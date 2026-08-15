@@ -94,7 +94,13 @@ the sorted path exo's runner emits.
   30s and generates coherently through /v1/chat/completions. Two-node
   ring blocked ONLY on hardware: jaccl dials errno-65 because the TB5
   cable is still unplugged from the GPTQ night (all 120Gb/s ports idle,
-  only the 40Gb/s link live). Replug -> rerun the 2-node smoke.
+  only the 40Gb/s link live). **RESOLVED same day: TB5 replugged →
+  2-node TensorShardMetadata instance loads, runners Ready, coherent +
+  CORRECT generation through /v1/chat/completions. M1d CLOSED.**
+  Second gotcha: M4 resolves models via PER-MODEL SYMLINKS in
+  ~/.exo/models -> the SMB share; a new artifact needs its symlink or the
+  node reports DownloadPending forever and the 2-node load never starts
+  (runners stick at Connected — exactly what we saw).
 - **M1e: end-to-end referee** on a real (small-bytes) VQ artifact vs its
   bf16 proxy score. Bar: PPL within noise of the proxy (same values, so
   any gap = kernel bug). THEN the artifact claims are real, sizes weighed
