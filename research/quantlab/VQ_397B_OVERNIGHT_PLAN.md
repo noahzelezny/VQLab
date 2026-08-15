@@ -1,5 +1,19 @@
 # E35 M0b — 397B VQ quality proxy: overnight build plan (2026-08-14)
 
+> **STATUS 2026-08-15 — HISTORICAL, EXECUTED.** This night ran; its
+> proxies A/B/C/D are measured and recorded in `EXPERIMENTS.md` (E35 M0b).
+> Its "NOT tonight" list is now obsolete: the Metal kernel (M1) is BUILT
+> and shipped, and the d8/K4096 sweep it deferred ran as E36.
+> **Two corrections this plan predates, both important:**
+> 1. Its GiB figures are ANALYTIC (`log2(K)/d + 16/group`). Codes are
+>    stored in whole bytes, so unpacked reality is bigger — A is 196 GiB
+>    not 134, E is 196 not 145. Only K<=256 at d=4 packs exactly. See the
+>    stored-vs-analytic table in `EXPERIMENTS.md` section M2.
+> 2. Proxies are superseded by real codes artifacts (`vq_397b_codes.py`),
+>    which are smaller, faster to fit, and actually runnable. Proxies only
+>    existed because no kernel did.
+> Current truth: `EXPERIMENTS.md` + `M1_KERNEL_PLAN.md`.
+
 Goal: kill the E33 DILUTION RISK before any kernel work. Measure what
 VQ d4/K1024 on the 397B's 2-bit expert region actually buys vs shipped
 `struct6-tail30` (wikitext 2.3982 / code 2.5928). Ship bar: wikitext

@@ -122,13 +122,41 @@ save codes/codebook/vq_scales per tensor alongside (or instead of) the
 bf16 reconstruction. ~30 lines; do it with M1a so correctness tests run
 against REAL codes from layer 0, not synthetic ones.
 
-## Risks, ranked
+## Risks, ranked — ALL RETIRED 2026-08-15 (kept for the record)
 
-1. Prefill throughput (simdgroup tiling is the fiddly Metal). Mitigation:
-   decode-to-tile fallback is straightforward and correct.
-2. K16384 codebook gathers thrashing. Mitigation: banked codebook; or ship
-   accessibility artifact at d=4 K=128 (1 KB codebook) and keep d8 premium
-   for a v2.
-3. exo two-node integration (never the kernel itself — E2 history).
-4. NOT a risk: quality. Proxies already carry the referee numbers; the
-   kernel just has to reproduce them.
+1. ~~Prefill throughput (simdgroup tiling)~~ — **never needed.**
+   decode-to-dense + PADDED batched GEMM BEAT gather_qmm (1.21-1.28x).
+   The row-batched gather_mm variant is the trap (0.43x).
+2. ~~K16384 codebook thrashing~~ — **moot, and the premise changed.** E36
+   showed uniform d8 is the wrong bet (gate_up never recovers); the live
+   question is the MIXED geometry d8 K4096 down_proj, whose 64 KB codebook
+   goes device/L2-resident. K<=1024 (16 KB) still fits threadgroup.
+3. ~~exo two-node~~ — **done.** Both nodes patched, ring serves the VQ 35B.
+   Two gotchas: numeric path parts break tree_unflatten (walk attributes),
+   and the M4 resolves models via per-model symlinks in `~/.exo/models`.
+4. NOT a risk: quality — **confirmed, and better than predicted.** The real
+   artifact BEAT its own proxy (2.7655 vs 2.8197) because it ships fp16
+   scales where proxies used bf16.
+
+## What actually bit us instead (none of it was on this list)
+
+- **The stored-vs-analytic bpw trap.** This doc's own note ("7 bits stored
+  in 8") was never carried into the size claims. Codes are stored in whole
+  bytes, so F/G are 110.8 GiB not ~100, and A/B/E need bit-packing to
+  reach their quoted sizes at all. Full table in `EXPERIMENTS.md` M2.
+- **A lazily-evaluated chunk loop holds every iteration's transients.**
+  `_prefill` looked exactly like "the model is too big for this machine"
+  (3.35 MB/token vs 0.059 MB/token of real KV cache). Fixed by `mx.eval`
+  per chunk. This, not model size, was the context ceiling.
+- **Benchmarks that measure the wrong path.** A monolithic prefill forward
+  pass OOMs Metal at 8k where the chunked path mlx_lm actually uses runs
+  30k fine; and tok/s that includes prefill understates decode ~10x.
+
+## Where the frontier is now (see EXPERIMENTS.md E36)
+
+Mixed geometry: gate/up d4 K256 + down d8 K4096 — down_proj PREFERS d8
+(relerr 0.1794 vs the C anchor's 0.1930 at 22% fewer bits) while gate_up
+never recovers. Format is already legal (`vq_modules` carries dim/K per
+module). Step 1 = d8 kernel, unpacked, ~110.8 GiB (C's size, better
+quality) — no packing risk. Step 2 = bit-packing, shrinks that to 103.7
+and unlocks A(132)/E(143)/B(148) at their true sizes.

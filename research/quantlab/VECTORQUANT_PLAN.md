@@ -1,5 +1,16 @@
 # E35 — Vector quantization for the 2-bit expert region (the last lever)
 
+> **STATUS 2026-08-15 — HISTORICAL. This plan is DELIVERED; do not act on
+> its "next steps".** M0 (35B quality), M0b (397B proxies), M1 (Metal
+> kernel + runtime + exo, all five milestones) and M2 (the real shippable
+> artifact) are all DONE. The shipped artifact is
+> `rotlab--397B-tail3x3-vqK256codes`: **110.8 GiB, wikitext 2.7655 / code
+> 2.6383** (beats spicyneuron 2.6bit on BOTH corpora at 9.8 GiB less),
+> runs on a single 128 GB Mac at 30k context / ~20 tok/s decode, loads
+> under stock unpatched mlx-lm.
+> **Current truth lives in `EXPERIMENTS.md` (sections E35, M2, M2b, M2c,
+> E36) and `M1_KERNEL_PLAN.md`.** Kept for the reasoning that got us here.
+
 Scoped 2026-08-14, after E31-E34 closed every scalar-format lever. Noah's
 call: willing to spend real time including kernel work ("sometimes things
 are easier than we think").
