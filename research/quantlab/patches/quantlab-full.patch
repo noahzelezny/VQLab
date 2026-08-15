@@ -1,0 +1,426 @@
+--- pristine/optiq/core/sensitivity.py	2026-08-06 14:12:58
++++ /Users/noahzelezny/quantlab/venv/lib/python3.12/site-packages/optiq/core/sensitivity.py	2026-08-10 21:29:04
+@@ -522,7 +522,50 @@
+     m = re.search(r"layers?\.(\d+)\.", lname)
+     if m is not None and n_layers > 1:
+         d = int(m.group(1))
+-        if d == 0 or d == n_layers - 1:
++        import os as _os_dp
++        _dp_mode = _os_dp.environ.get("OPTIQ_DEPTH_PRIOR", "")
++        if _dp_mode == "reverse_experts" and not ("experts" in lname or "switch" in lname):
++            # E14: apply the reverse (tail-heavy) curve ONLY to routed experts;
++            # everything else keeps the stock U. E13b showed the depth law is
++            # family-dependent: expert bits belong in the tail (t2.4 win), but
++            # crushing EARLY attention re-triggers the E7 cliff (t2.2 loss).
++            _dp_mode = ""
++        elif _dp_mode == "reverse_experts":
++            _dp_mode = "reverse"
++        if _dp_mode == "flat":
++            # E11 follow-up arm: no depth structure at all — every layer gets
++            # the mid-network baseline. Isolates how much the depth axis is
++            # worth in total.
++            p = 0.45
++        elif _dp_mode == "reverse":
++            # E11 follow-up arm: mirror of "monotone" — protect LATE layers,
++            # crush early. Tests whether the U's early lobe is the wasteful
++            # part (E11 showed under-protecting the tail loses 0.47 PPL).
++            # E13: OPTIQ_DEPTH_K tunes steepness (default 2.7321 = E12 arm);
++            # higher k concentrates the same budget on fewer final layers.
++            import math as _math_dp
++            _k = float(_os_dp.environ.get("OPTIQ_DEPTH_K", "2.7321"))
++            _x = 1.0 - (d / (n_layers - 1))
++            _v = _math_dp.exp(-_k * _x)
++            if d == 0:
++                _v *= 3.0
++            _vmin = _math_dp.exp(-_k)
++            p = 0.30 + 0.60 * min(max((_v - _vmin) / (1.0 - _vmin), 0.0), 1.0)
++        elif _dp_mode == "monotone":
++            # quantlab E10 (08-10): measured 2-bit KL falls monotonically with
++            # normalized depth on Qwen3.5-35B-A3B — exp(-2.732x), R^2=0.91 over
++            # layers 0..N-2, with a 3.0x bump on the final layer. The stock
++            # U-shape below correlates with measurement at only r=+0.185;
++            # depth-descending correlates at r=+0.951. Parameterized on x=d/(N-1)
++            # so it transfers across depths (35B 40L -> 397B 60L).
++            import math as _math_dp
++            _x = d / (n_layers - 1)
++            _v = _math_dp.exp(-2.7321 * _x)
++            if d == n_layers - 1:
++                _v *= 3.0
++            _vmin = _math_dp.exp(-2.7321)
++            p = 0.30 + 0.60 * min(max((_v - _vmin) / (1.0 - _vmin), 0.0), 1.0)
++        elif d == 0 or d == n_layers - 1:
+             p = 0.90                       # first / last block: protect
+         elif d <= 1 or d >= n_layers - 2:
+             p = 0.65                       # near-edge blocks
+--- pristine/optiq/core/optimizer.py	2026-07-12 10:16:08
++++ /Users/noahzelezny/quantlab/venv/lib/python3.12/site-packages/optiq/core/optimizer.py	2026-08-09 19:51:54
+@@ -118,6 +118,41 @@
+     min_bits = candidate_bits[0]
+     max_bits = candidate_bits[-1]
+ 
++    # Forced-allocation mode (env-gated experiment, 2026-08-09): bypass the
++    # knapsack entirely and assign bits by layer family. Exists to falsify
++    # the per-layer isolation assumption end-to-end: quantize ONE family
++    # aggressively while holding everything else high, then benchmark.
++    # OPTIQ_FORCE_ATTN_BITS / OPTIQ_FORCE_MLP_BITS / OPTIQ_FORCE_OTHER_BITS.
++    import os as _os_force
++    _f_attn = int(_os_force.environ.get("OPTIQ_FORCE_ATTN_BITS", "0") or "0")
++    _f_mlp = int(_os_force.environ.get("OPTIQ_FORCE_MLP_BITS", "0") or "0")
++    _f_other = int(_os_force.environ.get("OPTIQ_FORCE_OTHER_BITS", "0") or "0")
++    if _f_attn or _f_mlp or _f_other:
++        _fallback = _f_other or max_bits
++        forced_configs = []
++        for r in sensitivity_results:
++            n = r.layer_name
++            if "attn" in n:
++                b = _f_attn or _fallback
++            elif ".mlp." in n and n.rsplit(".", 1)[-1] in ("gate_proj", "up_proj", "down_proj"):
++                b = _f_mlp or _fallback
++            else:
++                b = _fallback
++            forced_configs.append(LayerQuantConfig(
++                layer_name=n, bits=b, group_size=group_size,
++                param_count=r.param_count,
++            ))
++        _fbpw = compute_bpw(forced_configs)
++        print(f"  FORCED allocation: attn={_f_attn or _fallback} mlp={_f_mlp or _fallback} "
++              f"other={_fallback} -> bpw {_fbpw:.2f} (knapsack bypassed)")
++        return OptimizationResult(
++            configs=forced_configs, target_bpw=target_bpw, achieved_bpw=_fbpw,
++            threshold=0, n_high_bits=sum(1 for c in forced_configs if c.bits == max_bits),
++            n_low_bits=sum(1 for c in forced_configs if c.bits == min_bits),
++            total_params=sum(r.param_count for r in sensitivity_results),
++            estimated_size_mb=sum(c.bits * c.param_count for c in forced_configs) / 8 / (1024 * 1024),
++        )
++
+     # Identify layers to always protect
+     protected_layers = set()
+     protected_layers.update(_identify_output_layers(
+@@ -139,6 +174,47 @@
+     allocation = {}
+     for r in sensitivity_results:
+         allocation[r.layer_name] = min_bits
++
++    # Attention floor (env-gated experiment, 2026-08-09): per-layer KL
++    # sensitivity measures each layer quantized IN ISOLATION. On MoE models
++    # attention scores come out nearly flat across bit-widths (measured on
++    # Qwen3.5-35B-A3B: 2b=4.0e-2 vs 4b=3.2e-2), so greedy allocation crushes
++    # attention to the lowest bits — inverted from every shipped mixed quant,
++    # which holds attention/router HIGH and squeezes experts. The isolation
++    # assumption hides compounding across all-attention-at-2bit. Floor
++    # attention at OPTIQ_ATTN_FLOOR_BITS before the greedy pass so the
++    # budget math accounts for it; experts still allocate by measured KL.
++    import os as _os
++    # Expert param-count correction (env-gated, 2026-08-09): batched-expert
++    # sweep entries record the param_count of ONE expert while the chosen
++    # bit-width is applied to ALL experts in the stack. Budget math then
++    # sees ~1/N of the real expert mass (measured: 35B-A3B checkpoint sums
++    # to ~2B params) and ships artifacts far over target while reporting
++    # on-target achieved_bpw. Set OPTIQ_EXPERT_PARAM_MULT to the model's
++    # num_experts to budget against real bytes.
++    _exp_mult = int(_os.environ.get("OPTIQ_EXPERT_PARAM_MULT", "0") or "0")
++    if _exp_mult > 1:
++        _mlp_tokens = ("gate_proj", "up_proj", "down_proj")
++        _corrected = []
++        for r in sensitivity_results:
++            last = r.layer_name.rsplit(".", 1)[-1]
++            if ".mlp." in r.layer_name and last in _mlp_tokens:
++                r = SensitivityResult(
++                    layer_name=r.layer_name,
++                    sensitivities=r.sensitivities,
++                    param_count=r.param_count * _exp_mult,
++                )
++            _corrected.append(r)
++        sensitivity_results = _corrected
++        total_params = sum(r.param_count for r in sensitivity_results)
++    _attn_floor = int(_os.environ.get("OPTIQ_ATTN_FLOOR_BITS", "0") or "0")
++    if _attn_floor:
++        _floor_bits = min((b for b in candidate_bits if b >= _attn_floor),
++                          default=max_bits)
++        _attn_pats = (".self_attn.", ".linear_attn.", ".attn.")
++        for r in sensitivity_results:
++            if any(p in r.layer_name for p in _attn_pats):
++                allocation[r.layer_name] = _floor_bits
+ 
+     # Block-aware floor: pre-upgrade the most-sensitive components per
+     # transformer block. Prevents "many consecutive blocks fully at the
+--- pristine/optiq/core/lowbit.py	2026-08-07 08:43:32
++++ /Users/noahzelezny/quantlab/venv/lib/python3.12/site-packages/optiq/core/lowbit.py	2026-08-11 11:49:32
+@@ -106,7 +106,7 @@
+ # Above this many elements the search is split along the leading axis. Groups
+ # run along the LAST axis, so slicing the first changes nothing about the
+ # result -- it only bounds how much is live at once.
+-_CHUNK_ELEMS = 1 << 28
++_CHUNK_ELEMS = 1 << 25  # 33M: keep each search kernel well under the Metal watchdog even under ambient GPU contention (E15)
+ 
+ 
+ def quantize_best(x: mx.array, group_size: int, bits: int):
+@@ -122,7 +122,20 @@
+         per = max(1, int(x.shape[0] * _CHUNK_ELEMS / x.size))
+         packs, scs, bis = [], [], []
+         for i in range(0, x.shape[0], per):
+-            pk, sc, bi = _search_affine(x[i:i + per], group_size, bits)
++            # Page the mmap'd slice in via the CPU stream before the GPU
++            # search — see _chunked_quantize._watchdog_safe_quantize.
++            with mx.stream(mx.cpu):
++                xc = x[i:i + per] + 0
++            mx.eval(xc)
++            with mx.stream(mx.gpu):
++                pk, sc, bi = _search_affine(xc, group_size, bits)
++            mx.eval(pk, sc, bi)
++            del xc
++            # Force each chunk's kernels to flush NOW: without this the lazy
++            # graph accumulates every chunk's search and evaluates it as one
++            # Metal command buffer at the concat below — which exceeds the GPU
++            # watchdog on 397B-scale expert stacks (2B params/tensor).
++            mx.eval(pk, sc, bi)
+             packs.append(pk)
+             scs.append(sc)
+             bis.append(bi)
+@@ -211,6 +224,24 @@
+         def _quantize(w, group_size: int = 64, bits: int = 4, mode: str = "affine"):
+             if mode == "affine" and bits <= self.max_bits:
+                 return quantize_best(w, group_size, bits)
++            if mode == "affine" and getattr(w, "ndim", 2) >= 2 and w.size > _CHUNK_ELEMS:
++                # Giant expert stack above the search tier (e.g. 4-bit): chunk
++                # + CPU-materialize so mmap page-in never stalls a GPU buffer
++                # into the Metal watchdog (E15). Bit-identical to whole-tensor.
++                per = max(1, int(w.shape[0] * _CHUNK_ELEMS / w.size))
++                parts = []
++                for i in range(0, w.shape[0], per):
++                    with mx.stream(mx.cpu):
++                        wc = w[i:i + per] + 0
++                    mx.eval(wc)
++                    with mx.stream(mx.gpu):
++                        out = self._orig(wc, group_size=group_size, bits=bits, mode=mode)
++                    mx.eval(*out)
++                    del wc
++                    parts.append(out)
++                res = tuple(mx.concatenate(list(ps), axis=0) for ps in zip(*parts))
++                mx.eval(*res)
++                return res
+             return self._orig(w, group_size=group_size, bits=bits, mode=mode)
+ 
+         mx.quantize = _quantize
+--- pristine/optiq/models/llm.py	2026-08-07 13:12:30
++++ /Users/noahzelezny/quantlab/venv/lib/python3.12/site-packages/optiq/models/llm.py	2026-08-11 11:23:17
+@@ -342,7 +342,18 @@
+ 
+     # Step 4: sensitivity
+     checkpoint_path = os.path.join(output_dir, "sensitivity_checkpoint.json")
+-    if method == "static":
++    # Forced-allocation mode ignores sensitivity scores entirely (see
++    # optimizer.py) — a measured sweep would be hours of wasted forward
++    # passes feeding numbers nobody reads. Use the structural analysis as
++    # a placeholder input instead.
++    _forced_alloc = any(
++        os.environ.get(k)
++        for k in ("OPTIQ_FORCE_ATTN_BITS", "OPTIQ_FORCE_MLP_BITS",
++                  "OPTIQ_FORCE_OTHER_BITS")
++    )
++    if _forced_alloc and method != "static":
++        print("\n[2/4] Sensitivity analysis SKIPPED (forced allocation) — structural placeholder")
++    if method == "static" or _forced_alloc:
+         print(f"\n[2/4] Sensitivity analysis (method=static · structural rules, bits={candidate_bits})…")
+         sensitivity_results = analyze_sensitivity_static(
+             running_model,
+@@ -412,30 +423,42 @@
+     # mlx_lm.convert OOMs on a big MoE. Route those to the streaming convert,
+     # which respects the SAME per-layer allocation (``predicate``) one block at a
+     # time. bf16 sources keep the normal path (mmap streams it fine).
+-    if _needs_streaming_convert(local_dir):
++    if _needs_streaming_convert(local_dir) or os.environ.get("OPTIQ_FORCE_STREAMING"):
+         from ..backends.mlx_backend import convert_llm_to_mlx_streaming
++        from ..core.lowbit import use_search_encoder
+         print("  (streaming convert: fp8/large source — allocation-aware, per block)")
+-        convert_llm_to_mlx_streaming(
+-            model_name,
+-            optiq_path,
+-            quant_predicate=predicate,
+-            q_bits=low_bits,
+-            q_group_size=group_size,
+-            mode="affine",
+-        )
++        # use_search_encoder: the whole-model path gets this wrap in
++        # mlx_backend; the streaming path must match or its 2-bit layers ship
++        # with collapsed min/max ranges — a silent methodology fork (E15).
++        with use_search_encoder():
++            convert_llm_to_mlx_streaming(
++                model_name,
++                optiq_path,
++                quant_predicate=predicate,
++                q_bits=low_bits,
++                q_group_size=group_size,
++                mode="affine",
++            )
+         from optiq import artifacts
+ 
+         artifacts.write_json(optiq_path, artifacts.METADATA,
+                              json.loads(json.dumps(metadata, default=str)))
+     else:
+-        convert_llm_to_mlx(
+-            model_name,
+-            optiq_path,
+-            quant_predicate=predicate,
+-            q_bits=low_bits,
+-            q_group_size=group_size,
+-            metadata=metadata,
+-        )
++        # 397B fix (E15): load/sanitize ops bind to the stream active at op
++        # CREATION. Under the GPU stream, evaluating a giant fused-expert
++        # split stalls on mmap page-in and the Metal watchdog kills the
++        # command buffer. CPU has no watchdog; the compute-heavy quantize
++        # kernels explicitly hop back to GPU (see _chunked_quantize/lowbit).
++        import mlx.core as _mx_dev
++        with _mx_dev.stream(_mx_dev.cpu):
++            convert_llm_to_mlx(
++                model_name,
++                optiq_path,
++                quant_predicate=predicate,
++                q_bits=low_bits,
++                q_group_size=group_size,
++                metadata=metadata,
++            )
+ 
+     # mlx-lm's convert drops the vision/audio towers, so the artifact is
+     # language-only until they are put back. Do it here, in the pipeline, rather
+--- pristine/optiq/backends/mlx_backend.py	2026-08-07 13:11:40
++++ /Users/noahzelezny/quantlab/venv/lib/python3.12/site-packages/optiq/backends/mlx_backend.py	2026-08-11 11:50:44
+@@ -505,7 +505,12 @@
+         print(f"  [stream] relabelled F8_E8M0 headers in {relabelled} shards")
+ 
+     print(f"  Converting {hf_path} → {output_path} (streaming, allocation-aware)")
+-    model, tokenizer, config = load(hf_path, return_config=True, lazy=True)
++    # Load under the CPU stream: ops bind to the stream active at CREATION,
++    # so a GPU-ambient load makes every weight's mmap/cast op a GPU op that
++    # stalls on SSD page-in whenever the disk is busy (e.g. right after a
++    # shard flush) — Metal watchdog kills the buffer. E15's final root cause.
++    with mx.stream(mx.cpu):
++        model, tokenizer, config = load(hf_path, return_config=True, lazy=True)
+     config["quantization"] = {"group_size": q_group_size, "bits": q_bits, "mode": mode}
+ 
+     # Ordered top-level units: the transformer block list (wherever it lives) is
+@@ -513,22 +518,42 @@
+     # small unit. Never add a container module (e.g. a nested ``model``) as a
+     # unit — that would quantize every block at once and OOM. We descend into
+     # the core container and take only its leaf (non-list) children.
+-    has_core = hasattr(model, "model") and isinstance(model.model, nn.Module)
+-    core = model.model if has_core else model
+-    layers = getattr(core, "layers", None) or getattr(model, "layers", None) or []
+-    layer_prefix = "model.layers" if (has_core and hasattr(core, "layers")) else "layers"
+-    units: list[tuple[str, object]] = []
+-    for name, child in model.children().items():
+-        if (has_core and name == "model") or name == "mtp":
+-            continue  # core is descended below; MTP head is dropped in quant ckpts
+-        if isinstance(child, (list, tuple)):
+-            continue
+-        units.append((name, child))
+-    if has_core:
++    # Generic descent: find the container that OWNS the block list, however
++    # deep the nesting (model.layers, model.model.layers, or a VLM wrapper's
++    # language_model.model.layers — the 397B case that made unit 0 the whole
++    # language model and re-created exactly the OOM this path exists to avoid).
++    # Every non-container child along the path becomes its own small unit.
++    def _holds_layers(m) -> bool:
++        if not isinstance(m, nn.Module):
++            return False
++        if isinstance(getattr(m, "layers", None), (list, tuple)):
++            return True
++        return any(
++            _holds_layers(c) for c in m.children().values()
++            if not isinstance(c, (list, tuple))
++        )
++
++    units: list[tuple[str, object]] = []
++    core, core_prefix = model, ""
++    while True:
++        # Trust only the children scan — NOT ``core.layers``: wrappers delegate
++        # ``.layers`` as a property (Qwen3.5-VLM's top module returns the inner
++        # text model's list), which made the old owner-check stop at the top,
++        # emit the whole language_model as one unit AND find 60 layers (=61).
++        descend = None
+         for name, child in core.children().items():
+-            if isinstance(child, (list, tuple)):
+-                continue  # the block list — streamed per-block below
+-            units.append((f"model.{name}", child))
++            if isinstance(child, (list, tuple)) or name == "mtp":
++                continue  # block list handled below; MTP dropped in quant ckpts
++            if descend is None and _holds_layers(child):
++                descend = (name, child)  # on-path container: descend, not a unit
++                continue
++            units.append((f"{core_prefix}{name}", child))
++        if descend is None:
++            break
++        core_prefix = f"{core_prefix}{descend[0]}."
++        core = descend[1]
++    layers = getattr(core, "layers", None) or []
++    layer_prefix = f"{core_prefix}layers"
+     units += [(f"{layer_prefix}.{i}", blk) for i, blk in enumerate(layers)]
+ 
+     weight_map: dict[str, str] = {}
+--- pristine/optiq/mlx_lm_patches/_chunked_quantize.py	2026-04-26 02:33:32
++++ /Users/noahzelezny/quantlab/venv/lib/python3.12/site-packages/optiq/mlx_lm_patches/_chunked_quantize.py	2026-08-11 11:49:32
+@@ -40,6 +40,55 @@
+ _FREEABLE_ATTRS = ("weight", "scales", "biases", "bias")
+ 
+ 
++# 397B fix (quantlab E15, 08-11): a single 512-expert stack is ~2B params, and
++# ONE mx.quantize kernel over it exceeds the Metal GPU watchdog -> command-buffer
++# timeout. Chunk along the expert axis (axis 0): grouping is along the LAST axis,
++# so per-chunk quantize + concat is bit-identical to whole-tensor quantize.
++_CHUNK_EXPERTS = 4  # ~34M params/kernel on 397B stacks — watchdog margin under contention
++_CHUNK_THRESHOLD = 1 << 28  # 268M params: the 35B stacks (fine) sit at this size
++
++
++def _watchdog_safe_quantize(w, group_size: int = 64, bits: int = 4, **kw):
++    numel = 1
++    for s in w.shape:
++        numel *= s
++    if getattr(w, "ndim", 2) < 2 or numel <= _CHUNK_THRESHOLD:
++        return _ORIG_MX_QUANTIZE(w, group_size=group_size, bits=bits, **kw)
++    # 2-D giants (lm_head/embed at 397B scale: 618M params) need the same
++    # treatment — a single kernel + GPU-stream mmap page-in trips the Metal
++    # watchdog exactly like a 3-D expert stack (E15 bisect). Chunk rows.
++    if w.ndim == 2:
++        rows = max(1, int(w.shape[0] * _CHUNK_THRESHOLD / numel))
++        parts = []
++        for i in range(0, w.shape[0], rows):
++            with mx.stream(mx.cpu):
++                chunk = w[i : i + rows] + 0
++            mx.eval(chunk)
++            with mx.stream(mx.gpu):
++                out = _ORIG_MX_QUANTIZE(chunk, group_size=group_size, bits=bits, **kw)
++            mx.eval(*out)
++            del chunk
++            parts.append(out)
++        return tuple(mx.concatenate(list(ps), axis=0) for ps in zip(*parts))
++    parts = []
++    for i in range(0, w.shape[0], _CHUNK_EXPERTS):
++        # Materialize the slice on the CPU stream first: the source is mmap'd
++        # bf16 on SSD, and a GPU kernel that stalls on page-in gets killed by
++        # the Metal watchdog (the actual E15 failure mode). CPU has no watchdog.
++        with mx.stream(mx.cpu):
++            chunk = w[i : i + _CHUNK_EXPERTS] + 0
++        mx.eval(chunk)
++        with mx.stream(mx.gpu):
++            out = _ORIG_MX_QUANTIZE(chunk, group_size=group_size, bits=bits, **kw)
++        mx.eval(*out)  # flush each chunk's command buffer
++        del chunk
++        parts.append(out)
++    return tuple(mx.concatenate(list(ps), axis=0) for ps in zip(*parts))
++
++
++_ORIG_MX_QUANTIZE = mx.quantize
++
++
+ def _chunked_quantize(
+     model,
+     group_size: int | None = None,
+@@ -49,6 +98,7 @@
+     class_predicate=None,
+ ):
+     """Drop-in replacement for ``mlx.nn.quantize`` that flushes per-module."""
++    mx.quantize = _watchdog_safe_quantize  # shim: chunk giant expert stacks
+     cp = class_predicate or (lambda _, m: hasattr(m, "to_quantized"))
+     counter = {"n": 0}
+ 
