@@ -16,14 +16,42 @@
 #   The row-batched gather_mm path is a known trap (0.43x): do not "simplify"
 #   the prefill path back to it.
 
+import os
+
 import mlx.core as mx
 import mlx.nn as nn
 import numpy as np
 
 # below this many (token, expert) pairs use the fused kernel; above, the
 # decode+padded-GEMM path (decode cost amortizes). Tune in M1e if needed.
-VQ_FUSED_MAX_N = 4096
-_DECODE_CHUNK = 128
+VQ_FUSED_MAX_N = int(os.environ.get("SCOUT_VQ_FUSED_MAX_N", 4096))
+
+# Experts decoded to dense fp16 per prefill chunk. THIS IS THE MEMORY KNOB,
+# not the KV cache: measured 2026-08-15 on a 128 GB M4 Max running the
+# 110.8 GiB 397B, prefill grew 3.35 MB/token where the KV cache theory is
+# only 0.059 MB/token — a 57x gap that is entirely these buffers. The
+# transient is chunk * out * in * 2 bytes:
+#     chunk=128 -> 1.0 GiB (down_proj) / 2.0 GiB (gate_up)
+#     chunk= 16 -> 0.12 GiB            / 0.25 GiB
+# On a box with headroom, big chunks give better GEMM efficiency. On a box
+# where the model nearly fills RAM, they are what caps your context length.
+# Auto-sized from free memory at import; override with SCOUT_VQ_DECODE_CHUNK.
+def _default_decode_chunk():
+    env = os.environ.get("SCOUT_VQ_DECODE_CHUNK")
+    if env:
+        return max(1, int(env))
+    try:
+        info = mx.device_info() if hasattr(mx, "device_info") else mx.metal.device_info()
+        headroom = info["max_recommended_working_set_size"] - mx.get_active_memory()
+        # keep the largest transient (gate_up, out*in ~ 8M elems fp16 = 16 MB
+        # per expert) under ~1/8 of remaining headroom
+        per_expert = 2048 * 4096 * 2
+        return max(4, min(128, int(headroom / 8 / per_expert)))
+    except Exception:
+        return 32
+
+
+_DECODE_CHUNK = None  # resolved lazily on first prefill (after weights load)
 
 _SRC_FUSED = r"""
     const int OUT  = dims[0];
@@ -147,6 +175,9 @@ def _decode_chunk(codes, codebook, scales, eidx_chunk):
 def _prefill(xf, idx_sorted_np, codes, codebook, scales):
     """xf [N, IN] rows sorted by expert; idx_sorted_np = matching np expert
     ids. Decode touched experts in chunks; one padded batched GEMM each."""
+    global _DECODE_CHUNK
+    if _DECODE_CHUNK is None:
+        _DECODE_CHUNK = _default_decode_chunk()
     E, OUT, _ = codes.shape
     counts = np.bincount(idx_sorted_np, minlength=E)
     touched = np.nonzero(counts)[0]
@@ -170,6 +201,14 @@ def _prefill(xf, idx_sorted_np, codes, codebook, scales):
         yp = xp @ mx.swapaxes(w, 1, 2)                      # [ne, cap, OUT]
         flat_valid = np.nonzero(vmask.reshape(-1))[0].astype(np.uint32)
         ys.append(yp.reshape(ne * cap, OUT)[mx.array(flat_valid)])
+        # CRITICAL: MLX is lazy. Without this eval the whole loop builds one
+        # graph and EVERY chunk's decoded weights stay live until the final
+        # concatenate — 4 chunks x 2 GiB for gate_up, which is what actually
+        # capped context length on a 128 GB box (measured 2026-08-15: prefill
+        # grew 3.35 MB/token vs 0.059 MB/token of real KV cache). Evaluating
+        # per chunk lets each `w` be freed before the next is decoded.
+        mx.eval(ys[-1])
+        del w, xp, yp
     return mx.concatenate(ys, axis=0)
 
 
