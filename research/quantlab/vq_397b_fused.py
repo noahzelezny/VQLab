@@ -39,6 +39,12 @@ ap.add_argument("--iters", type=int, default=20)
 ap.add_argument("--expert-chunk", type=int, default=32)
 ap.add_argument("--sample", type=int, default=2_000_000)
 ap.add_argument("--dry-run", action="store_true")
+ap.add_argument("--stage-dir", default=None,
+                help="copy each source shard here before mx.load. REQUIRED "
+                     "when --src is on USB/exFAT: MLX mmaps, and Metal reads "
+                     "of an mmap'd file on the M4's USB T7 return ZERO pages "
+                     "or time out even at 955 MB/s, while read() is perfect. "
+                     "Staging to internal APFS costs ~1.7s per 8.6GB shard.")
 args = ap.parse_args()
 
 BASE, SRC, OUT = pathlib.Path(args.base), pathlib.Path(args.src), pathlib.Path(args.out)
@@ -97,11 +103,30 @@ def vq_expert_block(W):
     return (Wg / scale).reshape(-1, D), scale, (e, out_d, in_d)
 
 
+_staged = {}
+
+
+def _shard_path(fname):
+    """mx.load-safe path for a source shard (see --stage-dir)."""
+    if not args.stage_dir:
+        return str(SRC / fname)
+    st = pathlib.Path(args.stage_dir)
+    st.mkdir(parents=True, exist_ok=True)
+    local = st / fname
+    if fname not in _staged:
+        for old in _staged.values():          # keep only one resident
+            old.unlink(missing_ok=True)
+        _staged.clear()
+        shutil.copy2(SRC / fname, local)
+        _staged[fname] = local
+    return str(local)
+
+
 def load_src_expert(li, proj):
     """bf16 source tensor for (layer, mlx proj name), sliced from gate_up."""
     key, half = PROJ[proj]
     sk = f"model.language_model.layers.{li}.mlp.experts.{key}"
-    T = mx.load(str(SRC / src_idx[sk]))[sk]
+    T = mx.load(_shard_path(src_idx[sk]))[sk]
     if half is not None:
         mid = T.shape[1] // 2
         T = T[:, :mid, :] if half == 0 else T[:, mid:, :]
