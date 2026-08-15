@@ -1412,3 +1412,13 @@ All artifacts + logs: `/Volumes/Thunderbay SSD/Exo Models/optiq-ab*` and `.{ab,h
 Sweep checkpoint (35B, 391 layers × {2,3,4}): `optiq-ab-35b/sensitivity_checkpoint.json`.
 Env-gated patches + verify procedure: `~/Documents/AgenicAI/quantlab/README.md`.
 Research-store chain: 1934a079 → f828e303 → e47cd33e → c91de858 → b293ff81 → 9fbc2733 → b56200c2 (E17) → a6f6f613 (E17b) → (this doc).
+
+## Rig gotcha (08-14 evening) — mx.load on exFAT silently serves ZEROS
+
+The M4's T7 (exFAT, USB) holds a bf16 397B copy. `mx.load` mmaps; macOS
+mmap on exFAT is broken — the GPU reads ZERO PAGES (VQ relerr exactly
+1.0000) or takes Metal command-buffer timeouts. Raw `read()` of the same
+files is fast and 100% intact — drive fine, copy fine, THE READ PATH lies.
+Cost tonight: two false diagnoses (dev mlx build; corrupt copy) before the
+discriminating test (raw bytes, no GPU). NEVER point MLX at exFAT. Fix:
+reformat the T7 to APFS, or stage shards to internal APFS first.
