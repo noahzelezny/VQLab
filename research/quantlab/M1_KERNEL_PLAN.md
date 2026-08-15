@@ -1,0 +1,82 @@
+# M1 — the VQ Metal kernel (scoped 2026-08-15, while G cooks)
+
+The gate between the E35 proxy numbers and anything a human can download.
+Everything below is `mx.fast.metal_kernel` (present in our mlx 0.32.0):
+custom Metal source JIT'd from Python, NO MLX fork.
+
+## Format (per VQ'd tensor, replacing weight/scales/biases)
+
+    codes     uint8 (K<=256) or uint16     [E, out, in/d]
+    codebook  fp16                         [K, d]
+    vq_scales bf16                         [E, out, in/64]
+
+d=4/K=128 codes are 7 bits stored in 8 — the artifact stores 2.29 bpw
+against the 2.00 analytic. Optional 4-bit packing later recovers it; ship
+v1 unpacked (simplicity first, still 21 GiB under the RTN daily).
+d=8/K=16384: uint16 codes = 2.00 bpw stored exactly. Convenient irony:
+the PREMIUM geometry packs cleanly and the cheap one doesn't.
+
+## The kernel: fused LUT-matmul (never materialize the weight)
+
+Per output element: y[t,r] = Σ_g scale[e,r,g] · Σ_{j∈g} codebook[codes[e,r,j]] · x[t, j*d:(j+1)*d]
+
+Two shapes matter and they want different kernels:
+1. **Decode (M=1..few tokens)** — memory-bound. One threadgroup per row
+   block; threads stream codes, gather codebook, FMA against x held in
+   registers/threadgroup. VQ reads FEWER bytes than affine-2bit (2.0-2.29
+   vs 2.5 bpw), so the roofline argues we can BEAT gather_qmm here.
+2. **Prefill (M=hundreds+)** — compute-bound. Naive LUT-FMA will lose to
+   simdgroup matmuls. Strategy: decode a [BR x BK] weight tile into
+   threadgroup memory once, then simdgroup_matmul against many tokens —
+   decode cost amortizes over M. This is also the fallback if (1)
+   disappoints: decode-to-tile is the universal slow-path.
+
+Codebook residency drives the design:
+    d=4 K=128:   1 KB  -> threadgroup memory, trivially hot
+    d=8 K=16384: 256 KB -> device memory, L2-resident (M3/M4 L2 is MBs)
+Measure both; if K16384 decode stalls on codebook gathers, split the
+codebook into banked halves per simdgroup.
+
+## MoE gather (the real call signature)
+
+`QuantizedSwitchLinear.__call__(x, indices, sorted_indices)` →
+`mx.gather_qmm(..., rhs_indices=indices)`. Ours: `VQSwitchLinear` with the
+same signature; kernel takes `indices` and resolves e per token. v1 ignores
+`sorted_indices` (correct either way, just unexploited locality); v2 uses
+the sorted path exo's runner emits.
+
+## Milestones (each gated on the last, ~in order of risk retirement)
+
+- **M1a (half day): correctness.** Single-expert kernel vs numpy decode:
+  max |Δ| within fp16 accumulation noise on random + real-codes inputs.
+- **M1b (half day): decode-shape benchmark** vs gather_qmm on the real
+  sizes ([512,1024,4096] gate_up, [512,4096,1024] down; M=1,4,16).
+  Bar: ≥0.5x gather_qmm tok/s (roofline says ≥1x is in reach).
+- **M1c (day): the tile/prefill path + gather indices.** Bar: prefill of
+  8192 tokens within 2x of gather_qmm (prefill is a one-time cost per
+  request; 2x there costs seconds, decode rate is what Noah feels).
+- **M1d (day): VQSwitchLinear + loader + exo.** Patched switch_layers
+  recognizing `*.codes`/`*.codebook`/`*.vq_scales`, BOTH node checkouts
+  (E2/E23). Smoke: 35B VQ artifact generates coherently through exo.
+- **M1e: end-to-end referee** on a real (small-bytes) VQ artifact vs its
+  bf16 proxy score. Bar: PPL within noise of the proxy (same values, so
+  any gap = kernel bug). THEN the artifact claims are real, sizes weighed
+  not analytic, and the HF upload can happen.
+
+## Fit-side work M1 needs (small)
+
+`vq_fit`/`vq_397b_fused` currently throw codes away. Add `--emit-codes`:
+save codes/codebook/vq_scales per tensor alongside (or instead of) the
+bf16 reconstruction. ~30 lines; do it with M1a so correctness tests run
+against REAL codes from layer 0, not synthetic ones.
+
+## Risks, ranked
+
+1. Prefill throughput (simdgroup tiling is the fiddly Metal). Mitigation:
+   decode-to-tile fallback is straightforward and correct.
+2. K16384 codebook gathers thrashing. Mitigation: banked codebook; or ship
+   accessibility artifact at d=4 K=128 (1 KB codebook) and keep d8 premium
+   for a v2.
+3. exo two-node integration (never the kernel itself — E2 history).
+4. NOT a risk: quality. Proxies already carry the referee numbers; the
+   kernel just has to reproduce them.
