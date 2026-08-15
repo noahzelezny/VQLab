@@ -1592,3 +1592,27 @@ peak-memory symptom looks exactly like "the model is too big for the machine"
 and would have sent us chasing a smaller artifact for nothing.
 Instrument-first ([[feedback_measure_the_metric_that_binds]]): the KV-cache
 arithmetic is what proved the model size was innocent.
+
+### M2b VERDICT — 397B runs on ONE 128 GB Mac at 30k context
+
+Post-fix ladder (`m2_fits_in_128.py`, M4 Max 128 GB, stock mlx_lm, artifact's
+own embedded model.py):
+
+  | context | peak GiB | swap |
+  |---|---|---|
+  | 463 | 112.4 | -48 MB |
+  | 1,871 | 115.1 | -48 MB |
+  | 7,503 | 115.5 | -64 MB |
+  | 15,016 | 115.8 | -72 MB |
+  | **30,031** | **117.7** | **-128 MB** |
+
+**A 65x increase in context cost 5.3 GiB** and swap FELL at every rung. Peak
+stays under the 120 GiB recommended working set throughout. Pre-fix the same
+model pinned at 122.6 GiB by 1,871 tokens with swap rising and empty output.
+
+CLAIM (defensible): *Qwen3.5-397B-A17B, 110.8 GiB, runs on a single 128 GB
+Apple Silicon Mac at 30k context* — with quality beating spicyneuron's 2.6bit
+on BOTH corpora at 9.8 GiB less. As far as we can tell this is a first.
+DO NOT quote the tok/s column above: it divides generated tokens by wall time
+INCLUDING prefill, so it measures prefill at long prompts. Use
+`m2_speed_split.py` (separate prefill / decode) for any published speed.
