@@ -28,6 +28,9 @@ ap = argparse.ArgumentParser()
 ap.add_argument("--model", required=True)
 ap.add_argument("--contexts", default="512,2048,8192")
 ap.add_argument("--decode-tokens", type=int, default=64)
+ap.add_argument("--prefill-step", type=int, default=512,
+                help="prefill chunk size; mlx_lm.generate chunks too — a single "
+                     "monolithic pass OOMs Metal at 8k on a nearly-full box")
 ap.add_argument("--corpus",
                 default=str(pathlib.Path(__file__).parent / "referee/referee_corpus.txt"))
 args = ap.parse_args()
@@ -63,11 +66,19 @@ for n in (int(x) for x in args.contexts.split(",")):
     mx.reset_peak_memory()
     cache = make_prompt_cache(model)
 
-    # --- PREFILL: one forward pass over the whole prompt
+    # --- PREFILL, CHUNKED exactly as mlx_lm.generate does it.
+    # A single monolithic model(ids[None]) forward pass OOMs Metal at 8k on a
+    # box this full (measured 2026-08-15) while the real chunked path runs 30k
+    # fine — the activation tensors for one giant pass are the problem, not the
+    # model. Benchmark the path users actually take.
     mx.eval(ids)
     t0 = time.time()
-    logits = model(ids[None], cache=cache)
-    mx.eval(logits)
+    step = args.prefill_step
+    for i in range(0, ids.size - 1, step):
+        chunk = ids[i:i + step]
+        logits = model(chunk[None], cache=cache)
+        mx.eval(logits)
+        mx.clear_cache()
     t_pre = time.time() - t0
 
     # --- DECODE: token-by-token continuation reusing that cache
