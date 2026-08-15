@@ -136,9 +136,12 @@ for fi, f in enumerate(files):
         if any(e in k for e in EXPERT_KEYS):
             codes_u8, cb, sc, proxy, err = vq_tensor(v)
             errs.append(err)
-            new_c[k + ".codes"] = codes_u8
-            new_c[k + ".codebook"] = cb
-            new_c[k + ".vq_scales"] = sc
+            # module path, not tensor path: strip ".weight" so the loader
+            # swaps gate_proj itself, not gate_proj.weight
+            kb = k[:-7] if k.endswith(".weight") else k
+            new_c[kb + ".codes"] = codes_u8
+            new_c[kb + ".codebook"] = cb
+            new_c[kb + ".vq_scales"] = sc
             new_p[k] = proxy
             print(f"  {k.split('layers.')[-1][:40]:42s} relerr {err:.4f}",
                   flush=True)

@@ -16,18 +16,21 @@ import shutil
 import sys
 
 MARK = "# --- quantlab VQ hook (patch_mlx_lm.py) ---"
+# NOTE: swap by direct attribute walk, NOT tree_unflatten/update_modules —
+# numeric path parts ("layers.0") break the tree alignment there.
 HOOK = f"""
     {MARK}
     _vq_prefixes = sorted({{k[:-6] for k in weights if k.endswith(".codes")}})
     if _vq_prefixes:
-        from mlx.utils import tree_unflatten
         from .models.vq_switch import VQSwitchLinear
-        model.update_modules(tree_unflatten([
-            (p, VQSwitchLinear.from_weights(
-                weights[p + ".codes"], weights[p + ".codebook"],
-                weights[p + ".vq_scales"]))
-            for p in _vq_prefixes
-        ]))
+        for _p in _vq_prefixes:
+            _parts = _p.split(".")
+            _obj = model
+            for _c in _parts[:-1]:
+                _obj = _obj[int(_c)] if _c.isdigit() else getattr(_obj, _c)
+            setattr(_obj, _parts[-1], VQSwitchLinear.from_weights(
+                weights[_p + ".codes"], weights[_p + ".codebook"],
+                weights[_p + ".vq_scales"]))
     # --- end quantlab VQ hook ---
 """
 ANCHOR = "    model.eval()\n    model.load_weights(list(weights.items()), strict=strict)"
@@ -45,11 +48,24 @@ def main():
         import mlx_lm
         pkg = pathlib.Path(mlx_lm.__file__).parent
     utils = pkg / "utils.py"
+    backup = pkg / "utils.py.orig-vq"
     dst = pkg / "models" / "vq_switch.py"
     src = pathlib.Path(__file__).parent / "vq_switch.py"
-    text = utils.read_text()
+    # always regenerate from the pristine backup so hook EDITS take effect
+    if backup.exists():
+        text = backup.read_text()
+    else:
+        text = utils.read_text()
+        if MARK in text:
+            # strip an existing hook block to recover the pristine text
+            i = text.index("\n    " + MARK)
+            j = text.index("# --- end quantlab VQ hook ---\n")
+            text = (text[:i] + "\n"
+                    + text[j + len("# --- end quantlab VQ hook ---\n"):])
+            print("  (recovered pristine text by stripping old hook)")
+        backup.write_text(text)
 
-    hooked = MARK in text
+    hooked = MARK in utils.read_text() and (HOOK.strip() in utils.read_text())
     module_current = dst.exists() and dst.read_text() == src.read_text()
     print(f"mlx_lm at {pkg}")
     print(f"  vq_switch.py installed+current: {module_current}")
