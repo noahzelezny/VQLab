@@ -79,17 +79,35 @@ def is_vq_target(name):
     return isinstance(q, dict) and q.get("bits") == 2
 
 
+def _assign(X, C, cn, step):
+    outs = []
+    for s0 in range(0, X.shape[0], step):
+        xb = X[s0:s0 + step]
+        outs.append(mx.argmin(mx.sum(xb * xb, axis=1, keepdims=True)
+                              - 2 * (xb @ C.T) + cn[None, :], axis=1))
+        mx.eval(outs[-1])
+    return mx.concatenate(outs)
+
+
 def kmeans(X, k, iters):
+    # the [chunk, K] fp32 distance matrix must stay under ~2 GB — at
+    # K=16384 an unchunked 2M-sample assign is 131 GB and Metal refuses
+    step = max(50_000, int(5e8 / k))
     n = X.shape[0]
     C = X[mx.random.randint(0, n, (k,))]
-    xn = mx.sum(X * X, axis=1, keepdims=True)
     for _ in range(iters):
         cn = mx.sum(C * C, axis=1)
-        a = mx.argmin(xn - 2 * (X @ C.T) + cn[None, :], axis=1)
-        mx.eval(a)
-        oh = (a[:, None] == mx.arange(k)[None, :]).astype(mx.float32)
-        cnt = mx.sum(oh, axis=0)
-        C = mx.where(cnt[:, None] > 0, (oh.T @ X) / mx.maximum(cnt[:, None], 1.0), C)
+        a = _assign(X, C, cn, step)
+        oh_sum = mx.zeros((k, X.shape[1]))
+        cnt = mx.zeros((k,))
+        for s0 in range(0, n, 2_000_000):
+            ab = a[s0:s0 + 2_000_000]
+            oh = (ab[:, None] == mx.arange(k)[None, :]).astype(mx.float32)
+            oh_sum = oh_sum + oh.T @ X[s0:s0 + 2_000_000]
+            cnt = cnt + mx.sum(oh, axis=0)
+            mx.eval(oh_sum, cnt)
+        C = mx.where(cnt[:, None] > 0,
+                     oh_sum / mx.maximum(cnt[:, None], 1.0), C)
         mx.eval(C)
     return C
 
@@ -160,8 +178,9 @@ def vq_tensor(li, proj, want_shape):
         blk = T[s:s + EC].astype(mx.float32)
         sub, scale, (e, out_d, in_d) = vq_expert_block(blk)
         parts = []
-        for c in range(0, sub.shape[0], 4_000_000):
-            xb = sub[c:c + 4_000_000]
+        step = max(50_000, int(5e8 / K))
+        for c in range(0, sub.shape[0], step):
+            xb = sub[c:c + step]
             a = mx.argmin(mx.sum(xb * xb, axis=1, keepdims=True)
                           - 2 * (xb @ C.T) + cn[None, :], axis=1)
             parts.append(C[a])
