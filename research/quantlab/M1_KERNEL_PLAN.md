@@ -49,6 +49,11 @@ the sorted path exo's runner emits.
 
 - **M1a (half day): correctness.** Single-expert kernel vs numpy decode:
   max |Δ| within fp16 accumulation noise on random + real-codes inputs.
+  **DONE 2026-08-15** (m1a_kernel_test.py, on the M4): ~2e-7 rel with fp32
+  accum on synthetic d4/K128 AND d8/K16384 AND real L0 codes (down_proj +
+  gate_up); 3.5e-4 with fp16 output. Emit side: m1a_emit_codes.py
+  (standalone — the fused fitter stayed untouched under the live E/F/G
+  chain); real-tensor fits take 12-16 s at K128 on the M4.
 - **M1b (half day): decode-shape benchmark** vs gather_qmm on the real
   sizes ([512,1024,4096] gate_up, [512,4096,1024] down; M=1,4,16).
   Bar: ≥0.5x gather_qmm tok/s (roofline says ≥1x is in reach).
