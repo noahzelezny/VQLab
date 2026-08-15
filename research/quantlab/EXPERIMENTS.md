@@ -1413,12 +1413,28 @@ Sweep checkpoint (35B, 391 layers × {2,3,4}): `optiq-ab-35b/sensitivity_checkpo
 Env-gated patches + verify procedure: `~/Documents/AgenicAI/quantlab/README.md`.
 Research-store chain: 1934a079 → f828e303 → e47cd33e → c91de858 → b293ff81 → 9fbc2733 → b56200c2 (E17) → a6f6f613 (E17b) → (this doc).
 
-## Rig gotcha (08-14 evening) — mx.load on exFAT silently serves ZEROS
+## Rig gotcha (08-14 evening) — a 39 MB/s USB link makes mx.load return ZEROS
 
-The M4's T7 (exFAT, USB) holds a bf16 397B copy. `mx.load` mmaps; macOS
-mmap on exFAT is broken — the GPU reads ZERO PAGES (VQ relerr exactly
-1.0000) or takes Metal command-buffer timeouts. Raw `read()` of the same
-files is fast and 100% intact — drive fine, copy fine, THE READ PATH lies.
-Cost tonight: two false diagnoses (dev mlx build; corrupt copy) before the
-discriminating test (raw bytes, no GPU). NEVER point MLX at exFAT. Fix:
-reformat the T7 to APFS, or stage shards to internal APFS first.
+**CORRECTED — the first version of this entry blamed exFAT mmap. Wrong.**
+
+Symptoms on the M4's T7 (bf16 397B copy): `mx.load` served all-zero tensors
+(VQ relerr exactly 1.0000), Metal command-buffer timeouts on the same reads,
+and 18 MB/s file copies. Three false diagnoses in order: (1) exo's dev mlx
+build — refuted, a pinned 0.32.0 venv failed identically; (2) corrupt copy —
+refuted, RAW read() of the exact tensor byte ranges is 99.9% nonzero; (3)
+exFAT mmap — refuted, an APFS disk image ON the T7 reproduced the zeros with
+byte-perfect data inside it.
+
+ROOT CAUSE: the drive was enumerating at **USB 2.0 speed — 39 MB/s measured**
+(should be ~1000 MB/s), after being moved to a different port. An 8.6 GB
+mmap'd tensor then needs ~220 s to fault in, which exceeds BOTH the Metal
+watchdog and the device's own 30 s read timeout (`ioreg`: Read Time Out
+Duration=30000) — so the GPU gets aborts or zero pages. One degraded link
+explains all three symptoms.
+
+Lessons: (a) `mx.load` mmaps, so GPU reads inherit the DEVICE's latency —
+a slow link corrupts silently rather than erroring; (b) when data reads fine
+via `read()` but wrong via mmap, suspect the transport, not the filesystem;
+(c) always check link speed before blaming software — `ioreg -rc
+IOBlockStorageDevice` + a raw read-rate measurement takes 30 seconds and
+would have skipped all three wrong turns.
