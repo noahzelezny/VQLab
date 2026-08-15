@@ -1637,3 +1637,29 @@ path mlx_lm actually uses runs 30k fine — benchmark the path users take.
 128 GB Apple Silicon Mac: 30k context, ~20 tok/s decode, ~40-50 tok/s
 prefill, wikitext 2.7655 / code 2.6383 (beats spicyneuron 2.6bit on both
 at 9.8 GiB less), stock mlx-lm, zero patches.
+
+## E36 (08-15) — d8 probe: the win is PER-TENSOR, not per-format (mixed geometry)
+
+Same-methodology ladder on real 397B L0 tensors (M4, m1a_emit_codes,
+fp16-codebook relerr), d4 K256 as the C anchor:
+
+  | geometry | bpw(packed) | down_proj | gate_up |
+  |---|---|---|---|
+  | d4 K256 (C) | 2.25 | 0.1930 | 0.4161 |
+  | d8 K256    | 1.25 | 0.3413 | 0.6437 |
+  | d8 K1024   | 1.50 | 0.2335 | 0.5939 |
+  | d8 K4096   | 1.75 | **0.1794** | 0.5185 |
+
+- **68 GiB (d8 K256, byte-aligned, no packing) is DEAD**: +77%/+55% error.
+- **down_proj prefers d8**: K4096 BEATS the C anchor at 22% fewer bits.
+- **gate_up never recovers at d8** — even K4096 sits far below its d4
+  anchor. The morning sweep's "d8 ~2%/bit better" held only for down_proj
+  (1/3 of expert mass). Uniform-d8 G spends its 38h applying the wrong
+  geometry to 2/3 of the weights.
+- **MIXED GEOMETRY is already format-legal**: vq_modules carries dim/K per
+  module; the runtime builds each module independently. Frontier candidates:
+    gate/up d4K256 + down d8K4096  -> ~103.6 GiB, quality >= C everywhere
+    gate/up d4K1024 + down d8K4096 -> ~118 GiB, ~A-grade gate/up at C size
+  Both need 12-bit packing + the L2-resident d8 kernel (K4096 codebook =
+  64 KB > 32 KB threadgroup). d8 K1024 (16 KB) fits threadgroup if a
+  cheaper mixed point is wanted (down 0.2335, slightly below C).
