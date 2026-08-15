@@ -193,6 +193,63 @@ def bench(fn, warmup=5, reps=20):
     return (time.perf_counter() - t0) / reps
 
 
+def main_d8(z, args, rng):
+    """d8 bench: shipping vq_switch kernels (threadgroup K<=1024 / L2-resident
+    device codebook) vs the honest gather_qmm baseline, + naive cross-check."""
+    import vq_switch
+    E, OUT, IN, D, K, G = [int(v) for v in z["meta"]]
+    print(f"tensor: E={E} out={OUT} in={IN} d={D} K={K} G={G}  "
+          f"(codebook {K*D*2/1024:.0f} KB)")
+    codes = mx.array(z["codes"])                       # uint16
+    cb = mx.array(z["codebook"]).astype(mx.float16)
+    sc16 = mx.array(z["scales"]).astype(mx.float16)
+    # naive reference must see the SAME fp16-rounded scale values the
+    # shipping kernels read, or the cross-check measures rounding, not bugs
+    sc = sc16.astype(mx.float32)
+    mx.eval(codes, cb, sc, sc16)
+
+    Wb = mx.random.normal((E, OUT, IN)).astype(mx.bfloat16)
+    qw, qs, qb = mx.quantize(Wb, group_size=64, bits=2)
+    mx.eval(qw, qs, qb)
+
+    top_k = args.experts_used
+    for M in (1, 4, 16):
+        N = M * top_k
+        idx_np = np.sort(rng.integers(0, E, (M, top_k)).astype(np.uint32), axis=1)
+        xtok = mx.random.normal((M, IN)).astype(mx.float16)
+        xq = xtok[:, None, None, :].astype(mx.bfloat16)
+        idx = mx.array(idx_np)
+        x = mx.repeat(xtok[:, None, :], top_k, axis=1).reshape(N, IN)
+        eidx = mx.array(idx_np.reshape(-1))
+        mx.eval(x, eidx, xq, idx)
+
+        t_base = bench(lambda: mx.gather_qmm(
+            xq, qw, qs, qb, rhs_indices=idx, transpose=True,
+            group_size=64, bits=2, sorted_indices=True))
+        t_naive = bench(lambda: vq_run(K_GATHER, x, eidx, codes, cb, sc))
+        # L2-resident device-codebook variant (forced)
+        saved = vq_switch._D8_TG_MAX_K
+        vq_switch._D8_TG_MAX_K = 0
+        t_l2 = bench(lambda: vq_switch._fused(x, eidx, codes, cb, sc16))
+        y_l2 = vq_switch._fused(x, eidx, codes, cb, sc16).astype(mx.float32)
+        vq_switch._D8_TG_MAX_K = saved
+        # threadgroup variant when the codebook fits
+        if K <= vq_switch._D8_TG_MAX_K:
+            t_tg = bench(lambda: vq_switch._fused(x, eidx, codes, cb, sc16))
+            y_tg = vq_switch._fused(x, eidx, codes, cb, sc16).astype(mx.float32)
+        else:
+            t_tg, y_tg = float("nan"), None
+        y_ref = vq_run(K_GATHER, x, eidx, codes, cb, sc).astype(mx.float32)
+        d = float(mx.abs(y_l2 - y_ref).max())
+        if y_tg is not None:
+            d = max(d, float(mx.abs(y_tg - y_ref).max()))
+        print(f"M={M:3d} (N={N:4d}): gather_qmm {t_base*1e3:7.3f} ms | "
+              f"naive {t_naive*1e3:7.3f} ({t_base/t_naive:4.2f}x) | "
+              f"d8-L2 {t_l2*1e3:7.3f} ({t_base/t_l2:4.2f}x) | "
+              f"d8-tg {t_tg*1e3:7.3f} ({t_base/t_tg:4.2f}x) | "
+              f"max|d| {d:.1e}", flush=True)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--npz", required=True, help="real codes (m1a_emit_codes)")
@@ -201,6 +258,8 @@ def main():
     rng = np.random.default_rng(1)
     z = np.load(args.npz)
     E, OUT, IN, D, K, G = [int(v) for v in z["meta"]]
+    if D == 8:
+        return main_d8(z, args, rng)
     print(f"tensor: E={E} out={OUT} in={IN} d={D} K={K} G={G}")
 
     codes = mx.array(z["codes"])                       # uint16 [E,OUT,NSUB]

@@ -5,8 +5,15 @@
 #
 # Format (per VQ'd expert tensor, produced by vq_*_codes fitters):
 #   {p}.codes      uint8 (K<=256) / uint16   [E, out, in/d]
-#   {p}.codebook   fp16                      [K, d]      (d=4 only, v1)
+#   {p}.codebook   fp16                      [K, d]      (d=4 or d=8)
 #   {p}.vq_scales  fp16                      [E, out, in/group]
+#
+# d=8 (E36 mixed geometry, 2026-08-15): each module dispatches on its own
+# codebook shape, so a model can mix d4 and d8 tensors freely. d8 codebooks
+# above 2K entries (K4096 = 64 KB fp16) cannot live in Apple's 32 KB
+# threadgroup memory — the d8 kernels keep the codebook in DEVICE memory and
+# rely on L2 residency (measured, not assumed: see m1b_bench d8 rows). A
+# threadgroup d8 variant exists for K<=1024 (16 KB codebook).
 #
 # Two execution regimes (measured on M4, m1b/m1c benches, 2026-08-15):
 #   decode (small N):  fused LUT-matmul kernel, threadgroup codebook + x,
@@ -97,17 +104,105 @@ _SRC_FUSED = r"""
     y[(size_t)t * OUT + r] = static_cast<T>(acc);
 """
 
+# d=8, codebook in DEVICE memory (L2-resident; K4096 = 64 KB > 32 KB
+# threadgroup). x cached in threadgroup as float4; each code costs two half4
+# codebook loads. Codes are uint16 (12-bit values for K4096).
+_SRC_FUSED_D8 = r"""
+    const int OUT  = dims[0];
+    const int IN   = dims[1];
+    const int G    = dims[3];
+    const int N    = dims[4];
+    const int NSUB = IN / 8;
+    const int NX4  = IN / 4;
+    const int NGRP = IN / G;
+    const int SPG  = G / 8;
+    uint r = thread_position_in_grid.x;
+    uint t = thread_position_in_grid.y;
+    uint lid = thread_position_in_threadgroup.x;
+    uint tgsize = threads_per_threadgroup.x;
+
+    threadgroup float4 xs[MAX_NX4];
+    const device T* xrow = x + (size_t)t * IN;
+    for (uint i = lid; i < (uint)NX4; i += tgsize)
+        xs[i] = float4((float)xrow[i*4], (float)xrow[i*4+1],
+                       (float)xrow[i*4+2], (float)xrow[i*4+3]);
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+    if (r >= (uint)OUT || t >= (uint)N) return;
+    const uint e = eidx[t];
+    const device CT* crow = codes + (size_t)e * OUT * NSUB + (size_t)r * NSUB;
+    const device half* srow = scales + (size_t)e * OUT * NGRP + (size_t)r * NGRP;
+    const device half4* cb4 = (const device half4*)codebook;
+    float acc = 0.0f;
+    int j = 0;
+    for (int g = 0; g < NGRP; ++g) {
+        float gacc = 0.0f;
+        for (int q = 0; q < SPG; ++q, ++j) {
+            const uint c = (uint)crow[j];
+            gacc += dot(float4(cb4[2*c]),   xs[2*j])
+                  + dot(float4(cb4[2*c+1]), xs[2*j+1]);
+        }
+        acc = fma((float)srow[g], gacc, acc);
+    }
+    y[(size_t)t * OUT + r] = static_cast<T>(acc);
+"""
+
+# d=8, codebook in THREADGROUP memory — K<=1024 only (half4 pairs: K*16 B
+# = 16 KB at K1024, + x as half4 = 8 KB at IN=4096 -> 24 KB total).
+_SRC_FUSED_D8_TG = r"""
+    const int OUT  = dims[0];
+    const int IN   = dims[1];
+    const int G    = dims[3];
+    const int N    = dims[4];
+    const int K    = dims[5];
+    const int NSUB = IN / 8;
+    const int NX4  = IN / 4;
+    const int NGRP = IN / G;
+    const int SPG  = G / 8;
+    uint r = thread_position_in_grid.x;
+    uint t = thread_position_in_grid.y;
+    uint lid = thread_position_in_threadgroup.x;
+    uint tgsize = threads_per_threadgroup.x;
+
+    threadgroup half4 cb[2 * MAX_K];
+    threadgroup half4 xs[MAX_NX4];
+    const device half4* cbg = (const device half4*)codebook;
+    for (uint i = lid; i < (uint)(2 * K); i += tgsize)
+        cb[i] = cbg[i];
+    const device T* xrow = x + (size_t)t * IN;
+    for (uint i = lid; i < (uint)NX4; i += tgsize)
+        xs[i] = half4((half)xrow[i*4], (half)xrow[i*4+1],
+                      (half)xrow[i*4+2], (half)xrow[i*4+3]);
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+    if (r >= (uint)OUT || t >= (uint)N) return;
+    const uint e = eidx[t];
+    const device CT* crow = codes + (size_t)e * OUT * NSUB + (size_t)r * NSUB;
+    const device half* srow = scales + (size_t)e * OUT * NGRP + (size_t)r * NGRP;
+    float acc = 0.0f;
+    int j = 0;
+    for (int g = 0; g < NGRP; ++g) {
+        float gacc = 0.0f;
+        for (int q = 0; q < SPG; ++q, ++j) {
+            const uint c = (uint)crow[j];
+            gacc += dot(float4(cb[2*c]),   float4(xs[2*j]))
+                  + dot(float4(cb[2*c+1]), float4(xs[2*j+1]));
+        }
+        acc = fma((float)srow[g], gacc, acc);
+    }
+    y[(size_t)t * OUT + r] = static_cast<T>(acc);
+"""
+
 _SRC_DECODE = r"""
     uint g = thread_position_in_grid.x;
     uint r = thread_position_in_grid.y;
     uint ec = thread_position_in_grid.z;
     const int OUT  = dims[0];
     const int IN   = dims[1];
+    const int D    = dims[2];
     const int G    = dims[3];
     const int NE   = dims[4];
-    const int NSUB = IN / 4;
+    const int NSUB = IN / D;
     const int NGRP = IN / G;
-    const int SPG  = G / 4;
+    const int SPG  = G / D;
     if (g >= (uint)NGRP || r >= (uint)OUT || ec >= (uint)NE) return;
     const uint e = eidx[ec];
     const device CT* crow = codes + (size_t)e * OUT * NSUB + (size_t)r * NSUB;
@@ -116,8 +211,8 @@ _SRC_DECODE = r"""
     const int j0 = g * SPG;
     for (int q = 0; q < SPG; ++q) {
         const uint c = (uint)crow[j0 + q];
-        for (int u = 0; u < 4; ++u)
-            wrow[q * 4 + u] = (half)(s * (float)codebook[c * 4 + u]);
+        for (int u = 0; u < D; ++u)
+            wrow[q * D + u] = (half)(s * (float)codebook[c * D + u]);
     }
 """
 
@@ -126,7 +221,7 @@ _KERNELS = {}
 
 def _get_kernel(name, src):
     if name not in _KERNELS:
-        if name == "vq_fused":
+        if name.startswith("vq_fused"):
             inp, out = ["x", "eidx", "codes", "codebook", "scales", "dims"], ["y"]
         else:
             inp, out = ["codes", "codebook", "scales", "eidx", "dims"], ["w"]
@@ -135,17 +230,32 @@ def _get_kernel(name, src):
     return _KERNELS[name]
 
 
+# largest d8 codebook the threadgroup variant may cache (K*16 B + x half4)
+_D8_TG_MAX_K = 1024
+
+
 def _fused(x, eidx, codes, codebook, scales):
     N, IN = x.shape
     E, OUT, NSUB = codes.shape
-    K = codebook.shape[0]
+    K, D = codebook.shape
     G = IN // scales.shape[2]
-    dims = mx.array([OUT, IN, 4, G, N, K], dtype=mx.int32)
+    dims = mx.array([OUT, IN, D, G, N, K], dtype=mx.int32)
     tgx = 256 if OUT >= 256 else OUT
-    (y,) = _get_kernel("vq_fused", _SRC_FUSED)(
+    if D == 4:
+        name, src = "vq_fused", _SRC_FUSED
+        template = [("T", x.dtype), ("CT", codes.dtype),
+                    ("MAX_K", K), ("MAX_NSUB", NSUB)]
+    elif K <= _D8_TG_MAX_K:
+        name, src = "vq_fused_d8_tg", _SRC_FUSED_D8_TG
+        template = [("T", x.dtype), ("CT", codes.dtype),
+                    ("MAX_K", K), ("MAX_NX4", IN // 4)]
+    else:
+        name, src = "vq_fused_d8", _SRC_FUSED_D8
+        template = [("T", x.dtype), ("CT", codes.dtype),
+                    ("MAX_NX4", IN // 4)]
+    (y,) = _get_kernel(name, src)(
         inputs=[x, eidx, codes, codebook, scales, dims],
-        template=[("T", x.dtype), ("CT", codes.dtype),
-                  ("MAX_K", K), ("MAX_NSUB", NSUB)],
+        template=template,
         grid=(((OUT + tgx - 1) // tgx) * tgx, N, 1),
         threadgroup=(tgx, 1, 1),
         output_shapes=[(N, OUT)],
@@ -157,10 +267,11 @@ def _fused(x, eidx, codes, codebook, scales):
 def _decode_chunk(codes, codebook, scales, eidx_chunk):
     NE = eidx_chunk.shape[0]
     E, OUT, NSUB = codes.shape
-    IN = NSUB * 4
+    D = codebook.shape[1]
+    IN = NSUB * D
     NGRP = scales.shape[2]
     G = IN // NGRP
-    dims = mx.array([OUT, IN, 4, G, NE], dtype=mx.int32)
+    dims = mx.array([OUT, IN, D, G, NE], dtype=mx.int32)
     (w,) = _get_kernel("vq_decode", _SRC_DECODE)(
         inputs=[codes, codebook, scales, eidx_chunk, dims],
         template=[("CT", codes.dtype)],

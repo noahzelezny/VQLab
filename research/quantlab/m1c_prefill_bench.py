@@ -20,55 +20,10 @@ import time
 import mlx.core as mx
 import numpy as np
 
-SRC_DECODE = r"""
-    // one thread per (expert-in-chunk, row, scale-group)
-    uint g = thread_position_in_grid.x;   // scale group
-    uint r = thread_position_in_grid.y;   // row
-    uint ec = thread_position_in_grid.z;  // expert index within chunk
-    const int OUT  = dims[0];
-    const int IN   = dims[1];
-    const int G    = dims[3];
-    const int NSUB = IN / 4;
-    const int NGRP = IN / G;
-    const int SPG  = G / 4;
-    const int NE   = dims[4];             // experts in chunk
-    if (g >= (uint)NGRP || r >= (uint)OUT || ec >= (uint)NE) return;
-    const uint e = eidx[ec];              // absolute expert id
-    const device uchar* crow = codes + (size_t)e * OUT * NSUB + (size_t)r * NSUB;
-    const float s = (float)scales[(size_t)e * OUT * NGRP + (size_t)r * NGRP + g];
-    device half* wrow = w + (size_t)ec * OUT * IN + (size_t)r * IN + (size_t)g * G;
-    const int j0 = g * SPG;
-    for (int q = 0; q < SPG; ++q) {
-        const uint c = (uint)crow[j0 + q];
-        for (int u = 0; u < 4; ++u)
-            wrow[q * 4 + u] = (half)(s * (float)codebook[c * 4 + u]);
-    }
-"""
-
-DECODE = mx.fast.metal_kernel(
-    name="vq_decode_dense",
-    input_names=["codes", "codebook", "scales", "eidx", "dims"],
-    output_names=["w"],
-    source=SRC_DECODE,
-)
-
-
 def decode_chunk(codes8, cb, sc16, eidx_chunk):
-    NE = eidx_chunk.shape[0]
-    E, OUT, NSUB = codes8.shape
-    IN = NSUB * 4
-    NGRP = sc16.shape[2]
-    G = IN // NGRP
-    dims = mx.array([OUT, IN, 4, G, NE], dtype=mx.int32)
-    (w,) = DECODE(
-        inputs=[codes8, cb, sc16, eidx_chunk, dims],
-        template=[("X", mx.float16)],
-        grid=(NGRP, OUT, NE),
-        threadgroup=(min(32, NGRP), 8, 1),
-        output_shapes=[(NE, OUT, IN)],
-        output_dtypes=[mx.float16],
-    )
-    return w
+    # the SHIPPING decode kernel (vq_switch): generic over d and code dtype
+    import vq_switch
+    return vq_switch._decode_chunk(codes8, cb, sc16, eidx_chunk)
 
 
 def vq_prefill(x_sorted, seg_expert, seg_tok_idx, codes8, cb, sc16, chunk=64):
@@ -127,11 +82,11 @@ def main():
     rng = np.random.default_rng(2)
     z = np.load(args.npz)
     E, OUT, IN, D, K, G = [int(v) for v in z["meta"]]
-    assert D == 4 and K <= 256
     print(f"tensor: E={E} out={OUT} in={IN} d={D} K={K} G={G}  "
           f"tokens={args.tokens} top_k={args.top_k}")
 
-    codes8 = mx.array(z["codes"].astype(np.uint8))
+    ct = np.uint8 if K <= 256 else np.uint16
+    codes8 = mx.array(z["codes"].astype(ct))
     cb = mx.array(z["codebook"]).astype(mx.float16)
     sc16 = mx.array(z["scales"]).astype(mx.float16)
     sc32 = mx.array(z["scales"]).astype(mx.float32)

@@ -112,6 +112,48 @@ def check(tag, x_np, codes_np, cb_np, sc_np, G, x_dtype, cb_dtype, out_dtype, ba
     return ok
 
 
+def check_vq_switch(tag, codes_np, cb_np, sc16_np, G, M, rng):
+    """Validate the SHIPPING kernels (vq_switch._fused + _decode_chunk)
+    against fp64 numpy on multi-expert codes. codes_np [E,OUT,NSUB],
+    sc16_np fp16 [E,OUT,NGRP]."""
+    import vq_switch
+    E, OUT, NSUB = codes_np.shape
+    D = cb_np.shape[1]
+    IN = NSUB * D
+    x_np = rng.standard_normal((M, IN)).astype(np.float16)
+    eidx_np = rng.integers(0, E, (M,)).astype(np.uint32)
+    ct = np.uint8 if cb_np.shape[0] <= 256 else np.uint16
+    codes = mx.array(codes_np.astype(ct))
+    cb = mx.array(cb_np)
+    sc = mx.array(sc16_np)
+    y = vq_switch._fused(mx.array(x_np), mx.array(eidx_np), codes, cb, sc)
+    mx.eval(y)
+    ok = True
+    for m in range(M):
+        ref = numpy_ref(x_np[m:m+1].astype(np.float32), codes_np[eidx_np[m]],
+                        cb_np.astype(np.float32),
+                        sc16_np[eidx_np[m]].astype(np.float32), G)
+        got = np.array(y[m].astype(mx.float32)).astype(np.float64)
+        rel = np.abs(got - ref[0]).max() / max(np.abs(ref).max(), 1e-9)
+        # fused kernel outputs fp16 (x dtype): fp16-out bar
+        if rel >= 1e-3:
+            ok = False
+    print(f"  {tag + ' [vq_switch fused]':44s} "
+          f"{'OK' if ok else 'FAIL'} (bar 1e-3, fp16 out)", flush=True)
+    # dense decode kernel vs numpy decode
+    w = vq_switch._decode_chunk(codes, cb, sc,
+                                mx.array(np.arange(E, dtype=np.uint32)))
+    mx.eval(w)
+    wref = (cb_np.astype(np.float32)[codes_np].reshape(E, OUT, IN // G, G)
+            * sc16_np.astype(np.float32)[:, :, :, None]).reshape(E, OUT, IN)
+    dw = np.abs(np.array(w.astype(mx.float32)) - wref).max() \
+        / max(np.abs(wref).max(), 1e-9)
+    dok = dw < 1e-3
+    print(f"  {tag + ' [vq_switch decode]':44s} max rel {dw:.2e} "
+          f"{'OK' if dok else 'FAIL'}", flush=True)
+    return ok and dok
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--npz", help="real codes from m1a_emit_codes.py")
@@ -141,6 +183,21 @@ def main():
     all_ok &= check("fp16 x, fp16 cb, fp32 out", x, codes2, cb2, sc, G,
                     mx.float16, mx.float16, mx.float32, 1e-5)
 
+    print("== synthetic d=8 K=4096 (E36 mixed-geometry down_proj) ==", flush=True)
+    D3, K3 = 8, 4096
+    codes3 = rng.integers(0, K3, (OUT, IN // D3)).astype(np.uint16)
+    cb3 = (rng.standard_normal((K3, D3)) * 0.4).astype(np.float16)
+    all_ok &= check("fp16 x, fp16 cb, fp32 out", x, codes3, cb3, sc, G,
+                    mx.float16, mx.float16, mx.float32, 1e-5)
+
+    # the SHIPPING kernels (vq_switch fused + dense decode), d8 geometry
+    all_ok &= check_vq_switch("synthetic d8 K4096", codes3[None], cb3,
+                              sc[None].astype(np.float16), G, args.m, rng)
+    codes3b = rng.integers(0, 1024, (OUT, IN // D3)).astype(np.uint16)
+    all_ok &= check_vq_switch("synthetic d8 K1024 (tg)", codes3b[None],
+                              cb3[:1024], sc[None].astype(np.float16), G,
+                              args.m, rng)
+
     if args.npz:
         z = np.load(args.npz)
         E, OUTd, INd, D, K, G = [int(v) for v in z["meta"]]
@@ -151,6 +208,11 @@ def main():
             all_ok &= check(f"expert {e}: fp16 x, fp16 cb, fp32 out",
                             x, z["codes"][e], z["codebook"], z["scales"][e], G,
                             mx.float16, mx.float16, mx.float32, 1e-5)
+        # shipping kernels on the real codes (both fused + decode paths)
+        all_ok &= check_vq_switch(f"real codes d{D} K{K}", z["codes"],
+                                  z["codebook"],
+                                  z["scales"].astype(np.float16), G,
+                                  args.m, rng)
         # and the decode itself vs the ORIGINAL weights: sanity that the
         # emitted format reproduces the fit's reconstruction (not a kernel
         # property, but catches emit-side layout bugs)
