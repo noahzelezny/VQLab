@@ -33,10 +33,16 @@ def relerr(W, d, k):
     sc = mx.maximum(mx.max(mx.abs(Wg), axis=2, keepdims=True), 1e-8)
     sc = sc.astype(mx.bfloat16).astype(mx.float32)
     sub = (Wg / sc).reshape(-1, d); mx.eval(sub)
-    C = kmeans(sub[mx.random.randint(0, sub.shape[0], (min(1_500_000, sub.shape[0]),))], k)
+    samp = sub[mx.random.randint(0, sub.shape[0], (min(1_500_000, sub.shape[0]),))]
+    samp = mx.where(mx.isnan(samp), 0.0, samp)      # guard: nan seeds poison k-means
+    C = kmeans(samp, k)
+    C = mx.where(mx.isnan(C), 0.0, C)
     cn = mx.sum(C * C, axis=1); parts = []
-    for c in range(0, sub.shape[0], 4_000_000):
-        xb = sub[c:c + 4_000_000]
+    # chunk must scale INVERSELY with K: the distance matrix is
+    # [chunk, K] fp32 and Metal caps a single buffer at ~62 GB.
+    step = max(100_000, int(6e9 / k))
+    for c in range(0, sub.shape[0], step):
+        xb = sub[c:c + step]
         a = mx.argmin(mx.sum(xb * xb, axis=1, keepdims=True) - 2 * (xb @ C.T) + cn[None, :], axis=1)
         parts.append(C[a]); mx.eval(parts[-1])
     R = (mx.concatenate(parts, axis=0).reshape(-1, i // G, G) * sc).reshape(e, o, i)
