@@ -1395,6 +1395,54 @@ nothing can RUN one. M1 (Metal LUT-matmul kernel via `mx.fast.metal_kernel`,
 present in mlx 0.32.0 — no fork needed) is the real remaining risk; decode-
 at-load is NOT a fallback for the 397B (bf16 runtime footprint ~800 GiB).
 
+## E35 M0b (08-14/15) — VQ AT 397B: the frontier moves. Both size classes won.
+
+Fused one-pass fit+assemble (`vq_397b_fused.py`) over the shipped artifacts;
+2-bit expert region replaced by a VQ reconstruction stored bf16 (QUALITY
+PROXY — real bytes are analytic, no kernel yet). Structure/tail/routers
+byte-identical. Every number below reproduced bit-identically x2 on the
+single-box referee. Instrument validated: tail3x3 re-measured 3.1557,
+matching its months-old record exactly.
+
+  | artifact | GiB* | wikitext | code | eyes |
+  |---|---|---|---|---|
+  | **C  tail3x3+VQ K256**  | **111** | **2.8197** | **2.6504** | yes |
+  | spicyneuron 2.6bit      | 120.6 | 3.1843 | 2.6667 | no |
+  | ours tail3x3 (RTN)      | 122.3 | 3.1557 | 2.6542 | yes |
+  | **A  tail3x3+VQ K1024** | **134** | **2.4328** | **2.6042** | yes |
+  | ours tail30 (RTN)       | 142.5 | 2.3982 | 2.5928 | yes |
+  | **B  tail30+VQ K1024**  | **148** | **2.3579** | **2.5961** | yes |
+  | spicyneuron 3.5bit      | 165.6 | 2.3614 | 2.6005 | no |
+  *GiB for VQ rows is the ANALYTIC size of the real format, not the proxy.
+
+**Both classes won outright, on BOTH corpora:**
+- 2.6bit class: C beats spicyneuron 2.6bit by 11.45% wikitext / 0.61% code
+  at ~10 GiB LESS.
+- 3bit class: B beats spicyneuron 3.5bit by 0.15% wikitext / 0.17% code at
+  ~17 GiB less. (E29's "publish the efficiency claim, not a win" is now
+  SUPERSEDED — it is a win.)
+- A is the efficiency standout: matches their 3.5bit on code (2.6042 vs
+  2.6005) at 31.6 GiB less.
+
+**Dilution law confirmed quantitatively.** 35B gave -11.4% wikitext. At
+397B: tail3x3 (57/60 layers still 2-bit) kept nearly all of it (-10.65% vs
+its own baseline); tail30 (only 30/60) got -1.68%. VQ's payoff is
+proportional to REMAINING 2-bit mass — the same law E33 found for group
+size, now with a second data point at 7x dilution.
+
+**Domain asymmetry, stated because it constrains the claim.** At K256 the
+win is 11% wikitext but only 0.6% code; at K1024 code improves ~2.3%.
+Codebook size matters MORE for code than for prose. Never publish the
+wikitext number alone.
+
+**K-curve on tail3x3 is steep and not flat at the top:** K256 2.8197 ->
+K1024 2.4328 (23 GiB). Probe relerr keeps falling to K2048 (0.2311 ->
+0.1947), so K2048/K4096 are unexplored upside. K512 (2.50 bpw = exactly
+RTN's budget, ~122 GiB) is in flight as run D.
+
+**Still proxy-only.** No codes are stored, no kernel exists, nothing can RUN
+these. M1 (Metal LUT-matmul) remains the gating work for shipping.
+
 ## Open directions (v2 drawer)
 
 - Grouped-perturbation calibration (probe families jointly; compounding becomes
