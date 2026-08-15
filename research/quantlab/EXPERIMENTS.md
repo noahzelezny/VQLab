@@ -1616,3 +1616,24 @@ on BOTH corpora at 9.8 GiB less. As far as we can tell this is a first.
 DO NOT quote the tok/s column above: it divides generated tokens by wall time
 INCLUDING prefill, so it measures prefill at long prompts. Use
 `m2_speed_split.py` (separate prefill / decode) for any published speed.
+
+### M2c — honest throughput (m2_speed_split.py, chunked prefill, real corpus)
+
+  | context | prefill tok/s | DECODE tok/s | peak GiB |
+  |---|---|---|---|
+  | 512 | 48.2 | 22.2 | 112.4 |
+  | 2,048 | 51.5 | 21.9 | 112.8 |
+  | 8,192 | 40.7 | 18.8 | 113.0 |
+  | 14,000 | 38.8 | 20.1 | 113.1 |
+
+Decode is FLAT at ~19-22 tok/s through 14k context, peak ~113 GiB. The
+"2.9 -> 0.4 tok/s collapse" in m2_fits_in_128's table was measurement
+artifact (generated/wall-time-incl-prefill). Second measurement trap the
+same day: a MONOLITHIC prefill forward pass OOMs Metal at 8k on the nearly-
+full box (kIOGPUCommandBufferCallbackErrorOutOfMemory) while the chunked
+path mlx_lm actually uses runs 30k fine — benchmark the path users take.
+
+**FULL PUBLISHABLE CLAIM for C:** Qwen3.5-397B-A17B, 110.8 GiB, single
+128 GB Apple Silicon Mac: 30k context, ~20 tok/s decode, ~40-50 tok/s
+prefill, wikitext 2.7655 / code 2.6383 (beats spicyneuron 2.6bit on both
+at 9.8 GiB less), stock mlx-lm, zero patches.
