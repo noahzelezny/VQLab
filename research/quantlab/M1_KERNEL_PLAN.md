@@ -87,7 +87,14 @@ the sorted path exo's runner emits.
   (hook walks attributes — tree_unflatten breaks on layers.0) +
   vq_35b_codes.py. rotlab-35B-vqK256codes = **10.1 GiB** (vs 62G bf16),
   generates coherently at **85 tok/s, 11 GB peak** on the M4 via
-  `mlx_lm generate`. REMAINING: exo two-node checkouts.
+  `mlx_lm generate`. **EXO 2026-08-15**: live env mlx_lm patched on BOTH
+  nodes (conda envs + dev venvs, 4 trees), codebook-replicate guard in
+  auto_parallel.py both checkouts (committed in ~/exo on M3, applied on
+  M4), builtin model card installed. Single-node exo placement SERVES in
+  30s and generates coherently through /v1/chat/completions. Two-node
+  ring blocked ONLY on hardware: jaccl dials errno-65 because the TB5
+  cable is still unplugged from the GPTQ night (all 120Gb/s ports idle,
+  only the 40Gb/s link live). Replug -> rerun the 2-node smoke.
 - **M1e: end-to-end referee** on a real (small-bytes) VQ artifact vs its
   bf16 proxy score. Bar: PPL within noise of the proxy (same values, so
   any gap = kernel bug). THEN the artifact claims are real, sizes weighed
