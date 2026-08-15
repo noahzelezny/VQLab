@@ -83,10 +83,24 @@ the sorted path exo's runner emits.
 - **M1d (day): VQSwitchLinear + loader + exo.** Patched switch_layers
   recognizing `*.codes`/`*.codebook`/`*.vq_scales`, BOTH node checkouts
   (E2/E23). Smoke: 35B VQ artifact generates coherently through exo.
+  **SINGLE-BOX HALF DONE 2026-08-15**: vq_switch.py + patch_mlx_lm.py
+  (hook walks attributes — tree_unflatten breaks on layers.0) +
+  vq_35b_codes.py. rotlab-35B-vqK256codes = **10.1 GiB** (vs 62G bf16),
+  generates coherently at **85 tok/s, 11 GB peak** on the M4 via
+  `mlx_lm generate`. REMAINING: exo two-node checkouts.
 - **M1e: end-to-end referee** on a real (small-bytes) VQ artifact vs its
   bf16 proxy score. Bar: PPL within noise of the proxy (same values, so
   any gap = kernel bug). THEN the artifact claims are real, sizes weighed
   not analytic, and the HF upload can happen.
+  **DONE (35B) 2026-08-15, M4 referee, all runs bit-identical x2:**
+    codes 7.0378 wiki / 3.0755 code; twin 7.0313 / 3.0750.
+  Gap = +0.092% wiki / +0.016% code — NOT a layout bug (those are
+  catastrophic, not 0.1%): the twin stores bf16(fp32 product) and runs
+  dense-bf16 gather_mm, the codes path computes fp16-in/fp32-acc/fp16-out.
+  Three dtype paths, sub-0.1% spread, quality claims move by nothing.
+  Twin also confirms the E35 K256 record (7.1807 -> 7.0313 here; refit
+  reseed + fp16 scales, slightly better). 397B claims will be re-measured
+  on the real artifacts anyway, never carried from proxies.
 
 ## Fit-side work M1 needs (small)
 

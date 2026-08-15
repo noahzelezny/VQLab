@@ -1486,3 +1486,29 @@ via `read()` but wrong via mmap, suspect the transport, not the filesystem;
 (c) always check link speed before blaming software — `ioreg -rc
 IOBlockStorageDevice` + a raw read-rate measurement takes 30 seconds and
 would have skipped all three wrong turns.
+
+## M1 (08-15) — the VQ runtime EXISTS. Kernel correct, fast enough, artifact runs.
+
+One day on the idle M4 while the M3 ground the E/F/G fit queue. All code in
+vq_switch.py / patch_mlx_lm.py / vq_35b_codes.py / m1*_*.py; plan+results in
+M1_KERNEL_PLAN.md. Highlights:
+
+- **M1a** `mx.fast.metal_kernel` fused LUT-matmul == fp64 numpy decode to
+  ~2e-7 (fp32 acc) on synthetic d4/K128 + d8/K16384 AND real 397B L0 codes.
+- **M1b** decode shapes: best kernel (threadgroup cb+x, uchar4 code loads)
+  = 0.66-0.88x gather_qmm. Bar (>=0.5x) met. Gotchas: the honest baseline
+  is the mlx_lm sorted call shape (flat unsorted gather_qmm degrades ~80x
+  and flatters rivals); K<=256 must ship uint8 codes.
+- **M1c** prefill: decode-to-dense + PADDED batched GEMM **beats gather_qmm
+  1.21-1.28x** at 8192 tok. Row-batched gather_mm (65k M=1 matvecs) is the
+  trap: 0.43x. The feared simdgroup tile kernel was never needed.
+- **M1d** (single box) `rotlab-35B-vqK256codes` = **10.1 GiB** artifact
+  (62G bf16 source), coherent generation at **85 tok/s / 11 GB peak** on
+  the M4. Loader hook walks attributes (tree_unflatten breaks on layers.0);
+  fitter strips `.weight` so the MODULE path carries codes.
+- **M1e** (35B) referee, bit-identical x2: codes 7.0378/3.0755 vs twin
+  7.0313/3.0750 — +0.09%/+0.02%, the fp16-vs-bf16 arithmetic-path spread,
+  not a bug. E35 quality claims unmoved.
+
+Remaining to close M1: exo two-node integration, then the 397B codes
+fitters (vq_397b_fused --emit-codes analogue) -> real 111 GiB C artifact.
