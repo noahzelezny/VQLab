@@ -70,6 +70,16 @@ the sorted path exo's runner emits.
 - **M1c (day): the tile/prefill path + gather indices.** Bar: prefill of
   8192 tokens within 2x of gather_qmm (prefill is a one-time cost per
   request; 2x there costs seconds, decode rate is what Noah feels).
+  **DONE 2026-08-15** (m1c_prefill_bench.py, M4) — and the winner is NOT
+  a fused tile kernel: **decode-to-dense + PADDED batched GEMM beats
+  gather_qmm outright: 1.21x (down_proj), 1.28x (gate_up)** at 8192 tok.
+  Decode kernel is ~8% of the cost (2-4 ms/128 experts); compact each
+  expert's rows to a uniform cap (pad overhead 1.27x rows) and run one
+  [E,cap,IN]@[E,IN,OUT] batched matmul per chunk. The row-batched
+  gather_mm variant (65k M=1 matvecs) is the trap: 0.43x. Plan risk #1
+  (simdgroup tiling) RETIRED — never needed. Integration note for M1d:
+  the pad/compact step must run as mx ops on GPU (bench built it in
+  numpy outside the timed region; exo's runner already sorts by expert).
 - **M1d (day): VQSwitchLinear + loader + exo.** Patched switch_layers
   recognizing `*.codes`/`*.codebook`/`*.vq_scales`, BOTH node checkouts
   (E2/E23). Smoke: 35B VQ artifact generates coherently through exo.
