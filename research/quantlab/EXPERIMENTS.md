@@ -1512,3 +1512,52 @@ M1_KERNEL_PLAN.md. Highlights:
 
 Remaining to close M1: exo two-node integration, then the 397B codes
 fitters (vq_397b_fused --emit-codes analogue) -> real 111 GiB C artifact.
+
+## M2 (08-15) — THE REAL C ARTIFACT + the stored-vs-analytic bpw trap
+
+`rotlab--397B-tail3x3-vqK256codes` = **110.8 GiB**, 27 shards, 171 expert
+tensors, mean relerr 0.3156, fitted in 2h09 on the M4 (`vq_397b_codes.py`).
+Self-contained: `model_file: model.py` + `vq_modules` geometry in config, so
+STOCK mlx_lm loads it — the M4's mlx_lm was reverted to pristine before the
+referee run specifically to prove that path at 397B scale.
+
+**Referee (M4, stock mlx_lm, reproduced bit-identically x2): wikitext 2.7655**
+— 1.9% BETTER than the bf16 proxy's 2.8197. Not noise and not a bug: the
+shipping artifact stores scales in **fp16 (10 mantissa bits)** where the
+proxy used **bf16 (7 bits)**, so the real thing is more accurate than its own
+preview. (Same direction as the 35B refit: 7.1807 -> 7.0313.) vs spicyneuron
+2.6bit 3.1843 @ 120.6 GiB = **13.2% better in 9.8 GiB less**.
+
+**THE TRAP — analytic bpw assumes bit-packing we never implemented.**
+`BPW = log2(K)/d + 16/group` is what the fitters print, but codes are stored
+in WHOLE BYTES (uint8 for K<=256, uint16 above). Padding is invisible in the
+formula:
+
+  | run | geom | analytic | STORED | total |
+  |---|---|---|---|---|
+  | C | d4 K256   | 2.25 | **2.25** | 110.8 GiB (packs exactly) |
+  | F | d4 K128   | 2.00 | **2.25** | 110.8 GiB (7 bits in 8) |
+  | G | d8 K16384 | 2.00 | **2.25** | 110.8 GiB (14 bits in 16) |
+  | E | d4 K2048  | 3.00 | **4.25** | ~181 GiB (11 bits in 16) |
+
+Consequences:
+- **F is STRICTLY DOMINATED by C** — identical size, half the codebook,
+  worse quality. Disarmed 08-15 before it auto-started. It had no reason to
+  exist as configured.
+- **G is the SAME SIZE as C**, not smaller. Its case is quality only
+  (relerr 0.3099 vs C's 0.3156, ~2%) for 38h + a kernel that does not exist
+  (256 KB codebook cannot live in Apple's 32 KB threadgroup memory).
+- **E as a real artifact would be 181 GiB**, bigger than B (148) which
+  already beats spicyneuron 3.5bit. E's value is the axis question only.
+- Byte-aligned geometries are quantised: d4/K<=256 = 2.25 bpw (110.8 GiB),
+  d8/K<=256 = 1.25 bpw (~68 GiB), d8/K<=65536 = 2.25 GiB. **Nothing lands
+  between 68 and 110.8 GiB without bit-packing** — that is the real lever for
+  a sub-100 GiB artifact, and it is the same work for F and G.
+- Free upgrade if G ever runs: at d=8 a uint16 holds 16 bits, so **K=65536
+  is the same file size as K=16384** with a 4x bigger codebook — but 4x the
+  assign cost (~169h, rejected).
+
+NEXT: measure whether 110.8 GiB actually GENERATES on a 128 GB box
+(`m2_fits_in_128.py`) — the referee STREAMS, so it proves quality, not
+residency. If C fits, the accessibility claim is already won and F/G revert
+to pure quality experiments.
