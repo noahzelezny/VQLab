@@ -109,5 +109,5 @@ transfers even half).
 
 ## Order of operations
 
-M0 is the only thing to build next. Everything after it is conditional,
-and half the project's risk (quality) dies or survives there for free.
+~~M0 is the only thing to build next~~ — *this was true on 08-14; every
+milestone through M2 is now DELIVERED (see the status banner at the top).*

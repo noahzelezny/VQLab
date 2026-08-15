@@ -101,6 +101,6 @@ assemble exits 0. Log everything to logs_vq397b_*.log.
 
 ## Not tonight
 
-- No Metal kernel (M1) — fresh-head work, gated on tonight's number.
-- No K=4096 / d=8 sweeps — only if the decision tree sends us there.
-- No exo/loader changes — proxy only.
+- ~~No Metal kernel (M1)~~ *(since built and shipped — see banner)*
+- ~~No K=4096 / d=8 sweeps~~ *(since ran as E36 — mixed geometry won)*
+- ~~No exo/loader changes~~ *(since done — both nodes serve VQ artifacts)*
