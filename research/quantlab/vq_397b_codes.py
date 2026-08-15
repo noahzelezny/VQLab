@@ -56,14 +56,29 @@ ap.add_argument("--sample", type=int, default=2_000_000)
 ap.add_argument("--stage-dir", default=None)
 ap.add_argument("--ship-to", default=None,
                 help="rsync each finished shard here, then delete local")
+ap.add_argument("--geom", default=None,
+                help="per-projection geometry override, e.g. "
+                     "'gate_proj=d4k256,up_proj=d4k256,down_proj=d8k4096' "
+                     "(E36: down_proj prefers d8; gate/up never recovers)")
 args = ap.parse_args()
 
 BASE, SRC, OUT = pathlib.Path(args.base), pathlib.Path(args.src), pathlib.Path(args.out)
 SHIP = pathlib.Path(args.ship_to) if args.ship_to else None
 LO, HI = (int(x) for x in args.vq_layers.split("-"))
-D, K, G = args.dim, args.k, args.group
-CODE_DTYPE = mx.uint8 if K <= 256 else mx.uint16
-BPW = math.log2(K) / D + 16.0 / G
+G = args.group
+
+# per-projection (D, K); default = the uniform --dim/--k
+GEOM = {p: (args.dim, args.k) for p in ("gate_proj", "up_proj", "down_proj")}
+if args.geom:
+    for part in args.geom.split(","):
+        proj, dk = part.split("=")
+        d_s, k_s = dk.lstrip("d").split("k")
+        assert proj in GEOM, proj
+        GEOM[proj] = (int(d_s), int(k_s))
+
+
+def code_dtype(k):
+    return mx.uint8 if k <= 256 else mx.uint16
 
 base_idx = json.load(open(BASE / "model.safetensors.index.json"))["weight_map"]
 src_idx = json.load(open(SRC / "model.safetensors.index.json"))["weight_map"]
@@ -148,6 +163,7 @@ def load_src_expert(li, proj):
 
 def vq_tensor_codes(li, proj, want_shape):
     """Fit one expert tensor -> (codes, codebook fp16, scales fp16, relerr)."""
+    D, K = GEOM[proj]
     T = load_src_expert(li, proj)
     assert tuple(T.shape) == tuple(want_shape), (li, proj, T.shape, want_shape)
     n_exp, out_d, in_d = T.shape
@@ -193,7 +209,7 @@ def vq_tensor_codes(li, proj, want_shape):
         num += float(mx.sum((R - blk) ** 2))
         den += float(mx.sum(blk ** 2))
         e = blk.shape[0]
-        codes_parts.append(a.astype(CODE_DTYPE).reshape(e, out_d, in_d // D))
+        codes_parts.append(a.astype(code_dtype(K)).reshape(e, out_d, in_d // D))
         scales_parts.append(scale.astype(mx.float16).reshape(e, out_d, in_d // G))
         mx.eval(codes_parts[-1], scales_parts[-1])
         del blk, sub, scale, a, R, aparts
@@ -217,9 +233,17 @@ def ship(shard_name):
 
 # ---- plan -----------------------------------------------------------------
 targets = sorted({n.rsplit(".", 1)[0] for n in base_idx if is_vq_target(n)})
+
+
+def stored_bpw(d, k):
+    # codes are whole bytes (the M2 trap): uint8 for K<=256 else uint16
+    return (8 if k <= 256 else 16) / d + 16.0 / G
+
+
+geom_str = ", ".join(f"{p}=d{d}k{k} ({stored_bpw(d, k):.2f} bpw stored)"
+                     for p, (d, k) in GEOM.items())
 print(f"base {BASE.name}: {len(targets)} expert tensors -> CODES "
-      f"(layers {LO}-{HI}), d={D} K={K} = {BPW:.2f} bpw stored "
-      f"({'uint8' if K <= 256 else 'uint16'} codes)", flush=True)
+      f"(layers {LO}-{HI})  {geom_str}", flush=True)
 if not targets:
     raise SystemExit("no 2-bit expert tensors in range")
 
@@ -265,8 +289,9 @@ for si, sh in enumerate(shards):
             new[mod + ".codes"] = codes
             new[mod + ".codebook"] = cb
             new[mod + ".vq_scales"] = vsc
+            pd, pk = GEOM[proj]
             vq_modules[mod] = {"experts": want[0], "out": want[1],
-                              "in": want[2], "k": K, "dim": D, "group": G}
+                              "in": want[2], "k": pk, "dim": pd, "group": G}
             errs.append(err)
             done.add(mod)
             print(f"    L{li:02d} {proj:10s} relerr {err:.4f}", flush=True)
@@ -295,8 +320,9 @@ for m in targets:
         q = base_cfg["quantization"][m]
         # shapes recoverable only from the base scales tensor; load lazily
         sc = mx.load(str(BASE / base_idx[m + ".scales"]))[m + ".scales"]
+        pd, pk = GEOM[m.rsplit(".", 1)[1]]
         vq_modules[m] = {"experts": sc.shape[0], "out": sc.shape[1],
-                         "in": sc.shape[2] * G, "k": K, "dim": D, "group": G}
+                         "in": sc.shape[2] * G, "k": pk, "dim": pd, "group": G}
 
 new_cfg["model_file"] = "model.py"
 new_cfg["vq_modules"] = vq_modules
