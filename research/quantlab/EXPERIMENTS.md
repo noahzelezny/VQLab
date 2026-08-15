@@ -1561,3 +1561,34 @@ NEXT: measure whether 110.8 GiB actually GENERATES on a 128 GB box
 (`m2_fits_in_128.py`) — the referee STREAMS, so it proves quality, not
 residency. If C fits, the accessibility claim is already won and F/G revert
 to pure quality experiments.
+
+## M2b (08-15) — RESIDENCY on a 128 GB box, and the lazy-graph prefill bug
+
+**It fits.** `rotlab--397B-tail3x3-vqK256codes` (110.8 GiB) loads on a 128 GB
+M4 Max in ~60s, **110.8 GiB resident, swap +0**. MLX warns 113.4 GB needed vs
+a 120 GB recommended working set — real but not fatal.
+
+**The ceiling was OUR BUG, not the model size.** First ladder (chunk=128,
+pre-fix) showed prefill growing **3.35 MB/token** where this architecture's KV
+cache is only **0.059 MB/token** — a 57x gap. Root cause found by arithmetic,
+not guesswork: `_prefill` built the entire chunk loop as ONE LAZY MLX GRAPH,
+so every chunk's decoded dense expert weights (2.0 GiB each for gate_up)
+stayed alive until the final `concatenate`. Four chunks = 8 GiB live on a box
+with ~9 GiB headroom.
+
+FIX (commit 67a0473): `mx.eval()` each chunk's output inside the loop so each
+`w` frees before the next decode; `_DECODE_CHUNK` auto-sized from free
+headroom (env `SCOUT_VQ_DECODE_CHUNK`) instead of hardcoded 128.
+
+  | context | peak (before) | tok/s (before) | peak (AFTER) | tok/s (AFTER) |
+  |---|---|---|---|---|
+  | 463    | 118.0 GiB | 2.2 | **112.4 GiB** | **2.9** |
+  | 1,871  | 122.6 GiB | 1.2 (empty out) | (running) | |
+  | 7,503  | 122.7 GiB | 0.4 | | |
+
+**Lesson worth keeping: on a lazily-evaluated framework, a loop that only
+evaluates at the end holds EVERY iteration's transients simultaneously.** The
+peak-memory symptom looks exactly like "the model is too big for the machine"
+and would have sent us chasing a smaller artifact for nothing.
+Instrument-first ([[feedback_measure_the_metric_that_binds]]): the KV-cache
+arithmetic is what proved the model size was innocent.
