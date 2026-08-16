@@ -191,6 +191,158 @@ _SRC_FUSED_D8_TG = r"""
     y[(size_t)t * OUT + r] = static_cast<T>(acc);
 """
 
+# --- packed-code variants (d=4) -------------------------------------------
+# Codes live as uint32 words, BITS per code, blocks of 32 codes = BITS words
+# (see vq_pack.py for the format and its bit-exactness tests). The fetch is
+# the ONLY difference from the unpacked kernels above: same threadgroup
+# caching, same accumulation, same output. Row math is unchanged because
+# packing is row-local — crow just steps by WPR instead of NSUB.
+# NOTE: mx.fast.metal_kernel splices this source INSIDE a function body, so a
+# nested `inline uint vq_code(...) {}` is a compile error ("function definition
+# is not allowed here"). Hence macros. The `(sh + BITS > 32)` guard is a
+# ternary, so the `32 - sh` shift is never evaluated when sh == 0 (which would
+# be a 32-bit shift on a 32-bit type, i.e. UB).
+_PACK_FETCH = r"""
+    #define VQ_MASK   ((1u << BITS) - 1u)
+    #define VQ_OFF(j) (((j) & 31) * BITS)
+    #define VQ_W(j)   ((((j) >> 5) * BITS) + (VQ_OFF(j) >> 5))
+    #define VQ_SH(j)  (VQ_OFF(j) & 31)
+    #define VQ_CODE(crow, j) ( ( ((crow)[VQ_W(j)] >> VQ_SH(j)) \
+        | ((VQ_SH(j) + BITS > 32) ? ((crow)[VQ_W(j) + 1] << (32 - VQ_SH(j))) : 0u) \
+        ) & VQ_MASK )
+"""
+
+# d=4, LARGE K (>1024) — and every packed artifact.
+#
+# The original _SRC_FUSED caches the codebook as float4 (16 B/entry). At
+# K2048 that alone is 32 KB, so with x cached the threadgroup allocation is
+# 36 KB and Metal refuses to load the kernel ("Threadgroup memory size 36864
+# exceeds the maximum 32768"). That is a hard ceiling on E's geometry
+# REGARDLESS of packing — found 2026-08-15 while gating the packed kernels.
+#
+# Fix: cache codebook and x as half4 (8 B/entry). This is VALUE-IDENTICAL,
+# not an approximation: the codebook is fp16 on disk and x is cast to fp16
+# before dispatch, so both round-trips are exact; only the threadgroup
+# footprint changes (K2048 + NSUB1024 -> 16 KB + 8 KB = 24 KB).
+#
+# BITS is the packed code width; BITS == 0 selects plain uint8/uint16 codes,
+# so one source serves both formats.
+_SRC_FUSED_D4_BIGK = r"""
+    const int OUT  = dims[0];
+    const int IN   = dims[1];
+    const int G    = dims[3];
+    const int N    = dims[4];
+    const int K    = dims[5];
+    const int NSUB = IN / 4;
+    const int NGRP = IN / G;
+    const int QPG  = G / 16;
+    uint r = thread_position_in_grid.x;
+    uint t = thread_position_in_grid.y;
+    uint lid = thread_position_in_threadgroup.x;
+    uint tgsize = threads_per_threadgroup.x;
+
+    threadgroup half4 cb[MAX_K];
+    threadgroup half4 xs[MAX_NSUB];
+    const device half4* cbg = (const device half4*)codebook;
+    for (uint i = lid; i < (uint)K; i += tgsize)
+        cb[i] = cbg[i];
+    const device T* xrow = x + (size_t)t * IN;
+    for (uint i = lid; i < (uint)NSUB; i += tgsize)
+        xs[i] = half4((half)xrow[i*4], (half)xrow[i*4+1],
+                      (half)xrow[i*4+2], (half)xrow[i*4+3]);
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+    if (r >= (uint)OUT || t >= (uint)N) return;
+    const uint e = eidx[t];
+    const device CT* crow = codes + (size_t)e * OUT * NSUB + (size_t)r * NSUB;
+    #define VQ_AT(j) ((uint)crow[j])
+    const device half* srow = scales + (size_t)e * OUT * NGRP + (size_t)r * NGRP;
+    float acc = 0.0f;
+    int j = 0;
+    for (int g = 0; g < NGRP; ++g) {
+        float gacc = 0.0f;
+        for (int q = 0; q < QPG; ++q) {
+            gacc += dot(float4(cb[VQ_AT(j)]),   float4(xs[j]))
+                  + dot(float4(cb[VQ_AT(j+1)]), float4(xs[j+1]))
+                  + dot(float4(cb[VQ_AT(j+2)]), float4(xs[j+2]))
+                  + dot(float4(cb[VQ_AT(j+3)]), float4(xs[j+3]));
+            j += 4;
+        }
+        acc = fma((float)srow[g], gacc, acc);
+    }
+    y[(size_t)t * OUT + r] = static_cast<T>(acc);
+"""
+
+_SRC_FUSED_PACKED = _PACK_FETCH + r"""
+    const int OUT  = dims[0];
+    const int IN   = dims[1];
+    const int G    = dims[3];
+    const int N    = dims[4];
+    const int K    = dims[5];
+    const int NSUB = IN / 4;
+    const int NGRP = IN / G;
+    const int QPG  = G / 16;
+    const int WPR  = NSUB / 32 * BITS;
+    uint r = thread_position_in_grid.x;
+    uint t = thread_position_in_grid.y;
+    uint lid = thread_position_in_threadgroup.x;
+    uint tgsize = threads_per_threadgroup.x;
+
+    threadgroup half4 cb[MAX_K];
+    threadgroup half4 xs[MAX_NSUB];
+    const device half4* cbg = (const device half4*)codebook;
+    for (uint i = lid; i < (uint)K; i += tgsize)
+        cb[i] = cbg[i];
+    const device T* xrow = x + (size_t)t * IN;
+    for (uint i = lid; i < (uint)NSUB; i += tgsize)
+        xs[i] = half4((half)xrow[i*4], (half)xrow[i*4+1],
+                      (half)xrow[i*4+2], (half)xrow[i*4+3]);
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+    if (r >= (uint)OUT || t >= (uint)N) return;
+    const uint e = eidx[t];
+    const device uint* crow = codes + (size_t)e * OUT * WPR + (size_t)r * WPR;
+    const device half* srow = scales + (size_t)e * OUT * NGRP + (size_t)r * NGRP;
+    float acc = 0.0f;
+    int j = 0;
+    for (int g = 0; g < NGRP; ++g) {
+        float gacc = 0.0f;
+        for (int q = 0; q < QPG; ++q) {
+            gacc += dot(float4(cb[VQ_CODE(crow, j)]),   float4(xs[j]))
+                  + dot(float4(cb[VQ_CODE(crow, j+1)]), float4(xs[j+1]))
+                  + dot(float4(cb[VQ_CODE(crow, j+2)]), float4(xs[j+2]))
+                  + dot(float4(cb[VQ_CODE(crow, j+3)]), float4(xs[j+3]));
+            j += 4;
+        }
+        acc = fma((float)srow[g], gacc, acc);
+    }
+    y[(size_t)t * OUT + r] = static_cast<T>(acc);
+"""
+
+_SRC_DECODE_PACKED = _PACK_FETCH + r"""
+    uint g = thread_position_in_grid.x;
+    uint r = thread_position_in_grid.y;
+    uint ec = thread_position_in_grid.z;
+    const int OUT  = dims[0];
+    const int IN   = dims[1];
+    const int D    = dims[2];
+    const int G    = dims[3];
+    const int NE   = dims[4];
+    const int NSUB = IN / D;
+    const int NGRP = IN / G;
+    const int SPG  = G / D;
+    const int WPR  = NSUB / 32 * BITS;
+    if (g >= (uint)NGRP || r >= (uint)OUT || ec >= (uint)NE) return;
+    const uint e = eidx[ec];
+    const device uint* crow = codes + (size_t)e * OUT * WPR + (size_t)r * WPR;
+    const float s = (float)scales[(size_t)e * OUT * NGRP + (size_t)r * NGRP + g];
+    device half* wrow = w + (size_t)ec * OUT * IN + (size_t)r * IN + (size_t)g * G;
+    const int j0 = g * SPG;
+    for (int q = 0; q < SPG; ++q) {
+        const uint c = VQ_CODE(crow, j0 + q);
+        for (int u = 0; u < D; ++u)
+            wrow[q * D + u] = (half)(s * (float)codebook[c * D + u]);
+    }
+"""
+
 _SRC_DECODE = r"""
     uint g = thread_position_in_grid.x;
     uint r = thread_position_in_grid.y;
@@ -234,14 +386,30 @@ def _get_kernel(name, src):
 _D8_TG_MAX_K = 1024
 
 
-def _fused(x, eidx, codes, codebook, scales):
+def _fused(x, eidx, codes, codebook, scales, pack_bits=0):
     N, IN = x.shape
-    E, OUT, NSUB = codes.shape
+    E, OUT, _ = codes.shape
     K, D = codebook.shape
+    NSUB = IN // D
     G = IN // scales.shape[2]
     dims = mx.array([OUT, IN, D, G, N, K], dtype=mx.int32)
     tgx = 256 if OUT >= 256 else OUT
-    if D == 4:
+    # threadgroup budget: float4 codebook cache is 16 B/entry, so K>1024 with
+    # x cached overflows Apple's 32 KB. Large-K (and all packed) go through
+    # the half4 variant — value-identical, half the footprint.
+    if pack_bits:
+        if D != 4:
+            raise NotImplementedError("packed codes are d=4 only (F and E are d4)")
+        name = f"vq_fused_packed{pack_bits}"
+        src = _SRC_FUSED_PACKED
+        template = [("T", x.dtype), ("MAX_K", K), ("MAX_NSUB", NSUB),
+                    ("BITS", pack_bits)]
+    elif D == 4 and K > 1024:
+        name = "vq_fused_d4_bigk"
+        src = _SRC_FUSED_D4_BIGK
+        template = [("T", x.dtype), ("CT", codes.dtype), ("MAX_K", K),
+                    ("MAX_NSUB", NSUB)]
+    elif D == 4:
         name, src = "vq_fused", _SRC_FUSED
         template = [("T", x.dtype), ("CT", codes.dtype),
                     ("MAX_K", K), ("MAX_NSUB", NSUB)]
@@ -264,17 +432,26 @@ def _fused(x, eidx, codes, codebook, scales):
     return y
 
 
-def _decode_chunk(codes, codebook, scales, eidx_chunk):
+def _decode_chunk(codes, codebook, scales, eidx_chunk, pack_bits=0,
+                  in_features=None):
     NE = eidx_chunk.shape[0]
-    E, OUT, NSUB = codes.shape
+    E, OUT, _ = codes.shape
     D = codebook.shape[1]
-    IN = NSUB * D
     NGRP = scales.shape[2]
+    # packed rows are WPR words wide, so shape no longer implies IN — the
+    # caller passes it (VQSwitchLinear.input_dims knows it from the format).
+    IN = in_features if in_features is not None else codes.shape[2] * D
     G = IN // NGRP
     dims = mx.array([OUT, IN, D, G, NE], dtype=mx.int32)
-    (w,) = _get_kernel("vq_decode", _SRC_DECODE)(
+    if pack_bits:
+        name, src = f"vq_decode_packed{pack_bits}", _SRC_DECODE_PACKED
+        template = [("BITS", pack_bits)]
+    else:
+        name, src = "vq_decode", _SRC_DECODE
+        template = [("CT", codes.dtype)]
+    (w,) = _get_kernel(name, src)(
         inputs=[codes, codebook, scales, eidx_chunk, dims],
-        template=[("CT", codes.dtype)],
+        template=template,
         grid=(NGRP, OUT, NE),
         threadgroup=(min(32, NGRP), 8, 1),
         output_shapes=[(NE, OUT, IN)],
@@ -283,7 +460,8 @@ def _decode_chunk(codes, codebook, scales, eidx_chunk):
     return w
 
 
-def _prefill(xf, idx_sorted_np, codes, codebook, scales):
+def _prefill(xf, idx_sorted_np, codes, codebook, scales, pack_bits=0,
+             in_features=None):
     """xf [N, IN] rows sorted by expert; idx_sorted_np = matching np expert
     ids. Decode touched experts in chunks; one padded batched GEMM each."""
     global _DECODE_CHUNK
@@ -307,7 +485,8 @@ def _prefill(xf, idx_sorted_np, codes, codebook, scales):
             gmap[i, :c] = np.arange(starts[e], starts[e] + c, dtype=np.uint32)
             vmask[i, :c] = True
         w = _decode_chunk(codes, codebook, scales,
-                          mx.array(eids.astype(np.uint32)))
+                          mx.array(eids.astype(np.uint32)),
+                          pack_bits=pack_bits, in_features=in_features)
         xp = xf[mx.array(gmap.reshape(-1))].reshape(ne, cap, -1)
         yp = xp @ mx.swapaxes(w, 1, 2)                      # [ne, cap, OUT]
         flat_valid = np.nonzero(vmask.reshape(-1))[0].astype(np.uint32)
@@ -327,12 +506,22 @@ class VQSwitchLinear(nn.Module):
     """Drop-in for QuantizedSwitchLinear over VQ codes. No bias support
     (Qwen3.5 experts are bias-free)."""
 
-    def __init__(self, codes, codebook, vq_scales, group_size: int = 64):
+    def __init__(self, codes, codebook, vq_scales, group_size: int = 64,
+                 pack_bits: int = 0, in_features: int | None = None):
         super().__init__()
         self.codes = codes
         self.codebook = codebook
         self.vq_scales = vq_scales
         self.group_size = group_size
+        # pack_bits = 0 -> legacy unpacked codes (uint8/uint16), the format
+        # every shipped artifact before 08-16 uses. Non-zero -> uint32 words
+        # holding pack_bits-wide fields (vq_pack.py).
+        self.pack_bits = pack_bits
+        if pack_bits and in_features is None:
+            raise ValueError("packed codes need explicit in_features: a "
+                             "packed row is WPR words wide, so its shape no "
+                             "longer implies the input dimension")
+        self._in_features = in_features
         self.freeze()
 
     @classmethod
@@ -341,6 +530,8 @@ class VQSwitchLinear(nn.Module):
 
     @property
     def input_dims(self):
+        if self._in_features is not None:
+            return self._in_features
         return self.codes.shape[2] * self.codebook.shape[1]
 
     @property
@@ -360,9 +551,11 @@ class VQSwitchLinear(nn.Module):
         in_dtype = xf.dtype
         if in_dtype not in (mx.float16,):
             xf = xf.astype(mx.float16)
+        pb = self.pack_bits
         if N <= VQ_FUSED_MAX_N:
             y = _fused(xf, idx_flat.astype(mx.uint32),
-                       self["codes"], self["codebook"], self["vq_scales"])
+                       self["codes"], self["codebook"], self["vq_scales"],
+                       pack_bits=pb)
         else:
             idx_np = np.array(idx_flat, copy=False)
             if not sorted_indices:
@@ -370,9 +563,11 @@ class VQSwitchLinear(nn.Module):
                 inv = np.argsort(order, kind="stable")
                 y = _prefill(xf[mx.array(order.astype(np.uint32))],
                              idx_np[order],
-                             self["codes"], self["codebook"], self["vq_scales"])
+                             self["codes"], self["codebook"], self["vq_scales"],
+                             pack_bits=pb, in_features=IN)
                 y = y[mx.array(inv.astype(np.uint32))]
             else:
                 y = _prefill(xf, idx_np,
-                             self["codes"], self["codebook"], self["vq_scales"])
+                             self["codes"], self["codebook"], self["vq_scales"],
+                             pack_bits=pb, in_features=IN)
         return y.astype(in_dtype).reshape(*indices.shape, 1, OUT)
