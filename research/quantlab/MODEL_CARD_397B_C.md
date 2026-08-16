@@ -82,7 +82,7 @@ The artifact includes the full 333-tensor vision tower at source precision
 (0.85 GiB). `mlx-lm` is text-only for this architecture and ignores it;
 [exo](https://github.com/exo-explore/exo) loads it from this folder
 directly. `mlx-vlm` support requires its `model_file` loader hook
-(upstream PR in progress).
+([PR #1926](https://github.com/Blaizzy/mlx-vlm/pull/1926), under review).
 
 ## Siblings
 
@@ -101,9 +101,11 @@ recipe, all measured the same way:
   room for other software. It runs; it is not roomy.
 - This is a *thinking* model (Qwen3.5 family): by default it spends tokens
   reasoning before answering. Budget `max_tokens` accordingly.
-- Distributed (exo) tensor-parallel serving works but needs a one-line
-  sharding rule — VQ codebooks must be replicated, not sliced. Single-box
-  users are unaffected.
+- Distributed (exo) tensor-parallel serving needs one line in exo's own
+  sharding rule — VQ codebooks must be replicated, not sliced (upstream PR
+  pending). `mlx-lm` itself is stock in that setup too: verified serving
+  this model across two Macs with an unpatched `mlx-lm`, producing output
+  identical to the patched run. Single-box users are unaffected.
 
 ## Provenance
 

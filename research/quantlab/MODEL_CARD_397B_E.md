@@ -46,10 +46,12 @@ different corpora or eval harnesses.
   over Thunderbolt) with one sharding rule: VQ codebooks replicate rather
   than slice (upstream PR pending; one-line change to `auto_parallel`).
 
-We have not measured single-box throughput (no ≥192 GB machine in the lab).
-The `VQ-2.4bpw` build decodes at 19–22 tok/s on an M4 Max, and this build
-reads only ~33% more expert bytes per token — expect the same class of
-speed, not a different experience.
+Measured on the cluster (exo, M3 Ultra 96 GB + M4 Max 128 GB over
+Thunderbolt 5 / RDMA, tensor-sharded): **~17.4 tok/s** decode on a short
+prompt, placing in ~5.5 minutes. No single-box number — we have no machine
+with ≥192 GB unified memory to measure one; for reference the `VQ-2.4bpw`
+build decodes at 19–22 tok/s on one M4 Max, so a single large-memory box
+should land in that class without the ring's communication overhead.
 
 ## Run it
 
@@ -86,7 +88,7 @@ The artifact includes the full 333-tensor vision tower at source precision
 (0.85 GiB). `mlx-lm` is text-only for this architecture and ignores it;
 [exo](https://github.com/exo-explore/exo) loads it from this folder
 directly. `mlx-vlm` support requires its `model_file` loader hook
-(upstream PR in progress).
+([PR #1926](https://github.com/Blaizzy/mlx-vlm/pull/1926), under review).
 
 ## Known limitations
 

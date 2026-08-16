@@ -2246,3 +2246,26 @@ Env gotcha for any HF automation: Noah's `HF_HOME` is
 lives there. Non-interactive shells don't source .zshrc, so scripts must set
 HF_HOME explicitly or run unauthenticated — which would fail a 100+ GiB
 upload at the very end. `upload_to_hf.sh` sets it and pre-flights whoami.
+
+### STOCK mlx_lm proven on the CLUSTER too (08-16)
+
+Noah's rule — "only keep deviations if they're necessary" — so we tested the
+strongest claim instead of assuming it. Restored PRISTINE `mlx_lm` on BOTH
+exo nodes (`utils.py` from the `.orig-vq` backup, `models/vq_switch.py`
+deleted) and re-placed VQ-3.1bpw 2-node tensor-sharded.
+
+**Result: SERVING after 623s, output IDENTICAL to the patched run** — same
+text, same 1189 tokens, same 5282 reasoning chars. exo calls
+`mlx_lm.utils.load_model`, which honors `model_file` natively, so the
+artifact's bundled `model.py` supplies the VQ runtime. The patch was only
+ever a convenience for the pre-packaging 35B artifact — and that one now
+carries `model.py` too, so **`patch_mlx_lm.py` is retired; nothing needs it.**
+
+Standing deviation list is now exactly ONE item: the codebook-replicate line
+in exo's own `auto_parallel.py` (codebooks are shared LUTs and must not be
+sliced). Nothing else, anywhere, for any consumer.
+
+Also measured: **VQ-3.1bpw decodes ~17.4 tok/s** on the ring (M3 Ultra 96 GB
++ M4 Max 128 GB over TB5/RDMA) — installed in its card, replacing the earlier
+byte-arithmetic estimate. Memory splits proportional to node capacity
+(M3 45.6 GiB / M4 80.6 GiB), not evenly.
