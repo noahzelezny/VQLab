@@ -2013,3 +2013,41 @@ Operational note: `vq_35b_codes.py` does NOT embed model.py — that is a
 separate `add_model_file.py` step. Omitting it yields "Received 360
 parameters not in model" (120 modules x 3 tensors), because no
 VQSwitchLinear is ever constructed.
+
+## E REAL ARTIFACT (08-16) — the 3bit class is won. Both classes now held.
+
+`rotlab--397B-tail3x3-vqK2048codes` — real codes, **196.3 GiB unpacked /
+142.9 GiB packed**, fit 15568s (4h19m) on the M3, 171 tensors, mean relerr
+**0.1936** (proxy 0.1952). Referee: stock mlx_lm, single-box streaming, both
+corpora, bit-identical x2.
+
+  | | E real (142.9 packed) | spicy 3.5bit (165.6) | C (110.8) |
+  |---|---|---|---|
+  | wikitext | **2.3519** | 2.3614 | 2.7655 |
+  | code | **2.5987** | 2.6005 | 2.6383 |
+
+**E beats spicyneuron 3.5bit on both corpora at 22.7 GiB less.** With C
+holding the 2.6bit class, BOTH debut classes are won with real runnable
+artifacts.
+
+**Publish it honestly: wikitext +0.40%, code +0.07%.** The code figure is a
+TIE, not a win — the claim is "matches on code, wins wikitext, at 23 GiB
+less". The size advantage is the headline; a 0.07% margin is exactly what
+the both-corpora rule exists to stop us overselling.
+
+**Proxy fidelity is NOT one-directional** — worth knowing before trusting any
+future proxy:
+  | | wikitext | code |
+  |---|---|---|
+  | C: proxy -> real | 2.8197 -> 2.7655 (-1.9%) | 2.6504 -> 2.6383 (-0.5%) |
+  | E: proxy -> real | 2.3272 -> 2.3519 (**+1.1%**) | 2.6004 -> 2.5987 (-0.1%) |
+C's real artifact beat its proxy on both; E's real artifact came in WORSE on
+wikitext and better on code. So "real beats proxy (fp16 vs bf16 scales)" was
+an over-generalisation from a single data point. Treat proxies as ±1-2%
+indicators per corpus, never as a decimal-accurate prediction. E's relerr
+improved (0.1936 vs 0.1952) while its wikitext ppl got worse — relerr and
+perplexity do not move in lockstep at this resolution.
+
+**The half4 kernel fix is validated at 397B scale**: every K2048 module
+decodes through `_SRC_FUSED_D4_BIGK`, and it produced coherent, reproducible
+numbers. Without it this artifact could not have run at all.
