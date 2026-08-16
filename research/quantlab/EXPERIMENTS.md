@@ -2093,3 +2093,30 @@ C wins its class outright on both corpora. E takes the 3bit class (code is a
 TIE at 0.07% — publish it as "matches on code"). F trades 1.2% of code for
 20.5 GiB and is the accessibility artifact. Every number: stock mlx_lm,
 single-box streaming referee, bit-identical reruns.
+
+## PACKED AT 397B SCALE (08-16) — both artifacts, both corpora, all exact
+
+Ran `pack_artifact.py` on the real E and F artifacts and refereed the packed
+copies x2 on both corpora. Every score is IDENTICAL to the unpacked twin:
+
+  | artifact | unpacked | packed | ratio | wikitext | code |
+  |---|---|---|---|---|---|
+  | E (11-bit) | 196.3 GiB | **142.8** | 0.728x | 2.3519 = 2.3519 | 2.5987 = 2.5987 |
+  | F (7-bit) | 110.8 GiB | **100.1** | 0.904x | 3.1706 = 3.1706 | 2.6988 = 2.6988 |
+
+nll agrees to 4 decimals in all 8 packed runs (E 7006.0744 / 7823.3298,
+F 9452.9411 / 8133.0694). Packing is now validated at **7, 8 and 11 bits**,
+on both the 35B and the full 397B — the sizes are real, not computed, and
+quality is provably untouched.
+
+Predicted vs actual packed size: E 142.9 predicted / 142.8 actual, F 100.1 /
+100.1. The shape-derived size table in `vq_pack.py` is trustworthy.
+
+**SHIPPABLE STATE — three artifacts, stock mlx_lm, zero patches:**
+  - `rotlab--397B-tail3x3-vqK128codes-packed`  100.1 GiB
+  - `rotlab--397B-tail3x3-vqK256codes`         110.8 GiB (C, byte-aligned)
+  - `rotlab--397B-tail3x3-vqK2048codes-packed` 142.8 GiB
+Remaining before publish: vision graft (exo backdoor works; mlx-vlm needs a
+model_file PR), model cards for F and E, and a decode-speed measurement of
+the packed path on a quiet box (the packed-vs-unpacked timings collected so
+far were all taken under contention and are NOT comparable).
