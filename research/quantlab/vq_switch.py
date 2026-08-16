@@ -526,6 +526,15 @@ class VQSwitchLinear(nn.Module):
 
     @classmethod
     def from_weights(cls, codes, codebook, vq_scales):
+        if codes.dtype == mx.uint32:
+            # packed codes (vq_pack.py). Geometry is fully derivable from the
+            # tensors: the packer stores ceil(log2(K))-bit fields (K is a
+            # power of two by construction), and rows are NSUB/32*BITS words.
+            k, d = codebook.shape
+            bits = int(k - 1).bit_length()
+            nsub = codes.shape[2] * 32 // bits
+            return cls(codes, codebook, vq_scales,
+                       pack_bits=bits, in_features=nsub * d)
         return cls(codes, codebook, vq_scales)
 
     @property
