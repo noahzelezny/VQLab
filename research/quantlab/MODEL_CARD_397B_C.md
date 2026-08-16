@@ -74,6 +74,25 @@ quantization. Per-tensor geometry lives in `config.json → vq_modules`.
 Codebooks are fit in pure weight space (k-means; no Hessian, no
 activation data). Fit + assembly: ~2 h on one M4 Max.
 
+## Vision
+
+The artifact includes the full 333-tensor vision tower at source precision
+(0.85 GiB). `mlx-lm` is text-only for this architecture and ignores it;
+[exo](https://github.com/exo-explore/exo) loads it from this folder
+directly. `mlx-vlm` support requires its `model_file` loader hook
+(upstream PR in progress).
+
+## Siblings
+
+This is the middle of a three-size family, all from the same skeleton and
+recipe, all measured the same way:
+
+| | size | wikitext | code | needs |
+|---|---|---|---|---|
+| accessibility build (K128, packed) | 100.1 GiB | 3.1706 | 2.6988 | 128 GB Mac, roomy |
+| **this build (K256)** | **110.8 GiB** | **2.7655** | **2.6383** | 128 GB Mac, tight |
+| quality build (K2048, packed) | 142.8 GiB | 2.3519 | 2.5987 | ≥192 GB or cluster |
+
 ## Known limitations
 
 - **Tight on 128 GB.** ~118 GiB peak against ~120 GiB usable leaves little
