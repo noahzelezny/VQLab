@@ -109,6 +109,7 @@ for K in (int(x) for x in args.ks.split(",")):
     cn = mx.sum(Cf * Cf, axis=1)
     step = max(50_000, int(5e8 / K))
     t0 = time.time()
+    num = den = 0.0
     for s in range(0, T.shape[0], args.expert_chunk):
         blk = T[s:s + args.expert_chunk].astype(mx.float32)
         sub, scale = normalize(blk)
@@ -121,15 +122,19 @@ for K in (int(x) for x in args.ks.split(",")):
         a = mx.concatenate(aparts)
         R = (Cf[a].reshape(-1, blk.shape[2] // G, G) * scale).reshape(blk.shape)
         mx.eval(R)
+        num += float(mx.sum((R - blk) ** 2))
+        den += float(mx.sum(blk ** 2))
         del blk, sub, scale, a, R, aparts
         mx.clear_cache()
     t_as = time.time() - t0
+    relerr = math.sqrt(num / den)
 
     # scale the assign to the full tensor, then to the whole model
     full = t_as * (n_exp_full / args.experts)
     rows.append((K, t_km, t_as, full))
     print(f"K={K:<6} kmeans {t_km:7.1f}s   assign({args.experts} experts) "
-          f"{t_as:7.1f}s   -> full tensor {full:7.1f}s", flush=True)
+          f"{t_as:7.1f}s   -> full tensor {full:7.1f}s   relerr {relerr:.4f}",
+          flush=True)
 
 print("\n--- extrapolation (57 layers x 3 projections = 171 tensors) ---")
 print("assign scales with tensor size; gate_up is 2x down_proj, so a layer")

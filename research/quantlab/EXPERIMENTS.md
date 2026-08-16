@@ -1939,3 +1939,32 @@ C at 110.8 GiB remains the artifact, unchallenged on both corpora.
 Cost of reaching this: ~25 minutes (two-point probe + 35B calibration) against
 the 3.5h fit + referee it replaced. This is what E37's lesson is worth in
 practice — the cheap experiment answered the expensive question.
+
+## Probe (08-15) — K128 shallow AND deep: depth-STABLE, uniformly ~+18% relerr
+
+The E37-mandated two-point-plus probe, applied to the last sub-100 candidate
+(d4 K128 packed = 100.1 GiB). Layers 0 / 40 / 56, both projections, K128 vs
+the C geometry K256 on the same tensors (`probe_k_fit_time.py`, M3):
+
+  | layer, proj | K128 | K256 | penalty |
+  |---|---|---|---|
+  | L0 down | 0.2523 | 0.1876 | +34% |
+  | L0 gate_up | 0.4534 | 0.4306 | +5% |
+  | L40 down | 0.3689 | 0.3118 | +18% |
+  | L40 gate_up | 0.3692 | 0.3118 | +18% |
+  | L56 down | 0.3674 | 0.3136 | +17% |
+  | L56 gate_up | 0.3736 | 0.3186 | +17% |
+
+**No d8-style depth pathology**: the penalty is ~17-18% at every deep layer
+and BOTH projections — flat, not climbing. (L0 is again the outlier in both
+directions, confirming E37's "layer 0 is unrepresentative".) K128 is a
+legitimate geometry, just uniformly coarser.
+
+Quality projection (calibrate on E: -38% relerr bought code -1.9%, wiki
+-17.5%): +18% relerr on C's 0.3156 → ~0.373, projecting code ~+0.9% and
+wikitext ~+8% vs C. That puts K128 at roughly **spicy-2.6bit parity on code**
+(C's margin there is only 1.07%) while still clearly ahead on wikitext, at
+**20 GiB less than their 120.6**. A real but marginal claim: "ties on code,
+wins wikitext, 100 GiB". Whether that is worth a fit + referee is a
+judgment call, not a science question — the fit is cheap (~2.5 h incl. I/O)
+but only AFTER bit-packing exists, since 7-bit codes don't pack until then.
