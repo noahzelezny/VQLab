@@ -2191,3 +2191,31 @@ ModelConfig should NOT expose `text_config`/`vision_config` attributes
 unless it also supplies TextConfig/VisionConfig classes —
 `update_module_configs` keys off those attrs. Our future VLM model.py must
 handle this (our config DOES carry vision_config).
+
+## exo 2-node verification (08-16) — and the sharding bug it caught
+
+Renamed to the community bpw convention (overall bits/weight = total bytes /
+total params, the exl2 style; size-in-name is not a convention anyone uses):
+`Qwen3.5-397B-A17B-VQ-2.2bpw` / `-2.4bpw` / `-3.1bpw`.
+
+**THE BUG THAT WOULD HAVE SHIPPED.** E stalled on the ring at 59/60 layers,
+M4 at 66 GiB vs M3 at 16.5 GiB, no traceback, runners eventually vanishing.
+Noah's control experiment — spicyneuron 2.6bit places fine on the same ring —
+proved exo healthy and pointed at our artifact. Cause, found by READING
+`auto_parallel._sharded_to_all` rather than by another 10-minute placement:
+it shards `codes` IN PLACE along the last axis AFTER module construction.
+The unpacked path survived because `input_dims` was already a property over
+live shapes; **the packed path cached `in_features`**, so post-shard it
+described a tensor twice the size it held. Single-box never shards — which is
+exactly why F-packed ran all morning on the M4 and this hid until the cluster.
+Fix: derive dims from current tensors, never cache (`vq_switch.py`), then
+REGENERATE every artifact's bundled `model.py` (they embed the runtime).
+
+**2.2bpw VERIFIED SERVING 2-node tensor-sharded** — both runners Ready,
+coherent structured reasoning, `finish_reason: stop`, correct answers.
+
+Test-design trap worth keeping: the first two runs looked like garbage
+("Definition", then "."). Not corruption — **max_tokens truncation on a
+thinking model**, which the model card warns about and the test author (me)
+ignored. Budget 3000+ tokens for a verification prompt. `/no_think` did NOT
+suppress reasoning on this model; token budget is the only real lever.
