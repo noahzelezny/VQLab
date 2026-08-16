@@ -115,6 +115,27 @@ the sorted path exo's runner emits.
   reseed + fp16 scales, slightly better). 397B claims will be re-measured
   on the real artifacts anyway, never carried from proxies.
 
+- **M1f: d=8 kernels (E36/E37, 2026-08-15). DONE — and they are FAST.**
+  `vq_switch.py` gained two d8 fused kernels plus a d-generic dense decode;
+  dispatch is per MODULE on codebook shape, so one checkpoint can mix d4 and
+  d8 tensors freely.
+    - `_SRC_FUSED_D8` — codebook stays in DEVICE memory and rides L2. This was
+      the open risk (K4096 = 64 KB fp16 vs Apple's 32 KB threadgroup memory,
+      with random per-weight gathers, the pattern caches handle worst).
+      **L2 residency holds**: 0.86-1.39x gather_qmm at M=1/4/16 on real 397B
+      L0 down_proj codes — BETTER than the shipped d4 tg4 path (0.84-0.93x).
+      Risk #2 in the list below is retired.
+    - `_SRC_FUSED_D8_TG` — threadgroup variant for K<=1024 (16 KB): 0.99-1.12x.
+      Kept as fallback; no reason to prefer it at K4096.
+    - Prefill (decode-to-dense + padded batched GEMM, unchanged strategy):
+      **1.19x** at 8192 tokens vs d4's 1.22x. No regression.
+    - M1a correctness ~2e-7 fp32-accum on synthetic AND real d8 K4096 codes,
+      covering both shipping paths (fused + dense decode).
+  **But the artifact this was built for LOST** — see EXPERIMENTS.md E37. d8 for
+  down_proj was a layer-0 measurement artifact; at layer 40 d8 is 32.9% WORSE
+  than d4. The kernel is not the problem and the mixed-geometry machinery is
+  referee-validated; the geometry CHOICE was wrong. C stays champion.
+
 ## Fit-side work M1 needs (small)
 
 `vq_fit`/`vq_397b_fused` currently throw codes away. Add `--emit-codes`:
@@ -127,10 +148,11 @@ against REAL codes from layer 0, not synthetic ones.
 1. ~~Prefill throughput (simdgroup tiling)~~ — **never needed.**
    decode-to-dense + PADDED batched GEMM BEAT gather_qmm (1.21-1.28x).
    The row-batched gather_mm variant is the trap (0.43x).
-2. ~~K16384 codebook thrashing~~ — **moot, and the premise changed.** E36
-   showed uniform d8 is the wrong bet (gate_up never recovers); the live
-   question is the MIXED geometry d8 K4096 down_proj, whose 64 KB codebook
-   goes device/L2-resident. K<=1024 (16 KB) still fits threadgroup.
+2. ~~K16384 codebook thrashing~~ — **MEASURED AND RETIRED 2026-08-15 (M1f).**
+   The 64 KB d8 K4096 codebook stays L2-resident under random per-weight
+   gathers and runs 0.86-1.39x gather_qmm — BEATING the d4 threadgroup path.
+   Banking was never needed. (What killed d8 was quality, not residency:
+   E37. The kernel is fine; the geometry choice was wrong.)
 3. ~~exo two-node~~ — **done.** Both nodes patched, ring serves the VQ 35B.
    Two gotchas: numeric path parts break tree_unflatten (walk attributes),
    and the M4 resolves models via per-model symlinks in `~/.exo/models`.

@@ -1721,3 +1721,63 @@ was called a publication-blocking defect earlier in the session. It is not —
 it is the normal shape of every mlx_lm conversion of this model, comparator
 included. The error was inferring a loader failure without reading
 `sanitize()`.
+
+## E37 (08-15) — mixed geometry FALSIFIED: E36's d8 win was a LAYER-0 ARTIFACT
+
+Built the E36 frontier candidate for real: `rotlab--397B-tail3x3-vqMixed-d4K256-d8K4096`,
+gate/up d4 K256 + down d8 K4096, 171 tensors, 110.8 GiB, 3h34m on the M4
+(`vq_397b_codes.py --geom`). It loads under STOCK mlx_lm, scores deterministically,
+and **loses on both corpora**:
+
+  | corpus | mixed | C (bar) | delta |
+  |---|---|---|---|
+  | wikitext | **3.0819** | 2.7655 | **+11.4% worse** |
+  | code | **2.6820** | 2.6383 | **+1.66% worse** |
+
+Both x2 bit-identical (total_nll equal to 4 decimals, DETERMINISM spread 0.00%),
+M3 referee, stock unpatched mlx_lm. Mean fit relerr 0.3474 vs C's 0.3156.
+
+**ROOT CAUSE — the probe was taken at the one layer where the sign is positive.**
+E36 fitted layer 0 only. Same methodology re-run at layer 40 inverts the result:
+
+  | down_proj | d4 K256 | d8 K4096 | d8 vs d4 |
+  |---|---|---|---|
+  | layer 0 (E36's probe) | 0.1930 | **0.1794** | -7.0% (d8 better) |
+  | layer 40 | **0.3117** | 0.4142 | **+32.9% (d8 WORSE)** |
+
+The full fit log shows why: d8 down_proj relerr climbs monotonically 0.1793 (L0)
+-> 0.4148 (L56) and plateaus. d4 climbs too (it is a property of the TENSORS, not
+the geometry — d4 K512 goes 0.1566 -> 0.2645), but **d8 degrades far harder**:
+2.31x from L0 to plateau vs d4's 1.69x. Layer 0 is anomalously easy to VQ, and
+d8's extra dimensions only pay off while the subvector distribution is that benign.
+
+**THE LESSON, and it is bigger than this experiment: a single-layer probe does not
+generalize across depth.** E36's whole premise ("down_proj PREFERS d=8, beats the
+anchor at 22% fewer bits") was one number from one tensor. Any future geometry
+decision must be probed at BOTH a shallow and a deep layer before a 3.5h fit is
+spent on it — the two-point probe costs ~4 minutes (24s at K256, 192s at K4096).
+
+Second, quieter finding: **the domain asymmetry reversed direction here.** Every
+prior entry warned that wikitext-only publishing could hide a code regression;
+this time code (+1.66%) nearly absorbed a loss that wikitext (+11.4%) reports
+loudly. Scoring both corpora is what makes either number trustworthy.
+
+Consequences:
+- **Mixed geometry is CLOSED as a quality lever.** Not the mechanism — the
+  mechanism works perfectly (see below) — the d8-for-down_proj bet itself.
+- **The frontier plan's step 2 (12-bit packing -> ~103.7 GiB) is dead as written**:
+  it existed to shrink d8 K4096 down_proj, which is quality-negative. Packing a
+  worse artifact smaller is not the trade we want.
+- **C remains champion**, unchallenged: 2.7655 / 2.6383 at 110.8 GiB.
+- Artifact DELETED after scoring (111 GiB, confirmed to do nothing for us).
+
+**What survives and is worth keeping — the runtime, which is now strictly more
+capable than C needs:**
+- d8 Metal kernels landed and are FAST (M1 ladder green, see M1_KERNEL_PLAN):
+  L2-resident 64 KB codebook holds at **0.86-1.39x gather_qmm** decode — better
+  than the shipped d4 path (0.84-0.93x) — and 1.19x prefill.
+- **Mixed geometry is proven end-to-end**: 114 d4K256 + 57 d8K4096 modules in one
+  checkpoint, per-module dispatch, loading and scoring under stock mlx_lm with
+  zero patches. The MACHINERY for any future per-tensor geometry decision exists
+  and is referee-validated. Only this particular geometry choice was wrong.
+- `vq_397b_codes.py --geom` plumbs per-projection geometry through fit + config.
