@@ -1968,3 +1968,48 @@ wikitext ~+8% vs C. That puts K128 at roughly **spicy-2.6bit parity on code**
 wins wikitext, 100 GiB". Whether that is worth a fit + referee is a
 judgment call, not a science question — the fit is cheap (~2.5 h incl. I/O)
 but only AFTER bit-packing exists, since 7-bit codes don't pack until then.
+
+## Packing VALIDATED (08-15/16) — 7-bit codes, real model, bit-identical
+
+Bit-packing is built and proven end-to-end. `vq_pack.py` (format + packer),
+packed Metal kernels in `vq_switch.py`, `pack_artifact.py` (converter),
+and the `add_model_file.py` shim now carry `pack_bits`/`in_features`.
+
+**35B K128 (7-bit), M4, stock mlx_lm via the bundled model.py:**
+
+  | | wikitext | code | size |
+  |---|---|---|---|
+  | unpacked | 7.7654 | 3.2463 | 10.1 GiB |
+  | **packed** | **7.7654** | **3.2463** | **9.2 GiB (0.908x)** |
+
+nll agrees to 4 decimals on BOTH corpora (16790.9817 / 9646.1924), each
+reproduced x2. This is an EQUALITY gate, not a tolerance: packing changes
+representation, never values, so any drift would mean a decode bug.
+
+Why 0.908x and not 0.875x: only CODES shrink (8->7 bits). Codebooks, scales
+and the entire non-expert region are untouched. The 397B's expert share is
+larger, which is why F gains more there (110.8 -> 100.1 GiB).
+
+Also validated at 8 bits on the 35B K256 artifact (M3): 15985.0024 / 7.0378
+identical packed vs unpacked — byte-neutral in size, but it exercises the
+same shim/loader path.
+
+**A kernel ceiling found while gating this, unrelated to packing:**
+`_SRC_FUSED` caches the codebook as float4 (16 B/entry), so K2048 needs
+32 KB before x is cached and Metal REFUSES to load the kernel (36864 >
+32768). **E could not have decoded in ANY format.** `_SRC_FUSED_D4_BIGK`
+caches codebook+x as half4 — value-identical (both are fp16 on disk),
+24 KB total. Caught the night E was being fit; without it the artifact
+would have failed at first token.
+
+Two silent bugs the equality gate caught, both of which produce plausible
+wrong numbers rather than errors:
+1. **`#if BITS > 0` does not work in MLX kernels.** Template params are C++
+   template parameters, NOT preprocessor defines — the preprocessor saw BITS
+   undefined, took the unpacked branch, and read packed words as raw codes.
+2. Dispatch routed packed tensors to the unpacked big-K kernel.
+
+Operational note: `vq_35b_codes.py` does NOT embed model.py — that is a
+separate `add_model_file.py` step. Omitting it yields "Received 360
+parameters not in model" (120 modules x 3 tensors), because no
+VQSwitchLinear is ever constructed.
