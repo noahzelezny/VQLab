@@ -1663,3 +1663,61 @@ fp16-codebook relerr), d4 K256 as the C anchor:
   Both need 12-bit packing + the L2-resident d8 kernel (K4096 codebook =
   64 KB > 32 KB threadgroup). d8 K1024 (16 KB) fits threadgroup if a
   cheaper mixed point is wanted (down 0.2335, slightly below C).
+
+## E (08-15 overnight) — d4 K2048 on tail3x3: the 3-bit-class number, and the domain asymmetry AGAIN
+
+`zzvq-tail3x3-K2048` — bf16 quality proxy, 698.6 GiB, fit 36,451s on the M3
+(171 tensors, **mean relerr 0.1952** vs C's 0.3156, and below the 35B K1024
+reference of 0.222). Referee: stock mlx_lm, single-box, **all four runs
+bit-identical** (wikitext nll 6919.536 x2, code 7828.8672 x2).
+
+  | corpus | E (K2048) | C proxy | margin |
+  |---|---|---|---|
+  | wikitext | **2.3272** | 2.8197 | 17.5% |
+  | code | **2.6004** | 2.6504 | **1.9%** |
+
+**The asymmetry is the finding, not the headline.** Relerr improved 38% and
+wikitext followed (17.5%), but code moved 1.9% — the same shape as K256's
+11%-vs-0.6%. Codebook size buys wikitext far more than it buys code on this
+family. A publish that quoted wikitext alone would misrepresent E by ~9x.
+
+Where E actually stands, against the outside comparator (spicyneuron 3.5bit,
+165.6 GiB, 2.3614 / 2.6005): E **wins wikitext by 1.4% and ties code**
+(2.6004 vs 2.6005) at **142.8 GiB packed** — a 3-bit-class win at 22.8 GiB
+less. Against our own B proxy (~148 GiB) it is a wash: E +1.3% wikitext,
+B +0.17% code.
+
+**E does NOT displace C.** Paying 32 GiB over C — and leaving single-128 GB
+territory — to buy 1.9% on code is the wrong trade for the accessibility
+goal. C stays the daily driver; E is the heavy-hitter/cluster artifact.
+
+**E is a PROXY — three things stand between it and shipping:**
+1. a real codes fit at K2048 (does not exist yet; K>256 ⇒ uint16 codes),
+2. bit-packing (11-bit fields) — unpacked E is **196.3 GiB**, not 142.8,
+3. vision, if it is to be the differentiator (see below).
+
+## Vision (08-15) — mlx_lm DISCARDS it for this arch; "with vision" is an mlx-vlm project
+
+Checked while scoping a vision graft. Facts, measured:
+
+- Source `Qwen--Qwen3.5-397B-A17B-bf16` carries **333 vision tensors in 2
+  shards = 0.85 GiB bf16**. Cheap to copy.
+- Shipped C carries **0** of them — and so does the spicymirror comparator
+  (0 / 2212). Nobody in this class ships vision.
+- Cause, in stock `mlx_lm/models/qwen3_5_moe.py` `Model.sanitize()`:
+      if key.startswith("vision_tower") or key.startswith("model.visual"):
+          continue
+  The loader drops them by construction. `mlx_lm` is text-only for this
+  architecture; vision lives in **mlx-vlm**, a separate package with its own
+  loader and arch registry.
+
+**Consequence:** grafting the tensors puts bytes in the file that `mlx_lm`
+silently discards — the capability would not exist. Shipping working vision
+means supporting mlx-vlm, including a `model_file`-equivalent VQ shim for
+its model class. That is an unscoped investigation, NOT a copy job.
+
+**Retraction:** C's config declaring `vision_config` with no vision weights
+was called a publication-blocking defect earlier in the session. It is not —
+it is the normal shape of every mlx_lm conversion of this model, comparator
+included. The error was inferring a loader failure without reading
+`sanitize()`.
