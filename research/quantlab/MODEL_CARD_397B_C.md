@@ -10,7 +10,9 @@ tags:
 - apple-silicon
 ---
 
-# Qwen3.5-397B-A17B — VQ 110.8 GiB (runs on a single 128 GB Mac)
+# Qwen3.5-397B-A17B-VQ-2.4bpw
+
+**110.8 GiB — the daily driver, runs on a single 128 GB Mac.**
 
 A vector-quantized build of [Qwen3.5-397B-A17B](https://huggingface.co/Qwen/Qwen3.5-397B-A17B)
 that fits and **generates on one 128 GB Apple Silicon machine** — no cluster,
@@ -89,9 +91,9 @@ recipe, all measured the same way:
 
 | | size | wikitext | code | needs |
 |---|---|---|---|---|
-| accessibility build (K128, packed) | 100.1 GiB | 3.1706 | 2.6988 | 128 GB Mac, roomy |
-| **this build (K256)** | **110.8 GiB** | **2.7655** | **2.6383** | 128 GB Mac, tight |
-| quality build (K2048, packed) | 142.8 GiB | 2.3519 | 2.5987 | ≥192 GB or cluster |
+| `VQ-2.2bpw` (accessibility) | 100.1 GiB | 3.1706 | 2.6988 | 128 GB Mac, roomy |
+| **`VQ-2.4bpw` (this build)** | **110.8 GiB** | **2.7655** | **2.6383** | 128 GB Mac, tight |
+| `VQ-3.1bpw` (quality) | 142.8 GiB | 2.3519 | 2.5987 | ≥192 GB or cluster |
 
 ## Known limitations
 
@@ -106,6 +108,6 @@ recipe, all measured the same way:
 ## Provenance
 
 Base model: Qwen/Qwen3.5-397B-A17B (Apache 2.0 — see the base model card
-for license and usage terms). Quantization: rotlab, 2026. Built with MLX;
+for license and usage terms). Quantization: TheDrainFlorist, 2026. Built with MLX;
 referee scoring scripts and the full experiment log (E31–E36: what worked,
 what was falsified, and why) available on request.

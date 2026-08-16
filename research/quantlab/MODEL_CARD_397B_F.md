@@ -10,12 +10,14 @@ tags:
 - apple-silicon
 ---
 
-# Qwen3.5-397B-A17B — VQ 100.1 GiB (the accessibility build)
+# Qwen3.5-397B-A17B-VQ-2.2bpw
+
+**100.1 GiB — the accessibility build.**
 
 A vector-quantized build of [Qwen3.5-397B-A17B](https://huggingface.co/Qwen/Qwen3.5-397B-A17B)
 built to answer one question: **how small can a 397B get and still be worth
 running?** 100.1 GiB — it runs on a single 128 GB Apple Silicon machine with
-~17 GiB more headroom than our 110.8 GiB build, no cluster, no patches,
+~17 GiB more headroom than our `VQ-2.4bpw` build, no cluster, no patches,
 stock `mlx-lm`.
 
 ## Measured results
@@ -23,16 +25,16 @@ stock `mlx-lm`.
 All numbers measured on this exact artifact, reproduced bit-identically ×2,
 scored with an unmodified `mlx-lm` install. Read the whole row, not one cell:
 
-| | this model (100.1 GiB) | spicyneuron 2.6bit (120.6 GiB) | our 110.8 GiB build |
+| | this model (100.1 GiB) | spicyneuron 2.6bit (120.6 GiB) | our `VQ-2.4bpw` build |
 |---|---|---|---|
 | wikitext perplexity (raw, prefix-8192) | **3.1706** | 3.1843 | 2.7655 |
 | code perplexity (mixed-language) | 2.6988 | **2.6667** | 2.6383 |
 
 **The honest trade:** against the closest community quant this build is
 slightly better on prose (−0.43%) and slightly worse on code (+1.20%), at
-**20.5 GiB smaller**. Against our own 110.8 GiB build it gives up real
+**20.5 GiB smaller**. Against our `VQ-2.4bpw` build it gives up real
 quality on both corpora in exchange for ~10.7 GiB of headroom. If your
-machine runs the 110.8 GiB build comfortably, use that one; this build
+machine runs the `VQ-2.4bpw` build comfortably, use that one; this build
 exists for machines and workloads where those gigabytes decide whether the
 model fits at all.
 
@@ -87,8 +89,8 @@ directly. `mlx-vlm` support requires its `model_file` loader hook
 
 ## Known limitations
 
-- Code-heavy workloads measurably prefer the 110.8 GiB sibling (+1.2% code
-  perplexity here vs the community 2.6bit, +2.3% vs our 110.8 GiB build).
+- Code-heavy workloads measurably prefer the `VQ-2.4bpw` build (+1.2% code
+  perplexity here vs the community 2.6bit, +2.3% vs our `VQ-2.4bpw` build).
 - This is a *thinking* model (Qwen3.5 family): it spends tokens reasoning
   before answering. Budget `max_tokens` accordingly.
 - Distributed (exo) tensor-parallel serving needs a one-line sharding rule
@@ -98,6 +100,6 @@ directly. `mlx-vlm` support requires its `model_file` loader hook
 ## Provenance
 
 Base model: Qwen/Qwen3.5-397B-A17B (Apache 2.0 — see the base model card
-for license and usage terms). Quantization: rotlab, 2026. Built with MLX;
+for license and usage terms). Quantization: TheDrainFlorist, 2026. Built with MLX;
 referee scoring scripts and the full experiment log (what worked, what was
 falsified, and why) available on request.

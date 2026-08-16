@@ -10,7 +10,9 @@ tags:
 - apple-silicon
 ---
 
-# Qwen3.5-397B-A17B — VQ 142.8 GiB (the quality build)
+# Qwen3.5-397B-A17B-VQ-3.1bpw
+
+**142.8 GiB — the quality build.**
 
 A vector-quantized build of [Qwen3.5-397B-A17B](https://huggingface.co/Qwen/Qwen3.5-397B-A17B)
 for machines with memory to spend: the strongest quantization we know how
@@ -21,7 +23,7 @@ to make of this model at this size, on stock `mlx-lm`, no patches.
 All numbers measured on this exact artifact, reproduced bit-identically ×2,
 scored with an unmodified `mlx-lm` install:
 
-| | this model (142.8 GiB) | spicyneuron 3.5bit (165.6 GiB) | our 110.8 GiB build |
+| | this model (142.8 GiB) | spicyneuron 3.5bit (165.6 GiB) | our `VQ-2.4bpw` build |
 |---|---|---|---|
 | wikitext perplexity (raw, prefix-8192) | **2.3519** | 2.3614 | 2.7655 |
 | code perplexity (mixed-language) | 2.5987 | 2.6005 | 2.6383 |
@@ -45,7 +47,7 @@ different corpora or eval harnesses.
   than slice (upstream PR pending; one-line change to `auto_parallel`).
 
 We have not measured single-box throughput (no ≥192 GB machine in the lab).
-The 110.8 GiB sibling decodes at 19–22 tok/s on an M4 Max, and this build
+The `VQ-2.4bpw` build decodes at 19–22 tok/s on an M4 Max, and this build
 reads only ~33% more expert bytes per token — expect the same class of
 speed, not a different experience.
 
@@ -95,6 +97,6 @@ directly. `mlx-vlm` support requires its `model_file` loader hook
 ## Provenance
 
 Base model: Qwen/Qwen3.5-397B-A17B (Apache 2.0 — see the base model card
-for license and usage terms). Quantization: rotlab, 2026. Built with MLX;
+for license and usage terms). Quantization: TheDrainFlorist, 2026. Built with MLX;
 referee scoring scripts and the full experiment log (what worked, what was
 falsified, and why) available on request.
