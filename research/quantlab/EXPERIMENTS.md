@@ -2179,3 +2179,15 @@ Notes for the record:
   its speed story is exo cluster serving, a different measurement.
 - All ppl: stock mlx_lm, single-box streaming referee, bit-identical x2,
   identical packed-vs-unpacked verified per artifact.
+
+## mlx-vlm model_file PR OPENED (08-16)
+
+https://github.com/Blaizzy/mlx-vlm/pull/1926 — branch `model-file-loading`
+on the noahzelezny fork, authored noahzelezny@thedrainflorist.com. 20-line
+hook in `load_model` + `tests/test_model_file_loading.py` (3 tests: end-to-
+end synthetic checkpoint, missing-file error, registry-path-untouched).
+Contract note discovered writing the test: a `model_file` module's
+ModelConfig should NOT expose `text_config`/`vision_config` attributes
+unless it also supplies TextConfig/VisionConfig classes —
+`update_module_configs` keys off those attrs. Our future VLM model.py must
+handle this (our config DOES carry vision_config).
