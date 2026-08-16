@@ -1901,6 +1901,17 @@ that does not scale with K at all. Cost of the probe: ~2 minutes.
 
 ### E38b — the 35B calibration: F is DEAD, and with it the sub-100 GiB route
 
+> **SUPERSEDED same night (see "F REAL" below).** Noah reweighed the
+> trade-off: losing code by ~1-4% at 20.5 GiB smaller is still an
+> ACCESSIBILITY win ("someone can run it who couldn't before"), so F was
+> fit, refereed and packed on 08-16 — real numbers 3.1706 / 2.6988 at
+> 100.1 GiB. Two notes on this section with hindsight: (1) its VERDICT
+> conflated "F loses code" (true, -1.20% measured) with "route closed"
+> (a value judgment that was Noah's to make, and he made it the other
+> way); (2) its projected wikitext 3.0475 was still 4% optimistic vs the
+> real 3.1706 — even the calibrated transfer missed. The 35B measurement
+> itself stands and remains the best K256->K128 calibration point.
+
 Fitted `rotlab-35B-vqK128codes` from the same source and script as the
 existing K256 artifact, regenerated BOTH artifacts' `model.py` from the
 current runtime so the only variable is codebook size, and scored both on

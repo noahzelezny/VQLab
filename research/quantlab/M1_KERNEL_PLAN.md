@@ -176,9 +176,22 @@ against REAL codes from layer 0, not synthetic ones.
 
 ## Where the frontier is now (see EXPERIMENTS.md E36)
 
-Mixed geometry: gate/up d4 K256 + down d8 K4096 — down_proj PREFERS d8
-(relerr 0.1794 vs the C anchor's 0.1930 at 22% fewer bits) while gate_up
-never recovers. Format is already legal (`vq_modules` carries dim/K per
-module). Step 1 = d8 kernel, unpacked, ~110.8 GiB (C's size, better
-quality) — no packing risk. Step 2 = bit-packing, shrinks that to 103.7
-and unlocks A(132)/E(143)/B(148) at their true sizes.
+~~Mixed geometry: gate/up d4 K256 + down d8 K4096~~ — **FALSIFIED (E37):
+E36's d8 win was a layer-0 artifact; the real mixed build LOST both corpora
+and was deleted.** Step 2 (bit-packing) WAS built and validated instead
+(08-15/16): packed == unpacked bit-identically at 7/8/11 bits, 35B and 397B.
+
+## FINAL STATE (08-16) — this plan is fully delivered and closed
+
+Three real artifacts, all refereed x2 both corpora under stock mlx_lm:
+
+  | | packed GiB | wikitext | code |
+  |---|---|---|---|
+  | F (d4 K128, 7-bit packed) | 100.1 | 3.1706 | 2.6988 |
+  | C (d4 K256, byte-aligned) | 110.8 | 2.7655 | 2.6383 |
+  | E (d4 K2048, 11-bit packed) | 142.8 | 2.3519 | 2.5987 |
+
+One late kernel fix mattered: the original fused d4 kernel cached the
+codebook as float4, so K2048 = 32 KB of threadgroup before x — Metal refuses
+the load. `_SRC_FUSED_D4_BIGK` (half4 cache, value-identical) unblocked E.
+Current truth: `EXPERIMENTS.md` (F REAL / E REAL / PACKED AT 397B SCALE).
