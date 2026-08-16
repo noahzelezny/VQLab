@@ -2,7 +2,7 @@
 # Upload the three VQ artifacts to HuggingFace under TheDrainFlorist.
 # NOT run automatically — publishing is Noah's call, under Noah's account.
 #
-#   huggingface-cli login          # once, if not already
+#   hf auth login                  # once, if not already (huggingface-cli is deprecated)
 #   ./upload_to_hf.sh --dry-run    # list what would go
 #   ./upload_to_hf.sh 2.2          # upload one
 #   ./upload_to_hf.sh all
@@ -32,6 +32,11 @@ for a in "${ARTS[@]}"; do
   size=$(du -sh "$E/$a" | cut -f1)
   echo "=== $ORG/$a  ($size) ==="
   # sanity gates before anything leaves the machine
+  # __pycache__ is build residue from importing model.py locally — never publish it
+  rm -rf "$E/$a/__pycache__" 2>/dev/null
+  for need in tokenizer.json tokenizer_config.json chat_template.jinja model.safetensors.index.json; do
+    [ -f "$E/$a/$need" ] || { echo "  !! missing $need — downloaders could not run it"; exit 1; }
+  done
   [ -f "$E/$a/README.md" ] || { echo "  !! no model card"; exit 1; }
   [ -f "$E/$a/model.py" ] || { echo "  !! no model.py (downloaders could not load it)"; exit 1; }
   grep -q "MUST be derived from the CURRENT tensors" "$E/$a/model.py" \
@@ -43,5 +48,24 @@ assert c.get('model_file')=='model.py', 'config missing model_file'
 assert c.get('vq_modules'), 'config missing vq_modules'
 print('  config ok:', len(c['vq_modules']), 'vq modules')"
   if [ "$sel" = "--dry-run" ]; then echo "  (dry run — nothing uploaded)"; continue; fi
-  huggingface-cli upload "$ORG/$a" "$E/$a" . --repo-type model
+  # PRIVATE first by default: inspect the rendered card + file listing on the
+  # Hub before it is visible to anyone. Flip with `hf repo settings` (or the
+  # web UI) once it looks right. Pass PUBLIC=1 to skip the private stage.
+  vis="--private"; [ "${PUBLIC:-0}" = "1" ] && vis=""
+  hf repo create "$ORG/$a" --repo-type model $vis --exist-ok 2>&1 | tail -1
+  # upload-large-folder, NOT plain upload: the one-shot path warns it "might
+  # take some time and then fail" on 100+ GiB folders. This one is RESUMABLE
+  # (tracks state in .cache/huggingface inside the folder) and parallel, so a
+  # dropped connection costs minutes, not the whole transfer.
+  # 3 workers, not 8: with 8 the transfer stalled dead (byte-identical progress
+  # for minutes, ~0.5 MB/s on the wire) on 2026-08-16. Fewer parallel LFS
+  # streams held ~15 MB/s steadily.
+  hf upload-large-folder "$ORG/$a" "$E/$a" --repo-type model --num-workers 3
+
+  # verify the Hub copy against local checksums before anyone downloads it
+  echo "  --- verifying uploaded checksums ---"
+  hf cache verify "$ORG/$a" --local-dir "$E/$a" --fail-on-missing-files \
+    && echo "  ✅ checksums match" || { echo "  !! VERIFY FAILED — do not publish"; exit 1; }
+  echo "  repo is PRIVATE. Make public with:"
+  echo "    hf repos settings $ORG/$a --public"
 done

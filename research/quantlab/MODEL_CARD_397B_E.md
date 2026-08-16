@@ -1,13 +1,17 @@
 ---
-language: en
+language:
+- en
+license: apache-2.0
 library_name: mlx
 pipeline_tag: text-generation
 base_model: Qwen/Qwen3.5-397B-A17B
+base_model_relation: quantized
 tags:
 - mlx
 - quantized
 - vector-quantization
 - apple-silicon
+- qwen3.5
 ---
 
 # Qwen3.5-397B-A17B-VQ-3.1bpw
