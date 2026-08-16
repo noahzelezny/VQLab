@@ -2131,3 +2131,24 @@ Remaining before publish: vision graft (exo backdoor works; mlx-vlm needs a
 model_file PR), model cards for F and E, and a decode-speed measurement of
 the packed path on a quiet box (the packed-vs-unpacked timings collected so
 far were all taken under contention and are NOT comparable).
+
+## Vision graft SHIPPED + mlx-vlm PR drafted (08-16)
+
+`graft_vision.py`: copies the 333 `model.visual.*` tensors (0.85 GiB bf16)
+from the source model into a `model-vision-graft.safetensors` shard and
+registers them in the artifact index. Run against ALL THREE artifacts —
+C, E-packed, F-packed — each now vision-complete on disk, configs already
+carried `vision_config` + `image_token_id`.
+
+Regression proof: C re-refereed AFTER the graft under mlx_lm — **2.7655,
+nll 8332.9789, exact match**. The graft is invisible to mlx_lm (sanitize
+drops visual keys), works today under exo (VisionCardConfig reads the tower
+from the artifact's own dir), and awaits the model_file hook under mlx-vlm.
+
+**mlx-vlm PR branch ready** (scratchpad clone, branch `model-file-loading`,
+19-line diff to `load_model` in `mlx_vlm/utils.py`): mirrors mlx_lm's
+`model_file` mechanism verbatim — config.json names a Python file inside the
+checkpoint, `importlib.util.spec_from_file_location` loads it as the arch
+module, registry path untouched for every existing model. Hook mechanism
+verified against a synthetic checkpoint. NOT yet pushed/opened — Noah's
+GitHub, Noah's call.
