@@ -1821,3 +1821,52 @@ capable than C needs:**
   zero patches. The MACHINERY for any future per-tensor geometry decision exists
   and is referee-validated. Only this particular geometry choice was wrong.
 - `vq_397b_codes.py --geom` plumbs per-projection geometry through fit + config.
+
+## E38 (08-15) — F (d4 K128) revisited: PASSES the depth test, but the magnitude is the problem
+
+E37's fix applied prospectively. Before spending another 3.5h fit, ran the
+two-point probe (L0 + L40, both projections) on the one geometry that packing
+could still help. **Packing is a no-op for C** — d4 K256 codes are exactly 8
+bits in a uint8, nothing to reclaim — so the sub-100 GiB question rests
+entirely on a sub-byte geometry. Measured byte split of C:
+
+  | component | GiB | share |
+  |---|---|---|
+  | VQ codes | 85.5 | 77.2% |
+  | VQ scales (fp16) | 10.7 | 9.6% |
+  | codebooks | 0.0003 | ~0% |
+  | structure (tail3x3, attn, embeddings) | 14.6 | 13.2% |
+
+d4 K128 packed to 7 bits reclaims 1/8 of the codes: **110.8 -> 100.1 GiB**.
+That also un-dominates F: M2 killed it as "same size, worse quality"; packed
+it is 10.7 GiB SMALLER, so it becomes a real trade instead of a strict loss.
+
+Probe (m1a_emit_codes, fp16-codebook relerr, identical methodology):
+
+  | tensor | d4 K256 (C) | d4 K128 (F) | F/C |
+  |---|---|---|---|
+  | L0 down | 0.1930 | 0.2566 | 1.330 |
+  | L0 gate_up | 0.4161 | 0.4500 | 1.081 |
+  | L40 down | 0.3117 | 0.3686 | **1.182** |
+  | L40 gate_up | 0.3119 | 0.3691 | **1.183** |
+
+**F passes the test d8 failed**: the penalty does not widen with depth, it
+CONVERGES to a steady ~1.18x on both projections. Note also how tightly the
+two projections converge at L40 (0.3117/0.3119 and 0.3686/0.3691) — layer 0
+is the outlier for every geometry we have measured, which is E37's lesson
+restated from a second direction.
+
+**But steady is not the same as affordable.** C's measured mean over all 171
+tensors is 0.3156; at a flat 1.18x, F projects to ~0.372 — WORSE than the
+E37 mixed artifact's 0.3474, and that one lost wikitext by 11.4%. The single
+calibration point we own says +10.1% relative relerr cost +11.4% wikitext PPL.
+F is asking for +18%.
+
+That extrapolation is one point and the error DISTRIBUTION differs (E37
+concentrated its damage in down_proj at depth; F spreads uniformly), so F is
+not dead on arithmetic — but it does not justify a 3.5h 397B fit on those
+odds. Calibrating at 35B instead (minutes, not hours): fit K128 against the
+existing `rotlab-35B-vqK256codes` (7.0378 wiki / 3.0755 code) to turn
+"relerr says probably bad" into a real PPL delta for the K256->K128 halving.
+`vq_35b_codes.py --out-proxy` made optional for this (the twin costs ~6x the
+codes artifact in disk and the M1e runtime-vs-twin check is long closed).

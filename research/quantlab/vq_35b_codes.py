@@ -28,7 +28,8 @@ mx.set_cache_limit(8 << 30)
 ap = argparse.ArgumentParser()
 ap.add_argument("--src", required=True, help="rotlab-35B-bf16exp-struct6")
 ap.add_argument("--out-codes", required=True)
-ap.add_argument("--out-proxy", required=True)
+ap.add_argument("--out-proxy", default=None,
+                help="bf16 twin (M1e runtime check). OPTIONAL: skip it for a\n                      pure quality calibration — it costs ~6x the codes\n                      artifact in disk and the runtime-vs-twin gap is closed.")
 ap.add_argument("--dim", type=int, default=4)
 ap.add_argument("--k", type=int, default=256)
 ap.add_argument("--group", type=int, default=64)
@@ -38,9 +39,10 @@ args = ap.parse_args()
 
 SRC = pathlib.Path(args.src)
 OUTC = pathlib.Path(args.out_codes)
-OUTP = pathlib.Path(args.out_proxy)
+OUTP = pathlib.Path(args.out_proxy) if args.out_proxy else None
 OUTC.mkdir(parents=True, exist_ok=True)
-OUTP.mkdir(parents=True, exist_ok=True)
+if OUTP is not None:
+    OUTP.mkdir(parents=True, exist_ok=True)
 D, K, G = args.dim, args.k, args.group
 assert K <= 256, "uint8 codes only in this writer"
 
@@ -149,7 +151,8 @@ for fi, f in enumerate(files):
             new_c[k] = v
             new_p[k] = v
     mx.save_safetensors(str(OUTC / f), new_c)
-    mx.save_safetensors(str(OUTP / f), new_p)
+    if OUTP is not None:
+        mx.save_safetensors(str(OUTP / f), new_p)
     for k in new_c:
         map_c[k] = f
     for k in new_p:
@@ -159,7 +162,7 @@ for fi, f in enumerate(files):
     mx.clear_cache()
     print(f"[{fi+1}/{len(files)}] {f}  ({time.time()-t0:.0f}s)", flush=True)
 
-for out, wm in ((OUTC, map_c), (OUTP, map_p)):
+for out, wm in [(OUTC, map_c)] + ([(OUTP, map_p)] if OUTP is not None else []):
     tsz = sum((out / f).stat().st_size for f in files)
     json.dump({"metadata": {"total_size": tsz}, "weight_map": wm},
               open(out / "model.safetensors.index.json", "w"))
@@ -171,6 +174,7 @@ for out, wm in ((OUTC, map_c), (OUTP, map_p)):
 print(f"\ndone in {time.time()-t0:.0f}s")
 print(f"mean relerr {sum(errs)/len(errs):.4f} over {len(errs)} tensors")
 gib_c = sum((OUTC / f).stat().st_size for f in files) / 2**30
-gib_p = sum((OUTP / f).stat().st_size for f in files) / 2**30
 print(f"codes artifact {gib_c:.1f} GiB -> {OUTC}")
-print(f"proxy twin     {gib_p:.1f} GiB -> {OUTP}")
+if OUTP is not None:
+    gib_p = sum((OUTP / f).stat().st_size for f in files) / 2**30
+    print(f"proxy twin     {gib_p:.1f} GiB -> {OUTP}")
