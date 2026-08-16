@@ -1898,3 +1898,44 @@ geometry — the model holds.
 **Corrects the 6-10 h estimate given earlier from arithmetic alone.** The
 error was treating the whole of C's 2h09 as K-scaling when 85% of it is I/O
 that does not scale with K at all. Cost of the probe: ~2 minutes.
+
+### E38b — the 35B calibration: F is DEAD, and with it the sub-100 GiB route
+
+Fitted `rotlab-35B-vqK128codes` from the same source and script as the
+existing K256 artifact, regenerated BOTH artifacts' `model.py` from the
+current runtime so the only variable is codebook size, and scored both on
+both corpora x2 (M4, all runs bit-identical, DETERMINISM spread 0.00%):
+
+  | 35B | wikitext | code |
+  |---|---|---|
+  | K256 | 7.0378 | 3.0755 |
+  | K128 | 7.7555 | 3.2408 |
+  | **penalty** | **+10.20%** | **+5.37%** |
+
+(K256 reproduced its historical M1e score 7.0378 / 3.0755 EXACTLY through the
+new runtime — incidental proof that the d8 kernel work caused zero regression
+on the d4 path. The K128 artifact also weighed **10.1 GiB, identical to
+K256** — the stored-bpw trap again, at 35B.)
+
+Projected onto the 397B artifacts:
+
+  | artifact | size | wikitext | code |
+  |---|---|---|---|
+  | C (shipped) | 110.8 GiB | **2.7655** | **2.6383** |
+  | F (packed, projected) | 100.1 GiB | 3.0475 | 2.7801 |
+  | spicyneuron 2.6bit | 120.6 GiB | 3.1843 | 2.6667 |
+
+**F beats spicyneuron on wikitext (-4.30%) and LOSES on code (+4.25%).** That
+forfeits the only claim worth publishing — C beats the community quant on
+BOTH corpora — in exchange for 10.7 GiB. And the verdict is robust to
+transfer error: F would need a code penalty under **1.08%** to win there,
+5x smaller than measured; even halving the observed penalty still loses code.
+
+**VERDICT: the sub-100 GiB route is closed.** Not because bit-packing fails —
+it works and would deliver the 10.7 GiB — but because the only geometry that
+can USE packing (sub-byte codes = K128) costs ~10% wikitext to get there.
+C at 110.8 GiB remains the artifact, unchallenged on both corpora.
+
+Cost of reaching this: ~25 minutes (two-point probe + 35B calibration) against
+the 3.5h fit + referee it replaced. This is what E37's lesson is worth in
+practice — the cheap experiment answered the expensive question.
