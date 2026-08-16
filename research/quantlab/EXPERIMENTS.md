@@ -1722,6 +1722,46 @@ it is the normal shape of every mlx_lm conversion of this model, comparator
 included. The error was inferring a loader failure without reading
 `sanitize()`.
 
+### The exo backdoor — vision ALREADY WORKS there, and the graft is NOT inert
+
+Second correction, same session: "grafting the tensors is inert" is true only
+for `mlx_lm`. **exo never uses mlx_lm's loader for vision.** It carries its
+own path, `exo/src/exo/worker/engines/mlx/vision.py`:
+
+- `model_cards.py` builds a `VisionCardConfig` for ANY model whose config has
+  both `vision_config` and `image_token_id`;
+- `weights_repo` is set to the model's OWN id, and `vision.py` resolves it
+  via `build_model_path(...)` — i.e. exo reads the vision tower out of the
+  SAME directory as the language model.
+
+Confirmed by Noah 08-15: **the 397B has been made to see, through exo only** —
+never through mlx_vlm, which we have never patched. So the capability is real
+and the mechanism is exo's, not ours.
+
+**Consequence for shipping — vision splits three ways, by consumer:**
+
+  | consumer | what it takes | patches |
+  |---|---|---|
+  | **exo** | graft the 333 tensors (0.85 GiB) into the artifact | **none** |
+  | `mlx_lm` | nothing works — `sanitize()` drops the keys | text-only, period |
+  | `mlx-vlm` | subclass its `Model` + a `model_file` hook upstream | PR (~20 lines) |
+
+mlx-vlm feasibility, checked: it already ships `mlx_vlm/models/qwen3_5_moe/`,
+and its `language.py` imports `SwitchGLU` **from `mlx_lm.models.switch_layers`**
+— the exact class `VQSwitchLinear` replaces, so the VQ runtime transplants
+without a rewrite. The only true blocker is that `get_model_and_args()`
+resolves classes purely by `model_type` via `importlib`, with NO `model_file`
+hook (that mechanism is mlx_lm-only). Prove any of this at 35B first — that
+artifact is 10 GiB and surfaces loader surprises in minutes, not hours.
+
+**Standing gotcha, now measured:** all fifteen local 397B artifacts carry
+**0 vision tensors** — C, the new mixed build, tail30, tail3x3, and both
+spicyneuron comparators. Four of them (tail30, tail3x3, C, mixed) declare
+`vision_config` WITHOUT the weights, which is precisely the "serves BLIND
+while looking healthy" shape the debut plan warns about. Whatever carried
+vision in the working exo run is not in the current artifact set, so a ship
+that promises vision MUST graft explicitly and be verified on an image.
+
 ## E37 (08-15) — mixed geometry FALSIFIED: E36's d8 win was a LAYER-0 ARTIFACT
 
 Built the E36 frontier candidate for real: `rotlab--397B-tail3x3-vqMixed-d4K256-d8K4096`,
