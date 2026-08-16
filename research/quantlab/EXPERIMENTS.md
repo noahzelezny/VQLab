@@ -1870,3 +1870,31 @@ existing `rotlab-35B-vqK256codes` (7.0378 wiki / 3.0755 code) to turn
 "relerr says probably bad" into a real PPL delta for the K256->K128 halving.
 `vq_35b_codes.py --out-proxy` made optional for this (the twin costs ~6x the
 codes artifact in disk and the M1e runtime-vs-twin check is long closed).
+
+## Probe (08-15) — K-scaling of codes-fit time: E is a ~4 h fit, not 6-10 h
+
+`probe_k_fit_time.py` (M3, free GPU; layer 40 down_proj, real bf16 tensor,
+the fitter's kmeans + assign loops copied shape-for-shape):
+
+  | K | kmeans | assign (64 experts) | full tensor |
+  |---|---|---|---|
+  | 256 | 0.9s | 1.0s | 8.1s |
+  | 2048 | 6.7s | 7.4s | 59.2s |
+
+**K2048 costs 7.3x K256 in compute** — sub-linear in K (8x nominal), the GEMM
+amortising. Extrapolated compute for all 171 tensors: **K256 ~0.3 h,
+K2048 ~2.0 h.**
+
+Calibrate against the real C fit (K256, 2h09 on the M4): compute is only
+~0.3 h of that, so **~1.8 h was I/O** (390 GB source read + artifact write).
+I/O is K-independent, so:
+
+    E codes fit  ~=  2.0 h compute + ~1.8 h I/O  ~=  **4 h**
+
+Independently corroborated by the chip's mixed fit (down=d8K4096, heavier
+compute than K2048): **3h34m measured**. Same ballpark, from a different
+geometry — the model holds.
+
+**Corrects the 6-10 h estimate given earlier from arithmetic alone.** The
+error was treating the whole of C's 2h09 as K-scaling when 85% of it is I/O
+that does not scale with K at all. Cost of the probe: ~2 minutes.
