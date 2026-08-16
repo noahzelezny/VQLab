@@ -2219,3 +2219,30 @@ Test-design trap worth keeping: the first two runs looked like garbage
 thinking model**, which the model card warns about and the test author (me)
 ignored. Budget 3000+ tokens for a verification prompt. `/no_think` did NOT
 suppress reasoning on this model; token budget is the only real lever.
+
+### All three VERIFIED on the 2-node ring (08-16)
+
+  | artifact | size | format | placement | generation |
+  |---|---|---|---|---|
+  | VQ-2.2bpw | 100.1 GiB | 7-bit packed | (post-reset) | coherent, finish=stop |
+  | VQ-2.4bpw | 110.8 GiB | unpacked | 80s | coherent, finish=stop |
+  | VQ-3.1bpw | 142.8 GiB | 11-bit packed | 336s | coherent, finish=stop |
+
+3.1bpw — the artifact that stalled at 59/60 this morning — now places and
+serves, and answered "what is vector quantization?" correctly in two
+sentences (1189 tokens, 5282 chars of reasoning). The cached-in_features fix
+is confirmed on the hardest case.
+
+**Sequencing gotcha, learned the hard way:** DELETE-then-place wedges exo.
+Deleting an instance leaves runners in RunnerShuttingDown indefinitely, and
+the next placement spawns runners that die instantly, leaving ghost
+"RunnerLoading" entries whose layer counts are FICTION — the state API
+reports progress for processes that do not exist. Always verify against
+`ps` on both nodes, never the API alone. `exo_verify_artifact.sh` now does a
+full `exo-reset.sh --restart` between artifacts (~60s) instead.
+
+Env gotcha for any HF automation: Noah's `HF_HOME` is
+`/Volumes/Thunderbay SSD/Mlx_Models` (set in ~/.zshrc), and the auth token
+lives there. Non-interactive shells don't source .zshrc, so scripts must set
+HF_HOME explicitly or run unauthenticated — which would fail a 100+ GiB
+upload at the very end. `upload_to_hf.sh` sets it and pre-flights whoami.

@@ -7,9 +7,21 @@
 #   ./upload_to_hf.sh 2.2          # upload one
 #   ./upload_to_hf.sh all
 set -euo pipefail
+# Noah's HF_HOME lives on the SSD (~/.zshrc), and the auth token with it.
+# Non-interactive shells do NOT source .zshrc, so without this every hf call
+# runs UNAUTHENTICATED and a 100+ GiB push fails at the end. Set it explicitly.
+export HF_HOME="${HF_HOME:-/Volumes/Thunderbay SSD/Mlx_Models}"
+
 E="/Volumes/Thunderbay SSD/Exo Models"
 ORG="TheDrainFlorist"
 declare -a ARTS=("Qwen3.5-397B-A17B-VQ-2.2bpw" "Qwen3.5-397B-A17B-VQ-2.4bpw" "Qwen3.5-397B-A17B-VQ-3.1bpw")
+
+python3 -c "
+from huggingface_hub import HfApi
+w=HfApi().whoami(); r=(w.get('auth') or {}).get('accessToken',{}).get('role')
+print(f'authenticated as {w[\"name\"]} (token role: {r})')
+assert r in ('write','admin'), 'token lacks write permission — uploads would fail'
+" || { echo 'HF auth pre-flight FAILED'; exit 1; }
 
 sel="${1:-all}"
 for a in "${ARTS[@]}"; do
