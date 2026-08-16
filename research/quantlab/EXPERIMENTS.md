@@ -2051,3 +2051,45 @@ perplexity do not move in lockstep at this resolution.
 **The half4 kernel fix is validated at 397B scale**: every K2048 module
 decodes through `_SRC_FUSED_D4_BIGK`, and it produced coherent, reproducible
 numbers. Without it this artifact could not have run at all.
+
+## F REAL (08-16) — the 100 GiB point exists, and BOTH ppl projections were wrong
+
+`rotlab--397B-tail3x3-vqK128codes` — **110.8 GiB unpacked / 100.1 packed**,
+fit in only **1577s (26 min)**, mean relerr **0.3698**. Referee x2 both
+corpora, bit-identical.
+
+  | | F (100.1 packed) | spicy 2.6bit (120.6) | C (110.8) |
+  |---|---|---|---|
+  | wikitext | **3.1706** | 3.1843 | 2.7655 |
+  | code | 2.6988 | **2.6667** | 2.6383 |
+
+F wins wikitext by 0.43%, **LOSES code by 1.20%**, at **20.5 GiB less** than
+its comparator. That is the honest claim, and it is still a real win on
+Noah's terms (08-15): "slightly worse at -20GB means someone can run it who
+couldn't before."
+
+**Two forecasting failures worth carrying:**
+1. **Both ppl projections missed, mine worse.** Predicted wikitext: mine
+   ~2.843 (relerr-calibrated), the other session's 3.0475. Actual **3.1706**
+   — 11% and 4% optimistic respectively. Yet the RELERR prediction was
+   nearly exact (+17-18% probed, +17.2% actual, 0.3156 -> 0.3698). So the
+   relerr model transfers; **relerr -> perplexity does not.** Same lesson E
+   taught in the opposite direction the same night. Do not publish or plan
+   around a projected ppl: fit it and referee it.
+2. **F's fit ETA was 6x off** — estimated ~2.5 h, took 26 min. K128 compute
+   is ~16x cheaper than K2048 and it writes 86 GiB less, but that does not
+   cover the gap: the I/O share in the earlier calibration was overstated
+   for this shape. Fit cost is not a simple compute + fixed-I/O model.
+
+## THE LINEUP (08-16) — three real artifacts, all measured, all reproduced x2
+
+  | | packed GiB | wikitext | code | vs its comparator |
+  |---|---|---|---|---|
+  | **F** | 100.1 | 3.1706 | 2.6988 | +0.43% / -1.20% vs 2.6bit @120.6 |
+  | **C** | 110.8 | 2.7655 | 2.6383 | +13.2% / +1.07% vs 2.6bit @120.6 |
+  | **E** | 142.9 | 2.3519 | 2.5987 | +0.40% / +0.07% vs 3.5bit @165.6 |
+
+C wins its class outright on both corpora. E takes the 3bit class (code is a
+TIE at 0.07% — publish it as "matches on code"). F trades 1.2% of code for
+20.5 GiB and is the accessibility artifact. Every number: stock mlx_lm,
+single-box streaming referee, bit-identical reruns.
