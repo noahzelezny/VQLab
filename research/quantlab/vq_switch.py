@@ -539,8 +539,16 @@ class VQSwitchLinear(nn.Module):
 
     @property
     def input_dims(self):
-        if self._in_features is not None:
-            return self._in_features
+        # MUST be derived from the CURRENT tensors, never cached: exo's
+        # tensor-parallel path shards `codes` IN PLACE after the module is
+        # built (auto_parallel._sharded_to_all -> last axis). A cached value
+        # then describes the pre-shard tensor, the kernel computes word
+        # offsets for twice the data it holds, and the ring desyncs mid-load
+        # (observed 2026-08-16: M4 66 GiB loaded, M3 stalled at 16.5 GiB).
+        # Single-box never shards, which is why this only bites the cluster.
+        if self.pack_bits:
+            nsub = self.codes.shape[2] * 32 // self.pack_bits
+            return nsub * self.codebook.shape[1]
         return self.codes.shape[2] * self.codebook.shape[1]
 
     @property
