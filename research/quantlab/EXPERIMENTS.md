@@ -2152,3 +2152,30 @@ checkpoint, `importlib.util.spec_from_file_location` loads it as the arch
 module, registry path untouched for every existing model. Hook mechanism
 verified against a synthetic checkpoint. NOT yet pushed/opened — Noah's
 GitHub, Noah's call.
+
+## FINAL TABLE (08-16) — the release lineup, everything measured
+
+  | | F | C | E |
+  |---|---|---|---|
+  | geometry | d4 K128, 7-bit packed | d4 K256, byte-aligned | d4 K2048, 11-bit packed |
+  | **size** | **100.1 GiB** | **110.8 GiB** | **142.8 GiB** |
+  | wikitext ppl | 3.1706 | 2.7655 | 2.3519 |
+  | code ppl | 2.6988 | 2.6383 | 2.5987 |
+  | vs comparator | spicy 2.6bit @120.6: wiki **-0.43%**, code +1.20% | spicy 2.6bit @120.6: wiki **-13.2%**, code **-1.07%** | spicy 3.5bit @165.6: wiki **-0.40%**, code -0.07% (tie) |
+  | decode tok/s (M4 Max 128GB) | **20.4-20.9** | 19-22 | n/a single-box |
+  | prefill tok/s | 42-48 | 40-50 | n/a single-box |
+  | peak GiB @8k ctx | **103.0** | ~115.5 | — |
+  | load time | 116 s | ~60 s | — |
+  | vision tower | grafted | grafted | grafted |
+  | runs on | 128 GB Mac, roomy | 128 GB Mac, tight | ≥192 GB or cluster |
+
+Notes for the record:
+- **F is NOT faster than C, and should not be.** Decode is bound by
+  bytes-read-PER-TOKEN, and this is an A17B MoE: both read the same routed
+  experts, F's codes at 7/8 width = ~8% best-case traffic cut, absorbed by
+  K-independent costs. The 20 GB buys RESIDENCY (peak 103 vs ~115.5), not
+  tok/s. Size -> headroom; active-bytes -> speed.
+- E has no single-box speed number because no box we own holds 142.8 GiB;
+  its speed story is exo cluster serving, a different measurement.
+- All ppl: stock mlx_lm, single-box streaming referee, bit-identical x2,
+  identical packed-vs-unpacked verified per artifact.
