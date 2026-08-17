@@ -2356,3 +2356,119 @@ few-shot setting, generative tasks (the scorer is loglikelihood-only by
 construction). Timings: ours 1.28-1.50 h/model, spicy 10-11 min/model,
 sweep total ~4.6 h. Raw per-item records in results_tasks/*.samples.json
 (local, untracked); summaries committed.
+
+## VQ PREFILL DIAGNOSIS (08-16) — the 9x is padded-GEMM waste, not the kernel
+
+Follow-up to the task-bench surprise above (tracker VQ-PF1). Diagnose-only:
+instrument, name the cause, quantify the recoverable headroom. No fix is
+applied in this entry.
+
+**The puzzle.** vq_switch.py's header claims the chunked decode+GEMM prefill
+path benches 1.21-1.28x gather_qmm; the 08-16 sweep measured ~90 s/block for
+our VQ artifacts vs ~9.6 s/block for spicy 2.6bit on an identical
+289,598-token workload. Both numbers are real. The regime that separates them
+is **router skew**, and the microbench never saw it.
+
+**Workload shape** (what the scorer actually asks of the MoE): 8000 sequences
+/ 289,598 tokens, `--batch-seqs 256` ⇒ 32 padded buckets of ~9,216 tokens.
+E=512 experts, top_k=10 ⇒ N=92,160 (token,expert) pairs per bucket per
+projection, mean 180 rows/expert. 3 projections x 32 buckets x 60 blocks.
+
+**Probe 1 — the expert kernel is exonerated** (`probe_vq_prefill_regime.py`,
+real layer-3 gate_proj tensors out of the shipped 2.4bpw artifact, uniform
+router, vs an affine 2-bit gather_qmm baseline of identical shape):
+
+  | tokens/call | rows/expert | gather_qmm | vq _prefill | ratio | decode share |
+  |---|---|---|---|---|---|
+  | 1024 | 20 | 7.5 ms | 22.8 ms | 0.33x | 45% |
+  | 4096 | 80 | 28.5 ms | 36.7 ms | 0.78x | 28% |
+  | **9050** | **177** | **61.5 ms** | **61.5 ms** | **1.00x** | 17% |
+  | 18100 | 354 | 122.4 ms | 101.8 ms | 1.20x | 10% |
+  | 72400 | 1414 | 484.6 ms | 302.8 ms | 1.60x | 3% |
+
+  At the scorer's own shape the kernel is at **parity**, and the header's
+  1.21-1.28x reproduces exactly where m1c_prefill_bench measured it (high
+  rows/expert). Decode-materialization is NOT the story: decoding all 512
+  experts costs 10.2 ms, 17% of the call, and is chunk-size-sensitive only
+  from 10.2 ms (chunk 128) to 41.3 ms (chunk 4) — worst case 1.7x, not 9x.
+
+**Probe 2 — the gap is real and this instrument reproduces it**
+(`probe_block_prefill.py`, one REAL transformer block, bucket [256,36]):
+spicy 2.6bit **295 ms/bucket ⇒ 9.4 s/block** (the sweep measured 9.6 — the
+instrument is faithful); VQ-2.4bpw **1135 ms/bucket ⇒ 36.3 s/block**.
+
+**Probe 3 — where the block's time goes** (`probe_block_breakdown.py`, stage
+timing inside the real `VQSwitchLinear.__call__`, 3 calls/block, N=92,160):
+
+  | stage | ms | % of block |
+  |---|---|---|
+  | `_prefill` (3 calls) | 783.9 | 72.6% |
+  | `broadcast_to(...).reshape(N, IN)` | 143.4 | 13.3% |
+  | output reshape | 55.0 | 5.1% |
+  | astype fp16 | 27.7 | 2.6% |
+  | idx -> host sync, argsort | 0.3 | 0.0% |
+  | rest of block (attn, norms, shared expert) | 68.8 | 6.4% |
+
+  `_prefill` is **261 ms/call here vs 61 ms/call in probe 1** at the same
+  token count. The only difference between the two is the expert histogram.
+  (The bucket-loop re-decode of hypothesis #1 is real — 32 buckets do decode
+  each layer's experts 32x — but it amplifies BOTH models' weight traffic
+  equally and is only 17% of our call, so it does not explain the ratio.)
+
+**THE CAUSE** (`probe_routing_pad.py`, real router indices captured off a
+real block): `_prefill` pads every expert in a decode chunk to that chunk's
+**maximum** token count and runs one batched GEMM over `[ne, cap, IN]`. Real
+MoE routing is heavily skewed — **max 1574 rows/expert against a mean of
+180, 8.7x** — so at the shipped `_DECODE_CHUNK=128` the per-chunk caps are
+[773, 1574, 1197, 633] and the GEMM does **5.80x the necessary FLOPs**. A
+uniform rng router over the same E, N and chunk pads only **1.20x**. Timed
+side by side on identical data: `_prefill` **238 ms under the real router vs
+76 ms under uniform**. That 3.1x is the missing factor, and it is invisible
+to any benchmark whose router is `rng.integers` — which is exactly what
+m1c_prefill_bench.py uses. **The kernel was never the problem; the padding
+policy is.** The remainder of the gap is the ~226 ms/block (21%) spent
+materializing the `[N, IN]` fp16 row matrix that `gather_qmm` never needs,
+because it gathers rows inside the matmul.
+
+**Recoverable headroom, on-disk layout untouched** (`probe_pad_headroom.py`,
+real router histogram; "id" = shipped policy, chunks experts by expert id;
+"count" = chunk experts by SIMILAR token count, a pure host-side reordering
+of which experts share a GEMM — codes, codebooks and scales are not read
+differently, let alone repacked):
+
+  | chunk | pad (id) | time (id) | pad (count) | time (count) |
+  |---|---|---|---|---|
+  | 8 | 2.59x | 146.9 ms | **1.08x** | 84.0 ms |
+  | 16 | 3.36x | 150.5 ms | 1.19x | **75.9 ms** |
+  | 32 | 4.08x | 198.2 ms | 1.41x | 98.0 ms |
+  | 64 | 4.81x | 236.6 ms | 1.88x | 108.5 ms |
+  | **128 (shipped)** | **5.92x** | **263.1 ms** | 2.84x | 124.7 ms |
+  | 256 | 8.01x | 491.4 ms | 4.83x | 189.5 ms |
+  | 512 | 8.91x | 505.2 ms | 8.91x | 446.7 ms |
+
+  Count-sorted chunking at chunk=16 lands `_prefill` at **75.9 ms — 3.5x
+  faster than shipped, and 1.24x gather_qmm's 61.5 ms**, i.e. it *recovers
+  the header's own claim* on the real router. Confirmed at block level with
+  the existing env knob alone (no code change): `SCOUT_VQ_DECODE_CHUNK=8`
+  takes the real block from 1135 to **690 ms/bucket (22.1 s/block, 1.65x)**.
+
+**Verdict.** The fused VQ-GEMM tile kernel proposed as the candidate fix is
+NOT indicated: the existing kernel already matches gather_qmm at this shape
+once it stops multiplying padding. Two layout-free changes, in cost order:
+(1) chunk experts by token count rather than expert id inside `_prefill`;
+(2) lower the `_DECODE_CHUNK` default, which is currently auto-sized purely
+for memory headroom (128 on a 96 GB M3 Ultra) with no regard for the pad
+tax it buys. Both are a few lines inside `_prefill` and ship as the few-KB
+bundled `model.py` update the HARD CONSTRAINT requires. Deliberately not
+done here: neither is applied, and neither is trustworthy until
+`score_tasks_streaming.py --selftest` reproduces the published ppl
+(2.4bpw 2.7655) to 4 decimals through the changed path.
+
+**Caveats.** All timings are layer 3 of the 2.4bpw artifact on a 96 GB M3
+Ultra, with a synthetic uniform-length bucket [256,36]; the real sweep's
+length-sorted buckets have a long tail, which is why the reproduced ratio
+here is 3.9x (36.3 vs 9.4 s/block) against 9x in the sweep — longer buckets
+raise N per call and, with a skewed router, the cap along with it. Routing
+skew was measured on ONE block with random hidden states; a real-token
+histogram could differ in magnitude, not in kind (probe_routing_skew.py has
+the corpus-driven version if the number needs hardening).
