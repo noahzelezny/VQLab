@@ -75,9 +75,9 @@ one Mac-class of memory earlier.
 
 ### Acknowledgment
 
-spicyneuron's 397B quants are what made this model runnable here in the
-first place — they were the artifacts that fit when nothing else did, and
-they were the reference this work was measured against throughout. This
+spicyneuron's 397B quants are what made this model runnable on my hardware
+in the first place — they were the artifacts that fit when nothing else did,
+and they were the reference this work was measured against throughout. This
 release is offered in that same spirit: the full method, the experiments
 that failed as well as the ones that worked, and comparator numbers
 re-measured on one harness so the claims can be checked rather than taken
