@@ -16,7 +16,7 @@ tags:
 
 # Qwen3.5-397B-A17B-VQ-2.4bpw
 
-**110.8 GiB — the daily driver, runs on a single 128 GB Mac.**
+**111.6 GiB — the daily driver, runs on a single 128 GB Mac.**
 
 A vector-quantized build of [Qwen3.5-397B-A17B](https://huggingface.co/Qwen/Qwen3.5-397B-A17B)
 that fits and **generates on one 128 GB Apple Silicon machine** — no cluster,
@@ -27,7 +27,7 @@ no patches, stock `mlx-lm`.
 All numbers measured on this exact artifact (not projected from a proxy),
 reproduced bit-identically ×2, scored with an unmodified `mlx-lm` install.
 
-| | this model (110.8 GiB) | spicyneuron 2.6bit (120.6 GiB) |
+| | this model (111.6 GiB) | spicyneuron 2.6bit (120.6 GiB) |
 |---|---|---|
 | wikitext perplexity (raw, prefix-8192) | **2.7655** | 3.1843 |
 | code perplexity (mixed-language) | **2.6383** | 2.6667 |
@@ -126,10 +126,10 @@ rather than quoting their reported figures.
 
 | model | size | HellaSwag | PIQA | WinoGrande |
 |---|---|---|---|---|
-| Qwen3.5-397B-A17B-VQ-2.2bpw | 100.1 GiB | 0.861 | 0.841 | 0.787 |
-| **Qwen3.5-397B-A17B-VQ-2.4bpw** *(this model)* | 110.8 GiB | 0.883 | 0.844 | 0.784 |
+| Qwen3.5-397B-A17B-VQ-2.2bpw | 100.9 GiB | 0.861 | 0.841 | 0.787 |
+| **Qwen3.5-397B-A17B-VQ-2.4bpw** *(this model)* | 111.6 GiB | 0.883 | 0.844 | 0.784 |
 | spicyneuron 2.6bit | 120.6 GiB | 0.880 | 0.841 | 0.771 |
-| Qwen3.5-397B-A17B-VQ-3.1bpw | 142.8 GiB | 0.903 | 0.840 | 0.780 |
+| Qwen3.5-397B-A17B-VQ-3.1bpw | 143.7 GiB | 0.903 | 0.840 | 0.780 |
 | spicyneuron 3.5bit | 165.6 GiB | 0.904 | 0.846 | 0.767 |
 
 Every model scored identical items, so differences are **paired** (McNemar
@@ -138,7 +138,7 @@ perplexity ordering; PIQA and WinoGrande separate no pair at n=1000 and
 stand as integrity checks rather than rankings.
 
 **This model** is statistically indistinguishable from spicyneuron's
-2.6bit on all three tasks (McNemar p = 0.76 / 0.77 / 0.29) at **9.8 GiB
+2.6bit on all three tasks (McNemar p = 0.76 / 0.77 / 0.29) at **9.0 GiB
 smaller** — consistent with the perplexity result, where it leads its size
 class on both corpora.
 
@@ -161,7 +161,7 @@ pressure reverses the gain. Measured on an M4 Max 128 GB, 8k context:
 
 **On a 128 GB machine, do not raise the step past 2048 with this model** —
 the 4096 run exhausted memory. If you want a larger prefill step on 128 GB,
-use the 100.1 GiB sibling (`-VQ-2.2bpw`), which has the headroom for it and
+use the 100.9 GiB sibling (`-VQ-2.2bpw`), which has the headroom for it and
 reaches ~141 tok/s. These limits are about the single-box memory ceiling,
 not the model: with more memory (192 GB+, or tensor-sharded across an exo
 cluster) the larger steps are back on the table. Decode is unaffected
@@ -178,6 +178,10 @@ The artifact includes the full 333-tensor vision tower at source precision
 directly. `mlx-vlm` support requires its `model_file` loader hook
 ([PR #1926](https://github.com/Blaizzy/mlx-vlm/pull/1926), under review).
 
+The sizes quoted above are the download: they include this tower. Because
+`mlx-lm` does not load it, resident memory runs ~0.85 GiB below the disk
+figure — the runtime tables report what was actually measured resident.
+
 ## Siblings
 
 This is the middle of a three-size family, all from the same skeleton and
@@ -185,9 +189,9 @@ recipe, all measured the same way:
 
 | | size | wikitext | code | needs |
 |---|---|---|---|---|
-| `VQ-2.2bpw` (accessibility) | 100.1 GiB | 3.1706 | 2.6988 | 128 GB Mac, roomy |
-| **`VQ-2.4bpw` (this build)** | **110.8 GiB** | **2.7655** | **2.6383** | 128 GB Mac, tight |
-| `VQ-3.1bpw` (quality) | 142.8 GiB | 2.3519 | 2.5987 | ≥192 GB or cluster |
+| `VQ-2.2bpw` (accessibility) | 100.9 GiB | 3.1706 | 2.6988 | 128 GB Mac, roomy |
+| **`VQ-2.4bpw` (this build)** | **111.6 GiB** | **2.7655** | **2.6383** | 128 GB Mac, tight |
+| `VQ-3.1bpw` (quality) | 143.7 GiB | 2.3519 | 2.5987 | ≥192 GB or cluster |
 
 ## Known limitations
 

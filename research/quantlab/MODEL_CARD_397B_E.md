@@ -16,7 +16,7 @@ tags:
 
 # Qwen3.5-397B-A17B-VQ-3.1bpw
 
-**142.8 GiB — the quality build.**
+**143.7 GiB — the quality build.**
 
 A vector-quantized build of [Qwen3.5-397B-A17B](https://huggingface.co/Qwen/Qwen3.5-397B-A17B)
 for machines with memory to spend: the strongest quantization we know how
@@ -27,13 +27,13 @@ to make of this model at this size, on stock `mlx-lm`, no patches.
 All numbers measured on this exact artifact, reproduced bit-identically ×2,
 scored with an unmodified `mlx-lm` install:
 
-| | this model (142.8 GiB) | spicyneuron 3.5bit (165.6 GiB) | our `VQ-2.4bpw` build |
+| | this model (143.7 GiB) | spicyneuron 3.5bit (165.6 GiB) | our `VQ-2.4bpw` build |
 |---|---|---|---|
 | wikitext perplexity (raw, prefix-8192) | **2.3519** | 2.3614 | 2.7655 |
 | code perplexity (mixed-language) | 2.5987 | 2.6005 | 2.6383 |
 
 **The honest claim: matches the community 3.5bit on code (0.07% is a tie),
-edges it on wikitext (−0.40%), at 22.8 GiB smaller.** The size difference
+edges it on wikitext (−0.40%), at 21.9 GiB smaller.** The size difference
 is the story — this quality previously cost 165.6 GiB.
 
 Domain asymmetry note: against our smaller builds, the wikitext gain is
@@ -43,7 +43,7 @@ different corpora or eval harnesses.
 
 ## Hardware
 
-142.8 GiB resident does **not** fit a 128 GB machine. You need either:
+143.7 GiB on disk (~142.8 GiB resident) does **not** fit a 128 GB machine. You need either:
 
 - a single Apple Silicon machine with ≥ 192 GB unified memory, or
 - an [exo](https://github.com/exo-explore/exo) cluster (e.g. 96 GB + 128 GB
@@ -128,10 +128,10 @@ rather than quoting their reported figures.
 
 | model | size | HellaSwag | PIQA | WinoGrande |
 |---|---|---|---|---|
-| Qwen3.5-397B-A17B-VQ-2.2bpw | 100.1 GiB | 0.861 | 0.841 | 0.787 |
-| Qwen3.5-397B-A17B-VQ-2.4bpw | 110.8 GiB | 0.883 | 0.844 | 0.784 |
+| Qwen3.5-397B-A17B-VQ-2.2bpw | 100.9 GiB | 0.861 | 0.841 | 0.787 |
+| Qwen3.5-397B-A17B-VQ-2.4bpw | 111.6 GiB | 0.883 | 0.844 | 0.784 |
 | spicyneuron 2.6bit | 120.6 GiB | 0.880 | 0.841 | 0.771 |
-| **Qwen3.5-397B-A17B-VQ-3.1bpw** *(this model)* | 142.8 GiB | 0.903 | 0.840 | 0.780 |
+| **Qwen3.5-397B-A17B-VQ-3.1bpw** *(this model)* | 143.7 GiB | 0.903 | 0.840 | 0.780 |
 | spicyneuron 3.5bit | 165.6 GiB | 0.904 | 0.846 | 0.767 |
 
 Every model scored identical items, so differences are **paired** (McNemar
@@ -140,7 +140,7 @@ perplexity ordering; PIQA and WinoGrande separate no pair at n=1000 and
 stand as integrity checks rather than rankings.
 
 **This model** is statistically indistinguishable from spicyneuron's
-3.5bit on all three tasks (McNemar p = 1.00 / 0.33 / 0.25) at **22.8 GiB
+3.5bit on all three tasks (McNemar p = 1.00 / 0.33 / 0.25) at **21.9 GiB
 smaller**, and matches it on perplexity for both corpora — the same quality
 point, one memory class earlier.
 
@@ -155,6 +155,10 @@ The artifact includes the full 333-tensor vision tower at source precision
 [exo](https://github.com/exo-explore/exo) loads it from this folder
 directly. `mlx-vlm` support requires its `model_file` loader hook
 ([PR #1926](https://github.com/Blaizzy/mlx-vlm/pull/1926), under review).
+
+The sizes quoted above are the download: they include this tower. Because
+`mlx-lm` does not load it, resident memory runs ~0.85 GiB below the disk
+figure — the runtime tables report what was actually measured resident.
 
 ## Known limitations
 
