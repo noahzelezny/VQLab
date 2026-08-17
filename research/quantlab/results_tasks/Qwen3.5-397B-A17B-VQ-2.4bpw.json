@@ -1,0 +1,39 @@
+{
+ "model": "Qwen3.5-397B-A17B-VQ-2.4bpw",
+ "tasks": [
+  "hellaswag",
+  "piqa",
+  "winogrande"
+ ],
+ "limit": 1000,
+ "num_shots": 0,
+ "seconds": 5396.1,
+ "harness": "lm-eval 0.4.12 via score_tasks_streaming.py (layer-streamed loglikelihood)",
+ "results": {
+  "hellaswag": {
+   "name": "hellaswag",
+   "alias": "hellaswag",
+   "sample_len": 1000,
+   "acc,none": 0.741,
+   "acc_stderr,none": 0.013860415257527861,
+   "acc_norm,none": 0.883,
+   "acc_norm_stderr,none": 0.010169287802713345
+  },
+  "piqa": {
+   "name": "piqa",
+   "alias": "piqa",
+   "sample_len": 1000,
+   "acc,none": 0.814,
+   "acc_stderr,none": 0.012310790208412926,
+   "acc_norm,none": 0.844,
+   "acc_norm_stderr,none": 0.011480235006122295
+  },
+  "winogrande": {
+   "name": "winogrande",
+   "alias": "winogrande",
+   "sample_len": 1000,
+   "acc,none": 0.784,
+   "acc_stderr,none": 0.013019735539307761
+  }
+ }
+}

@@ -2269,3 +2269,90 @@ Also measured: **VQ-3.1bpw decodes ~17.4 tok/s** on the ring (M3 Ultra 96 GB
 + M4 Max 128 GB over TB5/RDMA) — installed in its card, replacing the earlier
 byte-arithmetic estimate. Memory splits proportional to node capacity
 (M3 45.6 GiB / M4 80.6 GiB), not evenly.
+
+## TASK BENCHMARKS (08-16) — HellaSwag/PIQA/WinoGrande, all five models, ONE harness
+
+Motivation: the HF cards show perplexity only; spicyneuron's card shows task
+accuracies. Their card states NO harness, version, shots, or limit — and
+their reported stderrs imply n≈500 (0.598±0.022 ⇒ n=497; all three tasks
+land on ~500). We had already measured their 2.6bit at wikitext 3.1843
+where their card says 3.852 — same weights, 21% apart, the gap IS the
+pipeline. So: never quote their numbers next to ours; run their artifacts
+on our own instrument instead. This entry does exactly that.
+
+**Instrument:** `score_tasks_streaming.py` — an lm-eval `LM` subclass whose
+`loglikelihood()` streams one transformer block at a time (the
+score_streaming.py trick) while batching ALL task sequences through each
+block before freeing it. One pass over the model's bytes per sweep, flat
+~15 GB, so the 165.6 GiB comparator scores on one box. lm-eval builds the
+prompts and computes the metrics; we only supply logprobs. Reuse was
+load-bearing: WinoGrande varies the CONTEXT per option (shared
+continuation) — easy to invert in a hand-rolled scorer.
+
+**Validation before any number was trusted** (referee/README rule):
+0.8B debug model — batched path vs referee: total_nll 23135.2109 BOTH.
+VQ-2.2bpw real artifact — ppl 3.1706, the published number (total_nll
+differs at 3e-8 relative: float summation order, per-token concat vs
+per-1024-chunk; the claim is "identical to 4 decimals", not bit-identical).
+0.8B end-to-end sanity: hellaswag 0.49 / piqa 0.71 / winogrande 0.57 —
+inside the published band for that size.
+
+**Settings (state these on any card):** lm-eval 0.4.12, mlx_lm 0.31.3,
+0-shot, limit 1000 per task, seeded selection (identical items for every
+model), acc_norm for hellaswag/piqa, acc for winogrande. 10-shot was
+measured (request construction only) at 4.62M tokens vs 289,598 — 16x the
+compute — and skipped; shot count only matters vs OUTSIDE numbers, which
+we are not comparing against.
+
+  | model | GiB | hellaswag | piqa | winogrande |
+  |---|---|---|---|---|
+  | VQ-2.2bpw | 100.1 | 0.8610 | 0.8410 | 0.7870 |
+  | VQ-2.4bpw | 110.8 | 0.8830 | 0.8440 | 0.7840 |
+  | spicy 2.6bit | 120.6 | 0.8800 | 0.8410 | 0.7710 |
+  | VQ-3.1bpw | 142.8 | 0.9030 | 0.8400 | 0.7800 |
+  | spicy 3.5bit | 165.6 | 0.9040 | 0.8460 | 0.7670 |
+
+**Paired analysis** (`analyze_task_bench.py`: every model saw the SAME 1000
+items, so item difficulty cancels; McNemar exact on discordant pairs +
+paired bootstrap 95% CI — the independent ±0.011-0.015 stderr is the wrong
+bar for deltas):
+
+- **HellaSwag is the one task that discriminates, and it reproduces the
+  perplexity ordering exactly:** 2.2 < 2.4 ≈ spicy2.6 < 3.1 ≈ spicy3.5.
+  Every rung is significant (2.2→2.4 p=0.0013; 2.4→3.1 p=0.0017;
+  spicy2.6→spicy3.5 p=0.0001). Discordant counts are lopsided the same
+  way every time (e.g. 2.2 vs 3.1: 8 wins / 50 losses).
+- **The size-class matchups are statistical TIES on all three tasks:**
+  VQ-2.4bpw vs spicy 2.6bit p=0.76/0.77/0.29 at **9.8 GiB smaller**;
+  VQ-3.1bpw vs spicy 3.5bit p=1.00/0.33/0.25 at **22.8 GiB smaller**.
+  That is the publishable claim: same task accuracy, meaningfully smaller.
+- **PIQA and WinoGrande resolve nothing** at n=1000 — every pair ties.
+  They are "nothing broke" checks here, not rankings. WinoGrande shows a
+  consistent but non-significant drift in OUR favor (all four VQ-vs-spicy
+  deltas positive, up to +0.020 p=0.12); n=1000 cannot promote it and we
+  do not claim it.
+- **spicyneuron's published task numbers are confirmed incomparable:**
+  their 2.6bit on OUR harness: hellaswag 0.8800 (their card: 0.598 — 28
+  points; our RAW acc is 0.743, so it is not an acc/acc_norm confusion),
+  piqa 0.8410 (0.802), winogrande 0.7710 (0.718). Second independent
+  confirmation of the pipeline gap after the ppl one. Their artifacts are
+  GOOD — their published numbers just measure something else.
+
+**Surprise, logged as tracker VQ-PF1:** identical 289,598-token workload
+runs ~9.6 s/block on spicy (MLX affine gather_qmm) vs ~90 s/block on our
+VQ artifacts — ~9x on prefill-shaped work, corroborated by the cards'
+prefill figures (489 vs 42-48 tok/s, ~10x, measured completely
+differently). Decode is at parity (bandwidth-bound; 20.4-20.9 tok/s F).
+PUZZLE: vq_switch.py's own microbench header says chunked decode+GEMM is
+1.21-1.28x gather_qmm — contradicts end-to-end; diagnose before fixing
+(bucket-loop re-decode amplification in MY scorer is candidate #1 and
+would partially exonerate the kernel). Constraint recorded: any fix must
+keep the on-disk layout frozen so it ships as a few-KB model.py update,
+not a 100+ GiB re-upload.
+
+**Not measured:** full task sets (13.1k items; ~6x the compute — the
+paired design at n=1000 already separated what is separable), any
+few-shot setting, generative tasks (the scorer is loglikelihood-only by
+construction). Timings: ours 1.28-1.50 h/model, spicy 10-11 min/model,
+sweep total ~4.6 h. Raw per-item records in results_tasks/*.samples.json
+(local, untracked); summaries committed.
