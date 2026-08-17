@@ -39,8 +39,8 @@ Runtime, single M4 Max 128 GB (macOS, stock `mlx-lm`):
 | load time | ~60 s |
 | resident memory | 110.8 GiB (peak 117.7 GiB at 30k context) |
 | context verified | **30,031 tokens**, zero swap growth |
-| decode | **~19–22 tok/s**, flat from 512 → 14k context |
-| prefill | ~40–50 tok/s (chunked, as mlx-lm does natively) |
+| decode | **~19–21 tok/s**, flat from 512 → 14k context |
+| prefill | **~79 tok/s** at a 1024-token step (see Tuning — this model is memory-bound on a 128 GB box; bigger steps get SLOWER) |
 
 Perplexities are corpus-specific: never compare them across different
 corpora or eval harnesses, only against other models scored on the same
@@ -145,6 +145,30 @@ class on both corpora.
 > These are **0-shot** scores. Leaderboard conventions often use 10-shot
 > HellaSwag / 5-shot WinoGrande, which run several points higher — compare
 > against other 0-shot numbers only.
+
+## Tuning: prefill speed
+
+`mlx-lm` prefills prompts in 512-token steps by default, and a larger step
+usually helps a sparse MoE. **On this model, only up to a point** — at
+110.8 GiB it is the tightest fit of the three on a 128 GB machine, and memory
+pressure reverses the gain. Measured on an M4 Max 128 GB, 8k context:
+
+| `--prefill-step-size` | prefill tok/s | peak memory |
+|---|---|---|
+| 1024 | **~79** | 113.6 GiB |
+| 2048 | ~68 (slower) | 116.0 GiB |
+| 4096 | not recommended | exceeded available memory |
+
+**On a 128 GB machine, do not raise the step past 2048 with this model** —
+the 4096 run exhausted memory. If you want a larger prefill step on 128 GB,
+use the 100.1 GiB sibling (`-VQ-2.2bpw`), which has the headroom for it and
+reaches ~141 tok/s. These limits are about the single-box memory ceiling,
+not the model: with more memory (192 GB+, or tensor-sharded across an exo
+cluster) the larger steps are back on the table. Decode is unaffected
+either way.
+
+Perplexity is deterministic and can be measured any time; wall time cannot —
+check nothing else is running before trusting a throughput number.
 
 ## Vision
 

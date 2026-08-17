@@ -2654,3 +2654,52 @@ model.py re-spliced in all three artifacts (Thunderbay AND the M4 local
 copies, which are now independent files), pushed to HF. Weights, codebooks,
 scales and config.json untouched — every published ppl and task number
 stands.
+
+## FUSED-THRESHOLD (08-17) — real at block level, a WASH end-to-end. Not shipped.
+
+The lead: mlx-lm's default 512-token prefill step gives N = 512*10 = 5,120
+(token,expert) pairs — just OVER VQ_FUSED_MAX_N=4096, so the default takes
+the chunked padded-GEMM path at ~10 rows/expert, our worst regime. Would the
+fused kernel be faster there? Raising the threshold is a model.py-only
+change: invisible to users, no env vars.
+
+**Block level (M3, resident single block, n=3 each, control included):**
+
+  | bucket | N | padded | fused | verdict |
+  |---|---|---|---|---|
+  | [1,256] | 2,560 | 35.5 | 35.1 | control: both fused, identical ✓ |
+  | [1,512] | 5,120 | 106.0-108.2 | 67.1-68.0 | **fused 1.58x** |
+  | [1,1024] | 10,240 | 129.6-131.7 | 131.9 | tie — crossover |
+  | [1,2048] | 20,480 | 192.4-196.5 | 268.9 | padded 1.4x |
+
+  Crossover ~N=10k, so 8192 would be the right threshold. The N=2,560
+  control (same path under both settings) matching to 1% is what makes the
+  probe trustworthy.
+
+**PPL gate (score_local, step 512, so the fused path is actually exercised —
+--selftest would be a FALSE PASS, its single 82k-pair call never crosses the
+threshold):** both paths deterministic, padded 1.096101, fused 1.095358
+(6.8e-4 relative, fused LOWER). Plausible mechanism: the fused kernel
+accumulates in fp32 (`float acc`, fma) where the padded path runs an fp16
+GEMM. Published numbers unaffected — selftest with the raised threshold
+still returns 9452.9414 / 3.1706 exactly (its calls sit far above any
+threshold considered).
+
+**End-to-end (M4, m2_speed_split, ctx 8192, step 512, five runs both
+orders):** 4096 → 73.7, 56.9 tok/s; 8192 → 53.6, 62.0, 58.2. **A wash** —
+the instrument's ±15% swamps the effect. The 1.58x is real for the expert
+projection but the projection is only part of block time, and prefill
+includes attention and everything else. Order-reversal killed the
+throttling confound (8192 won the reversed round).
+
+**Decision: NOT SHIPPED.** The only reason to move the threshold was speed;
+without a measurable end-to-end gain we would be changing arithmetic
+(slightly different logits for prompts whose chunks land in 4096 < N <=
+8192) in exchange for nothing a user can perceive. Contrast chunk-32, which
+shipped because it was BOTH measurable end-to-end (1.42-1.50x) AND exact.
+Kept as a lead: if the fused-row-gather work ever removes the ~21% row
+materialization, the balance shifts and this threshold deserves a re-test.
+
+Method note: this took three instruments to resolve — resident block probe
+(found it), chunked scorer (gated it), end-to-end throughput (rejected it).
+Any one alone would have given the wrong answer or shipped a no-op.

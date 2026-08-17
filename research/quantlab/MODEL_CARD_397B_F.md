@@ -46,10 +46,10 @@ Runtime, single M4 Max 128 GB (macOS, stock `mlx-lm`):
 
 | | |
 |---|---|
-| load time | ~116 s (network volume; local SSD is faster) |
-| resident memory | 100.1 GiB (**peak 103.0 GiB at 8k context**) |
-| decode | **~20–21 tok/s**, flat from 512 → 8k context |
-| prefill | ~42–48 tok/s (chunked, as mlx-lm does natively) |
+| load time | **~21 s** (local NVMe) · ~116 s from a network volume |
+| resident memory | 100.1 GiB (**peak 101.8 GiB at 8k context**) |
+| decode | **~18–21 tok/s** (20.8 at 2k, 18.3 at 8k) |
+| prefill | **~63–74 tok/s** at the default 512-token step; **~118–141 tok/s** at a larger step — see Tuning |
 
 Note the size does **not** buy speed — this is an A17B MoE, so decode reads
 the same active experts per token as the larger builds. It buys *residency*:
@@ -146,6 +146,31 @@ Mac with real headroom.
 > These are **0-shot** scores. Leaderboard conventions often use 10-shot
 > HellaSwag / 5-shot WinoGrande, which run several points higher — compare
 > against other 0-shot numbers only.
+
+## Tuning: prefill speed
+
+`mlx-lm` prefills prompts in 512-token steps by default. This model is a
+sparse MoE — a larger step puts more rows through each expert per call, which
+this quantization format likes. Measured on an M4 Max 128 GB, 8k context:
+
+| `--prefill-step-size` | prefill tok/s | peak memory |
+|---|---|---|
+| 512 (default) | ~63–76 | 101.8 GiB |
+| 1024 | ~89 | 103.0 GiB |
+| 2048 | ~112–118 | 105.4 GiB |
+| 4096 | ~138–141 | 109.6 GiB |
+
+Decode is unaffected (~18–21 tok/s throughout) — it uses a different code
+path. The cost is memory: budget the peak above plus your KV cache. On a
+128 GB machine this model has room for step 4096; leave headroom if you run
+long contexts. (Measured single-box; with more memory or an exo cluster the
+same knob applies with a higher ceiling.)
+
+Two measurement notes, because they bit us: perplexity is deterministic and
+can be measured any time, but WALL TIME cannot — check nothing else is
+running before trusting a throughput number. And these were measured with
+the model on local NVMe; reading weights from a network volume dominates
+load time and muddies everything downstream.
 
 ## Vision
 
