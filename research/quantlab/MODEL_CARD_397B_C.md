@@ -51,9 +51,14 @@ files. The wikitext margin (13.2%) is much larger than the code margin
 
 ```bash
 pip install mlx-lm
-python -m mlx_lm generate --model <this-folder> \
-  --prompt "Explain vector quantization briefly." --max-tokens 200
+python -m mlx_lm generate \
+  --model TheDrainFlorist/Qwen3.5-397B-A17B-VQ-2.4bpw \
+  --prompt "Explain vector quantization briefly." \
+  --max-tokens 1000
 ```
+
+`max-tokens` is deliberately generous: this is a reasoning model and a small
+budget gets consumed by its thinking, leaving the visible answer truncated.
 
 No patches, no custom forks: `config.json` declares `model_file: model.py`,
 and `mlx-lm` imports the bundled `model.py` from inside this folder. That
@@ -68,17 +73,46 @@ Tips for 128 GB machines:
   lower it (e.g. `16`) if you run close to the ceiling.
 - Machines with more memory need none of this.
 
-## Format
+## Methodology
 
-Expert weights (the 2-bit region of a structure-quantized skeleton) are
-product-quantized: each 4-weight subvector stores one uint8 index into a
-per-tensor 256-entry fp16 codebook, with an fp16 scale per (row, 64
-weights) — 2.25 bits/weight stored. Non-expert structure, attention, a
-promoted layer tail, and routers keep their original higher-precision
-quantization. Per-tensor geometry lives in `config.json → vq_modules`.
+**Mixed precision by layer sensitivity.** Not all weights deserve the same
+bits. Attention, MoE routers, embeddings, and the output head stay at higher
+precision — they are a small fraction of the parameters but errors there
+propagate through every token. The MoE *experts* are ~85% of the model and
+individually far more tolerant, so they absorb the aggressive quantization.
+A tail of later layers is also promoted above the expert baseline; measured
+layer-wise error showed depth matters, and the last layers repay the bits.
 
-Codebooks are fit in pure weight space (k-means; no Hessian, no
-activation data). Fit + assembly: ~2 h on one M4 Max.
+**Vector quantization instead of scalar rounding — the part that is
+different.** Scalar 2-bit gives each weight 4 rigid levels; over a group of 4
+weights that is 256 fixed grid combinations. This build instead learns a
+**codebook of joint 4-weight patterns** and stores one index per group.
+Each 4-weight subvector stores one **8-bit index** into a per-tensor 256-entry fp16 codebook. At the same bits, the codebook's entries sit
+where the weight distribution actually is, rather than on a uniform lattice —
+which is why this beats scalar quantization at matched size rather than
+merely matching it. Per-tensor codebooks, with an fp16 scale per (row, 64
+weights), for 2.25 bits/weight stored in the expert region.
+
+**Codebooks are fit in pure weight space** — k-means over the weight
+subvectors, no Hessian, no activation statistics, no calibration corpus. That
+is a deliberate choice: calibration-fitted methods we tested (GPTQ- and
+DWQ-style) reduced *layer* error while making *end-to-end* perplexity worse
+on this architecture, and they bias the result toward whatever text the
+calibration set contains. Weight-space fitting has no such domain preference.
+
+**Sub-byte bit-packing.** Codes are packed into uint32 words (row-local,
+32-code blocks) rather than padded to whole bytes, which is what makes the
+non-byte-aligned sizes possible at all. Packing is a pure representation
+change: the packed artifact's perplexities match its unpacked twin to four
+decimals of total negative log-likelihood on both corpora.
+
+**How it was evaluated.** Perplexity on two corpora — raw wikitext
+(prefix-8192) and a mixed-language code corpus — every number reproduced
+bit-identically twice, scored with an unmodified `mlx-lm`. Two corpora
+because this family shows real domain asymmetry: larger codebooks buy far
+more on prose than on code, so a single-corpus number would misrepresent the
+trade. Task-suite evals (HellaSwag/PIQA/WinoGrande and friends) have **not**
+been run; only what is reported above is measured.
 
 ## Vision
 
@@ -106,8 +140,9 @@ recipe, all measured the same way:
 - This is a *thinking* model (Qwen3.5 family): by default it spends tokens
   reasoning before answering. Budget `max_tokens` accordingly.
 - Distributed (exo) tensor-parallel serving needs one line in exo's own
-  sharding rule — VQ codebooks must be replicated, not sliced (upstream PR
-  pending). `mlx-lm` itself is stock in that setup too: verified serving
+  sharding rule — VQ codebooks must be replicated, not sliced. That change
+  is not yet upstreamed; the one-line patch is in the experiment log and can
+  be applied locally. `mlx-lm` itself is stock in that setup too: verified serving
   this model across two Macs with an unpatched `mlx-lm`, producing output
   identical to the patched run. Single-box users are unaffected.
 
