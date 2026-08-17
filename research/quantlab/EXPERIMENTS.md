@@ -2483,3 +2483,52 @@ raise N per call and, with a skewed router, the cap along with it. Routing
 skew was measured on ONE block with random hidden states; a real-token
 histogram could differ in magnitude, not in kind (probe_routing_skew.py has
 the corpus-driven version if the number needs hardening).
+
+## VQ-PF1 FIX APPLIED (08-16) — count-sorted chunking, 1.83x prefill, ppl to the digit
+
+Acts on the diagnosis above. ONE change in `_prefill`: chunk experts by
+SIMILAR ROW COUNT instead of by expert id
+(`touched[np.argsort(counts[touched])]`), plus the row-order restore that
+requires — reordering experts reorders output rows, and `_prefill`'s
+contract is to return rows in its INPUT order (`__call__` layers its own
+`inv` on top). Tracked via `row_ids`, undone with one `[N, OUT]` gather.
+
+**Correctness, established BEFORE any timing claim:**
+- Synthetic, skewed routers (Dirichlet α=0.1/0.5/3.0, skew 3.2-7.3x):
+  new(count, chunk16) vs shipped(id, chunk128) **bit-identical, maxdiff
+  0.000e+00** in all three.
+- Real artifacts, `--selftest` through the changed path, all three exact:
+  2.2bpw **3.1706** (nll 9452.9414) · 2.4bpw **2.7655** (8332.9785) ·
+  3.1bpw **2.3519** (7006.0742).
+
+**Speed** (2.2bpw selftest, old vs new runtime back-to-back, same box):
+**167.6 s -> 91.4 s, 1.83x.** 2.4bpw 97.1 s, 3.1bpw 110.7 s (no clean
+pre-fix baseline was taken for those two — only 2.2bpw is a controlled
+comparison).
+
+**THE TRAP, and why the default chunk did NOT change.** The diagnosis
+recommended lowering `_DECODE_CHUNK` as fix #2. It IS faster — chunk=16
+took the same selftest to 76.3 s. It also **changes the output**: ppl
+3.1754, nll 9465.2217, against the published 3.1706 / 9452.9414. Not a
+bug and not the count-sort — count-sorted chunking at the shipped 128
+reproduces the published nll to the digit (9452.9414). `ne` is the
+batched-GEMM batch dimension; a different `ne` selects a different Metal
+GEMM tiling and fp16 accumulates in a different order. So the reordering
+ships and the default does not: **exact reproducibility of every published
+number beat ~20% more prefill.** `SCOUT_VQ_DECODE_CHUNK` still exposes the
+trade for anyone who wants it, now documented as breaking bit-exactness.
+
+**Process note worth keeping.** The first "validation" of this fix was
+worthless and looked fine: ppl 3.1706, unchanged. The artifacts carry a
+BUNDLED `model.py` (`config.json → model_file`), so `mlx_lm` was loading
+the OLD runtime and my edited `vq_switch.py` never executed — the matching
+ppl was matching because NOTHING HAD CHANGED. Three timing runs were also
+spent on the old code. Editing `vq_switch.py` does not change an artifact;
+the bundled copy must be re-spliced (`model.py` = `vq_switch.py` + the
+1798-char loader shim). Check `grep -c` for your own change in the
+artifact's `model.py` before believing any number.
+
+**Shipping shape:** artifact `model.py` is 29,719 bytes; codes, codebooks,
+scales and `config.json` are untouched, so this is a single small file per
+repo — HF is content-addressed, so existing downloaders fetch only it, not
+100+ GiB. The HARD CONSTRAINT held.

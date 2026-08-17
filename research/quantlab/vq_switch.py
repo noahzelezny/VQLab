@@ -22,6 +22,17 @@
 #                      batched GEMM per chunk — 1.21-1.28x gather_qmm
 #   The row-batched gather_mm path is a known trap (0.43x): do not "simplify"
 #   the prefill path back to it.
+#
+# READ THIS BEFORE TRUSTING THE 1.21-1.28x ABOVE (VQ-PF1, 2026-08-16): that
+# figure was measured with an `rng.integers` router, which pads only 1.20x.
+# REAL MoE routing is skewed ~8.7x (max 1574 rows/expert vs mean 180), and
+# the padded GEMM pads every expert in a chunk to that chunk's MAX row count
+# — so expert-id-ordered chunking did 5.80x the necessary FLOPs and the
+# prefill path measured ~9x SLOWER than gather_qmm end-to-end, not faster.
+# The kernel was never at fault: at the real workload shape it is at parity
+# (61.5 ms both). The fix is in `_prefill` below — chunk experts by SIMILAR
+# ROW COUNT, not by expert id. Any future prefill benchmark MUST use a real
+# router histogram or it will reproduce the same blind spot.
 
 import os
 
@@ -40,9 +51,20 @@ VQ_FUSED_MAX_N = int(os.environ.get("SCOUT_VQ_FUSED_MAX_N", 4096))
 # transient is chunk * out * in * 2 bytes:
 #     chunk=128 -> 1.0 GiB (down_proj) / 2.0 GiB (gate_up)
 #     chunk= 16 -> 0.12 GiB            / 0.25 GiB
-# On a box with headroom, big chunks give better GEMM efficiency. On a box
-# where the model nearly fills RAM, they are what caps your context length.
-# Auto-sized from free memory at import; override with SCOUT_VQ_DECODE_CHUNK.
+# On a box where the model nearly fills RAM, they are what caps your context
+# length. Auto-sized from free memory at import; override with
+# SCOUT_VQ_DECODE_CHUNK.
+#
+# DO NOT lower this default to chase speed. Isolated 2026-08-16 on the real
+# 2.2bpw artifact: chunk=16 is genuinely faster, but it CHANGES THE OUTPUT —
+# selftest ppl 3.1754 / nll 9465.2217 against the published 3.1706 /
+# 9452.9414. Not a bug: `ne` sets the batched-GEMM batch dim, a different ne
+# selects a different Metal GEMM tiling, and fp16 accumulates in a different
+# order. Count-sorted chunking at the SHIPPED 128 reproduces the published
+# nll to the digit, so the reordering ships and the default does not.
+# Anyone trading exact reproducibility for prefill speed can still set
+# SCOUT_VQ_DECODE_CHUNK — just know the published numbers no longer
+# reproduce bit-identically when you do.
 def _default_decode_chunk():
     env = os.environ.get("SCOUT_VQ_DECODE_CHUNK")
     if env:
@@ -470,9 +492,25 @@ def _prefill(xf, idx_sorted_np, codes, codebook, scales, pack_bits=0,
     E, OUT, _ = codes.shape
     counts = np.bincount(idx_sorted_np, minlength=E)
     touched = np.nonzero(counts)[0]
+    # COUNT-SORTED CHUNKING (VQ-PF1, 2026-08-16). The GEMM below pads every
+    # expert in a chunk up to that chunk's MAX row count, so a chunk that
+    # mixes a 1574-row expert with a 20-row one pays 1574 rows for both.
+    # Real routing is skewed ~8.7x, so chunking by expert ID (the obvious
+    # order, and what shipped) did 5.80x the necessary FLOPs. Grouping
+    # experts of SIMILAR size makes cap track the chunk mean: pad falls
+    # 5.92x -> 1.19x and _prefill goes 263 -> 75.9 ms at chunk=16.
+    # This is a pure host-side reordering of WHICH experts share a GEMM —
+    # codes/codebook/scales are read identically, nothing is repacked, so
+    # the on-disk artifact layout is untouched (the HARD CONSTRAINT: a fix
+    # must ship as a bundled model.py update, never a re-upload).
+    touched = touched[np.argsort(counts[touched], kind="stable")]
     starts = np.zeros(E + 1, np.int64)
     starts[1:] = np.cumsum(counts)
     ys = []
+    # Reordering experts reorders OUTPUT ROWS, and this function's contract
+    # is to return rows in its input order (__call__ applies its own `inv`
+    # on top). Track the xf row each output row came from and undo it below.
+    row_ids = []
     for c0 in range(0, len(touched), _DECODE_CHUNK):
         eids = touched[c0:c0 + _DECODE_CHUNK]
         ne = len(eids)
@@ -491,6 +529,7 @@ def _prefill(xf, idx_sorted_np, codes, codebook, scales, pack_bits=0,
         yp = xp @ mx.swapaxes(w, 1, 2)                      # [ne, cap, OUT]
         flat_valid = np.nonzero(vmask.reshape(-1))[0].astype(np.uint32)
         ys.append(yp.reshape(ne * cap, OUT)[mx.array(flat_valid)])
+        row_ids.append(gmap.reshape(-1)[flat_valid])
         # CRITICAL: MLX is lazy. Without this eval the whole loop builds one
         # graph and EVERY chunk's decoded weights stay live until the final
         # concatenate — 4 chunks x 2 GiB for gate_up, which is what actually
@@ -499,7 +538,14 @@ def _prefill(xf, idx_sorted_np, codes, codebook, scales, pack_bits=0,
         # per chunk lets each `w` be freed before the next is decoded.
         mx.eval(ys[-1])
         del w, xp, yp
-    return mx.concatenate(ys, axis=0)
+    y = mx.concatenate(ys, axis=0)
+    # Undo the count-sort: output row j currently holds input row row_ids[j].
+    # inv[row_ids[j]] = j, so y[inv] restores the caller's row order. One
+    # [N, OUT] gather (~2 ms at N=92k) against ~190 ms of padding saved.
+    rid = np.concatenate(row_ids)
+    inv = np.empty(rid.shape[0], np.uint32)
+    inv[rid] = np.arange(rid.shape[0], dtype=np.uint32)
+    return y[mx.array(inv)]
 
 
 class VQSwitchLinear(nn.Module):
