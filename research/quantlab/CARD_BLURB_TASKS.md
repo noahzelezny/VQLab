@@ -2,8 +2,16 @@
 
 Status: awaiting Noah's review. Nothing here is published. The shared
 section is identical across all three cards; the one-line takeaway differs
-per card. Tone rule: factual about the comparator pipeline difference, zero
-editorializing about spicyneuron — their artifacts measured well here.
+per card.
+
+Tone rule: factual about the comparator pipeline difference, zero
+editorializing about spicyneuron — their artifacts measured well here, and
+the cards already name them in the perplexity table, so naming in the task
+table is consistent rather than a new choice. The acknowledgment section
+below carries the intent Noah stated: gratitude, and a contribution offered
+in the same spirit. It deliberately does NOT claim spicyneuron's were the
+first or only 397B quants runnable on consumer Apple Silicon — that is not
+something we verified.
 
 ---
 
@@ -60,6 +68,20 @@ VQ-3.1bpw is statistically indistinguishable from spicyneuron's 3.5bit
 on all three tasks (McNemar p=1.00/0.33/0.25) at **22.8 GiB smaller**,
 and matches it on perplexity for both corpora — the same quality point,
 one Mac-class of memory earlier.
+
+---
+
+## Acknowledgment (all three cards — place near Provenance)
+
+### Acknowledgment
+
+spicyneuron's 397B quants are what made this model runnable here in the
+first place — they were the artifacts that fit when nothing else did, and
+they were the reference this work was measured against throughout. This
+release is offered in that same spirit: the full method, the experiments
+that failed as well as the ones that worked, and comparator numbers
+re-measured on one harness so the claims can be checked rather than taken
+on trust.
 
 ---
 
