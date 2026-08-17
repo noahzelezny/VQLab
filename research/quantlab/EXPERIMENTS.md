@@ -2532,3 +2532,57 @@ artifact's `model.py` before believing any number.
 scales and `config.json` are untouched, so this is a single small file per
 repo — HF is content-addressed, so existing downloaders fetch only it, not
 100+ GiB. The HARD CONSTRAINT held.
+
+## CHUNK KNEE: THERE IS NO KNEE (08-17) — and last night's 1.20x was noise
+
+Follow-up to the VQ-PF1 fix entry, which left one claim provisional at n=1:
+chunk=16 measured 76.3 s / ppl 3.1754 against the shipped 128's 91.4 s /
+3.1706, and the open question was whether that +0.0048 ppl was a systematic
+cost buying real speed (a knee worth taking) or float noise.
+
+Swept chunk 4/8/16/32/64/128, 2.2bpw selftest, QUIET box (the HF upload and
+the 790 MB Claude-Code ingest that contended with every earlier timing had
+both finished):
+
+  | chunk | ppl | total_nll | seconds |
+  |---|---|---|---|
+  | 4 | 3.1741 | 9461.9189 | 106.1 |
+  | **8** | **3.1696** | 9450.3555 | 111.9 |
+  | 16 | 3.1754 | 9465.2217 | 103.5 |
+  | 32 | 3.1706 | 9452.9414 | 105.5 |
+  | 64 | 3.1706 | 9452.9414 | 98.3 |
+  | 128 (shipped) | 3.1706 | 9452.9414 | 103.5 |
+
+**BOTH halves of the provisional claim fail.**
+
+1. **The ppl shift is float ordering, not damage — proven by the sign.**
+   It is NOT monotone in chunk: chunk=8 lands at 3.1696, *below* the
+   published 3.1706, while chunk=16 sits above it. Systematic accumulation
+   error would make every smaller chunk worse; instead they scatter ±0.005
+   on both sides. Chunks 32/64/128 return nll 9452.9414 IDENTICALLY, so a
+   different Metal GEMM tiling is only selected below ne=32. Each value is
+   itself deterministic — chunk=16 reproduced 3.1754 / 9465.2217 exactly,
+   matching last night to the digit (n=2).
+
+2. **Smaller chunks are NOT faster.** 98-112 s across the entire range with
+   no trend; chunk=64 fastest, chunk=8 SLOWEST. Last night's 76.3 s was
+   measured while the HF upload saturated the SSD — contention noise that
+   happened to land low, and I reported the 1.20x from it. On a quiet box
+   the speed difference between chunk 8 and chunk 128 is ~8% and points the
+   WRONG way.
+
+**Verdict: no knee, no trade, nothing to tune.** Shipping count-sorted
+chunking at the default 128 was right, for a better reason than the one we
+had: not "exactness is worth 20% of prefill" but "there was never 20% of
+prefill on offer." The 1.83x from count-sorting itself stands (167.6 s
+pre-fix vs ~100 s here). `SCOUT_VQ_DECODE_CHUNK` stays as an escape hatch
+for memory pressure — its ORIGINAL purpose, per the transient-size table —
+not as a speed knob.
+
+**Method note for the next person timing anything here.** Three separate
+wrong numbers in two days came from timing on a contended box: this 76.3 s,
+the "9x" prefill gap (partly), and 3.1bpw looking FASTER than 2.2bpw in the
+08-16 task sweep (1.28 h vs 1.43 h) purely because the upload finished
+between them. Perplexity is contention-immune and can be measured any time;
+WALL TIME CANNOT. Check `ps` for the embedder, the ingest, and smbd before
+believing a duration.
