@@ -2350,6 +2350,17 @@ would partially exonerate the kernel). Constraint recorded: any fix must
 keep the on-disk layout frozen so it ships as a few-KB model.py update,
 not a 100+ GiB re-upload.
 
+> **RESOLVED same night — see the VQ-PF1 entry below. The VQ kernel is NOT
+> the problem: it is at PARITY with gather_qmm at this workload's real
+> shape (61.5 ms both).** The 9x is padded-GEMM waste in `_prefill`, which
+> pads every expert in a decode chunk to that chunk's MAX row count against
+> a router skewed 8.7x — 5.80x surplus FLOPs at the shipped
+> _DECODE_CHUNK=128. My candidate #1 above was wrong; the header's
+> 1.21-1.28x came from a bench whose synthetic `rng.integers` router pads
+> only 1.20x. Do not cite the 9x as a property of vector quantization —
+> it is a chunking-policy bug with the layout untouched, and chunk=8 alone
+> already takes a real block 1135 -> 690 ms.
+
 **Not measured:** full task sets (13.1k items; ~6x the compute — the
 paired design at n=1000 already separated what is separable), any
 few-shot setting, generative tasks (the scorer is loglikelihood-only by
