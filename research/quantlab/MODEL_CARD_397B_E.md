@@ -113,8 +113,40 @@ decimals of total negative log-likelihood on both corpora.
 bit-identically twice, scored with an unmodified `mlx-lm`. Two corpora
 because this family shows real domain asymmetry: larger codebooks buy far
 more on prose than on code, so a single-corpus number would misrepresent the
-trade. Task-suite evals (HellaSwag/PIQA/WinoGrande and friends) have **not**
-been run; only what is reported above is measured.
+trade. Task-suite results are reported below, measured the same way.
+
+## Task benchmarks
+
+All five models below — this repo's three VQ artifacts and the two community
+comparators — were evaluated on the **same harness, same settings, same
+seeded items**: lm-eval 0.4.12 driven by a layer-streaming loglikelihood
+scorer (`mlx-lm` 0.31.3), **0-shot**, first 1000 items per task, `acc_norm`
+for HellaSwag/PIQA, `acc` for WinoGrande. Task numbers published elsewhere
+come from a different pipeline and are not directly comparable, so the
+comparator *artifacts* were re-evaluated here under identical conditions
+rather than quoting their reported figures.
+
+| model | size | HellaSwag | PIQA | WinoGrande |
+|---|---|---|---|---|
+| Qwen3.5-397B-A17B-VQ-2.2bpw | 100.1 GiB | 0.861 | 0.841 | 0.787 |
+| Qwen3.5-397B-A17B-VQ-2.4bpw | 110.8 GiB | 0.883 | 0.844 | 0.784 |
+| spicyneuron 2.6bit | 120.6 GiB | 0.880 | 0.841 | 0.771 |
+| **Qwen3.5-397B-A17B-VQ-3.1bpw** *(this model)* | 142.8 GiB | 0.903 | 0.840 | 0.780 |
+| spicyneuron 3.5bit | 165.6 GiB | 0.904 | 0.846 | 0.767 |
+
+Every model scored identical items, so differences are **paired** (McNemar
+exact test). HellaSwag reliably separates these quants and reproduces the
+perplexity ordering; PIQA and WinoGrande separate no pair at n=1000 and
+stand as integrity checks rather than rankings.
+
+**This model** is statistically indistinguishable from spicyneuron's
+3.5bit on all three tasks (McNemar p = 1.00 / 0.33 / 0.25) at **22.8 GiB
+smaller**, and matches it on perplexity for both corpora — the same quality
+point, one memory class earlier.
+
+> These are **0-shot** scores. Leaderboard conventions often use 10-shot
+> HellaSwag / 5-shot WinoGrande, which run several points higher — compare
+> against other 0-shot numbers only.
 
 ## Vision
 
@@ -129,6 +161,15 @@ directly. `mlx-vlm` support requires its `model_file` loader hook
 - Needs ≥ 192 GB unified memory or a cluster — see Hardware above.
 - This is a *thinking* model (Qwen3.5 family): it spends tokens reasoning
   before answering. Budget `max_tokens` accordingly.
+
+## Acknowledgment
+
+spicyneuron's 397B quants are what made this model runnable on my hardware in
+the first place — they were the artifacts that fit when nothing else did, and
+they were the reference this work was measured against throughout. This
+release is offered in that same spirit: the full method, the experiments that
+failed as well as the ones that worked, and comparator numbers re-measured on
+one harness so the claims can be checked rather than taken on trust.
 
 ## Provenance
 
