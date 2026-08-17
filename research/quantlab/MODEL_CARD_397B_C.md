@@ -167,8 +167,8 @@ not the model: with more memory (192 GB+, or tensor-sharded across an exo
 cluster) the larger steps are back on the table. Decode is unaffected
 either way.
 
-Perplexity is deterministic and can be measured any time; wall time cannot —
-check nothing else is running before trusting a throughput number.
+Note: perplexity is deterministic; wall-time figures are not, and will vary
+with whatever else your machine is doing.
 
 ## Vision
 

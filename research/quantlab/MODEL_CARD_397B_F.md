@@ -166,11 +166,8 @@ path. The cost is memory: budget the peak above plus your KV cache. On a
 long contexts. (Measured single-box; with more memory or an exo cluster the
 same knob applies with a higher ceiling.)
 
-Two measurement notes, because they bit us: perplexity is deterministic and
-can be measured any time, but WALL TIME cannot — check nothing else is
-running before trusting a throughput number. And these were measured with
-the model on local NVMe; reading weights from a network volume dominates
-load time and muddies everything downstream.
+Note: perplexity is deterministic; wall-time figures are not, and will vary
+with whatever else your machine is doing.
 
 ## Vision
 
