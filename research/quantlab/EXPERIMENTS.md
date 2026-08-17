@@ -2586,3 +2586,71 @@ the "9x" prefill gap (partly), and 3.1bpw looking FASTER than 2.2bpw in the
 between them. Perplexity is contention-immune and can be measured any time;
 WALL TIME CANNOT. Check `ps` for the embedder, the ingest, and smbd before
 believing a duration.
+
+## CORRECTION + SHIP (08-17) — the knee is REAL, ~1.4x, and free. Default 128 -> 32.
+
+This reverses the "no knee" entry above. That conclusion was measured with
+the WRONG INSTRUMENT and it cost us a 1.4x we already had.
+
+**The instrument error.** The knee sweep timed `score_tasks_streaming.py
+--selftest`, which re-reads the entire model from disk on every pass (~63 s
+of a ~100 s run for 100 GiB at ~1.7 GB/s). That run is DISK-bound, so a
+compute-side change is buried: a 1.4x on the ~40 s compute half moves the
+total by ~10%, inside the run-to-run noise. Measuring a RESIDENT block
+instead (`probe_block_prefill.py`, weights materialized before the timed
+region) shows it immediately.
+
+**Resident measurements, M4, [256,36] bucket, steady-state ms/bucket:**
+
+  | chunk | 2.2bpw | 2.4bpw | 3.1bpw |
+  |---|---|---|---|
+  | 16 | 677.2 | 651.9 | 663.6 |
+  | **32** | **716.1** | **683.0** | **691.9** |
+  | 64 | 791.4 | 756.3 | 775.7 |
+  | 128 (old default) | 984.1 | 943.2 | 947.3 |
+
+  Reproduced (run 2, quiet box, --buckets 4): 2.2bpw 701.8/1037.6,
+  2.4bpw 953.8/1426.2, 3.1bpw 1018.5/1490.5.
+
+  **128 -> 32 = 1.37x, 1.38x, 1.37x (run 1); 1.48x, 1.50x, 1.46x (run 2).**
+  Claim conservatively: **~1.4x, n=2, all three artifacts.**
+
+**READ THE RATIOS, NOT THE ABSOLUTES.** 2.4bpw measured 683 ms in run 1 and
+954 ms in run 2 — 40% apart on identical work, because something else was
+running. The A/B survives only because both arms sit inside the same run.
+Never quote these ms as throughput.
+
+**Why 32 and not 16** (16 is marginally faster still): 32 is the SMALLEST
+chunk that reproduces published perplexity EXACTLY. Validated on all three
+at the new default — 2.2bpw nll 9452.9414 / 3.1706, 2.4bpw 8332.9785 /
+2.7655, 3.1bpw 7006.0742 / 2.3519, every one an exact match. Below 32 the
+Metal GEMM tiling changes and fp16 sums in a different order: chunk 16 gives
+9465.2217, chunk 8 gives 9450.3555 — one above the published value and one
+BELOW it. A lower ppl from float reordering cannot be banked; it is the same
+model measured differently. Take the knee, keep exactness.
+
+**The gap vs the affine comparator, resident, VQ vs spicyneuron 2.6bit:**
+
+  | tokens/call | rows/expert | VQ @128 | VQ @32 | spicy | gap @128 | gap @32 |
+  |---|---|---|---|---|---|---|
+  | 9,216 | 180 | 972.8 | 679.3 | 461.1 | 2.10x | **1.47x** |
+  | 16,384 | 320 | 2365.4 | 1773.4 | 1427.1 | 1.61x | **1.24x** |
+  | 65,536 | 1,280 | 10030.0 | 7718.4 | 6473.5 | 1.57x | **1.19x** |
+
+  The gap NARROWS with prompt length and does not reverse — the isolated
+  expert kernel wins at high rows/expert but the whole block does not,
+  because the ~21% spent materializing the [N, IN] fp16 row matrix (which
+  gather_qmm never needs) does not go away. At long-prompt shapes VQ is
+  within **1.19x** of affine. The earlier "4-5x" was arithmetic, never
+  measured; the measured end-to-end task-bench gap was 3.3x (0.73 h vs
+  0.22 h) at chunk 128 and is not yet re-measured at 32.
+
+**Remaining lever, unbuilt:** fuse the row gather into the matmul so the
+[N, IN] matrix is never materialized (~21% of block time). Only worth it if
+someone needs the last 1.19x.
+
+**Shipped:** default cap 128 -> 32 in `_default_decode_chunk`, bundled
+model.py re-spliced in all three artifacts (Thunderbay AND the M4 local
+copies, which are now independent files), pushed to HF. Weights, codebooks,
+scales and config.json untouched — every published ppl and task number
+stands.

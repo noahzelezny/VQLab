@@ -55,16 +55,33 @@ VQ_FUSED_MAX_N = int(os.environ.get("SCOUT_VQ_FUSED_MAX_N", 4096))
 # length. Auto-sized from free memory at import; override with
 # SCOUT_VQ_DECODE_CHUNK.
 #
-# DO NOT lower this default to chase speed. Isolated 2026-08-16 on the real
-# 2.2bpw artifact: chunk=16 is genuinely faster, but it CHANGES THE OUTPUT —
-# selftest ppl 3.1754 / nll 9465.2217 against the published 3.1706 /
-# 9452.9414. Not a bug: `ne` sets the batched-GEMM batch dim, a different ne
-# selects a different Metal GEMM tiling, and fp16 accumulates in a different
-# order. Count-sorted chunking at the SHIPPED 128 reproduces the published
-# nll to the digit, so the reordering ships and the default does not.
-# Anyone trading exact reproducibility for prefill speed can still set
-# SCOUT_VQ_DECODE_CHUNK — just know the published numbers no longer
-# reproduce bit-identically when you do.
+# DEFAULT IS 32, AND 32 IS NOT ARBITRARY (2026-08-17, resident probes on the
+# M4 across all three artifacts). Steady-state ms/bucket, real block, weights
+# RESIDENT (probe_block_prefill.py, [256,36] bucket):
+#
+#     chunk |  2.2bpw  2.4bpw  3.1bpw
+#       16  |   677.2   651.9   663.6
+#       32  |   716.1   683.0   691.9
+#       64  |   791.4   756.3   775.7
+#      128  |   984.1   943.2   947.3     <- the old default
+#
+# 128 -> 32 is 1.37x / 1.38x / 1.37x — the knee is the SAME for K128, K256
+# and K2048, so codebook size does not move it.
+#
+# 32 rather than 16, which is marginally faster still, because 32 is the
+# smallest chunk that reproduces the published perplexity EXACTLY
+# (nll 9452.9414 on 2.2bpw; 16 gives 9465.2217 and 8 gives 9450.3555).
+# Those shifts are float ORDERING, not quality: `ne` is the batched-GEMM
+# batch dim, a different ne picks a different Metal tiling, and fp16 sums in
+# a different order — chunk 8 lands BELOW the published number and chunk 16
+# above it. A lower ppl from reordering cannot be banked; it is the same
+# model measured differently. So the rule is: take the knee, keep exactness.
+#
+# CAUTION FOR ANYONE RE-MEASURING THIS. Do NOT time it with
+# score_tasks_streaming.py --selftest: that re-reads the whole model from
+# disk every pass (~63 s of a ~100 s run at 100 GiB), so it is DISK-bound and
+# reports "no difference" for a change worth 1.37x. That mistake was made on
+# 08-17 and reversed by measuring a resident block instead.
 def _default_decode_chunk():
     env = os.environ.get("SCOUT_VQ_DECODE_CHUNK")
     if env:
@@ -75,7 +92,7 @@ def _default_decode_chunk():
         # keep the largest transient (gate_up, out*in ~ 8M elems fp16 = 16 MB
         # per expert) under ~1/8 of remaining headroom
         per_expert = 2048 * 4096 * 2
-        return max(4, min(128, int(headroom / 8 / per_expert)))
+        return max(4, min(32, int(headroom / 8 / per_expert)))
     except Exception:
         return 32
 
