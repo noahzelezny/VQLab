@@ -2895,3 +2895,44 @@ independent mixed-precision attempts all lose to uniform: use uniform here.
 candidate_bits match (core/sensitivity.py:870) — the af6 variant cost 3
 MINUTES instead of ~10h by copying the checkpoint into the new output dir
 first. Sensitivity is a property of model+calibration, not of the budget.
+
+## E43 (08-18) — K=2048: CODEBOOK CAPACITY WAS THE BINDING CONSTRAINT
+
+**Question.** K256 VQ left gemma at 42.65% agreement vs an 80% 8-bit
+ceiling, and Qwen3.6 at 79.50% vs a 96% bar. Untried levers ranked in E36/
+E37's wake: d-geometry, tail schedules, larger K. Which one binds?
+
+**Method.** Change ONLY K: 256 -> 2048, d=4 held, same struct-e2 bases,
+same bf16 value sources, same fitter. gemma on M4 (2653s, needed
+--expert-chunk 16 after K=8192 died to a Metal command-buffer timeout),
+Qwen3.6 on M3 (3097s). Score on the same KL caches; gemma additionally on
+litbench generative+cyclic, the instrument its community-4bit incumbent was
+measured with.
+
+**Result.** relerr 0.31 -> 0.187 on BOTH families, and it converted on both:
+
+- gemma: 3363 -> 1856 mnats, 42.65 -> 56.56% agreement (13.7G unpacked).
+  litbench 86.54% vs bf16's 84.62% — AT the bf16 ceiling (not "above":
+  n=104, SE ~3.4pp), vs community 4bit 79.81% at 15G.
+- Qwen3.6: 79.50 -> 87.33% agreement; packs 17.6 -> 13.0 GiB (0.734x,
+  120/120 tensors) and the packed artifact scores IDENTICALLY (85.535
+  mnats to three decimals). Beats community 4bit (85.61% @ 19G) at 68% of
+  its size. Still 9 points short of the 8bit bar (96.18%).
+
+**Answer: K.** Codebook capacity, not geometry or scheduling, was the
+K=256 bottleneck. Cost profile makes it strictly first-try: fit wall-clock
+~same, size cost only at storage (8 -> 11 packed bits/code, 2.25 -> ~3.1
+bpw effective on a fully packable family).
+
+**Falsified along the way.** (a) "litbench is saturated at 79.81" — no,
+K2048 moved it +6.73; the tie at K256 was two models at the same quality,
+not an instrument ceiling. (b) "Qwen3.6 punishes compression too hard for
+VQ to matter" — no, same lever, same conversion. (c) My packed-size quote
+for gemma (~2.75 bpw) — down_proj (NSUB=176, 1/3 of code elements) can't
+block-pack at 32 codes/block, so gemma's effective width is 12.7 bits ->
+~3.42 bpw. Qwen (NSUB=128) packs fully.
+
+**Open.** gemma K2048 packed size (running); whether 87.33% Qwen justifies
+a publish given it misses the stated 8bit goal; 16-code block layout to
+reclaim gemma's unpacked third; K=4096/8192 needs either a fitter that
+survives Metal timeouts (smaller chunks?) or a different box.
