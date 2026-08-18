@@ -103,8 +103,15 @@ hf download mlx-community/gemma-4-26b-a4b-it-bf16   # ~52G, the VQ source
 hf download mlx-community/gemma-4-e4b-it-bf16       # ~18G, the control + reference
 ```
 
-**BOTH DOWNLOADED** (2026-08-17). 26b bf16 = 48G, 11 shards, loads
-strict. e4b bf16 = present. The 26b transfer wedged once with the process
+**26b bf16 DOWNLOADED** (2026-08-17): 48G, 11 shards, loads strict.
+**e4b bf16 IS NOT DOWNLOADED** — an earlier revision of this line claimed it
+was. Root cause: it was queued second in the original download script, and
+that script was killed to restart the stalled 26b transfer, so it never ran.
+What IS in HF_HOME is gemma-4-**e2b**-it-bf16 (19G), fetched separately as
+the HF-transformers referee weightset — e2b, not e4b. This matters: e4b bf16
+is the control that lets the incumbent sidecar be scored on OUR harness
+instead of comparing our VQ against mlx-community's 8-bit (the
+cross-publisher mixing the methodology rule forbids). The 26b transfer wedged once with the process
 alive but idle at ~14G; killing and re-running `hf download` resumed from
 the `.incomplete` files at 44 MB/s.
 
@@ -117,7 +124,8 @@ the `.incomplete` files at 44 MB/s.
 | `gemma-4-26b-a4b-it-6bit` | **config.json only** | unusable — do not point anything at it |
 | `Qwen3.6-35B-A3B-4bit` | 19 G | code-leaning comparator |
 | `gemma-4-26b-a4b-it-bf16` | **48 G** | VQ source — DOWNLOADED |
-| `gemma-4-e4b-it-bf16` | **present** | control + reference — DOWNLOADED |
+| `gemma-4-e4b-it-bf16` | **MISSING** | control + reference — re-queued |
+| `gemma-4-e2b-it-bf16` | 19 G | HF-transformers referee weightset |
 | `gemma26b-rungs/` | 12 rungs | affine ladder, all scored |
 | `kl_cache_gemma26b/` | built | teacher cache for `kl_damage.py score` |
 

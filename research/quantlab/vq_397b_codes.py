@@ -52,6 +52,9 @@ ap.add_argument("--dim", type=int, default=4)
 ap.add_argument("--group", type=int, default=64)
 ap.add_argument("--iters", type=int, default=20)
 ap.add_argument("--expert-chunk", type=int, default=32)
+ap.add_argument("--family", default="qwen3_5", choices=["qwen3_5", "gemma4"],
+                help="module naming / source-key family. Default reproduces "
+                     "the shipped 397B behaviour exactly.")
 ap.add_argument("--sample", type=int, default=2_000_000)
 ap.add_argument("--stage-dir", default=None)
 ap.add_argument("--ship-to", default=None,
@@ -84,8 +87,38 @@ base_idx = json.load(open(BASE / "model.safetensors.index.json"))["weight_map"]
 src_idx = json.load(open(SRC / "model.safetensors.index.json"))["weight_map"]
 base_cfg = json.load(open(BASE / "config.json"))
 
-PROJ = {"gate_proj": ("gate_up_proj", 0), "up_proj": ("gate_up_proj", 1),
-        "down_proj": ("down_proj", None)}
+# FAMILY TABLE. Default is qwen3_5 and is BIT-IDENTICAL to the behaviour that
+# produced the shipped 397B artifacts — the constants below are exactly what
+# was hardcoded before. gemma4 differs only in the module substring and the
+# source-key template; its fused gate_up stack and split axis are the same
+# (mlx_lm gemma4_text.py:627 splits axis=-2 of a rank-3 [E,2I,H], which IS
+# axis 1, the same OUT-dim half-slice used here).
+FAMILY = {
+    "qwen3_5": {
+        "target_substr": "switch_mlp",
+        # HF-layout source: gate and up live FUSED in one [E, 2I, H] stack,
+        # taken as halves along the OUT axis.
+        "src_key": "model.language_model.layers.{li}.mlp.experts.{key}",
+        "proj": {"gate_proj": ("gate_up_proj", 0),
+                 "up_proj": ("gate_up_proj", 1),
+                 "down_proj": ("down_proj", None)},
+    },
+    "gemma4": {
+        "target_substr": "switch_glu",
+        # mlx-community's gemma bf16 is an MLX-FORMAT conversion, so
+        # mlx_lm's sanitize has ALREADY split experts.gate_up_proj into
+        # switch_glu.{gate,up}_proj (gemma4_text.py:625-634). There is no
+        # fused stack in the checkpoint — verified: 'gate_up_proj' appears
+        # in zero keys. So every projection is direct, no half-slicing, and
+        # the prefix is language_model.model.* not model.language_model.*.
+        "src_key": "language_model.model.layers.{li}.experts.switch_glu.{key}.weight",
+        "proj": {"gate_proj": ("gate_proj", None),
+                 "up_proj": ("up_proj", None),
+                 "down_proj": ("down_proj", None)},
+    },
+}
+FAM = FAMILY[args.family]
+PROJ = FAM["proj"]
 
 
 def layer_of(name):
@@ -96,7 +129,7 @@ def layer_of(name):
 
 
 def is_vq_target(name):
-    if "switch_mlp" not in name:
+    if FAM["target_substr"] not in name:
         return False
     li = layer_of(name)
     if not (LO <= li <= HI):
@@ -153,7 +186,7 @@ def _shard_path(fname):
 
 def load_src_expert(li, proj):
     key, half = PROJ[proj]
-    sk = f"model.language_model.layers.{li}.mlp.experts.{key}"
+    sk = FAM["src_key"].format(li=li, key=key)
     T = mx.load(_shard_path(src_idx[sk]))[sk]
     if half is not None:
         mid = T.shape[1] // 2

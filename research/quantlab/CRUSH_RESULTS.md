@@ -1,8 +1,10 @@
 # Crush run — Qwen3.8-27B + gemma-4-26b-a4b (2026-08-17 evening)
 
-Single box: M3 Ultra 96GB (no ssh path to the M4). All rungs built with
-mlx_lm 0.31.3 affine quantization. **No VQ yet** — this is the affine
-baseline that VQ has to beat.
+Affine ladder built on the M3 Ultra 96GB; the VQ fit ran on the M4 Max
+128GB (reachable via nozzlebook-pro.local / tailscale — an earlier line here
+wrongly said there was no ssh path). mlx_lm 0.31.3, mlx 0.32.0 on both.
+Sections 1-3 are the AFFINE baseline; the VQ run that beats it is at the
+bottom.
 
 ## Qwen3.8-27B (dense, 27.78B, bf16 55.6G)
 
@@ -115,3 +117,35 @@ affine 2-bit experts were poor and VQ at matched size was not.
 2.54G), experts go to VQ at ~2.0 bpw. Preflight blocker still open:
 `down_proj` cannot sub-byte pack at d=4 (moe_intermediate 704 -> NSUB 176,
 176 % 32 != 0). See LADDER_GEMMA.md for the three options.
+
+---
+
+## VQ RUN (later the same evening) — the gap closes
+
+`vq_397b_codes.py --family gemma4 --k 256 --dim 4`, fitted on the M4 Max in
+315s over the struct8-e2 base (experts 2-bit affine) with the bf16 as value
+source. 90 tensors, **mean relerr 0.3136** — statistically the same as the
+397B fit's 0.3156 (EXPERIMENTS.md:1519), so the fit is healthy on a new
+family rather than struggling.
+
+| rung | size | KL (mnats) | top-1 agree |
+|---|---|---|---|
+| struct8-e8 (affine) | 25G | 441 | 79.95% (ceiling) |
+| struct6-e4 (affine) | 14G | 3180 | 42.73% |
+| **VQ K256 d4** | **8.4G** | **3363** | **42.65%** |
+| struct6-e3 (affine) | 11G | 3734 | 38.01% |
+| struct8-e2 (affine) | 9.1G | 4648 | 34.90% |
+
+**VQ at 8.4G equals affine at 14G** (42.65% vs 42.73%) — same quality for
+40% of the bytes — and beats the affine rung at its own size by +7.8 points
+of agreement while being 0.7G SMALLER. This is the 397B result reproducing:
+affine 2-bit experts are poor, VQ at matched size is not.
+
+It also hits the sidecar target exactly: **8.4 GiB = gemma-4-e4b-it-8bit's
+8.4G**, with audio still graftable.
+
+Still open: 42.65% sits well under the 79.95% 8-bit ceiling. Whether that
+ceiling is reachable at ~8G, or is a floor imposed by discrete MoE routing,
+is the next question — K/d geometry (E36: down_proj prefers larger d) and a
+tail schedule are the untried levers. Packing is a separate, final, safe
+pass (see LADDER_GEMMA.md; per-module skip is the clean option).
