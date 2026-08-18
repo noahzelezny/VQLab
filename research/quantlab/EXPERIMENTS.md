@@ -2852,3 +2852,46 @@ confident mass alone.
 
 CAVEAT: that evidence is 4-choice argmax on tasks; ours is top-1 over a
 ~250k vocab on free text. Comparable PHENOMENA, not comparable NUMBERS.
+
+## E42 (08-18) — THE SIDECAR ANSWER, and OptiQ falsified on dense
+
+Full tables in CRUSH_RESULTS.md.
+
+**GEMMA SWAP: VIABLE.** Generative chat-native litbench (the only valid
+cross-model form — see below), 104 items, position-debiased:
+
+  26b bf16 (48G)          84.62%   <- the premise: bigger MoE IS better
+  e4b bf16 (19G) CYCLIC   82.69%   <- the incumbent, our own harness
+  VQ-K256-d4 (8.4G) CYC   79.81%   <- 44% of the size, within noise
+
+A 26B MoE at the CURRENT SIDECAR'S EXACT SIZE (8.4 GiB) scores within this
+bench's resolution of e4b at bf16. Audio still graftable.
+
+**INSTRUMENT WARNING, THE THIRD TONIGHT.** Single-token chat scoring put the
+26b at 37.5% — BELOW its own 8-bit quant. Cause: it opens a <|channel>thought
+block and reasons through every option, so reading letter logprobs at the
+first position measures willingness-to-answer-immediately, not comprehension.
+e4b answers directly and was unaffected, which is exactly why the artefact
+looked like a capability gap. --generative fixes it (37.5% -> 100% on a
+6-item smoke; e4b unchanged at 78.85%, the control that proves the fix does
+not simply inflate).
+
+**OPTIQ ON QWEN3.8-27B: E4 DOES NOT REPLICATE.** Real calibrated sweep, 497
+components, ~8h:
+
+  uniform q3      11G  1.116x  <- STILL THE BEST
+  optiq-b30       13G  1.179x
+  optiq-b30-af6   13G  1.621x  (attention floor 6)
+
+Both lose to plain uniform while being 2G larger. The floor makes it worse:
+forcing 6-bit attention leaves no budget elsewhere so 100% of mlp goes to
+2-bit, reproducing the m2-a6 shape that already failed. Unfloored calibration
+assigned 2- and 3-bit to some ATTENTION layers, so flat isolation-KL on
+attention is NOT MoE-specific — but flooring is not the cure on dense either,
+because the bytes must come from the mlp bulk (61.6% of params). Three
+independent mixed-precision attempts all lose to uniform: use uniform here.
+
+**TOOLING.** optiq resumes from sensitivity_checkpoint.json when
+candidate_bits match (core/sensitivity.py:870) — the af6 variant cost 3
+MINUTES instead of ~10h by copying the checkpoint into the new output dir
+first. Sensitivity is a property of model+calibration, not of the budget.

@@ -342,3 +342,51 @@ would have cost, because optiq resumes from `sensitivity_checkpoint.json`
 (core/sensitivity.py:870) when candidate_bits match. Copy the checkpoint into
 the new output dir first. Sensitivity is a property of model+calibration,
 not of the bit budget.
+
+## THE ANSWER — generative chat-native litbench (the valid instrument)
+
+All 104 items, `litbench_chat.py --generative` so reasoners are not
+penalised. `CYCLIC` = `--cyclic`, options rotated through all 4 positions
+and averaged; those are the decision-grade numbers.
+
+| model | size | accuracy |
+|---|---|---|
+| **26b bf16** | 48G | **84.62%** |
+| CYCLIC e4b bf16 | 19G | 82.69% |
+| struct8-e8 (affine, 8-bit) | 25G | 79.81% |
+| **CYCLIC VQ-K256-d4** | **8.4G** | **79.81%** |
+| e4b bf16 | 19G | 78.85% |
+| vq-tail10 | 9.5G | 76.92% |
+| struct8-e2 (affine) | 9.1G | 75.00% |
+| VQ-K256-d4 | 8.4G | 72.12% |
+
+**1. THE PREMISE HOLDS.** 26b bf16 (84.62%) beats e4b bf16 (78.85%) by 5.8
+points. The bigger MoE really is the better literary model at full fat,
+which is what the whole sidecar-swap idea rested on. Note this only became
+visible after the instrument was fixed — single-token scoring had the 26b at
+37.5%, BELOW its own 8-bit quant.
+
+**2. THE 8.4G VQ ARTIFACT IS COMPETITIVE WITH THE 19G INCUMBENT.**
+Position-debiased, VQ-K256-d4 scores 79.81% against e4b bf16's 82.69% — a
+2.88 point gap on a 104-item bench that resolves ~10 points between
+different models. **Statistically indistinguishable, at 44% of the size.**
+
+**3. CYCLIC MATTERS AND SHOULD ALWAYS BE USED FOR DECISIONS.** Both models
+score HIGHER debiased (e4b 78.85 -> 82.69, VQ 72.12 -> 79.81), and the VQ
+artifact gains more than twice as much. Single-presentation ordering was
+penalising it specifically. Quote cyclic numbers or none.
+
+**4. The affine/VQ ordering here disagrees with KL** (KL had VQ well ahead of
+struct8-e2; litbench has them within 3 points either way). Both differences
+are inside this bench's resolution, so the honest reading is that they agree
+on the big things and neither can rank adjacent rungs. That is E41's
+complementary-instruments point in practice.
+
+### Bottom line for the sidecar decision
+
+A 26B MoE at **8.4 GiB — the exact size of the current e4b-8bit sidecar** —
+scores within noise of e4b at **bf16** (19G), and the underlying model is
+meaningfully better (84.62 vs 78.85). Audio is still graftable. The
+remaining question is not quality-at-size but whether the ~40 point KL gap
+to lossless matters for the jobs the sidecar actually does, which litbench
+says it largely does not.
