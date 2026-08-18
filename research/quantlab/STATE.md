@@ -152,3 +152,9 @@ text-only / ~12.6G sighted — still inside the 15G 4bit budget, thinner
 margin than first quoted. Reaching that last third needs a block size
 dividing 176 (16 works but changes word alignment) — real size on the table
 if 12.6G ever needs to be 11G.
+
+**gemma K2048 PACKED (08-18): 13.7 -> 11.5 GiB (0.838x).** 60/90 packed,
+30 down_projs (NSUB=176) copied through uint16 as designed — real size hits
+the 11.5G projection exactly. Text-only; sighted (+vision graft ~1.1G)
+projects ~12.6G, still under the 15G community 4bit it beats by 6.73
+litbench points. KL identity check on packed artifact: running on M4.
