@@ -34,6 +34,7 @@ for a in "${ARTS[@]}"; do
   # sanity gates before anything leaves the machine
   # __pycache__ is build residue from importing model.py locally — never publish it
   rm -rf "$E/$a/__pycache__" 2>/dev/null
+  find "$E/$a" -name ".DS_Store" -delete 2>/dev/null   # macOS junk; it WILL get published otherwise
   for need in tokenizer.json tokenizer_config.json chat_template.jinja model.safetensors.index.json; do
     [ -f "$E/$a/$need" ] || { echo "  !! missing $need — downloaders could not run it"; exit 1; }
   done
@@ -51,7 +52,12 @@ print('  config ok:', len(c['vq_modules']), 'vq modules')"
   # PRIVATE first by default: inspect the rendered card + file listing on the
   # Hub before it is visible to anyone. Flip with `hf repo settings` (or the
   # web UI) once it looks right. Pass PUBLIC=1 to skip the private stage.
-  vis="--private"; [ "${PUBLIC:-0}" = "1" ] && vis=""
+  # PUBLIC by default: a free account's PRIVATE storage quota is far below
+  # 100 GiB, so private staging fails at COMMIT time with
+  # "403 Private repository storage limit reached" after the data is already
+  # uploaded (learned on 2.2bpw, 2026-08-16). Public repos have no such cap.
+  # Set PRIVATE=1 only if the account has paid private storage.
+  vis=""; [ "${PRIVATE:-0}" = "1" ] && vis="--private"
   hf repo create "$ORG/$a" --repo-type model $vis --exist-ok 2>&1 | tail -1
   # upload-large-folder, NOT plain upload: the one-shot path warns it "might
   # take some time and then fail" on 100+ GiB folders. This one is RESUMABLE
@@ -60,12 +66,11 @@ print('  config ok:', len(c['vq_modules']), 'vq modules')"
   # 3 workers, not 8: with 8 the transfer stalled dead (byte-identical progress
   # for minutes, ~0.5 MB/s on the wire) on 2026-08-16. Fewer parallel LFS
   # streams held ~15 MB/s steadily.
-  hf upload-large-folder "$ORG/$a" "$E/$a" --repo-type model --num-workers 3
+  hf upload-large-folder "$ORG/$a" "$E/$a" --repo-type model --num-workers 3 --exclude ".cache/*" --exclude "*.DS_Store"
 
   # verify the Hub copy against local checksums before anyone downloads it
   echo "  --- verifying uploaded checksums ---"
   hf cache verify "$ORG/$a" --local-dir "$E/$a" --fail-on-missing-files \
     && echo "  ✅ checksums match" || { echo "  !! VERIFY FAILED — do not publish"; exit 1; }
-  echo "  repo is PRIVATE. Make public with:"
-  echo "    hf repos settings $ORG/$a --public"
+  echo "  live: https://huggingface.co/$ORG/$a"
 done
