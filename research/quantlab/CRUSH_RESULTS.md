@@ -149,3 +149,48 @@ ceiling is reachable at ~8G, or is a floor imposed by discrete MoE routing,
 is the next question — K/d geometry (E36: down_proj prefers larger d) and a
 tail schedule are the untried levers. Packing is a separate, final, safe
 pass (see LADDER_GEMMA.md; per-module skip is the clean option).
+
+## FLOOR TEST — what "79.95%" actually means
+
+Prompted by the 397B session, who showed on their lineup that per-item
+disagreement is SYMMETRIC (on disagreeing items neither model matches gold
+more often — 29v31, 16v18, coin flips) and concentrated on NEAR-TIES (top-2
+margin 1.2-2.4 nats on disagreements vs 16-18 nats on agreements, up to
+14.7x). I.e. quants reshuffle the near-ties and leave the confident mass
+alone, so agreement overstates quality difference.
+
+So: measure two models we have INDEPENDENTLY established are equivalent
+against each other, and whatever that reads is the metric's floor.
+
+| comparison | KL (mnats) | top-1 agree |
+|---|---|---|
+| struct8-e8 vs ITSELF (control) | 0.000 | 100.00% |
+| **struct8-e8 vs uniform-q8** | **397** | **82.32%** |
+| struct8-e8 vs bf16 | 441 | 79.95% |
+| VQ K256 d4 vs bf16 | 3363 | 42.65% |
+
+**The floor is ~82%.** Two near-lossless 25G artifacts, equivalent by every
+other measure, disagree on 17.7% of positions. The self-comparison control
+returns exactly 100.00% / 0.000, so this is not instrument error — it is
+genuine near-tie reshuffling, on a model whose distribution is collapsed
+(GEMMA4_PPL_ANOMALY.md) and whose routing is discrete.
+
+**CONSEQUENCE 1 — restate the ceiling.** "79.95% vs bf16" was never a
+quality ceiling; it is 8-bit sitting essentially AT the metric's floor,
+which is the correct reading for near-lossless quantization. The metric
+cannot distinguish "identical quality" from "8-bit" and should not be asked
+to.
+
+**CONSEQUENCE 2 — and this is the one that matters — VQ's gap is REAL.**
+42.65% is not 82% minus measurement slop; it is 40 points below the floor,
+far outside the saturated region where the metric loses resolution. The
+peer's own decision rule said a high floor would mean "measured against a
+stick that cannot read past it", and a low floor would mean real damage.
+82.32% is the low case. **So K/d geometry and a tail schedule are worth the
+compute** — there is genuine headroom between VQ-at-8.4G and lossless, not
+an artifact.
+
+Caveat kept from the peer: their evidence is 4-choice argmax on tasks, ours
+is top-1 over a ~250k vocab on free text. Comparable PHENOMENA, not
+comparable numbers. What transfers is the mechanism (near-tie reshuffling),
+not the percentages.
