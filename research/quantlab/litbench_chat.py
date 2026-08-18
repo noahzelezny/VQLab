@@ -139,6 +139,7 @@ def main():
     per_cat = {}
     picks = [0] * len(LETTERS)
     unparsed = 0
+    per_item = []          # per-item outcomes -> paired tests (McNemar) later
     for it in items:
         votes = [0.0] * len(LETTERS)
         gen_votes = [0] * len(LETTERS)
@@ -176,6 +177,9 @@ def main():
         c = per_cat.setdefault(it["category"], [0, 0])
         c[0] += ok
         c[1] += 1
+        per_item.append({"id": it.get("id", len(per_item)),
+                         "category": it["category"], "pred": pred,
+                         "gold": it["label"], "correct": ok})
 
     acc = correct / len(items)
     res = {
@@ -187,6 +191,7 @@ def main():
         "answer_distribution": picks,
         "mode": "generative" if args.generative else "single_token",
         "unparsed": unparsed,
+        "per_item": per_item,
     }
     print(json.dumps(res, indent=1))
     print(f"\naccuracy {acc:.2%}  (chance {1/len(LETTERS):.0%}, n={len(items)}"
