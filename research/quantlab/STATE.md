@@ -157,4 +157,4 @@ if 12.6G ever needs to be 11G.
 30 down_projs (NSUB=176) copied through uint16 as designed — real size hits
 the 11.5G projection exactly. Text-only; sighted (+vision graft ~1.1G)
 projects ~12.6G, still under the 15G community 4bit it beats by 6.73
-litbench points. KL identity check on packed artifact: running on M4.
+litbench points. KL identity check PASSED: packed scores 1856.250 mnats / 56.56% — identical to unpacked to three decimals, same as Qwen. Both packed artifacts verified pure representation changes.
