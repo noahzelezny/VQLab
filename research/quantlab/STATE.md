@@ -110,3 +110,45 @@ expert-chunk/sample down further.
    the ~96% 8bit bar. K=256 at 79.50% is not enough.
 4. Publish decision: gemma VQ is the only artifact currently clearing its
    bar.
+
+---
+
+## K=2048 ROUND (08-18, both machines)
+
+Larger codebook is the lever that worked on BOTH families. relerr 0.31 -> 0.187
+in each case; the fit improvement converted to real quality in each case.
+
+**gemma-4-26b-a4b** (M4, 2653s, 13.7 GiB unpacked)
+  | rung | size | KL (mnats) | agree |
+  |---|---|---|---|
+  | struct8-e8 (affine) | 25G | 441 | 79.95% (ceiling) |
+  | VQ K2048 d4 | 13.7G unpacked | 1856 | 56.56% |
+  | VQ K256 d4 | 8.4G | 3363 | 42.65% |
+  Recovers ~1/3 of the K256 -> 8bit gap. litbench (generative+cyclic) still
+  running on M4 — that is the instrument the 15G community 4bit was measured
+  on (79.81%), so it is what settles the "beat 4bit at 4bit size" target.
+
+**Qwen3.6-35B-A3B** (M3, 3097s, 17.6 GiB unpacked -> 13.0 GiB packed)
+  | rung | size | agree |
+  |---|---|---|
+  | mlx-community 8bit | 35G | 96.18% |
+  | **VQ K2048 d4 PACKED** | **13.0G** | **87.33%** |
+  | mlx-community 4bit | 19G | 85.61% |
+  | VQ K256 d4 | 10G | 79.50% |
+  BEATS community 4bit at 68% of its size. Still short of the 96.18% 8bit
+  bar, which was the stated goal — publishable as "better than the 4bit,
+  smaller than the 4bit", NOT as "8bit quality".
+
+**Packing verified end-to-end.** pack_artifact.py on the real Qwen artifact:
+120/120 packed, 17.6 -> 13.0 GiB (0.734x), and the packed model scores
+85.535 mnats / 87.33% — IDENTICAL to unpacked. Pure representation change,
+confirmed on a 13G artifact rather than only on the synthetic test.
+
+**gemma packed size will NOT hit the analytic target.** down_proj is NSUB=176
+(not %32) and is exactly 1/3 of all code elements (down is [hidden,176],
+gate/up are [704,704] — equal element counts). So 1/3 of codes stay uint16:
+effective 12.7 bits, not 11; stored ~3.42 bpw, not 2.75. Estimate ~11.5G
+text-only / ~12.6G sighted — still inside the 15G 4bit budget, thinner
+margin than first quoted. Reaching that last third needs a block size
+dividing 176 (16 works but changes word alignment) — real size on the table
+if 12.6G ever needs to be 11G.
