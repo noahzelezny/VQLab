@@ -250,3 +250,45 @@ consistent, but only one is now load-bearing).
 Untried lever remaining (and the one E37 also points to): a TAIL SCHEDULE (more expert bits in some layers,
 397B's struct6-tailN shape), which spends bytes where they help instead of
 uniformly. That is the next thing to run, not more geometry.
+
+## CHAT-NATIVE COMPARISON — first attempt INVALID, do not cite it
+
+litbench scored through each model's own chat template with lettered options,
+reading the answer-letter logprob at the first generated position. Position
+bias controlled with --cyclic. Results:
+
+    e4b bf16      78.85%        vq-tail10   49.04%
+    struct8-e8    44.23%        vq-K256-d4  38.46%
+    struct8-e2    32.69%        26b bf16    37.50%
+
+**THESE NUMBERS ARE AN ARTEFACT AND MUST NOT BE QUOTED.** Two tells: 26b
+bf16 (37.5%) scored BELOW its own 8-bit quant (44.23%), which is impossible
+if the metric measures quality; and the 25G near-lossless rung landed at 44%
+while a 19G e4b hit 79%.
+
+ROOT CAUSE — single-token scoring measures WILLINGNESS TO ANSWER
+IMMEDIATELY, not comprehension. Top-5 next tokens after the generation
+prompt:
+
+    e4b bf16 : '<|channel>', 'D', 'A', '$', 'C'          <- letters present
+    26b bf16 : '<|channel>', '<', '---', ' <', ' inner'  <- NO letter at all
+
+Both open a thinking channel; the 26b is more committed to it and writes a
+genuine analysis of every option before answering. Reading letter logprobs
+at that position penalises the better reasoner. Confirmed by generation: the
+26b spends 200+ tokens correctly reasoning about the coral-reef metaphor and
+had not reached its answer when the budget ran out.
+
+FIX — `litbench_chat.py --generative`: let the model think, parse the answer
+letter after the `<channel|>` close. Same model, same items, 6-item smoke:
+
+    26b bf16 single-token  37.5%  ->  generative  100%
+
+**Single-token mode stays valid for comparing QUANTS OF ONE MODEL** (both
+sides share an answering style, so the bias cancels) and is invalid across
+models. Generative sweep running; those are the numbers to use.
+
+LESSON, and it is the same one twice tonight: an instrument that is
+in-distribution for one model can be out-of-distribution for another. Raw
+continuation broke gemma-vs-Qwen (E39); single-token chat broke
+e4b-vs-26b. Both times the artefact looked like a decisive capability gap.
