@@ -214,3 +214,34 @@ Caveat kept from the peer: their evidence is 4-choice argmax on tasks, ours
 is top-1 over a ~250k vocab on free text. Comparable PHENOMENA, not
 comparable numbers. What transfers is the mechanism (near-tie reshuffling),
 not the percentages.
+
+## K/d GEOMETRY — E36 does NOT transfer to gemma
+
+E36 (397B) found `down_proj` prefers larger d. Tested here, gate/up held at
+d4k256, `down_proj` moved to d8k256:
+
+| rung | size | KL (mnats) | top-1 agree | mean relerr |
+|---|---|---|---|---|
+| **VQ K256 d4 (all)** | 8.4G | **3363** | **42.65%** | 0.3136 |
+| VQ K256 d4/d8 | 7.5G | 5689 | 29.88% | 0.4010 |
+
+**Worse on every axis except size**, and the fit itself says so before any
+scoring: relerr 0.3136 -> 0.4010.
+
+IMPORTANT — this is NOT a matched-size comparison, and the reason matters.
+At fixed K, d8 stores 8 bits per EIGHT weights where d4 stores 8 bits per
+FOUR: 1.25 bpw vs 2.25 bpw (the fitter prints this). So d8 halves the bit
+budget for that projection. Matching bpw at d=8 would need K=65536, which is
+absurd — d8 is inherently a bits-for-subvector-size trade, and on gemma the
+trade is bad. Read the result as "d8k256 down_proj is a bad operating point:
+it saves 0.9G and costs 12.8 points of agreement", not as "d8 is refuted at
+matched budget".
+
+Practical consequence: **the all-d4 K256 artifact at 8.4G remains the best
+gemma rung**, and the packing skip for `down_proj` stays motivated purely by
+`176 % 32 != 0` rather than by geometry (see LADDER_GEMMA.md — the two were
+consistent, but only one is now load-bearing).
+
+Untried lever remaining: a TAIL SCHEDULE (more expert bits in some layers,
+397B's struct6-tailN shape), which spends bytes where they help instead of
+uniformly. That is the next thing to run, not more geometry.
