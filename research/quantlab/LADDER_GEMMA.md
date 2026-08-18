@@ -1,8 +1,20 @@
 # Gemma-4-26B-A4B ladder — affine baseline DONE, VQ pending
 
 Target: replace the `gemma-4-e4b-it-8bit` sidecar (8.96 G on disk) with a
-quantized `gemma-4-26b-a4b-it` at the same or smaller footprint, keeping the
-audio tower and the family's literary character.
+quantized `gemma-4-26b-a4b-it` at the same or smaller footprint.
+
+**CORRECTION (08-18) — 26b-a4b HAS NO AUDIO TOWER.** Earlier revisions of
+this file said the swap keeps audio. That was read off `audio_config` in
+config.json; the WEIGHTS tell a different story:
+
+    e4b      (bf16/8bit/6bit)  audio tensors 752-754   vision 661
+    26b-a4b  (bf16/4bit)       audio tensors     0     vision 358
+
+The config declares the capability, the checkpoint does not contain it. This
+matches the family split — the E-series are the omni on-device models that
+carry audio; 26b-a4b is text+vision only. **So this is not a drop-in
+replacement: swapping e4b -> 26b trades audio away for literary/text
+quality.** If audio matters it argues for running both, not replacing one.
 
 ## STATUS (corrected 2026-08-17 evening — this section was stale)
 
@@ -28,9 +40,9 @@ The 80% -> 35% gap at 9.1G is exactly the gap VQ closed at 397B.
 
 | | addressable weights | total | audio |
 |---|---|---|---|
-| gemma-4-e4b-it-8bit (current) | ~6.0 G (2.8 G is PLE tables) | 8.96 G | yes |
-| gemma-4-26b-a4b @ 2.4bpw | 7.8 G | ~7.8 G | yes |
-| gemma-4-26b-a4b @ 3.1bpw | 10.1 G | ~10.1 G | yes |
+| gemma-4-e4b-it-8bit (current) | ~6.0 G (2.8 G is PLE tables) | 8.96 G | **yes (752 tensors)** |
+| gemma-4-26b-a4b @ 2.4bpw | 7.8 G | ~7.8 G | **NO — 0 audio tensors** |
+| gemma-4-26b-a4b @ 3.1bpw | 10.1 G | ~10.1 G | **NO — 0 audio tensors** |
 | Qwen3.6-35B-A3B @ 2.3bpw | ~10 G | ~10 G | **no** |
 
 `gemma-4-26b-a4b-it` is MoE (`enable_moe_block: True`, 128 experts, top_k 8,

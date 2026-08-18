@@ -142,7 +142,8 @@ of agreement while being 0.7G SMALLER. This is the 397B result reproducing:
 affine 2-bit experts are poor, VQ at matched size is not.
 
 It also hits the sidecar target exactly: **8.4 GiB = gemma-4-e4b-it-8bit's
-8.4G**, with audio still graftable.
+8.4G**. NOTE (corrected 08-18): audio is NOT graftable here — 26b-a4b ships
+ZERO audio tensors (e4b ships 752). Only vision (0.573B) exists to graft.
 
 Still open: 42.65% sits well under the 79.95% 8-bit ceiling. Whether that
 ceiling is reachable at ~8G, or is a floor imposed by discrete MoE routing,
@@ -386,7 +387,11 @@ complementary-instruments point in practice.
 
 A 26B MoE at **8.4 GiB — the exact size of the current e4b-8bit sidecar** —
 scores within noise of e4b at **bf16** (19G), and the underlying model is
-meaningfully better (84.62 vs 78.85). Audio is still graftable. The
+meaningfully better (84.62 vs 78.85).
+
+**BUT IT IS NOT A DROP-IN REPLACEMENT: 26b-a4b HAS NO AUDIO TOWER** (0
+tensors vs e4b's 752). The swap buys literary/text quality and loses audio
+entirely, which argues for running both rather than replacing. The
 remaining question is not quality-at-size but whether the ~40 point KL gap
 to lossless matters for the jobs the sidecar actually does, which litbench
 says it largely does not.
