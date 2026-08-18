@@ -29,14 +29,27 @@ ap = argparse.ArgumentParser()
 ap.add_argument("--artifact", required=True)
 ap.add_argument("--src", default="/Volumes/Thunderbay SSD/Exo Models/"
                                  "Qwen--Qwen3.5-397B-A17B-bf16")
+ap.add_argument("--prefixes", default="model.visual,vision_tower",
+                help="comma-separated key prefixes to graft. Default is the "
+                     "Qwen set. gemma-4 needs "
+                     "'vision_tower,embed_vision' (the tower is split across "
+                     "two prefixes; grafting only one yields a broken tower).")
+ap.add_argument("--copy-config-keys", default="",
+                help="comma-separated config keys to copy from --src when the "
+                     "artifact lacks them (e.g. vision_config,image_token_id). "
+                     "mlx_lm.convert drops these for text-only artifacts.")
 args = ap.parse_args()
 
 ART, SRC = pathlib.Path(args.artifact), pathlib.Path(args.src)
 GRAFT_SHARD = "model-vision-graft.safetensors"
 
 src_map = json.load(open(SRC / "model.safetensors.index.json"))["weight_map"]
-vis = {k: sh for k, sh in src_map.items()
-       if k.startswith("model.visual") or k.startswith("vision_tower")}
+# Qwen keeps the whole tower under one prefix; gemma-4 splits it across
+# vision_tower.* AND embed_vision.* (356 tensors total), so a single-prefix
+# filter silently grafts an incomplete tower. --prefixes is additive and the
+# default reproduces the original Qwen behaviour exactly.
+_PREFIXES = tuple(p for p in args.prefixes.split(",") if p)
+vis = {k: sh for k, sh in src_map.items() if k.startswith(_PREFIXES)}
 if not vis:
     raise SystemExit(f"source {SRC} has no vision tensors")
 
@@ -62,6 +75,16 @@ if "metadata" in idx and "total_size" in idx["metadata"]:
 json.dump(idx, open(idx_path, "w"), indent=1)
 
 cfg = json.load(open(ART / "config.json"))
+if args.copy_config_keys:
+    src_cfg = json.load(open(SRC / "config.json"))
+    copied = []
+    for k in args.copy_config_keys.split(","):
+        if k and k not in cfg and k in src_cfg:
+            cfg[k] = src_cfg[k]
+            copied.append(k)
+    if copied:
+        json.dump(cfg, open(ART / "config.json", "w"), indent=1)
+        print(f"copied config keys from source: {copied}")
 missing = [k for k in ("vision_config", "image_token_id") if k not in cfg]
 print(f"grafted {len(out)} vision tensors ({total / 1024**3:.2f} GiB) -> "
       f"{ART / GRAFT_SHARD}")
