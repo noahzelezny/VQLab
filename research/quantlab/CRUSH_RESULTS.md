@@ -395,3 +395,18 @@ entirely, which argues for running both rather than replacing. The
 remaining question is not quality-at-size but whether the ~40 point KL gap
 to lossless matters for the jobs the sidecar actually does, which litbench
 says it largely does not.
+
+## PUBLISH CHECK — ours vs the smallest thing that already exists
+
+mlx-community ships nothing below 15G for gemma-4-26b-a4b (4bit=15G,
+6bit≈19G, 8bit≈29G). Same generative+cyclic litbench, both position-debiased:
+
+| model | size | accuracy |
+|---|---|---|
+| mlx-community 26b-a4b-4bit | 15G | 79.81% |
+| **our VQ-K256-d4 (sighted)** | **9.5G** | **79.81%** |
+
+**Identical accuracy at 63% of the size.** This is the publishable claim:
+not "better than the incumbent sidecar" (that was the e4b comparison,
+already settled) but "smaller than anything mlx-community has shipped for
+this model, at no quality cost we can detect." Worth a Hub upload.
