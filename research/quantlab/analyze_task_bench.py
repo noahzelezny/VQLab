@@ -25,7 +25,12 @@ import pathlib
 import random
 
 DIR = pathlib.Path(__file__).parent / "results_tasks"
-METRIC = {"hellaswag": "acc_norm", "piqa": "acc_norm", "winogrande": "acc"}
+# litbench: acc_norm is the metric of record — the hand-authored items carry
+# a residual length bias (answers skew ~3 chars long), and byte-length
+# normalization is what keeps that from scoring as literary understanding.
+# See literary/README.md.
+METRIC = {"hellaswag": "acc_norm", "piqa": "acc_norm", "winogrande": "acc",
+          "litbench": "acc_norm"}
 
 ORDER = [  # ascending size, ours + comparators interleaved
     ("Qwen3.5-397B-A17B-VQ-2.2bpw", "VQ-2.2bpw (100.1G)"),
@@ -44,8 +49,8 @@ def binom_two_sided(k, n):
     return min(1.0, sum(p for p in pk if p <= pk[k] + 1e-12))
 
 
-def load(name):
-    s = json.load(open(DIR / f"{name}.samples.json"))
+def load(name, directory):
+    s = json.load(open(directory / f"{name}.samples.json"))
     out = {}
     for task, rows in s.items():
         m = METRIC[task]
@@ -54,13 +59,37 @@ def load(name):
 
 
 def main():
-    data = {name: load(name) for name, _ in ORDER}
-    label = dict(ORDER)
+    import argparse
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--dir", default=None,
+                    help="results dir (default results_tasks/)")
+    ap.add_argument("--tasks", default=None,
+                    help="comma-separated subset of tasks to report")
+    args = ap.parse_args()
+
+    directory = pathlib.Path(args.dir) if args.dir else DIR
+    tasks = ([t.strip() for t in args.tasks.split(",") if t.strip()]
+             if args.tasks else list(METRIC))
+
+    # Fall back to whatever samples files are present, so a new results dir
+    # (results_literary/) works without editing ORDER. Keep ORDER's curated
+    # labels and size-ascending sequence when the files match it.
+    present = {p.name[:-len(".samples.json")]
+               for p in directory.glob("*.samples.json")}
+    order = [(n, l) for n, l in ORDER if n in present]
+    order += [(n, n) for n in sorted(present - {n for n, _ in ORDER})]
+    if not order:
+        raise SystemExit(f"no *.samples.json in {directory}")
+
+    data = {name: load(name, directory) for name, _ in order}
+    label = dict(order)
     rng = random.Random(0)
 
-    for a, b in itertools.combinations([n for n, _ in ORDER], 2):
+    for a, b in itertools.combinations([n for n, _ in order], 2):
         print(f"\n=== {label[a]}  vs  {label[b]}")
-        for task in METRIC:
+        for task in tasks:
+            if task not in data[a] or task not in data[b]:
+                continue
             da, db = data[a][task], data[b][task]
             ids = sorted(set(da) & set(db))
             assert len(ids) == len(da) == len(db), (task, len(ids))

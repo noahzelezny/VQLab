@@ -70,8 +70,11 @@ class StreamingLM:
     subclassing (done at runtime so this module imports without lm_eval).
     """
 
-    def __init__(self, model_path, batch_seqs=256, verbose=True):
+    def __init__(self, model_path, batch_seqs=256, verbose=True, direct=False,
+                 allow_unmatched=False):
         self.model_path = model_path
+        self.direct = direct
+        self.allow_unmatched = allow_unmatched
         self.batch_seqs = batch_seqs
         self.verbose = verbose
         self._model = None
@@ -79,12 +82,65 @@ class StreamingLM:
 
     # ---- model handling -------------------------------------------------
     def _load(self):
-        """Load lazily. Reloaded per pass: streaming DESTROYS the layer list."""
-        from mlx_lm.utils import load
-        with mx.stream(mx.cpu):
-            model, tokenizer, _ = load(
-                self.model_path, lazy=True, return_config=True)
-        return model, tokenizer
+        """Load lazily. Reloaded per pass: streaming DESTROYS the layer list.
+
+        STRICT, AND REFUSE OTHERWISE. mlx_lm's `load()` uses `strict=True`,
+        which is the property we want: a tensor the model class does not
+        build is a version mismatch, and dropping it degrades the model in a
+        way no downstream number reveals.
+
+        THE E-SERIES CASE, MEASURED. gemma-4 e2b/e4b ship
+        k_proj/v_proj/k_norm for their KV-shared layers (e2b 140 tensors =
+        20 layers x 7, e4b 126 = 18 x 7), which mlx_lm never constructs
+        because `has_kv = layer_idx < num_hidden_layers -
+        num_kv_shared_layers` (gemma4_text.py:183). Those tensors are
+        genuinely DEAD: mlx_vlm 0.5.0 builds them, mlx_lm drops them, and
+        both score e2b-6bit at ppl 96.62 — identical to the decimal. So
+        --allow-unmatched is safe for this family.
+
+        (An earlier revision of this file blamed those dropped tensors for
+        gemma's terrible benchmark scores. That was wrong — the cause is the
+        family's collapsed raw-text distribution, proven against HF
+        transformers on unquantized bf16. See GEMMA4_PPL_ANOMALY.md.)
+
+        The refusal is still the right default for UNKNOWN checkpoints: an
+        unmatched tensor that IS live degrades the model in a way no
+        downstream number reveals. Confirm deadness, then pass the flag.
+        """
+        from mlx_lm.utils import load, load_model, load_tokenizer
+        try:
+            with mx.stream(mx.cpu):
+                model, tokenizer, _ = load(
+                    self.model_path, lazy=True, return_config=True)
+            return model, tokenizer
+        except ValueError as e:
+            if "not in model" not in str(e):
+                raise
+            head = str(e).split("\n")[0]
+            n = head.split("Received ")[-1].split(" parameters")[0]
+            if not self.allow_unmatched:
+                raise SystemExit(
+                    f"\nREFUSING TO SCORE: {head}\n"
+                    f"  The checkpoint carries {n} tensors this mlx_lm model "
+                    f"class does not build. Dropping tensors can silently "
+                    f"degrade a model, so this is refused by default.\n"
+                    f"  KNOWN-SAFE CASE: the gemma-4 E-series (e2b/e4b) ships "
+                    f"k_proj/v_proj/k_norm for KV-shared layers (e2b 140 = "
+                    f"20 layers x 7, e4b 126 = 18 x 7). These are genuinely "
+                    f"dead: mlx_vlm builds them and mlx_lm does not, and both "
+                    f"give ppl 96.62 on e2b-6bit — identical to the decimal. "
+                    f"For those, --allow-unmatched is safe.\n"
+                    f"  Verify before trusting it on any OTHER checkpoint: an "
+                    f"unmatched tensor that IS live degrades the model in a "
+                    f"way no downstream number reveals.")
+            self._log(f"  NOTE: dropping {n} unmatched tensors "
+                      f"(--allow-unmatched). Confirm they are dead for this "
+                      f"checkpoint (E-series shared-KV k/v provably are).")
+            path = pathlib.Path(self.model_path)
+            with mx.stream(mx.cpu):
+                model, _ = load_model(path, lazy=True, strict=False)
+                tokenizer = load_tokenizer(path)
+            return model, tokenizer
 
     @property
     def tokenizer(self):
@@ -100,6 +156,77 @@ class StreamingLM:
     def _log(self, *a):
         if self.verbose:
             print(*a, flush=True)
+
+    # ---- direct path: for models that FIT IN RAM ------------------------
+    def _forward_direct(self, seqs, spans):
+        """Whole-model forward, one padded bucket at a time.
+
+        WHY THIS EXISTS. `_forward_batches` streams layers because the 397B
+        artifacts are larger than RAM. It does that by calling each block as
+        `blk(h, mask="causal", cache=None) -> h`, which assumes a plain
+        decoder stack. gemma-4 breaks every part of that assumption:
+
+          - `DecoderLayer.__call__` RETURNS A TUPLE (h, shared_kv, offset)
+            and takes `per_layer_input` and `shared_kv` (gemma4_text.py:333).
+          - e4b threads per-layer embedding inputs (PLE) computed from
+            `embed_tokens_per_layer` + `per_layer_model_projection`.
+          - `num_kv_shared_layers` means layers 24-41 REUSE the KV produced
+            by an earlier layer, so it must be carried forward.
+          - `layer_types` alternates sliding/full attention with
+            `sliding_window: 512`. Handing "causal" to a sliding layer is
+            SILENTLY WRONG — it attends outside the window and still returns
+            a number.
+
+        Re-deriving all that here would be a second, unverified copy of
+        upstream's forward pass, and the mask bug would not announce itself.
+        So when the model fits in memory, call the model. mlx_lm's own
+        `__call__` handles PLE, shared KV, and the mask pattern correctly by
+        construction.
+
+        Streaming stays the path for anything bigger than RAM; this is the
+        path for sidecar-sized artifacts.
+
+        MEMORY. Scoring happens INSIDE the bucket loop. Returning logits
+        would mean holding [seq, pos, 262144] fp32 for every sequence -- for
+        416 sequences of ~60 tokens that is ~26 GB, larger than the model.
+        Only the per-sequence (sum logprob, all-greedy) pair survives a
+        bucket, so peak stays one bucket's logits.
+        """
+        model, _ = self._load_cached()
+        order = sorted(range(len(seqs)), key=lambda i: len(seqs[i]))
+        buckets = [order[i:i + self.batch_seqs]
+                   for i in range(0, len(order), self.batch_seqs)]
+        out = [(0.0, True)] * len(seqs)
+        t0 = time.time()
+        for bi, idx in enumerate(buckets):
+            L = max(len(seqs[i]) for i in idx)
+            padded = [seqs[i] + [0] * (L - len(seqs[i])) for i in idx]
+            logits = model(mx.array(padded)).astype(mx.float32)
+            mx.eval(logits)
+            for k, i in enumerate(idx):
+                ctx_len, n_cont = spans[i]
+                start = max(ctx_len - 1, 0)
+                end = min(start + n_cont, len(seqs[i]) - 1)
+                if end <= start:
+                    continue
+                # position p predicts token p+1 — same convention as the
+                # streamed path (see _loglikelihood_pairs).
+                lg = logits[k, start:end]
+                tgt = mx.array(seqs[i][start + 1:end + 1])
+                lse = mx.logsumexp(lg, axis=-1)
+                picked = mx.take_along_axis(
+                    lg, tgt[:, None].astype(mx.int64), axis=-1)[:, 0]
+                lp = picked - lse
+                gd = mx.argmax(lg, axis=-1) == tgt
+                mx.eval(lp, gd)
+                out[i] = (float(mx.sum(lp).item()), bool(mx.all(gd).item()))
+            del logits
+            gc.collect()
+            mx.clear_cache()
+            if self.verbose:
+                self._log(f"    bucket {bi + 1}/{len(buckets)} "
+                          f"({time.time() - t0:.0f}s)")
+        return out
 
     # ---- the core: one streamed pass over many sequences ----------------
     def _forward_batches(self, seqs):
@@ -205,10 +332,28 @@ class StreamingLM:
         PREDICTION targets a continuation token, i.e. hidden[ctx_len-1 : -1].
         """
         tok = self.tokenizer
+        # BOS IS LOAD-BEARING ON GEMMA. `tok.encode()` here does NOT prepend
+        # the BOS token, and gemma-4 without BOS collapses into degenerate
+        # repetition ("The capital of France is the capital of France is...")
+        # instead of answering. Scored that way it lands BELOW CHANCE:
+        # measured 40.5% acc_norm on hellaswag for 26b-a4b-4bit and 21.2% on
+        # litbench (4-choice chance is 25%). Qwen is unaffected, which is why
+        # this hid until a second family was scored.
+        #
+        # Prepend only when the tokenizer declares a BOS and the encoding
+        # lacks it, so families that already handle it are untouched.
+        bos = getattr(tok, "bos_token_id", None)
+
+        def enc(s):
+            ids = tok.encode(s)
+            if bos is not None and (not ids or ids[0] != bos):
+                ids = [bos] + ids
+            return ids
+
         seqs, spans = [], []
         for ctx, cont in pairs:
-            ctx_ids = tok.encode(ctx)
-            full_ids = tok.encode(ctx + cont)
+            ctx_ids = enc(ctx)
+            full_ids = enc(ctx + cont)
             # Guard the degenerate case where the join re-tokenizes the seam.
             if len(full_ids) <= len(ctx_ids):
                 full_ids = ctx_ids + tok.encode(cont, add_special_tokens=False)
@@ -220,6 +365,10 @@ class StreamingLM:
 
         self._log(f"  {len(seqs)} sequences, "
                   f"{sum(len(s) for s in seqs)} tokens")
+        if self.direct:
+            # Model fits in RAM: use upstream's own forward (handles PLE,
+            # shared KV, and sliding-window masks correctly by construction).
+            return self._forward_direct(seqs, spans)
         hidden = self._forward_batches(seqs)
 
         rows, tgts, owner = [], [], []
@@ -248,14 +397,16 @@ class StreamingLM:
         return [(a, b) for a, b in out]
 
 
-def _build_lm(model_path, batch_seqs):
+def _build_lm(model_path, batch_seqs, direct=False, allow_unmatched=False):
     """Subclass lm-eval's LM at runtime (keeps this module import-light)."""
     from lm_eval.api.model import LM
 
     class _LM(LM, StreamingLM):
         def __init__(self):
             LM.__init__(self)
-            StreamingLM.__init__(self, model_path, batch_seqs=batch_seqs)
+            StreamingLM.__init__(self, model_path, batch_seqs=batch_seqs,
+                                 direct=direct,
+                                 allow_unmatched=allow_unmatched)
 
         def loglikelihood(self, requests):
             return self._loglikelihood_pairs([r.args for r in requests])
@@ -318,6 +469,20 @@ def main():
     ap.add_argument("--output-dir", default=None)
     ap.add_argument("--batch-seqs", type=int, default=256,
                     help="sequences per padded bucket in the layer loop")
+    ap.add_argument("--direct", action="store_true",
+                    help="skip layer streaming and call the model directly. "
+                         "REQUIRED for gemma-4 (its DecoderLayer returns a "
+                         "tuple, threads per-layer inputs and shared KV, and "
+                         "alternates sliding-window masks that the streamed "
+                         "path would silently get wrong). Use for any model "
+                         "that fits in RAM; streaming is for the rest.")
+    ap.add_argument("--allow-unmatched", action="store_true",
+                    help="load even if the checkpoint carries tensors the "
+                         "model class does not build. Investigation only: "
+                         "the dropped tensors degrade the model silently.")
+    ap.add_argument("--include-path", default=None,
+                    help="directory of local lm-eval task YAMLs (e.g. literary/ "
+                         "for litbench); stock tasks need no path")
     ap.add_argument("--selftest", action="store_true",
                     help="reproduce the referee wikitext ppl and exit")
     args = ap.parse_args()
@@ -330,12 +495,20 @@ def main():
 
     import lm_eval
 
-    lm = _build_lm(args.model, args.batch_seqs)
+    lm = _build_lm(args.model, args.batch_seqs, direct=args.direct,
+                   allow_unmatched=args.allow_unmatched)
     tasks = [t.strip() for t in args.tasks.split(",") if t.strip()]
+    # Local task YAMLs (litbench) need a TaskManager pointed at their dir;
+    # stock tasks resolve without one, so only build it when asked.
+    task_manager = None
+    if args.include_path:
+        from lm_eval.tasks import TaskManager
+        task_manager = TaskManager(include_path=args.include_path)
     t0 = time.time()
     res = lm_eval.simple_evaluate(
         model=lm, tasks=tasks, limit=args.limit,
         num_fewshot=args.num_shots, log_samples=True, bootstrap_iters=100000,
+        task_manager=task_manager,
     )
     elapsed = time.time() - t0
 

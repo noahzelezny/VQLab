@@ -4,3 +4,5 @@ logs_*
 __pycache__/
 *.pyc
 calib_corpus.txt
+.DS_Store
+referee/referee_corpus_literary.txt

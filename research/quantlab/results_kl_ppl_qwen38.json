@@ -1,0 +1,28 @@
+{
+ "teacher": "/Volumes/Thunderbay SSD/Exo Models/Qwen--Qwen3.8-27B",
+ "bf16_ppl": 5.22490149745195,
+ "corpus": "referee/referee_corpus.txt",
+ "rungs": [
+  {
+   "rung": "q4",
+   "ppl": 5.205500115974286,
+   "ppl_ratio": 0.9962867469392245,
+   "kl_millinats": 45.842,
+   "top1_agreement": 0.898193
+  },
+  {
+   "rung": "q3",
+   "ppl": 5.832337363533016,
+   "ppl_ratio": 1.1162578598615298,
+   "kl_millinats": 187.765,
+   "top1_agreement": 0.79484
+  },
+  {
+   "rung": "q2",
+   "ppl": 16.434945094320234,
+   "ppl_ratio": 3.1455033367299143,
+   "kl_millinats": 1426.891,
+   "top1_agreement": 0.460693
+  }
+ ]
+}

@@ -1,0 +1,37 @@
+# lm-eval task: literary understanding (discriminative)
+#
+# Loglikelihood multiple-choice, so it runs on the EXISTING scorer
+# (score_tasks_streaming.py) with no new machinery: lm-eval scores each
+# choice as its own (context, continuation) pair and never shows the model
+# the options together.
+#
+# `doc_to_text` ends on "Answer:" with NO trailing space — the leading space
+# lives on each choice, applied by build_litbench.py. See the note there.
+#
+# acc_norm is the METRIC OF RECORD for this task. The authored items carry a
+# residual length bias (correct answers skew ~3 chars long, length-rank
+# 3.2/4); byte-length normalization is what keeps that from being scored as
+# literary understanding. Report acc alongside it, never instead of it.
+#
+# dataset_path: json + data_files means no HF Hub dependency — the items are
+# the file next to this one. Absolute path because lm-eval resolves data
+# files relative to CWD, not to the YAML.
+task: litbench
+dataset_path: json
+dataset_kwargs:
+  data_files:
+    test: /Users/noahzelezny/Documents/AgenicAI/quantlab/literary/litbench.jsonl
+test_split: test
+output_type: multiple_choice
+doc_to_text: "{{passage}}\n\nQuestion: {{question}}\nAnswer:"
+doc_to_choice: "{{choices}}"
+doc_to_target: "{{label}}"
+metric_list:
+  - metric: acc
+    aggregation: mean
+    higher_is_better: true
+  - metric: acc_norm
+    aggregation: mean
+    higher_is_better: true
+metadata:
+  version: 1.0

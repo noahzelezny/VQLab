@@ -2703,3 +2703,105 @@ materialization, the balance shifts and this threshold deserves a re-test.
 Method note: this took three instruments to resolve — resident block probe
 (found it), chunked scorer (gated it), end-to-end throughput (rejected it).
 Any one alone would have given the wrong answer or shipped a no-op.
+
+---
+
+## E38 (08-17) — GEMMA-4 ARRIVES, AND ppl DIES WITH IT
+
+Goal: replace the gemma-4-e4b sidecar with gemma-4-26b-a4b at the same
+~8.4G, keeping audio. Detail: **GEMMA4_PPL_ANOMALY.md**, **CRUSH_RESULTS.md**,
+**LADDER_GEMMA.md**.
+
+**RAW LIKELIHOOD IS INVALID ON gemma-4-it — MODEL PROPERTY, NOT A PORT BUG.**
+The family assigns absurd probabilities to external text (plain English ppl
+~100, Austen ~700) while its own greedy output scores 1.42 and it generates
+fluently. Falsified as an mlx bug by an INDEPENDENT referee: HF transformers
+5.5.4, fp32, on unquantized bf16, reproduces it (115.6 / 695.1 vs mlx's
+96.6 / 729.2). mlx_lm and mlx_vlm agree to the decimal — they share lineage
+and referee nothing, which is why the third implementation was needed.
+Consequence: **no wikitext ppl, no literary ppl, no raw-continuation MC
+(hellaswag/litbench-as-shipped) may be cited for gemma-4, absolutely or
+cross-family.** Qwen is unaffected.
+
+**REPLACEMENT INSTRUMENT: `kl_damage.py`** — KL to the model's own bf16
+output. Sharpening is common-mode between teacher and student so it cancels
+exactly, and no notion of "correct" text is needed. Cache format is
+byte-compatible with `dwq_cache_teacher.py`. Top-k truncation is *helped*
+here: a collapsed distribution is concentrated, so k=64 holds 96.5%.
+
+**KL VALIDATED AGAINST ppl ON QWEN** (where both work): across 9 rungs KL
+and ppl rank identically, monotonically, 1.00x -> 3.15x. Dense conversion:
+KL <50 mnats free, ~200 = +10% ppl, >1000 broken. **These DO NOT transfer to
+MoE** — gemma-4-26b at 8-BIT reads 441 mnats / 79.95% agreement where Qwen
+q4 reads 45.8 / 89.82%. Routing is discrete: perturb anything upstream and a
+different 8-of-128 experts fire. Measure gemma against its own 8-bit
+reference, not zero.
+
+**gemma-4-26b-a4b IS A HYBRID, NOT A PURE MoE.** Every layer carries a dense
+`mlp.{gate,up,down}_proj` ALONGSIDE `experts.switch_glu.*`; `v_proj` exists
+in only 25 of 30 layers (`attention_k_eq_v`). Split: experts 90.5%,
+attention 4.4%, embed 2.9%, dense mlp 2.1%. Non-expert at FULL 8-bit costs
+only 2.54G, leaving ~2.05 bpw for experts inside 8.4G.
+
+**AFFINE LADDER (12 rungs, `convert_gemma_struct.py`, all KL-scored):**
+
+  | rung | size | top-1 agree |
+  |---|---|---|
+  | struct8-e8 | 25G | 79.95% (ceiling) |
+  | uniform-q8 | 25G | 79.33% |
+  | struct6-e8 | 24G | 45.20% |
+  | struct6-e3 | 11G | 38.01% |
+  | struct8-e2 | 9.1G | 34.90% |
+  | uniform-q3 | 10G | 4.46% |
+
+  Converter VERIFIED: struct8-e8 reproduces uniform-q8 and edges it (bf16
+  router), so the `switch_glu`/`router.proj` re-targeting is correct against
+  real tensors. Structured beats uniform at every small size. **E8's
+  attention cliff reproduced on a new family** — struct6-e8 collapses to
+  45.2% purely from qkv at 4-bit, already-known and re-learned the slow way;
+  use `--structure-bits 8 --qkv-bits 8`, it is nearly free here.
+  **Affine tops out at 9.1G / 34.9% against an 80% ceiling. That gap is the
+  VQ-shaped hole.** VQ NOT YET RUN; blocked on the `down_proj` packing
+  decision (moe_intermediate 704 -> NSUB 176, 176 % 32 != 0).
+
+**mlx FACTS.** gemma-4 cannot be layer-streamed (DecoderLayer returns a
+tuple, threads PLE + shared KV, alternates sliding-window masks a hand-rolled
+loop gets silently wrong) — `score_tasks_streaming.py --direct` added, and
+VALIDATED to the digit against the streamed path on Qwen, 2x faster.
+`tok.encode()` does not prepend BOS and gemma degenerates without it — fixed.
+E-series quants ship dead shared-KV k/v tensors mlx_lm won't build (e2b 140 =
+20x7, e4b 126 = 18x7); provably dead (mlx_lm and mlx_vlm both give ppl 96.62
+with and without), so `--allow-unmatched` is safe there and refused by
+default elsewhere. e2b/e4b are DENSE — "E" is effective params via per-layer
+embeddings + KV sharing, NOT expert routing — so only 26b-a4b is a VQ target.
+
+## E39 (08-17) — QWEN3.8-27B: q4 IS FREE, HAND-MIXED LOSES TO UNIFORM
+
+Dense 27.78B, bf16 55.6G. Both instruments valid, measured together.
+
+  | rung | size | ppl | vs bf16 | KL | agree |
+  |---|---|---|---|---|---|
+  | q4 | 14G | 5.2055 | **0.996x** | 45.8 | 89.82% |
+  | m3-a4 | 13G | 5.4377 | 1.041x | 106.4 | 85.36% |
+  | q3 | 11G | 5.8323 | 1.116x | 187.8 | 79.48% |
+  | m2-a4 | 11G | 7.0976 | 1.358x | 504.3 | 69.67% |
+  | q2 | 5.7G | 16.4349 | 3.146x | 1426.9 | 46.07% |
+
+**q4 at 14G is free** (4x compression, 0.996x). **Hand-designed static mixed
+allocation LOSES to uniform at matched budget** — m2-a4 1.358x vs q3 1.116x
+at 11G, and m2-a6 at 12G is still worse than q3 at 11G. Cause: mlp is 61.6%
+of a dense model, so 2-bit mlp IS the dense cliff (headline 4) and attention
+protection cannot buy it back. Mirror image of MoE, where experts are ~90%
+and tolerate 2-bit.
+
+**This does NOT falsify E4** — these are STATIC hand allocations, not optiq's
+KL-calibrated ones. OptiQ sweep IN PROGRESS (~10.6h sensitivity on the M3
+Ultra, ~0.5 components/min x 326). Bar to clear: **beat 1.116x at 11G**.
+Note the bf16-reference SwitchLinear blind spot does NOT fire on a dense
+model — only conv1d is invisible, at 2.0M params (0.01%). `optiq_realloc.py`
+re-allocates from an existing `sensitivity_checkpoint.json` so extra
+target-bpw / attention-floor combinations are free (the floor lives in
+optimizer.py, not sensitivity.py).
+
+Model also carries an MTP head (0.425B, speculative decoding) and a vision
+tower (0.46B) — droppable bytes if unused.

@@ -1,0 +1,63 @@
+{
+ "teacher": "/Volumes/Thunderbay SSD/Exo Models/Qwen--Qwen3.8-27B",
+ "bf16_ppl": 5.22490149745195,
+ "corpus": "referee/referee_corpus.txt",
+ "rungs": [
+  {
+   "rung": "m2-a4",
+   "ppl": 7.09759515942004,
+   "ppl_ratio": 1.3584170271690967,
+   "kl_millinats": 504.291,
+   "top1_agreement": 0.696696
+  },
+  {
+   "rung": "m2-a4-gs32",
+   "ppl": 6.53181689368123,
+   "ppl_ratio": 1.2501320640908982,
+   "kl_millinats": 394.512,
+   "top1_agreement": 0.724447
+  },
+  {
+   "rung": "m2-a6",
+   "ppl": 7.09132156924665,
+   "ppl_ratio": 1.3572163174185972,
+   "kl_millinats": 495.313,
+   "top1_agreement": 0.698975
+  },
+  {
+   "rung": "m3-a3",
+   "ppl": 5.676655386291549,
+   "ppl_ratio": 1.086461704409147,
+   "kl_millinats": 140.116,
+   "top1_agreement": 0.834635
+  },
+  {
+   "rung": "m3-a4",
+   "ppl": 5.437709609190858,
+   "ppl_ratio": 1.040729593054087,
+   "kl_millinats": 106.374,
+   "top1_agreement": 0.853597
+  },
+  {
+   "rung": "q2",
+   "ppl": 16.434945094320234,
+   "ppl_ratio": 3.1455033367299143,
+   "kl_millinats": 1426.891,
+   "top1_agreement": 0.460693
+  },
+  {
+   "rung": "q3",
+   "ppl": 5.832337363533016,
+   "ppl_ratio": 1.1162578598615298,
+   "kl_millinats": 187.765,
+   "top1_agreement": 0.79484
+  },
+  {
+   "rung": "q4",
+   "ppl": 5.205500115974286,
+   "ppl_ratio": 0.9962867469392245,
+   "kl_millinats": 45.842,
+   "top1_agreement": 0.898193
+  }
+ ]
+}
