@@ -1,0 +1,25 @@
+{
+ "model": "e13fae2a81ec07e3092a3ebb70c80970b640dc3c",
+ "n": 104,
+ "accuracy": 0.8462,
+ "cyclic": false,
+ "chance": 0.25,
+ "per_category": {
+  "irony": 0.9231,
+  "metaphor": 1.0,
+  "narrative_causality": 0.9231,
+  "subtext": 0.8462,
+  "symbol_motif": 0.9231,
+  "tone_register": 0.8462,
+  "understatement": 0.8462,
+  "unreliable_narrator": 0.4615
+ },
+ "answer_distribution": [
+  47,
+  18,
+  20,
+  19
+ ],
+ "mode": "generative",
+ "unparsed": 0
+}

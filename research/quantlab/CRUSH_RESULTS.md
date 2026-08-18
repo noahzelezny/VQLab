@@ -292,3 +292,53 @@ LESSON, and it is the same one twice tonight: an instrument that is
 in-distribution for one model can be out-of-distribution for another. Raw
 continuation broke gemma-vs-Qwen (E39); single-token chat broke
 e4b-vs-26b. Both times the artefact looked like a decisive capability gap.
+
+## OptiQ ON QWEN3.8-27B — CALIBRATION LOSES TO UNIFORM, AND THE FLOOR LOSES HARDER
+
+The E4 hypothesis ("calibrated allocation beats uniform on DENSE at matched
+budget in the steep zone") tested properly this time: real optiq
+`--method optiq --reference bf16`, not a hand-designed static allocation.
+497 components profiled, ~8h on the M3 Ultra.
+
+| rung | size | ppl | vs bf16 | KL (mnats) | top-1 agree |
+|---|---|---|---|---|---|
+| uniform q3 (baseline to beat) | **11G** | 5.8323 | **1.116x** | 187.8 | 79.48% |
+| optiq-b30 (unfloored) | 13G | 6.1596 | 1.179x | 302.1 | 78.57% |
+| optiq-b30-af6 (attn floor 6) | 13G | 8.4690 | 1.621x | 681.4 | 61.04% |
+
+**BOTH LOSE TO PLAIN UNIFORM q3 — while being 2G LARGER.** Calibrated
+allocation is not merely failing to win here; it is paying more bytes for
+worse quality. E4 does NOT replicate on Qwen3.8-27B.
+
+**The attention floor makes it much worse, not better.** Predicted before
+scoring, and the reason is already in this file: the floored allocation is
+`full_attn` all-6, `linear_attn` all-6, `mlp` all-2 — which is essentially
+the hand-designed `m2-a6` rung that scored 1.357x earlier tonight. Forcing
+6-bit attention leaves the allocator no budget anywhere else, so it crushes
+100% of the mlp to 2 bits, and mlp is 61.6% of a dense model. Same cliff,
+reached by a different road.
+
+What unfloored calibration actually chose (and it is NOT the proven recipe):
+
+    full_attn    2:1  3:17  4:25  6:21   <- genuinely assigns 2- and 3-bit attention
+    linear_attn  2:10 3:66  4:64  6:4
+    mlp          2:78 3:104 4:6   6:4
+
+So the flat-per-layer-KL problem that motivated `OPTIQ_ATTN_FLOOR_BITS` on
+MoE is NOT MoE-specific: on a dense model too, isolation-KL rates attention
+insensitive enough to hand some layers 2 bits. But flooring it is not the
+cure either, because on a dense model the bytes have to come out of the mlp
+bulk, which cannot afford them.
+
+**CONCLUSION FOR THE LADDER: use uniform for Qwen3.8-27B.** q4 at 14G is
+free (0.996x); q3 at 11G costs 11.6%. Nothing tried tonight — hand-designed
+static mixed, optiq calibrated, optiq calibrated+floored — beat plain
+uniform at matched or smaller size. Three independent attempts at
+mixed-precision on this model, all losing, is a strong result rather than a
+null one.
+
+Cost note: the af6 variant took **3 minutes**, not the ~10h a naive re-run
+would have cost, because optiq resumes from `sensitivity_checkpoint.json`
+(core/sensitivity.py:870) when candidate_bits match. Copy the checkpoint into
+the new output dir first. Sensitivity is a property of model+calibration,
+not of the bit budget.

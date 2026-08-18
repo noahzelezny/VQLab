@@ -1,0 +1,25 @@
+{
+ "model": "vq-tail10-K256-d4",
+ "n": 104,
+ "accuracy": 0.7692,
+ "cyclic": false,
+ "chance": 0.25,
+ "per_category": {
+  "irony": 0.9231,
+  "metaphor": 0.9231,
+  "narrative_causality": 0.8462,
+  "subtext": 0.7692,
+  "symbol_motif": 0.8462,
+  "tone_register": 0.7692,
+  "understatement": 0.6923,
+  "unreliable_narrator": 0.3846
+ },
+ "answer_distribution": [
+  56,
+  12,
+  18,
+  18
+ ],
+ "mode": "generative",
+ "unparsed": 0
+}
