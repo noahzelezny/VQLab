@@ -2706,7 +2706,7 @@ Any one alone would have given the wrong answer or shipped a no-op.
 
 ---
 
-## E38 (08-17) — GEMMA-4 ARRIVES, AND ppl DIES WITH IT
+## E39 (08-17) — GEMMA-4 ARRIVES, AND ppl DIES WITH IT
 
 Goal: replace the gemma-4-e4b sidecar with gemma-4-26b-a4b at the same
 ~8.4G, keeping audio. Detail: **GEMMA4_PPL_ANOMALY.md**, **CRUSH_RESULTS.md**,
@@ -2775,7 +2775,7 @@ with and without), so `--allow-unmatched` is safe there and refused by
 default elsewhere. e2b/e4b are DENSE — "E" is effective params via per-layer
 embeddings + KV sharing, NOT expert routing — so only 26b-a4b is a VQ target.
 
-## E39 (08-17) — QWEN3.8-27B: q4 IS FREE, HAND-MIXED LOSES TO UNIFORM
+## E40 (08-17) — QWEN3.8-27B: q4 IS FREE, HAND-MIXED LOSES TO UNIFORM
 
 Dense 27.78B, bf16 55.6G. Both instruments valid, measured together.
 
@@ -2805,3 +2805,50 @@ optimizer.py, not sensitivity.py).
 
 Model also carries an MTP head (0.425B, speculative decoding) and a vision
 tower (0.46B) — droppable bytes if unused.
+
+## E41 (08-17) — METHODOLOGY: the agreement metric has a FLOOR, and the two metrics are complementary
+
+Not a gemma result — this changes how every agreement number in this repo
+should be read, on any family.
+
+Measure two artifacts INDEPENDENTLY established as equivalent against each
+other, and whatever that reads is the instrument's floor:
+
+  | comparison | KL (mnats) | top-1 agree |
+  |---|---|---|
+  | struct8-e8 vs ITSELF (control) | 0.000 | 100.00% |
+  | struct8-e8 vs uniform-q8 | 397 | 82.32% |
+  | struct8-e8 vs bf16 | 441 | 79.95% |
+  | VQ K256 d4 vs bf16 | 3363 | 42.65% |
+
+**Two near-lossless artifacts disagree on 17.7% of positions.** The self
+comparison returns exactly 100.00%/0.000, so this is not instrument error.
+
+1. **Agreement SATURATES near the top.** It cannot separate "equivalent"
+   from "8-bit" (82.32 vs 79.95). So a near-lossless rung reading ~80% is
+   the EXPECTED result, not a quality ceiling to climb toward — an earlier
+   draft of CRUSH_RESULTS.md made exactly that mistake.
+2. **Agreement DISCRIMINATES lower down.** The affine ladder separates four
+   rungs cleanly across 27-45 (27.29 / 34.90 / 38.01 / 42.73). A saturated
+   instrument cannot do that, which is what licenses spending compute on
+   improvements in that region. NOTE: a low floor does NOT by itself imply
+   real damage — the floor locates only the TOP of the scale. The ladder's
+   resolution is the argument, not the floor value.
+3. **KL behaves oppositely** — still separating 397 from 441 where agreement
+   has given up. So QUOTE KL AS MULTIPLES OF ITS NOISE FLOOR (~400 mnats
+   here; VQ at 3363 is ~8.5x it) and keep agreement as the intuitive
+   companion. Neither is trustworthy alone across the full range.
+4. **The floor is a property of the MEASUREMENT SETUP**, not a constant.
+   Re-measure it whenever the corpus or cache changes, or you are comparing
+   across two different sticks.
+
+MECHANISM, from the 397B session's per-item data (which existed because
+`results_tasks/*.samples.json` are tracked — a new metric over old per-item
+outputs, no GPU): quant disagreement is SYMMETRIC (on disagreeing items
+neither model matches gold more often — 29v31, 16v18) and concentrated on
+NEAR-TIES (top-2 margin 1.2-2.4 nats on disagreements vs 16-18 on
+agreements, up to 14.7x). Quants reshuffle uncertain decisions and leave the
+confident mass alone.
+
+CAVEAT: that evidence is 4-choice argmax on tasks; ours is top-1 over a
+~250k vocab on free text. Comparable PHENOMENA, not comparable NUMBERS.

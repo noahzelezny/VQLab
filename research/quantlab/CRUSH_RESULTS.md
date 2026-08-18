@@ -217,8 +217,13 @@ not the percentages.
 
 ## K/d GEOMETRY — E36 does NOT transfer to gemma
 
-E36 (397B) found `down_proj` prefers larger d. Tested here, gate/up held at
-d4k256, `down_proj` moved to d8k256:
+E36 (397B) found `down_proj` prefers larger d — **but E37 ALREADY FALSIFIED
+THAT** as a layer-0 probing artifact (d8 relerr climbs 0.1793 at L0 to 0.4148
+at L56; the mixed artifact lost on both corpora, relerr 0.3474 vs 0.3156).
+This run cited E36 without reading E37, so it re-derived a known result. It
+stands as independent SECOND-FAMILY corroboration of E37 — same direction,
+same shape — but that is luck, not method. Gate/up held at d4k256,
+`down_proj` moved to d8k256:
 
 | rung | size | KL (mnats) | top-1 agree | mean relerr |
 |---|---|---|---|---|
@@ -242,6 +247,6 @@ gemma rung**, and the packing skip for `down_proj` stays motivated purely by
 `176 % 32 != 0` rather than by geometry (see LADDER_GEMMA.md — the two were
 consistent, but only one is now load-bearing).
 
-Untried lever remaining: a TAIL SCHEDULE (more expert bits in some layers,
+Untried lever remaining (and the one E37 also points to): a TAIL SCHEDULE (more expert bits in some layers,
 397B's struct6-tailN shape), which spends bytes where they help instead of
 uniformly. That is the next thing to run, not more geometry.
