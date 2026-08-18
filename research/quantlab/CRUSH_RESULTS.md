@@ -497,3 +497,42 @@ died to a Metal command-buffer timeout on the M4 (see STATE.md); K=2048
 with --expert-chunk 16 is the proven ceiling of this fitter on that box.
 Codebook capacity, not d-geometry or tail schedules, was the binding
 constraint at K=256 — try K first next time.
+
+## DOMAIN SCAN (08-18) — is gemma's KL gap hiding somewhere litbench can't see?
+
+**Motivation (Noah).** litbench saturated at K2048 (86.54% vs bf16's 84.62%)
+while KL still reported a 23-point gap to the 8-bit ceiling. Two valid
+instruments disagreeing. The 397B was measured on wikitext AND code; ppl is
+invalid on gemma, but KL is a DIVERGENCE from bf16, not a likelihood claim,
+so it stays valid on any corpus. Hypothesis: the gap is concentrated in
+literary (gemma's actual job) and litbench is too easy to see it — which
+would justify a d=2 gemma.
+
+Built kl_cache_gemma26b_CODE (96x512) and _LIT (128x512), chat-wrapped like
+the general cache. Scored three rungs per domain INCLUDING struct8-e8, so
+the gap is measured within each domain and corpus difficulty cancels.
+
+| domain | struct8-e8 (ceiling) | VQ K2048 | VQ K256 | K2048 gap | KL ratio |
+|---|---|---|---|---|---|
+| general | 441 / 79.95% | 1856 / 56.56% | 3363 / 42.65% | 23.39 | 4.21x |
+| literary | 437 / 79.67% | 1818 / 56.53% | 3300 / 42.93% | 23.14 | 4.16x |
+| code | 421 / 82.45% | 1464 / 64.73% | 2514 / 54.76% | 17.72 | 3.48x |
+
+**HYPOTHESIS FALSIFIED. The damage is UNIFORM across domains.** Literary is
+statistically identical to general (23.14 vs 23.39). Code is the LEAST
+damaged domain (17.72), not the most — plausibly because code token
+distributions are more predictable, so MoE routing is more stable.
+
+**CONSEQUENCE.** No d=2 gemma on these grounds. It would cost ~6G (though
+note d=2 also FIXES gemma's packing: down_proj NSUB 704/2 = 352 = 11x32,
+so the stranded third disappears) to move a metric that no instrument we
+trust connects to gemma's job, and the one hypothesis that would have
+connected them is now dead.
+
+**WHAT IS STILL UNRESOLVED.** The 23-point gap is real and flat, not
+absent. litbench cannot resolve it and the domain scan did not break the
+tie — it only killed one explanation. Settling it needs a harder
+GENERATIVE bench (long-form coherence, multi-turn, constrained
+instruction-following) or use-in-anger judgement. Single-token benches are
+exactly where routing divergence hides — the same trap that had
+single-token litbench scoring 26b bf16 BELOW its own 8-bit quant.
