@@ -1,0 +1,21 @@
+{
+ "teacher": "/Volumes/Thunderbay SSD/Mlx_Models/hub/models--mlx-community--Qwen3.6-35B-A3B-bf16/snapshots/04bbe07c3ed2d93cbf832f523fea344bca1d0fcf",
+ "bf16_ppl": 4.721483588293755,
+ "corpus": "referee/referee_corpus.txt",
+ "rungs": [
+  {
+   "rung": "vq-K256-d4",
+   "ppl": 5.388082434234535,
+   "ppl_ratio": 1.14118419210299,
+   "kl_millinats": 214.514,
+   "top1_agreement": 0.795044
+  },
+  {
+   "rung": "mlx-community--Qwen3.6-35B-A3B-4bit",
+   "ppl": 4.91541347171344,
+   "ppl_ratio": 1.04107392936841,
+   "kl_millinats": 78.557,
+   "top1_agreement": 0.856079
+  }
+ ]
+}

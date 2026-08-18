@@ -52,7 +52,7 @@ ap.add_argument("--dim", type=int, default=4)
 ap.add_argument("--group", type=int, default=64)
 ap.add_argument("--iters", type=int, default=20)
 ap.add_argument("--expert-chunk", type=int, default=32)
-ap.add_argument("--family", default="qwen3_5", choices=["qwen3_5", "gemma4"],
+ap.add_argument("--family", default="qwen3_5", choices=["qwen3_5", "gemma4", "qwen3_5_mlx"],
                 help="module naming / source-key family. Default reproduces "
                      "the shipped 397B behaviour exactly.")
 ap.add_argument("--sample", type=int, default=2_000_000)
@@ -112,6 +112,21 @@ FAMILY = {
         # in zero keys. So every projection is direct, no half-slicing, and
         # the prefix is language_model.model.* not model.language_model.*.
         "src_key": "language_model.model.layers.{li}.experts.switch_glu.{key}.weight",
+        "proj": {"gate_proj": ("gate_proj", None),
+                 "up_proj": ("up_proj", None),
+                 "down_proj": ("down_proj", None)},
+    },
+    "qwen3_5_mlx": {
+        # SAME architecture as qwen3_5 (qwen3_5_moe, switch_mlp, shared
+        # expert) but sourced from an mlx-community MLX-FORMAT bf16
+        # conversion rather than the original HF-format one. Verified on
+        # mlx-community/Qwen3.6-35B-A3B-bf16: sanitize already split
+        # gate_up_proj (zero fused keys), prefix is language_model.model.*
+        # (no leading "model."), and there is no .experts. path segment —
+        # the module IS switch_mlp.{gate,up,down}_proj directly. Do not
+        # point this at an HF-format source (use "qwen3_5" for that).
+        "target_substr": "switch_mlp",
+        "src_key": "language_model.model.layers.{li}.mlp.switch_mlp.{key}.weight",
         "proj": {"gate_proj": ("gate_proj", None),
                  "up_proj": ("up_proj", None),
                  "down_proj": ("down_proj", None)},
