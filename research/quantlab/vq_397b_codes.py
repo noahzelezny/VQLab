@@ -63,6 +63,15 @@ ap.add_argument("--geom", default=None,
                 help="per-projection geometry override, e.g. "
                      "'gate_proj=d4k256,up_proj=d4k256,down_proj=d8k4096' "
                      "(E36: down_proj prefers d8; gate/up never recovers)")
+ap.add_argument("--tail-from", type=int, default=None,
+                help="first layer index of the TAIL (see --tail-geom)")
+ap.add_argument("--tail-geom", default=None,
+                help="geometry for layers >= --tail-from, e.g. 'd2k2048', "
+                     "applied to all three projections. Spends bytes where "
+                     "they help: E25/E29 put the 397B knee at ~tail30 of 60. "
+                     "This is a QWEN-FAMILY law and does NOT transfer to "
+                     "gemma (LADDER_GEMMA.md:180; gemma vq-tail10 scored "
+                     "BELOW flat K256, 76.92 vs 79.81).")
 args = ap.parse_args()
 
 BASE, SRC, OUT = pathlib.Path(args.base), pathlib.Path(args.src), pathlib.Path(args.out)
@@ -78,6 +87,20 @@ if args.geom:
         d_s, k_s = dk.lstrip("d").split("k")
         assert proj in GEOM, proj
         GEOM[proj] = (int(d_s), int(k_s))
+
+# tail override: layers >= TAIL_FROM use TAIL_GEOM for every projection
+TAIL_GEOM, TAIL_FROM = None, args.tail_from
+if args.tail_geom:
+    assert TAIL_FROM is not None, "--tail-geom requires --tail-from"
+    _d, _k = args.tail_geom.lstrip("d").split("k")
+    TAIL_GEOM = (int(_d), int(_k))
+
+
+def geom_for(li, proj):
+    """(D, K) for this layer+projection — the tail may differ from the body."""
+    if TAIL_GEOM is not None and li >= TAIL_FROM:
+        return TAIL_GEOM
+    return GEOM[proj]
 
 
 def code_dtype(k):
@@ -211,7 +234,7 @@ def load_src_expert(li, proj):
 
 def vq_tensor_codes(li, proj, want_shape):
     """Fit one expert tensor -> (codes, codebook fp16, scales fp16, relerr)."""
-    D, K = GEOM[proj]
+    D, K = geom_for(li, proj)
     T = load_src_expert(li, proj)
     assert tuple(T.shape) == tuple(want_shape), (li, proj, T.shape, want_shape)
     n_exp, out_d, in_d = T.shape
@@ -290,6 +313,10 @@ def stored_bpw(d, k):
 
 geom_str = ", ".join(f"{p}=d{d}k{k} ({stored_bpw(d, k):.2f} bpw stored)"
                      for p, (d, k) in GEOM.items())
+if TAIL_GEOM is not None:
+    _d, _k = TAIL_GEOM
+    geom_str += (f"  ||  TAIL layers {TAIL_FROM}-{HI}: d{_d}k{_k} "
+                 f"({stored_bpw(_d, _k):.2f} bpw stored)")
 print(f"base {BASE.name}: {len(targets)} expert tensors -> CODES "
       f"(layers {LO}-{HI})  {geom_str}", flush=True)
 if not targets:
@@ -337,7 +364,7 @@ for si, sh in enumerate(shards):
             new[mod + ".codes"] = codes
             new[mod + ".codebook"] = cb
             new[mod + ".vq_scales"] = vsc
-            pd, pk = GEOM[proj]
+            pd, pk = geom_for(li, proj)
             vq_modules[mod] = {"experts": want[0], "out": want[1],
                               "in": want[2], "k": pk, "dim": pd, "group": G}
             errs.append(err)
