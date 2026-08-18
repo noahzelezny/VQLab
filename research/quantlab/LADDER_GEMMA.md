@@ -207,3 +207,28 @@ report those beside the bf16 pair.
 Caveat on reading it: litbench at n=104 resolves ~10.5pp, enough to separate
 these two models but **not** enough to separate two quants of one of them
 (`literary/README.md`).
+
+## Geometry and packing interact — do not "fix" one and break the other
+
+Mixed subvector dims ARE supported: `vq_switch.py:11-12` — each module
+dispatches on its own codebook shape, so d4 and d8 tensors coexist in one
+model — and `add_model_file.py` stores `dim` per module in `vq_modules`, the
+same per-module mechanism as `pack_bits`.
+
+Two constraints that travel with it:
+
+- **Packing is d=4 ONLY** (`vq_switch.py:441` raises NotImplementedError).
+  So a d=8 `down_proj` can never be packed. This is CONSISTENT with, not in
+  tension with, the `176 % 32 != 0` skip: `down_proj` was already the tensor
+  we were going to leave unpacked. **If someone later "fixes" the packing
+  skip, they break the geometry choice.** Both decisions are load-bearing.
+- **d8 codebooks above ~2K entries do not fit Apple's 32 KB threadgroup
+  memory** (K4096 at fp16 = 64 KB); those kernels fall back to device memory
+  and L2 residency, and a threadgroup d8 variant exists only for K<=1024. At
+  K=256 this is far inside the comfortable range — but sweeping K upward
+  TOGETHER with d=8 is where the performance cliff lives.
+
+Also: the ~400 mnats / ~82% floor is a property of the MEASUREMENT SETUP,
+not a universal constant. Re-run the struct8-e8 vs uniform-q8 floor test on
+any run that changes the corpus or the cache, or you are comparing across
+two different sticks.

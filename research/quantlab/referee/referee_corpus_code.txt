@@ -1,0 +1,4187 @@
+// ==== python: generate.py ====
+import contextlib
+import functools
+import math
+import os
+import time
+import uuid
+from typing import Callable, Generator, cast, get_args
+
+import mlx.core as mx
+from mlx_lm.generate import (
+    maybe_quantize_kv_cache,
+    stream_generate,
+)
+from mlx_lm.sample_utils import make_logits_processors, make_sampler
+from mlx_lm.tokenizer_utils import TokenizerWrapper
+
+from exo.api.types import (
+    CompletionTokensDetails,
+    FinishReason,
+    GenerationStats,
+    PromptTokensDetails,
+    TopLogprobItem,
+    Usage,
+)
+from exo.shared.types.common import ModelId
+from exo.shared.types.memory import Memory
+from exo.shared.types.text_generation import (
+    InputMessage,
+    InputMessageContent,
+    TextGenerationTaskParams,
+)
+from exo.shared.types.worker.runner_response import (
+    GenerationResponse,
+)
+from exo.worker.engines.mlx.auto_parallel import (
+    PipelineFirstLayer,
+    PipelineLastLayer,
+    clear_prefill_sends,
+    flush_prefill_sends,
+    set_pipeline_prefill,
+    set_pipeline_queue_sends,
+)
+from exo.worker.engines.mlx.cache import (
+    CacheSnapshot,
+    KVPrefixCache,
+    copy_snapshot_entry,
+    encode_prompt,
+    has_non_kv_caches,
+    is_non_trimmable_cache_entry,
+    make_kv_cache,
+    snapshot_ssm_states,
+)
+from exo.worker.engines.mlx.constants import (
+    DEFAULT_TOP_LOGPROBS,
+    KV_BITS,
+    KV_GROUP_SIZE,
+    MAX_TOKENS,
+    kv_bits_for,
+)
+from exo.worker.engines.mlx.generator.remote_prefill import remote_prefill
+from exo.worker.engines.mlx.types import KVCacheType, Model
+from exo.worker.engines.mlx.utils_mlx import (
+    apply_chat_template,
+    fix_unmatched_think_end_tokens,
+    mx_barrier,
+    system_prompt_token_count,
+)
+from exo.worker.engines.mlx.vision import (
+    MediaRegion,
+    VisionProcessor,
+    VisionResult,
+    get_inner_model,
+    prepare_vision,
+)
+from exo.worker.runner.bootstrap import logger
+
+REMOTE_PREFILL_MIN_TOKENS = 1000
+
+generation_stream = mx.new_stream(mx.default_device())
+
+_MIN_PREFIX_HIT_RATIO_TO_UPDATE = 0.5
+
+
+@contextlib.contextmanager
+def patch_embed_tokens(
+    model: Model,
+    embeddings: mx.array,
+    start_offset: int = 0,
+    token_count: int = 0,
+    image_token_id: int | None = None,
+) -> Generator[None]:
+    inner = get_inner_model(model)  # type: ignore
+    original_embed = inner.embed_tokens  # type: ignore
+    end_offset = start_offset + token_count
+    offset = [start_offset]
+
+    def _inject(input_ids: mx.array) -> mx.array:
+        chunk_start = offset[0]
+        chunk_len = input_ids.shape[-1]
+        chunk_end = chunk_start + chunk_len
+        offset[0] = chunk_end
+
+        # The injection window is [start_offset, end_offset).
+        if chunk_end <= start_offset or chunk_start >= end_offset:
+            return original_embed(input_ids)  # type: ignore
+
+        # Mixed chunk: splice the pre-computed embeddings for the overlap
+        # into `original_embed(input_ids)` for any text-only fringes.
+        overlap_start = max(chunk_start, start_offset)
+        overlap_end = min(chunk_end, end_offset)
+        dst_start = overlap_start - chunk_start
+        dst_end = overlap_end - chunk_start
+        text_embeds: mx.array = original_embed(input_ids)  # type: ignore
+        return mx.concatenate(
+            [
+                text_embeds[:, :dst_start, :],
+                embeddings[:, overlap_start:overlap_end, :],
+                text_embeds[:, dst_end:, :],
+            ],
+            axis=1,
+        )
+
+    for attr in dir(original_embed):  # type: ignore
+        if not attr.startswith("_") and not hasattr(_inject, attr):
+            with contextlib.suppress(AttributeError, TypeError):
+                setattr(_inject, attr, getattr(original_embed, attr))  # type: ignore
+
+    inner.embed_tokens = _inject
+
+    # Gemma 4 (e2b/e4b) has a second, independent embedding table that produces
+    # per-layer conditioning signals via self.embed_tokens_per_layer(input_ids).
+    # The injected vision embeddings live in the main residual stream only, so
+    # if image_token_id positions are passed through as-is the per-layer table
+    # produces garbage signals at those positions (the `<image>` token was never
+    # trained to have meaningful per-layer inputs).
+    original_per_layer = getattr(inner, "embed_tokens_per_layer", None)  # type: ignore
+    if original_per_layer is not None and image_token_id is not None:
+
+        def _clean_per_layer(input_ids: mx.array) -> mx.array:
+            clean_ids = mx.where(
+                input_ids == image_token_id, mx.zeros_like(input_ids), input_ids
+            )
+            return original_per_layer(clean_ids)  # type: ignore
+
+        inner.embed_tokens_per_layer = _clean_per_layer
+
+    try:
+        yield
+    finally:
+        inner.embed_tokens = original_embed
+        if original_per_layer is not None and image_token_id is not None:
+            inner.embed_tokens_per_layer = original_per_layer
+
+
+class PrefillCancelled(BaseException):
+    """Raised when prefill is cancelled via the progress callback."""
+
+
+def _has_pipeline_communication_layer(model: Model):
+    for layer in model.layers:
+        if isinstance(layer, (PipelineFirstLayer, PipelineLastLayer)):
+            return True
+    return False
+
+
+def pipeline_parallel_prefill(
+    model: Model,
+    prompt: mx.array,
+    prompt_cache: KVCacheType,
+    prefill_step_size: int,
+    kv_group_size: int | None,
+    kv_bits: int | None,
+    prompt_progress_callback: Callable[[int, int], None],
+    distributed_prompt_progress_callback: Callable[[], None] | None,
+    group: mx.distributed.Group,
+) -> None:
+    """Prefill the KV cache for pipeline parallel with overlapping stages.
+
+    Each rank processes the full prompt through its real cache, offset by leading
+    and trailing dummy iterations.
+
+    Total iterations per rank = N_real_chunks + world_size - 1:
+      - rank r leading dummies  (skip_pipeline_io, throwaway cache)
+      - N_real_chunks real      (pipeline IO active, real cache)
+      - (world_size-1-r) trailing dummies (skip_pipeline_io, throwaway cache)
+
+    e.g.
+    Timeline (2 ranks, 3 chunks of 10240 tokens @ step=4096):
+        iter 0: R0 real[0:4096]     R1 dummy
+        iter 1: R0 real[4096:8192]  R1 real[0:4096]
+        iter 2: R0 real[8192:10240] R1 real[4096:8192]
+        iter 3: R0 dummy            R1 real[8192:10240]
+
+    This function is designed to match mlx_lm's stream_generate exactly in terms of
+    side effects (given the same prefill step size)
+    """
+    prefill_step_size = prefill_step_size // min(4, group.size())
+
+    quantize_cache_fn: Callable[..., None] = functools.partial(
+        maybe_quantize_kv_cache,
+        quantized_kv_start=0,
+        kv_group_size=kv_group_size,
+        kv_bits=kv_bits,
+    )
+
+    _prompt_cache: KVCacheType = prompt_cache
+    rank = group.rank()
+    world_size = group.size()
+
+    # Build list of real prompt chunk sizes
+    total = len(prompt)
+    real_chunk_sizes: list[int] = []
+    remaining = total - 1
+    while remaining:
+        n = min(prefill_step_size, remaining)
+        real_chunk_sizes.append(n)
+        remaining -= n
+    n_real = len(real_chunk_sizes)
+
+    # Each rank does: [rank leading dummies] [N real chunks] [world_size-1-rank trailing dummies]
+    n_leading = rank
+    n_trailing = world_size - 1 - rank
+    n_total = n_leading + n_real + n_trailing
+
+    t_start = time.perf_counter()
+    processed = 0
+    logger.info(
+        f"[R{rank}] Pipeline prefill: {n_real} real + {n_leading} leading + {n_trailing} trailing = {n_total} iterations"
+    )
+    clear_prefill_sends()
+
+    # Initial callback matching generate_step
+    prompt_progress_callback(0, total)
+
+    try:
+        with mx.stream(generation_stream):
+            for _ in range(n_leading):
+                if distributed_prompt_progress_callback is not None:
+                    distributed_prompt_progress_callback()
+
+            for i in range(n_real):
+                chunk_size = real_chunk_sizes[i]
+                model(
+                    prompt[processed : processed + chunk_size][None],
+                    cache=_prompt_cache,
+                )
+                quantize_cache_fn(_prompt_cache)
+                processed += chunk_size
+
+                if distributed_prompt_progress_callback is not None:
+                    distributed_prompt_progress_callback()
+
+                flush_prefill_sends()
+
+                prompt_progress_callback(processed, total)
+
+            for _ in range(n_trailing):
+                if distributed_prompt_progress_callback is not None:
+                    distributed_prompt_progress_callback()
+
+    finally:
+        clear_prefill_sends()
+
+    # Post-loop: process remaining 1 token + add +1 entry to match stream_generate.
+    for _ in range(2):
+        with mx.stream(generation_stream):
+            model(prompt[-1:][None], cache=_prompt_cache)
+            quantize_cache_fn(_prompt_cache)
+        flush_prefill_sends()
+
+    assert _prompt_cache is not None
+    with mx.stream(generation_stream):
+        mx.eval([c.state for c in _prompt_cache])  # type: ignore
+
+    # Final callback matching generate_step
+    prompt_progress_callback(total, total)
+
+    logger.info(
+        f"[R{rank}] Prefill: {n_real} real + {n_leading}+{n_trailing} dummy iterations, "
+        f"Processed {processed} tokens in {(time.perf_counter() - t_start) * 1000:.1f}ms"
+    )
+
+
+def prefill(
+    model: Model,
+    tokenizer: TokenizerWrapper,
+    sampler: Callable[[mx.array], mx.array],
+    prompt_tokens: mx.array,
+    cache: KVCacheType,
+    group: mx.distributed.Group | None,
+    on_prefill_progress: Callable[[int, int], None] | None,
+    distributed_prompt_progress_callback: Callable[[], None] | None,
+    kv_bits: int | None = None,
+) -> tuple[float, int, list[CacheSnapshot]]:
+    """Prefill the KV cache with prompt tokens.
+
+    This runs the model over the prompt tokens to populate the cache,
+    then trims off the extra generated token.
+
+    Returns:
+        (tokens_per_sec, num_tokens, snapshots)
+    """
+    num_tokens = len(prompt_tokens)
+    if num_tokens == 0:
+        return 0.0, 0, []
+
+    logger.debug(f"Prefilling {num_tokens} tokens...")
+    start_time = time.perf_counter()
+    has_ssm = has_non_kv_caches(cache)
+    snapshots: list[CacheSnapshot] = []
+
+    # TODO(evan): kill the callbacks/runner refactor
+    def progress_callback(processed: int, total: int) -> None:
+        elapsed = time.perf_counter() - start_time
+        tok_per_sec = processed / elapsed if elapsed > 0 else 0
+        logger.debug(
+            f"Prefill progress: {processed}/{total} tokens ({tok_per_sec:.1f} tok/s)"
+        )
+        if has_ssm:
+            snapshots.append(snapshot_ssm_states(cache))
+
+        if on_prefill_progress is not None:
+            on_prefill_progress(processed, total)
+
+    def combined_progress_callback(processed: int, total: int) -> None:
+        if distributed_prompt_progress_callback is not None:
+            distributed_prompt_progress_callback()
+        progress_callback(processed, total)
+
+    set_pipeline_prefill(model, is_prefill=True)
+
+    mx_barrier(group)
+    logger.info("Starting prefill")
+
+    is_pipeline = _has_pipeline_communication_layer(model)
+
+    # Scout 2026-06-10: the prefill chunk size sets the PEAK prefill activation
+    # memory (≈ chunk_size × seq_len × heads), the transient that OOMs DeepSeek
+    # -V4-Flash on long prefills on the tight M3+M4 ring (144GB weights / 224GB
+    # RAM → ~8k-token ceiling: it hangs then the OS memory-kills the instance).
+    # Lowering this shrinks the spike so V4 survives much longer contexts
+    # (slower prefill — more chunks — but works at all). Env-tunable; the 4096
+    # default preserves upstream behavior until EXO_PREFILL_STEP_SIZE is set.
+    prefill_step_size = int(os.getenv("EXO_PREFILL_STEP_SIZE", "4096"))
+
+    try:
+        if is_pipeline and num_tokens >= prefill_step_size:
+            set_pipeline_queue_sends(model, queue_sends=True)
+            assert group is not None, "Pipeline prefill requires a distributed group"
+            pipeline_parallel_prefill(
+                model=model,
+                prompt=prompt_tokens,
+                prompt_cache=cache,
+                prefill_step_size=prefill_step_size,
+                kv_group_size=KV_GROUP_SIZE,
+                kv_bits=kv_bits,
+                prompt_progress_callback=progress_callback,
+                distributed_prompt_progress_callback=distributed_prompt_progress_callback,
+                group=group,
+            )
+        else:
+            # Use max_tokens=1 because max_tokens=0 does not work.
+            # We just throw away the generated token - we only care about filling the cache
+            for _ in stream_generate(
+                model=model,
+                tokenizer=tokenizer,
+                prompt=prompt_tokens,
+                max_tokens=1,
+                sampler=sampler,
+                prompt_cache=cache,
+                prefill_step_size=prefill_step_size,
+                kv_group_size=KV_GROUP_SIZE,
+                kv_bits=kv_bits,
+                prompt_progress_callback=combined_progress_callback,
+            ):
+                break  # Stop after first iteration - cache is now filled
+    except PrefillCancelled:
+        set_pipeline_queue_sends(model, queue_sends=False)
+        set_pipeline_prefill(model, is_prefill=False)
+        raise
+
+    set_pipeline_queue_sends(model, queue_sends=False)
+    set_pipeline_prefill(model, is_prefill=False)
+
+    # stream_generate added 1 extra generated token to the cache, so we should trim it.
+    # Because of needing to roll back arrays cache, we will generate on 2 tokens so trim 1 more.
+    pre_gen = snapshots[-2] if has_ssm else None
+    for i, c in enumerate(cache):
+        non_trimmable = is_non_trimmable_cache_entry(c)
+        if has_ssm and non_trimmable:
+            assert pre_gen is not None
+            restored = copy_snapshot_entry(pre_gen.states[i])
+            if restored is not None:
+                cache[i] = restored  # type: ignore
+        else:
+            assert not non_trimmable
+            c.trim(2)
+
+    elapsed = time.perf_counter() - start_time
+    tokens_per_sec = num_tokens / elapsed if elapsed > 0 else 0.0
+    logger.debug(
+        f"Prefill complete: {num_tokens} tokens in {elapsed:.2f}s "
+        f"({tokens_per_sec:.1f} tok/s)"
+    )
+    # Exclude the last snapshot
+    return tokens_per_sec, num_tokens, snapshots[:-1] if snapshots else []
+
+
+def warmup_inference(
+    model: Model,
+    tokenizer: TokenizerWrapper,
+    group: mx.distributed.Group | None,
+    model_id: ModelId,
+) -> int:
+    logger.info(f"warming up inference for instance: {model_id}")
+
+    content = InputMessageContent(
+        "Prompt to warm up the inference engine. Repeat this."
+    )
+
+    warmup_task_params = TextGenerationTaskParams(
+        model=model_id,
+        input=[InputMessage(role="user", content=content)],
+        max_output_tokens=50,
+        temperature=0.0,
+    )
+
+    warmup_prompt = apply_chat_template(
+        tokenizer=tokenizer,
+        task_params=warmup_task_params,
+    )
+
+    tokens_generated = 0
+
+    mx_barrier(group)
+
+    logger.info("Generating warmup tokens")
+
+    t = time.monotonic()
+
+    for _r in mlx_generate(
+        model=model,
+        tokenizer=tokenizer,
+        task=warmup_task_params,
+        prompt=warmup_prompt,
+        kv_prefix_cache=None,
+        group=group,
+    ):
+        tokens_generated += 1
+
+    check_for_cancel_every = min(
+        math.ceil(tokens_generated / min(time.monotonic() - t, 0.001)), 100
+    )
+
+    mx_barrier(group)
+
+    logger.info(f"warmed up by generating {tokens_generated} tokens")
+    if group is not None:
+        check_for_cancel_every = int(
+            mx.max(
+                mx.distributed.all_gather(
+                    mx.array([check_for_cancel_every]),
+                    group=group,
+                )
+            ).item()
+        )
+
+    logger.info(
+        f"runner checking for cancellation every {check_for_cancel_every} tokens"
+    )
+
+    return check_for_cancel_every
+
+
+def ban_token_ids(token_ids: list[int]) -> Callable[[mx.array, mx.array], mx.array]:
+    token_ids = [int(t) for t in token_ids]
+
+    def proc(_history: mx.array, logits: mx.array) -> mx.array:
+        for tid in token_ids:
+            logits[..., tid] = -1e9
+        return logits
+
+    return proc
+
+
+def eos_ids_from_tokenizer(tokenizer: TokenizerWrapper) -> list[int]:
+    eos: list[int] | None = getattr(tokenizer, "eos_token_ids", None)
+    if eos is None:
+        return []
+    return eos
+
+
+def extract_top_logprobs(
+    logprobs: mx.array,
+    tokenizer: TokenizerWrapper,
+    top_logprobs: int,
+    selected_token: int,
+    precomputed_indices: list[int] | None = None,
+    precomputed_values: list[float] | None = None,
+    precomputed_selected: float | None = None,
+) -> tuple[float, list[TopLogprobItem]]:
+    if (
+        precomputed_indices is not None
+        and precomputed_values is not None
+        and precomputed_selected is not None
+    ):
+        top_indices_list: list[int] = precomputed_indices[:top_logprobs]
+        top_values_list: list[float] = precomputed_values[:top_logprobs]
+        selected_logprob = precomputed_selected
+    else:
+        selected_logprob_arr = logprobs[selected_token]
+        top_logprobs = min(top_logprobs, logprobs.shape[0] - 1)
+        top_indices = mx.argpartition(-logprobs, top_logprobs)[:top_logprobs]
+        top_values = logprobs[top_indices]
+        sort_order = mx.argsort(-top_values)
+        top_indices = top_indices[sort_order]
+        top_values = top_values[sort_order]
+        mx.eval(selected_logprob_arr, top_indices, top_values)
+        selected_logprob = float(selected_logprob_arr.item())
+        top_indices_list = top_indices.tolist()  # type: ignore
+        top_values_list = top_values.tolist()  # type: ignore
+
+    # Convert to list of TopLogprobItem
+    top_logprob_items: list[TopLogprobItem] = []
+    for token_id, token_logprob in zip(top_indices_list, top_values_list, strict=True):
+        if math.isnan(token_logprob):
+            continue
+
+        # Decode token ID to string
+        token_str = tokenizer.decode([token_id])
+        top_logprob_items.append(
+            TopLogprobItem(
+                token=token_str,
+                logprob=token_logprob,
+                bytes=list(token_str.encode("utf-8")),
+            )
+        )
+
+    return selected_logprob, top_logprob_items
+
+
+def _echo_score(
+    model: Model,
+    task: TextGenerationTaskParams,
+    all_prompt_tokens: list[int] | mx.array,
+    group: mx.distributed.Group | None,
+    prefill_tps_placeholder: float = 0.0,
+) -> Generator[GenerationResponse]:
+    """Chunked prompt-NLL scoring pass (see task.echo_score)."""
+    import json as _json
+
+    toks = mx.array(all_prompt_tokens)
+    n = toks.shape[0]
+    if n < 2:
+        yield GenerationResponse(
+            text=_json.dumps({"error": "echo_score needs >= 2 prompt tokens"}),
+            token=0, finish_reason="stop", usage=None,
+        )
+        return
+
+    caches = make_kv_cache(model=model)
+    # Deliberately NOT set_pipeline_prefill(is_prefill=True) here: that flag
+    # gates PipelineLastLayer's cross-rank all_gather (auto_parallel.py) off,
+    # which is the right call for ordinary prefill (only the last rank's
+    # logits matter before decode) but wrong for scoring — every rank must
+    # return the real, gathered logits since we can't assume which rank's
+    # response the caller reads. Leaving is_prefill at its default False
+    # keeps the gather on, at the cost of one all_gather per chunk.
+    mx_barrier(group)
+    start = time.perf_counter()
+    step = int(os.getenv("EXO_ECHO_SCORE_STEP", "1024"))
+    total_nll = 0.0
+    scored = 0
+    for i in range(0, n - 1, step):
+        chunk = toks[i : min(i + step, n - 1)]
+        targets = toks[i + 1 : i + 1 + chunk.shape[0]]
+        logits = model(chunk[None], cache=caches)
+        logits = logits[0].astype(mx.float32)
+        logsumexp = mx.logsumexp(logits, axis=-1)
+        tgt_logit = mx.take_along_axis(
+            logits, targets[:, None].astype(mx.int64), axis=-1
+        )[:, 0]
+        nll = logsumexp - tgt_logit
+        chunk_nll = mx.sum(nll)
+        mx.eval(chunk_nll)
+        total_nll += float(chunk_nll.item())
+        scored += int(chunk.shape[0])
+    elapsed = time.perf_counter() - start
+    set_pipeline_prefill(model, is_prefill=False)
+
+    nll_per_token = total_nll / max(scored, 1)
+    result = {
+        "echo_score": True,
+        "total_nll": round(total_nll, 4),
+        "tokens_scored": scored,
+        "nll_per_token": round(nll_per_token, 6),
+        "ppl": round(math.exp(min(nll_per_token, 30.0)), 4),
+        "seconds": round(elapsed, 2),
+        "tok_per_sec": round(scored / elapsed if elapsed > 0 else 0.0, 1),
+    }
+    usage = Usage(
+        prompt_tokens=int(n), completion_tokens=0, total_tokens=int(n),
+        prompt_tokens_details=PromptTokensDetails(cached_tokens=0),
+        completion_tokens_details=CompletionTokensDetails(reasoning_tokens=0),
+    )
+    stats = GenerationStats(
+        prompt_tps=float(result["tok_per_sec"]), generation_tps=0.0,
+        prompt_tokens=int(n), generation_tokens=0,
+        peak_memory_usage=Memory.from_gb(mx.get_peak_memory() / 1e9),
+    )
+    yield GenerationResponse(
+        text=_json.dumps(result), token=0, finish_reason="stop",
+        stats=stats, usage=usage,
+    )
+
+
+def mlx_generate(
+    model: Model,
+    tokenizer: TokenizerWrapper,
+    task: TextGenerationTaskParams,
+    prompt: str,
+    kv_prefix_cache: KVPrefixCache | None,
+    group: mx.distributed.Group | None,
+    on_prefill_progress: Callable[[int, int], None] | None = None,
+    distributed_prompt_progress_callback: Callable[[], None] | None = None,
+    on_generation_token: Callable[[], None] | None = None,
+    vision_processor: VisionProcessor | None = None,
+) -> Generator[GenerationResponse]:
+    # Ensure that generation stats only contains peak memory for this generation
+    mx.reset_peak_memory()
+    # TODO: Randomise task seed and set in taskparams, instead of hard coding as 42.
+    seed = task.seed or 42
+    mx.random.seed(seed)
+
+    # Per-model KV cache quantization override. See `kv_bits_for` in
+    # ../constants.py for the architecture-quirk-driven decision table.
+    # Resolved here (once per request) and threaded down to both prefill
+    # and decode so the entire request runs at the same KV precision.
+    kv_bits = kv_bits_for(task.model)
+    # Permanent observability: log resolved precision per request so we can
+    # verify the gating fires for whitelisted models, and so it's obvious
+    # when an unknown model falls through to the FP16 default. Cheap (one
+    # line per chat completion) and pays for itself the next time anyone
+    # debugs an OOM or gibberish issue.
+    logger.info(f"kv_bits resolved for model={task.model}: {kv_bits}")
+
+    # Encode prompt once at the top and fix unmatched think tags
+    all_prompt_tokens = encode_prompt(tokenizer, prompt)
+    all_prompt_tokens = fix_unmatched_think_end_tokens(all_prompt_tokens, tokenizer)
+    min_prefix_hit_length = max(1000, system_prompt_token_count(task, tokenizer))
+
+    vision: VisionResult | None = None
+    if vision_processor is not None:
+        try:
+            vision = prepare_vision(
+                images=task.images,
+                chat_template_messages=task.chat_template_messages,
+                vision_processor=vision_processor,
+                tokenizer=tokenizer,
+                model=model,
+                model_id=task.model,
+                task_params=task,
+            )
+        except Exception:
+            logger.opt(exception=True).warning(
+                "Vision processing failed, falling back to text-only"
+            )
+    if vision is not None:
+        all_prompt_tokens = vision.prompt_tokens
+    media_regions: list[MediaRegion] = vision.media_regions if vision else []
+
+    if task.echo_score:
+        # Prompt scoring: one chunked forward pass over the prompt, computing
+        # NLL of each next token from the logits prefill normally discards.
+        # Enables cluster-held perplexity evaluation of models too large for
+        # any single box. SPMD-safe: PipelineLastLayer all_gathers logits, so
+        # every rank computes the identical result (auto_parallel.py).
+        yield from _echo_score(
+            model, task, all_prompt_tokens, group,
+            prefill_tps_placeholder=0.0,
+        )
+        return
+
+    # Honor use_prefix_cache for ALL requests, not just bench. Single-shot/bulk work
+    # (chat-summary backfill, gardener, consolidation drain) sends use_prefix_cache=
+    # False and NEVER reuses the pool, so the per-request deepcopy+pool is pure waste
+    # — the 397B "memory pressure" churn. Restores Scout ce019259, which a later
+    # refactor (move to generator/generate.py) narrowed back to bench-only. is_bench
+    # still governs eos-banning below; the chat path opts in via use_prefix_cache=True.
+    is_bench = task.bench
+    if not task.use_prefix_cache:
+        kv_prefix_cache = None
+
+    # Use prefix cache if available, otherwise create fresh cache
+    prefix_hit_length = 0
+    matched_index: int | None = None
+    is_exact_hit = False
+    if kv_prefix_cache is None:
+        caches = make_kv_cache(model=model)
+        prompt_tokens = all_prompt_tokens
+    else:
+        caches, prompt_tokens, matched_index, is_exact_hit = (
+            kv_prefix_cache.get_kv_cache(
+                model, all_prompt_tokens, media_regions=media_regions
+            )
+        )
+        prefix_hit_length = len(all_prompt_tokens) - len(prompt_tokens)
+        if prefix_hit_length > 0:
+            logger.info(
+                f"KV cache hit: {prefix_hit_length}/{len(all_prompt_tokens)} tokens cached ({100 * prefix_hit_length / len(all_prompt_tokens):.1f}%)"
+            )
+
+    logits_processors: list[Callable[[mx.array, mx.array], mx.array]] = (
+        make_logits_processors(
+            repetition_penalty=task.repetition_penalty,
+            repetition_context_size=task.repetition_
+
+// ==== python: task_group.py ====
+from collections.abc import Awaitable, Callable
+from dataclasses import dataclass, field
+from types import TracebackType
+from typing import Any, Unpack
+
+from anyio import create_task_group
+from anyio.abc import TaskGroup as TaskGroupABC
+
+
+@dataclass
+class TaskGroup:
+    _tg: TaskGroupABC | None = field(default=None, init=False)
+    _queued: list[tuple[Any, Any, Any]] | None = field(default_factory=list, init=False)
+
+    def is_running(self) -> bool:
+        return self._tg is not None
+
+    def cancel_tasks(self):
+        assert self._tg
+        self._tg.cancel_scope.cancel()
+
+    def cancel_called(self) -> bool:
+        assert self._tg
+        return self._tg.cancel_scope.cancel_called
+
+    def start_soon[*T](
+        self,
+        func: Callable[[Unpack[T]], Awaitable[Any]],
+        *args: Unpack[T],
+        name: object = None,
+    ) -> None:
+        assert self._tg is not None
+        assert self._queued is None
+        self._tg.start_soon(func, *args, name=name)
+
+    def queue[*T](
+        self,
+        func: Callable[[Unpack[T]], Awaitable[Any]],
+        *args: Unpack[T],
+        name: object = None,
+    ) -> None:
+        assert self._tg is None
+        assert self._queued is not None
+        self._queued.append((func, args, name))
+
+    async def __aenter__(self) -> TaskGroupABC:
+        assert self._tg is None
+        assert self._queued is not None
+        self._tg = create_task_group()
+        r = await self._tg.__aenter__()
+        for func, args, name in self._queued:  # pyright: ignore[reportAny]
+            self._tg.start_soon(func, *args, name=name)  # pyright: ignore[reportAny]
+        self._queued = None
+        return r
+
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
+    ) -> bool:
+        """Exit the task group context waiting for all tasks to finish."""
+        assert self._tg is not None, "aenter sets self.lazy, so it exists when we aexit"
+        assert self._queued is None
+        return await self._tg.__aexit__(exc_type, exc_val, exc_tb)
+
+
+// ==== python: placement_utils.py ====
+import os
+from collections.abc import Generator, Mapping
+
+from loguru import logger
+
+from exo.shared.models.model_cards import ModelCard
+from exo.shared.topology import Topology
+from exo.shared.types.common import Host, NodeId
+from exo.shared.types.memory import Memory
+from exo.shared.types.profiling import MemoryUsage, NodeNetworkInfo
+from exo.shared.types.topology import Cycle, RDMAConnection, SocketConnection
+from exo.shared.types.worker.runners import RunnerId, ShardAssignments
+from exo.shared.types.worker.shards import (
+    CfgShardMetadata,
+    PipelineShardMetadata,
+    Sharding,
+    ShardMetadata,
+    TensorShardMetadata,
+)
+
+
+def filter_cycles_by_memory(
+    cycles: list[Cycle],
+    node_memory: Mapping[NodeId, MemoryUsage],
+    required_memory: Memory,
+) -> list[Cycle]:
+    filtered_cycles: list[Cycle] = []
+    for cycle in cycles:
+        if not all(node in node_memory for node in cycle):
+            continue
+
+        total_mem = sum(
+            (node_memory[node_id].ram_available for node_id in cycle.node_ids),
+            start=Memory(),
+        )
+        if total_mem >= required_memory:
+            filtered_cycles.append(cycle)
+    return filtered_cycles
+
+
+def get_smallest_cycles(
+    cycles: list[Cycle],
+) -> list[Cycle]:
+    min_nodes = min(len(cycle) for cycle in cycles)
+    return [cycle for cycle in cycles if len(cycle) == min_nodes]
+
+
+def allocate_layers_proportionally(
+    total_layers: int,
+    memory_fractions: list[float],
+) -> list[int]:
+    n = len(memory_fractions)
+    if n == 0:
+        raise ValueError("Cannot allocate layers to an empty node list")
+    if total_layers < n:
+        raise ValueError(
+            f"Cannot distribute {total_layers} layers across {n} nodes "
+            "(need at least 1 layer per node)"
+        )
+
+    # Largest remainder: floor each, then distribute remainder by fractional part
+    raw = [f * total_layers for f in memory_fractions]
+    result = [int(r) for r in raw]
+    by_remainder = sorted(range(n), key=lambda i: raw[i] - result[i], reverse=True)
+    for i in range(total_layers - sum(result)):
+        result[by_remainder[i]] += 1
+
+    # Ensure minimum 1 per node by taking from the largest
+    for i in range(n):
+        if result[i] == 0:
+            max_idx = max(range(n), key=lambda j: result[j])
+            assert result[max_idx] > 1
+            result[max_idx] -= 1
+            result[i] = 1
+
+    return result
+
+
+def _validate_cycle(cycle: Cycle) -> None:
+    if not cycle.node_ids:
+        raise ValueError("Cannot create shard assignments for empty node cycle")
+
+
+def _compute_total_memory(
+    node_ids: list[NodeId],
+    node_memory: Mapping[NodeId, MemoryUsage],
+) -> Memory:
+    total_memory = sum(
+        (node_memory[node_id].ram_available for node_id in node_ids),
+        start=Memory(),
+    )
+    if total_memory.in_bytes == 0:
+        raise ValueError("Cannot create shard assignments: total available memory is 0")
+    return total_memory
+
+
+def _allocate_and_validate_layers(
+    node_ids: list[NodeId],
+    node_memory: Mapping[NodeId, MemoryUsage],
+    total_memory: Memory,
+    model_card: ModelCard,
+) -> list[int]:
+    layer_allocations = allocate_layers_proportionally(
+        total_layers=model_card.n_layers,
+        memory_fractions=[
+            node_memory[node_id].ram_available / total_memory for node_id in node_ids
+        ],
+    )
+
+    total_storage = model_card.storage_size
+    total_layers = model_card.n_layers
+    for i, node_id in enumerate(node_ids):
+        node_layers = layer_allocations[i]
+        required_memory = (total_storage * node_layers) // total_layers
+        available_memory = node_memory[node_id].ram_available
+        if required_memory > available_memory:
+            raise ValueError(
+                f"Node {i} ({node_id}) has insufficient memory: "
+                f"requires {required_memory.in_gb:.2f} GB for {node_layers} layers, "
+                f"but only has {available_memory.in_gb:.2f} GB available"
+            )
+
+    return layer_allocations
+
+
+def get_shard_assignments_for_pipeline_parallel(
+    model_card: ModelCard,
+    cycle: Cycle,
+    node_memory: Mapping[NodeId, MemoryUsage],
+) -> ShardAssignments:
+    """Create shard assignments for pipeline parallel execution."""
+    world_size = len(cycle)
+    use_cfg_parallel = model_card.uses_cfg and world_size >= 2 and world_size % 2 == 0
+
+    if use_cfg_parallel:
+        return _get_shard_assignments_for_cfg_parallel(model_card, cycle, node_memory)
+    else:
+        return _get_shard_assignments_for_pure_pipeline(model_card, cycle, node_memory)
+
+
+def _get_shard_assignments_for_cfg_parallel(
+    model_card: ModelCard,
+    cycle: Cycle,
+    node_memory: Mapping[NodeId, MemoryUsage],
+) -> ShardAssignments:
+    """Create shard assignments for CFG parallel execution.
+
+    CFG parallel runs two independent pipelines. Group 0 processes the positive
+    prompt, group 1 processes the negative prompt. The ring topology places
+    group 1's ranks in reverse order so both "last stages" are neighbors for
+    efficient CFG exchange.
+    """
+    _validate_cycle(cycle)
+
+    world_size = len(cycle)
+    cfg_world_size = 2
+    pipeline_world_size = world_size // cfg_world_size
+
+    # Allocate layers for one pipeline group (both groups run the same layers)
+    pipeline_node_ids = cycle.node_ids[:pipeline_world_size]
+    pipeline_memory = _compute_total_memory(pipeline_node_ids, node_memory)
+    layer_allocations = _allocate_and_validate_layers(
+        pipeline_node_ids, node_memory, pipeline_memory, model_card
+    )
+
+    # Ring topology: group 0 ascending [0,1,2,...], group 1 descending [...,2,1,0]
+    # This places both last stages as neighbors for CFG exchange.
+    position_to_cfg_pipeline = [(0, r) for r in range(pipeline_world_size)] + [
+        (1, r) for r in reversed(range(pipeline_world_size))
+    ]
+
+    runner_to_shard: dict[RunnerId, ShardMetadata] = {}
+    node_to_runner: dict[NodeId, RunnerId] = {}
+
+    for device_rank, node_id in enumerate(cycle.node_ids):
+        cfg_rank, pipeline_rank = position_to_cfg_pipeline[device_rank]
+        layers_before = sum(layer_allocations[:pipeline_rank])
+        node_layers = layer_allocations[pipeline_rank]
+
+        shard = CfgShardMetadata(
+            model_card=model_card,
+            device_rank=device_rank,
+            world_size=world_size,
+            start_layer=layers_before,
+            end_layer=layers_before + node_layers,
+            n_layers=model_card.n_layers,
+            cfg_rank=cfg_rank,
+            cfg_world_size=cfg_world_size,
+            pipeline_rank=pipeline_rank,
+            pipeline_world_size=pipeline_world_size,
+        )
+
+        runner_id = RunnerId()
+        runner_to_shard[runner_id] = shard
+        node_to_runner[node_id] = runner_id
+
+    return ShardAssignments(
+        model_id=model_card.model_id,
+        runner_to_shard=runner_to_shard,
+        node_to_runner=node_to_runner,
+    )
+
+
+def _get_shard_assignments_for_pure_pipeline(
+    model_card: ModelCard,
+    cycle: Cycle,
+    node_memory: Mapping[NodeId, MemoryUsage],
+) -> ShardAssignments:
+    """Create shard assignments for pure pipeline execution."""
+    _validate_cycle(cycle)
+    total_memory = _compute_total_memory(cycle.node_ids, node_memory)
+
+    layer_allocations = _allocate_and_validate_layers(
+        cycle.node_ids, node_memory, total_memory, model_card
+    )
+
+    runner_to_shard: dict[RunnerId, ShardMetadata] = {}
+    node_to_runner: dict[NodeId, RunnerId] = {}
+
+    for pipeline_rank, node_id in enumerate(cycle.node_ids):
+        layers_before = sum(layer_allocations[:pipeline_rank])
+        node_layers = layer_allocations[pipeline_rank]
+
+        shard = PipelineShardMetadata(
+            model_card=model_card,
+            device_rank=pipeline_rank,
+            world_size=len(cycle),
+            start_layer=layers_before,
+            end_layer=layers_before + node_layers,
+            n_layers=model_card.n_layers,
+        )
+
+        runner_id = RunnerId()
+        runner_to_shard[runner_id] = shard
+        node_to_runner[node_id] = runner_id
+
+    return ShardAssignments(
+        model_id=model_card.model_id,
+        runner_to_shard=runner_to_shard,
+        node_to_runner=node_to_runner,
+    )
+
+
+def get_shard_assignments_for_tensor_parallel(
+    model_card: ModelCard,
+    cycle: Cycle,
+):
+    total_layers = model_card.n_layers
+    world_size = len(cycle)
+    runner_to_shard: dict[RunnerId, ShardMetadata] = {}
+    node_to_runner: dict[NodeId, RunnerId] = {}
+
+    for i, node_id in enumerate(cycle):
+        shard = TensorShardMetadata(
+            model_card=model_card,
+            device_rank=i,
+            world_size=world_size,
+            start_layer=0,
+            end_layer=total_layers,
+            n_layers=total_layers,
+        )
+
+        runner_id = RunnerId()
+
+        runner_to_shard[runner_id] = shard
+        node_to_runner[node_id] = runner_id
+
+    shard_assignments = ShardAssignments(
+        model_id=model_card.model_id,
+        runner_to_shard=runner_to_shard,
+        node_to_runner=node_to_runner,
+    )
+
+    return shard_assignments
+
+
+def get_shard_assignments(
+    model_card: ModelCard,
+    cycle: Cycle,
+    sharding: Sharding,
+    node_memory: Mapping[NodeId, MemoryUsage],
+) -> ShardAssignments:
+    match sharding:
+        case Sharding.Pipeline:
+            return get_shard_assignments_for_pipeline_parallel(
+                model_card=model_card,
+                cycle=cycle,
+                node_memory=node_memory,
+            )
+        case Sharding.Tensor:
+            return get_shard_assignments_for_tensor_parallel(
+                model_card=model_card,
+                cycle=cycle,
+            )
+
+
+def get_mlx_jaccl_devices_matrix(
+    selected_cycle: list[NodeId],
+    cycle_digraph: Topology,
+) -> list[list[str | None]]:
+    """Build connectivity matrix mapping device i to device j via RDMA interface names.
+
+    The matrix element [i][j] contains the interface name on device i that connects
+    to device j, or None if no connection exists or no interface name is found.
+    Diagonal elements are always None.
+    """
+    num_nodes = len(selected_cycle)
+    matrix: list[list[str | None]] = [
+        [None for _ in range(num_nodes)] for _ in range(num_nodes)
+    ]
+
+    for i, node_i in enumerate(selected_cycle):
+        for j, node_j in enumerate(selected_cycle):
+            if i == j:
+                continue
+
+            for conn in cycle_digraph.get_all_connections_between(node_i, node_j):
+                if isinstance(conn, RDMAConnection):
+                    matrix[i][j] = conn.source_rdma_iface
+                    break
+            else:
+                raise ValueError(
+                    "Current jaccl backend requires all-to-all RDMA connections"
+                )
+
+    return matrix
+
+
+def _find_connection_ip(
+    node_i: NodeId,
+    node_j: NodeId,
+    cycle_digraph: Topology,
+) -> Generator[str, None, None]:
+    """Find all IP addresses that connect node i to node j."""
+    for connection in cycle_digraph.get_all_connections_between(node_i, node_j):
+        if isinstance(connection, SocketConnection):
+            yield connection.sink_multiaddr.ip_address
+
+
+def find_ip_prioritised(
+    node_id: NodeId,
+    other_node_id: NodeId,
+    cycle_digraph: Topology,
+    node_network: Mapping[NodeId, NodeNetworkInfo],
+    ring: bool,
+) -> str | None:
+    """Find an IP address between nodes with prioritization.
+
+    Priority: ethernet > wifi > unknown > thunderbolt
+    """
+    ips = list(_find_connection_ip(node_id, other_node_id, cycle_digraph))
+    if not ips:
+        # Scout patch 2026-05-18: exo's topology probe is asymmetric in this
+        # cluster — A→B socket connections populate but B→A only has an RDMA
+        # edge (no SocketConnection), even though HTTP is reachable both
+        # ways. _find_connection_ip filters for SocketConnection so it
+        # returns empty for one direction and placement fails. Fall back to
+        # the peer's NodeNetworkInfo interfaces — those describe every IP
+        # the peer is listening on (collected by exo via a separate path
+        # that does work bidirectionally). The TB4-subnet priority below
+        # still picks the right leg.
+        fallback = node_network.get(other_node_id, NodeNetworkInfo())
+        ips = [iface.ip_address for iface in fallback.interfaces]
+        if not ips:
+            return None
+    other_network = node_network.get(other_node_id, NodeNetworkInfo())
+    ip_to_type = {
+        iface.ip_address: iface.interface_type for iface in other_network.interfaces
+    }
+
+    # Ring should prioritise fastest connection. As a best-effort, we prioritise TB.
+    # TODO: Profile and get actual connection speeds.
+    if ring:
+        priority = {
+            "thunderbolt": 0,
+            "maybe_ethernet": 1,
+            "ethernet": 2,
+            "wifi": 3,
+            "unknown": 4,
+        }
+        # Scout patch 2026-05-14: macOS presents IP-over-Thunderbolt as a
+        # plain ethernet-class interface ("maybe_ethernet"), so the real
+        # point-to-point TB4 link ties in priority with a home-LAN
+        # ethernet port. min() then breaks the tie by list order and
+        # frequently splits the ring across mixed networks (one leg TB4,
+        # one leg home LAN / WiFi). A ring runs at its slowest leg, so
+        # that tanks pipeline-parallel inference (observed: 35s prefill)
+        # and trips the macOS GPU command-buffer watchdog mid-decode,
+        # SIGABRT-ing the runner. RDMA (MlxJaccl) is the "real" fix but
+        # is unreliable on this cluster due to asymmetric M3/M4 compute
+        # speeds (race conditions), so we pin every ring leg to the known
+        # point-to-point TB4 subnet instead. Override the prefix via the
+        # EXO_RING_PREFER_SUBNET env var.
+        _tb_subnet = os.environ.get("EXO_RING_PREFER_SUBNET", "10.0.0.")
+        return min(
+            ips,
+            key=lambda ip: -1
+            if ip.startswith(_tb_subnet)
+            else priority.get(ip_to_type.get(ip, "unknown"), 2),
+        )
+
+    # RDMA prefers ethernet coordinator
+    else:
+        priority = {
+            "ethernet": 0,
+            "wifi": 1,
+            "unknown": 2,
+            "maybe_ethernet": 3,
+            "thunderbolt": 4,
+        }
+    # Scout patch 2026-06-22: on this cluster the "ethernet" coordinator leg is
+    # M4's home-LAN port behind a 10G splitter + USB-C hub — measured 4.3ms /
+    # 0.33ms jitter, SHARED with all home-network traffic, vs the TB4 bridge's
+    # 0.43ms / 0.06ms on a dedicated point-to-point cable. So the lightweight
+    # rendezvous/gossip used to ride the splitter and was exposed to network
+    # contention. Pin the coordinator to the same TB4 subnet the ring already
+    # uses (EXO_RING_PREFER_SUBNET) so it rides the dedicated link instead. That
+    # subnet (10.0.0.x, en4/en3) is SEPARATE from the raw RDMA ifaces (10.0.1.x,
+    # en7/en2), so this keeps the coordinator off the RDMA link too — honoring
+    # the ethernet-coordinator intent while dropping the home-LAN dependency.
+    _tb_subnet = os.environ.get("EXO_RING_PREFER_SUBNET", "10.0.0.")
+    return min(
+        ips,
+        key=lambda ip: -1
+        if ip.startswith(_tb_subnet)
+        else priority.get(ip_to_type.get(ip, "unknown"), 2),
+    )
+
+
+def get_mlx_ring_hosts_by_node(
+    selected_cycle: Cycle,
+    cycle_digraph: Topology,
+    ephemeral_port: int,
+    node_network: Mapping[NodeId, NodeNetworkInfo],
+) -> dict[NodeId, list[Host]]:
+    """Generate per-node host lists for MLX ring backend.
+
+    Each node gets a list where:
+    - Self position: Host(ip="0.0.0.0", port=ephemeral_port)
+    - Left/right neighbors: actual connection IPs
+    - Non-neighbors: Host(ip="198.51.100.1", port=0) placeholder (RFC 5737 TEST-NET-2)
+    """
+    world_size = len(selected_cycle)
+    if world_size == 0:
+        return {}
+
+    hosts_by_node: dict[NodeId, list[Host]] = {}
+
+    for rank, node_id in enumerate(selected_cycle):
+        left_rank = (rank - 1) % world_size
+        right_rank = (rank + 1) % world_size
+
+        hosts_for_node: list[Host] = []
+
+        for idx, other_node_id in enumerate(selected_cycle):
+            if idx == rank:
+                hosts_for_node.append(Host(ip="0.0.0.0", port=ephemeral_port))
+                continue
+
+            if idx not in {left_rank, right_rank}:
+                # Placeholder IP from RFC 5737 TEST-NET-2
+                hosts_for_node.append(Host(ip="198.51.100.1", port=0))
+                continue
+
+            connection_ip = find_ip_prioritised(
+                node_id, other_node_id, cycle_digraph, node_network, ring=True
+            )
+            if connection_ip is None:
+                raise ValueError(
+                    "MLX ring backend requires connectivity between neighbouring nodes"
+                )
+
+            hosts_for_node.append(Host(ip=connection_ip, port=ephemeral_port))
+
+        hosts_by_node[node_id] = hosts_for_node
+
+    return hosts_by_node
+
+
+def get_mlx_jaccl_coordinators(
+    coordinator: NodeId,
+    coordinator_port: int,
+    cycle_digraph: Topology,
+    node_network: Mapping[NodeId, NodeNetworkInfo],
+) -> dict[NodeId, str]:
+    """Get the coordinator addresses for MLX JACCL (rank 0 device).
+
+    Select an IP address that each node can reach for the rank 0 node. Returns
+    address in format "X.X.X.X:PORT" per node.
+    """
+    logger.debug(f"Selecting coordinator: {coordinator}")
+
+    def get_ip_for_node(n: NodeId) -> str:
+        if n == coordinator:
+            return "0.0.0.0"
+
+        ip = find_ip_prioritised(
+            n, coordinator, cycle_digraph, node_network, ring=False
+        )
+        if ip is not None:
+            return ip
+
+        raise ValueError(
+            "Current jaccl backend requires all participating devices to be able to communicate"
+        )
+
+    return {
+        n: f"{get_ip_for_node(n)}:{coordinator_port}"
+        for n in cycle_digraph.list_nodes()
+    }
+
+
+// ==== python: constants.py ====
+import os
+import sys
+from pathlib import Path
+
+from exo.utils.dashboard_path import find_dashboard, find_resources
+
+_EXO_HOME_ENV = os.environ.get("EXO_HOME", None)
+
+
+def _get_xdg_dir(env_var: str, fallback: str) -> Path:
+    """Get XDG directory, prioritising EXO_HOME environment variable if its set. On non-Linux platforms, default to ~/.exo."""
+
+    if _EXO_HOME_ENV is not None:
+        return Path.home() / _EXO_HOME_ENV
+
+    if sys.platform != "linux":
+        return Path.home() / ".exo"
+
+    xdg_value = os.environ.get(env_var, None)
+    if xdg_value is not None:
+        return Path(xdg_value) / "exo"
+    return Path.home() / fallback / "exo"
+
+
+EXO_CONFIG_HOME = _get_xdg_dir("XDG_CONFIG_HOME", ".config")
+EXO_DATA_HOME = _get_xdg_dir("XDG_DATA_HOME", ".local/share")
+EXO_CACHE_HOME = _get_xdg_dir("XDG_CACHE_HOME", ".cache")
+
+# Default models directory (always included as first entry in writable dirs)
+_EXO_DEFAULT_MODELS_DIR_ENV = os.environ.get("EXO_DEFAULT_MODELS_DIR", None)
+EXO_DEFAULT_MODELS_DIR = (
+    Path(_EXO_DEFAULT_MODELS_DIR_ENV).expanduser()
+    if _EXO_DEFAULT_MODELS_DIR_ENV is not None
+    else EXO_DATA_HOME / "models"
+)
+
+
+def _parse_colon_dirs(env_var: str) -> tuple[Path, ...]:
+    raw = os.environ.get(env_var, None)
+    if raw is None:
+        return ()
+    return tuple(Path(p).expanduser() for p in raw.split(":") if p)
+
+
+# Read-only model directories (colon-separated). Never written to or deleted from.
+_EXO_MODELS_READ_ONLY_DIRS_ENV = _parse_colon_dirs("EXO_MODELS_READ_ONLY_DIRS")
+# Writable model directories (colon-separated). Default dir is always prepended.
+_EXO_MODELS_DIRS_ENV = _parse_colon_dirs("EXO_MODELS_DIRS")
+
+# If a directory appears in both lists, treat it as read-only.
+_read_only_set = frozenset(_EXO_MODELS_READ_ONLY_DIRS_ENV)
+EXO_MODELS_DIRS: tuple[Path, ...] = tuple(
+    d
+    for d in (EXO_DEFAULT_MODELS_DIR, *_EXO_MODELS_DIRS_ENV)
+    if d not in _read_only_set
+)
+EXO_MODELS_READ_ONLY_DIRS: tuple[Path, ...] = _EXO_MODELS_READ_ONLY_DIRS_ENV
+
+_RESOURCES_DIR_ENV = os.environ.get("EXO_RESOURCES_DIR", None)
+RESOURCES_DIR = (
+    find_resources() if _RESOURCES_DIR_ENV is None else Path.home() / _RESOURCES_DIR_ENV
+)
+_DASHBOARD_DIR_ENV = os.environ.get("EXO_DASHBOARD_DIR", None)
+DASHBOARD_DIR = (
+    find_dashboard() if _DASHBOARD_DIR_ENV is None else Path.home() / _DASHBOARD_DIR_ENV
+)
+
+# Log files (data/logs or cache)
+EXO_LOG_DIR = EXO_CACHE_HOME / "exo_log"
+EXO_LOG = EXO_LOG_DIR / "exo.log"
+EXO_RUNNER_LOG_DIR = EXO_LOG_DIR / "runner_log"
+EXO_RUNNER_STDOUT_LOG = EXO_RUNNER_LOG_DIR / "stdout.log"
+EXO_RUNNER_STDERR_LOG = EXO_RUNNER_LOG_DIR / "stderr.log"
+
+EXO_TEST_LOG = EXO_CACHE_HOME / "exo_test.log"
+EXO_PID_FILE = EXO_CACHE_HOME / "exo.pid"
+
+# Identity (config)
+EXO_NODE_ID_KEYPAIR = EXO_CONFIG_HOME / "node_id.keypair"
+EXO_CONFIG_FILE = EXO_CONFIG_HOME / "config.toml"
+
+# libp2p topics for event forwarding
+LIBP2P_LOCAL_EVENTS_TOPIC = "worker_events"
+LIBP2P_GLOBAL_EVENTS_TOPIC = "global_events"
+LIBP2P_ELECTION_MESSAGES_TOPIC = "election_message"
+LIBP2P_COMMANDS_TOPIC = "commands"
+
+EXO_MAX_CHUNK_SIZE = 512 * 1024
+
+EXO_CUSTOM_MODEL_CARDS_DIR = EXO_DATA_HOME / "custom_model_cards"
+
+EXO_EVENT_LOG_DIR = EXO_DATA_HOME / "event_log"
+EXO_IMAGE_CACHE_DIR = EXO_CACHE_HOME / "images"
+EXO_TRACING_CACHE_DIR = EXO_CACHE_HOME / "traces"
+
+EXO_ENABLE_IMAGE_MODELS = (
+    os.getenv("EXO_ENABLE_IMAGE_MODELS", "false").lower() == "true"
+)
+
+EXO_OFFLINE = os.getenv("EXO_OFFLINE", "false").lower() == "true"
+
+EXO_TRACING_ENABLED = os.getenv("EXO_TRACING_ENABLED", "false").lower() == "true"
+
+ENABLE_DISAGGREGATION = os.getenv("ENABLE_DISAGGREGATION", "false").lower() == "true"
+
+EXO_MAX_CONCURRENT_REQUESTS = int(os.getenv("EXO_MAX_CONCURRENT_REQUESTS", "8"))
+
+EXO_MAX_INSTANCE_RETRIES = 5
+
+
+// ==== rust: lib.rs ====
+//! TODO: crate documentation
+//!
+//! this is here as a placeholder documentation
+//!
+//!
+
+mod allow_threading;
+mod ident;
+mod networking;
+mod pidfile;
+
+use crate::ident::PyKeypair;
+use crate::networking::networking_submodule;
+use crate::pidfile::pidfile_submodule;
+use pyo3::prelude::PyModule;
+use pyo3::types::PyModuleMethods;
+use pyo3::{Bound, PyResult, pyclass, pymodule};
+use pyo3_stub_gen::define_stub_info_gatherer;
+
+/// Namespace for all the constants used by this crate.
+pub(crate) mod r#const {
+    pub const MPSC_CHANNEL_SIZE: usize = 1024;
+}
+
+/// Namespace for crate-wide extension traits/methods
+pub(crate) mod ext {
+    use crate::allow_threading::AllowThreads;
+    use extend::ext;
+    use pyo3::exceptions::{PyConnectionError, PyRuntimeError};
+    use pyo3::types::PyBytes;
+    use pyo3::{Py, PyErr, PyResult, Python};
+    use tokio::runtime::Runtime;
+    use tokio::sync::mpsc;
+    use tokio::sync::mpsc::error::TryRecvError;
+    use tokio::task::JoinHandle;
+
+    #[ext(pub, name = ByteArrayExt)]
+    impl [u8] {
+        fn pybytes(&self) -> Py<PyBytes> {
+            Python::attach(|py| PyBytes::new(py, self).unbind())
+        }
+    }
+
+    #[ext(pub, name = ResultExt)]
+    impl<T, E> Result<T, E>
+    where
+        E: ToString,
+    {
+        fn pyerr(self) -> PyResult<T> {
+            self.map_err(|e| PyRuntimeError::new_err(e.to_string()))
+        }
+    }
+
+    pub trait FutureExt: Future + Sized {
+        /// SEE: https://pyo3.rs/v0.26.0/async-await.html#detaching-from-the-interpreter-across-await
+        fn allow_threads_py(self) -> AllowThreads<Self>
+        where
+            AllowThreads<Self>: Future,
+        {
+            AllowThreads::new(self)
+        }
+    }
+
+    impl<T: Future> FutureExt for T {}
+
+    #[ext(pub, name = PyErrExt)]
+    impl PyErr {
+        fn receiver_channel_closed() -> Self {
+            PyConnectionError::new_err("Receiver channel closed unexpectedly")
+        }
+    }
+
+    #[ext(pub, name = PyResultExt)]
+    impl<T> PyResult<T> {
+        fn write_unraisable(self) -> Option<T> {
+            Python::attach(|py| self.write_unraisable_with(py))
+        }
+
+        fn write_unraisable_with(self, py: Python<'_>) -> Option<T> {
+            match self {
+                Ok(v) => Some(v),
+                Err(e) => {
+                    // write error back to python
+                    e.write_unraisable(py, None);
+                    None
+                }
+            }
+        }
+    }
+
+    #[ext(pub, name = TokioRuntimeExt)]
+    impl Runtime {
+        fn spawn_with_scope<F>(&self, py: Python<'_>, future: F) -> PyResult<JoinHandle<F::Output>>
+        where
+            F: Future + Send + 'static,
+            F::Output: Send + 'static,
+        {
+            let locals = pyo3_async_runtimes::tokio::get_current_locals(py)?;
+            Ok(self.spawn(pyo3_async_runtimes::tokio::scope(locals, future)))
+        }
+    }
+
+    #[ext(pub, name = TokioMpscSenderExt)]
+    impl<T> mpsc::Sender<T> {
+        /// Sends a value, waiting until there is capacity.
+        ///
+        /// A successful send occurs when it is determined that the other end of the
+        /// channel has not hung up already. An unsuccessful send would be one where
+        /// the corresponding receiver has already been closed.
+        async fn send_py(&self, value: T) -> PyResult<()> {
+            self.send(value)
+                .await
+                .map_err(|_| PyErr::receiver_channel_closed())
+        }
+    }
+
+    #[ext(pub, name = TokioMpscReceiverExt)]
+    impl<T> mpsc::Receiver<T> {
+        /// Receives the next value for this receiver.
+        async fn recv_py(&mut self) -> PyResult<T> {
+            self.recv().await.ok_or_else(PyErr::receiver_channel_closed)
+        }
+
+        /// Receives at most `limit` values for this receiver and returns them.
+        ///
+        /// For `limit = 0`, an empty collection of messages will be returned immediately.
+        /// For `limit > 0`, if there are no messages in the channel's queue this method
+        /// will sleep until a message is sent.
+        async fn recv_many_py(&mut self, limit: usize) -> PyResult<Vec<T>> {
+            // get updates from receiver channel
+            let mut updates = Vec::with_capacity(limit);
+            let received = self.recv_many(&mut updates, limit).await;
+
+            // if we received zero items, then the channel was unexpectedly closed
+            if limit != 0 && received == 0 {
+                return Err(PyErr::receiver_channel_closed());
+            }
+
+            Ok(updates)
+        }
+
+        /// Tries to receive the next value for this receiver.
+        fn try_recv_py(&mut self) -> PyResult<Option<T>> {
+            match self.try_recv() {
+                Ok(v) => Ok(Some(v)),
+                Err(TryRecvError::Empty) => Ok(None),
+                Err(TryRecvError::Disconnected) => Err(PyErr::receiver_channel_closed()),
+            }
+        }
+    }
+}
+
+/// A Python module implemented in Rust. The name of this function must match
+/// the `lib.name` setting in the `Cargo.toml`, else Python will not be able to
+/// import the module.
+#[pymodule(name = "exo_pyo3_bindings")]
+fn main_module(m: &Bound<'_, PyModule>) -> PyResult<()> {
+    // install logger
+    pyo3_log::init();
+    let mut builder = tokio::runtime::Builder::new_multi_thread();
+    builder.enable_all();
+    pyo3_async_runtimes::tokio::init(builder);
+
+    // TODO: for now this is all NOT a submodule, but figure out how to make the submodule system
+    //       work with maturin, where the types generate correctly, in the right folder, without
+    //       too many importing issues...
+    m.add_class::<PyKeypair>()?;
+    networking_submodule(m)?;
+    pidfile_submodule(m)?;
+
+    // top-level constructs
+    // TODO: ...
+
+    Ok(())
+}
+
+define_stub_info_gatherer!(stub_info);
+
+
+// ==== rust: bootstrap_peers.rs ====
+use futures_lite::StreamExt;
+use networking::swarm::{FromSwarm, create_swarm};
+use std::time::Duration;
+use tokio::sync::mpsc;
+use tokio::time::timeout;
+
+/// Helper: find a free TCP port.
+fn free_port() -> u16 {
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    listener.local_addr().unwrap().port()
+}
+
+/// Two nodes connect via bootstrap peers — no mDNS needed.
+///
+/// Node A listens on a fixed port. Node B bootstraps to A's address.
+/// We verify that B emits `FromSwarm::Discovered` for A's peer ID.
+#[tokio::test]
+async fn two_nodes_connect_via_bootstrap_peers() {
+    let port_a = free_port();
+
+    // Node A: listens on a known port, no bootstrap peers
+    let keypair_a = libp2p::identity::Keypair::generate_ed25519();
+    let peer_id_a = keypair_a.public().to_peer_id();
+    let (_tx_a, rx_a) = mpsc::channel(16);
+    let swarm_a = create_swarm(keypair_a, rx_a, vec![], port_a).expect("create swarm A");
+    let mut stream_a = swarm_a.into_stream();
+
+    // Node B: bootstraps to A's address
+    let keypair_b = libp2p::identity::Keypair::generate_ed25519();
+    let (_tx_b, rx_b) = mpsc::channel(16);
+    let swarm_b = create_swarm(
+        keypair_b,
+        rx_b,
+        vec![format!("/ip4/127.0.0.1/tcp/{port_a}")],
+        0,
+    )
+    .expect("create swarm B");
+    let mut stream_b = swarm_b.into_stream();
+
+    // Wait for B to discover A (connection established)
+    let connected = timeout(Duration::from_secs(10), async {
+        loop {
+            tokio::select! {
+                Some(event) = stream_a.next() => {
+                    // A will also see B connect, but we check from B's perspective
+                    let _ = event;
+                }
+                Some(event) = stream_b.next() => {
+                    if let FromSwarm::Discovered { peer_id } = event {
+                        if peer_id == peer_id_a {
+                            return true;
+                        }
+                    }
+                }
+            }
+        }
+    })
+    .await;
+
+    assert!(
+        connected.is_ok() && connected.unwrap(),
+        "Node B should discover Node A via bootstrap peer"
+    );
+}
+
+/// Empty bootstrap peers should work (backward compatible).
+#[tokio::test]
+async fn create_swarm_with_empty_bootstrap_peers() {
+    let keypair = libp2p::identity::Keypair::generate_ed25519();
+    let (_tx, rx) = mpsc::channel(16);
+    let swarm = create_swarm(keypair, rx, vec![], 0);
+    assert!(
+        swarm.is_ok(),
+        "create_swarm with no bootstrap peers should succeed"
+    );
+}
+
+/// Invalid multiaddr strings are silently filtered out.
+#[tokio::test]
+async fn create_swarm_ignores_invalid_bootstrap_addrs() {
+    let keypair = libp2p::identity::Keypair::generate_ed25519();
+    let (_tx, rx) = mpsc::channel(16);
+    let swarm = create_swarm(
+        keypair,
+        rx,
+        vec![
+            "not-a-valid-multiaddr".to_string(),
+            "".to_string(),
+            "/ip4/10.0.0.1/tcp/30000".to_string(), // valid
+        ],
+        0,
+    );
+    assert!(
+        swarm.is_ok(),
+        "create_swarm should succeed even with invalid bootstrap addrs"
+    );
+}
+
+/// Fixed listen port works correctly.
+#[tokio::test]
+async fn create_swarm_with_fixed_port() {
+    let port = free_port();
+    let keypair = libp2p::identity::Keypair::generate_ed25519();
+    let (_tx, rx) = mpsc::channel(16);
+    let swarm = create_swarm(keypair, rx, vec![], port);
+    assert!(swarm.is_ok(), "create_swarm with fixed port should succeed");
+}
+
+
+// ==== rust: swarm.rs ====
+use std::pin::Pin;
+
+use crate::swarm::transport::tcp_transport;
+use crate::{alias, discovery};
+pub use behaviour::{Behaviour, BehaviourEvent};
+use futures_lite::{Stream, StreamExt};
+use libp2p::{PeerId, SwarmBuilder, gossipsub, identity, swarm::SwarmEvent};
+use tokio::sync::{mpsc, oneshot};
+
+/// The current version of the network: this prevents devices running different versions of the
+/// software from interacting with each other.
+///
+/// TODO: right now this is a hardcoded constant; figure out what the versioning semantics should
+///       even be, and how to inject the right version into this config/initialization. E.g. should
+///       this be passed in as a parameter? What about rapidly changing versions in debug builds?
+///       this is all VERY very hard to figure out and needs to be mulled over as a team.
+pub const NETWORK_VERSION: &[u8] = b"v0.0.1";
+pub const OVERRIDE_VERSION_ENV_VAR: &str = "EXO_LIBP2P_NAMESPACE";
+
+// Uses oneshot senders to emulate function calling apis while avoiding requiring unique ownership
+// of the Swarm.
+pub enum ToSwarm {
+    Unsubscribe {
+        topic: String,
+        result_sender: oneshot::Sender<bool>,
+    },
+    Subscribe {
+        topic: String,
+        result_sender: oneshot::Sender<Result<bool, gossipsub::SubscriptionError>>,
+    },
+    Publish {
+        topic: String,
+        data: Vec<u8>,
+        result_sender: oneshot::Sender<Result<gossipsub::MessageId, gossipsub::PublishError>>,
+    },
+}
+pub enum FromSwarm {
+    Message {
+        from: PeerId,
+        topic: String,
+        data: Vec<u8>,
+    },
+    Discovered {
+        peer_id: PeerId,
+    },
+    Expired {
+        peer_id: PeerId,
+    },
+}
+
+pub struct Swarm {
+    swarm: libp2p::Swarm<Behaviour>,
+    from_client: mpsc::Receiver<ToSwarm>,
+}
+
+impl Swarm {
+    pub fn into_stream(self) -> Pin<Box<dyn Stream<Item = FromSwarm> + Send>> {
+        let Swarm {
+            mut swarm,
+            mut from_client,
+        } = self;
+        let stream = async_stream::stream! {
+            loop {
+                tokio::select! {
+                    msg = from_client.recv() => {
+                        let Some(msg) = msg else { break };
+                        on_message(&mut swarm, msg);
+                    }
+                    event = swarm.next() => {
+                        let Some(event) = event else { break };
+                        if let Some(item) = filter_swarm_event(event) {
+                            yield item;
+                        }
+                    }
+                }
+            }
+        };
+        Box::pin(stream)
+    }
+}
+
+fn on_message(swarm: &mut libp2p::Swarm<Behaviour>, message: ToSwarm) {
+    match message {
+        ToSwarm::Subscribe {
+            topic,
+            result_sender,
+        } => {
+            let result = swarm
+                .behaviour_mut()
+                .gossipsub
+                .subscribe(&gossipsub::IdentTopic::new(topic));
+            _ = result_sender.send(result);
+        }
+        ToSwarm::Unsubscribe {
+            topic,
+            result_sender,
+        } => {
+            let result = swarm
+                .behaviour_mut()
+                .gossipsub
+                .unsubscribe(&gossipsub::IdentTopic::new(topic));
+            _ = result_sender.send(result);
+        }
+        ToSwarm::Publish {
+            topic,
+            data,
+            result_sender,
+        } => {
+            let result = swarm
+                .behaviour_mut()
+                .gossipsub
+                .publish(gossipsub::IdentTopic::new(topic), data);
+            _ = result_sender.send(result);
+        }
+    }
+}
+
+fn filter_swarm_event(event: SwarmEvent<BehaviourEvent>) -> Option<FromSwarm> {
+    match event {
+        SwarmEvent::Behaviour(BehaviourEvent::Gossipsub(gossipsub::Event::Message {
+            message:
+                gossipsub::Message {
+                    source: Some(peer_id),
+                    topic,
+                    data,
+                    ..
+                },
+            ..
+        })) => Some(FromSwarm::Message {
+            from: peer_id,
+            topic: topic.into_string(),
+            data,
+        }),
+        SwarmEvent::Behaviour(BehaviourEvent::Discovery(
+            discovery::Event::ConnectionEstablished { peer_id, .. },
+        )) => Some(FromSwarm::Discovered { peer_id }),
+        SwarmEvent::Behaviour(BehaviourEvent::Discovery(discovery::Event::ConnectionClosed {
+            peer_id,
+            ..
+        })) => Some(FromSwarm::Expired { peer_id }),
+        _ => None,
+    }
+}
+
+/// Create and configure a swarm.
+///
+/// - `listen_port`: TCP port to listen on. `0` lets the OS assign one.
+/// - `bootstrap_peers`: multiaddrs to dial for environments without mDNS.
+/// - `listen_ips`: IPs to listen on; empty means the historical `0.0.0.0`.
+///   Each IP gets its own listener; at least one must be accepted.
+/// - `enable_mdns`: when false, no mDNS sockets are opened and pairing relies
+///   entirely on `bootstrap_peers`.
+pub fn create_swarm(
+    keypair: identity::Keypair,
+    from_client: mpsc::Receiver<ToSwarm>,
+    bootstrap_peers: Vec<String>,
+    listen_port: u16,
+    listen_ips: Vec<String>,
+    enable_mdns: bool,
+) -> alias::AnyResult<Swarm> {
+    let parsed_bootstrap_peers: Vec<libp2p::Multiaddr> = bootstrap_peers
+        .iter()
+        .filter(|s| !s.is_empty())
+        .filter_map(|s| s.parse().ok())
+        .collect();
+
+    let mut swarm = SwarmBuilder::with_existing_identity(keypair)
+        .with_tokio()
+        .with_other_transport(tcp_transport)?
+        .with_behaviour(|keypair| Behaviour::new(keypair, parsed_bootstrap_peers, enable_mdns))?
+        .build();
+
+    let ips = if listen_ips.is_empty() {
+        vec!["0.0.0.0".to_string()]
+    } else {
+        listen_ips
+    };
+    let mut listening = 0usize;
+    let mut last_err: Option<String> = None;
+    for ip in &ips {
+        match format!("/ip4/{ip}/tcp/{listen_port}").parse::<libp2p::Multiaddr>() {
+            Ok(addr) => match swarm.listen_on(addr) {
+                Ok(_) => listening += 1,
+                Err(e) => last_err = Some(format!("listen_on {ip}: {e}")),
+            },
+            Err(e) => last_err = Some(format!("bad listen ip {ip}: {e}")),
+        }
+    }
+    if listening == 0 {
+        return Err(format!(
+            "no libp2p listener could be established on {ips:?}: {}",
+            last_err.unwrap_or_else(|| "unknown error".into())
+        )
+        .into());
+    }
+    Ok(Swarm { swarm, from_client })
+}
+
+mod transport {
+    use crate::alias;
+    use crate::swarm::{NETWORK_VERSION, OVERRIDE_VERSION_ENV_VAR};
+    use futures_lite::{AsyncRead, AsyncWrite};
+    use keccak_const::Sha3_256;
+    use libp2p::core::muxing;
+    use libp2p::core::transport::Boxed;
+    use libp2p::pnet::{PnetError, PnetOutput};
+    use libp2p::{PeerId, Transport, identity, noise, pnet, yamux};
+    use std::{env, sync::LazyLock};
+
+    /// Key used for networking's private network; parametrized on the [`NETWORK_VERSION`].
+    /// See [`pnet_upgrade`] for more.
+    static PNET_PRESHARED_KEY: LazyLock<[u8; 32]> = LazyLock::new(|| {
+        let builder = Sha3_256::new().update(b"exo_discovery_network");
+
+        if let Ok(var) = env::var(OVERRIDE_VERSION_ENV_VAR) {
+            let bytes = var.into_bytes();
+            builder.update(&bytes)
+        } else {
+            builder.update(NETWORK_VERSION)
+        }
+        .finalize()
+    });
+
+    /// Make the Swarm run on a private network, as to not clash with public libp2p nodes and
+    /// also different-versioned instances of this same network.
+    /// This is implemented as an additional "upgrade" ontop of existing [`libp2p::Transport`] layers.
+    async fn pnet_upgrade<TSocket>(
+        socket: TSocket,
+        _: impl Sized,
+    ) -> Result<PnetOutput<TSocket>, PnetError>
+    where
+        TSocket: AsyncRead + AsyncWrite + Send + Unpin + 'static,
+    {
+        use pnet::{PnetConfig, PreSharedKey};
+        PnetConfig::new(PreSharedKey::new(*PNET_PRESHARED_KEY))
+            .handshake(socket)
+            .await
+    }
+
+    /// TCP/IP transport layer configuration.
+    pub fn tcp_transport(
+        keypair: &identity::Keypair,
+    ) -> alias::AnyResult<Boxed<(PeerId, muxing::StreamMuxerBox)>> {
+        use libp2p::{
+            core::upgrade::Version,
+            tcp::{Config, tokio},
+        };
+
+        // `TCP_NODELAY` enabled => avoid latency
+        let tcp_config = Config::default().nodelay(true);
+
+        // V1 + lazy flushing => 0-RTT negotiation
+        let upgrade_version = Version::V1Lazy;
+
+        // Noise is faster than TLS + we don't care much for security
+        let noise_config = noise::Config::new(keypair)?;
+
+        // Use default Yamux config for multiplexing
+        let yamux_config = yamux::Config::default();
+
+        // Create new Tokio-driven TCP/IP transport layer
+        let base_transport = tokio::Transport::new(tcp_config)
+            .and_then(pnet_upgrade)
+            .upgrade(upgrade_version)
+            .authenticate(noise_config)
+            .multiplex(yamux_config);
+
+        // Return boxed transport (to flatten complex type)
+        Ok(base_transport.boxed())
+    }
+}
+
+mod behaviour {
+    use crate::{alias, discovery};
+    use libp2p::swarm::NetworkBehaviour;
+    use libp2p::{gossipsub, identity};
+
+    /// Behavior of the Swarm which composes all desired behaviors:
+    /// Right now its just [`discovery::Behaviour`] and [`gossipsub::Behaviour`].
+    #[derive(NetworkBehaviour)]
+    pub struct Behaviour {
+        pub discovery: discovery::Behaviour,
+        pub gossipsub: gossipsub::Behaviour,
+    }
+
+    impl Behaviour {
+        pub fn new(
+            keypair: &identity::Keypair,
+            bootstrap_peers: Vec<libp2p::Multiaddr>,
+            enable_mdns: bool,
+        ) -> alias::AnyResult<Self> {
+            Ok(Self {
+                discovery: discovery::Behaviour::new(keypair, bootstrap_peers, enable_mdns)?,
+                gossipsub: gossipsub_behaviour(keypair),
+            })
+        }
+    }
+
+    fn gossipsub_behaviour(keypair: &identity::Keypair) -> gossipsub::Behaviour {
+        use gossipsub::{ConfigBuilder, MessageAuthenticity, ValidationMode};
+
+        // build a gossipsub network behaviour
+        //  => signed message authenticity + strict validation mode means the message-ID is
+        //     automatically provided by gossipsub w/out needing to provide custom message-ID function
+        gossipsub::Behaviour::new(
+            MessageAuthenticity::Signed(keypair.clone()),
+            ConfigBuilder::default()
+                .max_transmit_size(8 * 1024 * 1024)
+                .validation_mode(ValidationMode::Strict)
+                .build()
+                .expect("the configuration should always be valid"),
+        )
+        .expect("creating gossipsub behavior should always work")
+    }
+}
+
+
+// ==== rust: discovery.rs ====
+use crate::ext::MultiaddrExt;
+use delegate::delegate;
+use either::Either;
+use futures_lite::FutureExt;
+use futures_timer::Delay;
+use libp2p::core::transport::PortUse;
+use libp2p::core::{ConnectedPoint, Endpoint};
+use libp2p::swarm::behaviour::ConnectionEstablished;
+use libp2p::swarm::dial_opts::DialOpts;
+use libp2p::swarm::{
+    CloseConnection, ConnectionClosed, ConnectionDenied, ConnectionHandler,
+    ConnectionHandlerSelect, ConnectionId, FromSwarm, NetworkBehaviour, THandler, THandlerInEvent,
+    THandlerOutEvent, ToSwarm, dummy,
+};
+use libp2p::{Multiaddr, PeerId, identity, mdns};
+use std::collections::{BTreeSet, HashMap};
+use std::convert::Infallible;
+use std::io;
+use std::net::IpAddr;
+use std::task::{Context, Poll};
+use std::time::Duration;
+use util::wakerdeque::WakerDeque;
+
+const RETRY_CONNECT_INTERVAL: Duration = Duration::from_secs(5);
+
+mod managed {
+    use libp2p::swarm::NetworkBehaviour;
+    use libp2p::swarm::behaviour::toggle::Toggle;
+    use libp2p::{identity, mdns, ping};
+    use std::io;
+    use std::time::Duration;
+
+    const MDNS_RECORD_TTL: Duration = Duration::from_secs(2_500);
+    const MDNS_QUERY_INTERVAL: Duration = Duration::from_secs(1_500);
+    const PING_TIMEOUT: Duration = Duration::from_millis(2_500);
+    const PING_INTERVAL: Duration = Duration::from_millis(2_500);
+
+    #[derive(NetworkBehaviour)]
+    pub struct Behaviour {
+        mdns: Toggle<mdns::tokio::Behaviour>,
+        ping: ping::Behaviour,
+    }
+
+    impl Behaviour {
+        pub fn new(keypair: &identity::Keypair, enable_mdns: bool) -> io::Result<Self> {
+            let mdns = if enable_mdns {
+                Toggle::from(Some(mdns_behaviour(keypair)?))
+            } else {
+                Toggle::from(None)
+            };
+            Ok(Self {
+                mdns,
+                ping: ping_behaviour(),
+            })
+        }
+    }
+
+    fn mdns_behaviour(keypair: &identity::Keypair) -> io::Result<mdns::tokio::Behaviour> {
+        use mdns::{Config, tokio};
+
+        // mDNS config => enable IPv6
+        let mdns_config = Config {
+            ttl: MDNS_RECORD_TTL,
+            query_interval: MDNS_QUERY_INTERVAL,
+
+            // enable_ipv6: true, // TODO: for some reason, TCP+mDNS don't work well with ipv6?? figure out how to make work
+            ..Default::default()
+        };
+
+        let mdns_behaviour = tokio::Behaviour::new(mdns_config, keypair.public().to_peer_id());
+        Ok(mdns_behaviour?)
+    }
+
+    fn ping_behaviour() -> ping::Behaviour {
+        ping::Behaviour::new(
+            ping::Config::new()
+                .with_timeout(PING_TIMEOUT)
+                .with_interval(PING_INTERVAL),
+        )
+    }
+}
+
+/// Events for when a listening connection is truly established and truly closed.
+#[derive(Debug, Clone)]
+pub enum Event {
+    ConnectionEstablished {
+        peer_id: PeerId,
+        connection_id: ConnectionId,
+        remote_ip: IpAddr,
+        remote_tcp_port: u16,
+    },
+    ConnectionClosed {
+        peer_id: PeerId,
+        connection_id: ConnectionId,
+        remote_ip: IpAddr,
+        remote_tcp_port: u16,
+    },
+}
+
+/// Discovery behavior that wraps mDNS to produce truly discovered durable peer-connections.
+///
+/// The behaviour operates as such:
+///  1) All true (listening) connections/disconnections are tracked, emitting corresponding events
+///     to the swarm.
+///  1) mDNS discovered/expired peers are tracked; discovered but not connected peers are dialed
+///     immediately, and expired but connected peers are disconnected from immediately.
+///  2) Every fixed interval: discovered but not connected peers are dialed, and expired but
+///     connected peers are disconnected from.
+pub struct Behaviour {
+    // state-tracking for managed behaviors & mDNS-discovered peers
+    managed: managed::Behaviour,
+    mdns_discovered: HashMap<PeerId, BTreeSet<Multiaddr>>,
+    bootstrap_peers: Vec<Multiaddr>,
+
+    retry_delay: Delay, // retry interval
+
+    // pending events to emmit => waker-backed Deque to control polling
+    pending_events: WakerDeque<ToSwarm<Event, Infallible>>,
+}
+
+impl Behaviour {
+    pub fn new(
+        keypair: &identity::Keypair,
+        bootstrap_peers: Vec<Multiaddr>,
+        enable_mdns: bool,
+    ) -> io::Result<Self> {
+        Ok(Self {
+            managed: managed::Behaviour::new(keypair, enable_mdns)?,
+            mdns_discovered: HashMap::new(),
+            bootstrap_peers,
+            retry_delay: Delay::new(RETRY_CONNECT_INTERVAL),
+            pending_events: WakerDeque::new(),
+        })
+    }
+
+    fn dial(&mut self, peer_id: PeerId, addr: Multiaddr) {
+        self.pending_events.push_back(ToSwarm::Dial {
+            opts: DialOpts::peer_id(peer_id).addresses(vec![addr]).build(),
+        })
+    }
+
+    fn close_connection(&mut self, peer_id: PeerId, connection: ConnectionId) {
+        // push front to make this IMMEDIATE
+        self.pending_events.push_front(ToSwarm::CloseConnection {
+            peer_id,
+            connection: CloseConnection::One(connection),
+        })
+    }
+
+    fn handle_mdns_discovered(&mut self, peers: Vec<(PeerId, Multiaddr)>) {
+        for (p, ma) in peers {
+            self.dial(p, ma.clone()); // always connect
+
+            // get peer's multi-addresses or insert if missing
+            let Some(mas) = self.mdns_discovered.get_mut(&p) else {
+                self.mdns_discovered.insert(p, BTreeSet::from([ma]));
+                continue;
+            };
+
+            // multiaddress should never already be present - else something has gone wrong
+            let is_new_addr = mas.insert(ma);
+            assert!(is_new_addr, "cannot discover a discovered peer");
+        }
+    }
+
+    fn handle_mdns_expired(&mut self, peers: Vec<(PeerId, Multiaddr)>) {
+        for (p, ma) in peers {
+            // at this point, we *must* have the peer
+            let mas = self
+                .mdns_discovered
+                .get_mut(&p)
+                .expect("nonexistent peer cannot expire");
+
+            // at this point, we *must* have the multiaddress
+            let was_present = mas.remove(&ma);
+            assert!(was_present, "nonexistent multiaddress cannot expire");
+
+            // if empty, remove the peer-id entirely
+            if mas.is_empty() {
+                self.mdns_discovered.remove(&p);
+            }
+        }
+    }
+
+    fn on_connection_established(
+        &mut self,
+        peer_id: PeerId,
+        connection_id: ConnectionId,
+        remote_ip: IpAddr,
+        remote_tcp_port: u16,
+    ) {
+        // send out connected event
+        self.pending_events
+            .push_back(ToSwarm::GenerateEvent(Event::ConnectionEstablished {
+                peer_id,
+                connection_id,
+                remote_ip,
+                remote_tcp_port,
+            }));
+    }
+
+    fn on_connection_closed(
+        &mut self,
+        peer_id: PeerId,
+        connection_id: ConnectionId,
+        remote_ip: IpAddr,
+        remote_tcp_port: u16,
+    ) {
+        // send out disconnected event
+        self.pending_events
+            .push_back(ToSwarm::GenerateEvent(Event::ConnectionClosed {
+                peer_id,
+                connection_id,
+                remote_ip,
+                remote_tcp_port,
+            }));
+    }
+}
+
+impl NetworkBehaviour for Behaviour {
+    type ConnectionHandler =
+        ConnectionHandlerSelect<dummy::ConnectionHandler, THandler<managed::Behaviour>>;
+    type ToSwarm = Event;
+
+    // simply delegate to underlying mDNS behaviour
+
+    delegate! {
+        to self.managed {
+            fn handle_pending_inbound_connection(&mut self, connection_id: ConnectionId, local_addr: &Multiaddr, remote_addr: &Multiaddr) -> Result<(), ConnectionDenied>;
+            fn handle_pending_outbound_connection(&mut self, connection_id: ConnectionId, maybe_peer: Option<PeerId>, addresses: &[Multiaddr], effective_role: Endpoint) -> Result<Vec<Multiaddr>, ConnectionDenied>;
+        }
+    }
+
+    fn handle_established_inbound_connection(
+        &mut self,
+        connection_id: ConnectionId,
+        peer: PeerId,
+        local_addr: &Multiaddr,
+        remote_addr: &Multiaddr,
+    ) -> Result<THandler<Self>, ConnectionDenied> {
+        Ok(ConnectionHandler::select(
+            dummy::ConnectionHandler,
+            self.managed.handle_established_inbound_connection(
+                connection_id,
+                peer,
+                local_addr,
+                remote_addr,
+            )?,
+        ))
+    }
+
+    #[allow(clippy::needless_question_mark)]
+    fn handle_established_outbound_connection(
+        &mut self,
+        connection_id: ConnectionId,
+        peer: PeerId,
+        addr: &Multiaddr,
+        role_override: Endpoint,
+        port_use: PortUse,
+    ) -> Result<THandler<Self>, ConnectionDenied> {
+        Ok(ConnectionHandler::select(
+            dummy::ConnectionHandler,
+            self.managed.handle_established_outbound_connection(
+                connection_id,
+                peer,
+                addr,
+                role_override,
+                port_use,
+            )?,
+        ))
+    }
+
+    fn on_connection_handler_event(
+        &mut self,
+        peer_id: PeerId,
+        connection_id: ConnectionId,
+        event: THandlerOutEvent<Self>,
+    ) {
+        match event {
+            Either::Left(ev) => libp2p::core::util::unreachable(ev),
+            Either::Right(ev) => {
+                self.managed
+                    .on_connection_handler_event(peer_id, connection_id, ev)
+            }
+        }
+    }
+
+    // hook into these methods to drive behavior
+
+    fn on_swarm_event(&mut self, event: FromSwarm) {
+        self.managed.on_swarm_event(event); // let mDNS handle swarm events
+
+        // handle swarm events to update internal state:
+        match event {
+            FromSwarm::ConnectionEstablished(ConnectionEstablished {
+                peer_id,
+                connection_id,
+                endpoint,
+                ..
+            }) => {
+                let remote_address = match endpoint {
+                    ConnectedPoint::Dialer { address, .. } => address,
+                    ConnectedPoint::Listener { send_back_addr, .. } => send_back_addr,
+                };
+
+                if let Some((ip, port)) = remote_address.try_to_tcp_addr() {
+                    // handle connection established event which is filtered correctly
+                    self.on_connection_established(peer_id, connection_id, ip, port)
+                }
+            }
+            FromSwarm::ConnectionClosed(ConnectionClosed {
+                peer_id,
+                connection_id,
+                endpoint,
+                ..
+            }) => {
+                let remote_address = match endpoint {
+                    ConnectedPoint::Dialer { address, .. } => address,
+                    ConnectedPoint::Listener { send_back_addr, .. } => send_back_addr,
+                };
+
+                if let Some((ip, port)) = remote_address.try_to_tcp_addr() {
+                    // handle connection closed event which is filtered correctly
+                    self.on_connection_closed(peer_id, connection_id, ip, port)
+                }
+            }
+
+            // since we are running TCP/IP transport layer, we are assuming that
+            // no address changes can occur, hence encountering one is a fatal error
+            FromSwarm::AddressChange(a) => {
+                unreachable!("unhandlable: address change encountered: {:?}", a)
+            }
+            _ => {}
+        }
+    }
+
+    fn poll(&mut self, cx: &mut Context) -> Poll<ToSwarm<Self::ToSwarm, THandlerInEvent<Self>>> {
+        // delegate to managed behaviors for any behaviors they need to perform
+        match self.managed.poll(cx) {
+            Poll::Ready(ToSwarm::GenerateEvent(e)) => {
+                match e {
+                    // handle discovered and expired events from mDNS
+                    managed::BehaviourEvent::Mdns(e) => match e.clone() {
+                        mdns::Event::Discovered(peers) => {
+                            self.handle_mdns_discovered(peers);
+                        }
+                        mdns::Event::Expired(peers) => {
+                            self.handle_mdns_expired(peers);
+                        }
+                    },
+
+                    // handle ping events => if error then disconnect
+                    managed::BehaviourEvent::Ping(e) => {
+                        if let Err(_) = e.result {
+                            self.close_connection(e.peer, e.connection.clone())
+                        }
+                    }
+                }
+
+                // since we just consumed an event, we should immediately wake just in case
+                // there are more events to come where that came from
+                cx.waker().wake_by_ref();
+            }
+
+            // forward any other mDNS event to the swarm or its connection handler(s)
+            Poll::Ready(e) => {
+                return Poll::Ready(
+                    e.map_out(|_| unreachable!("events returning to swarm already handled"))
+                        .map_in(Either::Right),
+                );
+            }
+
+            Poll::Pending => {}
+        }
+
+        // retry connecting to all mDNS peers periodically (fails safely if already connected)
+        if self.retry_delay.poll(cx).is_ready() {
+            for (p, mas) in self.mdns_discovered.clone() {
+                for ma in mas {
+                    self.dial(p, ma)
+                }
+            }
+            // dial bootstrap peers (for environments where mDNS is unavailable)
+            for addr in &self.bootstrap_peers {
+                self.pending_events.push_back(ToSwarm::Dial {
+                    opts: DialOpts::unknown_peer_id().address(addr.clone()).build(),
+                })
+            }
+            self.retry_delay.reset(RETRY_CONNECT_INTERVAL) // reset timeout
+        }
+
+        // send out any pending events from our own service
+        if let Some(e) = self.pending_events.pop_front(cx) {
+            return Poll::Ready(e.map_in(Either::Left));
+        }
+
+        // wait for pending events
+        Poll::Pending
+    }
+}
+
+
+// ==== js: scout-caption-timing.js ====
+/**
+ * scout-caption-timing.js — which displayed caption token is lit at time t.
+ *
+ * THIS RULE EXISTS TWICE ON PURPOSE, AND MUST NOT DRIFT.
+ *
+ *   * here                     — the editor's live caption overlay (index.html)
+ *   * scout/media/caption_timing.py — `word_segments`, shared by BOTH karaoke-ASS
+ *     builders (the chunk_srt sidecar and the captions_ass export schedule)
+ *
+ * They are hand-mirrored implementations of ONE rule, and they have drifted
+ * before: commit 2b06bfe7 ("contiguous-SRT boundary theft") happened because
+ * the export path had a third implementation that agreed with neither the
+ * editor nor the truth.
+ *
+ * The guard is a shared golden corpus — tests/fixtures/caption_highlight_lockstep.json
+ * — that BOTH sides must reproduce identically:
+ *
+ *     node --test "tests/js/*.test.js"          (this file)
+ *     pytest tests/test_caption_highlight_lockstep.py   (the Python mirror)
+ *
+ * Change the rule in one place and those two suites disagree immediately. If
+ * you edit this file, edit `word_segments` in the same commit.
+ *
+ * THE RULE
+ * --------
+ * Real speech onsets drive it: count how many words have STARTED by t (so the
+ * highlight HOLDS during a pause instead of sailing through it), then map that
+ * onto the number of DISPLAYED tokens, which can differ from the number of
+ * spoken words:
+ *
+ *     idx = round((spoken - 1) / n * W)      clamped to W - 1
+ *
+ * Token 0 is lit from the cue start — before it is spoken. That is not a lead:
+ * chunk_srt builds cues FROM the word timings, so cue.start IS the first
+ * onset (measured: 0 ms median AND 0 ms max gap).
+ *
+ * With no usable word timings, fall back to an even split of the cue duration
+ * so a cue always animates rather than burning as a dead plain line.
+ *
+ * EVERY WORD GETS A VISIBLE HIGHLIGHT
+ * -----------------------------------
+ * Noah 2026-08-05: "I do need each word to get highlighted." Forced alignment
+ * emits onsets as little as 10 ms apart (its own sanitizer floor, not speech),
+ * and a 10 ms window is shorter than one frame at 24, 30 AND 60 fps — measured
+ * on QKSL6404, 10 of 321 words never landed on a rendered frame.
+ *
+ * So a starved word opens EARLY rather than closing late: boundaries are walked
+ * BACKWARD, `open[k] = min(onset[k], open[k+1] - MIN_VISIBLE_S)`. Closing late
+ * would either steal the next word's time or delay every highlight after it;
+ * opening early borrows from a neighbour that has the room, and a highlight
+ * that leads speech slightly reads as normal karaoke while one that lags reads
+ * as broken. Word 0 has nothing behind it, so a cue that OPENS on a starved
+ * word pushes forward instead — bounded, and it stops as soon as a word's own
+ * onset is already late enough.
+ */
+(function (root, factory) {
+  const api = factory();
+  if (typeof module !== 'undefined' && module.exports) module.exports = api;
+  if (root) root.ScoutCaptionTiming = api;
+})(typeof globalThis !== 'undefined' ? globalThis : this, function () {
+  'use strict';
+
+  // Mirrors MIN_HIGHLIGHT_S / MIN_VISIBLE_S in scout/media/caption_timing.py.
+  const MIN_HIGHLIGHT_S = 0.25;
+  const MIN_VISIBLE_S = 0.10;
+
+  /**
+   * Words that belong to a cue.
+   *
+   * Cue ranges are HALF-OPEN: a word starting exactly on the boundary belongs
+   * to the cue it OPENS, never the one it closes. Chunked SRTs are contiguous
+   * (prev.end === next.start), so an inclusive test would hand every boundary
+   * word to the previous cue — which is exactly the boundary theft that
+   * 2b06bfe7 fixed.
+   */
+  function cueWords(words, cueStart, cueEnd) {
+    if (!words || !words.length) return [];
+    return words.filter(w =>
+      w && Number.isFinite(+w.start) && Number.isFinite(+w.end) &&
+      +w.end > cueStart + 1e-3 && +w.start < cueEnd - 1e-3);
+  }
+
+  /**
+   * Port of `word_segments` — onsets in, `[start, end, i]` windows out.
+   *
+   * `i` indexes back into `onsets` so the caller can recover its own payload.
+   * Keep this in lockstep with the Python; the fixture is what proves it.
+   */
+  function wordSegments(onsets, cueEnd, opts) {
+    const o = opts || {};
+    const minHighlight = o.minHighlightS != null ? o.minHighlightS : MIN_HIGHLIGHT_S;
+    const minVisible = o.minVisibleS != null ? o.minVisibleS : MIN_VISIBLE_S;
+
+    const kept = [];
+    for (let i = 0; i < onsets.length; i++) {
+      const t = +onsets[i];
+      if (kept.length && t <= kept[kept.length - 1][0]) continue;
+      kept.push([t, i]);
+    }
+    if (!kept.length) return [];
+
+    const n = kept.length;
+    // Where the last window closes. The only place the PREFERRED floor can act,
+    // because every interior word is followed immediately by the next one.
+    let lastClose = o.lastWordEnd == null ? +cueEnd : +o.lastWordEnd;
+    if (lastClose - kept[n - 1][0] < minHighlight) {
+      lastClose = Math.min(kept[n - 1][0] + minHighlight, +cueEnd);
+    }
+
+    const floor = kept[0][0];
+    const opens = new Array(n);
+    if (lastClose - floor < n * minVisible) {
+      // Physically impossible — share the shortfall evenly rather than drop a
+      // word, since a word with no highlight is the failure being fixed.
+      const step = (lastClose - floor) / n;
+      for (let k = 0; k < n; k++) opens[k] = floor + k * step;
+    } else {
+      let nxt = lastClose;
+      for (let k = n - 1; k >= 0; k--) {
+        opens[k] = Math.min(kept[k][0], nxt - minVisible);
+        nxt = opens[k];
+      }
+      opens[0] = floor;
+      for (let k = 1; k < n; k++) {
+        if (opens[k] < opens[k - 1] + minVisible) opens[k] = opens[k - 1] + minVisible;
+      }
+    }
+
+    const out = [];
+    for (let k = 0; k < n; k++) {
+      const start = opens[k];
+      const end = k + 1 < n ? opens[k + 1] : lastClose;
+      if (end > start) out.push([start, end, kept[k][1]]);
+    }
+    return out;
+  }
+
+  /**
+   * Port of `captions_ass._display_spans` — `[start, end, tokenIndex]` for a cue.
+   *
+   * @param {{start:number,end:number}} cue
+   * @param {number} tokenCount  number of DISPLAYED tokens (>=1)
+   * @param {Array<{start:number,end:number}>} words  all word timings (unbucketed)
+   */
+  function displaySpans(cue, tokenCount, words) {
+    const W = Math.max(1, tokenCount | 0);
+    const cs = +cue.start, ce = +cue.end;
+    const cw = cueWords(words, cs, ce);
+
+    if (!cw.length) {                       // proportional fallback
+      const step = Math.max(0.001, ce - cs) / W;
+      const out = [];
+      for (let i = 0; i < W; i++) out.push([cs + i * step, cs + (i + 1) * step, i]);
+      return out;
+    }
+
+    const n = cw.length;
+    const times = [], idxs = [];
+    for (let j = 0; j < n; j++) {
+      const idx = Math.min(W - 1, Math.round(j / n * W));
+      const t = j === 0 ? cs : Math.max(cs, Math.min(ce, +cw[j].start));
+      if (times.length &&
+          (idx === idxs[idxs.length - 1] || t <= times[times.length - 1])) continue;
+      times.push(t); idxs.push(idx);
+    }
+    return wordSegments(times, ce).map(s => [s[0], s[1], idxs[s[2]]]);
+  }
+
+  /**
+   * Index of the displayed token that is lit at time `t`.
+   *
+   * @param {{start:number,end:number}} cue   cue bounds in the same time base as t
+   * @param {number} t                        playhead time
+   * @param {number} wordCount                number of DISPLAYED tokens (>=1)
+   * @param {Array<{start:number,end:number}>} words  all word timings (unbucketed)
+   * @returns {number} token index in [0, wordCount-1]
+   */
+  function activeWordIndex(cue, t, wordCount, words) {
+    const spans = displaySpans(cue, wordCount, words);
+    if (!spans.length) return 0;
+    let cur = spans[0][2];
+    for (let k = 0; k < spans.length; k++) {
+      const [st, en, idx] = spans[k];
+      if (t >= st && t < en) return idx;
+      if (t >= st) cur = idx;
+    }
+    return cur;
+  }
+
+  return { activeWordIndex, cueWords, displaySpans, wordSegments,
+           MIN_HIGHLIGHT_S, MIN_VISIBLE_S };
+});
+
+
+// ==== js: scout-model-picker.js ====
+/*
+ * scout-model-picker.js — the chat model picker's brain.
+ *
+ * Lifted out of index.html (AGENTS.md front-end rule: touch a cohesive lump,
+ * extract it) when the picker grew recents, favorites, and real load/unload.
+ *
+ * WHAT CHANGED, AND WHY IT MATTERS
+ * The old picker reported INTENT. Clicking a model wrote the new name into the
+ * header pill immediately and nothing ever polled, so a row read "active" while
+ * the model was still ~90s from loading, and an eviction underneath it (an
+ * overnight-runner leapfrog swap, idle-evict) never moved the UI at all. The
+ * only way to see the truth was a second browser tab open on the exo
+ * supervisor. So: every row's badge here comes from `/api/models/residency`,
+ * which is projected from Exo's own `/state` — resident / loading / downloading
+ * is measured, never assumed.
+ *
+ * WHERE THE TWO LISTS LIVE (deliberately different, and neither is per-user)
+ *   * recents   — localStorage, PER DEVICE. "What did I use on this machine
+ *                 lately" is a device fact, and it must work before any user is
+ *                 resolved.
+ *   * favorites — server-side, ONE SHARED LIST for the whole machine, via
+ *                 `/api/models/favorites`. A star records what runs well on
+ *                 this HARDWARE ("this quant fits, that one thrashes"), which
+ *                 is a property of the cluster, not of who is typing. So there
+ *                 is no user id anywhere in this file.
+ *
+ * Everything above `init()` is pure and node-testable (tests/js/
+ * scout-model-picker.test.js); the DOM/network half is a thin shell over it.
+ */
+(function (root, factory) {
+  const api = factory();
+  if (typeof module !== 'undefined' && module.exports) module.exports = api;
+  if (root) root.ScoutModelPicker = api;
+})(typeof globalThis !== 'undefined' ? globalThis : this, function () {
+  'use strict';
+
+  const RECENTS_KEY = 'scout.modelRecents';
+  const RECENTS_MAX = 5;
+
+  // ── Pure helpers ────────────────────────────────────────────────────────
+  function escapeHtml(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, (c) => (
+      { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
+    ));
+  }
+
+  function shortName(name) {
+    return (name || '').replace(/^[^/]+\//, '');   // strip the org prefix
+  }
+
+  const MAKERS = ['qwen', 'minimax', 'glm', 'deepseek', 'gemma', 'gpt-oss',
+                  'llama', 'kimi', 'mistral', 'phi', 'siglip'];
+
+  function detectMaker(name) {
+    const n = (name || '').toLowerCase();
+    for (const k of MAKERS) if (n.includes(k)) return k;
+    return 'other';
+  }
+
+  function detectVariant(name) {
+    const short = shortName(name);
+    const m = short.match(/[-_]((?:\d+bit)|bf16|fp16|f16|(?:MXFP4(?:-Q\d+)?)|Q\d+)$/i);
+    return m ? m[1] : '';
+  }
+
+  function baseName(short, variant) {
+    if (!variant) return short;
+    return short.replace(
+      new RegExp('[-_]' + variant.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '$', 'i'), '');
+  }
+
+  /* Name-equivalence with org-prefix slack — the JS twin of the backend's
+   * `_model_matches`. Exo reports `mlx-community/Qwen3-0.6B-8bit` while a
+   * config may hold the bare leaf, and a picker that misses that equivalence
+   * shows "not loaded" for a model that is very much loaded. */
+  function modelMatches(target, list) {
+    if (!target || !list || !list.length) return false;
+    return list.some((m) => m === target ||
+      m.endsWith('/' + target) || target.endsWith('/' + m));
+  }
+
+  /* Flatten `/api/models` per-backend lists into one array of rows.
+   *
+   * Non-chat models are dropped here: Stable Diffusion, SigLIP, Whisper, TTS
+   * and embedding models are all legitimately in the HF cache, but they can
+   * never be the answer to "which model do I chat with", so listing them is
+   * pure noise. The backend classifies (`chat_capable` on each row, one rule
+   * for every consumer); this trusts that flag and FAILS OPEN, so an older
+   * backend that doesn't send the field yields the full list rather than an
+   * empty picker. */
+  function normalize(overview) {
+    const out = [];
+    const push = (arr, server) => (arr || []).filter((m) => m.chat_capable !== false).forEach((m) => {
+      const short = shortName(m.name);
+      const variant = m.quantization || detectVariant(m.name) || '';
+      const base = baseName(short, variant);
+      out.push({
+        name: m.name, server, size_gb: m.size_gb || 0,
+        fits: !!m.fits_headroom, instant: !!m.instant,
+        maker: (m.family || detectMaker(m.name) || 'other').toLowerCase(),
+        variant, base, displayBase: base.replace(/[-_]/g, ' '),
+        state: 'idle', stateDetail: '',
+      });
+    });
+    push(overview.sidecar, 'sidecar');
+    push(overview.exo, 'exo');
+    push(overview.mlx, 'mlx');
+    push(overview.ollama, 'ollama');
+    return out;
+  }
+
+  /* THE truth stamp. Every row's badge comes from here — the `loaded` flag on
+   * /api/models is a per-backend guess, this is Exo's /state.
+   *
+   * A sidecar/mlx/ollama row is not an Exo instance, so residency can't speak
+   * for it; those keep the overview's own `loaded` flag (passed in as
+   * `serverLoaded`) and are never badged "loading" by an Exo placement. */
+  function stampResidency(rows, residency, serverLoaded) {
+    const res = residency || {};
+    const resident = res.resident_models || [];
+    const placing = res.placing || [];
+    const downloading = res.downloading || [];
+    return rows.map((row) => {
+      // Reset before re-deriving. Carrying the previous stamp forward is how a
+      // row keeps claiming "loaded" after something evicted it underneath us —
+      // this function must be a pure projection of THIS residency payload.
+      const r = Object.assign({}, row, { state: 'idle', stateDetail: '' });
+      if (row.server !== 'exo') {
+        r.state = (serverLoaded && serverLoaded[row.name]) ? 'resident' : 'idle';
+        return r;
+      }
+      const dl = downloading.find((d) => modelMatches(row.name, [d.model_id]));
+      const pl = placing.find((p) => modelMatches(row.name, [p.model_id]));
+      // ORDER MATTERS: an in-flight placement outranks the instance row.
+      // Measured 2026-08-04 — Exo publishes `instances[<id>]` ~0.3s after
+      // /place_instance, long before the weights are in RAM (a 129GB shard set
+      // is minutes). Checking `resident` first would badge a model "loaded" for
+      // the whole load, which is the exact lie this endpoint exists to stop.
+      if (dl) {
+        r.state = 'downloading';
+        r.stateDetail = (dl.pct != null ? dl.pct + '%' : '');
+      } else if (pl) {
+        r.state = 'loading';
+        r.stateDetail = pl.phase || '';
+      } else if (modelMatches(row.name, resident)) {
+        r.state = 'resident';
+      }
+      return r;
+    });
+  }
+
+  /* Elapsed-time memory for placements. /state says a placement is Running but
+   * not since when, so the "loading… 47s" counter is measured from when this
+   * page FIRST saw it — which is what the person watching actually cares about.
+   * `now` is injected so tests don't need a clock. */
+  function trackPlacing(timers, residency, now) {
+    const live = new Set(((residency || {}).placing || []).map((p) => p.model_id));
+    const next = {};
+    live.forEach((m) => { next[m] = timers[m] != null ? timers[m] : now; });
+    return next;
+  }
+
+  function elapsedLabel(startedAt, now) {
+    if (startedAt == null) return '';
+    const s = Math.max(0, Math.round((now - startedAt) / 1000));
+    return s < 60 ? s + 's' : Math.floor(s / 60) + 'm' + String(s % 60).padStart(2, '0') + 's';
+  }
+
+  /* Recents — most-recent first, de-duped, capped. Pure. */
+  function pushRecent(list, name, max) {
+    if (!name) return (list || []).slice();
+    const cap = max || RECENTS_MAX;
+    return [name].concat((list || []).filter((n) => n !== name)).slice(0, cap);
+  }
+
+  function toggleFavorite(list, name) {
+    const cur = (list || []).slice();
+    const i = cur.indexOf(name);
+    if (i >= 0) { cur.splice(i, 1); return cur; }
+    cur.push(name);
+    return cur;
+  }
+
+  /* Build the view model.
+   *
+   * RECENT IS A TAB, not a pinned section. As a section it looked like models
+   * "toggled between Recent and Favorites": starring something removed it from
+   * Recent (to avoid listing it twice) so it appeared to jump lists. As a tab
+   * it's just a view — the last 5 picks, in order, and a favorite showing up
+   * there too is expected rather than confusing.
+   *
+   * Favorites stays PINNED at the top of the All tab: it's the one-click
+   * shortlist and it should never be a click away. Both are shown FLAT — a
+   * five-item shortlist doesn't need family grouping. */
+  function buildView(opts) {
+    const rows = opts.rows || [];
+    const favorites = opts.favorites || [];
+    const recents = opts.recents || [];
+    const active = opts.active || '';
+    const query = (opts.query || '').trim().toLowerCase();
+    const server = opts.server || 'all';
+    const maker = opts.maker || 'all';
+    const expanded = opts.expanded || new Set();
+
+    const byName = new Map(rows.map((r) => [r.name, r]));
+
+    // Pinned/tab lists resolve names against the FULL row set (they're a
+    // shortlist, not a view of the pool) but DO honor an active search —
+    // typing is a search of everything. A name that no longer exists on disk
+    // just drops out.
+    const pin = (names) => names
+      .map((n) => byName.get(n))
+      .filter(Boolean)
+      .filter((r) => !query || r.name.toLowerCase().includes(query));
+
+    const recentRows = pin(recents);
+
+    // The Recent tab is its own flat view — no grouping, no fits/other split.
+    if (server === 'recent') {
+      return {
+        mode: 'recent', flat: recentRows, favorites: [],
+        fits: [], other: [], poolCount: recentRows.length, makerCounts: {},
+      };
+    }
+
+    let pool = server === 'all' ? rows.slice() : rows.filter((m) => m.server === server);
+    const makerCounts = {};
+    pool.forEach((m) => { makerCounts[m.maker] = (makerCounts[m.maker] || 0) + 1; });
+    if (maker !== 'all') pool = pool.filter((m) => m.maker === maker);
+    if (query) {
+      pool = pool.filter((m) => m.name.toLowerCase().includes(query) ||
+        m.maker.includes(query) || (m.variant || '').toLowerCase().includes(query));
+    }
+
+    // Favorites pin to the top of the All tab only — inside a backend tab the
+    // list is already a deliberate filter and a pinned block would fight it.
+    const favRows = server === 'all' ? pin(favorites) : [];
+
+    const gm = new Map();
+    pool.forEach((m) => {
+      const key = m.maker + '::' + m.base;
+      let g = gm.get(key);
+      if (!g) { g = { key, displayBase: m.displayBase, maker: m.maker, variants: [], servers: new Set() }; gm.set(key, g); }
+      g.variants.push(m); g.servers.add(m.server);
+    });
+    const groups = [...gm.values()];
+    groups.forEach((g) => {
+      g.variants.sort((a, b) => a.size_gb - b.size_gb);
+      g.anyFits = g.variants.some((v) => v.fits);
+      g.hasActive = g.variants.some((v) => v.name === active);
+      g.anyResident = g.variants.some((v) => v.state === 'resident');
+      g.sizeMin = Math.min(...g.variants.map((v) => v.size_gb));
+      g.sizeMax = Math.max(...g.variants.map((v) => v.size_gb));
+      g.open = !!query || expanded.has(g.key);
+    });
+    // Resident sorts above merely-active: "what's warm" is the thing you want
+    // to click when the alternative is a 90s wait.
+    const byRank = (a, b) => (b.anyResident - a.anyResident) ||
+      (b.hasActive - a.hasActive) || (b.sizeMax - a.sizeMax);
+
+    return {
+      mode: 'groups',
+      flat: [],
+      favorites: favRows,
+      recents: recentRows,          // for the tab's count badge
+      fits: groups.filter((g) => g.anyFits).sort(byRank),
+      other: groups.filter((g) => !g.anyFits).sort(byRank),
+      poolCount: pool.length,
+      makerCounts,
+    };
+  }
+
+  function memText(residency, overview) {
+    const r = residency || {};
+    if (r.reachable && typeof r.headroom_gb === 'number') {
+      return Math.round(r.headroom_gb) + ' GB free';
+    }
+    const d = overview || {};
+    if (typeof d.total_gb === 'number' && typeof d.headroom_gb === 'number')
+      return Math.round(d.total_gb - d.headroom_gb) + '/' + Math.round(d.total_gb) + ' GB';
+    return '';
+  }
+
+  // ── HTML ────────────────────────────────────────────────────────────────
+  const SERVER_LABEL = { sidecar: '⚡ Instant', exo: 'EXO', mlx: 'MLX-VLM', ollama: 'Ollama' };
+  const MAKER_LABEL = {
+    qwen: 'Qwen', minimax: 'MiniMax', glm: 'GLM', deepseek: 'DeepSeek', gemma: 'Gemma',
+    'gpt-oss': 'GPT-OSS', llama: 'Llama', kimi: 'Kimi', mistral: 'Mistral',
+    phi: 'Phi', siglip: 'SigLIP', other: 'Other',
+  };
+  const MAKER_DOT = {
+    qwen: '#818cf8', minimax: '#f472b6', glm: '#34d399', deepseek: '#60a5fa',
+    gemma: '#fbbf24', 'gpt-oss': '#a78bfa', llama: '#fb923c', kimi: '#22d3ee',
+    mistral: '#fb7185', phi: '#a3e635', siglip: '#94a3b8', other: '#64748b',
+  };
+  function makerLabel(k) { return MAKER_LABEL[k] || (k.charAt(0).toUpperCase() + k.slice(1)); }
+  function fmtGB(x) { return !x ? '—' : (x >= 10 ? Math.round(x) + ' GB' : (Math.round(x * 10) / 10) + ' GB'); }
+
+  const STAR_ON = '<svg class="mp-star-ico" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2.9 6.1 6.6.9-4.8 4.7 1.2 6.6L12 17.2 6.1 20.3l1.2-6.6L2.5 9l6.6-.9z"/></svg>';
+  const STAR_OFF = '<svg class="mp-star-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3.5l2.6 5.4 5.9.8-4.3 4.2 1 5.9-5.2-2.8-5.2 2.8 1-5.9L3.5 9.7l5.9-.8z"/></svg>';
+  const CHECK_SVG = '<svg class="mp-check" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>';
+
+  /* The residency badge — the whole reason the second tab existed. */
+  function stateBadgeHtml(row, timers, now) {
+    if (row.state === 'resident')
+      return '<span class="mp-state resident" title="Loaded on the cluster right now">● loaded</span>';
+    if (row.state === 'downloading')
+      return '<span class="mp-state loading" title="Downloading shards">↓ ' +
+        escapeHtml(row.stateDetail || 'downloading') + '</span>';
+    if (row.state === 'loading') {
+      const el = elapsedLabel((timers || {})[row.name], now);
+      return '<span class="mp-state loading" title="Placement in flight on Exo">' +
+        '<span class="mp-spin"></span>' + escapeHtml(row.stateDetail || 'loading') +
+        (el ? ' · ' + escapeHtml(el) : '') + '</span>';
+    }
+    return '';
+  }
+
+  /* Load / Unload. Only Exo rows get these — a sidecar or Ollama model isn't an
+   * Exo instance, so there is nothing here to place or DELETE. */
+  function actionsHtml(row) {
+    if (row.server !== 'exo') return '';
+    if (row.state === 'resident')
+      return '<button class="mp-act" data-act="unload" data-model="' + escapeHtml(row.name) +
+        '" title="Unload from the cluster (frees its RAM)">Unload</button>';
+    if (row.state === 'loading' || row.state === 'downloading') return '';
+    return '<button class="mp-act" data-act="load" data-model="' + escapeHtml(row.name) +
+      '" title="Load onto the cluster without switching chat to it">Load</button>';
+  }
+
+  function starHtml(row, favorites) {
+    const on = (favorites || []).indexOf(row.name) >= 0;
+    return '<button class="mp-star' + (on ? ' on' : '') + '" data-act="fav" data-model="' +
+      escapeHtml(row.name) + '" title="' + (on ? 'Remove from favorites' : 'Add to favorites') +
+      '" aria-label="' + (on ? 'Remove from favorites' : 'Add to favorites') + '">' +
+      (on ? STAR_ON : STAR_OFF) + '</button>';
+  }
+
+  function variantRowHtml(row, ctx, opts) {
+    const isActive = row.name === ctx.active;
+    const label = (opts && opts.fullName)
+      ? shortName(row.name)
+      : (row.variant || shortName(row.name));
+    const tail = isActive ? CHECK_SVG
+      : (row.fits ? '' : '<span class="mp-nofit">won’t fit</span>');
+    return '<div class="mp-variant' + (isActive ? ' active' : '') + (row.fits ? '' : ' nofit') + '"' +
+      ' data-model="' + escapeHtml(row.name) + '" data-server="' + escapeHtml(row.server) + '">' +
+      starHtml(row, ctx.favorites) +
+      '<button class="mp-pick" data-act="pick" data-model="' + escapeHtml(row.name) +
+      '" data-server="' + escapeHtml(row.server) + '" title="Switch chat to this model">' +
+      '<span class="mp-name">' + escapeHtml(label) + '</span></button>' +
+      stateBadgeHtml(row, ctx.timers, ctx.now) +
+      '<span class="mp-badge ' + escapeHtml(row.server) + '">' + (SERVER_LABEL[row.server] || row.server) + '</span>' +
+      '<span class="mp-size">' + fmtGB(row.size_gb) + '</span>' +
+      actionsHtml(row) + tail + '</div>';
+  }
+
+  function groupHtml(g, ctx) {
+    const range = g.sizeMin === g.sizeMax ? fmtGB(g.sizeMin) : fmtGB(g.sizeMin) + '–' + fmtGB(g.sizeMax);
+    const badges = [...g.servers].map((s) => '<span class="mp-badge ' + s + '">' + (SERVER_LABEL[s] || s) + '</span>').join(' ');
+    let html = '<button class="mp-group' + (g.open ? ' open' : '') + '" data-act="group" data-group="' + escapeHtml(g.key) + '">' +
+      '<svg class="mp-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 6l6 6-6 6"/></svg>' +
+      '<span class="mp-dot" style="background:' + (MAKER_DOT[g.maker] || '#64748b') + '"></span>' +
+      '<span class="mp-group-name">' + escapeHtml(g.displayBase) +
+      (g.hasActive ? ' <span class="mp-active-dot">●</span>' : '') + '</span>' +
+      (g.anyResident ? '<span class="mp-state resident">● loaded</span>' : '') +
+      badges + '<span class="mp-meta">' + g.variants.length + ' variant' +
+      (g.variants.length > 1 ? 's' : '') + ' · ' + range + '</span></button>';
+    if (g.open) html += g.variants.map((v) => variantRowHtml(v, ctx)).join('');
+    return html;
+  }
+
+  function listHtml(view, ctx) {
+    let html = '';
+    if (view.mode === 'recent') {
+      if (!view.flat.length) {
+        return '<div class="mp-empty">No recent models yet — the last ' + RECENTS_MAX +
+               ' you switch to will show up here.</div>';
+      }
+      html += '<div class="mp-section recent">Recently used — newest first</div>';
+      return html + view.flat.map((r) => variantRowHtml(r, ctx, { fullName: true })).join('');
+    }
+    if (view.favorites.length) {
+      html += '<div class="mp-section fav">★ Favorites</div>';
+      html += view.favorites.map((r) => variantRowHtml(r, ctx, { fullName: true })).join('');
+    }
+    if (view.fits.length) {
+      html += '<div class="mp-section fits">✓ Recommended — fits in available memory</div>';
+      html += view.fits.map((g) => groupHtml(g, ctx)).join('');
+    }
+    if (view.other.length) {
+      html += '<div class="mp-section other">Other models</div>';
+      html += view.other.map((g) => groupHtml(g, ctx)).join('');
+    }
+    if (!html) html = '<div class="mp-empty">No models match.</div>';
+    return html;
+  }
+
+  /* Tab bar. `Recent` sits alongside the backend slicers rather than being a
+   * pinned section — it is a view of the last N picks, not a backend. */
+  function serverSlicerHtml(rows, current, recents) {
+    const recentCount = (recents || []).filter((n) => rows.some((r) => r.name === n)).length;
+    const tabs = [{ id: 'all', label: 'All' }, { id: 'recent', label: 'Recent' },
+                  { id: 'sidecar', label: '⚡ Instant' },
+                  { id: 'exo', label: 'EXO' }, { id: 'mlx', label: 'MLX-VLM' },
+                  { id: 'ollama', label: 'Ollama' }];
+    return tabs.map((t) => {
+      const count = t.id === 'all' ? rows.length
+        : t.id === 'recent' ? recentCount
+        : rows.filter((m) => m.server === t.id).length;
+      const disabled = t.id !== 'all' && count === 0;
+      return '<button class="mp-server-tab' + (current === t.id ? ' active' : '') +
+        '" data-server="' + t.id + '"' + (disabled ? ' disabled' : '') + '>' +
+        t.label + '<span class="mp-count">' + count + '</span></button>';
+    }).join('');
+  }
+
+  function makerRailHtml(counts, total, current) {
+    let html = '<button class="mp-maker' + (current === 'all' ? ' active' : '') + '" data-maker="all">' +
+      '<span class="mp-dot" style="background:#94a3b8"></span>All<span class="mp-count">' + total + '</span></button>';
+    html += Object.keys(counts).sort().map((k) =>
+      '<button class="mp-maker' + (current === k ? ' active' : '') + '" data-maker="' + escapeHtml(k) + '">' +
+      '<span class="mp-dot" style="background:' + (MAKER_DOT[k] || '#64748b') + '"></span>' +
+      escapeHtml(makerLabel(k)) + '<span class="mp-count">' + counts[k] + '</span></button>').join('');
+    return html;
+  }
+
+  // ── Storage (browser-only; guarded so require() works headless) ──────────
+  const _hasDOM = typeof document !== 'undefined';
+
+  function loadRecents() {
+    try {
+      const raw = globalThis.localStorage && globalThis.localStorage.getItem(RECENTS_KEY);
+      const arr = raw ? JSON.parse(raw) : [];
+      return Array.isArray(arr) ? arr.filter((n) => typeof n === 'string') : [];
+    } catch (e) { return []; }
+  }
+
+  function saveRecents(list) {
+    try {
+      globalThis.localStorage &&
+        globalThis.localStorage.setItem(RECENTS_KEY, JSON.stringify((list || []).slice(0, RECENTS_MAX)));
+    } catch (e) { /* private mode / quota — recents are a nicety, never fatal */ }
+  }
+
+  /* Favorites are ONE SHARED LIST, not per user: a star means "this runs well
+   * on this hardware", which is a fact about the cluster, not about who is
+   * typing. So there's no user id to resolve — every account sees and edits the
+   * same set, and the picker can load favorites before knowing who's logged in. */
+  async function fetchFavorites() {
+    try {
+      const r = await fetch('/api/models/favorites');
+      if (!r.ok) return [];
+      const d = await r.json();
+      return Array.isArray(d.favorites)
+        ? d.favorites.filter((n) => typeof n === 'string') : [];
+    } catch (e) { return []; }
+  }
+
+  async function saveFavorites(list) {
+    try {
+      const fd = new FormData();
+      // The whole list, not a delta — a star toggle is then one write with no
+      // read-modify-write race between two open tabs.
+      fd.append('favorites', JSON.stringify(list || []));
+      const r = await fetch('/api/models/favorites', { method: 'PUT', body: fd });
+      return r.ok;
+    } catch (e) { return false; }
+  }
+
+  // ── Network ─────────────────────────────────────────────────────────────
+  async function fetchOverview() {
+    const r = await fetch('/api/models');
+    if (!r.ok) throw new Error('models http ' + r.status);
+    return r.json();
+  }
+
+  async function fetchResidency() {
+    const r = await fetch('/api/models/residency');
+    if (!r.ok) throw new Error('residency http ' + r.status);
+    return r.json();
+  }
+
+  async function place(model, opts) {
+    const fd = new FormData();
+    fd.append('model', model);
+    if (opts && opts.evictOthers) fd.append('evict_others', 'true');
+    if (opts && opts.force) fd.append('force', 'true');
+    const r = await fetch('/api/models/place', { method: 'POST', body: fd });
+    const body = await r.json().catch(() => ({}));
+    return { ok: r.ok && body.ok !== false, status: r.status, body };
+  }
+
+  async function unload(model, opts) {
+    const fd = new FormData();
+    fd.append('model', model);
+    if (opts && opts.force) fd.append('force', 'true');
+    const r = await fetch('/api/models/unload', { method: 'POST', body: fd });
+    const body = await r.json().catch(() => ({}));
+    return { ok: r.ok && body.ok !== false, status: r.status, body };
+  }
+
+  async function setActive(model, server) {
+    const fd = new FormData();
+    fd.append('role', 'chat');
+    fd.append('name', model);
+    if (server && server !== 'all') fd.append('backend', server);
+    // Chat-only swap: the agent-role pins (235B quality_*) must survive it.
+    fd.append('realign_agents', 'false');
+    const r = await fetch('/api/models/active', { method: 'POST', body: fd });
+    if (!r.ok) throw new Error('switch http ' + r.status);
+    return r.json();
+  }
+
+  return {
+    // pure
+    escapeHtml, shortName, detectMaker, detectVariant, baseName, modelMatches,
+    normalize, stampResidency, trackPlacing, elapsedLabel, pushRecent,
+    toggleFavorite, buildView, memText, fmtGB, makerLabel,
+    // html
+    listHtml, groupHtml, variantRowHtml, serverSlicerHtml, makerRailHtml,
+    stateBadgeHtml, actionsHtml,
+    // storage + net
+    loadRecents, saveRecents, fetchFavorites, saveFavorites,
+    fetchOverview, fetchResidency, place, unload, setActive,
+    // constants
+    RECENTS_KEY, RECENTS_MAX, _hasDOM,
+  };
+});
+
+
+// ==== js: scout-chat-enhance.js ====
+/* scout-chat-enhance.js — post-process passes on rendered chat bubbles.
+ *
+ * addMsgToDOM() renders an assistant message once via marked.parse() (there's
+ * no streaming re-render of the markdown — the live bubble is plaintext until
+ * the turn finalizes), so these passes run exactly once per message and are
+ * also idempotent (dataset guards) for safety on history replay.
+ *
+ * Two enhancements, mirroring the per-message copy button already in
+ * index.html (COPY_SVG / clipboard.writeText / 1.5s OK flash):
+ *   1. TABLE COPY  — each rendered <table> becomes its own "chunk" with a
+ *      hover-revealed button that copies the table back as GitHub-flavored
+ *      Markdown (re-serialized from the DOM).
+ *   2. INLINE MERMAID — a ```mermaid fence renders to an SVG chart card,
+ *      themed with the Scout palette (window.scoutMermaidConfig). Mermaid
+ *      (~3.2MB) is lazy-loaded only when a chart first appears.
+ *
+ * Lives outside index.html (a hot, multi-agent file) to keep that file's
+ * footprint to two <script> tags + one call site.
+ */
+(function () {
+  'use strict';
+
+  // Icons mirror index.html's COPY_SVG / COPY_OK_SVG (sized via CSS here).
+  const COPY_ICON = '<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>';
+  const OK_ICON   = '<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>';
+
+  let _mmdSeq = 0;
+  let _mermaidReady = null;   // Promise, created on first chart
+
+  // ── one-time CSS (uses --scout-* tokens; injected so index.html stays lean) ──
+  function injectStyle() {
+    if (document.getElementById('scout-chat-enhance-css')) return;
+    const css = `
+.scout-table-wrap { position: relative; margin: 1rem 0; }
+.scout-table-wrap > table { margin: 0 !important; }
+.scout-code-wrap { position: relative; margin: 1rem 0; }
+.scout-code-wrap > pre { margin: 0 !important; }
+.scout-mermaid-chunk {
+  position: relative; margin: 1rem 0; padding: 14px 16px;
+  background: var(--scout-rail-bg, #0a0a14);
+  border: 1px solid var(--scout-border-accent, rgba(99,102,241,0.18));
+  border-radius: var(--scout-radius, 6px);
+  overflow-x: auto;
+}
+.scout-mermaid-svg { display: flex; justify-content: center; }
+.scout-mermaid-svg svg { max-width: 100%; height: auto; }
+.scout-chunk-copy {
+  position: absolute; top: 6px; right: 6px;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 26px; height: 26px; padding: 0; margin: 0;
+  color: var(--scout-text-muted, #6b7280);
+  background: rgba(10,10,20,0.72);
+  border: 1px solid var(--scout-border, #374151);
+  border-radius: var(--scout-radius-sm, 3px);
+  cursor: pointer; opacity: 0; z-index: 3;
+  transition: opacity .12s ease, color .12s ease, border-color .12s ease;
+}
+.scout-table-wrap:hover .scout-chunk-copy,
+.scout-code-wrap:hover .scout-chunk-copy,
+.scout-mermaid-chunk:hover .scout-chunk-copy,
+.scout-chunk-copy:focus-visible { opacity: 1; }
+.scout-chunk-copy:hover {
+  color: var(--scout-accent, #818cf8);
+  border-color: var(--scout-border-strong, rgba(99,102,241,0.45));
+}
+.scout-chunk-copy.ok { color: #34d399; border-color: #34d399; opacity: 1; }
+.scout-chunk-copy svg { width: 15px; height: 15px; }
+.scout-zoomable { cursor: zoom-in; }
+/* The sidebar preview image (#artifactImage) becomes pan/zoomable — set up once
+   in enhanceSidebarImageViewer(). Inline chat images open INTO this panel. */
+#artifactImage.scout-panzoom { cursor: grab; transform-origin: 0 0; }
+#artifactImage.scout-panzoom.grabbing { cursor: grabbing; }
+/* File-path pill — a path Scout writes in chat becomes clickable: the body
+   reveals it in Finder, the trailing ⤢ opens it in the default app. */
+.scout-path-pill {
+  display: inline-flex; align-items: center; gap: 4px;
+  max-width: 100%; vertical-align: baseline;
+  padding: 1px 5px 1px 5px; margin: 0 1px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.86em; line-height: 1.5;
+  color: var(--scout-accent, #818cf8);
+  background: var(--scout-input-bg, #0b0f1a);
+  border: 1px solid var(--scout-border-accent, rgba(99,102,241,0.22));
+  border-radius: var(--scout-radius-sm, 4px);
+  cursor: pointer; user-select: text;
+  transition: background .12s ease, border-color .12s ease, color .12s ease;
+}
+.scout-path-pill:hover {
+  color: var(--scout-accent-bright, #a5b4fc);
+  border-color: var(--scout-border-strong, rgba(99,102,241,0.5));
+  background: var(--scout-btn-hov, #161b2e);
+}
+.scout-path-pill svg { width: 12px; height: 12px; flex: 0 0 auto; opacity: .85; }
+.scout-path-name {
+  white-space: nowrap;
+  max-width: none; /* Show full path, no truncation */
+}
+.scout-path-open {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 16px; height: 16px; padding: 0; margin-left: 1px;
+  color: inherit; background: transparent; border: 0;
+  border-radius: 3px; cursor: pointer; opacity: .55;
+  transition: opacity .12s ease, background .12s ease;
+}
+.scout-path-open:hover { opacity: 1; background: rgba(99,102,241,0.18); }
+.scout-path-open svg { width: 11px; height: 11px; opacity: 1; }
+.scout-path-link { cursor: pointer; }   /* an upgraded non-media <a> path link */
+#scout-path-toast {
+  position: fixed; left: 50%; bottom: 24px;
+  transform: translateX(-50%) translateY(8px);
+  z-index: 9999; max-width: 80vw;
+  padding: 8px 14px; font-size: 0.85rem;
+  color: var(--scout-text, #e5e7eb);
+  background: var(--scout-rail-bg, #0a0a14);
+  border: 1px solid var(--scout-border-strong, rgba(99,102,241,0.45));
+  border-radius: var(--scout-radius, 6px);
+  box-shadow: 0 6px 24px rgba(0,0,0,0.42);
+  opacity: 0; pointer-events: none;
+  transition: opacity .16s ease, transform .16s ease;
+}
+#scout-path-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+`;
+    const style = document.createElement('style');
+    style.id = 'scout-chat-enhance-css';
+    style.textContent = css;
+    document.head.appendChild(style);
+  }
+
+  // Shared copy button — getText() is read on click so it reflects live DOM.
+  function buildCopyBtn(getText, title) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.title = title || 'Copy';
+    btn.className = 'scout-chunk-copy';
+    btn.innerHTML = COPY_ICON;
+    btn.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      ev.preventDefault();
+      const txt = (typeof getText === 'function') ? getText() : String(getText || '');
+      navigator.clipboard.writeText(txt).then(() => {
+        btn.innerHTML = OK_ICON;
+        btn.classList.add('ok');
+        setTimeout(() => { btn.innerHTML = COPY_ICON; btn.classList.remove('ok'); }, 1500);
+      }).catch(() => {});
+    });
+    return btn;
+  }
+
+  // ── 1. table → copy-as-markdown ──────────────────────────────────────
+  function tableToMarkdown(table) {
+    const cell = (c) => (c.textContent || '').trim()
+      .replace(/\|/g, '\\|')      // escape pipes so columns survive
+      .replace(/\s*\n\s*/g, ' '); // collapse intra-cell newlines
+    const lines = [];
+    let cols = 0;
+
+    const headRow = table.querySelector('thead tr');
+    if (headRow) {
+      const cells = [...headRow.querySelectorAll('th,td')].map(cell);
+      cols = cells.length;
+      lines.push('| ' + cells.join(' | ') + ' |');
+      lines.push('| ' + cells.map(() => '---').join(' | ') + ' |');
+    }
+    [...table.querySelectorAll('tbody tr')].forEach((tr) => {
+      const cells = [...tr.querySelectorAll('th,td')].map(cell);
+      if (!cols) {  // no <thead> → promote the first body row to header
+        cols = cells.length;
+        lines.push('| ' + cells.join(' | ') + ' |');
+        lines.push('| ' + cells.map(() => '---').join(' | ') + ' |');
+        return;
+      }
+      lines.push('| ' + cells.join(' | ') + ' |');
+    });
+    return lines.join('\n');
+  }
+
+  function addTableCopyButtons(root) {
+    root.querySelectorAll('table').forEach((table) => {
+      if (table.dataset.copyWired) return;
+      table.dataset.copyWired = '1';
+      const wrap = document.createElement('div');
+      wrap.className = 'scout-table-wrap';
+      table.parentNode.insertBefore(wrap, table);
+      wrap.appendChild(table);
+      wrap.appendChild(buildCopyBtn(() => tableToMarkdown(table), 'Copy table as Markdown'));
+    });
+  }
+
+  // ── 1b. code block → copy-as-text ────────────────────────────────────
+  // Every <pre> code block gets the same chunk affordance as tables. Skips
+  // mermaid fences (the mermaid pass replaces those with a chart card that
+  // carries its own "copy source" button), so pass order doesn't matter.
+  function addCodeCopyButtons(root) {
+    root.querySelectorAll('pre').forEach((pre) => {
+      if (pre.dataset.copyWired) return;
+      const code = pre.querySelector('code');
+      if (code && isMermaidCode(code)) return;   // mermaid pass owns it
+      pre.dataset.copyWired = '1';
+      const wrap = document.createElement('div');
+      wrap.className = 'scout-code-wrap';
+      pre.parentNode.insertBefore(wrap, pre);
+      wrap.appendChild(pre);
+      wrap.appendChild(buildCopyBtn(
+        () => (code ? code.textContent : pre.textContent) || '', 'Copy code'));
+    });
+  }
+
+  // ── 2. ```mermaid → inline SVG chart ─────────────────────────────────
+  function ensureMermaid() {
+    if (_mermaidReady) return _mermaidReady;
+    _mermaidReady = new Promise((resolve, reject) => {
+      const boot = () => {
+        try {
+          const cfg = (typeof window.scoutMermaidConfig === 'function')
+            ? window.scoutMermaidConfig()
+            : { startOnLoad: false, theme: 'dark', securityLevel: 'strict' };
+          window.mermaid.initialize(cfg);
+          resolve(window.mermaid);
+        } catch (e) { reject(e); }
+      };
+      if (window.mermaid) { boot(); return; }
+      const s = document.createElement('script');
+      s.src = '/static/vendor/mermaid.min.js';
+      s.onload = boot;
+      s.onerror = () => reject(new Error('mermaid failed to load'));
+      document.head.appendChild(s);
+    });
+    return _mermaidReady;
+  }
+
+  function isMermaidCode(code) {
+    const c = code.className || '';
+    return /(?:^|\s)(?:language-|lang-)?mermaid(?:\s|$)/.test(c);
+  }
+
+  async function renderMermaidBlocks(root) {
+    const codes = [...root.querySelectorAll('pre > code')].filter(isMermaidCode);
+    if (!codes.length) return;
+    let mermaid;
+    try { mermaid = await ensureMermaid(); }
+    catch (_) { return; }   // lib unavailable → leave fences as plain code
+
+    for (const code of codes) {
+      const pre = code.closest('pre');
+      if (!pre || pre.dataset.mermaidDone) continue;
+      pre.dataset.mermaidDone = '1';
+      const src = code.textContent || '';   // raw source (strips hljs spans)
+      const id = 'scout-mmd-' + (_mmdSeq++) + '-' + Math.random().toString(36).slice(2, 8);
+      try {
+        const out = await mermaid.render(id, src);
+        const card = document.createElement('div');
+        card.className = 'scout-mermaid-chunk';
+        const fig = document.createElement('div');
+        fig.className = 'scout-mermaid-svg';
+        fig.innerHTML = out.svg;
+        card.appendChild(fig);
+        card.appendChild(buildCopyBtn(() => src, 'Copy diagram source'));
+        pre.replaceWith(card);
+      } catch (_) {
+        // Bad syntax → keep the original code block visible so the user can
+        // still read/copy/fix it; just clear the guard for a later attempt.
+        pre.dataset.mermaidDone = '';
+      }
+    }
+  }
+
+  // ── 3. image preview — click a chat image → open it in the SIDEBAR ────
+  // A diagram/image is a "preview item": clicking the inline copy opens it in
+  // the existing right-side viewer (#artifactImage via openImage), not a
+  // floating overlay. Auto-open is suppressed in index.html for render_mermaid,
+  // so the panel only appears on a click.
+  // A render_mermaid diagram already appears in the tool-call trace (a thumbnail
+  // + "open panel"), and the live artifact event auto-opens it in the side
+  // preview. So the bulky inline copy the model embeds is just removed here
+  // (keyed on the /cache/diagrams/ path) — no inline image, no chip. Photos/art
+  // stay inline (bindImagePreview makes them click-to-preview).
+  function removeInlineDiagrams(root) {
+    root.querySelectorAll('img').forEach((img) => {
+      const src = img.getAttribute('src') || img.src || '';
+      if (!/\/cache\/diagrams\//.test(src)) return;
+      const p = img.closest('p');
+      img.remove();
+      // drop the now-empty paragraph the embed sat in, so there's no blank gap
+      if (p && !p.textContent.trim() && !p.querySelector('img,svg,table,pre,a')) p.remove();
+    });
+  }
+
+  // Trace thumbnails for a diagram show a "🖼️ <title>" label. Swap the framed-
+  // picture icon for a bar-chart one (📊) so a diagram reads as a chart, not a
+  // photo. Done document-wide (not in the bubble) because the thumbnail lives in
+  // the tool-call trace, and is rendered by two paths — the live one and the
+  // replay-on-reload one (the latter inside a foreign in-flight hunk we won't
+  // edit). Idempotent; only touches labels next to a /cache/diagrams/ image.
+  function restyleDiagramTraceThumbs() {
+    document.querySelectorAll('img[src*="/cache/diagrams/"]').forEach((img) => {
+      if (img.dataset.diagIcon) return;
+      let node = img.parentElement;
+      for (let i = 0; i < 4 && node; i++) {
+        const span = [...node.querySelectorAll('span')].find((s) => s.textContent.includes('🖼️'));
+        if (span) { span.textContent = span.textContent.replace('🖼️', '📊'); img.dataset.diagIcon = '1'; return; }
+        node = node.parentElement;
+      }
+    });
+  }
+
+  function bindImagePreview(root) {
+    root.querySelectorAll('img').forEach((img) => {
+      if (img.dataset.lbWired || img.closest('a')) return;  // leave media-link imgs to their handler
+      img.dataset.lbWired = '1';
+      img.classList.add('scout-zoomable');
+      img.addEventListener('click', (e) => {
+        e.preventDefault(); e.stopPropagation();
+        const src = img.currentSrc || img.src;
+        const H = window.scoutArtifactHandle;
+        if (src && H && typeof H.openImage === 'function') {
+          H.openImage({ kind: 'image', url: src, title: img.alt || 'Image' });
+        }
+      });
+    });
+  }
+
+  // Make the sidebar preview image (#artifactImage) pan + zoom — wheel zooms
+  // toward the cursor, drag pans, double-click fits. Wired from here (not by
+  // editing openImage(), a hot multi-agent spot) by wrapping openImage: after
+  // it swaps in a new image we reset the transform and disable its built-in
+  // click→full-overlay (Noah wants in-panel zoom, not an overlay).
+  let _viewerWired = false;
+  function enhanceSidebarImageViewer() {
+    if (_viewerWired) return;
+    const img = document.getElementById('artifactImage');
+    const H = window.scoutArtifactHandle;
+    if (!img || !H || typeof H.openImage !== 'function') return;   // retry next call
+    _viewerWired = true;
+
+    const stage = img.parentElement;
+    if (stage) stage.style.overflow = 'hidden';   // clip the panned/zoomed image to the panel
+    img.classList.add('scout-panzoom');
+
+    let scale = 1, tx = 0, ty = 0, drag = false, ox = 0, oy = 0;
+    const apply = () => { img.style.transform = `translate(${tx}px,${ty}px) scale(${scale})`; };
+    const reset = () => { scale = 1; tx = 0; ty = 0; img.style.transform = ''; };
+
+    img.addEventListener('wheel', (e) => {
+      e.preventDefault();
+      const r = (stage || img).getBoundingClientRect();
+      const cx = e.clientX - r.left, cy = e.clientY - r.top;   // cursor in untransformed stage coords
+      const ns = Math.min(8, Math.max(1, scale * (e.deltaY < 0 ? 1.12 : 1 / 1.12)));
+      const k = ns / scale;
+      tx = cx - k * (cx - tx);   // keep the point under the cursor fixed
+      ty = cy - k * (cy - ty);
+      scale = ns;
+      if (scale === 1) { tx = 0; ty = 0; }   // snap back to fit at 1×
+      apply();
+    }, { passive: false });
+
+    img.addEventListener('mousedown', (e) => {
+      if (scale <= 1) return;                 // nothing to pan until zoomed in
+      e.preventDefault();
+      drag = true; ox = e.clientX - tx; oy = e.clientY - ty;
+      img.classList.add('grabbing');
+    });
+    window.addEventListener('mousemove', (e) => {
+      if (!drag) return;
+      tx = e.clientX - ox; ty = e.clientY - oy; apply();
+    });
+    window.addEventListener('mouseup', () => { drag = false; img.classList.remove('grabbing'); });
+    img.addEventListener('dblclick', (e) => { e.preventDefault(); reset(); });
+
+    const orig = H.openImage.bind(H);
+    H.openImage = function (meta) {
+      orig(meta);
+      try {
+        const el = document.getElementById('artifactImage');
+        if (el) { el.onclick = null; el.classList.add('scout-panzoom'); }   // kill the overlay; pan/zoom in place
+      } catch (_) {}
+      reset();
+    };
+  }
+
+  // ── 4. file paths → click-to-reveal pills ────────────────────────────
+  // A path Scout writes in chat ("saved to /Users/…/x.pdf", "see research/y/")
+  // is dead plain text — marked only autolinks http(s)/email, never a file
+  // path. This pass turns recognized local paths into a pill: the body reveals
+  // the file in Finder (POST /api/reveal), the trailing ⤢ opens it in the
+  // default app. The backend confines every path to Scout's read roots, so a
+  // misfire can only ever poke a file Scout could already read.
+  //
+  // Media embeds (<img>) and media LINKS (<a> → image/video) keep their
+  // existing in-app preview (see index.html _healChatImages / _bindChatMediaLinks)
+  // — this pass claims only bare-text paths and NON-media <a> links, so the two
+  // never fight over the same element.
+  const FILE_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M14 3v4a1 1 0 001 1h4M5 4a1 1 0 011-1h8l5 5v11a1 1 0 01-1 1H6a1 1 0 01-1-1V4z"/></svg>';
+  const FOLDER_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M3 7a1 1 0 011-1h5l2 2h9a1 1 0 011 1v9a1 1 0 01-1 1H4a1 1 0 01-1-1V7z"/></svg>';
+  const OPEN_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M14 5h5v5M19 5l-7 7M19 14v4a1 1 0 01-1 1H6a1 1 0 01-1-1V6a1 1 0 011-1h4"/></svg>';
+
+  // Repo-relative top-level dirs Scout references by name (so "scout/ui/x.py"
+  // and "research/y/" linkify, but a bare relative word like "ui/foo" does not).
+  const REPO_DIRS = 'scout|scripts|docs|research|standpipes|collars|tests|cache|data|skills|refpool|products|notebooks|compositions|uploads|memory|cad';
+  // A path token: optional file://, then ~/ | / | <repo-dir>/, then a run of
+  // path chars. Lookbehind keeps the anchor at a real boundary (not mid-word).
+  const PATH_RE = new RegExp(
+    '(?<![\\w./~-])(?:file://)?(?:~/|/|(?:' + REPO_DIRS + ')/)[^\\s\'"`<>()\\[\\]{}]*',
+    'g');
+  const MEDIA_EXT = /\.(png|jpe?g|webp|gif|bmp|heic|heif|tiff?|svg|mp4|mov|m4v|webm|mkv|avi)$/i;
+
+  const stripFile = (s) => String(s || '').replace(/^file:\/\//i, '');
+
+  // Is *tok* a path worth turning into a reveal pill? Must be a real path (has a
+  // slash), end in a file extension or a trailing slash (a directory), and not
+  // be an app/web route the browser already serves.
+  function isLinkablePath(tok) {
+    const p = stripFile(tok);
+    if (!p || p.length < 3 || !p.includes('/')) return false;
+    if (/^\/\//.test(p)) return false;                                  // protocol-relative
+    if (/^\/(api|static|scout_files|products|compositions|uploads|preview)\//.test(p)) return false;
+    const segs = p.replace(/\/+$/, '').split('/').filter(Boolean);
+    if (!segs.length) return false;
+    if (p.endsWith('/')) return true;                                   // a directory
+    return /\.[A-Za-z0-9]{1,8}$/.test(p);                              // a file with extension
+  }
+  // Exposed so a headless test can exercise the matcher without a DOM.
+  window._scoutMatchPaths = function (text) {
+    const out = [];
+    PATH_RE.lastIndex = 0;
+    let m;
+    while ((m = PATH_RE.exec(String(text || '')))) {
+      const tok = m[0].replace(/[.,;:!?]+$/, '');                       // drop trailing sentence punctuation
+      if (isLinkablePath(tok)) out.push(stripFile(tok));
+    }
+    return out;
+  };
+
+  // Transient bottom-center toast (errors only — success is the Finder window).
+  function pathToast(msg) {
+    let el = document.getElementById('scout-path-toast');
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'scout-path-toast';
+      el.setAttribute('role', 'status');
+      document.body.appendChild(el);
+    }
+    el.textContent = msg;
+    el.classList.add('show');
+    clearTimeout(el._t);
+    el._t = setTimeout(() => el.classList.remove('show'), 2600);
+  }
+
+  function revealPath(path, action) {
+    return fetch('/api/reveal', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path: path, action: action || 'reveal' }),
+    }).then(async (r) => {
+      let j = {};
+      try { j = await r.json(); } catch (_) {}
+      if (r.ok && j.ok) return true;
+      if (r.status === 415 && action === 'open') return revealPath(path, 'reveal');  // not previewable → reveal
+      pathToast(j && j.error ? ('Couldn’t open — ' + j.error) : 'Couldn’t open that path');
+      return false;
+    }).catch(() => { pathToast('Couldn’t reach Scout to open that path'); return false; });
+  }
+
+  function makePathPill(path) {
+    const isDir = path.endsWith('/');
+    const name = path.replace(/\/+$/, '').split('/').pop() || path;
+    const pill = document.createElement('span');
+    pill.className = 'scout-path-pill';
+    pill.dataset.path = path;
+    pill.title = path + ' — click to reveal in Finder';
+    pill.innerHTML = (isDir ? FOLDER_ICON : FILE_ICON) +
+      '<span class="scout-path-name"></span>' +
+      '<button type="button" class="scout-path-open" title="Open in default app">' + OPEN_ICON + '</button>';
+    pill.querySelector('.scout-path-name').textContent = name;   // textContent → XSS-safe
+    pill.addEventListener('click', (e) => {
+      if (e.target.closest('.scout-path-open')) return;          // the ⤢ has its own handler
+      e.preventDefault();
+      revealPath(path, 'reveal');
+    });
+    pill.querySelector('.scout-path-open').addEventListener('click', (e) => {
+      e.preventDefault(); e.stopPropagation();
+      revealPath(path, 'open');
+    });
+    return pill;
+  }
+
+  // Replace every path match inside one text node with pills, preserving the
+  // surrounding text (including any trailing punctuation we trimmed off).
+  function pillifyTextNode(node) {
+    const text = node.nodeValue;
+    PATH_RE.lastIndex = 0;
+    let m, last = 0, frag = null;
+    while ((m = PATH_RE.exec(text))) {
+      const tok = m[0].replace(/[.,;:!?]+$/, '');
+      if (!isLinkablePath(tok)) continue;                        // exec already advanced past it
+      frag = frag || document.createDocumentFragment();
+      if (m.index > last) frag.appendChild(document.createTextNode(text.slice(last, m.index)));
+      frag.appendChild(makePathPill(stripFile(tok)));
+      last = m.index + tok.length;                               // leave trimmed punctuation for the next slice
+    }
+    if (frag) {
+      if (last < text.length) frag.appendChild(document.createTextNode(text.slice(last)));
+      node.parentNode.replaceChild(frag, node);
+    }
+  }
+
+  function linkifyPaths(bubble) {
+    if (bubble.dataset.pathsLinked) return;
+    bubble.dataset.pathsLinked = '1';
+    // 1. bare-text paths → pills. Walk text nodes, skipping code/links/buttons.
+    const walker = document.createTreeWalker(bubble, NodeFilter.SHOW_TEXT, {
+      acceptNode(node) {
+        if (!node.nodeValue || node.nodeValue.indexOf('/') === -1) return NodeFilter.FILTER_REJECT;
+        for (let p = node.parentNode; p && p !== bubble; p = p.parentNode) {
+          const t = p.nodeName;
+          if (t === 'A' || t === 'CODE' || t === 'PRE' || t === 'BUTTON') return NodeFilter.FILTER_REJECT;
+          if (p.classList && p.classList.contains('scout-path-pill')) return NodeFilter.FILTER_REJECT;
+        }
+        return NodeFilter.FILTER_ACCEPT;
+      },
+    });
+    const nodes = [];
+    let n;
+    while ((n = walker.nextNode())) nodes.push(n);   // collect first — pillify mutates the tree
+    nodes.forEach((node) => { try { pillifyTextNode(node); } catch (_) {} });
+
+    // 2. NON-media local <a> links (e.g. [report](/Users/…/x.pdf)) → reveal on
+    //    click. Media <a> are left to _bindChatMediaLinks (in-app preview).
+    bubble.querySelectorAll('a[href]').forEach((a) => {
+      if (a.dataset.pathBound) return;
+      const href = stripFile(a.getAttribute('href') || '');
+      if (!isLinkablePath(href) || MEDIA_EXT.test(href)) return;
+      a.dataset.pathBound = '1';
+      a.classList.add('scout-path-link');
+      a.title = href + ' — click to reveal in Finder';
+      a.addEventListener('click', (e) => { e.preventDefault(); revealPath(href, 'reveal'); });
+    });
+  }
+
+  // ── public entry — called from addMsgToDOM after marked.parse ─────────
+  window._enhanceChatBubble = function _enhanceChatBubble(bubble) {
+    if (!bubble) return;
+    injectStyle();
+    try { enhanceSidebarImageViewer(); } catch (_) {}
+    try { addTableCopyButtons(bubble); } catch (_) {}
+    try { addCodeCopyButtons(bubble); } catch (_) {}
+    try { removeInlineDiagrams(bubble); } catch (_) {}  // diagrams live in the trace + preview, not inline
+    try { restyleDiagramTraceThumbs(); } catch (_) {}   // 🖼️ → 📊 on diagram trace thumbnails
+    try { bindImagePreview(bubble); } catch (_) {}
+    try {
+
+// ==== js: scout-voice.js ====
+/**
+ * scout-voice.js — the chat readback engine (Scout speaks a reply in Noah's
+ * or Natalie's cloned voice, highlighting each word as it lands).
+ *
+ * Extracted from index.html's inline script. That file carries ~18k lines of
+ * inline JS and absorbs ~17% of all commits in this repo, so it is the single
+ * worst place for logic to live: nothing can import it, nothing can test it,
+ * and every parallel agent editing the page collides on it.
+ *
+ * WHAT IT DOES
+ * A reply is chunked on sentence/block boundaries, each chunk is synthesized
+ * by /api/voice/speak, and a pump keeps the queue a few chunks ahead of the
+ * playhead. Synthesis runs ~1.4x realtime, so rendering a whole reply up front
+ * meant ~60s of silence; chunking puts the first word ~10s in and streams the
+ * rest behind it. Word highlighting uses real Whisper timings when the
+ * alignment sidecar is up, and a measured syllable/waveform heuristic when it
+ * is not.
+ *
+ * PUBLIC API (window.ScoutVoice)
+ *   speak(text, btn, bubble)  start / pause / resume / cancel a readback
+ *   stop()                    cancel whatever is live
+ *   getVoice() setVoice(id)   which cloned voice
+ *   getSpeed() setSpeed(x)    playback pace, applied live (no re-render)
+ *
+ * Everything else on the export is internal and exists so the pure logic can
+ * be tested — see tests/js/scout-voice.test.js. The pure functions
+ * (syllables, chunkSpans, proportionalTimes, alignedTimes, plainSpeech) take
+ * plain values or duck-typed span objects, so they run under `node --test`
+ * with no DOM and no dependencies.
+ *
+ * Loaded as a classic deferred script; exports to CommonJS when required from
+ * Node. No build step, no package manager — same call the affiliate Worker's
+ * tests make.
+ */
+(function (root, factory) {
+  const api = factory();
+  if (typeof module !== 'undefined' && module.exports) module.exports = api;
+  if (root) root.ScoutVoice = api;
+})(typeof globalThis !== 'undefined' ? globalThis : this, function () {
+  'use strict';
+
+  // Browser-only globals are touched lazily so this file can be required in
+  // Node for tests. `_hasDOM` gates the few places that read the environment
+  // at module scope.
+  const _hasDOM = typeof document !== 'undefined' && typeof localStorage !== 'undefined';
+  const _pref = (k, d) => { try { return _hasDOM ? (localStorage.getItem(k) ?? d) : d; } catch (e) { return d; } };
+  const _setPref = (k, v) => { try { if (_hasDOM) localStorage.setItem(k, v); } catch (e) {} };
+
+  const VOICE_SPEAKER_SVG = '<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5L6 9H2v6h4l5 4V5z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.54 8.46a5 5 0 010 7.07M19.07 4.93a10 10 0 010 14.14"/></svg>';
+  const PLAY_SVG = '<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>';
+  const PAUSE_SVG = '<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="currentColor"><path d="M7 5h3.2v14H7zM13.8 5H17v14h-3.2z"/></svg>';
+  const VOICE_SPINNER_SVG = '<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><circle cx="12" cy="12" r="9" stroke-width="2" opacity="0.25"/><path stroke-linecap="round" stroke-width="2" d="M21 12a9 9 0 00-9-9"/></svg>';
+  let scoutVoice = _pref('scout.voice', 'noah') || 'noah';
+  let scoutVoiceSpeed = parseFloat(_pref('scout.voice.speed', '1')) || 1;
+
+  // ── Readback session ───────────────────────────────────────────────────
+  // Synthesis measures ~1.4x realtime (5.2s of audio took 8.0s; 24.1s took
+  // 33.2s), so rendering a whole reply as one clip meant ~60s of silence
+  // before the first word. Instead we chunk the reply into sentences and
+  // render them on a pump that stays a few chunks ahead of playback: first
+  // audio lands in a couple of seconds, and the rest streams in behind it.
+  //
+  // `_speakSeq` is a generation counter. EVERY async continuation re-checks
+  // it before touching shared state or calling play(). That is what fixes
+  // the cacophony: the old code set the owning button up front but left the
+  // audio handle null for the entire ~60s fetch, so a second click failed
+  // the "already playing" guard and started a second, untracked render —
+  // and both eventually played. A stale seq now discards its own work.
+  let _speakSeq = 0;
+  let _speak = null;   // the one live session, or null
+  let _kara = null;    // karaoke window for the CHUNK now playing {spans, times}
+
+  // Speak-button icon states: idle 🔊 / loading / playing ⏸ / paused ▶.
+  function _setSpeakIcon(btn, state) {
+    if (!btn) return;
+    btn.classList.toggle('speaking', state === 'playing');
+    btn.classList.toggle('loading', state === 'loading');
+    btn.classList.toggle('tts-error', state === 'error');
+    if (state === 'playing')      { btn.innerHTML = PAUSE_SVG;          btn.title = 'Pause'; }
+    else if (state === 'paused')  { btn.innerHTML = PLAY_SVG;           btn.title = 'Resume'; }
+    else if (state === 'loading') { btn.innerHTML = VOICE_SPINNER_SVG;  btn.title = 'Preparing voice — click to cancel'; }
+    else if (state === 'error')   { btn.innerHTML = VOICE_SPEAKER_SVG;  btn.title = 'Voice failed — tap to retry'; }
+    else                          { btn.innerHTML = VOICE_SPEAKER_SVG;  btn.title = 'Speak in the selected voice'; }
+  }
+
+  // Progress chip next to the 🔊 button. The old build did have a spinner,
+  // but it lived inside `.msg-actions`, which is opacity-0 until hover — so
+  // the moment the pointer left the message there was no signal at all.
+  // Both the chip and the button are pinned visible by CSS while a session
+  // is live (`.msg-actions:has(.voice-speak-btn.loading)`).
+  function _speakStatusEl(btn) {
+    if (!btn || !btn.parentElement) return null;
+    let el = btn.parentElement.querySelector('.voice-status');
+    if (!el) {
+      el = document.createElement('span');
+      el.className = 'voice-status hidden';
+      btn.parentElement.insertBefore(el, btn.nextSibling);
+    }
+    return el;
+  }
+  function _paintSpeakStatus(sess) {
+    const el = sess && sess.statusEl;
+    if (!el) return;
+    if (!sess || sess.seq !== _speakSeq) { el.textContent = ''; el.classList.add('hidden'); return; }
+    const n = sess.chunks.length;
+    if (!sess.item) {
+      // Nothing playing yet: either the very first render (which may also be
+      // paying the one-time ~3GB model load) or a buffer underrun.
+      el.textContent = sess.started ? `rendering ${Math.min(sess.cursor + 1, n)}/${n}…`
+                                    : (n > 1 ? `preparing 1/${n}…` : 'preparing…');
+    } else if (n > 1) {
+      el.textContent = `${sess.item.index + 1}/${n}`;
+    } else {
+      el.textContent = '';
+    }
+    el.classList.toggle('hidden', !el.textContent);
+  }
+
+  // Tear a session down: stop audio, abort in-flight renders, drop blobs.
+  function _endSpeak(sess, { icon = 'idle' } = {}) {
+    if (!sess) return;
+    if (sess._raf) { cancelAnimationFrame(sess._raf); sess._raf = null; }
+    if (sess.audio) { try { sess.audio.pause(); } catch (e) {} sess.audio = null; }
+    try { sess.abort.abort(); } catch (e) {}
+    if (sess.item) { URL.revokeObjectURL(sess.item.url); sess.item = null; }
+    sess.ready.forEach(it => URL.revokeObjectURL(it.url));
+    sess.ready = [];
+    if (sess._drain) { const r = sess._drain; sess._drain = null; r(); }
+    _setSpeakIcon(sess.btn, icon);
+    if (sess.statusEl) { sess.statusEl.textContent = ''; sess.statusEl.classList.add('hidden'); }
+    _clearKaraoke();
+    if (_speak === sess) _speak = null;
+  }
+  // Cancel whatever is live (a new clip, or the user clicking away).
+  function _stopCurrentSpeak() {
+    _speakSeq++;                 // orphans every in-flight continuation
+    _endSpeak(_speak);
+  }
+
+  // ── Karaoke helpers — highlight each word as it's spoken ────────────────
+  // Timing is proportional WITHIN a chunk, and every chunk is re-anchored to
+  // its own measured duration. That is the fix for drift: the old code
+  // spread one estimate across a whole reply, so a bad guess early on
+  // compounded and the highlight ran further off with every sentence. Now
+  // error can never exceed one sentence. (We still can't get true per-word
+  // timings — Whisper in-process OpenMP-conflicts with the resident TTS
+  // model and crashes the app.)
+
+  // Wrap each word of a rendered bubble in a <span class="kw"> (skipping
+  // code), so we can highlight them in time with the audio. Idempotent.
+  function _wrapWords(el) {
+    const existing = [...el.querySelectorAll('.kw')];
+    if (existing.length) return existing;
+    // Everything in here is chrome or code, not prose — and since the spoken
+    // text is now built FROM these spans, anything we wrap is also read out
+    // loud. `svg` matters twice over: a rendered mermaid diagram lives in the
+    // bubble, and dropping HTML <span>s among its <text> nodes both breaks
+    // the chart and makes Scout recite the node labels. `.msg-fade` is the
+    // "See more" overlay on a clamped message.
+    const SKIP = 'pre, code, script, style, svg, .msg-fade, .scout-chunk-copy, [data-no-speak]';
+    const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, {
+      acceptNode: (n) => (!n.nodeValue.trim() || !n.parentElement || n.parentElement.closest(SKIP))
+        ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT,
+    });
+    const nodes = []; let nd; while ((nd = walker.nextNode())) nodes.push(nd);
+    const spans = [];
+    nodes.forEach(tn => {
+      const frag = document.createDocumentFragment();
+      tn.nodeValue.split(/(\s+)/).forEach(tok => {
+        if (tok === '' || /^\s+$/.test(tok)) { frag.appendChild(document.createTextNode(tok)); }
+        else { const s = document.createElement('span'); s.className = 'kw'; s.textContent = tok; frag.appendChild(s); spans.push(s); }
+      });
+      tn.parentNode.replaceChild(frag, tn);
+    });
+    return spans;
+  }
+
+  // ── Word timing ────────────────────────────────────────────────────────
+  // Scored against Whisper word-timestamp ground truth on three real clips.
+  // The old model (character count + a pause bonus, spread linearly over the
+  // clip) averaged 0.41s of error and landed within 250ms only ~31% of the
+  // time — and it ran CONSISTENTLY EARLY (median signed error -0.40/-0.55/
+  // -0.17s), which is what reads as "the highlight doesn't follow".
+  //
+  // Two changes, both measured:
+  //   * weight by SYLLABLES, not characters — "through" is one beat and
+  //     "away" is two, but character count says the opposite;
+  //   * map word position through the clip's own cumulative VOICED-FRAME
+  //     curve instead of wall-clock, so a pause holds the highlight where
+  //     it is instead of letting it sail on through the silence.
+  // Result: 0.23s average error, ~69% within 250ms, and no systematic lead.
+  // Syllables of the SPOKEN form of an integer. Stripping non-letters (the
+  // obvious implementation) scores "1,462" as one syllable when the voice
+  // spends nine on it — measured, "1,462." takes 2.88s against 0.88s for
+  // "37.", and both used to weigh the same. Numbers were the one place the
+  // highlight reliably outran the audio.
+  const _ONES  = [2, 1, 1, 1, 1, 1, 1, 2, 1, 1];       // zero … nine
+  const _TEENS = [1, 3, 1, 2, 2, 2, 2, 3, 2, 2];       // ten … nineteen
+  const _TENS  = [0, 0, 2, 2, 2, 2, 2, 3, 2, 2];       // (index = tens digit)
+  function _intSyllables(n) {
+    if (!isFinite(n) || n < 0) return 1;
+    if (n < 10) return _ONES[n];
+    if (n < 20) return _TEENS[n - 10];
+    if (n < 100) return _TENS[Math.floor(n / 10)] + (n % 10 ? _ONES[n % 10] : 0);
+    if (n < 1e3) return _ONES[Math.floor(n / 100)] + 2 + (n % 100 ? _intSyllables(n % 100) : 0);
+    if (n < 1e6) return _intSyllables(Math.floor(n / 1e3)) + 2 + (n % 1e3 ? _intSyllables(n % 1e3) : 0);
+    if (n < 1e9) return _intSyllables(Math.floor(n / 1e6)) + 2 + (n % 1e6 ? _intSyllables(n % 1e6) : 0);
+    return _intSyllables(Math.floor(n / 1e9)) + 2 + (n % 1e9 ? _intSyllables(n % 1e9) : 0);
+  }
+  function _letterSyllables(s) {
+    const g = s.toLowerCase().match(/[aeiouy]+/g);
+    let n = g ? g.length : 0;
+    if (/e$/.test(s.toLowerCase()) && n > 1 && !/(le|ee|ye)$/.test(s.toLowerCase())) n -= 1;  // silent -e
+    return Math.max(1, n);
+  }
+  // Spoken symbols carry real time too — "%" is two beats, not zero.
+  const _SYM_SYL = { '%': 2, '$': 2, '&': 1, '+': 1, '=': 2, '@': 1, '#': 1, '/': 1 };
+  function _syllables(word) {
+    const raw = String(word || '');
+    let n = 0, saw = false;
+    const re = /(\d[\d,]*)(\.\d+)?|([A-Za-z]+)|([%$&+=@#/])/g;
+    let m;
+    while ((m = re.exec(raw))) {
+      saw = true;
+      if (m[1] !== undefined) {
+        const digits = m[1].replace(/,/g, '');
+        // A long digit run is read out figure by figure, not as a quantity.
+        n += digits.length > 9 ? Math.round(digits.length * 1.2)
+                               : _intSyllables(parseInt(digits, 10));
+        if (m[2]) n += 1 + (m[2].length - 1);      // "point" + one beat per figure
+      } else if (m[3] !== undefined) {
+        n += _letterSyllables(m[3]);
+      } else if (m[4] !== undefined) {
+        n += _SYM_SYL[m[4]] || 1;
+      }
+    }
+    return saw ? Math.max(1, n) : 1;
+  }
+
+  // Cumulative count of "loud enough to be speech" frames, 10ms hop. Lets us
+  // invert speaking-time -> wall-clock.
+  async function _voicedCurve(blob) {
+    try {
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      if (!Ctx || !blob) return null;
+      _voicedCurve._ctx = _voicedCurve._ctx || new Ctx();
+      const buf = await _voicedCurve._ctx.decodeAudioData(await blob.arrayBuffer());
+      const ch = buf.getChannelData(0), sr = buf.sampleRate;
+      const hop = Math.max(1, Math.round(sr * 0.01));
+      const n = Math.floor(ch.length / hop);
+      if (n < 2) return null;
+      const rms = new Float32Array(n);
+      let peak = 0;
+      for (let i = 0; i < n; i++) {
+        let acc = 0;
+        const a = i * hop, b = a + hop;
+        for (let j = a; j < b; j++) acc += ch[j] * ch[j];
+        const r = Math.sqrt(acc / hop);
+        rms[i] = r; if (r > peak) peak = r;
+      }
+      const thr = Math.max(1e-4, peak * 0.05);
+      const cum = new Float32Array(n + 1);
+      for (let i = 0; i < n; i++) cum[i + 1] = cum[i] + (rms[i] > thr ? 1 : 0);
+      const total = cum[n];
+      return total > 0 ? { cum, frameDt: hop / sr, total } : null;
+    } catch (e) { return null; }   // decode unsupported → linear fallback
+  }
+
+  // Real per-word starts from Whisper, expanded onto the span list. Spans
+  // that contribute no audio (a lone emoji) inherit the previous start —
+  // they are silent, so any window works as long as it stays monotonic.
+  function _alignedTimes(chunk, align, duration) {
+    const starts = [];
+    let prev = 0;
+    chunk.spans.forEach((s, i) => {
+      const wi = chunk.sayIdx[i];
+      const t = (wi >= 0 && align[wi] != null) ? align[wi] : null;
+      prev = (t == null) ? prev : t;
+      starts.push(prev);
+    });
+    for (let i = 1; i < starts.length; i++) {
+      if (starts[i] <= starts[i - 1]) starts[i] = starts[i - 1] + 0.008;
+    }
+    return starts.map((st, i) => ({
+      start: st,
+      end: i + 1 < starts.length ? starts[i + 1] : Math.max(st + 0.05, duration),
+    }));
+  }
+
+  // Ask the sidecar to time this clip. Deliberately NOT awaited by the
+  // render pump: playback starts on the heuristic immediately and upgrades
+  // in place the moment real timings land, so accuracy costs zero latency.
+  // A missing/dead sidecar just never upgrades.
+  function _requestAlignment(sess, item) {
+    const chunk = item.chunk;
+    if (!chunk.words || !chunk.words.length) return;
+    const fd = new FormData();
+    fd.append('clip', item.clipName);
+    fd.append('words', JSON.stringify(chunk.words));
+    fetch('/api/voice/align', { method: 'POST', body: fd, signal: sess.abort.signal })
+      .then(r => r.ok ? r.json() : null)
+      .then(d => {
+        if (!d || !d.ok || !Array.isArray(d.times)) return;
+        if (sess.seq !== _speakSeq) return;
+        item.align = d.times;
+        // Already playing this chunk? Swap the timings under it live.
+        if (sess.item === item && _kara && _kara.spans === chunk.spans) {
+          const dur = (isFinite(item.audio.duration) && item.audio.duration > 0)
+            ? item.audio.duration : item.duration;
+          _kara.times = _alignedTimes(chunk, d.times, dur);
+        }
+      })
+      .catch(() => {});   // sidecar down / aborted — heuristic stands
+  }
+
+  function _proportionalTimes(spans, duration, curve) {
+    const w = spans.map(s => _syllables(s.textContent) + 0.5);
+    const total = w.reduce((a, b) => a + b, 0) || 1;
+    // speaking-time fraction -> wall clock (binary search the curve)
+    const at = (frac) => {
+      if (!curve) return frac * duration;
+      const target = frac * curve.total;
+      let lo = 0, hi = curve.cum.length - 1;
+      while (lo < hi) { const mid = (lo + hi) >> 1; if (curve.cum[mid] < target) lo = mid + 1; else hi = mid; }
+      return lo * curve.frameDt;
+    };
+    const starts = []; let acc = 0;
+    for (let i = 0; i < spans.length; i++) { starts.push(at(acc / total)); acc += w[i]; }
+    // Strictly increasing, and contiguous — a gap between two words would
+    // leave _highlightAt with nothing to select and blank the line.
+    for (let i = 1; i < starts.length; i++) {
+      if (starts[i] <= starts[i - 1]) starts[i] = starts[i - 1] + 0.008;
+    }
+    return starts.map((st, i) => ({
+      start: st,
+      end: i + 1 < starts.length ? starts[i + 1] : Math.max(st + 0.05, duration),
+    }));
+  }
+
+  function _clearKaraoke() {
+    if (_kara && _kara.spans) _kara.spans.forEach(s => s.classList.remove('kw-active'));
+    _kara = null;
+  }
+  function _highlightAt(t) {
+    if (!_kara) return;
+    const { spans, times } = _kara;
+    let idx = -1;
+    for (let i = 0; i < times.length; i++) { if (times[i] && t >= times[i].start && t < times[i].end) { idx = i; break; } }
+    // Past the last word (trailing silence in the clip): hold the final word
+    // rather than blanking, so the highlight doesn't flicker off between
+    // chunks. Same for a t before the first word.
+    if (idx < 0 && times.length) idx = (t >= times[times.length - 1].end) ? times.length - 1 : 0;
+    if (idx === _kara.last) return;
+    if (_kara.last >= 0 && spans[_kara.last]) spans[_kara.last].classList.remove('kw-active');
+    if (idx >= 0 && spans[idx]) spans[idx].classList.add('kw-active');
+    _kara.last = idx;
+  }
+
+  // ── Chunking ───────────────────────────────────────────────────────────
+  // Group the bubble's word spans into roughly-sentence chunks. The chunk
+  // TEXT is built from the spans themselves, so the words the model speaks
+  // and the words we highlight are one and the same list.
+  //
+  // That identity is the real karaoke fix. The old path spoke `content` —
+  // the RAW MARKDOWN, asterisks, link URLs, code fences and all — while
+  // highlighting words in the RENDERED bubble. Two different token streams,
+  // so the mapping was wrong from the first `**bold**` onward. Speaking the
+  // spans also means fenced code is no longer read aloud (`_wrapWords`
+  // already skips PRE/CODE), which is what you'd want anyway.
+  // Chunk sizes RAMP. Measured on this box, synthesis costs
+  // ~1.335x the audio's own duration plus ~1.06s fixed per call
+  // (5.2s of audio took 8.0s; 24.1s took 33.2s). Two consequences:
+  //   * a small first chunk buys a fast first word — that is the whole
+  //     reason the wait dropped from ~60s to ~10s;
+  //   * every extra chunk costs another ~1s of fixed overhead, so once
+  //     playback is running we want FEWER, bigger chunks.
+  // Hence: start small, settle large.
+  const _CHUNK_PLAN = [
+    { min: 40,  max: 170 },   // chunk 0 — optimize time-to-first-word
+    { min: 80,  max: 280 },
+    { min: 110, max: 400 },   // steady state — amortize the per-call overhead
+  ];
+  const _LOOKAHEAD = 3;       // chunks rendered ahead of the playhead
+  // Synthesis is slower than realtime, so the queue drains no matter how it
+  // is sliced. Buffer a little before starting (absorbs the first few
+  // boundaries) but never make the user wait longer than this for word one.
+  const _PREBUFFER = 2;
+  const _MAX_START_WAIT_MS = 11000;
+  // A sentence ends here / this token is really an abbreviation.
+  const _TERMINAL = /[.!?…][")'\]]?$/;
+  const _ABBREV = /(?:^[A-Z]|\b(?:Mr|Mrs|Ms|Dr|Prof|Sr|Jr|vs|etc|approx|Fig|No)|\b[eE]\.g|\b[iI]\.e)\.$/;
+  // Block-level elements whose boundaries imply a full stop. A table ROW is
+  // the block; the cells inside it are only a beat (see _CELL_SEL). Treating
+  // every cell as its own sentence machine-gunned a 3-column header out as
+  // three equal fragments — "Feature. Adenomyosis. Endometriosis." — which
+  // is what made table headings read fast and flat.
+  const _BLOCK_SEL = 'p, li, h1, h2, h3, h4, h5, h6, blockquote, tr, dt, dd';
+  const _CELL_SEL = 'td, th';
+
+  function _chunkSpans(spans) {
+    // Which block each word came from. Flattening the DOM to a space-joined
+    // string silently drops every structural pause markdown encodes, so a
+    // heading ran straight into the body ("…Coincidences The apple story…")
+    // and bullet lists came out as one breathless run. Measured: the same
+    // sentence with vs without the period rendered 7.76s vs 8.48s, and
+    // silencedetect finds NO pause in the first and a 0.63s pause in the
+    // second — the model honours punctuation, so we put it back.
+    const blocks = spans.map(s => (s.closest ? s.closest(_BLOCK_SEL) : null));
+    const cells = spans.map(s => (s.closest ? s.closest(_CELL_SEL) : null));
+    const chunks = [];
+    // `words` is the spoken-token list and `sayIdx` maps each span to its
+    // index in it (-1 for a span that contributes no audio, e.g. a lone
+    // emoji). Whisper alignment comes back indexed to `words`, so this is
+    // what lets real per-word timings land on the right spans.
+    let cur = [], curIdx = [], words = [], text = '';
+    const flush = () => {
+      if (!cur.length) return;
+      const say = text.replace(/\s+/g, ' ').replace(/\s+([.,;:!?])/g, '$1').trim();
+      if (!/[A-Za-z0-9]/.test(say)) {
+        // Nothing sayable (a lone emoji, a bare "---") — hand the spans to
+        // the previous chunk so no word loses its highlight.
+        if (chunks.length) {
+          const prev = chunks[chunks.length - 1];
+          prev.spans.push(...cur);
+          cur.forEach(() => prev.sayIdx.push(-1));
+        }
+        cur = []; curIdx = []; words = []; text = '';
+        return;
+      }
+      chunks.push({ spans: cur, sayIdx: curIdx, words, text: say });
+      cur = []; curIdx = []; words = []; text = '';
+    };
+    spans.forEach((s, i) => {
+      // Drop emoji/pictographs HERE, not at flush — headings routinely end
+      // with one ("Translation Mishaps 📜") and a trailing emoji would hide
+      // the real last word from the block-end test below, which is exactly
+      // how the heading kept running into the next paragraph. The SPAN is
+      // still highlighted; only the audio skips it.
+      const t = (s.textContent || '').replace(/[\p{Extended_Pictographic}️⃣]/gu, '').trim();
+      cur.push(s);
+      if (t) { curIdx.push(words.length); words.push(t); text = text ? text + ' ' + t : t; }
+      else { curIdx.push(-1); }
+      // Last word of a heading / list item / row / paragraph? Close it like a
+      // sentence so the voice breathes where your eye does. A cell boundary
+      // inside a row is only a comma — "Feature, Adenomyosis, Endometriosis."
+      // reads as one heading, where a period per cell read as three.
+      const last = i + 1 >= spans.length;
+      const blockEnd = last || blocks[i + 1] !== blocks[i];
+      const cellEnd = !blockEnd && !!cells[i] && cells[i + 1] !== cells[i];
+      if (text && /[A-Za-z0-9)"'\]]$/.test(text)) {
+        if (blockEnd && !_TERMINAL.test(text)) text += '.';
+        else if (cellEnd) text += ',';
+      }
+      const plan = _CHUNK_PLAN[Math.min(chunks.length, _CHUNK_PLAN.length - 1)];
+      const ends = _TERMINAL.test(text) && !_ABBREV.test(t);
+      // Only break on the length cap at a real boundary, so a table row can't
+      // be sliced across two clips (the header used to land as
+      // "Feature. Adenomyosis." | "Endometriosis."). The 1.6x ceiling stops
+      // an unpunctuated wall of text from running away.
+      if ((ends && text.length >= plan.min) ||
+          (text.length >= plan.max && (blockEnd || cellEnd)) ||
+          text.length >= plan.max * 1.6) flush();
+    });
+    flush();
+    return chunks;
+  }
+
+  // Render one chunk: synthesize, then pull the wav ourselves.
+  // We fetch the clip explicitly instead of handing the URL to <audio>
+  // because synthesis blocks the server's event loop — an <audio> element's
+  // lazy range request can land BEHIND the next chunk's render and stall
+  // playback for seconds. Awaiting the blob here keeps the ordering ours.
+  async function _renderChunk(sess, index) {
+    const fd = new FormData();
+    fd.append('text', sess.chunks[index].text);
+    fd.append('voice', scoutVoice);
+    // Always render at native pace: playback speed is applied client-side
+    // via playbackRate, so changing it never re-renders — and the server's
+    // on-disk cache key (which includes speed) stays stable across speeds.
+    fd.append('speed', '1.0');
+    const res = await fetch('/api/voice/speak', { method: 'POST', body: fd, signal: sess.abort.signal });
+    if (!res.ok) throw new Error('tts ' + res.status);
+    const data = await res.json();
+    const wav = await fetch(data.url, { signal: sess.abort.signal });
+    if (!wav.ok) throw new Error('clip ' + wav.status);
+    const blob = await wav.blob();
+    const url = URL.createObjectURL

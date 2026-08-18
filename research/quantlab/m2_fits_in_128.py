@@ -56,8 +56,11 @@ print(f"baseline swap: {swap0:.0f} MB", flush=True)
 
 # let MLX wire the whole model; default limit is a fraction of RAM
 try:
-    total = mx.metal.device_info()["max_recommended_working_set_size"]
-    print(f"max recommended working set: {gib(total):.1f} GiB", flush=True)
+    info = (mx.device_info() if hasattr(mx, "device_info")
+            else mx.metal.device_info())
+    total = info["max_recommended_working_set_size"]
+    print(f"device: {info.get('device_name')}  RAM {gib(info['memory_size']):.1f} GiB  "
+          f"max recommended working set {gib(total):.1f} GiB", flush=True)
     mx.set_wired_limit(int(total))
 except Exception as e:
     print(f"(could not raise wired limit: {e})", flush=True)

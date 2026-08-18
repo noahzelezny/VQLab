@@ -181,14 +181,34 @@ which is the correct reading for near-lossless quantization. The metric
 cannot distinguish "identical quality" from "8-bit" and should not be asked
 to.
 
-**CONSEQUENCE 2 — and this is the one that matters — VQ's gap is REAL.**
-42.65% is not 82% minus measurement slop; it is 40 points below the floor,
-far outside the saturated region where the metric loses resolution. The
-peer's own decision rule said a high floor would mean "measured against a
-stick that cannot read past it", and a low floor would mean real damage.
-82.32% is the low case. **So K/d geometry and a tail schedule are worth the
-compute** — there is genuine headroom between VQ-at-8.4G and lossless, not
-an artifact.
+**CONSEQUENCE 2 — VQ's gap is REAL, but NOT for the reason first written
+here.** The original argument (and the peer's own decision rule, which they
+retracted) was "a low floor means real damage". That is wrong: the floor
+tells you only where the TOP of the scale sits — that near-lossless reads as
+82%, not 100%. It says nothing about whether the region 40 points below has
+resolution.
+
+What actually licenses the conclusion is the AFFINE LADDER already measured
+above: struct6-e2 27.29 -> struct8-e2 34.90 -> struct6-e3 38.01 -> struct6-e4
+42.73. The metric cleanly separates four rungs across the 27-45 band, which
+is exactly where VQ sits at 42.65. **A saturated instrument cannot do that.**
+So the metric demonstrably has resolution in the working region, and
+improvements there will be visible. That is why K/d geometry and a tail
+schedule are worth the compute.
+
+**QUOTE KL, NOT AGREEMENT, FOR THIS CLAIM.** The floor shows up more cleanly
+in KL: 397 (two equivalent artifacts) vs 441 (near-lossless vs source) are
+essentially the same number, so KL's noise floor is ~400 mnats and VQ at
+3363 sits at **~8.5x the instrument's noise floor**. That statement does not
+require the reader to know the ceiling is 82%.
+
+**METHODOLOGY FACT — the two metrics are complementary and neither is
+trustworthy alone.** Agreement SATURATES near the top (it cannot distinguish
+"equivalent" from "8-bit": 82.32 vs 79.95) but DISCRIMINATES lower down
+(27->43 cleanly). KL behaves the opposite way: it still separates 397 from
+441 where agreement has given up, and it compresses differences lower down
+into large hard-to-read numbers. Report both; trust agreement in the damaged
+region and KL near lossless.
 
 Caveat kept from the peer: their evidence is 4-choice argmax on tasks, ours
 is top-1 over a ~250k vocab on free text. Comparable PHENOMENA, not
