@@ -15,6 +15,13 @@ reason the format exists.
 Writes model.py + config (model_file, vq_modules with pack_bits) via
 add_model_file.py, so the result is still zero-patch loadable by stock
 mlx_lm.
+
+MIXED ARTIFACTS. A tensor whose NSUB is not a multiple of 32 cannot use the
+block layout and is copied through UNPACKED (gemma-4-26b's down_proj, NSUB
+176). The result is a legal artifact: the reader dispatches per tensor on
+codes.dtype, so packed and unpacked tensors coexist. Such tensors keep
+paying full uint16, so the achieved size will miss the analytic target —
+the run prints exactly which ones and why.
 """
 import argparse
 import json
@@ -47,6 +54,7 @@ for f in SRC.iterdir():
         shutil.copy2(f, OUT / f.name)
 
 vq_meta = {}
+skipped = []
 for si, sh in enumerate(shards, 1):
     data = mx.load(str(SRC / sh))
     out_data = {}
@@ -61,6 +69,16 @@ for si, sh in enumerate(shards, 1):
         bits = vq_pack.bits_for_k(k)
         codes = np.array(val, copy=False)
         nsub = codes.shape[2]
+        # The block layout needs NSUB % 32 == 0 (vq_pack's BLOCK). Qwen shapes
+        # always satisfy it; gemma-4-26b's down_proj does not (NSUB=176 at
+        # d=4). Such a tensor is COPIED THROUGH UNPACKED rather than fataling:
+        # mixed artifacts are safe by construction, because add_model_file
+        # dispatches on codes.dtype (uint32 = packed) and so reads a skipped
+        # tensor by the original path. Absent pack_bits IS the unpacked signal.
+        if nsub % vq_pack.BLOCK:
+            out_data[key] = val
+            skipped.append((mod, nsub))
+            continue
         packed = vq_pack.pack(codes.astype(np.uint16), bits)
         # verify THIS tensor round-trips before we let it out of the process:
         # a silent packing error decodes to plausible garbage, not an error.
@@ -94,3 +112,11 @@ src_gib = sum(f.stat().st_size for f in SRC.glob("*.safetensors")) / 1024 ** 3
 out_gib = sum(f.stat().st_size for f in OUT.glob("*.safetensors")) / 1024 ** 3
 print(f"\npacked {len(vq_meta)} tensors: {src_gib:.1f} -> {out_gib:.1f} GiB "
       f"({out_gib / src_gib:.3f}x)")
+if skipped:
+    # Loud, because these tensors keep paying full uint16 and are the reason
+    # the achieved size misses the analytic target.
+    shapes = sorted({n for _, n in skipped})
+    print(f"NOT PACKED: {len(skipped)} tensors with NSUB % {vq_pack.BLOCK} "
+          f"!= 0 (NSUB {shapes}) — copied through unpacked, still uint16.")
+    for mod, n in skipped[:3]:
+        print(f"  e.g. {mod} (NSUB={n})")
