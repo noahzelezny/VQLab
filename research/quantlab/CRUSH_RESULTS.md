@@ -410,3 +410,90 @@ mlx-community ships nothing below 15G for gemma-4-26b-a4b (4bit=15G,
 not "better than the incumbent sidecar" (that was the e4b comparison,
 already settled) but "smaller than anything mlx-community has shipped for
 this model, at no quality cost we can detect." Worth a Hub upload.
+
+## K=2048 ROUND (08-18) — the codebook was the bottleneck, and litbench was NOT saturated
+
+Same fitter, same base (struct8-e2), same value source (bf16), only K
+changed: 256 -> 2048 at d=4. Fit relerr dropped 0.3136 -> 0.1877 (gemma)
+and 0.3126 -> 0.1874 (Qwen3.6) — a 40% cut in reconstruction error on both
+families, and on BOTH it converted into measured quality rather than
+staying a fit-side illusion.
+
+### gemma-4-26b-a4b
+
+KL (chat-wrapped, vs bf16):
+
+| rung | size | KL (mnats) | agree |
+|---|---|---|---|
+| struct8-e8 (affine 8-bit) | 25G | 441 | 79.95% |
+| **VQ K2048 d4** | **13.7G unpacked** | **1856** | **56.56%** |
+| VQ K256 d4 | 8.4G | 3363 | 42.65% |
+
+litbench, generative + cyclic (the decision-grade instrument):
+
+| model | size | accuracy |
+|---|---|---|
+| **VQ K2048 d4** | 13.7G unpacked | **86.54%** |
+| 26b bf16 | 48G | 84.62% |
+| e4b bf16 (incumbent sidecar) | 19G | 82.69% |
+| mlx-community 4bit | 15G | 79.81% |
+| VQ K256 d4 (sighted) | 9.5G | 79.81% |
+
+**READ 86.54% AS "AT THE bf16 CEILING", NOT "ABOVE bf16".** A quant cannot
+truly beat its own full-precision source; +1.92 over bf16 on n=104 is well
+inside noise (binomial SE ~3.4pp at this accuracy). The claim that survives
+scrutiny: **K2048 is indistinguishable from bf16 on litbench at 29% of
+bf16's size, and beats the 15G community 4bit by 6.73 points (~2 SE —
+suggestive, not conclusive; a paired per-item test would tighten this but
+per-item outcomes are not stored — TODO if this goes in a model card).**
+
+Two predictions made and broken IN OPPOSITE DIRECTIONS, worth remembering:
+after K256 tied community-4bit at 79.81% we assumed litbench was saturated
+there — it was not (K2048 moved +6.73). After K2048 hit 86.54% the ceiling
+IS real — bf16 itself sits at 84.62. Moral: "the bench is saturated" is a
+claim about the bench AND the model; test it, don't infer it.
+
+Residual instrument caveat: prediction distribution [48,17,19,20] vs gold
+[34,20,27,23] — an A-skew that survives --cyclic. Fair across models
+(everyone is measured with it), but absolute accuracies carry it.
+
+### Qwen3.6-35B-A3B
+
+| rung | size | KL (mnats) | agree |
+|---|---|---|---|
+| mlx-community 8bit | 35G | — | 96.18% |
+| **VQ K2048 d4 PACKED** | **13.0G** | **85.5** | **87.33%** |
+| mlx-community 4bit | 19G | — | 85.61% |
+| VQ K256 d4 | 10G | — | 79.50% |
+
+**Beats the community 4bit at 68% of its size.** Does NOT reach the 8bit bar
+(96.18%) that was the stated goal — the honest framing is "better and
+smaller than the 4bit", not "8bit quality". Noah's shelf-feel judgement
+("4bit hits the shelf, 8bit is the only usable one") maps to agreement:
+85.61% = shelf, 96.18% = usable. 87.33% is just past the shelf line, so
+expect it to FEEL like a slightly-better 4bit, not like the 8bit.
+
+### Packing is verified as a pure representation change on a REAL artifact
+
+pack_artifact.py on Qwen K2048: 120/120 tensors packed (NSUB=128, no
+skips), 17.6 -> 13.0 GiB (0.734x). Packed model re-scored on the SAME KL
+cache: **85.535 mnats / 87.33% — identical to unpacked to three decimals.**
+This closes the loop the synthetic round-trip test opened: packing changes
+bytes, not the model.
+
+gemma packs WORSE structurally: down_proj is NSUB=176 (176 % 32 != 0) and
+holds exactly 1/3 of all code elements (down [hidden,176] equals gate/up
+[704,704] per expert). That third stays uint16 -> effective 12.7 bits/code
+instead of 11, ~0.80x instead of 0.73x. Fix if ever needed: a 16-code
+block layout (16*11=176 bits) — different word alignment, real size on the
+table.
+
+### The transferable lesson
+
+K256 -> K2048 at fixed d=4 costs nothing at fit time (same wall-clock
+within 20%), doubles stored code width (8 -> 16 bits raw, 11 packed), and
+bought +13.9 agreement points on gemma and +7.8 on Qwen. The K=8192 attempt
+died to a Metal command-buffer timeout on the M4 (see STATE.md); K=2048
+with --expert-chunk 16 is the proven ceiling of this fitter on that box.
+Codebook capacity, not d-geometry or tail schedules, was the binding
+constraint at K=256 — try K first next time.
