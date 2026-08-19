@@ -107,7 +107,7 @@ Comfortable on a 32 GB machine with context headroom — the 8-bit needs 48 GB+.
 ```bash
 pip install mlx-lm
 python -m mlx_lm generate \
-  --model TheDrainFlorist/Qwen3.6-35B-A3B-VQ-tail30-d2K512 \
+  --model TheDrainFlorist/Qwen3.6-35B-A3B-VQ-4.4bpw \
   --prompt "Write a Python function that ..." \
   --max-tokens 512
 ```

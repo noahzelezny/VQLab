@@ -61,7 +61,7 @@ Runs on a 16 GB machine at short context; comfortable on 24 GB+.
 ```bash
 pip install mlx-lm
 python -m mlx_lm generate \
-  --model TheDrainFlorist/Qwen3.6-35B-A3B-VQ-d4K2048 \
+  --model TheDrainFlorist/Qwen3.6-35B-A3B-VQ-3.2bpw \
   --prompt "Explain the difference between a mutex and a semaphore." \
   --max-tokens 512
 ```
