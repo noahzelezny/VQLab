@@ -35,7 +35,7 @@ where the 18.7 GiB parity build is too large. Stock `mlx-lm`.
 | **this model** | **13.8 GiB** | **1.029x** | **87.33%** |
 | mlx-community 4-bit | 19 GiB | 1.041x | 85.61% |
 
-**+2.9% perplexity against the 4-bit's +4.1%, at 68% of its size.**
+**+2.9% perplexity against the 4-bit's +4.1%, at 73% of its size.**
 
 This is a genuine quality step down from the parity build — it costs ~3.8%
 perplexity to save 4.9 GiB. If you have the RAM, take the 18.7 GiB one.

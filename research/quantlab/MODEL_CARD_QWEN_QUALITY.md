@@ -33,9 +33,9 @@ same files with an unmodified `mlx-lm`:
 | build | size | perplexity | vs bf16 | top-1 agreement |
 |---|---|---|---|---|
 | bf16 | 65.4 GiB | 4.7215 | 1.000x | 100% |
-| mlx-community 8-bit | 35 GiB | — | 0.999x | 96.18% |
+| mlx-community 8-bit | 35 GiB | 4.7150 | 0.999x | 96.18% |
 | **this model** | **18.7 GiB** | **4.6812** | **0.991x** | 90.75% |
-| mlx-community 4-bit | 19 GiB | — | 1.041x | 85.61% |
+| mlx-community 4-bit | 19 GiB | 4.9154 | 1.041x | 85.61% |
 
 **At parity with bf16 on perplexity, at 26% of its size** — and smaller than
 the 4-bit while being ~5% better on ppl.
@@ -67,8 +67,8 @@ on the same harness and corpus; nothing was discarded.
 | build | geometry | layer schedule | size (GiB) | ppl | vs bf16 | KL (mnats) | top-1 agree |
 |---|---|---|---|---|---|---|---|
 | bf16 (teacher) | — | — | 65.4 | 4.7215 | 1.000x | 0 | 100% |
-| mlx-community 8-bit | affine 8-bit | uniform | 35 | — | 0.999x | — | 96.18% |
-| mlx-community 4-bit | affine 4-bit | uniform | 19 | — | 1.041x | — | 85.61% |
+| mlx-community 8-bit | affine 8-bit | uniform | 35 | 4.7150 | 0.999x | 7.449 | 96.18% |
+| mlx-community 4-bit | affine 4-bit | uniform | 19 | 4.9154 | 1.041x | 78.557 | 85.61% |
 | **VQ — this model** | d2·K512 + d4·K2048 | rich layers 30-39 | 18.7* | 4.6812 | **0.991x** | 44.573 | 90.75% |
 | VQ | d2·K2048 + d4·K2048 | rich layers 30-39 | 20.7 | 4.7210 | 1.000x | 46.842 | 90.30% |
 | VQ | d2·K256 + d4·K2048 | rich layers 30-39 | 16.5 | 4.7321 | 1.002x | 49.264 | 89.92% |
