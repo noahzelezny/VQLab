@@ -242,3 +242,40 @@ d2-K512 pack+KL.
 **NEXT:** score/ppl the flat-d2 qwen; pack+graft+score d2-K512 gemma;
 winrate generations for both d2 gemmas -> judging chip; verify_artifact
 --threshold 0.35 on anything that ships.
+
+---
+
+## OVERNIGHT ROUND 3 (08-19) — THE d=2 HEADLINE IS RETRACTED
+
+**READ E46's BRACKET AND E47 BEFORE TRUSTING ANY d2 CLAIM.**
+
+**Matched-bpw bracket (gemma, same base/source/fitter/cache):**
+| geometry | bpw | agree | vs d4 line |
+|---|---|---|---|
+| d4 K256 | 2.25 | 42.65% | (anchor) |
+| d2 K32 | 2.50 | 48.84% | -0.77 |
+| d4 K2048 | 2.75 | 56.56% | (anchor) |
+| d2 K64 | 3.00 | 57.68% | **-5.84** |
+| d2 K256 | 4.00 | 68.27% | no d4 comparator |
+| d2 K512 | 4.75 | 72.72% | no d4 comparator |
+
+At MATCHED BYTES d=4 with a big codebook WINS on gemma, and d2's deficit
+WIDENS with bpw. The 397B session pre-registered 63.52% for d2-K64 before it
+existed; it came in at 57.68%. What survives for d=2: it keeps climbing where
+the d4 K-ladder is known to flatten (untested above K2048 on gemma), it fits
+8x cheaper, and at K<=256 it needs no packing and decodes FASTER than d4.
+
+**IN FLIGHT (all verified before believed):**
+- M3: gemma d2-K1024 fit -> then pack/graft/prose chain -> then LEADS:
+  gemma d4-K8192 (3.50 bpw, the decisive d4-saturation test) and qwen
+  tail30-d2k512 (parity below 20G?).
+- M4: gemma d4-K4096 (3.25 bpw, MEASURED point beside d2-K64) and d4-K512
+  (2.50 bpw, target-1 candidate: d4 line predicts ~49.6% vs K256's 42.65%
+  for +0.8G).
+
+**M4 IS INTERMITTENTLY WRONG (E47, A/B proven).** Everything it fits is
+verified on M3. Use `verify_artifact.py --outlier 3.0`, NOT --threshold —
+an absolute bar is geometry-specific and cries wolf.
+
+**STILL OWED:** blind win-rate judging for the d2 gemmas (prose regen queued;
+old gens were pre-kernel <pad>). No gemma quality claim is real without it.
