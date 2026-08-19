@@ -3273,3 +3273,41 @@ line passes exactly through d2-K64's 57.68% at 3.00 bpw when X = 59.92%.
   X < ~59.9%  -> the d4 line bent UNDER d2; d=2 is competitive after all
   X ~ 59.9%   -> the two geometries are indistinguishable per bit here
 Recorded BEFORE the number exists, by both sessions.
+
+## E49 (08-19) — QWEN: A CHEAPER TAIL STRICTLY DOMINATES A RICHER ONE
+
+**Setup.** tail30 (layers 10-39 at d2, body 0-9 at d4-K2048) reached ppl
+PARITY at 20.7G with a d2-K2048 tail (5.75 bpw). Hypothesis: the tail is
+OVER-fed — drop the tail codebook and the artifact gets smaller without
+losing parity.
+
+**Result — it got smaller AND better, on every axis:**
+
+| rung | packed | ppl vs bf16 | KL | agree |
+|---|---|---|---|---|
+| mlx-community 8bit | 35G | 0.999x | — | 96.18% |
+| **tail30 d2k512 tail** | **17.9G** | **0.991x** | 44.6 | **90.75%** |
+| tail30 d2k2048 tail | 20.7G | 1.000x | 46.8 | 90.30% |
+| tail20 d2k2048 tail | 18.1G | 1.007x | 50.8 | 89.77% |
+| mlx-community 4bit | 19G | 1.041x | — | 85.61% |
+
+Strict dominance: -2.8 GiB, better ppl, better agreement. **Spending FEWER
+bits on the tail beat spending more.**
+
+**READ CAREFULLY — WHAT CHANGED IS THE ALLOCATION, NOT THE TOTAL.** Both
+rungs pay for 30 tail layers; the cheaper one simply stops over-serving them
+and the bytes it frees are not spent anywhere. So this is not "less is more"
+in general — it says the d2-K2048 tail was PAST ITS OWN KNEE, i.e. the tail
+saturates in codebook size just as the body's K-ladder does (E45). The
+lesson generalizes as: when a schedule and a geometry are tuned separately,
+the schedule's optimum moves once the geometry improves. tail30's depth was
+chosen when the tail was d4; nobody re-tuned it after d2 arrived.
+
+**0.991x is BELOW bf16 and that is not a bug.** Mild quantization slightly
+reducing referee ppl has been seen repeatedly in this lab (Qwen3.8 q4 at
+0.996x, E40; mlx-community 8bit at 0.999x). Treat anything in 0.99-1.00x as
+"at parity", not as "beats the teacher" — the corpus is finite and the
+effect is within its noise.
+
+**Next rung queued:** tail30 with a d2-K256 tail (4.25 bpw). If cheaper wins
+again the knee is lower still, and K<=256 needs no packing for those tensors.
