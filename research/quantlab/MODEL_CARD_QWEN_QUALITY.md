@@ -14,9 +14,9 @@ tags:
 - qwen3.6
 ---
 
-# Qwen3.6-35B-A3B-VQ-4.4bpw
+# Qwen3.6-35B-A3B-VQ-4.6bpw
 
-**8-bit-quality perplexity, smaller than the community 4-bit.** 17.9 GiB at ppl 0.991x vs bf16 — the 8-bit holds 0.999x at 35 GiB, the 4-bit degrades to 1.041x at 19 GiB (all measured on the same harness and corpus). Runs on a 32 GB Mac.
+**8-bit-quality perplexity, smaller than the community 4-bit.** 18.7 GiB (vision tower included) at ppl 0.991x vs bf16 — the 8-bit holds 0.999x at 35 GiB, the 4-bit degrades to 1.041x at 19 GiB (all measured on the same harness and corpus). Runs on a 32 GB Mac.
 
 A vector-quantized build of
 [Qwen3.6-35B-A3B](https://huggingface.co/Qwen/Qwen3.6-35B-A3B) for Apple
@@ -34,7 +34,7 @@ same files with an unmodified `mlx-lm`:
 |---|---|---|---|---|
 | bf16 | 65.4 GiB | 4.7215 | 1.000x | 100% |
 | mlx-community 8-bit | 35 GiB | — | 0.999x | 96.18% |
-| **this model** | **17.9 GiB** | **4.6812** | **0.991x** | 90.75% |
+| **this model** | **18.7 GiB** | **4.6812** | **0.991x** | 90.75% |
 | mlx-community 4-bit | 19 GiB | — | 1.041x | 85.61% |
 
 **At parity with bf16 on perplexity, at 26% of its size** — and smaller than
@@ -69,7 +69,7 @@ on the same harness and corpus; nothing was discarded.
 | bf16 (teacher) | — | — | 65.4 | 4.7215 | 1.000x | 0 | 100% |
 | mlx-community 8-bit | affine 8-bit | uniform | 35 | — | 0.999x | — | 96.18% |
 | mlx-community 4-bit | affine 4-bit | uniform | 19 | — | 1.041x | — | 85.61% |
-| **VQ — this model** | d2·K512 + d4·K2048 | rich layers 30-39 | 17.9 | 4.6812 | **0.991x** | 44.573 | 90.75% |
+| **VQ — this model** | d2·K512 + d4·K2048 | rich layers 30-39 | 18.7* | 4.6812 | **0.991x** | 44.573 | 90.75% |
 | VQ | d2·K2048 + d4·K2048 | rich layers 30-39 | 20.7 | 4.7210 | 1.000x | 46.842 | 90.30% |
 | VQ | d2·K256 + d4·K2048 | rich layers 30-39 | 16.5 | 4.7321 | 1.002x | 49.264 | 89.92% |
 | VQ | d2·K2048 + d4·K2048 | rich layers 20-39 | 18.1 | 4.7541 | 1.007x | 50.791 | 89.77% |
@@ -77,9 +77,11 @@ on the same harness and corpus; nothing was discarded.
 | VQ | d2·K256 | uniform | 17.6 | 4.7984 | 1.016x | 36.862 | 90.92% |
 | VQ | d4·K8192 | uniform | 14.8 | 4.7814 | 1.013x | 56.413 | 89.37% |
 | VQ | d4·K4096 | uniform | 14.0 | 4.8100 | 1.019x | 68.546 | 87.88% |
-| **VQ — compact sibling** | d4·K2048 | uniform | 13.0 | 4.8584 | 1.029x | 85.535 | 87.33% |
+| **VQ — compact sibling** | d4·K2048 | uniform | 13.8* | 4.8584 | 1.029x | 85.535 | 87.33% |
 | VQ | d4·K256 | uniform | 10 | — | 1.141x | — | 79.50% |
 | affine baseline (ours) | struct 8-bit base | uniform | 11 | — | 1.224x | — | 75.99% |
+
+\*Released sizes include the bf16 vision tower (+0.83 GiB); unreleased lab builds are text-only.
 
 Reading notes: "rich layers 30-39" means those layers carry the d4·K2048
 geometry and every other layer carries the cheap d2 geometry listed first.
@@ -107,7 +109,7 @@ Comfortable on a 32 GB machine with context headroom — the 8-bit needs 48 GB+.
 ```bash
 pip install mlx-lm
 python -m mlx_lm generate \
-  --model TheDrainFlorist/Qwen3.6-35B-A3B-VQ-4.4bpw \
+  --model TheDrainFlorist/Qwen3.6-35B-A3B-VQ-4.6bpw \
   --prompt "Write a Python function that ..." \
   --max-tokens 512
 ```

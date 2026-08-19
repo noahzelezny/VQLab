@@ -14,13 +14,13 @@ tags:
 - qwen3.6
 ---
 
-# Qwen3.6-35B-A3B-VQ-3.2bpw
+# Qwen3.6-35B-A3B-VQ-3.4bpw
 
-**13.0 GiB — beats the 19 GiB 4-bit on perplexity at 68% of its size.**
+**13.8 GiB (vision tower included) — beats the 19 GiB 4-bit on perplexity at 73% of its size.**
 
 The compact build in this collection: a vector-quantized
 [Qwen3.6-35B-A3B](https://huggingface.co/Qwen/Qwen3.6-35B-A3B) for machines
-where the 17.9 GiB parity build is too large. Stock `mlx-lm`.
+where the 18.7 GiB parity build is too large. Stock `mlx-lm`.
 
 
 ![where these releases sit](qwen36_ladder.png)
@@ -31,14 +31,14 @@ where the 17.9 GiB parity build is too large. Stock `mlx-lm`.
 |---|---|---|---|
 | bf16 | 65.4 GiB | 1.000x | 100% |
 | mlx-community 8-bit | 35 GiB | 0.999x | 96.18% |
-| sibling parity build | 17.9 GiB | 0.991x | 90.75% |
-| **this model** | **13.0 GiB** | **1.029x** | **87.33%** |
+| sibling parity build | 18.7 GiB | 0.991x | 90.75% |
+| **this model** | **13.8 GiB** | **1.029x** | **87.33%** |
 | mlx-community 4-bit | 19 GiB | 1.041x | 85.61% |
 
 **+2.9% perplexity against the 4-bit's +4.1%, at 68% of its size.**
 
 This is a genuine quality step down from the parity build — it costs ~3.8%
-perplexity to save 4.9 GiB. If you have the RAM, take the 17.9 GiB one.
+perplexity to save 4.9 GiB. If you have the RAM, take the 18.7 GiB one.
 
 Perplexity is corpus-specific; compare only against models scored on the
 same files.
@@ -61,7 +61,7 @@ Runs on a 16 GB machine at short context; comfortable on 24 GB+.
 ```bash
 pip install mlx-lm
 python -m mlx_lm generate \
-  --model TheDrainFlorist/Qwen3.6-35B-A3B-VQ-3.2bpw \
+  --model TheDrainFlorist/Qwen3.6-35B-A3B-VQ-3.4bpw \
   --prompt "Explain the difference between a mutex and a semaphore." \
   --max-tokens 512
 ```
@@ -99,7 +99,7 @@ Single-machine mlx-lm and pipeline sharding are unaffected.
 
 ## Limitations
 
-- Measurably below the 17.9 GiB sibling (1.029x vs 0.991x ppl) and well
+- Measurably below the 18.7 GiB sibling (1.029x vs 0.991x ppl) and well
   below the 35 GiB 8-bit. This is the size-first choice, not the quality
   choice.
 - Perplexity measured on one corpus; a different workload may rank builds
