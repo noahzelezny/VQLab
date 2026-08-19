@@ -496,8 +496,9 @@ def _fused(x, eidx, codes, codebook, scales, pack_bits=0):
     if pack_bits:
         if D != 4:
             raise NotImplementedError(
-                f"packed codes are d=4 only (got d={D}); d=2 artifacts must "
-                "ship unpacked (uint8) until a packed d2 kernel exists")
+                f"no FUSED packed kernel for d={D} (it is d4-shaped and "
+                f"returns NaN). VQSwitchLinear routes packed d=2 to _prefill "
+                f"instead; this raise only fires on a direct _fused call.")
         name = f"vq_fused_packed{pack_bits}"
         src = _SRC_FUSED_PACKED
         template = [("T", x.dtype), ("MAX_K", K), ("MAX_NSUB", NSUB),
@@ -560,9 +561,10 @@ def _decode_chunk(codes, codebook, scales, eidx_chunk, pack_bits=0,
     # this file inside the venv (site-packages/mlx_lm/models/vq_switch.py)
     # that still had the fall-through dispatch — see E47. Packed d2 remains
     # unimplemented and must still raise.
-    if D == 2 and pack_bits:
-        raise NotImplementedError(
-            "d=2 packed decode is not implemented; ship d=2 unpacked (uint8).")
+    # packed d=2 through THIS path is verified D-generic: decoded against a
+    # numpy vq_pack.unpack reference at max rel 2.6e-4 (K=512, pack_bits=9).
+    # The FUSED packed kernel is NOT — it is d4-shaped and returns NaN at
+    # d=2 — so __call__ routes packed d=2 here regardless of N.
     dims = mx.array([OUT, IN, D, G, NE], dtype=mx.int32)
     if pack_bits:
         name, src = f"vq_decode_packed{pack_bits}", _SRC_DECODE_PACKED
@@ -714,7 +716,12 @@ class VQSwitchLinear(nn.Module):
         if in_dtype not in (mx.float16,):
             xf = xf.astype(mx.float16)
         pb = self.pack_bits
-        if N <= VQ_FUSED_MAX_N:
+        # PACKED d=2 HAS NO FUSED KERNEL (returns NaN — it is d4-shaped).
+        # Prefill decodes it correctly, so force that path. Costs decode
+        # speed (~10 tok/s vs ~50) until a fused packed-d2 kernel exists;
+        # correct-and-slow beats fast-and-wrong, and beats not loading at all.
+        _d2_packed = pb and self["codebook"].shape[1] == 2
+        if N <= VQ_FUSED_MAX_N and not _d2_packed:
             y = _fused(xf, idx_flat.astype(mx.uint32),
                        self["codes"], self["codebook"], self["vq_scales"],
                        pack_bits=pb)
