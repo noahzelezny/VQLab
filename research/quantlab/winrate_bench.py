@@ -82,8 +82,20 @@ def cmd_prompts(args):
 # --------------------------------------------------------------- generate
 
 def strip_thinking(text):
-    """Drop the model's thinking channel; keep only the shipped prose."""
+    """Drop the model's thinking channel AND anything after its end-of-turn.
+
+    The turn-marker cut is not cosmetic. mlx-community's gemma-4-e4b-it-8bit
+    does not register <turn|> as an EOS for mlx_lm.generate, so 59/60 of its
+    generations ran past the answer and trailed hundreds of characters of
+    "<turn|><turn|>msch<turn|>ichi..." garbage (2026-08-19). Our 26b VQ
+    artifacts emit it 0/60. Judged blind and uncut, e4b would lose on a
+    PACKAGING defect of someone else's artifact while we recorded it as a
+    quality verdict — the exact instrument error E56 exists to prevent.
+    Cut here, and note the defect separately where it belongs.
+    """
     tail = text.rsplit("<channel|>", 1)[-1]
+    for marker in ("<turn|>", "<end_of_turn>", "<|im_end|>"):
+        tail = tail.split(marker)[0]
     return tail.strip()
 
 

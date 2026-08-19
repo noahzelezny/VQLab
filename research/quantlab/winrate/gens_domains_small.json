@@ -1,0 +1,308 @@
+{
+ "model": "vq-K256-d4",
+ "prompts": "winrate/prompts_domains.json",
+ "max_tokens": 640,
+ "never_closed_channel": 0,
+ "gens": [
+  {
+   "id": 1000,
+   "text": "The sky is blue due to **Rayleigh scattering**. As sunlight enters the atmosphere, it strikes gas molecules and scatters in all directions. Blue light travels in shorter, smaller waves, causing it to scatter more intensely than other colors. This widespread scattering of blue light is what our eyes perceive when looking at the sky.",
+   "closed_channel": true
+  },
+  {
+   "id": 1001,
+   "text": "Yeast makes bread rise through a biological process called **fermentation**. When yeast is mixed into dough, it consumes the sugars present in the flour. As it digests these sugars, it releases **carbon dioxide gas** as a byproduct. This gas becomes trapped within the dough's gluten network, forming tiny bubbles. As these bubbles expand, they push the dough upward, creating the airy, porous texture characteristic of risen bread.",
+   "closed_channel": true
+  },
+  {
+   "id": 1002,
+   "text": "First, research the company thoroughly so you can speak knowledgeably about their mission and values. \n\nBeyond research, here is a breakdown of essential advice for your first interview:\n\n**1. Preparation is Key**\n*   **Study the job description:** Know exactly what skills they are looking for so you can highlight how you possess them.\n*   **Prepare \"STAR\" stories:** For behavioral questions (e.g., \"Tell me about a time you faced a challenge\"), use the **S**ituation, **T**ask, **A**ction, and **R**esult method to keep your answers structured.\n*   **Anticipate common questions:** Have answers ready for \"Tell me about yourself,\" \"Why do you want this job?\" and \"What are your strengths/weaknesses?\"\n\n**2. Professionalism and Logistics**\n*   **Dress the part:** Even if the office is casual, aim for \"business casual\" to show respect for the process.\n*   **Test your tech (if virtual):** Ensure your camera, microphone, and internet connection are stable 15 minutes before the call.\n*   **Arrive early (if in person):** Aim to be in the building 10 minutes before your scheduled time.\n\n**3. During the Interview**\n*   **Mind your body language:** Maintain eye contact, sit up straight, and remember to smile. This conveys confidence and enthusiasm.\n*   **Listen actively:** Don't interrupt the interviewer. If you don't understand a question, it is perfectly okay to ask, \"Could you clarify what you mean by that?\"\n*   **Ask thoughtful questions:** At the end, never say \"I don't have any questions.\" Instead, ask things like, \"What does a typical day look like in this role?\" or \"What does success look like in this position?\"\n\n**4. The Follow-Up**\n*   **Send a thank-you note:** Within 24 hours, send a brief, polite email thanking them for their time and reiterating your interest in the role. This leaves a lasting positive impression.",
+   "closed_channel": true
+  },
+  {
+   "id": 1003,
+   "text": "A checksum is a value derived from a block of data using a specific mathematical algorithm. It acts as a digital fingerprint for a file or a message, used to verify that the data has not been altered, corrupted, or tampered with during transmission or storage.\n\nWhen data is sent from one place to another, there is a risk that bits might be flipped or lost due to noise or hardware errors. To prevent this, the sender calculates a checksum based on the original data and sends it along with the file. The receiver then performs the same calculation on the received data. If the receiver's calculated checksum matches the sender's checksum, the data is considered intact; if they do not match, it indicates that the data has been modified or corrupted.\n\nCommonly used in networking, file downloads, and database management, checksums are essential for ensuring data integrity. While simple checksums (like parity bits) are used to catch accidental errors, more complex cryptographic checksums (like SHA-256) are used to protect against intentional, malicious tampering.",
+   "closed_channel": true
+  },
+  {
+   "id": 1004,
+   "text": "Building a wall\nWeighting down a tarp\nPropping open a door\nCreating a garden path\nUsing as a weapon",
+   "closed_channel": true
+  },
+  {
+   "id": 1005,
+   "text": "Nile\nAmazon\nMississippi",
+   "closed_channel": true
+  },
+  {
+   "id": 1006,
+   "text": "Plants absorb sunlight. Roots drink up liquid. Air brings in carbon. Sunlight plus liquid plus carbon forms sugar. Oxygen flows out.",
+   "closed_channel": true
+  },
+  {
+   "id": 1007,
+   "text": "I woke up to the sound of my baby breathing softly in the crib. Then I remembered that I live alone and never had a child.",
+   "closed_channel": true
+  },
+  {
+   "id": 1008,
+   "text": "Recursion is a method of solving a problem where the solution depends on solutions to smaller instances of the same problem, typically implemented by a function calling itself.",
+   "closed_channel": true
+  },
+  {
+   "id": 1009,
+   "text": "Imagine you have $1 to buy a candy bar. Next year, that same candy bar might cost $2. \n\nInflation is when prices go up over time. It means your money doesn't go as far as it used to. It\u2019s like the money is losing its \"superpower\" to buy things, so you need more of it to get the same treats!",
+   "closed_channel": true
+  },
+  {
+   "id": 1010,
+   "text": "Maintain a consistent sleep schedule every day.\nAvoid screens and bright lights before bed.\nKeep your bedroom cool, dark, and quiet.\nLimit caffeine and heavy meals in the evening.",
+   "closed_channel": true
+  },
+  {
+   "id": 1011,
+   "text": "Water moves through a continuous, self-sustaining process known as the water cycle, which circulates moisture between the Earth's surface and the atmosphere. \n\nThe cycle begins with **evaporation**, where heat from the sun causes water from oceans, lakes, and rivers to turn into water vapor. This vapor rises into the air and undergoes **condensation**, cooling down to form clouds. When the moisture in these clouds becomes too heavy, it falls back to Earth through **precipitation**, which includes rain, snow, sleet, or hail. \n\nOnce the water reaches the ground, it undergoes **collection** and **infiltration**. Some water flows over the surface as runoff, heading back into bodies of water, while other portions soak into the soil to become groundwater. This entire movement ensures that water is constantly recycled and redistributed across the planet.",
+   "closed_channel": true
+  },
+  {
+   "id": 1012,
+   "text": "An API (Application Programming Interface) is a set of rules that allows different software programs to communicate. It acts as a digital intermediary, letting one application request data or services from another, much like a waiter taking an order from a customer to a kitchen.",
+   "closed_channel": true
+  },
+  {
+   "id": 1013,
+   "text": "Gold leaves drift down,\nChilly winds begin to blow,\nSummer fades away.",
+   "closed_channel": true
+  },
+  {
+   "id": 1014,
+   "text": "Red\nYellow\nBlue\nOrange\nGreen\nPurple",
+   "closed_channel": true
+  },
+  {
+   "id": 1015,
+   "text": "Gravity is the fundamental force of attraction that pulls objects with mass toward one another. It is responsible for keeping planets in orbit and causing objects to fall toward the Earth.",
+   "closed_channel": true
+  },
+  {
+   "id": 1016,
+   "text": "Place the eggs in a single layer at the bottom of a saucepan and cover them with cold water until they are submerged by at least an inch. Bring the water to a boil over medium-high heat, then turn off the heat and let the eggs sit in the hot water for 10 to 12 minutes depending on your preferred level of firmness. Once the time is up, transfer the eggs immediately to an ice bath to stop the cooking process and make them easier to peel.",
+   "closed_channel": true
+  },
+  {
+   "id": 1017,
+   "text": "Cinderella is a kind-hearted girl mistreated by her wicked stepmother and stepsisters. When a royal ball is announced, her fairy godmother intervenes, using magic to provide her with a gown and a carriage. At the ball, Cinderella dances with the Prince, but must flee before midnight, leaving behind a glass slipper. The Prince searches the kingdom for the girl whose foot fits the shoe. Eventually, he finds Cinderella, they marry, and she escapes her life of servitude.",
+   "closed_channel": true
+  },
+  {
+   "id": 1018,
+   "text": "A firewall acts as a digital barrier between your network and the internet. It monitors incoming and outgoing traffic, using a set of predefined security rules to allow or block data. By filtering out unauthorized access and malicious threats, it prevents hackers and malware from penetrating your private system.",
+   "closed_channel": true
+  },
+  {
+   "id": 1019,
+   "text": "Dolphin\nWhale\nSeal\nOtter\nPlatypus",
+   "closed_channel": true
+  },
+  {
+   "id": 1100,
+   "text": "Miss Bingley attempts to mock Elizabeth Bennet\u2019s \"fine eyes\" and disparage her family, but Mr. Darcy refuses to join in the criticism. The following day, the group gathers in the drawing-room for various social activities, including writing, gaming, and quiet observation.",
+   "closed_channel": true
+  },
+  {
+   "id": 1101,
+   "text": "While discussing the upcoming ball and its tedious formalities, Elizabeth expresses her preference for conversation over dancing. In response, Miss Bingley attempts to draw Darcy's attention through her elegant movements, but he remains focused on his studies.",
+   "closed_channel": true
+  },
+  {
+   "id": 1102,
+   "text": "Catherine and Lydia question the character and motives of Mr. Collins following his letter, finding his behavior pompous and confusing. Meanwhile, the family's attitude shifts as their mother, previously hostile, begins to approach his visit with unexpected composure.",
+   "closed_channel": true
+  },
+  {
+   "id": 1103,
+   "text": "After observing a strange interaction between two gentlemen, Elizabeth and Jane discuss the encounter without fully understanding the behavior. Meanwhile, Mr. Collins praises the politeness of Mrs. Philips, leading to an arrangement where he travels to Meryton with his cousins. Upon their arrival, the young women learn that Mr. Wickham has accepted their uncle's invitation and is already present.",
+   "closed_channel": true
+  },
+  {
+   "id": 1104,
+   "text": "The passage begins with a characterization of Mr. Darcy, noting that his social behavior shifts from aloof to agreeable depending on the wealth of his companions. The scene then transitions to a card game where Mr. Collins attempts to display his superior social standing by dismissively treating his gambling losses as insignificant.",
+   "closed_channel": true
+  },
+  {
+   "id": 1105,
+   "text": "During a dance, Elizabeth attempts to make conversation with Darcy, but her mention of a new acquaintance causes him to react with visible haughtiness and a desire to change the subject. The tension between them is interrupted when Sir William Lucas approaches and offers polite compliments to Darcy.",
+   "closed_channel": true
+  },
+  {
+   "id": 1106,
+   "text": "Elizabeth feels embarrassed by her family's social follies, which were witnessed by Mr. Darcy and the Bingley sisters. The evening becomes increasingly uncomfortable for her as Mr. Collins persistently clings to her side, refusing to dance with anyone else so he can focus entirely on winning her favor.",
+   "closed_channel": true
+  },
+  {
+   "id": 1107,
+   "text": "Charlotte Lucas praises Mr. Darcy's cleverness in composing a charade, while Elizabeth Bennet distinguishes between mere common sense and true literary talent. To avoid any social awkwardness or formal commitment, Mr. Darcy promises to handle the exchange with Mr. Elton himself, allowing Elizabeth to remain unburdened by the interaction.",
+   "closed_channel": true
+  },
+  {
+   "id": 1108,
+   "text": "Emma discusses her lack of interest in marriage with Harriet, explaining that she requires a partner of exceptional character to be tempted. While Harriet is driven by a curiosity to see the Vicarage, Emma asserts her independence and her refusal to seek out a superior suitor like Mr. Elton.",
+   "closed_channel": true
+  },
+  {
+   "id": 1109,
+   "text": "Mrs. John Knightley is a gentle, affectionate woman characterized by her delicate health and deep devotion to her family. Her husband, Mr. John Knightley, is a clever and respectable professional, though his reserved and occasionally moody temperament contrasts sharply with her extreme sweetness. This personality gap creates a dynamic where his natural flaws are potentially exacerbated by her unwavering kindness.",
+   "closed_channel": true
+  },
+  {
+   "id": 1110,
+   "text": "The first speaker discusses the declining health and overwhelming workload of a man named Perry, who is constantly in demand due to his intelligence. The second speaker reports that a woman's throat condition has significantly improved, likely due to bathing or a specific medicinal application.",
+   "closed_channel": true
+  },
+  {
+   "id": 1111,
+   "text": "Mrs. Goddard expresses intense anxiety over a friend's sore throat, prompting Emma to offer soothing reassurances. However, Emma quickly shifts the conversation to the cold weather, using it as a pretext to suggest that Mr. Elton stay home to protect his own voice for the following day.",
+   "closed_channel": true
+  },
+  {
+   "id": 1112,
+   "text": "As the group settles in after Mr. Woodhouse's lengthy storytelling, Emma attempts to distance herself from Mr. Elton, only to find him seated intimately close to her. His attentive and solicitous behavior makes it difficult for her to maintain her resolve, leading her to question whether he is truly shifting his affections from Harriet to herself.",
+   "closed_channel": true
+  },
+  {
+   "id": 1113,
+   "text": "While the group attempts to comfort a silent and distressed Mr. Woodhouse, his son-in-law remains unconcerned about the approaching snowstorm. The son-in-law confidently dismisses the danger, expressing optimism that they will arrive safely at Hartfield despite the worsening weather.",
+   "closed_channel": true
+  },
+  {
+   "id": 1114,
+   "text": "Harriet realizes that she has been deeply mistaken about Mr. Elton, misinterpreting his improper behavior as mere social clumsiness rather than a lack of character. While she previously believed his attentions were a sign of respect for her friendship with Knightley, he is now proving to be the proud and conceited man that Mr. Knightley had originally warned her about.",
+   "closed_channel": true
+  },
+  {
+   "id": 1115,
+   "text": "A group of emaciated, chained men, labeled as criminals by the law, march slowly up a path while balancing baskets on their heads. They are followed by a \"reclaimed\" individual in a uniform who maintains a cautious, alert stance toward the narrator.",
+   "closed_channel": true
+  },
+  {
+   "id": 1116,
+   "text": "In a dark, silent setting, Marlow recounts his experiences working under the influence of the enigmatic Kurtz. He expresses deep frustration over the lack of practical resources, specifically emphasizing his desperate need for rivets to repair a broken steamboat.",
+   "closed_channel": true
+  },
+  {
+   "id": 1117,
+   "text": "While navigating a river toward Kurtz\u2019s station, the narrator and his crew encounter a sudden sand-bank formation that splits the stream into two channels. After choosing the western passage, they find themselves funneled into a much narrower, constricted channel bordered by a long shoal and dense, overhanging vegetation.",
+   "closed_channel": true
+  },
+  {
+   "id": 1118,
+   "text": "The narrator, a sailor on the ship *Pequod*, reflects on the meager wages offered for his labor and expresses distrust toward the ship's primary owners, Captain Peleg and Bildad. While Peleg attempts to manage practical tasks, the narrator observes that the stingy Bildad remains preoccupied with his Bible, seemingly indifferent to the crew's concerns.",
+   "closed_channel": true
+  },
+  {
+   "id": 1119,
+   "text": "After a long evening of listening to sailors' stories, Ishmael returns to his room to find that Queequeg is still sitting motionless in the same position. Despite Ishmael's frustration and attempt to sleep, he remains restless and distressed, unsettled by the thought of Queequeg sitting alone in the dark.",
+   "closed_channel": true
+  },
+  {
+   "id": 1200,
+   "text": "Before you push back, you need to gather facts. Don't start by arguing; start by asking for **clarification and documentation.**\n\nYour first move should be to ask: **\"Could you please provide a breakdown of the new rent amount and a copy of the formal notice that complies with our lease agreement and local tenant laws?\"**\n\nSpecifically, you want to uncover three things:\n1. **The Legal Basis:** Does your lease allow for mid-term increases? (Usually, they don't).\n2. **The Notice Period:** Most jurisdictions require 30 or 60 days for rent hikes. 20 days may be illegal.\n3. **The Justification:** Is the 15% increase tied to specific utility or tax hikes, or is it arbitrary?\n\nOnce you have the written notice, check your local \"Rent Control\" or \"Tenant Rights\" laws before responding.",
+   "closed_channel": true
+  },
+  {
+   "id": 1201,
+   "text": "Ouch, that\u2019s frustrating! If you\u2019re burning garlic twice, you\u2019re likely hitting it with too much heat or adding it too early. Here are three specific things to check:\n\n1.  **The Heat Level:** Garlic has a high sugar content and very little moisture. If your oil is shimmering or smoking, it\u2019s too hot. Aim for **medium-low heat**. You want it to soften and turn golden, not turn black.\n2.  **The Timing:** If you are saut\u00e9ing onions or other aromatics, wait until they are nearly done before adding garlic. Garlic only needs 30\u201360 seconds of contact to release its flavor.\n3.  **The \"Scent Test\":** If the garlic smells bitter or looks dark brown/black, it\u2019s gone. \n\nNext time, try adding it last, right before you add your liquid or main ingredients to stop the cooking process. You've got this!",
+   "closed_channel": true
+  },
+  {
+   "id": 1202,
+   "text": "That is such a classic question! You can explain it using the concept of **relative motion**.\n\nTry saying something like this:\n\n\"The moon is actually much, much further away than the car. Because it is so far away, it doesn't have to move very much to stay in your view. \n\nWhen we drive, we are moving fast through our neighborhood, but the moon is so huge and distant that even as we zoom past trees and houses, the moon stays in almost the same spot in the sky. It looks like it's following us, but it's actually just staying still while *we* are the ones doing all the moving!\"\n\nYou can even demonstrate it: Have her hold a toy car and move it past a lamp (which is \"close\" and moves past quickly), then compare it to a distant star or a cloud (which stays \"still\" even as she moves).",
+   "closed_channel": true
+  },
+  {
+   "id": 1203,
+   "text": "To handle this, you need to move from \"defensive\" to \"assertive\" without being aggressive. The goal is to reclaim ownership in real-time.\n\nHere are three specific scripts to use:\n\n**1. The \"Bridge\" (When they speak right after you):**\n\"Thanks, [Name]. To build on the point I just made, I also suggest...\"\n\n**2. The \"Clarification\" (When they present your idea as theirs):**\n\"I\u2019m glad you agree with the point I just raised, [Name]. To expand on my original thought...\"\n\n**3. The \"Direct Reclaim\" (If they present it entirely as their own):**\n\"Actually, that\u2019s the idea I was just proposing. To add more detail to my thought...\"\n\n**Pro-tip:** If this happens often, start sending a \"pre-meeting\" email to the group outlining your ideas so there is a digital paper trail of your ownership.",
+   "closed_channel": true
+  },
+  {
+   "id": 1204,
+   "text": "Since you have $60 for five people, we should aim for a \"Mediterranean Feast\" style. It feels elevated but relies on affordable staples.\n\nHere is my suggested menu:\n\n*   **Appetizer:** Toasted baguette slices with olive oil, garlic, and heirloom tomatoes (Salt, pepper, and basil).\n*   **Main Course:** Lemon-Garlic Roasted Chicken Thighs served over a bed of buttery Orzo with spinach and parmesan.\n*   **Side:** A crisp cucumber and red onion salad with a vinegar dressing.\n*   **Dessert:** Affogato (Vanilla ice cream topped with a shot of espresso or strong coffee).\n\n**Budget Breakdown (Est.):**\n*   Chicken thighs & Orzo: $18\n*   Produce (Tomatoes, spinach, cucumber, garlic, lemon): $15\n*   Pantry/Dairy (Bread, parmesan, olive oil, ice cream): $15\n*   Coffee/Misc: $12\n\nThis leaves you a little wiggle room for a bottle of budget-friendly white wine! What do you think?",
+   "closed_channel": true
+  },
+  {
+   "id": 1205,
+   "text": "Don't panic\u2014your starter isn't dead! That nail polish scent is actually a very specific sign of **excess acetic acid** (vinegar) or high concentrations of **ethanol** (alcohol).\n\nIt usually means your starter is **hungry**. When the wild yeast consumes all the available sugars, the byproduct shifts from a sweet, yeasty smell to a sharp, chemical, or acidic one. It can also happen if your kitchen is too cold, causing the fermentation to slow down and acidify.\n\n**How to fix it:**\n1. **Feed it more often:** Give it a larger ratio of flour to water (e.g., 1:2:2) to provide more fuel.\n2. **Check the temperature:** Ensure it\u2019s in a warm spot (70-75\u00b0F).\n3. **The Test:** If it bubbles when you feed it, it's alive. If it stays flat and smells like pure acetone, it's likely \"over-fermented\" and needs a fresh feeding to reset.",
+   "closed_channel": true
+  },
+  {
+   "id": 1206,
+   "text": "It sounds frustrating to hit a wall so early, but don't let it stop you! Knee pain in new runners is often caused by \"impact overload\" or improper mechanics.\n\nFirst, **check your shoes.** If you are wearing old sneakers or flat lifestyle shoes, you lack the necessary cushioning. Go to a running specialty store for a gait analysis.\n\nSecond, **slow down and shorten your stride.** Many beginners \"overstride,\" landing with their heel far in front of their body, which acts like a brake and slams the knee. Try taking shorter, quicker steps to land with your foot directly under your hips.\n\nThird, **build strength.** Your knees are supported by your muscles. Incorporate squats and lunges to build stability.\n\nIf the pain is sharp or persistent, please see a physical therapist to rule out injury!",
+   "closed_channel": true
+  },
+  {
+   "id": 1207,
+   "text": "I know how frustrating that is! To stop the 4 a.m. wake-up calls, you need to change the \"reward\" system. If you get up to feed them or even just yell at them, you are reinforcing the behavior.\n\nTry these three specific steps:\n\n1.  **Ignore the behavior:** If they meow or scratch, do not move, speak, or look at them. Stay completely still in the dark.\n2.  **Automate feeding:** Use an automatic feeder set to go off at 4 a.m. This removes the \"hunger\" motivation for them to wake you.\n3.  **Play before bed:** Use a wand toy to engage them in intense play for 15 minutes right before you go to sleep. This burns their energy so they are more likely to sleep through the night.\n\nConsistency is key\u2014it may take a week to break the habit!",
+   "closed_channel": true
+  },
+  {
+   "id": 1208,
+   "text": "First, take a breath and forgive yourself. Everyone has experienced a \"brain freeze\"; it\u2019s a physiological response, not a character flaw.\n\nTomorrow, don't over-explain or apologize profusely. Over-apologizing can actually make the moment feel more awkward than it was. Instead, use **\"The Pivot\"** method:\n\n1.  **Acknowledge briefly:** \"I hit a bit of a mental block yesterday, but I wanted to circle back to [Topic X] to ensure we're on the same page.\"\n2.  **Provide the missing value:** Bring the specific data, slide, or answer that you couldn't provide during the freeze.\n3.  **Lead the discussion:** Instead of looking backward, look forward. Ask, \"Based on what I shared, what are our next steps?\"\n\nBy focusing on the *work* rather than your *performance*, you demonstrate professional maturity and resilience. You've got this!",
+   "closed_channel": true
+  },
+  {
+   "id": 1209,
+   "text": "It sounds like your tomatoes are struggling! To narrow this down, we need to look at the pattern.\n\nIf the yellowing is **patchy or mottled** with small spots, it\u2019s likely a **nutrient deficiency** (like magnesium or nitrogen) or a **fungal infection** like leaf spot.\n\nIf the edges are **curling inward or twisting**, you might be dealing with **leaf curl virus**, often spread by whiteflies or aphids. Check the undersides of the leaves for tiny insects.\n\nHowever, if the edges are **turning yellow and drooping** due to heat, it could be **physiological leaf roll** caused by extreme temperature or irregular watering.\n\n**Quick check:** Are the yellow patches symmetrical? Are there tiny bugs? If you can provide a photo or describe the texture (brittle vs. soft), I can help you pinpoint the exact fix!",
+   "closed_channel": true
+  },
+  {
+   "id": 1210,
+   "text": "Since she specifically asked for your opinion, you should tell her, but **how** you say it is more important than the fact itself. \n\nIf you want to be helpful, don't just say \"it was out of tune.\" Instead, frame it as a technical observation rather than a critique of her performance. \n\n**Try this approach:**\n\"The vocals were beautiful, but I noticed a few spots where the band's timing/tuning felt a little off. It didn't ruin the vibe, but it was noticeable.\"\n\n**Why this works:**\n1. **It validates her:** You start with a compliment.\n2. **It\u2019s specific:** You aren't saying \"they were bad,\" you are saying \"the tuning was off.\"\n3. **It provides context:** You reassure her that it didn't ruin the wedding.\n\nIf she is sensitive, skip the critique and focus on the energy of the room instead.",
+   "closed_channel": true
+  },
+  {
+   "id": 1211,
+   "text": "I hear you\u2014that \"looping\" feeling is incredibly frustrating. It usually happens when your brain is either overstimulated or too fatigued to process new information.\n\nTo break the cycle, try these three concrete steps:\n\n1.  **The \"Externalize\" Trick:** Stop reading and grab a blank piece of paper. Write down one single sentence summarizing what you *think* you just read. If you can't, your brain isn't absorbing; it's just scanning.\n2.  **Change the Sensory Input:** If you've been sitting still, stand up or walk for five minutes. The physical shift resets your focus.\n3.  **Micro-Goals:** Don't aim to finish the chapter. Tell yourself, \"I am only reading the next three sentences.\" \n\nIf you've hit a wall, your brain might actually be tired. Sometimes, the most productive thing is a 20-minute power nap.",
+   "closed_channel": true
+  },
+  {
+   "id": 1212,
+   "text": "Before deciding, don't just say \"yes\" or \"no.\" Instead, sit down and investigate the **why**. \n\nIs he bored with the repertoire, struggling with a specific teacher, or feeling social pressure to quit? If it\u2019s a lack of passion, forcing him might cause resentment. However, if it\u2019s a temporary slump, he might regret quitting once the \"hard part\" passes.\n\n**Try these three steps:**\n1. **The \"One More Term\" Rule:** Ask him to commit to one more semester/term. This prevents impulsive decisions.\n2. **The Pivot:** If he hates classical, let him switch to jazz or pop. It changes the \"work\" into \"play.\"\n3. **The Exit Interview:** If he still wants to quit after the term, let him. He\u2019s learned discipline and musicality that stay with him forever, even if the instrument goes.",
+   "closed_channel": true
+  },
+  {
+   "id": 1213,
+   "text": "To figure out if $900 is fair, don't just look at the total; look at the **breakdown**. \n\nFirst, ask for an itemized invoice. A fair quote should separate **parts** (pads, rotors, sensors) from **labor** (hourly rate x number of hours). \n\nNext, check these three things:\n1.  **The Parts:** Search your car's make/model online for \"brake pad prices.\" If the parts cost $300 but they charged $600, that's a huge markup.\n2.  **The Labor:** Ask for their hourly rate. If they charge $150/hour and the job takes 3 hours, that\u2019s $450. \n3.  **The Scope:** Are they replacing just the pads, or also the rotors? Replacing rotors adds significant cost.\n\nFinally, call one other shop for a \"ballpark\" quote. If the other shop says $600, $900 is high. If they say $1,100, you're getting a deal!",
+   "closed_channel": true
+  },
+  {
+   "id": 1214,
+   "text": "Don't panic; silence is often just people being busy, not a judgment on your character. To handle this, choose one of these three specific paths based on the \"vibe\" of the chat:\n\n1.  **The Self-Deprecating Pivot:** If it was a bad joke or a weird take, send a quick follow-up: *\"Wait, scratch that. I just realized how dumb that sounded. Moving on!\"* This signals you have self-awareness.\n2.  **The Subject Change:** If the silence is awkward, don't address the mistake. Just drop a new, unrelated topic or a funny meme to reset the momentum.\n3.  **The \"Ghost\" Method:** If it wasn't offensive, just leave it. Over-explaining often makes the \"dumb\" moment even more awkward.\n\n**Rule of thumb:** If you haven't been \"called out,\" don't call yourself out. Just move forward.",
+   "closed_channel": true
+  },
+  {
+   "id": 1215,
+   "text": "To figure out why your plant is shedding, I need to narrow down the variables. Could you tell me:\n\n1. **What kind of plant is it?** (Some species are more sensitive to changes than others.)\n2. **Where is it located?** Is it near a window, an AC vent, or a radiator?\n3. **How do you water it?** Do you use a schedule (e.g., \"every Monday\"), or do you feel the soil? Is the soil currently bone-dry or soggy?\n4. **What does the leaf look like when it falls?** Is it yellow and mushy, or brown and crispy?\n5. **Have you recently moved it?** Did you change its spot or repot it lately?\n\nKnowing these details will help us determine if it's a watering issue, a light problem, or environmental stress!",
+   "closed_channel": true
+  },
+  {
+   "id": 1216,
+   "text": "Congratulations on your first hosting gig! It\u2019s a huge milestone. To avoid the \"holiday scramble,\" keep these three specific things in mind:\n\nFirst, **check your oven capacity.** People often forget that a large turkey, two side dishes, and a dessert might not all fit in the oven at once. Map out your cooking timeline and rack space ahead of time.\n\nSecond, **the \"hidden\" essentials.** Don't forget extra trash bags, extra ice, and plenty of paper towels. You\u2019ll go through more than you think.\n\nThird, **the beverage station.** Don't just stock the alcohol; make sure you have enough water, sparkling water, and actual glasses. \n\nPro tip: Clear a designated spot for coats and bags before guests arrive so your living room doesn't become a storage unit. You've got this!",
+   "closed_channel": true
+  },
+  {
+   "id": 1217,
+   "text": "Your first move should be a **friendly, low-stakes conversation** rather than a formal complaint. Jumping straight to a landlord or animal control can create permanent tension between you and your neighbor.\n\nGo over during a quiet time of day (not while the barking is happening) and use \"I\" statements to avoid sounding accusatory. Try something like: *\"Hey, I wanted to mention that your dog has been barking quite a bit between 9 and 11 PM lately. I\u2019ve been having a hard time sleeping\u2014is there anything I can do to help, or do you have a plan to manage it?\"*\n\nThis approach accomplishes two things: it alerts them to the problem without being aggressive, and it opens a door for them to explain if they are struggling (e.g., a new puppy or a medical issue) before you escalate the situation.",
+   "closed_channel": true
+  },
+  {
+   "id": 1218,
+   "text": "To stop the snooze cycle, we need to move your \"prep phase\" from the morning to the night before. Let\u2019s redesign your evening with three concrete anchors:\n\n1.  **The Gear Setup:** Don't just \"plan\" to work out. Lay your clothes, shoes, and towel right next to your bed. If you use equipment, set it out. This removes the \"decision fatigue\" that makes you hit snooze.\n2.  **The Digital Sunset:** Set a \"phone curfew\" 60 minutes before sleep. Blue light kills your sleep quality, making morning willpower impossible.\n3.  **The Pre-Load:** Pack your gym bag or prep your breakfast/water bottle tonight. \n\n**Your goal:** Make the morning a \"path of least resistance.\" If you have to search for a sock at 6:00 AM, you\u2019ve already lost the battle. Try this tonight!",
+   "closed_channel": true
+  },
+  {
+   "id": 1219,
+   "text": "\"Bake until done\" is the ultimate kitchen riddle! Since custard is delicate, you can't rely on a timer; you have to rely on your senses.\n\nHere is how to tell if it's ready:\n\n1.  **The Jiggle Test:** Gently shake the pan. The edges should be firm and set, but the center should still have a slight, uniform \"wobble\" (like Jell-O). If it sloshes like liquid, it\u2019s not ready. If it\u2019s stiff, it\u2019s overbaked.\n2.  **The Visual:** The surface should look smooth and slightly matte, not shiny or liquid.\n3.  **The Temperature:** If you have an instant-read thermometer, custard is usually done when the center hits about **175\u00b0F (80\u00b0C)**.\n\n**Pro tip:** Pull it out when it looks *slightly* underdone. It will continue to set as it cools!",
+   "closed_channel": true
+  }
+ ]
+}
