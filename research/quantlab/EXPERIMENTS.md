@@ -4017,3 +4017,15 @@ gaps, blind at ~5 points, saturating near the top).
 E56's question is therefore in final form: 26b bf16 is the better base;
 does 2.25 bpw give back enough of that real advantage to lose to a smaller
 (8.38G) incumbent on the weaker base? Readings unchanged.
+
+### E47 addendum (08-19, from the 397B session's M4 failure #5) — M4 can lose COMPLETED work at the write step
+
+A finished ~40min gemma cheap-shallow fit died at the final
+mx.save_safetensors with kIOGPUCommandBufferCallbackErrorSubmissionsIgnored
+("for causing prior/excessive GPU errors") — the GPU context was poisoned
+upstream and every buffer was silently ignored until the write surfaced it.
+A plain matmul passes immediately after the process exits: the poisoning is
+per-process, not persistent; retry needs no reboot. Adds to the M4 failure
+catalogue: it does not only corrupt tensors (E47 body), it can also discard
+a whole completed fit at save time. Policy sharpened: prefer fitting on M3;
+if a long fit must run on M4, checkpoint per-shard.
