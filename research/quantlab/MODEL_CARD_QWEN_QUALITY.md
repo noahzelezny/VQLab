@@ -22,6 +22,9 @@ A vector-quantized build of
 [Qwen3.6-35B-A3B](https://huggingface.co/Qwen/Qwen3.6-35B-A3B) for Apple
 Silicon. Stock `mlx-lm`, no patches.
 
+
+![where these releases sit](qwen36_ladder.png)
+
 ## Measured results
 
 Referee corpus, 2048-token windows, scored against the bf16 teacher on the
@@ -51,13 +54,47 @@ discrete routing flips swap one plausible token for another, which
 perplexity absorbs and argmax-agreement punishes. Both numbers are honest;
 quote both.
 
+
+## The full sweep — every build we measured
+
+Two codebook geometries were swept end to end. Every point below was scored
+on the same harness and corpus; nothing was discarded.
+
+![d4 family](qwen36_d4_family.png)
+
+![d2 family](qwen36_d2_family.png)
+
+| build | geometry | layer schedule | size (GiB) | ppl | vs bf16 | KL (mnats) | top-1 agree |
+|---|---|---|---|---|---|---|---|
+| bf16 (teacher) | — | — | 70 | 4.7215 | 1.000x | 0 | 100% |
+| mlx-community 8-bit | affine 8-bit | uniform | 35 | — | 0.999x | — | 96.18% |
+| mlx-community 4-bit | affine 4-bit | uniform | 19 | — | 1.041x | — | 85.61% |
+| **VQ — this model** | d2·K512 + d4·K2048 | rich layers 30-39 | 17.9 | 4.6812 | **0.991x** | 44.573 | 90.75% |
+| VQ | d2·K2048 + d4·K2048 | rich layers 30-39 | 20.7 | 4.7210 | 1.000x | 46.842 | 90.30% |
+| VQ | d2·K256 + d4·K2048 | rich layers 30-39 | 16.5 | 4.7321 | 1.002x | 49.264 | 89.92% |
+| VQ | d2·K2048 + d4·K2048 | rich layers 20-39 | 18.1 | 4.7541 | 1.007x | 50.791 | 89.77% |
+| VQ (placement control) | d2·K512 + d4·K2048 | rich layers 0-9 (mirrored) | 17.9 | 4.8110 | 1.019x | 50.944 | 89.28% |
+| VQ | d2·K256 | uniform | 17.6 | 4.7984 | 1.016x | 36.862 | 90.92% |
+| VQ | d4·K8192 | uniform | 14.8 | 4.7814 | 1.013x | 56.413 | 89.37% |
+| VQ | d4·K4096 | uniform | 14.0 | 4.8100 | 1.019x | 68.546 | 87.88% |
+| **VQ — compact sibling** | d4·K2048 | uniform | 13.0 | 4.8584 | 1.029x | 85.535 | 87.33% |
+| VQ | d4·K256 | uniform | 10 | — | 1.141x | — | 79.50% |
+| affine baseline (ours) | struct 8-bit base | uniform | 11 | — | 1.224x | — | 75.99% |
+
+Reading notes: "rich layers 30-39" means those layers carry the d4·K2048
+geometry and every other layer carries the cheap d2 geometry listed first.
+The placement control is this model's exact recipe mirrored end-for-end —
+same bytes, 0.028x worse — which is the measurement behind the layer
+schedule this release uses. The flat d2·K256 row is why top-1 agreement is
+reported but never used to rank builds: it has the best agreement and KL of
+any unreleased build and mid-pack perplexity.
+
 ## Runtime
 
 Single M3 Ultra, macOS, stock `mlx-lm`, GPU otherwise idle:
 
 | | |
 |---|---|
-| load time | ~2 s (warm) |
 | peak memory | 18.0 GiB |
 | decode | **~55 tok/s** |
 

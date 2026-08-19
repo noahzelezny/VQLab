@@ -22,6 +22,9 @@ The compact build in this collection: a vector-quantized
 [Qwen3.6-35B-A3B](https://huggingface.co/Qwen/Qwen3.6-35B-A3B) for machines
 where the 17.9 GiB parity build is too large. Stock `mlx-lm`.
 
+
+![where these releases sit](qwen36_ladder.png)
+
 ## Measured results
 
 | build | size | vs bf16 ppl | top-1 agreement |
@@ -46,7 +49,6 @@ Single M3 Ultra, macOS, stock `mlx-lm`, GPU otherwise idle:
 
 | | |
 |---|---|
-| load time | ~7 s |
 | peak memory | 13.1 GiB |
 | decode | **~66 tok/s** |
 
