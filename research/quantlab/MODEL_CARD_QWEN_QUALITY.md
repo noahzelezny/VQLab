@@ -42,8 +42,13 @@ the 4-bit while being ~5% better on ppl.
 
 **Read 0.991x as "at parity", not "better than bf16".** Mild quantization
 slightly reducing referee perplexity is a known effect on this corpus (the
-8-bit reads 0.999x). The corpus is finite; treat anything in 0.99-1.00x as
-indistinguishable from the teacher.
+8-bit reads 0.999x), and the KL column proves it is not a quality claim:
+this build sits **44.573 mnats** from the teacher's distribution while the
+8-bit sits at **7.449**. Perplexity is an aggregate over a finite corpus and
+absorbs offsetting errors in both directions; KL measures the distance to
+the teacher directly and does not. Treat anything in 0.99-1.00x as
+indistinguishable from bf16 on this corpus, and read the KL column when you
+want to know which build is actually closer.
 
 Perplexity is corpus-specific — compare only against models scored on the
 same files, never across harnesses.
