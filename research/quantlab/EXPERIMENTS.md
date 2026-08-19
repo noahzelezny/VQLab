@@ -3576,7 +3576,7 @@ matched-size build, not another proxy.
 
 Cost of settling it: ~20 minutes of probing against a ~3h fit avoided.
 
-## E52 (08-19) — THE PACKING ASYMMETRY: d4 wins per BIT and loses per BYTE, on gemma only
+## E54 (08-19) — THE PACKING ASYMMETRY: d4 wins per BIT and loses per BYTE, on gemma only
 
 **The contradiction.** E50's matched-bpw bracket showed d4 ahead of d2 by
 1-2 agreement points. But plotted against SIZE, the gemma d2 curve sits
