@@ -4207,3 +4207,44 @@ correct bar and one no instrument here currently clears.
 chat, A/B re-randomized every turn, votes logged with true identity to
 winrate/human_verdicts.jsonl for a sign test. Noah's read is the only
 signal not yet saturated.
+
+## E64 (08-19, PRE-REGISTERED) — the breaking-point ladder: escalate until something fails
+
+**Mandate (Noah):** "push these guys until one starts breaking. There has to
+be one that's better than the other at something." E63 could not answer
+that because both models sat at ceiling; a ceiling cannot rank. So this set
+is built to produce a CURVE, and the deliverable is the tier at which each
+model falls off — a location, not a verdict.
+
+**Families x 4 escalating tiers** (winrate/prompts_ladder.json, 83 items):
+- state (10/25/50/100 sequential mutations of a box world, ask final
+  contents) — no shortcut exists; pure state carrying, the classic
+  small-model breaker.
+- chain (5/8/12/16 shuffled adjacency links uniquely fixing an order, ask
+  position p) — depth of transitive chaining.
+- constr (3/6/9/12 SIMULTANEOUS constraints; the hard tiers add acrostics,
+  exact word counts, letter bans, comma bans).
+- needle (8k/24k/48k token haystacks) plus needle_agg (three planted
+  numbers, report the SUM) — aggregation cannot be solved by one lucky
+  retrieval, which single-needle can.
+- sustain (1500/3000 words) scored for degeneration.
+
+**Gold-generation rule (the E63 lesson, now enforced structurally):** golds
+are produced BY A SIMULATOR from the same structure that is rendered into
+prose, never hand-written. Additionally verified INDEPENDENTLY before the
+run: all 20 state golds re-simulated from the rendered prose by a separate
+parser (20/20 agree); all 20 chain golds brute-force checked for solution
+UNIQUENESS and position correctness (20/20). A gold that disagrees with its
+question is an instrument that punishes the model that is right.
+
+**Pre-registered readings.** Expected breaking order if capacity is what
+separates: state tier 50-100 first, then chain 12-16, then constr 9-12,
+then needle_agg at 48k; single-needle retrieval expected to survive
+longest (both models have >=131k context). If BOTH models again clear
+every tier, the honest conclusion is that this class of task cannot
+separate them at all and the next escalation must change KIND (rare
+knowledge, adversarial reasoning, code execution) rather than degree — and
+the gemma-small card's "indistinguishable" language is then final, not
+provisional. A family where one model breaks at least one tier earlier
+than the other, with McNemar p<0.05 pooled, is the first real capability
+separation this project has found.
