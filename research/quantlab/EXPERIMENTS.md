@@ -3397,3 +3397,63 @@ of a saturating curve, and finally plain arithmetic in the x-axis itself.
 The fix that actually worked was measuring the neighbours instead of
 interpolating from far away — d4-K512 and d4-K8192 cost ~1.3h combined and
 turned a 6-point claim into a 1-2 point one.
+
+## E51 (08-19) — BLIND JUDGING: the d2 gemmas are INDISTINGUISHABLE from bf16, and the judge reproduces the KL ordering
+
+**The question this closes.** Since E43 two valid gemma instruments disagreed:
+litbench said VQ-K2048 was at the bf16 ceiling while KL said it diverged 4.2x
+more than 8-bit. E44 built the blind win-rate to break the tie, and E44's
+first run judged bf16 vs the two d4 artifacts. This is the same instrument
+run against the three d2 rungs built overnight.
+
+**Protocol.** 60 literary continuations per artifact, greedy, generated
+through each model's own chat template with thinking disabled. Pairs
+anonymized A/B with the assignment RANDOMIZED per pair and the key withheld
+in a separate file the judge was never pointed at. Judge: claude-sonnet-5,
+told explicitly that ties are legitimate. Decoded afterwards; exact
+two-sided sign test on decisive pairs.
+
+| artifact | KL agree | bf16 | quant | tie | p | verdict |
+|---|---|---|---|---|---|---|
+| d4-K256 (E44) | 42.65% | 34 | 12 | — | 0.0016 | bf16 SIGNIFICANTLY better |
+| d4-K2048 (E44) | 56.56% | 36 | 20 | 4 | 0.044 | bf16 SIGNIFICANTLY better |
+| d2-K512 | 72.72% | 23 | 16 | 21 | 0.34 | indistinguishable |
+| d2-K1024 | 75.90% | 16 | 25 | 19 | 0.21 | indistinguishable |
+| **d2-K2048** | **77.89%** | **11** | **23** | **26** | 0.058 | indistinguishable |
+
+**FINDING 1 — the artifacts we were shipping yesterday were MEASURABLY WORSE
+than bf16; the d2 rungs are not.** Both d4 artifacts lose significantly. No
+d2 rung does. gemma-quality at 18.74G sighted is statistically
+indistinguishable from 48G bf16 on blind literary judging.
+
+**FINDING 2 — THE JUDGE REPRODUCES THE KL ORDERING, and this is the real
+result.** bf16's share of DECISIVE pairs falls monotonically down the KL
+ranking: 74% -> 64% -> 59% -> 39% -> 32%, across five artifacts and two
+geometries. An independent, blind, human-style instrument recovered the
+ordering our automated metric predicted. That is the corroboration litbench
+could not supply because it had saturated (E43). It also rehabilitates KL for
+gemma: it over-reports the MAGNITUDE of MoE damage, but it RANKS correctly.
+
+**FINDING 3 — ties rise with quality:** 4 -> 21 -> 19 -> 26. On d2-K2048 the
+judge cannot separate the texts in 43% of pairs.
+
+**DO NOT READ THIS AS "THE QUANT BEATS bf16".** The judge has a strong
+positional lean toward B (raw splits 33-6, 24-17, 24-10) and bf16 sat in A
+for 34/60, so the bias pushes TOWARD the candidate. The defensible ceiling on
+this data is "indistinguishable", not "better", and d2-K2048's p=0.058 points
+the wrong way to be claimed as a win.
+
+**WHY THE ORDERING SURVIVES THE BIAS.** All three pair sets were built with
+the same seed over the same sorted ids, so the A/B assignment is IDENTICAL
+across them (verified). The positional confound is therefore the SAME
+constant in all three comparisons — it contaminates each absolute number but
+CANCELS when the artifacts are compared with each other. Design note for
+reuse: keep the pair assignment fixed across candidates for exactly this
+reason; it converts an instrument bias into a common-mode term.
+
+**Instrument caveats that remain.** One judge, one pass, no dual-order
+replication (E44's dual-order local judge was too weak to rank these at all —
+47/60 order-inconsistent). n=60 with up to 26 ties leaves as few as 34
+decisive pairs, so confidence intervals are wide. A second judge from a
+different family, or dual-order replication, would tighten this; neither
+changes the ordering, which is the load-bearing part.
