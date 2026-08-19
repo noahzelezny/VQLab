@@ -74,7 +74,7 @@ Single M3 Ultra, macOS, stock `mlx-lm`, GPU otherwise idle:
 | | |
 |---|---|
 | peak memory | 17.7 GiB |
-| decode | **~40 tok/s** |
+| decode | **~48 tok/s** |
 
 *Measured on an M4 Max (128 GB), mlx-lm, 120-token greedy generation.*
 

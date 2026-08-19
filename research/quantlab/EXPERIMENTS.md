@@ -4092,3 +4092,24 @@ The general lesson goes beyond vision: a gate suite verifies what it
 MEASURES, and everything it does not measure ships unverified. When adding
 a capability class (vision, future audio, adapters), add the corresponding
 existence gate the same day.
+
+## E62 (08-19) — FUSED PACKED-D2 KERNEL PRODUCTION-VALIDATED: ~3x decode on both quality artifacts, zero numeric drift
+
+Gate = reproduce the recorded scores on the guarded artifact with the
+fused runtime (397B session, M4, logs ~/qlab/kl_gate*.log; teacher cache
+was never gone — a stale-path scare):
+
+| artifact | KL / agree / ppl | old -> fused decode |
+|---|---|---|
+| qwen vq-tail30-d2k512-packed | 44.573 / 90.75% / ppl identical to every printed digit | 21.9 -> 66.2 (40-tok) / 54.9 (120-tok) |
+| gemma vq-K2048-d2-packed-sighted | 537.302 / 77.89% reproduced | 8.4 -> 47.8 |
+
+Identical to every printed digit on qwen incl. the raw ppl float; both
+quality artifacts now ship the fused runtime (qwen build is what is on
+the Hub as VQ-4.6bpw). The packed-d2 prefill fallback (E-noted at the d2
+kernel's debut) is retired from production. Cards updated (gemma decode
+~40 -> ~48 measured).
+
+Hub verification note: `hf cache verify` false-alarms on the Hub's
+auto-created .gitattributes and the local .cache state dir — content
+verification is sha256 against the Hub file listing, done directly.
