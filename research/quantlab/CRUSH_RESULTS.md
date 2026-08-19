@@ -536,3 +536,49 @@ GENERATIVE bench (long-form coherence, multi-turn, constrained
 instruction-following) or use-in-anger judgement. Single-token benches are
 exactly where routing divergence hides — the same trap that had
 single-token litbench scoring 26b bf16 BELOW its own 8-bit quant.
+
+## FINAL (08-19) — THE PUBLISH SET, after the overnight d2 ladder
+
+Reasoning and failures behind these numbers: E45-E51. Sizes are MEASURED on
+disk; gemma sizes are sighted (vision tower grafted, text path verified
+KL-identical). Every artifact passed `verify_artifact.py --outlier 3.0`,
+which decodes each tensor FROM THE ARTIFACT against bf16 rather than trusting
+a fit log.
+
+### gemma-4-26b-a4b (bf16 48G; raw ppl INVALID on this family — E39)
+
+| artifact | sighted | KL agree | blind vs bf16 | verdict |
+|---|---|---|---|---|
+| struct8-e8 (8-bit ref) | 25G | 79.95% | — | practical ceiling |
+| **vq-K2048-d2-packed** | **18.74G** | **77.89%** | 11-23, 26 tie, p=0.058 | **indistinguishable from bf16** |
+| vq-K1024-d2-packed | 17.41G | 75.90% | 16-25, 19 tie, p=0.21 | indistinguishable |
+| vq-K512-d2-packed | 16.08G | 72.72% | 23-16, 21 tie, p=0.34 | indistinguishable |
+| mlx-community 4bit | 15G | — | — | litbench 79.81% |
+| vq-K2048-d4 (was shipping) | 12.53G | 56.56% | 36-20, p=0.044 | bf16 SIGNIFICANTLY better |
+| **vq-K256-d4 (small)** | **9.43G** | 42.65% | 34-12, p=0.0016 | ties 15G 4bit on litbench |
+
+### Qwen3.6-35B-A3B (bf16 70G; ppl VALID — quote ppl, not agreement)
+
+| artifact | packed | ppl vs bf16 | agree |
+|---|---|---|---|
+| mlx-community 8bit | 35G | 0.999x | 96.18% |
+| **vq-tail30-d2k512-packed** | **17.9G** | **0.991x** | 90.75% |
+| vq-tail30-d2k2048-packed | 20.7G | 1.000x | 90.30% |
+| vq-tail30-d2k256-packed | 16.5G | 1.002x | 89.92% |
+| vq-tail20-d2k2048-packed | 18.1G | 1.007x | 89.77% |
+| mlx-community 4bit | 19G | 1.041x | 85.61% |
+| **vq-K2048-d4-packed (small)** | **13.0G** | **1.029x** | 87.33% |
+
+Read 0.99-1.00x as "at parity", not "beats the teacher" (E49).
+
+### The four claims, stated as they should ship
+
+1. **gemma quality, 18.74G** — statistically indistinguishable from 48G bf16
+   on blind literary judging (Sonnet, key withheld, 26/60 ties). 39% of bf16's
+   size.
+2. **gemma small, 9.43G** — matches mlx-community's 15G 4bit on litbench at
+   63% of its size; measurably below bf16, and honest about it.
+3. **qwen quality, 17.9G** — ppl 0.991x vs bf16, against 35G for the 8-bit at
+   0.999x. 51% of the 8-bit's size, runs on a 32GB machine.
+4. **qwen small, 13.0G** — ppl 1.029x, beating the 19G community 4bit's
+   1.041x at 68% of its size.
