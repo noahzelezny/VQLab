@@ -3602,13 +3602,23 @@ sister Qwen3.6 line measured both quantities on the same pair of artifacts:
 
   | build | blended fit relerr | measured ppl |
   |---|---|---|
-  | tail30-d2K512 | ~0.090 (WORSE) | **0.991x (BETTER)** |
-  | flat d2-K256 | ~0.084 (better) | 1.016x (worse) |
+  | `tail30-d2K512` (L0-9 CHEAP d4K2048, L10-39 d2K512) | ~0.090 (WORSE) | **0.991x (BETTER)** |
+  | `tail30-d2K256` (L0-9 CHEAP d4K2048, L10-39 d2K256) | ~0.109 (WORSE) | **1.002x (BETTER)**, 1.2 GiB SMALLER |
+  | flat d2-K256 (uniform) | ~0.084 (best fit) | 1.016x (worst ppl) |
 
-relerr says flat should win; perplexity says the tail build wins, at
-essentially the same size. **The ordering inverts.** Whatever a schedule
-exploits is invisible to reconstruction error, which is exactly the regime
+relerr ranks flat first; perplexity ranks it LAST, at essentially matched
+size. **The ordering inverts, twice, in the same direction.** Whatever a
+schedule exploits is invisible to reconstruction error — exactly the regime
 this entry's own probe operates in.
+
+**NAMING WARNING, and it cost the sister line a night of wrong theory.**
+Those builds are named "tail30" for the layers being PROMOTED, but on a
+`--k 2048 --dim 4` base `--tail-from 10 --tail-geom d2k512` yields layers
+0-9 at CHEAP d4-K2048 and 10-39 rich. **They are HEAD-DOWNGRADE builds.**
+Read as tail-promotions they suggest "spend more late"; read correctly they
+suggest "spend LESS early" — the opposite lever, and the one that makes an
+artifact SMALLER. Name a variant for the variable that MOVED, not for the
+end you were thinking about.
 
 Consequence for THIS entry, stated plainly: the five-layer sweep above
 remains correct about what it measured — fit error has no usable depth
