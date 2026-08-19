@@ -3117,6 +3117,14 @@ need blind win-rate judging before any quality claim.
 Two infrastructure findings that invalidate results silently. Both were
 caught by verify_artifact.py, neither by any fit log.
 
+### 0. TWO DIFFERENT FAILURE MODES — do not conflate them (397B session)
+
+  LOUD: kIOGPUCommandBufferCallbackErrorTimeout. It RAISES, the run dies,
+  nothing reaches disk. Retry and move on. Seen on both boxes under load.
+  SILENT: wrong compute that passes the fitter's own relerr gate and LANDS
+  IN THE ARTIFACT. Only this one needs a standing verification gate.
+Conflating them makes verification look more burdensome than it is.
+
 ### 1. M4 (nozzlebook-pro, M4 Max 128GB) returns wrong compute intermittently
 
 Controlled A/B — SAME artifact file, SAME deterministic verification, hashes
@@ -3143,9 +3151,17 @@ Corrupted artifacts M4 produced tonight, all passing the fitter's own gate:
 M3 (M3 Ultra) produced ZERO corrupted artifacts across the same night.
 
 **POLICY: every M4-fitted artifact is verified ON M3 before any number from
-it is believed.** verify_artifact.py --threshold 0.35 catches this; fit logs
-structurally cannot, because the fitter reports what it computed, not what
-reached disk.
+it is believed.** Fit logs structurally cannot see this — the fitter reports
+what it COMPUTED, not what reached disk.
+
+**USE `--outlier 3.0`, NOT `--threshold`.** An absolute bar is
+geometry-specific: healthy d4-K128 on the 397B lands ~0.46, so 0.35 would
+fail every tensor and the gate would be ignored within a day. Corruption is
+an OUTLIER AGAINST THE ARTIFACT'S OWN PEERS — tail30's dead tensor read
+1.0000 beside peers at 0.032. `--outlier MULT` flags anything above MULT x
+the artifact's own median and needs no per-geometry tuning. Validated both
+ways: catches all 3 corrupt tensors in qwen d2-K64 (5.7-5.9x median) and
+passes a clean artifact with no false alarm. Credit: 397B session.
 
 ### 2. There are TWO copies of vq_switch.py and the LIVE one is in the venv
 
@@ -3196,7 +3212,19 @@ K32->K64).
    than d4 (51.0 vs 47.2 tok/s), sidestepping gemma's NSUB=176 stranded
    third entirely.
 
-**THE TEST THAT SETTLES IT** (queued): gemma d4-K8192 at 3.50 bpw. The d2
+**PRE-REGISTERED PREDICTION, RESOLVED.** The 397B session pre-registered,
+BEFORE d2-K64 existed, that if d2 sat on the d4 line it would land at 63.52%
+(d4 slope 27.82 pts/bpw from the K256->K2048 interval), with <61% meaning
+"d2 is worse per bit" and >66% meaning "d2 genuinely steeper".
+    d2-K64 actual: 57.68%  ->  5.84 points BELOW the d4 line.
+And the gap WIDENS with bpw (-0.77 at 2.50, -5.84 at 3.00). On gemma, at
+matched bytes, d=2 is WORSE per bit than d=4 with a large codebook.
+
+Qualifier that cuts both ways: the d4 line is EXTRAPOLATED past K2048, and
+E45 showed the d4 K-ladder flattens (qwen K2048->K4096 = +0.55 for +0.9G).
+So 63.52% probably overstates real d4 up there. Hence:
+
+**THE TEST THAT SETTLES IT** (running): gemma d4-K8192 at 3.50 bpw. The d2
 line interpolates to ~63% there. If d4-K8192 lands below that, d=2 scales
 further and the whole lineup is worth re-walking; if it matches or beats it,
 d=2 is only a fit-cost and packing convenience, not a quality lever.
