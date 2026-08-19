@@ -4018,14 +4018,29 @@ E56's question is therefore in final form: 26b bf16 is the better base;
 does 2.25 bpw give back enough of that real advantage to lose to a smaller
 (8.38G) incumbent on the weaker base? Readings unchanged.
 
-### E47 addendum (08-19, from the 397B session's M4 failure #5) — M4 can lose COMPLETED work at the write step
+### E47 addendum (08-19, corrected same day) — M4 failure #5: a fit lost at the write step; cost was ~6 minutes, not 40
 
-A finished ~40min gemma cheap-shallow fit died at the final
-mx.save_safetensors with kIOGPUCommandBufferCallbackErrorSubmissionsIgnored
-("for causing prior/excessive GPU errors") — the GPU context was poisoned
-upstream and every buffer was silently ignored until the write surfaced it.
-A plain matmul passes immediately after the process exits: the poisoning is
-per-process, not persistent; retry needs no reboot. Adds to the M4 failure
-catalogue: it does not only corrupt tensors (E47 body), it can also discard
-a whole completed fit at save time. Policy sharpened: prefer fitting on M3;
-if a long fit must run on M4, checkpoint per-shard.
+A gemma cheap-shallow fit on M4 died at the final mx.save_safetensors with
+kIOGPUCommandBufferCallbackErrorSubmissionsIgnored. First report said "~40
+minutes of completed work lost" — that number was pattern-matched from an
+unrelated fit's duration, never measured, and Noah caught it: file mtimes
+bound the crashed run at ~6-7 minutes (cheap-codebook fits are fast). Do
+not build checkpointing machinery to protect 6-minute jobs.
+
+Two mechanism hypotheses, deliberately BOTH held (neither proven):
+1. Poisoned GPU context (from the error string): per-process, not
+   persistent — a plain matmul passes immediately after; retry, no reboot.
+2. SMB contention (Noah's): M4 reaches the Thunderbay SSD over SMB from
+   M3, and the crash landed exactly at the save while M3 was hammering the
+   same disk with the K8192 fit. Explains WHY it struck at the write,
+   which hypothesis 1 does not.
+Live discriminator: the K128 retry runs under the same contention (E56
+benches now on M3). Survives -> evidence against contention; dies at the
+write again -> evidence for.
+
+Related, measured here: the 6-bit pack path needed for cheap-shallow K64
+regions is fully supported — vq_pack round-trips 6-bit exactly, and BOTH
+Metal readers (fused packed6 d4 and decode packed6) match the unpacked
+reference bit-identically (max rel diff 0.0e0, synthetic E2/OUT128/IN256).
+No slow-path fallback: pack_bits is a template parameter, so 6-bit gets
+its own compiled kernel, same as 9/11-bit.
