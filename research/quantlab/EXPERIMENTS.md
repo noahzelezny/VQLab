@@ -2936,3 +2936,65 @@ block-pack at 32 codes/block, so gemma's effective width is 12.7 bits ->
 a publish given it misses the stated 8bit goal; 16-code block layout to
 reclaim gemma's unpacked third; K=4096/8192 needs either a fitter that
 survives Metal timeouts (smaller chunks?) or a different box.
+
+## E44 (08-18, evening) — THE INSTRUMENT WAS BROKEN THREE WAYS, AND ONE FIT WAS TOO
+
+**Context.** Built winrate_bench.py to settle the litbench/KL disagreement
+on gemma (E43): blind paired win-rate on literary prose, judged by
+Qwen3.8-27B q4, every pair judged in both orders. First run returned 60/60
+"inconsistent" — zero decisive pairs. Diagnosis found FOUR distinct
+failures, three in the instrument and one latent in the fitter.
+
+**1. Generation never left the thinking channel.** 420 max_tokens; the 26b
+plans/drafts/self-critiques for 3000+ tokens on a writing task. All 180
+"generations" were raw reasoning — the tokenizer's channel markers
+(<|channel> id 100 opens, <channel|> id 101 closes) confirmed no close ever
+appeared. First diagnosis wrongly blamed the marker string itself; the
+marker was correct, the budget was the bug.
+FIX: apply_chat_template(..., enable_thinking=False) — gemma's template
+pre-closes an EMPTY thinking block and prose starts immediately (verified:
+first token is story text). Fair across models, kills the reasoning-length
+confound, and 700 tokens suffices.
+
+**2. The judge parser read our own prompt back.** Qwen3.8 is a reasoner; it
+restates the instruction ('answer "1", "2", or "tie"') while thinking. A
+first-match \b(1|2|tie)\b regex matched that restatement: 120/120
+judgments returned "1".
+FIX: require an explicit trailing "VERDICT: x" line and take the LAST
+match. Lesson generalizes: NEVER first-match-parse a reasoner's output —
+litbench hit the identical trap (E39) and solved it the same way.
+
+**3. (What went right.) The dual-order guard converted garbage into an
+obvious null.** Judging each pair in both orders and requiring agreement
+meant a constant-"1" judge scored 0 decisive rather than a plausible 30-30.
+A single-order design would have produced a believable, WRONG win-rate that
+was one commit away from a model card.
+
+**4. tail30 fit collapse — kmeans is UNSEEDED, fits are non-deterministic.**
+tail30 (a strict superset of tail20's d2 coverage) scored WORSE than tail20
+(160 vs 51 mnats, 83.79 vs 89.77%). Impossible if fits were healthy. Log
+audit: L26 down_proj relerr 1.0000 (weight destroyed), four more tensors
+0.12-0.26 — the SAME layers fitted at ~0.032 in tail20. kmeans centroid
+init is mx.random with no fixed seed; a bad draw (or a transient Metal
+fault — this was the M4, which also produced the K8192 command-buffer
+timeout) collapses a tensor and the fitter shipped it silently.
+FIXES, two layers:
+  - fitter now refits (fresh init) any tensor over --relerr-abort 0.35 and
+    ABORTS the run if still failing (vq_397b_codes.py).
+  - verify_artifact.py decodes every tensor FROM THE ARTIFACT (packed or
+    unpacked) and measures relerr against the bf16 source independently —
+    catches fit collapse, packing faults, write faults, stale resume
+    shards. Smoke-verified: packed tail20's decoded relerrs match the fit
+    log to 4 decimals. RUN THIS BEFORE ANY HF UPLOAD.
+Audit of all shipping artifacts (qwen K2048/K4096/tail20, gemma K2048):
+clean, worst 0.215 = L00, legitimately hard. tail30 shard-2 refit queued
+with the gate armed.
+
+**Meta-lesson.** Every failure tonight was SILENT-PLAUSIBLE: reasoning that
+looked like generations, a parse that looked like a verdict, a fit that
+looked done. The pattern that caught each one was a REDUNDANT CHECK THAT
+CANNOT SHARE THE FAILURE (order-swapped judging; a superset artifact
+scoring worse than its subset; decode-from-artifact verification).
+Instruments need controls before results are believed — same lesson as the
+agreement-floor test (E41), which is why the bench has a bf16-vs-bf16
+control in its design.
