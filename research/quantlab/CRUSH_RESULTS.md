@@ -352,7 +352,7 @@ and averaged; those are the decision-grade numbers.
 
 | model | size | accuracy |
 |---|---|---|
-| **26b bf16** | 48G | **84.62%** |
+| **CYCLIC 26b bf16** | 48G | **85.58%** | 
 | CYCLIC e4b bf16 | 19G | 82.69% |
 | struct8-e8 (affine, 8-bit) | 25G | 79.81% |
 | **CYCLIC VQ-K256-d4** | **8.4G** | **79.81%** |
@@ -434,7 +434,7 @@ litbench, generative + cyclic (the decision-grade instrument):
 | model | size | accuracy |
 |---|---|---|
 | **VQ K2048 d4** | 13.7G unpacked | **86.54%** |
-| 26b bf16 | 48G | 84.62% |
+| CYCLIC 26b bf16 | 48G | 85.58% |
 | e4b bf16 (incumbent sidecar) | 19G | 82.69% |
 | mlx-community 4bit | 15G | 79.81% |
 | VQ K256 d4 (sighted) | 9.5G | 79.81% |
@@ -582,3 +582,17 @@ Read 0.99-1.00x as "at parity", not "beats the teacher" (E49).
    0.999x. 51% of the 8-bit's size, runs on a 32GB machine.
 4. **qwen small, 13.0G** — ppl 1.029x, beating the 19G community 4bit's
    1.041x at 68% of its size.
+
+
+### HAZARD CLOSED (08-19 evening): 26b bf16 measured CYCLIC = 85.58%
+
+The 84.62% previously shown for 26b bf16 was a NON-cyclic run sitting in
+cyclic tables (flagged 08-19 midday). Re-measured with --cyclic
+--generative: **85.58%** (n=104). Both tables above now carry the cyclic
+number. Knock-on: the "K2048 beats bf16" row (86.54 vs 85.58) is now a
+0.96-point gap — well inside noise per E56's SE arithmetic (±3.7 pts), as
+"you should not claim any build beats bf16" already required. Paired
+teacher-vs-quant (new, per-item): gemma-small vs its own 26b bf16 teacher
+is discordant on only 12/104 items (9-3 teacher, McNemar p=0.146) — even
+teacher vs 2.25bpw quant is not decision-grade separable on this
+instrument at n=104.
