@@ -3345,3 +3345,55 @@ artifacts — the 2.2bpw alone has 100+ healthy tensors above 0.35. `--outlier
 against a 3x bar). A fixed bar would have produced three false alarms on a
 verified-good release, and a gate that cries wolf gets widened until it
 catches nothing. Median-relative is the design that survives.
+
+## E50 (08-19) — THE BRACKET, WITH THE bpw ARITHMETIC FIXED: d4 wins per bit, but SATURATES; d2 keeps going
+
+**FIRST, MY OWN ERROR.** E46's bracket used WRONG bpw values. Packed bpw is
+`log2(K)/d + 16/64`, so d4-K2048 is **3.00** bpw (I wrote 2.75) and d2-K32 is
+**2.75** (I wrote 2.50). Every "matched-bpw" statement in E46, and the
+397B session's pre-registered 59.92% boundary which was computed FROM MY
+NUMBERS, inherited the error. The conclusions survive; the arithmetic did
+not. Corrected ladder, all points MEASURED on the same base/source/fitter/
+KL cache (gemma-4-26b-a4b):
+
+| geometry | packed bpw | agreement |
+|---|---|---|
+| d4-K256 | 2.25 | 42.65% |
+| d4-K512 | 2.50 | 45.04% |
+| d2-K32 | 2.75 | 48.84% |
+| d4-K2048 | 3.00 | 56.56% |
+| d2-K64 | 3.25 | 57.68% |
+| d4-K8192 | 3.50 | 61.32% |
+| d2-K256 | 4.25 | 68.27% |
+| d2-K512 | 4.75 | 72.72% |
+| d2-K1024 | 5.25 | 75.90% |
+| **d2-K2048** | **5.75** | **77.89%** |
+| (8-bit ceiling) | — | 79.95% |
+
+**AT MATCHED BPW, d4 WINS — BY 1-2 POINTS, NOT 6.** Interpolating d4 between
+MEASURED neighbours (no extrapolation this time):
+    2.75 bpw: d2-K32 48.84% vs d4 50.80%  -> d4 +1.96
+    3.25 bpw: d2-K64 57.68% vs d4 58.94%  -> d4 +1.26
+E46's "-5.84" came from extrapolating a d4 chord fitted at 42-56%, exactly
+the saturation error E48 describes. The real d4 slope COLLAPSES with bpw:
+27.8 pts/bpw over K256->K2048, then **9.5** over K2048->K8192.
+
+**BUT d4 CANNOT REACH THE INTERESTING REGION AT ALL.** bpw = log2(K)/d, so at
+d=4 every +0.25 bpw costs a K DOUBLING. Reaching d2-K2048's 5.75 bpw would
+need K = 2^22 — infeasible in memory, in fit time, and in codebook storage.
+d4 tops out around K=8192 / 3.50 bpw / 61.32%. d=2 reaches 5.75 bpw with
+K=2048 and lands at **77.89%, within 2.06 points of the 8-bit ceiling.**
+
+**THE HONEST SYNTHESIS.** d=2 is NOT a better use of a bit. It is the only
+geometry that can SPEND enough bits to approach the ceiling, because K grows
+exponentially in (bpw x d). Where both are feasible, prefer d4. Where you
+want quality above ~3.5 bpw, d4 is not an option and d2 is. That is a
+different and more useful claim than either "d beats K" (E46, retracted) or
+"d2 is a bit-buying illusion" (the reading after the first bracket).
+
+**METHOD.** Three wrong conclusions in one night, all from the same family of
+error: comparing points that differ in two variables, extrapolating a chord
+of a saturating curve, and finally plain arithmetic in the x-axis itself.
+The fix that actually worked was measuring the neighbours instead of
+interpolating from far away — d4-K512 and d4-K8192 cost ~1.3h combined and
+turned a 6-point claim into a 1-2 point one.
