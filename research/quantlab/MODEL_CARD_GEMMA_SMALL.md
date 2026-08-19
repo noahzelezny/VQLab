@@ -17,14 +17,25 @@ tags:
 
 # gemma-4-26b-a4b-it-VQ-d4K256
 
-**8.4 GiB text / 9.4 GiB with vision — a 26B MoE at the size of the 8.35 GiB e4b-8bit sidecar it was built to replace.**
+**8.4 GiB text / 9.4 GiB with vision — matches the 15 GiB community 4-bit of the same model, at 63% of its size.**
 
-**The design goal.** `gemma-4-e4b-it-8bit` (8.35 GiB) is a common sidecar
-choice — small, fast, always resident. This build asks whether you can run
-the *bigger* 26B-A4B model in that same slot instead. At full precision the
-26B is the better literary model (84.62% vs e4b's 82.69% on generative,
-position-debiased literary multiple-choice), so the question is whether
-enough of that advantage survives compression to 8.4 GiB.
+**The design goal, and the honest outcome.** `gemma-4-e4b-it-8bit`
+(8.35 GiB) is a common sidecar choice — small, fast, always resident. This
+build asked whether the *bigger* 26B-A4B model could take that slot instead.
+
+**Measured: it does not beat e4b-8bit on literary work.** Same instrument,
+generative and position-debiased, n=104:
+
+| model | size | literary MC |
+|---|---|---|
+| gemma-4-e4b-it-8bit | 8.35 GiB | **84.62%** |
+| gemma-4-e4b-it bf16 | 19 GiB | 82.69% |
+| **this model** | 9.43 GiB | **79.81%** |
+
+If you are running e4b-8bit as a literary sidecar, this is not an upgrade —
+keep e4b-8bit. What this build offers instead is a 26B-A4B **at 63% of the
+size of the smallest community build of the same model** (15 GiB 4-bit,
+which it matches at 79.81%), with vision included.
 
 This is NOT the build to pick if you want bf16-quality prose — the 18.7 GiB
 sibling in this collection exists for that and is a different goal
