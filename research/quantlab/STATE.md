@@ -279,3 +279,45 @@ an absolute bar is geometry-specific and cries wolf.
 
 **STILL OWED:** blind win-rate judging for the d2 gemmas (prose regen queued;
 old gens were pre-kernel <pad>). No gemma quality claim is real without it.
+
+---
+
+## OVERNIGHT ROUND 4 (08-19) — BOTH QUALITY TARGETS IMPROVED
+
+**QWEN QUALITY — new champion, strictly dominant (E49):**
+| rung | packed | ppl vs bf16 | agree |
+|---|---|---|---|
+| mlx-community 8bit | 35G | 0.999x | 96.18% |
+| **vq-tail30-d2k512-packed** | **17.9G** | **0.991x** | **90.75%** |
+| vq-tail30-d2k2048-packed | 20.7G | 1.000x | 90.30% |
+| vq-tail20-d2k2048-packed | 18.1G | 1.007x | 89.77% |
+| mlx-community 4bit | 19G | 1.041x | 85.61% |
+A CHEAPER tail beat a richer one on every axis while being 2.8G smaller.
+0.99-1.00x = "at parity" (mild quant reduces referee ppl slightly; seen at
+E40 too), NOT "beats the teacher".
+
+**GEMMA QUALITY — d2 ladder, still climbing:**
+| artifact | sighted | KL | agree |
+|---|---|---|---|
+| struct8-e8 ceiling | 25G | 441 | 79.95% |
+| vq-K1024-d2-packed | 17.41G | 609 | 75.90% |
+| vq-K512-d2-packed | 16.08G | 744 | 72.72% |
+| vq-K256-d2 | 14.75G | 950 | 68.27% |
+| vq-K2048-d4 (was shipping) | 12.53G | 1856 | 56.56% |
+ALL still need BLIND JUDGING before any quality claim (KL over-reports MoE
+damage). Prose generation running.
+
+**PACKED d=2 RUNS THROUGH PREFILL, NOT FUSED.** The fused packed kernel is
+d4-shaped and returns NaN at d=2; prefill is D-generic (verified 2.6e-4 vs a
+numpy vq_pack.unpack reference). vq_switch routes packed-d2 to prefill:
+correct but ~8.4 tok/s vs 25.4 unpacked. Chip task_d993902d queued for a
+fused packed-d2 kernel. NOTE: generate prose/benchmarks from the UNPACKED
+artifact — identical weights, 3x faster.
+
+**K8192 WAS NEVER A TIMEOUT.** k-means chunked its one-hot at a fixed 2M
+rows regardless of K -> 2e6*k*4 bytes = 65.5 GB at k=8192, over Metal's
+62.6 GB cap. Fixed (chunk scales with k). d4-K8192 requeued; both sessions
+pre-registered 59.92% as the decision boundary (E48).
+
+**M4 STILL FAILING:** another command-buffer timeout on gemma d4-K4096.
+That measured d4 point is still missing; requeue on M3.
