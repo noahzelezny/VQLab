@@ -4113,3 +4113,53 @@ kernel's debut) is retired from production. Cards updated (gemma decode
 Hub verification note: `hf cache verify` false-alarms on the Hub's
 auto-created .gitattributes and the local .cache state dir — content
 verification is sha256 against the Hub file listing, done directly.
+
+## E63 (08-19, PRE-REGISTERED before the run) — the capacity probe: testing where a small model should RUN OUT OF ROOM
+
+**Why.** Every instrument returned parity between gemma-small (2.25bpw VQ
+of 26b-a4b) and e4b-8bit: litbench McNemar p=0.33, quant-vs-its-own-teacher
+p=0.15, constraint pass-rate 19/20 vs 19/20 (p=1.0), and my own read of 4
+prose pairs scored ~2-1-1 with a clear STYLE difference (gemma-small more
+structured and lands the sharper insight; e4b chattier, sometimes more
+directly practical) and no competence gap. Noah's objection — a 6x
+parameter gap cannot be invisible — is right, and the resolution is that
+none of those tasks stress capacity. "Why does the moon follow the car"
+needs one good analogy, not 26B parameters.
+
+**Design.** 60 prompts, 4 families, THREE machine-scored so no judge
+variance enters (winrate/prompts_capacity.json, score_capacity.py):
+- multihop (20): constructed-world chains, all facts in-prompt so it is
+  reasoning depth not recall; exact-match golds. An early wrong turn
+  poisons the chain — the small-model failure mode.
+- constraint (20): SIX simultaneous machine-checkable constraints per item
+  (vs ONE in the easy set that both models aced), scored per-constraint so
+  4-of-6 is distinguishable from 2-of-6.
+- needle (10): a planted fact at 5 known depths in a 6k-17k token literary
+  haystack; exact-match retrieval.
+- sustain (10): 800-word continuations scored MECHANICALLY for
+  degeneration (distinct-trigram ratio, repeated-sentence rate, longest
+  repeated 8-gram, reached-length) — looping is what a model out of
+  capacity does, and it is measurable without taste.
+
+**Instrument hygiene applied up front, both caught before the run:**
+1. A harness defect that would have faked the result: mlx-community's
+   e4b-8bit does not register <turn|> as EOS under mlx_lm.generate, so
+   59/60 of its domain generations trailed junk ("<turn|>msch<turn|>ichi")
+   while our 26b builds did it 0/60. Judged blind and uncut, e4b loses on
+   someone else's PACKAGING defect and we record it as quality.
+   strip_thinking now cuts at end-of-turn markers (2f17bc2).
+2. One of my own multihop items was UNSATISFIABLE (Dara<Eli<Faye<Gus forced
+   Gus last while the item asserted "Gus is not last"). Found by
+   hand-verifying all 20 golds before generating. RULE: verify every gold
+   answer by hand; a wrong gold is an instrument that silently punishes the
+   model that is right.
+
+**Pre-registered readings.** If the parity is real capability parity, all
+four families come back within noise and the gemma-small card's
+"indistinguishable" language stands as the honest description of BOTH the
+easy and the hard regime. If the 26b advantage is real but regime-specific,
+the expected signature is: needle and sustain separate first (context and
+looping are where parameters buy the most), multihop next, constraint last.
+A gemma-small win on >=2 families at p<0.05 with none opposing would
+justify a capability claim CONFINED TO THE STRESSED REGIME — never a
+general "better model" claim, and never a bf16 comparison.
