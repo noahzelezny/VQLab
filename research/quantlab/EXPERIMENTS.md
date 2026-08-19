@@ -3978,3 +3978,42 @@ saturating near the top — the same failure shape as the ~82% agreement
 floor (E41) and bounded-metric extrapolation (E48). Every close call this
 arc was settled by blind paired judging. Do not gate a publish on litbench
 alone.
+
+## E59 (08-19) — qwen d4-K8192 MEASURED: extrapolation vindicated to the third decimal, and d4's ceiling is now a data point
+
+Noah's chart question: "by the looks of the qwen chart, d4-K8192 should be
+similar to tail d2K256?" Measured:
+
+| build | size | ppl | agree |
+|---|---|---|---|
+| vq-K8192-d4-packed | 14.8G | 1.013x | 89.37% |
+| vq-tail30-d2k256-packed (cheap-shallow) | 16.5G | 1.002x | 89.92% |
+
+The E48 extrapolation said ~14.8G / ~1.012x with a warned ±2pt window — it
+landed at 14.8G / 1.013x, dead center. (One vindication does not repeal
+E48: bounded metrics still cannot be extrapolated, ppl-ratio evidently can
+be interpolated within a family's own ladder.)
+
+Answer to the question: close, and instructively NOT similar. d4-K8192 is
+1.7G smaller but 11 ppl-points worse; it is the best pure-d4 point on the
+curve and still loses to a mixed cheap-shallow d2 build. This is the
+measured version of E50's saturation argument: at d4 each further halving
+of loss costs a DOUBLING of K (next rung K=65k ~ 9.5h fit), while d2
+schedules reach the same quality region by allocation instead of brute K.
+The d4 curve bends exactly where the geometry math said it must.
+
+Verify gate PASSed (3.0x median) — a FLAT build, so the E57-amendment
+mixed-geometry caveat does not apply here.
+
+### E56 addendum 2 (08-19) — base-model control resolved (see E58): the conditional in the predictions is now unconditional
+
+E58 (397B session, partial by Noah's decision, 43/60 pairs): 26b-a4b bf16
+beats e4b bf16 15-4 on decisives, exact p=0.0192. The E56 prediction text
+hedged "the 26b base advantage (if the M4 control confirms one)" — it is
+confirmed. e4b was never the stronger base; litbench's contrary read is
+demoted per E58's SE arithmetic (a coarse screen: decisive at 42%-tier
+gaps, blind at ~5 points, saturating near the top).
+
+E56's question is therefore in final form: 26b bf16 is the better base;
+does 2.25 bpw give back enough of that real advantage to lose to a smaller
+(8.38G) incumbent on the weaker base? Readings unchanged.
