@@ -157,6 +157,6 @@ Single-machine mlx-lm and pipeline sharding are unaffected.
   8-bit is measurably closer to bf16.
 - Perplexity was measured on one corpus. A code-heavy or non-English
   workload may rank these builds differently.
-- No blind human-preference evaluation was run on this model (unlike the
-  gemma builds in this collection); the claim here rests on perplexity,
+- No blind human-preference evaluation was run on this model (unlike our
+  gemma-4 releases, which needed one); the claim here rests on perplexity,
   which is valid for this family.
