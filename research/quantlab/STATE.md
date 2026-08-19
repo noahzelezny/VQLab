@@ -321,3 +321,10 @@ pre-registered 59.92% as the decision boundary (E48).
 
 **M4 STILL FAILING:** another command-buffer timeout on gemma d4-K4096.
 That measured d4 point is still missing; requeue on M3.
+
+**OPERATIONAL NOTE (learned the hard way, 08-19).** Do NOT chain background
+jobs as N scripts each `pgrep`-waiting on the previous BY NAME. Renaming or
+killing one breaks every downstream wait condition and they all stampede the
+GPU simultaneously (happened twice tonight; the second time three fits and a
+generation ran at once and all stalled at 0 progress). Use ONE sequential
+script — a single process cannot race itself. See scratchpad/QUEUE.sh.
