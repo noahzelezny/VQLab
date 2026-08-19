@@ -3051,12 +3051,15 @@ if healthy. gemma sighted artifacts measured: K256 9.43G, K2048 12.53G
 (winrate_bench, E44's fixed instrument) still running; results go in
 CRUSH_RESULTS when they land.
 
-## E46 (08-18, late) — THE d LADDER DOMINATES THE K LADDER, AND WE COULDN'T SEE IT BECAUSE THERE WAS NO d=2 KERNEL
+## E46 (08-18, late) — d=2 GEOMETRY: HEADLINE RETRACTED, SEE THE BRACKET AT THE END
 
-**The headline.** At roughly matched bytes, HALVING d beats RAISING K, on both
-families. E43 concluded "codebook capacity was the binding constraint" and
-said try K first. That conclusion was right WITHIN d=4 and wrong as general
-advice: the whole K ladder was climbing the shallower hill.
+**RETRACTED HEADLINE (corrected same night, see BRACKET below).** This entry
+originally claimed "at roughly matched bytes, halving d beats raising K." It
+does not. The comparison it rested on — d2-K256 at 4.00 bpw vs d4-K2048 at
+2.75 bpw — is a 45% BIT RAISE, not matched bytes, and the error flattered the
+new result. Caught by the 397B session. The matched-bpw bracket at the end of
+this entry is the corrected finding. What survives: d=2 keeps CLIMBING where
+the d4 K-ladder is known to flatten, and it is far cheaper to fit.
 
 gemma-4-26b-a4b expert fits (same base, same source, same fitter):
 
@@ -3162,3 +3165,43 @@ diff 2.5e-4.
 
 **POLICY: patching vq_switch.py means `cp vq_switch.py $VENV/lib/python*/
 site-packages/mlx_lm/models/`, on every box.**
+
+### BRACKET (the corrected, matched-bpw finding)
+
+Same base/source/fitter, same KL cache, gemma-4-26b-a4b:
+
+| geometry | code bpw | agreement |
+|---|---|---|
+| d4 K256  | 2.25 | 42.65% |
+| d2 K32   | 2.50 | 48.84% |
+| **d4 K2048** | **2.75** | **56.56%** |
+| **d2 K64**   | **3.00** | **57.68%** |
+| d2 K256  | 4.00 | 68.27% |
+| d2 K512  | 4.75 | 72.72% |
+
+**AT MATCHED BYTES, d=4 WITH A BIG CODEBOOK WINS.** Interpolating the d2 line
+to 2.75 bpw gives ~53.3%, BELOW d4-K2048's 56.56%. d2-K64 beats the d4 anchor
+by only +1.12 points while spending 9% more bits. Returns per bit in this
+regime actually favour d4 (27.8 pts/bpw for K256->K2048 vs 17.7 for
+K32->K64).
+
+**WHAT IS STILL TRUE, and why d=2 is not dead:**
+1. d=2 keeps climbing to 68.27% (4.00 bpw) and 72.72% (4.75 bpw), while the
+   d4 K-ladder is KNOWN TO FLATTEN — qwen K2048->K4096 bought +0.55 points
+   for +0.9G (E45). Nobody has a d4 comparator above K2048 on gemma, so the
+   high-bpw regime is untested, not won.
+2. Fit COST is genuinely 8x lower and is independent of the bits question:
+   d2-K256 313s vs d4-K2048 2653s (smaller codebook dominates k-means).
+3. K<=256 at d=2 needs NO packing (uint8, byte-aligned) and decodes FASTER
+   than d4 (51.0 vs 47.2 tok/s), sidestepping gemma's NSUB=176 stranded
+   third entirely.
+
+**THE TEST THAT SETTLES IT** (queued): gemma d4-K8192 at 3.50 bpw. The d2
+line interpolates to ~63% there. If d4-K8192 lands below that, d=2 scales
+further and the whole lineup is worth re-walking; if it matches or beats it,
+d=2 is only a fit-cost and packing convenience, not a quality lever.
+
+**METHOD NOTE.** The original error is the one to remember: comparing two
+points that differ in TWO variables (geometry AND bits) and attributing the
+whole difference to the one being advocated. Bracket the anchor next time —
+it cost 6 minutes of fitting to answer.
