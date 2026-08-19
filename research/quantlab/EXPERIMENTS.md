@@ -3696,7 +3696,28 @@ If it fails, either pick a d where it passes, or accept a ~1 GiB penalty per
 stranded third — and never compare geometries on nominal bpw alone when one
 of them cannot pack.
 
-## E55 (08-19) — relerr RANKS BUILDS BACKWARDS: two measured inversions, and a depth effect that only the output metric can see
+## E55 (08-19) — DO NOT RANK VQ BUILDS BY relerr ACROSS DIFFERENT ALLOCATIONS
+
+**THE DURABLE RESULT, stated first because it outlives the experiment that
+produced it.** Reconstruction error ranked two builds BACKWARDS, twice, at
+matched size, in the ordinary operating range. Both sessions then reasoned
+from that proxy to a wrong conclusion within hours of each other — this one
+to a deep-promotion mechanism that does not exist as stated, the 397B
+session to "therefore do nothing" about a shallow anomaly sitting in its own
+sweep. Neither error was careless; both were the instrument working exactly
+as designed and measuring the wrong quantity.
+
+    RULE: relerr compares builds that share BOTH geometry and allocation.
+    Across allocations it is not a ranking instrument. Use an output-scored
+    metric (ppl where valid, blind judging where not) or do not rank.
+
+This is stronger than E45's "relerr expires": that was the proxy losing
+resolution at the top of a ladder. This is the proxy inverting in the middle
+of its range.
+
+---
+
+### The measurements behind it, and the depth effect only the output metric can see
 
 **This is stronger than E45's "relerr expires".** E45 said the fit proxy
 stops TRACKING quality at the top of a ladder. This says it ORDERS two
@@ -3739,3 +3760,31 @@ more than the schedule question that produced it.
 **PRACTICAL RULE UNTIL THEN.** Do not rank two VQ builds by relerr unless
 they share geometry AND allocation. Across schedules it has now ordered
 builds backwards twice.
+
+
+### PRE-REGISTERED PREDICTIONS for arm 3 (written before the number exists)
+
+Arm 2 (head-DOWN: L0-9 cheap d4-K2048, L10-39 rich d2-K512) = 17.88G, ppl
+0.991x. Arm 3 mirrors it — identical bits, identical geometries, cheap end
+moved to L30-39. Readings agreed by both sessions IN ADVANCE:
+
+  arm2 > arm3   shallow layers are cheap; head-down is the lever, and it
+                SHRINKS artifacts rather than growing them
+  arm3 > arm2   deep promotion was the active ingredient; E49 survives as
+                originally written
+  arm2 ~ arm3   position is irrelevant; both beat flat only because d2-K512
+                beats d2-K256, and E49 dies as a schedule claim
+
+**397B session predicts arm2 > arm3**, reasoning from its own responsiveness
+data (shallow layers gain 32.7% from a 16x codebook vs ~49% in the body, so
+bits placed early buy less reconstruction than bits placed anywhere else).
+
+**This session predicts arm2 > arm3 as well, with arm3 landing 0.005-0.015
+worse on ppl (so ~0.996-1.006x)**, on independent evidence: tail30-d2K256 is
+also a head-down build, and it beat flat d2-K256 on ppl (1.002x vs 1.016x)
+while being 1.2 GiB smaller. Two head-down builds have now beaten flat; no
+head-up build has been measured at all.
+
+If arm3 wins instead, the shallow-layers-are-cheap reading is either
+family-specific or does not survive the jump from fit to output, and BOTH
+sessions' entries need amending rather than defending.
