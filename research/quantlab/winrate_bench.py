@@ -102,20 +102,42 @@ def cmd_generate(args):
 
     prompts = json.load(open(args.prompts))
     gens = []
+    n_open = 0        # generations that never left the thinking channel
     for pr in prompts:
         msg = [{"role": "user",
                 "content": pr["passage"] + "\n\n" + pr["task"]}]
-        text = tok.apply_chat_template(msg, add_generation_prompt=True,
-                                       tokenize=False)
+        # enable_thinking=False pre-fills an EMPTY, already-closed thinking
+        # block, so the model writes prose immediately. Without it the 26b
+        # drafts and self-critiques for 3000+ tokens and never emits the
+        # answer inside any sane budget — the first run's 420-token cap
+        # produced 180 "generations" that were 100% raw reasoning.
+        try:
+            text = tok.apply_chat_template(msg, add_generation_prompt=True,
+                                           tokenize=False,
+                                           enable_thinking=False)
+            prefilled = "<channel|>" in text
+        except TypeError:
+            text = tok.apply_chat_template(msg, add_generation_prompt=True,
+                                           tokenize=False)
+            prefilled = False
         out = mlx_generate(model, tok, prompt=text,
                            max_tokens=args.max_tokens, verbose=False)
-        gens.append({"id": pr["id"], "text": strip_thinking(out)})
+        # prose is clean if thinking was pre-closed, or if the model closed it
+        closed = prefilled or ("<channel|>" in out)
+        gens.append({"id": pr["id"], "text": strip_thinking(out),
+                     "closed_channel": closed})
+        if not closed:
+            n_open += 1
         mx.clear_cache()
         print(f"[{pr['id'] + 1}/{len(prompts)}] {len(gens[-1]['text'])} chars",
               flush=True)
     res = {"model": str(args.model).rstrip("/").split("/")[-1],
            "prompts": args.prompts, "max_tokens": args.max_tokens,
-           "gens": gens}
+           "never_closed_channel": n_open, "gens": gens}
+    if n_open:
+        print(f"*** WARNING: {n_open}/{len(gens)} generations never closed "
+              f"<|channel> — those are REASONING, not prose. Raise "
+              f"--max-tokens. ***")
     out = pathlib.Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(res, indent=1))
@@ -135,15 +157,27 @@ CONTINUATION 1:
 CONTINUATION 2:
 {c2}
 
-Which continuation is the better piece of literary writing? Answer with exactly one word: "1", "2", or "tie"."""
+Which continuation is the better piece of literary writing?
+
+Think briefly if you need to, then end your reply with a final line of exactly this form:
+VERDICT: 1
+(or "VERDICT: 2", or "VERDICT: tie")"""
 
 
 def parse_verdict(text):
+    """LAST explicit VERDICT line wins.
+
+    A reasoner restates the instruction ('answer 1, 2, or tie') before
+    answering, so a first-match regex reads OUR OWN PROMPT back and every
+    judgement comes out '1' — which is exactly what happened on the first
+    run (120/120 '1', 60/60 inconsistent). Anchor on an explicit marker and
+    take the last one, so reasoning that mentions '1' cannot win.
+    """
     tail = text.rsplit("<channel|>", 1)[-1]
     for chunk in (tail, text):
-        m = re.search(r"\b(1|2|tie)\b", chunk, re.IGNORECASE)
+        m = re.findall(r"VERDICT:\s*(1|2|tie)", chunk, re.IGNORECASE)
         if m:
-            return m.group(1).lower()
+            return m[-1].lower()
     return None
 
 
@@ -200,6 +234,10 @@ def cmd_judge(args):
         print(f"[{i + 1}/{len(ids)}] {verdict}", flush=True)
 
     decisive = a_wins + b_wins
+    if inconsistent + unparsed > len(ids) // 3:
+        print(f"\n*** WARNING: {inconsistent} inconsistent + {unparsed} "
+              f"unparsed of {len(ids)}. The judge is not answering "
+              f"consistently — treat this as a BROKEN RUN, not a tie. ***")
     res = {
         "a": A["model"], "b": B["model"], "judge":
             str(args.judge).rstrip("/").split("/")[-1],
@@ -235,7 +273,9 @@ def main():
     p.add_argument("--model", required=True)
     p.add_argument("--prompts", required=True)
     p.add_argument("--out", required=True)
-    p.add_argument("--max-tokens", type=int, default=420)
+    p.add_argument("--max-tokens", type=int, default=700,
+                   help="MUST be large enough to exit the thinking "
+                        "channel AND write the prose. At 420 the 26b never closed <|channel> and every 'generation' was raw reasoning.")
     p.add_argument("--allow-unmatched", action="store_true")
     p.set_defaults(fn=cmd_generate)
 
@@ -244,7 +284,7 @@ def main():
     p.add_argument("--a", required=True, help="by convention: bf16")
     p.add_argument("--b", required=True)
     p.add_argument("--out", required=True)
-    p.add_argument("--max-tokens", type=int, default=380)
+    p.add_argument("--max-tokens", type=int, default=900)
     p.set_defaults(fn=cmd_judge)
 
     args = ap.parse_args()

@@ -36,6 +36,7 @@ import math
 import pathlib
 import shutil
 import subprocess
+import sys
 import time
 
 import mlx.core as mx
@@ -63,6 +64,13 @@ ap.add_argument("--geom", default=None,
                 help="per-projection geometry override, e.g. "
                      "'gate_proj=d4k256,up_proj=d4k256,down_proj=d8k4096' "
                      "(E36: down_proj prefers d8; gate/up never recovers)")
+ap.add_argument("--relerr-abort", type=float, default=0.35,
+                help="refit, then abort, if any tensor exceeds this relerr. "
+                     "Healthy d4k2048 is ~0.19, d2k2048 ~0.032, worst "
+                     "legitimate (L00) ~0.215 — so 0.35 is well clear of "
+                     "normal and well under a collapse (1.0).")
+ap.add_argument("--max-refit", type=int, default=2,
+                help="refit attempts for a tensor over --relerr-abort")
 ap.add_argument("--tail-from", type=int, default=None,
                 help="first layer index of the TAIL (see --tail-geom)")
 ap.add_argument("--tail-geom", default=None,
@@ -361,6 +369,24 @@ for si, sh in enumerate(shards):
             sc = data[mod + ".scales"]
             want = (sc.shape[0], sc.shape[1], sc.shape[2] * G)
             codes, cb, vsc, err = vq_tensor_codes(li, proj, want)
+            # SANITY GATE. kmeans init is random and unseeded, and a fit can
+            # collapse: tail30 (08-18) produced L26 down_proj at relerr
+            # 1.0000 (reconstruction ~= zero, i.e. that weight destroyed)
+            # plus four more >0.12, while the SAME layers fitted cleanly at
+            # 0.032 in tail20. Non-deterministic, so retry with a fresh init;
+            # a silently broken tensor must never reach an artifact.
+            for attempt in range(args.max_refit):
+                if err <= args.relerr_abort:
+                    break
+                print(f"    !! L{li:02d} {proj} relerr {err:.4f} > "
+                      f"{args.relerr_abort} — refit {attempt + 1}/"
+                      f"{args.max_refit}", flush=True)
+                codes, cb, vsc, err = vq_tensor_codes(li, proj, want)
+            if err > args.relerr_abort:
+                sys.exit(f"FATAL: L{li} {proj} relerr {err:.4f} still above "
+                         f"{args.relerr_abort} after {args.max_refit} refits. "
+                         f"The fit is unstable for this tensor — do not ship "
+                         f"this artifact.")
             new[mod + ".codes"] = codes
             new[mod + ".codebook"] = cb
             new[mod + ".vq_scales"] = vsc
