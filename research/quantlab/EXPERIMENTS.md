@@ -3515,3 +3515,63 @@ Corollary for the runtime as it stands: with the gather effectively free, VQ
 tax over affine is the weight decode itself. That is the fused-kernel path
 (`_fused`), already measured and rejected as a wash end-to-end at the default
 prefill step.
+
+## E53 (08-19) — NO DEPTH GRADIENT FOR VQ CODEBOOK: UNIFORM K IS DEFENSIBLE, THE TAIL LEVER IS DEAD
+
+**The question.** E25 established on THIS model that concentrating affine bit
+promotions in the last 10 layers beat spreading them at matched size (tail10
+3.0157 vs spread10 3.0490). The published VQ lineup is FLAT — one K across
+all 171 modules — so the obvious lever was: carry E25's tail law over to VQ,
+body at K128 + tail at K2048, landing ~2.3bpw against the 2.4bpw's 2.00. The
+question this settles is whether the fit side supports it.
+
+**It does not.** `probe_k_fit_time.py`, gate_up_proj, K128 vs K2048, bf16
+source, 64 experts assigned:
+
+  | layer | K128 | K2048 | reduction |
+  |---|---|---|---|
+  | 0 | 0.4427 | 0.2978 | 32.7% |
+  | 3 | 0.4038 | 0.2409 | 40.3% |
+  | 14 | 0.3698 | 0.2011 | 45.6% |
+  | 28 | 0.3686 | 0.1888 | 48.8% |
+  | 40 | 0.3689 | 0.1879 | 49.1% |
+  | 42 | 0.3683 | 0.1867 | 49.3% |
+  | 56 | 0.3696 | 0.1941 | 47.5% |
+
+1. **The body is flat.** From L14 on, K128 relerr spans 0.3683-0.3698 across
+   42 layers — a **0.4% spread**. K2048 spans 7.7%. There is no depth trend
+   to exploit.
+2. **The deepest layer is not the neediest.** L56 (0.1941) is 2.8% WORSE than
+   L28 (0.1888) at K2048 — non-monotone, so "spend late" has no fit-side
+   justification.
+3. **What looked like a gradient was a SHALLOW ANOMALY.** An n=2 probe (L3 vs
+   L40) read 40.3% vs 49.1% and looked like a clean depth trend. Five points
+   show it is L0-L3 being anomalous while everything else is uniform. n=2
+   cannot distinguish an endpoint anomaly from a gradient — this is E37's
+   two-point rule biting from the other side: two points are enough to
+   FALSIFY a claimed trend, never enough to ESTABLISH one.
+4. **The two projections have OPPOSITE depth profiles, and they cancel.**
+   down_proj gets worse with depth (L3 0.3084 -> L40 0.3692); gate_up gets
+   better then flattens (L3 0.4038 -> L40 0.3689 -> flat). E37 recorded the
+   down_proj half ("layer 0 is anomalously easy to VQ"); the gate_up half runs
+   the other way. Any schedule tilted toward either end helps one projection
+   at the other's expense.
+5. **The hard tensors are not codebook-limited.** L0 gate_up gains only 32.7%
+   from a **16x** larger codebook, vs ~49% in the body. Shallow gate_up is
+   limited by something other than codebook capacity (subvector geometry or
+   intrinsic outliers), so a "head" schedule is not indicated either. This is
+   consistent with the shipped artifacts, whose worst tensors are L00/L01 in
+   all three (verify_artifact, 513 tensors).
+
+**CONCLUSION: uniform K is close to optimal for VQ on this model, and the flat
+lineup is a defensible design rather than an unexamined default.** Not built.
+
+**Scope limit, stated so nobody over-reads this.** relerr is a FIT proxy and
+E45 says it expires; this closes the fit-side case only. E25's output-scored
+tail law is formally untested under VQ. But with zero fit-side support,
+opposite-signed projections, and a transfer across quantization schemes
+(affine bit-promotion -> VQ codebook size), the expected value did not justify
+a ~2.9h fit plus scoring. If anyone revisits, the bar is an output-scored
+matched-size build, not another proxy.
+
+Cost of settling it: ~20 minutes of probing against a ~3h fit avoided.
