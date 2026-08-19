@@ -158,3 +158,38 @@ if 12.6G ever needs to be 11G.
 the 11.5G projection exactly. Text-only; sighted (+vision graft ~1.1G)
 projects ~12.6G, still under the 15G community 4bit it beats by 6.73
 litbench points. KL identity check PASSED: packed scores 1856.250 mnats / 56.56% — identical to unpacked to three decimals, same as Qwen. Both packed artifacts verified pure representation changes.
+
+---
+
+## EVENING ROUND 2 (08-18) — tail ladder, instruments, verification
+
+**THE PUBLISH SET (all verified sizes, all measured):**
+| artifact | size | headline |
+|---|---|---|
+| gemma vq-K256-d4-sighted | 9.43G | litbench ties 15G community 4bit; replaces 19G e4b |
+| gemma vq-K2048-d4-sighted | 12.53G | litbench 86.54% = bf16 ceiling (84.62) |
+| qwen36 vq-K2048-d4-packed | 13.0G | ppl 1.029x; beats 19G 4bit (1.041x) |
+| qwen36 vq-tail20-d2k2048-packed | 18.1G | ppl 1.007x vs 8bit 0.999x @ 35G — the 32GB artifact |
+
+Full numbers: E45. Failures + fixes: E44. K story: E43. Domain scan:
+CRUSH_RESULTS (uniform damage, d=2-gemma falsified).
+
+**INSTRUMENTS (all committed):**
+- winrate_bench.py — blind paired literary win-rate, dual-order judging,
+  VERDICT-line parsing, enable_thinking=False generation. Judge:
+  Qwen3.8-27B q4.
+- verify_artifact.py — decode-from-artifact relerr vs bf16, packed or not.
+  RUN WITH --threshold 0.35 BEFORE ANY HF UPLOAD.
+- vq_397b_codes.py — now has --tail-from/--tail-geom AND --relerr-abort
+  refit/abort gate (kmeans is unseeded; fits are non-deterministic, E44).
+
+**IN FLIGHT when this was written:**
+- M3: prose gens (bf16+K2048 done, K256 running) -> auto-judge bf16-vs-K2048
+  -> queued verify_all of the 4 publish artifacts (logs_verify_all.log)
+- M4: re-judge of thinking gens -> queued tail30 shard-2 repair
+  (~/qlab/repair_tail30.log on M4)
+- still unassigned: judge bf16-vs-K256 prose (fire on first free machine)
+
+**DECISIONS RESOLVED TONIGHT:** K=8192 dead (K ladder exhausted, E45 F1).
+d=2-gemma dead (domain scan). tail30 pending repair, not blocking publish.
+gemma publish gate = the two win-rate verdicts.
