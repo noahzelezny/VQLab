@@ -3575,3 +3575,59 @@ a ~2.9h fit plus scoring. If anyone revisits, the bar is an output-scored
 matched-size build, not another proxy.
 
 Cost of settling it: ~20 minutes of probing against a ~3h fit avoided.
+
+## E52 (08-19) — THE PACKING ASYMMETRY: d4 wins per BIT and loses per BYTE, on gemma only
+
+**The contradiction.** E50's matched-bpw bracket showed d4 ahead of d2 by
+1-2 agreement points. But plotted against SIZE, the gemma d2 curve sits
+ABOVE the d4 curve at every point, with no crossover. Both are correct; the
+difference is entirely packing.
+
+**Cause.** `vq_pack` packs codes in blocks of 32, so a tensor packs only if
+NSUB = in_features/d is a multiple of 32. gemma-4-26b has
+moe_intermediate = 704:
+
+| model | d | down NSUB | gate/up NSUB | result |
+|---|---|---|---|---|
+| gemma-4-26b | 4 | **176** | 704 | down_proj STRANDED at uint16 |
+| gemma-4-26b | 2 | 352 | 1408 | all pack |
+| qwen3.6-35b | 4 | 128 | 512 | all pack |
+| qwen3.6-35b | 2 | 256 | 1024 | all pack |
+
+down_proj is exactly 1/3 of gemma's code elements (down is [hidden,176],
+gate/up are [704,704] — equal counts). So every gemma d4 build above K=256
+carries a third of its codes at full uint16 width:
+
+    effective bpw(d4, K>256) = [ (2/3)log2(K) + (1/3)(16) ] / 4 + 0.25
+
+d4-K2048's nominal 3.00 bpw is really **3.42**, and it lands at 12.54 GiB
+instead of 11.50. Adding this term made a one-parameter size model match
+SIX measured artifacts to within 0.1 GiB (d4-K256 9.43, d4-K2048 12.54,
+d2-K256 14.75, d2-K512 16.08, d2-K1024 17.41, d2-K2048 18.74). It is
+arithmetic, not a fudge factor.
+
+**CONSEQUENCE — and the scope limit that matters.** On gemma, d=4 is the
+better geometry per BIT and the worse geometry per BYTE. Bits are what the
+theory compares; bytes are what ships. **This does NOT generalize**: Qwen
+packs fully at both d=2 and d=4 (NSUB 128/512 and 256/1024), so there the
+bpw advantage does translate to size. The gemma penalty is an accident of
+one architectural constant, not a property of d=4.
+
+**WHY K IS THE CEILING.** bpw = log2(K)/d, so at fixed d each +0.25 bpw
+DOUBLES K, while k-means assignment costs O(n*K*d). Extrapolated from the
+measured gemma d4-K8192 fit (4255 s):
+
+| d4 target | K | fit time |
+|---|---|---|
+| 3.50 bpw | 8,192 | 1.2 h  (measured) |
+| 4.25 bpw | 65,536 | 9.5 h |
+| 5.75 bpw | 4,194,304 | 605 h |
+
+Exponential cost for linear quality. That is the wall — not memory (E50's
+scatter-add removed that one) but the assignment search. Approximate NN or
+hierarchical k-means would move it; nothing else will.
+
+**PRACTICAL RULE.** Check `in_features/d % 32` BEFORE choosing a geometry.
+If it fails, either pick a d where it passes, or accept a ~1 GiB penalty per
+stranded third — and never compare geometries on nominal bpw alone when one
+of them cannot pack.

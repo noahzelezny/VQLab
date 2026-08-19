@@ -17,11 +17,21 @@ tags:
 
 # gemma-4-26b-a4b-it-VQ-d4K256
 
-**9.4 GiB — matches the 15 GiB 4-bit at 63% of its size. Vision included.**
+**8.4 GiB text / 9.4 GiB with vision — a 26B MoE at the size of the 8.35 GiB e4b-8bit sidecar it was built to replace.**
 
-The compact build in this collection: a vector-quantized
-[gemma-4-26b-a4b-it](https://huggingface.co/google/gemma-4-26b-a4b-it) small
-enough to sit alongside a larger model on the same machine. Stock `mlx-lm`.
+**The design goal.** `gemma-4-e4b-it-8bit` (8.35 GiB) is a common sidecar
+choice — small, fast, always resident. This build asks whether you can run
+the *bigger* 26B-A4B model in that same slot instead. At full precision the
+26B is the better literary model (84.62% vs e4b's 82.69% on generative,
+position-debiased literary multiple-choice), so the question is whether
+enough of that advantage survives compression to 8.4 GiB.
+
+This is NOT the build to pick if you want bf16-quality prose — the 18.7 GiB
+sibling in this collection exists for that and is a different goal
+(bf16-indistinguishable, smallest size we could reach). This one is
+size-first: the largest model that fits the sidecar slot.
+
+Stock `mlx-lm`, vision included.
 
 ## Measured results
 

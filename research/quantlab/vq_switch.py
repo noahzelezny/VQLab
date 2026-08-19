@@ -730,6 +730,15 @@ class VQSwitchLinear(nn.Module):
                              "packed row is WPR words wide, so its shape no "
                              "longer implies the input dimension")
         self._in_features = in_features
+        # SHARDING GUARD (2026-08-19). The codebook is a shared [K, d] lookup
+        # table indexed by the codes; it must be REPLICATED across tensor-
+        # parallel ranks, never sliced. exo's tensor_auto_parallel sliced it
+        # by default until PR #2268, and a sliced codebook does not error —
+        # every rank decodes against a fraction of the table and the model
+        # emits fluent garbage, which reads as "this quant is broken" rather
+        # than "my cluster mis-sharded a LUT". Remember the size we were
+        # built with so __call__ can say so plainly.
+        self._k_expect = int(codebook.shape[0])
         self.freeze()
 
     @classmethod
@@ -768,6 +777,19 @@ class VQSwitchLinear(nn.Module):
         return self.codes.shape[0]
 
     def __call__(self, x, indices, sorted_indices=False):
+        k_now = self.codebook.shape[0]
+        if k_now != self._k_expect:
+            raise RuntimeError(
+                f"VQ codebook was sharded: K={k_now}, expected "
+                f"{self._k_expect}. The codebook is a SHARED lookup table and "
+                f"must be replicated across tensor-parallel ranks, not sliced "
+                f"(codes and scales shard fine on the default axes). On exo, "
+                f"apply the codebook guard in "
+                f"src/exo/worker/engines/mlx/auto_parallel.py — upstream PR "
+                f"https://github.com/exo-explore/exo/pull/2268, or the ready "
+                f"branch https://github.com/noahzelezny/exo/tree/"
+                f"vq-codebook-replicate. Pipeline sharding and single-box "
+                f"mlx-lm are unaffected.")
         IN = self.input_dims
         OUT = self.output_dims
         idx_flat = indices.flatten()
