@@ -52,6 +52,9 @@ ap.add_argument("--k", type=int, default=256)
 ap.add_argument("--dim", type=int, default=4)
 ap.add_argument("--group", type=int, default=64)
 ap.add_argument("--iters", type=int, default=20)
+ap.add_argument("--init", choices=("kmeans++", "random"),
+                default="kmeans++",
+                help="codebook seeding. Artifacts built before 08-18 used 'random'.")
 ap.add_argument("--expert-chunk", type=int, default=32)
 ap.add_argument("--family", default="qwen3_5", choices=["qwen3_5", "gemma4", "qwen3_5_mlx"],
                 help="module naming / source-key family. Default reproduces "
@@ -185,10 +188,47 @@ def is_vq_target(name):
     return isinstance(q, dict) and q.get("bits") == 2
 
 
-def kmeans(X, k, iters):
+def kmeanspp_init(X, k, cap=200_000):
+    """k-means++ seeding: each new centre is drawn with probability
+    proportional to its squared distance from the nearest chosen centre.
+
+    WHY. Uniform-random seeding (the original) draws k points from the raw
+    density, so dense regions get many near-duplicate centres and sparse
+    regions get none — wasted codebook and, at worst, a collapsed fit (E44:
+    tail30 L26 down_proj hit relerr 1.0 from a bad draw). ++ spreads the
+    seeds and is the standard fix.
+
+    Textbook ++ is k sequential passes over X; at k=2048 and |X|=2M that is
+    ~4e9 distance evals. So seed on a SUBSAMPLE (cap) and hand the result to
+    full k-means over all of X — the usual scalable compromise, and the
+    refinement iterations see every point regardless.
+    """
+    n = X.shape[0]
+    if n > cap:
+        X = X[mx.random.randint(0, n, (cap,))]
+        n = cap
+    first = int(mx.random.randint(0, n, (1,)).item())
+    picks = [X[first]]
+    d2 = mx.sum((X - picks[0]) ** 2, axis=1)
+    for _ in range(k - 1):
+        tot = mx.sum(d2)
+        if float(tot.item()) <= 1e-12:          # X has <k distinct points
+            picks.append(X[int(mx.random.randint(0, n, (1,)).item())])
+            continue
+        cdf = mx.cumsum(d2 / tot)
+        r = mx.random.uniform(shape=(1,))
+        j = min(int(mx.sum(cdf < r).item()), n - 1)
+        c = X[j]
+        picks.append(c)
+        d2 = mx.minimum(d2, mx.sum((X - c) ** 2, axis=1))
+    return mx.stack(picks)
+
+
+def kmeans(X, k, iters, init="kmeans++"):
     step = max(50_000, int(5e8 / k))
     n = X.shape[0]
-    C = X[mx.random.randint(0, n, (k,))]
+    C = (kmeanspp_init(X, k) if init == "kmeans++"
+         else X[mx.random.randint(0, n, (k,))])
     for _ in range(iters):
         cn = mx.sum(C * C, axis=1)
         parts = []
@@ -263,7 +303,8 @@ def vq_tensor_codes(li, proj, want_shape):
         samples.append(sub[idx])
         mx.eval(samples[-1])
         del sub
-    C16 = kmeans(mx.concatenate(samples, axis=0), K, args.iters).astype(mx.float16)
+    C16 = kmeans(mx.concatenate(samples, axis=0), K, args.iters,
+                 init=args.init).astype(mx.float16)
     mx.eval(C16)
     del samples
     Cf = C16.astype(mx.float32)               # assign against SHIPPED values
