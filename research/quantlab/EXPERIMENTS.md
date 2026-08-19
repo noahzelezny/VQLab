@@ -3050,3 +3050,61 @@ if healthy. gemma sighted artifacts measured: K256 9.43G, K2048 12.53G
 (vision graft +1.07G, text path KL-identical). Blind win-rate verdicts
 (winrate_bench, E44's fixed instrument) still running; results go in
 CRUSH_RESULTS when they land.
+
+## E46 (08-18, late) — THE d LADDER DOMINATES THE K LADDER, AND WE COULDN'T SEE IT BECAUSE THERE WAS NO d=2 KERNEL
+
+**The headline.** At roughly matched bytes, HALVING d beats RAISING K, on both
+families. E43 concluded "codebook capacity was the binding constraint" and
+said try K first. That conclusion was right WITHIN d=4 and wrong as general
+advice: the whole K ladder was climbing the shallower hill.
+
+gemma-4-26b-a4b expert fits (same base, same source, same fitter):
+
+| geometry | code bpw | mean relerr | note |
+|---|---|---|---|
+| d4 K256  | 2.00 | 0.3136 | the 9.43G small artifact |
+| d4 K2048 | 2.75 | 0.1877 | the 12.53G quality artifact |
+| d2 K256  | 4.00 | 0.0873 | 2.15x better than d4K2048 |
+| d2 K512  | 4.50 | **0.0589** | best gemma fit achieved |
+
+Fit COST also fell: d2K256 took 313s vs d4K2048's 2653s (smaller codebook
+dominates the k-means cost), so the better geometry is also 8x cheaper to
+search.
+
+**WHY WE MISSED IT FOR SO LONG — no d=2 kernel existed.** vq_switch.py
+shipped fused decode kernels for d=4 (float4) and d=8 (2x half4) only.
+`_fused` is never passed in_features, so it ASSUMES d=4 and derives
+NSUB=IN/4. A d=2 artifact therefore read across codebook entries and emitted
+pure `<pad>` — while `_prefill` (which DOES receive in_features) decoded it
+correctly. Net effect: d=2 scored fine on every teacher-forced instrument
+(KL 949.960 / 68.27%, verify_artifact PASS at relerr 0.087) and generated
+nothing. Forcing SCOUT_VQ_FUSED_MAX_N=0 proved the diagnosis: correct prose
+at 10.8 tok/s vs 48.7 for d=4.
+FIXED (commit 4b2d016): d=2 fused kernel + EXPLICIT dim dispatch that raises
+on unsupported (dim, pack_bits) instead of falling through to another dim's
+kernel. Verified independently: prose correct with no env var, KL bit-identical
+at 949.960/68.27%, d=4 unregressed at 47.2 tok/s, and d=2 now runs at
+**51.0 tok/s — FASTER than d=4** (K<=256 means uint8 codes and a codebook
+small enough to sit in threadgroup memory).
+
+**METHODOLOGICAL RULE — QWEN IS SCORED ON PPL, FULL STOP.** Twice tonight a
+Qwen call was made on top-1 agreement and twice it was wrong:
+  - K=4096 predicted ~90% from relerr, landed 87.88% (+0.55 over K2048).
+  - tail30 was dismissed as "+0.53 agreement for +2.6G, a poor trade" — then
+    ppl showed 4.7210 vs bf16's 4.7215, i.e. **1.000x, PARITY**, where
+    tail20 sits at 1.007x. tail30 is the accessibility artifact, not tail20.
+MoE routing is discrete, so any perturbation flips which experts fire and
+agreement punishes that categorically while ppl absorbs it. Qwen's ppl is
+VALID (unlike gemma's) — use it, and treat agreement as a secondary signal.
+Corollary: gemma has no ppl, so gemma decisions need the BLIND WIN-RATE, not
+KL alone (E44/winrate_bench). Testing is mandatory for gemma, not optional.
+
+**relerr is a proxy that expires.** It stayed log-linear across the whole K
+ladder (0.313 -> 0.187 -> 0.158, ~16%/doubling) while agreement flatlined at
+K=4096. Never extrapolate more than one rung past a SCORED point.
+
+**Open at time of writing.** Qwen flat d2-K256 fitting (~18.8G projected, no
+packing needed since uint8) — if it matches tail30's 1.000x parity it wins on
+size and simplicity, since tail20/tail30 are mixed-geometry and need packing.
+gemma d2-K512 packing/scoring (~16G sighted projected). Both d2 gemmas still
+need blind win-rate judging before any quality claim.
