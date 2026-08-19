@@ -4064,3 +4064,31 @@ and K512 = 45.04% @ 2.50, so the interpolated flat build at 2.33 bpw is
 given instrument noise) to demonstrate an allocation effect on gemma;
 beating 42.65% alone is bought quality, not allocation. Score = KL/agree
 vs bf16 (gemma ppl invalid), after E47 verification on M3.
+
+## E61 (08-19) — RELEASE NEAR-MISS: text-only artifacts passed every gate because every gate measures the text path
+
+Both Qwen3.6 publish artifacts reached 40 minutes INTO UPLOAD with zero
+vision tensors (vision_config stripped) after passing guard, KL
+reproduction, fused re-bundle, stock-venv smoke, and cards. Nothing failed
+because nothing looks: every gate we built exercises the text path. Noah
+caught it by asking. (397B releases unaffected — towers verified at debut;
+gemma sighted builds fine.)
+
+Fixed by the 397B session: graft_vision.py, KL gate reproduced exactly on
+the grafted bytes (44.573 / 90.75), sizes 18.73 / 13.81 GiB, names
+corrected to VQ-4.6bpw / VQ-3.4bpw — the old names divided text-only bytes
+by a param count that INCLUDED vision, so the advertised bpw was quietly
+inconsistent. Naming rule: total-bytes over total-params.
+
+Mechanical gate added: check_vision.py — counts tensors by vision prefix
+in artifact vs source indexes; FAILs on mismatch unless --allow-text-only
+is passed AND the card states the decision. First run correctly failed the
+gemma cheap-shallow artifact (356 missing: 355 vision_tower + 1
+embed_vision — gemma needs BOTH prefixes grafted before it could ship).
+Release checklist line: "vision tensor count == source count, or an
+explicit text-only statement on the card."
+
+The general lesson goes beyond vision: a gate suite verifies what it
+MEASURES, and everything it does not measure ships unverified. When adding
+a capability class (vision, future audio, adapters), add the corresponding
+existence gate the same day.
