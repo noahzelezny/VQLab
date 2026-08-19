@@ -240,12 +240,21 @@ def kmeans(X, k, iters, init="kmeans++"):
         a = mx.concatenate(parts)
         oh_sum = mx.zeros((k, X.shape[1]))
         cnt = mx.zeros((k,))
-        for s0 in range(0, n, 2_000_000):
-            ab = a[s0:s0 + 2_000_000]
+        # ONE-HOT CHUNK MUST SCALE WITH K. This was a fixed 2,000,000 rows,
+        # so the [rows, k] fp32 one-hot below is 2e6*k*4 bytes — 65.5 GB at
+        # k=8192, over Metal's 62.6 GB single-buffer cap. That is what killed
+        # every K8192 attempt (the failure reads as
+        # "[metal::malloc] Attempting to allocate 65536000000 bytes", NOT as
+        # the command-buffer timeout it was previously blamed on). Budget the
+        # chunk by k instead, matching how `step` above is already computed.
+        oh_chunk = max(50_000, int(5e8 / k))
+        for s0 in range(0, n, oh_chunk):
+            ab = a[s0:s0 + oh_chunk]
             oh = (ab[:, None] == mx.arange(k)[None, :]).astype(mx.float32)
-            oh_sum = oh_sum + oh.T @ X[s0:s0 + 2_000_000]
+            oh_sum = oh_sum + oh.T @ X[s0:s0 + oh_chunk]
             cnt = cnt + mx.sum(oh, axis=0)
             mx.eval(oh_sum, cnt)
+            del oh
         C = mx.where(cnt[:, None] > 0,
                      oh_sum / mx.maximum(cnt[:, None], 1.0), C)
         mx.eval(C)
