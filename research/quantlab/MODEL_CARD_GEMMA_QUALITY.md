@@ -73,7 +73,6 @@ Single M3 Ultra, macOS, stock `mlx-lm`, GPU otherwise idle:
 
 | | |
 |---|---|
-| load time | ~2 s (warm) |
 | peak memory | 17.7 GiB |
 | decode | **~40 tok/s** |
 

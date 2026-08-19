@@ -14,7 +14,7 @@ tags:
 - qwen3.6
 ---
 
-# Qwen3.6-35B-A3B-VQ-tail30-d2K512
+# Qwen3.6-35B-A3B-VQ-4.4bpw
 
 **8-bit-quality perplexity, smaller than the community 4-bit.** 17.9 GiB at ppl 0.991x vs bf16 — the 8-bit holds 0.999x at 35 GiB, the 4-bit degrades to 1.041x at 19 GiB (all measured on the same harness and corpus). Runs on a 32 GB Mac.
 
@@ -32,7 +32,7 @@ same files with an unmodified `mlx-lm`:
 
 | build | size | perplexity | vs bf16 | top-1 agreement |
 |---|---|---|---|---|
-| bf16 | 70 GiB | 4.7215 | 1.000x | 100% |
+| bf16 | 65.4 GiB | 4.7215 | 1.000x | 100% |
 | mlx-community 8-bit | 35 GiB | — | 0.999x | 96.18% |
 | **this model** | **17.9 GiB** | **4.6812** | **0.991x** | 90.75% |
 | mlx-community 4-bit | 19 GiB | — | 1.041x | 85.61% |
@@ -66,7 +66,7 @@ on the same harness and corpus; nothing was discarded.
 
 | build | geometry | layer schedule | size (GiB) | ppl | vs bf16 | KL (mnats) | top-1 agree |
 |---|---|---|---|---|---|---|---|
-| bf16 (teacher) | — | — | 70 | 4.7215 | 1.000x | 0 | 100% |
+| bf16 (teacher) | — | — | 65.4 | 4.7215 | 1.000x | 0 | 100% |
 | mlx-community 8-bit | affine 8-bit | uniform | 35 | — | 0.999x | — | 96.18% |
 | mlx-community 4-bit | affine 4-bit | uniform | 19 | — | 1.041x | — | 85.61% |
 | **VQ — this model** | d2·K512 + d4·K2048 | rich layers 30-39 | 17.9 | 4.6812 | **0.991x** | 44.573 | 90.75% |

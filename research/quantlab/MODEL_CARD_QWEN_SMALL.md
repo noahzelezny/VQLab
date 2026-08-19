@@ -14,7 +14,7 @@ tags:
 - qwen3.6
 ---
 
-# Qwen3.6-35B-A3B-VQ-d4K2048
+# Qwen3.6-35B-A3B-VQ-3.2bpw
 
 **13.0 GiB — beats the 19 GiB 4-bit on perplexity at 68% of its size.**
 
@@ -29,7 +29,7 @@ where the 17.9 GiB parity build is too large. Stock `mlx-lm`.
 
 | build | size | vs bf16 ppl | top-1 agreement |
 |---|---|---|---|
-| bf16 | 70 GiB | 1.000x | 100% |
+| bf16 | 65.4 GiB | 1.000x | 100% |
 | mlx-community 8-bit | 35 GiB | 0.999x | 96.18% |
 | sibling parity build | 17.9 GiB | 0.991x | 90.75% |
 | **this model** | **13.0 GiB** | **1.029x** | **87.33%** |
