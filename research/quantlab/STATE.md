@@ -367,3 +367,40 @@ d4-K512 (target-1 candidate).
 **M4 IS DOWN FOR FITS.** 4 failures overnight (3 corrupt artifacts + repeated
 command-buffer timeouts) plus A/B-proven wrong compute (E47). Everything ran
 on M3. Do not trust an M4-fitted artifact without verifying it on M3.
+
+---
+
+## FINAL OVERNIGHT STATE (08-19) — ladders essentially exhausted
+
+**GEMMA — d2 ladder run to its knee. Gains are shrinking toward the ceiling:**
+| artifact | packed bpw | sighted | agree | delta |
+|---|---|---|---|---|
+| (8-bit ceiling) | — | 25G | 79.95% | — |
+| **vq-K2048-d2-packed-sighted** | 5.75 | **18.74G** | **77.89%** | +1.99 |
+| vq-K1024-d2-packed | 5.25 | 17.41G | 75.90% | +3.18 |
+| vq-K512-d2-packed | 4.75 | 16.08G | 72.72% | +4.45 |
+| vq-K256-d2 | 4.25 | 14.75G | 68.27% | — |
+Next rung (d2-K4096, 6.25 bpw, ~20G) would gain maybe ~1 point and exceed
+the qwen build's size. NOT worth it.
+
+**GEMMA d4 SATURATES and cannot go higher:** K256 42.65 -> K512 45.04 ->
+K2048 56.56 -> K8192 61.32 (3.50 bpw). Every +0.25 bpw costs a K DOUBLING at
+d=4, so 5.75 bpw would need K=2^22. See E50.
+
+**QWEN — tail knee FOUND at K512 (cheaper won once, lost twice):**
+| rung | packed | ppl | agree |
+|---|---|---|---|
+| **vq-tail30-d2k512-packed** | **17.9G** | **0.991x** | 90.75% |
+| vq-tail30-d2k256-packed | 16.5G | 1.002x | 89.92% |
+| vq-tail30-d2k2048-packed | 20.7G | 1.000x | 90.30% |
+
+**WHAT REMAINS — blind judging, nothing else.** Prose generated for
+d2-K512, d2-K1024, d2-K2048 vs bf16; blind pairs built with keys withheld.
+Chip task_7ae8af6c covers K512/K1024 — ADD d2K2048 (blind_pairs_d2K2048.json)
+when running it. Decode every verdict with:
+    ./score_blind_verdict.py --verdict winrate/claude_verdict_<tag>.json --tag <tag>
+
+**PEER SESSION ENDED** (socket gone). Their result is in E47.3: all three
+published 397B artifacts verified CLEAN, 513 tensors. A final message to
+them about the bpw correction (E50) was undeliverable — it matters to them
+because their pre-registered boundary was computed from my wrong numbers.
