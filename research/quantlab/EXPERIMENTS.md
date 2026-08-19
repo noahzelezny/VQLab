@@ -3019,6 +3019,26 @@ and referee ppl):
 **FINDING 1 — the K ladder is exhausted.** 2048->4096 halved nothing:
 +0.55 agree for +0.9G, after 256->2048 bought +7.83. Do not chase K=8192.
 
+**FINDING 1b (added 08-19) — AND THE COST IS SUPERLINEAR, which is
+independently decisive.** The quality argument above says "not worth it";
+the cost argument says "not reachable". bpw = log2(K)/d, so each +0.25 bpw
+at fixed d DOUBLES K, while k-means assignment costs O(n*K*d). Extrapolated
+from a measured gemma d4-K8192 fit (4255 s):
+
+| d4 target | K | fit time |
+|---|---|---|
+| 3.50 bpw | 8,192 | 1.2 h (measured) |
+| 4.25 bpw | 65,536 | 9.5 h |
+| 5.75 bpw | 4,194,304 | 605 h |
+
+So the two curves close from both ends: quality flattens (this entry) while
+cost explodes. Note this is the ASSIGNMENT search, not memory — E50's
+scatter-add removed the memory wall and the ladder still stops. Only
+approximate NN or hierarchical k-means would move it.
+
+Credit: the 397B session, who pointed out that E45 was making only the
+quality half of the argument.
+
 **FINDING 2 — relerr stopped predicting exactly there.** Fit relerr stayed
 log-linear right through K=4096 (0.313 -> 0.187 -> 0.158, ~16%/doubling)
 while agreement flatlined. relerr is a trustworthy proxy only until it
