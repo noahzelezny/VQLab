@@ -4034,9 +4034,13 @@ Two mechanism hypotheses, deliberately BOTH held (neither proven):
    M3, and the crash landed exactly at the save while M3 was hammering the
    same disk with the K8192 fit. Explains WHY it struck at the write,
    which hypothesis 1 does not.
-Live discriminator: the K128 retry runs under the same contention (E56
-benches now on M3). Survives -> evidence against contention; dies at the
-write again -> evidence for.
+Live discriminator RESOLVED same day: the K128 retry wrote its full
+artifact cleanly while M3's E56 benches were hammering the same SSD — MORE
+contention than the run that died (M3 was quiet then). Contention does not
+explain the crash. Verdict: UNEXPLAINED TRANSIENT; neither hypothesis is
+credited. (A "fits run slower under load" impression from partial logs is
+also withdrawn — the finished retry took 511s, comparable to the crashed
+run's <7 min; it was an eyeball, not a measurement.)
 
 Related, measured here: the 6-bit pack path needed for cheap-shallow K64
 regions is fully supported — vq_pack round-trips 6-bit exactly, and BOTH
@@ -4044,3 +4048,19 @@ Metal readers (fused packed6 d4 and decode packed6) match the unpacked
 reference bit-identically (max rel diff 0.0e0, synthetic E2/OUT128/IN256).
 No slow-path fallback: pack_bits is a template parameter, so 6-bit gets
 its own compiled kernel, same as 9/11-bit.
+
+## E60 (08-19, PRE-REGISTERED before scoring) — gemma cheap-shallow K128/K512: the fair bar is the INTERPOLATED flat line, not flat K256
+
+Artifact (397B session's build, M4): gemma26b-rungs/
+vq-headdown-k128-tail512-d4 — cheap-shallow L0-9 d4-K128 / L10-29 d4-K512,
+90 tensors, mean relerr 0.3001 (which per E55 decides nothing). Nominal
+2.33 bpw — NOT matched to shipping flat K256-d4 (2.25): the matched K64
+tripped the old abort gate and K128 was substituted without re-deriving
+size, so the build is ~3.6% richer than the incumbent.
+
+Fair comparison, registered now: flat ladder gives K256 = 42.65% @ 2.25
+and K512 = 45.04% @ 2.50, so the interpolated flat build at 2.33 bpw is
+~43.4%. The cheap-shallow build must beat ~43.4% (by more than ~1 point,
+given instrument noise) to demonstrate an allocation effect on gemma;
+beating 42.65% alone is bought quality, not allocation. Score = KL/agree
+vs bf16 (gemma ppl invalid), after E47 verification on M3.
