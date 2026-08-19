@@ -9,7 +9,14 @@ SMALL="$E/gemma26b-rungs/vq-K256-d4"       # same artifact as the 79.81 run
 E4B8="$E/mlx-community--gemma-4-e4b-it-8bit"
 BF26=$(echo "/Volumes/Thunderbay SSD/Mlx_Models/hub/models--mlx-community--gemma-4-26b-a4b-it-bf16/snapshots"/*)
 
-until ! pgrep -f "vq_397b_codes|pack_artifact|kl_ppl_calibrate|verify_artifact" >/dev/null; do sleep 60; done
+# Noah sequenced the 397B cheap-shallow build (vq_397b_fused) AHEAD of these
+# benches. Wait for ALL fit/verify machinery, then hold a 20-min grace window
+# so a job launched in the gap is not jumped.
+while :; do
+  until ! pgrep -f "vq_397b_codes|vq_397b_fused|pack_artifact|kl_ppl_calibrate|verify_artifact|score_streaming" >/dev/null; do sleep 60; done
+  sleep 1200
+  pgrep -f "vq_397b_codes|vq_397b_fused|pack_artifact|kl_ppl_calibrate|verify_artifact|score_streaming" >/dev/null || break
+done
 
 echo "== 1. litbench cyclic generative, per_item, gemma-small (rerun for pairing) =="
 $V litbench_chat.py --model "$SMALL" --cyclic --generative \
