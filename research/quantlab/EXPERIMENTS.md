@@ -3457,3 +3457,61 @@ replication (E44's dual-order local judge was too weak to rank these at all —
 decisive pairs, so confidence intervals are wide. A second judge from a
 different family, or dual-order replication, would tighten this; neither
 changes the ordering, which is the load-bearing part.
+
+## E52 (08-19) — THE FUSED ROW-GATHER LEVER DOES NOT EXIST: MLX ALREADY FUSES IT
+
+**Retires the standing "remaining lever, unbuilt" from the VQ-PF1 entry.**
+That note said ~21% of block time goes to materializing the `[N, IN]` fp16
+row matrix `gather_qmm` never needs, and that fusing the gather into the
+matmul was worth it "if someone needs the last 1.19x". Measured properly, the
+recoverable amount is **zero**.
+
+**Two instruments, and the second one overturns the first.**
+
+1. Timing the `_prefill` inner loop with `mx.eval` BETWEEN the gather and the
+   matmul reproduces the historic figure almost exactly — across all three VQ
+   modules of a real block, real router histogram, chunk 32, n=3:
+
+   | stage | ms | share of VQ `_prefill` |
+   |---|---|---|
+   | decode | 17.87 | 33.7% |
+   | **gather** | **12.88** | **24.2%** |
+   | matmul | 22.32 | 42.1% |
+
+   Against a whole-block time of 107.2 ms (n=3, same shape), that is **12.0%
+   of block** — so even taken at face value the old "21% of block" was stale,
+   roughly halved by count-sort + chunk-32 shrinking `cap` (xp is
+   `[ne, cap, IN]`, so its size scales with the padding those fixes removed).
+
+2. But the real `_prefill` does NOT evaluate them separately — it builds one
+   graph per chunk and calls `mx.eval` once, at the end. Timing gather+matmul
+   as ONE eval, n=3:
+
+   | | run 1 | run 2 | run 3 |
+   |---|---|---|---|
+   | separate (gather + matmul) | 2.02 | 1.68 | 1.58 |
+   | together, one eval | 1.23 | 1.41 | 1.30 |
+   | **left for a hand-written kernel** | **-0.29** | **+0.06** | **+0.04** |
+
+   MLX already absorbs 16-39% of the separate sum. What remains is 0.04 ms on
+   a 1.3 ms operation — indistinguishable from zero, and negative once.
+
+**THE LESSON, and it is the general one: an instrument that serializes what
+production fuses will invent work that does not exist.** The `mx.eval` I
+inserted to attribute time between two stages is the same `mx.eval` that
+destroys the fusion being measured. Any lazy-graph framework has this hazard,
+and the tell is that the "cost" belongs to an intermediate the real code never
+materializes on its own. Before optimizing a stage, time the stage boundary
+you actually ship — not the one you inserted to see inside.
+
+**Decision: NOT BUILT, and the lead is closed rather than deferred.** A fused
+gather+LUT-matmul Metal kernel is substantial work, changes summation order
+(the chunk-32 result showed fp16 order moves published ppl), and buys ~0%.
+Contrast count-sort and chunk-32, which shipped because they were measurable
+end-to-end AND bit-exact.
+
+Corollary for the runtime as it stands: with the gather effectively free, VQ
+`_prefill` is decode 34% / matmul 42% / gather ~0, so the only remaining VQ
+tax over affine is the weight decode itself. That is the fused-kernel path
+(`_fused`), already measured and rejected as a wash end-to-end at the default
+prefill step.
