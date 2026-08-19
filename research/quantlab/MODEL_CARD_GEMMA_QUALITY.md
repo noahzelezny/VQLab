@@ -114,6 +114,17 @@ corruption during development — a fit log reporting healthy error while the
 written file held destroyed tensors — so it is a standing gate, not a
 formality.
 
+
+### Multi-machine (exo) note
+
+These artifacts fit on one machine, but if you shard them across an
+[exo](https://github.com/exo-explore/exo) cluster anyway, one guard is
+required: VQ codebooks must **replicate rather than slice**. Without it,
+exo's tensor parallelism splits the codebook silently and the model
+generates fluent garbage that reads as "a broken quant." The guard is
+bundled in this artifact's `model.py`; upstream fix submitted as
+[exo PR #2268](https://github.com/exo-explore/exo/pull/2268).
+
 ## Limitations
 
 - **Do not benchmark this with perplexity.** See above.

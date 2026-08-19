@@ -125,6 +125,17 @@ Every tensor decoded from the published artifact and compared against the
 bf16 source; nothing exceeds 3x the artifact's own median reconstruction
 error.
 
+
+### Multi-machine (exo) note
+
+These artifacts fit on one machine, but if you shard them across an
+[exo](https://github.com/exo-explore/exo) cluster anyway, one guard is
+required: VQ codebooks must **replicate rather than slice**. Without it,
+exo's tensor parallelism splits the codebook silently and the model
+generates fluent garbage that reads as "a broken quant." The guard is
+bundled in this artifact's `model.py`; upstream fix submitted as
+[exo PR #2268](https://github.com/exo-explore/exo/pull/2268).
+
 ## Limitations
 
 - **Significantly below bf16 on blind literary judging (p=0.0016).** Chosen
