@@ -3889,3 +3889,17 @@ Instrument caveat recorded in STATE: verify_artifact --outlier flags the
 d4-K2048 region of ANY mixed-geometry build (~0.19 vs d2-K512 ~0.09 body,
 3.2x median) — a healthy geometry difference, not corruption. Read the
 gate per-region on mixed builds.
+
+### E56 addendum (08-19, before verdict benches ran) — control trending, question sharpened
+
+M4 faceoff interim at 36/60 pairs: 26b bf16 leads e4b bf16 14-2 on decisives
+(sign test already ~p=0.004). If it holds, litbench's contrary read
+(e4b-bf16 82.69 "above" 26b) was instrument noise, and E56's question
+sharpens to: does 2.25bpw quantization give back the real bf16 advantage
+against an 8.38G incumbent that starts from a weaker base? The three paired
+instruments answer that as designed — no protocol change, readings stand.
+
+Candidate lever parked for AFTER baselines: E57 says head-down works on
+qwen; a head-down gemma-small at the same bytes might retain more of the
+26b advantage. Compute is Noah's call; do not start it before the E56
+baselines land or it contaminates the comparison set.
