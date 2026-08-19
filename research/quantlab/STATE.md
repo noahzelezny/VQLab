@@ -410,3 +410,90 @@ because their pre-registered boundary was computed from my wrong numbers.
 the dispatcher). Verify with:
     cd /Users/noahzelezny/Documents/AgenicAI && \
       .venv/bin/python scripts/scout_services.py status nightly-dispatcher
+
+---
+
+# ===== COMPACTION HANDOFF (08-19 midday) =====
+
+## 1. A PUBLISHED CLAIM WAS FALSIFIED — read this first
+
+**e4b-8bit scores 84.62%; our gemma-small scores 79.81%.** Same instrument
+(litbench generative + cyclic, n=104, 0 unparsed), e4b's positional lean is
+MILDER than ours (35/21/26/22 vs 50/17/20/17). So the "26B in the e4b-8bit
+sidecar slot" premise FAILS on literary work. MODEL_CARD_GEMMA_SMALL.md now
+says so and tells readers to keep e4b-8bit for that use.
+
+**Related instrument hazard:** the `26b bf16 | 48G | 84.62%` row in
+CRUSH_RESULTS' generative table is **NON-cyclic**, sitting among cyclic
+rows. There is NO cyclic litbench for 26b bf16. Do not compare it against
+cyclic numbers.
+
+## 2. MEASURED gemma ladder — packed AND sighted, all apples-to-apples
+
+| build | geom | K | bpw | sighted | KL | agree |
+|---|---|---|---|---|---|---|
+| struct8-e8 (8-bit ref) | affine | — | 8 | 24.98G | 441 | 79.95% |
+| **vq-K2048-d2** | d2 | 2048 | 5.75 | **18.74G** | 537 | 77.89% |
+| vq-K1024-d2 | d2 | 1024 | 5.25 | 17.41G | 609 | 75.90% |
+| vq-K512-d2 | d2 | 512 | 4.75 | 16.08G | 744 | 72.72% |
+| vq-K256-d2 | d2 | 256 | 4.25 | 14.75G | 950 | 68.27% |
+| vq-K8192-d4 | d4 | 8192 | 3.50* | 13.42G | 1426 | 61.32% |
+| vq-K2048-d4 | d4 | 2048 | 3.00* | 12.53G | 1856 | 56.56% |
+| vq-K64-d2 | d2 | 64 | 3.25 | 12.09G | 1779 | 57.68% |
+| vq-K512-d4 | d4 | 512 | 2.50* | 11.65G | 2969 | 45.04% |
+| vq-K32-d2 | d2 | 32 | 2.75 | 10.76G | 2570 | 48.84% |
+| **vq-K256-d4** | d4 | 256 | 2.25 | **9.43G** | 3363 | 42.65% |
+*nominal; d4 K>256 pays the stranded-third penalty (E54), effective is higher.
+
+Sizes match the one-parameter model to <0.1 GiB. Packing verified as a pure
+representation change on the newly packed rungs (d2-K32: 2569.541 both ways).
+
+## 3. IN FLIGHT
+
+- **M4**: flat d2-K512 (qwen) FIT DONE — *not yet verified*. Policy: verify
+  on M3 (`verify_artifact.py --outlier 3.0`) before believing any number.
+  Then add_model_file -> pack -> kl_ppl_calibrate.
+- **M3 queue** (serialized, logs_*.log): verify_packed (running), then
+  qwen_k8192.sh, then arm3_headup.sh.
+
+## 4. THE ARM EXPERIMENT — predictions are pre-registered, do not rationalize
+
+My "tail30" builds are **HEAD-DOWN** builds: `--tail-from 10 --tail-geom X`
+puts the CHEAP geometry on layers 0-9. I named them for the end I was
+promoting; the 397B session caught it, and the wrong name had already put a
+wrong mechanism into BOTH sets of notes.
+
+| arm | L0-9 | L10-29 | L30-39 | size | ppl |
+|---|---|---|---|---|---|
+| 1 flat | d2-K512 | d2-K512 | d2-K512 | ~19.6G | fit done, unscored |
+| 2 head-DOWN | **d4-K2048** | d2-K512 | d2-K512 | 17.88G | **0.991x** |
+| 3 head-UP | d2-K512 | d2-K512 | **d4-K2048** | ~17.9G | queued |
+
+Arms 2 and 3 differ ONLY in which end is cheap. Readings agreed in advance:
+arm2>arm3 = shallow layers are cheap (and head-down SHRINKS artifacts);
+arm3>arm2 = deep promotion was the active ingredient (E49 survives);
+arm2~arm3 = position irrelevant, E49 dies as a schedule claim.
+BOTH sessions predict arm2 > arm3; this session adds a magnitude (arm3
+0.005-0.015 worse, ~0.996-1.006x). See E55.
+
+## 5. THE DURABLE RESULT (E55) — outlives the schedule question
+
+**Do not rank VQ builds by relerr across different allocations.** Two
+measured inversions on Qwen3.6: flat d2-K256 has the BEST fit error (0.0834)
+and WORST ppl (1.016x); both head-down builds fit worse and score better.
+Both sessions reasoned from that proxy to a wrong conclusion within hours.
+Use ppl where valid, blind judging where not.
+
+## 6. UNCHANGED, VERIFIED, PUBLISHABLE
+
+| target | artifact | size | evidence |
+|---|---|---|---|
+| gemma quality | vq-K2048-d2-packed-sighted | 18.74G | indistinguishable from bf16 blind (11-23, 26 tie, p=.058) |
+| gemma small | vq-K256-d4-sighted | 9.43G | ties 15G 4bit; LOSES to e4b-8bit (see §1) |
+| qwen quality | vq-tail30-d2k512-packed | 17.88G | ppl 0.991x vs 8bit 0.999x @ 35G |
+| qwen small | vq-K2048-d4-packed | 12.96G | ppl 1.029x vs 4bit 1.041x @ 19G |
+
+Four model cards written (MODEL_CARD_{GEMMA,QWEN}_{QUALITY,SMALL}.md).
+Scout nightly-dispatcher running. M4 is unreliable (E47) — verify its output
+on M3 always. Stage commits BY PATH, never -A; no Co-Authored-By trailer
+(AGENTS.md Commits 1-3, 5).
