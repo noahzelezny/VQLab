@@ -3108,3 +3108,57 @@ packing needed since uint8) — if it matches tail30's 1.000x parity it wins on
 size and simplicity, since tail20/tail30 are mixed-geometry and need packing.
 gemma d2-K512 packing/scoring (~16G sighted projected). Both d2 gemmas still
 need blind win-rate judging before any quality claim.
+
+## E47 (08-18/19, overnight) — M4 COMPUTE IS INTERMITTENTLY WRONG, AND THE VENV HOLDS THE LIVE RUNTIME
+
+Two infrastructure findings that invalidate results silently. Both were
+caught by verify_artifact.py, neither by any fit log.
+
+### 1. M4 (nozzlebook-pro, M4 Max 128GB) returns wrong compute intermittently
+
+Controlled A/B — SAME artifact file, SAME deterministic verification, hashes
+of the per-tensor relerr list:
+
+    M3  run A  9ca617fa...   run B  9ca617fa...     <- identical
+    M4  run A  eafc930d...   run B  9ca617fa...     <- DIFFERENT
+
+M4's run B agrees with M3, so 9ca617 is the truth and run A was simply
+wrong. A follow-up 5 runs on M4 all returned the correct hash (including 5
+taken DURING a concurrent fit), so the fault is INTERMITTENT, roughly 1 in 7
+observed here — not load-triggered in any way we could pin down.
+
+Corrupted artifacts M4 produced tonight, all passing the fitter's own gate:
+  - tail30 (qwen): 5 tensors collapsed, one at relerr 1.0000, while the SAME
+    layers fitted at 0.032 in tail20. Scored 160 mnats/83.79%; after refit on
+    M3, 46.8 mnats/90.30% — the difference between "not worth shipping" and
+    the PARITY artifact.
+  - gemma d2-K512: fit log reported worst 0.0611; the WRITTEN artifact held 4
+    tensors at 0.54-0.99. Refit on M3: clean, 744 mnats / 72.72%.
+  - qwen d2-K64: 3 tensors >0.5 (L11 gate_proj 0.988, L38 down_proj 0.957).
+  - Also the only box to hit kIOGPUCommandBufferCallbackErrorTimeout (K=8192,
+    and again at K=32 where codebook size cannot be the cause).
+M3 (M3 Ultra) produced ZERO corrupted artifacts across the same night.
+
+**POLICY: every M4-fitted artifact is verified ON M3 before any number from
+it is believed.** verify_artifact.py --threshold 0.35 catches this; fit logs
+structurally cannot, because the fitter reports what it computed, not what
+reached disk.
+
+### 2. There are TWO copies of vq_switch.py and the LIVE one is in the venv
+
+The artifact shim does `importlib.import_module(f"mlx_lm.models.{model_type}")`,
+so the VQ runtime resolves to
+`venv/lib/python3.12/site-packages/mlx_lm/models/vq_switch.py` — NOT the copy
+add_model_file.py inlines into each artifact's model.py (dead code for these
+loads). A patched repo vq_switch.py therefore has NO effect until copied into
+the venv.
+
+Cost: ~1h chasing a "broken d=2 uint16 decode" that was a stale venv copy
+still holding the old fall-through dispatch. Compounding it, the real
+artifact WAS also corrupt (finding 1), so two independent faults produced one
+symptom and each masked the other. The decode kernels are in fact D-generic:
+verified numerically for d2-uint16 K=512 against a numpy reference, max rel
+diff 2.5e-4.
+
+**POLICY: patching vq_switch.py means `cp vq_switch.py $VENV/lib/python*/
+site-packages/mlx_lm/models/`, on every box.**
