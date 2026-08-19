@@ -3926,3 +3926,55 @@ cannot rank allocations. For non-flat builds set it above the cheap
 region's expected relerr and read the REFIT SPREAD (reproducibility) as
 the stability signal instead; 0.4357/0.4360 across refits is stable-poor,
 not broken.
+
+---
+
+## E58 (08-19) — bf16 BASE-MODEL FACEOFF: 26b-a4b beats e4b on prose (PARTIAL, stopped by Noah)
+
+**Why this ran.** MODEL_CARD_GEMMA_SMALL states e4b-8bit beats our
+gemma-small on literary work, on one litbench read (84.62 vs 79.81, n=104).
+Noah doubted it and spotted the tell himself: **e4b-8bit scores ABOVE e4b
+bf16 (82.69%) on the same instrument** — a quant cannot beat its own
+teacher, so the instrument was resolving noise. At n=104 the binomial SE is
+~±3.7 points: the 1.9-point "8bit wins" is 0.5 SE (noise), and the
+4.8-point gap the sidecar falsification rests on is ~1.3 SE (suggestive,
+not decision-grade). The card asserted harder than the error bars own.
+
+**Design.** Strip quantization out entirely and ask the base-model question
+directly: **26b-a4b bf16 vs e4b bf16**, 60 literary prompts, greedy,
+winrate_bench dual-order blind judging (Qwen3.8-27B q4 judge, different
+family). A "win" requires the judge to pick the same continuation in BOTH
+orders; self-disagreement counts as no-decision. Gens on M4:
+`gens_prose_26b-bf16.json` / `gens_prose_e4b-bf16.json`.
+
+**Result — PARTIAL, 43 of 60 pairs.**
+
+| | pairs |
+|---|---|
+| 26b-a4b bf16 wins | **15** |
+| e4b bf16 wins | **4** |
+| inconsistent (judge flipped with order) | 23 |
+| ties / unparsed | 1 |
+
+Exact two-sided sign test on the 19 decisives: **p = 0.0192**.
+
+**Stopped deliberately at 43/60 by Noah**, not by failure and not on a
+favorable interim — he judged the comparison decision-irrelevant ("two
+models, one half the size of the other, released in the same family at the
+same time") once its only real purpose, showing litbench cannot resolve
+this question, was already established. Record it as a stopped-early
+partial. It is NOT a publish gate; E56 is.
+
+**What it establishes.** The base-model claim inverts: 26b-a4b bf16 is
+better than e4b bf16 on literary prose, at p<0.05 even on two-thirds of the
+planned pairs. litbench's contrary read was instrument noise. The publish
+question therefore sharpens — it was never "is 26b a worse model", it is
+"does 2.25 bpw give back enough of a real bf16 advantage to lose to a
+smaller (8.38 GiB) incumbent built on a weaker base."
+
+**Instrument standing.** litbench is a coarse SCREEN: decisive for large
+gaps (the 42%-tier artifacts), unable to resolve ~5 points at n=104, and
+saturating near the top — the same failure shape as the ~82% agreement
+floor (E41) and bounded-metric extrapolation (E48). Every close call this
+arc was settled by blind paired judging. Do not gate a publish on litbench
+alone.
