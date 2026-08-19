@@ -193,3 +193,52 @@ CRUSH_RESULTS (uniform damage, d=2-gemma falsified).
 **DECISIONS RESOLVED TONIGHT:** K=8192 dead (K ladder exhausted, E45 F1).
 d=2-gemma dead (domain scan). tail30 pending repair, not blocking publish.
 gemma publish gate = the two win-rate verdicts.
+
+---
+
+## LATE-NIGHT ROUND (08-18) — d=2 changes everything; READ E46
+
+**THE RULE THAT MATTERS MOST:** Qwen decisions are made on **PPL** (it is
+valid there); gemma decisions need the **BLIND WIN-RATE** (winrate_bench),
+because gemma has no valid ppl and KL over-reports MoE routing damage.
+Top-1 agreement is SECONDARY everywhere. Two wrong calls tonight came from
+reading Qwen off agreement (E46).
+
+**QWEN — tail30 achieves bf16 PARITY:**
+| rung | packed | ppl vs bf16 | agree |
+|---|---|---|---|
+| mlx-community 8bit | 35G | 0.999x | 96.18% |
+| **vq-tail30-d2k2048-packed** | **20.7G** | **1.000x** | 90.30% |
+| vq-tail20-d2k2048-packed | 18.1G | 1.007x | 89.77% |
+| vq-K2048-d4-packed | 13.0G | 1.029x | 87.33% |
+| mlx-community 4bit | 19G | 1.041x | 85.61% |
+tail30 = the 32GB accessibility artifact. NOTE it needed a shard-2 repair
+(E44) — the broken version read 160 mnats / 83.79%.
+
+**GEMMA — the d2 ladder (blind judging still REQUIRED before claims):**
+| artifact | sighted | KL | agree | fit relerr |
+|---|---|---|---|---|
+| struct8-e8 ceiling | 25G | 441 | 79.95% | — |
+| vq-K512-d2 | ~16G? | pending | pending | 0.0589 |
+| **vq-K256-d2-sighted** | **14.75G** | 950 | 68.27% | 0.0873 |
+| vq-K2048-d4-sighted | 12.53G | 1856 | 56.56% | 0.1877 |
+| vq-K256-d4-sighted | 9.43G | 3363 | 42.65% | 0.3136 |
+
+**d=2 KERNEL NOW EXISTS** (4b2d016, vq_switch.py). Before it, d=2 artifacts
+emitted pure `<pad>` on decode while scoring perfectly on teacher-forced
+instruments. d=2 now runs 51.0 tok/s, FASTER than d=4's 47.2. Unsupported
+(dim, pack_bits) now RAISES instead of silently using another dim's kernel.
+
+**BLIND WIN-RATE (settled, E44):** Sonnet, blind, key withheld:
+bf16 beat vq-K2048-d4 36-20 (p=0.044, mostly weak confidence); beat
+vq-K256-d4 34-12 (p=0.0016). Local Qwen judge agreed on the small one
+(13-2, p=0.007). CONTROL: bf16 vs itself = 20/20 tie, so the instrument is
+calibrated. The d2 gemmas MUST get the same treatment.
+
+**IN FLIGHT:** M3 qwen flat-d2-K256 (~18.8G projected, uint8 = no packing;
+if it matches tail30's 1.000x it wins on size AND simplicity). M4 gemma
+d2-K512 pack+KL.
+
+**NEXT:** score/ppl the flat-d2 qwen; pack+graft+score d2-K512 gemma;
+winrate generations for both d2 gemmas -> judging chip; verify_artifact
+--threshold 0.35 on anything that ships.
