@@ -328,3 +328,42 @@ killing one breaks every downstream wait condition and they all stampede the
 GPU simultaneously (happened twice tonight; the second time three fits and a
 generation ran at once and all stalled at 0 progress). Use ONE sequential
 script — a single process cannot race itself. See scratchpad/QUEUE.sh.
+
+---
+
+## MORNING HANDOFF (08-19) — WHAT TO DO FIRST
+
+**TWO CHIPS ARE WAITING FOR A CLICK. Both are blocking real conclusions:**
+1. `task_7ae8af6c` **Blind-judge d2 gemma prose vs bf16** — 120 anonymized
+   pairs, key withheld. THIS IS THE GATE on every gemma quality claim; KL
+   over-reports MoE damage and litbench saturates, so nothing about the d2
+   gemmas is settled until this runs. Decode with:
+   `./score_blind_verdict.py --verdict winrate/claude_verdict_d2K512.json --tag d2K512`
+   (and `--tag d2K1024`). It prints the decoded win/loss, an exact sign test,
+   AND the judge's raw positional split as an instrument check.
+2. `task_d993902d` **Packed d=2 fused kernel** — the two best gemma artifacts
+   currently decode at ~8.4 tok/s through the prefill fallback instead of
+   ~50. Correctness is fine; only speed is blocked.
+
+**SCOUT WAS NOT STARTED.** Noah asked for the dispatcher only once the
+exploration was exhausted. It was not — the d2 ladder was still climbing and
+the cheaper-tail lead was still paying at the time of writing. Start it with
+`python scripts/scout_services.py list` (from /Users/noahzelezny/Documents/
+AgenicAI) to find the dispatcher's service name, then `start <name>`.
+
+**BEST ARTIFACTS AS OF THIS WRITING** (all verified; gemma unjudged):
+| target | artifact | size | evidence |
+|---|---|---|---|
+| gemma small | vq-K256-d4-sighted | 9.43G | litbench ties 15G 4bit; bf16 beat it 34-12 blind |
+| gemma quality | vq-K1024-d2-packed | 17.41G | 75.90% agree vs 79.95% ceiling — UNJUDGED |
+| qwen small | vq-K2048-d4-packed | 13.0G | ppl 1.029x vs 4bit's 1.041x @ 19G |
+| qwen quality | **vq-tail30-d2k512-packed** | **17.9G** | **ppl 0.991x** — dominates the 20.7G rung |
+
+**IN THE QUEUE when this was written** (scratchpad/QUEUE.sh, one sequential
+process, logs_QUEUE.log): gemma d4-K8192 (decisive, boundary 59.92%), gemma
+d2-K2048 (top of ladder), qwen tail30-d2k256 (cheaper tail again), gemma
+d4-K512 (target-1 candidate).
+
+**M4 IS DOWN FOR FITS.** 4 failures overnight (3 corrupt artifacts + repeated
+command-buffer timeouts) plus A/B-proven wrong compute (E47). Everything ran
+on M3. Do not trust an M4-fitted artifact without verifying it on M3.
