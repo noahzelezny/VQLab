@@ -408,6 +408,59 @@ _SRC_FUSED_PACKED = _PACK_FETCH + r"""
     y[(size_t)t * OUT + r] = static_cast<T>(acc);
 """
 
+# d=2 packed (gemma d2 K512/K1024 rungs, 2026-08-19). Same shape as
+# _SRC_FUSED_D2 — half2 codebook + x caches, QPG*4 subvectors per group —
+# with the code fetch swapped for the VQ_CODE bit-field read. The packing
+# layout (vq_pack.py) is dim-agnostic: blocks of 32 codes = BITS uint32
+# words, row-local, so crow steps by WPR just like the d4 packed kernel.
+# What is NOT dim-agnostic is NSUB (= IN/2, double the d4 value for the same
+# IN) — deriving it inside the kernel from IN keeps the d4/d2 asymmetry that
+# caused the original silent d2 bug out of the picture; threadgroup sizing
+# uses MAX_NSUB from the host, which also computes NSUB = IN/D explicitly.
+_SRC_FUSED_PACKED_D2 = _PACK_FETCH + r"""
+    const int OUT  = dims[0];
+    const int IN   = dims[1];
+    const int G    = dims[3];
+    const int N    = dims[4];
+    const int K    = dims[5];
+    const int NSUB = IN / 2;
+    const int NGRP = IN / G;
+    const int QPG  = G / 8;
+    const int WPR  = NSUB / 32 * BITS;
+    uint r = thread_position_in_grid.x;
+    uint t = thread_position_in_grid.y;
+    uint lid = thread_position_in_threadgroup.x;
+    uint tgsize = threads_per_threadgroup.x;
+
+    threadgroup half2 cb[MAX_K];
+    threadgroup half2 xs[MAX_NSUB];
+    const device half2* cbg = (const device half2*)codebook;
+    for (uint i = lid; i < (uint)K; i += tgsize)
+        cb[i] = cbg[i];
+    const device T* xrow = x + (size_t)t * IN;
+    for (uint i = lid; i < (uint)NSUB; i += tgsize)
+        xs[i] = half2((half)xrow[i*2], (half)xrow[i*2+1]);
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+    if (r >= (uint)OUT || t >= (uint)N) return;
+    const uint e = eidx[t];
+    const device uint* crow = codes + (size_t)e * OUT * WPR + (size_t)r * WPR;
+    const device half* srow = scales + (size_t)e * OUT * NGRP + (size_t)r * NGRP;
+    float acc = 0.0f;
+    int j = 0;
+    for (int g = 0; g < NGRP; ++g) {
+        float gacc = 0.0f;
+        for (int q = 0; q < QPG; ++q) {
+            gacc += dot(float2(cb[VQ_CODE(crow, j)]),   float2(xs[j]))
+                  + dot(float2(cb[VQ_CODE(crow, j+1)]), float2(xs[j+1]))
+                  + dot(float2(cb[VQ_CODE(crow, j+2)]), float2(xs[j+2]))
+                  + dot(float2(cb[VQ_CODE(crow, j+3)]), float2(xs[j+3]));
+            j += 4;
+        }
+        acc = fma((float)srow[g], gacc, acc);
+    }
+    y[(size_t)t * OUT + r] = static_cast<T>(acc);
+"""
+
 _SRC_DECODE_PACKED = _PACK_FETCH + r"""
     uint g = thread_position_in_grid.x;
     uint r = thread_position_in_grid.y;
@@ -494,13 +547,22 @@ def _fused(x, eidx, codes, codebook, scales, pack_bits=0):
     # <pad> with NO error (2026-08-18, gemma26b vq-K256-d2). A wrong-memory
     # read must never be the default branch.
     if pack_bits:
-        if D != 4:
+        # Explicit per-D dispatch, same rule as unpacked: a packed kernel for
+        # one D reads wrong memory at another D (the d4 kernel at d=2 returns
+        # NaN), so anything unimplemented must raise, never fall through.
+        if D == 4:
+            name = f"vq_fused_packed{pack_bits}"
+            src = _SRC_FUSED_PACKED
+        elif D == 2:
+            # NSUB (= IN/2) doubles vs d4 for the same IN; MAX_NSUB below is
+            # computed from the actual IN, so the threadgroup x cache is
+            # sized for the doubled subvector count automatically.
+            name = f"vq_fused_packed{pack_bits}_d2"
+            src = _SRC_FUSED_PACKED_D2
+        else:
             raise NotImplementedError(
-                f"no FUSED packed kernel for d={D} (it is d4-shaped and "
-                f"returns NaN). VQSwitchLinear routes packed d=2 to _prefill "
-                f"instead; this raise only fires on a direct _fused call.")
-        name = f"vq_fused_packed{pack_bits}"
-        src = _SRC_FUSED_PACKED
+                f"no FUSED packed kernel for d={D}; only d=4 and d=2 are "
+                f"implemented and each is dispatched explicitly.")
         template = [("T", x.dtype), ("MAX_K", K), ("MAX_NSUB", NSUB),
                     ("BITS", pack_bits)]
     elif D == 2:
@@ -563,8 +625,7 @@ def _decode_chunk(codes, codebook, scales, eidx_chunk, pack_bits=0,
     # unimplemented and must still raise.
     # packed d=2 through THIS path is verified D-generic: decoded against a
     # numpy vq_pack.unpack reference at max rel 2.6e-4 (K=512, pack_bits=9).
-    # The FUSED packed kernel is NOT — it is d4-shaped and returns NaN at
-    # d=2 — so __call__ routes packed d=2 here regardless of N.
+    # The fused path has its own dedicated packed-d2 kernel (2026-08-19).
     dims = mx.array([OUT, IN, D, G, NE], dtype=mx.int32)
     if pack_bits:
         name, src = f"vq_decode_packed{pack_bits}", _SRC_DECODE_PACKED
@@ -716,12 +777,11 @@ class VQSwitchLinear(nn.Module):
         if in_dtype not in (mx.float16,):
             xf = xf.astype(mx.float16)
         pb = self.pack_bits
-        # PACKED d=2 HAS NO FUSED KERNEL (returns NaN — it is d4-shaped).
-        # Prefill decodes it correctly, so force that path. Costs decode
-        # speed (~10 tok/s vs ~50) until a fused packed-d2 kernel exists;
-        # correct-and-slow beats fast-and-wrong, and beats not loading at all.
-        _d2_packed = pb and self["codebook"].shape[1] == 2
-        if N <= VQ_FUSED_MAX_N and not _d2_packed:
+        # Packed d=2 now has its own fused kernel (vq_fused_packed{bits}_d2,
+        # 2026-08-19, verified against vq_pack.unpack numpy reference); the
+        # old force-to-_prefill workaround is gone. _fused still raises
+        # explicitly for any (D, pack_bits) without a dedicated kernel.
+        if N <= VQ_FUSED_MAX_N:
             y = _fused(xf, idx_flat.astype(mx.uint32),
                        self["codes"], self["codebook"], self["vq_scales"],
                        pack_bits=pb)
