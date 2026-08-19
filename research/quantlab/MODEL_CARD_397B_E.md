@@ -47,8 +47,11 @@ different corpora or eval harnesses.
 
 - a single Apple Silicon machine with ≥ 192 GB unified memory, or
 - an [exo](https://github.com/exo-explore/exo) cluster (e.g. 96 GB + 128 GB
-  over Thunderbolt) with one sharding rule: VQ codebooks replicate rather
-  than slice — a one-line change to exo's `auto_parallel`, not yet upstreamed.
+  over Thunderbolt) with one sharding guard: VQ codebooks replicate rather
+  than slice. Submitted upstream as [PR #2268](https://github.com/exo-explore/exo/pull/2268); until it merges, use
+  the branch [`noahzelezny/exo:vq-codebook-replicate`](https://github.com/noahzelezny/exo/tree/vq-codebook-replicate), which also
+  ships builtin exo model cards for this lineup so the model is runnable by
+  name.
 
 Measured on the cluster (exo, M3 Ultra 96 GB + M4 Max 128 GB over
 Thunderbolt 5 / RDMA, tensor-sharded): **~17.4 tok/s** decode on a short

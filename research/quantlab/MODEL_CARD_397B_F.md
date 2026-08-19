@@ -187,10 +187,13 @@ figure — the runtime tables report what was actually measured resident.
   perplexity here vs the community 2.6bit, +2.3% vs our `VQ-2.4bpw` build).
 - This is a *thinking* model (Qwen3.5 family): it spends tokens reasoning
   before answering. Budget `max_tokens` accordingly.
-- Distributed (exo) tensor-parallel serving needs one line in exo's own
-  sharding rule — VQ codebooks must be replicated, not sliced. That change
-  is not yet upstreamed; the one-line patch is in the experiment log and can
-  be applied locally. `mlx-lm` itself is stock in that setup too: verified serving
+- Distributed (exo) tensor-parallel serving needs one guard in exo's own
+  sharding rule — VQ codebooks are a shared lookup table and must be
+  replicated, not sliced. Submitted upstream as [PR #2268](https://github.com/exo-explore/exo/pull/2268); until it
+  merges, a ready-to-use branch is at
+  [`noahzelezny/exo:vq-codebook-replicate`](https://github.com/noahzelezny/exo/tree/vq-codebook-replicate) (8 lines in
+  `src/exo/worker/engines/mlx/auto_parallel.py`, plus builtin model cards for
+  this lineup). `mlx-lm` itself is stock in that setup too: verified serving
   this model across two Macs with an unpatched `mlx-lm`, producing output
   identical to the patched run. Single-box users are unaffected.
 
