@@ -247,14 +247,15 @@ def kmeans(X, k, iters, init="kmeans++"):
         # "[metal::malloc] Attempting to allocate 65536000000 bytes", NOT as
         # the command-buffer timeout it was previously blamed on). Budget the
         # chunk by k instead, matching how `step` above is already computed.
-        oh_chunk = max(50_000, int(5e8 / k))
-        for s0 in range(0, n, oh_chunk):
-            ab = a[s0:s0 + oh_chunk]
-            oh = (ab[:, None] == mx.arange(k)[None, :]).astype(mx.float32)
-            oh_sum = oh_sum + oh.T @ X[s0:s0 + oh_chunk]
-            cnt = cnt + mx.sum(oh, axis=0)
-            mx.eval(oh_sum, cnt)
-            del oh
+        # SCATTER-ADD, not one-hot. The one-hot form built an [rows, k] fp32
+        # matrix: 2e6*k*4 bytes = 65.5 GB at k=8192 (over Metal's 62.6 GB cap,
+        # which is what killed every K8192 run). Chunking it small enough to
+        # fit made it 33x more iterations and K8192 did not finish a single
+        # tensor in 58 minutes. scatter-add is O(n) in the assignment instead
+        # of O(n*k), so cost stops depending on k entirely.
+        oh_sum = oh_sum.at[a].add(X)
+        cnt = cnt.at[a].add(mx.ones((n,), dtype=mx.float32))
+        mx.eval(oh_sum, cnt)
         C = mx.where(cnt[:, None] > 0,
                      oh_sum / mx.maximum(cnt[:, None], 1.0), C)
         mx.eval(C)
