@@ -3853,3 +3853,39 @@ interesting result.
 **Status:** instruments built and committed; runs queued behind the M3
 queue (verify_packed -> qwen_k8192 -> arm3_headup) as
 `gemma_small_verdict.sh`. Nothing scored yet.
+
+## E57 (08-19) — ARM 3 RESULT: HEAD-DOWN CONFIRMED, AND THE TAIL IS THE WRONG PLACE TO SPEND BITS
+
+The three-arm experiment (design + pre-registered readings in E55/E56-era
+notes) resolved:
+
+| arm | L0-9 | L10-29 | L30-39 | size | ppl vs bf16 | agree |
+|---|---|---|---|---|---|---|
+| 2 head-DOWN | **d4-K2048** | d2-K512 | d2-K512 | 17.88G | **0.991x** | 90.75% |
+| 3 head-UP | d2-K512 | d2-K512 | **d4-K2048** | 17.9G | **1.019x** | 89.28% |
+
+Same bits, same size; only WHICH END gets the expensive geometry differs.
+Head-down beats head-up by 0.028x ppl — larger than this session's
+pre-registered magnitude (0.005-0.015) and in the direction BOTH sessions
+predicted. KL agrees (50.944 vs arm2's lower; 89.28% vs 90.75%).
+
+**Readings, as agreed in advance:** arm2 > arm3 → shallow layers are the
+place the expensive geometry pays; deep "promotion" was never the active
+ingredient; E49 dies as a deep-schedule claim and survives only as
+"head-down works." Arm 3 also lands WORSE than what its bit budget should
+buy — spending d4-K2048 on L30-39 bought less than spending it anywhere.
+
+Mechanism note (consistent with the 397B responsiveness data): shallow
+layers are the HARDEST to fit and feed every later layer, so error placed
+there compounds; the tail's errors have nowhere to propagate. The fit-side
+depth profile was FLAT on qwen (E53), which is exactly why relerr could
+not see this — output sensitivity, not fit difficulty, is depth-graded.
+
+Arm 1 (flat d2-K512, ~19.6G) fit on M4 remains unverified; it brackets the
+schedule effect from below once scored, but the arm2-vs-arm3 question no
+longer depends on it.
+
+Instrument caveat recorded in STATE: verify_artifact --outlier flags the
+d4-K2048 region of ANY mixed-geometry build (~0.19 vs d2-K512 ~0.09 body,
+3.2x median) — a healthy geometry difference, not corruption. Read the
+gate per-region on mixed builds.
