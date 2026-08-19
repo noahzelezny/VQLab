@@ -4163,3 +4163,47 @@ looping are where parameters buy the most), multihop next, constraint last.
 A gemma-small win on >=2 families at p<0.05 with none opposing would
 justify a capability claim CONFINED TO THE STRESSED REGIME — never a
 general "better model" claim, and never a bf16 comparison.
+
+### E63 RESULT (08-19) — the capacity probe FAILED TO SEPARATE, because BOTH models are at ceiling
+
+| family | gemma-small (2.25bpw of 26b) | e4b-8bit | paired |
+|---|---|---|---|
+| multihop | 20/20 | 20/20 | p=1.0 |
+| needle (6k-17k tok, 5 depths) | 10/10 | 10/10 | p=1.0 |
+| constraint (x6 each) | 120/120, 20/20 perfect | 118/120, 18/20 perfect | p=0.50 |
+| sustain | 1128 w, distinct3 .969, rep-sent .000 | 1019 w, distinct3 .984, rep-sent .010 | no looping either |
+
+**Pre-registered signature (needle and sustain separate first, then multihop,
+constraint last) did not appear — nothing separated at all.** e4b's only
+blemish was 2 missed required-vocabulary constraints out of 120 (p=0.50,
+noise).
+
+**The honest reading, and it is NOT "the models are identical."** This is a
+CEILING result, and a ceiling cannot rank: both models scored at or within
+2 items of perfect on every family, so the probe has no resolving power
+left at the top. The data are equally consistent with (a) genuine
+equivalence in this regime and (b) a probe that is still too easy. We
+cannot distinguish those two from this run. Same failure family as E41
+(agreement floor), E48 (bounded metrics), and E56's litbench demotion — the
+fourth time this project has been bitten by an instrument that saturates.
+
+**What IS established, and it is worth stating plainly:** 2.25bpw VQ
+quantization of gemma-4-26b-a4b costs NOTHING measurable on multi-hop
+reasoning depth, long-context retrieval to 17k tokens at all depths,
+six-way simultaneous constraint satisfaction, or 1000+ word generation
+without degeneration. That is a strong statement about the METHOD even
+though it is a null result about the COMPARISON.
+
+**Consequence for the publish decision (E56):** with litbench, domain
+constraints, and now a purpose-built hard probe all returning parity, the
+E56 third reading is the one the evidence supports —
+"statistically indistinguishable from e4b-8bit on every instrument we
+built; e4b-8bit is 1.05 GiB smaller and remains the default." Any claim of
+a gemma-small capability advantage would now need a probe that first
+demonstrates it has headroom (i.e. that some model FAILS it), which is the
+correct bar and one no instrument here currently clears.
+
+**Human instrument opened (chat_arena.py):** blind side-by-side browser
+chat, A/B re-randomized every turn, votes logged with true identity to
+winrate/human_verdicts.jsonl for a sign test. Noah's read is the only
+signal not yet saturated.
