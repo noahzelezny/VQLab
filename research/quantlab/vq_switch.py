@@ -5,7 +5,7 @@
 #
 # Format (per VQ'd expert tensor, produced by vq_*_codes fitters):
 #   {p}.codes      uint8 (K<=256) / uint16   [E, out, in/d]
-#   {p}.codebook   fp16                      [K, d]      (d=4 or d=8)
+#   {p}.codebook   fp16                      [K, d]      (d=2, 4 or 8)
 #   {p}.vq_scales  fp16                      [E, out, in/group]
 #
 # d=8 (E36 mixed geometry, 2026-08-15): each module dispatches on its own
@@ -230,6 +230,58 @@ _SRC_FUSED_D8_TG = r"""
     y[(size_t)t * OUT + r] = static_cast<T>(acc);
 """
 
+# d=2 (gemma d2 rungs, 2026-08-18). The mirror case of d8: where d8 needs
+# two half4 loads per code, d2 needs only a half2 — so both codebook and x
+# cache as half2. Threadgroup footprint is tiny (K*4 B codebook: 1 KB at
+# K256, 8 KB even at K2048) but NSUB doubles vs d4 (IN/2), so the x cache is
+# the bigger term (NSUB*4 B: 5.5 KB at IN=2816) — still nowhere near the
+# 32 KB ceiling. half2 caching is value-identical, same argument as the
+# d4 bigK kernel: codebook is fp16 on disk and x is cast to fp16 before
+# dispatch. Codes stay one-per-subvector (uint8/uint16), crow steps by NSUB
+# exactly like d4 — only the load width changes.
+_SRC_FUSED_D2 = r"""
+    const int OUT  = dims[0];
+    const int IN   = dims[1];
+    const int G    = dims[3];
+    const int N    = dims[4];
+    const int K    = dims[5];
+    const int NSUB = IN / 2;
+    const int NGRP = IN / G;
+    const int QPG  = G / 8;
+    uint r = thread_position_in_grid.x;
+    uint t = thread_position_in_grid.y;
+    uint lid = thread_position_in_threadgroup.x;
+    uint tgsize = threads_per_threadgroup.x;
+
+    threadgroup half2 cb[MAX_K];
+    threadgroup half2 xs[MAX_NSUB];
+    const device half2* cbg = (const device half2*)codebook;
+    for (uint i = lid; i < (uint)K; i += tgsize)
+        cb[i] = cbg[i];
+    const device T* xrow = x + (size_t)t * IN;
+    for (uint i = lid; i < (uint)NSUB; i += tgsize)
+        xs[i] = half2((half)xrow[i*2], (half)xrow[i*2+1]);
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+    if (r >= (uint)OUT || t >= (uint)N) return;
+    const uint e = eidx[t];
+    const device CT* crow = codes + (size_t)e * OUT * NSUB + (size_t)r * NSUB;
+    const device half* srow = scales + (size_t)e * OUT * NGRP + (size_t)r * NGRP;
+    float acc = 0.0f;
+    int j = 0;
+    for (int g = 0; g < NGRP; ++g) {
+        float gacc = 0.0f;
+        for (int q = 0; q < QPG; ++q) {
+            gacc += dot(float2(cb[(uint)crow[j]]),   float2(xs[j]))
+                  + dot(float2(cb[(uint)crow[j+1]]), float2(xs[j+1]))
+                  + dot(float2(cb[(uint)crow[j+2]]), float2(xs[j+2]))
+                  + dot(float2(cb[(uint)crow[j+3]]), float2(xs[j+3]));
+            j += 4;
+        }
+        acc = fma((float)srow[g], gacc, acc);
+    }
+    y[(size_t)t * OUT + r] = static_cast<T>(acc);
+"""
+
 # --- packed-code variants (d=4) -------------------------------------------
 # Codes live as uint32 words, BITS per code, blocks of 32 codes = BITS words
 # (see vq_pack.py for the format and its bit-exactness tests). The fetch is
@@ -436,13 +488,24 @@ def _fused(x, eidx, codes, codebook, scales, pack_bits=0):
     # threadgroup budget: float4 codebook cache is 16 B/entry, so K>1024 with
     # x cached overflows Apple's 32 KB. Large-K (and all packed) go through
     # the half4 variant — value-identical, half the footprint.
+    # Dispatch is EXPLICIT on D with a hard raise for anything unhandled.
+    # This used to fall through to the d8 kernels for any non-d4 codebook —
+    # a d=2 artifact then read across codebook entries and generated pure
+    # <pad> with NO error (2026-08-18, gemma26b vq-K256-d2). A wrong-memory
+    # read must never be the default branch.
     if pack_bits:
         if D != 4:
-            raise NotImplementedError("packed codes are d=4 only (F and E are d4)")
+            raise NotImplementedError(
+                f"packed codes are d=4 only (got d={D}); d=2 artifacts must "
+                "ship unpacked (uint8) until a packed d2 kernel exists")
         name = f"vq_fused_packed{pack_bits}"
         src = _SRC_FUSED_PACKED
         template = [("T", x.dtype), ("MAX_K", K), ("MAX_NSUB", NSUB),
                     ("BITS", pack_bits)]
+    elif D == 2:
+        name, src = "vq_fused_d2", _SRC_FUSED_D2
+        template = [("T", x.dtype), ("CT", codes.dtype),
+                    ("MAX_K", K), ("MAX_NSUB", NSUB)]
     elif D == 4 and K > 1024:
         name = "vq_fused_d4_bigk"
         src = _SRC_FUSED_D4_BIGK
@@ -452,14 +515,16 @@ def _fused(x, eidx, codes, codebook, scales, pack_bits=0):
         name, src = "vq_fused", _SRC_FUSED
         template = [("T", x.dtype), ("CT", codes.dtype),
                     ("MAX_K", K), ("MAX_NSUB", NSUB)]
-    elif K <= _D8_TG_MAX_K:
+    elif D == 8 and K <= _D8_TG_MAX_K:
         name, src = "vq_fused_d8_tg", _SRC_FUSED_D8_TG
         template = [("T", x.dtype), ("CT", codes.dtype),
                     ("MAX_K", K), ("MAX_NX4", IN // 4)]
-    else:
+    elif D == 8:
         name, src = "vq_fused_d8", _SRC_FUSED_D8
         template = [("T", x.dtype), ("CT", codes.dtype),
                     ("MAX_NX4", IN // 4)]
+    else:
+        raise NotImplementedError(f"no fused kernel for subvector dim d={D}")
     (y,) = _get_kernel(name, src)(
         inputs=[x, eidx, codes, codebook, scales, dims],
         template=template,
