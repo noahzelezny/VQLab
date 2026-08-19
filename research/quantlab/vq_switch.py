@@ -546,6 +546,23 @@ def _decode_chunk(codes, codebook, scales, eidx_chunk, pack_bits=0,
     # caller passes it (VQSwitchLinear.input_dims knows it from the format).
     IN = in_features if in_features is not None else codes.shape[2] * D
     G = IN // NGRP
+    # PREFILL GUARD (2026-08-18). _fused dispatches explicitly on D, but this
+    # path only branched on pack_bits — so d=2 with uint16 codes (K>256) read
+    # wrong memory and returned SILENT GARBAGE: gemma vq-K512-d2 verified at
+    # relerr 0.0589 (verify_artifact PASS, weights provably fine) yet scored
+    # 3154 mnats / 47.14%, worse than the d4 artifact it should beat. d=2 with
+    # uint8 (K<=256) is correct and is what ships. Raise rather than decode
+    # wrongly — a plausible bad number costs more than a crash.
+    # (2026-08-18, later) the vq_decode kernel is D-generic: verified
+    # numerically for d2-uint16 (K=512) against a numpy reference, max rel
+    # diff 2.5e-4. So unpacked d2 needs no dtype restriction here. The
+    # garbage that prompted the original guard came from a STALE COPY of
+    # this file inside the venv (site-packages/mlx_lm/models/vq_switch.py)
+    # that still had the fall-through dispatch — see E47. Packed d2 remains
+    # unimplemented and must still raise.
+    if D == 2 and pack_bits:
+        raise NotImplementedError(
+            "d=2 packed decode is not implemented; ship d=2 unpacked (uint8).")
     dims = mx.array([OUT, IN, D, G, NE], dtype=mx.int32)
     if pack_bits:
         name, src = f"vq_decode_packed{pack_bits}", _SRC_DECODE_PACKED
