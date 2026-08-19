@@ -3233,3 +3233,43 @@ d=2 is only a fit-cost and packing convenience, not a quality lever.
 points that differ in TWO variables (geometry AND bits) and attributing the
 whole difference to the one being advocated. Bracket the anchor next time —
 it cost 6 minutes of fitting to answer.
+## E48 (08-19) — A BOUNDED METRIC CANNOT BE LINEARLY EXTRAPOLATED: the agreement ladder is a chord of a saturating curve
+
+**Origin.** The 397B session pre-registered d2-K64 = 63.52% from a d4 slope
+of 27.82 agreement-points/bpw fitted over K256->K2048 (42.65 -> 56.56%).
+Measured: 57.68%. They then retracted their own reasoning before the result
+could be used, and the retraction is the finding.
+
+**THE ERROR, STATED GENERALLY.** Top-1 agreement is bounded above by a
+MEASUREMENT FLOOR, not by 100%. E41 put that floor near ~82% for this
+family: even a near-lossless 8-bit gemma quant only agrees with bf16 79.95%
+of the time, because MoE routing is discrete and any perturbation flips which
+8-of-128 experts fire. So the agreement-vs-bpw curve SATURATES toward ~80,
+and any slope fitted in the 40-60% band is a CHORD of that curve, not its
+tangent. Extrapolating the chord upward systematically OVERSTATES the
+ceiling-ward arm.
+
+How badly: extending the same 27.82 pts/bpw line to 3.50 bpw predicts 77.4%
+— within 5 points of the floor itself, i.e. the linear model claims K8192
+would be nearly indistinguishable from bf16. Nobody believes that, and that
+implausibility was visible BEFORE the fit was run.
+
+**RULE.** Put the metric's FLOOR next to every agreement-vs-size table, so
+saturation is visible at a glance rather than discovered by extrapolating
+through it. Fit slopes only over the interval they were measured on, and
+never predict a rung above ~60% agreement from a slope fitted below it.
+
+**This is the same shape as E45's "relerr is a proxy that expires", one
+level up.** E45: the FIT PROXY stopped tracking quality (relerr stayed
+log-linear while agreement flatlined at K=4096). E48: the SCORING METRIC
+stops tracking damage linearly as it approaches its own floor. Both are
+"this number has a domain of validity"; between them they cover the fit side
+and the score side of the same ladder.
+
+**PRE-REGISTERED, PENDING (gemma d4-K8192 @ 3.50 bpw, fitting on M3).**
+Interpolating d4 between K2048 (2.75, 56.56%) and K8192 (3.50, X), the d4
+line passes exactly through d2-K64's 57.68% at 3.00 bpw when X = 59.92%.
+  X > ~59.9%  -> d4 still wins at 3.00 bpw; d=2 is the worse lever
+  X < ~59.9%  -> the d4 line bent UNDER d2; d=2 is competitive after all
+  X ~ 59.9%   -> the two geometries are indistinguishable per bit here
+Recorded BEFORE the number exists, by both sessions.
