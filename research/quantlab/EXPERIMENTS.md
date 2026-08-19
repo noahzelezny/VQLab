@@ -3311,3 +3311,37 @@ effect is within its noise.
 
 **Next rung queued:** tail30 with a d2-K256 tail (4.25 bpw). If cheaper wins
 again the knee is lower still, and K<=256 needs no packing for those tensors.
+
+### 3. SCOPED NEGATIVE RESULT — no M4 corruption reached the Hub (397B session, 08-19)
+
+All three PUBLISHED 397B artifacts verified: decoded from the artifact files
+(not fit logs) against the 751G bf16 source, on the M3, MLX pinned to CPU so
+the GPU was never involved. 171 tensors each, 513 total, ZERO corruption.
+
+| artifact | mean relerr | worst | worst/mean | outlier(3x) |
+|---|---|---|---|---|
+| 2.2bpw d4-K128 | 0.3698 | 0.4655 | 1.26x | clean |
+| 2.4bpw d4-K256 | 0.3156 | 0.4332 | 1.37x | clean |
+| 3.1bpw d4-K2048 | 0.1936 | 0.2963 | 1.53x | clean |
+
+Two independent cross-checks make this believable rather than merely a PASS:
+  - the 2.4bpw VERIFIED mean (0.3156) equals the FIT-TIME mean recorded in
+    EXPERIMENTS.md to four decimals, from a decode path sharing no
+    reconstruction code with the fitter;
+  - E36 measured this same model at d4-K256 layer 0 as down 0.1930 /
+    gate_up 0.4161 months ago with different code; the 2.4bpw L00 gate/up
+    land at 0.4163/0.4189.
+Worst tensors are at L00/L01 in every artifact — the known layer-0-is-hard
+structure (E37), not damage.
+
+Scope it honestly: whatever the ~1-in-7 M4 error rate applies to, it did not
+hit these fits. The fits behind the release were either M3 or lucky, and we
+should NOT retro-fit a story about which.
+
+**AND THIS IS THE CONCRETE CASE FOR `--outlier` OVER `--threshold`.**
+`--threshold 0.35` would have FAILED ALL THREE of these clean, shipped
+artifacts — the 2.2bpw alone has 100+ healthy tensors above 0.35. `--outlier
+3.0` passes all three by an enormous margin (worst case 1.26-1.53x mean
+against a 3x bar). A fixed bar would have produced three false alarms on a
+verified-good release, and a gate that cries wolf gets widened until it
+catches nothing. Median-relative is the design that survives.
