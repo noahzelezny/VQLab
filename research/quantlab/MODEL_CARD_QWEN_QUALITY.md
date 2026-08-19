@@ -16,7 +16,7 @@ tags:
 
 # Qwen3.6-35B-A3B-VQ-tail30-d2K512
 
-**17.9 GiB at bf16-parity perplexity — half the size of the 8-bit, on a 32 GB Mac.**
+**8-bit-quality perplexity, smaller than the community 4-bit.** 17.9 GiB at ppl 0.991x vs bf16 — the 8-bit holds 0.999x at 35 GiB, the 4-bit degrades to 1.041x at 19 GiB (all measured on the same harness and corpus). Runs on a 32 GB Mac.
 
 A vector-quantized build of
 [Qwen3.6-35B-A3B](https://huggingface.co/Qwen/Qwen3.6-35B-A3B) for Apple
@@ -57,9 +57,11 @@ Single M3 Ultra, macOS, stock `mlx-lm`, GPU otherwise idle:
 
 | | |
 |---|---|
-| load time | ~9 s |
+| load time | ~2 s (warm) |
 | peak memory | 18.0 GiB |
-| decode | **~46 tok/s** |
+| decode | **~55 tok/s** |
+
+*Measured on an M4 Max (128 GB), mlx-lm, 120-token greedy generation.*
 
 Comfortable on a 32 GB machine with context headroom — the 8-bit needs 48 GB+.
 
@@ -99,11 +101,15 @@ one to three decimals.
 
 These artifacts fit on one machine, but if you shard them across an
 [exo](https://github.com/exo-explore/exo) cluster anyway, one guard is
-required: VQ codebooks must **replicate rather than slice**. Without it,
-exo's tensor parallelism splits the codebook silently and the model
-generates fluent garbage that reads as "a broken quant." The guard is
-bundled in this artifact's `model.py`; upstream fix submitted as
-[exo PR #2268](https://github.com/exo-explore/exo/pull/2268).
+required: VQ codebooks must **replicate rather than slice**. Stock exo
+tensor parallelism slices them. This artifact's bundled `model.py` detects
+that and fails loudly with an explanatory error (instead of silently
+generating fluent garbage that reads as "a broken quant") — but it cannot
+fix the sharding itself. To actually run tensor-parallel, apply
+[exo PR #2268](https://github.com/exo-explore/exo/pull/2268) or run the
+ready branch
+[`noahzelezny/exo:vq-codebook-replicate`](https://github.com/noahzelezny/exo/tree/vq-codebook-replicate).
+Single-machine mlx-lm and pipeline sharding are unaffected.
 
 ## Limitations
 
