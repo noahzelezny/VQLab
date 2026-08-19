@@ -3685,3 +3685,47 @@ hierarchical k-means would move it; nothing else will.
 If it fails, either pick a d where it passes, or accept a ~1 GiB penalty per
 stranded third — and never compare geometries on nominal bpw alone when one
 of them cannot pack.
+
+## E55 (08-19) — relerr RANKS BUILDS BACKWARDS: two measured inversions, and a depth effect that only the output metric can see
+
+**This is stronger than E45's "relerr expires".** E45 said the fit proxy
+stops TRACKING quality at the top of a ladder. This says it ORDERS two
+builds WRONG, in the ordinary operating range, at matched size. Qwen3.6-35B,
+all measured (fit-log mean relerr; referee ppl vs bf16):
+
+| build | mean relerr | packed | ppl vs bf16 |
+|---|---|---|---|
+| flat d2-K256 | **0.0834** (best fit) | 17.64G | **1.016x** (worst ppl) |
+| tail30 d2-K512 tail | 0.0904 | 17.88G | **0.991x** (best ppl) |
+| tail30 d2-K256 tail | **0.1091** (worst fit) | **16.47G** | 1.002x |
+
+**Two inversions, same direction.** Both tail builds have WORSE
+reconstruction error and BETTER perplexity than the flat build. Any
+conclusion drawn from a fit proxy has to survive this.
+
+**THE THIRD ROW IS THE INTERESTING ONE.** tail30-d2K256 *is* flat-d2-K256
+with layers 0-9 DOWNGRADED to d4-K2048 — fewer bits (3.00 vs 4.25 bpw),
+measurably worse fit — and it comes out better on ppl AND 1.2 GiB smaller.
+Spending fewer bits on the shallow layers did not cost output quality.
+
+**WHAT THIS IMPLIES, stated carefully.** Fit difficulty is FLAT with depth on
+this model — probe_depth_profile measures 0.5% spread across L3/L20/L38 at
+both d=2/K512 and d=4/K2048. So layers are equally hard to RECONSTRUCT but
+apparently NOT equally costly to get wrong: the shallow layers tolerate more
+error than the deep ones. That gradient is invisible to every fit-side
+instrument, which is exactly why the 397B session's E53 (no fit-side depth
+gradient there either, via opposing profiles that cancel) cannot settle
+whether a schedule helps — and they have amended it to say so.
+
+**WHAT IT DOES NOT SHOW.** These are three points, not a curve, and the two
+tail builds differ from flat in TWO variables (depth allocation AND tail
+codebook). E49's mechanism claim is still unproven. The clean control is
+flat d2-K512 at matched geometry (~19.6G), queued; per the 397B session's
+suggestion it will report relerr AND ppl so the inversion gets a third data
+point either way. One instance is a counterexample; three consistent ones
+would be a rule about when reconstruction error misleads, which is worth
+more than the schedule question that produced it.
+
+**PRACTICAL RULE UNTIL THEN.** Do not rank two VQ builds by relerr unless
+they share geometry AND allocation. Across schedules it has now ordered
+builds backwards twice.
