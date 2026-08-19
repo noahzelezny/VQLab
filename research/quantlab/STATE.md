@@ -396,11 +396,17 @@ d=4, so 5.75 bpw would need K=2^22. See E50.
 
 **WHAT REMAINS — blind judging, nothing else.** Prose generated for
 d2-K512, d2-K1024, d2-K2048 vs bf16; blind pairs built with keys withheld.
-Chip task_7ae8af6c covers K512/K1024 — ADD d2K2048 (blind_pairs_d2K2048.json)
-when running it. Decode every verdict with:
+Chip **task_8af591c9** covers all three (K512/K1024/K2048); the earlier
+two-artifact chip was withdrawn and replaced. Decode every verdict with:
     ./score_blind_verdict.py --verdict winrate/claude_verdict_<tag>.json --tag <tag>
 
 **PEER SESSION ENDED** (socket gone). Their result is in E47.3: all three
 published 397B artifacts verified CLEAN, 513 tensors. A final message to
 them about the bpw correction (E50) was undeliverable — it matters to them
 because their pre-registered boundary was computed from my wrong numbers.
+
+**SCOUT: nightly-dispatcher started** once the last prose job cleared the GPU
+(services list also shows `overnight-runner`, not started — Noah asked for
+the dispatcher). Verify with:
+    cd /Users/noahzelezny/Documents/AgenicAI && \
+      .venv/bin/python scripts/scout_services.py status nightly-dispatcher
