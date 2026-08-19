@@ -60,7 +60,15 @@ ap.add_argument("--src", required=True, help="bf16 source dir")
 ap.add_argument("--family", required=True, choices=sorted(FAMILY))
 ap.add_argument("--group", type=int, default=64)
 ap.add_argument("--threshold", type=float, default=None,
-                help="exit 1 if any tensor's relerr exceeds this")
+                help="absolute relerr bar. GEOMETRY-SPECIFIC — healthy d4K128 "
+                     "on the 397B lands ~0.46, so 0.35 cries wolf there. "
+                     "Prefer --outlier, which needs no per-geometry tuning.")
+ap.add_argument("--outlier", type=float, default=None, metavar="MULT",
+                help="flag any tensor whose relerr exceeds MULT x the "
+                     "artifact's OWN median (try 3.0). Corruption is an "
+                     "outlier against its peers — tail30's dead tensor read "
+                     "1.0000 beside peers at 0.032 — not a fixed bar. This is "
+                     "the gate that survives across geometries.")
 ap.add_argument("--limit", type=int, default=None,
                 help="verify only the first N tensors (smoke mode)")
 args = ap.parse_args()
@@ -154,9 +162,28 @@ for r, li, proj in rows:
 for proj, v in sorted(by_proj.items()):
     print(f"mean {proj:10s} {sum(v) / len(v):.4f}  (n={len(v)})")
 
+fail = False
+if args.outlier is not None:
+    vals = sorted(r for r, _, _ in rows)
+    med = vals[len(vals) // 2]
+    bar = med * args.outlier
+    bad = [(r, li, p) for r, li, p in rows if r > bar]
+    print(f"\noutlier gate: median {med:.4f} x{args.outlier} -> bar {bar:.4f}")
+    if bad:
+        print(f"FAIL: {len(bad)} tensors are outliers against their own peers")
+        for r, li, p in bad[:8]:
+            print(f"    L{li:02d} {p:10s} {r:.4f}  ({r / med:.1f}x median)")
+        fail = True
+    else:
+        print(f"PASS: no tensor exceeds {args.outlier}x the artifact median")
+
 if args.threshold is not None:
     bad = [(r, li, p) for r, li, p in rows if r > args.threshold]
     if bad:
         print(f"\nFAIL: {len(bad)} tensors above {args.threshold}")
-        sys.exit(1)
-    print(f"\nPASS: all tensors <= {args.threshold}")
+        fail = True
+    else:
+        print(f"\nPASS: all tensors <= {args.threshold}")
+
+if fail:
+    sys.exit(1)
