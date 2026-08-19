@@ -202,6 +202,10 @@ def cmd_judge(args):
     gens_a = {g["id"]: g["text"] for g in A["gens"]}
     gens_b = {g["id"]: g["text"] for g in B["gens"]}
     ids = sorted(set(gens_a) & set(gens_b))
+    if args.shard:
+        si, sn = (int(x) for x in args.shard.split("/"))
+        ids = ids[si::sn]        # strided, so every shard spans the corpus
+        print(f"shard {si}/{sn}: {len(ids)} pairs", flush=True)
 
     def ask(passage, c1, c2):
         msg = [{"role": "user", "content": JUDGE_TMPL.format(
@@ -257,6 +261,32 @@ def cmd_judge(args):
     print(f"wrote {out}")
 
 
+def cmd_merge(args):
+    """Combine shard verdicts and recompute the aggregate stats."""
+    parts = [json.load(open(f)) for f in args.shards]
+    detail = [d for p in parts for d in p["detail"]]
+    seen, uniq = set(), []
+    for d in sorted(detail, key=lambda x: x["id"]):
+        if d["id"] not in seen:
+            seen.add(d["id"]); uniq.append(d)
+    tally = {k: sum(1 for d in uniq if d["verdict"] == v)
+             for k, v in (("a_wins", "a"), ("b_wins", "b"), ("ties", "tie"),
+                          ("inconsistent", "inconsistent"),
+                          ("unparsed", "unparsed"))}
+    dec = tally["a_wins"] + tally["b_wins"]
+    res = {"a": parts[0]["a"], "b": parts[0]["b"], "judge": parts[0]["judge"],
+           "n": len(uniq), **tally, "decisive": dec,
+           "a_winrate_decisive": round(tally["a_wins"] / dec, 4) if dec else None,
+           "sign_test_p": round(sign_test_p(tally["a_wins"], tally["b_wins"]), 4),
+           "merged_from": args.shards, "detail": uniq}
+    pathlib.Path(args.out).write_text(json.dumps(res, indent=1))
+    print(f"{res['a']} vs {res['b']}: {tally['a_wins']}-{tally['b_wins']} "
+          f"({tally['ties']} tie, {tally['inconsistent']} inconsistent, "
+          f"{tally['unparsed']} unparsed) n={len(uniq)} "
+          f"p={res['sign_test_p']}")
+    print(f"wrote {args.out}")
+
+
 def main():
     ap = argparse.ArgumentParser()
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -285,7 +315,16 @@ def main():
     p.add_argument("--b", required=True)
     p.add_argument("--out", required=True)
     p.add_argument("--max-tokens", type=int, default=900)
+    p.add_argument("--shard", default=None,
+                   help="'i/N' — judge only every Nth pair. One sequence at a "
+                        "time leaves the GPU mostly idle, so N processes give "
+                        "near-linear speedup. Merge with the 'merge' command.")
     p.set_defaults(fn=cmd_judge)
+
+    p = sub.add_parser("merge")
+    p.add_argument("--shards", nargs="+", required=True)
+    p.add_argument("--out", required=True)
+    p.set_defaults(fn=cmd_merge)
 
     args = ap.parse_args()
     args.fn(args)
