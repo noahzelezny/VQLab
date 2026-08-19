@@ -2998,3 +2998,55 @@ scoring worse than its subset; decode-from-artifact verification).
 Instruments need controls before results are believed — same lesson as the
 agreement-floor test (E41), which is why the bench has a bf16-vs-bf16
 control in its design.
+
+## E45 (08-18, evening) — QWEN3.6 TAIL LADDER: NEAR-PARITY AT 18.1G, THE K LADDER IS SPENT, AND relerr STOPPED PREDICTING
+
+**Goal (Noah).** A second Qwen artifact: 8-bit quality (96.18% agree /
+0.999x ppl @ 35G) at the smallest size — "8bit parity someone can run on a
+32GB machine is a perfect accessibility artifact."
+
+**Rungs built this evening** (all packed, all verified vs the same KL cache
+and referee ppl):
+
+| rung | packed | ppl | vs bf16 | KL (mnats) | agree |
+|---|---|---|---|---|---|
+| mlx-community 8bit | 35G | — | 0.999x | — | 96.18% |
+| **vq-tail20-d2k2048** | **18.1G** | 4.7541 | **1.007x** | 50.8 | 89.77% |
+| vq-K4096-d4 | 13.9G | 4.8100 | 1.019x | 68.5 | 87.88% |
+| vq-K2048-d4 | 13.0G | 4.8584 | 1.029x | 85.5 | 87.33% |
+| mlx-community 4bit | 19G | — | 1.041x | — | 85.61% |
+
+**FINDING 1 — the K ladder is exhausted.** 2048->4096 halved nothing:
++0.55 agree for +0.9G, after 256->2048 bought +7.83. Do not chase K=8192.
+
+**FINDING 2 — relerr stopped predicting exactly there.** Fit relerr stayed
+log-linear right through K=4096 (0.313 -> 0.187 -> 0.158, ~16%/doubling)
+while agreement flatlined. relerr is a trustworthy proxy only until it
+isn't; it gave no warning. Score early, never extrapolate more than one
+rung ahead of a scored point (the "K=4096 ~90%" prediction was wrong).
+
+**FINDING 3 — the tail law transfers to Qwen3.6 and shows up on PPL.**
+tail20 (L20-39 at d2k2048, body d4k2048): tail relerr 0.032 vs body 0.187
+(~6x), and ppl lands at 1.007x vs 8-bit's 0.999x — 0.8 points of ppl from
+parity at 52% of 8-bit's size. Also beats the 19G community 4bit while
+smaller. This is the accessibility artifact.
+
+**FINDING 4 — the two instruments diverge, and the split is informative.**
+tail20 is 1.007x on ppl but 89.77% on agreement (8bit: 96.18%). For MoE
+this is the expected signature: routing flips swap one plausible token for
+another — ppl absorbs it, top-1 agreement punishes it. Same shape as the
+gemma litbench/KL disagreement (E43/E44). Quote BOTH numbers; neither alone
+is the truth.
+
+**FINDING 5 — a near-lossless tail moved agreement only +2.44.** So the
+BODY (L0-19 at d4) is the binding constraint on agreement now. Extending
+d2 to the body (~23G) extrapolates to ~92%, still short of 96 — full
+agreement-parity is NOT reachable under ~32GB with this fitter. Parity on
+ppl effectively already happened at 18.1G.
+
+**Bookkeeping.** tail30 collapsed in fit (E44), shard-2 refit queued with
+the sanity gate armed; expect it at ~20.7G packed between tail20 and d2-body
+if healthy. gemma sighted artifacts measured: K256 9.43G, K2048 12.53G
+(vision graft +1.07G, text path KL-identical). Blind win-rate verdicts
+(winrate_bench, E44's fixed instrument) still running; results go in
+CRUSH_RESULTS when they land.
