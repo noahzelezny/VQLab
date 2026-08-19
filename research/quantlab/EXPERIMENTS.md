@@ -3903,3 +3903,26 @@ Candidate lever parked for AFTER baselines: E57 says head-down works on
 qwen; a head-down gemma-small at the same bytes might retain more of the
 26b advantage. Compute is Noah's call; do not start it before the E56
 baselines land or it contaminates the comparison set.
+
+### E57 AMENDMENT (08-19, caught by the 397B session within the hour) — the mechanism prose above is INVERTED; the table is correct
+
+Read the bpw before the prose: d4-K2048 = 3.0 bpw (CHEAP), d2-K512 = 4.75
+bpw (EXPENSIVE). Arm 2, the winner, puts the CHEAP geometry on L0-9 and the
+expensive one on L10-39. So the correct reading is the one E55-era notes and
+the 397B responsiveness data already carried: **shallow layers TOLERATE
+cheapness; the expensive geometry pays on the deep end.** The sentences
+above ("shallow layers are the place the expensive geometry pays" and the
+error-compounding mechanism note) describe the LOSING arm and are wrong.
+
+This is the naming trap's third strike: "head-down/head-up" invites reading
+"which end is promoted" instead of "which end is cheap." From here, say it
+only as CHEAP-SHALLOW (winner) vs CHEAP-DEEP (loser).
+
+Gate rule (from the 397B session's gemma cheap-shallow FATAL): 
+--relerr-abort is a STABILITY guard, not a quality guard — cheap-shallow
+designs intentionally raise relerr where it is cheapest to be wrong, so a
+fixed 0.35 bar vetoes the intended design using the exact proxy E55 proved
+cannot rank allocations. For non-flat builds set it above the cheap
+region's expected relerr and read the REFIT SPREAD (reproducibility) as
+the stability signal instead; 0.4357/0.4360 across refits is stable-poor,
+not broken.
