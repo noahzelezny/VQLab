@@ -3536,7 +3536,7 @@ tax over affine is the weight decode itself. That is the fused-kernel path
 (`_fused`), already measured and rejected as a wash end-to-end at the default
 prefill step.
 
-## E53 (08-19) — NO DEPTH GRADIENT FOR VQ CODEBOOK: UNIFORM K IS DEFENSIBLE, THE TAIL LEVER IS DEAD
+## E53 (08-19) — NO DEPTH GRADIENT IN FIT ERROR FOR VQ CODEBOOK: UNIFORM K IS DEFENSIBLE ON THE FIT SIDE (see the AMENDMENT — relerr is now known to INVERT against ppl)
 
 **The question.** E25 established on THIS model that concentrating affine bit
 promotions in the last 10 layers beat spreading them at matched size (tail10
@@ -3595,6 +3595,40 @@ a ~2.9h fit plus scoring. If anyone revisits, the bar is an output-scored
 matched-size build, not another proxy.
 
 Cost of settling it: ~20 minutes of probing against a ~3h fit avoided.
+
+**AMENDMENT (08-19, same day) — A DIRECT COUNTEREXAMPLE. relerr does not
+merely expire at extremes (E45); it can RANK TWO BUILDS BACKWARDS.** The
+sister Qwen3.6 line measured both quantities on the same pair of artifacts:
+
+  | build | blended fit relerr | measured ppl |
+  |---|---|---|
+  | tail30-d2K512 | ~0.090 (WORSE) | **0.991x (BETTER)** |
+  | flat d2-K256 | ~0.084 (better) | 1.016x (worse) |
+
+relerr says flat should win; perplexity says the tail build wins, at
+essentially the same size. **The ordering inverts.** Whatever a schedule
+exploits is invisible to reconstruction error, which is exactly the regime
+this entry's own probe operates in.
+
+Consequence for THIS entry, stated plainly: the five-layer sweep above
+remains correct about what it measured — fit error has no usable depth
+gradient on the 397B, and down_proj/gate_up genuinely cancel. But
+"THE TAIL LEVER IS DEAD" was too strong a title for relerr evidence, and is
+retitled. The honest claim is: **there is no FIT-SIDE reason to tilt a
+schedule by depth, and no fit-side instrument can rule a tail IN or OUT.**
+Settling it for the 397B would need an output-scored matched-size build, the
+same bar E25 met on affine.
+
+Related: the same probe found Qwen3.6 FLAT across depth at both d2-K512 and
+d4-K2048 (largest spread 0.5%) — so two families reach "no fit-side depth
+signal" by different mechanisms (397B: opposing profiles that cancel;
+Qwen3.6: never diverging). Both are silent on the output side.
+
+Method note worth keeping: the verdict logic in the first version of that
+probe reported the SIGN of the depth difference without testing its
+MAGNITUDE, so a 0.5% drift printed as "a depth effect is physically
+available". A comparison script needs a threshold, not just a direction —
+otherwise it manufactures a signal out of noise and reads as confirmation.
 
 ## E54 (08-19) — THE PACKING ASYMMETRY: d4 wins per BIT and loses per BYTE, on gemma only
 
