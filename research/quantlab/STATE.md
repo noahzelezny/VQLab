@@ -415,6 +415,24 @@ the dispatcher). Verify with:
 
 # ===== COMPACTION HANDOFF (08-19 midday) =====
 
+
+## 0. PUBLISH HOLD (08-19 afternoon) — gemma-small verdict is NOT decision-grade yet
+
+Noah caught it: e4b-8bit (84.62%) scores ABOVE its own bf16 teacher (82.69%)
+on litbench — noise announcing itself. At n=104 the 4.8pt "falsification"
+gap is ~1.3 SE. Publish of MODEL_CARD_GEMMA_SMALL is HELD pending E56
+(pre-registered protocol + readings in EXPERIMENTS.md). New facts:
+e4b-8bit is 8.38 GiB vs gemma-small 9.43 GiB — the incumbent is SMALLER,
+so gemma-small must WIN outright; a tie keeps e4b-8bit.
+Queued: gemma_small_verdict.sh (litbench per_item reruns incl. cyclic
+26b-bf16, paired McNemar, domain gens, constraint pass-rates).
+M4 runs the 26b-vs-e4b bf16 faceoff control (~/qlab/bf16_faceoff.log).
+Instruments: paired_litbench.py, check_constraints.py,
+winrate/prompts_domains.json (make_domain_prompts.py).
+Also learned: verify_artifact --outlier cries wolf on MIXED-geometry
+artifacts (arm3's d4K2048 tail reads 3.2x the d2K512 median at a healthy
+0.188) — read the gate per-geometry-region on tail/head builds.
+
 ## 1. A PUBLISHED CLAIM WAS FALSIFIED — read this first
 
 **e4b-8bit scores 84.62%; our gemma-small scores 79.81%.** Same instrument

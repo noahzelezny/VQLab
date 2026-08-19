@@ -3788,3 +3788,68 @@ head-up build has been measured at all.
 If arm3 wins instead, the shallow-layers-are-cheap reading is either
 family-specific or does not survive the jump from fit to output, and BOTH
 sessions' entries need amending rather than defending.
+## E56 (08-19) — PRE-REGISTERED: is the gemma-small sidecar claim decidable? (PUBLISH HELD until this resolves)
+
+**The problem Noah caught.** The sidecar falsification (e4b-8bit 84.62% vs
+vq-K256-d4 79.81%, litbench cyclic generative n=104) was stated harder than
+its error bars own it. The tell: e4b-8bit scores ABOVE its own bf16 teacher
+(82.69%) on the same instrument — a quant beating its teacher is noise
+announcing itself. Binomial SE at n=104 is ~±3.7pts, so the 4.8pt gap is
+~1.3 SE. Suggestive, not decision-grade. Symmetrically: vq-K2048-d4's 86.54%
+"above e4b-8bit" is the same size of noise and buys nothing.
+
+**Burden of proof (measured, not assumed).** e4b-8bit is 8.38 GiB on disk;
+gemma-small is 9.43 GiB. The smaller model is the incumbent. gemma-small
+must therefore WIN outright to justify existing as a literary sidecar —
+a tie keeps e4b-8bit. This asymmetry means the current card wording
+("keep e4b-8bit") survives even a null result; what the card may NOT say
+without significance is that e4b-8bit is *better*, only that gemma-small
+was not shown better.
+
+**Design: three paired instruments + one running control.** All pairing is
+per-item — paired designs remove item-difficulty variance, which dominates
+at this n. Instruments:
+
+1. **Paired litbench McNemar** (`paired_litbench.py`). Re-run vq-K256-d4
+   cyclic generative so it stores per_item (e4b-8bit already does; the
+   storage landed after the older runs). Also re-run 26b-bf16 WITH --cyclic,
+   closing the non-cyclic-row hazard flagged in CRUSH_RESULTS.
+2. **Blind paired win-rate on 3 non-literary domains**
+   (`winrate/prompts_domains.json`: 20 instruction-following, 20
+   summarization, 20 dialogue) + the existing 60 literary = 120 paired
+   prompts, judged blind per the E51 protocol, sign test on non-ties.
+   litbench is one narrow lens; the sidecar ships all four of these.
+3. **Deterministic constraint pass-rate** (`check_constraints.py`): the 20
+   instruction prompts carry machine-checkable constraints (word caps,
+   exact line counts, mandated openings). Pass/fail, zero judge variance,
+   paired McNemar. (From Noah's Gemini triage — the one genuinely new,
+   genuinely cheap instrument on that list; KL, top-1 match, and blind
+   pairwise judging we already run.)
+4. **Control (running, M4 ~/qlab/bf16_faceoff.log):** 26b bf16 vs e4b bf16
+   blind win-rate — whether the base-model ordering is even real, zero
+   quantization in the picture.
+
+**Pre-registered readings — written before any number lands:**
+
+- gemma-small "designed to outperform e4b-8bit" may return to the card ONLY
+  if ≥2 instruments favor gemma-small at exact p<0.05 AND none favor
+  e4b-8bit at p<0.05.
+- "e4b-8bit is better — keep it" may be stated as MEASURED only if ≥1
+  instrument favors e4b-8bit at p<0.05 and none favors gemma-small.
+- Anything else → card says "statistically indistinguishable from e4b-8bit
+  on our instruments (n and CI quoted); e4b-8bit is 1.05 GiB smaller, so it
+  remains the default recommendation." That is a publishable, honest claim.
+
+**Predictions (this session):** litbench McNemar discordant count 14-24,
+p in 0.15-0.6 → alone inconclusive. Constraint pass-rate: both models pass
+14-18/20, McNemar inconclusive. Pooled 120-prompt win-rate: e4b-8bit ahead
+on literary (consistent with litbench point estimate), roughly even
+elsewhere; pooled p likely 0.05-0.3 → final verdict most likely lands on
+reading 3 (indistinguishable, keep the smaller incumbent). If instead
+gemma-small wins pooled — the 26b base advantage (if the M4 control
+confirms one) survived 2.25-bit quantization, which would be the more
+interesting result.
+
+**Status:** instruments built and committed; runs queued behind the M3
+queue (verify_packed -> qwen_k8192 -> arm3_headup) as
+`gemma_small_verdict.sh`. Nothing scored yet.
