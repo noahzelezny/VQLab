@@ -4515,3 +4515,18 @@ So freed RAM cannot buy "faster gen via bigger chunks"; what it buys is
 CONTEXT (prefill transients measure 3.35 MB/token vs KV-cache theory's
 0.059 — a 57x gap that is entirely chunk buffers). 4 GiB of headroom =
 meaningfully longer usable context on a RAM-tight box.
+
+### E70 addendum — the byte-aligned packing own-goal (37% decode for zero bytes)
+
+The M4 A/B caught the cheap-shallow 397B decoding 37% SLOWER than the
+shipped 2.4bpw (12.3 vs 19.4 tok/s). Not a tradeoff — a packer defect:
+pack_artifact packed the 141 K256 tensors at pack_bits=8, which saves
+EXACTLY zero bytes (32 codes x 8 bits = 32 bytes, same as uint8) but
+routes 82% of the model through packed bit-field extraction. Fixed with a
+byte-aligned skip in BOTH packers (bits % 8 == 0 -> copy through). Fourth
+exhibit for the known-bad-input rule: the packer's round-trip test proved
+CORRECTNESS while nothing tested USEFULNESS — a pack that round-trips
+perfectly and saves nothing passed every gate we had. Re-pack + re-verify
++ M4 re-A/B in flight; no decode number is a result until re-measured.
+Prefill was a wash (120 vs 125 t/s); load-time delta is SMB cache state,
+ignore.
