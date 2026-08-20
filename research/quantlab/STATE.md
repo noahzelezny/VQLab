@@ -103,7 +103,11 @@ never was an anomaly. See E79.
   kills it on disk stalls.
 - pack only non-byte-aligned widths (bits%8==0 saves nothing, costs 37%).
 - Every new gate: acceptance-test against KNOWN-BAD input first.
-- E-numbers through E71. gemma cheap-shallow = E60 (+0.94, UNDER bar).
+- E-numbers through E80. gemma cheap-shallow = E60 (+0.94, UNDER bar).
+- E79: E71's swap conclusion RETRACTED (proxy-score comparator). The
+  ladder is monotone in size; cheap-shallow buys arbitrary-size targeting
+  (~2x byte-efficiency of flat steps), never a quality win at a flat rung's
+  own size.
 
 # STATE — resume point (2026-08-18 ~11:00)
 
