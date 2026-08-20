@@ -4325,3 +4325,50 @@ summary still lands in the job log, and a live log exists for status
 checks. Applied to all runner scripts. Sibling of the earlier stampede
 rule (ONE sequential queue, not N pgrep waiters): orchestration mistakes
 cost more debugging time tonight than any modeling mistake.
+
+## E65 RESULT (08-19) — VQ TRANSFERS TO A SMALL DENSE MODEL, and fits BETTER than the 26b MoE
+
+126 dense mlp tensors of gemma-4-e4b-it at d2-K2048:
+
+| | mean relerr | worst | per-proj |
+|---|---|---|---|
+| **e4b dense mlp** | **0.0297** | 0.0310 | down .0297 / gate .0297 / up .0296 |
+| 26b MoE d2-K2048 (healthy ref) | ~0.032 | — | — |
+
+Independently verified decode-side (verify_artifact --family gemma4_e4b),
+outlier gate PASS, no tensor above 3x median, spread 0.0296-0.0310 with NO
+depth gradient. Clears the pre-registered bar (<=0.05, no outliers).
+
+**The going-in worry is falsified.** "Small dense models have less
+redundancy so VQ should hurt more" — measured, it fits slightly BETTER
+than the MoE experts did. Fit time 1850s for 6.15 GiB of weights.
+
+**Size arithmetic (mlp only):** 6.15 GiB bf16 -> 2.21 GiB at 5.75 bpw, vs
+~3.27 GiB at 8-bit => build-1 lands ~7.32 GiB against the 8.38 GiB
+incumbent, a 12.6% win. Real but modest, which is why E66 measures the
+bigger prize before any runtime work is invested.
+
+**NOT YET A MODEL.** No runtime integration: vq_switch's VQSwitchLinear is
+expert-shaped (__call__ takes routing indices), so a dense VQLinear wrapper
+(E=1, zero indices) plus a gemma4-e4b arch shim is required before any KL
+number exists. Per E55 relerr does not rank allocations — it only gates
+obvious non-transfer, which it has now passed.
+
+## E66 (08-19, in flight) — the PLE prize: VQ on embed_tokens_per_layer
+
+embed_tokens_per_layer is [262144, 10752] = 2.82B params = 5.25 GiB =
+35.5% of e4b bf16, the single biggest object in the model and the only one
+that can make a VQ e4b decisively smaller than 8-bit. Also the friendliest
+RUNTIME case in the project: an embedding is a row gather, so decode is
+codes[row] -> codebook, with no matmul kernel at all.
+
+Method (large-scale k-means standard): fit the codebook on a ~20M-subvector
+random row sample, then ONE full assignment pass over all 1.41B subvectors
+in row chunks, accumulating relerr exactly. Sampling the FIT is legitimate;
+sampling the ASSIGNMENT would not be.
+
+Projected if it holds: 5.25 GiB -> 1.89 GiB at 5.75 bpw (vs 2.79 at
+8-bit), and combined with E65 the artifact lands ~6.4 GiB vs the 8.38 GiB
+incumbent (24% smaller). A cheaper geometry on embeddings (they are
+famously quant-tolerant) would go further, but that is a follow-up only if
+this measures clean.
