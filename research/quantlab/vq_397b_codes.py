@@ -419,7 +419,30 @@ shard_sizes = {}
 shards = sorted(set(base_idx.values()))
 for si, sh in enumerate(shards):
     dst = OUT / sh
+    def _complete(f):
+        # A shard is resumable only if its safetensors header parses AND the
+        # header-declared payload matches the bytes on disk. Existence alone
+        # is NOT enough: a file caught mid-transfer is indistinguishable from
+        # a finished one by name, and the skip would then bake a truncated
+        # shard into the artifact silently. (Caught live: model-00005 at
+        # 3.6/8.2 GiB during a resume-copy. Same failure family as the
+        # tokenizer that loaded and encoded nothing.)
+        try:
+            import struct as _st
+            with open(f, "rb") as fh:
+                n = _st.unpack("<Q", fh.read(8))[0]
+                hdr = json.loads(fh.read(n))
+            want = 8 + n + max(v["data_offsets"][1] for k, v in hdr.items()
+                               if k != "__metadata__")
+            return f.stat().st_size == want
+        except Exception:
+            return False
+
     shipped = SHIP / sh if SHIP else None
+    if dst.exists() and not _complete(dst):
+        print(f"[{si+1}/{len(shards)}] {sh} PARTIAL on disk — refitting it",
+              flush=True)
+        dst.unlink()
     if dst.exists() or (shipped is not None and shipped.exists()):
         for k in (k for k, v in base_idx.items() if v == sh):
             mod = k.rsplit(".", 1)[0]
