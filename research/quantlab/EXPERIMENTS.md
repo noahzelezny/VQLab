@@ -4248,3 +4248,32 @@ the gemma-small card's "indistinguishable" language is then final, not
 provisional. A family where one model breaks at least one tier earlier
 than the other, with McNemar p<0.05 pooled, is the first real capability
 separation this project has found.
+
+### E64 instrument audit (08-19, before reading the comparison) — full sweep after the acrostic bug
+
+Three instrument defects found tonight by reading failures instead of
+counts (the acrostic/opening-word contradiction that manufactured a fake
+collapse curve — 11/20 items unsatisfiable, 5/5 at tier 12; the
+leading-article exact-match bug that failed "brass coin" against gold
+"a brass coin"; the alone-number rule that would fail a model for showing
+its arithmetic). After the fixes, a systematic audit of the remaining
+bug classes:
+
+- STATE ambiguity: "move whatever is in box A into box B" when A is empty
+  is ambiguous English (overwrite-B vs leave-B). Both semantics simulated
+  on all 20 items: the asked box's answer differs in 0/20 — no exposure.
+- NEEDLE integrity: every planted fact appears exactly once; every
+  needle_agg sum re-verified from the rendered passage.
+- CONSTR satisfiability: a witness text was CONSTRUCTED for each of the 20
+  repaired constraint sets and passed through the scorer's own checker —
+  20/20 satisfiable by construction, not by assumption.
+
+RULE for the record: hand-verified golds are necessary but not sufficient —
+the generator and the verifier can share the same wrong assumption. The
+audit standard is (a) independent re-simulation from the RENDERED text,
+(b) ambiguity simulation under rival readings, (c) witness construction
+for every constraint set, (d) read the raw failures before trusting any
+curve. gemma-small's surviving results: state cliff at tier 100 (5/5 at
+50 -> 2/5), sustain looping past ~3000 words (rep-sent 0.095 -> 0.287),
+perfect needle/agg to 48k, perfect chain to 16. Constraint curve VOID
+until the repaired rerun lands.
