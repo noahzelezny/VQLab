@@ -1,5 +1,9 @@
 # COMPACTION HANDOFF (08-20 ~13:20) — read this first
 
+**Before proposing ANY experiment: read FINDINGS.md** — settled laws,
+retractions, and instrument rules. If an idea re-tests a law or re-opens a
+retraction without new evidence, drop it.
+
 ## IN FLIGHT
 - M3: run_rung21_m3.sh -> logs_rung21.log / logs_live_rung21.log —
   K64 shallow / d4k128 body, abort 0.60. Launched 12:56, due ~14:15,
