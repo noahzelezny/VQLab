@@ -133,12 +133,16 @@ for mod in mods:
 
     li = layer_of(mod)
     proj = mod.rsplit(".", 1)[1]
-    # Keep the source in bf16 and cast PER CHUNK inside the loop below. A
-    # whole-tensor astype(float32) on a 397B expert stack ([512, out, in] ->
-    # ~25 GB) is one Metal command and tripped the GPU watchdog FOUR times
-    # (kIOGPUCommandBufferCallbackErrorTimeout) — including once at a bare
-    # mx.eval(T) of the cast. Chunked, no single buffer exceeds ~100 MB.
+    # Materialize the source ON THE CPU STREAM before any GPU math. Five
+    # Metal-watchdog kills (kIOGPUCommandBufferCallbackErrorTimeout) at
+    # DIFFERENT layers — including a ~100 MB chunk that cannot time out on
+    # compute — localized the fault: the lazy shard read of the 751G bf16
+    # source stalls on disk INSIDE a GPU command buffer, and the watchdog
+    # kills the wait. The CPU stream has no watchdog; once the bytes are in
+    # unified memory, the per-chunk GPU cast/diff below is microseconds.
     T = src_tensor(li, proj)
+    with mx.stream(mx.cpu):
+        mx.eval(T)
 
     # W_hat = codebook[codes] * scale, group-wise along `in`
     num = den = 0.0
