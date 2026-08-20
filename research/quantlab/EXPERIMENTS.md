@@ -4555,3 +4555,26 @@ because presence is not function. Per the E70 house rule its acceptance
 test ran against a known-bad input FIRST (fails 3 ways, exit 1) before its
 pass was believed. Fixed pack passes, and reproduces referee ppl 2.779 to
 the exact total_nll — pack + tokenizer install verified end-to-end.
+
+## E71 (08-20) — 397B cheap-shallow vs shipped 2.4bpw: the complete swap picture (M4 re-A/B, hardened harness)
+
+| | cheap-shallow 108G | shipped 2.4bpw 112G |
+|---|---|---|
+| referee ppl prose / code | **2.779** / 2.6479 | 2.8197 / **2.6504** (~tie) |
+| prefill 3121 tok | 173.4 t/s | **188.7** (~8%, real: six-bit extraction) |
+| decode 160 tok | 23.6 t/s | 23.9 (wash — packing fix confirmed e2e) |
+| peak memory | **110.4 GiB** | 114.2 (clears mlx-lm's size warning) |
+
+M4 incident #3 EXPLAINED (not a transient): the first A/B held prefill +
+decode alive together, 118.6 GiB peak on a ~120 ceiling — memory panic.
+Harness now one-process-per-arm.
+
+**Chunk sweep on the real 397B:** 16 -> 212.6 t/s prefill, 32 -> 177.3,
+64 -> 152.6, 128 -> 121.3, memory FALLING as chunks shrink. Two lessons:
+(1) _default_decode_chunk caps at 32, so no user automatically gets the
+20% faster chunk-16 — kept (32 is the smallest bit-exact-reproducing
+chunk) but SCOUT_VQ_DECODE_CHUNK=16 is now documented on the cards;
+(2) the 08-17 resident-block probe said 5.7% for 32->16 — end-to-end it
+is 20%. Block-level microbenches understate end-to-end wins: instrument
+scope, again. Caveat honored: chunk 16 measured on cheap-shallow only;
+assume the 8% prefill gap persists at matched chunk.
