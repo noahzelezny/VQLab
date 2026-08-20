@@ -4623,3 +4623,6 @@ Peer independently re-verified both live gemma repos off the Hub (files,
 tokenizer function, vision both prefixes, config wiring) — clean. After
 four upload defects in two days, second-pair-of-eyes on anything public is
 now standing practice, not an insult.
+
+### E70 addendum 4 (08-20): stale-script class of failure + preamble sync gate
+M4's first 3.1-class fit died at mx.save_safetensors with a Metal watchdog kill. Root cause was NOT the save and NOT the box: M4's vq_397b_codes.py was stale, missing 8a4d486 (one-hot chunk scaled with K) and a9f5c5c (scatter-add centroid update). The old path queues a ~2 GB [chunk,K] one-hot per chunk; MLX laziness defers the whole graph to the save, which is where the watchdog fires. Lesson: **"crashed at the write step" means the write is where deferred work gets paid, not where the problem is** — at least some of our three prior M4 write-step crashes may be this. Fix: check_scripts_sync.sh (commit 69a7041) — chain preambles md5-check the fit/pack/gate script set against repo HEAD before running; known-bad tested per the gate rule. M3's copies verified clean (all six match HEAD), so the 2.2-class run stands.
