@@ -134,6 +134,13 @@ for mod in mods:
     li = layer_of(mod)
     proj = mod.rsplit(".", 1)[1]
     T = src_tensor(li, proj).astype(mx.float32)
+    # Force the source-shard read to complete BEFORE the diff loop. Without
+    # this, the first .item() pulls the whole lazy load + slice + cast into
+    # one Metal command buffer, which on the 397B's shard sizes exceeded the
+    # GPU watchdog three times (overnight + 08-20 morning) as
+    # kIOGPUCommandBufferCallbackErrorTimeout. Splitting load from math
+    # keeps every buffer small.
+    mx.eval(T)
 
     # W_hat = codebook[codes] * scale, group-wise along `in`
     num = den = 0.0
