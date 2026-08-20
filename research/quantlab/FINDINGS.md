@@ -54,6 +54,14 @@ Last updated: 2026-08-20 (through E80).
    measured at 6-bit). [E70, E71 speed rows — artifact-vs-artifact, unaffected
    by the E79 retraction]
 
+10. **At matched bytes, d4 + big codebook beats d2 + small codebook.**
+    Pre-registered and resolved on BOTH families: d2-K64 landed 5.84 pts
+    below the d4 line (gemma), and 1.26 below at matched 3.25 bpw (qwen);
+    the gap WIDENS with bpw. d2's real wins are operational: ~8x cheaper
+    fits and faster decode at K≤256 (byte-aligned, no packing). Refines
+    law 1: packaging washes only DOWN to a floor of codebook expressivity —
+    "raise K first." [E-record ~L3210-3400]
+
 ## II. Retracted / false leads — do NOT re-chase without new evidence
 
 - **"Cheap-shallow beats the rung above it" — FALSE.** Root cause: E71 used a
@@ -109,6 +117,5 @@ Last updated: 2026-08-20 (through E80).
 
 - E80 (tonight): does harvest cost keep falling at K2048? Bar = 2.3997.
 - Fair e4b embedding test: affine + fp32 path vs VQ + fp32 path. Cheap, decisive.
-- d2/K64 vs d4/K2048 at matched ~3 bpw — the one untested geometry cell.
 - Qwen MoE speed candidates Q1-Q4 registered in E77, unmeasured.
 - Why is creation-binding insufficient for lazy loads? (MLX-side curiosity.)
