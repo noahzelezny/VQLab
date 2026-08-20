@@ -4277,3 +4277,40 @@ curve. gemma-small's surviving results: state cliff at tier 100 (5/5 at
 50 -> 2/5), sustain looping past ~3000 words (rep-sent 0.095 -> 0.287),
 perfect needle/agg to 48k, perfect chain to 16. Constraint curve VOID
 until the repaired rerun lands.
+
+## E65 (08-19, PRE-REGISTERED, fit in flight) — does VQ transfer to a small DENSE model? (gemma-4-e4b)
+
+**Motivation (Noah):** "there's nothing we can really do to make e4b
+smaller/better than the 8bit huh?" Never tried — all gemma VQ work went at
+the 26b MoE. If the d2-K2048 recipe transfers, the honest small-gemma
+offering may be a VQ of the incumbent itself.
+
+**Byte map of e4b bf16 (14.79 GiB total), measured:** the PLE table
+embed_tokens_per_layer is 5.25G (35.5%!), the dense mlp trio is 6.15G
+(41.7%), embed_tokens 1.25G, attention ~1.1G, audio+vision towers ~0.7G.
+Two consequences: (1) the mlp trio is the only classic VQ surface, so a
+first build caps at ~7.3G total (8bit everywhere + VQ mlp) vs the
+incumbent's 8.38G — a ~1.05G win IF quality holds; (2) the PLE table is
+the real prize (5.25G of embedding rows, famously quant-tolerant) but VQ
+of embedding-style tensors is unproven here — that is experiment 2, only
+if experiment 1 earns it.
+
+**Tonight's experiment 1:** standalone fitter (fit_e4b_vq.py — the main
+fitter's is_vq_target wants a 2-bit-marked struct BASE that dense e4b
+lacks), same contract as the family fitter: group-64 max-abs fp16 scales,
+kmeans++ init, scatter-add Lloyd, d2-K2048. Verified decode-side by
+verify_artifact --family gemma4_e4b (dense = [1,OUT,IN]).
+
+**Smoke result (L0, 3 tensors):** relerr 0.0294-0.0298, independently
+verified. IN FAMILY with the 26b's healthy d2-K2048 (~0.032) — the
+less-redundancy worry has not materialized at layer 0.
+
+**Pre-registered readings:**
+- mean relerr <= 0.05 with no outliers -> proceed to runtime integration
+  and KL-vs-bf16; the size story is ~7.3G vs 8.38G at (to be measured)
+  quality. NOT publishable on relerr alone (E55: relerr does not rank
+  allocations — but it DOES gate obvious non-transfer).
+- mean relerr >> 0.05 or depth-graded blowups -> VQ does not transfer to
+  small dense models at this geometry; write the negative result, keep
+  e4b-8bit as the honest incumbent recommendation on the gemma-small card.
+- Either way, PLE VQ is a separate decision for Noah after these numbers.
