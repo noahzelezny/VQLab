@@ -16,7 +16,13 @@ import json
 import pathlib
 import sys
 
-PREFIXES = ("vision_tower", "embed_vision", "vision_model", "multi_modal")
+# model.visual is the 397B/qwen3.5 layout — its absence from the first
+# version made the gate PASS VACUOUSLY on the family it was most needed for
+# (overnight 08-19: "source has no vision tensors" printed for a 751G bf16
+# with 333 visual tensors). A gate that cannot see the tensors it guards is
+# worse than no gate: it stamps approval.
+PREFIXES = ("vision_tower", "embed_vision", "vision_model", "multi_modal",
+            "model.visual", "visual")
 
 ap = argparse.ArgumentParser()
 ap.add_argument("--artifact", required=True)
