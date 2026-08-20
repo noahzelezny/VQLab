@@ -140,8 +140,13 @@ for mod in mods:
     # source stalls on disk INSIDE a GPU command buffer, and the watchdog
     # kills the wait. The CPU stream has no watchdog; once the bytes are in
     # unified memory, the per-chunk GPU cast/diff below is microseconds.
-    T = src_tensor(li, proj)
+    # The stream is bound at OP-CREATION time, not eval time — wrapping only
+    # the eval left the load/slice ops on the GPU stream, and run 6 still
+    # died at mx.eval(T) (further along: disk-stall timing is intermittent).
+    # Create the load+slice UNDER the cpu stream so the whole read chain is
+    # watchdog-free.
     with mx.stream(mx.cpu):
+        T = src_tensor(li, proj)
         mx.eval(T)
 
     # W_hat = codebook[codes] * scale, group-wise along `in`
