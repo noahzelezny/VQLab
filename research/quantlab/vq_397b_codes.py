@@ -46,7 +46,11 @@ mx.set_cache_limit(8 << 30)
 ap = argparse.ArgumentParser()
 ap.add_argument("--base", required=True)
 ap.add_argument("--src", required=True)
-ap.add_argument("--out", required=True)
+ap.add_argument("--out", required=True,
+                help="output dir. EXISTING SHARDS ARE SKIPPED (the fit RESUMES). "
+                     "Do NOT delete this dir to 'start clean' on a retry -- that "
+                     "throws away hours of completed, valid work. Two relaunches "
+                     "cost ~107 GiB of finished shards to exactly that reflex.")
 ap.add_argument("--vq-layers", required=True)
 ap.add_argument("--k", type=int, default=256)
 ap.add_argument("--dim", type=int, default=4)
