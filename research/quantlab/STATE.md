@@ -1,20 +1,70 @@
-# COMPACTION HANDOFF (08-20 ~noon) — read this first
+# COMPACTION HANDOFF (08-20 ~13:20) — read this first
 
-## IN FLIGHT (answers expected ~14:45-15:30)
-- M3: run_rung22_m3.sh -> logs_rung22.log / logs_live_ladder397b.log —
-  2.2-class cheap-shallow fit (K32 shallow L0-9 / d4k128 body, abort 0.75)
-  + full gate chain inline (verify, pack, graft model.visual, check_vision,
-  check_release, referee both corpora). Must beat shipped 2.2 (ppl 3.1706
-  @ 100.9G) at ~98G.
-- M4 (peer session, uds:/tmp/cc-socks/39597.sock): 3.1-class fit (K512
-  shallow / d4k2048 body, abort 0.70) -> rotlab--397B-cheapshallow-k512-
-  tail2048. E47 POLICY: verify it FROM M3 before believing any number.
-  Must beat shipped 3.1 (ppl 2.3519 @ 143.7G) at ~140G.
-- after_ladder_refs.sh (waiter): re-scores shipped 2.2/3.1 on today's
-  harness once M3's rung finishes — use THOSE numbers for comparison rows.
-- Registered expectations (mine): 2.2-class WINS; 3.1-class gain SHRINKS,
-  possibly to noise (the gemma E60 result, +0.94 under bar, is the
-  precedent). Do not round a small 3.1 gain up.
+## IN FLIGHT
+- M3: run_rung21_m3.sh -> logs_rung21.log / logs_live_rung21.log —
+  K64 shallow / d4k128 body, abort 0.60. Launched 12:56, due ~14:15,
+  then its inline gate chain (verify, pack, graft, check_vision,
+  check_release, referee both corpora) ~45 min after that.
+  PREDICTED SIZE 99.0 GiB (see size model below). Quality TBD.
+- M4 (peer, uds:/tmp/cc-socks/39597.sock): 3.1-class (K512 shallow /
+  d4k2048 body). Run 3, healthy past the run-2 death point after the
+  cpu-stream fix. Due ~15:00. E47: verify FROM M3 before believing it.
+  MY REGISTERED SIZE BET: 140.3 +/- 0.5 GiB.
+
+## TODAY'S RESULTS (measured, all in EXPERIMENTS.md E73-E76)
+- **2.2-class rung LOST** (E74): K32/K128, 97.2 GiB / 2.069 bpw honest,
+  prose 3.2730 vs shipped 2.2's 3.1706 (+3.2%), code 2.7055 vs 2.6988.
+  E72's "2.2-class wins biggest" FALSIFIED as stated. All gates green.
+- **Cheap-shallow is HARVEST, not reallocation** (E74 addendum, peer
+  correction, verified from configs): shipped 2.4 = flat K256 @112.0G,
+  shipped 3.1 = flat K2048 @144.0G, shipped 2.2 = flat K128 @100.9G.
+  Every cheap-shallow build HOLDS the body and harvests shallow bits.
+- **SIZE MODEL (validated twice out-of-sample)**: new = base - 1.87 GiB
+  x (shallow bits harvested). Shallow 1.87 GiB/bit, body 8.81 GiB/bit
+  (measured by differencing shard headers). flat K128 predicted 100.93
+  vs 100.9; cheap-shallow 2.3 predicted 108.3 vs 107.9.
+- **FLOOR framing supersedes "low-bit lever"**: shallow tolerates
+  harvesting to a floor; 2 bits off a rich body worked, 2 bits off an
+  already-cheap body did not. Running rung tests 1 bit. Dose-response at
+  constant body: 0 bits = 3.1706, 1 bit = TBD, 2 bits = 3.2730.
+- **e4b deficit is DTYPE PROMOTION** (E76): VQEmbedding emits fp16 into a
+  bf16 model (vq_dense.py:185, the one path that doesn't cast to x.dtype).
+  Real gaps: prefill -11% (not the published -21%), decode -17% (not -8%).
+  Published prefill came from a 21-token prompt, +/-8% scatter, n=1 draws.
+  Casting to bf16 recovers all speed but FAILS the KL gate (9.021 vs
+  7.451) — the accidental fp32 path IS the quality win. **E69's "VQ beats
+  affine for embeddings" is CONFOUNDED; do not repeat it until the fair
+  test is run.**
+
+## PUBLISHED STATE
+- gemma-4-e4b-it-VQ-PLE: **SET PRIVATE 08-20 ~13:15** at Noah's direction
+  (card oversold decode, mechanism unproven). Republish plan agreed:
+  (1) ship C1 fused gather (bit-exact, +6% decode -> real gap -12%),
+  (2) KL identity must reproduce 7.451/95.70, (3) run the FAIR E69 test
+  (give the 8-bit the same fp32 path — settles the mechanism), (4) rewrite
+  card with long-context prefill, prompt length stated, n>=3 with scatter.
+  Do this AFTER the 397B work.
+- gemma-4-26b-a4b-it-VQ-6.2bpw: **PUBLIC, CLEAN, unaffected** — verified
+  it uses only VQLinear (90 modules, no VQEmbedding), and every VQLinear
+  path casts to x.dtype. The dtype bug cannot touch it.
+
+## NEW GATES THIS SESSION (both known-bad tested first, per E70 rule)
+- check_scripts_sync.sh (69a7041): chain scripts must md5-match repo HEAD.
+  Motivated by M4 running a stale fitter -> GPU timeout.
+- check_comparator.py (2d754ad): comparator must hold the teacher's full
+  core tensor set. A comparator that loads short scores WORSE and flatters
+  us. Known-bad: mlx-community e4b-8bit FAILs (54 extra sites).
+
+## STANDING RULES REAFFIRMED TODAY
+- Never edit a script a running chain has not yet invoked (Python reads at
+  invocation, not chain start). Cost us the overnight run once already.
+- "Crashed at the write/save step" = where deferred lazy work gets PAID,
+  not where the bug is. Two instances now (verify, fitter).
+- cpu-stream fix: `with mx.stream(mx.cpu):` must wrap op CREATION (load AND
+  slice), not just the eval. Now in verify_artifact.py and vq_397b_codes.py
+  (9a08166). NOT yet in graft_vision.py / pack_artifact.py — do that sweep
+  when no chain is running.
+- Report nothing as measured that was predicted. Pre-register before fits.
 
 ## DECISIONS PENDING (Noah's)
 - Swap ALL THREE 397B rungs to cheap-shallow if ladder wins ("we can swap
