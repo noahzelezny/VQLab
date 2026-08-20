@@ -74,9 +74,10 @@
   shipped 2.4 (E71). Old rungs get MOVED not deleted. Honest-bpw names
   (bytes*8/403.4e9): ladder would be ~2.1 / 2.30 / ~3.0.
 
-## PUBLISHED TODAY (already live, done)
+## PUBLISHED (see PUBLISHED STATE above — e4b is now PRIVATE)
 - HF collection "gemma-4 VQ (Apple Silicon)":
-  gemma-4-26b-a4b-it-VQ-6.2bpw (18.74G) + gemma-4-e4b-it-VQ-PLE (7.39G).
+  gemma-4-26b-a4b-it-VQ-6.2bpw (18.74G) PUBLIC + gemma-4-e4b-it-VQ-PLE
+  (7.39G) **PRIVATE since 08-20 13:15 — do not treat as live**.
   Cards: charts embedded AFTER frontmatter, runtime = M4 Max, env knob
   documented as VQ_DECODE_CHUNK (SCOUT_ prefix stripped from all public
   artifacts; internal runtime keeps legacy alias). 26B small build RETIRED.
