@@ -295,10 +295,19 @@ def _shard_path(fname):
 def load_src_expert(li, proj):
     key, half = PROJ[proj]
     sk = FAM["src_key"].format(li=li, key=key)
-    T = mx.load(_shard_path(src_idx[sk]))[sk]
-    if half is not None:
-        mid = T.shape[1] // 2
-        T = T[:, :mid, :] if half == 0 else T[:, mid:, :]
+    # Materialize the source read ON THE CPU STREAM. The lazy shard read of a
+    # remote 751G bf16 source stalls on disk INSIDE a GPU command buffer and
+    # the Metal watchdog kills the wait (kIOGPUCommandBufferCallbackErrorTimeout)
+    # — seen at the fit's sampling eval when SRC is on SMB rather than local
+    # disk. Same fault and same cure as verify_artifact.py: the stream binds at
+    # OP-CREATION time, not eval time, so the load AND the slice must be created
+    # under mx.cpu or the read chain stays on the watchdog'd stream.
+    with mx.stream(mx.cpu):
+        T = mx.load(_shard_path(src_idx[sk]))[sk]
+        if half is not None:
+            mid = T.shape[1] // 2
+            T = T[:, :mid, :] if half == 0 else T[:, mid:, :]
+        mx.eval(T)
     return T
 
 
