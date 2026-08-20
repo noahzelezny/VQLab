@@ -20,18 +20,18 @@ import mlx.core as mx
 
 ap = argparse.ArgumentParser()
 ap.add_argument("--base", required=True, help="8-bit incumbent artifact")
-ap.add_argument("--mlp", required=True, help="fit_e4b_vq.py output dir")
+ap.add_argument("--mlp", default=None, help="fit_e4b_vq.py output dir")
 ap.add_argument("--ple", default=None, help="fit_e4b_ple.py output dir")
 ap.add_argument("--out", required=True)
 args = ap.parse_args()
 
 BASE, OUT = pathlib.Path(args.base), pathlib.Path(args.out)
-MLP = pathlib.Path(args.mlp)
+MLP = pathlib.Path(args.mlp) if args.mlp else None
 OUT.mkdir(parents=True, exist_ok=True)
 
 base_idx = json.load(open(BASE / "model.safetensors.index.json"))["weight_map"]
-mlp_cfg = json.load(open(MLP / "config.json"))["vq_modules"]
-mlp_w = mx.load(str(MLP / "model-00001-of-00001.safetensors"))
+mlp_cfg = json.load(open(MLP / "config.json"))["vq_modules"] if MLP else {}
+mlp_w = mx.load(str(MLP / "model-00001-of-00001.safetensors")) if MLP else {}
 
 DROP_MLP = tuple(f".mlp.{p}." for p in ("gate_proj", "up_proj", "down_proj"))
 PLE_KEY = "language_model.model.embed_tokens_per_layer"
@@ -53,7 +53,7 @@ DEAD_KV = (".self_attn.k_proj.", ".self_attn.v_proj.", ".self_attn.k_norm.")
 
 
 def is_dropped(k):
-    if k.startswith("language_model.model.layers.") and any(d in k for d in DROP_MLP):
+    if MLP and k.startswith("language_model.model.layers.") and any(d in k for d in DROP_MLP):
         return True
     if args.ple and k.startswith(PLE_KEY):
         return True
@@ -82,19 +82,22 @@ for sh in sorted(set(base_idx.values())):
     mx.clear_cache()
 print(f"carried {carried} tensors from the 8-bit base")
 
-# ---- splice VQ mlp
+# ---- splice VQ mlp (skipped for PLE-only ablation builds)
 # The fitter writes codes/scales as [1, OUT, *] so verify_artifact (which
 # speaks the expert format) can check them. A DENSE module wants 2D, and
 # 2D also keeps the venv's expert-shaped VQ hook off them — squeeze here.
 mlp_2d = {}
+if not MLP:
+    pass
 for k, v in mlp_w.items():
     mlp_2d[k] = v[0] if (k.endswith((".codes", ".vq_scales")) and v.ndim == 3) else v
-shard_no += 1
-name = f"model-{shard_no:05d}.safetensors"
-mx.save_safetensors(str(OUT / name), mlp_2d)
-for k in mlp_2d:
-    new_map[k] = name
-print(f"spliced {len(mlp_2d)} VQ mlp tensors (codes squeezed to 2D)")
+if mlp_2d:
+    shard_no += 1
+    name = f"model-{shard_no:05d}.safetensors"
+    mx.save_safetensors(str(OUT / name), mlp_2d)
+    for k in mlp_2d:
+        new_map[k] = name
+    print(f"spliced {len(mlp_2d)} VQ mlp tensors (codes squeezed to 2D)")
 
 vq_linear = {m: dict(v) for m, v in mlp_cfg.items()}
 vq_embed = {}
