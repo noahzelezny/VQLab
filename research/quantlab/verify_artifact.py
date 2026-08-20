@@ -133,14 +133,12 @@ for mod in mods:
 
     li = layer_of(mod)
     proj = mod.rsplit(".", 1)[1]
-    T = src_tensor(li, proj).astype(mx.float32)
-    # Force the source-shard read to complete BEFORE the diff loop. Without
-    # this, the first .item() pulls the whole lazy load + slice + cast into
-    # one Metal command buffer, which on the 397B's shard sizes exceeded the
-    # GPU watchdog three times (overnight + 08-20 morning) as
-    # kIOGPUCommandBufferCallbackErrorTimeout. Splitting load from math
-    # keeps every buffer small.
-    mx.eval(T)
+    # Keep the source in bf16 and cast PER CHUNK inside the loop below. A
+    # whole-tensor astype(float32) on a 397B expert stack ([512, out, in] ->
+    # ~25 GB) is one Metal command and tripped the GPU watchdog FOUR times
+    # (kIOGPUCommandBufferCallbackErrorTimeout) — including once at a bare
+    # mx.eval(T) of the cast. Chunked, no single buffer exceeds ~100 MB.
+    T = src_tensor(li, proj)
 
     # W_hat = codebook[codes] * scale, group-wise along `in`
     num = den = 0.0
@@ -151,9 +149,12 @@ for mod in mods:
         sc = scales[s:s + CH]                     # [e, out, in/G]
         w = (w.reshape(c.shape[0], out_d, in_d // G, G)
              * sc[..., None]).reshape(c.shape[0], out_d, in_d)
-        diff = w - T[s:s + CH]
+        Tc = T[s:s + CH].astype(mx.float32)
+        mx.eval(Tc)
+        diff = w - Tc
         num += float(mx.sum(diff * diff).item())
-        den += float(mx.sum(T[s:s + CH] * T[s:s + CH]).item())
+        den += float(mx.sum(Tc * Tc).item())
+        del Tc
         del w, diff
         mx.clear_cache()
     relerr = math.sqrt(num / max(den, 1e-12))
