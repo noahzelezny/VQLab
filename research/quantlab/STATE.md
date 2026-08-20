@@ -1,3 +1,49 @@
+# COMPACTION HANDOFF (08-20 ~noon) — read this first
+
+## IN FLIGHT (answers expected ~14:45-15:30)
+- M3: run_rung22_m3.sh -> logs_rung22.log / logs_live_ladder397b.log —
+  2.2-class cheap-shallow fit (K32 shallow L0-9 / d4k128 body, abort 0.75)
+  + full gate chain inline (verify, pack, graft model.visual, check_vision,
+  check_release, referee both corpora). Must beat shipped 2.2 (ppl 3.1706
+  @ 100.9G) at ~98G.
+- M4 (peer session, uds:/tmp/cc-socks/39597.sock): 3.1-class fit (K512
+  shallow / d4k2048 body, abort 0.70) -> rotlab--397B-cheapshallow-k512-
+  tail2048. E47 POLICY: verify it FROM M3 before believing any number.
+  Must beat shipped 3.1 (ppl 2.3519 @ 143.7G) at ~140G.
+- after_ladder_refs.sh (waiter): re-scores shipped 2.2/3.1 on today's
+  harness once M3's rung finishes — use THOSE numbers for comparison rows.
+- Registered expectations (mine): 2.2-class WINS; 3.1-class gain SHRINKS,
+  possibly to noise (the gemma E60 result, +0.94 under bar, is the
+  precedent). Do not round a small 3.1 gain up.
+
+## DECISIONS PENDING (Noah's)
+- Swap ALL THREE 397B rungs to cheap-shallow if ladder wins ("we can swap
+  all the models" — approved contingent on numbers; he has NOT posted
+  publicly yet, deliberately). The proven middle rung: cheapshallow 2.30bpw
+  107.9G, ppl 2.779/2.6479, decode wash, prefill -8%, peak -3.8G vs
+  shipped 2.4 (E71). Old rungs get MOVED not deleted. Honest-bpw names
+  (bytes*8/403.4e9): ladder would be ~2.1 / 2.30 / ~3.0.
+
+## PUBLISHED TODAY (already live, done)
+- HF collection "gemma-4 VQ (Apple Silicon)":
+  gemma-4-26b-a4b-it-VQ-6.2bpw (18.74G) + gemma-4-e4b-it-VQ-PLE (7.39G).
+  Cards: charts embedded AFTER frontmatter, runtime = M4 Max, env knob
+  documented as VQ_DECODE_CHUNK (SCOUT_ prefix stripped from all public
+  artifacts; internal runtime keeps legacy alias). 26B small build RETIRED.
+
+## KEY FACTS THIS SESSION KEEPS RELEARNING
+- All three shipped 397B rungs = same struct6-tail3x3 base, differ ONLY in
+  flat codebook K128/K256/K2048. Base was REBUILT (122G) and lives again.
+- Fit chain does NOT propagate tokenizer files (copy pair from shipped
+  2.4bpw; check_release gates it). graft_vision needs --prefixes
+  model.visual on this family.
+- verify_artifact on 397B: create src load+slice UNDER `with
+  mx.stream(mx.cpu)` (stream binds at op creation) or the Metal watchdog
+  kills it on disk stalls.
+- pack only non-byte-aligned widths (bits%8==0 saves nothing, costs 37%).
+- Every new gate: acceptance-test against KNOWN-BAD input first.
+- E-numbers through E71. gemma cheap-shallow = E60 (+0.94, UNDER bar).
+
 # STATE — resume point (2026-08-18 ~11:00)
 
 Written so work continues without this session's context. Everything below
