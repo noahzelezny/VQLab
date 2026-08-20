@@ -27,7 +27,14 @@ def final_answer(text):
 
 
 def norm(s):
-    return re.sub(r"\s+", " ", s.strip().strip(".!,:;\"'*_ ")).lower()
+    """Normalise for exact-match. The leading-article strip is NOT cosmetic:
+    the state golds read "a brass coin" and models answer "brass coin", which
+    the first version of this scorer marked WRONG — an instrument bug that
+    would have reported a model failure that never happened (and unfairly
+    penalised whichever model drops articles). Caught 2026-08-19 by reading
+    the failures instead of trusting the count."""
+    s = re.sub(r"\s+", " ", s.strip().strip(".!,:;\"'*_ ")).lower()
+    return re.sub(r"^(a|an|the)\s+", "", s)
 
 
 def exact_ok(pred, gold):
@@ -127,10 +134,11 @@ def mcnemar(b, c):
 
 def curve(s, label):
     print(f"\n{label}  ({s['model']})")
-    fams = sorted({k[0] for k in s if isinstance(k, tuple)})
+    KEYS = [k for k in s if isinstance(k, tuple)]
+    fams = sorted({k[0] for k in KEYS})
     for fam in fams:
         if fam == "sustain":
-            for tier in sorted(t for f, t in s if f == fam):
+            for tier in sorted(t for f, t in KEYS if f == fam):
                 v = s[(fam, tier)]
                 m = lambda k: sum(x[k] for x in v) / len(v)
                 print(f"  {fam:11s} tier {tier:>5}: reached "
@@ -141,12 +149,12 @@ def curve(s, label):
         if fam == "constr_parts":
             continue
         row = []
-        for tier in sorted(t for f, t in s if f == fam):
+        for tier in sorted(t for f, t in KEYS if f == fam):
             v = s[(fam, tier)]
             row.append(f"t{tier}:{sum(v)}/{len(v)}")
         print(f"  {fam:11s} " + "  ".join(row))
     if ("constr_parts", 12) in s:
-        for tier in sorted(t for f, t in s if f == "constr_parts"):
+        for tier in sorted(t for f, t in KEYS if f == "constr_parts"):
             v = s[("constr_parts", tier)]
             print(f"  constr-parts tier {tier:>2}: {sum(v)}/{len(v)} "
                   f"individual constraints")
@@ -163,10 +171,8 @@ else:
     curve(A, "A"); curve(B, "B")
     print("\npaired McNemar by family (all tiers pooled)")
     for fam in ("state", "chain", "needle", "needle_agg", "constr"):
-        ids_a = [(t, i) for (f, t) in A if f == fam
-                 for i in range(len(A[(f, t)]))]
         b_ = c_ = n = 0
-        for (f, t) in A:
+        for (f, t) in [k for k in A if isinstance(k, tuple)]:
             if f != fam or (f, t) not in B:
                 continue
             for x, y in zip(A[(f, t)], B[(f, t)]):
