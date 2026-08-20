@@ -4638,3 +4638,20 @@ Prefill is the only column where our artifacts lose. Candidates registered BEFOR
 **Registered candidates (predictions, not results):** C1 route VQEmbedding packed gather through the existing verified `_SRC_DECODE_PACKED` kernel by viewing the table as V "experts" of OUT=1 — one kernel replaces ~160 ops + 2 giant gathers; expected bit-exact, must be proven on GPU. C2 dedup token ids before decode (`emb(unique)[inverse]`) — ALREADY PROVEN BIT-EXACT on the CPU stream against real artifact tensors; win scales with prompt dup rate, nil at N=1; composable with C1. C3 quantify the 397B packed-vs-unpacked kernel tax at real shapes; if large, cooperative word-loading or unpack-once-per-chunk to a transient uint16 buffer. C4 decoded-row cache for hot ids (adds state; below C1/C2). C5 per-tensor chunk autotune — blocked by the bit-exactness rule, needs a ppl gate, ranked last. NOT pursued: fused row-gather GEMM for _prefill (real ~1.19x lever, big kernel effort); chunk defaults (settled, E71).
 
 **Registered expectation:** if F3 is the mechanism, the e4b gap closes mostly at SMALL N and the long-prompt gap was never as bad as the card implies. If C1 lands and the gap persists at large N, F3 is falsified and the cost is in the two giant gathers instead.
+
+### E74 (08-20): 2.2-class ladder rung — E72's registered prediction FALSIFIED AS STATED
+Artifact: rotlab--397B-cheapshallow-k32-tail128 (shallow K32 / body d4 K128, tail 3x3, abort bar 0.75). Fit 2290s, 171 tensors, mean relerr 0.3892 (shallow ~0.51, body ~0.369). Packed 97.2 GiB = **2.069 bpw honest** (403.4B params). All gates green: verify outlier gate PASS, 333/333 vision tensors, required files + index + tokenizer round-trip PASS. Referee, same instrument, same day as the refs.
+
+| artifact | GiB | prose ppl | code ppl |
+|---|---|---|---|
+| NEW 2.2-class (K32/K128) | 97.2 | 3.2730 | 2.7055 |
+| shipped VQ-2.2bpw | 100.9 | 3.1706 | 2.6988 |
+| cheap-shallow 2.3 | 107.9 | 2.7790 | 2.6479 |
+
+**Result: −3.7 GiB but prose +0.1024 ppl (+3.2%) and code +0.0067 (+0.25%). This is NOT the clean win the 2.3 rung was over the shipped 2.4.** E72 registered "2.2-class WINS, and biggest" — that is falsified as stated. Recording it as such rather than reframing the prediction around the outcome.
+
+**Caveat that keeps this from being a clean refutation either**: the comparison is not size-matched. The new rung is 3.7 GiB SMALLER, so "worse ppl" is partly bought size. ESTIMATE ONLY (not a measurement): the local frontier slope between shipped-2.2 and cheap-shallow-2.3 is 0.0559 ppl/GiB; extrapolating the shipped geometry down to 97.2 GiB predicts prose ~3.378 vs 3.273 measured, i.e. the rung may still sit ABOVE the frontier line. That slope is borrowed across geometry families and cannot settle it. A size-matched rung (K64-ish shallow) is what would actually decide, and would cost another ~40 min fit + chain.
+
+**Standing implication for the "low-bit lever" hypothesis (E57 amendment):** the hypothesis predicted gains GROW as bits fall. The lowest rung we have fielded did not win outright. Either the lever peaks somewhere around the 2.3-class and falls off below it, or K32 shallow is simply past the point where the shallow layers still tolerate cheapness (shallow relerr 0.51 is the highest we have shipped). Do not resolve this until the 3.1-class lands — the ladder shape needs both ends.
+
+**Also**: chain emitted `WARNING: config lacks ['vision_config']` — must be copied from the source config before this artifact could ever be published for exo. Known step, not yet done.
