@@ -54,13 +54,16 @@ Last updated: 2026-08-20 (through E80).
    measured at 6-bit). [E70, E71 speed rows — artifact-vs-artifact, unaffected
    by the E79 retraction]
 
-10. **At matched bytes, d4 + big codebook beats d2 + small codebook.**
-    Pre-registered and resolved on BOTH families: d2-K64 landed 5.84 pts
-    below the d4 line (gemma), and 1.26 below at matched 3.25 bpw (qwen);
-    the gap WIDENS with bpw. d2's real wins are operational: ~8x cheaper
-    fits and faster decode at K≤256 (byte-aligned, no packing). Refines
-    law 1: packaging washes only DOWN to a floor of codebook expressivity —
-    "raise K first." [E-record ~L3210-3400]
+10. **At matched bytes, d4 + big codebook beats d2 + small codebook —
+    SUPPORTED, not settled.** Admissible evidence is qwen-only (Noah's
+    ruling 08-20: gemma-family scores are excluded as an instrument herring
+    — see gemma4-loglikelihood note). On qwen: d2-K64 sits 1.26 pts below
+    d4 at matched 3.25 bpw. Directionally clear, margin thin, one pair.
+    The gemma corroboration (5.84 pts, widening with bpw) is set aside, not
+    refuted. A second qwen matched-bytes pair would settle it. d2's real
+    wins are operational either way: ~8x cheaper fits, faster decode at
+    K≤256 (byte-aligned). "Raise K first" stands as the working default.
+    [E-record ~L3380-3400, qwen table only]
 
 ## II. Retracted / false leads — do NOT re-chase without new evidence
 
@@ -118,4 +121,6 @@ Last updated: 2026-08-20 (through E80).
 - E80 (tonight): does harvest cost keep falling at K2048? Bar = 2.3997.
 - Fair e4b embedding test: affine + fp32 path vs VQ + fp32 path. Cheap, decisive.
 - Qwen MoE speed candidates Q1-Q4 registered in E77, unmeasured.
+- Second qwen matched-bytes d2/d4 pair (e.g. d2-K256 vs d4-K4096, both
+  4.0 b/w) to settle law 10 beyond one thin pair. ~1h on the 35B.
 - Why is creation-binding insufficient for lazy loads? (MLX-side curiosity.)
