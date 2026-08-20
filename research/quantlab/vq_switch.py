@@ -42,7 +42,8 @@ import numpy as np
 
 # below this many (token, expert) pairs use the fused kernel; above, the
 # decode+padded-GEMM path (decode cost amortizes). Tune in M1e if needed.
-VQ_FUSED_MAX_N = int(os.environ.get("SCOUT_VQ_FUSED_MAX_N", 4096))
+VQ_FUSED_MAX_N = int(os.environ.get("VQ_FUSED_MAX_N",
+                     os.environ.get("SCOUT_VQ_FUSED_MAX_N", 4096)))
 
 # Experts decoded to dense fp16 per prefill chunk. THIS IS THE MEMORY KNOB,
 # not the KV cache: measured 2026-08-15 on a 128 GB M4 Max running the
@@ -53,7 +54,7 @@ VQ_FUSED_MAX_N = int(os.environ.get("SCOUT_VQ_FUSED_MAX_N", 4096))
 #     chunk= 16 -> 0.12 GiB            / 0.25 GiB
 # On a box where the model nearly fills RAM, they are what caps your context
 # length. Auto-sized from free memory at import; override with
-# SCOUT_VQ_DECODE_CHUNK.
+# VQ_DECODE_CHUNK.
 #
 # DEFAULT IS 32, AND 32 IS NOT ARBITRARY (2026-08-17, resident probes on the
 # M4 across all three artifacts). Steady-state ms/bucket, real block, weights
@@ -83,7 +84,11 @@ VQ_FUSED_MAX_N = int(os.environ.get("SCOUT_VQ_FUSED_MAX_N", 4096))
 # reports "no difference" for a change worth 1.37x. That mistake was made on
 # 08-17 and reversed by measuring a resident block instead.
 def _default_decode_chunk():
-    env = os.environ.get("SCOUT_VQ_DECODE_CHUNK")
+    # Public name is VQ_DECODE_CHUNK (cards say so); SCOUT_ prefix kept as
+    # a legacy alias for our own scripts only — no Scout branding in
+    # anything a downloader reads.
+    env = os.environ.get("VQ_DECODE_CHUNK",
+                         os.environ.get("SCOUT_VQ_DECODE_CHUNK"))
     if env:
         return max(1, int(env))
     try:

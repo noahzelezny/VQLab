@@ -90,14 +90,13 @@ So the family guidance is:
 
 ## Runtime
 
-Single M3 Ultra, macOS, stock `mlx-lm`, GPU otherwise idle:
+Measured on an M4 Max (128 GB), macOS, stock `mlx-lm`, GPU otherwise idle, 120-token greedy generation:
 
 | | |
 |---|---|
 | peak memory | 17.7 GiB |
 | decode | **~48 tok/s** |
 
-*Measured on an M4 Max (128 GB), mlx-lm, 120-token greedy generation.*
 
 Fits a 32 GB machine with room for context.
 
