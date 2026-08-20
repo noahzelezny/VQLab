@@ -4727,3 +4727,25 @@ K64/K128 rung (harvest 1 bit off flat K128). Fit 2238s, mean relerr 0.3754. **Pa
 **Consequence for the swap decision:** do NOT swap the shipped 2.2 to cheap-shallow — at matched-ish size it loses prose and gains nothing. Cheap-shallow at this class is only interesting if the GOAL is a smaller artifact (e.g. a ~97-99 GiB rung that undercuts the 2.2 on disk at a measured, honest quality cost). The proven 2.3-over-2.4 swap is unaffected and still stands.
 
 **Registered predictions, settled:** E72's "2.2-class WINS, and biggest" is now falsified across BOTH rungs, not just as stated. My E74 speculation that the rung might still sit above the frontier line was directionally right for the wrong reason — it is above the flat-ladder slope, but it does not beat the incumbent at its own size.
+
+### E79 (08-20): **E71 IS WRONG — cheap-shallow 2.3 does NOT beat the shipped 2.4. It compared against a PROXY score.**
+Triggered by Noah asking why the 2.3 outperforming the 2.4 was "the only incongruous bit". It was incongruous because it is not true.
+
+E71's table lists the shipped-2.4bpw column as prose **2.8197** / code 2.6504. **2.8197 is the score of the bf16-scales PROXY build (`zzvq-tail3x3-K256`), not of the shipped artifact.** Our own notebook already recorded the difference at line ~2053: "C: proxy -> real | 2.8197 -> 2.7655 (-1.9%) | 2.6504 -> 2.6383 (-0.5%)". E71 then used the proxy row as the incumbent anyway. The real shipped artifact was never re-scored beside the cheap-shallow build.
+
+Measured today, both REAL artifacts, same instrument, same session:
+
+| artifact | GiB | prose ppl | code ppl |
+|---|---|---|---|
+| cheap-shallow 2.3 (K64/K256) | 107.9 | 2.7790 | 2.6479 |
+| **shipped VQ-2.4bpw (real)** | 112.0 | **2.7655** | **2.6383** |
+
+**The shipped 2.4 wins BOTH corpora.** Cheap-shallow is -4.1 GiB but +0.49% prose and +0.36% code. Instrument confirmed deterministic: the 2.3 build reproduced 2.779 / 2.6479 to the exact total_nll, and shipped 2.2 / 3.1 reproduce their historic numbers exactly, so this is not drift — it is the wrong comparator.
+
+**Consequences, all of them bad for the story we were telling:**
+1. **The swap must NOT happen as planned.** Cheap-shallow 2.3 is smaller (-4.1 GiB, -3.8 GiB peak) but worse on both corpora AND ~8% slower at prefill. It is a size play with a measured quality cost, not a free win. Nothing was published — the standing "no public swap without measured numbers Noah has seen" rule is the only reason this did not ship.
+2. **There is no anomaly to explain.** The whole "a smaller rung dominates the one above it" puzzle — which drove the E57 mechanism work, the "low-bit lever", and this entire ladder-translation day — was an artifact of comparing a real build against a proxy score. The ladder is monotone after all.
+3. **E78's dose-response stands unchanged** (it used real artifacts on today's instrument throughout) and now reads consistently: harvesting shallow bits costs quality monotonically at K128 AND, we can now say, at K256 too. The "tolerance depends on base richness" framing in E74/E78 was built to explain a difference that does not exist. Retract it.
+4. What survives: cheap-shallow is a **byte-efficient way to get smaller** (~0.03 ppl/GiB vs ~0.056 stepping down the flat ladder), and the size model (three out-of-sample hits) is unaffected.
+
+**Process lesson, and it is the expensive one: a proxy number was allowed into a comparison table as if it were the incumbent, and every downstream result inherited it.** Gates we built this week check artifacts (tensors, tokenizer, vision, completeness). None of them check that a COMPARISON ROW came from the artifact it names. Proposed rule: every comparison table states, per cell, which artifact produced it and when — and any number older than the artifact it is compared against gets re-measured, not cited.
