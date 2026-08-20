@@ -4314,3 +4314,14 @@ less-redundancy worry has not materialized at layer 0.
   small dense models at this geometry; write the negative result, keep
   e4b-8bit as the honest incumbent recommendation on the gemma-small card.
 - Either way, PLE VQ is a separate decision for Noah after these numbers.
+
+### Orchestration lesson (08-19) — `| tail -N` on a long job makes you blind for its whole runtime
+
+Three times tonight (capacity, ladder, e4b fit) I piped a multi-minute
+generator through `| tail -N` to keep logs tidy, and then could not answer
+"how far along is it?" because the per-item progress was buffered until
+exit. The fix is `2>&1 | tee -a logs_live_<job>.log | tail -N`: the tidy
+summary still lands in the job log, and a live log exists for status
+checks. Applied to all runner scripts. Sibling of the earlier stampede
+rule (ONE sequential queue, not N pgrep waiters): orchestration mistakes
+cost more debugging time tonight than any modeling mistake.

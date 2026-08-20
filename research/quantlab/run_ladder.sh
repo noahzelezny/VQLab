@@ -8,7 +8,7 @@ for pair in "small:$E/gemma26b-rungs/vq-K256-d4:" \
   tag=$(echo "$pair" | cut -d: -f1); mdl=$(echo "$pair" | cut -d: -f2); flag=$(echo "$pair" | cut -d: -f3)
   echo "########## GENERATING: $tag"
   $V winrate_bench.py generate --model "$mdl" --prompts winrate/prompts_ladder.json \
-     --max-tokens 4600 $flag --out winrate/gens_ladder_$tag.json 2>&1 | tail -1
+     --max-tokens 4600 $flag --out winrate/gens_ladder_$tag.json 2>&1 | tee -a logs_live_$(basename run_ladder.sh .sh).log | tail -1
   echo "---------- partial scores: $tag"
   $V score_ladder.py --gens winrate/gens_ladder_$tag.json
 done

@@ -17,7 +17,7 @@ for pair in "small:$E/gemma26b-rungs/vq-K256-d4:" \
             "e4b8:$E/mlx-community--gemma-4-e4b-it-8bit:--allow-unmatched"; do
   tag=$(echo "$pair"|cut -d: -f1); mdl=$(echo "$pair"|cut -d: -f2); flag=$(echo "$pair"|cut -d: -f3)
   $V winrate_bench.py generate --model "$mdl" --prompts winrate/prompts_constr_fixed.json \
-     --max-tokens 900 $flag --out winrate/gens_constr_$tag.json 2>&1 | tail -1
+     --max-tokens 900 $flag --out winrate/gens_constr_$tag.json 2>&1 | tee -a logs_live_$(basename rerun_constr.sh .sh).log | tail -1
   $V - "$tag" <<'PY'
 import json,sys
 tag=sys.argv[1]
