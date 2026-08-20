@@ -154,22 +154,28 @@ class Model(_arch.Model):
         super().__init__(args)
         for _p, _m in _cfg.get("vq_linear", {}).items():
             _obj, _leaf = _reach(self, _p)
-            _ct = mx.uint8 if _m["k"] <= 256 else mx.uint16
+            _pb = _m.get("pack_bits", 0)
+            _ct = mx.uint32 if _pb else (mx.uint8 if _m["k"] <= 256 else mx.uint16)
+            _cols = (_m["in"] // _m["dim"] // 32 * _pb) if _pb else _m["in"] // _m["dim"]
             setattr(_obj, _leaf, VQLinear(
-                mx.zeros((_m["out"], _m["in"] // _m["dim"]), dtype=_ct),
+                mx.zeros((_m["out"], _cols), dtype=_ct),
                 mx.zeros((_m["k"], _m["dim"]), dtype=mx.float16),
                 mx.zeros((_m["out"], _m["in"] // _m["group"]),
                          dtype=mx.float16),
-                group_size=_m["group"]))
+                group_size=_m["group"], pack_bits=_pb,
+                in_features=_m["in"] if _pb else None))
         for _p, _m in _cfg.get("vq_embed", {}).items():
             _obj, _leaf = _reach(self, _p)
-            _ct = mx.uint8 if _m["k"] <= 256 else mx.uint16
+            _pb = _m.get("pack_bits", 0)
+            _ct = mx.uint32 if _pb else (mx.uint8 if _m["k"] <= 256 else mx.uint16)
+            _cols = (_m["in"] // _m["dim"] // 32 * _pb) if _pb else _m["in"] // _m["dim"]
             setattr(_obj, _leaf, VQEmbedding(
-                mx.zeros((_m["rows"], _m["in"] // _m["dim"]), dtype=_ct),
+                mx.zeros((_m["rows"], _cols), dtype=_ct),
                 mx.zeros((_m["k"], _m["dim"]), dtype=mx.float16),
                 mx.zeros((_m["rows"], _m["in"] // _m["group"]),
                          dtype=mx.float16),
-                group_size=_m["group"]))
+                group_size=_m["group"], pack_bits=_pb,
+                in_features=_m["in"] if _pb else None))
 '''
 (OUT / "model.py").write_text(
     pathlib.Path("vq_dense.py").read_text() + SHIM)
