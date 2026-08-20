@@ -4814,3 +4814,10 @@ Noah asked whether extrapolating the d/K table outward (d8, K65536) buys quality
 **Also unresolved:** the ~2% relerr edge for d8 is a FIT-ERROR number, and law 6 says fit error does not rank output damage (E55/E69 both burned us on exactly this). G's quality case has never been measured as KL or ppl.
 
 **Cheap decisive test, if we want it:** fit d8-K65536 and d4-K256 on the 35B (not 397B) and score both on kl_cache_qwen36 — same instrument as E82, both at 2.00 bpw. That answers the quality question for the cost of a 35B fit, and does NOT need the fast kernel (scoring can use the reference path). Only if it wins big does the kernel work become worth pricing. Logged as an open question, not scheduled.
+
+### E84 (08-20): pre-registration — re-score the whole 35B rung set on ONE instrument
+Most qwen36-35b-rungs numbers in the record come from a retired instrument (its 8-bit ceiling was 79.95%, BELOW tonight's d2-K64 score of 79.7% measured on kl_cache_qwen36 — the two sets are not comparable, per E82). E82 settled d4-K4096 vs d2-K64 with a single measured pair. This re-scores every surviving rung on kl_cache_qwen36 so the d2-vs-d4 curve is one-instrument throughout.
+
+**Registered before running:** (a) the d4 line lies below (better than) the d2 line at every matched bpw, per E82/law 10; (b) the d4 K-ladder flattens above K2048 (E45 measured +0.55 pts for K2048->K4096 on the old instrument — expect the same shape here); (c) d2 keeps climbing to high bpw where d4 has run out of practical K. If (a) fails at any matched point, law 10 is not general and E82 was a lucky pair.
+
+Rungs on disk: d2 = K64/K128/K256/K512; d4 = K256/K2048/K4096/K8192. (vq-K32-d2 is 0 bytes — empty dir, excluded.) Note the sizes are NOT matched across the set; comparison must be by bits/weight (log2(K)/d) and by measured size, never by K alone.
