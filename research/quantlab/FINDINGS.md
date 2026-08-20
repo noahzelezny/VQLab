@@ -8,10 +8,14 @@ Last updated: 2026-08-20 (through E80).
 
 ## I. Settled laws (each has survived at least one attempt to kill it)
 
-1. **Quality tracks total bytes; geometry packaging washes at matched size.**
-   d/K combos at the same bits-per-weight land on the same size-quality curve
-   (log2(K)/d IS the rate — this is rate-distortion, not a house discovery).
-   No exotic geometry rescues a size class. [E45, E50, E78, gemma domain scan]
+1. **Quality tracks total bytes — WITHIN the d4 family. Across d it does
+   NOT.** At matched bits/weight, d4-K4096 beats d2-K64 by 3.3x KL (E82), so
+   "geometry washes" is FALSE as a general claim; it holds for K-choices at
+   d4 (E45/E50: the d4 K-ladder flattens, K2048->K4096 buys +0.55 pts for
+   +0.9G). Correct statement: **d=4 with the largest K the budget allows is
+   the frontier; d=2 sits measurably off it.** Rate (log2(K)/d) prices the
+   bytes but does not predict the damage — expressivity per code does.
+   [E45, E50, E78, E82]
 
 2. **Position law: early layers tolerate cheap bits; enrichment pays only in
    the back of the network; knee ≈ layer 30 (of 60, affine) / L10 (VQ
