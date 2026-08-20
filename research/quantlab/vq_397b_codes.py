@@ -428,7 +428,18 @@ for si, sh in enumerate(shards):
         shard_sizes[sh] = have.stat().st_size
         print(f"[{si+1}/{len(shards)}] {sh} exists, skip", flush=True)
         continue
-    data = mx.load(str(BASE / sh))
+    # Materialize the BASE shard ON THE CPU STREAM. Tensors we pass through
+    # untouched go into `new` still LAZY, so the only pending work when
+    # mx.save_safetensors fires below is this read — and it would then be paid
+    # INSIDE a GPU command buffer, where a slow (e.g. network-mounted) read
+    # trips the Metal watchdog. That failure presents at the SAVE, which is
+    # misleading: the write is fine, the read never happened yet. General rule:
+    # any lazy read still pending when a save forces evaluation is paid inside
+    # a GPU command buffer. Stream binds at op creation, so the load must be
+    # created here, not merely evaluated here.
+    with mx.stream(mx.cpu):
+        data = mx.load(str(BASE / sh))
+        mx.eval(list(data.values()))
     new = {}
     done = set()
     for name, val in data.items():
