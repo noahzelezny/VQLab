@@ -1,3 +1,11 @@
+> **RETIRED (2026-08-20, never published).** This 26B-based small build
+> was superseded before release: it is statistically indistinguishable
+> from `gemma-4-e4b-it-8bit` on every instrument we built, while being
+> larger. The small-gemma slot is served by the e4b line — the 8-bit
+> for speed, our VQ-PLE build (7.39 GiB) for memory. Kept as ladder
+> data; see MODEL_CARD_GEMMA_E4B_VQPLE.md and the quality card's
+> 'Choosing a size' section.
+
 ---
 language:
 - en

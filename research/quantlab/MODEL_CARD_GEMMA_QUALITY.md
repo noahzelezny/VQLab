@@ -67,6 +67,27 @@ with top-8 routing: any perturbation flips which experts fire, so even a
 near-lossless 8-bit quant only reproduces bf16's argmax ~80% of the time.
 Judge against the 8-bit row, never against 100%.
 
+## Choosing a size (read this before downloading)
+
+This artifact exists for one job: **bf16-class quality in the smallest
+size that actually delivers it** (18.7 GiB; blind judges could not tell it
+from bf16). Below this size, quantizing the 26B harder stops making sense
+— we measured our own smaller 26B builds against
+`mlx-community/gemma-4-e4b-it-8bit` across paired litbench, KL,
+constraint benches, and a capability ladder, and the honest result is
+that **at small sizes the e4b is the right model**: it matches or beats
+aggressive 26B quants at similar or smaller size, and it is faster.
+
+So the family guidance is:
+- **~19 GiB budget, want bf16-class quality or long-form generation
+  (2,500+ words sustained):** this artifact.
+- **~8 GiB budget:** use `gemma-4-e4b-it-8bit` — not a compromise; it wins
+  that bracket on our measurements.
+- **Tighter than 8 GiB or RAM-bound:** see our VQ-PLE build of the e4b
+  (7.39 GiB, measurably closer to bf16 than the 8-bit, 20% less RAM,
+  ~8% slower decode) — the right pick when memory is the constraint and
+  latency is not.
+
 ## Runtime
 
 Single M3 Ultra, macOS, stock `mlx-lm`, GPU otherwise idle:
