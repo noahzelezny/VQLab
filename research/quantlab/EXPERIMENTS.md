@@ -4708,3 +4708,22 @@ M4's attempt 3 survived 87 minutes on the read-side cpu-stream fix, then died at
 Fixed both sides now (9a08166 read path, this commit passthrough). Round-trip tested on a real artifact (473 tensors, bit-identical). NOTE A CONFOUND, flagged by the peer and worth preserving: their relaunch runs both fixes AND local T7 output at once, so if it completes we will not know whether T7 was necessary. It was not, by this analysis. Testing the patched fitter against a network-mounted OUTPUT on a cheap model — where failure costs minutes — is outstanding.
 
 **Still outstanding from the sweep**: graft_vision.py and pack_artifact.py read large sources lazily and have the same disease; both are invoked by live chains today, so they get patched when nothing is running.
+
+### E78 (08-20): the dose-response — shallow harvest is MONOTONE COST at the K128 base, but a cheap way to buy bytes
+K64/K128 rung (harvest 1 bit off flat K128). Fit 2238s, mean relerr 0.3754. **Packed 99.05 GiB = 2.109 bpw honest.** All gates green (verify outlier PASS, vision PASS, files+index+tokenizer PASS). Referee, same instrument as the refs.
+
+**SIZE MODEL: third out-of-sample confirmation, and the tightest yet.** Predicted 99.0, measured 99.05 — error **+0.05 GiB**. The harvest form (new = base − 1.87 GiB × shallow bits) is now validated at 100.93/100.9, 108.3/107.9 and 99.0/99.05. It stands as a pricing tool; the peer's 140.3 prediction is the next test.
+
+| shallow harvest (body held at K128) | GiB | prose ppl | code ppl |
+|---|---|---|---|
+| 0 bits — flat K128 (shipped 2.2) | 100.90 | 3.1706 | 2.6988 |
+| 1 bit — K64/K128 (this rung) | 99.05 | 3.2289 | 2.7078 |
+| 2 bits — K32/K128 | 97.20 | 3.2730 | 2.7055 |
+
+**Prose degrades MONOTONICALLY with harvest depth. There is no floor above zero at this base** — every bit taken from the shallow region costs quality. Code is flat within noise across all three (2.6988 / 2.7078 / 2.7055), consistent with every other code-corpus result in this arc. So the E74 "floor" framing is refined: at the K256 base (the 2.3 build) harvesting 2 bits was FREE and won; at the K128 base harvesting even 1 bit costs. The tolerance is not a fixed K and not a fixed number of bits — it depends on how rich the base already is.
+
+**But the exchange rate is FAVOURABLE**, and this is the finding worth keeping: harvesting sheds bytes at 0.0315 ppl/GiB (first bit) and 0.0238 (second), against a flat-ladder slope of ~0.0559 ppl/GiB between shipped-2.2 and cheap-shallow-2.3. So cheap-shallow is roughly **2x more byte-efficient than stepping down the flat ladder** — it is a good way to GET SMALLER, just not a free quality win at this class. (Caveat: the 0.0559 reference spans two geometries and is an estimate, not a measurement.)
+
+**Consequence for the swap decision:** do NOT swap the shipped 2.2 to cheap-shallow — at matched-ish size it loses prose and gains nothing. Cheap-shallow at this class is only interesting if the GOAL is a smaller artifact (e.g. a ~97-99 GiB rung that undercuts the 2.2 on disk at a measured, honest quality cost). The proven 2.3-over-2.4 swap is unaffected and still stands.
+
+**Registered predictions, settled:** E72's "2.2-class WINS, and biggest" is now falsified across BOTH rungs, not just as stated. My E74 speculation that the rung might still sit above the frontier line was directionally right for the wrong reason — it is above the flat-ladder slope, but it does not beat the incumbent at its own size.
