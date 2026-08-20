@@ -54,16 +54,14 @@ Last updated: 2026-08-20 (through E80).
    measured at 6-bit). [E70, E71 speed rows — artifact-vs-artifact, unaffected
    by the E79 retraction]
 
-10. **At matched bytes, d4 + big codebook beats d2 + small codebook —
-    SUPPORTED, not settled.** Admissible evidence is qwen-only (Noah's
-    ruling 08-20: gemma-family scores are excluded as an instrument herring
-    — see gemma4-loglikelihood note). On qwen: d2-K64 sits 1.26 pts below
-    d4 at matched 3.25 bpw. Directionally clear, margin thin, one pair.
-    The gemma corroboration (5.84 pts, widening with bpw) is set aside, not
-    refuted. A second qwen matched-bytes pair would settle it. d2's real
-    wins are operational either way: ~8x cheaper fits, faster decode at
-    K≤256 (byte-aligned). "Raise K first" stands as the working default.
-    [E-record ~L3380-3400, qwen table only]
+10. **At matched bytes, spend geometry budget on K, not d — SETTLED (qwen).**
+    Measured pair, same instrument (kl_cache_qwen36), identical 18G size:
+    d4-K4096 = KL 68.5 mnats / 87.9% top-1 vs d2-K64 = 223.5 / 79.7%.
+    3.3x lower KL at the same bytes. (Historic +1.26 table: different
+    instrument, cannot be mixed — its 8-bit ceiling sits below tonight's
+    d2 score.) d2's wins are operational only: ~8x cheaper fits, faster
+    decode at K<=256. Gemma evidence remains excluded per Noah's
+    instrument ruling. [E82]
 
 ## II. Retracted / false leads — do NOT re-chase without new evidence
 
@@ -120,8 +118,9 @@ Last updated: 2026-08-20 (through E80).
 
 - E80 (tonight): does harvest cost keep falling at K2048? Bar = 2.3997.
 - Fair e4b embedding test: affine + fp32 path vs VQ + fp32 path. Cheap, decisive.
-- Qwen MoE speed candidates Q1-Q4 registered in E77, unmeasured.
-- Settle law 10: score d2-K64 vs d4-K4096 (both exactly 3.0 b/w of codes,
-  BOTH ARTIFACTS ALREADY EXIST in qwen36-35b-rungs) on one instrument.
-  Scoring only, no fit — minutes, not an hour.
+- Ship u8view (+33% prefill, bit-exact, E81) and re-splice bundled model.py
+  in d4-K256 artifacts; then artifact-level 397B recheck of the E70 37% tax
+  (does not reproduce at kernel level — laws 8/9 may need edits).
+- Bundled-runtime gate: check_release should verify the artifact's model.py
+  matches the runtime that produced its benchmark numbers (E81 finding 5).
 - Why is creation-binding insufficient for lazy loads? (MLX-side curiosity.)
