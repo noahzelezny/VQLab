@@ -33,9 +33,22 @@ args = ap.parse_args()
 
 
 def vcount(d):
+    """Count distinct WEIGHT SITES, not raw tensors. A quantized artifact
+    carries .scales/.biases companions per weight, so raw counts read HIGHER
+    than a bf16 source and the gate cried missing-towers on an artifact with
+    MORE vision tensors than its source (e4b VQ-PLE, 661 vs 659, 08-20).
+    Stripping the quantization suffixes makes the site count representation-
+    invariant."""
     m = json.load(open(pathlib.Path(d) / "model.safetensors.index.json"))
-    keys = m["weight_map"]
-    return {p: sum(k.startswith(p) for k in keys) for p in PREFIXES}
+    sites = set()
+    for k in m["weight_map"]:
+        for suf in (".weight", ".scales", ".biases", ".codes", ".codebook",
+                    ".vq_scales"):
+            if k.endswith(suf):
+                k = k[:-len(suf)]
+                break
+        sites.add(k)
+    return {p: sum(k.startswith(p) for k in sites) for p in PREFIXES}
 
 
 a, s = vcount(args.artifact), vcount(args.src)
