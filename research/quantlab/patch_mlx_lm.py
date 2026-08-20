@@ -20,7 +20,12 @@ MARK = "# --- quantlab VQ hook (patch_mlx_lm.py) ---"
 # numeric path parts ("layers.0") break the tree alignment there.
 HOOK = f"""
     {MARK}
-    _vq_prefixes = sorted({{k[:-6] for k in weights if k.endswith(".codes")}})
+    # ndim==3 scopes this to EXPERT-shaped codes. Dense VQ artifacts
+    # (gemma-4-e4b: VQLinear/VQEmbedding, 2D codes) install their own
+    # modules via model.py; this hook overwriting them with the
+    # expert-shaped VQSwitchLinear breaks them (2026-08-19).
+    _vq_prefixes = sorted({{k[:-6] for k in weights if k.endswith(".codes")
+                           and weights[k].ndim == 3}})
     if _vq_prefixes:
         from .models.vq_switch import VQSwitchLinear
         for _p in _vq_prefixes:

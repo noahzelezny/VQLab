@@ -4372,3 +4372,48 @@ Projected if it holds: 5.25 GiB -> 1.89 GiB at 5.75 bpw (vs 2.79 at
 incumbent (24% smaller). A cheaper geometry on embeddings (they are
 famously quant-tolerant) would go further, but that is a follow-up only if
 this measures clean.
+
+## E67 (08-19 evening) — RUNTIME LANDED: the VQ e4b runs, and its prose is byte-identical to the incumbent's
+
+Built vq_dense.py (VQLinear + VQEmbedding, dense drop-ins mirroring the
+fitter contract; verified against an independent numpy reference at 3e-4 /
+exact) and build_e4b_vq.py (start from the 8-bit incumbent, splice VQ mlp
+trio + VQ PLE table, self-contained model.py shim — same pattern as every
+shipped artifact). Three integration findings, all recorded because each
+would bite again:
+
+1. **The incumbent does not strict-load.** mlx-community's e4b-8bit ships
+   k/v/k_norm tensors for the 18 KV-SHARED layers that mlx_lm's gemma4
+   never instantiates — "126 parameters not in model". Every consumer all
+   evening was silently falling back to strict=False. Our artifact DROPS
+   the dead tensors and loads strictly.
+2. **The venv VQ hook grabbed dense codes.** patch_mlx_lm's loader hook
+   matched any ".codes" suffix and installed expert-shaped VQSwitchLinear
+   over them. Scoped to ndim==3 (expert format); dense artifacts install
+   their own modules via model.py. Repo patch source updated to match.
+3. **Dense codes are 2D on disk.** The fitter's [1, OUT, NSUB] is the
+   verify format; build squeezes to [OUT, NSUB].
+
+**Proof the VQ path is live, not a fallback:** zeroing the L0 gate_proj
+codebook garbles generation ("Red" -> "Please provide more."). Module
+types confirmed VQLinear / VQEmbedding in the loaded graph.
+
+**Quality (first read):** the harbour-town paragraph is BYTE-IDENTICAL to
+the 8-bit incumbent's for the full 160-token budget — mean relerr 0.0297
+on mlp + 0.0296 on PLE does not perturb greedy decoding on this prompt.
+One prompt is not a verdict (litbench + KL owed), but it is the strongest
+possible smoke signal.
+
+**Speed:** naive per-call weight decode measured 11.5 tok/s vs the
+incumbent's 84.2. Routing VQLinear's small-N path through the E62
+production-validated fused kernels (a dense linear IS an expert layer with
+E=1, all tokens routed to expert 0; paths agree at 4e-4) recovered
+**43.0 tok/s, peak 7.9 GB**. Remaining 2x gap vs 8-bit: PLE gather is
+cheap; the honest next lever is packing (codes are unpacked uint16 —
+8.12 GiB now, ~6.4 GiB packed) and a dense-shaped fused variant if wanted.
+
+**Where this leaves the e4b line:** artifact runs, loads clean, prose
+matches the incumbent on first contact, 8.12 GiB unpacked with ~6.4 GiB
+in reach vs the incumbent's 8.38. Owed before any claim: pack + packed-KL
+identity, litbench cyclic + paired McNemar vs 8-bit, KL-vs-bf16, and the
+PLE ladder read (d2-K1024 0.0422 / d2-K256 0.0861 — the knee is real).
