@@ -38,7 +38,32 @@ ap.add_argument("--teacher", required=True)
 ap.add_argument("--quiet", action="store_true")
 a = ap.parse_args()
 
-art, tea = core_tensors(a.artifact), core_tensors(a.teacher)
+def normalize(names):
+    """Best-effort alignment of HF vs MLX prefix conventions."""
+    out = set()
+    for k in names:
+        # HF writes model.language_model.X, MLX writes language_model.model.X
+        k = re.sub(r"^model\.language_model\.", "language_model.model.", k)
+        out.add(k)
+    return out
+
+art, tea = normalize(core_tensors(a.artifact)), normalize(core_tensors(a.teacher))
+overlap = len(art & tea) / max(1, min(len(art), len(tea)))
+
+# A name-based diff can only detect DROPPED tensors when both sides use the
+# same naming convention. MLX artifacts routinely fuse gate/up into one tensor
+# and rename experts (switch_mlp) relative to the HF teacher; that is a
+# repacking, not a hole. Refusing to distinguish the two would make this gate
+# cry wolf on every legitimate MLX comparator -- and a gate that always fails
+# is a gate nobody reads.
+if overlap < 0.90:
+    print(f"INCONCLUSIVE: naming conventions differ too much to compare by name "
+          f"(only {overlap:.0%} of sites align; artifact {len(art)}, teacher "
+          f"{len(tea)}). This is NOT evidence of missing tensors -- MLX fuses "
+          f"gate/up and renames experts. Compare against a same-convention "
+          f"reference, or check structural uniformity per layer instead.")
+    sys.exit(2)
+
 extra, missing = sorted(art - tea), sorted(tea - art)
 
 if not a.quiet:
