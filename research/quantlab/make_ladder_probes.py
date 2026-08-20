@@ -172,6 +172,14 @@ for k in (3, 6, 9, 12):
             cons[name] = dict(POOL)[name]()
         if "acrostic" in cons:
             cons["exact_lines"] = len(cons["acrostic"])
+            # An acrostic FIXES the first letter of line 1, so a mandated
+            # opening word starting with any other letter is UNSATISFIABLE.
+            # The first version of this generator emitted exactly that in
+            # 11/20 items, concentrated in the high tiers (5/5 at tier 12),
+            # which manufactured a fake "constraint collapse" curve. Make the
+            # opening word BE the acrostic word so the pair is consistent.
+            if "start_with" in cons:
+                cons["start_with"] = cons["acrostic"].capitalize()
         if "exact_words" in cons and "max_words" in cons:
             del cons["max_words"]
         prompts.append({"id": pid, "domain": "constr", "tier": k,
