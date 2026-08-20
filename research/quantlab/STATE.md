@@ -433,6 +433,24 @@ Also learned: verify_artifact --outlier cries wolf on MIXED-geometry
 artifacts (arm3's d4K2048 tail reads 3.2x the d2K512 median at a healthy
 0.188) — read the gate per-geometry-region on tail/head builds.
 
+
+## 0b. PUBLISHED (08-20 midday) — gemma collection live; 397B swap awaiting Noah
+
+- Collection: https://huggingface.co/collections/TheDrainFlorist/gemma-4-vq-apple-silicon-6a873d1717a70d83dbee7f02
+  - gemma-4-26b-a4b-it-VQ-6.2bpw (18.74G, blind-indistinguishable from bf16;
+    card carries sizing guidance: small bracket -> e4b-8bit)
+  - gemma-4-e4b-it-VQ-PLE (7.39G; KL 7.451 vs incumbent 8.149; the one
+    surface where data-free VQ beats calibrated affine outright)
+  - 26B small build RETIRED unpublished (card marked; E56 hold resolved by
+    replacement, not by softening)
+- 397B cheap-shallow: ALL gates green (verify 171/171, vision 333/333,
+  check_release, referee reproduced exactly). Swap picture complete (E71):
+  prose ppl -1.4% / code tie / decode wash / prefill -8% / -4G disk /
+  -3.8G peak. NOAH'S CALL pending.
+- Gates added this cycle: check_release.py (required files + tokenizer
+  FUNCTION), check_vision site-counting, byte-aligned pack skip; house
+  rule: every gate acceptance-tests against a KNOWN-BAD input first.
+
 ## 1. A PUBLISHED CLAIM WAS FALSIFIED — read this first
 
 **e4b-8bit scores 84.62%; our gemma-small scores 79.81%.** Same instrument
