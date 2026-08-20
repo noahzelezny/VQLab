@@ -265,7 +265,16 @@ out = pathlib.Path(OUT)
 src = pathlib.Path(VISION_SRC)
 import shutil
 
-shutil.copy2(src / "optiq" / "optiq_vision.safetensors", out / "optiq")
-for f in ("preprocessor_config.json", "video_preprocessor_config.json"):
-    shutil.copy2(src / f, out / f)
-print(f"done: {OUT} (+vision)")
+try:
+    shutil.copy2(src / "optiq" / "optiq_vision.safetensors", out / "optiq")
+    for f in ("preprocessor_config.json", "video_preprocessor_config.json"):
+        shutil.copy2(src / f, out / f)
+    print(f"done: {OUT} (+vision)")
+except FileNotFoundError as e:
+    # The optiq-layout vision source was deleted in the 08-19 cleanup; the
+    # published artifacts carry vision only in GRAFTED form
+    # (model-vision-graft.safetensors), which this copy step does not speak.
+    # A base variant without the sidecar is still a valid FIT BASE — the
+    # fitter touches expert layers only — but it must be re-grafted
+    # (graft_vision.py) and pass check_vision.py before any release (E61).
+    print(f"done: {OUT} (NO VISION SIDECAR — {e}; re-graft before release)")
