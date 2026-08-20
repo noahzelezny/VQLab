@@ -23,11 +23,22 @@ BASE="$E/TheDrainFlorist--Qwen3.5-397B-A17B-$REBUILD_NAME"
 if [ -z "$SKIP_FIT" ]; then
 echo "=== 2. cheap-shallow fit ==="
 $V $FIT_TOOL --family qwen3_5 --base "$BASE" --src "$E/Qwen--Qwen3.5-397B-A17B-bf16/" \
-   --out "$E/vq397-cheapshallow-k64-tail256" $FIT_FLAGS 2>&1 | tee -a logs_live_397b.log | tail -3 || { echo "FIT FAILED"; }
+   --out "$E/$FIT_OUT" $FIT_FLAGS 2>&1 | tee -a logs_live_397b.log | tail -3 || { echo "FIT FAILED"; }
 
 echo "=== 3. verify (read per-region: mixed geometry, E57 amendment) ==="
-$V verify_artifact.py --artifact "$E/vq397-cheapshallow-k64-tail256" \
+$V add_model_file.py --artifact "$E/$FIT_OUT" >/dev/null 2>&1
+$V verify_artifact.py --artifact "$E/$FIT_OUT" \
    --src "$E/Qwen--Qwen3.5-397B-A17B-bf16" --family qwen3_5 --outlier 3.0 2>&1 | tee -a logs_live_397b.log | tail -6
+echo "=== 3b. pack + re-verify ==="
+$V pack_artifact.py --src "$E/$FIT_OUT" --out "$E/$FIT_OUT-packed" 2>&1 | tee -a logs_live_397b.log | tail -1
+$V verify_artifact.py --artifact "$E/$FIT_OUT-packed" \
+   --src "$E/Qwen--Qwen3.5-397B-A17B-bf16" --family qwen3_5 --outlier 3.0 2>&1 | tee -a logs_live_397b.log | tail -3
+echo "=== 3c. vision graft (397B keys are model.visual, NOT vision_tower) + gate ==="
+$V graft_vision.py --artifact "$E/$FIT_OUT-packed" --src "$E/Qwen--Qwen3.5-397B-A17B-bf16" --prefixes model.visual 2>&1 | tee -a logs_live_397b.log | tail -2
+$V check_vision.py --artifact "$E/$FIT_OUT-packed" --src "$E/Qwen--Qwen3.5-397B-A17B-bf16" 2>&1 | tee -a logs_live_397b.log | tail -2
+echo "=== 3d. referee selftest (both corpora) ==="
+$V referee/score_streaming.py --model "$E/$FIT_OUT-packed" --corpus referee/referee_corpus.txt 2>&1 | tail -2
+$V referee/score_streaming.py --model "$E/$FIT_OUT-packed" --corpus referee/referee_corpus_code.txt 2>&1 | tail -2
 fi
 
 echo "=== 4. scout dispatcher watchdog (always runs) ==="

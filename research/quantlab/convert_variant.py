@@ -271,6 +271,11 @@ try:
         shutil.copy2(src / f, out / f)
     print(f"done: {OUT} (+vision)")
 except FileNotFoundError as e:
+    _pub = pathlib.Path("/Volumes/Thunderbay SSD/Exo Models/"
+                        "TheDrainFlorist--Qwen3.5-397B-A17B-VQ-2.4bpw")
+    for f in ("preprocessor_config.json", "video_preprocessor_config.json"):
+        if (_pub / f).exists():
+            shutil.copy2(_pub / f, out / f)
     # The optiq-layout vision source was deleted in the 08-19 cleanup; the
     # published artifacts carry vision only in GRAFTED form
     # (model-vision-graft.safetensors), which this copy step does not speak.
