@@ -4655,3 +4655,21 @@ Artifact: rotlab--397B-cheapshallow-k32-tail128 (shallow K32 / body d4 K128, tai
 **Standing implication for the "low-bit lever" hypothesis (E57 amendment):** the hypothesis predicted gains GROW as bits fall. The lowest rung we have fielded did not win outright. Either the lever peaks somewhere around the 2.3-class and falls off below it, or K32 shallow is simply past the point where the shallow layers still tolerate cheapness (shallow relerr 0.51 is the highest we have shipped). Do not resolve this until the 3.1-class lands — the ladder shape needs both ends.
 
 **Also**: chain emitted `WARNING: config lacks ['vision_config']` — must be copied from the source config before this artifact could ever be published for exo. Known step, not yet done.
+
+### E74 addendum (08-20): my structural argument was answering the wrong question — CORRECTED
+I argued from the measured per-bit costs (shallow 1.87 GiB/bit, body 8.81 GiB/bit, 4.7:1) that "cheap-shallow cannot fund a body upgrade." The peer pushed back and is RIGHT; verified from the shipped configs rather than taken on trust:
+
+- shipped VQ-2.4bpw = **flat K256** everywhere, 112.0 GiB.
+- cheap-shallow 2.3 = K64 shallow / **K256 body** = 107.9 GiB.
+- shipped VQ-3.1bpw = **flat K2048** everywhere, 144.0 GiB; peer's rung = K512 shallow / K2048 body.
+
+So no build in this arc REALLOCATES anything. Every one of them HOLDS the body at the shipped geometry and simply harvests bits back from the shallow region. The mechanism is **"shallow bits are wasted, take them back"**, not "move bits from shallow to body". My 4.7:1 ratio correctly prices a reallocation nobody has attempted; it says nothing about the experiment actually running. Recording the correction rather than quietly restating it.
+
+**The size model now has two out-of-sample confirmations** (pure-harvest form: new = base − 1.87 × shallow bits dropped): flat K128 predicted 100.93 vs 100.9 measured; cheap-shallow 2.3 predicted 108.3 vs 107.9 measured (+0.4). It predicts the peer's 3.1-class rung at 140.3 GiB — a live out-of-sample test landing today.
+
+**Reframing of the real finding (peer's, adopted): there is a FLOOR on shallow harvest.** K64 shallow off a K256 body (2 bits harvested) held quality and won. K32 shallow off a K128 body (2 bits harvested from an already-cheap base, 5-bit codes) cost +3.2% prose. So shallow is not "insensitive" — it tolerates harvesting down to a floor, and the floor appears to be geometry-relative rather than an absolute K. This supersedes the "low-bit lever" framing of the E57 amendment.
+
+**This makes the planned rung a direct floor test.** K64/K128 harvests exactly ONE bit off flat K128, giving a dose-response on harvest DEPTH at constant body: 0 bits = flat K128 = 3.1706; 1 bit = K64/K128 = TBD (predicted 99.0 GiB); 2 bits = K32/K128 = 3.2730. If the 1-bit point holds or beats flat, the floor sits between one and two bits of harvest at this geometry, and the recipe's rule becomes "harvest one bit, not two."
+
+### E75 (08-20): peer's 3.1-class pre-registration, logged BEFORE their number lands
+Peer registers: SIZE ~140 GiB (vs shipped 143.7); QUALITY roughly neutral, within ~0.5% of shipped 3.1's 2.3519 prose, explicitly NOT a gain. Their stated reading if neutral: "cheap-shallow is a size lever with a floor, and the floor is geometry-relative" — useful at every class, never a quality win. If it LOSES like the 2.2-class did, the floor is nearer than either of us thinks and the lever only ever worked at exactly one rung — a much weaker result, to be stated plainly. Also confirmed: the cpu-stream fix cleared the fit path (run 3 passed 45 min, where run 2 died at ~40 at the sampling eval; same code, same box, same src, only the stream changed).
