@@ -121,6 +121,7 @@ Last updated: 2026-08-20 (through E80).
 - E80 (tonight): does harvest cost keep falling at K2048? Bar = 2.3997.
 - Fair e4b embedding test: affine + fp32 path vs VQ + fp32 path. Cheap, decisive.
 - Qwen MoE speed candidates Q1-Q4 registered in E77, unmeasured.
-- Second qwen matched-bytes d2/d4 pair (e.g. d2-K256 vs d4-K4096, both
-  4.0 b/w) to settle law 10 beyond one thin pair. ~1h on the 35B.
+- Settle law 10: score d2-K64 vs d4-K4096 (both exactly 3.0 b/w of codes,
+  BOTH ARTIFACTS ALREADY EXIST in qwen36-35b-rungs) on one instrument.
+  Scoring only, no fit — minutes, not an hour.
 - Why is creation-binding insufficient for lazy loads? (MLX-side curiosity.)
