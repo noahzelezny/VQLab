@@ -4594,3 +4594,32 @@ size), gemma 26B DIRECTIONAL-ONLY (+0.94 pt, below bar). Two clean wins,
 one shrug — "translates broadly, magnitude varies by family" is the
 publishable sentence, and the pre-registration is what keeps +0.94 from
 being rounded up into a third win.
+
+## E72 (08-20, PRE-REGISTERED while both fits run) — the 397B cheap-shallow ladder: readings before numbers
+
+In flight: 2.2-class (M3: K32 shallow / d4k128 body) and 3.1-class (M4,
+peer session: K512 / d4k2048; I verify from M3 per E47 before believing).
+Bars, same-instrument (refs re-scored tonight): shipped 2.2 ppl 3.1706 @
+100.9G; shipped 3.1 ppl 2.3519 @ 143.7G.
+
+Registered BEFORE any result lands:
+1. (both sessions) 2.2-class WINS, and biggest — the low-bit bracket has
+   the most damage to redistribute.
+2. (both sessions) 3.1-class gain SHRINKS, possibly to noise. Mechanism is
+   E45/E50's: at large K the flat build already sits near what the
+   codebook can express. If the ladder comes back monotone
+   (big win -> small win -> noise), the conclusion is "cheap-shallow is a
+   LOW-BIT lever" — which also says where not to spend future compute.
+3. (peer, sizing) the fitter stores BOTH 3.1-class regions at 4.25 bpw
+   (uint16 for any K>256) — the unpacked artifact carries NO size
+   separation; only packing (9-bit vs 11-bit) realizes the geometry. Do
+   not read pre-pack sizes.
+4. (peer, speed) since 9 and 11 bits are both non-byte-aligned, EVERY
+   3.1-class tensor rides the packed kernel — prediction: 3.1-class
+   prefill lands below shipped 3.1 by MORE than the 8% the 2.3-class paid
+   on its 30 six-bit tensors.
+
+Peer independently re-verified both live gemma repos off the Hub (files,
+tokenizer function, vision both prefixes, config wiring) — clean. After
+four upload defects in two days, second-pair-of-eyes on anything public is
+now standing practice, not an insult.
