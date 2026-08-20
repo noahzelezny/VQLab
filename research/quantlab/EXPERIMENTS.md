@@ -4766,3 +4766,20 @@ flat ladder: K128 100.9/3.1706 -> K256 112.0/2.7655 -> K2048 144.0/2.3519. Local
 So harvesting from a rich base is ~10x cheaper per byte than from a poor one, and ~11x cheaper than stepping down the flat ladder. What was retracted in E79 is the claim that harvesting is ever FREE or a quality WIN; what stands is that it is a much cheaper way to shed bytes when the base is rich. The K128-base rungs (0.024-0.032) are only marginally better than flat and are, as Noah put it, mostly just more gradients.
 
 **The capability this actually buys, stated honestly:** combined with the size model (three out-of-sample hits, best 99.0 predicted / 99.05 measured), we can now name a target size and produce the best artifact at that size in one ~40 min fit, rather than being restricted to the sizes flat codebook steps happen to land on. That is a real product capability. It is NOT a better frontier at the flat rungs' own sizes.
+
+### E80 (08-20): pre-registration for the 3.1-class rung — does harvest get cheaper as the base gets richer?
+Noah's hypothesis: "at larger sizes the value should show more — the same shape for the 3-bit might beat our old 3.1." This is exactly what the peer's in-flight rung tests (K512 shallow off a K2048 body = harvest 11-bit -> 9-bit). Registered BEFORE their number lands.
+
+Measured harvest cost by base richness so far — note this is TWO bases, one of them a single measurement, so the trend is thin:
+| base | codes | harvest cost |
+|---|---|---|
+| K128 | 7-bit | 0.0315 ppl/GiB (1st bit), 0.0238 (2nd) |
+| K256 | 8-bit | **0.0033 ppl/GiB** |
+
+**Registered predictions for the K512/K2048 rung (shipped 3.1 = 144.0 GiB, 2.3519):**
+- SIZE 140.3 +/- 0.5 GiB (already registered, E74 addendum — the size model's fourth out-of-sample test).
+- QUALITY: if the K256 rate holds, ppl ~2.364; if richer really is cheaper, ~2.358; if it behaves like the K128 base, ~2.468.
+- **It will NOT beat the shipped 3.1's 2.3519.** E79 retracted "harvest is ever free or a win"; the honest expectation is a small loss, ~0.5%.
+- **The bar that matters is 2.3997** — flat-ladder interpolation at 140.3 GiB between the 112/2.7655 and 144/2.3519 rungs. Beating THAT is what makes cheap-shallow worth having, since there is no flat rung anywhere in that 32 GiB gap.
+
+**Falsification:** if it lands at or above 2.40 it is worthless at this class (no better than interpolation) and cheap-shallow is a K256-region trick only. If it lands below 2.36 the richness trend is real and predictive, and "name a size, get the best artifact at it" becomes a claim we can defend across the whole ladder. If it BEATS 2.3519 outright, E79's retraction was itself wrong and harvesting can be free at sufficient richness — the least likely outcome and the one requiring the most scrutiny.
