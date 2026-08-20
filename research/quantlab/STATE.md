@@ -66,8 +66,18 @@
   when no chain is running.
 - Report nothing as measured that was predicted. Pre-register before fits.
 
+## !! E79 CORRECTION (08-20 14:45) — READ BEFORE ANY SWAP !!
+The "cheap-shallow 2.3 beats shipped 2.4" result is FALSE. E71 used the
+bf16-scales PROXY score (2.8197) in the shipped-2.4 column. Real artifacts,
+today's instrument: shipped 2.4 = 2.7655/2.6383, cheap-shallow 2.3 =
+2.7790/2.6479. **The shipped 2.4 wins BOTH corpora.** Cheap-shallow is
+-4.1 GiB and ~8% slower prefill, i.e. a size play with a measured quality
+cost. THE SWAP MUST NOT PROCEED as designed. The ladder is monotone; there
+never was an anomaly. See E79.
+
 ## DECISIONS PENDING (Noah's)
-- Swap ALL THREE 397B rungs to cheap-shallow if ladder wins ("we can swap
+- ~~Swap ALL THREE 397B rungs to cheap-shallow~~ RETRACTED, see E79 above.
+- (historic) Swap ALL THREE 397B rungs to cheap-shallow if ladder wins ("we can swap
   all the models" — approved contingent on numbers; he has NOT posted
   publicly yet, deliberately). The proven middle rung: cheapshallow 2.30bpw
   107.9G, ppl 2.779/2.6479, decode wash, prefill -8%, peak -3.8G vs
