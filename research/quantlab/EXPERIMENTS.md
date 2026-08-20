@@ -4530,3 +4530,28 @@ perfectly and saves nothing passed every gate we had. Re-pack + re-verify
 + M4 re-A/B in flight; no decode number is a result until re-measured.
 Prefill was a wash (120 vs 125 t/s); load-time delta is SMB cache state,
 ignore.
+
+### E70 addendum 2 — the missing tokenizer (fourth unusable-but-passing artifact in two days) and the check_release gate
+
+The 397B session's A/B found the cheap-shallow artifact has NO tokenizer —
+and AutoTokenizer LOADS ANYWAY and encodes 16k chars to zero tokens, which
+downstream surfaces as unrelated-looking errors (mlx_lm: "Either
+input_embeddings or prompt must be provided"; referee: "[gather] indices
+must be integral" — an empty float array from the zero-token encode; that
+one burned an hour here as a phantom model bug). Root cause of the hole:
+the fit chain (vq_397b_codes/convert_variant) never propagates tokenizer
+files — the shipped lineup got theirs at upload staging, and the defective
+pack had them only because it was accidentally packed from the SSD root.
+
+Note for the record: the SHIPPED lineup's tokenizer.json differs by hash
+from the bf16 source's — the release lineage evidently fixed something at
+staging. The shipped pair is the version every published number was
+measured with, so it is the version copied into the cheap-shallow (both
+dirs), not the bf16 one.
+
+New gate: check_release.py — required files + index-shard completeness +
+tokenizer FUNCTION (round-trip a probe, len>0, decode contains input),
+because presence is not function. Per the E70 house rule its acceptance
+test ran against a known-bad input FIRST (fails 3 ways, exit 1) before its
+pass was believed. Fixed pack passes, and reproduces referee ppl 2.779 to
+the exact total_nll — pack + tokenizer install verified end-to-end.
