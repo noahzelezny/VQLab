@@ -4749,3 +4749,20 @@ Measured today, both REAL artifacts, same instrument, same session:
 4. What survives: cheap-shallow is a **byte-efficient way to get smaller** (~0.03 ppl/GiB vs ~0.056 stepping down the flat ladder), and the size model (three out-of-sample hits) is unaffected.
 
 **Process lesson, and it is the expensive one: a proxy number was allowed into a comparison table as if it were the incumbent, and every downstream result inherited it.** Gates we built this week check artifacts (tensors, tokenizer, vision, completeness). None of them check that a COMPARISON ROW came from the artifact it names. Proposed rule: every comparison table states, per cell, which artifact produced it and when — and any number older than the artifact it is compared against gets re-measured, not cited.
+
+### E79 addendum (08-20): what actually survives — cheap-shallow beats INTERPOLATION, not the rung above it
+Noah's read: "we bought nothing except more gradients of size at similar size/quality ratios." Mostly fair, but not for the 2.3 point. Checked against the true flat ladder (real artifacts, today's instrument):
+
+flat ladder: K128 100.9/3.1706 -> K256 112.0/2.7655 -> K2048 144.0/2.3519. Local slopes 0.0365 then 0.0129 ppl/GiB.
+
+**cheap-shallow 2.3 sits 0.1361 ppl ABOVE the flat line through its own size.** At 107.9 GiB, linear interpolation between the two flat rungs predicts 2.9151; the artifact measures 2.7790. It loses to the 112 GiB rung above it (2.7655) but beats anything else obtainable at 107.9 GiB — and there IS no flat rung at 107.9.
+
+**Harvest cost depends sharply on base richness — the E74/E78 intuition survives in corrected form:**
+- from the K256 base (2.4 -> cs2.3): **0.0033 ppl/GiB**
+- from the K128 base (2.2 -> K64): 0.0315 ppl/GiB
+- from the K128 base (K64 -> K32): 0.0238 ppl/GiB
+- reference, flat ladder in that region: 0.0365 ppl/GiB
+
+So harvesting from a rich base is ~10x cheaper per byte than from a poor one, and ~11x cheaper than stepping down the flat ladder. What was retracted in E79 is the claim that harvesting is ever FREE or a quality WIN; what stands is that it is a much cheaper way to shed bytes when the base is rich. The K128-base rungs (0.024-0.032) are only marginally better than flat and are, as Noah put it, mostly just more gradients.
+
+**The capability this actually buys, stated honestly:** combined with the size model (three out-of-sample hits, best 99.0 predicted / 99.05 measured), we can now name a target size and produce the best artifact at that size in one ~40 min fit, rather than being restricted to the sizes flat codebook steps happen to land on. That is a real product capability. It is NOT a better frontier at the flat rungs' own sizes.
