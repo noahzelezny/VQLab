@@ -4417,3 +4417,31 @@ matches the incumbent on first contact, 8.12 GiB unpacked with ~6.4 GiB
 in reach vs the incumbent's 8.38. Owed before any claim: pack + packed-KL
 identity, litbench cyclic + paired McNemar vs 8-bit, KL-vs-bf16, and the
 PLE ladder read (d2-K1024 0.0422 / d2-K256 0.0861 — the knee is real).
+
+## E68 RESULT (08-19 night) — the VQ e4b does NOT match the 8-bit incumbent; smaller, but measurably more damaged
+
+| | VQ e4b 6.34G | 8-bit 8.38G |
+|---|---|---|
+| KL to bf16 (same cache) | 20.830 mnats | **8.149 mnats** |
+| top-1 agreement | 93.20% | **95.70%** |
+| litbench cyclic | 78.85% | **84.62%** |
+
+Paired McNemar on litbench: 8 discordant, 7-1 for the 8-bit, p=0.0703 —
+short of 0.05 but directionally consistent with the unambiguous KL gap.
+Packed artifact reproduces 20.830 to the third decimal (pack verified at
+the logit level). The one-prompt byte-identical generation (E67) was real
+and is a lesson in exactly why one greedy prompt is not an instrument.
+
+**Honest framing:** data-free weight-space VQ at ~5.75bpw lands within 5.7
+litbench points and 12.7 KL mnats of a calibrated 8-bit at 76% of its
+size. That is a strong METHOD result and a negative PRODUCT result: the
+small-gemma slot is NOT taken by this build. "Smaller and closer to bf16
+than the incumbent" is dead at this geometry.
+
+**Open, cheap, and decisive next measurement (queued): the damage
+ablation.** Two artifacts, one with only the mlp VQ'd (PLE stays 8-bit)
+and one with only the PLE VQ'd. Two KL scores against the existing cache
+say where the 20.8 mnats lives. If it is mostly PLE, richer PLE geometry
+(or leaving PLE at 8-bit for a ~7.3G build at possibly ~10-12 mnats) may
+still produce a credible artifact; if it is mostly mlp, the mlp needs
+d2-K8192-class spend and the size story erodes. Measure before deciding.
