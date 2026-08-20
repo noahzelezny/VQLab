@@ -4481,3 +4481,37 @@ build (~2.7x; still under the 8-bit's 84 — the full-VQ build stays a
 method exhibit, not a product). Microbench trap recorded: independent
 kernel chains overlap on-GPU and rank kernels BACKWARDS; only dependent
 chains measure decode truth.
+
+## E70 (08-20) — three instrument findings from the overnight 397B chain
+
+**1. Metal "GPU timeouts" that were never about the GPU.** Six consecutive
+kIOGPUCommandBufferCallbackErrorTimeout kills of verify_artifact on the
+397B, at DIFFERENT layers each run — including one at a ~100 MB chunk that
+cannot time out on compute. Root cause: the LAZY shard read of the 751G
+bf16 source stalls on disk INSIDE a GPU command buffer, and the watchdog
+kills the wait. Fix in two parts, and the second is the one that will bite
+the next person: materialize the source on the CPU stream (no watchdog),
+and **the stream binds at OP-CREATION time, not eval time** — wrapping
+only mx.eval(T) in the cpu-stream context left the load/slice ops on the
+GPU stream and run 6 died identically. The load AND slice must be created
+under `with mx.stream(mx.cpu)`. Applies to anything that touches the 751G
+src (or any source larger than RAM) from GPU-adjacent code.
+
+**2. A gate's first run must be against something you KNOW is broken.**
+check_vision passed VACUOUSLY on the 397B overnight ("source has no vision
+tensors — text-only family, PASS" printed for a 751G source carrying 333
+model.visual tensors) because its prefix list predated the family. Second
+gate in two days needing its own verification (the outlier gate's
+mixed-geometry blindness was the first). Rule: when a gate is added or
+extended, its acceptance test is a KNOWN-BAD input it must fail — a gate
+validated only on passing cases stamps approval.
+
+**3. The chunking lever runs BACKWARDS from intuition (397B session's
+measurement, recorded here because Noah's swap decision touches it):**
+larger prefill chunks are SLOWER — chunk 128->32 is 1.37x FASTER, knee
+identical across K128/K256/K2048, shipped default 32 chosen as the
+smallest chunk reproducing published ppl exactly (float summation order).
+So freed RAM cannot buy "faster gen via bigger chunks"; what it buys is
+CONTEXT (prefill transients measure 3.35 MB/token vs KV-cache theory's
+0.059 — a 57x gap that is entirely chunk buffers). 4 GiB of headroom =
+meaningfully longer usable context on a RAM-tight box.
