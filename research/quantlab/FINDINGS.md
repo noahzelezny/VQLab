@@ -127,4 +127,10 @@ Last updated: 2026-08-20 (through E80).
   (does not reproduce at kernel level — laws 8/9 may need edits).
 - Bundled-runtime gate: check_release should verify the artifact's model.py
   matches the runtime that produced its benchmark numbers (E81 finding 5).
+- **d8/K65536 vs d4/K256 at matched 2.00 bpw** (E83): post-packing these are
+  the same size with a 65,536 vs 256 codebook — the most favourable K-vs-K
+  matchup available, and law 10 says K is what pays. Blockers: no kernel
+  (1 MB codebook vs 32 KB threadgroup) and an unmeasured fit cost (the
+  "169h" predates the k-means fixes). Decisive test is a 35B fit pair scored
+  on kl_cache_qwen36 — quality first, kernel work only if it wins.
 - Why is creation-binding insufficient for lazy loads? (MLX-side curiosity.)

@@ -4801,3 +4801,16 @@ Noah ruled gemma evidence inadmissible (non-deterministic instrument herring), l
 | d2-K64 | 223.5 mnats | 79.7% |
 
 **3.3x lower KL and +8.1 points at identical size.** The historic table's +1.26 badly understated the gap (different instrument — its 8-bit ceiling was 79.95%, BELOW tonight's d2-K64, so the two score sets cannot be mixed; another instrument-mismatch specimen for the paper). Law 10 upgraded to settled-on-qwen: **at matched bytes, spend geometry budget on K, not on d.** "Raise K first" is now a measured law, not a default.
+
+### E83 (08-20): the d8/K65536 candidate ("G") — its 08-15 rejection rests on TWO stale premises
+Noah asked whether extrapolating the d/K table outward (d8, K65536) buys quality at days-of-compute cost. The record already priced this as candidate G and rejected it. Re-examined: **two of the three rejection grounds have since expired.**
+
+**Stale premise 1 — the size argument.** The 08-15 table concluded "G is the SAME SIZE as C (d4-K256), not smaller; its case is quality only (~2% relerr)". That was correct in the whole-byte storage era. Post-packing the comparison is different: d8-K65536 = 16/8 = **2.00 bpw, identical to d4-K256's 2.00** — but with a **65,536-entry codebook against 256**. By law 10 (spend budget on K, measured 3.3x KL at matched bytes, E82) that is the single most favourable K-vs-K matchup we have ever been able to state. d8-K16384 lands at 1.75 bpw — genuinely SMALLER than d4-K256, which the old table could not see (it read both as 2.25).
+
+**Stale premise 2 — the fit cost.** "~169h assign cost, rejected" predates commits 8a4d486 (one-hot chunk scaled with K) and a9f5c5c (scatter-add centroid update), which took K8192 "from impractical to 10s" per tensor. The 169h figure was measured against the code those commits replaced and cannot be trusted; it needs re-measuring, not citing.
+
+**LIVE premise 3 — the kernel does not exist, and this is the real blocker.** A K65536/d8 codebook is 1.0 MB fp16 (K16384 = 256 KB); Apple's threadgroup memory is 32 KB. Both would have to stream centroids from device memory, relying on L2 residency. Our fast paths (`_fused`, `_SRC_DECODE_PACKED`) all load the codebook into threadgroup. So G needs a new kernel whose performance is unknown and plausibly poor — and E82's quality win would have to survive that.
+
+**Also unresolved:** the ~2% relerr edge for d8 is a FIT-ERROR number, and law 6 says fit error does not rank output damage (E55/E69 both burned us on exactly this). G's quality case has never been measured as KL or ppl.
+
+**Cheap decisive test, if we want it:** fit d8-K65536 and d4-K256 on the 35B (not 397B) and score both on kl_cache_qwen36 — same instrument as E82, both at 2.00 bpw. That answers the quality question for the cost of a 35B fit, and does NOT need the fast kernel (scoring can use the reference path). Only if it wins big does the kernel work become worth pricing. Logged as an open question, not scheduled.
