@@ -21,6 +21,8 @@ before it may replace this path.
 Both mirror the fitter's contract exactly: scales are fp16 max-abs per
 group of G along `in`, codes index a [K, D] fp16 codebook.
 """
+import os
+
 import mlx.core as mx
 import mlx.nn as nn
 
@@ -111,10 +113,22 @@ class VQLinear(nn.Module):
         xf = x.reshape(-1, IN)
         N = xf.shape[0]
         if N <= 32:
-            from mlx_lm.models.vq_switch import _fused
-            eidx = mx.zeros((N,), dtype=mx.uint32)
-            y = _fused(xf, eidx, self.codes[None], self.codebook,
-                       self.vq_scales[None], pack_bits=self.pack_bits)
+            # DENSE fused kernel (2026-08-19): one simdgroup per output row
+            # instead of one thread, no expert axis. Bit-identical to the
+            # expert-kernel path below (the kernel replicates its float
+            # ordering exactly — verified, and the E62 KL number reproduces).
+            # SCOUT_VQ_DENSE_REF=1 keeps the old expert-shaped path callable
+            # as the reference for A/B checks.
+            if os.environ.get("SCOUT_VQ_DENSE_REF"):
+                from mlx_lm.models.vq_switch import _fused
+                eidx = mx.zeros((N,), dtype=mx.uint32)
+                y = _fused(xf, eidx, self.codes[None], self.codebook,
+                           self.vq_scales[None], pack_bits=self.pack_bits)
+            else:
+                from mlx_lm.models.vq_switch import _dense_fused
+                y = _dense_fused(xf, self.codes, self.codebook,
+                                 self.vq_scales, pack_bits=self.pack_bits,
+                                 in_features=self._in_features)
             return y.astype(x.dtype).reshape(*orig_shape[:-1], OUT)
         codes = self.codes
         if self.pack_bits:

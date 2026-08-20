@@ -461,6 +461,145 @@ _SRC_FUSED_PACKED_D2 = _PACK_FETCH + r"""
     y[(size_t)t * OUT + r] = static_cast<T>(acc);
 """
 
+# --- DENSE d=2 kernels (e4b VQLinear decode path, 2026-08-19) --------------
+# The expert kernels above give a dense layer at E=1 correctness but not
+# speed: ONE thread walks a whole code row (NSUB = IN/2 = up to 5120 codes)
+# sequentially, so decode is LATENCY-bound, not bandwidth-bound (measured
+# 43 tok/s on e4b-VQ-d2K2048-packed vs 84 for 8-bit, whose qmv splits a row
+# across a simdgroup). These dense variants do the same: a 32-lane simdgroup
+# owns each output row, lane l handles scale-groups l, l+32, ..., and the
+# per-group partials are stitched back together with a simd_shuffle broadcast
+# loop so the group-order fma chain is executed in EXACTLY the sequential
+# order of the expert kernel. That makes the output BIT-IDENTICAL to the
+# _SRC_FUSED_D2 / _SRC_FUSED_PACKED_D2 path — required, because the shipped
+# KL numbers (E62) were scored through those kernels, and a reduction in a
+# different float order would move the printed number. The per-group inner
+# expression (QPG iterations of four dots summed a+b+c+d) is copied verbatim
+# for the same reason: `gacc += a+b+c+d` and four `gacc += d_i` round
+# differently.
+#
+# No expert axis, no eidx gather: codes/scales are [OUT, ...], crow/srow are
+# plain row offsets. Threadgroup caching is unchanged (half2 codebook + x:
+# K2048 -> 8 KB, IN=10240 -> NSUB 5120 -> 20 KB; 28 KB < 32 KB ceiling).
+_SRC_DENSE_D2 = r"""
+    const int OUT  = dims[0];
+    const int IN   = dims[1];
+    const int G    = dims[3];
+    const int K    = dims[5];
+    const int NSUB = IN / 2;
+    const int NGRP = IN / G;
+    const int QPG  = G / 8;
+    const int SPG  = G / 2;
+    uint r = thread_position_in_grid.y;
+    uint t = thread_position_in_grid.z;
+    uint lane = thread_position_in_threadgroup.x;
+    uint lid = thread_position_in_threadgroup.y * 32 + lane;
+    uint tgsize = threads_per_threadgroup.x * threads_per_threadgroup.y;
+
+    threadgroup half2 cb[MAX_K];
+    threadgroup half2 xs[MAX_NSUB];
+    const device half2* cbg = (const device half2*)codebook;
+    for (uint i = lid; i < (uint)K; i += tgsize)
+        cb[i] = cbg[i];
+    const device T* xrow = x + (size_t)t * IN;
+    for (uint i = lid; i < (uint)NSUB; i += tgsize)
+        xs[i] = half2((half)xrow[i*2], (half)xrow[i*2+1]);
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+    if (r >= (uint)OUT) return;
+    const device CT* crow = codes + (size_t)r * NSUB;
+    const device half* srow = scales + (size_t)r * NGRP;
+    float acc = 0.0f;
+    const int NBLK = (NGRP + 31) / 32;
+    for (int b = 0; b < NBLK; ++b) {
+        const int g = b * 32 + (int)lane;
+        float gacc = 0.0f;
+        if (g < NGRP) {
+            int j = g * SPG;
+            for (int q = 0; q < QPG; ++q) {
+                gacc += dot(float2(cb[(uint)crow[j]]),   float2(xs[j]))
+                      + dot(float2(cb[(uint)crow[j+1]]), float2(xs[j+1]))
+                      + dot(float2(cb[(uint)crow[j+2]]), float2(xs[j+2]))
+                      + dot(float2(cb[(uint)crow[j+3]]), float2(xs[j+3]));
+                j += 4;
+            }
+        }
+        const int gmax = min(32, NGRP - b * 32);
+        for (int i = 0; i < gmax; ++i)
+            acc = fma((float)srow[b * 32 + i],
+                      simd_shuffle(gacc, (ushort)i), acc);
+    }
+    if (lane == 0) y[(size_t)t * OUT + r] = static_cast<T>(acc);
+"""
+
+# Packed twin. G=64 ONLY, and that is load-bearing: at d=2, a scale-group of
+# 64 weights is 32 codes, and vq_pack blocks are 32 codes = BITS uint32
+# words — so each lane's group is EXACTLY one word-aligned block. The lane
+# copies its block's BITS words into registers ONCE and extracts all 32
+# codes from registers; going through the generic VQ_CODE device-memory
+# macro instead re-reads words per code and measured 169 us/matmul on a
+# dependent e4b-shaped chain vs 82 for this version (M3 Ultra, 2026-08-19).
+# Bit extraction order and arithmetic are unchanged — output stays
+# bit-identical to _SRC_FUSED_PACKED_D2 (verified).
+# The LC(i) offsets are compile-time (i and BITS are constants after
+# unrolling), so wbuf indexing does not spill. Code 31 ends at bit 32*BITS-1
+# exactly, so no extraction ever reads past wbuf[BITS-1].
+_SRC_DENSE_PACKED_D2 = r"""
+    const int OUT  = dims[0];
+    const int IN   = dims[1];
+    const int G    = dims[3];
+    const int K    = dims[5];
+    const int NSUB = IN / 2;
+    const int NGRP = IN / G;
+    const int WPR  = NSUB / 32 * BITS;
+    uint r = thread_position_in_grid.y;
+    uint t = thread_position_in_grid.z;
+    uint lane = thread_position_in_threadgroup.x;
+    uint lid = thread_position_in_threadgroup.y * 32 + lane;
+    uint tgsize = threads_per_threadgroup.x * threads_per_threadgroup.y;
+
+    threadgroup half2 cb[MAX_K];
+    threadgroup half2 xs[MAX_NSUB];
+    const device half2* cbg = (const device half2*)codebook;
+    for (uint i = lid; i < (uint)K; i += tgsize)
+        cb[i] = cbg[i];
+    const device T* xrow = x + (size_t)t * IN;
+    for (uint i = lid; i < (uint)NSUB; i += tgsize)
+        xs[i] = half2((half)xrow[i*2], (half)xrow[i*2+1]);
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+    if (r >= (uint)OUT) return;
+    const device uint* crow = codes + (size_t)r * WPR;
+    const device half* srow = scales + (size_t)r * NGRP;
+    float acc = 0.0f;
+    const int NBLK = (NGRP + 31) / 32;
+    for (int b = 0; b < NBLK; ++b) {
+        const int g = b * 32 + (int)lane;
+        float gacc = 0.0f;
+        if (g < NGRP) {
+            uint wbuf[BITS];
+            const device uint* blk = crow + (size_t)g * BITS;
+            for (int wi = 0; wi < BITS; ++wi) wbuf[wi] = blk[wi];
+            int j = g * 32;
+            for (int q = 0; q < 8; ++q) {
+                const int i0 = q * 4;
+                #define LC(i) (((wbuf[((i)*BITS)>>5] >> (((i)*BITS)&31)) \
+                    | (((((i)*BITS)&31) + BITS > 32) \
+                       ? (wbuf[(((i)*BITS)>>5)+1] << (32-(((i)*BITS)&31))) \
+                       : 0u)) & ((1u<<BITS)-1u))
+                gacc += dot(float2(cb[LC(i0)]),   float2(xs[j]))
+                      + dot(float2(cb[LC(i0+1)]), float2(xs[j+1]))
+                      + dot(float2(cb[LC(i0+2)]), float2(xs[j+2]))
+                      + dot(float2(cb[LC(i0+3)]), float2(xs[j+3]));
+                j += 4;
+            }
+        }
+        const int gmax = min(32, NGRP - b * 32);
+        for (int i = 0; i < gmax; ++i)
+            acc = fma((float)srow[b * 32 + i],
+                      simd_shuffle(gacc, (ushort)i), acc);
+    }
+    if (lane == 0) y[(size_t)t * OUT + r] = static_cast<T>(acc);
+"""
+
 _SRC_DECODE_PACKED = _PACK_FETCH + r"""
     uint g = thread_position_in_grid.x;
     uint r = thread_position_in_grid.y;
@@ -517,7 +656,9 @@ _KERNELS = {}
 
 def _get_kernel(name, src):
     if name not in _KERNELS:
-        if name.startswith("vq_fused"):
+        if name.startswith("vq_dense"):
+            inp, out = ["x", "codes", "codebook", "scales", "dims"], ["y"]
+        elif name.startswith("vq_fused"):
             inp, out = ["x", "eidx", "codes", "codebook", "scales", "dims"], ["y"]
         else:
             inp, out = ["codes", "codebook", "scales", "eidx", "dims"], ["w"]
@@ -593,6 +734,74 @@ def _fused(x, eidx, codes, codebook, scales, pack_bits=0):
         template=template,
         grid=(((OUT + tgx - 1) // tgx) * tgx, N, 1),
         threadgroup=(tgx, 1, 1),
+        output_shapes=[(N, OUT)],
+        output_dtypes=[x.dtype],
+    )
+    return y
+
+
+# rows each threadgroup owns in the dense kernels (one 32-lane simdgroup per
+# row). Swept 2/4/8/16/32 on the dependent e4b-shaped chain (M3 Ultra,
+# 2026-08-19): 211.9 / 118.8 / 79.6 / 73.0 / 68.1 us per matmul — bigger
+# threadgroups amortise the codebook+x threadgroup loads over more rows.
+_DENSE_ROWS_TG = 32
+
+
+def _dense_fused(x, codes, codebook, scales, pack_bits=0, in_features=None):
+    """Dense d=2 fused VQ matmul: y[N, OUT] = x [N, IN] @ decode(codes).T.
+
+    codes [OUT, NSUB] (uint8/uint16) or [OUT, WPR] (uint32, pack_bits-wide
+    fields); scales [OUT, IN/G]. Output is BIT-IDENTICAL to _fused with E=1
+    and eidx=0 (see the kernel-source comment) — verified before first ship.
+    Dispatch is explicit with hard raises, never a silent fallthrough.
+    """
+    N, IN = x.shape
+    OUT = codes.shape[0]
+    K, D = codebook.shape
+    if D != 2:
+        raise NotImplementedError(
+            f"no DENSE fused kernel for d={D}; only d=2 is implemented and "
+            f"dispatched explicitly (a kernel for one D reads wrong memory "
+            f"at another D — see the expert-kernel dispatch above).")
+    NSUB = IN // D
+    NGRP = scales.shape[1]
+    G = IN // NGRP
+    if G % 8 != 0:
+        raise NotImplementedError(f"dense d2 kernel needs G % 8 == 0, got {G}")
+    if pack_bits:
+        if G != 64:
+            # the packed kernel's register block-fetch assumes one scale
+            # group == one 32-code pack block (see its source comment).
+            raise NotImplementedError(
+                f"packed dense d2 kernel requires group_size=64, got {G}")
+        exp_in = in_features
+        if exp_in is not None and exp_in != IN:
+            raise ValueError(f"packed dense: x is IN={IN} but module says "
+                             f"in_features={exp_in}")
+        if codes.shape[1] != NSUB // 32 * pack_bits:
+            raise ValueError(
+                f"packed dense: codes are {codes.shape[1]} words/row, "
+                f"expected {NSUB // 32 * pack_bits} for IN={IN}, "
+                f"bits={pack_bits}")
+        name = f"vq_dense_packed{pack_bits}_d2"
+        src = _SRC_DENSE_PACKED_D2
+        template = [("T", x.dtype), ("MAX_K", K), ("MAX_NSUB", NSUB),
+                    ("BITS", pack_bits)]
+    else:
+        if codes.shape[1] != NSUB:
+            raise ValueError(f"dense: codes are {codes.shape[1]} cols, "
+                             f"expected NSUB={NSUB} for IN={IN}, d={D}")
+        name = "vq_dense_d2"
+        src = _SRC_DENSE_D2
+        template = [("T", x.dtype), ("CT", codes.dtype),
+                    ("MAX_K", K), ("MAX_NSUB", NSUB)]
+    dims = mx.array([OUT, IN, D, G, N, K], dtype=mx.int32)
+    rows = _DENSE_ROWS_TG
+    (y,) = _get_kernel(name, src)(
+        inputs=[x, codes, codebook, scales, dims],
+        template=template,
+        grid=(32, ((OUT + rows - 1) // rows) * rows, N),
+        threadgroup=(32, rows, 1),
         output_shapes=[(N, OUT)],
         output_dtypes=[x.dtype],
     )

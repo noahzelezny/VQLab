@@ -4445,3 +4445,39 @@ say where the 20.8 mnats lives. If it is mostly PLE, richer PLE geometry
 (or leaving PLE at 8-bit for a ~7.3G build at possibly ~10-12 mnats) may
 still produce a credible artifact; if it is mostly mlp, the mlp needs
 d2-K8192-class spend and the size story erodes. Measure before deciding.
+
+## E69 (08-19 night) — THE ABLATION FLIPS IT: VQ-PLE alone BEATS the 8-bit incumbent
+
+Damage split of E68's 20.8 mnats, measured (same cache, same corpus):
+
+| build | KL mnats | agree | note |
+|---|---|---|---|
+| mlp-only VQ | 21.625 | 93.30% | ~all the damage is the mlp |
+| **PLE-only VQ** | **7.451** | **95.70%** | BETTER than the 8-bit incumbent |
+| full VQ | 20.830 | 93.20% | |
+| 8-bit incumbent | 8.149 | 95.70% | the bar |
+
+Two findings:
+1. **The mlp trio does not tolerate 5.75bpw VQ on this model** despite its
+   excellent 0.0297 relerr — E55 again, in a new costume: weight-space fit
+   error said "healthy," output-space KL says the mlp is where e4b's
+   capability lives. (Also note mlp-only 21.6 > full 20.8: interactions are
+   not additive; do not linearly decompose KL.)
+2. **VQ-PLE at d2-K2048 is a strictly better representation of the PLE
+   table than 8-bit affine**: swapping ONLY it drops KL below the
+   incumbent (7.45 < 8.15) at 0.9 GiB less packed size. Embeddings are the
+   one place our data-free VQ beats calibrated affine outright.
+
+**The candidate artifact this produces: e4b-VQ-pleonly-packed, 7.39 GiB**
+(vs incumbent 8.38) — 12% smaller, measurably closer to bf16, and it keeps
+the 8-bit mlp matmuls so decode speed should match the incumbent (~84).
+Gates running: packed-KL identity (must reproduce 7.451), decode speed,
+litbench cyclic, paired McNemar. Ships only if all four hold.
+
+Kernel chip result (same evening, recorded for the method): dense d2
+fused kernels (unpacked + packed), BIT-IDENTICAL to the E62-scored path,
+KL 20.830 reproduced exactly, decode 24.3 -> 66.8 tok/s on the full-VQ
+build (~2.7x; still under the 8-bit's 84 — the full-VQ build stays a
+method exhibit, not a product). Microbench trap recorded: independent
+kernel chains overlap on-GPU and rank kernels BACKWARDS; only dependent
+chains measure decode truth.
