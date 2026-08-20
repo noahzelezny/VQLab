@@ -466,6 +466,14 @@ for si, sh in enumerate(shards):
     # created here, not merely evaluated here.
     with mx.stream(mx.cpu):
         data = mx.load(str(BASE / sh))
+        # This eval is LOAD-BEARING, not belt-and-braces. Empirical, two runs
+        # on the same box differing only in this line (08-20): with it, 65 min
+        # clean; without it (cpu-stream creation only), watchdog kill at the
+        # save, original traceback. So creation-under-cpu is necessary but not
+        # sufficient -- the deferred read still lands on a GPU command buffer
+        # when save forces it. It also costs ~2x per tensor by materialising
+        # the full base shard eagerly. Both facts are measured. Do not
+        # "optimise" this line out.
         mx.eval(list(data.values()))
     new = {}
     done = set()
