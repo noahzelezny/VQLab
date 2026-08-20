@@ -47,6 +47,10 @@ for sh in sorted(set(idx.values())):
         if nsub % 32:
             print(f"  SKIP {m}: NSUB={nsub} not %32");  skipped += 1
             continue
+        if bits % 8 == 0:
+            # byte-aligned: packing saves zero bytes and costs bit-field
+            # extraction at decode (E70-era finding on the 397B). Copy through.
+            continue
         codes = np.array(data[k]).astype(np.uint16)
         data[k] = mx.array(vq_pack.pack(codes[None], bits)[0])
         meta["pack_bits"] = bits

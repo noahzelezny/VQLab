@@ -79,6 +79,17 @@ for si, sh in enumerate(shards, 1):
             out_data[key] = val
             skipped.append((mod, nsub))
             continue
+        # BYTE-ALIGNED skip (08-20, found by the 397B session's A/B): when
+        # bits %% 8 == 0, packing saves ZERO bytes (32 codes x 8 bits = 32
+        # bytes either way) but routes the tensor through the packed
+        # kernel's bit-field extraction — measured 37%% decode tax on the
+        # cheap-shallow 397B, whose 141 K256 tensors were "packed" at 8
+        # bits for nothing. Same pass-through mechanism as the NSUB skip:
+        # absent pack_bits IS the unpacked signal, so mixed artifacts stay
+        # safe by construction.
+        if bits % 8 == 0:
+            out_data[key] = val
+            continue
         packed = vq_pack.pack(codes.astype(np.uint16), bits)
         # verify THIS tensor round-trips before we let it out of the process:
         # a silent packing error decodes to plausible garbage, not an error.
