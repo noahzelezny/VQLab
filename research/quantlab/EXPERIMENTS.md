@@ -4578,3 +4578,19 @@ chunk) but SCOUT_VQ_DECODE_CHUNK=16 is now documented on the cards;
 is 20%. Block-level microbenches understate end-to-end wins: instrument
 scope, again. Caveat honored: chunk 16 measured on cheap-shallow only;
 assume the 8% prefill gap persists at matched chunk.
+
+### E60 RESULT (08-20, scored a day after fit) — gemma cheap-shallow lands JUST UNDER its pre-registered bar
+
+vq-headdown-k128-tail512-d4 (2.33 bpw nominal): KL 3204.5, agreement
+**44.34%**. The pre-registered fair bar was the INTERPOLATED flat line at
+2.33 bpw (~43.4%), to be beaten "by more than ~1 point" for a real
+allocation effect. Measured: +0.94 — under the bar by six hundredths.
+
+Reading, exactly as registered: NOT a demonstrated allocation effect on
+gemma — direction positive, magnitude within instrument noise. The
+honest tally for cheap-shallow across scales is now: qwen 35B YES
+(decisive, 0.028x both directions), 397B YES (both corpora, smaller
+size), gemma 26B DIRECTIONAL-ONLY (+0.94 pt, below bar). Two clean wins,
+one shrug — "translates broadly, magnitude varies by family" is the
+publishable sentence, and the pre-registration is what keeps +0.94 from
+being rounded up into a third win.
