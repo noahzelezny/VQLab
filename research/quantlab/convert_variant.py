@@ -31,8 +31,11 @@ mx.set_default_device(mx.cpu)
 SPICY = "/Users/noahzelezny/.exo/models/spicyneuron--Qwen3.5-397B-A17B-MLX-2.6bit"
 SRC = "/Volumes/Thunderbay SSD/Exo Models/Qwen--Qwen3.5-397B-A17B-bf16"
 OUT_ROOT = "/Volumes/Thunderbay SSD/Exo Models"
-VISION_SRC = ("/Users/noahzelezny/.exo/models/"
-              "TheDrainFlorist--Qwen3.5-397B-A17B-spicymirror")
+# spicymirror was deleted in the post-release cleanup (08-19); the published
+# VQ-2.4bpw carries the same bf16 vision sidecar, towers verified at debut
+# (E61). Same tensors either way — every build shares one bf16 tower.
+VISION_SRC = ("/Volumes/Thunderbay SSD/Exo Models/"
+              "TheDrainFlorist--Qwen3.5-397B-A17B-VQ-2.4bpw")
 
 ap = argparse.ArgumentParser()
 ap.add_argument("--name", required=True, help="suffix: …-A17B-<name>")

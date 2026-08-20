@@ -17,18 +17,20 @@ echo "=== gemma gates done at $(date -Iseconds); final lines: ==="
 tail -6 logs_pleonly_gates.log
 
 echo "=== 1. rebuild base: $REBUILD_NAME ==="
-$V convert_variant.py --name "$REBUILD_NAME" $REBUILD_FLAGS 2>&1 | tee -a logs_live_397b.log | tail -4 || exit 1
+$V convert_variant.py --name "$REBUILD_NAME" $REBUILD_FLAGS 2>&1 | tee -a logs_live_397b.log | tail -4 || { echo "REBUILD FAILED — skipping fit, still starting scout"; SKIP_FIT=1; }
 
 BASE="$E/TheDrainFlorist--Qwen3.5-397B-A17B-$REBUILD_NAME"
+if [ -z "$SKIP_FIT" ]; then
 echo "=== 2. cheap-shallow fit ==="
 $V $FIT_TOOL --family qwen3_5 --base "$BASE" --src "$E/Qwen--Qwen3.5-397B-A17B-bf16/" \
-   --out "$E/vq397-cheapshallow-k64-tail256" $FIT_FLAGS 2>&1 | tee -a logs_live_397b.log | tail -3 || exit 1
+   --out "$E/vq397-cheapshallow-k64-tail256" $FIT_FLAGS 2>&1 | tee -a logs_live_397b.log | tail -3 || { echo "FIT FAILED"; }
 
 echo "=== 3. verify (read per-region: mixed geometry, E57 amendment) ==="
 $V verify_artifact.py --artifact "$E/vq397-cheapshallow-k64-tail256" \
    --src "$E/Qwen--Qwen3.5-397B-A17B-bf16" --family qwen3_5 --outlier 3.0 2>&1 | tee -a logs_live_397b.log | tail -6
+fi
 
-echo "=== 4. scout dispatcher watchdog ==="
+echo "=== 4. scout dispatcher watchdog (always runs) ==="
 cd /Users/noahzelezny/Documents/AgenicAI
 STOP=0; FAILS=0
 nohup caffeinate -i bash -c 'while true; do echo "[watchdog] start $(date -Iseconds)"; ( exec -a nightly-dispatcher .venv/bin/python -m scout.services.nightly_dispatcher --node m3 --job-timeout 21600 ); ec=$?; echo "[watchdog] exited $ec, restart in 5s"; sleep 5; done' > /tmp/scout_dispatcher_0820.log 2>&1 &
