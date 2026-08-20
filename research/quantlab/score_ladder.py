@@ -44,10 +44,14 @@ def exact_ok(pred, gold):
     toks = re.findall(r"[a-z0-9]+", p)
     if g in toks and len(p) <= len(g) + 25:
         return True
-    # numeric golds: accept the number appearing alone
+    # Numeric golds: the LAST number on the ANSWER line is the commit.
+    # The first version required the number to appear ALONE, which fails a
+    # model that shows its arithmetic ("ANSWER: 23+45+12 = 80") despite the
+    # final value being correct — punishing transparency. Trailing work is
+    # fine; a different final number is not.
     if g.isdigit():
         nums = re.findall(r"\d+", p)
-        return len(nums) == 1 and nums[0] == g
+        return bool(nums) and nums[-1] == g
     return False
 
 
