@@ -99,6 +99,8 @@ def src_tensor(li, proj):
     if sub is not None:                          # fused gate_up in HF layout
         half = T.shape[1] // 2
         T = T[:, half * sub:half * (sub + 1), :]
+    if T.ndim == 2:                              # dense family (e4b): E=1
+        T = T[None]
     return T
 
 

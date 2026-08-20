@@ -150,6 +150,18 @@ FAMILY = {
                  "up_proj": ("up_proj", None),
                  "down_proj": ("down_proj", None)},
     },
+    "gemma4_e4b": {
+        # gemma-4-e4b-it: DENSE mlp (no experts), weights are 2D [OUT, IN].
+        # Only used for VERIFICATION of e4b VQ artifacts (fit_e4b_vq.py) —
+        # the main fitter's is_vq_target() wants a 2-bit-marked struct BASE,
+        # which dense e4b builds do not have. Consumers must treat a 2D
+        # source tensor as [1, OUT, IN] (E=1).
+        "target_substr": ".mlp.",
+        "src_key": "language_model.model.layers.{li}.mlp.{key}.weight",
+        "proj": {"gate_proj": ("gate_proj", None),
+                 "up_proj": ("up_proj", None),
+                 "down_proj": ("down_proj", None)},
+    },
     "qwen3_5_mlx": {
         # SAME architecture as qwen3_5 (qwen3_5_moe, switch_mlp, shared
         # expert) but sourced from an mlx-community MLX-FORMAT bf16
