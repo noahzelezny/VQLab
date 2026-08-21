@@ -149,6 +149,12 @@ Last updated: 2026-08-20 (through E80).
   measured 2.8 h (3.7x fast). A duration is MEASURED only from a completed run
   of the same shape; anything else gets stated as unmeasured, not as a number.
   Schedules built on probe timings put real deadlines at risk. [08-21]
+- **Shard granularity is interrupt cost.** A kill loses everything buffered
+  since the last shard write. On the 397B (27 shards) that is minutes; on the
+  35B (3 shards, 40 tensors each at 84 s/tensor) it is up to ~56 min. The same
+  property that makes a low-shard fit's out dir sit empty and look stalled
+  makes killing it expensive — remember the two together, they come from one
+  fact and point opposite ways. [08-21]
 - Prefer local reads for big sources; reads outweigh writes ~6:1 in a fit.
 - Make failure cheap (resume, quarantine, verified copies) — today's error
   budget held because failures were recoverable, not because reasoning was
