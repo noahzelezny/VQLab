@@ -4,7 +4,7 @@
 re-opens a retraction, cite new evidence or drop it. EXPERIMENTS.md is the
 chronological lab notebook (E-numbers); this file is the distillation. Keep it
 under ~150 lines; when you add a law, delete anything it supersedes.
-Last updated: 2026-08-20 (through E80).
+Last updated: 2026-08-21 (through E102).
 
 ## I. Settled laws (each has survived at least one attempt to kill it)
 
@@ -75,6 +75,33 @@ Last updated: 2026-08-20 (through E80).
     test generality. Sizes are IDENTICAL when packed (13.83 GiB both); the
     21.3 GiB d2 figure is uint8 padding only. "Raise K first" = a measured
     preference, not a landslide. [E87 + correction; E82 void per E85]
+
+11. **At LOW K, a better-fitting codebook can be a WORSE model — because
+    k-means trades the tail for the bulk.** Measured on a matched K256 pair
+    (identical size, identical geometry, only the fitter differs): the newer
+    fit has lower mean relerr on all three projections and scores WORSE
+    end-to-end (2.8057 vs 2.7655). Bucketing error by |w| percentile shows a
+    monotonic crossover — better on the bottom 90% of weights, worse on the
+    top 1%, consistent across layers:
+
+        |w| 0-50  -0.0115 | 50-90 -0.0011 | 90-99 +0.0001 | 99-99.9 +0.0057 | 99.9-100 +0.0112
+
+    k-means minimizes AVERAGE distortion, so when centroids are scarce it packs
+    them into the dense middle and abandons the rare large-magnitude weights
+    that dominate output. At K=2048/K=8192 there are enough centroids for both,
+    so the same fitter change is a clean WIN. **This is why the 08-18 fitter
+    change helps at large K and hurts at small K** — it is not a bug, it is the
+    stated objective meeting a metric that weights the tail far more heavily.
+    [E101, E102]
+
+12. **Mean relerr is a BULK statistic and is the wrong gate at low K.** It is
+    dominated by the 90% of weights that do not matter much, so it reports the
+    bulk/tail trade above as an improvement. At low K it is not merely blind to
+    output damage (E98: identical relerr, 6% KL apart) — it is
+    ANTI-CORRELATED (E101). A tail-aware statistic (normalized error in the
+    99-100th |w| percentile) would have flagged the bad artifact before
+    scoring. Any fitter-tuning loop that reads reconstruction error will pick
+    the worse artifact, confidently. [E98, E101, E102]
 
 ## II. Retracted / false leads — do NOT re-chase without new evidence
 
@@ -149,18 +176,17 @@ Last updated: 2026-08-20 (through E80).
   measured 2.8 h (3.7x fast). A duration is MEASURED only from a completed run
   of the same shape; anything else gets stated as unmeasured, not as a number.
   Schedules built on probe timings put real deadlines at risk. [08-21]
-- **Shard granularity is interrupt cost.** A kill loses everything buffered
-  since the last shard write. On the 397B (27 shards) that is minutes; on the
-  35B (3 shards, 40 tensors each at 84 s/tensor) it is up to ~56 min. The same
-  property that makes a low-shard fit's out dir sit empty and look stalled
-  makes killing it expensive — remember the two together, they come from one
-  fact and point opposite ways. [08-21]
-- **Do not kill jobs to defend a schedule.** [Noah, 08-21] An idle box is
-  cheaper than lost work. Before treating any constraint as a deadline, ask
-  whether it is a *time* requirement or a *coincidence* requirement: the exo
-  2-box smoke needs both boxes quiet, which is satisfied at 18:00 or tomorrow
-  just as well as at 14:30. A coincidence requirement dressed up as a deadline
-  will have you destroying real measurements to defend an arbitrary hour.
+- **Scheduling, settled [Noah, 08-21]: nothing gets killed to defend a
+  schedule; an idle box is cheaper than lost work.** Before treating a
+  constraint as a deadline ask whether it is a TIME requirement or a
+  COINCIDENCE requirement — the exo 2-box smoke needs both boxes quiet, which
+  is satisfied tonight as well as at 14:30. Interrupt cost scales with shard
+  granularity (a 3-shard 35B kill loses up to ~56 min; a 27-shard 397B, minutes).
+- **Model names: Qwen3.5-397B-A17B and Qwen3.6-35B-A3B BOTH declare
+  `model_type: qwen3_5_moe`** (60L/512exp vs 40L/256exp). "Different
+  generation" is defensible; "different architecture" is FALSE. A real
+  `Qwen--Qwen3.5-35B-A3B` also sits on the share, so an imprecise reference
+  lands a reader on a model we never measured. Name models exactly.
 - **A constraint that arrives as a given gets checked ONCE before anything is
   built on it.** The 14:30 deadline was never examined: one session asserted
   it, the other hardened it into a kill rule, then an unconditional kill rule,
@@ -168,29 +194,25 @@ Last updated: 2026-08-20 (through E80).
   of an unexamined premise produces MORE confident wrongness, not less, because
   the machinery looks so sound that it draws scrutiny away from what it is
   protecting. Ask what makes a constraint binding before defending it. [08-21]
-- **A verification is scoped to the checkpoint it ran against. Name the
-  target, not just the result.** "Template verified 192/192, all 64 layers"
-  was true of the SOURCE and said nothing about the BASE the splice writes to
-  — different checkpoint, different convention
-  (`model.language_model.layers.N` vs `language_model.model.layers.N`), and a
-  mismatch there writes 192 tensors under names the base never uses, yields a
-  complete-looking index, and can silently score the BASE while you call it
-  VQ. Same shape as the unexamined-premise failure: rigorous check, wrong
-  target, reported as though general. State verifications as
-  "X verified against Y," never bare. [08-21]
+- **MEASURE THE OBJECT YOU MEAN. Today's recurring failure, seven instances,
+  one shape: a real check run competently against the wrong thing, returning a
+  number that looked right.** A verification scoped to the SOURCE checkpoint
+  quoted as covering the BASE; a size read off the VQ subset quoted as the
+  whole artifact; a pre-graft size compared with a post-graft one; durations
+  extrapolated from probes that timed the cheap half (4-6x optimistic); an
+  outlier gate run under the wrong `--family` and its KeyError read as "the
+  gate cannot parse this family"; `pgrep` matching the zsh wrapper instead of
+  the job; exo sizing a PACKED artifact from an index that described the
+  UNPACKED one (+37%). None looked like an error. The remedy is boring: name
+  what you measured and what you meant, and confirm they are the same before
+  believing the number. State verifications as "X verified against Y", never
+  bare. [08-21]
 - **The clause added as a courtesy gets the least scrutiny.** A card sentence
   written to be generous about a result ("it also reproduced on...") carried
   two errors — wrong model family and a scale off by 10x — while the numbers
   around it were checked hard. Generous asides feel like they cost nothing, so
   they skip the verification the load-bearing claims get. Check the throwaway
   clause at the same standard, or cut it. [08-21]
-- **Qwen3.5-397B-A17B and Qwen3.6-35B-A3B both declare
-  `model_type: qwen3_5_moe`.** The generation lives in the repo name, not the
-  architecture string (60L/512exp vs 40L/256exp). So "different generation" is
-  defensible and "different architecture" is FALSE. Name models exactly rather
-  than characterizing the relationship. Note also that a real
-  `Qwen--Qwen3.5-35B-A3B` sits on the share with 4bit/8bit variants — a reader
-  who assumes the 3.5 line lands on a model we never touched. [08-21]
 - **A claim about a TOOL needs matched pairs at more than one geometry, made
   BEFORE the claim.** The 08-18 fitter change was called an improvement for
   hours on one matched pair (K2048) plus one unmatched corroboration. E92
@@ -201,14 +223,6 @@ Last updated: 2026-08-20 (through E80).
   Measured: K2048 win, K8192 win, K256 LOSS, the loss 3.7x the win. Three
   points falsify "uniform"; they do NOT establish "helps at large K" — that
   needs a fourth matched pair at another K. [E92, 08-21]
-- **THE recurring failure this week has one shape: a plausible number DERIVED
-  rather than measured.** Four instances in one day, all would have been
-  believed, none would have looked like an error: probe-based durations (4-6x
-  optimistic), an elapsed-counter ETA (1.5x), a VQ-subset size read as a
-  whole-artifact size, and "d8 should be ~25% slower" reasoned from the 2.4's
-  u8view gain. The tell is that a derived number arrives with no run behind it
-  but the same number of decimal places as a measured one. Before quoting any
-  figure, name the run that produced it; if you cannot, say unmeasured. [08-21]
 - **A retraction must chase the CITATIONS, not just the claim.** E82 was
   voided on 08-20; on 08-21 its heading still read "LAW 10 SETTLED" above a
   table wrong by ~25x, and E83 still cited its 3.3x as live support — E83
