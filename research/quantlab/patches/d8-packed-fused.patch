@@ -1,0 +1,142 @@
+--- a/vq_switch.py
++++ b/vq_switch.py
+@@ -465,7 +465,93 @@
+     }
+     y[(size_t)t * OUT + r] = static_cast<T>(acc);
+ """
++
++
++_SRC_FUSED_PACKED_D8 = _PACK_FETCH + r"""
++    const int OUT  = dims[0];
++    const int IN   = dims[1];
++    const int G    = dims[3];
++    const int N    = dims[4];
++    const int NSUB = IN / 8;
++    const int NX4  = IN / 4;
++    const int NGRP = IN / G;
++    const int SPG  = G / 8;
++    const int WPR  = NSUB / 32 * BITS;
++    uint r = thread_position_in_grid.x;
++    uint t = thread_position_in_grid.y;
++    uint lid = thread_position_in_threadgroup.x;
++    uint tgsize = threads_per_threadgroup.x;
+ 
++    threadgroup float4 xs[MAX_NX4];
++    const device T* xrow = x + (size_t)t * IN;
++    for (uint i = lid; i < (uint)NX4; i += tgsize)
++        xs[i] = float4((float)xrow[i*4], (float)xrow[i*4+1],
++                       (float)xrow[i*4+2], (float)xrow[i*4+3]);
++    threadgroup_barrier(mem_flags::mem_threadgroup);
++    if (r >= (uint)OUT || t >= (uint)N) return;
++    const uint e = eidx[t];
++    const device uint* crow = codes + (size_t)e * OUT * WPR + (size_t)r * WPR;
++    const device half* srow = scales + (size_t)e * OUT * NGRP + (size_t)r * NGRP;
++    const device half4* cb4 = (const device half4*)codebook;
++    float acc = 0.0f;
++    int j = 0;
++    for (int g = 0; g < NGRP; ++g) {
++        float gacc = 0.0f;
++        for (int q = 0; q < SPG; ++q, ++j) {
++            const uint c = VQ_CODE(crow, j);
++            gacc += dot(float4(cb4[2*c]),   xs[2*j])
++                  + dot(float4(cb4[2*c+1]), xs[2*j+1]);
++        }
++        acc = fma((float)srow[g], gacc, acc);
++    }
++    y[(size_t)t * OUT + r] = static_cast<T>(acc);
++"""
++
++
++_SRC_FUSED_PACKED_D8_TG = _PACK_FETCH + r"""
++    const int OUT  = dims[0];
++    const int IN   = dims[1];
++    const int G    = dims[3];
++    const int N    = dims[4];
++    const int K    = dims[5];
++    const int NSUB = IN / 8;
++    const int NX4  = IN / 4;
++    const int NGRP = IN / G;
++    const int SPG  = G / 8;
++    const int WPR  = NSUB / 32 * BITS;
++    uint r = thread_position_in_grid.x;
++    uint t = thread_position_in_grid.y;
++    uint lid = thread_position_in_threadgroup.x;
++    uint tgsize = threads_per_threadgroup.x;
++
++    threadgroup half4 cb[2 * MAX_K];
++    threadgroup half4 xs[MAX_NX4];
++    const device half4* cbg = (const device half4*)codebook;
++    for (uint i = lid; i < (uint)(2 * K); i += tgsize)
++        cb[i] = cbg[i];
++    const device T* xrow = x + (size_t)t * IN;
++    for (uint i = lid; i < (uint)NX4; i += tgsize)
++        xs[i] = half4((half)xrow[i*4], (half)xrow[i*4+1],
++                      (half)xrow[i*4+2], (half)xrow[i*4+3]);
++    threadgroup_barrier(mem_flags::mem_threadgroup);
++    if (r >= (uint)OUT || t >= (uint)N) return;
++    const uint e = eidx[t];
++    const device uint* crow = codes + (size_t)e * OUT * WPR + (size_t)r * WPR;
++    const device half* srow = scales + (size_t)e * OUT * NGRP + (size_t)r * NGRP;
++    float acc = 0.0f;
++    int j = 0;
++    for (int g = 0; g < NGRP; ++g) {
++        float gacc = 0.0f;
++        for (int q = 0; q < SPG; ++q, ++j) {
++            const uint c = VQ_CODE(crow, j);
++            gacc += dot(float4(cb[2*c]),   float4(xs[2*j]))
++                  + dot(float4(cb[2*c+1]), float4(xs[2*j+1]));
++        }
++        acc = fma((float)srow[g], gacc, acc);
++    }
++    y[(size_t)t * OUT + r] = static_cast<T>(acc);
++"""
++
+ # --- DENSE d=2 kernels (e4b VQLinear decode path, 2026-08-19) --------------
+ # The expert kernels above give a dense layer at E=1 correctness but not
+ # speed: ONE thread walks a whole code row (NSUB = IN/2 = up to 5120 codes)
+@@ -718,12 +804,41 @@
+             # sized for the doubled subvector count automatically.
+             name = f"vq_fused_packed{pack_bits}_d2"
+             src = _SRC_FUSED_PACKED_D2
++        elif D == 8:
++            # d=8 packed (E100, 2026-08-21). NSUB = IN/8 -- a QUARTER of the
++            # d4 value for the same IN -- so the codes row is WPR = NSUB/32
++            # *BITS words; derived inside the kernel from IN, never passed.
++            # K16384*d8*fp16 = 256 KB does not fit threadgroup memory, so the
++            # large-K variant streams the codebook from DEVICE memory exactly
++            # like _SRC_FUSED_D8. Verified bit-identical to the unpacked d8
++            # kernels on synthetic codes at K=256/1024/4096/16384.
++            if NSUB % 32 != 0:
++                raise NotImplementedError(
++                    f"vq_pack blocks are 32 codes; NSUB={NSUB} (IN={IN}, "
++                    f"d=8) must be a multiple of 32, i.e. IN % 256 == 0")
++            if K <= _D8_TG_MAX_K:
++                name = f"vq_fused_packed{pack_bits}_d8_tg"
++                src = _SRC_FUSED_PACKED_D8_TG
++            else:
++                name = f"vq_fused_packed{pack_bits}_d8"
++                src = _SRC_FUSED_PACKED_D8
+         else:
+             raise NotImplementedError(
+-                f"no FUSED packed kernel for d={D}; only d=4 and d=2 are "
+-                f"implemented and each is dispatched explicitly.")
+-        template = [("T", x.dtype), ("MAX_K", K), ("MAX_NSUB", NSUB),
+-                    ("BITS", pack_bits)]
++                f"no FUSED packed kernel for d={D}; only d=4, d=2 and d=8 "
++                f"are implemented and each is dispatched explicitly.")
++        if codes.shape[2] != NSUB // 32 * pack_bits:
++            raise ValueError(
++                f"packed codes are {codes.shape[2]} words/row, expected "
++                f"{NSUB // 32 * pack_bits} for IN={IN}, d={D}, "
++                f"bits={pack_bits}")
++        if D == 8:
++            template = [("T", x.dtype), ("MAX_NX4", IN // 4),
++                        ("BITS", pack_bits)]
++            if K <= _D8_TG_MAX_K:
++                template.insert(1, ("MAX_K", K))
++        else:
++            template = [("T", x.dtype), ("MAX_K", K), ("MAX_NSUB", NSUB),
++                        ("BITS", pack_bits)]
+     elif D == 2:
+         name, src = "vq_fused_d2", _SRC_FUSED_D2
+         template = [("T", x.dtype), ("CT", codes.dtype),
