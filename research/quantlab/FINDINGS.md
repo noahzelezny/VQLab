@@ -178,6 +178,19 @@ Last updated: 2026-08-20 (through E80).
   VQ. Same shape as the unexamined-premise failure: rigorous check, wrong
   target, reported as though general. State verifications as
   "X verified against Y," never bare. [08-21]
+- **The clause added as a courtesy gets the least scrutiny.** A card sentence
+  written to be generous about a result ("it also reproduced on...") carried
+  two errors — wrong model family and a scale off by 10x — while the numbers
+  around it were checked hard. Generous asides feel like they cost nothing, so
+  they skip the verification the load-bearing claims get. Check the throwaway
+  clause at the same standard, or cut it. [08-21]
+- **Qwen3.5-397B-A17B and Qwen3.6-35B-A3B both declare
+  `model_type: qwen3_5_moe`.** The generation lives in the repo name, not the
+  architecture string (60L/512exp vs 40L/256exp). So "different generation" is
+  defensible and "different architecture" is FALSE. Name models exactly rather
+  than characterizing the relationship. Note also that a real
+  `Qwen--Qwen3.5-35B-A3B` sits on the share with 4bit/8bit variants — a reader
+  who assumes the 3.5 line lands on a model we never touched. [08-21]
 - Prefer local reads for big sources; reads outweigh writes ~6:1 in a fit.
 - Make failure cheap (resume, quarantine, verified copies) — today's error
   budget held because failures were recoverable, not because reasoning was
