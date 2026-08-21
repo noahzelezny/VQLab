@@ -44,7 +44,7 @@ OUTC.mkdir(parents=True, exist_ok=True)
 if OUTP is not None:
     OUTP.mkdir(parents=True, exist_ok=True)
 D, K, G = args.dim, args.k, args.group
-assert K <= 256, "uint8 codes only in this writer"
+CODE_DTYPE = mx.uint8 if K <= 256 else mx.uint16  # uint16 above 256 (E88)
 
 EXPERT_KEYS = ("mlp.experts.gate_up_proj", "mlp.experts.down_proj",
                "mlp.switch_mlp.gate_proj", "mlp.switch_mlp.up_proj",
@@ -55,7 +55,9 @@ def kmeans(X, k, iters):
     n = X.shape[0]
     C = X[mx.random.randint(0, n, (k,))]
     xn = mx.sum(X * X, axis=1, keepdims=True)
-    step = max(50_000, int(5e8 / k))
+    # No 50k floor: at K=65536 a 50k-row block is a 13 GiB distance
+    # matrix (OOM, exit 137 — measured E88). 5e8/k keeps blocks ~1 GiB.
+    step = max(2_048, int(5e8 / k))
     for _ in range(iters):
         cn = mx.sum(C * C, axis=1)
         oh_sum = mx.zeros((k, X.shape[1]))
@@ -119,7 +121,7 @@ def vq_tensor(W):
         mx.eval(proxy_parts[-1], num, den)
     err = float(mx.sqrt(num / den))
     proxy = mx.concatenate(proxy_parts, axis=0).reshape(shape)
-    codes_u8 = codes.astype(mx.uint8).reshape(E, out_dim, nsub)
+    codes_u8 = codes.astype(CODE_DTYPE).reshape(E, out_dim, nsub)
     scales16 = scale.astype(mx.float16).reshape(E, out_dim, in_dim // G)
     mx.eval(codes_u8, scales16, proxy)
     return codes_u8, C16, scales16, proxy, err
