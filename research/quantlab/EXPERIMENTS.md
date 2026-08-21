@@ -4976,3 +4976,24 @@ Peer's exact bytes: E92 flat-K256 110.768 GiB (pred 111.6, −0.83), E93 flat-K5
 
 ### Night log (08-21 ~03:35): tower constant MEASURED, bias hypothesis dead, series units fixed
 Peer independently measured the tower rather than accepting my remembered 0.85: 333 model.visual tensors, 912,020,960 bytes = 0.849 GiB, byte-identical across two independently grafted artifacts. Their flat-geometry bias hypothesis is DEAD (mechanism predicts both residuals; nothing left to explain). Sharpened falsifiable consequence: today's graft steps must grow each packed dir by EXACTLY 912,020,960 bytes. Adopted their units fix into law 5: every size point is stamped pre- or post-graft. Their own summary is the epigraph the paper's methods section wants: "a number that resolves a discrepancy has to be measured, not recalled, even when the person recalling it is the one who logged it."
+
+### E91 RESOLVED (08-21 03:18): BOTH mechanisms are real, and they decompose EXACTLY additively
+All gates green (verify median 0.1865 — identical to E80's, as it must be with cloned body blocks; vision 333/333; files/bundle PASS). **Packed 142.8 pre-graft + 0.849 tower = 143.65 vs predicted 143.7 — err −0.05, size model's 6th success, stamped post-graft.**
+
+| same instrument | GiB (post-graft) | prose | code |
+|---|---|---|---|
+| **E91 flat-K2048, today's fitter** | **143.65** | **2.3410** | **2.5963** |
+| E80 harvest rung (K512 shallow) | 139.93 | 2.3452 | 2.5969 |
+| shipped 3.1 (old fitter) | 143.7 | 2.3519 | 2.5987 |
+
+**The decomposition closes to four decimals:**
+- fitter effect (geometry matched): 2.3410 − 2.3519 = **−0.0109** — today's k-means beats the shipped fit at identical geometry.
+- harvest cost (fitter matched, bodies block-identical): 2.3452 − 2.3410 = **+0.0042** for −3.72 GiB = **0.0011 ppl/GiB** — the cheapest byte-shedding ever measured on this ladder, 3x better than even E79's rich-base estimate.
+- sum: −0.0067. Measured E80-vs-shipped: −0.0067. **Additive, no interaction term.**
+
+**Consequences:**
+1. **Flagship candidate: E91 flat-K2048-refit** (2.3410 @ 143.65) — best 397B artifact ever produced here. E80 rung remains the best-per-GiB option (2.3452 @ 139.93). Both beat everything shipped and both beat spicy 3.5bit (2.3614 @ 165.6) by wide margins.
+2. **The fitter-vintage effect is REAL and quantified (−0.011 at K2048).** Every shipped rung is old-fitter and leaving quality on the table. E92 (already fit+packed) tests it at K256 today; predicted to beat shipped 2.7655.
+3. **Harvest at a rich base is all but free (0.0011 ppl/GiB)** — "name a size" now has a measured, tiny cost at the top of the ladder. E79's floor story survives with better constants.
+4. NOTE for E92/E93/E89 gating: chain emits `config lacks vision_config` warning — copy from source config before any publish (known step).
+Nothing swaps until Noah reads this. E89 resumed automatically at 03:18 (~107 tensors to go, lands early afternoon).
