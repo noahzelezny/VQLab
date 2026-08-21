@@ -4881,3 +4881,16 @@ Noah caught an overclaim in E87. I wrote that "on a packed-size basis d4 wins by
 **Identical to two decimal places.** The 21.33 GiB figure is uint8 padding, nothing else — pack d2-K16 to its true 4-bit width and the two artifacts are the same size, as matched 2.00 bpw requires. So the clean statement is: **at matched packed size (13.83 GiB), d4-K256 beats d2-K16 by 12.2% KL and +1.62 points top-1.** No size asterisk, no additional d4 advantage.
 
 Worth keeping as a pattern: this is the THIRD time today an unpacked/stored size was mistaken for a real size difference (the others: the 110.8 GiB whole-byte table that killed candidate G in E83, and the 397B pre-pack "110.8 GiB" readings that mean nothing until packing). Rule for the notebook and the paper: **never compare artifact sizes before packing; quote analytic/packed bpw or quote packed bytes, never stored bytes.**
+
+### E88 (08-20): pre-registration — the third rung of the d-ladder: d8-K65536 at 2.00 bpw
+Noah's extrapolation from E87: if d4-K256 beats d2-K16 at matched rate, d8 with the correspondingly larger codebook should be better still. The matched d8 arm at 2.00 bpw is K65536 — E83's candidate G.
+
+**Cost re-measured with the fixed k-means (scatter-add + K-scaled chunks): 6.6s/iter on 2M samples -> 2.2 min/tensor -> ~4.4 h for all 121 tensors.** The historic "169h, rejected" figure was ~38x stale. One infrastructure bug found and fixed in the probe: the fitter's 50k-row chunk floor creates a 13 GiB distance matrix at K65536 (OOM, exit 137, measured); floor removed, blocks now ~1 GiB. Fitter now writes uint16 codes above K256.
+
+**The ladder this completes (all at 2.00 bpw analytic, all packed 13.83 GiB, same source, same instrument):**
+  d2-K16 = 239.9 mnats / 78.43%  ->  d4-K256 = 210.7 / 80.05%  ->  d8-K65536 = ?
+
+**Registered predictions:** (a) d8-K65536 beats d4-K256 (direction, from E87 + rate-distortion: higher d captures inter-weight correlation). (b) The increment is SMALLER than d2->d4's 29.2 mnats — each doubling of d buys less, because the K needed to hold rate grows quadratically and centroid estimation from a fixed 2M samples gets noisier (30 samples/centroid at K65536 vs 7800 at K256). (c) Falsification: if d8 LOSES to d4, the d-ladder peaks at d4 and the sample-starvation mechanism in (b) is the suspect — refit with more samples before concluding.
+**Scoring only needs the reference decode path; the missing fast kernel (1 MB codebook vs 32 KB threadgroup) blocks SHIPPING d8, not measuring it.**
+
+Run plan: fit starts only after tonight's M4 gate chain releases the box; outlier-gate on M3 per rule III.7 before scoring; score on kl_cache_qwen36.
