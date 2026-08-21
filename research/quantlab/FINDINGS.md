@@ -57,14 +57,16 @@ Last updated: 2026-08-20 (through E80).
    measured at 6-bit). [E70, E71 speed rows — artifact-vs-artifact, unaffected
    by the E79 retraction]
 
-10. **d4-vs-d2 at matched bytes: UNSETTLED.** E82 appeared to settle this
-    (3.3x KL) but its d2 arm was a KNOWN-CORRUPT artifact (E85) — void. The
-    older +1.26 point came from a retired instrument and cannot be mixed.
-    No clean matched-bpw d2/d4 pair currently exists; settling it requires
-    fitting one (d2-K256 at 4.00 bpw has no d4 partner — needs K65536).
-    d2's operational wins stand regardless: ~8x cheaper fits, byte-aligned
-    at K<=256. "Raise K first" remains a working default, NOT a measured
-    law. [E82 void, E85]
+10. **d4 beats d2 at matched information rate — measured, modest.** Clean
+    pair (E87), both arms fit on M3 from one bf16 source, both outlier-gated
+    before scoring, same instrument: at 2.00 bpw, d4-K256 = KL 210.7 /
+    80.05% top-1 vs d2-K16 = 239.9 / 78.43%. **d4 wins by ~12% KL, NOT the
+    3.3x that E82's corrupt arm produced (overstated ~25x).** Scope: one
+    pair, at a bpw that forces d2 to a coarse K16 — a 2.5 bpw pair would
+    test generality. Storage: d4-K256 packs exactly (13.8 GiB); d2-K16
+    wastes half in uint8 (21.3 GiB) and needs 4-bit packing just to reach
+    parity. "Raise K first" = a measured preference, not a landslide.
+    [E87; E82 void per E85]
 
 ## II. Retracted / false leads — do NOT re-chase without new evidence
 

@@ -4853,3 +4853,19 @@ E85 left law 10 unsettled with no clean pair in existence. Cheapest available: *
 **Registered prediction:** d4-K256 scores lower KL than d2-K16 at the same 2.00 bpw. Confidence is LOW — the only two supporting data points are now void (E82 contaminated) or from a retired instrument. If d2-K16 wins or ties, "raise K first" is falsified at this bpw and the geometry rule has to be rewritten around dimension rather than codebook size. Registered before either fit starts.
 
 **Caveat registered in advance:** 2.00 bpw forces d2 to K16, which is a very coarse codebook (16 centroids for 2-D vectors). A single point at the extreme of d2's range may not represent d2 at shipping widths. If d4 wins here, the honest claim is "at 2.00 bpw", not "in general" — a second pair at 2.5 or 3.0 bpw would be needed to generalise.
+
+### E87 (08-20): **LAW 10 SETTLED PROPERLY — d4 beats d2 at matched 2.00 bpw, both arms fit clean on M3**
+The E86 pair, run to replace E82's contaminated result. Both arms fit fresh from the same bf16 source on M3, differing ONLY in geometry; both passed an outlier gate BEFORE scoring (rule III.7); both scored on kl_cache_qwen36.
+
+| arm | analytic bpw | fit relerr (median/worst) | outlier gate | KL (mnats) | top-1 |
+|---|---|---|---|---|---|
+| **d4-K256** | 2.00 | 0.3126 / 0.3471 (1.11x) | PASS, 0 tensors >0.5 | **210.7** | **80.05%** |
+| d2-K16 | 2.00 | 0.3325 / 0.3426 (1.03x) | PASS, 0 tensors >0.5 | 239.9 | 78.43% |
+
+**d4 wins: 12.2% lower KL, +1.62 points top-1, at matched information rate.** Registered prediction (E86) CONFIRMED, at low stated confidence — and note the honest size of the effect: **12%, not the 3.3x that E82's corrupt arm produced.** The contaminated result overstated the real gap by roughly 25x. Fit relerr ordered the same way (0.3126 vs 0.3325) and this time agreed with the output measure — which is not guaranteed (law 6) and should not be read as relerr becoming trustworthy.
+
+**Storage caveat, registered in E86 and confirmed:** the arms match at 2.00 bpw of INFORMATION but not on disk — d4-K256's 8-bit codes pack exactly (13.8 GiB artifact) while d2-K16's 4-bit codes sit in uint8 and waste half (21.3 GiB). Packing is bit-exact so KL is unaffected, but any size claim must state packed sizes. On a packed-size basis d4 wins by even more, since d2 needs 4-bit packing merely to reach parity.
+
+**Scope, per the E86 caveat:** this is ONE pair at 2.00 bpw, where d2 is forced to a very coarse K16. The honest claim is "d4 beats d2 at 2.00 bpw by ~12%", NOT a general law about dimension. A second pair at 2.5 bpw (d2-K32 vs d4-K1024) would test whether the gap holds where d2 has more centroids to work with; d4-K1024 is beyond this fitter's K<=256 limit, so that pair needs the other fitter.
+
+**Law 10 status: SETTLED at 2.00 bpw on qwen, effect size ~12%.** "Raise K first" is measured again — but as a modest preference, not the landslide the corrupt artifact implied.
