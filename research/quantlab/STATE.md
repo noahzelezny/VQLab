@@ -27,6 +27,20 @@
    + graft_vision twin) — the last mapped mines, both known-bad-testable.
 5. THEN: Noah's decisions — swap/publish the refreshed ladder, 35B refresh
    pass (audit vq_35b kmeans parity first), e4b rebuild, collection post.
+
+## APPROVED / DIRECTED BY NOAH (08-21 morning)
+- **Flagship swap APPROVED**: flat-K2048-refit ships as "3bpw" @ 143.65.
+  Staging with peer. Smoke = EXO 2-BOX on our fork (artifact > any single
+  box); card MUST note upstream PR #2268 stalled -> our codebook-replicate
+  fork required for sharding. Old 3.1bpw repo MOVED not deleted.
+- **Repo name: MoEMash.** License direction: dual (noncommercial free /
+  commercial paid). Paper framing: narrow and thorough — (1) data-free VQ
+  beats calibrated affine at matched bytes in the 2-3.5bpw MoE-expert
+  regime; (2) flat nodes are provably the peaks (4.7:1 shallow:body ratio
+  closes the counter-design); harvest prices sizes between nodes.
+- **Future dense target: Qwen3.8-27B** (true dense; source + kl_cache_qwen38
+  ALREADY ON DISK). Directive: start FLAT — no tail complications.
+- **Future: webGUI** (exo-style) for the repo.
 Overnight incidents (all resolved, see night logs): pack_artifact disease
 fired on M4 exactly as pre-flagged (my scheduling miss); vision-tower units
 mismatch briefly looked like a size-model bias (peer measured it dead).
