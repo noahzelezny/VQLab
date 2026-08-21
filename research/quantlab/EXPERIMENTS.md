@@ -5197,3 +5197,46 @@ than the line**. Sits above the ladder between the two shipped rungs.
     122.305  flatk512 (E93)         2.5634 / 2.6123   <- new rung
     143.682  shipped 3.1            2.3519 / 2.5987
     143.682  flatk2048-refit        2.3410 / 2.5963   <- flagship candidate
+
+## E97 — the corruption was visible in our own recorded numbers, unread
+
+While ordering a gate sweep I checked the E84 ladder for monotonicity. Our
+own law says raising K lowers damage at fixed d. The recorded numbers:
+
+    d2:  K64   223.517
+         K128  386.619   <== INVERSION: double the codebook, 73% WORSE
+         K256   36.862
+    d4:  K256  214.514
+         K2048  85.535
+         K4096  68.546
+         K8192  56.413   (monotone, no violation)
+
+`vq-K128-d2` is the artifact that failed today's outlier gate with **20
+corrupt tensors**. Its corruption was sitting in the ladder as a flat
+violation of our own law, in a number we quoted, and nobody read it — for six
+days.
+
+**Free screen, no compute:** at fixed d, KL must fall as K rises. Any
+inversion is either a broken artifact or a broken law, and both are worth
+knowing immediately. This costs one sort over results we already have.
+
+**Prioritizing the sweep from this.** The d4 arm is perfectly monotone across
+four rungs, which is weak evidence of health for all of them (a corrupt rung
+would have to break monotonicity to hide, and none does). The d2 arm had one
+violation and it was real. So:
+- gate first anything that produced a recorded number AND sits near an
+  inversion,
+- then the rest of the recorded-number rungs,
+- orphans nobody ever scored are last, because nothing rests on them.
+
+That is a better ordering than directory listing or citation counting: it is
+derived from stored evidence rather than from what we remember citing.
+
+**Gate results so far (M3, outlier 3.0, family qwen3_5_mlx):**
+
+    vq-K64-d2               FAIL   3 outliers
+    vq-K128-d2              FAIL  20 outliers
+    vq-K64-d2-refit         PASS
+    vq-K128-d2-refit        PASS
+    e94-35b-K8192-refresh   PASS   median 0.1325, bar 0.3975
+    qwen36-35b-rungs/vq-K8192-d4   (running)
