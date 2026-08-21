@@ -5759,3 +5759,52 @@ mechanism's shape, its depth structure, and its invisibility to our gate.
 **Open:** why the sign flips with depth. Shallow layers have a different weight
 distribution (L00's bottom-half weights are near-zero, which also broke
 magnitude weighting in E106). Not chased here.
+
+## E110 — WHY the depth flip: shallow layers are heavy-tailed, body layers are sub-Gaussian
+
+E109 left open why ++ seeding helps below L15 and sells the tail from L20 on.
+Pre-registered hypothesis (in `probe_depth_geometry.py` before running): ++
+seeds proportional to squared distance, so what that buys depends on the shape
+of the NORMALIZED subvector cloud k-means actually sees. Heavy-tailed cloud ->
+seeds land ON the tail, tail served, ++ helps everywhere. Homogeneous cloud ->
+++ degenerates to a better-spread cover of the bulk, which at scarce K is
+bought with the tail.
+
+**Measured, 36 tensors, ||x|| of group-64-normalized subvectors:**
+
+                        exc. kurtosis   top-1% energy      CV
+    SHALLOW L00-L10          +1.250         0.0990        1.497
+    BODY    L20-L55          -0.384         0.0381        0.487
+
+**Confirmed on every metric.** Shallow is heavier-tailed: kurtosis positive vs
+negative, 2.6x the energy concentrated in the top 1% of subvectors, 3x the
+coefficient of variation. L00 gate/up are extreme — kurtosis 7.74, top-1%
+energy 0.215, CV 2.89.
+
+**The body is SUB-Gaussian (negative excess kurtosis, -0.384).** That is the
+crux: body subvectors form a homogeneous cloud with no distinguished far
+points, so distance-proportional seeding has no tail to find and simply covers
+the bulk more evenly — a better local optimum of the average objective, paid
+for out of the tail exactly as law 11 describes.
+
+**So the full chain, end to end:**
+1. Shallow weights are heavy-tailed and contain many all-zero subvectors; body
+   weights are homogeneous and sub-Gaussian.
+2. ++ seeding chases far points. In shallow layers the far points ARE the
+   tail, so it helps everywhere. In body layers there are no far points, so it
+   just optimizes the average — and at K=256 a better average is a
+   bulk-favouring one.
+3. The body is 8.81 GiB/bit vs shallow's 1.87, so the body verdict is the
+   artifact verdict: the K256 refit lost.
+4. At K=2048 there are enough centroids to serve bulk and tail together, so
+   the same change wins.
+
+**Instrument note: the p99/p50 subvector-norm ratio is DEGENERATE in shallow
+layers** and its printed values (1e20) are meaningless — the median subvector
+norm is ~0 there because many subvectors are exactly zero. That zero-median
+fact is itself informative and is why the ratio column must not be quoted.
+Kurtosis, top-1% energy share and CV are all well-behaved and agree.
+
+**Scope.** Distributional statistics on 8 experts per tensor, one model. The
+mechanism is now explained for the 397B; whether other families split at the
+same depth is exactly what PROCESS.md's step 2 is for.
