@@ -5025,7 +5025,9 @@ I specified vq_35b_codes.py for the refresh. Peer's three checks, all confirmed:
 
 **Measured (peer, from the log):** 41 of 120 tensors in 57 min = 84 s/tensor,
 projecting 168 min. **2.8 h, i.e. 3.7x the prediction, and slower than the
-run the port was supposed to beat.** Rate steady, relerr ~0.132, L00 down_proj
+run the port was supposed to beat.** CORRECTED on completion: the finished
+run was 10920s = 3.03 h at 91 s/tensor, so the true miss is **4-6x**. Even
+the partial-run projection was optimistic. Rate steady, relerr ~0.132, L00 down_proj
 0.1046 — the fit is healthy. This is a speed result, not a quality result, and
 has no bearing on E94's vintage-effect measurement.
 
@@ -5087,3 +5089,29 @@ Report size alongside every quality number so placement is never implied to be a
 **Prior:** e4b's MLPs did NOT tolerate 5.75-bit VQ (20.8 vs 8.1 mnats) while
 its embedding table did. If dense MLPs are simply hostile to VQ, this should
 fail, and failing cleanly at flat geometry is a real answer.
+
+## E94 — RESULT: fitter vintage confirmed at 35B, second family
+
+Structural twin comparison, everything held except the codebooks:
+
+    e94-35b-K8192-refresh        53.022 mnats  89.55% top-1  17.651 GiB
+    qwen36-35b-rungs/vq-K8192-d4 56.413 mnats  89.37% top-1  17.651 GiB
+                                 -3.391 mnats (-6.0%)  +0.183 pp
+
+Both 120 modules, all (4,8192), identical size to three decimals, identical
+index length (1477). Only the codebooks differ. Instrument identity verified
+field-by-field against the standing rung's stored result: same cache_dir,
+same teacher snapshot hash, same tokens_scored (8192), same top_k (64), same
+captured_mass (0.938186), same chat_wrapped (False). Not a re-scored
+comparison — the same instrument, twice.
+
+**What this does and does not establish.** The vintage effect is now measured
+at TWO model families, once each: 397B (flagship vs its predecessor) and 35B
+(here). It is NOT "measured repeatedly" at either. The mechanism remains
+UNIDENTIFIED — two changes landed in the k-means implementation on 08-18 and
+neither has been isolated. Reported as a fitter improvement, not explained as
+one. The card language must continue to say exactly that.
+
+Duration, measured: 10920s = 3.03 h, 91 s/tensor. My scatter-add prediction
+was 30-45 min, so the miss is **4-6x**, not the 3.7x quoted from a partial
+run. E96's ratio is corrected accordingly.
