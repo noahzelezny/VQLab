@@ -27,6 +27,7 @@ import argparse
 import json
 import pathlib
 import shutil
+import struct
 import subprocess
 import sys
 
@@ -125,7 +126,27 @@ for si, sh in enumerate(shards, 1):
           flush=True)
     del data, out_data
 
-shutil.copy2(idx_path, OUT / idx_path.name)
+# The index must be REWRITTEN, not copied: metadata.total_size describes the
+# SOURCE (unpacked) tensors, and copying it verbatim makes a packed artifact
+# declare a size it does not have. Measured 2026-08-21: flatk2048-refit-packed
+# claimed 197.12 GiB for 143.68 GiB (+37%), flatk512-packed +61%. exo reads
+# this field to size the model and REFUSED to place the flagship — "No cycles
+# found with sufficient memory" — and any downloader would be misled the same
+# way. Recomputed below from the packed shards' own headers.
+_idx = json.load(open(idx_path))
+_total = 0
+for _sh in sorted(set(_idx["weight_map"].values())):
+    with open(OUT / _sh, "rb") as _f:
+        _n = struct.unpack("<Q", _f.read(8))[0]
+        _hdr = json.loads(_f.read(_n))
+    for _name, _meta in _hdr.items():
+        if _name != "__metadata__":
+            _s, _e = _meta["data_offsets"]
+            _total += _e - _s
+_idx.setdefault("metadata", {})["total_size"] = _total
+json.dump(_idx, open(OUT / idx_path.name, "w"), indent=1)
+print(f"index total_size recomputed from packed shards: {_total} "
+      f"({_total / 2**30:.2f} GiB)")
 
 # seed config with pack_bits/in so add_model_file can read them back (it
 # refuses to guess a bit width, by design)
