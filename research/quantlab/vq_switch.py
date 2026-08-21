@@ -677,6 +677,19 @@ _D8_TG_MAX_K = 1024
 
 
 def _fused(x, eidx, codes, codebook, scales, pack_bits=0):
+    # U8-VIEW DISPATCH (E77/E90, 2026-08-20). Unpacked uint8 d4 rows are
+    # byte-for-byte the pack_bits=8 word layout (little-endian; verified
+    # against vq_pack.pack), and the packed fused kernel's simdgroup layout
+    # measured 1.38-1.45x the one-thread-per-row unpacked kernel at every N
+    # on both 35B expert shapes (+33% end-to-end prefill at step 512,
+    # 1009-1020 vs 732-769 tok/s, rotlab--35B-vqK256codes). Zero-copy
+    # reinterpret; output is BIT-IDENTICAL (mx.array_equal at N=8/512/4096
+    # on real tensors, greedy 200-token generation byte-identical, KL gate
+    # reproduced to every printed digit).
+    if (pack_bits == 0 and codes.dtype == mx.uint8
+            and codebook.shape[1] == 4 and codes.shape[2] % 4 == 0):
+        codes = mx.view(codes, dtype=mx.uint32)
+        pack_bits = 8
     N, IN = x.shape
     E, OUT, _ = codes.shape
     K, D = codebook.shape
