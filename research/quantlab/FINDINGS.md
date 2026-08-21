@@ -47,7 +47,11 @@ Last updated: 2026-08-20 (through E80).
    size on MoE experts** — the core method claim, held on two families, and
    the reason our 100.9 GiB beats spicy2.6's larger artifact. [shipped rungs]
 
-8. **Operational sweet spot: d4/K256.** Byte-aligned uint8 codes (zero unpack
+8. **Operational sweet spot: d4/K256.** NOTE: healthy relerr ranges SCALE
+   WITH K — K2048-class fits sit ~0.19, K256-class ~0.31, K128 ~0.46. An
+   abort threshold tuned at one K is wrong at another (0.35 would have
+   killed the healthy E92 K256 refit; peer near-miss 08-21). Set
+   --relerr-abort per geometry, not from this file's K2048-era numbers. Byte-aligned uint8 codes (zero unpack
    tax — the only rung that pays none), threadgroup-sized codebook, ~40 min
    fits at 397B, won both corpora at its size. Leave it only when the size
    budget forces you. K>256 costs uint16 + pack tax + ~6x fit time. [E71-79]
