@@ -29,18 +29,28 @@ long, KILL THE CHAIN rather than push the smoke — the smoke needs both boxes
 and M4's window is the scarce resource.
 
 ## M4 QUEUE (fits only) — must be QUIET by 14:30
-1. E94 35B K8192 refresh — running, healthy, launched 08:59:52, ETA ~09:35,
+1. E94 35B K8192 refresh — running, healthy, launched 08:59:52, **ETA ~11:48**
+   (measured 84 s/tensor from the log; my 30-45 min prediction was falsified,
+   see E96 — do NOT re-price it from a probe),
    fitter md5 7eab40fa, 120 expert tensors / layers 0-39 / d4k8192.
    Its out dir read 0B early: the 35B has only 3 shards, so the fitter buffers
    a third of the model before its first write. **An empty out dir is not
    evidence of a stall on a low-shard model** — do not "resume" a healthy fit
    on the strength of one.
-2. d2-K64 + d2-K128 repairs (~15-20 min each, known duration) — these retire
-   the E82 contamination.
-3. E95 dense Qwen3.8-27B — duration UNKNOWN, no comparable prior run. Runs only
-   if the remaining window clearly covers it; otherwise slides to tonight when
-   the box is free anyway. Agreed with peer: do NOT kill a dense fit mid-flight
-   to clear the box for the smoke.
+2. d2-K64 + d2-K128 repairs — duration **UNKNOWN** (the 15-20 min figure came
+   from the same optimism E96 falsified). They retire the E82 contamination,
+   which is not time-critical. **They MUST write to fresh dirs** (`*-refit`) —
+   see the FINDINGS refit rule; an in-place refit would resume-skip every shard
+   and emit a repaired-looking artifact full of the suspect bytes.
+   **HARD RULE: if either is still running at 14:00, kill it.** They resume
+   cleanly into fresh dirs; the smoke needs both boxes and cannot slide.
+3. E95 dense Qwen3.8-27B — **NOT running today** under any outcome (peer's
+   call, accepted). Tonight, when the box is free.
+
+PRIORITY RULING (asked and answered 08-21 ~10:00): do NOT kill E94 to
+guarantee the repairs a window. E94 is the third measurement of the vintage
+effect, which is load-bearing for a flagship card claim; the repairs clean up
+an experiment already struck. The repairs slide; E94 finishes.
 4. Conditional d4-K2048/K4096 refresh if E94 shows a gain.
 
 M4 artifacts will sit unscored until late afternoon because M3 is occupied.
