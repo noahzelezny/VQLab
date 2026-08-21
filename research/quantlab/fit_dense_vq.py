@@ -102,7 +102,13 @@ def fit_tensor(T):
     num = float(mx.sum((R - T) ** 2).item())
     den = float(mx.sum(T.astype(mx.float32) ** 2).item())
     relerr = (num / max(den, 1e-12)) ** 0.5
-    codes = a.reshape(1, T.shape[0], T.shape[1] // D).astype(mx.uint16)
+    # Code width MUST follow K, not default to uint16: the runtime shim picks
+    # uint8 for K<=256 (build_e4b_vq.py:161), so a uint16 artifact at K256 both
+    # DOUBLES the stored bytes -- turning a 2.0 bpw fit into 4.0 bpw on disk --
+    # and mismatches the dtype the loader allocates. Caught 2026-08-21 when the
+    # assembled 27B came out only 5.6% smaller than its 4-bit base.
+    code_dtype = mx.uint8 if K <= 256 else mx.uint16
+    codes = a.reshape(1, T.shape[0], T.shape[1] // D).astype(code_dtype)
     return codes, C.astype(mx.float16), scale.reshape(1, T.shape[0], -1), relerr
 
 

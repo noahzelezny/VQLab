@@ -123,7 +123,22 @@ mlp_2d = {}
 for k, v in mlp_w.items():
     mod, leaf = k.rsplit(".", 1)
     nk = f"{FIT_TO_BASE[mod]}.{leaf}"
-    mlp_2d[nk] = v[0] if (leaf in ("codes", "vq_scales") and v.ndim == 3) else v
+    t = v[0] if (leaf in ("codes", "vq_scales") and v.ndim == 3) else v
+    # Defensive width fix: the runtime shim allocates uint8 for K<=256, so a
+    # uint16 codes tensor both doubles the bytes on disk and mismatches the
+    # dtype the loader expects. fit_dense_vq.py hardcoded uint16 until
+    # 2026-08-21; narrow here so artifacts built from OLD fit outputs are still
+    # correct. Only narrows when it is provably lossless.
+    if leaf == "codes":
+        want = mx.uint8 if mlp_cfg[mod]["k"] <= 256 else mx.uint16
+        if t.dtype != want:
+            hi = int(mx.max(t).item())
+            if want == mx.uint8 and hi > 255:
+                raise SystemExit(f"FAIL: {mod} codes reach {hi} but k<=256 "
+                                 f"implies uint8 — codebook/codes disagree.")
+            print(f"  narrowing {mod} codes {t.dtype} -> {want}")
+            t = t.astype(want)
+    mlp_2d[nk] = t
 shard_no += 1
 name = f"model-{shard_no:05d}.safetensors"
 mx.save_safetensors(str(OUT / name), mlp_2d)
