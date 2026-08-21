@@ -1,3 +1,43 @@
+# BOX SCHEDULE (08-21 09:50) — this session manages M3 + coordinates M4
+
+## ROLES
+- THIS session: M3 schedule, all gate chains, all scoring, coordination
+  with the M4 session. Does NOT own paper/ or webgui/ (Noah's own sessions,
+  briefs in handoff/). Card fixes ARE ours.
+- M4 session (uds:/tmp/cc-socks/39597.sock): fits only, hands over
+  ungated. Never gates its own artifacts (E47).
+
+## M3 QUEUE (serial, GPU-bound)
+| when | job | verdict |
+|---|---|---|
+| ->10:40 | E89 d8 fit (155/171 tensors, shard 22/27) | — |
+| 10:40-12:00 | E89 inline gate chain | **d8 verdict ~12:00** |
+| 12:00-12:45 | E92 chain (flatk256-refit-packed, 111G, on share) | **K256 refit** |
+| 12:45-13:30 | E93 chain (flatk512-packed, 122G, on share) | **new ~122G rung** |
+| as they land | score M4 artifacts (kl_damage, minutes each) | E94, E95 |
+| ~14:00 | flagship 2nd referee pass (restores reproduced-twice claim) | — |
+| 14:30-16:00 | **exo 2-box smoke of the 3bpw** (needs BOTH boxes quiet) | throughput |
+| after chains clear | land the 2 lazy-load patches (pack_artifact from
+  logs/pack_artifact_cpuread.patch + graft_vision twin); card editing pass | |
+
+## M4 QUEUE (fits only)
+1. E94 35B K8192 refresh — CORRECTED invocation (vq_397b_codes
+   --family qwen3_5_mlx --base rotlab-35B-qwen36-e2, layers 0-39, k 8192
+   d4). NOTE: out dir reads 0B at 09:50 — confirm it launched.
+2. E95 dense 27B — fit_dense_vq.py --family qwen3_8 --dim 4 --k 256.
+3. d2-K64 + d2-K128 refits (repair E82's corrupt arm; law 10 second point).
+4. Conditional on E94 gain: refresh d4-K2048/K4096.
+HARD: M4 quiet by 14:30 for the exo smoke.
+
+## BLOCKERS ON THE RELEASE (must clear before upload)
+- Card says "corrected k-means implementation (fixed 2026-08-18)" but E94
+  registers the mechanism as UNIDENTIFIED. Soften or identify. OURS to fix.
+- check_card_placeholders.sh must pass on all cards (G still has
+  __PREDECESSOR_REVISION__ by design until upload time).
+- Cards C and F go stale on rename — edit in the same session as the upload.
+- 6 more record inconsistencies flagged by a fresh review: see the bottom of
+  paper/OUTLINE.md. Noah has the list; reconcile when the queue is quiet.
+
 # MORNING BOARD (08-21 03:30 — night results are IN)
 
 ## THE HEADLINE: E91 resolved — BOTH mechanisms real, exactly additive
