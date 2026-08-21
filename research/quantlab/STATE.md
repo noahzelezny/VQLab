@@ -1,3 +1,33 @@
+# MORNING BOARD (08-21 03:30 — night results are IN)
+
+## THE HEADLINE: E91 resolved — BOTH mechanisms real, exactly additive
+- **New best 397B ever: flat-K2048-refit = 2.3410 / 2.5963 @ 143.65 GiB**
+  (post-graft). Fitter effect −0.0109 (geometry matched vs shipped 3.1);
+  harvest cost +0.0042 for −3.72 GiB (0.0011 ppl/GiB, bodies
+  block-identical). Sum = measured E80 delta to 4 decimals.
+- E80 rung (2.3452 @ 139.93) = best-per-GiB. Both beat shipped 3.1 and
+  spicy 3.5bit. NOTHING SWAPPED — Noah decides on waking.
+- Size model: 6 hits 1 in-band 0 misses; points now STAMPED pre/post-graft
+  (tower = exactly 912,020,960 bytes, measured).
+
+## TODAY'S QUEUE (in order)
+1. E89 d8 fit RESUMED 03:18 (~107 tensors left, lands early-mid afternoon;
+   its inline chain follows automatically; watcher armed on logs_e89.log).
+2. Gate E92 (flatk256-refit-packed, on share, M4-packed via CPUREAD copy)
+   — registered: beats shipped 2.4's 2.7655/2.6383 if fitter effect holds
+   at K256. Graft must grow dir by EXACTLY 912,020,960 bytes (E92 ->
+   ~111.62, size test confirmation).
+3. Gate E93 (flatk512-packed) — the missing rung; bar = interpolation
+   112.0/2.7655 <-> 143.7/2.3519 at 122.31; graft growth must be exact too.
+4. AFTER E89's chain fully clears: land the two lazy-load patches
+   (pack_artifact from peer's parked diff at logs/pack_artifact_cpuread.patch,
+   + graft_vision twin) — the last mapped mines, both known-bad-testable.
+5. THEN: Noah's decisions — swap/publish the refreshed ladder, 35B refresh
+   pass (audit vq_35b kmeans parity first), e4b rebuild, collection post.
+Overnight incidents (all resolved, see night logs): pack_artifact disease
+fired on M4 exactly as pre-flagged (my scheduling miss); vision-tower units
+mismatch briefly looked like a size-model bias (peer measured it dead).
+
 # OVERNIGHT BOARD (08-20 22:20) — read this first tomorrow
 
 ## FOUR UNGATED ARTIFACTS EXPECTED BY MORNING — gate serially on M3, read
