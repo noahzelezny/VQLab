@@ -18,17 +18,24 @@ fit before the smoke and have moved after it.
 |---|---|---|
 | ->12:20 | E89 d8-K16384 fit (shard 22/27 at 09:50) | — |
 | 12:20-13:40 | E89 inline gate chain | **d8 verdict ~13:40** |
-| 14:30-16:00 | **exo 2-box smoke of the 3bpw** (needs BOTH boxes quiet) | throughput |
-| after smoke | E92 chain (flatk256-refit-packed, 111G, on share) | **K256 refit** |
+| 13:40 -> | E92 chain (flatk256-refit-packed, 111G, on share) | **K256 refit** |
 | then | E93 chain (flatk512-packed, 122G, on share) | **new ~122G rung** |
+| opportunistic | **exo 2-box smoke of the 3bpw** — whenever BOTH boxes are naturally quiet. No deadline. | throughput |
 | as they land | score M4 artifacts (kl_damage, minutes each) | E94, E95 |
 | later | flagship 2nd referee pass; land the 2 lazy-load patches; card pass | — |
 
-The 14:30 quiet constraint is now the binding one. If E89's gate chain runs
-long, KILL THE CHAIN rather than push the smoke — the smoke needs both boxes
-and M4's window is the scarce resource.
+NO JOBS GET KILLED (Noah, 08-21 ~10:05): "killing a job is almost certainly a
+bigger waste of time... If truly one machine goes idle for a while, its not the
+end of the world." This supersedes the earlier kill rules on BOTH boxes — my
+"kill the E89 gate chain" and M4's armed 14:00 watchdog (disarmed).
 
-## M4 QUEUE (fits only) — must be QUIET by 14:30
+The 14:30 deadline was my error. The exo smoke needs both boxes QUIET — that is
+a coincidence requirement, not a time requirement. It runs equally well at 18:00
+or tomorrow. I manufactured a hard deadline out of a resource constraint and
+then priced real work against it. Take the smoke opportunistically when both
+boxes are naturally idle.
+
+## M4 QUEUE (fits only) — no deadline, nothing killed
 1. E94 35B K8192 refresh — running, healthy, launched 08:59:52, **ETA ~11:48**
    (measured 84 s/tensor from the log; my 30-45 min prediction was falsified,
    see E96 — do NOT re-price it from a probe),
@@ -42,10 +49,9 @@ and M4's window is the scarce resource.
    which is not time-critical. **They MUST write to fresh dirs** (`*-refit`) —
    see the FINDINGS refit rule; an in-place refit would resume-skip every shard
    and emit a repaired-looking artifact full of the suspect bytes.
-   **HARD RULE: if either is still running at 14:00, kill it.** They resume
-   cleanly into fresh dirs; the smoke needs both boxes and cannot slide.
-3. E95 dense Qwen3.8-27B — **NOT running today** under any outcome (peer's
-   call, accepted). Tonight, when the box is free.
+   No deadline. They run to completion whenever they finish.
+3. E95 dense Qwen3.8-27B — UNBLOCKED. It no longer has to fit around a
+   deadline that does not exist. Run it when the box is free.
 
 PRIORITY RULING (asked and answered 08-21 ~10:00): do NOT kill E94 to
 guarantee the repairs a window. E94 is the third measurement of the vintage

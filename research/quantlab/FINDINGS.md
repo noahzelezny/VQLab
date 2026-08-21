@@ -155,6 +155,12 @@ Last updated: 2026-08-20 (through E80).
   property that makes a low-shard fit's out dir sit empty and look stalled
   makes killing it expensive — remember the two together, they come from one
   fact and point opposite ways. [08-21]
+- **Do not kill jobs to defend a schedule.** [Noah, 08-21] An idle box is
+  cheaper than lost work. Before treating any constraint as a deadline, ask
+  whether it is a *time* requirement or a *coincidence* requirement: the exo
+  2-box smoke needs both boxes quiet, which is satisfied at 18:00 or tomorrow
+  just as well as at 14:30. A coincidence requirement dressed up as a deadline
+  will have you destroying real measurements to defend an arbitrary hour.
 - Prefer local reads for big sources; reads outweigh writes ~6:1 in a fit.
 - Make failure cheap (resume, quarantine, verified copies) — today's error
   budget held because failures were recoverable, not because reasoning was
