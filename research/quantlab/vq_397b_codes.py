@@ -272,7 +272,16 @@ def kmeans(X, k, iters, init="kmeans++", W=None):
     scalar), only the centroid update and the ++ seeding are."""
     step = max(50_000, int(5e8 / k))
     n = X.shape[0]
-    C = (kmeanspp_init(X, k, W=W) if init == "kmeans++"
+    # SEEDING IS DELIBERATELY UNWEIGHTED. Weighting BOTH the ++ seeding and the
+    # centroid update compounds instead of composing: ++ already spreads seeds
+    # by squared distance, so multiplying by mag^p puts nearly every seed in
+    # the extreme tail and starves the bulk of centroids. Measured 2026-08-21
+    # (E106), L00 down_proj K256 d4, mean held-out relerr:
+    #     random init  p=0 0.2035  p=4 0.1685   (weighting helps)
+    #     ++ seeding   p=0 0.1177  p=4 0.4869   (weighting destroys it)
+    # and the real 397B fit aborted at 0.7111. The tail weighting belongs on
+    # the UPDATE only; ++ keeps its own unweighted objective.
+    C = (kmeanspp_init(X, k) if init == "kmeans++"
          else X[mx.random.randint(0, n, (k,))])
     for _ in range(iters):
         cn = mx.sum(C * C, axis=1)

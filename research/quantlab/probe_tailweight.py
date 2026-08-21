@@ -120,9 +120,9 @@ def kmeans(X, W, iters):
         # each new centre is drawn with probability proportional to w * d^2.
         cap = min(n, 200_000)
         Xc = X[mx.random.randint(0, n, (cap,))] if n > cap else X
+        # Unweighted, mirroring the fitter after E106: weighting the seeding
+        # as well as the update compounds and starves the bulk.
         Wc = None
-        if W is not None:
-            Wc = W[mx.random.randint(0, n, (cap,))] if n > cap else W
         seeds = [Xc[mx.random.randint(0, Xc.shape[0], (1,))[0]]]
         d2 = mx.sum((Xc - seeds[0]) ** 2, axis=1)
         for _ in range(K - 1):
