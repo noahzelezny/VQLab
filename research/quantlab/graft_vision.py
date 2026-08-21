@@ -34,10 +34,14 @@ ap.add_argument("--prefixes", default="model.visual,vision_tower",
                      "Qwen set. gemma-4 needs "
                      "'vision_tower,embed_vision' (the tower is split across "
                      "two prefixes; grafting only one yields a broken tower).")
-ap.add_argument("--copy-config-keys", default="",
+ap.add_argument("--copy-config-keys", default="vision_config,image_token_id",
                 help="comma-separated config keys to copy from --src when the "
-                     "artifact lacks them (e.g. vision_config,image_token_id). "
-                     "mlx_lm.convert drops these for text-only artifacts.")
+                     "artifact lacks them. mlx_lm.convert drops these for "
+                     "text-only artifacts. DEFAULTS ON: this was opt-in until "
+                     "2026-08-21 and no chain script ever passed it, so every "
+                     "chain-built 397B artifact shipped without vision_config "
+                     "and needed a hand-graft to be exo-loadable. Copies only "
+                     "keys the artifact LACKS, so it never overwrites.")
 args = ap.parse_args()
 
 ART, SRC = pathlib.Path(args.artifact), pathlib.Path(args.src)
