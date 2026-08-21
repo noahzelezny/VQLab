@@ -191,6 +191,16 @@ Last updated: 2026-08-20 (through E80).
   than characterizing the relationship. Note also that a real
   `Qwen--Qwen3.5-35B-A3B` sits on the share with 4bit/8bit variants — a reader
   who assumes the 3.5 line lands on a model we never touched. [08-21]
+- **A claim about a TOOL needs matched pairs at more than one geometry, made
+  BEFORE the claim.** The 08-18 fitter change was called an improvement for
+  hours on one matched pair (K2048) plus one unmatched corroboration. E92
+  falsified the generalization only because it happened to be size-matched
+  against a PUBLISHED artifact — had it been an unmatched rung like E93,
+  nothing would have contradicted it and we would have published a general
+  improvement that is false at a third of the ladder. Luck, not process.
+  Measured: K2048 win, K8192 win, K256 LOSS, the loss 3.7x the win. Three
+  points falsify "uniform"; they do NOT establish "helps at large K" — that
+  needs a fourth matched pair at another K. [E92, 08-21]
 - Prefer local reads for big sources; reads outweigh writes ~6:1 in a fit.
 - Make failure cheap (resume, quarantine, verified copies) — today's error
   budget held because failures were recoverable, not because reasoning was
