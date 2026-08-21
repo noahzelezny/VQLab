@@ -4933,3 +4933,20 @@ E89 separates two hypotheses that agree everywhere already measured: "quality im
 Pushed with Noah's approval after the full gate stack: check_bundle (new gate, known-bad tested both directions), referee identity through the new bundle EXACT (2.7655, total_nll to all decimals — teacher-forced path pinned), and the peer's symlink-controlled A/B on the M4: **greedy decode token-identical (50/50 token ids equal) between old and new bundles on the shipped artifact itself** — autoregressive path pinned. Old bundle preserved as model.py.pre-u8view. Card states 35B-measured numbers as 35B; 397B speed explicitly unclaimed until measured. Bonus fix: the card still carried SCOUT_VQ_DECODE_CHUNK — renamed public. Scope boundaries in the commit messages verbatim per peer review: one prompt/50 greedy tokens pins the trajectory, not all temperatures/contexts.
 
 Incidental (peer, worth a rule note): cold vs warm load on the same artifact over SMB = 788s vs 144s — a 5.5x page-cache effect. Load-time benchmarks must state cache state or they are meaningless (files rule III.4's neighbor).
+
+### E80 RESOLVED (08-20 21:55): the 3.1-class rung BEATS the shipped 3.1 on both corpora — and the honest mechanism question is the FITTER, not the geometry
+Chain: all gates green (verify median 0.1865 outlier PASS — first M4-fitted artifact to pass verify-from-M3 first try; vision 333/333; files/tokenizer PASS; check_bundle PASS first production outing). 
+
+**SIZE: 139.93 GiB packed = size model's FOURTH out-of-sample hit (bet 140.3 +/- 0.5, err -0.37).** The pricing tool stands at 4-for-4.
+
+| same instrument, minutes apart | GiB | prose | code |
+|---|---|---|---|
+| NEW K512/K2048 harvest rung | 139.93 | **2.3452** | **2.5969** |
+| shipped 3.1 (re-scored back-to-back, reproduces exactly) | 143.7 | 2.3519 | 2.5987 |
+| registered bar (interpolation at 140.3) | — | 2.3997 | — |
+
+Registered grid said "beats 2.3519 outright -> re-examine the instrument before celebrating." Done: shipped 3.1 reproduces its total_nll to four decimals back-to-back with the new score, so the difference (23.4 nats over 8192 tokens, 0.28% prose) is a real property of the two artifacts on this corpus, not measurement drift.
+
+**The honest mechanism caution, registered NOW before anyone builds on it:** harvesting 2 shallow bits should not IMPROVE quality — no version of the harvest story predicts a win. The confounded variable is the FITTER: this rung was fit with today's k-means (scatter-add, K-scaled chunks, cpu-stream reads, LOAD-BEARING eval) at mean relerr 0.1859; the shipped 3.1 was fit weeks ago on the older pipeline. The most plausible reading is **"2026-08-20 fitter beats the old fitter by more than 2 shallow bits cost"** — i.e. the win belongs to the pipeline, not to cheap-shallow. Decisive test (cheap, registered): refit FLAT K2048 with today's fitter; if it beats 2.3452, the geometry story inverts again and the flat refit becomes the new flagship candidate. Do NOT swap anything on tonight's evidence alone.
+
+**What is cleanly settled regardless of mechanism:** E80's actual question — cheap-shallow generalises to the rich end (bar 2.3997 beaten by 0.055); "name a size, get the best artifact at it" now holds across the measured ladder; and the size model is validated 4/4. E89 (d8) launched immediately after, 21:55.
