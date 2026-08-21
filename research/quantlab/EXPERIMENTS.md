@@ -5715,3 +5715,47 @@ this sample of three.
 
 **The card stays as written.** "Neither has been tested alone" is false, but
 the replacement sentence cannot be written from 2 of 3.
+
+## E109 — COUNTING EXPERIMENT: the ++ penalty is DEPTH-STRUCTURED, and it is a body-layer effect
+
+36 tensors: 12 layers (0,5,...,55) x 3 projections, K=256, init the only
+variable, held-out experts, 2 reps, verdict requires BOTH tail buckets to move
+by more than the run-to-run spread.
+
+    band              n    PENALTY   ++better   other
+    L00-L10 shallow   9       0         7         2
+    L15 transition    3       1         1         1
+    L20-L55 body     24      18         0         6
+
+    body by projection:  down_proj 8/8    gate_proj 5/8    up_proj 5/8
+
+**The effect is not tensor-random, it is depth-structured.** Below L15, ++
+seeding is uniformly BETTER — and dramatically so (L00 gate/up: -0.108,
+-0.135, an order of magnitude larger than any body effect). From L20 on, ++
+sells the tail on 18 of 24 tensors and is uniformly better on **zero**.
+`down_proj` in the body is 8/8.
+
+**This retires E108's "2 of 3, not universal".** L15 up_proj was not a failed
+reproduction — it sits in the transition band. I sampled three tensors across
+a boundary I did not know existed and read the spread as unreliability.
+
+**Why this explains the artifacts.** The 397B size model says the body
+(L10-56) is 8.81 GiB/bit against the shallow band's 1.87 — the body IS the
+model. A change that helps 9 shallow tensors and hurts 18 body tensors is a
+net loss at K=256, which is what E92 measured end-to-end (+0.0402 ppl). At
+K=2048 the same penalty reverses or shrinks (E107/E108), so the change is a
+net win — which is what the flagship and the 35B measured.
+
+**And the gate still cannot see any of it.** Mean relerr delta across the 24
+body tensors: **-0.00033**, range -0.00181 to +0.00108. Essentially zero, and
+if anything slightly favourable. Every artifact in the penalty band would pass
+a mean-relerr gate unchanged while its tail was being sold.
+
+**Scope.** Reconstruction error on held-out experts, 8 experts per tensor, 2
+reps, one K. It does NOT measure end-to-end damage — that was measured
+separately on real artifacts (E92/E101). What this establishes is the
+mechanism's shape, its depth structure, and its invisibility to our gate.
+
+**Open:** why the sign flips with depth. Shallow layers have a different weight
+distribution (L00's bottom-half weights are near-zero, which also broke
+magnitude weighting in E106). Not chased here.
