@@ -65,9 +65,12 @@ def kmeans(X, k, iters):
         for s in range(0, n, step):
             xb, xnb = X[s:s + step], xn[s:s + step]
             a = mx.argmin(xnb - 2 * (xb @ C.T) + cn[None, :], axis=1)
-            oh = (a[:, None] == mx.arange(k)[None, :]).astype(mx.float32)
-            oh_sum = oh_sum + oh.T @ xb
-            cnt = cnt + mx.sum(oh, axis=0)
+            # scatter-add centroid update, ported from vq_397b_codes (a9f5c5c):
+            # the one-hot matmul this replaces builds a [chunk, K] float32 per
+            # step — the pattern that made K8192 impractical and killed M4 runs.
+            # Mathematically the same update; enormously cheaper.
+            oh_sum = oh_sum.at[a].add(xb)
+            cnt = cnt.at[a].add(mx.ones((a.shape[0],), dtype=mx.float32))
             mx.eval(oh_sum, cnt)
         C = mx.where(cnt[:, None] > 0, oh_sum / mx.maximum(cnt[:, None], 1.0), C)
         mx.eval(C)
