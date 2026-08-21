@@ -4844,3 +4844,12 @@ Our own record, written 08-15, lists `qwen d2-K64` among **corrupted artifacts M
 4. The d4 line is internally monotone and plausible (214.5 -> 85.5 -> 68.5 -> 56.4 as bpw rises 2.00 -> 3.25) and shows the expected flattening: +17.0 mnats for K2048->K4096, +12.1 for K4096->K8192. That part of E84 stands.
 
 **Process failure, mine:** the E47/M4-verification policy exists precisely for this, is written in bold in the notebook, and I did not apply it before scoring. FINDINGS.md's instrument rules covered comparators and proxies but had no rule about scoring artifacts of unverified provenance. Added as rule III.7: **before scoring any artifact, confirm it passed an outlier gate on a trusted box — a corrupt artifact scores plausibly and silently, and the fitter's own log cannot see it.**
+
+### E86 (08-20): pre-registration — the clean d2/d4 matched-bpw pair
+E85 left law 10 unsettled with no clean pair in existence. Cheapest available: **2.00 bits/weight — d2-K16 vs d4-K256.** Both sides are K<=256 (the only widths vq_35b_codes.py writes) and both fits are minutes (measured: d4-K256 = 337s, d2-K256 = 583s).
+
+**Provenance, deliberate:** the original struct6 base for the 35B rungs is gone from disk, so BOTH arms are fit fresh from the same bf16 source (mlx-community Qwen3.6-35B-A3B-bf16 — the same model that produced kl_cache_qwen36's teacher logits). Non-expert tensors therefore stay bf16 in both arms rather than being 6-bit structure. Absolute KL will be BETTER than the historic rungs and is NOT comparable to them; only the d2-vs-d4 difference is the result, and that comparison is clean because the two arms are identical apart from geometry. Both fit on M3 (the box that has produced zero corrupted artifacts), and both get an outlier check before scoring, per new rule III.7.
+
+**Registered prediction:** d4-K256 scores lower KL than d2-K16 at the same 2.00 bpw. Confidence is LOW — the only two supporting data points are now void (E82 contaminated) or from a retired instrument. If d2-K16 wins or ties, "raise K first" is falsified at this bpw and the geometry rule has to be rewritten around dimension rather than codebook size. Registered before either fit starts.
+
+**Caveat registered in advance:** 2.00 bpw forces d2 to K16, which is a very coarse codebook (16 centroids for 2-D vectors). A single point at the extreme of d2's range may not represent d2 at shipping widths. If d4 wins here, the honest claim is "at 2.00 bpw", not "in general" — a second pair at 2.5 or 3.0 bpw would be needed to generalise.
