@@ -5016,3 +5016,33 @@ Target: Qwen3.8-27B (64 layers, dense mlp trio = 192 tensors; hybrid linear/full
 
 ### E94 amendment (08-21): my invocation was the WRONG TOOL — peer hold saved the series
 I specified vq_35b_codes.py for the refresh. Peer's three checks, all confirmed: (1) that script has never been run (zero hits in any log/script); (2) the standing 56.4-mnat rung was produced by vq_397b_codes.py --family qwen3_5_mlx (config shape matches: model_file, 120 modules L0-39, base bits 2); (3) vq_35b_codes' output (bare code tensors) is not even loadable by kl_damage. Running my spec would have introduced the TOOL as a second variable in the experiment registered to isolate fitter VINTAGE — a no-gain would have been uninterpretable and a gain would have masqueraded as confirmation. Corrected invocation launched: same tool/base/src/geometry/layer-range as the standing rung, vintage the only variable. Confirmed both k-means fixes present at HEAD in the tool. Consequence: my 719ebf8 scatter-port to vq_35b_codes is a correct patch to a script nobody runs. **Rule (peer's, adopted): before registering measurement N of an effect, verify which tool produced measurements 1..N-1.**
+
+## E96 — falsified: the scatter-add port did not speed up 35B/K8192
+
+**Prediction (mine, registered pre-run):** E94 completes in 30-45 min, against
+~1.8 h for the pre-port fitter, on the strength of the scatter-add port in
+`vq_35b_codes.py` (719ebf8).
+
+**Measured (peer, from the log):** 41 of 120 tensors in 57 min = 84 s/tensor,
+projecting 168 min. **2.8 h, i.e. 3.7x the prediction, and slower than the
+run the port was supposed to beat.** Rate steady, relerr ~0.132, L00 down_proj
+0.1046 — the fit is healthy. This is a speed result, not a quality result, and
+has no bearing on E94's vintage-effect measurement.
+
+**Why it matters beyond the schedule:** this is the third consecutive duration
+prediction derived from a probe rather than a run, all optimistic, all mine:
+- d8 fit-cost probe: timed centroid updates, not assignment — 4x fast.
+- E89: extrapolated from the elapsed-seconds counter, not shard write stamps
+  — 1.5x fast (10:40 claimed, 12:20 real).
+- E94: scatter-add port — 3.7x fast.
+
+The common defect is that each probe measured the cheap half of the work and
+the estimate was reported as if it were a measurement. Rule added to FINDINGS
+III: a duration is measured only from a completed run of the same shape;
+otherwise it is stated as unmeasured, not as a number. Schedules built on probe
+timings put real deadlines at risk — here it nearly cost the exo smoke window,
+which needs both boxes and cannot slide.
+
+**Open:** why the port didn't help at K8192/d4. Not chased today; it is a
+performance question and nothing downstream depends on it. Do not re-predict
+the fixed version's speed without running it.
