@@ -4915,3 +4915,13 @@ Noah's call, and the reasoning is recorded because it is right: the 35B d8 run (
 - Speed/kernel is EXPLICITLY out of scope: scoring rides the streaming referee (no fast kernel needed). If quality wins, the 1 MB... rather 256 KB codebook kernel becomes tomorrow's question; if quality loses, it never becomes a question.
 
 Runs AFTER tonight's M4 gate chain (E80) — launched by hand, not by waiter, per this afternoon's lesson.
+
+### E89 amendment (08-20, pre-result): reading grid fixed BEFORE the fit, per peer review
+Peer flagged that my 3.10-3.15 prediction reads as contradicting Law 1 ("rate twins land on the same curve"). Correction to the peer's premise: Law 1 was AMENDED after E85/E87 — its current form says packaging washes across K at d4, and across-d behaviour is measured NON-wash at 2.0 bpw (E87: d4 beats d2 by 12% KL at matched rate). My prediction extrapolates E87's cross-d effect upward with a diminishing increment; it is consistent with current FINDINGS, not a contradiction. But the peer's framing request is right regardless — without a reading grid, a wash gets misread as failure. Fixed now, before any number exists:
+
+- **~3.1706 (within referee noise): rate-twin equivalence EXTENDS to d8.** The E87 cross-d effect is a low-bpw/coarse-K phenomenon that vanishes at richer geometry. Closes the d-axis with a clean boundary statement. NOT a failure.
+- **3.10-3.15: cross-d effect persists at product scale** — my registered point estimate; dimension pays above d4 and the kernel investment question opens.
+- **>= 3.1706 by real margin: d8 is WORSE at matched rate** — sample starvation or d8 fit pathology; check the fit log before generalizing.
+- **< 3.05: memorization check fires BEFORE belief** (~120 samples/centroid).
+
+**Size registration (Law 5 / rule 7):** unpacked will read ~181 GiB-class (14-bit codes in uint16 — the pre-pack number is NOT the result); packed must land in the 100.9 GiB class of its rate-twin. Materially off that = build defect, not physics. Same discipline for the peer's incoming rung: its 145+ GiB pre-pack directory does not test my 140.3 +/- 0.5 packed prediction.
