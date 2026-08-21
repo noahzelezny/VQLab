@@ -161,6 +161,13 @@ Last updated: 2026-08-20 (through E80).
   2-box smoke needs both boxes quiet, which is satisfied at 18:00 or tomorrow
   just as well as at 14:30. A coincidence requirement dressed up as a deadline
   will have you destroying real measurements to defend an arbitrary hour.
+- **A constraint that arrives as a given gets checked ONCE before anything is
+  built on it.** The 14:30 deadline was never examined: one session asserted
+  it, the other hardened it into a kill rule, then an unconditional kill rule,
+  then an armed watchdog, each step locally sound. Careful execution downstream
+  of an unexamined premise produces MORE confident wrongness, not less, because
+  the machinery looks so sound that it draws scrutiny away from what it is
+  protecting. Ask what makes a constraint binding before defending it. [08-21]
 - Prefer local reads for big sources; reads outweigh writes ~6:1 in a fit.
 - Make failure cheap (resume, quarantine, verified copies) — today's error
   budget held because failures were recoverable, not because reasoning was
