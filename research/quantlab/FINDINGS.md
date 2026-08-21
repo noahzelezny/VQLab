@@ -201,6 +201,14 @@ Last updated: 2026-08-20 (through E80).
   Measured: K2048 win, K8192 win, K256 LOSS, the loss 3.7x the win. Three
   points falsify "uniform"; they do NOT establish "helps at large K" — that
   needs a fourth matched pair at another K. [E92, 08-21]
+- **THE recurring failure this week has one shape: a plausible number DERIVED
+  rather than measured.** Four instances in one day, all would have been
+  believed, none would have looked like an error: probe-based durations (4-6x
+  optimistic), an elapsed-counter ETA (1.5x), a VQ-subset size read as a
+  whole-artifact size, and "d8 should be ~25% slower" reasoned from the 2.4's
+  u8view gain. The tell is that a derived number arrives with no run behind it
+  but the same number of decimal places as a measured one. Before quoting any
+  figure, name the run that produced it; if you cannot, say unmeasured. [08-21]
 - Prefer local reads for big sources; reads outweigh writes ~6:1 in a fit.
 - Make failure cheap (resume, quarantine, verified copies) — today's error
   budget held because failures were recoverable, not because reasoning was
