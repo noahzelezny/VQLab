@@ -1,0 +1,12 @@
+{
+ "student": "/Volumes/Thunderbay SSD/Exo Models/qwen36-35b-rungs/vq-K256-d4",
+ "teacher": "/Volumes/Thunderbay SSD/Mlx_Models/hub/models--mlx-community--Qwen3.6-35B-A3B-bf16/snapshots/04bbe07c3ed2d93cbf832f523fea344bca1d0fcf",
+ "cache_dir": "/Volumes/Thunderbay SSD/Exo Models/kl_cache_qwen36",
+ "mean_kl_nats": 0.214514,
+ "mean_kl_millinats": 214.514,
+ "top1_agreement": 0.795044,
+ "tokens_scored": 8192,
+ "top_k": 64,
+ "captured_mass": 0.938186,
+ "chat_wrapped": false
+}

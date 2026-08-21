@@ -8,14 +8,13 @@ Last updated: 2026-08-20 (through E80).
 
 ## I. Settled laws (each has survived at least one attempt to kill it)
 
-1. **Quality tracks total bytes — WITHIN the d4 family. Across d it does
-   NOT.** At matched bits/weight, d4-K4096 beats d2-K64 by 3.3x KL (E82), so
-   "geometry washes" is FALSE as a general claim; it holds for K-choices at
-   d4 (E45/E50: the d4 K-ladder flattens, K2048->K4096 buys +0.55 pts for
-   +0.9G). Correct statement: **d=4 with the largest K the budget allows is
-   the frontier; d=2 sits measurably off it.** Rate (log2(K)/d) prices the
-   bytes but does not predict the damage — expressivity per code does.
-   [E45, E50, E78, E82]
+1. **Quality tracks total bytes; packaging washes across K at d4.**
+   Measured within the d4 family (E84, one instrument): KL 214.5 -> 85.5 ->
+   68.5 -> 56.4 as bpw rises 2.00 -> 3.25, with the expected flattening at
+   high K. Whether it also washes ACROSS d is UNSETTLED — the evidence that
+   said otherwise was contaminated (E85). Rate (log2(K)/d) prices the bytes;
+   whether it predicts the damage across d is untested.
+   [E45, E50, E78, E84; E82 void]
 
 2. **Position law: early layers tolerate cheap bits; enrichment pays only in
    the back of the network; knee ≈ layer 30 (of 60, affine) / L10 (VQ
@@ -58,14 +57,14 @@ Last updated: 2026-08-20 (through E80).
    measured at 6-bit). [E70, E71 speed rows — artifact-vs-artifact, unaffected
    by the E79 retraction]
 
-10. **At matched bytes, spend geometry budget on K, not d — SETTLED (qwen).**
-    Measured pair, same instrument (kl_cache_qwen36), identical 18G size:
-    d4-K4096 = KL 68.5 mnats / 87.9% top-1 vs d2-K64 = 223.5 / 79.7%.
-    3.3x lower KL at the same bytes. (Historic +1.26 table: different
-    instrument, cannot be mixed — its 8-bit ceiling sits below tonight's
-    d2 score.) d2's wins are operational only: ~8x cheaper fits, faster
-    decode at K<=256. Gemma evidence remains excluded per Noah's
-    instrument ruling. [E82]
+10. **d4-vs-d2 at matched bytes: UNSETTLED.** E82 appeared to settle this
+    (3.3x KL) but its d2 arm was a KNOWN-CORRUPT artifact (E85) — void. The
+    older +1.26 point came from a retired instrument and cannot be mixed.
+    No clean matched-bpw d2/d4 pair currently exists; settling it requires
+    fitting one (d2-K256 at 4.00 bpw has no d4 partner — needs K65536).
+    d2's operational wins stand regardless: ~8x cheaper fits, byte-aligned
+    at K<=256. "Raise K first" remains a working default, NOT a measured
+    law. [E82 void, E85]
 
 ## II. Retracted / false leads — do NOT re-chase without new evidence
 
@@ -101,6 +100,10 @@ Last updated: 2026-08-20 (through E80).
    before it is trusted. (A gate that always fails is one nobody reads.)
 6. Report nothing predicted as measured. Label ESTIMATE vs MEASURED in every
    table.
+7. **Before scoring ANY artifact, confirm it passed an outlier gate on a
+   trusted box.** A corrupt artifact scores plausibly and silently, and the
+   fitter's own log structurally cannot see it (it reports what it COMPUTED,
+   not what reached disk). Cost of skipping this: E82. [E85]
 
 ## IV. MLX/Metal engineering rules (each cost ≥1 run to learn)
 

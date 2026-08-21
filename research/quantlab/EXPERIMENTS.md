@@ -4821,3 +4821,26 @@ Most qwen36-35b-rungs numbers in the record come from a retired instrument (its 
 **Registered before running:** (a) the d4 line lies below (better than) the d2 line at every matched bpw, per E82/law 10; (b) the d4 K-ladder flattens above K2048 (E45 measured +0.55 pts for K2048->K4096 on the old instrument — expect the same shape here); (c) d2 keeps climbing to high bpw where d4 has run out of practical K. If (a) fails at any matched point, law 10 is not general and E82 was a lucky pair.
 
 Rungs on disk: d2 = K64/K128/K256/K512; d4 = K256/K2048/K4096/K8192. (vq-K32-d2 is 0 bytes — empty dir, excluded.) Note the sizes are NOT matched across the set; comparison must be by bits/weight (log2(K)/d) and by measured size, never by K alone.
+
+### E85 (08-20): **E82 IS CONTAMINATED — its d2 arm is a known-corrupt artifact. Law 10 reverts to UNSETTLED.**
+The E84 sweep produced a non-monotone d2 line — d2-K128 (3.50 bpw) scored 386.6 mnats, WORSE than d2-K64 (3.00 bpw) at 223.5. More bits cannot be worse; something was broken. It is.
+
+Our own record, written 08-15, lists `qwen d2-K64` among **corrupted artifacts M4 produced, all passing the fitter's own gate**: 3 tensors >0.5 relerr (L11 gate_proj 0.988, L38 down_proj 0.957). The same entry states the standing policy in bold: **every M4-fitted artifact is verified ON M3 before any number from it is believed.** I scored it tonight without that check and published a headline off it.
+
+| rung | analytic bpw | KL (mnats) | top-1 | status |
+|---|---|---|---|---|
+| d2-K64 | 3.00 | 223.5 | 79.7% | **KNOWN CORRUPT** |
+| d2-K128 | 3.50 | 386.6 | 74.1% | **SUSPECT** (non-monotone vs K64) |
+| d2-K256 | 4.00 | 36.9 | 90.9% | plausible |
+| d4-K256 | 2.00 | 214.5 | 79.5% | plausible |
+| d4-K2048 | 2.75 | 85.5 | 87.3% | plausible |
+| d4-K4096 | 3.00 | 68.5 | 87.9% | plausible |
+| d4-K8192 | 3.25 | 56.4 | 89.4% | plausible |
+
+**Consequences:**
+1. **E82's "d4-K4096 beats d2-K64 by 3.3x at matched bytes" is void.** The measured gap is d4 vs a DAMAGED d2, not d4 vs d2. Law 10 ("spend budget on K, not d") reverts from SETTLED to UNSETTLED — weaker than before tonight, because the historic +1.26 point that previously supported it came from the retired instrument and cannot be mixed either.
+2. **Law 1's correction (E82-based) is also unsafe** and reverts: whether quality washes across d at matched bytes is once again an open question, not a measured law.
+3. **There is currently NO clean matched-bpw d2-vs-d4 pair in existence.** The only plausible d2 point (K256, 4.00 bpw) has no d4 partner — that would need d4-K65536, which does not exist. Settling law 10 requires FITTING a clean pair, not scoring what is on disk.
+4. The d4 line is internally monotone and plausible (214.5 -> 85.5 -> 68.5 -> 56.4 as bpw rises 2.00 -> 3.25) and shows the expected flattening: +17.0 mnats for K2048->K4096, +12.1 for K4096->K8192. That part of E84 stands.
+
+**Process failure, mine:** the E47/M4-verification policy exists precisely for this, is written in bold in the notebook, and I did not apply it before scoring. FINDINGS.md's instrument rules covered comparators and proxies but had no rule about scoring artifacts of unverified provenance. Added as rule III.7: **before scoring any artifact, confirm it passed an outlier gate on a trusted box — a corrupt artifact scores plausibly and silently, and the fitter's own log cannot see it.**
