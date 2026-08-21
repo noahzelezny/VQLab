@@ -4792,7 +4792,16 @@ Peer ran the controlled experiment by accident: same box, same file, only the `m
 ### E81 (08-20): chip's qwen MoE speed report (E77 measured) — headline: bit-exact u8view lever, +33% prefill on every d4-K256 artifact
 Full report in chip transcript; measured, one process/arm, n>=3, prompt lengths stated. (1) **u8view**: uint8 code rows are byte-identical to the pack_bits=8 word layout, so a zero-copy view dispatches the FASTER packed fused kernel on unpacked artifacts — bit-identical (array_equal at N=8/512/4096 + identical 200-tok greedy gen). End-to-end 35B: prefill 732-769 -> 1009-1020 tok/s (+33%), decode +3%, reproduces the packed twin exactly. Proposed ~6-line dispatch in _fused; NOT applied. (2) **Honest competitive picture**: even with the lever, 35B VQ prefill is ~0.5x affine (2100+) and decode -10-20%; at top_k=8 the default 512-step rides the small-N kernel (N=4096=VQ_FUSED_MAX_N); step 2048 -> _prefill path -> 1086-1106. (3) **E70's 37% byte-aligned decode tax does NOT reproduce at kernel level** (packed8 0.75-0.91x, bit-equal, incl. synthetic 397B shapes) — law 8/9 need an artifact-level 397B recheck before edits. (4) Chunk knee does NOT transfer across scales: 35B optimum is the default 32, not 16 — shape-dependent, not universal. (5) **Shipping defect found**: rotlab--35B-vqK256codes bundles a pre-packing model.py — external users (stock mlx-lm) execute DIFFERENT code than our venv benches. Gate idea: check_release should hash-compare bundled model.py against the runtime that produced the benches. (6) Q2b native-bf16 kernel: dead (same speed, changes numerics).
 
-### E82 (08-20): LAW 10 SETTLED — d4+big-K beats d2+small-K at matched size, measured pair, same instrument
+### E82 (08-20): **VOID — see E85. Its d2 arm is a known-corrupt artifact.**
+
+> **RETRACTED IN PLACE 08-21.** Everything below overstates the effect by
+> ~25x. The d2-K64 arm held 3 collapsed tensors (L34 gate 0.9895, L11 gate
+> 0.9880, L38 down 0.9569 — re-measured on M3 08-21 with the outlier gate;
+> note the 08-15 record listed only two of the three). E85 voids this entry;
+> **E87 re-settles the real magnitude at ~12%, not 3.3x.** Do not cite E82's
+> numbers. Do not cite "3.3x" from anywhere.
+
+### E82 (08-20): [ORIGINAL HEADING] LAW 10 SETTLED — d4+big-K beats d2+small-K at matched size, measured pair, same instrument
 Noah ruled gemma evidence inadmissible (non-deterministic instrument herring), leaving law 10 on one interpolated qwen point (+1.26). Ran the decisive pair tonight: vq-K4096-d4 was sitting UNSCORED on disk at exactly vq-K64-d2's size. Both scored on kl_cache_qwen36 (same teacher, same 8192 tokens, chat_wrapped=False), both 18G on disk:
 
 | rung (18G each) | KL to bf16 | top-1 agreement |
@@ -4805,7 +4814,14 @@ Noah ruled gemma evidence inadmissible (non-deterministic instrument herring), l
 ### E83 (08-20): the d8/K65536 candidate ("G") — its 08-15 rejection rests on TWO stale premises
 Noah asked whether extrapolating the d/K table outward (d8, K65536) buys quality at days-of-compute cost. The record already priced this as candidate G and rejected it. Re-examined: **two of the three rejection grounds have since expired.**
 
-**Stale premise 1 — the size argument.** The 08-15 table concluded "G is the SAME SIZE as C (d4-K256), not smaller; its case is quality only (~2% relerr)". That was correct in the whole-byte storage era. Post-packing the comparison is different: d8-K65536 = 16/8 = **2.00 bpw, identical to d4-K256's 2.00** — but with a **65,536-entry codebook against 256**. By law 10 (spend budget on K, measured 3.3x KL at matched bytes, E82) that is the single most favourable K-vs-K matchup we have ever been able to state. d8-K16384 lands at 1.75 bpw — genuinely SMALLER than d4-K256, which the old table could not see (it read both as 2.25).
+> **PREMISE CORRECTED 08-21.** This entry cites E82's 3.3x as live support.
+> E82 is void (E85); the measured figure is **~12%** (E87). The d8-K16384
+> result that followed stands on its own — it won at matched size, gated and
+> scored — but the *case for chasing d8-K65536 next* is materially weaker
+> than the argument below states: a ~12% K preference, not a landslide.
+
+**Stale premise 1 — the size argument.** The 08-15 table concluded "G is the SAME SIZE as C (d4-K256), not smaller; its case is quality only (~2% relerr)". That was correct in the whole-byte storage era. Post-packing the comparison is different: d8-K65536 = 16/8 = **2.00 bpw, identical to d4-K256's 2.00** — but with a **65,536-entry codebook against 256**. By law 10 (spend budget on K; the 3.3x cited here is VOID per E85, real
+figure ~12% per E87) that is the single most favourable K-vs-K matchup we have ever been able to state. d8-K16384 lands at 1.75 bpw — genuinely SMALLER than d4-K256, which the old table could not see (it read both as 2.25).
 
 **Stale premise 2 — the fit cost.** "~169h assign cost, rejected" predates commits 8a4d486 (one-hot chunk scaled with K) and a9f5c5c (scatter-add centroid update), which took K8192 "from impractical to 10s" per tensor. The 169h figure was measured against the code those commits replaced and cannot be trusted; it needs re-measuring, not citing.
 
