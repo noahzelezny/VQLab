@@ -4,7 +4,7 @@
 re-opens a retraction, cite new evidence or drop it. EXPERIMENTS.md is the
 chronological lab notebook (E-numbers); this file is the distillation. Keep it
 under ~150 lines; when you add a law, delete anything it supersedes.
-Last updated: 2026-08-21 (through E102).
+Last updated: 2026-08-21 (through E110).
 
 ## I. Settled laws (each has survived at least one attempt to kill it)
 
@@ -33,7 +33,7 @@ Last updated: 2026-08-21 (through E102).
    sizes BETWEEN flat rungs at ~2x the byte-efficiency of stepping down.
    [E78, E79 addendum; E80 tests the K2048 end tonight]
 
-5. **Size model (5 hits + 1 in-band, 0 misses through E93):**
+5. **Size model (6 hits + 1 in-band, 0 misses; stamped through E92/E93 post-graft, 08-21):**
    STAMP EVERY DATA POINT pre-graft or post-graft — the vision tower is a
    fixed 912,020,960 bytes (0.849 GiB, byte-identical across grafted
    artifacts) and historic points are all POST-graft; mixing the two is a
