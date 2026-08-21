@@ -37,6 +37,7 @@ import pathlib
 import shutil
 import subprocess
 import sys
+import re
 import time
 
 import mlx.core as mx
@@ -539,7 +540,13 @@ for m in targets:
         q = base_cfg["quantization"][m]
         # shapes recoverable only from the base scales tensor; load lazily
         sc = mx.load(str(BASE / base_idx[m + ".scales"]))[m + ".scales"]
-        pd, pk = GEOM[m.rsplit(".", 1)[1]]
+        # geom_for, NOT GEOM: this rebuild runs for shards SKIPPED on resume,
+        # and GEOM alone ignores --tail-geom — a resumed tail shard would get
+        # stamped with the SHALLOW K and the runtime would decode against the
+        # wrong codebook size, silently. (Latent until a tail run resumes;
+        # audited tonight's rung's config — it did not fire.)
+        li = int(re.search(r"layers\.(\d+)\.", m).group(1))
+        pd, pk = geom_for(li, m.rsplit(".", 1)[1])
         vq_modules[m] = {"experts": sc.shape[0], "out": sc.shape[1],
                          "in": sc.shape[2] * G, "k": pk, "dim": pd, "group": G}
 
