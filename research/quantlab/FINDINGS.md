@@ -209,6 +209,15 @@ Last updated: 2026-08-20 (through E80).
   u8view gain. The tell is that a derived number arrives with no run behind it
   but the same number of decimal places as a measured one. Before quoting any
   figure, name the run that produced it; if you cannot, say unmeasured. [08-21]
+- **A retraction must chase the CITATIONS, not just the claim.** E82 was
+  voided on 08-20; on 08-21 its heading still read "LAW 10 SETTLED" above a
+  table wrong by ~25x, and E83 still cited its 3.3x as live support — E83
+  being the argument that justified the d8 fit. FINDINGS got updated because
+  that is where laws live; a dependency sitting in prose in another entry was
+  invisible. Citations are how a claim propagates, and a reader arriving by
+  grep never sees a retraction filed 30 lines later. **When you void
+  something, grep the notebook for its E-number and annotate every hit, and
+  retract IN PLACE at the heading.** [E82/E83, 08-21]
 - Prefer local reads for big sources; reads outweigh writes ~6:1 in a fit.
 - Make failure cheap (resume, quarantine, verified copies) — today's error
   budget held because failures were recoverable, not because reasoning was
