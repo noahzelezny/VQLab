@@ -4997,3 +4997,8 @@ All gates green (verify median 0.1865 — identical to E80's, as it must be with
 3. **Harvest at a rich base is all but free (0.0011 ppl/GiB)** — "name a size" now has a measured, tiny cost at the top of the ladder. E79's floor story survives with better constants.
 4. NOTE for E92/E93/E89 gating: chain emits `config lacks vision_config` warning — copy from source config before any publish (known step).
 Nothing swaps until Noah reads this. E89 resumed automatically at 03:18 (~107 tensors to go, lands early afternoon).
+
+### E91 correction (08-21 03:45, peer review): the "exactly additive" claim was an ALGEBRAIC IDENTITY, not a finding
+My resolution wrote "sum −0.0067 = measured −0.0067 exactly. Additive, no interaction term." That is (a−c) = (a−b) + (b−c) with E91 as b — it cancels, and could not have failed to close on ANY data, including garbage. Three measurements sharing an endpoint leave zero degrees of freedom for an interaction to appear in. **Struck.** Detecting an interaction needs the fourth cell of the 2x2 (harvest applied to the OLD fitter's output), which nobody has fit and which is probably not worth fitting. Honest phrasing: the two contrasts are REPORTED AS A DECOMPOSITION BY CONSTRUCTION; each stands on its own as a real two-artifact measurement: fitter −0.0109 (geometry matched), harvest +0.0042 for −3.72 GiB (bodies block-identical).
+
+Also stated per peer: the harvest control is BLOCK-IDENTITY except L10-11 — four tensors refit at matched geometry with an unseeded k-means draw. That fit-noise sits INSIDE the +0.0042 and cannot be separated from it; at this effect size it is a known contaminant of the measurement, not a negligible one.

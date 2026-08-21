@@ -3,8 +3,11 @@
 ## THE HEADLINE: E91 resolved — BOTH mechanisms real, exactly additive
 - **New best 397B ever: flat-K2048-refit = 2.3410 / 2.5963 @ 143.65 GiB**
   (post-graft). Fitter effect −0.0109 (geometry matched vs shipped 3.1);
-  harvest cost +0.0042 for −3.72 GiB (0.0011 ppl/GiB, bodies
-  block-identical). Sum = measured E80 delta to 4 decimals.
+  harvest cost +0.0042 for −3.72 GiB (0.0011 ppl/GiB; bodies
+  block-identical EXCEPT L10-11, 4 tensors of fit noise inside the 0.0042).
+  NOTE: the two contrasts share endpoint E91 — they are a decomposition by
+  construction, NOT a measured additivity (that claim was struck, see E91
+  correction). Each contrast stands alone.
 - E80 rung (2.3452 @ 139.93) = best-per-GiB. Both beat shipped 3.1 and
   spicy 3.5bit. NOTHING SWAPPED — Noah decides on waking.
 - Size model: 6 hits 1 in-band 0 misses; points now STAMPED pre/post-graft
