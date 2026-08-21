@@ -4894,3 +4894,10 @@ Noah's extrapolation from E87: if d4-K256 beats d2-K16 at matched rate, d8 with 
 **Scoring only needs the reference decode path; the missing fast kernel (1 MB codebook vs 32 KB threadgroup) blocks SHIPPING d8, not measuring it.**
 
 Run plan: fit starts only after tonight's M4 gate chain releases the box; outlier-gate on M3 per rule III.7 before scoring; score on kl_cache_qwen36.
+
+### E84 addendum (08-20): comparator rows verified on M3; the qwen3.6 quantization cliff
+mlx-community 3.6 comparators re-scored on this box, kl_cache_qwen36: 4-bit = 78.557 mnats / 85.61%, 8-bit = 7.449 / 96.18% — digit-identical to the peer's independent runs. Two-box agreement on the same instrument.
+
+The full one-instrument quality ladder for qwen3.6-35B now reads:
+  8-bit 7.4  ->  d4-K8192 (3.25bpw) 56.4  ->  4-bit 78.6  ->  d4-K256 (2.0bpw) 210.7  ->  d2-K16 239.9
+**The 8->4 bit cliff is 10.5x.** Noah's read stands: this model is quantization-fragile, and community 4-bit is already lossy. Consequences: (a) d4-K8192 remains the only interesting product point — the sole artifact between the cliff edges, better AND smaller than the community 4-bit; whether 56 mnats is USABLE needs generative evidence (litbench), not KL alone. (b) The 2.0 bpw arms (210-240) are science, not product — even a decisive d8 win tonight lands far past the cliff; E88's value is the d-ladder shape, and the kernel question only matters if some model family tolerates 2 bpw better than this one.
