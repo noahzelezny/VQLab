@@ -5575,3 +5575,42 @@ that is the trade being bought, not damage.** The corruption check that still
 works is the outlier gate (median x3), which is relative and unaffected by a
 uniform shift. Reading a raised mean as a broken fit repeats E101 with the
 sign flipped.
+
+## E106 — the tail-weight failure is in the SEEDING, not the update; and the screen was testing half the patch
+
+The P=4 fit aborted (`FATAL: L0 down_proj relerr 0.7111 > 0.60 after 2
+refits`) after a screen that had said P=4 was fine. Diagnosed by making the
+screen mirror the fitter.
+
+**First diagnosis was WRONG.** I assumed the screen's in-sample evaluation
+flattered the weighting. Fixed it to fit on train experts and score on
+held-out ones — and the gap is negligible (L00 p=4: held-out 0.1685 vs
+in-sample 0.1673). Generalization across experts was never the issue. The fix
+is still correct and stays, but it did not explain anything.
+
+**Actual cause: the screen used RANDOM init; the patched fitter uses WEIGHTED
+k-means++.** The patch weights BOTH the centroid update and the ++ seeding
+(draws proportional to `w * d^2`). The screen only ever exercised the update.
+Adding `--init kmeans++` to mirror the fitter reproduces the failure in
+minutes — L00 down_proj, MEAN held-out relerr:
+
+    init        p=0        p=4
+    random    0.2035     0.1685    <- p=4 looks GOOD, this is what fooled us
+    kmeans++  0.1177     0.4869    <- p=4 BLOWS UP, matching the real fit
+
+The 50-90 bucket goes to 8.33 at p=4 with ++ seeding. Mechanism: ++ already
+spreads seeds by distance; multiplying that by `mag^4` concentrates nearly
+every seed in the extreme tail, so the bulk receives almost no centroids. The
+two mechanisms compound instead of composing.
+
+**So the direction is not dead — the implementation is wrong.** The centroid
+update alone (random init, p=4) does what E102 predicted: tail buckets improve
+(-0.041 / -0.043) at a bulk cost. The obvious next version weights the UPDATE
+and leaves ++ seeding unweighted, which the screen can now test in minutes
+before any fit is launched. UNTESTED; not a claim.
+
+**The rule this cost us:** a screen must exercise the SAME CODE PATH as the
+thing it screens. Random init was chosen deliberately, to isolate p as the
+only variable between arms — a defensible experimental instinct that made the
+screen unable to see the failure that mattered. Isolating a variable and
+predicting a system are different jobs.
