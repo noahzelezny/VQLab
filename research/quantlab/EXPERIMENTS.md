@@ -4901,3 +4901,17 @@ mlx-community 3.6 comparators re-scored on this box, kl_cache_qwen36: 4-bit = 78
 The full one-instrument quality ladder for qwen3.6-35B now reads:
   8-bit 7.4  ->  d4-K8192 (3.25bpw) 56.4  ->  4-bit 78.6  ->  d4-K256 (2.0bpw) 210.7  ->  d2-K16 239.9
 **The 8->4 bit cliff is 10.5x.** Noah's read stands: this model is quantization-fragile, and community 4-bit is already lossy. Consequences: (a) d4-K8192 remains the only interesting product point — the sole artifact between the cliff edges, better AND smaller than the community 4-bit; whether 56 mnats is USABLE needs generative evidence (litbench), not KL alone. (b) The 2.0 bpw arms (210-240) are science, not product — even a decisive d8 win tonight lands far past the cliff; E88's value is the d-ladder shape, and the kernel question only matters if some model family tolerates 2 bpw better than this one.
+
+### E89 (08-20): pre-registration — d8 goes straight to the 397B (supersedes E88's 35B run)
+Noah's call, and the reasoning is recorded because it is right: the 35B d8 run (4.4h) yields a datapoint about an unusable bpw class; the 397B d8 twin (~2.5-3h, K16384 is 1/4 the k-means of K65536) yields the SAME dimension-axis answer as a same-size head-to-head against a rung people actually use. One test, both payoffs. E88's 35B run is cancelled, not deferred — if E89 answers the d-axis question at 397B scale, the 35B point is redundant.
+
+**Design:** rotlab--397B-d8K16384 — flat d8-K16384 on all expert tensors (analytic 1.75 b/w of codes, identical to shipped flat-K128's 7-bit d4). Same base (struct6-tail3x3), same src, fit on M3. Packed sizes should be IDENTICAL to the shipped 2.2bpw (both pack to 14 bits per 8 weights vs 7 bits per 4 — same ratio); per rule 7, sizes compared packed only.
+
+**Bar and registered predictions:**
+- Direct opponent: shipped flat K128 = prose 3.1706 / code 2.6988 at 100.9 GiB, same instrument, refs re-scored today.
+- PREDICTED: d8 wins prose by a MODEST margin — the 35B d2->d4 step bought 12% KL; d4->d8 should buy less. On the 397B ppl scale my point estimate is 3.10-3.15, i.e. a few percent, NOT a rung-step.
+- FALSIFIED (d-axis dead): >= 3.1706. The d-ladder peaks at d4 and the kernel question dies for good.
+- SURPRISE (scrutinize before celebrating): < 3.05 — that would be half a rung-step from geometry alone; check sample-starvation memorization (122 samples/centroid here vs 7800 at K256-d4) and verify from artifact per E47 discipline before believing.
+- Speed/kernel is EXPLICITLY out of scope: scoring rides the streaming referee (no fast kernel needed). If quality wins, the 1 MB... rather 256 KB codebook kernel becomes tomorrow's question; if quality loses, it never becomes a question.
+
+Runs AFTER tonight's M4 gate chain (E80) — launched by hand, not by waiter, per this afternoon's lesson.
