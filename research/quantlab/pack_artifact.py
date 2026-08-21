@@ -39,6 +39,13 @@ ap = argparse.ArgumentParser()
 ap.add_argument("--src", required=True)
 ap.add_argument("--out", required=True)
 ap.add_argument("--group", type=int, default=64)
+ap.add_argument("--vision-config-from", default="/Volumes/Thunderbay SSD/"
+                "Exo Models/Qwen--Qwen3.5-397B-A17B-bf16",
+                help="artifact dir to copy vision_config/image_token_id from "
+                     "when the packed config lacks them. Defaults to the Qwen "
+                     "3.5 bf16 source since that is what this lab packs; pass "
+                     "a different path for another family, or \"\" to skip "
+                     "and get a warning instead.")
 args = ap.parse_args()
 
 SRC, OUT = pathlib.Path(args.src), pathlib.Path(args.out)
@@ -56,7 +63,21 @@ for f in SRC.iterdir():
 vq_meta = {}
 skipped = []
 for si, sh in enumerate(shards, 1):
-    data = mx.load(str(SRC / sh))
+    # Materialize the shard ON THE CPU STREAM and force it here. Tensors we
+    # pass through untouched (every non-.codes key, and every byte-aligned
+    # or NSUB-skipped codes tensor) go into out_data STILL LAZY, so without
+    # this the only pending work at mx.save_safetensors is a read of SRC --
+    # and it is then paid inside a GPU command buffer. Over a fast local
+    # disk that finishes; over SMB it trips the Metal watchdog and the pack
+    # dies at the write step with a GPU Timeout that names the save, not the
+    # read. Measured 2026-08-21: M4 packing the share died on shard 1 (K512)
+    # and shard 5 (K256, where n_packed=0 makes EVERY tensor a lazy
+    # passthrough); same artifacts pack clean on M3's local disk. The eval
+    # is LOAD-BEARING -- creation-binding to the CPU stream alone is
+    # measured-insufficient. Same family as vq_397b_codes.py's load path.
+    with mx.stream(mx.cpu):
+        data = mx.load(str(SRC / sh))
+        mx.eval(list(data.values()))
     out_data = {}
     n_packed = 0
     for key, val in data.items():
@@ -109,6 +130,35 @@ shutil.copy2(idx_path, OUT / idx_path.name)
 # seed config with pack_bits/in so add_model_file can read them back (it
 # refuses to guess a bit width, by design)
 cfg = json.load(open(OUT / "config.json"))
+
+# ---- vision keys.
+# The packer copies the fit output's config verbatim, and the fit output never
+# had vision_config: the FIT's base (struct6-tail3x3) has no such key, and
+# mlx_lm.convert strips it for text-only artifacts. Result until 2026-08-21:
+# every chain-built 397B artifact grafted all 333 vision tensors and still
+# shipped a config exo cannot build a VisionCardConfig from. graft_vision.py
+# had a flag for it that no chain ever passed. Fixed in both places — here so
+# a packed artifact is correct even if nobody runs the graft, and there so the
+# graft repairs one that slipped through.
+VISION_KEYS = ("vision_config", "image_token_id")
+_missing = [k for k in VISION_KEYS if k not in cfg]
+if _missing:
+    _vsrc = pathlib.Path(args.vision_config_from) if args.vision_config_from else None
+    if _vsrc and (_vsrc / "config.json").exists():
+        _vc = json.load(open(_vsrc / "config.json"))
+        _copied = [k for k in _missing if k in _vc]
+        for k in _copied:
+            cfg[k] = _vc[k]
+        if _copied:
+            print(f"copied vision keys from {_vsrc.name}: {_copied}")
+        if [k for k in _missing if k not in _vc]:
+            print(f"WARNING: {[k for k in _missing if k not in _vc]} absent "
+                  f"from {_vsrc.name} too — artifact will not be exo vision-ready.")
+    else:
+        print(f"WARNING: config lacks {_missing} and no --vision-config-from "
+              f"given. exo will not build a VisionCardConfig. Re-run with "
+              f"--vision-config-from <bf16 source>, or run graft_vision.py "
+              f"(its --copy-config-keys now defaults ON).")
 merged = cfg.get("vq_modules", {})
 for mod, meta in vq_meta.items():
     merged.setdefault(mod, {}).update(meta)
