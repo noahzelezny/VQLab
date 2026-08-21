@@ -86,7 +86,7 @@ ap.add_argument("--tail-weight-pow", type=float, default=0.0,
                      "weights each training subvector by its WEIGHT-SPACE L2 "
                      "norm to the p: w = (scale_g * ||x||_2)^p, where scale_g "
                      "is the group-64 max-abs the subvector was normalized by "
-                     "(64 % d == 0, so a subvector never straddles two "
+                     "(64 %% d == 0, so a subvector never straddles two "
                      "groups). p=2 makes Lloyd minimize true weight-space MSE "
                      "instead of normalized-space MSE; p>2 buys the tail at "
                      "the bulk's expense. WHY (E102): k-means minimizes "
