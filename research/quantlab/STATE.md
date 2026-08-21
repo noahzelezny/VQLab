@@ -29,6 +29,11 @@
    pass (audit vq_35b kmeans parity first), e4b rebuild, collection post.
 
 ## APPROVED / DIRECTED BY NOAH (08-21 morning)
+- **UPLOAD CHECKLIST (hard gates, in order)**: (1) check_card_placeholders.sh
+  on EVERY card in the bundle — a human reader's eye supplies meaning for
+  __TOKENS__, so review alone cannot catch them; (2) predecessor revision
+  hash recorded and substituted at upload time; (3) Noah reads the full set;
+  (4) exo 2-box smoke passes; (5) cards C/F/G + chart upload TOGETHER.
 - **Flagship swap APPROVED**: flat-K2048-refit ships as "3bpw" @ 143.65.
   Staging with peer. Smoke = EXO 2-BOX on our fork (artifact > any single
   box); card MUST note upstream PR #2268 stalled -> our codebook-replicate
