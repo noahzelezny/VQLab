@@ -132,6 +132,13 @@ Last updated: 2026-08-20 (through E80).
 - Never edit a script a running chain has not yet invoked (Python reads at
   invocation). Never `rm -rf` a fit output dir: fits RESUME (and the resume
   check now validates shard completeness, not existence).
+- **A REFIT MUST WRITE TO A NEW DIR.** Because fits resume, aiming a refit at
+  the dir it is meant to repair makes it skip every existing shard as
+  "complete" and emit a repaired-LOOKING artifact containing exactly the
+  suspect bytes, with rc=0 and a log full of "exists, skip." Completeness
+  validates shard *structure*, not shard *correctness*, so no downstream gate
+  catches it. Keeping the original also lets you score old vs new on one
+  cache. [caught pre-launch on the d2-K64/K128 repairs, 08-21]
 - Stale scripts on a second box = silent divergence → `check_scripts_sync.sh`
   in every chain preamble.
 - Prefer local reads for big sources; reads outweigh writes ~6:1 in a fit.
