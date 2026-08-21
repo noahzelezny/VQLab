@@ -5456,3 +5456,76 @@ specified, against an output metric that weights the tail far more heavily.
   tail, or fit the tail separately) should recover the loss. UNTESTED.
 - Retires the framing that the refit is "worse for unknown reasons." It is
   worse for a specific reason that its own objective guarantees.
+
+## E103 — flagship SERVES on the 2-node exo ring, coherent on graded probes
+
+First time any token has been generated through `flatk2048-refit-packed`. At
+143.68 GiB it fits neither box (M3 96 GiB, M4 128 GiB), so the 2-node ring is
+the ONLY form III.10 can take for this artifact.
+
+**Graded known-answer probes, greedy (temperature 0), against the placed
+instance:**
+
+    1 OVERDETERMINED  "The capital of France is"        -> "**Paris**."       OK
+    2 TWO-HOP ARITH   "What is 17 times 23?"            -> "391"              OK
+    3 PRECISE RECALL  "Who wrote Pride and Prejudice?"  -> "Jane Austen"      OK
+    4 OPEN-ENDED      "what is vector quantization?"    -> correct definition OK
+
+All four correct, all `finish: stop`, no truncation. The graded design matters:
+fluent garbage fails all four; partial degradation (a half-sliced codebook)
+passes #1 and fails #2/#3. Passing #2 and #3 is what rules that out, and #4
+would have exposed a subject-matter-wrong answer to readers who would notice.
+
+**What this establishes:** the artifact serves on the ring, the packed-d4
+pack_bits=11 path executes, and the codebook-replication guard held across the
+2-node split.
+
+**What this does NOT establish: that sharded output equals a single-box run.**
+That comparison is impossible for this artifact — it fits neither box. The
+supported claim is "serves and is coherent", NEVER "sharding is bit-exact".
+
+**Two blockers had to clear first, and neither alone was sufficient:**
+1. M4's `~/.exo/models` is a REAL DIRECTORY, not a symlink to the share, so it
+   could never see a local-only artifact (published ones are local copies exo
+   downloaded from HF). Symlink added -> both nodes DownloadCompleted.
+2. `metadata.total_size` in the packed index was the UNPACKED size (E104).
+
+**A false negative worth remembering:** `exo_verify_artifact.sh` fired its
+generate the instant placement returned rc=0, while both runners were still
+`RunnerWarmingUp`, and the 300s curl timed out -> "PLACED BUT DID NOT
+GENERATE". That verdict was a RACE IN THE SCRIPT, not a fault in the artifact,
+and it would have sent someone hunting a nonexistent bug. The script should
+wait for runner-ready; a return code certifies the step it measured and
+nothing downstream.
+
+## E104 — every packed artifact declared the UNPACKED size
+
+`pack_artifact.py` copied the source index verbatim (`shutil.copy2`), so
+`metadata.total_size` described the pre-pack tensors:
+
+    flatk2048-refit-packed   declared 197.12 GiB / actual 143.68   +37.2%
+    flatk512-packed          declared 197.12 GiB / actual 122.30   +61.2%
+    d8K16384-packed          declared 111.66 GiB / actual 100.97   +10.6%
+    flatk256-refit-packed    correct (pack_bits=None, nothing packed)
+    VQ-2.2 / 2.4 / 3.1bpw    correct to the byte
+
+exo reads that field to size a model; it refused to place the flagship with
+`ValueError: No cycles found with sufficient memory`. **But this was never
+only an exo problem — `metadata.total_size` is read by HuggingFace's UI and by
+downloader tooling, so a published artifact would have told every consumer to
+provision 197 GiB for a 143.7 GiB model.** Silent, because the number is
+plausible.
+
+The three PUBLISHED artifacts are unaffected, verified to the byte.
+
+**Principle: derive a size from the bytes, never from a field that says what
+the bytes are.** The model card was never contaminated because every size on
+it came from summing `data_offsets` or from `stat` — neither reads the
+declared field. The card was right and the artifact was lying, all afternoon,
+and the discrepancy was discoverable at any time by comparing the two. Nobody
+did, because nobody expects a self-describing file to misdescribe itself.
+
+Fixed in `pack_artifact.py` (recompute from packed shard headers) with
+`fix_index_total_size.py` as the audit/repair tool. Independently re-verified
+by the peer from `data_offsets` rather than from the repaired field — a
+repaired number must not be checked against itself.
