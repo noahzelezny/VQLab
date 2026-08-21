@@ -1,3 +1,47 @@
+# OVERNIGHT BOARD (08-20 22:20) — read this first tomorrow
+
+## FOUR UNGATED ARTIFACTS EXPECTED BY MORNING — gate serially on M3, read
+## each against its registration BEFORE looking at the next:
+- **E89** (M3, fitting now): flat d8-K16384 397B — rate-twin of shipped
+  flat-K128. Grid in E89 amendments: ~3.1706 = rate-twin equivalence
+  extends (clean close); 3.10-3.15 = dimension pays; <3.05 = memorization
+  check FIRST. Opponent numbers: 3.1706/2.6988 (re-scored today).
+- **E91** (M4): flat-K2048 shard-reuse refit — THE MECHANISM DECIDER.
+  vs E80 rung 2.3452/2.5969 isolates harvest; vs shipped 3.1 2.3519/2.5987
+  isolates fitter vintage. Predicted packed 143.7 (size model test #5).
+- **E92** (M4 queue): flat-K256 refit. Predicted ~111.6 (#6). Beats
+  shipped 2.7655/2.6383 if fitter effect is real.
+- **E93** (M4 queue): flat-K512, the missing rung. Predicted ~122.6 (#7).
+  Bar = interpolation between 112.0/2.7655 and 143.7/2.3519 at its size.
+M4 queue log: grep '@@@' on M4's queue log for the night's outcome. A dead
+fit = resume manually (same invocation, do NOT delete output). Peer staged
+the fixed fitter (fc7c7e6) to install between E91 and E92 — verify md5 in
+their log.
+
+## TODAY'S SETTLED RESULTS (all in EXPERIMENTS E73-E93)
+- **E80: the 3.1-class harvest rung WON — 139.93 GiB, 2.3452/2.5969, beats
+  the shipped 3.1 on both corpora.** All gates green. Size model 4/4.
+  Mechanism honestly UNRESOLVED (fitter-vintage confound) until E91.
+- **E90: u8view SHIPPED to published 2.4bpw** — +25-32% prefill (35B-
+  measured, 397B unclaimed on card), decode token-identical, referee exact.
+  check_bundle gate born (known-bad tested both directions).
+- E79: E71's swap conclusion was a proxy-score error; ladder is monotone;
+  cheap-shallow = size-targeting tool (~2x byte-efficiency), 4/4 pricing.
+- E87: d4 beats d2 ~12% KL at matched 2.00 bpw (clean pair; E82's 3.3x was
+  a corrupt-arm artifact, E85). E84: one-instrument 35B ladder; qwen3.6
+  8->4bit cliff 10.5x; d4-K8192 (56.4) beats mlx 4-bit (78.6) smaller.
+- e4b: dtype confound (E76), repo PRIVATE, republish plan agreed.
+- FINDINGS.md exists — laws/retractions/rules; cite the commit when citing
+  a law. New gates: check_scripts_sync, check_comparator, check_bundle,
+  resume completeness, fitter resume-metadata fix (fc7c7e6).
+
+## DON'T RELEARN
+- Never edit scripts a running chain hasn't invoked; fits RESUME (never
+  rm output); stored bytes are not sizes (pack first); score nothing
+  without an outlier gate on a trusted box; comparison rows name artifact+
+  instrument+commit; M3 is 96 GB — no resident loads >90 GiB (streaming
+  referee is fine); cold/warm SMB load differs 5.5x.
+
 # COMPACTION HANDOFF (08-20 ~13:20) — read this first
 
 **Before proposing ANY experiment: read FINDINGS.md** — settled laws,
