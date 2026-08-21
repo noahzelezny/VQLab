@@ -1,4 +1,4 @@
-# BOX SCHEDULE (08-21 09:50) — this session manages M3 + coordinates M4
+# BOX SCHEDULE (08-21 09:55) — this session manages M3 + coordinates M4
 
 ## ROLES
 - THIS session: M3 schedule, all gate chains, all scoring, coordination
@@ -7,40 +7,63 @@
 - M4 session (uds:/tmp/cc-socks/39597.sock): fits only, hands over
   ungated. Never gates its own artifacts (E47).
 
+## TIMELINE CORRECTION (supersedes the 09:50 board)
+The 09:50 board said E89 finished 10:40. Wrong — extrapolated from elapsed
+seconds instead of shard write timestamps. Shards land every ~30 min
+(shard 22 at 09:50, 5 remain). Real finish: **12:20**. E92/E93 no longer
+fit before the smoke and have moved after it.
+
 ## M3 QUEUE (serial, GPU-bound)
 | when | job | verdict |
 |---|---|---|
-| ->10:40 | E89 d8 fit (155/171 tensors, shard 22/27) | — |
-| 10:40-12:00 | E89 inline gate chain | **d8 verdict ~12:00** |
-| 12:00-12:45 | E92 chain (flatk256-refit-packed, 111G, on share) | **K256 refit** |
-| 12:45-13:30 | E93 chain (flatk512-packed, 122G, on share) | **new ~122G rung** |
-| as they land | score M4 artifacts (kl_damage, minutes each) | E94, E95 |
-| ~14:00 | flagship 2nd referee pass (restores reproduced-twice claim) | — |
+| ->12:20 | E89 d8-K16384 fit (shard 22/27 at 09:50) | — |
+| 12:20-13:40 | E89 inline gate chain | **d8 verdict ~13:40** |
 | 14:30-16:00 | **exo 2-box smoke of the 3bpw** (needs BOTH boxes quiet) | throughput |
-| after chains clear | land the 2 lazy-load patches (pack_artifact from
-  logs/pack_artifact_cpuread.patch + graft_vision twin); card editing pass | |
+| after smoke | E92 chain (flatk256-refit-packed, 111G, on share) | **K256 refit** |
+| then | E93 chain (flatk512-packed, 122G, on share) | **new ~122G rung** |
+| as they land | score M4 artifacts (kl_damage, minutes each) | E94, E95 |
+| later | flagship 2nd referee pass; land the 2 lazy-load patches; card pass | — |
 
-## M4 QUEUE (fits only)
-1. E94 35B K8192 refresh — CORRECTED invocation (vq_397b_codes
-   --family qwen3_5_mlx --base rotlab-35B-qwen36-e2, layers 0-39, k 8192
-   d4). NOTE: out dir reads 0B at 09:50 — confirm it launched.
-2. E95 dense 27B — fit_dense_vq.py --family qwen3_8 --dim 4 --k 256.
-3. d2-K64 + d2-K128 refits (repair E82's corrupt arm; law 10 second point).
-4. Conditional on E94 gain: refresh d4-K2048/K4096.
-HARD: M4 quiet by 14:30 for the exo smoke.
+The 14:30 quiet constraint is now the binding one. If E89's gate chain runs
+long, KILL THE CHAIN rather than push the smoke — the smoke needs both boxes
+and M4's window is the scarce resource.
+
+## M4 QUEUE (fits only) — must be QUIET by 14:30
+1. E94 35B K8192 refresh — running, healthy, launched 08:59:52, ETA ~09:35,
+   fitter md5 7eab40fa, 120 expert tensors / layers 0-39 / d4k8192.
+   Its out dir read 0B early: the 35B has only 3 shards, so the fitter buffers
+   a third of the model before its first write. **An empty out dir is not
+   evidence of a stall on a low-shard model** — do not "resume" a healthy fit
+   on the strength of one.
+2. d2-K64 + d2-K128 repairs (~15-20 min each, known duration) — these retire
+   the E82 contamination.
+3. E95 dense Qwen3.8-27B — duration UNKNOWN, no comparable prior run. Runs only
+   if the remaining window clearly covers it; otherwise slides to tonight when
+   the box is free anyway. Agreed with peer: do NOT kill a dense fit mid-flight
+   to clear the box for the smoke.
+4. Conditional d4-K2048/K4096 refresh if E94 shows a gain.
+
+M4 artifacts will sit unscored until late afternoon because M3 is occupied.
+That is scheduling, not a fault in the fits.
 
 ## BLOCKERS ON THE RELEASE (must clear before upload)
-- Card says "corrected k-means implementation (fixed 2026-08-18)" but E94
-  registers the mechanism as UNIDENTIFIED. Soften or identify. OURS to fix.
-- check_card_placeholders.sh must pass on all cards (G still has
-  __PREDECESSOR_REVISION__ by design until upload time).
-- Cards C and F go stale on rename — edit in the same session as the upload.
-- 6 more record inconsistencies flagged by a fresh review: see the bottom of
-  paper/OUTLINE.md. Noah has the list; reconcile when the queue is quiet.
+- [x] Card mechanism claim fixed. Now: fit with a later k-means version (two
+      changes landed 08-18), recipe unchanged, improvement measured but **not
+      isolated**. Also removed "measured repeatedly" (it is measured ONCE, this
+      artifact vs its predecessor) and a stale forward reference promising a
+      task-suite table the card no longer contains.
+- [ ] `check_card_placeholders.sh` passes (G carries `__PREDECESSOR_REVISION__`
+      by design until upload).
+- [ ] Cards C and F go stale on rename — must be edited in the same session.
+- [ ] Predecessor revision hash recorded and substituted at upload time.
+- [ ] Upload sequence: gates pass -> card pass -> **Noah reads the full set** ->
+      exo smoke -> bundled upload (rename + weights + 3 cards + chart together).
+      **Publishing is Noah's call. Old repos are MOVED, never deleted.**
+- Card checklist addition: when a section is replaced, sweep every above/below
+  cross-reference — a replaced section leaves forward references promising
+  content the card no longer contains.
 
-# MORNING BOARD (08-21 03:30 — night results are IN)
-
-## THE HEADLINE: E91 resolved — BOTH mechanisms real, exactly additive
+## THE HEADLINE: E91 — both mechanisms real; additivity claim STRUCK
 - **New best 397B ever: flat-K2048-refit = 2.3410 / 2.5963 @ 143.65 GiB**
   (post-graft). Fitter effect −0.0109 (geometry matched vs shipped 3.1);
   harvest cost +0.0042 for −3.72 GiB (0.0011 ppl/GiB; bodies
