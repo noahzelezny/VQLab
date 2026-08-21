@@ -5115,3 +5115,69 @@ one. The card language must continue to say exactly that.
 Duration, measured: 10920s = 3.03 h, 91 s/tensor. My scatter-add prediction
 was 30-45 min, so the miss is **4-6x**, not the 3.7x quoted from a partial
 run. E96's ratio is corrected accordingly.
+
+## E92/E93 — RESULT: the fitter-vintage effect REVERSES at low K
+
+Both artifacts gated clean (outlier gate, 333 vision tensors, index, tokenizer)
+and both configs now carry vision_config + image_token_id automatically — first
+chain to do so, confirming the graft/pack fixes (d143d8b, 21f0acb).
+
+### E92 is a REGRESSION, and it is the cleanest pair we have
+
+    shipped VQ-2.4bpw          2.7655 / 2.6383   111.617 GiB
+    flatk256-refit (E92)       2.8057 / 2.6447   111.617 GiB
+                               +0.0402 / +0.0064  WORSE on both
+
+171 modules both, all (K256, d4) both, size identical to three decimals. The
+ONLY difference is the fitter vintage. The refit LOSES.
+
+### Set against the flagship pair, which is equally clean
+
+    shipped VQ-3.1bpw          2.3519 / 2.5987   143.682 GiB
+    flatk2048-refit (flagship) 2.3410 / 2.5963   143.682 GiB
+                               -0.0109 / -0.0024  BETTER on both
+
+171 modules both, all (K2048, d4) both, identical size.
+
+### The law this forces
+
+**The 08-18 fitter change is K-DEPENDENT, not a uniform improvement.**
+Three matched-pair measurements:
+
+    K2048 @397B   -0.0109 ppl   WIN
+    K8192 @35B    -3.391 mnats  WIN
+    K256  @397B   +0.0402 ppl   LOSS
+
+It helps at large codebooks and hurts at small ones. Note also the asymmetry:
+the flagship's win (0.0109) is FOUR TIMES SMALLER than the K256 loss (0.0402).
+The effect we have been calling an improvement is marginal where it wins and
+substantial where it loses.
+
+**Card consequence.** The flagship IS K2048, so the card's claim about THAT
+artifact remains true and measured. But any phrasing that invites the reader
+to generalize — "a later version of our k-means implementation" improving
+things — is now known to be false at K256. The card must either scope the
+claim to the geometry it was measured at, or say the effect is
+geometry-dependent. Flagged as a RELEASE BLOCKER; the wording is not mine to
+finalize and the card does not go to Noah until this is resolved.
+
+**Do NOT swap E92 for the shipped 2.4.** It is worse at identical size.
+
+### E93 is a genuine new rung
+
+    flatk512-packed            2.5634 / 2.6123   122.305 GiB
+
+No size-matched peer. Interpolating the shipped 2.4 -> 3.1 line at 122.305 GiB
+predicts 2.628 on the literary corpus; measured 2.5634, i.e. **0.064 better
+than the line**. Sits above the ladder between the two shipped rungs.
+
+### Ladder as it now stands (all packed, post-graft, whole-artifact bytes)
+
+    100.930  shipped 2.2            3.1706 / —
+    100.970  d8-K16384              3.0591 / 2.6728
+    107.9    cheapshallow-2.3       2.779  / 2.6479
+    111.617  shipped 2.4            2.7655 / 2.6383
+    111.617  flatk256-refit (E92)   2.8057 / 2.6447   <- regression
+    122.305  flatk512 (E93)         2.5634 / 2.6123   <- new rung
+    143.682  shipped 3.1            2.3519 / 2.5987
+    143.682  flatk2048-refit        2.3410 / 2.5963   <- flagship candidate
