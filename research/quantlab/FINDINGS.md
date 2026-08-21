@@ -33,7 +33,12 @@ Last updated: 2026-08-20 (through E80).
    sizes BETWEEN flat rungs at ~2x the byte-efficiency of stepping down.
    [E78, E79 addendum; E80 tests the K2048 end tonight]
 
-5. **Size model (validated 3x out-of-sample, best err +0.05 GiB):**
+5. **Size model (5 hits + 1 in-band, 0 misses through E93):**
+   STAMP EVERY DATA POINT pre-graft or post-graft — the vision tower is a
+   fixed 912,020,960 bytes (0.849 GiB, byte-identical across grafted
+   artifacts) and historic points are all POST-graft; mixing the two is a
+   units mismatch that briefly presented as a "flat-geometry bias" (n=2,
+   killed by a 2-minute header read). Original form:
    `new_size = base_size − 1.87 GiB × shallow_bits_harvested` (397B; shallow
    region L0-9 = 1.87 GiB/bit, body L10-56 = 8.81 GiB/bit). Price a rung
    before fitting it. [E74 addendum, E78]
