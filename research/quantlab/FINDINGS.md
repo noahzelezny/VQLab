@@ -218,6 +218,14 @@ Last updated: 2026-08-20 (through E80).
   grep never sees a retraction filed 30 lines later. **When you void
   something, grep the notebook for its E-number and annotate every hit, and
   retract IN PLACE at the heading.** [E82/E83, 08-21]
+- **GENERATE ONE TOKEN before calling anything releasable.** Every gate we own
+  reads bytes; none runs the model. The d8-K16384 packed artifact passed the
+  outlier gate, check_release, check_vision AND the referee — the referee
+  scores through the REFERENCE decode path — then raised
+  `NotImplementedError: no FUSED packed kernel for d=8` on its first real
+  forward pass. Note the scope: unpacked d=8 kernels exist; only the PACKED
+  path lacks d=8. A gate that passes tells you about the property it measures
+  and nothing else. [E100, 08-21]
 - Prefer local reads for big sources; reads outweigh writes ~6:1 in a fit.
 - Make failure cheap (resume, quarantine, verified copies) — today's error
   budget held because failures were recoverable, not because reasoning was

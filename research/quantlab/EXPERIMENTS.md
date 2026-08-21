@@ -5304,3 +5304,47 @@ which is the direction that gets noticed least.
 
 Three independent estimates of the same quantity now agree: E87 ~12%, and
 these two at 6.4% and 11.4%. The 3.3x figure was contamination throughout.
+
+## E100 — the d8 artifact cannot serve PACKED; unpacked it runs but loses
+
+Peer's A/B died on the first forward pass, after a clean 385s load:
+
+    NotImplementedError: no FUSED packed kernel for d=8; only d=4 and d=2
+    are implemented and each is dispatched explicitly.   [vq_switch.py:722]
+
+**Correction to the first reading: this is a PACKED-kernel gap, not a d=8
+gap.** Source confirms UNPACKED d=8 kernels exist and are dispatched —
+`vq_fused_d8_tg` (K<=1024, threadgroup) and `vq_fused_d8` (device memory,
+vq_switch.py:741-747). Only the PACKED path is missing d=8. So:
+
+    rotlab--397B-d8K16384          110.809 GiB  unpacked  -> RUNS
+    rotlab--397B-d8K16384-packed   100.971 GiB  pack_bits=14 -> RAISES
+
+**And that reframes the result decisively, against d8.** The quality win was
+stated at the packed size:
+
+    d8-K16384 (packed)  3.0591 / 2.6728 @ 100.97 GiB  vs shipped 2.2 3.1706 @ 100.9
+
+That comparison is only available in a form that cannot generate a token. At
+the size d8 can actually SERVE — 110.809 GiB unpacked — its competition is
+cheap-shallow 2.3 at 107.9 GiB scoring **2.779 / 2.6479**, which is better on
+both corpora AND 2.9 GiB smaller. **Runnable d8 loses.**
+
+So the honest verdict on E89: the geometry result stands as a measurement
+(d8/K16384 beats d4/K128 at matched bytes), and the artifact is not a
+shippable rung at any size we can serve today. Getting the 101 GiB version to
+run costs a packed d=8 Metal kernel — unwritten, unknown performance.
+
+**E83 called this before the fit and we both read past it** (line ~4828):
+"the kernel does not exist, and this is the real blocker... G needs a new
+kernel whose performance is unknown and plausibly poor." The fit ran anyway.
+
+**Why every gate missed it: none of them executes a forward pass.** The
+outlier gate reads tensors; check_release reads files; check_vision counts
+tensors; and `referee/score_streaming.py` scores through the REFERENCE decode
+path, which handles d=8 — so the artifact scored perfectly while being unable
+to serve. We verified the bytes exhaustively and never ran the model.
+
+**New rule (III.10): an artifact is not releasable until it has GENERATED ONE
+TOKEN through the fused path it will ship with.** Cost: seconds. Today it
+would have saved a 6.5-hour fit, a pack, a graft, a score and an A/B setup.
