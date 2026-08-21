@@ -1,0 +1,83 @@
+# PROCESS — what to do with a NEW model family, before fitting anything
+
+Written 2026-08-21 after E107-E109. The lab spent weeks on a fitter regression
+whose cause was a seeding choice interacting with layer depth, and every step
+of that could have been front-loaded into a two-hour characterisation pass. Do
+that pass first. It is cheap, it is mechanical, and it tells you which knobs
+matter for THIS family before any codebook is fit.
+
+Related: FINDINGS.md holds the laws; EXPERIMENTS.md holds the chronology. This
+file is the recipe.
+
+---
+
+## 0. Establish the instrument BEFORE the artifact
+
+- Build a teacher cache (`kl_damage.py cache`) and confirm it is deterministic.
+  A family whose raw scores are non-deterministic is a family you cannot rank
+  quants in — find that out now, not after four fits. [gemma-4-e4b, FINDINGS II]
+- Identify the comparator set and record HOW each was produced. A locally
+  converted 4-bit and a downloaded 4-bit are different instruments; name which.
+- Verify `verify_artifact.py` can parse the family's tensor layout. Adding a
+  family entry is minutes; discovering the gate cannot read your artifacts
+  after you have twenty of them is a day.
+
+## 1. Profile the weight geometry (no fitting)
+
+For a sample of layers spanning depth x every projection:
+
+- **Distribution shape per layer.** Fraction of weight energy in the top 1% of
+  |w|, kurtosis, fraction of near-zero weights. Shallow layers are routinely a
+  different animal from body layers and the difference is measurable in
+  minutes.
+- **Where the bytes are.** GiB per bit by layer band. On the 397B the body
+  (L10-56) is 8.81 GiB/bit against the shallow band's 1.87 — so a per-tensor
+  effect that only hits the body dominates the artifact, and one that only hits
+  shallow layers barely registers. Know this ratio before you reason about any
+  per-tensor result.
+
+## 2. Run the INIT SWEEP (`probe_init_sweep.py`) — the pass this file exists for
+
+Layers x all three projections, K at the low end of your intended range, init
+as the only variable, evaluated on HELD-OUT experts, >=2 seeds, verdict
+requiring both tail buckets to move by more than the run-to-run spread.
+
+It answers, per family, in ~30 minutes:
+
+- Does k-means++ seeding help or hurt, and **where**? On the 397B it is
+  uniformly better below L15 and sells the tail on 18 of 24 body tensors
+  (E109). That flip is invisible to mean relerr (delta -0.00033 across the
+  body), so no gate we own would ever surface it.
+- Is the answer depth-structured, projection-structured, or neither? Sample
+  enough of both axes to tell them apart — three tensors is not enough, and
+  sampling across an unknown boundary reads as "unreliable effect" (E108).
+- **Which K regime is safe.** The penalty shrinks or reverses as K rises. If
+  the target bpw forces low K, seeding choice is a quality lever; if K is
+  large, it is free.
+
+## 3. Only then fit
+
+Carry into the fit: which init, which K band, and whether shallow and body
+layers want different treatment. If the sweep says the family is depth-split,
+a flat recipe is leaving quality on the table and a per-band recipe is the
+first thing to try.
+
+---
+
+## Standing gates, once artifacts exist
+
+1. `verify_artifact.py --outlier 3.0` — relative, catches collapsed tensors.
+   It does NOT catch a uniformly worse fit, and mean relerr is a BULK
+   statistic that is blind (E98) or anti-correlated (E101) to output damage at
+   low K. **Add a tail statistic** (normalized error in the 99-100th |w|
+   percentile) if you care about low-K artifacts.
+2. `pack_artifact.py` then **re-check the declared size** — the index's
+   `metadata.total_size` must be recomputed from the packed shards, never
+   copied (E104). Derive a size from the bytes, never from a field that says
+   what the bytes are.
+3. `graft_vision.py` with `--copy-config-keys` (now default ON).
+4. **Generate one token through the fused path the artifact will ship with**
+   (III.10). Every byte-level gate we own passed an artifact that could not
+   run (E100). The referee scores through the REFERENCE decode path and is
+   structurally blind to this.
+5. Score on the family's own instrument, and state which one.

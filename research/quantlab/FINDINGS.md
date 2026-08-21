@@ -103,6 +103,17 @@ Last updated: 2026-08-21 (through E102).
     scoring. Any fitter-tuning loop that reads reconstruction error will pick
     the worse artifact, confidently. [E98, E101, E102]
 
+13. **The ++ SEEDING PENALTY IS DEPTH-STRUCTURED, and profiling it is a
+    first-pass job for any new family.** 36 tensors on the 397B, init as the
+    only variable: below L15 k-means++ is uniformly BETTER (L00 gate/up by
+    -0.11/-0.13); from L20 on it sells the tail on 18 of 24 body tensors and
+    is better on zero. Body `down_proj` is 8/8. Because the body is
+    8.81 GiB/bit against shallow's 1.87, a body-only penalty IS an artifact
+    penalty — which is why the K256 refit lost while K2048/K8192 won. Mean
+    relerr across those body tensors moves -0.00033, so the gate sees nothing.
+    **Run `probe_init_sweep.py` on a new family BEFORE fitting anything** —
+    see PROCESS.md. [E107, E108, E109]
+
 ## II. Retracted / false leads — do NOT re-chase without new evidence
 
 - **"Cheap-shallow beats the rung above it" — FALSE.** Root cause: E71 used a
