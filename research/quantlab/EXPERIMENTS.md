@@ -5810,3 +5810,60 @@ Kurtosis, top-1% energy share and CV are all well-behaved and agree.
 **Scope.** Distributional statistics on 8 experts per tensor, one model. The
 mechanism is now explained for the 397B; whether other families split at the
 same depth is exactly what PROCESS.md's step 2 is for.
+
+## E113 — packed d=8 fused kernel: CORRECT on the real artifact, speed unmeasured
+
+E100 established that `d8K16384-packed` (100.97 GiB, 3.0591/2.6728, beating
+shipped 2.2's 3.1706 at the same size) could not generate: no fused packed
+kernel for d=8. Kernel written by a design agent (Noah-approved), combining
+`_SRC_FUSED_D8`'s device-memory codebook access with `_PACK_FETCH`'s
+bit-unpacking. Committed 73cdaf7.
+
+**Correctness — synthetic, then confirmed on the real tensor:**
+
+    synthetic: bit-identical to the shipped UNPACKED d8 kernel, max 0.000e+00,
+               across K=16384/4096/1024/256 at pack_bits 14/12/10/8, multiple
+               shapes, both device and threadgroup variants
+    artifact:  III.10 packed d8   -> 'Paris.\nA. True\nB'
+               III.10 unpacked d8 -> 'Paris.\nA. True\nB'   BYTE-IDENTICAL
+
+Synthetic bit-identity predicted byte-identical greedy text on the real
+artifact, and that prediction held. That is the strong form of the claim.
+
+**TWO PROCESS FAILURES IN THE HANDOFF, both caught by the peer, neither in the
+agent's sequence:**
+
+1. **The patch did not apply.** Generated as a diff into a temp file, so the
+   `+++` header targeted `/tmp/vqs_new.py` and `git apply` refused it. The
+   agent reported it "verified to apply clean"; that was not reproducible.
+   Regenerated at the source rather than hand-edited — a hand-edited patch
+   header immediately before a timing run is not a method.
+
+2. **The A/B would not have exercised the kernel at all.** The artifact
+   declares `model_file: model.py` and ships its own bundled runtime;
+   `mlx_lm.load()` imports THAT, not the repo. The raise lives at line ~723 of
+   the BUNDLED copy. Patching the repo and benchmarking would have loaded
+   ~101 GiB, run the old bundled runtime, raised identically, and looked like
+   a failed kernel after six minutes. **This is E81 recurring** — the bundle is
+   a copy, not a reference — and `check_bundle.py`, built for exactly this,
+   caught it only because someone thought to run it.
+
+**check_bundle satisfied III.5 incidentally, on one artifact in one session:**
+FAIL on the stale bundle (1093 lines vs runtime 1166), PASS after re-splice.
+Known-bad fails, known-good passes.
+
+**Live hazard fixed in the same commit:** the fused packed path never validated
+row width — `_fused` computed NSUB but never checked
+`codes.shape[2] == NSUB//32*pack_bits`, though `_dense_fused` did. A geometry
+mismatch read wrong memory and returned plausible garbage instead of raising.
+Unguarded in the decode path until today.
+
+**SPEED: NOT MEASURED.** A/B launched 16:34 on a quiet share. One early
+observation, explicitly NOT a measurement: the packed smoke emitted 8 tokens in
+43.0s against the unpacked artifact's 5.6s — but both include Metal JIT on
+first kernel use, both are n=1, and neither controls anything. Recorded only so
+that a low A/B result reads as a second observation rather than a surprise, and
+a parity result reads as a discrepancy to explain rather than a quiet
+contradiction. **E83's warning — device-memory codebook, 256 KB against a
+32 KB threadgroup limit, two dependent half4 loads per code with no in-thread
+reuse — remains unrefuted.**
