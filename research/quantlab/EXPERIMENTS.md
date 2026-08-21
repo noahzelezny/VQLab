@@ -4925,3 +4925,6 @@ Peer flagged that my 3.10-3.15 prediction reads as contradicting Law 1 ("rate tw
 - **< 3.05: memorization check fires BEFORE belief** (~120 samples/centroid).
 
 **Size registration (Law 5 / rule 7):** unpacked will read ~181 GiB-class (14-bit codes in uint16 — the pre-pack number is NOT the result); packed must land in the 100.9 GiB class of its rate-twin. Materially off that = build defect, not physics. Same discipline for the peer's incoming rung: its 145+ GiB pre-pack directory does not test my 140.3 +/- 0.5 packed prediction.
+
+### E89 second amendment (08-20, pre-result): the decisive framing, peer's
+E89 separates two hypotheses that agree everywhere already measured: "quality improves monotonically in d at matched rate" vs "d has an interior optimum near d4" (counteracting force: sample sparsity, ~120 samples/centroid at K16384). Both predict E87's d2 < d4; they differ ONLY at d8. If d8 lands at or below d4's curve, Law 8's d4 sweet spot gains a principled mechanism rather than an empirical shrug. This is the correct way to read the wash/loss outcomes — decisive either way, not "win expected".

@@ -101,11 +101,15 @@ Last updated: 2026-08-20 (through E80).
    before it is trusted. (A gate that always fails is one nobody reads.)
 6. Report nothing predicted as measured. Label ESTIMATE vs MEASURED in every
    table.
-7. **Never compare artifact sizes before packing.** Stored bytes include
+7. **Cite the commit when citing a law.** This file moved twice in 25
+   minutes tonight and a peer built an argument on the stale version. A law
+   citation without a commit hash is as untrustworthy as a comparator row
+   without an instrument, for the same reason.
+8. **Never compare artifact sizes before packing.** Stored bytes include
    whole-byte padding and are not a size. Quote packed bytes or analytic
    bpw. Three separate wrong conclusions today traced to this (E83's
    candidate-G rejection, the 397B pre-pack readings, the E87 overclaim).
-8. **Before scoring ANY artifact, confirm it passed an outlier gate on a
+9. **Before scoring ANY artifact, confirm it passed an outlier gate on a
    trusted box.** A corrupt artifact scores plausibly and silently, and the
    fitter's own log structurally cannot see it (it reports what it COMPUTED,
    not what reached disk). Cost of skipping this: E82. [E85]
