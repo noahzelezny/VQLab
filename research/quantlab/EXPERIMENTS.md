@@ -5614,3 +5614,54 @@ thing it screens. Random init was chosen deliberately, to isolate p as the
 only variable between arms — a defensible experimental instinct that made the
 screen unable to see the failure that mattered. Isolating a variable and
 predicting a system are different jobs.
+
+## E107 — MECHANISM IDENTIFIED: k-means++ seeding buys the bulk with the tail, and only pays off when K is large
+
+The 08-18 fitter change has been "UNIDENTIFIED" on the card all day. Commit
+689e03c, `fitter: kmeans++ seeding (robustness, NOT a quality lever)`, is a
+quality lever in BOTH directions, and it explains the K-dependence.
+
+**Pre-registered before running** (`probe_init_tail.py` docstring): ++ must be
+WORSE than random on the tail buckets at K=256, and that penalty must be
+ABSENT or much smaller at K=2048. Both halves required; ++ hurting the tail at
+both K would be a real effect that does NOT explain the K-dependence.
+
+**Controls:** same tensor, same sampled subvectors, same Lloyd iterations,
+same seed per pair — init is the ONLY difference within a pair. 3 reps.
+Evaluated on HELD-OUT experts. L30 down_proj, d4, 16 experts.
+
+**Result — delta (++ minus random), POSITIVE = ++ WORSE:**
+
+    K      99-99.9        99.9-100        MEAN relerr
+    256   +0.00707±0.00099  +0.00844±0.00210   -0.00003±0.00034
+    2048  -0.00175±0.00059  +0.00287±0.00062   -0.00044±0.00003
+
+**At K=256** both tail buckets are worse by ~7x the run-to-run spread, and
+**mean relerr does not move at all** (-0.00003). That is why this was invisible:
+the statistic we gate on shows nothing while the tail is being sold off.
+
+**At K=2048** the 99-99.9 penalty REVERSES to a gain, the extreme-tail penalty
+shrinks 2.9x, and mean relerr improves. ++ is a net win there.
+
+**Magnitudes match the real artifacts.** E102 measured the shipped-2.4 vs
+K256-refit pair at +0.0057 (99-99.9) and +0.0112 (99.9-100). This isolated
+init-only experiment gives +0.0071 and +0.0084 on the same geometry. Same
+direction, same order.
+
+**Why.** ++ seeds proportional to squared distance, which finds a better local
+optimum of the AVERAGE objective. When centroids are scarce, a better average
+optimum IS a bulk-favouring one — the tail is what gets given up (law 11). When
+centroids are plentiful there is room to serve both, so the same change is free
+or positive.
+
+**Scope, stated plainly.** One tensor, one layer, one projection, 16 experts,
+3 reps, reconstruction error only. It does NOT establish the end-to-end
+perplexity effect — that was measured separately on real artifacts (E92/E101).
+What it establishes is that init alone reproduces the tail/bulk trade with the
+right sign and magnitude, and that the trade vanishes at high K. A second
+tensor and a second layer would strengthen it; a different projection would
+test whether it generalises.
+
+**Consequence for the card.** "Two changes landed together and neither has been
+tested alone" is no longer true — one has now been tested alone. The card
+should not be updated until this is reproduced on at least one more tensor.
