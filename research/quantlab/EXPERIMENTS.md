@@ -5409,3 +5409,50 @@ ways.
 K2048/K8192? No hypothesis is offered here. Note the mechanism hunt cannot use
 relerr as its readout — E98 established relerr is blind to the effect; E101
 shows it is worse than blind, it is anti-correlated.
+
+## E102 — WHY the K256 refit loses: it trades the tail for the bulk
+
+E101 established the refit fits better and scores worse but offered no
+mechanism. This is the mechanism, measured.
+
+**Hypothesis (pre-registered in `probe_k256_magnitude.py` before running):**
+k-means minimizes AVERAGE distortion. When centroids are scarce the objective
+trades the tail away — centroids pack into the dense middle of the weight
+distribution and abandon rare large-magnitude weights, because covering them
+costs more average error than it saves. Large weights dominate the output. At
+K=2048/K=8192 there are enough centroids for both; at K=256 they compete.
+**Falsifiable prediction: the refit wins the low-|w| buckets and LOSES the
+high-|w| buckets.**
+
+**Result — down_proj, layers 10/30/50, 4 experts each, error RMS normalized
+within each |w| percentile bucket. Positive = refit worse:**
+
+    |w| percentile      mean delta
+       0-50            -0.01152    refit BETTER
+      50-90            -0.00110    refit better
+      90-99            +0.00013    tie
+      99-99.9          +0.00573    refit WORSE
+      99.9-100         +0.01115    refit WORSE
+
+**Monotonic crossover, consistent across all three layers.** The refit is
+better exactly where most of the weights are — which is what drove its lower
+mean relerr — and worse exactly where the large weights are. The mean relerr
+we gate on is dominated by the bulk, so it reports the trade as an
+improvement.
+
+**This explains the K-dependence directly.** The bulk-vs-tail trade only
+binds when centroids are scarce. At K=256 a codebook cannot serve both, so
+gaining on the bulk means losing the tail; at K=2048 and K=8192 it can serve
+both, so the same fitter change is a clean win. That is why the 08-18 change
+helps at large K and hurts at small K, and it means the effect is not a bug in
+the fitter — it is the average-distortion objective behaving exactly as
+specified, against an output metric that weights the tail far more heavily.
+
+**Consequences.**
+- **Mean relerr is the wrong gate for low-K artifacts.** It is a bulk statistic
+  and the damage lives in the top 1%. A tail-aware statistic — normalized error
+  in the 99-100th |w| percentile — would have flagged the refit before scoring.
+- Predicts a fix: at low K, an outlier-aware fit (reserve centroids for the
+  tail, or fit the tail separately) should recover the loss. UNTESTED.
+- Retires the framing that the refit is "worse for unknown reasons." It is
+  worse for a specific reason that its own objective guarantees.
