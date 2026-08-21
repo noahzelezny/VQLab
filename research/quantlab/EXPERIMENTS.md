@@ -5317,17 +5317,18 @@ gap.** Source confirms UNPACKED d=8 kernels exist and are dispatched —
 `vq_fused_d8_tg` (K<=1024, threadgroup) and `vq_fused_d8` (device memory,
 vq_switch.py:741-747). Only the PACKED path is missing d=8. So:
 
-    rotlab--397B-d8K16384          110.809 GiB  unpacked      -> dispatches (SOURCE ONLY, unverified)
+    rotlab--397B-d8K16384          110.809 GiB  unpacked      -> RUNS (III.10 smoke, executed)
     rotlab--397B-d8K16384-packed   100.971 GiB  pack_bits=14  -> RAISES (executed, measured)
 
-**CAUTION on that first row: "runs" is INFERENCE, not measurement.** I read
-the dispatch table and wrote RUNS. That is the same class of evidence as
-reading a gate's output — it says what the code intends, not what happens —
-and it is the exact error that cost us today. A III.10 smoke on the unpacked
-artifact is running on M4; until it reports, unpacked d8 is UNVERIFIED. Three
-live outcomes: it generates (runnable d8 exists and loses), it raises (d8 has
-no serving path at any size), or it emits garbage (which the packed twin's
-clean referee scores would never have revealed).
+**That first row was briefly written as RUNS on the strength of the dispatch
+table alone — inference from source, the same class of evidence as reading a
+gate's output. It is now VERIFIED BY EXECUTION:** III.10 smoke on M4, loaded
+in 65s (113,468 MB resident), generated in 5.6s from "The capital of France
+is" -> **"Paris.\nA. True\nB"**. Correct answer, coherent continuation. A
+working model, not one that loads and emits nonsense.
+
+**So the true sentence is "runnable d8 exists and LOSES," not "d8 has no
+serving path."** Those are different claims and only the first is supported.
 
 **And that reframes the result decisively, against d8.** The quality win was
 stated at the packed size:
@@ -5357,3 +5358,15 @@ to serve. We verified the bytes exhaustively and never ran the model.
 **New rule (III.10): an artifact is not releasable until it has GENERATED ONE
 TOKEN through the fused path it will ship with.** Cost: seconds. Today it
 would have saved a 6.5-hour fit, a pack, a graft, a score and an A/B setup.
+
+### E100 addendum — the contention cost, measured for free
+
+    packed d8   100.97 GiB   loaded 385s   (13:23, five 35B gates running on M3)
+    unpacked d8 110.81 GiB   loaded  65s   (13:33, share quiet)
+
+Same box, same share, and the SLOWER load was of the SMALLER artifact: **5.9x
+penalty from concurrent M3 I/O**. This is the number we were arguing about
+qualitatively all afternoon — it justifies discarding the contaminated load
+times and it prices the "run it in parallel" decision. Concurrent share work
+during a load-bound measurement costs roughly 6x, so measurements that touch
+the share get the share to themselves.
