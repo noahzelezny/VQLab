@@ -5240,3 +5240,29 @@ derived from stored evidence rather than from what we remember citing.
     vq-K128-d2-refit        PASS
     e94-35b-K8192-refresh   PASS   median 0.1325, bar 0.3975
     qwen36-35b-rungs/vq-K8192-d4   (running)
+
+## E98 — both K8192 arms PASS; and the pair is the cleanest law-6 specimen we have
+
+    e94-35b-K8192-refresh   PASS  down 0.1316  gate 0.1328  up 0.1325  bar 0.3975
+    vq-K8192-d4 (comparator) PASS down 0.1316  gate 0.1328  up 0.1325  bar 0.3974
+
+**The card's K8192 row is admissible.** Both arms gated, no outliers, and E94's
+-3.391 mnats win is not contamination.
+
+**But look at the relerrs: identical to four decimals on all three
+projections.** That looked like a bug — the same artifact gated twice, or a
+cached source — so I checked. The bars differ (0.3975 vs 0.3974), so the
+medians were computed separately; and a direct tensor compare of
+`layers.9...up_proj.codebook` gives max abs diff **1.950**, mean **0.518**.
+The codebooks are genuinely, substantially different.
+
+So: **two fits with the same weight-space reconstruction error to four
+decimals, differing 6.0% in output KL** (53.022 vs 56.413). That is law 6 —
+fit error does not rank output damage — in its sharpest form yet. The
+aggregate distortion of k-means converges tightly across runs; what differs is
+WHERE the error lands, and that is what the model's output notices.
+
+Useful corollary: **relerr cannot detect the fitter-vintage effect at all.**
+Anyone trying to tune the fitter by watching relerr would see a flat line
+while KL moved 6%. The gate catches broken artifacts; it says nothing about
+better ones.
