@@ -168,6 +168,16 @@ Last updated: 2026-08-20 (through E80).
   of an unexamined premise produces MORE confident wrongness, not less, because
   the machinery looks so sound that it draws scrutiny away from what it is
   protecting. Ask what makes a constraint binding before defending it. [08-21]
+- **A verification is scoped to the checkpoint it ran against. Name the
+  target, not just the result.** "Template verified 192/192, all 64 layers"
+  was true of the SOURCE and said nothing about the BASE the splice writes to
+  — different checkpoint, different convention
+  (`model.language_model.layers.N` vs `language_model.model.layers.N`), and a
+  mismatch there writes 192 tensors under names the base never uses, yields a
+  complete-looking index, and can silently score the BASE while you call it
+  VQ. Same shape as the unexamined-premise failure: rigorous check, wrong
+  target, reported as though general. State verifications as
+  "X verified against Y," never bare. [08-21]
 - Prefer local reads for big sources; reads outweigh writes ~6:1 in a fit.
 - Make failure cheap (resume, quarantine, verified copies) — today's error
   budget held because failures were recoverable, not because reasoning was

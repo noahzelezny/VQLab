@@ -5046,3 +5046,44 @@ which needs both boxes and cannot slide.
 **Open:** why the port didn't help at K8192/d4. Not chased today; it is a
 performance question and nothing downstream depends on it. Do not re-predict
 the fixed version's speed without running it.
+
+## E95 — PRE-REGISTRATION: dense VQ on Qwen3.8-27B (flat, no tail)
+
+Registered BEFORE the fit, per the pre-registration rule. Nothing below is a
+result.
+
+**Question:** does data-free weight-space VQ carry to a DENSE model, or is the
+whole result an MoE-expert phenomenon? Noah is holding the MoEMash naming
+decision on this. Highest information value of anything queued.
+
+**Recipe (flat only, Noah's directive — "just flat codebooks instead of all
+the frivolous tail complications"):** `fit_dense_vq.py --family qwen3_8
+--dim 4 --k 256`, layers 0-63, 192 mlp tensors. NO `--tail-from`, NO
+`--tail-geom`. A tail-tuned first dense result would be uninterpretable in
+exactly the way the 397B tail arc was.
+
+**Assembly:** `build_dense_vq.py` (ddedf05) splices into
+`qwen38-27b-rungs/q4`, carrying every non-MLP tensor through unchanged.
+
+**Comparator naming (corrected):** q4 is a LOCALLY converted mlx affine
+4-bit, 14.09 GiB, from the same teacher — NOT a community download. There is
+no downloaded 27B comparator on the share. Scored 45.842 mnats / 89.82% top-1
+on kl_cache_qwen38. The q2/q3/q4 ladder is ONE INSTRUMENT: all three written
+2026-08-17 17:15 in a single run, identical settings (group_size 64, affine),
+same transformers stamp — verified, so a new point may sit on it.
+
+**What this CANNOT say:** d4/K256 is 2.0 bpw on the MLPs against a 4-bit base.
+This is NOT size-matched; the artifact will land well under 14.09 GiB. The
+phrase "VQ beats 4-bit" must not appear. Two legitimate readings only:
+1. ABLATION vs q4 — non-MLP bytes byte-identical, MLP treatment differs. Isolates the swap.
+2. PLACEMENT on the q2/q3/q4 ladder at the artifact's ACTUAL size. This is the one that answers Noah.
+Report size alongside every quality number so placement is never implied to be a match.
+
+**Three-way name check (all three required, none sufficient alone):**
+- fitter names vs SOURCE: 192/192, all 64 layers [peer]
+- base targets exist in q4: 192/192, all 64 layers [peer, independent of the fit]
+- fit output lands on base: `build_dense_vq.py --dry-run` before any bytes [pending]
+
+**Prior:** e4b's MLPs did NOT tolerate 5.75-bit VQ (20.8 vs 8.1 mnats) while
+its embedding table did. If dense MLPs are simply hostile to VQ, this should
+fail, and failing cleanly at flat geometry is a real answer.
