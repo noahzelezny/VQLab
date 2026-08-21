@@ -5249,8 +5249,15 @@ derived from stored evidence rather than from what we remember citing.
 **The card's K8192 row is admissible.** Both arms gated, no outliers, and E94's
 -3.391 mnats win is not contamination.
 
-**But look at the relerrs: identical to four decimals on all three
-projections.** That looked like a bug — the same artifact gated twice, or a
+**But look at the relerrs: the per-projection MEANS are identical to four
+decimals.** Stated precisely because it matters: these are aggregates over
+n=40 tensors each (the tool prints `mean down_proj 0.1316 (n=40)`), NOT
+pointwise-identical tensors. An aggregate over 40 samples concentrates hard by
+construction, so the honest claim is "the aggregate distortion of k-means
+converges tightly across runs while output KL moves 6%" — not "two fits landed
+pointwise identical," which would be a stranger fact needing its own
+explanation. The mechanism below is unaffected; the sharpness of the wording
+is. That looked like a bug — the same artifact gated twice, or a
 cached source — so I checked. The bars differ (0.3975 vs 0.3974), so the
 medians were computed separately; and a direct tensor compare of
 `layers.9...up_proj.codebook` gives max abs diff **1.950**, mean **0.518**.
@@ -5266,3 +5273,34 @@ Useful corollary: **relerr cannot detect the fitter-vintage effect at all.**
 Anyone trying to tune the fitter by watching relerr would see a flat line
 while KL moved 6%. The gate catches broken artifacts; it says nothing about
 better ones.
+
+## E99 — the repaired d2 arm: d4's margin was ~3x inflated by contamination
+
+Both refits gated PASS (E98), then scored on kl_cache_qwen36, same instrument
+as the whole ladder.
+
+    rung              bpw    CORRUPT      CLEAN (refit)
+    d2-K64            3.25   223.517  ->   73.259    (-67%)
+    d2-K128           3.75   386.619  ->   49.984    (-87%)
+    d2-K256           4.25        —         36.862   (was always clean)
+
+**The d2 arm is now monotone** — 73.259 / 49.984 / 36.862 as bpw rises. The
+E97 inversion is gone, because it was contamination, exactly as the screen
+predicted.
+
+**Matched-bpw comparison, on clean data:**
+
+    3.25 bpw:  d2-K64-refit  73.259  vs  d4-K4096  68.546   -> d4 better by  6.4%
+    3.75 bpw:  d2-K128-refit 49.984  vs  d4 interp 44.28    -> d4 better by 11.4%
+
+So d4 still wins — the law survives — but by **6-11%**, in line with E87's
+independently-fit ~12%, and NOT by anything resembling E82's 3.3x.
+
+**The sign of the error is the uncomfortable part and worth stating plainly:
+corruption INFLATES KL, so the corrupt points made d2 look far worse than it
+is. Every "d4 beats d2" conclusion drawn off this ladder was drawn against a
+handicapped opponent.** The correction moves against our own preferred result,
+which is the direction that gets noticed least.
+
+Three independent estimates of the same quantity now agree: E87 ~12%, and
+these two at 6.4% and 11.4%. The 3.3x figure was contamination throughout.
