@@ -5317,8 +5317,17 @@ gap.** Source confirms UNPACKED d=8 kernels exist and are dispatched —
 `vq_fused_d8_tg` (K<=1024, threadgroup) and `vq_fused_d8` (device memory,
 vq_switch.py:741-747). Only the PACKED path is missing d=8. So:
 
-    rotlab--397B-d8K16384          110.809 GiB  unpacked  -> RUNS
-    rotlab--397B-d8K16384-packed   100.971 GiB  pack_bits=14 -> RAISES
+    rotlab--397B-d8K16384          110.809 GiB  unpacked      -> dispatches (SOURCE ONLY, unverified)
+    rotlab--397B-d8K16384-packed   100.971 GiB  pack_bits=14  -> RAISES (executed, measured)
+
+**CAUTION on that first row: "runs" is INFERENCE, not measurement.** I read
+the dispatch table and wrote RUNS. That is the same class of evidence as
+reading a gate's output — it says what the code intends, not what happens —
+and it is the exact error that cost us today. A III.10 smoke on the unpacked
+artifact is running on M4; until it reports, unpacked d8 is UNVERIFIED. Three
+live outcomes: it generates (runnable d8 exists and loses), it raises (d8 has
+no serving path at any size), or it emits garbage (which the packed twin's
+clean referee scores would never have revealed).
 
 **And that reframes the result decisively, against d8.** The quality win was
 stated at the packed size:
