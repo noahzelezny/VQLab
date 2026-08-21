@@ -4869,3 +4869,15 @@ The E86 pair, run to replace E82's contaminated result. Both arms fit fresh from
 **Scope, per the E86 caveat:** this is ONE pair at 2.00 bpw, where d2 is forced to a very coarse K16. The honest claim is "d4 beats d2 at 2.00 bpw by ~12%", NOT a general law about dimension. A second pair at 2.5 bpw (d2-K32 vs d4-K1024) would test whether the gap holds where d2 has more centroids to work with; d4-K1024 is beyond this fitter's K<=256 limit, so that pair needs the other fitter.
 
 **Law 10 status: SETTLED at 2.00 bpw on qwen, effect size ~12%.** "Raise K first" is measured again — but as a modest preference, not the landslide the corrupt artifact implied.
+
+### E87 CORRECTION (08-20, same evening): the packed sizes are IDENTICAL — d4 does not "win by more"
+Noah caught an overclaim in E87. I wrote that "on a packed-size basis d4 wins by even more, since d2 needs 4-bit packing merely to reach parity." That is wrong. Packing is a storage encoding, not a quality or budget difference; the fair axis is packed size, which is exactly what matched analytic bpw already guarantees. Measured from the shard headers:
+
+| arm | structure | vq aux | codes (stored uint8) | UNPACKED | **PACKED** |
+|---|---|---|---|---|---|
+| d4-K256 | 5.39 | 0.94 | 7.50 (8 bits, exact) | 13.83 GiB | **13.83 GiB** |
+| d2-K16 | 5.39 | 0.94 | 15.00 (4 bits in 8) | 21.33 GiB | **13.83 GiB** |
+
+**Identical to two decimal places.** The 21.33 GiB figure is uint8 padding, nothing else — pack d2-K16 to its true 4-bit width and the two artifacts are the same size, as matched 2.00 bpw requires. So the clean statement is: **at matched packed size (13.83 GiB), d4-K256 beats d2-K16 by 12.2% KL and +1.62 points top-1.** No size asterisk, no additional d4 advantage.
+
+Worth keeping as a pattern: this is the THIRD time today an unpacked/stored size was mistaken for a real size difference (the others: the 110.8 GiB whole-byte table that killed candidate G in E83, and the 397B pre-pack "110.8 GiB" readings that mean nothing until packing). Rule for the notebook and the paper: **never compare artifact sizes before packing; quote analytic/packed bpw or quote packed bytes, never stored bytes.**

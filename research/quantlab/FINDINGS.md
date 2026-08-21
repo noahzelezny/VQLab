@@ -63,10 +63,9 @@ Last updated: 2026-08-20 (through E80).
     80.05% top-1 vs d2-K16 = 239.9 / 78.43%. **d4 wins by ~12% KL, NOT the
     3.3x that E82's corrupt arm produced (overstated ~25x).** Scope: one
     pair, at a bpw that forces d2 to a coarse K16 — a 2.5 bpw pair would
-    test generality. Storage: d4-K256 packs exactly (13.8 GiB); d2-K16
-    wastes half in uint8 (21.3 GiB) and needs 4-bit packing just to reach
-    parity. "Raise K first" = a measured preference, not a landslide.
-    [E87; E82 void per E85]
+    test generality. Sizes are IDENTICAL when packed (13.83 GiB both); the
+    21.3 GiB d2 figure is uint8 padding only. "Raise K first" = a measured
+    preference, not a landslide. [E87 + correction; E82 void per E85]
 
 ## II. Retracted / false leads — do NOT re-chase without new evidence
 
@@ -102,7 +101,11 @@ Last updated: 2026-08-20 (through E80).
    before it is trusted. (A gate that always fails is one nobody reads.)
 6. Report nothing predicted as measured. Label ESTIMATE vs MEASURED in every
    table.
-7. **Before scoring ANY artifact, confirm it passed an outlier gate on a
+7. **Never compare artifact sizes before packing.** Stored bytes include
+   whole-byte padding and are not a size. Quote packed bytes or analytic
+   bpw. Three separate wrong conclusions today traced to this (E83's
+   candidate-G rejection, the 397B pre-pack readings, the E87 overclaim).
+8. **Before scoring ANY artifact, confirm it passed an outlier gate on a
    trusted box.** A corrupt artifact scores plausibly and silently, and the
    fitter's own log structurally cannot see it (it reports what it COMPUTED,
    not what reached disk). Cost of skipping this: E82. [E85]
