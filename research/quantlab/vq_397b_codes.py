@@ -79,6 +79,14 @@ ap.add_argument("--relerr-abort", type=float, default=0.35,
                      "normal and well under a collapse (1.0).")
 ap.add_argument("--max-refit", type=int, default=2,
                 help="refit attempts for a tensor over --relerr-abort")
+ap.add_argument("--tail-weight-from", type=int, default=0,
+                help="apply --tail-weight-pow only from this layer onward. "
+                     "Shallow layers are HEAVY-TAILED (E110: L00-L10 excess "
+                     "kurtosis +1.25 vs body -0.38) and magnitude weighting "
+                     "destroys them — L00 down_proj went 0.118 -> 0.487 mean "
+                     "relerr at p=4 and aborted a 397B fit (E106). The body "
+                     "is sub-Gaussian and is where the tail trade is live. "
+                     "0 = every layer.")
 ap.add_argument("--tail-weight-pow", type=float, default=0.0,
                 help="MAGNITUDE-WEIGHTED k-means for the codebook fit. 0.0 "
                      "(default) is the unweighted objective every existing "
@@ -370,7 +378,7 @@ def vq_tensor_codes(li, proj, want_shape):
         return (Wg / scale).reshape(-1, D), scale
 
     # --- codebook from sampled subvectors
-    P = args.tail_weight_pow
+    P = args.tail_weight_pow if li >= args.tail_weight_from else 0.0
     samples, sample_w = [], []
     per = max(1, args.sample // max(1, (n_exp // EC)))
     for s in range(0, n_exp, EC):
