@@ -5370,3 +5370,42 @@ qualitatively all afternoon — it justifies discarding the contaminated load
 times and it prices the "run it in parallel" decision. Concurrent share work
 during a load-bound measurement costs roughly 6x, so measurements that touch
 the share get the share to themselves.
+
+## E101 — the K256 refit is NOT corrupt. It fits BETTER and scores WORSE.
+
+Noah asked whether E92's regression was a damaged fit. It is not. Both arms
+verified on M3, same source, same family, same outlier setting:
+
+                      down     gate       up     median   outlier gate
+    shipped VQ-2.4    0.3034   0.3214   0.3221   0.3118   PASS
+    flatk256-refit    0.2986   0.3118   0.3117   0.3116   PASS
+                      -0.0048  -0.0096  -0.0104
+
+**The refit reconstructs the weights BETTER on all three projections** — lower
+relative error everywhere, no outliers, nothing near the 0.86-0.99 signature
+of the corrupt d2 artifacts. And it scores WORSE end-to-end: 2.8057 / 2.6447
+against 2.7655 / 2.6383, at byte-identical size (111.617 GiB) and identical
+geometry (171 modules, all K256/d4).
+
+**So this is law 6 in its purest form yet: a strictly better weight-space fit
+that produces a strictly worse model.** The K8192 pair showed identical relerr
+with 6% different KL — same aggregate error, different placement. This is
+stronger: the error is *smaller* and the damage is *larger*. Reconstruction
+error and output damage are not merely uncorrelated here, they point opposite
+ways.
+
+**Consequences.**
+- The E92 regression stands as a real result. Nothing to retract, nothing
+  corrupt to repair. `VQ-2.4bpw` stays as shipped because refitting it makes
+  a better-fitting, worse-performing artifact.
+- **Anyone tuning a fitter on relerr would have chosen the refit.** It looks
+  better by every weight-space measure we have. Only an output-side metric
+  reveals the truth. This is E55/E69's trap with the sign made explicit.
+- It strengthens the K-dependence finding rather than explaining it away: at
+  K256 the newer fitter genuinely finds a lower-distortion codebook, and that
+  codebook is genuinely worse for the model.
+
+**Open, and now sharper:** why does lower distortion hurt at K256 and help at
+K2048/K8192? No hypothesis is offered here. Note the mechanism hunt cannot use
+relerr as its readout — E98 established relerr is blind to the effect; E101
+shows it is worse than blind, it is anti-correlated.
