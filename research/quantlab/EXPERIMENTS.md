@@ -5665,3 +5665,53 @@ test whether it generalises.
 **Consequence for the card.** "Two changes landed together and neither has been
 tested alone" is no longer true — one has now been tested alone. The card
 should not be updated until this is reproduced on at least one more tensor.
+
+## E108 — REPRODUCTION: 2 of 3 tensors. The mechanism is real but NOT universal.
+
+Same controls as E107 (init the only variable, same sample, same seed per
+pair, held-out experts, 3 reps). Delta = ++ minus random, POSITIVE = ++ worse.
+
+**L30 down_proj (E107, original):**
+
+    K256    99-99.9 +0.00707±0.00099   99.9-100 +0.00844±0.00210   MEAN -0.00003
+    K2048   99-99.9 -0.00175±0.00059   99.9-100 +0.00287±0.00062   MEAN -0.00044
+
+**L45 gate_proj — REPRODUCES:**
+
+    K256    99-99.9 +0.00756±0.00114   99.9-100 +0.01096±0.00248   MEAN +0.00007
+    K2048   99-99.9 -0.00154±0.00045   99.9-100 +0.00203±0.00039   MEAN -0.00035
+
+Same signature and nearly the same magnitudes: tail penalty at K256 (6-7x the
+spread), mean flat, and at K2048 the 99-99.9 penalty reverses while the
+extreme-tail penalty shrinks ~5x.
+
+**L15 up_proj — DOES NOT REPRODUCE:**
+
+    K256    ALL buckets negative, MEAN -0.00617±0.00127
+    K2048   ALL buckets negative, MEAN -0.00563±0.00037
+
+++ is better EVERYWHERE, at both K, well outside the spread. No tail penalty
+exists on this tensor to explain.
+
+**So the honest claim is narrower than E107 stated.** ++ seeding produces the
+bulk-for-tail trade on SOME tensors and is a uniform improvement on others.
+Two of three is a real effect, not a fluke — the two positives have tight
+spreads and matching magnitudes — but "++ seeding causes the K-dependence" is
+not established as a general property of the fitter.
+
+**What would settle it.** The artifact-level effect is a sum over 171 tensors,
+so the mechanism survives if the tail penalty holds on a MAJORITY. That is a
+counting question and it is cheap: run this probe across a sample of tensors
+spanning layers and all three projections, and report the fraction showing the
+penalty. Until that exists, the mechanism is SUPPORTED, not settled.
+
+**A depth hypothesis worth testing rather than assuming.** The miss is the
+shallowest tensor of the three (L15 vs L30/L45), and shallow layers were also
+the ones that broke magnitude weighting (L00 blew up in E106 while L30 was
+clean). Depth may be the variable rather than projection. NOT TESTED — L15 is
+one tensor and gate_proj/up_proj differ from down_proj in shape
+([16,1024,4096] vs [16,4096,1024]), so projection and depth are confounded in
+this sample of three.
+
+**The card stays as written.** "Neither has been tested alone" is false, but
+the replacement sentence cannot be written from 2 of 3.
