@@ -1,0 +1,139 @@
+--- a/vq_397b_codes.py
++++ b/vq_397b_codes.py
+@@ -79,6 +79,23 @@
+                      "normal and well under a collapse (1.0).")
+ ap.add_argument("--max-refit", type=int, default=2,
+                 help="refit attempts for a tensor over --relerr-abort")
++ap.add_argument("--tail-weight-pow", type=float, default=0.0,
++                help="MAGNITUDE-WEIGHTED k-means for the codebook fit. 0.0 "
++                     "(default) is the unweighted objective every existing "
++                     "artifact was fit with — bit-identical code path. p>0 "
++                     "weights each training subvector by its WEIGHT-SPACE L2 "
++                     "norm to the p: w = (scale_g * ||x||_2)^p, where scale_g "
++                     "is the group-64 max-abs the subvector was normalized by "
++                     "(64 % d == 0, so a subvector never straddles two "
++                     "groups). p=2 makes Lloyd minimize true weight-space MSE "
++                     "instead of normalized-space MSE; p>2 buys the tail at "
++                     "the bulk's expense. WHY (E102): k-means minimizes "
++                     "AVERAGE distortion, so at low K it packs centroids into "
++                     "the dense middle and abandons the rare large weights "
++                     "that dominate the output — measured as a monotonic "
++                     "crossover, better on |w| 0-90 pct, worse on 99-100. "
++                     "Only expected to matter where centroids are scarce; at "
++                     "K2048/K8192 the codebook already serves both.")
+ ap.add_argument("--tail-from", type=int, default=None,
+                 help="first layer index of the TAIL (see --tail-geom)")
+ ap.add_argument("--tail-geom", default=None,
+@@ -205,7 +222,7 @@
+     return isinstance(q, dict) and q.get("bits") == 2
+ 
+ 
+-def kmeanspp_init(X, k, cap=200_000):
++def kmeanspp_init(X, k, cap=200_000, W=None):
+     """k-means++ seeding: each new centre is drawn with probability
+     proportional to its squared distance from the nearest chosen centre.
+ 
+@@ -222,17 +239,25 @@
+     """
+     n = X.shape[0]
+     if n > cap:
+-        X = X[mx.random.randint(0, n, (cap,))]
++        sel = mx.random.randint(0, n, (cap,))
++        X = X[sel]
++        if W is not None:
++            W = W[sel]
+         n = cap
+     first = int(mx.random.randint(0, n, (1,)).item())
+     picks = [X[first]]
+     d2 = mx.sum((X - picks[0]) ** 2, axis=1)
+     for _ in range(k - 1):
+-        tot = mx.sum(d2)
++        # With W, seeds are drawn proportional to w*d2 rather than d2, so the
++        # SEEDING obeys the same objective as the refinement below. Seeding
++        # unweighted and refining weighted starts every tail centre in the
++        # bulk and asks 20 Lloyd steps to walk it out.
++        pd2 = d2 if W is None else d2 * W
++        tot = mx.sum(pd2)
+         if float(tot.item()) <= 1e-12:          # X has <k distinct points
+             picks.append(X[int(mx.random.randint(0, n, (1,)).item())])
+             continue
+-        cdf = mx.cumsum(d2 / tot)
++        cdf = mx.cumsum(pd2 / tot)
+         r = mx.random.uniform(shape=(1,))
+         j = min(int(mx.sum(cdf < r).item()), n - 1)
+         c = X[j]
+@@ -241,10 +266,13 @@
+     return mx.stack(picks)
+ 
+ 
+-def kmeans(X, k, iters, init="kmeans++"):
++def kmeans(X, k, iters, init="kmeans++", W=None):
++    """W=None reproduces the unweighted fit exactly. W is a per-row weight;
++    ASSIGNMENT is unaffected (argmin of a distance does not see a positive
++    scalar), only the centroid update and the ++ seeding are."""
+     step = max(50_000, int(5e8 / k))
+     n = X.shape[0]
+-    C = (kmeanspp_init(X, k) if init == "kmeans++"
++    C = (kmeanspp_init(X, k, W=W) if init == "kmeans++"
+          else X[mx.random.randint(0, n, (k,))])
+     for _ in range(iters):
+         cn = mx.sum(C * C, axis=1)
+@@ -270,8 +298,10 @@
+         # fit made it 33x more iterations and K8192 did not finish a single
+         # tensor in 58 minutes. scatter-add is O(n) in the assignment instead
+         # of O(n*k), so cost stops depending on k entirely.
+-        oh_sum = oh_sum.at[a].add(X)
+-        cnt = cnt.at[a].add(mx.ones((n,), dtype=mx.float32))
++        # Weighted centroid = sum(w*x)/sum(w). Same two scatter-adds, so the
++        # O(n) cost and the k-independence of the update are unchanged.
++        oh_sum = oh_sum.at[a].add(X if W is None else X * W[:, None])
++        cnt = cnt.at[a].add(mx.ones((n,), dtype=mx.float32) if W is None else W)
+         mx.eval(oh_sum, cnt)
+         C = mx.where(cnt[:, None] > 0,
+                      oh_sum / mx.maximum(cnt[:, None], 1.0), C)
+@@ -331,18 +361,38 @@
+         return (Wg / scale).reshape(-1, D), scale
+ 
+     # --- codebook from sampled subvectors
+-    samples = []
++    P = args.tail_weight_pow
++    samples, sample_w = [], []
+     per = max(1, args.sample // max(1, (n_exp // EC)))
+     for s in range(0, n_exp, EC):
+-        sub, _ = normalize(T[s:s + EC].astype(mx.float32))
++        sub, sc = normalize(T[s:s + EC].astype(mx.float32))
+         idx = mx.random.randint(0, sub.shape[0], (min(per, sub.shape[0]),))
+         samples.append(sub[idx])
+-        mx.eval(samples[-1])
+-        del sub
+-    C16 = kmeans(mx.concatenate(samples, axis=0), K, args.iters,
+-                 init=args.init).astype(mx.float16)
++        if P:
++            # scale is per (row, group-of-G); a subvector lives wholly inside
++            # one group (G % D == 0) and the flatten order is
++            # (rows, groups, G//D, D), so repeating each group's scale G//D
++            # times CONSECUTIVELY lines the two up. Getting this wrong is
++            # silent: it mislabels which subvectors are the tail.
++            ssub = mx.repeat(sc.reshape(-1, in_d // G), G // D,
++                             axis=1).reshape(-1)
++            # magnitude in ORIGINAL weight units — the same quantity E102
++            # bucketed on, lifted from per-weight to per-subvector.
++            mag = ssub[idx] * mx.sqrt(mx.sum(sub[idx] ** 2, axis=1))
++            sample_w.append(mag ** P)
++            mx.eval(sample_w[-1])
++        mx.eval(samples[-1])
++        del sub, sc
++    Xs = mx.concatenate(samples, axis=0)
++    Ws = None
++    if P:
++        Ws = mx.concatenate(sample_w, axis=0)
++        Ws = Ws / mx.maximum(mx.mean(Ws), 1e-20)   # mean 1: keeps the fp32
++        mx.eval(Ws)                                # scatter sums well-scaled
++    C16 = kmeans(Xs, K, args.iters,
++                 init=args.init, W=Ws).astype(mx.float16)
+     mx.eval(C16)
+-    del samples
++    del samples, sample_w, Xs, Ws
+     Cf = C16.astype(mx.float32)               # assign against SHIPPED values
+     cn = mx.sum(Cf * Cf, axis=1)
+ 

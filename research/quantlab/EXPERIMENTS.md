@@ -5529,3 +5529,49 @@ Fixed in `pack_artifact.py` (recompute from packed shard headers) with
 `fix_index_total_size.py` as the audit/repair tool. Independently re-verified
 by the peer from `data_offsets` rather than from the repaired field — a
 repaired number must not be checked against itself.
+
+## E105 — tail-weighted k-means: screen PASSES, and plain k-means was never minimizing weight-space MSE
+
+Design by subagent (design-only, ran nothing). Patch at
+`patches/tail-weighted-kmeans.patch`, NOT applied. Screen run on M3, one
+tensor (L30 down_proj, 8 experts, K256/d4), minutes.
+
+**The reframe worth more than the patch:** `normalize()` divides each
+group-of-64 by its max-abs before k-means. So plain Lloyd minimizes distortion
+in NORMALIZED space — which is not weight-space MSE at all. The knob
+`--tail-weight-pow P` weights each training subvector by
+`(scale_g * ||x||_2)^P`, its L2 norm in ORIGINAL weight units. **P=2 is not a
+tail hack; it is the correction that makes Lloyd minimize true weight-space
+MSE.** P>2 is the actual hypothesis, since E101 showed a fit with LOWER
+weight-space relerr still losing — the output metric weights the tail harder
+than MSE does. Assignment is untouched (a positive scalar cannot change an
+argmin), so artifact format, packer and kernels see nothing new.
+
+**Screen result — normalized RMS error by |w| percentile, delta vs P=0
+(negative = better):**
+
+    P      0-50     50-90    90-99   99-99.9  99.9-100   MEAN relerr
+    2    +0.1015   +0.0150  -0.0139  -0.0372   -0.0346     +0.0175
+    4    +0.2966   +0.0635  -0.0175  -0.0647   -0.0695     +0.0694
+    8    +0.8259   +0.1185  +0.0184  -0.0886   -0.1067     +0.1929
+
+**Pre-registered bar (both tail buckets negative) is met by P=2, 4 and 8.**
+The E102 deficit to recover is only +0.0057 / +0.0112, so P=4's -0.065 /
+-0.070 has an order of magnitude of headroom.
+
+**P=8 shows the predicted instability boundary**: its 90-99 bucket turns
+POSITIVE (+0.018) while the extreme tail keeps improving — effective-sample
+collapse, a few subvectors dominating every centroid. P=4 is the last value
+that improves 90-99 as well as the tail.
+
+**What the screen does NOT answer.** The bulk cost is large (P=4: +0.30 in the
+bottom half). Whether the trade is a net win end-to-end depends on how output
+damage weights these buckets, which no weight-space statistic can tell us —
+that is the whole content of laws 11-12. **Only a fit + referee score answers
+it.** The screen establishes the knob does what it claims, nothing more.
+
+**Note for whoever gates the resulting artifact: mean relerr WILL be worse and
+that is the trade being bought, not damage.** The corruption check that still
+works is the outlier gate (median x3), which is relative and unaffected by a
+uniform shift. Reading a raised mean as a broken fit repeats E101 with the
+sign flipped.
