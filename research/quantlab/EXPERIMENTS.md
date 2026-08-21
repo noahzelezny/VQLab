@@ -4928,3 +4928,8 @@ Peer flagged that my 3.10-3.15 prediction reads as contradicting Law 1 ("rate tw
 
 ### E89 second amendment (08-20, pre-result): the decisive framing, peer's
 E89 separates two hypotheses that agree everywhere already measured: "quality improves monotonically in d at matched rate" vs "d has an interior optimum near d4" (counteracting force: sample sparsity, ~120 samples/centroid at K16384). Both predict E87's d2 < d4; they differ ONLY at d8. If d8 lands at or below d4's curve, Law 8's d4 sweet spot gains a principled mechanism rather than an empirical shrug. This is the correct way to read the wash/loss outcomes — decisive either way, not "win expected".
+
+### E90 (08-20): u8view SHIPPED to the published 2.4bpw
+Pushed with Noah's approval after the full gate stack: check_bundle (new gate, known-bad tested both directions), referee identity through the new bundle EXACT (2.7655, total_nll to all decimals — teacher-forced path pinned), and the peer's symlink-controlled A/B on the M4: **greedy decode token-identical (50/50 token ids equal) between old and new bundles on the shipped artifact itself** — autoregressive path pinned. Old bundle preserved as model.py.pre-u8view. Card states 35B-measured numbers as 35B; 397B speed explicitly unclaimed until measured. Bonus fix: the card still carried SCOUT_VQ_DECODE_CHUNK — renamed public. Scope boundaries in the commit messages verbatim per peer review: one prompt/50 greedy tokens pins the trajectory, not all temperatures/contexts.
+
+Incidental (peer, worth a rule note): cold vs warm load on the same artifact over SMB = 788s vs 144s — a 5.5x page-cache effect. Load-time benchmarks must state cache state or they are meaningless (files rule III.4's neighbor).
