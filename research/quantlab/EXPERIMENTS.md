@@ -5174,6 +5174,22 @@ before the paragraph.**
 > evidence about the fitter. Fix the read; keep the gate as defence in
 > depth.
 
+**Transport addendum (08-21, counting statistic).** M3 fits reading the
+source from the directly-attached SSD: E112 172 tensors, E117 172, E118 172,
+E114 dense 193 — **709 tensors, 0 collapses**. M4 fits reading over SMB: 1
+collapse in 90 tensors (three 30-tensor trials, writing to LOCAL /tmp, so the
+write path is excluded by construction). So the MECHANISM is transport-
+independent — the L60 instance below was a local read — but the RATE plainly
+is not. Two consequences that must not be merged: transport-independence is
+why the fix goes on every read path and why "route fits through local disk"
+stays dead (it trades a rate reduction for a permanent tax and leaves the
+fault live); rate-dependence is why the reproducer lives on M4-over-SMB and
+why a clean M3 run is NOT a regression test for this class. Caveat on the
+709: those are per-tensor windows, structurally far safer than
+build_dense_vq's ~1300-tensor window across a clear_cache, so it is strong
+evidence that fitter-local reads are safer and NO evidence that any local
+read is safe — one confirmed local instance governs.
+
 First splice (08-21 13:30) zeroed all three tensors of L60 up_proj — same
 module as the aborted E95 fit, but this time the fit log read 0.3137 and the
 FIT FILE was clean (all 576 tensors verified non-zero when read eagerly).
@@ -6115,6 +6131,80 @@ One new fit brackets the init crossover: we hold flatk512 (++, E93) at
 VALIDITY GATE: if E117 falsifies, the crossover interpretation is void (the
 pair still stands as a measurement). The night queue
 (`run_night_queue.sh`) auto-launches this only on a clean E117 DONE banner.
+
+## E121 — PRE-REGISTRATION: run the 08-16 fitter itself (queued, M3)
+
+**Noah's actual question:** how did the shipped 2.4 happen, when nothing we
+build today reaches it? E117 excluded seeding. E120 tests summation order
+per-tensor. This tests the whole thing end-to-end by running THE ACTUAL CODE
+that produced the shipped artifact.
+
+`fitter_0816_cdcdeab.py` is `git show cdcdeab:vq_397b_codes.py` verbatim —
+the last commit touching the fitter before the 08-18/19 k-means changes.
+Committed as a FILE, not just a git ref, so the run stays reproducible after
+any rebase and the diff against HEAD is readable side by side. Its `kmeans()`
+is random init + one-hot matmul accumulation in fixed 2,000,000-row chunks.
+No `--init`, no `--relerr-abort`, no `--tail-*` — none existed. That is the
+point: the old tool, unedited. It also means NO abort guard, so the gate
+afterward is the only catcher and the fit log must be read.
+
+Everything else matched to E92/E117: base `struct6-tail3x3`, d4 K256 group
+64, layers 0-56, same referee corpora.
+
+**Pre-registered readings:**
+- **REPRODUCES** (wikitext <= 2.7700): the regression lives inside the three
+  08-18/19 k-means commits. Bisect them; E120 already names summation order
+  as the leading suspect.
+- **DOES NOT** (~2.81+): the fitter FILE is not the cause. The difference is
+  then environmental — mlx version, base artifact, or source checkpoint — and
+  "fitter vintage" has meant the wrong thing in every entry since E94. Bigger
+  finding; do not paper over this branch.
+- Between 2.7700 and 2.8057: partial. Report as partial, bisect anyway.
+
+**Standing caveat:** E94's 35B corroboration is unverifiable (its artifact was
+overwritten, see the E94 retraction), so whatever E121 returns, the vintage
+claim is **measured at 397B, corroboration lost** — not "two families."
+Agreed on the record with the M4 session before the result existed.
+
+## E122 — PRE-REGISTRATION: publish-readiness audit of the two swap candidates
+
+Noah intends to replace two published rungs with better-scoring artifacts:
+
+    101 GiB  shipped 2.2  3.1706        -> d8K16384-packed       3.0591 / 2.6728
+    144 GiB  shipped 3.1  2.3519/2.5987 -> flatk2048-refit-packed 2.3410 / 2.5963
+
+**The blocker this audit exists for, and it is E81 in its published form:**
+`d8K16384-packed` was SCORED at 11:39 and its bundled `model.py` was REPLACED
+at 16:29 with the 1208-line runtime carrying the packed d8 fused kernel. The
+artifact therefore ships a decode path that has never produced its published
+number, and fused-vs-decode is a NUMERICS change, not packaging. It runs (the
+M4's speed A/B drove it at 17.24 tok/s) — but running is not producing the
+same logits. Caught by comparing mtimes, not by any gate we own: no gate
+compares the runtime that scored an artifact to the runtime it ships.
+
+`flatk2048-refit-packed` does not have this problem (model.py 03:14, scored
+03:17) and is smoked and release-checked anyway, because the point of the
+audit is that the SHIPPING bundle is what gets verified.
+
+**Pre-registered readings for the d8 re-score:**
+- **INERT** (within 0.005 on both corpora): the runtime swap is numerically
+  neutral; the published number describes the shipped bytes. Clear to card.
+- **NOT INERT**: the fused kernel changes outputs. The 11:39 number is VOID
+  for publication and this run's number is the artifact's number. Do not
+  average, do not pick the better one, do not publish until Noah has seen
+  both.
+
+**Card constraints, fixed before the numbers land:** measured values only,
+size beside every figure, and the d8 decode tax stated QUALITATIVELY — no
+speed figure, because the M4 decode instrument is bimodal and unexplained
+(E115). "VQ beats 4-bit" stays banned.
+
+**What this pair does NOT touch:** the 111.6 GiB rung, which is the one we
+cannot currently reproduce (E117). Both swap candidates were fit with today's
+fitter — flatk2048 BEAT its old-fitter predecessor, and d8 is a different
+geometry outside the low-K regime where the vintage regression lives. The
+unreproducible rung is the one being left alone; the record must say so
+rather than implying the whole ladder is rebuildable.
 
 ## E120 — PRE-REGISTRATION: the vintage hunt, narrowed to float summation order
 
