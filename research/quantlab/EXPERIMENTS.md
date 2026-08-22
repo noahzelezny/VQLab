@@ -6459,6 +6459,38 @@ a near-lossless-regime property (both E124 and q4 sit within 0.03 ppl of each
 other, where small differences can reorder), or a one-off, is open. The M4's
 d2/K512 is the replication test.
 
+## E126 — PRE-REGISTRATION: d2/K512, and the 6c replication test
+
+Fit on M4 (~00:19), gate/pack/smoke/score on M3 — the instrument lives here
+(kl_cache_qwen38, the referee, the q2/q3/q4 ladder as ONE instrument), and it
+keeps the M4 free for the d8 clean-venv smoke that still blocks Noah's 101 GiB
+swap.
+
+**Geometry:** d2/K512, layers 0-63, projected 14.590 GiB (9-bit codes, NOT
+byte-aligned, so pack_dense does real work — unlike E124's K256). Inside
+Noah's relaxed band (<= 14.80 GiB, 29ddfb2). 12.5% more code budget than
+E124's K256.
+
+**Pre-registered branches for the 6c replication test, written by the M4
+session BEFORE the fit finished:**
+1. Ranks CONSISTENTLY on KL and ppl despite sitting close to q4 -> the
+   near-lossless-reordering explanation WEAKENS and 6c looks like a one-off.
+2. INVERTS while close to q4 -> near-lossless reordering is the better
+   explanation and 6c stays narrowed to that.
+3. Lands FAR from q4 on both -> **the test is INCONCLUSIVE and gets reported
+   as inconclusive.** Registered explicitly because it is the branch a tired
+   session skips: a consistent ranking at a distance is not evidence about a
+   phenomenon defined by proximity.
+
+**Against Noah's bar** (KL <= 36.7 mnats AND ppl < 5.2055 by >= 0.02, at
+<= 14.80 GiB): met or missed, reported as stated. E124 already demonstrated a
+rung can win KL, top-1 and size and still miss the target as Noah phrased it.
+
+**What this CANNOT settle, agreed in advance:** whether d2 is the right
+geometry. It is one point on the d2 line; its exact rate twin (d4/K65536 at
+13.594 GiB) is untested, and the size-matched d-vs-K question stays open
+regardless of what this returns.
+
 ## E125 — RESULT: the fitter is NOT bitwise reproducible, but IS statistically reproducible. E94's numbers are recovered.
 
 Ran because e94b — a FRESH fit of E94's recipe, on bytes that are not E94's
