@@ -157,10 +157,23 @@ Last updated: 2026-08-21 (through E110).
    before it is trusted. (A gate that always fails is one nobody reads.)
 6. Report nothing predicted as measured. Label ESTIMATE vs MEASURED in every
    table.
-7. **Cite the commit when citing a law.** This file moved twice in 25
-   minutes tonight and a peer built an argument on the stale version. A law
-   citation without a commit hash is as untrustworthy as a comparator row
-   without an instrument, for the same reason.
+7. **Cite the commit when citing a law, and RESOLVE the citation.** This file
+   moved twice in 25 minutes and a peer built an argument on the stale
+   version. A law citation without a commit hash is as untrustworthy as a
+   comparator row without an instrument, for the same reason.
+   **A citation is only as good as the last time someone actually looked it
+   up — and the most-cited rules get resolved least, because familiarity
+   substitutes for lookup.** On 08-21 "III.10" was cited 14+ times across
+   EXPERIMENTS, STATE, PROCESS, a compaction summary and a cross-session
+   handoff, by two sessions, over several days. No such rule existed; section
+   III had nine items. It survived not despite being repeated but BECAUSE it
+   was: every repetition raised its apparent authority without adding a
+   single check, and the handoff that told another session to "run III.10"
+   was read by someone who already believed they knew what it said. A wrong
+   entry has one author; a phantom citation recruits everyone who repeats it.
+   It cost nothing only by luck — the rule was followed because its author
+   happened to be the one running the gate. Resolve before you repeat,
+   especially when you are sure. [smoke-gen rule now III.11, 3600888]
 8. **Never compare artifact sizes before packing.** Stored bytes include
    whole-byte padding and are not a size. Quote packed bytes or analytic
    bpw. Three separate wrong conclusions today traced to this (E83's
