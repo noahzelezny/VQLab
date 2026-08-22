@@ -6573,6 +6573,86 @@ than a within-noise inversion doing load-bearing work in a paper.
 three arms, per FINDINGS 6c (report both, always). Refs: q4 45.842 / 5.2055 @
 14.094 GiB; E124 (= arm A's geometry) 40.327 / 5.2330 @ 13.596 GiB.
 
+## E129 — INVESTIGATION: the vintage gap, restated correctly. It may be a seed lottery on one corpus.
+
+Dedicated investigator, tasked only with explaining why nothing reproduces the
+shipped 2.4's 2.7655. It wrote nothing to the record; this entry lands its
+findings. Every item below names the command it came from.
+
+**MEASURED — every input is now CONTENT-verified identical, not mtime-verified:**
+- Shipped artifact vs E121's arm, hashed per tensor via safetensors offsets:
+  2545 tensors each, identical names/shapes/dtypes, **2032/2032 non-VQ tensors
+  byte-identical, 16.567 GB compared.** Extends the 342-tensor check to the
+  whole artifact — base carry, embeddings, vision graft.
+- **171/171 `.vq_scales` byte-identical, 10.69 GiB.** vq_scales is a
+  deterministic fp16-rounded per-group max|W| of the source with no RNG, so
+  this kills the source-checkpoint hypothesis BY CONTENT.
+- Geometry is exactly as assumed: 171 modules, all d4/K256/group64, no
+  per-layer variation. Codes U8 in every arm; packing is a no-op at K256.
+- Bundled runtime: `model.py` byte-identical (md5 8952eca…) between shipped
+  and flatk256-refit. The other arms' 92a97ddf… differs only by ADDED d8
+  kernels; the d=4 path is untouched.
+- E121 ran the right vintage: the shipped fit started 13:01 Aug 15;
+  vq_397b_codes.py was committed 12:58 Aug 15, three minutes earlier.
+  `git diff 0564198 cdcdeab` is entirely `--family`/`--geom` plumbing —
+  kmeans(), normalize(), the sampler and the assignment loop are unchanged.
+- 2.7655 is not stale: re-measured Aug 20 on THIS box with the CURRENT referee
+  at 2.7655/2.6383, matching the 08-15 originals to four decimals.
+- mlx did not move here: nothing under site-packages/mlx* is newer than Aug 9.
+
+**THE TWO NEW FACTS, and they reframe the question:**
+
+**1. The shipped artifact was fit on the M4. Every refit was fit on the M3.**
+Commit 528e884, which first recorded 2.7655, says "fitted in 2h09 on the M4"
+and "Referee (M4, stock mlx_lm)". E114/E115/E117/E118/E121 all ran on this M3
+Ultra. **The BOX has never been an arm in any experiment and was never on the
+"what is left" list.** Different GPU, different reduction order, possibly a
+different mlx build.
+
+**2. The gap exists on ONE corpus, and the shipped artifact is statistically
+ordinary in weight space.**
+
+    arm                box   mean relerr   wikitext   code
+    shipped 2.4         M4      0.3156      2.7655   2.6383
+    randinit (E115)     M3      0.3157      2.8158   2.6347  <- BEST on code
+    fitter0816 (E121)   M3      0.3172      2.8292   2.6508
+    refit ++ (E92)      M4        -         2.8057   2.6447
+
+randinit matches the shipped artifact's mean relerr to 0.0001 — the shipped
+codebooks are not structurally special (law 11/12: relerr does not rank). And
+**on the code corpus the shipped artifact is SECOND, beaten by randinit.** A
+systematically better fit should win both corpora. A lucky draw wins one.
+
+**3. A 397B floor already exists in the data at n=2.** E115 and E121 differ
+algorithmically only by scatter-add vs one-hot accumulation, which E120
+measured at ~2.4e-6 — so they are effectively two draws of one algorithm:
+**range 0.0134 wikitext / 0.0161 code.** The shipped-vs-best-refit gap is
+0.040. E127's 27B n=3 floor was 0.0447 ppl. (INFERRED, resting on E120.)
+
+**RANKED HYPOTHESES**
+- **H1 seed lottery** — the gap is inside an unmeasured 397B floor. Supported
+  by the ordinary relerr, the code-corpus loss, and an n=2 floor of 0.0134-0.0161
+  against a gap of 0.040.
+- **H2 the box** — M4 hardware and mlx build vs M3. Never tested, never named.
+- **H3 the Aug-15 command line** — no fit log survives for that run
+  (logs_live_397b.log was overwritten Aug 19), so `--iters`/`--sample`/
+  `--expert-chunk` are unrecorded. E127 has just shown `--iters` is a real
+  lever (-0.1256 ppl at 27B, 2.8x its floor). E121 used defaults.
+
+**ONE FIT TESTS ALL THREE:** run fitter_0816_cdcdeab.py with E121's exact
+arguments ON THE M4, gate/pack/score on the M3 instrument.
+- lands ~2.77 -> **H2 confirmed**, the box is the answer, shipped becomes
+  rebuildable.
+- lands 2.81-2.83 -> **H2 excluded** AND it is draw 3, giving the first n=3
+  397B ppl floor — which is what makes 0.040 interpretable at all (6f).
+Either branch is a result. Cost ~2h09 on the M4 plus ~5 min scoring. NOT RUN.
+
+**THE MYSTERY, RESTATED CORRECTLY.** Not "the shipped artifact is better and we
+cannot reproduce it." As measured: **the shipped artifact is better on one of
+two corpora, by an amount comparable to a seed-noise floor we have never
+measured at this model, and the only input difference anyone has identified is
+the machine it was fit on.** Everything else is content-verified identical.
+
 ## E128 — THE OFFERING LADDER: three rungs per model (Noah, 08-22, hard deadline Monday)
 
 Noah's specification, verbatim: **(1) slightly exceeding 4-bit quality at
