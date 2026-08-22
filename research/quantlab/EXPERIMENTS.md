@@ -6491,6 +6491,54 @@ geometry. It is one point on the d2 line; its exact rate twin (d4/K65536 at
 13.594 GiB) is untested, and the size-matched d-vs-K question stays open
 regardless of what this returns.
 
+## E126 — RESULT: d2/K512 beats q4 on ALL THREE metrics. Misses the pre-registered ppl MARGIN.
+
+Fit on M4 (192 tensors, ZERO collapses), gate/pack/smoke/score on M3.
+Gate PASS (median 0.0590, bar 0.1770). Pack asserted independently:
+**21.565 -> 14.592 GiB, 6.973 GiB removed** — this rung is 8.0 bpw unpacked
+and only enters the band because pack_dense did its work. Smoke PASS on the
+PACKED artifact ("Paris."). Size MEASURED.
+
+    artifact         size (GiB)   KL mnats   top-1     ppl
+    q4 (affine)        14.094      45.842    89.82%   5.2055
+    E126 d2/K512       14.592      33.095    91.10%   5.1943
+    E124 d2/K256       13.596      40.327    90.10%   5.2330
+    bf16 teacher            -           0   100%     5.2249
+
+**Beats q4 on every metric: KL -27.8%, top-1 +1.28 pp, ppl -0.0112**, at
++0.498 GiB (+3.5%). It is the first VQ artifact of ours to beat a 4-bit
+affine rung on all three at comparable size, and the best 27B we hold.
+
+**Against Noah's bar (29ddfb2), stated before the fit: MET on two of three.**
+
+    SIZE   <= 14.80 GiB                      14.592    MET
+    KL     <= 36.7 mnats                     33.095    MET
+    ppl    < 5.2055 by >= 0.02 (<= 5.1855)   5.1943    MISSED by 0.0088
+
+**The ppl is LOWER than q4 — by 0.0112, not the 0.0200 I pre-registered as
+"meaningfully."** Reported as a miss because that is what the registered
+number says. The margin was mine, not Noah's: his words were "meaningfully
+lower," and 0.02 was my operationalisation of "meaningfully" chosen before any
+data existed. Whether 0.0112 is meaningful is HIS call, not a number I should
+retrofit now that I can see the result. Both figures are here so he can make it.
+
+**6c REPLICATION TEST — branch 1, and 6c is demoted.** E126 sits 0.011 ppl
+from q4, squarely in the near-lossless regime where the reordering explanation
+predicted an inversion. It ranked CONSISTENTLY instead: KL, top-1 and ppl all
+favour E126. Per the pre-registered branches that WEAKENS near-lossless
+reordering and makes E124's inversion look like a one-off at n=1. 6c should
+not be carried into the paper as a phenomenon on this evidence.
+
+**Note the whole ladder sits at or below bf16 ppl** (q4 5.2055, E126 5.1943 vs
+teacher 5.2249) — consistent with E40's "q4 IS FREE" on this corpus, so ppl
+differences at the third decimal here are differences between models that are
+all effectively lossless on it. That is a reason to weight KL and top-1, where
+the separation is large (45.8 -> 33.1, 89.8% -> 91.1%), over a ppl gap of
+0.011.
+
+**What this does NOT settle:** whether d2 is the right geometry. Its exact
+rate twin at 14.59 GiB has not been run, and E126 is one point on the d2 line.
+
 ## E125 — RESULT: the fitter is NOT bitwise reproducible, but IS statistically reproducible. E94's numbers are recovered.
 
 Ran because e94b — a FRESH fit of E94's recipe, on bytes that are not E94's

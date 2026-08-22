@@ -193,7 +193,15 @@ Last updated: 2026-08-21 (through E110).
    27B ladder is ranked by KL. Any rung selected on KL alone is selected on a
    metric that has now demonstrably disagreed with the one Noah asks for. From
    here, every rung reports BOTH, and a winner is never declared on one.
-   **Status: n=1, and it did NOT replicate on the d4 rungs.** All three d4
+   **Status: DEMOTED 08-22. n=1 and it failed its own replication test.**
+   E126 (d2/K512) sits 0.011 ppl from q4 — squarely the near-lossless regime
+   this law's mundane reading predicts an inversion in — and ranked
+   CONSISTENTLY on KL, top-1 and ppl. Per the branches registered before it
+   ran, that weakens near-lossless reordering AND leaves the inversion as a
+   single unreplicated observation. Do not carry 6c into the paper as a
+   phenomenon; keep it as a recorded one-off and a reason to report both
+   metrics, which is cheap and correct regardless.
+   **Original status note:** n=1, and it did NOT replicate on the d4 rungs. All three d4
    dense rungs rank consistently on both metrics against q3 (K1024 better on
    both, K512 and K256 worse on both), so this is not a general VQ-vs-affine
    property. Seen once, at d2/K256 vs q4, where the two artifacts sit within
