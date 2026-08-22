@@ -6175,6 +6175,23 @@ flat, `--relerr-abort 0.90`. Then build_dense_vq (cured), zero-scan,
 verify_artifact vs `Qwen--Qwen3.8-27B`, pack_dense, III.11 smoke ON THE PACKED
 artifact, then score. ~51 min for the fit at the measured 16 s/tensor.
 
+**CRITERION RELAXED BY NOAH, 08-21 23:15, BEFORE ANY RUNG WAS FIT OR SCORED.**
+His words: "it's okay if it's about the q4 a little bit as long as its ppl is
+meaningfully lower than the 4bit equivalent." So size no longer has to fall
+strictly under q4 — a small overshoot is acceptable if it BUYS something. This
+is a change in the decision-maker's criteria, stated when no data existed;
+it is NOT a bar moved to accommodate a result, and the distinction only holds
+because of the timestamp. Thresholds fixed now, before the numbers:
+
+    SIZE BAND       <= 14.80 GiB   (q4 14.094 + ~5%)
+    QUALITY BAR     KL <= 36.7 mnats  (>= 20% below q4's 45.842)
+                    AND ppl < 5.2055 (q4's) by >= 0.02
+
+Both d2 rungs are therefore in scope, and the pair brackets q4:
+
+    d2 K256  13.594 GiB  (M3, E124)   under q4
+    d2 K512  14.590 GiB  (M4)         over q4 by 0.50 GiB, inside the band
+
 **Pre-registered readings, against the q2/q3/q4 ladder on kl_cache_qwen38:**
 - **THE PRIZE:** KL below q4's 45.842 mnats at a MEASURED size <= 14.09 GiB.
   That is "4-bit size, better-than-4-bit quality" and it is the first time any
