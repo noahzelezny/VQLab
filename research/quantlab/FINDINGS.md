@@ -199,6 +199,17 @@ Last updated: 2026-08-21 (through E110).
    registered as such BEFORE it finished. Do not generalise until it lands.
    [E124]
 
+6d. **FITS ARE STATISTICALLY REPRODUCIBLE, NOT BITWISE REPRODUCIBLE.** MLX's
+   RNG is not seeded across processes, so the same fit twice gives different
+   codebooks (measured: L30 d2/K512 -> 0.0590 vs 0.0592, codes and codebook
+   differ, scales identical). But aggregate metrics reproduce to our reporting
+   precision: a fresh fit of E94's recipe matched the original on every
+   projection mean to 4 decimals and on KL to 3. **So "this artifact scores X"
+   survives a re-run; "these exact bytes" does not. Say which you mean.** Two
+   corollaries: a lost artifact does not necessarily cost you its NUMBER, and
+   a difference at the 0.04+ ppl scale cannot be seed noise — look for an
+   input difference instead. [E125, and it corroborates E121]
+
 7. **Cite the commit when citing a law, and RESOLVE the citation.** This file
    moved twice in 25 minutes and a peer built an argument on the stale
    version. A law citation without a commit hash is as untrustworthy as a

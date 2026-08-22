@@ -6381,6 +6381,54 @@ generated a token from this artifact in a genuinely clean environment — fresh
 venv, stock `pip install mlx-lm==0.31.3`, no patch. Everything above is
 provenance, not execution. Owned by the M4 session, after the E119 ladder.
 
+## E125 — RESULT: the fitter is NOT bitwise reproducible, but IS statistically reproducible. E94's numbers are recovered.
+
+Ran because e94b — a FRESH fit of E94's recipe, on bytes that are not E94's
+bytes — scored identically to E94's retracted row, and identical numbers from
+different bytes needed an explanation rather than a shrug.
+
+**Bitwise: NO.** Fit the same tensor twice, same flags, separate processes:
+
+    det_a  L30 d2/K512  mean relerr 0.0590
+    det_b  L30 d2/K512  mean relerr 0.0592
+    codes DIFFERENT, codebook DIFFERENT, vq_scales IDENTICAL (scales are a
+    deterministic function of the source, so only the k-means output moves)
+
+MLX's RNG is not seeded across processes — verified directly, two runs of
+`mx.random.randint` give different draws — so every fit draws a different
+seeding and lands in a different local optimum.
+
+**Statistically: YES, to the precision we report.**
+
+    E94  (08-18, original bytes, now gone)   down 0.1316  gate 0.1328  up 0.1325  median 0.1325
+    e94b (08-21, fresh fit, different bytes) down 0.1316  gate 0.1328  up 0.1325  median 0.1325
+    E94   KL 53.022 mnats  top-1 89.55%  17.651 GiB
+    e94b  KL 53.022 mnats  top-1 89.55%  17.651 GiB
+
+Identical on every projection mean to four decimals and on KL to three. Not a
+coincidence and not a cached result (kl_damage recomputes; there is no
+per-path result cache). The mechanism is aggregation: individual tensors vary
+in the 4th decimal, but a mean over 40 tensors per projection — and a KL over
+8192 tokens — averages that variation away below our reporting precision.
+
+**CONSEQUENCE 1 — E94's retraction is NARROWED, not withdrawn.** "The bytes
+are gone and the row is not checkable against its named path" STANDS. "The
+number is unverifiable" is now FALSE: we reproduced it, from a fresh fit,
+under a different name. The honest statement is that E94's MEASUREMENT is
+reproducible while its ARTIFACT is not, and e94b is the live citable point.
+
+**CONSEQUENCE 2 — this corroborates E121's provenance finding independently.**
+If a fresh fit reproduces its own quality to 4 decimals, then seed variation
+does NOT produce differences at the 0.04-0.06 ppl scale. So the gap between
+the shipped 397B 2.4 and every refit of it cannot be seed noise, and must come
+from an input difference — which is exactly the Aug 19 base rewrite. Two
+independent routes to the same conclusion.
+
+**CONSEQUENCE 3 — for the paper.** Our fits are reproducible in the sense that
+matters for a result and not in the sense that matters for an artifact. Any
+claim of the form "this artifact scores X" survives a re-run; any claim of the
+form "these exact bytes" does not. Say which is meant.
+
 ## E124 — RESULT: beats q4 on KL and top-1, at less than q4's size. Loses on ppl.
 
     artifact              size        KL mnats   top-1     ppl
