@@ -145,3 +145,43 @@ codes, qwen3_8_dense family).
   to our copies on all three repos; no 695-line file exists; no correction
   needed. Pushing the 1093 runtime to 2.2/3.1 awaits a III.11 smoke per repo
   and Noah's go.
+
+
+## NIGHT OF 08-21 -> 08-22: armed schedule and standing duties
+
+**M3, strictly sequential (run_night_final2.sh -> run_night_ladders.sh):**
+1. E121 (08-16 fitter, cdcdeab) — running. NO abort by design, so its log is
+   the compute-side catcher.
+2. COLLAPSE-SCAN GATE: `grep -c "relerr 1.0000"` on E121's log. If > 0 the
+   chain does NOT gate, score or compare it, and that is REPORTED. A refit of
+   that fitter is a re-roll, not a fix.
+3. E120 accumulation probe (fixed, smoke-tested on a 1-expert case).
+4. E124 — 27B dense d2/K256, 13.594 GiB projected, Noah's target band.
+5. Ladder fills: every 27B d4 rung the M4 has finished (build -> gate ->
+   pack_dense -> III.11 on the PACKED artifact -> score, logging what it
+   skips), then the 35B second-family point via e94b under its OWN name.
+
+**M4 (peer):** in-flight d4/K1024, then d2/K512 (14.590 GiB, inside the
+relaxed band). Blocking and unrun: the d8 clean-venv smoke, which is the only
+thing gating the 101 GiB swap. Holds till morning — Noah did not answer and an
+unanswered question is not an approval.
+
+**E124 criterion, relaxed by Noah 23:15 BEFORE any fit (29ddfb2):**
+size <= 14.80 GiB, KL <= 36.7 mnats, ppl < 5.2055 by >= 0.02. Quote the commit
+with the numbers. A 14.7 GiB marginal result gets read against THIS bar, never
+a friendlier one invented afterward.
+
+**Open cross-check:** the 5.129 GiB non-MLP carry was measured on a d4
+artifact only. Both sessions report the four-way byte split (codes / codebook
+/ vq_scales / other) from their d2 builds. If `other` != 5.129, BOTH size
+projections move and no size goes to Noah until re-derived.
+
+**STANDING DUTIES WHEN THE SCHEDULE COMPLETES (Noah, 08-21 23:30):**
+1. Record every result in EXPERIMENTS/FINDINGS — results, not just runs, and
+   the falsified branches too.
+2. Then contact the PAPER SESSION and ask what further experiments would
+   strengthen the paper. Do not idle the boxes; do not invent work either —
+   ask the session that knows what the argument needs.
+
+**Do not repeat tonight's three:** preflight_ram.py before any resident-memory
+op; a small-case run before any launch; nothing concurrent.
