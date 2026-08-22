@@ -192,6 +192,19 @@ FAMILY = {
                  "up_proj": ("up_proj", None),
                  "down_proj": ("down_proj", None)},
     },
+    "qwen3_8_dense": {
+        # DENSE Qwen3.8-27B. Not an MoE: the mlp trio lives directly on the
+        # layer with no .experts./.switch_mlp. segment, and each tensor is 2D
+        # ([OUT, IN]) rather than [E, OUT, IN] — verify_artifact adds the E=1
+        # axis for dense families. Source is the HF-format bf16 checkpoint,
+        # whose prefix is model.language_model.* (the ARTIFACT uses
+        # language_model.model.*; build_dense_vq.py owns that remap).
+        "target_substr": "mlp",
+        "src_key": "model.language_model.layers.{li}.mlp.{key}.weight",
+        "proj": {"gate_proj": ("gate_proj", None),
+                 "up_proj": ("up_proj", None),
+                 "down_proj": ("down_proj", None)},
+    },
     "qwen3_5_mlx": {
         # SAME architecture as qwen3_5 (qwen3_5_moe, switch_mlp, shared
         # expert) but sourced from an mlx-community MLX-FORMAT bf16
