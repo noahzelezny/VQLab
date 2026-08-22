@@ -157,6 +157,25 @@ Last updated: 2026-08-21 (through E110).
    before it is trusted. (A gate that always fails is one nobody reads.)
 6. Report nothing predicted as measured. Label ESTIMATE vs MEASURED in every
    table.
+6b. **CHECK THE INPUTS BEFORE THE ALGORITHM. The cheapest check should come
+   first, and on 08-21 it came last.** A ~0.04-0.06 ppl gap between the
+   shipped 397B 2.4bpw and every refit of it was chased for two days as a
+   property of the k-means: four explanations proposed INSIDE the algorithm
+   (seeding, a K-crossover, float summation order, the fitter file itself),
+   three falsified by experiment (E117, E118, E121) and the fourth voided.
+   The actual cause was provenance — the BASE artifact had been silently
+   rewritten Aug 19, three days AFTER the artifact built from it — and it was
+   found with `ls -l` in about ninety seconds, once someone thought to look at
+   the input rather than the algorithm. **Before designing an experiment to
+   explain a difference between two runs, mtime and size every input both
+   runs consumed: base, source, config, and the tool.** E117/E118/E120 are
+   sound per-tensor physics aimed at the wrong object.
+   Corollary on searching: when concluding an input is GONE, say where you
+   looked. Two sessions searched five locations (SSD, HDD, external T7, and
+   both boxes' exo caches — the caches existed but were 0 B). "We searched"
+   over three locations would have been a weaker claim wearing the same words.
+   [E121, E94]
+
 7. **Cite the commit when citing a law, and RESOLVE the citation.** This file
    moved twice in 25 minutes and a peer built an argument on the stale
    version. A law citation without a commit hash is as untrustworthy as a

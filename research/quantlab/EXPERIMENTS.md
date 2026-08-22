@@ -6408,9 +6408,12 @@ provenance, not execution. Owned by the M4 session, after the E119 ladder.
 >
 > **The file may still be exonerated. It is not exonerated BY THIS RUN.**
 >
-> **And the original base does not survive:** not on the SSD (one copy, the
-> Aug 19 one), not on the HDD, and struct6-tail3x3 was never published to HF.
-> Searched all three. So the decisive experiment — refit K256 on the CURRENT
+> **And the original base does not survive.** Searched FIVE locations across
+> two sessions: the SSD (one copy, the Aug 19 one), the HDD (no struct6 tree),
+> the external T7 (nothing), and BOTH boxes' exo model caches — which exist as
+> directories and are 0 B, so the one candidate that would have been a genuine
+> pre-Aug-19 snapshot is empty. struct6-tail3x3 was also never published to HF
+> (checked the API; it is not among the six repos). So the decisive experiment — refit K256 on the CURRENT
 > fitter against the 08-16 base — **cannot be run.** On the evidence available,
 > the shipped 2.4 is unreproducible BY CONSTRUCTION, and the honest thing is
 > to say so and stop hunting rather than run a fifth variant.
