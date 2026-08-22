@@ -7571,3 +7571,52 @@ Committed 38/38 in under 2 minutes, 0 failures. Nothing was re-transferred.
 want to rerun it. Maybe later"). The card's benchmark row is relabelled
 `(v1 weights)` with a note that v2 has not been re-evaluated. v1's task
 numbers are NOT presented as v2's.
+
+### E128 run D — 35B R2 candidate, d4/K16384 (M4). PRE-REGISTERED, fit in flight.
+
+Written while the fit is running and before any number exists, because the
+successor session found that E130's pre-registration lived only in a shell
+script and was therefore invisible to the paper session. This run had the same
+defect — it existed as `~/qlab/fit_35b_r2.sh` on the M4 and in cross-session
+messages, and nowhere in this file.
+
+**Recipe:** `vq_397b_codes.py --family qwen3_5_mlx --vq-layers 0-39 --k 16384
+--dim 4 --expert-chunk 16 --relerr-abort 0.90`, base `rotlab-35B-qwen36-e2`,
+src the mlx-community Qwen3.6-35B-A3B-bf16 snapshot. Base, src and tool are
+**identical to e94b**, so the codebook size is the only change from the
+standing K8192 rung — this is a matched pair by construction, unlike the
+397B pair that turned out not to be (see the base rewrite, E129 context).
+Launched 08:56, output `e128-35b-d4K16384`, resume-safe.
+
+**Size, projected from the closed model (6e) — MEASURED size governs on
+delivery:**
+
+    codes  32.21B params / d4 * 14 bits = 13.12 GiB
+    scales 0.937   non-MLP 4.53 (DERIVED from e94b's total, NOT measured)
+    TOTAL  ~18.59 GiB   vs q4's 19.0 GiB
+
+Two caveats carried deliberately. The non-MLP carry is derived rather than
+measured, exactly the kind of figure that was wrong by 1.5 GiB on the 27B
+until three builds agreed — **this build closes it, and the four-way byte
+split gets reported.** And the fitter reports 4.25 bpw STORED (uint16 codes),
+so the 3.50 figure is post-pack: pack_dense is load-bearing here, and unlike
+run C a skipped pack WOULD cost the rung its bar (unpacked lands ~21.2 GiB
+against q4's 19.0).
+
+**Pre-registered readings.** R2 asks for q4's SIZE at meaningfully better
+quality. q4 (35B) is 78.557 mnats @ 19.0 GiB; the standing rung e94b is
+53.022 @ 17.651.
+
+- **MET** if measured packed size <= 19.0 GiB AND KL < 53.022 — i.e. it must
+  beat our own existing rung, not merely q4, or it is not worth publishing as
+  a new offering.
+- **NOT MET** if KL >= 53.022: raising K from 8192 to 16384 bought nothing at
+  this scale, and e94b remains the 35B R2 candidate at 1.35 GiB smaller.
+- **INCONCLUSIVE** if the packed size lands above 19.0 GiB, whatever the
+  quality — the rung is then not answering R2's question and must be reported
+  as a size miss rather than quietly compared on quality alone.
+
+Report KL AND ppl per 6c. The 6f seed floor was measured at d2/K256 on the
+27B and does **not** transfer here — different model, different geometry,
+different K — so a margin under ~2 mnats against e94b should be called
+indistinguishable rather than a win, pending its own n=3.

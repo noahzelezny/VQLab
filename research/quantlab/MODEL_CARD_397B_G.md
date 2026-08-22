@@ -36,12 +36,35 @@ All numbers measured on this exact artifact, scored with an unmodified
 wikitext, -0.16% code) at 21.9 GiB smaller.**
 
 **What changed against our own previous build at this size.** This artifact
-replaces `VQ-3.1bpw`. It is the **same size, same geometry, and same
-method** — 143.7 GiB, flat d4/K2048 experts, an identical footprint. The
-only difference is that its codebooks were fit with a corrected k-means
-implementation (fixed 2026-08-18), worth **-0.46% wikitext and -0.09% code**
-for free. Nothing about the recipe got smarter; an implementation defect got
-fixed, and every artifact fit before that date carries the deficit.
+replaces `VQ-3.1bpw`. It is the **same size and same geometry** — 143.682 GiB,
+flat d4/K2048 experts, an identical footprint — and it measures **−0.46%
+wikitext and −0.09% code** better.
+
+**We do not know why, and we are not going to guess in a model card.** The
+improvement is measured and reproducible; its cause is not established. Our
+working explanation for weeks was that the codebooks came from a later version
+of our k-means implementation. We tested that directly by re-running the
+*original* fitter, at its original commit, with identical arguments — and it
+scored **worse than every current build**, which falsifies the explanation
+rather than confirming it.
+
+We also found, while testing it, that the two artifacts do not share an
+identical input: the intermediate base they are both fit from was rebuilt
+after the earlier artifact was made, so the pair was never the controlled
+comparison we had been treating it as. That is our error and it is why the
+attribution is now blank rather than merely uncertain.
+
+**What survives is the measurement, which is what the table above reports.**
+If you are choosing between this artifact and the one it replaces, the numbers
+are the reason; the mechanism is an open question in our own notes.
+
+**The part worth carrying away, if you fit your own codebooks,** comes out of
+the same investigation and does not depend on its unresolved half: we spent
+weeks comparing fits by *mean* reconstruction error, and across the body
+tensors where these builds differ most, that mean moves by −0.00033 — it gets
+slightly better while the model gets worse. Any fit gated on mean
+reconstruction error is blind to that trade. It is how a regression survived
+our own review, and it is the one lesson here we are confident transfers.
 
 This repository was previously published as `VQ-3.1bpw`; it has been renamed
 and `main` now serves the improved weights, so the old URL redirects here.
@@ -145,7 +168,8 @@ decimals of total negative log-likelihood on both corpora.
 `mlx-lm` on the same harness used for every comparator here. Two corpora
 because this family shows real domain asymmetry: larger codebooks buy far
 more on prose than on code, so a single-corpus number would misrepresent the
-trade. Task-suite results are reported below, measured the same way.
+trade. Task-suite results for this artifact are not yet available — see
+below.
 
 ## Task benchmarks
 
