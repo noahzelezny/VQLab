@@ -5911,3 +5911,55 @@ predicts the gain shrinks as K rises (more centroids, less competition), and
 predicts the LARGEST gain at K128, which is the 101 GiB rung. Those are
 separate matched pairs and each needs its own, per the standing rule that a
 claim about a TOOL needs pairs at more than one geometry made BEFORE the claim.
+
+## E112 — RESULT: FALSIFIED. Tail-weighting the body makes the model WORSE.
+
+Scored against the rule pre-registered in d4f8da8 before any number existed.
+
+    artifact                        wikitext    code      size
+    bodytailw4 (this)                2.9945    2.6442   111.617 GiB
+    flatk256-refit  (primary)        2.8057    2.6447   111.617 GiB
+    shipped VQ-2.4  (ship bar)       2.7655    2.6383   111.617 GiB
+
+    vs primary:  wikitext +0.1888  WORSE     code -0.0005  (below the 0.005 band = no change)
+
+**The pre-registered rule says FALSIFIED at >= 2.8057 on either corpus.
+Wikitext is 2.9945. Falsified, and not marginally — it is 4.7x worse than the
+E92 regression this was built to fix (+0.1888 against +0.0402).**
+
+Size guard met exactly (111.617 GiB, byte-identical to both comparators),
+geometry identical, gates all passed, so the comparison is clean and the
+verdict stands on its own terms.
+
+**The code corpus is unchanged, and the rule already covers that: a split is
+INCONCLUSIVE, and this is not even a split — one corpus is much worse and the
+other is flat. Nothing here is partial success.** I record that explicitly
+because "code held steady" was the available spin and the pre-registration is
+what stopped it.
+
+**What this kills.** "The bulk/tail trade is recoverable by reweighting the
+k-means objective" is dead. The trade is real in reconstruction error
+(E102/E109: monotonic crossover, 18/24 body tensors), the weighting demonstrably
+buys the tail back in reconstruction error (E106 screen: -0.074/-0.084 at L30),
+and **none of that converts to end-to-end quality.** It converts to the
+opposite.
+
+**What this strengthens.** Laws 11-12, considerably. We now have the strongest
+possible demonstration that weight-space reconstruction error does not rank
+output damage: we deliberately engineered a fit to improve the exact
+error-band E102 identified as load-bearing, succeeded at that in weight space,
+and made the model substantially worse. The bulk we sacrificed mattered far
+more than the tail we bought — which E102 could not have told us, because E102
+measured reconstruction error, and that is precisely the quantity that does not
+rank output damage.
+
+**Cost:** one 53-minute fit, one gate chain. **Bought:** a mechanism-level
+negative that closes a direction, and a matched pair constructed on purpose
+rather than found. Cheap for what it settles.
+
+**Open, and NOT chased here.** The mechanism (E107-E110) still explains the
+K-dependence; only the intervention failed. Whether a *smaller* p (2 rather
+than 4) sits somewhere useful on the bulk/tail curve is untested — but the
+prior after this result should be poor, and the honest read is that the
+objective is not the lever. Anyone revisiting it should propose a different
+lever, not a different exponent.
