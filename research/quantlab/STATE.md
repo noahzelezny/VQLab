@@ -55,7 +55,7 @@ for it FAILED.** Both are results; the second is a real negative, not a setback.
    copies, 2.4 to our 1093-line copy. The "695-line local copy" does not
    exist anywhere on the volume — downloaders run exactly our code. Nothing
    needs correction. Noah leans toward pushing the tested 1093 runtime to the
-   2.2/3.1 repos (it is a superset, one added dense path); needs a III.10
+   2.2/3.1 repos (it is a superset, one added dense path); needs a III.11
    smoke on each repo's artifact with the 1093 bundle first. NOT pushed.
 1b. **The original HuggingFace fetch question.** M4's local copy of the published 2.2bpw has a
    695-line bundled `model.py`; the share copy has 717. Same weights, same
@@ -117,8 +117,8 @@ codes, qwen3_8_dense family).
 
 - **E95 CONCLUDED: dense VQ carries — not MoE-only.** 27B dense, flat
   d4/K256: 325.6 mnats / 76.5% top-1 / ppl 6.403 @ 9.7 GiB. Above the affine
-  q2->q3 line at its size (predicts ~439 mnats). Gate PASS, III.10 smoke
-  PASS. Paper session unblocked. Full entry + two runtime defects III.10
+  q2->q3 line at its size (predicts ~439 mnats). Gate PASS, III.11 smoke
+  PASS. Paper session unblocked. Full entry + two runtime defects III.11
   caught (d!=2 dense dispatch; expert kernel exceeds threadgroup memory at
   27B shapes) in EXPERIMENTS E95 RESULT.
 - **L60 ROOT-CAUSED — it was a DEFERRED READ, not write corruption.**
@@ -143,5 +143,5 @@ codes, qwen3_8_dense family).
   E116). Watcher launches only on a clean E117 DONE banner.
 - **HF fetch RESOLVED** (Noah authorized): published model.py md5-identical
   to our copies on all three repos; no 695-line file exists; no correction
-  needed. Pushing the 1093 runtime to 2.2/3.1 awaits a III.10 smoke per repo
+  needed. Pushing the 1093 runtime to 2.2/3.1 awaits a III.11 smoke per repo
   and Noah's go.

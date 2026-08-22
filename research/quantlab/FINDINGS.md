@@ -180,6 +180,23 @@ Last updated: 2026-08-21 (through E110).
    encounter was met with a change rather than an instrument. Cost of the
    discipline: ~30 minutes of holding a known one-line fix. [E119]
 
+11. **An artifact is not releasable until it has GENERATED ONE TOKEN through
+   the fused path it will ship with.** Every byte-level gate we own can pass
+   an artifact that cannot produce a token: the gate decodes weights, it does
+   not execute the runtime the artifact bundles. Proven twice on 2026-08-21 in
+   one evening on the first d=4 DENSE artifact (E95) — the dense fused kernel
+   exists only for d=2 and raised, and the expert-kernel fallback then died at
+   KERNEL LOAD at 27B mlp shapes (threadgroup 36864 B vs Metal's 32768 cap).
+   Neither is visible to any relerr gate, and no bench would have touched
+   either branch. Cost: seconds. [E100, E95]
+
+   *(This rule was STATED at E100 and cited as "III.10" for days without ever
+   being written here — a dangling citation that survived because everyone,
+   including its author, trusted the number. III.10 was legitimately taken by
+   the measure-before-you-fix rule on 08-21. Renumbered to III.11 and recorded
+   properly; the citation rule (III.7, cite the commit) exists for exactly
+   this failure and was not applied to a rule about gates.)*
+
 ## IV. MLX/Metal engineering rules (each cost ≥1 run to learn)
 
 - **Any lazy read still pending when a save forces evaluation is paid inside

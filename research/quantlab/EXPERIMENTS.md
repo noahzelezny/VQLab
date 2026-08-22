@@ -5109,7 +5109,7 @@ fail, and failing cleanly at flat geometry is a real answer.
 ## E95 — RESULT: dense VQ carries. The recipe is NOT an MoE-expert phenomenon.
 
 Scored 2026-08-21 19:00, artifact `e95-27b-dense-vq-r2` (rebuilt splice, gate
-PASS 0 outliers, III.10 smoke-gen PASS through the shipped runtime). Same
+PASS 0 outliers, III.11 smoke-gen PASS through the shipped runtime). Same
 instrument as the q2/q3/q4 ladder (`kl_cache_qwen38` + `referee_corpus.txt`
 2048 tok; teacher reload skipped, recorded bf16_ppl 5.2249 reused — the two
 per-rung measurements executed exactly as `kl_ppl_calibrate.py` does).
@@ -5137,7 +5137,7 @@ artifact is not size-matched to any rung. And per E107-E110 this fit used
 kmeans++ at K=256, which on the 397B is inside the penalty band — so this
 placement is, if anything, a LOWER bound on the dense recipe.
 
-**Two runtime defects found by III.10 on the way in** (both would have been
+**Two runtime defects found by III.11 on the way in** (both would have been
 invisible to every bench; the smoke-gen is the only gate that touches them):
 1. `vq_dense.py` dispatched d!=2 dense decode into `_dense_fused`, which
    exists only for d=2 and raises. First d=4 dense artifact ever smoked.
@@ -5431,12 +5431,12 @@ gap.** Source confirms UNPACKED d=8 kernels exist and are dispatched —
 `vq_fused_d8_tg` (K<=1024, threadgroup) and `vq_fused_d8` (device memory,
 vq_switch.py:741-747). Only the PACKED path is missing d=8. So:
 
-    rotlab--397B-d8K16384          110.809 GiB  unpacked      -> RUNS (III.10 smoke, executed)
+    rotlab--397B-d8K16384          110.809 GiB  unpacked      -> RUNS (III.11 smoke, executed)
     rotlab--397B-d8K16384-packed   100.971 GiB  pack_bits=14  -> RAISES (executed, measured)
 
 **That first row was briefly written as RUNS on the strength of the dispatch
 table alone — inference from source, the same class of evidence as reading a
-gate's output. It is now VERIFIED BY EXECUTION:** III.10 smoke on M4, loaded
+gate's output. It is now VERIFIED BY EXECUTION:** III.11 smoke on M4, loaded
 in 65s (113,468 MB resident), generated in 5.6s from "The capital of France
 is" -> **"Paris.\nA. True\nB"**. Correct answer, coherent continuation. A
 working model, not one that loads and emits nonsense.
@@ -5469,7 +5469,7 @@ tensors; and `referee/score_streaming.py` scores through the REFERENCE decode
 path, which handles d=8 — so the artifact scored perfectly while being unable
 to serve. We verified the bytes exhaustively and never ran the model.
 
-**New rule (III.10): an artifact is not releasable until it has GENERATED ONE
+**New rule (III.11): an artifact is not releasable until it has GENERATED ONE
 TOKEN through the fused path it will ship with.** Cost: seconds. Today it
 would have saved a 6.5-hour fit, a pack, a graft, a score and an A/B setup.
 
@@ -5575,7 +5575,7 @@ specified, against an output metric that weights the tail far more heavily.
 
 First time any token has been generated through `flatk2048-refit-packed`. At
 143.68 GiB it fits neither box (M3 96 GiB, M4 128 GiB), so the 2-node ring is
-the ONLY form III.10 can take for this artifact.
+the ONLY form III.11 can take for this artifact.
 
 **Graded known-answer probes, greedy (temperature 0), against the placed
 instance:**
@@ -5936,8 +5936,8 @@ bit-unpacking. Committed 73cdaf7.
     synthetic: bit-identical to the shipped UNPACKED d8 kernel, max 0.000e+00,
                across K=16384/4096/1024/256 at pack_bits 14/12/10/8, multiple
                shapes, both device and threadgroup variants
-    artifact:  III.10 packed d8   -> 'Paris.\nA. True\nB'
-               III.10 unpacked d8 -> 'Paris.\nA. True\nB'   BYTE-IDENTICAL
+    artifact:  III.11 packed d8   -> 'Paris.\nA. True\nB'
+               III.11 unpacked d8 -> 'Paris.\nA. True\nB'   BYTE-IDENTICAL
 
 Synthetic bit-identity predicted byte-identical greedy text on the real
 artifact, and that prediction held. That is the strong form of the claim.
@@ -6222,7 +6222,7 @@ model.py that raises on d=4 decode).
 corruption hit this exact pipeline twice — clean fit log, zeroed splice),
 `verify_artifact.py --family qwen3_8_dense --outlier 3.0` against the HF
 bf16 (`Qwen--Qwen3.8-27B`, NOT the mlx conversion — wrong index keys),
-III.10 smoke-gen through the bundled runtime, THEN score.
+III.11 smoke-gen through the bundled runtime, THEN score.
 
 **Instrument, identical to E95:** ppl on referee_corpus.txt 2048 tok +
 `kl_damage.py score --cache-dir kl_cache_qwen38`; reuse recorded bf16_ppl

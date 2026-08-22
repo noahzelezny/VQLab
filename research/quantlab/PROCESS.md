@@ -132,7 +132,7 @@ different box against the bytes on disk.
    what the bytes are.
 3. `graft_vision.py` with `--copy-config-keys` (now default ON).
 4. **Generate one token through the fused path the artifact will ship with**
-   (III.10). Every byte-level gate we own passed an artifact that could not
+   (III.11). Every byte-level gate we own passed an artifact that could not
    run (E100). The referee scores through the REFERENCE decode path and is
    structurally blind to this.
 5. Score on the family's own instrument, and state which one.
