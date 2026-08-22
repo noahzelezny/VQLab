@@ -176,6 +176,29 @@ Last updated: 2026-08-21 (through E110).
    over three locations would have been a weaker claim wearing the same words.
    [E121, E94]
 
+6c. **KL AND PPL CAN RANK TWO ARTIFACTS OPPOSITELY. Report both, always.**
+   First observed 08-21 (E124), one case, same model and same corpus:
+
+       q4 (affine 4-bit)  14.094 G   KL 45.842   top-1 89.82%   ppl 5.2055
+       E124 d2/K256       13.596 G   KL 40.327   top-1 90.10%   ppl 5.2330
+
+   KL and top-1 say the VQ rung is CLOSER TO THE TEACHER; ppl says it is a
+   WORSE LANGUAGE MODEL. Both are true and they measure different things: KL
+   is agreement with one teacher's full distribution, ppl is absolute
+   predictive quality on text. A quantisation can track the teacher's
+   distribution more faithfully while being worse at the actual next-token
+   job. This is NOT law 6 (weight error vs output damage) — it is one level
+   higher, two OUTPUT metrics disagreeing.
+   **Methodological consequence, which is the part that bites:** our entire
+   27B ladder is ranked by KL. Any rung selected on KL alone is selected on a
+   metric that has now demonstrably disagreed with the one Noah asks for. From
+   here, every rung reports BOTH, and a winner is never declared on one.
+   **Status: n=1.** One inversion is an existence proof, not a rate. The
+   0.0275 ppl gap is small and no repeat has been measured. The M4's d2/K512
+   (same d, same widths, 12.5% more code budget) is the natural test and was
+   registered as such BEFORE it finished. Do not generalise until it lands.
+   [E124]
+
 7. **Cite the commit when citing a law, and RESOLVE the citation.** This file
    moved twice in 25 minutes and a peer built an argument on the stale
    version. A law citation without a commit hash is as untrustworthy as a
