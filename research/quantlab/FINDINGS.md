@@ -170,6 +170,16 @@ Last updated: 2026-08-21 (through E110).
    fitter's own log structurally cannot see it (it reports what it COMPUTED,
    not what reached disk). Cost of skipping this: E82. [E85]
 
+10. **When a bug is rare and you have a reproducer, measure BEFORE you fix.**
+   A fix landed while the evidence is still unmeasured is how "it stopped
+   happening" gets mistaken for "we understood it" — and the rarer the bug,
+   the longer that mistake survives undetected, because absence of the
+   failure is exactly what both a real fix and a lucky run look like. The
+   zeroed-tensor collapse was chased for two nights as three different
+   diseases (write corruption, a cursed box, SMB) precisely because every
+   encounter was met with a change rather than an instrument. Cost of the
+   discipline: ~30 minutes of holding a known one-line fix. [E119]
+
 ## IV. MLX/Metal engineering rules (each cost ≥1 run to learn)
 
 - **Any lazy read still pending when a save forces evaluation is paid inside
