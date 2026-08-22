@@ -203,6 +203,17 @@ Last updated: 2026-08-21 (through E110).
    registered as such BEFORE it finished. Do not generalise until it lands.
    [E124]
 
+6e. **THE SIZE MODEL FOR DENSE 27B ARTIFACTS IS CLOSED.** total = codes +
+   0.498 (scales) + 5.129 (non-MLP carry) GiB, where codes = params/d *
+   bits/8. Confirmed on THREE builds across TWO geometries — d4 (M4), d2/K256
+   (M3, predicted 13.594 vs measured 13.596), d2/K512 (M4, `other` = 5.129 to
+   three decimals) — so it no longer needs a caveat. **But quote the PACKED
+   number and assert it:** d2/K512 is 21.565 GiB unpacked and 14.590 packed,
+   a 7 GiB difference, so a silently skipped pack turns a band-fitting
+   candidate into an artifact LARGER than what it is meant to beat. A chain
+   that scores "whichever artifact exists" will report a real number for the
+   wrong one. [E124, E126]
+
 6d. **FITS ARE STATISTICALLY REPRODUCIBLE, NOT BITWISE REPRODUCIBLE.** MLX's
    RNG is not seeded across processes, so the same fit twice gives different
    codebooks (measured: L30 d2/K512 -> 0.0590 vs 0.0592, codes and codebook
