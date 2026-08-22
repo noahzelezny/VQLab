@@ -6617,8 +6617,58 @@ figures only. Every rung enters the record at its MEASURED packed size.**
 - R2 passes if size <= the affine 4-bit's (or within 5%, stated) AND KL is
   lower by more than the seed-noise floor for that model/geometry.
 - R3 passes if KL <= the affine 8-bit's AND size is at least 20% smaller.
-  **The 8-bit KL is currently unmeasured for BOTH models, so R3 has no target
-  yet and no R3 claim may be made until A and B land.**
+
+### E128 A+B — RESULT: the 8-bit bars, and R3 is far harder than R1/R2
+
+    27B q8   26.341 GiB   KL  1.641 mnats   98.08% top-1   ppl 5.2433
+    35B q8   35.131 GiB   KL  7.449 mnats   96.18% top-1
+
+**R3 targets, now visible:** 27B needs KL <= 1.641 at <= 21.07 GiB; 35B needs
+KL <= 7.449 at <= 28.10 GiB.
+
+**Our best rungs are 20x and 7x short of those bars.** 27B best is E126 at
+33.095; 35B best is e94b at 53.022. Fitting the measured 27B d2 points gives a
+local slope of **x0.673 KL per +1 bpw**, so — EXTRAPOLATION, NOT MEASUREMENT —
+
+    d2 K2048  5.5 bpw  16.58 GiB   est ~22 mnats
+    d2 K4096  6.0 bpw  17.58 GiB   est ~18
+    d2 K16384 7.0 bpw  19.57 GiB   est ~12      (bar: 1.641)
+
+Even at 7 bpw — half of q8's 8 and only 26% smaller — the extrapolation lands
+~7x above the bar. To reach 1.641 on this slope needs roughly 12 bpw, i.e.
+LARGER than the 8-bit artifact it is meant to undercut.
+
+**So R3 as specified may be unreachable with VQ, on both models.** Stated as
+"may": the slope is fitted to two d2 points and extrapolated four bits beyond
+them, which is exactly the kind of reasoning this lab has been wrong about
+before. **The decisive test is already queued** — 27B d2/K4096 (run C). If it
+lands near the predicted ~18 mnats, the slope holds and R3 is out of reach at
+any size that saves meaningful bytes; if it lands far below, the curve steepens
+and R3 is live. Either way we will know from one fit rather than five.
+
+**What is NOT in doubt:** the 8-bit rungs are extremely strong (27B q8 is
+1.641 mnats — near-lossless), and beating them was always the hardest of the
+three asks. R1 and R2 are met and unaffected.
+
+### The 101 GiB swap is UNBLOCKED (M4, clean-room smoke)
+
+    fresh venv, `pip install mlx-lm` only:  mlx 0.32.1 / mlx_lm 0.31.3
+    site-packages vq_switch present:        False
+    utils.py md5:                           identical to the stock wheel
+    rotlab--397B-d8K16384-packed loaded 130s
+    type(model).__module__:                 custom_model
+    SMOKE OK: 'Paris.\nA. True\nB'   (byte-identical to E113's output)
+
+Airtight because site-packages has NO vq_switch and the packed-d8 kernel
+exists nowhere but the artifact's bundle — generation was impossible unless
+the bundle supplied it. **A downloader with nothing but `pip install mlx-lm`
+gets a working 101 GiB model.** The M3 smoke failure was a property of that
+box (a patched load_model shadowing the bundle), not of the artifact.
+
+The M4 session also reported that the same probe printed a CONTRADICTORY false
+line ("the bundle was BYPASSED") because it scanned sys.modules, which
+`module_from_spec`/`exec_module` never populates. Flagged by them rather than
+dropped, and fixed in stock_smoke.py (27fb66e) with the trap documented.
 - Per 6f: KL separations of 5+ mnats and top-1 of ~1 pp are real; third-decimal
   ppl differences between single-draw artifacts are NOT interpretable.
 
