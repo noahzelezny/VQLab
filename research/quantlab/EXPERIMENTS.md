@@ -6390,8 +6390,8 @@ stands, one instrument (kl_cache_qwen38 + referee_corpus 2048 tok):
     artifact                 size (GiB)   KL mnats   top-1     ppl
     q2   (affine)              7.832      1426.891   46.07%   16.4349
     E95  d4/K256               9.612       325.575   76.46%    6.4032
-    E119 d4/K512  packed      10.110       219.710   79.79%      -
-    E119 d4/K1024 packed      10.609       148.470   82.53%      -
+    E119 d4/K512  packed      10.110       219.710   79.79%    5.9810
+    E119 d4/K1024 packed      10.609       148.470   82.53%    5.5249
     q3   (affine)             10.963       187.765   79.48%    5.8323
     E124 d2/K256              13.596        40.327   90.10%    5.2330
     q4   (affine)             14.094        45.842   89.82%    5.2055
@@ -6441,9 +6441,23 @@ deferred by default:** d4/K65536 is a 65,536-centroid k-means (slow), and
 16-bit codes are byte-aligned so pack_dense skips them — the artifact is its
 own final size. Not queued tonight.
 
-**ppl not measured for the d4 rungs** — the chain scored KL only. Per FINDINGS
-6c (KL and ppl can rank oppositely, E124) that is now a gap, not a detail, and
-these rungs should not be ranked against q3 on KL alone without it.
+**ppl MEASURED for every rung (ppl fill, 3f172f3), and 6c does NOT replicate
+here.** On all three d4 rungs KL and ppl rank CONSISTENTLY:
+
+    K1024  KL 148.470 < q3's 187.765   AND  ppl 5.5249 < q3's 5.8323   both better
+    K512   KL 219.710 > q3's 187.765   AND  ppl 5.9810 > q3's 5.8323   both worse
+    K256   KL 325.575                       ppl 6.4032                 both worse
+
+So **K1024 beats q3 on BOTH metrics at 0.35 GiB less** — the E119 bar is met
+without relying on the metric that can invert, which is a stronger result than
+the KL-only version.
+
+**And it narrows 6c**: the KL/ppl inversion is NOT a general property of VQ vs
+affine. It has been seen exactly once, at E124's d2/K256 against q4, and it
+did not appear at any d4 rung against q3. Whether that makes it a d2 property,
+a near-lossless-regime property (both E124 and q4 sit within 0.03 ppl of each
+other, where small differences can reorder), or a one-off, is open. The M4's
+d2/K512 is the replication test.
 
 ## E125 — RESULT: the fitter is NOT bitwise reproducible, but IS statistically reproducible. E94's numbers are recovered.
 

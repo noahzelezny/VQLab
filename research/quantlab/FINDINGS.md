@@ -193,8 +193,12 @@ Last updated: 2026-08-21 (through E110).
    27B ladder is ranked by KL. Any rung selected on KL alone is selected on a
    metric that has now demonstrably disagreed with the one Noah asks for. From
    here, every rung reports BOTH, and a winner is never declared on one.
-   **Status: n=1.** One inversion is an existence proof, not a rate. The
-   0.0275 ppl gap is small and no repeat has been measured. The M4's d2/K512
+   **Status: n=1, and it did NOT replicate on the d4 rungs.** All three d4
+   dense rungs rank consistently on both metrics against q3 (K1024 better on
+   both, K512 and K256 worse on both), so this is not a general VQ-vs-affine
+   property. Seen once, at d2/K256 vs q4, where the two artifacts sit within
+   0.03 ppl of each other — a near-lossless regime where small differences can
+   reorder. One inversion is an existence proof, not a rate. The M4's d2/K512
    (same d, same widths, 12.5% more code budget) is the natural test and was
    registered as such BEFORE it finished. Do not generalise until it lands.
    [E124]
