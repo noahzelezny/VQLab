@@ -6423,6 +6423,31 @@ III.11 smoke-gen through the bundled runtime, THEN score.
 - Specifically interesting bar: K2048 (~10.5-11 GiB expected) vs q3
   (187.8 mnats @ 11 GiB) — a size-matched-ish comparison for once. Beating
   q3 at or below its size is the "usable 27B quant" threshold.
+
+  > **RESTATED 08-21 22:20, before any rung was scored.** The bracketed size
+  > above was an ASSUMPTION I never checked, and it is wrong for the
+  > artifacts as built. `fit_dense_vq.py` stores codes as uint16 for any
+  > K>256 and `build_dense_vq.py` has no packing step, so an UNPACKED rung
+  > carries 16 bits per 4 weights = **4.0 bpw on the MLPs regardless of K** —
+  > byte-identical to the affine 4-bit base it splices into. Measured: K512
+  > came out 13.60 GiB against q4's 14.09, and K1024/K2048 would land at the
+  > same place, since 10 and 11 bits both round up to uint16. Caught by the
+  > M4 session. This is precisely III.8 (never compare artifact sizes before
+  > packing).
+  >
+  > **Correction, not a workaround:** `pack_dense.py` already exists and is
+  > verified (d7f8e30, bit-exact vs vq_pack, e4b 8.12 -> 6.34 GiB, generation
+  > identical), and vq_dense.py's VQLinear already carries the pack_bits
+  > path. Checked against the K512 rung: all 192 modules are NSUB % 32 == 0
+  > (1280 and 4352), so nothing is skipped, and 9/10/11 bits are all
+  > non-byte-aligned so cb4fb9b's byte-aligned skip will not fire.
+  >
+  > **Therefore the reading is: score for quality now (packing is lossless,
+  > so quality carries over unchanged), pack, then place each rung on the
+  > affine ladder AT ITS MEASURED PACKED SIZE.** No analytic
+  > "packed-equivalent" size enters the record — a computed size is the exact
+  > thing III.8 forbids. The q3 comparison stands or falls on where the bytes
+  > actually land, not on where I guessed they would.
 - Any K where the dense point falls BELOW the affine line is a real dense/MoE
   divergence and must be reported as such, not smoothed.
 - Sizes reported next to every number; "VQ beats 4-bit" stays banned.
