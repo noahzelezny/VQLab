@@ -20,7 +20,7 @@ E="/Volumes/Thunderbay SSD/Exo Models"
 L=logs_live_night_ladders.log
 say() { echo "$(date '+%H:%M:%S')  $*" | tee -a $L; }
 
-while pgrep -f run_night_final >/dev/null; do sleep 60; done
+while pgrep -f run_night_final2 >/dev/null; do sleep 60; done
 say "stage 1 complete — starting ladder fills"
 
 # ---- A. 27B dense rungs

@@ -6152,10 +6152,23 @@ d2/K512 on the 27B:
 rank output damage and is anti-correlated at low K — so this is a reason to
 run the experiment, NOT a predicted result.
 
-**Sizes, computed for planning only, to be MEASURED after pack_dense (III.8):**
+**Sizes — CORRECTED 08-21 23:05, BEFORE the fit started.** My first figures
+(~12.1 / ~13.1 GiB) used a non-MLP carry of 3.6 GiB that I INVENTED rather
+than measured. The M4 session measured the real carry by splitting a built
+rung's bytes by tensor kind: non-MLP 5.129 GiB, scales 0.498 GiB. Validated
+here against our own artifact — the model predicts 9.611 GiB for the d4/K256
+build and the disk says 9.612:
 
-    d2 K256   4.25 bpw   ~12.1 GiB      d2 K512   4.75 bpw   ~13.1 GiB
-    q4 (affine incumbent)               14.09 GiB, 45.842 mnats, 89.82% top-1
+    d2 K256   codes 7.967 + scales 0.498 + nonMLP 5.129 = 13.594 GiB   <- UNDER q4
+    d2 K512   codes 8.963 + scales 0.498 + nonMLP 5.129 = 14.590 GiB   <- OVER q4
+    q4 (affine incumbent)                                  14.094 GiB
+
+**So the geometry changed from K512 to K256 before anything ran.** K512 would
+have been MORE bytes than the 4-bit baseline it exists to undercut — the one
+thing Noah's target forbids. K256 is the LARGEST d2 rung that fits beneath q4.
+Note 8 bits is byte-aligned, so `pack_dense` skips it by design (cb4fb9b): the
+unpacked artifact IS the final size, and there is no packed path to verify.
+These remain projections; the artifact's own bytes are what goes in the record.
 
 **Recipe:** `fit_dense_vq.py --family qwen3_8 --dim 2 --k 512`, layers 0-63,
 flat, `--relerr-abort 0.90`. Then build_dense_vq (cured), zero-scan,
