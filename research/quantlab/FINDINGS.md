@@ -206,6 +206,20 @@ Last updated: 2026-08-21 (through E110).
    back against the original and confirm the guard is the ONLY difference.
    [E119]
 
+11a. **THE SMOKE (III.11) NEEDS THE WHOLE MODEL RESIDENT — so it cannot run
+   on a box smaller than the artifact.** The streaming referee scores models
+   larger than RAM by design; GENERATION cannot. On 08-21 a publish-readiness
+   chain was pointed at a 100.971 GiB and a 143.682 GiB artifact on the 96 GiB
+   M3: the first thrashed (mlx warned "requires 102524 MB", max recommended
+   86016 MB) and the second drove swap from 0 to 60 GiB of 61 GiB before it
+   was stopped. Neither could have produced a verdict. **Current capability:
+   d8 (100.97) smokes on the M4 (128 GiB) only; the 143.682 GiB rung fits
+   NEITHER box and can only be smoked on the exo pair.** Check artifact bytes
+   against box RAM before scheduling a smoke — the rule already existed for
+   speed tests ("never on a model larger than RAM", III.4) and was not carried
+   across to the smoke, because the smoke was written as a cheap correctness
+   check rather than as a resident-memory operation.
+
 11. **An artifact is not releasable until it has GENERATED ONE TOKEN through
    the fused path it will ship with.** Every byte-level gate we own can pass
    an artifact that cannot produce a token: the gate decodes weights, it does
