@@ -6381,6 +6381,56 @@ generated a token from this artifact in a genuinely clean environment — fresh
 venv, stock `pip install mlx-lm==0.31.3`, no patch. Everything above is
 provenance, not execution. Owned by the M4 session, after the E119 ladder.
 
+## E124 — RESULT: beats q4 on KL and top-1, at less than q4's size. Loses on ppl.
+
+    artifact              size        KL mnats   top-1     ppl
+    q4 (affine 4-bit)     14.094 G     45.842    89.82%   5.2055
+    E124 d2/K256          13.596 G     40.327    90.10%   5.2330
+
+Fit clean: 192 tensors, mean relerr 0.0842, worst 0.0859, 1090s, ZERO
+collapses. Gate PASS. Size MEASURED, not computed.
+
+**Read against BOTH bars, because they disagree and picking one would be
+choosing the flattering answer:**
+- **E124's own pre-registered PRIZE** ("KL below q4's 45.842 at a measured
+  size <= 14.09 GiB"): **MET.** 40.327 mnats, -12.0% vs q4, at 0.50 GiB less.
+  Top-1 also higher, 90.10% vs 89.82%.
+- **Noah's relaxed 23:15 bar** (KL <= 36.7 AND ppl < 5.2055 by >= 0.02):
+  **NOT MET, on both terms.** KL 40.327 misses 36.7; ppl 5.2330 is 0.0275
+  WORSE than q4, not better. His words were "ppl meaningfully lower than the
+  4bit equivalent" — by that criterion, stated in his own terms, this rung
+  does not hit the target.
+
+**The split is the finding.** KL and top-1 favour the VQ rung; ppl favours
+q4. These are the same model on the same corpus, so it is not noise — it is
+the two metrics ranking differently, which is Law 6 territory (reconstruction
+error does not rank output damage) showing up one level higher, between two
+OUTPUT metrics rather than between weight error and output. Neither number is
+wrong and neither should be quoted alone.
+
+**SIZE MODEL CONFIRMED at d2, closing the open cross-check:** predicted 13.594
+GiB, measured 13.596. So the 5.129 GiB non-MLP carry does hold for a d2 build,
+as the M4 session expected but had only measured on d4.
+
+**8-bit codes are byte-aligned, so pack_dense correctly packed 0 tensors** —
+the unpacked artifact IS the final artifact, and there is no packed twin for
+this rung by construction (cb4fb9b).
+
+**III.11 FAILED FIRST, and the failure was real.** The dense d=2 fused kernel
+dies at KERNEL LOAD on 27B widths: NSUB = 17408/2 = 8704 needs 35840 B of
+threadgroup memory against Metal's 32768 cap — the same wall E95 hit with the
+expert kernel at d=4. **So neither d=2 nor d>2 had a usable fused dense path
+at this model's widths.** The scores above were never affected (scoring is
+prefill-shaped and takes the decode path) but the artifact could not generate
+a token, and under III.11 that is not releasable.
+
+Fixed by computing the threadgroup requirement and falling back to decode when
+it will not fit, rather than discovering it at kernel load. Re-smoked after the
+fix: **"Paris.\nThe capital of Germany is"** — correct and coherent. This is a
+CORRECTNESS fallback, not a performance fix: it keeps the artifact usable at
+decode speed. A dense kernel that fits the cap is the real fix and does not
+exist.
+
 ## E121 — RESULT: **VOID AS A VINTAGE TEST.** The base was not constant.
 
 > **RESTATED IN PLACE 08-21 23:45, within the hour, before anything cited it.**

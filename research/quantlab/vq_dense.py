@@ -121,7 +121,19 @@ class VQLinear(nn.Module):
         # small-N takes the decode path: bit-exact, just slow at decode
         # (~11.5 tok/s measured 08-19) — fine for gates and prefill-shaped
         # scoring, NOT a shipping configuration.
-        if N <= 32 and int(self.codebook.shape[1]) == 2:
+        # THREADGROUP CEILING (2026-08-21, E124). The d=2 dense kernel ALSO
+        # dies at kernel load on 27B mlp shapes: NSUB = IN/d = 8704 needs
+        # 35840 B of threadgroup memory against Metal's 32768 cap. So neither
+        # d=2 NOR d>2 has a usable fused dense path at this model's widths —
+        # the 397B's expert shapes simply never produce them. Measured, not
+        # inferred: the failure is a RuntimeError naming both numbers.
+        # Falling back to decode keeps the artifact CORRECT (bit-exact, the
+        # same path that produced its scores) at decode speed. This is not a
+        # performance fix and must not be read as one; a dense kernel that
+        # fits the cap is the real fix and does not exist yet.
+        _nsub = IN // int(self.codebook.shape[1])
+        _fits_tg = _nsub * 4 + 1024 <= 32768
+        if N <= 32 and int(self.codebook.shape[1]) == 2 and _fits_tg:
             # DENSE fused kernel (2026-08-19): one simdgroup per output row
             # instead of one thread, no expert axis. Bit-identical to the
             # expert-kernel path below (the kernel replicates its float
