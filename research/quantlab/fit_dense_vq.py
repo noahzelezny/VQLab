@@ -123,7 +123,19 @@ for li in range(LO, HI + 1):
     for proj in PROJ:
         sk = KEY.format(li=li, key=proj)
         sh = src_idx[sk]
-        T = mx.load(str(SRC / sh))[sk]
+        # MATERIALISE THE READ HERE, on the cpu stream (FINDINGS IV.1).
+        # mx.load is LAZY: left unevaluated, the source read is paid inside
+        # the kmeans GPU command buffer, and it can silently yield ZEROS.
+        # Measured 2026-08-21 (E123) by instrumenting this exact loop:
+        #   Xn all-zero, codebook all-zero, scales all-zero (fp16 underflow of
+        #   the 1e-8 floor), reconstruction all-zero -> relerr exactly 1.0000,
+        #   while the SAME lazy T re-evaluated moments later for the relerr
+        #   denominator read back correctly at norm 104.28.
+        # One tensor in ~90 on this path. The abort catches it; this prevents
+        # it. Do NOT "optimise" this eval away.
+        with mx.stream(mx.cpu):
+            T = mx.load(str(SRC / sh))[sk]
+            mx.eval(T)
         codes, cb, sc, rel = fit_tensor(T)
         mod = KEY_TMPL.replace(".weight", "").format(li=li, key=proj)
         weights[mod + ".codes"] = codes

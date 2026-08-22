@@ -6483,3 +6483,91 @@ uninformative" is the part that would otherwise quietly not get written down.
 flagged that as not-recommended pending this test — one supporting incident,
 one contradicting, and a permanent tax on every fit. The round-trip removes the
 remaining reason to pay it.
+
+## E123 — CONFIRMED: the zeroed-tensor collapse is a DEFERRED READ returning zeros
+
+The mechanism behind E95's L60, E119's L02, and two more sites, caught in the
+act with the pre-registered falsifier decided before the run.
+
+**Instrument.** `fit_dense_vq_diag.py` — the REAL fitter with one guarded
+diagnostic block inside `fit_tensor`, nothing else changed. Verified by
+stripping the diagnostic back out and diffing against `fit_dense_vq.py`: the
+guard line is the only difference. This matters, see the null below.
+
+**Caught, 30 clean tensors in, at L10 gate_proj:**
+
+    !!! COLLAPSE relerr=1.000000
+        Xn  norm=0.000000 allzero=True
+        C   norm=0.000000 allzero=True
+        scl norm=0.000000 allzero=True
+        R   norm=0.000000 allzero=True
+        T   norm=104.275970 (as used, lazy)
+        mem active=3.48 GiB peak=7.12 GiB
+        VERDICT: Xn ZERO -> READ at fault
+
+**Read it carefully, because the whole result is in the last two lines.** The
+SAME lazy array `T`, in the SAME function call, yielded ZEROS when consumed by
+`normalize()` and 104.276 when re-evaluated moments later for the relerr
+denominator. Not a corrupt file, not a corrupt tensor, not bad arithmetic: one
+lazy read, two different answers.
+
+Everything downstream follows mechanically and the dump confirms each step:
+zeros in -> `scale = max(|0|, 1e-8)` (and 1e-8 UNDERFLOWS fp16, which is why
+`scl` prints exactly 0) -> `Xn = 0` -> kmeans++ samples zeros -> codebook all
+zero -> reconstruction all zero -> `relerr = ||0 - T|| / ||T||` = EXACTLY
+1.0000. The exact-1.0000 signature every incident printed was never a
+coincidence; it is the arithmetic identity of "reconstruction is zero while T
+is fine," and it is only expressible if the read succeeds on the second
+evaluation.
+
+**Four distinct sites, no repeat:** L60 up_proj (E95), L02 gate_proj (E119),
+L04 down_proj (rate trials), L10 gate_proj (here). All three projections,
+four different layers. The peer's registered prediction was that a read fault
+is site-independent while fitter arithmetic would be geometry-correlated. Four
+for four.
+
+**Rate on this path:** 1 collapse in ~90 tensors (M4, source read over SMB).
+Against the peer's 709 tensors / 0 collapses on the M3 reading local disk. The
+MECHANISM is transport-independent — the peer's confirmed `build_dense_vq`
+instance was a LOCAL SSD read — but the RATE plainly is not. Both halves have
+operational consequences and they pull opposite ways:
+
+- transport-INDEPENDENT -> fix the read on every path, both boxes.
+  "Route fits through local disk" stays dead: it buys a rate reduction, pays a
+  permanent tax, and leaves the fault live.
+- rate-DEPENDENT -> the M4-on-SMB is where the reproducer lives, so that is
+  where instrumentation belongs, and a clean M3 run is NOT a regression test
+  for this class.
+
+This also retires "the M4 is a bad box" honestly. `M4: 4 incidents, M3: 0` was
+a real signal about EXPOSURE, not about hardware.
+
+**Fix (this commit):** materialise the load on the cpu stream with `mx.eval`
+inside the block, per FINDINGS IV.1 — the same cure as `pack_artifact` and
+`build_dense_vq` (013d2bb). The `--relerr-abort` guard stays: it CATCHES the
+fault, this PREVENTS it, and defence in depth is the point.
+
+### The null that came first, and why it was worthless
+
+Before this run, a standalone catcher reimplementing the fitter's math ran 240
+tensors and caught NOTHING. P(0 in 240 | rate 1/90) = 0.068 — improbable, and
+close enough to "rare, moving on" to end the investigation there.
+
+It was a bad instrument. `fit_dense_vq.py` accumulates every result
+(`weights[mod + ".codes"]` and siblings, 192 tensors deep); the probe
+discarded everything each iteration and called `clear_cache`. Whatever it was
+measuring, it was not this loop. Instrumenting the real file caught a collapse
+in 30 tensors.
+
+**Recorded as FINDINGS III.10's corollary (381f6a0): instrument the real code,
+do not reimplement it.** And the sharper form, which cost 41 minutes to learn:
+holding a known fix to preserve a reproducer is worthless if the instrument
+cannot reproduce. Measure before you fix, AND verify the measuring device can
+see the thing.
+
+**NOT established, and deliberately not claimed:** that the accumulation is
+the trigger. It is the difference between the instrument that fired and the
+one that did not, but the collapse fired at only 3.48 GiB active / 7.12 GiB
+peak, which is not obvious memory pressure, and a 0/240 null at p=0.068 is
+weak evidence for anything. The read fault is confirmed; its precise trigger
+is not, and no fix depends on knowing it.
