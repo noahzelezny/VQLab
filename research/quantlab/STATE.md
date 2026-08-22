@@ -27,15 +27,31 @@ is relabelled `(v1 weights)`; v1 numbers are not presented as v2's.
     27B  R1 E124 d2/K256  13.596 GiB  KL 40.327   MET
          R2 E126 d2/K512  14.592 GiB  KL 33.095   MET
          R3 run C in flight — d2/K4096, 17.580 GiB packed (CONFIRMED vs 6e)
-    35B  R1 e94b d4/K8192 17.651 GiB  KL 53.022   MET
-         R2 M4 fitting d4/K16384, ~18.59 GiB projected (under q4's 19.0)
-         R3 UNPICKED — held until run C reports
+    35B  R1 e94b d4/K8192 14.838 GiB  KL 53.022   MET   (PACKED — see below)
+         R2 e128 d4/K16384 15.783 GiB  KL unmeasured      (PACKED, fit clean)
+         R3 NOT TO BE FITTED — run C closed R3; report the slope instead
+
+**35B SIZE CORRECTIONS, 08-22, both MEASURED and both verified here from the
+artifacts' own bytes:**
+(1) **e94b's long-cited 17.651 GiB is an UNPACKED size** (no `pack_bits` in its
+config; it was never packed) and was being compared against packed rungs — a
+III.8 violation that this file previously repeated. PACKED it is **14.838
+GiB**. On a like-for-like basis R1 14.838 < R2 15.783, which is what the
+physics demands (14 bits vs 13). The mixed comparison made the BIGGER-codebook
+rung look SMALLER; that was the tell.
+(2) **The 35B non-MLP carry is 1.706 GiB MEASURED, not the 4.53 DERIVED** used
+in HANDOFF/E128 — off by 2.82 GiB, so every 35B projection shifts DOWN by that.
+Re-measured independently: codes 13.125 + vq_scales 0.938 + codebook 0.015 +
+other 1.706 = 15.783, matching the file total exactly. **Measured ONCE, not
+closed** — the 27B carry was wrong by 1.5 GiB until three builds agreed.
 
 **R3 sizing is not the risk; quality is.** Run C's 17.580 GiB packed is
 confirmed against the closed size model (6e: 11.953 codes + 0.498 + 5.129),
-and even UNPACKED at 21.564 GiB it clears the 26.341 GiB q8 bar — so a skipped
-pack cannot cost this rung its size bar, unlike the d2/K512 case. Assert the
-MEASURED packed size anyway.
+Assert the MEASURED packed size. **The unpacked figure is not a size and must
+not be compared to a bar** (III.8) — stored bytes carry whole-byte padding.
+Earlier text here cited run C's unpacked 21.564 GiB as headroom against the q8
+bar; that was a III.8 violation and is withdrawn. The guard against a skipped
+pack is asserting the packed number, not a margin computed from unpacked bytes.
 
 **Registered expectation for run C: ~18 mnats against a 1.641 bar.** If it
 lands there, say plainly that R3 is out of reach rather than burning the
