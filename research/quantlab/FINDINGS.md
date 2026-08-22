@@ -179,6 +179,16 @@ Last updated: 2026-08-21 (through E110).
 - Never edit a script a running chain has not yet invoked (Python reads at
   invocation). Never `rm -rf` a fit output dir: fits RESUME (and the resume
   check now validates shard completeness, not existence).
+- **A REFIT MUST NEVER AIM `--out` AT A SCORED ARTIFACT'S PATH.** Two
+  independent consequences, and the second was learned the hard way on
+  08-21: (a) resume-skip emits a repaired-LOOKING artifact containing the
+  suspect bytes (below); (b) even a PERFECTLY CLEAN refit silently destroys
+  the evidence for the number already published against that path — E94's
+  53.022 mnats now describes bytes that no longer exist, unrecoverably. (b)
+  fires even when nothing goes wrong, which is why the resume-skip framing
+  did not prevent it. Corollary: a directory's sidecar files (README,
+  tokenizer) keep their old timestamps through a refit, so a stale-looking
+  `ls` is NOT evidence the weights are untouched — check the shards. [E94]
 - **A REFIT MUST WRITE TO A NEW DIR.** Because fits resume, aiming a refit at
   the dir it is meant to repair makes it skip every existing shard as
   "complete" and emit a repaired-LOOKING artifact containing exactly the

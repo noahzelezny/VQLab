@@ -5160,6 +5160,8 @@ only thing that catches this class; it did, twice.
 Structural twin comparison, everything held except the codebooks:
 
     e94-35b-K8192-refresh        53.022 mnats  89.55% top-1  17.651 GiB
+                                 [!] ARTIFACT OVERWRITTEN 2026-08-21 — see
+                                     the retraction note at the end of E94
     qwen36-35b-rungs/vq-K8192-d4 56.413 mnats  89.37% top-1  17.651 GiB
                                  -3.391 mnats (-6.0%)  +0.183 pp
 
@@ -5230,7 +5232,42 @@ finalize and the card does not go to Noah until this is resolved.
 
 **Do NOT swap E92 for the shipped 2.4.** It is worse at identical size.
 
-### E93 is a genuine new rung
+#### E94 — ARTIFACT RETRACTION (added 2026-08-21 ~20:45)
+
+**The bytes this row was measured on no longer exist.** A re-fit of the same
+geometry ran on 08-21 with `--out` pointing at the SCORED artifact's own
+path, overwriting it: shards stamped 08-21 10:14 / 11:46 / 12:01 against a
+result file (`results_e94_35b-K8192-refresh.json`) written 08-18 10:47. The
+un-refit sidecar files (README, tokenizer, chat_template) still read 08-18,
+which is what makes the directory look untouched at a glance. Caught by the
+M4 session, which owned the run and said so plainly; verified here
+independently by timestamp before acting. No recovery — the HDD carries no
+Exo Models tree (checked, both sessions).
+
+**What stands and what does not.** The recorded numbers stand AS RECORDED —
+53.022 mnats / 89.55% top-1 / 17.651 GiB, and the -3.391 mnats (-6.0%) delta
+vs the standing K8192 rung. Nothing suggests they were wrong. But they are no
+longer CHECKABLE against the named path, so E94 may not be cited as
+reproducible evidence, and no experiment may re-derive from it as if the arm
+could be re-run. The instrument-identity verification in this entry
+(cache_dir, teacher hash, tokens_scored, captured_mass) applies to bytes that
+are gone.
+
+**Today's bytes are now `e94b-35b-K8192-refit-0821`** (MOVED, not deleted).
+They are a different artifact: `vq_397b_codes.py` seeds kmeans++ from
+unseeded RNG, so the codebooks are not the old ones. If a live 35B vintage
+arm is needed, score e94b and cite it under its OWN name — never inheriting
+this row.
+
+**The rule this cost us** (now FINDINGS): a refit must never aim `--out` at a
+SCORED artifact's path. The existing rule said a refit must write to a new
+dir, reasoned from resume-skip emitting a repaired-LOOKING artifact. This is
+the same rule with a second, independent consequence — it silently destroys
+the evidence for a published number — and it applies even when the refit is
+clean and completes perfectly, which is why the resume-skip framing did not
+catch it.
+
+## E93 is a genuine new rung
 
     flatk512-packed            2.5634 / 2.6123   122.305 GiB
 
