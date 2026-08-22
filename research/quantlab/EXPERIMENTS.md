@@ -6327,9 +6327,30 @@ Pre-registering that scope is what keeps a clean result from being read as
 
 **What survives:** the two failure shapes stay separate, and both still need
 their own catcher. `--relerr-abort` (129f66d) covers compute-time. The
-post-hoc outlier gate, run on a different box, is the only thing that covers
-write-time — and a clean round-trip does not make it optional, because one
-clean sample is not a guarantee about a rare event.
+post-hoc outlier gate, run on a different box, is the only catcher that runs
+against the BYTES ON DISK rather than against what a producer believed it
+computed — and a clean round-trip does not make it optional, because one clean
+sample is not a guarantee about a rare event.
+
+**[CORRECTED IN PLACE 2026-08-21 ~21:00, same night.]** The sentence above
+originally read "the only thing that covers write-time." That was wrong in the
+way this file has now been wrong three times tonight, and it is the worse kind
+of wrong because it is an OPERATIONAL instruction: it tells the next agent that
+nothing catches this class earlier, so the only available move is to keep
+paying for the post-hoc gate. There is now a third failure shape — a DEFERRED
+READ (013d2bb, 7da7399): a lazy `mx.load` left unevaluated across a
+memory-pressure boundary pays its read inside a GPU command buffer and can
+yield zeros silently. It is caught AT THE READ by materialising on the cpu
+stream per FINDINGS IV.1, plus an all-zero assertion — not by a gate at the
+end. The gate stays as defence in depth, never as the reason not to fix the
+read.
+
+**And it re-reads this entry's own result.** The round-trip came back clean
+because the write path was never the suspect. That is now an explanation
+rather than a loose end, but it also means this experiment tested the wrong
+hypothesis — correctly, and against a pre-registered scope, which is the only
+reason it produced no false conclusion. Recorded because "my clean result was
+uninformative" is the part that would otherwise quietly not get written down.
 
 **What it kills:** "route all M4 fits through local disk." STATE already
 flagged that as not-recommended pending this test — one supporting incident,
