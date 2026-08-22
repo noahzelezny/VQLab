@@ -185,3 +185,32 @@ projections move and no size goes to Noah until re-derived.
 
 **Do not repeat tonight's three:** preflight_ram.py before any resident-memory
 op; a small-case run before any launch; nothing concurrent.
+
+
+## 08-21 23:45 — THE VINTAGE HUNT IS OVER, AND THE ANSWER IS PROVENANCE
+
+The base artifact `struct6-tail3x3` was rewritten Aug 19 22:07-22:15. The
+shipped 2.4 was built Aug 15-16. The bf16 source is untouched since Aug 8.
+So every 397B refit since Aug 19 used a base that is NOT what the shipped
+artifact was built from — E92, E93, E117, E118, E121, flatk2048-refit, all of
+them. That is a uniform input change across every arm and it is outside the
+k-means entirely.
+
+E121 is therefore VOID as a vintage test, not a result about the fitter. It
+held the fitter fixed and assumed the base was constant; the base was the
+thing that moved.
+
+**The original base does not survive** — not on the SSD, not on the HDD, never
+published to HF. So the shipped 2.4bpw at 111.617 GiB is unreproducible by
+construction. Say that plainly; do not run a fifth variant hunting it.
+
+Three mechanism experiments (E117 seeding, E118 K-crossover, E120 accumulation
+order) were all chasing a k-means explanation for what is now most likely an
+input difference. They stand as measured per-tensor physics. They were aimed
+at the wrong object.
+
+**TWO silent in-place overwrites confirmed tonight** (E94's scored artifact,
+this base), both caught by mtime checks rather than by any failure. Artifacts
+have no write protection and no provenance stamp. TOMORROW, not tonight:
+publish-time manifest (path -> mtime + size + first-shard hash) and
+`chmod -R a-w` on scored artifacts.

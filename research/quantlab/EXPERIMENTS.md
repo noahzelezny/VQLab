@@ -6381,7 +6381,49 @@ generated a token from this artifact in a genuinely clean environment — fresh
 venv, stock `pip install mlx-lm==0.31.3`, no patch. Everything above is
 provenance, not execution. Owned by the M4 session, after the E119 ladder.
 
-## E121 — RESULT: NOT-THE-FILE. The 08-16 fitter does not reproduce the shipped 2.4 either.
+## E121 — RESULT: **VOID AS A VINTAGE TEST.** The base was not constant.
+
+> **RESTATED IN PLACE 08-21 23:45, within the hour, before anything cited it.**
+> The verdict below ("the fitter file is exonerated") is NOT supported by this
+> run, because the run was never a controlled comparison. E121 held the fitter
+> fixed and assumed everything else was constant. The M4 session checked
+> mtimes the moment the base was named as a suspect, and it was the base that
+> moved:
+>
+>     struct6-tail3x3 (the BASE)   ALL 27 shards   Aug 19 22:07-22:15
+>     VQ-2.4bpw (the ARTIFACT)     shards          Aug 15 - Aug 16 10:40
+>     Qwen3.5-397B-bf16 (SOURCE)   shards          Aug 8            <- unchanged
+>
+> Verified independently here. **The base is three days NEWER than the
+> artifact built from it.** So every 397B refit since Aug 19 — E92, E93, E117,
+> E118, E121, and the flagship flatk2048-refit — was built on bytes that are
+> not the bytes the shipped 2.4 was built on. A uniform input difference
+> across every arm is exactly the shape a uniform ~0.04-0.06 offset wants, and
+> it sits entirely outside the k-means.
+>
+> **This also explains why E121 came out WORST rather than reproducing.**
+> Running 08-16 code against an 08-19 base is not a reconstruction of the
+> 08-16 build; it is a fourth variant. The one thing E121 held fixed was the
+> only thing we now know changed.
+>
+> **The file may still be exonerated. It is not exonerated BY THIS RUN.**
+>
+> **And the original base does not survive:** not on the SSD (one copy, the
+> Aug 19 one), not on the HDD, and struct6-tail3x3 was never published to HF.
+> Searched all three. So the decisive experiment — refit K256 on the CURRENT
+> fitter against the 08-16 base — **cannot be run.** On the evidence available,
+> the shipped 2.4 is unreproducible BY CONSTRUCTION, and the honest thing is
+> to say so and stop hunting rather than run a fifth variant.
+>
+> **Second confirmed silent in-place overwrite tonight**, after E94's scored
+> artifact. Both found by checking mtimes, neither by anything failing. That
+> is a pattern: our artifacts carry no write protection and no provenance
+> stamp, so a rerun aimed at an existing path is indistinguishable from the
+> original. Proposed for tomorrow, NOT done tonight: a publish-time manifest
+> (path -> mtime, size, first-shard hash) and `chmod -R a-w` on anything
+> scored — converting "was this overwritten?" from forensics into a lookup.
+
+### The run itself, as measured (all four arms size-identical at 111.617 GiB)
 
 Ran `fitter_0816_cdcdeab.py` — `git show cdcdeab:vq_397b_codes.py` verbatim,
 the last commit before the 08-18/19 k-means changes — with E92/E117's exact
