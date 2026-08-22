@@ -35,6 +35,11 @@ ap.add_argument("--layers", default=None)
 ap.add_argument("--family", default="gemma4_e4b",
                 choices=["gemma4_e4b", "qwen3_8"],
                 help="selects tensor-name template and default layer range")
+ap.add_argument("--relerr-abort", type=float, default=0.90,
+                help="stop the fit if any tensor exceeds this relative error. "
+                     "Default 0.90 catches the degenerate case (relerr 1.0 = "
+                     "reconstruction is exactly zero) without tripping on "
+                     "legitimately hard low-K geometries.")
 args = ap.parse_args()
 
 SRC, OUT = pathlib.Path(args.src), pathlib.Path(args.out)
@@ -129,6 +134,18 @@ for li in range(LO, HI + 1):
         report.append(rel)
         print(f"L{li:02d} {proj:10s} relerr {rel:.4f}  "
               f"[{time.time()-t0:6.0f}s]", flush=True)
+        # ABORT on a degenerate fit. vq_397b_codes.py has had --relerr-abort
+        # for weeks; this fitter only PRINTED relerr and carried on. Measured
+        # 2026-08-21: the E95 dense 27B shipped L60 up_proj with codebook,
+        # codes AND scales all exactly zero against a real source tensor
+        # (absmax 0.283) — relerr 1.0000, printed, ignored, and invisible until
+        # the outlier gate learned to read dense artifacts hours later. A fit
+        # that reconstructs NOTHING must stop the run, not decorate the log.
+        if rel > args.relerr_abort:
+            raise SystemExit(
+                f"FATAL: L{li} {proj} relerr {rel:.4f} > {args.relerr_abort} "
+                f"— degenerate fit, do not ship this artifact. "
+                f"(relerr 1.0 means the reconstruction is exactly zero.)")
         del T
         mx.clear_cache()
 
