@@ -5147,13 +5147,39 @@ invisible to every bench; the smoke-gen is the only gate that touches them):
    decode): correct for gates and scoring, NOT a shipping configuration. A
    dense d4 kernel is future work if a dense model ever ships.
 
-**The L60 write-corruption recurred, then didn't.** First splice (08-21
-13:30) zeroed all three tensors of L60 up_proj — same module as the aborted
-E95 fit, but this time the fit log read 0.3137 and the FIT FILE was clean
-(all 576 tensors verified non-zero in memory): pure WRITE-TIME corruption,
-compute-time ruled out. Rebuild from identical inputs: 0 zero tensors, gate
-PASS. Intermittent, unreproduced, artifact-side. The post-hoc gate is the
-only thing that catches this class; it did, twice.
+**The L60 zeroing — CORRECTED IN PLACE 08-21 ~21:00. Read the bracket
+before the paragraph.**
+
+> **RETRACTED IN PLACE.** The paragraph below calls this "pure WRITE-TIME
+> corruption ... intermittent, unreproduced, artifact-side," and says the
+> post-hoc gate is the only catcher. **Every one of those clauses is wrong.**
+> It was a DEFERRED READ, not a write: `build_dense_vq.py` loaded the fit
+> file lazily and left it unevaluated until `save_safetensors()` forced it
+> ~1300 tensors later, across the base-carry loop and its `mx.clear_cache()`
+> — so the read was paid inside a GPU command buffer under memory pressure
+> and yielded zeros. FINDINGS IV.1, on a path nobody had checked for it.
+> It is NOT artifact-side, it is NOT unreproduced (the M4 session hit the
+> same disease in `fit_dense_vq.py` 65 s into E119, L02 gate_proj, relerr
+> exactly 1.0000 — the exact-1.0 signature is a zero RECONSTRUCTION against
+> a correctly-read tensor), and the post-hoc gate is NO LONGER the only
+> catcher: `build_dense_vq.py` now loads under `mx.stream(mx.cpu)` with
+> `mx.eval` inside the block, asserts no tensor reads all-zero, and
+> re-reads the shard it just wrote (013d2bb).
+>
+> **Operationally:** do not treat this as a storage or SMB problem and do
+> not build a workaround around the gate. The invariant is "any lazy read
+> left pending across a memory-pressure boundary," and the transport is
+> incidental — this instance was a LOCAL SSD read on the M3, which is also
+> why the old "M4 fits are cursed / M3 is clean" box policy was never
+> evidence about the fitter. Fix the read; keep the gate as defence in
+> depth.
+
+First splice (08-21 13:30) zeroed all three tensors of L60 up_proj — same
+module as the aborted E95 fit, but this time the fit log read 0.3137 and the
+FIT FILE was clean (all 576 tensors verified non-zero when read eagerly).
+Rebuild from identical inputs: 0 zero tensors, gate PASS — the transience
+that made it look like a storage fault and is in fact the signature of a
+deferred read that sometimes lands and sometimes doesn't.
 
 ## E94 — RESULT: fitter vintage confirmed at 35B, second family
 
