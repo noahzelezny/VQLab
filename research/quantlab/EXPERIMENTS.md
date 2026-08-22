@@ -6132,6 +6132,52 @@ VALIDITY GATE: if E117 falsifies, the crossover interpretation is void (the
 pair still stands as a measurement). The night queue
 (`run_night_queue.sh`) auto-launches this only on a clean E117 DONE banner.
 
+## E124 — PRE-REGISTRATION: the 27B at 4-BIT SIZE, chasing 8-bit quality
+
+**Noah's actual target, stated 08-21 ~22:45:** "4bit size with 8bit quality is
+the ideal payoff." Everything queued before this chases the LOW end (E95 at
+9.7 GiB, E119's d4 rungs at 8-10 GiB packed). Those are interesting and they
+are not what he wants. This aims at q4's size and tries to beat q4's quality.
+
+**Why d=2 rather than more K at d=4.** bpw = log2(K)/d, so the size budget can
+be spent on a finer subvector instead of a bigger codebook, and d2 is a much
+better-conditioned fit: on the 397B, d2-K2048 lands ~0.032 relerr against
+d4-K2048's ~0.19. Measured here before committing the run — ONE layer, L30,
+d2/K512 on the 27B:
+
+    d2 K512  L30  gate 0.0594  up 0.0591  down 0.0593   (49s for 3 tensors)
+    d4 K256  L30  (E95, same tensors)     ~0.3143
+
+**5.3x lower reconstruction error.** Law 6/12 still applies — relerr does not
+rank output damage and is anti-correlated at low K — so this is a reason to
+run the experiment, NOT a predicted result.
+
+**Sizes, computed for planning only, to be MEASURED after pack_dense (III.8):**
+
+    d2 K256   4.25 bpw   ~12.1 GiB      d2 K512   4.75 bpw   ~13.1 GiB
+    q4 (affine incumbent)               14.09 GiB, 45.842 mnats, 89.82% top-1
+
+**Recipe:** `fit_dense_vq.py --family qwen3_8 --dim 2 --k 512`, layers 0-63,
+flat, `--relerr-abort 0.90`. Then build_dense_vq (cured), zero-scan,
+verify_artifact vs `Qwen--Qwen3.8-27B`, pack_dense, III.11 smoke ON THE PACKED
+artifact, then score. ~51 min for the fit at the measured 16 s/tensor.
+
+**Pre-registered readings, against the q2/q3/q4 ladder on kl_cache_qwen38:**
+- **THE PRIZE:** KL below q4's 45.842 mnats at a MEASURED size <= 14.09 GiB.
+  That is "4-bit size, better-than-4-bit quality" and it is the first time any
+  VQ artifact of ours would have claimed it.
+- **STRONG:** KL in 45-90 mnats at <= 14.09 GiB — beats q3 decisively and
+  closes most of the gap to q4 at q4's size.
+- **NULL:** KL >= 187.765 (q3's) — d2 buys nothing the size does not already
+  buy, and the dense recipe tops out below 4-bit-class quality.
+- Report MEASURED packed size beside every number. "8-bit quality" is a goal,
+  not a comparator — we hold no 27B q8 rung on this instrument, so the honest
+  frame is distance-to-bf16 (KL), where bf16 is 0 by construction.
+
+**Relationship to E119:** E119's d4 ladder still runs on M4 and answers "does
+raising K carry on dense." E124 asks the different question Noah cares about
+and does not supersede it.
+
 ## E121 — PRE-REGISTRATION: run the 08-16 fitter itself (queued, M3)
 
 **Noah's actual question:** how did the shipped 2.4 happen, when nothing we
