@@ -28,9 +28,17 @@ for d in "$E"/e119-27b-dense-*; do
   [ -d "$d" ] || continue
   n=$(basename "$d")
   case "$n" in *-packed|*-vq) continue;; esac
-  ART="$E/$n-vq"; PK="$E/$n-vq-packed"
+  # The M4 ships these ALREADY ASSEMBLED (config carries vq_linear, not a
+  # fit-only dir), so there is nothing to build — an earlier version of this
+  # script would have tried to build an artifact from an artifact. Detect
+  # which form is on disk instead of assuming.
+  if python3 -c "import json,sys; c=json.load(open('$d/config.json')); sys.exit(0 if c.get('vq_linear') else 1)" 2>/dev/null; then
+    ART="$d"; PK="$E/$n-packed"
+  else
+    ART="$E/$n-vq"; PK="$E/$n-vq-packed"
+  fi
   if [ -f "$PK/model.safetensors.index.json" ]; then say "SKIP $n (already packed)"; continue; fi
-  say "=== $n"
+  say "=== $n  (artifact=$(basename $ART))"
   if [ ! -f "$ART/model.safetensors.index.json" ]; then
     $V build_dense_vq.py --family qwen3_8 --base "$E/qwen38-27b-rungs/q4" \
        --mlp "$d" --out "$ART" >> $L 2>&1 || { say "BUILD FAILED $n"; continue; }
