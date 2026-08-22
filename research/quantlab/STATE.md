@@ -50,7 +50,14 @@ for it FAILED.** Both are results; the second is a real negative, not a setback.
 
 ## OPEN DECISIONS — NOAH'S, NOT OURS
 
-1. **The HuggingFace fetch.** M4's local copy of the published 2.2bpw has a
+1. **[RESOLVED 08-21 19:00, Noah authorized the fetch]** Published model.py
+   fetched from all three HF repos: 2.2/3.1 are md5-identical to our 717-line
+   copies, 2.4 to our 1093-line copy. The "695-line local copy" does not
+   exist anywhere on the volume — downloaders run exactly our code. Nothing
+   needs correction. Noah leans toward pushing the tested 1093 runtime to the
+   2.2/3.1 repos (it is a superset, one added dense path); needs a III.10
+   smoke on each repo's artifact with the 1093 bundle first. NOT pushed.
+1b. **The original HuggingFace fetch question.** M4's local copy of the published 2.2bpw has a
    695-line bundled `model.py`; the share copy has 717. Same weights, same
    index, same config. Fetching the published `model.py` from HF and md5-ing
    it against both would settle whether **downloaders are running different
@@ -93,7 +100,7 @@ for it FAILED.** Both are results; the second is a real negative, not a setback.
 - `PROCESS.md` — NEW. Family-onboarding pass (profile geometry, sweep init,
   THEN fit), the new-fitter guard list, box policy, and the standing gates.
   This is the artifact Noah asked for toward shaping MoEMash practically.
-- `EXPERIMENTS.md` — chronology through E116.
+- `EXPERIMENTS.md` — chronology through E118 (E117/E118 pre-registered, running).
 
 ## FIXES THAT LANDED TODAY AND NOW FIRE AUTOMATICALLY
 
@@ -104,3 +111,27 @@ code width chosen from K (uint16 at K256 doubled an artifact); packed d8
 dispatch; row-width validation on the fused packed path; `--relerr-abort` on
 the dense fitter; verify_artifact reads dense artifacts (vq_linear key, 2D
 codes, qwen3_8_dense family).
+
+
+## NIGHT OF 08-21 (M3 session, Noah asleep) — running ship
+
+- **E95 CONCLUDED: dense VQ carries — not MoE-only.** 27B dense, flat
+  d4/K256: 325.6 mnats / 76.5% top-1 / ppl 6.403 @ 9.7 GiB. Above the affine
+  q2->q3 line at its size (predicts ~439 mnats). Gate PASS, III.10 smoke
+  PASS. Paper session unblocked. Full entry + two runtime defects III.10
+  caught (d!=2 dense dispatch; expert kernel exceeds threadgroup memory at
+  27B shapes) in EXPERIMENTS E95 RESULT.
+- **L60 write-corruption recurred then vanished:** first splice zeroed L60
+  up_proj (all three tensors) with a CLEAN fit file — pure write-time.
+  Rebuild from identical inputs: clean, 0 zeros. Intermittent. Note the
+  peer's E116 found the SMB write path clean on a 16 GiB round-trip; both
+  stand — E116 says the path is not ALWAYS bad, the L60 pair says it is
+  SOMETIMES bad. The post-hoc gate is the only defense; it worked twice.
+- **E117 running on M3** (K256 random-init, chain self-gates/packs/scores;
+  logs say E115 — numbering collision, see EXPERIMENTS E117 note).
+- **E118 armed** behind it via run_night_queue.sh (K512 random; logs say
+  E116). Watcher launches only on a clean E117 DONE banner.
+- **HF fetch RESOLVED** (Noah authorized): published model.py md5-identical
+  to our copies on all three repos; no 695-line file exists; no correction
+  needed. Pushing the 1093 runtime to 2.2/3.1 awaits a III.10 smoke per repo
+  and Noah's go.

@@ -112,7 +112,16 @@ class VQLinear(nn.Module):
         orig_shape = x.shape
         xf = x.reshape(-1, IN)
         N = xf.shape[0]
-        if N <= 32:
+        # d=2 is the only geometry with a dense fused kernel. The expert
+        # kernel (_fused, E=1) was tried as the d!=2 small-N path and DIED AT
+        # KERNEL LOAD on the first real dense model: at 27B mlp shapes
+        # (IN 17408) its threadgroup allocation is 36864 bytes vs Metal's
+        # 32768 cap — shapes the 397B's experts never produce. Caught by
+        # III.10 smoke-gen (E95). Until a dense kernel exists for d>2,
+        # small-N takes the decode path: bit-exact, just slow at decode
+        # (~11.5 tok/s measured 08-19) — fine for gates and prefill-shaped
+        # scoring, NOT a shipping configuration.
+        if N <= 32 and int(self.codebook.shape[1]) == 2:
             # DENSE fused kernel (2026-08-19): one simdgroup per output row
             # instead of one thread, no expert axis. Bit-identical to the
             # expert-kernel path below (the kernel replicates its float

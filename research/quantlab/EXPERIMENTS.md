@@ -5106,6 +5106,55 @@ Report size alongside every quality number so placement is never implied to be a
 its embedding table did. If dense MLPs are simply hostile to VQ, this should
 fail, and failing cleanly at flat geometry is a real answer.
 
+## E95 — RESULT: dense VQ carries. The recipe is NOT an MoE-expert phenomenon.
+
+Scored 2026-08-21 19:00, artifact `e95-27b-dense-vq-r2` (rebuilt splice, gate
+PASS 0 outliers, III.10 smoke-gen PASS through the shipped runtime). Same
+instrument as the q2/q3/q4 ladder (`kl_cache_qwen38` + `referee_corpus.txt`
+2048 tok; teacher reload skipped, recorded bf16_ppl 5.2249 reused — the two
+per-rung measurements executed exactly as `kl_ppl_calibrate.py` does).
+
+    rung          size     KL mnats   top-1     ppl
+    q2            7.9 G    1426.891   46.07%   16.4349
+    E95 dense VQ  9.7 G     325.575   76.46%    6.4032   <- new point
+    q3           11.0 G     187.765   79.48%    5.8323
+    q4           14.0 G      45.842   89.82%    5.2055
+
+**Placement (the pre-registered reading):** log-interpolating the affine
+q2->q3 line to 9.7 GiB predicts ~439 mnats and ~65.5% top-1. Measured 325.6
+and 76.5% — the dense VQ point sits ABOVE the affine ladder at its size, by
+~26% in KL. Same qualitative placement as every MoE result.
+
+**What this answers:** data-free weight-space VQ on a TRUE dense model
+(Qwen3.8-27B, no experts, E=1) lands above the affine line, with flat
+d4/K256 and no tail tuning — the weakest reasonable configuration. The prior
+worry (e4b: dense MLPs rejected 5.75-bit VQ) does not generalize: 27B dense
+MLPs tolerate 2.0 bpw VQ the same way expert tensors do. MoEMash's mechanism
+is a property of weight geometry, not of expert structure.
+
+**What this does NOT say (pre-registration):** "VQ beats 4-bit" — the
+artifact is not size-matched to any rung. And per E107-E110 this fit used
+kmeans++ at K=256, which on the 397B is inside the penalty band — so this
+placement is, if anything, a LOWER bound on the dense recipe.
+
+**Two runtime defects found by III.10 on the way in** (both would have been
+invisible to every bench; the smoke-gen is the only gate that touches them):
+1. `vq_dense.py` dispatched d!=2 dense decode into `_dense_fused`, which
+   exists only for d=2 and raises. First d=4 dense artifact ever smoked.
+2. The fallback expert kernel (`_fused`, E=1) DIES AT KERNEL LOAD at 27B mlp
+   shapes — threadgroup 36864 B vs Metal's 32768 cap. Shapes the 397B never
+   produces. d!=2 small-N now takes the decode path (bit-exact, ~11.5 tok/s
+   decode): correct for gates and scoring, NOT a shipping configuration. A
+   dense d4 kernel is future work if a dense model ever ships.
+
+**The L60 write-corruption recurred, then didn't.** First splice (08-21
+13:30) zeroed all three tensors of L60 up_proj — same module as the aborted
+E95 fit, but this time the fit log read 0.3137 and the FIT FILE was clean
+(all 576 tensors verified non-zero in memory): pure WRITE-TIME corruption,
+compute-time ruled out. Rebuild from identical inputs: 0 zero tensors, gate
+PASS. Intermittent, unreproduced, artifact-side. The post-hoc gate is the
+only thing that catches this class; it did, twice.
+
 ## E94 — RESULT: fitter vintage confirmed at 35B, second family
 
 Structural twin comparison, everything held except the codebooks:
@@ -5963,6 +6012,46 @@ than 4) sits somewhere useful on the bulk/tail curve is untested — but the
 prior after this result should be poor, and the honest read is that the
 objective is not the lever. Anyone revisiting it should propose a different
 lever, not a different exponent.
+
+## E117 — PRE-REGISTRATION: K256 --init random, end-to-end (launched 18:47, M3)
+
+**Numbering note:** the chain script and its logs say "E115"
+(`run_e115_k256_randinit.sh`, `logs_live_e115_randinit.log`) — written before
+discovering the peer had already used E115/E116 for the d8 speed A/B and the
+SMB round-trip. The script was running when the collision surfaced and a
+running script is never edited. Canonical numbers: this is E117; the K512
+crossover queued behind it is E118 (`run_e116_crossover.sh`, same collision).
+
+**Question:** does `--init random` at K256 recover the shipped 2.4's 2.7655
+end-to-end? Every shipped artifact was fit 08-16 with random seeding; every
+refit 08-21 with kmeans++ (default flipped 08-18). E92-vs-shipped is
+therefore an init A/B, and E107-E110's mechanism predicts the sign.
+
+**Recipe:** E92 with one flag changed. Base `struct6-tail3x3` (the only
+artifact with the 171 2-bit switch_mlp modules the refit VQ'd — NOT the
+shipped 2.4, whose experts are already codes; the refit's own config resembles
+the 2.4's because VQ'd modules are dropped from the quantization block, which
+cost one launch). d4 K256 group 64, layers 0-56, `--init random`,
+`--relerr-abort 0.90`. Gate, pack, graft, score on both referee corpora.
+
+**Pre-registered readings (written before any number):**
+- CONFIRMED: wikitext <= 2.7655 — recipe recovered, mechanism validated
+  end-to-end. Recipe becomes "random below the K crossover, ++ above."
+- FALSIFIED: wikitext ~ 2.8057 — init is NOT what separates shipped 2.4 from
+  the refit; something else in the 08-16 -> 08-21 drift is, and no refit is
+  trustworthy until found. The more valuable branch.
+- Between: reported as between.
+
+## E118 — PRE-REGISTRATION: K512 --init random (queued behind E117)
+
+One new fit brackets the init crossover: we hold flatk512 (++, E93) at
+2.5634/2.6123 @122.305 GiB; this is its same-size twin, one flag apart.
+- crossover ABOVE 512 if random < 2.5634 by >= 0.005
+- crossover BELOW 512 if random > 2.5634 by >= 0.005
+- too close to call if within 0.005 — reported as such.
+VALIDITY GATE: if E117 falsifies, the crossover interpretation is void (the
+pair still stands as a measurement). The night queue
+(`run_night_queue.sh`) auto-launches this only on a clean E117 DONE banner.
 
 ## E115 — d8 packed speed A/B: ~19% decode tax, and a decode instrument that is bimodal at 100 GiB
 
