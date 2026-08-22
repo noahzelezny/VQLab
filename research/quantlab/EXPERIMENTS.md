@@ -6535,8 +6535,26 @@ scored end-to-end on the same instrument.
 - If B does NOT achieve lower relerr than A, the experiment is VOID as a
   specimen — report that rather than reading the output comparison.
 
-**Scoring:** KL on kl_cache_qwen38 and ppl on referee_corpus 2048 tok, both
-arms, per FINDINGS 6c (report both, always). Refs: q4 45.842 / 5.2055 @
+**ARM C ADDED 08-22 00:50, before either arm was scored — the noise floor.**
+The paper session caught that A and B differ in TWO things, not one: `--iters`
+AND the init draw, because MLX's RNG is unseeded across processes (6d). So a
+lower-relerr/worse-ppl result from B would have no measured answer to "is that
+just a different draw?" at this model and geometry. E125's evidence that fits
+reproduce to 4 decimals is reassuring but it is a different family, a different
+geometry, and it speaks to AGGREGATE metric reproduction rather than to the
+ppl spread between two draws.
+
+    arm C   --iters 10   identical settings to A, different draw
+
+**|A - C| is the measured seed-noise floor**, and the A-vs-B effect is reported
+against it. An inversion larger than the floor is a specimen; one inside the
+floor is noise — and that is a thing to discover before it reaches a paper, not
+after. The four registered branches are unchanged; C only calibrates them.
+Registered before any arm was scored, so the floor cannot be chosen to suit the
+effect.
+
+**Scoring:** KL on kl_cache_qwen38 and ppl on referee_corpus 2048 tok, all
+three arms, per FINDINGS 6c (report both, always). Refs: q4 45.842 / 5.2055 @
 14.094 GiB; E124 (= arm A's geometry) 40.327 / 5.2330 @ 13.596 GiB.
 
 ## E126 — RESULT: d2/K512 beats q4 on ALL THREE metrics. Misses the pre-registered ppl MARGIN.
