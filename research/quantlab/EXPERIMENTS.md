@@ -6779,7 +6779,46 @@ CORRECTNESS fallback, not a performance fix: it keeps the artifact usable at
 decode speed. A dense kernel that fits the cap is the real fix and does not
 exist.
 
-## E121 — RESULT: **VOID AS A VINTAGE TEST.** The base was not constant.
+## E121 — RESULT: NOT-THE-FILE. (The "VOID" verdict below is itself retracted — see the 08-22 bracket.)
+
+> **THE VOID VERDICT IS WITHDRAWN, 08-22 morning.** Last night the M4 session
+> and I concluded from MTIMES that the Aug 19 base rewrite invalidated E121,
+> and I wrote "the shipped 2.4 is unreproducible by construction." **We
+> checked metadata and never checked content.** Measured this morning:
+>
+>     Base's non-expert tensors vs the shipped 2.4bpw's carried copies:
+>         342 compared, 342 BYTE-IDENTICAL, 0 different
+>
+> So the Aug 19 rebuild rewrote the SAME BYTES with new timestamps. That is
+> what should have been expected: affine quantization is deterministic, and
+> the recipe did not change — `--qkv-bits 4` was added to the recipe env at
+> 08-19 21:43, 24 minutes before the rebuild, but `convert_variant.py` has
+> defaulted `--qkv-bits` to 4 since its first commit, so the flag was a no-op.
+>
+> **And the base was never the fit's data source anyway.** vq_397b_codes.py
+> reads tensors from `--src` (`Qwen--Qwen3.5-397B-A17B-bf16`, untouched since
+> Aug 8) at :371; `--base` supplies only the target list and the carried
+> non-expert bytes, which we just proved identical. So neither channel from
+> the base to the fit changed.
+>
+> **Consequences, all reversals of last night:**
+> - E121 is a VALID comparison. Its verdict stands as first written: the
+>   08-16 fitter, run today, scores 2.8292 — worst of all four arms. The
+>   fitter FILE is exonerated by direct execution.
+> - "The shipped 2.4 is unreproducible by construction" is FALSE and is
+>   withdrawn. The inputs all survive.
+> - E101 is NOT confounded (the paper session's inference rested on the same
+>   mtime evidence). Its arms share base content, so it remains a clean
+>   law-6 specimen.
+> - **The vintage gap is REOPENED and unexplained.** Four in-algorithm
+>   explanations were falsified, and the provenance explanation that replaced
+>   them has now failed too.
+>
+> **The lesson is a correction to my own FINDINGS 6b.** That law says "check
+> the inputs before the algorithm," and we did — then stopped at `ls -l`. An
+> mtime is not an input; it is a claim about one. Checking content took four
+> minutes and reversed a conclusion that had already propagated into three
+> documents and a paper session's draft.
 
 > **RESTATED IN PLACE 08-21 23:45, within the hour, before anything cited it.**
 > The verdict below ("the fitter file is exonerated") is NOT supported by this

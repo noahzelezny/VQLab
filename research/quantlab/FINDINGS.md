@@ -170,6 +170,14 @@ Last updated: 2026-08-21 (through E110).
    explain a difference between two runs, mtime and size every input both
    runs consumed: base, source, config, and the tool.** E117/E118/E120 are
    sound per-tensor physics aimed at the wrong object.
+   **COROLLARY ADDED 08-22, at the cost of a wrong reversal: AN MTIME IS NOT
+   AN INPUT.** Having learned to check inputs, we checked TIMESTAMPS and
+   stopped there — concluding a base had changed, voiding a valid experiment,
+   and declaring a published artifact "unreproducible by construction." A
+   four-minute byte comparison showed 342/342 non-expert tensors identical:
+   the rewrite was deterministic output rewritten with new mtimes. Metadata
+   answers "was this touched," never "did this change." Compare CONTENT before
+   any conclusion rests on it. [E121]
    Corollary on searching: when concluding an input is GONE, say where you
    looked. Two sessions searched five locations (SSD, HDD, external T7, and
    both boxes' exo caches — the caches existed but were 0 B). "We searched"
