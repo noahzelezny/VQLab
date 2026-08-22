@@ -6641,11 +6641,58 @@ measured at ~2.4e-6 — so they are effectively two draws of one algorithm:
 
 **ONE FIT TESTS ALL THREE:** run fitter_0816_cdcdeab.py with E121's exact
 arguments ON THE M4, gate/pack/score on the M3 instrument.
-- lands ~2.77 -> **H2 confirmed**, the box is the answer, shipped becomes
-  rebuildable.
-- lands 2.81-2.83 -> **H2 excluded** AND it is draw 3, giving the first n=3
-  397B ppl floor — which is what makes 0.040 interpretable at all (6f).
-Either branch is a result. Cost ~2h09 on the M4 plus ~5 min scoring. NOT RUN.
+
+**PRE-REGISTRATION AMENDED 08-22, BEFORE THE FIT, on the M4 session's mlx
+dating — and the amendment WEAKENS one branch, which is why it had to happen
+now rather than after a number is on screen:**
+
+    M3 ./venv       mlx 0.32.0   dist-info Aug 9  19:37
+    M4 ~/qlab-venv  mlx 0.32.0   dist-info Aug 17 19:03   <- AFTER the shipped fit
+
+Versions are identical TODAY, so "different mlx" is not a live mechanism now.
+But **the M4's entire numerical stack was reinstalled on Aug 17, after the
+Aug 15-16 shipped fit.** Today's M4 is not, in software, the M4 that produced
+the artifact. The M3's stack has been unchanged since Aug 9 — i.e. across both
+the shipped fit and every refit.
+
+- lands <= 2.7800 -> **H2 CONFIRMED.** Strong: something about that box
+  reproduces the shipped number even across an mlx reinstall. Rebuildable, no
+  caveat.
+- lands 2.81-2.83 -> **excludes "the box AS IT IS TODAY", NOT "the box".** A
+  null here is equally consistent with H2-via-the-old-mlx. The originally
+  registered wording ("H2 excluded") would have recorded an exclusion the
+  evidence cannot support. It IS still draw 3, giving the first n=3 397B ppl
+  floor, which is what makes 0.040 interpretable at all (6f).
+- between 2.78 and 2.81 -> partial, reported as partial.
+
+**H4, promoted by this and previously unlisted: the mlx VERSION the M4 carried
+on Aug 15.** It is now the only identified difference between the shipped fit
+and every refit, and it is a numerical library. **Recovering that version
+number is the highest-value cheap action available** — it would make the old
+version installable and the shipped artifact genuinely rebuildable. The M4
+session could not recover it: no Aug 15-16 logs survive there, and pip leaves
+no history (an upgrade overwrites dist-info).
+
+**H4 VERSION HUNT — searched here, NOT recovered.** Per the say-where-you-looked
+rule, the places checked: the repo for a pin or requirements file (none exists);
+git log across all branches for any commit mentioning an mlx upgrade (none);
+`~/.zsh_history` for a pip install line (no match); the pip wheel and http
+caches (nothing dated Aug 8-18 that identifies a version); `~/mlx-wheels`
+(one wheel, `mlx-0.32.0.dev20260620+2414e5df`, dated **Jun 20** — predates the
+event); and `~/mlx-jaccl-fork` (a real custom mlx fork, but its last commit is
+**Jun 22** and the tree is dated Jul 18 — also predates). So a custom build
+existed in this environment, but neither artifact on disk is from the August
+window. H4's version remains unrecovered and the hypothesis stays open.
+
+**Incidental, and worth a look by whoever picks this up:** on THIS box,
+`venv/lib/python3.12/site-packages/mlx_lm/` is stamped **Aug 15 12:57** while
+its dist-info is Aug 9 — i.e. mlx_lm's CODE was modified three minutes before
+the shipped fit started at 13:01, which is patch_mlx_lm.py installing
+vq_switch.py. That is the M3, and the shipped fit is recorded as M4, so it does
+not bear on H2 directly; it is noted because the coincidence of timing is
+exactly the sort of thing that turns out to matter.
+
+Cost ~2h09 on the M4 plus ~5 min scoring. Queued behind R2 per Noah.
 
 **THE MYSTERY, RESTATED CORRECTLY.** Not "the shipped artifact is better and we
 cannot reproduce it." As measured: **the shipped artifact is better on one of
