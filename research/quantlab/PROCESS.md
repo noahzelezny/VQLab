@@ -103,6 +103,22 @@ Distinguishing them is diagnostic: if the fit log shows the bad value, the
 failure is in compute; if the log is clean and the artifact is not, the failure
 is between memory and disk.
 
+**UPDATED 08-21: "between memory and disk" has a named third shape, and it is
+not a write at all — it is a DEFERRED READ.** MLX `mx.load` is lazy; a value
+left unevaluated until a later save is materialized inside a GPU command
+buffer, and under memory pressure that read can return ZEROS. Signature: the
+producing log is clean, the consumer writes all-zero tensors, an eager re-read
+of the source is fine, and a rebuild from identical inputs succeeds — the
+transience reads as a storage fault and is not one. Seen twice on 08-21, on
+two different code paths and both transports (build_dense_vq.py splice, local
+SSD; fit_dense_vq.py source read, SMB), so the transport is incidental.
+**Fix at the read, do not build workarounds around the gate:** load under
+`with mx.stream(mx.cpu):` with `mx.eval` INSIDE the block (creation-binding
+alone is measured-insufficient), then assert no tensor is all-zero, then
+re-read what you wrote. Keep the post-hoc gate as defence in depth — it is no
+longer the only catcher, but it is still the only one that runs on a
+different box against the bytes on disk.
+
 ## Standing gates, once artifacts exist
 
 1. `verify_artifact.py --outlier 3.0` — relative, catches collapsed tensors.

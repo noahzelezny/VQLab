@@ -121,12 +121,22 @@ codes, qwen3_8_dense family).
   PASS. Paper session unblocked. Full entry + two runtime defects III.10
   caught (d!=2 dense dispatch; expert kernel exceeds threadgroup memory at
   27B shapes) in EXPERIMENTS E95 RESULT.
-- **L60 write-corruption recurred then vanished:** first splice zeroed L60
-  up_proj (all three tensors) with a CLEAN fit file — pure write-time.
-  Rebuild from identical inputs: clean, 0 zeros. Intermittent. Note the
-  peer's E116 found the SMB write path clean on a 16 GiB round-trip; both
-  stand — E116 says the path is not ALWAYS bad, the L60 pair says it is
-  SOMETIMES bad. The post-hoc gate is the only defense; it worked twice.
+- **L60 ROOT-CAUSED — it was a DEFERRED READ, not write corruption.**
+  (Superseding this file's earlier framing and E95's original paragraph,
+  both corrected 7da7399.) `build_dense_vq.py` loaded the fit file lazily
+  and left it unevaluated until save_safetensors forced it ~1300 tensors
+  later, across mx.clear_cache() — the read was paid inside a GPU command
+  buffer under memory pressure and returned zeros. FINDINGS IV.1 on an
+  unchecked path. Independently corroborated: the M4 session hit the same
+  disease in fit_dense_vq.py 65 s into E119 (L02 gate_proj, relerr exactly
+  1.0000 — a zero RECONSTRUCTION against a correctly-read tensor).
+  FIXED 013d2bb: cpu-stream load + mx.eval inside the block, all-zero
+  assertion on read, read-back scan of the written shard.
+  Two consequences: (1) the SMB framing is dead — this instance was a LOCAL
+  SSD read on the M3, so the transport is incidental and the invariant is
+  "any lazy read left pending across a memory-pressure boundary";
+  (2) the "M4 fits are cursed / M3 is clean" box policy was never evidence
+  about the fitter — the M3 had simply never been exposed on that path.
 - **E117 running on M3** (K256 random-init, chain self-gates/packs/scores;
   logs say E115 — numbering collision, see EXPERIMENTS E117 note).
 - **E118 armed** behind it via run_night_queue.sh (K512 random; logs say
