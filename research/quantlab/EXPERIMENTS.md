@@ -6573,6 +6573,55 @@ than a within-noise inversion doing load-bearing work in a paper.
 three arms, per FINDINGS 6c (report both, always). Refs: q4 45.842 / 5.2055 @
 14.094 GiB; E124 (= arm A's geometry) 40.327 / 5.2330 @ 13.596 GiB.
 
+## E128 — THE OFFERING LADDER: three rungs per model (Noah, 08-22, hard deadline Monday)
+
+Noah's specification, verbatim: **(1) slightly exceeding 4-bit quality at
+reduced GB footprint (accessibility); (2) matching affine 4-bit size at
+meaningfully better quality (daily); (3) affine 8-bit+ quality at meaningfully
+smaller size (heavy weight).** For both the 27B dense and the 35B MoE. These
+are community offerings, so every rung ships with a MEASURED size, both
+metrics, a gate and a III.11 smoke.
+
+**STATE OF THE LADDER — 2 of 6 rungs already met.**
+
+    27B   (q4 14.094 GiB / KL 45.842 / ppl 5.2055;  q8 NOT BUILT)
+      R1  E124 d2/K256   13.596 GiB  KL 40.327  ppl 5.2330   MET
+          (better than q4 on KL and top-1, 0.50 GiB smaller. ppl is inside
+           the 6f noise floor and is not claimed either way.)
+      R2  E126 d2/K512   14.592 GiB  KL 33.095  ppl 5.1943   MET*
+          (-27.8% KL, +1.28 pp top-1. *Size is +3.5% over q4, not exactly
+           matched — the geometry grid has no rung between 13.596 and 14.592,
+           because d2 moves in whole bits. Reported as "q4-class size".)
+      R3  UNBUILT — needs a q8 comparator first. Candidate d2/K4096 @ 17.58
+          GiB, which is ~35% under an estimated 27 GiB q8.
+
+    35B   (q4 19.0 GiB / KL 78.557;  q8 35.0 GiB / KL UNMEASURED)
+      R1  e94b d4/K8192  17.651 GiB  KL 53.022                MET
+          (-32% KL vs q4, 1.35 GiB smaller.)
+      R2  UNBUILT — candidate d4/K16384 @ 18.59 GiB, just under q4's 19.
+      R3  UNBUILT — needs the q8 KL. Candidate d2/K1024 @ 24.22 GiB (-31%).
+
+**WORK QUEUED, comparators first because no R3 is interpretable without them:**
+
+    A  score the 35B 8-bit (on disk, 35 GiB) on kl_cache_qwen36   [M3, cheap]
+    B  build + score a 27B q8                                     [M3]
+    C  fit 27B d2/K4096  -> R3 candidate                          [M3]
+    D  fit 35B d4/K16384 -> R2 candidate                          [M4]
+    E  fit 35B d2/K1024  -> R3 candidate                          [M4]
+
+**Sizes above are PROJECTED from the closed size model (6e) and are planning
+figures only. Every rung enters the record at its MEASURED packed size.**
+
+**Pre-registered readings, per rung, fixed now:**
+- R1 passes if KL < the affine 4-bit's AND size < it. Both models: met.
+- R2 passes if size <= the affine 4-bit's (or within 5%, stated) AND KL is
+  lower by more than the seed-noise floor for that model/geometry.
+- R3 passes if KL <= the affine 8-bit's AND size is at least 20% smaller.
+  **The 8-bit KL is currently unmeasured for BOTH models, so R3 has no target
+  yet and no R3 claim may be made until A and B land.**
+- Per 6f: KL separations of 5+ mnats and top-1 of ~1 pp are real; third-decimal
+  ppl differences between single-draw artifacts are NOT interpretable.
+
 ## E127 — RESULT: TRACKS on ppl. And the floor it measured retracts E126's ppl claim.
 
 Three arms, same source (Aug 8, unchanged), same base, all fit within 90
