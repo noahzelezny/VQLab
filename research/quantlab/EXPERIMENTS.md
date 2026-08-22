@@ -6053,6 +6053,77 @@ VALIDITY GATE: if E117 falsifies, the crossover interpretation is void (the
 pair still stands as a measurement). The night queue
 (`run_night_queue.sh`) auto-launches this only on a clean E117 DONE banner.
 
+## E117 — RESULT: FALSIFIED. Init is NOT what separates the shipped 2.4 from the refits.
+
+Scored 19:46. Chain clean end-to-end: gate PASS (0 outliers), vision PASS,
+release PASS, 111.617 GiB — byte-for-byte the same size as both references.
+
+    shipped 2.4 (08-16, random)        2.7655 / 2.6383
+    flatk256-refit (08-21, ++, E92)    2.8057 / 2.6447
+    flatk256-randinit (tonight)        2.8158 / 2.6347   <- THIS RUN
+
+The pre-registered rule says FALSIFIED at >= 2.8057 wikitext. It landed
+ABOVE it: random init today is WORSE than ++ today, and both are worse than
+the shipped 2.4 — whose config I verified is identical geometry (flat d4
+K256, 171 modules). So today's fitter cannot reproduce the 08-16 fitter's
+K256 result with EITHER init.
+
+**What survives:** E107-E110's per-tensor mechanism (measured, replicated,
+depth-structured). What does NOT survive is the leap from it to the
+artifact-level regression — the ++ penalty exists but is not the dominant
+end-to-end effect at K256.
+
+**Where the suspect list now stands:** three commits changed the k-means
+implementation 08-18/19 (E94 note). Seeding was one and is now EXCLUDED as
+the primary cause. The other two have never been isolated. Until one is,
+"fitter vintage" remains a one-way street we do not understand: the same
+tool that IMPROVED K2048/K8192 fits (E94, flagship) REGRESSES K256 fits.
+
+**Loose thread, recorded not interpreted:** the code corpus moved the OTHER
+way — tonight's 2.6347 is the best of all three. Whatever the 08-18/19
+change did, it is not uniformly bad; it trades corpora at K256.
+
+**E118 consequence (per its own validity gate):** the "crossover"
+interpretation is VOID. The K512 pair still stands as a same-size, one-flag
+measurement vs E93's ++ (2.5634/2.6123 @ 122.305 GiB).
+
+## E119 — PRE-REGISTRATION: the 27B dense K ladder (M4, Noah's directive 08-21 ~20:00)
+
+E95 established the floor: flat d4/K256 dense lands above the affine line.
+The question a USABLE 27B quant needs answered: does the K ladder scale on
+dense the way it did on the MoEs (the "raise K first" law)?
+
+**Recipe:** `fit_dense_vq.py --family qwen3_8 --dim 4`, layers 0-63, flat, at
+K = 512, 1024, 2048 (2.25 / 2.50 / 2.75 bpw stored on MLPs). Default
+kmeans++ seeding, stated explicitly: at K2048 ++ measured BETTER end-to-end
+on the 397B (flagship refit), and E117 just showed random is not a fix at
+low K either — but the fitter-vintage question is OPEN at K256-class, so the
+K512 point inherits that caveat. `--relerr-abort 0.90` (legitimate 27B
+tensors reach 0.43; 0.35 cries wolf — learned in E95's first launch).
+Assemble with `build_dense_vq.py` into `qwen38-27b-rungs/q4` (HEAD includes
+the d!=2 runtime fix — pull before building; an older checkout ships a
+model.py that raises on d=4 decode).
+
+**Gates, all mandatory, in order:** post-build ZERO-SCAN (the L60 write
+corruption hit this exact pipeline twice — clean fit log, zeroed splice),
+`verify_artifact.py --family qwen3_8_dense --outlier 3.0` against the HF
+bf16 (`Qwen--Qwen3.8-27B`, NOT the mlx conversion — wrong index keys),
+III.10 smoke-gen through the bundled runtime, THEN score.
+
+**Instrument, identical to E95:** ppl on referee_corpus.txt 2048 tok +
+`kl_damage.py score --cache-dir kl_cache_qwen38`; reuse recorded bf16_ppl
+5.2249 rather than reloading the 55.6G teacher.
+
+**Pre-registered readings:**
+- The MoE law CARRIES if KL falls monotonically in K and the points stay
+  above the affine q2->q3->q4 line at their sizes.
+- Specifically interesting bar: K2048 (~10.5-11 GiB expected) vs q3
+  (187.8 mnats @ 11 GiB) — a size-matched-ish comparison for once. Beating
+  q3 at or below its size is the "usable 27B quant" threshold.
+- Any K where the dense point falls BELOW the affine line is a real dense/MoE
+  divergence and must be reported as such, not smoothed.
+- Sizes reported next to every number; "VQ beats 4-bit" stays banned.
+
 ## E115 — d8 packed speed A/B: ~19% decode tax, and a decode instrument that is bimodal at 100 GiB
 
 Closes STATE's "SPEED UNMEASURED" on E113's packed d8 kernel. Two boxes' worth
