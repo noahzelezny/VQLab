@@ -192,6 +192,19 @@ Last updated: 2026-08-21 (through E110).
    diseases (write corruption, a cursed box, SMB) precisely because every
    encounter was met with a change rather than an instrument. Cost of the
    discipline: ~30 minutes of holding a known one-line fix. [E119]
+   **Corollary, learned the same night at a cost of 41 minutes: INSTRUMENT
+   THE REAL CODE, DO NOT REIMPLEMENT IT.** A probe written to mimic the
+   failing path caught 0 in 240 tensors and yielded no verdict, because the
+   reimplementation silently dropped the one variable under test: the real
+   fitter accumulates every tensor's outputs so memory grows monotonically,
+   while the probe discarded and cleared each iteration and never built the
+   pressure the hypothesis names as the trigger. A probe that CANNOT fire is
+   indistinguishable from a bug that is not there — the exact ambiguity this
+   rule exists to prevent — so holding the fix bought nothing while the
+   instrument was wrong. Correct form: patch the REAL file with a guarded
+   diagnostic block, then diff the patched copy with the diagnostic stripped
+   back against the original and confirm the guard is the ONLY difference.
+   [E119]
 
 11. **An artifact is not releasable until it has GENERATED ONE TOKEN through
    the fused path it will ship with.** Every byte-level gate we own can pass
