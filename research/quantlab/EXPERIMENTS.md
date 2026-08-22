@@ -6381,6 +6381,54 @@ generated a token from this artifact in a genuinely clean environment — fresh
 venv, stock `pip install mlx-lm==0.31.3`, no patch. Everything above is
 provenance, not execution. Owned by the M4 session, after the E119 ladder.
 
+## E121 — RESULT: NOT-THE-FILE. The 08-16 fitter does not reproduce the shipped 2.4 either.
+
+Ran `fitter_0816_cdcdeab.py` — `git show cdcdeab:vq_397b_codes.py` verbatim,
+the last commit before the 08-18/19 k-means changes — with E92/E117's exact
+geometry and base. Clean: 171 tensors, **ZERO at relerr 1.0000** (the collapse
+scan is the only compute-side catcher, since that fitter has no abort by
+design), gate PASS (median 0.3120, worst L01 up 0.4343, bar 0.9360), vision
+PASS, release PASS, 111.617 GiB post-graft — size-identical to every arm.
+
+    shipped 2.4      (08-16 artifact)   2.7655 / 2.6383
+    flatk256-refit   (08-21, ++)        2.8057 / 2.6447
+    flatk256-randinit(08-21, random)    2.8158 / 2.6347
+    fitter0816       (08-16 CODE, today) 2.8292 / 2.6508   <- THIS RUN, WORST
+
+Pre-registered: REPRODUCES at <= 2.7700, NOT-THE-FILE at ~2.81+. It landed at
+**2.8292 — the worst of all four**, and it is the only arm that ran the actual
+08-16 code.
+
+**THE FITTER FILE IS NOT THE CAUSE.** Running the exact code that built the
+shipped artifact, at the same geometry, from the same base, on the same
+corpora, does not get within 0.06 of it. That kills the framing every entry
+since E94 has used: "fitter vintage" cannot mean the fitter's SOURCE, because
+the source is exonerated by direct execution.
+
+**What is left, and none of it has been tested:** the mlx/mlx-lm version, the
+base artifact (`struct6-tail3x3` as it exists today vs as it existed 08-16),
+or the bf16 source checkpoint. Any of those can move a k-means fit — MLX
+kernel changes alter float summation order, and a base or source that has been
+rewritten since is not the same input. Note the E94 retraction is now doubly
+relevant: we already have one proven case of an artifact being silently
+overwritten in place, and the base is exactly the kind of file that could have
+been.
+
+**What this does to E107-E110, E117, E118, E120:** the mechanism work stands
+as measured per-tensor physics and is now definitively NOT the explanation for
+the artifact-level gap. E117 excluded seeding; E118 showed the K-dependence is
+non-monotone; this excludes the whole file. Three narrowing results, all
+falsifications, all of the same target. The honest state is: **we can measure
+the effect and we cannot yet explain it, and every explanation we have
+proposed has been eliminated by experiment.**
+
+**Standing consequence for the paper and the ladder:** the shipped 2.4 at
+111.617 GiB is an artifact we cannot currently rebuild by any means available
+to us — not with today's fitter under either seeding, and not with the
+original fitter. That is a statement about our tooling, not about the artifact,
+which is published, gated and verified. It must be said plainly rather than
+smoothed, and the rebuildability field in the GUI already carries it.
+
 ## E120 — PRE-REGISTRATION: the vintage hunt, narrowed to float summation order
 
 E117 excluded seeding. `git log --since=2026-08-17 --until=2026-08-20 --
