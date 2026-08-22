@@ -6053,6 +6053,57 @@ VALIDITY GATE: if E117 falsifies, the crossover interpretation is void (the
 pair still stands as a measurement). The night queue
 (`run_night_queue.sh`) auto-launches this only on a clean E117 DONE banner.
 
+## E120 — PRE-REGISTRATION: the vintage hunt, narrowed to float summation order
+
+E117 excluded seeding. `git log --since=2026-08-17 --until=2026-08-20 --
+vq_397b_codes.py` names exactly three k-means commits; the other two are:
+
+    8a4d486  one-hot chunk scales with K  (was fixed 2,000,000 rows)
+    a9f5c5c  scatter-add centroid update  (replaced the one-hot matmul)
+
+**Both change FLOAT SUMMATION ORDER in the centroid update, and neither was
+intended to.** Both were written as performance fixes for the K8192 OOM, and
+both were reviewed as such. The centroid update is a sum of member vectors
+per centroid; the answer is order-independent in exact arithmetic and is NOT
+in fp32.
+
+**Why this is the leading candidate for a K-DEPENDENT effect — the
+hypothesis, not a result.** The old path accumulated via `oh.T @ X`, a matmul
+whose internal reduction is tree-shaped and higher-precision, over chunks of
+`5e8/k` rows (a9f5c5c's predecessor: a fixed 2e6). The new path is
+`oh_sum.at[a].add(X)`, a scatter-add: each centroid's bin accumulates its
+members serially in fp32. Precision loss in a serial fp32 sum grows with the
+NUMBER OF TERMS PER BIN, and terms-per-bin is n/K — so the damage is
+inversely proportional to K. At K256 with n=2e6 that is ~7800 values per bin;
+at K2048, ~980. A mechanism whose error scales as 1/K is exactly the shape of
+the observed regression: K256 worse, K2048 unaffected-or-better.
+
+This also explains why the E107-E110 seeding mechanism measured real but
+could not carry the artifact-level effect: two K-dependent mechanisms were
+superimposed, and we isolated the one we had thought of.
+
+**Test (cheap, single tensor, no full fit):** take one body tensor, run the
+Lloyd update ONCE from a fixed shared assignment, three ways —
+  (a) scatter-add fp32            [HEAD]
+  (b) one-hot matmul fp32         [pre-a9f5c5c]
+  (c) float64 reference sum       [ground truth]
+at K=256 and K=2048. Report ||a-c|| and ||b-c|| per centroid, and the
+resulting relerr. Same tensor, same assignment, same seed — the ONLY variable
+is accumulation.
+
+**Pre-registered readings:**
+- CONFIRMED as a contributing cause if (a) is measurably further from (c)
+  than (b) is, AND the gap is larger at K256 than at K2048.
+- FALSIFIED if the two paths agree to fp32 noise at both K. Then summation
+  order is not it, 8a4d486's chunk change is the remaining suspect on its
+  own, and the hunt widens beyond these three commits.
+- A confirmed result does NOT license reverting a9f5c5c: it made K8192
+  practical (impractical -> 10s). The fix would be a higher-precision
+  accumulator (fp32 pairwise, or fp64 bins), keeping scatter-add's O(n).
+
+**Status:** written 08-21 ~21:00, NOT RUN — M3 is fitting E118, M4 is on
+E119. Runs on either box in minutes when one frees.
+
 ## E117 — RESULT: FALSIFIED. Init is NOT what separates the shipped 2.4 from the refits.
 
 Scored 19:46. Chain clean end-to-end: gate PASS (0 outliers), vision PASS,
