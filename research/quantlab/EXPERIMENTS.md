@@ -6573,6 +6573,66 @@ than a within-noise inversion doing load-bearing work in a paper.
 three arms, per FINDINGS 6c (report both, always). Refs: q4 45.842 / 5.2055 @
 14.094 GiB; E124 (= arm A's geometry) 40.327 / 5.2330 @ 13.596 GiB.
 
+## E127 — RESULT: TRACKS on ppl. And the floor it measured retracts E126's ppl claim.
+
+Three arms, same source (Aug 8, unchanged), same base, all fit within 90
+minutes, all gated PASS, all smoked, all 13.596 GiB.
+
+    arm            iters   relerr    KL mnats   top-1     ppl
+    A               10     0.0842     40.957    89.93%   5.2739
+    B               30     0.0833     40.436    90.06%   5.1483
+    C (A's twin)    10     0.0842     42.412    89.82%   5.2777
+
+**THE SEED-NOISE FLOOR, n=3.** E124 is a third independent draw at arm A's
+exact settings, so the floor rests on three draws rather than the two I
+planned:
+
+    E124   KL 40.327   ppl 5.2330
+    A      KL 40.957   ppl 5.2739
+    C      KL 42.412   ppl 5.2777
+    floor: KL 2.085 mnats     ppl 0.0447
+
+**Verdict on the specimen: TRACKS, on ppl only.** B has lower relerr
+(0.0833 vs 0.0842) AND better ppl (-0.1256, which is 2.8x the floor). So at
+this geometry, improving the weight-space objective improved the output — law
+6 does NOT bite here. B's KL improvement (-0.521) is INSIDE the floor and says
+nothing. Reported as TRACKS per the registered branches, with the caveat that
+B is ONE draw against a three-draw floor: the effect is 2.8x the floor, which
+is suggestive rather than settled. A second iters-30 draw would settle it.
+
+**This does not refute law 6, it bounds it.** E102 measured the tail/bulk
+crossover at LOW K where centroids are scarce; d2/K256 is a far finer fit
+(0.084 relerr vs the 0.31 of d4/K256). The honest statement is that law 6 was
+demonstrated in a regime this specimen is not in.
+
+### RETRACTION: E126's ppl claim does not survive its own noise floor
+
+E126 was reported as beating q4 on all three metrics. Against the floor
+measured here:
+
+    E126 vs q4   KL  -12.747  (floor 2.085)  -> REAL, 6.1x the floor
+                 top-1 +1.28 pp               -> real, and consistent
+                 ppl  -0.0112  (floor 0.0447) -> INSIDE THE NOISE. Not a claim.
+    E126 vs E124 ppl  -0.0387  (floor 0.0447) -> INSIDE THE NOISE. Not a claim.
+
+**So E126 beats q4 decisively on KL and top-1, and the ppl comparison is
+noise in both directions.** Yesterday's "beats q4 on all three metrics" is
+withdrawn; "beats q4 on KL and top-1 at +3.5% size, with ppl indistinguishable"
+is what the data supports.
+
+The margin argument that followed it is also moot: I reported E126 as missing
+a >=0.02 ppl margin by 0.0088, and treated that as a close call for Noah to
+rule on. Both numbers sit inside a 0.0447 floor. There was no signal there to
+rule on, and the correct response to "is 0.0112 meaningful?" was "we cannot
+tell at n=1 per artifact" — which nobody could know until the floor existed.
+
+**The general lesson, and it is why the floor was worth 35 minutes:** we have
+been comparing single-draw artifacts at ppl differences of 0.01-0.04 all week.
+Every such comparison in this lab is inside the seed-noise floor for this
+geometry. KL separations of 5+ mnats and top-1 separations of ~1 pp are real;
+third-decimal ppl differences between individual artifacts are not
+interpretable without repeats.
+
 ## E126 — RESULT: d2/K512 beats q4 on ALL THREE metrics. Misses the pre-registered ppl MARGIN.
 
 Fit on M4 (192 tensors, ZERO collapses), gate/pack/smoke/score on M3.

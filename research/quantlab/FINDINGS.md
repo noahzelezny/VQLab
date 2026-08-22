@@ -233,6 +233,16 @@ Last updated: 2026-08-21 (through E110).
    a difference at the 0.04+ ppl scale cannot be seed noise — look for an
    input difference instead. [E125, and it corroborates E121]
 
+6f. **MEASURE THE SEED-NOISE FLOOR BEFORE BELIEVING A SMALL DIFFERENCE.**
+   Fits are unseeded (6d), so two artifacts of identical geometry differ. At
+   dense 27B d2/K256, n=3 draws: **KL range 2.085 mnats, ppl range 0.0447.**
+   Consequences, measured 08-22: E126's "beats q4 on ppl by 0.0112" is INSIDE
+   that floor and was withdrawn; E127's iters effect on ppl (-0.1256) is 2.8x
+   it and stands. **Third-decimal ppl differences between single-draw
+   artifacts are not interpretable.** KL separations of 5+ mnats and top-1
+   separations of ~1 pp are. A floor costs one extra fit and it retracted one
+   claim and validated another the same night. [E127]
+
 7. **Cite the commit when citing a law, and RESOLVE the citation.** This file
    moved twice in 25 minutes and a peer built an argument on the stale
    version. A law citation without a commit hash is as untrustworthy as a
