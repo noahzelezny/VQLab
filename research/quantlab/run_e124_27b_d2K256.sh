@@ -27,7 +27,16 @@ echo "########## GATE" | tee -a $L
 $V verify_artifact.py --artifact "$ART" --src "$SRC" --family qwen3_8_dense \
    --outlier 3.0 2>&1 | tee -a $L | tail -6
 
-echo "########## PACK (pack_dense; 8 bits at K256 is BYTE-ALIGNED — pack_dense SKIPS it by design (cb4fb9b); the unpacked artifact IS the final size)" | tee -a $L
+# PACK banner derived from K, not hardcoded. pack_dense is a NO-OP only when
+# the index width is a whole number of bytes (bits % 8 == 0, i.e. K=256, 65536).
+# At K=4096 the index is 12 bits and pack_dense does real work; a banner that
+# says otherwise invites quoting the UNPACKED size, which III.8 forbids.
+PACK_BITS=$($V -c "import sys;print(max(1,(int(sys.argv[1])-1).bit_length()))" "256")
+if [ $((PACK_BITS % 8)) -eq 0 ]; then
+  echo "########## PACK (pack_dense; ${PACK_BITS} bits at K=256 is BYTE-ALIGNED — pack_dense SKIPS it by design (cb4fb9b); the unpacked artifact IS the final size)" | tee -a $L
+else
+  echo "########## PACK (pack_dense; ${PACK_BITS} bits at K=256 is NOT byte-aligned — pack_dense DOES real work. Quote the PACKED size only (III.8))" | tee -a $L
+fi
 $V pack_dense.py --src "$ART" --out "$PK" 2>&1 | tee -a $L | tail -3
 
 for A in "$ART" "$PK"; do

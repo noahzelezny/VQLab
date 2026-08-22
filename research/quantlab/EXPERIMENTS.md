@@ -7620,3 +7620,80 @@ Report KL AND ppl per 6c. The 6f seed floor was measured at d2/K256 on the
 27B and does **not** transfer here — different model, different geometry,
 different K — so a margin under ~2 mnats against e94b should be called
 indistinguishable rather than a win, pending its own n=3.
+
+## E128 run C — RESULT: R3 IS NOT REACHABLE ON THE 27B. The slope flattens.
+
+Registered branch (HANDOFF §3, before the run): expected ~18 mnats against the
+q8 bar of 1.641; if it lands there, say plainly R3 is out of reach rather than
+burning the weekend. **It landed at 26.709 — WORSE than the pessimistic
+branch.** Reported as registered.
+
+    artifact  e124-27b-dense-d2K4096-vq-packed   (SCORED ON THE PACKED BYTES)
+    size      17.583 GiB MEASURED   (projection 17.580 — matches to 3 dp)
+    KL        26.709 mnats/token
+    ppl       5.2417
+    top-1     91.66%
+    fit       192 tensors, mean relerr 0.0205, worst 0.0209, 0 collapses,
+              outlier gate PASS (median 0.0204, bar 0.0613)
+
+**R3 bar is q8: 26.341 GiB at KL 1.641. Run C is 16.3x the bar.**
+
+**THE SLOPE FLATTENS, so the extrapolation was optimistic:**
+
+    rung    bpw    size GiB    KL
+    K256    4.00   13.596      40.327
+    K512    4.50   14.592      33.095
+    K4096   6.00   17.583      26.709
+
+4.00->4.50 is x0.673 KL per +1 bpw — the fitted slope everything was
+extrapolated from. 4.50->6.00 is only **x0.868 per bpw**. Extrapolating from
+the MEASURED slope, reaching KL 1.641 needs ~+19.7 bpw (~25.7 bpw total); even
+at the optimistic 0.673 it needs ~13 bpw. The q8 bar costs 8 bits and 26.341
+GiB. **There is no rate at which this method reaches 8-bit-class KL on the
+27B.** Recommendation, agreed with the M4 session BEFORE this number existed:
+do NOT fit a 35B R3. Report the measured slope. The 35B has zero d2 points, so
+picking its R3 would rest entirely on transferring this slope across models.
+
+**PPL: EVERY DIFFERENCE ON THIS LADDER IS INSIDE THE FLOOR.** Run C's ppl
+(5.2417) is worse than q4's (5.2055) while its KL is far better — the 6c
+inversion shape. The gap is 0.0362 against a floor of 0.0447: **not a result in
+either direction.** Same for run C vs bf16 (0.0168) and K256->K4096 (0.0087,
+while KL improved 13.6 mnats). Only KL separates these rungs. **This does NOT
+re-elevate 6c**; an inversion inside the floor is not an observation.
+
+**THE FLOOR IS INHERITED, AND III.12 SAYS SAY SO.** 0.0447 was measured at
+d2/K256; run C is K4096, which draws 16x more centroids from the same sample
+budget. It does not transfer and it has not been measured here. It changes
+nothing about the R3 verdict — a 16x KL gap is untouchable by any floor — but
+it is why no ppl claim is made above.
+
+### Fix shipped with this entry: the PACK banner lied at K4096
+
+Run C's chain printed "8 bits at K256 is BYTE-ALIGNED — pack_dense SKIPS it by
+design; the unpacked artifact IS the final size" while packing a **12-bit**
+K4096 artifact, where pack_dense does real work (21.567 -> 17.583 GiB). The
+text was correct in the K256 script it was copied from and became false on
+copy. pack_dense behaved correctly; only the banner was wrong — but a banner
+asserting "the unpacked artifact IS the final size" invites quoting 21.567,
+which III.8 forbids and which would have put this rung 4 GiB above its true
+size.
+
+Both `run_e124_27b_d2K256.sh` and `run_e128c_27b_d2K4096.sh` now DERIVE the
+banner from K (`bits = (K-1).bit_length()`, no-op iff `bits % 8 == 0`) instead
+of asserting it, so it cannot go stale on the next copy. Verified: K256/K65536
+-> byte-aligned; K512/K4096 -> pack does work. Both scripts syntax-checked.
+
+## E130 — PARTIAL: arm 1 only. Arm 2 never started.
+
+Arm 1 (d2/K64, 3.00 bpw) completed: fit, outlier gate PASS, packed to
+**11.60 GiB — exactly the projection**. NOT scored. Arm 2 (d4/K4096) never
+started; the watcher was stopped first. E130 is half-run and its d-vs-K
+question is UNANSWERED.
+
+Process note: the watcher's guard was `pgrep fit_dense_vq .*d2K4096`, which
+released when run C's FIT exited — while run C's BUILD/PACK/SCORE were still
+running. Arm 1 therefore overlapped run C's pack by ~4 minutes. Values are
+deterministic and arm 1's gate passed with 0 skipped, so its numbers stand,
+but **the guard was written against the fit when what needed protecting was
+the whole chain.** Nobody edited anything; the arming was just narrower than
+the job.
