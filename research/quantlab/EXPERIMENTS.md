@@ -6186,6 +6186,43 @@ compares the runtime that scored an artifact to the runtime it ships.
 03:17) and is smoked and release-checked anyway, because the point of the
 audit is that the SHIPPING bundle is what gets verified.
 
+**SCOPE CORRECTION (before the run — the first framing was wrong twice).**
+My original framing, "d8 was scored at 11:39 and its runtime replaced at
+16:29, so the number is suspect," implies the whole number is in doubt. The
+M4 session then proposed a sharper version — that the ppl came off the
+UNPACKED bytes — which is disproved by the score log itself
+(logs_live_e89.log:439,441 name `rotlab--397B-d8K16384-packed`). The true
+statement is neither:
+
+**The ppl WAS measured on the packed bytes, through the DECODE path. The
+fused packed-d8 kernel the artifact now ships has never produced a
+perplexity.** E100's "packed d8 RAISES" and this row's "packed d8 scored
+3.0591" were never in conflict — they exercise different paths. Generation is
+small-N and dispatches to the fused kernel (absent until E113 built it at
+16:29); `score_streaming.py` pushes the whole prefix through each block as
+one causal full-forward (:8-10, :66), which is large-N and takes the decode
+path, which serves packed d8 fine.
+
+**Consequence, caught before the run: E122's re-score cannot close this gap.**
+score_streaming is prefill-shaped, so it will take the decode path again,
+return ~3.0591, and prove nothing about the fused kernel — a probe that
+cannot fire, which is III.10's corollary landing on the instrument written to
+apply it. The re-score is KEPT (it confirms the bytes, the bundle, and the
+release checks cheaply) but it is relabelled: it verifies the decode-path
+number and the shipping package, NOT the fused path.
+
+**What covers the fused path:** E113's bit-exactness result — synthetic
+bit-identity plus byte-identical greedy text on the real artifact — and
+generation IS the small-N regime the fused kernel serves, so that is
+on-path evidence, not inference. A ppl-through-fused would need small-N
+chunked scoring, which nothing in our tooling does today; it is a separate
+experiment if we want it, not something to smuggle in here.
+
+**Therefore the card says two sentences, not one:** the quality numbers were
+measured on the packed bytes through the decode path; generation uses the
+fused path, verified bit-identical on greedy output (E113). Neither
+"unverified" nor "measured through the shipping path" is accurate alone.
+
 **Pre-registered readings for the d8 re-score:**
 - **INERT** (within 0.005 on both corpora): the runtime swap is numerically
   neutral; the published number describes the shipped bytes. Clear to card.
