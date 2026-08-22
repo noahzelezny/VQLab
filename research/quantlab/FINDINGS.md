@@ -375,6 +375,17 @@ Last updated: 2026-08-21 (through E110).
 - Make failure cheap (resume, quarantine, verified copies) — today's error
   budget held because failures were recoverable, not because reasoning was
   right.
+- **To cancel the REST of a chain, kill the orchestrator — not the child.**
+  When a queued rung stops being worth running, killing the shell that drives
+  the loop leaves the in-flight job untouched: it is a child process, so it
+  survives its parent, and nothing already computed is lost. Editing the
+  script instead does NOT work — `sh` parses a `for` loop as one compound
+  command, so the iteration list is fixed in memory the moment the loop is
+  entered, and your edit changes nothing about what runs next. Verify both
+  halves after (orchestrator gone, worker alive) rather than assuming. This
+  is how a redirect respects a no-kill preference in substance and not just
+  in letter. Used 08-21 to drop the d4/K2048 rung after Noah's target moved
+  to q4-size, without disturbing the running K1024 fit.
 
 ## V. Open questions (the honest frontier)
 
