@@ -237,9 +237,33 @@ Last updated: 2026-08-21 (through E110).
    precision: a fresh fit of E94's recipe matched the original on every
    projection mean to 4 decimals and on KL to 3. **So "this artifact scores X"
    survives a re-run; "these exact bytes" does not. Say which you mean.** Two
-   corollaries: a lost artifact does not necessarily cost you its NUMBER, and
-   a difference at the 0.04+ ppl scale cannot be seed noise — look for an
-   input difference instead. [E125, and it corroborates E121]
+   corollaries, **both SCOPED 08-22 — each was stated generally on the
+   strength of a single geometry:**
+   (i) a lost artifact does not necessarily cost you its NUMBER — but this
+   rests on ONE measured case (E125, 35B d4/K8192, reproducing E94 to 4
+   decimals on projection means and 3 on KL). 6f measures a KL range of 2.085
+   mnats across draws at 27B d2/K256; if the 35B K8192 floor were anywhere
+   near that, reproducing 53.022 exactly is luckier than the corollary
+   implies. **Whether close reproduction holds at other geometries is
+   UNMEASURED.** Either that floor is far tighter, or one fortunate draw is
+   being read as a law.
+   (ii) a ppl difference is "too big for seed noise" ONLY relative to a floor
+   measured AT THAT GEOMETRY. **The original form — "a difference at the 0.04+
+   ppl scale cannot be seed noise" — is FALSE as a general claim and is
+   WITHDRAWN.** It was written 08-21 (e59c971); on 08-22, 6f measured a ppl
+   range of 0.0447 at dense 27B d2/K256 (b944e1e, n=3), larger than the 0.040
+   the corollary declared impossible. The two sat five lines apart in this
+   file for a day.
+   **This is not bookkeeping: the withdrawn corollary is the PREMISE that sent
+   the vintage hunt looking for an input difference rather than a seed
+   lottery.** E117, E118 and E121 were run against it.
+   Scope guard, so the correction does not overreach: 6f's 0.0447 is 27B
+   d2/K256; the vintage gap is 397B d4/K256, whose own floor is n=2
+   (0.0134 wikitext / 0.0161 code, E129, **INFERRED** via E120's ~2.4e-6
+   scatter-add/one-hot equivalence — if E120 moves, this floor moves). What is
+   established is that the corollary is false AS STATED GENERALLY. NOT that
+   the 397B floor is 0.0447, and NOT that the vintage gap is seed noise: H1
+   remains a ranked hypothesis. [E125, E127, E129]
 
 6f. **MEASURE THE SEED-NOISE FLOOR BEFORE BELIEVING A SMALL DIFFERENCE.**
    Fits are unseeded (6d), so two artifacts of identical geometry differ. At
@@ -330,6 +354,31 @@ Last updated: 2026-08-21 (through E110).
    the measure-before-you-fix rule on 08-21. Renumbered to III.11 and recorded
    properly; the citation rule (III.7, cite the commit) exists for exactly
    this failure and was not applied to a rule about gates.)*
+
+12. **MEASURE THE NOISE FLOOR FOR A GEOMETRY BEFORE RUNNING COMPARISONS AT IT
+   — not after a result needs defending. THIS IS III.4'S TWIN.** III.4 already
+   requires n>=3 with scatter for SPEED numbers; this extends the same
+   discipline to QUALITY. Stating it as the completion of an existing rule
+   rather than a new one is deliberate — it explains how the lab accepted
+   repeats for speed all week while comparing single-draw artifacts on ppl.
+   Fits are unseeded (6d), so every comparison at a new geometry is read
+   against an unknown noise level. The dense 27B d2/K256 floor was measured at
+   E127 on 08-22, AFTER E117, E118, E120, E121 and the E124/E126 rungs had
+   been run and interpreted. It should have been the FIRST run of the family,
+   not the eleventh. Cost: one extra fit. Return, the single night it landed:
+   it retracted E126's ppl claim (0.0112, inside the floor) and validated
+   E127's iters effect (-0.1256, 2.8x it), simultaneously.
+   **A FLOOR BELONGS TO THE GEOMETRY IT WAS MEASURED AT. DO NOT INHERIT IT.**
+   K4096 draws 16x more centroids from the same sample budget than K256, so
+   per-centroid sample count drops ~16x and seed variation is a different
+   quantity — it could widen (noisier centroids) or narrow (aggregate error
+   spread across more of them). We have no measurement either way. Two live
+   instances as of 08-22: E128 run C is K4096 and is read against a K256
+   floor, and E130's registered inconclusive branch resolves a K64-vs-K4096
+   comparison using the same K256 numbers.
+   **When a floor is inherited rather than measured, SAY SO in the reading.**
+   An inherited floor is a stated assumption; a silent one is III.2's missing
+   instrument wearing different clothes. [E127, E126, E129, E130]
 
 ## IV. MLX/Metal engineering rules (each cost ≥1 run to learn)
 
