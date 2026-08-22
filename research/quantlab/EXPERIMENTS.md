@@ -6381,6 +6381,48 @@ generated a token from this artifact in a genuinely clean environment — fresh
 venv, stock `pip install mlx-lm==0.31.3`, no patch. Everything above is
 provenance, not execution. Owned by the M4 session, after the E119 ladder.
 
+## E119 — RESULT: the d4 dense K ladder. K1024 beats q3 at less than q3's size.
+
+All packed with pack_dense, III.11 smoked ON THE PACKED artifact (both
+returned "Paris."), gates PASS, sizes MEASURED. The 27B dense ladder as it now
+stands, one instrument (kl_cache_qwen38 + referee_corpus 2048 tok):
+
+    artifact                 size (GiB)   KL mnats   top-1     ppl
+    q2   (affine)              7.832      1426.891   46.07%   16.4349
+    E95  d4/K256               9.612       325.575   76.46%    6.4032
+    E119 d4/K512  packed      10.110       219.710   79.79%      -
+    E119 d4/K1024 packed      10.609       148.470   82.53%      -
+    q3   (affine)             10.963       187.765   79.48%    5.8323
+    E124 d2/K256              13.596        40.327   90.10%    5.2330
+    q4   (affine)             14.094        45.842   89.82%    5.2055
+
+**E119's original pre-registered bar is MET, by the rung nobody expected.**
+The bar was "beat q3 at or below q3's size." K1024 does it: 148.470 mnats vs
+q3's 187.765, at 10.609 GiB vs 10.963 — **21% less damage at 0.35 GiB less**.
+K512 does not (219.710 vs 187.765) but is 0.85 GiB smaller, so it sits on the
+q2-q3 segment rather than above it.
+
+Note the bar was reachable only because packing worked: unpacked these rungs
+were 13.60 GiB each (4.0 bpw regardless of K — III.8), and the comparison was
+meaningless until pack_dense ran. I had restated the bar as unreachable on the
+strength of unpacked sizes; that restatement was wrong and the original bar
+stood.
+
+**Raising K carries on dense.** 325.575 -> 219.710 -> 148.470 as K goes
+256 -> 512 -> 1024 at fixed d=4, monotone, with size rising only 9.6 -> 10.6
+GiB. That is the "raise K first" law reproduced on a true dense model, which
+is what E95 was pre-registered to find out and E119 was built to extend.
+
+**But d beats K at this budget.** E124's d2/K256 at 13.596 GiB reaches 40.327
+mnats — better than every d4 rung by a factor of 3.7, and better than q4. The
+ladder says: spend the budget on a finer subvector before spending it on a
+bigger codebook. That inverts nothing in the laws (bpw = log2(K)/d treats them
+symmetrically) but it is the first dense evidence on which side to buy first.
+
+**ppl not measured for the d4 rungs** — the chain scored KL only. Per FINDINGS
+6c (KL and ppl can rank oppositely, E124) that is now a gap, not a detail, and
+these rungs should not be ranked against q3 on KL alone without it.
+
 ## E125 — RESULT: the fitter is NOT bitwise reproducible, but IS statistically reproducible. E94's numbers are recovered.
 
 Ran because e94b — a FRESH fit of E94's recipe, on bytes that are not E94's
