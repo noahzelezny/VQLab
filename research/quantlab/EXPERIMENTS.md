@@ -6491,6 +6491,54 @@ geometry. It is one point on the d2 line; its exact rate twin (d4/K65536 at
 13.594 GiB) is untested, and the size-matched d-vs-K question stays open
 regardless of what this returns.
 
+## E127 — PRE-REGISTRATION: a clean law-6 specimen on the dense 27B
+
+**Why this exists.** E121 revealed that the 08-16 base was silently rewritten,
+which confounds E101 — its two arms (shipped 2.4 vs flatk256-refit) do not
+share base bytes, so its "lower relerr, worse model" pair may be a base
+difference rather than a codebook one. Relerr is measured against the bf16
+source (unchanged since Aug 8) so that half holds, but end-to-end ppl carries
+the base's non-expert tensors. Untestable now that the 08-16 base is gone.
+E101 was one of two designed law-6 specimens in the paper; E112 survives (both
+arms on the Aug-21 base, byte-identical size, pre-registered rule). This
+rebuilds the lost half, on a different model AND geometry, which the paper
+session rates as worth more than another 397B d4/K256-class pair.
+
+**Design — one knob, identical inputs, arms built minutes apart.**
+Both fits: `fit_dense_vq.py --family qwen3_8 --dim 2 --k 256`, layers 0-63,
+source `Qwen--Qwen3.8-27B` (Aug 8, unchanged), spliced into
+`qwen38-27b-rungs/q4`. The ONLY difference is `--iters`:
+
+    arm A   --iters 10   (the default; this is E124's geometry)
+    arm B   --iters 30
+
+Lloyd descent monotonically decreases distortion on the data it fits, so B is
+EXPECTED to have strictly lower relerr than A. That is the point: it is a knob
+that reliably improves the weight-space objective, which is exactly the
+setting where law 6 asks whether output damage follows.
+
+**No provenance question can reopen this pair:** same source bytes, same base
+bytes, both fit within the hour, both gated, both packed (or not — 8-bit codes
+are byte-aligned, so neither packs; the artifacts ARE their final size), both
+scored end-to-end on the same instrument.
+
+**Pre-registered readings, written before either fit starts:**
+- **INVERSION (the specimen we want):** B has lower relerr AND worse ppl/KL
+  than A. Direct evidence for law 6 on a dense model, replacing what E101 no
+  longer supports.
+- **TRACKS:** B has lower relerr AND better ppl/KL. Law 6 does not bite here —
+  a real result, and it bounds where the law applies rather than refuting it
+  (E102's crossover was measured at low K where centroids are scarce; d2/K256
+  is a much finer fit at 0.084 relerr).
+- **FLAT:** relerr moves and output does not, beyond instrument noise. Also
+  useful, and the weakest of the three.
+- If B does NOT achieve lower relerr than A, the experiment is VOID as a
+  specimen — report that rather than reading the output comparison.
+
+**Scoring:** KL on kl_cache_qwen38 and ppl on referee_corpus 2048 tok, both
+arms, per FINDINGS 6c (report both, always). Refs: q4 45.842 / 5.2055 @
+14.094 GiB; E124 (= arm A's geometry) 40.327 / 5.2330 @ 13.596 GiB.
+
 ## E126 — RESULT: d2/K512 beats q4 on ALL THREE metrics. Misses the pre-registered ppl MARGIN.
 
 Fit on M4 (192 tensors, ZERO collapses), gate/pack/smoke/score on M3.
