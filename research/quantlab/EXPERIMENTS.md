@@ -5963,3 +5963,101 @@ than 4) sits somewhere useful on the bulk/tail curve is untested — but the
 prior after this result should be poor, and the honest read is that the
 objective is not the lever. Anyone revisiting it should propose a different
 lever, not a different exponent.
+
+## E115 — d8 packed speed A/B: ~19% decode tax, and a decode instrument that is bimodal at 100 GiB
+
+Closes STATE's "SPEED UNMEASURED" on E113's packed d8 kernel. Two boxes' worth
+of caveats came off first: matched runtimes on both arms (the disqualifier on
+Noah's original ~17% observation), one process per arm, same corpus (14,836
+real tokens), same peak (101.5/101.6 GiB — the arms are byte-comparable in
+residency), and a fan on the M4 at Noah's insistence so thermal could not be
+the story.
+
+**Raw decode@2048, every sample taken 08-21 evening (M4 Max 128 GB):**
+
+    d8-K16384-packed  100.97 GiB   17.08  17.29  17.34  |  13.75
+    VQ-2.2bpw (ship)  100.90 GiB   21.27  21.23  21.14  21.20  21.27  |  16.92  16.43
+
+**The bar separates two modes, and the mode is NOT a property of the artifact.**
+That is established by `drift_probe.sh`, which ran the SAME artifact four times
+back to back: 21.14, **12.69**, 21.27, 21.20 at 2048 (and 21.35 / **9.37** /
+21.35 / 21.36 at 512). One artifact, one box, one script, a 40% swing. So the
+degraded samples are excluded on a criterion that exists independently of which
+arm produced them — not on which answer they gave.
+
+**Clean-mode ratio: 17.24 / 21.22 = 0.812, a ~19% decode penalty for d8.**
+Corroborated by pairing runs that were adjacent in time (0.817 and 0.837), so
+the number does not depend on the pooling.
+
+**This CONFIRMS E83's device-memory-codebook warning, which had stood
+unrefuted.** d8-K16384 is a 1 MB codebook — it cannot live in threadgroup
+memory the way d4's 32 KB does, and the fused kernel pays for every fetch out
+of device memory. E113 proved the packed path is *correct* (byte-identical
+greedy text); E115 prices it.
+
+**What it means for the 101 GiB rung.** The trade is now stated in full:
+3.0591/2.6728 against the shipped 2.2bpw's 3.1706, for ~19% less decode, at
+essentially the same bytes. That is a real quality win at a real speed cost,
+and it is Noah's call which one belongs at that rung — not a defect in either.
+Noah's framing, recorded because it reframes the choice correctly: someone with
+a 128 GB machine has *no option* other than the ~101 GiB class, so the relevant
+comparison is not "d8 vs a smaller quant," it is "which artifact at the only
+size that fits."
+
+**The instrument finding, which outlives this experiment.** Decode throughput
+at ~100 GiB on this box is bimodal and we cannot currently predict which mode a
+run lands in. Ruled out by measurement, not assumption:
+
+- **Swap.** `swapouts_cumulative` reads 1,343,843 at the start and end of every
+  single run in all three probes — it never moved once. Degraded runs swapped
+  no more than clean ones.
+- **Thermal.** Fan directly on the box at max for the v2 pass; degraded runs
+  still occurred (run 4). Noah, at the box: "it's not even hot."
+- **Storage path.** `path_test.sh` alternated LOCAL/SMB: LOCAL 12.99 and 13.72,
+  SMB 12.49 and 17.71. Both paths produce both modes. The path does NOT
+  predict decode.
+- **Runtime skew.** `model.py` md5 verified identical local vs share
+  (c8190d58…) before the comparison ran.
+
+**Load time is the one thing that IS path-dependent and clean:** LOCAL 19s and
+19s, SMB 42s and 60s. Recorded for completeness only — per Noah, load time is
+"literally irrelevant and only bound by my arbitrary hardware choices," so it
+stays out of cards.
+
+**Standing consequence: quote decode as a RATIO between arms measured in the
+same session, never as an absolute, and never from n=1.** Project law
+"ratios survive, absolutes don't" already said this; E115 is the case that
+shows the absolutes are not merely imprecise but bimodal. Every published card
+speed table to date was produced by the weaker method. That is a hole in the
+instrument, not a defect in any artifact — but it is the reason no speed number
+should be added to a card until the mode question is understood.
+
+## E116 — the SMB write path is clean on a real-artifact round-trip
+
+Runs the test STATE listed as pending, against the write-time corruption shape
+(gemma d2-K512: clean fit log, corrupt bytes on disk).
+
+**Method:** five real artifact shards, 16 GiB total — md5 on M4 local disk,
+copy to the share, md5 read back. Not a synthetic payload; the actual bytes and
+the actual path a fit writes through.
+
+    5 shards, 0 mismatches   (18:23:18 -> 18:25:48)
+
+**Verdict, scoped exactly as it was scoped before the result existed: this
+exonerates the SMB write path on this sample. It does not exonerate the box,
+and it does not explain E95.** E95 was proven compute-time from its own fit
+log — L60 up_proj printed relerr 1.0000 inside a 0.3127–1.0000 range with one
+tensor at the bar, i.e. the corruption existed before any byte was written.
+Pre-registering that scope is what keeps a clean result from being read as
+"the M4 is fine."
+
+**What survives:** the two failure shapes stay separate, and both still need
+their own catcher. `--relerr-abort` (129f66d) covers compute-time. The
+post-hoc outlier gate, run on a different box, is the only thing that covers
+write-time — and a clean round-trip does not make it optional, because one
+clean sample is not a guarantee about a rare event.
+
+**What it kills:** "route all M4 fits through local disk." STATE already
+flagged that as not-recommended pending this test — one supporting incident,
+one contradicting, and a permanent tax on every fit. The round-trip removes the
+remaining reason to pay it.

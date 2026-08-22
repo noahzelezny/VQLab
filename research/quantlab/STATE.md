@@ -1,4 +1,4 @@
-# STATE (2026-08-21 ~18:00) — mechanism night
+# STATE (2026-08-21 ~18:35) — mechanism night
 
 ## WHERE THINGS STAND
 
@@ -26,9 +26,22 @@ for it FAILED.** Both are results; the second is a real negative, not a setback.
 - **E113: packed d8 kernel WORKS.** Bit-identical to the unpacked d8 kernel on
   synthetic data, and byte-identical greedy text on the real artifact
   ('Paris.\nA. True\nB' both ways). Unlocks 3.0591/2.6728 @ ~101 GiB vs
-  shipped 2.2's 3.1706. **SPEED UNMEASURED** — Noah saw ~17% decode tax but
-  that run is disqualified twice (contended share; mismatched runtimes between
-  arms). E83's device-memory-codebook warning stands unrefuted.
+  shipped 2.2's 3.1706.
+- **E115: speed MEASURED — ~19% decode tax.** Clean-mode decode@2048 17.24 vs
+  21.22 tok/s, ratio **0.812**, matched runtimes (md5-identical model.py),
+  fan on the box, corroborated by adjacent-run pairings (0.817/0.837).
+  **Confirms E83's device-memory-codebook warning** — d8-K16384's 1 MB
+  codebook cannot sit in threadgroup memory. So the 101 GiB rung is a real
+  quality win at a real speed cost, and which artifact belongs there is Noah's
+  call. **Instrument caveat: decode at ~100 GiB is BIMODAL** — the same
+  artifact ran 21.14 / 12.69 / 21.27 / 21.20. Swap (swapouts never moved off
+  1,343,843), thermal, and storage path are all ruled out by measurement.
+  Quote ratios from one session, never absolutes, never n=1.
+- **E116: SMB write path CLEAN.** Five real shards, 16 GiB, md5 local -> share
+  -> back, 0 mismatches. Exonerates the write path on this sample; does NOT
+  exonerate the box and does NOT explain E95 (compute-time, proven from its own
+  fit log). Kills "route M4 fits through local disk" — the last reason to pay
+  that permanent tax is gone. The post-hoc outlier gate stays mandatory.
 - **E114 (running, M3): dense 27B refit.** The first dense artifact was
   DEFECTIVE — L60 up_proj had codebook, codes AND scales all exactly zero
   against a healthy source. Fitter printed relerr 1.0000 and carried on
@@ -56,15 +69,15 @@ for it FAILED.** Both are results; the second is a real negative, not a setback.
   at its ACTUAL size (9.61 GiB, between q2's 7.83 and q3's 10.96). NOT
   size-matched to q4 — the readings are the ablation vs q4 and the ladder
   placement, never "VQ beats 4-bit".
-- **d8 speed A/B, properly** (M4). Needs a quiet share and matched runtimes on
-  both arms. Parity within ~5% means the 101 GiB rung improves at no speed
-  cost; below 0.75x is a measured tradeoff and cheap-shallow stays the product.
-- **Peer's SMB round-trip test.** Write a large payload M4 -> share, read back,
-  compare hashes. Decides the WRITE-time corruption shape (gemma d2-K512: clean
-  fit log, corrupt disk). Does NOT explain E95, which was compute-time.
-- **NOT recommended: routing M4 fits through local disk.** A permanent tax on
-  every fit, supported by one incident and contradicted by another. Run the
-  round-trip test first.
+- **Score E94** (35B-K8192 refresh, fit done 12:01, 17.7 GiB on the Thunderbay
+  SSD, 120 tensors mean relerr 0.1323). Waiting on the M3.
+- **Understand the bimodal decode instrument** before any speed number goes on
+  any card. Every published card's speed table was produced by the method E115
+  just showed to be unreliable. This is a hole in the instrument, not a defect
+  in any artifact — but it blocks speed claims.
+- **DONE, was pending here:** d8 speed A/B (E115) and the SMB round-trip
+  (E116). "Route M4 fits through local disk" is dead — E116 removed the
+  remaining reason.
 
 ## THE TWO FAILURE SHAPES (keep these separate)
 
@@ -80,7 +93,7 @@ for it FAILED.** Both are results; the second is a real negative, not a setback.
 - `PROCESS.md` — NEW. Family-onboarding pass (profile geometry, sweep init,
   THEN fit), the new-fitter guard list, box policy, and the standing gates.
   This is the artifact Noah asked for toward shaping MoEMash practically.
-- `EXPERIMENTS.md` — chronology through E114.
+- `EXPERIMENTS.md` — chronology through E116.
 
 ## FIXES THAT LANDED TODAY AND NOW FIRE AUTOMATICALLY
 

@@ -144,6 +144,15 @@ Last updated: 2026-08-21 (through E110).
 4. Speed numbers: n≥3 with scatter, prompt length stated, one process per
    arm, never on a contended box, never on a model larger than RAM
    (streaming referee is fine; speed tests are not).
+   **And quote a RATIO between arms measured in the same session, never an
+   absolute.** At ~100 GiB the decode instrument is BIMODAL: the same
+   artifact, same box, same script, back to back, gave 21.14 / 12.69 / 21.27
+   / 21.20 tok/s. Swap (swapouts never moved), thermal (fan on the box), and
+   storage path (both paths produce both modes) are ruled out by measurement
+   — the cause is not yet known, which is exactly why absolutes are unsafe.
+   Excluding a degraded sample is only legitimate when the mode was shown to
+   exist independently of which arm produced it. Load time IS cleanly
+   path-dependent (19s local vs 42-60s SMB) and belongs in no card. [E115]
 5. Every new gate must FAIL on a known-bad input AND PASS on a known-good
    before it is trusted. (A gate that always fails is one nobody reads.)
 6. Report nothing predicted as measured. Label ESTIMATE vs MEASURED in every
