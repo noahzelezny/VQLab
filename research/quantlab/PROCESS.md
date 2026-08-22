@@ -64,6 +64,35 @@ first thing to try.
 
 ---
 
+## Writing a new fitter
+
+**Start from the guard list, not from a working fit.** `fit_dense_vq.py` was
+generalised from `fit_e4b_vq.py` by copying its structure — and silently did
+not inherit `--relerr-abort`, which `vq_397b_codes.py` had carried for weeks.
+Consequence, measured 2026-08-21: the dense 27B shipped one tensor whose
+codebook, codes and scales were all exactly zero against a healthy source. The
+fitter computed relerr 1.0000, printed it, and carried on. It was invisible
+until the outlier gate learned to read dense artifacts hours later.
+
+Minimum guard list for any new fitter:
+- `--relerr-abort` with a sane default, and a refit-then-fail path
+- per-tensor relerr printed AND checked (printing is not checking)
+- code dtype chosen from K, never hardcoded (uint8 at K<=256, else uint16)
+- output written to a NEW directory, never in place (fits resume)
+- index `metadata.total_size` computed from what was written, never copied
+
+## Box policy
+
+**M4 has produced four known tensor-collapse incidents; M3 has produced zero.**
+08-15: qwen tail30 (5 tensors, one at relerr 1.0000), gemma d2-K512 (4 tensors
+0.54-0.99, with a HEALTHY fit log), qwen d2-K64 (3 tensors >0.5). 08-21: the
+dense 27B L60 up_proj at relerr 1.0000. The gemma case is the important one —
+the fit log read clean while the WRITTEN artifact was corrupt — so the abort is
+not sufficient and the post-hoc gate is the real control.
+
+Standing policy, unchanged since 08-15: **every M4-fitted artifact is verified
+on M3 before any number from it is believed**, and a repair refit goes to M3.
+
 ## Standing gates, once artifacts exist
 
 1. `verify_artifact.py --outlier 3.0` — relative, catches collapsed tensors.
