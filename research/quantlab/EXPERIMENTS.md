@@ -7759,3 +7759,50 @@ structurally cannot see it.
 Order matters: e94b is scored LAST but is R2's comparator, so if it fails its
 gate, R2's MET/MISSED verdict is withdrawn rather than reported against a
 comparator that did not pass check (III.3).
+
+## E133 — PRE-REGISTRATION: a 27B q6 comparator, to extend claim 1's fence to 6 bpw
+
+Requested by the paper session, which reports the request originates with Noah.
+**That origin is UNCONFIRMED by me — it arrived as a peer relaying him, not
+from Noah in my session — and this entry is registered but NOT run until he
+confirms.** It is queued LAST, below E130 arm 2, R2 and packed e94b (E132).
+Registered now because a reading must precede its number regardless of when
+the run happens.
+
+**Why it exists.** Our highest matched-class win is E126 d2/K512 at 4.5 bpw vs
+q4. E128C's d2/K4096 sits at 6.0 bpw with **no affine comparator at its rate**
+— q4 (14.094 GiB) is smaller, q8 (26.341) is bigger — so the fence stops at
+4.5 bpw and everything above is "unmeasured for lack of comparators."
+
+**Build:** uniform 6-bit, `q_group_size=64`, same `mlx_lm.convert` path that
+produced q3 and q4 (verified: q3 and q4 carry a single top-level bits entry
+and NO per-module overrides; q8 does carry them — 401 modules at 8 bits — so
+q8 is genuinely 8-bit and the R3 bar stands). Scored on the SAME instrument as
+every other rung: `kl_cache_qwen38` + the ppl block.
+
+**Projected size 20.36 GiB**, from the measured q3->q4 slope of 3.131 GiB/bit.
+E128C is 17.583 GiB MEASURED packed, so E128C would be **2.77 GiB smaller**.
+Assert the MEASURED size of q6 when it exists; the projection is not a size.
+
+**REGISTERED READINGS, before the number exists:**
+
+    E128C beats q6 on KL at 2.77 GiB smaller
+        -> the fence extends to 6.0 bpw with a genuine matched-class row.
+    q6 beats E128C
+        -> the VQ/affine crossover lies BETWEEN 4.5 and 6.0 bpw, and the paper
+           reports the BRACKET. This is the more interesting outcome and is
+           NOT a failure; it bounds where the method stops paying.
+    INSIDE THE FLOOR on ppl
+        -> report KL only for the ranking and say so. Every ppl difference on
+           the 27B d2 ladder is already inside 0.0447 (E128C RESULT), so a ppl
+           tie here is EXPECTED and must not be read as a tie overall.
+
+**The floor caveat, per III.12:** 0.0447 / 2.085 mnats is 27B **d2/K256**.
+q6 is affine, not VQ, and E128C is K4096. Any "inside the floor" call here is
+against an INHERITED floor and must be labelled so. An affine rung has no seed
+noise at all (no k-means, deterministic), so the floor applies to the VQ arm's
+draw only — which makes a near-tie harder to interpret, not easier.
+
+**What this does NOT license.** It says nothing about R3: E128C at 6.0 bpw
+scored KL 26.709 against the q8 bar of 1.641 and that verdict is closed
+(E128 run C). A q6 win or loss changes the FENCE of claim 1, not the wall.
