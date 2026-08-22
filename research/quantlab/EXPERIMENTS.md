@@ -7697,3 +7697,65 @@ deterministic and arm 1's gate passed with 0 skipped, so its numbers stand,
 but **the guard was written against the fit when what needed protecting was
 the whole chain.** Nobody edited anything; the arming was just narrower than
 the job.
+
+## E132 — PRE-REGISTRATION: the M3 scoring queue (arm 2, R2, packed e94b)
+
+Written BEFORE any of the three numbers exist. Arm 2 is fitting as this is
+committed; R2 and packed e94b have not been touched. Registered because the
+paper session is holding a claim on two of these and "decide how to read it
+when it lands" is how a reading gets chosen to suit the result.
+
+Strictly sequential on the M3, in this order: E130 arm 2 -> R2 -> packed e94b.
+
+### 1. E130 arm 2 (d4/K4096, 3.00 bpw) — the rate twin
+
+Branches UNCHANGED from d05d111; transcribed at 0df55aa. d2 wins / d4 wins /
+INSIDE THE FLOOR -> indistinguishable.
+**Addition, per III.12 (121f639), which is a FLAG not a change of branch:**
+the floor (KL 2.085 mnats / ppl 0.0447) is 27B **d2/K256** and neither arm is
+that geometry. It is INHERITED. If the arms land inside it, the honest report
+is "indistinguishable against an inherited floor", not "indistinguishable" —
+and the follow-up is one extra fit at one of the two geometries, not a claim.
+Report KL AND ppl (6c). Assert the MEASURED PACKED size (III.8).
+
+**What this does and does not license.** It answers d-vs-K at 3.00 bpw ONLY.
+It does NOT establish anything at R1's 4.00 bpw, and per law 10 (d4 beats d2
+by ~12% KL, one pair, at 2.00 bpw) a d4 win here would be a SECOND pair, not a
+settled law. A d4 win is an R1/R2 lever, NOT an R3 one: d4 tops out at 4.00
+bpw even at K65536, and E128 run C closed R3 by arithmetic (26.709 mnats
+against a 1.641 bar, slope flattening to x0.868/bpw).
+
+### 2. R2 (35B d4/K16384, 15.783 GiB MEASURED packed)
+
+Branches as the M4 session registered them at 4f676b7, and I will report
+against those, not an easier bar:
+    MET          KL < 53.022 (beats e94b, our own standing rung) at <= 19.0 GiB
+    MISSED       KL >= 53.022
+    INCONCLUSIVE size miss — if packed > 19.0 GiB it is not answering R2's
+                 question and its KL is not discussed as though it were
+**Registered now, because it is foreseeable and would otherwise be improvised:**
+our only floor is 27B d2/K256 and R2 is 35B d4/K16384. It does not transfer.
+If R2 lands NEAR 53.022, the reading is **"inside an inherited floor"** — NOT
+MET and NOT MISSED. Neither this session nor the M4's gets to pick the
+flattering side of an unmeasured floor.
+
+### 3. Packed e94b (d4/K8192, 14.838 GiB MEASURED) — closes a split provenance
+
+The paper's 35B row currently pairs a size from the PACKED artifact with
+KL 53.022 measured on the UNPACKED one. The packed artifact has had NO outlier
+gate and NO III.11 smoke — nothing in any log mentions it. E82 is the
+precedent: a corrupt artifact scores plausibly, and the fitter's own log
+structurally cannot see it.
+    REPRODUCES 53.022 to reporting precision -> the split provenance closes;
+                cite the packed artifact for BOTH halves of the row.
+    DIVERGES -> the row stays down and this becomes its own entry. pack_dense
+                was verified bit-exact on the 397B chain (E113), so a 35B
+                divergence is a real finding about pack_dense or about this
+                artifact — worth more than the row it would have supported.
+    GATE OR SMOKE FAILS -> the comparator is not release-eligible and R2 has
+                no valid comparator; report that and stop, do not substitute
+                the unpacked number to keep the comparison alive.
+
+Order matters: e94b is scored LAST but is R2's comparator, so if it fails its
+gate, R2's MET/MISSED verdict is withdrawn rather than reported against a
+comparator that did not pass check (III.3).
