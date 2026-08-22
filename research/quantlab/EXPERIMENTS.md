@@ -6553,6 +6553,22 @@ after. The four registered branches are unchanged; C only calibrates them.
 Registered before any arm was scored, so the floor cannot be chosen to suit the
 effect.
 
+**CONTINGENCY, registered 08-22 00:55 before any arm was scored — so that a
+second attempt cannot be designed around a result already seen.** If |A - C|
+swallows the A-vs-B effect, the fix is a BIGGER KNOB, not more arms: Lloyd may
+have largely converged by 10 iterations, making `--iters 10 vs 30` an
+underpowered lever. `--iters 3 vs 30` (or any setting that demonstrably moves
+relerr well outside the floor) keeps the identical one-knob design with a
+stronger signal and REUSES arm C's floor unchanged. Only run it if the floor
+measurement says the first attempt was underpowered — not because the first
+attempt gave an unwelcome answer.
+
+**And "the seed-noise floor at this geometry exceeds the effect we tried to
+measure" is a REPORTABLE RESULT, not a failed experiment** (agreed with the
+paper session in advance). It would mean law 6's designed-specimen evidence
+rests on E112 alone, stated as one specimen — narrower and honest, and better
+than a within-noise inversion doing load-bearing work in a paper.
+
 **Scoring:** KL on kl_cache_qwen38 and ppl on referee_corpus 2048 tok, all
 three arms, per FINDINGS 6c (report both, always). Refs: q4 45.842 / 5.2055 @
 14.094 GiB; E124 (= arm A's geometry) 40.327 / 5.2330 @ 13.596 GiB.
