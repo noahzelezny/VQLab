@@ -36,9 +36,20 @@ args = ap.parse_args()
 
 SRC = pathlib.Path(args.src)
 idx = json.load(open(SRC / "model.safetensors.index.json"))["weight_map"]
-name = (f"model.language_model.layers.{args.layer}.mlp.switch_mlp."
-        f"{args.proj}.weight")
+# 397B source is HF layout: key is mlp.experts.<key> with NO .weight suffix,
+# and gate/up live FUSED in one [E, 2I, H] stack taken as halves along OUT.
+# (The first version of this probe guessed `switch_mlp.<proj>.weight` — the
+# ARTIFACT convention, not the SOURCE one — and died on KeyError before doing
+# any work. Read FAMILY["qwen3_5"] in vq_397b_codes.py, do not guess.)
+_SUB = {"gate_proj": ("gate_up_proj", 0),
+        "up_proj": ("gate_up_proj", 1),
+        "down_proj": ("down_proj", None)}
+_key, _half = _SUB[args.proj]
+name = f"model.language_model.layers.{args.layer}.mlp.experts.{_key}"
 T = mx.load(str(SRC / idx[name]))[name][:args.experts].astype(mx.float32)
+if _half is not None:
+    _h = T.shape[1] // 2
+    T = T[:, _h * _half:_h * (_half + 1), :]
 print(f"{name}  experts[:{args.experts}] {T.shape}", flush=True)
 
 # normalize exactly as the fitter does: fp16 max-abs per group of G along `in`
