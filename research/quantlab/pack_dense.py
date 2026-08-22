@@ -35,7 +35,18 @@ targets = {m + ".codes": m for m in list(vq_l) + list(vq_e)}
 new_map, shard_no = {}, 0
 packed_n = skipped = 0
 for sh in sorted(set(idx.values())):
-    data = dict(mx.load(str(SRC / sh)))
+    # MATERIALISE ON THE CPU STREAM (FINDINGS IV.1). mx.load is LAZY, and
+    # every tensor that is NOT packed below passes through still-lazy — its
+    # read is then paid inside a GPU command buffer when save_safetensors
+    # forces evaluation, which can silently yield ZEROS. That is the exact
+    # mechanism confirmed in E123 (fitter, read returned zeros to one consumer
+    # and correct bytes to the next) and the cause of the L60 zeroed splice in
+    # build_dense_vq (013d2bb); pack_artifact had the same defect. This is the
+    # THIRD file in the family, found 2026-08-21 before its first use on a
+    # real dense rung. Do NOT remove the eval.
+    with mx.stream(mx.cpu):
+        data = dict(mx.load(str(SRC / sh)))
+        mx.eval(list(data.values()))
     for k in list(data):
         m = targets.get(k)
         if m is None:
@@ -58,6 +69,18 @@ for sh in sorted(set(idx.values())):
     shard_no += 1
     name = f"model-{shard_no:05d}.safetensors"
     mx.save_safetensors(str(OUT / name), data)
+    # Read back what we just wrote and refuse all-zero tensors. The write-side
+    # twin of the assertion above; build_dense_vq carries the same check.
+    with mx.stream(mx.cpu):
+        back = mx.load(str(OUT / name))
+        mx.eval(list(back.values()))
+    zeroed = [k for k, v in back.items()
+              if v.size and bool(mx.all(v == 0))]
+    if zeroed:
+        raise SystemExit(f"FATAL: {name} has {len(zeroed)} all-zero tensor(s) "
+                         f"after write, first={zeroed[0]} — do not ship this "
+                         f"artifact.")
+    del back
     for k in data:
         new_map[k] = name
     del data
