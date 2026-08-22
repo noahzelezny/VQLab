@@ -5867,3 +5867,47 @@ a parity result reads as a discrepancy to explain rather than a quiet
 contradiction. **E83's warning — device-memory codebook, 256 KB against a
 32 KB threadgroup limit, two dependent half4 loads per code with no in-thread
 reuse — remains unrefuted.**
+
+## E112 — PRE-REGISTERED READING RULE (written before the scores exist)
+
+Artifact: `rotlab--397B-flatk256-bodytailw4`. Body-only magnitude-weighted
+k-means (`--tail-weight-pow 4 --tail-weight-from 20`), K256/d4, layers 0-56.
+The first artifact built from tonight's mechanism (E102/E107-E110): body layers
+are sub-Gaussian, so plain Lloyd sells the tail to buy the bulk; weighting the
+centroid update by subvector weight-space norm should buy it back. Shallow
+layers are excluded because they are heavy-tailed and weighting destroys them
+(E106: L00 0.118 -> 0.487).
+
+**Fit + gate, already measured:** 3168s, mean relerr 0.3469 (vs the K256
+refit's ~0.3116), outlier gate PASS at median 0.3688 x3.0 -> bar 1.1065. The
++0.035 mean is THE TRADE, pre-registered as such before the gate ran; the
+relative gate is the arbiter and it passed clean.
+
+**Comparators — both at byte-identical 111.617 GiB and identical geometry:**
+
+    flatk256-refit   2.8057 / 2.6447   PRIMARY — same tool, same vintage,
+                                       differs from this ONLY by the weighting
+    shipped VQ-2.4   2.7655 / 2.6383   SHIP BAR — the artifact in the wild
+
+**Decision rule, fixed now:**
+- **CONFIRMED** if wikitext < 2.8057 AND code < 2.6447, both by >= 0.005.
+  The mechanism converts to end-to-end quality.
+- **FULLY CONFIRMED** if it also reaches <= 2.7655 / <= 2.6383 — i.e. the
+  weighting does not merely beat the refit, it erases the E92 regression and
+  matches or beats what is shipped.
+- **FALSIFIED** if >= 2.8057 on either corpus. The bulk/tail trade is real and
+  measurable in reconstruction error (E102/E109) but is NOT recoverable by
+  reweighting the k-means objective. That is a publishable negative and it
+  costs one fit.
+- **INCONCLUSIVE** if split (better on one corpus, worse on the other).
+  Recorded as inconclusive, NOT spun as partial success.
+
+**Size guard:** must land at 111.617 GiB. Anything else means the geometry
+drifted and the comparison is void regardless of the ppl.
+
+**What a win would and would NOT license.** A win is a K256/397B result. It
+would NOT establish the recipe at other K or other families — the mechanism
+predicts the gain shrinks as K rises (more centroids, less competition), and
+predicts the LARGEST gain at K128, which is the 101 GiB rung. Those are
+separate matched pairs and each needs its own, per the standing rule that a
+claim about a TOOL needs pairs at more than one geometry made BEFORE the claim.
