@@ -1,0 +1,10 @@
+{
+ "artifact": "/private/tmp/claude-501/-Users-noahzelezny-Documents-AgenicAI-quantlab/584e7754-a2c2-4609-b4dd-5329d609e487/scratchpad/manifest_test",
+ "shards": {
+  "model-00001.safetensors": {
+   "bytes": 16474,
+   "mtime": 1787383811,
+   "head_sha256": "b95775b372263d51eb751fa148a3872aa7c7950cc4acae068eed4184e880bcb6"
+  }
+ }
+}

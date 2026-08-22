@@ -1,0 +1,20 @@
+{
+ "artifact": "/Volumes/Thunderbay SSD/Exo Models/e94b-35b-K8192-refit-0821",
+ "shards": {
+  "model-00001-of-00003.safetensors": {
+   "bytes": 8424246439,
+   "mtime": 1787332481,
+   "head_sha256": "0bf70d889fd85dad5dfa68aeccbe3a4e1921e54b739daa68bb2e72f00d26df62"
+  },
+  "model-00002-of-00003.safetensors": {
+   "bytes": 8777657556,
+   "mtime": 1787338011,
+   "head_sha256": "eec9cc1a94715bde50c2955d255fc14936656e8f91943c6540261879bd08a23e"
+  },
+  "model-00003-of-00003.safetensors": {
+   "bytes": 1750513626,
+   "mtime": 1787338904,
+   "head_sha256": "bc53b6450ad54bf14904c632c3a8736d4213f9b6059e38663ef08eb10bd251d5"
+  }
+ }
+}

@@ -152,3 +152,22 @@ lives only in a document is not a control.
     M3 = 96 GiB    M4 = 128 GiB    exo pair = both boxes
     d8-K16384 (100.97 GiB)        -> M4 or exo
     flatk2048-refit (143.68 GiB)  -> exo ONLY, fits neither box alone
+
+
+## Provenance: stamp what you score
+
+`./artifact_manifest.py write <dir>` immediately after an artifact is gated,
+and `check` before citing any number from it. Manifests live in `manifests/`,
+outside the artifact, so stamping cannot alter what it describes.
+
+This exists because on 08-21 two artifacts were silently overwritten in place
+and BOTH were caught by chance mtime checks rather than by anything failing:
+E94's scored 35B artifact (a refit aimed at its own --out path — its published
+number described bytes that no longer existed), and the 397B base
+struct6-tail3x3 (rewritten three days AFTER the artifact built from it, which
+invalidated every 397B refit comparison since and was only found after four
+in-algorithm explanations had been falsified).
+
+NOT done, and it is Noah's call, not ours: `chmod -R a-w` on scored artifacts.
+Making published bytes read-only is a sweeping, outward-facing change and it
+waits for him.

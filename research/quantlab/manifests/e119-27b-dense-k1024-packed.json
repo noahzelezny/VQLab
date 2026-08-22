@@ -1,0 +1,25 @@
+{
+ "artifact": "/Volumes/Thunderbay SSD/Exo Models/e119-27b-dense-k1024-packed",
+ "shards": {
+  "model-00001.safetensors": {
+   "bytes": 2119658552,
+   "mtime": 1787379656,
+   "head_sha256": "58cf0d3c7fb99e946b778c0b0f0392a22f96e9032a9e855252a6fd093c5f60bf"
+  },
+  "model-00002.safetensors": {
+   "bytes": 1594027965,
+   "mtime": 1787379658,
+   "head_sha256": "ceac185f3ce9531ef3eb7947dfca681ca656e7dea080fa3253343617a27a4d56"
+  },
+  "model-00003.safetensors": {
+   "bytes": 1793355260,
+   "mtime": 1787379660,
+   "head_sha256": "f9a25d62f630c8f57535557510e8a0724b3451b2ec0d8214b193944aac51f86a"
+  },
+  "model-00004.safetensors": {
+   "bytes": 5884157878,
+   "mtime": 1787379695,
+   "head_sha256": "9e922297c407e84b9397aa8473e3f409511fdfc8856a23c4d550f8b0db2a4ca9"
+  }
+ }
+}
