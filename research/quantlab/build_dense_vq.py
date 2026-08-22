@@ -97,7 +97,27 @@ if args.dry_run:
     raise SystemExit(0)
 
 OUT.mkdir(parents=True, exist_ok=True)
-mlp_w = mx.load(str(MLP / "model-00001-of-00001.safetensors"))
+# CPU-STREAM EAGER LOAD, per FINDINGS IV.1. This read used to stay LAZY from
+# here until save_safetensors() forced it ~1300 tensors later, across the
+# whole base-carry loop and its mx.clear_cache() — i.e. the deferred read was
+# paid inside a GPU command buffer under memory pressure. On 2026-08-21 that
+# produced an artifact whose L60 up_proj codes/scales/codebook were ALL ZERO
+# while the source file was provably clean (every one of its 576 tensors
+# verified non-zero when read eagerly), and a rebuild from identical inputs
+# came out correct — the signature of a transient deferred read, not of a bad
+# disk. Same disease the fitter hits on SMB sources. eval INSIDE the block:
+# creation-binding alone is measured-insufficient [E70 add. 5-6].
+with mx.stream(mx.cpu):
+    mlp_w = mx.load(str(MLP / "model-00001-of-00001.safetensors"))
+    mx.eval(list(mlp_w.values()))
+# Post-read assertion: a silently-zeroed read must fail HERE, loudly, not
+# reach disk and wait for the post-hoc gate to notice.
+_dead = [k for k, v in mlp_w.items()
+         if float(mx.max(mx.abs(v.astype(mx.float32))).item()) == 0.0]
+if _dead:
+    raise SystemExit(f"FAIL: {len(_dead)} tensors read as ALL ZERO from "
+                     f"{MLP.name} (e.g. {_dead[:3]}). Deferred-read fault or "
+                     f"a corrupt fit output — do not write an artifact.")
 
 # ---- carry through everything we are NOT replacing, shard by shard
 new_map, shard_no, carried = {}, 0, 0
@@ -142,6 +162,17 @@ for k, v in mlp_w.items():
 shard_no += 1
 name = f"model-{shard_no:05d}.safetensors"
 mx.save_safetensors(str(OUT / name), mlp_2d)
+# READ-BACK ZERO SCAN. The gate catches this later, but the gate is a
+# separate invocation someone can forget; this makes the builder itself
+# refuse to emit a zeroed splice.
+_rb = mx.load(str(OUT / name))
+_bad = [k for k, v in _rb.items()
+        if float(mx.max(mx.abs(v.astype(mx.float32))).item()) == 0.0]
+if _bad:
+    raise SystemExit(f"FAIL: {len(_bad)} tensors are ALL ZERO in the shard "
+                     f"just written (e.g. {_bad[:3]}). Write-side fault — "
+                     f"artifact is incomplete, do not gate or score it.")
+del _rb
 for k in mlp_2d:
     new_map[k] = name
 print(f"spliced {len(mlp_2d)} VQ mlp tensors (renamed to base convention, "
