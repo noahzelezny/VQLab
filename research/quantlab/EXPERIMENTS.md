@@ -7490,3 +7490,84 @@ one that did not, but the collapse fired at only 3.48 GiB active / 7.12 GiB
 peak, which is not obvious memory pressure, and a 0/240 null at p=0.068 is
 weak evidence for anything. The read fault is confirmed; its precise trigger
 is not, and no fix depends on knowing it.
+
+## E130 — PRE-REGISTRATION: the d-vs-K rate twin at 3.00 bpw (armed, M3)
+
+**Recorded here 08-22 by the successor session. This is a TRANSCRIPTION, not
+a new pre-registration** — the text below was written and committed BEFORE
+either arm ran, in `run_e130_rate_twin.sh` (d05d111, 10:20 PDT). It is ported
+because it existed only in the script: HANDOFF §8 claimed "EXPERIMENTS.md
+through E130" and that was wrong, which matters because the paper session
+cites only committed EXPERIMENTS.md entries and therefore could not see it.
+No branch or threshold has been altered in transcription.
+
+Both arms are 11.60 GiB by construction: 6 bits per 2 weights and 12 bits per
+4 weights are the SAME RATE. This is the experiment that licenses (or kills)
+any claim about which of d or K is the better place to spend a fixed budget on
+a dense model.
+
+The exact twin of R1 would be d2/K256 vs d4/K65536, but K65536 is ~40-60h and
+gives only 340 subvectors per centroid; this band is ~4h and is not
+sample-starved. **Band caveat is explicit: it answers d-vs-K at 3.00 bpw, NOT
+at R1's 4.00 bpw.**
+
+**Registered readings, before either arm runs:**
+
+    d2 WINS  -> spending on a finer subvector beats a bigger codebook at fixed
+                rate on dense. Supports the R1/R2 geometry choice by analogy,
+                one band down; does NOT prove it at 4.00 bpw.
+    d4 WINS  -> we have been leaving quality on the table at R1/R2, and the
+                expensive K65536 twin becomes worth its 40-60h.
+    INSIDE THE FLOOR -> report as indistinguishable. The 27B ppl floor is
+                0.0447 and the KL floor 2.085 mnats (6f, n=3). A difference
+                smaller than that is NOT a result in either direction.
+
+Waits for run C rather than contending — two fits on one box invalidated a
+timing measurement earlier today.
+
+## E131 — RESULT: the 101 GiB swap is PUBLISHED, and the progress bar lied for 74 minutes
+
+`TheDrainFlorist/Qwen3.5-397B-A17B-VQ-2.2bpw` now serves
+`rotlab--397B-d8K16384-packed` (d8/K16384, 100.99 GiB / 108.4 GB). Same repo
+deliberately, to preserve download metrics. v1 remains reachable and complete
+at `revision=4554635165011f67e8166fd94d4bcc8cbf91401c` (08-19), which is the
+last commit before the swap began.
+
+**Verified three ways, none of which was the progress display:**
+
+    size diff, repo tree vs local     38/38 files, 0 mismatches
+    sha256 vs remote LFS oid          MATCH on 3 previously-stale shards
+    rendered card fetched back        byte-identical to local, all 10 sections
+
+**THE OPERATIONAL FINDING, and it is a gate we do not own.** The upload spent
+74 minutes reporting healthy progress while committing NOTHING. Two residue
+files (`model.safetensors.index.json.pre_total_size`, `config.json.bak`) were
+moved out of the artifact at ~10:5x, AFTER `upload-large-folder` registered
+them in its work list at 10:44. Every commit batch containing either failed
+wholesale; the FIRST attempt already failed ("40 files at once"). 20 files
+committed via shrunken retry batches that happened to exclude them; the
+remaining 18 were blocked indefinitely **despite their bytes being fully
+pre-uploaded** (`pre-uploaded: 29/29 (108.4G/108.4G)`). The log reached 5.9 GB
+of 15,376,010 identical failure lines and is distilled to
+`logs_live_upload_101.SUMMARY.log`.
+
+Fix: kill, remove the stale `.lock`/`.metadata` pairs for BOTH phantoms, relaunch.
+Committed 38/38 in under 2 minutes, 0 failures. Nothing was re-transferred.
+
+**Two rules this earns:**
+
+1. **A file-list diff is NOT a publish verification when you are REPLACING a
+   revision.** All 38 filenames were present remotely the entire time the
+   upload was stuck, because the previous revision had the same 38 names. The
+   check that caught it was SIZE; the check that proved it was sha256 against
+   the remote LFS oid. This is III.2's "name the instrument" applied to
+   publishing: presence is not content.
+2. **Do not mutate an artifact directory while a transfer against it is
+   running.** The uploader snapshots its work list at launch and cannot
+   recover from a file disappearing underneath it — it retries forever rather
+   than failing. Clean residue BEFORE launching, or kill first and then clean.
+
+**Not re-run, deliberately:** the task benchmarks. Noah declined ("I don't
+want to rerun it. Maybe later"). The card's benchmark row is relabelled
+`(v1 weights)` with a note that v2 has not been re-evaluated. v1's task
+numbers are NOT presented as v2's.

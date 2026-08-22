@@ -1,4 +1,89 @@
-# STATE (2026-08-21 ~18:35) — mechanism night
+# STATE (2026-08-22 ~13:25) — the publish landed; R3 is the open question
+
+## WHERE THINGS STAND
+
+**Headline: the 101 GiB swap is PUBLISHED and verified (E131).**
+`TheDrainFlorist/Qwen3.5-397B-A17B-VQ-2.2bpw` now serves the d8/K16384 build.
+v1 stays complete and reachable at `revision=4554635…` (08-19). Verified by
+size diff (38/38, 0 mismatches), sha256 against the remote LFS oid on 3
+shards, and the rendered card fetched back byte-identical with all 10 sections
+intact. **The progress display reported healthy progress for 74 minutes while
+committing nothing** — two residue files were moved out of the artifact after
+the uploader registered them, and every commit batch containing them failed
+wholesale. Full account and the two rules it earns: E131.
+
+**Task benchmarks were NOT re-run** (Noah declined). The card's benchmark row
+is relabelled `(v1 weights)`; v1 numbers are not presented as v2's.
+
+## RUNNING NOW (strictly sequential — concurrency killed E120/E121)
+
+    M3  80135  fit_dense_vq d2/K4096 (E128 run C)  L52 of 63, relerr 0.0205
+    M3  81035  run_e130_rate_twin.sh               ARMED, waits on run C
+    M4         e128-35b-d4K16384 (R2)              ~L19-L26 (peer session)
+    M4         E129 vintage test                   QUEUED behind R2
+
+## THE LADDER (E128)
+
+    27B  R1 E124 d2/K256  13.596 GiB  KL 40.327   MET
+         R2 E126 d2/K512  14.592 GiB  KL 33.095   MET
+         R3 run C in flight — d2/K4096, 17.580 GiB packed (CONFIRMED vs 6e)
+    35B  R1 e94b d4/K8192 17.651 GiB  KL 53.022   MET
+         R2 M4 fitting d4/K16384, ~18.59 GiB projected (under q4's 19.0)
+         R3 UNPICKED — held until run C reports
+
+**R3 sizing is not the risk; quality is.** Run C's 17.580 GiB packed is
+confirmed against the closed size model (6e: 11.953 codes + 0.498 + 5.129),
+and even UNPACKED at 21.564 GiB it clears the 26.341 GiB q8 bar — so a skipped
+pack cannot cost this rung its size bar, unlike the d2/K512 case. Assert the
+MEASURED packed size anyway.
+
+**Registered expectation for run C: ~18 mnats against a 1.641 bar.** If it
+lands there, say plainly that R3 is out of reach rather than burning the
+weekend. The M4 session's recommendation, which I endorse: do NOT then fit a
+35B R3 — report the measured slope honestly instead. "8-bit-class quality is
+not reachable by this method at these rates, here is the slope" is a real
+result, and the 35B has ZERO d2 points, so picking its R3 would rest entirely
+on transferring the 27B slope across models — the exact move this project has
+been burned by.
+
+**Seed floor does NOT transfer to K4096.** 6f's floor (KL 2.085 mnats, ppl
+0.0447) was measured at d2/K256, n=3. K4096 draws 16x more centroids from the
+same sample budget; that is a different quantity and we have no data on it.
+Moot for the R3 verdict (an 11x gap dwarfs any plausible floor), but it needs
+its own n=3 before run C is ever compared to another K4096-class rung.
+Report KL AND ppl regardless (6c).
+
+## DOC GAP FOUND AND CLOSED
+
+E130's pre-registration existed ONLY in `run_e130_rate_twin.sh` (d05d111),
+never in EXPERIMENTS.md — despite HANDOFF §8 claiming "EXPERIMENTS.md through
+E130". The paper session cites only committed EXPERIMENTS.md entries, so it
+could not see E130 at all. Transcribed verbatim into EXPERIMENTS.md, marked as
+a transcription, no branch altered.
+
+## OPEN — NOAH'S CALL, NOT OURS
+
+1. **K65536** — recommend NOT this weekend. The 40-60h estimate was taken
+   under contention, and E130 may moot it. A Saturday start lands Monday at best.
+2. **A second dense family** — genuinely blocked on Noah acquiring a model.
+   Otherwise the paper states the single-model limitation.
+3. **`chmod -R a-w` on scored artifacts** — must wait; run C and the M4 fit
+   are both writing.
+4. **`MODEL_CARD_397B_G.md`** (uncommitted, 3.1bpw flagship card, 35 added
+   lines) attributes its improvement to "a later version of our k-means
+   implementation" — **falsified by E121/E129**: running the actual 08-16
+   fitter scored 2.8292, worst of four arms. Nothing live; must not ship as
+   written.
+
+## E129 CAVEAT THAT MUST BE IN THE PRE-REGISTRATION BEFORE THE NUMBER EXISTS
+
+The M4's mlx stack was reinstalled Aug 17, AFTER the Aug 15-16 shipped fit. A
+null result therefore excludes "the box as it is today", NOT "the box". H4 —
+the mlx version the M4 carried on Aug 15 — remains unrecovered.
+
+---
+
+## SUPERSEDED — STATE (2026-08-21 ~18:35) — mechanism night
 
 ## WHERE THINGS STAND
 
