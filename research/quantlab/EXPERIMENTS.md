@@ -6413,11 +6413,33 @@ stood.
 GiB. That is the "raise K first" law reproduced on a true dense model, which
 is what E95 was pre-registered to find out and E119 was built to extend.
 
-**But d beats K at this budget.** E124's d2/K256 at 13.596 GiB reaches 40.327
-mnats — better than every d4 rung by a factor of 3.7, and better than q4. The
-ladder says: spend the budget on a finer subvector before spending it on a
-bigger codebook. That inverts nothing in the laws (bpw = log2(K)/d treats them
-symmetrically) but it is the first dense evidence on which side to buy first.
+**"d beats K at this budget" — RETRACTED WITHIN THE HOUR, before it reached
+anything but one message.** I wrote that off d2/K256 (40.327 mnats @ 13.596
+GiB) versus d4/K1024 (148.470 @ 10.609) and it does not follow: those rungs
+are 2.99 GiB apart, 28% in size, so the comparison attributes to DIMENSION a
+difference that includes a large rate increase. Caught by the M4 session. It
+is III.8's shape one level up — not unpacked-vs-packed, but comparing across
+rates and crediting the geometry.
+
+**The exact rate twin of d2/K256 is d4/K65536, and it is exact, not close:**
+
+    d2/K256      8 bits per 2 weights = 4.00 bpw   codes 7.969 GiB   total 13.596
+    d4/K65536   16 bits per 4 weights = 4.00 bpw   codes 7.969 GiB   total 13.596
+
+**That rung has never been run, so the size-matched d-vs-K question at Noah's
+band is UNANSWERED.** Correct statement of what we have: at 13.6 GiB, d2/K256
+reaches 40.3 mnats; its size-matched d4 twin is untested. Nothing here licenses
+a claim about dimension.
+
+**What the ladder DOES establish, which was E119's actual question:** raise-K
+carries on a true dense model and is monotone — 325.575 -> 219.710 -> 148.470
+at fixed d=4 as K goes 256 -> 512 -> 1024, with size rising only 9.6 -> 10.6
+GiB. That is a real result and it does not need the d-vs-K claim to stand.
+
+**Cost of running the twin, recorded so the decision is informed rather than
+deferred by default:** d4/K65536 is a 65,536-centroid k-means (slow), and
+16-bit codes are byte-aligned so pack_dense skips them — the artifact is its
+own final size. Not queued tonight.
 
 **ppl not measured for the d4 rungs** — the chain scored KL only. Per FINDINGS
 6c (KL and ppl can rank oppositely, E124) that is now a gap, not a detail, and
