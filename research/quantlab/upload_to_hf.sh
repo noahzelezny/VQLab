@@ -39,6 +39,19 @@ for a in "${ARTS[@]}"; do
     [ -f "$E/$a/$need" ] || { echo "  !! missing $need — downloaders could not run it"; exit 1; }
   done
   [ -f "$E/$a/README.md" ] || { echo "  !! no model card"; exit 1; }
+  # DENY-LIST: the gates above check what MUST be present; nothing checked what
+  # must NOT be. On 2026-08-22 a 101 GiB push was seconds from publishing
+  # config.json.bak and model.safetensors.index.json.pre_total_size — internal
+  # backups left by graft_vision and the index-size repair. --exclude covers
+  # .DS_Store and .cache only. Caught by diffing the local file list against
+  # the repo's, which is now this check.
+  junk=$(find "$E/$a" -maxdepth 1 \( -name "*.bak" -o -name "*.pre_*" -o -name "*.orig" \
+          -o -name "*.tmp" -o -name "*~" -o -name "__pycache__" -o -name "*.log" \) -print)
+  if [ -n "$junk" ]; then
+    echo "  !! build residue would be PUBLISHED — move it out of the artifact first:"
+    echo "$junk" | sed 's/^/     /'
+    exit 1
+  fi
   [ -f "$E/$a/model.py" ] || { echo "  !! no model.py (downloaders could not load it)"; exit 1; }
   grep -q "MUST be derived from the CURRENT tensors" "$E/$a/model.py" \
     || { echo "  !! model.py predates the sharding fix — rerun add_model_file.py"; exit 1; }
