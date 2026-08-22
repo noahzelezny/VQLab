@@ -64,12 +64,34 @@ art_map = idx["weight_map"]
 # collect from however many source shards hold vision tensors
 out = {}
 for sh in sorted(set(vis.values())):
-    data = mx.load(str(SRC / sh))
-    for k in (k for k, s in vis.items() if s == sh):
-        out[k] = data[k]
-    del data
+    # CPU-STREAM EAGER READ, per FINDINGS IV.1. These reads used to stay LAZY
+    # across every source shard AND a `del data`, materialising only inside
+    # save_safetensors below — a deferred read paid in a GPU command buffer,
+    # which E123 proved can silently return ZEROS. This script runs on EVERY
+    # published artifact, and check_vision.py verifies tensors are PRESENT,
+    # not non-zero, so a zeroed graft would have passed every gate we own.
+    # Third sibling of the same defect (build_dense_vq, pack_artifact,
+    # pack_dense); found by sweeping for the pattern rather than by hitting it.
+    with mx.stream(mx.cpu):
+        data = mx.load(str(SRC / sh))
+        picked = {k: data[k] for k, s in vis.items() if s == sh}
+        mx.eval(list(picked.values()))
+    out.update(picked)
+    del data, picked
+_dead = [k for k, v in out.items()
+         if float(mx.max(mx.abs(v.astype(mx.float32))).item()) == 0.0]
+if _dead:
+    raise SystemExit(f"FAIL: {len(_dead)} vision tensors read as ALL ZERO "
+                     f"(e.g. {_dead[:3]}) — deferred-read fault. Not writing.")
 total = sum(v.size * v.dtype.size for v in out.values())
 mx.save_safetensors(str(ART / GRAFT_SHARD), out, metadata={"format": "mlx"})
+_rb = mx.load(str(ART / GRAFT_SHARD))
+_bad = [k for k, v in _rb.items()
+        if float(mx.max(mx.abs(v.astype(mx.float32))).item()) == 0.0]
+if _bad:
+    raise SystemExit(f"FAIL: {len(_bad)} vision tensors are ALL ZERO in the "
+                     f"shard just written (e.g. {_bad[:3]}) — do not ship.")
+del _rb
 
 for k in vis:
     art_map[k] = GRAFT_SHARD

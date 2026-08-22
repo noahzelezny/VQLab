@@ -31,7 +31,20 @@ OUT.mkdir(parents=True, exist_ok=True)
 
 base_idx = json.load(open(BASE / "model.safetensors.index.json"))["weight_map"]
 mlp_cfg = json.load(open(MLP / "config.json"))["vq_modules"] if MLP else {}
-mlp_w = mx.load(str(MLP / "model-00001-of-00001.safetensors")) if MLP else {}
+# CPU-STREAM EAGER READ per FINDINGS IV.1 — same defect and same fix as
+# build_dense_vq.py (013d2bb). This produced the published gemma-4-26b
+# artifact, so it is a live publish path, not a lab script.
+if MLP:
+    with mx.stream(mx.cpu):
+        mlp_w = mx.load(str(MLP / "model-00001-of-00001.safetensors"))
+        mx.eval(list(mlp_w.values()))
+    _dead = [k for k, v in mlp_w.items()
+             if float(mx.max(mx.abs(v.astype(mx.float32))).item()) == 0.0]
+    if _dead:
+        raise SystemExit(f"FAIL: {len(_dead)} tensors read as ALL ZERO from "
+                         f"{MLP.name} (e.g. {_dead[:3]}) — not building.")
+else:
+    mlp_w = {}
 
 DROP_MLP = tuple(f".mlp.{p}." for p in ("gate_proj", "up_proj", "down_proj"))
 PLE_KEY = "language_model.model.embed_tokens_per_layer"

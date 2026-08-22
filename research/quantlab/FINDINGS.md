@@ -243,6 +243,21 @@ Last updated: 2026-08-21 (through E110).
   a GPU command buffer** → watchdog kill "at the write step." Load under
   `with mx.stream(mx.cpu):` AND `mx.eval` inside the block — creation-binding
   alone is measured-insufficient; the eval is LOAD-BEARING. [E70 add. 5-6]
+- **THE DEFERRED-READ FAMILY — sweep, do not discover one at a time.** Any
+  script that `mx.load`s and later `save_safetensors` without an eval in
+  between carries the IV.1 fault. Found on 08-21 by grepping the tree rather
+  than by hitting them: `build_dense_vq.py` (013d2bb), `pack_dense.py`
+  (3af8ed0), `graft_vision.py` and `build_e4b_vq.py` (this sweep).
+  `graft_vision.py` was the worst exposure — it runs on EVERY published
+  artifact, held its reads lazy across every source shard AND a `del data`,
+  and `check_vision.py` verifies vision tensors are PRESENT, not non-zero, so
+  a zeroed graft would have passed every gate we own. **Audited all 15
+  on-disk graft shards including the three published artifacts: 333/333
+  non-zero everywhere, no damage shipped.** Detection: `grep -l
+  save_safetensors *.py` then check each for `mx.stream(mx.cpu)` + `mx.eval`.
+  STILL UNFIXED, all lab-only and none in a publish path, do not run without
+  the cure: `assemble_gptq_35b.py`, `assemble_gptq_35b_v2.py`,
+  `dwq_assemble_tail.py`, `rotate_fuse.py`.
 - Never edit a script a running chain has not yet invoked (Python reads at
   invocation). Never `rm -rf` a fit output dir: fits RESUME (and the resume
   check now validates shard completeness, not existence).
