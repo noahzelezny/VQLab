@@ -110,9 +110,11 @@ for K in [int(x) for x in args.ks.split(",")]:
     bnp_sum = np.array(ob).astype(np.float64)
     live = cc > 0
     # centroid = sum/count; compare the CENTROIDS, which is what k-means uses
-    ca_c = anp_sum[live] / np.maximum(np.array(ca).astype(np.float64)[live], 1)
-    cb_c = bnp_sum[live] / np.maximum(np.array(cb).astype(np.float64)[live], 1)
-    cc_c = oc[live] / cc[live]
+    # counts are [K]; sums are [K, d] — the divisor needs an explicit axis or
+    # numpy broadcasts (n_live,) against (n_live, d) and raises.
+    ca_c = anp_sum[live] / np.maximum(np.array(ca).astype(np.float64)[live], 1)[:, None]
+    cb_c = bnp_sum[live] / np.maximum(np.array(cb).astype(np.float64)[live], 1)[:, None]
+    cc_c = oc[live] / cc[live][:, None]
 
     def relerr(P):
         return float(np.linalg.norm(P - cc_c) / np.linalg.norm(cc_c))

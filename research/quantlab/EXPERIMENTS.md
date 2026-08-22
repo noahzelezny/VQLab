@@ -6243,6 +6243,68 @@ geometry outside the low-K regime where the vintage regression lives. The
 unreproducible rung is the one being left alone; the record must say so
 rather than implying the whole ladder is rebuildable.
 
+## E118 — RESULT: random init WINS at K512. The K-dependence is NON-MONOTONE.
+
+Fit clean (172 tensors, 0 collapses), gate PASS, packed, grafted, 122.305 GiB
+— byte-identical to its ++ twin.
+
+    flatk512 (++,     E93)   2.5634 / 2.6123   @ 122.305 GiB
+    flatk512 (random, E118)  2.5249 / 2.6106   @ 122.305 GiB   <- better
+
+Random beats ++ by 0.0385 wikitext (past the 0.005 bar) and by 0.0017 on code
+(inside it — too close to call). **This is the best artifact we have at this
+size**, better than E93's rung.
+
+**But the pattern across K is not monotone**, so it does not support the
+crossover story that motivated the run:
+
+    K256   ++ better   (2.8057 vs random 2.8158)
+    K512   random better (2.5249 vs ++ 2.5634)
+    K2048  ++ better   (2.3410 vs random 2.3519)
+
+E118's own validity gate already voided the crossover reading when E117
+falsified init as the K256 cause; this confirms voiding it was right. The
+pair stands as a clean same-size, one-flag measurement and as a new rung
+candidate. It is NOT evidence for a crossover in K, and nobody should quote
+it as such.
+
+## E122 — RESULT: the d8 re-score is BIT-IDENTICAL, and that is the finding.
+
+    11:39  total_nll 9159.6833 / 8053.7149  ->  3.0591 / 2.6728
+    21:35  total_nll 9159.6833 / 8053.7149  ->  3.0591 / 2.6728
+
+Not "within 0.005" — the same digits. The runtime replacement at 16:29 could
+not have affected it, because **the bundled runtime is not what executed.**
+On M3 `patch_mlx_lm.py` installs a `load_model` hook (utils.py md5 b692faf0
+vs the stock 0.31.3 wheel's 3002ab1b) that walks the weights and overwrites
+the artifact's own VQ modules with the venv's `VQSwitchLinear` — here a stale
+1051-line copy without packed d8. Hence the smoke's error text came from the
+venv (":723, d=4 and d=2") and not from the bundle (":827, d=4, d=2 and d=8").
+
+**Retraction of my own claim, made to Noah and withdrawn within the hour:**
+"the 101 GiB artifact cannot generate a token" is FALSE. It cannot generate
+*on a patched box*. The M4, whose utils.py is byte-identical to the stock
+wheel, generated from this artifact at 17.24 tok/s (E115) precisely because
+the stock loader honors `model_file` and exec's the bundle, which is
+self-contained (imports only os/mlx/numpy/importlib/json/pathlib). Stock
+mlx-lm 0.31.3 ships NO vq_switch.py at all; both site-packages copies are
+ours. So a downloader gets the bundle, and the bundle carries packed d8.
+
+**The real E81-shape risk, inverted from how I first stated it:** not "the
+artifact ships stale code" but **"our dev boxes may never execute the code we
+ship."** Every M3 bench runs the venv copy, not the bundle.
+
+**Compounding defect, mine:** this smoke could not have produced a verdict on
+this box regardless — 100.971 GiB resident on a 96 GiB machine. I reported an
+impossible test's output as a finding. The 143.682 GiB smoke that followed
+drove swap to 60 of 61 GiB and killed both queued experiments. Guard added
+(preflight_ram.py, fdcb8dc); rule at III.11a.
+
+**STILL OPEN, and it is the only thing blocking the 101 GiB swap:** nobody has
+generated a token from this artifact in a genuinely clean environment — fresh
+venv, stock `pip install mlx-lm==0.31.3`, no patch. Everything above is
+provenance, not execution. Owned by the M4 session, after the E119 ladder.
+
 ## E120 — PRE-REGISTRATION: the vintage hunt, narrowed to float summation order
 
 E117 excluded seeding. `git log --since=2026-08-17 --until=2026-08-20 --
