@@ -35,6 +35,15 @@ check() {
   echo "########## $A" | tee -a $L
   md5 -q "$E/$A/model.py" | sed 's/^/  bundled runtime md5: /' | tee -a $L
   wc -l < "$E/$A/model.py" | sed 's/^/  bundled runtime lines: /' | tee -a $L
+  # HARD GUARD (8b92c97 + preflight_ram.py). A smoke needs the whole model
+  # RESIDENT. This chain was written pointing a smoke at 100.971 and 143.682
+  # GiB artifacts on a 96 GiB box; the second drove swap to 60 of 61 GiB and
+  # could never have returned a verdict. The guard refuses instead of thrashing.
+  if ! $V preflight_ram.py "$E/$A" 2>&1 | tee -a $L | grep -q "\-> OK"; then
+    echo "SKIPPED smoke for $A: does not fit this box. Run it where it fits." | tee -a $L
+    $V check_release.py --artifact "$E/$A" 2>&1 | tee -a $L | tail -1
+    return 0
+  fi
   echo "--- III.11 smoke: one token through the SHIPPED bundle" | tee -a $L
   $V - <<PY 2>&1 | tee -a $L
 from mlx_lm.utils import load

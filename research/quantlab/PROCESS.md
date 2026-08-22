@@ -136,3 +136,19 @@ different box against the bytes on disk.
    run (E100). The referee scores through the REFERENCE decode path and is
    structurally blind to this.
 5. Score on the family's own instrument, and state which one.
+
+
+## Preflight: does this operation fit the box?
+
+`./preflight_ram.py <artifact-dir>` before ANY resident-memory operation —
+III.11 smoke, speed test, generation of any kind. Exit 2 means it cannot run
+here; it names where it can. Scoring is exempt (`score_streaming.py` streams
+by design, which is exactly why the distinction gets forgotten).
+
+This exists because the RAM rule was violated three times in one day by the
+same agent on the same box, each time after restating the rule. A control that
+lives only in a document is not a control.
+
+    M3 = 96 GiB    M4 = 128 GiB    exo pair = both boxes
+    d8-K16384 (100.97 GiB)        -> M4 or exo
+    flatk2048-refit (143.68 GiB)  -> exo ONLY, fits neither box alone
