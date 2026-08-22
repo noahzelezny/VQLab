@@ -188,7 +188,12 @@ Last updated: 2026-08-21 (through E110).
   of the same shape; anything else gets stated as unmeasured, not as a number.
   Schedules built on probe timings put real deadlines at risk. [08-21]
 - **Scheduling, settled [Noah, 08-21]: nothing gets killed to defend a
-  schedule; an idle box is cheaper than lost work.** Before treating a
+  schedule; an idle box is cheaper than lost work.** REFINEMENT: ending a
+  QUEUE is not killing WORK. Stopping a probe wrapper so no further iterations
+  launch, while the in-flight iteration runs to completion, throws nothing
+  away — and a justification that rested on "this costs nothing" expires the
+  moment it starts costing something. Re-examine standing decisions when their
+  premise changes rather than when they fail. [peer, 08-21] Before treating a
   constraint as a deadline ask whether it is a TIME requirement or a
   COINCIDENCE requirement — the exo 2-box smoke needs both boxes quiet, which
   is satisfied tonight as well as at 14:30. Interrupt cost scales with shard
