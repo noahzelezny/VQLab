@@ -93,6 +93,16 @@ not sufficient and the post-hoc gate is the real control.
 Standing policy, unchanged since 08-15: **every M4-fitted artifact is verified
 on M3 before any number from it is believed**, and a repair refit goes to M3.
 
+**The abort does NOT make verification optional, and the two failure shapes are
+different.** `--relerr-abort` reads the fitter's COMPUTED relerr, so it catches
+a compute-time collapse (E95: the fitter printed 1.0000 itself) and CANNOT
+catch a write-time corruption (gemma d2-K512: fit log reported worst 0.0611
+while the WRITTEN artifact held 4 tensors at 0.54-0.99). **Only the post-hoc
+outlier gate, run on a different box against the bytes on disk, covers both.**
+Distinguishing them is diagnostic: if the fit log shows the bad value, the
+failure is in compute; if the log is clean and the artifact is not, the failure
+is between memory and disk.
+
 ## Standing gates, once artifacts exist
 
 1. `verify_artifact.py --outlier 3.0` — relative, catches collapsed tensors.
