@@ -255,9 +255,23 @@ Last updated: 2026-08-21 (through E110).
   on-disk graft shards including the three published artifacts: 333/333
   non-zero everywhere, no damage shipped.** Detection: `grep -l
   save_safetensors *.py` then check each for `mx.stream(mx.cpu)` + `mx.eval`.
-  STILL UNFIXED, all lab-only and none in a publish path, do not run without
-  the cure: `assemble_gptq_35b.py`, `assemble_gptq_35b_v2.py`,
-  `dwq_assemble_tail.py`, `rotate_fuse.py`.
+  **STILL UNFIXED: ELEVEN files, and THREE sit on publish paths** — do not
+  run any of them without applying the cure first:
+      vq_35b_codes.py        <- produced the published 35B VQ artifacts
+      fit_e4b_vq.py          <- produced the published gemma-4-26b artifact
+      kl_damage.py           <- our SCORING instrument
+      fitter_0816_cdcdeab.py <- E121's 08-16 fitter; deliberately unfixed to
+                                stay faithful to that vintage, so it must be
+                                GATED not cured (scan its log for
+                                "relerr 1.0000", then zero-scan the artifact)
+      fit_e4b_ple.py   vq_397b_fused.py   vq_fit.py
+      assemble_gptq_35b.py   assemble_gptq_35b_v2.py
+      dwq_assemble_tail.py   rotate_fuse.py
+  **Detection must test the GUARD, not the file:** my first sweep counted
+  `mx.eval` anywhere in the file and reported four, missing seven — a file
+  can eval elsewhere and still leave the load-to-save window open. Correct
+  test: has `save_safetensors` AND `mx.load(` AND NOT `mx.stream(mx.cpu)`.
+  Caught by the M4 session re-running it independently.
 - Never edit a script a running chain has not yet invoked (Python reads at
   invocation). Never `rm -rf` a fit output dir: fits RESUME (and the resume
   check now validates shard completeness, not existence).
