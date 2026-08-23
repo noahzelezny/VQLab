@@ -206,7 +206,7 @@ artifact ships with → scoring, both metrics, one instrument per model.
 The smoke generation is load-bearing: scoring exercises a
 prefill-shaped code path, serving exercises the fused decode kernels,
 and an artifact can score normally while being unable to serve — so
-nothing is releasable until it has generated a token through the code
+nothing is fully validated until it has generated a token through the code
 path it ships with. Predictions are registered before numbers exist,
 with reading grids fixed in advance, so a wash cannot be reread
 afterwards as a win.
@@ -242,7 +242,7 @@ invalid on those instruction-tuned models as a property of the model
 itself, scoring is therefore not deterministic, and no claim here rests
 on an instrument that cannot reproduce its own numbers.
 
-**Noise floors.** Because fits are stochastic, two builds of identical
+**Noise floors.** Because unseeded fits are stochastic, two builds of identical
 geometry differ. We measured that spread where our comparisons live:
 dense 27B d2/K256, three draws — KL range 2.085 mnats, perplexity range
 0.0447; 35B d2/K1024, two draws — 0.214 mnats; 397B d4/K256, two
@@ -313,8 +313,11 @@ corpora as measured — prose by 0.0204 and code by 0.0042 — but those
 margins are smaller than our fit-to-fit variability at the nearest
 measured geometry, so we claim the size and report the quality as
 indistinguishable pending a floor at this geometry, which is being
-measured. Note the calibrated comparators are text-only; every build
-of ours keeps the vision tower.
+measured. One asymmetry favours the comparators: the calibrated builds
+are text-only, while every size in our column includes the full vision
+tower at bf16 — 0.85 GiB of capability the affine builds simply omit.
+Subtracting it for a text-to-text comparison would move every VQ row
+0.85 GiB further ahead.
 
 Our ladder is monotone — no mixed-allocation build beats the flat rung
 at or above its own size, and a matched-byte sweep of allocation shapes
