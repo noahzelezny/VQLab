@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "moemash"
+version = "0.1.0"
+description = "Size-targeted, data-free vector quantization of large models on Apple Silicon (MLX)"
+readme = "README.md"
+requires-python = ">=3.12"
+# license: TBD (owner decision before publishing)
+dependencies = [
+    "mlx>=0.32.0",
+    "mlx-lm",
+    "numpy",
+    "safetensors",
+]
+
+[project.optional-dependencies]
+score = ["transformers"]
+
+[project.scripts]
+moemash = "moemash.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+moemash = ["referee/*.txt"]
