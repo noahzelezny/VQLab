@@ -87,7 +87,7 @@ bundled runtime tested as the unit under test.
 ```bash
 vqlab kl cache --model <BF16-27B> --out-dir caches/qwen38 ...
 vqlab fit-dense --src <SRC-27B> --out fits/27b-d2K512 \
-    --k 512 --dim 2 --family qwen3_8 --relerr-abort 0.6
+    --k 512 --dim 2 --family qwen3_8_dense --relerr-abort 0.6
 # splice into the affine base, pack:
 vqlab pack-dense --src <assembled> --out artifacts/27b-d2K512-packed
 vqlab verify --artifact artifacts/27b-d2K512-packed --src <BF16-27B> \
@@ -107,7 +107,7 @@ the range:
 
 ```bash
 for i in 1 2 3; do
-  vqlab fit-dense --src <SRC-27B> --out fits/floor-$i --k 256 --dim 2 --family qwen3_8
+  vqlab fit-dense --src <SRC-27B> --out fits/floor-$i --k 256 --dim 2 --family qwen3_8_dense
   # pack + score each
 done
 ```
