@@ -119,3 +119,8 @@ table row.
   the model, which makes scoring non-deterministic.
 - New family? Read `docs/ONBOARDING.md` (the two-hour characterisation pass
   to run before fitting anything).
+
+## License
+
+Apache-2.0. If you use VQLab or its artifacts in published work, cite the
+companion paper.
