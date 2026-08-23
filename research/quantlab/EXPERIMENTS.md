@@ -8343,3 +8343,86 @@ written rule and not a judgement call. The paper's 35B row was held until this
 landed and publishes as a QUALITY claim only:
 `d4/K8192: 53.022 mnats / 89.55% vs mlx 4-bit 78.557 / 85.61%, 14.838 GiB
 packed vs 19.0`.
+
+## E136 — the Aug-15 stack, reconstructed and REPLICATED (n=2, M4)
+
+Noah's call, run on the M4. Fit only; scoring is the M3 instrument's.
+
+**What makes this the closest reconstruction attempted.** The ACTUAL Aug-15
+fitter was found on the M4 in `~/quantlab_m1/vq_397b_codes.py` — mtime
+08-15 12:56:39, four minutes before the shipped fit's first shard at 13:01:19.
+It survived because it sits outside `~/qlab`, where every later session
+worked. Diffed against `fitter_0816_cdcdeab.py` (what E121/E129 executed):
+106 diff lines, all plumbing — `--family`/`--geom` args, the FAMILY table,
+per-projection GEOM, `code_dtype()`, reporting strings. **grep of the diff for
+`kmeans|sample|assign|centroid|Lloyd`: 0 hits.** The numerical core is
+byte-identical, so the reconstruction's own "BIT-IDENTICAL" comment is now
+VERIFIED rather than asserted — independently of E121, which was voided.
+
+**The axis nobody had listed.** E121 and E129 ran Python 3.12 + mlx 0.32.0
+cp312 (`~/qlab-venv`, installed 08-17, AFTER the shipped fit). E136 runs
+Python 3.13.9 + mlx 0.32.0 cp313 (`~/quantlab-m4/venv`, installed 08-10).
+Nobody had listed Python because the mlx VERSION matched on both sides. It
+does not: the ABI and the compiled extension differ.
+
+Verified binary-identical to the ORIGINAL `~/vqvenv` the recovered transcript
+names — same mlx `core*.so` md5, same full mlx tree hash including
+`.metallib`, same numpy 2.5.2. So this executes the literal Aug-15 numerics,
+not an approximation. (`~/vqvenv` also survives; restarting under it would
+rerun the same program, so it was not restarted.)
+
+### WALL-CLOCK — the free datum, and it comes out AGAINST the stack
+
+    shipped Aug-15 (py3.13 stack)   127.0 min
+    E136  draw 1   (py3.13 stack)    63.6 min
+    E136b draw 2   (py3.13 stack)    61.8 min
+    E129           (py3.12 stack)    74.0 min
+
+**The interpreter axis does NOT explain the +51 min: the 3.13 stack ran
+FASTER than the 3.12 stack, twice, not ~2h.**
+
+And the shipped excess is LOCALIZED, which a heavier budget cannot be. Its
+per-shard minutes: shards 7/8/9 at 8.4/14.8/8.2 and shard 22 at 10.2, with
+everything else at 3-4. Both E136 draws crossed that exact range at ~2.6
+min/shard. **Four isolated spikes in an otherwise normal run is contention on
+the box that day.** The 1.7x wall-clock ratio is what reopened E129's closure;
+it is now retired as evidence.
+
+### FINGERPRINT — a measured same-config floor at last
+
+Code-utilization from the bytes, 24 tensors, entropy normalised:
+
+    SHIPPED 2.4bpw          entropy 0.890427  dead 0.05029  gini 0.34814
+    E136  draw 1 (3.13)     entropy 0.890895  dead 0.05029  gini 0.34610
+    E136b draw 2 (3.13)     entropy 0.890587  dead 0.04915  gini 0.34776
+    E129        (3.12)      entropy 0.890587  dead 0.04980  gini 0.34782
+    E121   (M3, 3.12)       entropy 0.888257  dead 0.07080  gini 0.35523
+
+    SAME-CONFIG FLOOR (draw 1 vs draw 2, identical stack): dEntropy 0.000308
+
+    shipped vs draw 2   0.000160   = 0.5x the floor   INSIDE
+    shipped vs draw 1   0.000468   = 1.5x the floor   INSIDE
+    E121 (M3) vs draws  0.00233-0.00264 = 7.6-8.6x the floor   OUTSIDE
+
+**The shipped artifact's codes are indistinguishable from an M4 defaults
+draw, and the M3 arm is separated by ~8x the floor.** The Python axis leaves
+no mark: draw 2 (3.13) lands on E129 (3.12) to six decimals on entropy.
+
+### WHAT IS CLOSED, AND BY WHAT
+
+- **H3 (heavier k-means budget): CLOSED BY DOCUMENT.** The recovered Aug-15
+  launch command passed no `--iters`, `--sample`, `--expert-chunk` or `--dim`.
+  Defaults. Stronger than any fingerprint argument, which could only say "no
+  utilization signature" and carried a saturation caveat.
+- **Wall-clock as evidence: RETIRED** (above).
+- **The Python/mlx-binary axis: leaves no fingerprint signature.** Whether it
+  moves PERPLEXITY is the one live question and needs the M3 referee.
+
+**Not claimed:** that the box explains the ppl gap. The fingerprint says the
+codes cluster by box; it does not say why 2.7655 and 2.8095 differ. That
+remains open pending the score of these two draws.
+
+**Unmatched variable, named rather than left to surface later:** the recovered
+transcript shows Aug-15 read its BASE from local APFS (`/tmp/m1d`); E136 reads
+the base from the SMB share. Read path only — the base bytes are
+content-verified identical — but it is a difference and it is recorded.
