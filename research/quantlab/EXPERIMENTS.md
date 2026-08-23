@@ -7940,3 +7940,79 @@ rule that exists for exactly this gets skipped.
 86987c1, or moving the d4 codebook to DEVICE memory as d8 already has
 (vq_switch.py:12-16). Neither has been written, and neither will be started on
 a relayed authorisation.
+
+## E129 — RESULT: H2 EXCLUDED. The vintage gap is CLOSED AS UNEXPLAINED.
+
+Registered branches (before the fit): <= 2.7800 -> H2 CONFIRMED; 2.81-2.83 ->
+H2 EXCLUDED and gives the first n=3 397B floor; between -> partial.
+
+    arm                      box   wikitext    code     mean relerr
+    shipped 2.4               M4     2.7655    2.6383      0.3156
+    E129 fitter0816-M4        M4     2.8095    2.6408      0.3155
+    E121 fitter0816           M3     2.8292    2.6508      0.3172
+    E117 randinit             M3     2.8158    2.6347      0.3157
+    E92  refit++              M4     2.8057    2.6447         -
+
+**2.8095 is in the exclusion band. H2 EXCLUDED, as registered.** Same fitter,
+same vintage source, same BOX as the shipped artifact — and it lands 0.0440
+from 2.7655, among the M3 refits rather than near the shipped number.
+Artifact 110.768 GiB, K=256 so pack is a no-op; scored with E121's exact
+invocation (referee/score_streaming.py, both corpora) so the arms compare.
+NOT smoked: 110.768 GiB on a 96 GiB box would violate III.11a, and this is an
+experiment arm, not a release candidate.
+
+**THE FIRST n=3 397B PPL FLOOR — the payoff the exclusion branch was for:**
+
+    E121 (M3) 2.8292 / 2.6508
+    E117 (M3) 2.8158 / 2.6347
+    E129 (M4) 2.8095 / 2.6408
+    n=3 range 0.0197 wikitext / 0.0161 code
+
+**And the floor does NOT swallow the gap.** Shipped-vs-nearest-refit is 0.0440
+= **2.2x** the measured floor. So H1 (seed lottery) is not rescued by this
+either. Note this floor is measured at 397B **d4/K256** and per III.12 does not
+transfer to other geometries.
+
+### CLOSED AS UNEXPLAINED (Noah's decision, 08-22)
+
+Every structural hypothesis has now been falsified BY EXPERIMENT:
+
+    seeding          E117   falsified
+    K-crossover      E118   falsified
+    summation order  E120   real but ~2.4e-6, far too small
+    the fitter file  E121   falsified by running the original at its commit
+    provenance       -      retracted; 2032/2032 non-VQ tensors byte-identical
+    THE BOX          E129   falsified tonight
+    seed lottery H1  E129   not rescued: gap is 2.2x a measured n=3 floor
+
+What survives is narrower and stranger than any hypothesis offered: the
+shipped artifact is ORDINARY in weight space (relerr 0.3156 vs randinit 0.3157
+and E129's own 0.3155), is SECOND on the code corpus behind randinit, and is
+anomalous on wikitext ONLY, by 2.2x a now-measured floor. A systematically
+better fit wins both corpora; this wins one, by an amount three draws cannot
+reproduce, with unremarkable weights.
+
+**H3 is the only hypothesis left and it is not testable by rebuilding.** The
+Aug-15 fit log (logs_live_397b.log) was overwritten Aug 19, so --iters,
+--sample and --expert-chunk for that run are unrecorded. E127 showed --iters
+is a real lever (-0.1256 ppl at 27B, 2.8x its floor). Testing H3 means
+sweeping arguments until one matches, which is fishing, not an experiment.
+
+**Standing caveat, registered before the fit and it travels with this result:**
+the M4's mlx stack was reinstalled 2026-08-17, AFTER the Aug 15-16 shipped fit.
+This excludes "the box as it is today", NOT "the box as it was". H4 — the mlx
+version the M4 carried on Aug 15 — is unrecovered after two sessions searched
+five locations (repo pins, all git branches, shell history, both pip caches,
+~/mlx-wheels, ~/mlx-jaccl-fork).
+
+**Also recorded: `--stage-dir` was used here and not in E121.** Ruled
+non-disqualifying before the number existed: it is the vintage fitter's OWN
+documented argument (declared :59, header :22, its own usage example :28), it
+cannot reach the k-means math, and it makes the M4's SMB read path equivalent
+to the M3's local-SSD reads rather than slower — equalising, not introducing.
+The M4 session's first launch died in 58s at `mx.eval` on a lazy SMB read:
+FINDINGS IV.1 verbatim, the third run this class has cost the project.
+
+**The honest statement for the paper: 2.7655 is not reproducible, and we know
+it is not the seed, the fitter, the inputs, or the box.** Five falsified
+hypotheses and a measured floor is a result. It is not a mechanism.
