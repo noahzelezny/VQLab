@@ -43,7 +43,7 @@ import numpy as np
 # below this many (token, expert) pairs use the fused kernel; above, the
 # decode+padded-GEMM path (decode cost amortizes). Tune in M1e if needed.
 VQ_FUSED_MAX_N = int(os.environ.get("VQ_FUSED_MAX_N",
-                     os.environ.get("SCOUT_VQ_FUSED_MAX_N", 4096)))
+                     4096))
 
 # Experts decoded to dense fp16 per prefill chunk. THIS IS THE MEMORY KNOB,
 # not the KV cache: measured 2026-08-15 on a 128 GB M4 Max running the
@@ -84,11 +84,7 @@ VQ_FUSED_MAX_N = int(os.environ.get("VQ_FUSED_MAX_N",
 # reports "no difference" for a change worth 1.37x. That mistake was made on
 # 08-17 and reversed by measuring a resident block instead.
 def _default_decode_chunk():
-    # Public name is VQ_DECODE_CHUNK (cards say so); SCOUT_ prefix kept as
-    # a legacy alias for our own scripts only — no Scout branding in
-    # anything a downloader reads.
-    env = os.environ.get("VQ_DECODE_CHUNK",
-                         os.environ.get("SCOUT_VQ_DECODE_CHUNK"))
+    env = os.environ.get("VQ_DECODE_CHUNK", None)
     if env:
         return max(1, int(env))
     try:

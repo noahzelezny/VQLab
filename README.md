@@ -5,9 +5,11 @@ Silicon, with MLX.** Name a byte budget, price the recipe before fitting,
 fit it data-free, pack to true bit-width, verify, and serve through stock
 `mlx-lm` — the runtime ships inside the artifact.
 
-The method and every number below are documented in the companion paper
-(*Data-Free Vector Quantization Beats Affine Quantization at Matched
-Bytes*). All sizes are measured packed bytes; every margin is stated against
+The method and every number below are documented in the companion paper,
+[*Data-Free Vector Quantization Beats Affine Quantization at Matched
+Bytes*](paper/PAPER.md). Released artifacts are published under
+[TheDrainFlorist](https://huggingface.co/TheDrainFlorist) on Hugging Face
+with their VQ runtimes bundled in-checkpoint (stock `mlx-lm`, no patches). All sizes are measured packed bytes; every margin is stated against
 a measured seed-noise floor; see [METHODOLOGY.md](METHODOLOGY.md) for the
 rules that keep these numbers honest.
 
