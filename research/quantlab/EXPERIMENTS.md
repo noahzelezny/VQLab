@@ -8426,3 +8426,86 @@ remains open pending the score of these two draws.
 transcript shows Aug-15 read its BASE from local APFS (`/tmp/m1d`); E136 reads
 the base from the SMB share. Read path only — the base bytes are
 content-verified identical — but it is a difference and it is recorded.
+
+## E136b — RESULT: the replicate WITHDRAWS E136's headline. The interpreter axis is NOT established.
+
+Draw 2 on the identical Aug-15 stack (Python 3.13.9 / mlx cp313), same
+invocation, same referee, both corpora.
+
+    arm                          stack    wikitext    code
+    shipped 2.4                    ?       2.7655    2.6383
+    draw 1 (E136)                 3.13     2.7706    2.6603
+    draw 2 (E136b)                3.13     2.7962    2.6425
+    E129 (M4)                     3.12     2.8095    2.6408
+    E121 (M3)                     3.12     2.8292    2.6508
+
+**NEITHER REGISTERED BRANCH FIRED CLEANLY.** Registered: within ~0.01 of
+2.7706 -> axis ESTABLISHED; ~2.81 -> E136 was a draw and the axis dies.
+2.7962 is neither. It landed between, and the between case decides it anyway.
+
+### 1. THE SAME-STACK FLOOR IS 0.0256 WIKITEXT (n=2) — WIDER THAN EVERY FLOOR WE HAVE USED
+
+    397B floor, n=2, INFERRED via E120            0.0134
+    397B floor, n=3, MIXED boxes + interpreters   0.0197
+    397B floor, n=2, SAME STACK                   0.0256   <- this
+    (code: draws differ 0.0178)
+
+**Every time this floor has been measured more honestly it has come in WIDER.**
+That is the durable output of the replicate and it should make every
+third-decimal 397B claim in this record suspect, not just this one.
+
+### 2. E136's AGREEMENT WITH THE SHIPPED ARTIFACT WAS LUCK
+
+E136 sat 0.0051 from shipped and read as recovery. Its sibling draw, identical
+stack, sits 0.0307 from shipped — six times further. **A single draw landing
+close to a target says nothing when sibling draws scatter five times that
+distance.** E136's headline is WITHDRAWN.
+
+### 3. THE INTERPRETER AXIS IS NOT SEPARABLE FROM NOISE AT n=2
+
+    3.13 draws: 2.7706, 2.7962   mean 2.7834
+    3.12 (M4):  2.8095
+    difference of means 0.026  vs  within-stack spread 0.0256
+
+The apparent axis is the SAME SIZE as the noise it would have to exceed. Not
+established. Consistent with the M4's fingerprint result, which found the
+Python axis leaves NO signature in the codes at all (draw 2 lands on E129 at
+0.890587 entropy, identical to six decimals).
+
+### WHAT SURVIVES, stated at its real strength
+
+**The shipped 2.7655 lies INSIDE the same-stack draw distribution on BOTH
+corpora.** It is a plausible draw from the Aug-15 stack. That is NOT
+reproduction and must not be written as "recoverable" — a distribution 0.0256
+wide contains the target and also contains points 0.03 away from it.
+
+Combined with the M4's fingerprint work — shipped-vs-draws 0.5x and 1.5x the
+same-config floor, i.e. INSIDE, while the M3 arm sits ~8x OUTSIDE — the
+position is: **the shipped artifact is indistinguishable from an M4 defaults
+draw in code space, and its ppl sits inside a wide same-stack draw
+distribution. Nothing explains WHY 2.7655 and 2.8095 differ, and the codes say
+they should not.**
+
+### CARRIED IN, both settled before this score so they cannot be re-litigated
+
+- **WALL-CLOCK RETIRED.** shipped 127.0 min | draw1 63.6 | draw2 61.8 | E129
+  74.0. The 3.13 stack ran FASTER than 3.12, twice. The shipped excess is
+  localised to shards 7/8/9 (8.4/14.8/8.2 min) and 22 (10.2) against 3-4
+  elsewhere, while both draws crossed that range at ~2.6 min/shard. Four
+  isolated spikes is contention that day. The 1.7x ratio that reopened E129's
+  closure carries no weight.
+- **UNMATCHED VARIABLE, recorded not excused:** Aug-15 read its BASE from
+  local APFS; E136/E136b read it from the share. Read path only; bytes
+  content-verified identical.
+
+### STATUS OF THE ARC
+
+E129 closed it as unexplained. E136 appeared to reopen and solve it. **E136b
+returns it to unexplained** — with more measured than before: a same-stack
+floor, a retired wall-clock argument, H3 closed by document, and a fingerprint
+showing the codes cluster by box while the interpreter leaves no trace.
+
+**E136 was correctly kept OUT of FINDINGS pending this replicate.** Had it been
+written as a law four hours ago on n=1, it would be being retracted now. This
+is the third time this weekend that holding an n=1 result out of the laws file
+was vindicated (6c demoted, E126's ppl claim withdrawn, this).
