@@ -8172,3 +8172,81 @@ close: affine scales better at high rate — at 6.0 bpw it is already within
 2.07 mnats of q8's 1.641 while the best VQ rung sits at 26.709. **The method's
 regime is the low-bpw end, and it ends before 6 bpw.** That is a sharper and
 more defensible claim than "VQ wins," and it is falsifiable.
+
+## E136 — RESULT: 2.7706. THE SHIPPED RECIPE IS RECOVERABLE. The axis is the INTERPRETER STACK.
+
+Registered branch (paper ledger, before the fit): **<= 2.7800 wikitext -> the
+gap is the interpreter axis; shipped recipe RECOVERABLE, read as a
+SEED-DISTRIBUTION result.** It fired.
+
+    arm                          box  py    wikitext   code     mean relerr
+    shipped 2.4                   M4   ?     2.7655   2.6383      0.3156
+    E136 aug15stack               M4  3.13   2.7706   2.6603      0.3155
+    E129 fitter0816-M4            M4  3.12   2.8095   2.6408      0.3155
+    E117 randinit                 M3  3.12   2.8158   2.6347      0.3157
+    E121 fitter0816               M3  3.12   2.8292   2.6508      0.3172
+
+Artifact 110.768 GiB, K=256 (byte-aligned, nothing to pack). Scored with
+E129/E121's EXACT invocation — the script was derived from
+score_e129_vintage.sh by substitution so referee, corpora and command line are
+identical and the arms compare.
+
+**WIKITEXT GAP: 0.0051 — 0.26x the n=3 floor of 0.0197.** Every previous arm
+sat 0.040-0.064 out. This is 8x closer and INSIDE noise. The two-week
+irreproducibility is resolved on the corpus that defined it.
+
+**THE AXIS:** Python 3.13.9 + mlx 0.32.0 cp313, verified by the M4 session as
+binary-identical to the original ~/vqvenv (same mlx core .so md5, same tree
+hash including .metallib, numpy 2.5.2). E121 and E129 both ran Python 3.12 /
+cp312. Nobody listed the interpreter because the MLX VERSION matched on both
+sides — the axis hid behind a version string that was never wrong.
+
+**MECHANISM, as registered and not more than the evidence supports:** this is a
+SEED-DISTRIBUTION result, NOT "Python changes math." mlx's Metal kernels are
+identical source either side; numpy/Python differ, so the SAMPLE DRAW differs,
+so the codebooks differ. 6d (fits are unseeded) operating at a scale nobody
+had measured.
+
+**TWO QUALIFICATIONS, both against the headline:**
+
+1. **THE CODE CORPUS DOES NOT REPRODUCE AS CLEANLY.** 2.6603 vs shipped 2.6383
+   is 0.0220 against a code floor of 0.0161 — **1.37x, marginally OUTSIDE**.
+   Wikitext reproduces; code sits just beyond noise. The asymmetry is real and
+   is not dropped because the headline is good.
+2. **THE n=3 FLOOR IS NOT A CLEAN FLOOR.** It was measured from E117 (M3/3.12),
+   E121 (M3/3.12) and E129 (M4/3.12) — spanning TWO BOXES and, as of tonight,
+   an axis we now know matters. The M4 fingerprint work puts box separation at
+   7.6x the same-box spread. So 0.0197 MIXES axes and is probably INFLATED.
+   A proper same-stack floor (n=3 on Py3.13/cp313, one box) would likely be
+   TIGHTER — which would make the 0.0051 wikitext agreement stronger AND the
+   0.0220 code gap worse. **That measurement is what separates "recoverable"
+   from "reproduced" and it has not been made.**
+
+**CLOSURES CARRIED IN FROM THE SAME WORK, both by DOCUMENT rather than
+experiment, which is stronger:**
+- **H3 CLOSED.** The recovered Aug-15 launch passed no --iters, --sample,
+  --expert-chunk or --dim. Defaults. The last surviving E129 hypothesis dies
+  on evidence rather than remaining untestable.
+- **The WALL-CLOCK argument RETIRED.** The shipped run's 51-min excess
+  localises to four shards (7/8/9 at 8.4/14.8/8.2 min, 22 at 10.2) against
+  3-4 min elsewhere; E136 on the identical stack cleared shards 7-9 in
+  2.73/2.68/2.52 and finished in 63.6 min, FASTER than E129's 74. Four
+  isolated spikes in an otherwise normal run is contention, not configuration.
+
+**FINGERPRINT (M4 session, measured):** the Python axis does NOT move the codes.
+
+    within M4 (E129 3.12 vs E136 3.13)   dEntropy 0.000308   same-stack floor
+    across boxes (E121 M3 vs E129 M4)    dEntropy 0.002330   7.6x that
+    dead-code fraction: M4 arms 0.0498-0.0503, shipped 0.0503, M3 arm 0.0708
+
+So the codes cluster by BOX, not by interpreter, while the SCORE moves with the
+interpreter. Those two facts are not obviously compatible and the tension is
+recorded rather than resolved.
+
+### STATUS: E129's "closed as unexplained" is SUPERSEDED
+
+Closed at 7f00893 with five hypotheses falsified. E136 reopens it with a sixth
+axis nobody had listed, and that axis lands the arm inside the wikitext floor.
+**The honest statement is now: the shipped recipe is RECOVERABLE on the
+Aug-15 stack, reproduced on wikitext to 0.26x a mixed floor, with the code
+corpus 1.37x out and a clean same-stack floor still unmeasured.**
