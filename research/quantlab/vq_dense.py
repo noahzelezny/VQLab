@@ -131,8 +131,20 @@ class VQLinear(nn.Module):
         # same path that produced its scores) at decode speed. This is not a
         # performance fix and must not be read as one; a dense kernel that
         # fits the cap is the real fix and does not exist yet.
+        # THREADGROUP BUDGET — must count the CODEBOOK too (E134 addendum,
+        # 2026-08-22). Both dense d2 kernels cache `threadgroup half2
+        # cb[MAX_K]` AND `threadgroup half2 xs[MAX_NSUB]`, i.e. 4 bytes per
+        # entry each, so the requirement is (K + NSUB) * 4 + overhead. The
+        # original guard counted only NSUB and would have reported "fits" for
+        # a large-K artifact that then died at KERNEL LOAD — the same failure
+        # the guard exists to prevent, and the same defect E134 fixed on the
+        # MoE side, where a K>=4096 d4 artifact scored normally and could not
+        # generate a token. Does not bite at any rung on disk today
+        # (d2/K4096 at NSUB 2560 needs 26,624 B) and would have bitten at
+        # d2/K8192.
         _nsub = IN // int(self.codebook.shape[1])
-        _fits_tg = _nsub * 4 + 1024 <= 32768
+        _kk = int(self.codebook.shape[0])
+        _fits_tg = (_kk + _nsub) * 4 + 1024 <= 32768
         if N <= 32 and int(self.codebook.shape[1]) == 2 and _fits_tg:
             # DENSE fused kernel (2026-08-19): one simdgroup per output row
             # instead of one thread, no expert axis. Bit-identical to the
