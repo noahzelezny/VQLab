@@ -79,3 +79,16 @@ DENSE_FAMILIES = {
     # named to match FAMILY's verify entry; the pre-release name was "qwen3_8"
     "qwen3_8_dense": ("model.language_model.layers.{li}.mlp.{key}.weight", "0-63"),
 }
+
+# Dense assembly remap: family -> (fitter module template, base module
+# template). The fitter names modules with the SOURCE checkpoint's
+# convention because that is what it read; the mlx base uses another. These
+# are different strings and nothing downstream catches a mismatch except a
+# strict load failure at score time, so build_dense_vq --dry-run asserts
+# every fitted module lands on a real base module before bytes are written.
+DENSE_REMAP = {
+    "qwen3_8_dense": ("model.language_model.layers.{li}.mlp.{key}",
+                      "language_model.model.layers.{li}.mlp.{key}"),
+    "gemma4_e4b": ("language_model.model.layers.{li}.mlp.{key}",
+                   "language_model.model.layers.{li}.mlp.{key}"),
+}

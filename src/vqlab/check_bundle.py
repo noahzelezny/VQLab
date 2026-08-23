@@ -8,12 +8,14 @@ MoE artifacts (config declares vq_modules): PASS = repo vq_switch.py text is
 contained verbatim in the bundle.
 
 Dense artifacts (config declares vq_linear/vq_embed): the runtime is
-vq_dense.py, which ALSO does a lazy `from mlx_lm.models.vq_switch import
-_fused, _dense_fused` at call time — so a correct dense bundle must carry
-BOTH files' text, and even then the import may resolve to site-packages
-(see METHODOLOGY.md §5: instrument the import, never assume). There is no
-dense bundle writer yet; this gate fails dense artifacts loudly rather than
-letting the gap pass silently.
+vq_dense.py, whose fused path needs _dense_fused/_fused from vq_switch.py,
+so a correct dense bundle carries BOTH files' text (build_dense_vq.py
+writes them in that order, followed by the loader shim). Dense bundles that
+carry vq_dense.py ALONE reach into `mlx_lm.models.vq_switch` at call time
+and therefore require a VQ-patched mlx-lm: measured, such an artifact
+raises ModuleNotFoundError on a stock install — it scores fine and cannot
+serve. Passing this gate is still not proof of which copy executes; see
+METHODOLOGY.md §5 and run bundle-accept.
 """
 import argparse
 import json
@@ -47,11 +49,10 @@ def main() -> int:
                    if t not in bundle]
         if missing:
             print(f"FAIL (dense artifact): bundle is missing {', '.join(missing)}. "
-                  "No dense bundle writer exists yet — dense artifacts resolve "
-                  "their fused path against site-packages, not the bundle. Do "
-                  "not publish a dense artifact with a runtime-dependent claim "
-                  "until the bundle carries both runtimes AND bundle_accept "
-                  "passes on the lifted copy.")
+                  "Its fused path would resolve against site-packages, so the "
+                  "artifact requires a VQ-patched mlx-lm and raises "
+                  "ModuleNotFoundError on a stock install. Re-run build-dense "
+                  "to write a bundle carrying both runtimes.")
             return 1
         print("PASS: dense bundle carries both runtimes verbatim (still "
               "instrument the resolved import before any runtime claim)")

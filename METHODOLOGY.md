@@ -142,7 +142,11 @@ looked green).
 - Fits resume: never `rm -rf` a fit output dir, never write in place, and
   never edit a script a running chain has not yet invoked.
 - Dense and MoE are different runtimes; a smoke on one path says nothing
-  about the other.
+  about the other. A dense artifact's bundle must carry BOTH `vq_switch.py`
+  and `vq_dense.py` — the dense fused path calls `_dense_fused`, which lives
+  in vq_switch. Measured: a bundle carrying vq_dense alone raises
+  ModuleNotFoundError on a stock mlx-lm — it scores fine and cannot serve.
+  `check-bundle` gates this.
 - Healthy relative error scales with K (K2048-class ~0.19, K256 ~0.31,
   K128 ~0.46). Set `--relerr-abort` per geometry.
 - Never register a duration derived from a probe: probes time the cheap
