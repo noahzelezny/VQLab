@@ -56,7 +56,8 @@ by measurement (same artifact twice, six decimals identical).
 **THE FITTER IS NOW SEEDED** (`--seed`, default 1234). Gated both ways: seeded
 runs diverge 0.0100%, unseeded 99.7996%. **Seeding is necessary but NOT
 sufficient** — seeded runs are still not bitwise identical, so a second source
-(Metal reduction order) exists and 6d's attribution is incomplete. Amendment
+(UNIDENTIFIED; Metal reduction order is the leading UNTESTED candidate)
+exists and 6d's attribution is incomplete. Amendment
 proposed to the paper session, NOT applied.
 **Vintage fitters deliberately UNSEEDED** — they must stay byte-identical to
 the versions under test in E121/E129/E136.

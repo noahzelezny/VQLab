@@ -310,6 +310,29 @@ Last updated: 2026-08-21 (through E110).
    established is that the corollary is false AS STATED GENERALLY. NOT that
    the 397B floor is 0.0447, and NOT that the vintage gap is seed noise: H1
    remains a ranked hypothesis. [E125, E127, E129]
+   **SEEDING AMENDMENT, 08-22 (E139): the attribution in this law's headline is
+   INCOMPLETE.** 6d attributed non-bitwise reproducibility to MLX's RNG being
+   unseeded across processes. `fit_dense_vq.py` is now seeded (`--seed`,
+   default 1234) and the both-directions gate at dense 27B d2/K256, 3 tensors,
+   measured:
+
+       SEEDED   A vs B    0.0100% of codes differ   max|codebook diff| 4.9e-04
+       UNSEEDED C vs D   99.7996% of codes differ   max|codebook diff| 1.95
+
+   **Pinning the generator removes roughly four orders of magnitude of
+   byte-level divergence but NOT all of it — seeded runs are still not bitwise
+   identical.** A second source remains, **UNIDENTIFIED; Metal reduction order
+   is the leading candidate and is UNTESTED.** The unseeded RNG was the
+   DOMINANT source, not the only one — quote "statistically reproducible"
+   rather than attributing it wholly to seeding. **Whether the residue is
+   visible in output quality is UNMEASURED** (it costs two full fits plus
+   scoring).
+   Scope: the gate ran at ONE dense geometry (d2/K256); the ppl width it
+   explains was measured at 397B d4/K256. Not crossed silently, per III.12.
+   **The vintage fitters (`fitter_0816_cdcdeab.py` md5 22436a2c,
+   `vq_397b_codes.py` md5 2c5c3abb) are deliberately LEFT UNSEEDED — E121,
+   E129 and E136 are valid only as draws from the process AS IT WAS, and
+   seeding them would void those arms retroactively.** [E139, E136b]
 
 6f. **MEASURE THE SEED-NOISE FLOOR BEFORE BELIEVING A SMALL DIFFERENCE.**
    Fits are unseeded (6d), so two artifacts of identical geometry differ. At

@@ -8621,7 +8621,8 @@ requires and what a gate that only ever passes would not tell us.
 
 **Seeded runs are NOT bitwise identical** — 0.0100% of codes still differ and
 the shard hashes differ. So there is a SECOND nondeterminism source beyond the
-RNG: Metal reduction order. **6d attributed non-bitwise-reproducibility
+RNG — **UNIDENTIFIED; Metal reduction order is the leading candidate and is
+UNTESTED.** **6d attributed non-bitwise-reproducibility
 entirely to the unseeded RNG; that attribution is now incomplete.** With the
 RNG pinned, byte-level divergence survives at ~1e-4 of codes.
 
