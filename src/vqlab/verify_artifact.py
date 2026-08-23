@@ -33,26 +33,8 @@ import numpy as np
 import vq_pack
 
 
-def _load_family():
-    """FAMILY table from vq_397b_codes.py WITHOUT importing it (the fitter
-    runs argparse at module level). Exec just the dict literal so there is
-    still a single source of truth for key layouts."""
-    src = (pathlib.Path(__file__).parent / "vq_397b_codes.py").read_text()
-    start = src.index("FAMILY = {")
-    depth, i = 0, start + len("FAMILY = ")
-    for j in range(i, len(src)):
-        if src[j] == "{":
-            depth += 1
-        elif src[j] == "}":
-            depth -= 1
-            if depth == 0:
-                break
-    ns = {}
-    exec("FAMILY = " + src[i:j + 1], ns)
-    return ns["FAMILY"]
-
-
-FAMILY = _load_family()
+sys.path.insert(0, str(pathlib.Path(__file__).parent))
+from families import FAMILY  # shared registry (families.py)
 
 ap = argparse.ArgumentParser()
 ap.add_argument("--artifact", required=True)
