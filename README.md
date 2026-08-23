@@ -1,4 +1,4 @@
-# MoEMash
+# VQLab
 
 **Custom size-targeted vector-quantized (VQ) builds of large models on Apple
 Silicon, with MLX.** Name a byte budget, price the recipe before fitting,
@@ -52,10 +52,10 @@ at 35B. We publish these fences as measured boundaries, not caveats.
 
 ## The differentiating feature: size targeting
 
-Flat rungs leave gaps. MoEMash prices an artifact **before fitting it**:
+Flat rungs leave gaps. VQLab prices an artifact **before fitting it**:
 
 ```bash
-moemash price --family qwen397b --budget-gib 108
+vqlab price --family qwen397b --budget-gib 108
 ```
 
 Two measured size models back this: the 397B harvest form
@@ -76,19 +76,19 @@ fit → verify (outlier gate) → pack → graft (vision) → release checks
 ```bash
 pip install -e .
 
-moemash fit-moe   --family qwen397b --model <bf16-or-base> --out fits/K256 ...
-moemash fit-dense --model <src> --out fits/d2K512 ...
-moemash verify    <artifact> --outlier 3.0        # BEFORE believing any score
-moemash pack      <artifact> --out <packed>       # true bit-width, measured size
-moemash graft     <packed> --vision <bf16>        # MoE vision tower, bf16
-moemash check     <packed>                        # release + bundle gates
-moemash smoke     <packed>                        # one token, fused path, resident
-moemash score     <packed> --instrument referee   # or kl
-moemash manifest  write <packed>                  # stamp provenance
+vqlab fit-moe   --family qwen397b --model <bf16-or-base> --out fits/K256 ...
+vqlab fit-dense --model <src> --out fits/d2K512 ...
+vqlab verify    <artifact> --outlier 3.0        # BEFORE believing any score
+vqlab pack      <artifact> --out <packed>       # true bit-width, measured size
+vqlab graft     <packed> --vision <bf16>        # MoE vision tower, bf16
+vqlab check     <packed>                        # release + bundle gates
+vqlab smoke     <packed>                        # one token, fused path, resident
+vqlab score     <packed> --instrument referee   # or kl
+vqlab manifest  write <packed>                  # stamp provenance
 ```
 
 Every subcommand is a thin wrapper over a standalone script in
-`src/moemash/`; `moemash <cmd> --help` shows the full surface. See
+`src/vqlab/`; `vqlab <cmd> --help` shows the full surface. See
 [REPRODUCING.md](REPRODUCING.md) for the exact commands behind each paper
 table row.
 
