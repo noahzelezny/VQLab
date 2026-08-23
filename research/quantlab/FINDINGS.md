@@ -75,6 +75,21 @@ Last updated: 2026-08-21 (through E110).
     test generality. Sizes are IDENTICAL when packed (13.83 GiB both); the
     21.3 GiB d2 figure is uint8 padding only. "Raise K first" = a measured
     preference, not a landslide. [E87 + correction; E82 void per E85]
+    **SECOND PAIR, 08-22 (E130) — the scope note above is SATISFIED and d4
+    wins again.** An exact rate twin at 3.00 bpw, both packed and measured,
+    5 MB apart:
+
+        arm            size GiB    KL mnats    ppl      top-1
+        d2/K64          11.604      93.887    5.3494   85.73%
+        d4/K4096        11.609      85.823    5.2292   86.05%
+
+    d4 by 8.6% KL and CONSISTENTLY — no 6c inversion, all three metrics agree.
+    Both margins clear the floor (KL 3.9x, ppl 2.7x), which is INHERITED from
+    d2/K256 and labelled so per III.12. Two independent bands (2.00, 3.00),
+    same direction, ~12% and ~8.6%. Still a preference, not a landslide —
+    **and now BOUNDED: d4's rate CEILING is 4.00 bpw even at K65536 (16-bit
+    index over 4 weights), so a d4 advantage is an R1/R2 lever and can NEVER
+    be an R3 one.** [E130]
 
 11. **At LOW K, a better-fitting codebook can be a WORSE model — because
     k-means trades the tail for the bulk.** Measured on a matched K256 pair
@@ -113,6 +128,37 @@ Last updated: 2026-08-21 (through E110).
     relerr across those body tensors moves -0.00033, so the gate sees nothing.
     **Run `probe_init_sweep.py` on a new family BEFORE fitting anything** —
     see PROCESS.md. [E107, E108, E109]
+
+14. **THE AFFINE FRONTIER PASSES ABOVE THE VQ FRONTIER BY 6.0 bpw — the
+    crossover is bracketed 4.5-6.0 ON THE DENSE 27B.** Below 4.5 the VQ win
+    is measured on three families; the UPPER bracket is one model and the
+    MoEs have not been tested there. One instrument, all sizes MEASURED
+    PACKED:
+
+        rung             size GiB   bpw    KL mnats    ppl      top-1
+        q3                10.963      -    187.765       -         -
+        E130 d2/K64       11.604    3.00     93.887   5.3494   85.73%
+        E124 d2/K256      13.596    4.00     40.327       -     90.10%
+        q4                14.094    4.00     45.842   5.2055   89.82%
+        E126 d2/K512      14.592    4.50     33.095       -         -
+        E128C d2/K4096    17.583    6.00     26.709   5.2417   91.66%
+        q6                20.355    6.00      3.710   5.2603   96.75%
+        q8                26.341    8.00      1.641       -         -
+
+    BELOW: E124 beats q4 on KL at LESS than q4's size; E126 beats q4;
+    d2/K64 halves q3's KL for +0.64 GiB.
+    ABOVE: **q6 beats the best VQ rung by 7.2x on KL and 5.1 points on top-1
+    FOR 2.77 GiB MORE.** Keep that size clause welded to the headline
+    wherever this law is quoted: E128C is NOT dominated — it is smaller. The
+    precise form is that the affine FRONTIER passes above the VQ frontier,
+    not that q6 beats E128C outright. E128C's nominal 0.0186 ppl edge is
+    inside an inherited 0.0447 floor and cannot offset a 7.2x KL gap.
+    **Consequence: this method's regime is the LOW-bpw end and it ends before
+    6 bpw.** It is also why R3 was unreachable (E128 run C): at 6.0 bpw affine
+    is already within 2.07 mnats of q8 while VQ sits at 26.709, and the
+    measured d2 slope FLATTENS (x0.673/bpw over 4.00-4.50, only x0.868 over
+    4.50-6.00). Two independent routes to the same wall. [E133, E126, E124,
+    E128C]
 
 ## II. Retracted / false leads — do NOT re-chase without new evidence
 
@@ -380,7 +426,76 @@ Last updated: 2026-08-21 (through E110).
    An inherited floor is a stated assumption; a silent one is III.2's missing
    instrument wearing different clothes. [E127, E126, E129, E130]
 
+13. **NEVER ASSUME WHICH RUNTIME EXECUTES — INSTRUMENT THE IMPORT
+   (`mod.__file__`) AND NAME THE RESOLVED PATH IN ANY RUNTIME-DEPENDENT
+   CLAIM.** Which copy runs — the artifact's bundled `model.py`, the venv's
+   site-packages, or your repo checkout — depends on the artifact's loading
+   mechanism AND the environment, and BOTH directions have burned us:
+   - 08-21 (E113/E122): the bundle WAS the executing copy. The artifact
+     declares `model_file` and the stock loader exec'd it; the raise lived at
+     :723 of the BUNDLED copy, and patching the repo would have changed
+     nothing. A patched `utils.py` flips it the other way, which is how the
+     smoke's error text came from the venv (:723) and not the bundle (:827).
+   - 08-22 (E135): the reverse. A kernel fix was present in the repo AND in
+     both artifacts' bundles and NEITHER executed — the installed
+     site-packages copy was 2 days old and contained none of it. Two sessions
+     described the same repo and disagreed about whether artifacts could
+     generate, for 40 minutes, because their site-packages differed.
+   **`model_file` being declared does NOT settle it:** the 08-22 artifacts DO
+   declare `model_file: model.py` and the venv's `utils.py` does support it,
+   yet the resolved import was site-packages and installing the fix THERE is
+   what changed behaviour. That mechanism is NOT explained and is not claimed
+   here — which is exactly why the rule is to instrument rather than reason.
+   **Distinct from E122**, where a bundle changed AFTER the number that
+   shipped with it was measured; here the bundle never ran. **Any claim of the
+   form "this artifact ships the runtime that produced its number" must name
+   the runtime that actually resolved.** [E135, E113, E122]
+
+14. **BYTE-IDENTICAL GREEDY TEXT IS AN ACCEPTANCE GATE ONLY BETWEEN
+   IMPLEMENTATIONS OF THE SAME ALGORITHM. Across different algorithms it is
+   LUCK and must not gate anything alone.** E113 used it correctly (packed-d8
+   fused vs unpacked-d8 fused — exactness IS expected there). On 08-22 it was
+   applied fused-vs-decode and produced a false alarm: one artifact diverged
+   at token ~205 ("global hub"/"global center"), another was byte-identical,
+   and a K=2048 control was byte-identical — which briefly read as evidence
+   the new kernel was broken at large K. Measuring the error scale settled it:
+
+       rel. error of _fused vs the decode reference, same inputs
+       K=2048  CONTROL (kernel proven bit-identical)   3.3e-4 - 4.1e-4
+       K=8192  (device-codebook kernel)                3.3e-4 - 4.5e-4
+       K=16384 (device-codebook kernel)                3.8e-4 - 4.2e-4
+
+   LUT-matmul and decode-then-GEMM differ by ~4e-4 relative at EVERY K
+   including the known-good one; the control's byte-identity was 120 tokens
+   that happened to miss a near-tie. **Correct form: quote RELATIVE ERROR
+   against a KNOWN-GOOD control arm.**
+   **Corollary, and it cost a wasted probe the same night: a bit-identity
+   probe must RECORD WHICH KERNEL EACH ARM DISPATCHED and report VACUOUS if
+   they match.** The first version compared `vq_fused_packed8` against itself
+   and reported bit-identity that meant nothing — III.10's corollary (a probe
+   that cannot fire is indistinguishable from a bug that is not there)
+   applied to acceptance tests. [E135, E113]
+
 ## IV. MLX/Metal engineering rules (each cost ≥1 run to learn)
+
+- **THE d4/d2 FUSED KERNELS CACHE THE CODEBOOK IN THREADGROUP MEMORY, SO
+  `K * dim * 2 < 32768` IS A HARD CEILING** — Apple's threadgroup limit,
+  strictly less, and `xs[]` shares the budget. **d4 is safe to K2048, d2 to
+  K4096.** Measured as an exact boundary, four siblings on one box: K256
+  (2,048 B) OK, K2048 (16,384 B) OK, **K4096 (32,768 B) FAIL — ON the cap**,
+  K8192 (65,536 B) FAIL. **CONFIRMED ARCHITECTURAL, not per-device: the M3
+  and M4 fail identically on the same kernel.** d8 was moved to DEVICE memory
+  for this reason long ago (vq_switch.py:12-16); d4 was not until 08-22
+  (ba0fad5, accepted E135).
+  **`XPC_ERROR_CONNECTION_INTERRUPTED` IS HOW METAL REPORTS THIS
+  OVER-ALLOCATION — it is NOT a compiler-service fault.** A trivial custom
+  kernel compiles on the same box, same venv, minutes later. Chasing the XPC
+  message cost three probes. Compute `K*dim*2` FIRST.
+  **DENSE AND MoE ARE DIFFERENT RUNTIMES.** `vq_dense.py`'s fused path is
+  gated on `codebook.shape[1] == 2`, so a d4 DENSE artifact never loads a
+  fused kernel at all. **A smoke on one path says NOTHING about the other** —
+  asserted wrongly in BOTH directions within one hour on 08-22, by two
+  sessions reading each other's files. [E134, E135]
 
 - **Any lazy read still pending when a save forces evaluation is paid inside
   a GPU command buffer** → watchdog kill "at the write step." Load under
