@@ -34,7 +34,7 @@ import pathlib
 import sys
 
 import os
-MAN = pathlib.Path(os.environ.get("MOEMASH_MANIFEST_DIR", "manifests"))
+MAN = pathlib.Path(os.environ.get("VQLAB_MANIFEST_DIR", "manifests"))
 
 
 def head_sha(p, n=1 << 20):

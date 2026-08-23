@@ -14,7 +14,7 @@ import mlx.core as mx
 import mlx_lm.models.vq_switch as vs
 
 import os
-E = os.environ.get("MOEMASH_MODELS_DIR") or (sys.argv[1] if len(sys.argv) > 1 else ".")
+E = os.environ.get("VQLAB_MODELS_DIR") or (sys.argv[1] if len(sys.argv) > 1 else ".")
 
 def load_layer(art):
     idx = json.load(open(f"{art}/model.safetensors.index.json"))["weight_map"]

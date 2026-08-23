@@ -21,7 +21,7 @@ bundle = pathlib.Path(ART) / "model.py"
 text = bundle.read_text()
 cut = text.find("import importlib as _importlib")
 assert cut > 0, "shim marker not found"
-tmp = pathlib.Path(tempfile.mkdtemp(prefix="moemash_bundle_")) / "_bundled_vq_switch.py"
+tmp = pathlib.Path(tempfile.mkdtemp(prefix="vqlab_bundle_")) / "_bundled_vq_switch.py"
 tmp.write_text(text[:cut])
 
 spec = importlib.util.spec_from_file_location("bundled_vq_switch", tmp)

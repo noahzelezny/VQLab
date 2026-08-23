@@ -16,7 +16,7 @@ version of what this project asks of contributed results and code:
   instrument, and how the comparator was produced. Record the resolved
   interpreter stack (python, mlx version, the `.so` that actually loaded)
   per fit.
-- **Stamp provenance**: `moemash manifest write` after gating; `check`
+- **Stamp provenance**: `vqlab manifest write` after gating; `check`
   before citing.
 
 ## Code

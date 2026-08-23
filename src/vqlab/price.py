@@ -1,4 +1,4 @@
-"""moemash price — size-target a VQ build BEFORE fitting it.
+"""vqlab price — size-target a VQ build BEFORE fitting it.
 
 Two measured size models (see the paper, §2.4/§3.3):
 
@@ -149,7 +149,7 @@ def price_dense(fam: DenseFamily, budget_gib: float) -> str:
 
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(
-        prog="moemash price",
+        prog="vqlab price",
         description="Price a VQ build before fitting it: name a byte budget, "
                     "get the candidate recipes.",
     )
