@@ -18,6 +18,7 @@ fit quality first, runtime integration only if the numbers earn it.
     ./fit_e4b_vq.py --src <bf16 snapshot> --out <dir> [--k 2048 --dim 2]
 """
 import argparse
+import sys
 import json
 import pathlib
 import time
@@ -33,7 +34,7 @@ ap.add_argument("--group", type=int, default=64)
 ap.add_argument("--iters", type=int, default=10)
 ap.add_argument("--layers", default=None)
 ap.add_argument("--family", default="gemma4_e4b",
-                choices=["gemma4_e4b", "qwen3_8"],
+                choices=["gemma4_e4b", "qwen3_8_dense"],
                 help="selects tensor-name template and default layer range")
 ap.add_argument("--relerr-abort", type=float, default=0.90,
                 help="stop the fit if any tensor exceeds this relative error. "
@@ -44,11 +45,9 @@ args = ap.parse_args()
 
 SRC, OUT = pathlib.Path(args.src), pathlib.Path(args.out)
 K, D, G = args.k, args.dim, args.group
-FAMILIES = {
-    "gemma4_e4b": ("language_model.model.layers.{li}.mlp.{key}.weight", "0-41"),
-    "qwen3_8":   ("model.language_model.layers.{li}.mlp.{key}.weight", "0-63"),
-}
-KEY_TMPL, _default_layers = FAMILIES[args.family]
+sys.path.insert(0, str(pathlib.Path(__file__).parent))
+from families import DENSE_FAMILIES
+KEY_TMPL, _default_layers = DENSE_FAMILIES[args.family]
 LO, HI = (int(x) for x in (args.layers or _default_layers).split("-"))
 OUT.mkdir(parents=True, exist_ok=True)
 src_idx = json.load(open(SRC / "model.safetensors.index.json"))["weight_map"]
