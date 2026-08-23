@@ -8016,3 +8016,112 @@ FINDINGS IV.1 verbatim, the third run this class has cost the project.
 **The honest statement for the paper: 2.7655 is not reproducible, and we know
 it is not the seed, the fitter, the inputs, or the box.** Five falsified
 hypotheses and a measured floor is a result. It is not a mechanism.
+
+## E135 — RESULT: the E134 device-codebook kernel is ACCEPTED. And the runtime that executes is not the one an artifact bundles.
+
+### THE DIAGNOSIS THAT CAME FIRST, and it is a new failure class
+
+The M4 reported both 35B rungs generating after ba0fad5. On the M3 they still
+FAILED, with the pre-fix kernel name. Cause, found by instrumenting the import
+rather than reading files:
+
+    mlx_lm.models.vq_switch -> venv/lib/python3.12/site-packages/mlx_lm/models/vq_switch.py
+    installed copy: mtime 2026-08-20, contains 0 of the fix (repo copy: 8 refs)
+
+**`mlx_lm` imports vq_switch from SITE-PACKAGES. The artifact's bundled
+model.py is NOT what executes**, and neither is the repo checkout. The fix was
+present in both and irrelevant to both. This is distinct from E122 (a bundle
+changed after its number was measured); here **the bundle never ran at all**.
+Any claim of the form "this artifact ships the runtime that produced its
+number" must name the INSTALLED runtime, because that is what computed it.
+Two sessions described the same repo and disagreed about reality for 40
+minutes because they had different site-packages.
+
+### Harness isolation (Noah's call, and it is the right one)
+
+Rather than mutate the scoring instrument mid-evening, `venv-e134fix` was made
+by COPYING venv and replacing exactly one file. Verified: `diff -rq` reports
+that single file, mlx 0.32.0 / mlx_lm 0.31.3 in both, original md5 unchanged
+(e08f19ff...). A fresh pip install was deliberately NOT used — it could drift
+package versions and confound the comparison, the same trap HANDOFF flagged
+for lm-eval.
+
+### E113 ACCEPTANCE, all steps
+
+**Step 1 — synthetic bit-identity, devcb vs threadgroup, through the REAL
+`_fused` dispatch** (forced by monkeypatching `_d4_tg_fits`, not by
+reimplementing the call — III.10's corollary):
+
+    vq-K2048-d4-packed  K=2048 pb=11  N=1,8,32   bit-identical, max|diff| 0.000e+00
+    vq-K256-d4          K=256  pb=8   N=1,8,32   bit-identical, max|diff| 0.000e+00
+    6 valid comparisons, 0 failures
+
+**The probe was instrumented to prove it FIRED**, after a first version that
+could not: it now records the kernel name dispatched in each run and reports
+VACUOUS if they match. First run silently compared `vq_fused_packed8` against
+itself and reported bit-identity that meant nothing. Confirmed firing:
+`vq_fused_packed11` vs `vq_fused_packed11_d4_devcb`.
+
+**Step 2 — III.11 smoke on the fixed harness:** both PASS.
+
+    e94b  d4/K8192   'Paris, a city renowned for its rich'
+    e128  d4/K16384  'Paris.\nThe capital of France is'
+
+**Step 3 — byte-identical greedy: PASSES for R2, FAILS for e94b, and the
+failure is NOT a kernel defect.** e94b diverges at char 205 ("global hub" vs
+"global center"). Measured rather than argued:
+
+    rel. error of _fused vs the decode reference, same inputs
+    K=2048  CONTROL (threadgroup kernel, proven bit-identical in step 1)  3.3e-4 - 4.1e-4
+    K=8192  e94b   (devcb)                                               3.3e-4 - 4.5e-4
+    K=16384 R2     (devcb)                                               3.8e-4 - 4.2e-4
+
+**devcb agrees with decode to the SAME error scale as a known-good kernel.**
+fused-vs-decode differ by ~4e-4 relative at EVERY K — they are different
+algorithms (LUT-matmul vs decode-then-GEMM). The K=2048 greedy control came
+back byte-identical not because the paths are exact but because 120 tokens
+happened to miss a near-tie. e94b's divergence is one near-tie flipped by fp16
+accumulation order.
+
+**Method note, recorded because the reasoning moved twice:** "different
+algorithms" was first offered as an unmeasured defense, then abandoned on a
+single byte-identical control, then established by measuring the error scale
+with a known-good kernel as the control arm. **Byte-identical greedy across
+DIFFERENT algorithms is a luck-dependent test and must not be an acceptance
+gate on its own.** E113's use of it was fused-vs-fused, where exactness IS
+expected. Cross-algorithm, quote the relative error against a known-good
+control instead.
+
+### VERDICT
+
+The device-codebook d4 kernel is ACCEPTED: bit-identical to the threadgroup
+kernel where both exist, numerically indistinguishable from decode where only
+it exists, and III.11-clean on both real artifacts.
+
+### 35B numbers, on the runtime the artifacts ship with
+
+Re-scored on venv-e134fix and IDENTICAL to the pre-fix run to every printed
+digit (ppl to 15 decimals), which is expected: scoring is prefill-shaped and
+never dispatches the small-N fused kernel. So the fix is confirmed inert on
+the scoring path by MEASUREMENT, as the M4 asked rather than assumed.
+
+    artifact                     size GiB    KL      ppl       top-1
+    e94b  d4/K8192  packed        14.838   53.022   4.7090   89.55%
+    e128  d4/K16384 packed        15.783   47.535   4.7555   89.81%
+    refs, same instrument: q8 7.449, q4 78.557
+
+**e94b packed reproduces 53.022 exactly** -> E132's registered branch fires:
+the split provenance CLOSES and the 35B row may cite the packed artifact for
+both halves.
+
+**R2 is MET on the registered criterion** (4f676b7: KL < 53.022, beating e94b
+rather than merely q4) at 15.783 GiB, inside the <= 19.0 bar, top-1 also up.
+**But ppl INVERTS**: R2 is 0.0465 worse against an INHERITED 0.0447 floor —
+1.04x, i.e. sitting exactly on it. Per 6c a winner is not declared on one
+metric, and per E128C an inversion inside the floor is not an observation, so
+this does NOT re-elevate 6c. **A 35B floor does not exist; one extra fit would
+measure it.** Verdict stated as: MET on KL and top-1, ppl uninterpretable.
+
+**III.11 BLOCKED is LIFTED for both rungs — on the fixed runtime only.** The
+stock installed runtime still cannot load these kernels, so any release must
+ship or require the fixed vq_switch.
