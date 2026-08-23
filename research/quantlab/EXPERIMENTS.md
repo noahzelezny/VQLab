@@ -8566,3 +8566,84 @@ run C read the same path for 4h38m without incident.
 probe tensors with 0.9% spread; 192 tensors -> 133,056 s = **36.9 h**. The
 (params/d) x K cost model predicted 695 s/tensor and was right to two parts per
 thousand.
+
+## E139 — THE FITTER IS NOW SEEDED. And seeding is NECESSARY BUT NOT SUFFICIENT.
+
+Noah's decision, 08-22, after E136b measured a 0.0256 same-stack ppl spread:
+"seed the fitter. I'd rather have deterministic fits than a dice roll."
+
+**WHY THERE WAS VARIANCE AT ALL — the mechanism, read from source.** Nothing
+seeded ANY fitter. `fit_dense_vq.py`: zero seed calls. `fitter_0816_cdcdeab.py`:
+zero. `vq_397b_codes.py` appeared to have one — it is the word "seeding" in a
+DOCSTRING about k-means++, not an RNG seed. (Same shape as the III.10 phantom:
+a word that reads like a citation until someone looks.)
+
+Randomness enters `fit_dense_vq.py` in three places per tensor:
+
+    :70   idx = mx.random.randint(0, n, (min(cap, n),))   the SUBSAMPLE draw
+    :72   C  = P[mx.random.randint(...)]                  first centroid
+    :76   r  = float(mx.random.uniform().item())          k-means++ selection
+
+with **`cap = 200_000`** — the codebook is initialised from a 200k random
+subsample drawn WITH REPLACEMENT. Different subsample -> different init ->
+different codebook -> different tail reconstruction. Per law 11 the tail drives
+output damage while barely moving mean relerr, which is exactly the observed
+signature: **relerr identical to 4 decimals (0.3155 vs 0.3156) while ppl moved
+0.0256.** The fitter's own comment already recorded the extreme case (E44:
+"tail30 L26 down_proj hit relerr 1.0 from a bad draw"); nobody had measured the
+ORDINARY spread.
+
+**THE REFEREE IS NOT THE NOISE SOURCE.** Same artifact scored twice:
+nll 1.039996 / ppl 2.8292 both runs, identical to six decimals, only
+wall-clock differs. The variance is entirely in the fit.
+
+### THE CHANGE
+
+`--seed INT`, **default 1234, so fits are SEEDED and reproducible by default**.
+`--seed -1` restores the old unseeded behaviour, which is now the way to
+MEASURE a draw distribution on purpose (III.12 floors) rather than the way to
+accidentally have one.
+
+### GATED BOTH DIRECTIONS (III.5), 1 layer / 3 tensors at d2/K256
+
+    SEEDED   A vs B   codes differing     13,350 / 133,693,440 = 0.0100%   max|cb diff| 4.9e-04
+    UNSEEDED C vs D   codes differing  133,425,478 / 133,693,440 = 99.7996%  max|cb diff| 1.95
+    seeded vs unseeded                                            99.4915%
+
+**A ~10,000x reduction in divergence.** The gate passes on known-good (seeded
+runs agree) AND fails on known-bad (unseeded runs diverge), which is what III.5
+requires and what a gate that only ever passes would not tell us.
+
+### THE FINDING THAT CAME OUT OF THE GATE: SEEDING IS NOT SUFFICIENT
+
+**Seeded runs are NOT bitwise identical** — 0.0100% of codes still differ and
+the shard hashes differ. So there is a SECOND nondeterminism source beyond the
+RNG: Metal reduction order. **6d attributed non-bitwise-reproducibility
+entirely to the unseeded RNG; that attribution is now incomplete.** With the
+RNG pinned, byte-level divergence survives at ~1e-4 of codes.
+
+Practically the dice roll is gone: 0.01% of codes differing at max codebook
+delta 4.9e-04, against a floor (6f, E136b) that was measured on codebooks
+differing in 99.8% of codes. **Expectation, stated as expectation and NOT
+measured:** the residual should sit far below any ppl floor we have. Measuring
+it would cost two full fits plus scoring and has not been done.
+
+### SCOPE — what this does and does not fix
+
+- **Does:** every fit from 08-22 onward is reproducible from its recipe plus
+  its seed. The class of confusion that consumed two weeks cannot recur.
+- **Does NOT:** recover the past. The shipped 2.4bpw artifact's draw is gone
+  and is not recoverable by re-running anything. E136/E136b stand as measured.
+- **Does NOT:** apply to `fitter_0816_cdcdeab.py` or `vq_397b_codes.py`, which
+  are deliberately untouched — the vintage fitter must stay byte-identical to
+  the version under test (E121/E129/E136), and touching it would void those
+  arms.
+
+### E138 RELAUNCHED SEEDED
+
+E138 (d4/K65536, 37 h) had been running 8 minutes unseeded. Killed and
+relaunched with `--seed 1234` rather than spend 37 hours on a result that
+could not be reproduced — the exact defect this session spent the evening
+withdrawing a headline over. Cost: 8 minutes. Its pre-registration (E138,
+b7e2686) is otherwise unchanged; `--relerr-abort 0.30` still comes from the
+14:49 probe.
