@@ -15,42 +15,42 @@ and an in-place refit destroys the evidence for any published number).
 
 ```bash
 # 0. price it first (optional but free)
-moemash price --family qwen397b --budget-gib 112
+vqlab price --family qwen397b --budget-gib 112
 
 # 1. fit
-moemash fit-moe --base <BASE> --src <BF16> --out fits/K256 \
+vqlab fit-moe --base <BASE> --src <BF16> --out fits/K256 \
     --vq-layers 0-56 --k 256 --dim 4 --family qwen3_5
 
 # 2. outlier gate — on a box that did not produce the fit
-moemash verify --artifact fits/K256 --src <BF16> --family qwen3_5 --outlier 3.0
+vqlab verify --artifact fits/K256 --src <BF16> --family qwen3_5 --outlier 3.0
 
 # 3. pack to true bit-width (recomputes index total_size from packed shards)
-moemash pack --src fits/K256 --out artifacts/K256-packed
+vqlab pack --src fits/K256 --out artifacts/K256-packed
 
 # 4. graft the vision tower (post-graft size is the citable size)
-moemash graft --artifact artifacts/K256-packed --src <BF16>
+vqlab graft --artifact artifacts/K256-packed --src <BF16>
 
 # 5. release + bundle gates
-moemash check-release --artifact artifacts/K256-packed
-moemash check-bundle --artifact artifacts/K256-packed
-moemash bundle-accept artifacts/K256-packed   # tests the copy that ships
+vqlab check-release --artifact artifacts/K256-packed
+vqlab check-bundle --artifact artifacts/K256-packed
+vqlab bundle-accept artifacts/K256-packed   # tests the copy that ships
 
 # 6. smoke: one generated token through the shipping fused path
-moemash preflight-ram artifacts/K256-packed   # needs whole model resident
+vqlab preflight-ram artifacts/K256-packed   # needs whole model resident
 python -m mlx_lm generate --model artifacts/K256-packed --prompt "hi" --max-tokens 4
 
 # 7. score, then stamp
-moemash score --model artifacts/K256-packed                        # prose
-moemash score --model artifacts/K256-packed \
-    --corpus src/moemash/referee/referee_corpus_code.txt           # code
-moemash manifest write artifacts/K256-packed
+vqlab score --model artifacts/K256-packed                        # prose
+vqlab score --model artifacts/K256-packed \
+    --corpus src/vqlab/referee/referee_corpus_code.txt           # code
+vqlab manifest write artifacts/K256-packed
 ```
 
 ## §3.1 — the 397B ladder (streaming referee ppl, prose/code)
 
 | row | fit command (steps 2–7 identical) |
 |---|---|
-| d8/K16384, 100.97 GiB | `moemash fit-moe ... --k 16384 --dim 8` |
+| d8/K16384, 100.97 GiB | `vqlab fit-moe ... --k 16384 --dim 8` |
 | flat K128, 100.93 | `... --k 128 --dim 4` |
 | harvest K64/K256, 107.9 | `... --k 256 --dim 4 --geom` shallow-band K64 (see `fit-moe --help`, `--tail-geom`/`--vq-layers` split) |
 | flat K256, 111.62 | `... --k 256 --dim 4` |
@@ -65,17 +65,17 @@ geometry (~0.19 K2048-class, ~0.31 K256, ~0.46 K128). The 143.68 GiB
 flagship cannot be smoked on a 96 GB box (preflight will refuse).
 
 Comparator rows (spicyneuron 2.6/3.5-bit) are community artifacts scored
-on the same referee, same session, after `moemash check-comparator`.
+on the same referee, same session, after `vqlab check-comparator`.
 
 ## §3.2 — 35B MoE row (KL-to-bf16)
 
 ```bash
-moemash kl cache --model <BF16-35B> --out-dir caches/qwen36 \
+vqlab kl cache --model <BF16-35B> --out-dir caches/qwen36 \
     --num-samples 128 --seq-len 512 --top-k 64
-moemash fit-moe --base <BASE-35B> --src <BF16-35B> --out fits/35b-K8192 \
+vqlab fit-moe --base <BASE-35B> --src <BF16-35B> --out fits/35b-K8192 \
     --k 8192 --dim 4 --family qwen3_5 --vq-layers 0-39
 # gate, pack, smoke as above, then:
-moemash kl score --model artifacts/35b-K8192-packed --cache-dir caches/qwen36
+vqlab kl score --model artifacts/35b-K8192-packed --cache-dir caches/qwen36
 ```
 
 Published measurement: 53.022 mnats / 89.55% top-1 at 14.838 GiB packed —
@@ -85,15 +85,15 @@ bundled runtime tested as the unit under test.
 ## §3.2 — dense 27B ladder (KL + ppl)
 
 ```bash
-moemash kl cache --model <BF16-27B> --out-dir caches/qwen38 ...
-moemash fit-dense --src <SRC-27B> --out fits/27b-d2K512 \
+vqlab kl cache --model <BF16-27B> --out-dir caches/qwen38 ...
+vqlab fit-dense --src <SRC-27B> --out fits/27b-d2K512 \
     --k 512 --dim 2 --family qwen3_8 --relerr-abort 0.6
 # splice into the affine base, pack:
-moemash pack-dense --src <assembled> --out artifacts/27b-d2K512-packed
-moemash verify --artifact artifacts/27b-d2K512-packed --src <BF16-27B> \
+vqlab pack-dense --src <assembled> --out artifacts/27b-d2K512-packed
+vqlab verify --artifact artifacts/27b-d2K512-packed --src <BF16-27B> \
     --family qwen3_8_dense --outlier 3.0
-moemash kl score --model artifacts/27b-d2K512-packed --cache-dir caches/qwen38
-moemash score --model artifacts/27b-d2K512-packed   # ppl leg
+vqlab kl score --model artifacts/27b-d2K512-packed --cache-dir caches/qwen38
+vqlab score --model artifacts/27b-d2K512-packed   # ppl leg
 ```
 
 Affine comparators q2–q8 are *local* mlx-lm conversions (stated in the
@@ -107,7 +107,7 @@ the range:
 
 ```bash
 for i in 1 2 3; do
-  moemash fit-dense --src <SRC-27B> --out fits/floor-$i --k 256 --dim 2 --family qwen3_8
+  vqlab fit-dense --src <SRC-27B> --out fits/floor-$i --k 256 --dim 2 --family qwen3_8
   # pack + score each
 done
 ```
@@ -127,5 +127,5 @@ hardware; absolutes are unsafe and no absolute is published.
 The originally-published 397B 2.4bpw build predates the manifest system and
 its base was later overwritten in place; it is preserved and checkable (its
 manifest and pinned revision exist) but not rebuildable. Every other row is
-a fit-and-score away. This incident is why `moemash manifest` exists — stamp
+a fit-and-score away. This incident is why `vqlab manifest` exists — stamp
 every artifact you gate, and `manifest check` before citing it.

@@ -24,7 +24,7 @@ Designed to run on the M4 while the M3 grinds its own queue:
              (plain file IO, SMB-safe) and delete the local copy so
              base(122G) + output(~40G VQ region) never overflows the disk.
 
-  moemash fit-moe --base <affine-skeleton-dir> --vq-layers 0-56 --k 256 \
+  vqlab fit-moe --base <affine-skeleton-dir> --vq-layers 0-56 --k 256 \
       --out <new-output-dir> --stage-dir <fast-local-scratch> \
       --src "<bf16-source-dir>" \
       --ship-to "<final-artifact-dir>"

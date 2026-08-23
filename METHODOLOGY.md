@@ -8,14 +8,14 @@ consistent, and caught only by pre-registration, a cheap measurement, or a
 second reader. The rules below are the distillation. They are mechanical, and
 they are part of the tool: several of them are enforced by shipped gates.
 
-If you use MoEMash to produce a quant and publish a number from it, we ask
+If you use VQLab to produce a quant and publish a number from it, we ask
 you to follow the same rules. They cost minutes; skipping any one of them
 produced at least one false result in the lab record.
 
 ## 1. Gate before you believe
 
 **Run the outlier gate on the assembled artifact before any score from it is
-believed** (`moemash verify --outlier 3.0`), and run it on a *different box*
+believed** (`vqlab verify --outlier 3.0`), and run it on a *different box*
 than the one that fit it, when you have one. A corrupt artifact scores
 plausibly and silently; the fitter's own log structurally cannot see it — it
 reports what it *computed*, not what reached disk. The lab saw write-time and
@@ -69,7 +69,7 @@ site-packages, or your repo checkout — depends on the loader and the
 environment, and both directions have produced wrong conclusions. **Never
 assume; instrument the import (`mod.__file__`) and name the resolved path in
 any runtime-dependent claim.** Acceptance harnesses must import the bundled
-runtime *lifted from the artifact* as the unit under test (`moemash
+runtime *lifted from the artifact* as the unit under test (`vqlab
 bundle-accept`), not whatever a module path resolves to.
 
 ## 6. Comparators are instruments too
@@ -98,7 +98,7 @@ this change"). Two silent in-place overwrites in the lab record each cost
 days of algorithmic hypothesizing that a directory listing would have ended.
 Concretely:
 
-- Stamp every gated artifact with an external manifest (`moemash manifest
+- Stamp every gated artifact with an external manifest (`vqlab manifest
   write`) — per-shard bytes, mtimes, content hashes, stored *outside* the
   artifact — and `manifest check` before citing any number from it.
 - A refit must never aim `--out` at a scored artifact's path: fits resume,

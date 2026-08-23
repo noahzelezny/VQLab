@@ -7,7 +7,7 @@ matter for THIS family before any codebook is fit.
 
 ## 0. Establish the instrument BEFORE the artifact
 
-- Build a teacher cache (`moemash score --mode cache ...` / `kl_damage.py
+- Build a teacher cache (`vqlab score --mode cache ...` / `kl_damage.py
   cache`) and **confirm it is deterministic** — score the same artifact
   twice. A family whose raw scores are non-deterministic is a family you
   cannot rank quants in; find that out now, not after four fits. (This is
@@ -15,7 +15,7 @@ matter for THIS family before any codebook is fit.
 - Identify the comparator set and record HOW each was produced. A locally
   converted 4-bit and a downloaded 4-bit are different instruments; name
   which.
-- Verify the outlier gate (`moemash verify`) can parse the family's tensor
+- Verify the outlier gate (`vqlab verify`) can parse the family's tensor
   layout. Adding a family entry is minutes; discovering the gate cannot read
   your artifacts after you have twenty of them is a day.
 

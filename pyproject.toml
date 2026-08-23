@@ -3,7 +3,7 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "moemash"
+name = "vqlab"
 version = "0.1.0"
 description = "Size-targeted, data-free vector quantization of large models on Apple Silicon (MLX)"
 readme = "README.md"
@@ -20,10 +20,10 @@ dependencies = [
 score = ["transformers"]
 
 [project.scripts]
-moemash = "moemash.cli:main"
+vqlab = "vqlab.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
 
 [tool.setuptools.package-data]
-moemash = ["referee/*.txt"]
+vqlab = ["referee/*.txt"]

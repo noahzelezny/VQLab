@@ -1,9 +1,9 @@
-"""moemash — one CLI over the standalone pipeline scripts.
+"""vqlab — one CLI over the standalone pipeline scripts.
 
 The underlying scripts are deliberately standalone (each is a complete,
 auditable tool with its own argparse surface, and several run at module
 scope). This dispatcher sets sys.argv and executes the chosen script in
-its own right, so `moemash fit-moe --help` shows the script's full surface
+its own right, so `vqlab fit-moe --help` shows the script's full surface
 and behavior is identical to running the script directly.
 """
 
@@ -45,10 +45,10 @@ COMMANDS = {
 def main() -> int:
     argv = sys.argv[1:]
     if not argv or argv[0] in ("-h", "--help"):
-        print("moemash — size-targeted VQ quantization for MLX\n\ncommands:")
+        print("vqlab — size-targeted VQ quantization for MLX\n\ncommands:")
         for name, (_, desc) in COMMANDS.items():
             print(f"  {name:18s} {desc}")
-        print("\n`moemash <command> --help` shows each command's full surface.")
+        print("\n`vqlab <command> --help` shows each command's full surface.")
         print("Read METHODOLOGY.md before publishing any number.")
         return 0
     cmd, rest = argv[0], argv[1:]
