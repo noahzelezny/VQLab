@@ -1,101 +1,82 @@
-# STATE (2026-08-22 ~13:25) — the publish landed; R3 is the open question
+# STATE (2026-08-22 ~22:20) — the long Saturday
 
 ## WHERE THINGS STAND
 
-**Headline: the 101 GiB swap is PUBLISHED and verified (E131).**
-`TheDrainFlorist/Qwen3.5-397B-A17B-VQ-2.2bpw` now serves the d8/K16384 build.
-v1 stays complete and reachable at `revision=4554635…` (08-19). Verified by
-size diff (38/38, 0 mismatches), sha256 against the remote LFS oid on 3
-shards, and the rendered card fetched back byte-identical with all 10 sections
-intact. **The progress display reported healthy progress for 74 minutes while
-committing nothing** — two residue files were moved out of the artifact after
-the uploader registered them, and every commit batch containing them failed
-wholesale. Full account and the two rules it earns: E131.
+**Published:** the 101 GiB swap is live and verified (E131). Card corrected
+TWICE after publish — once for a stale geometry paragraph describing v1's
+weights (d4/K128) on v2's bytes, once for a 0.1 GiB size inconsistency. Both
+found because the card was re-checked against the ARTIFACT, not against its
+predecessor. **Preservation is not correctness.**
 
-**Task benchmarks were NOT re-run** (Noah declined). The card's benchmark row
-is relabelled `(v1 weights)`; v1 numbers are not presented as v2's.
+**RUNNING (M3, sole job): E138** d4/K65536, seeded, ~37 h, lands ~11:00 Monday.
+Pre-registered b7e2686. Revision item — the paper does NOT wait on it.
 
-## RUNNING NOW (strictly sequential — concurrency killed E120/E121)
+## THE LADDER — final for the paper
 
-    M3  80135  fit_dense_vq d2/K4096 (E128 run C)  L52 of 63, relerr 0.0205
-    M3  81035  run_e130_rate_twin.sh               ARMED, waits on run C
-    M4         e128-35b-d4K16384 (R2)              ~L19-L26 (peer session)
-    M4         E129 vintage test                   QUEUED behind R2
+    27B  R1  E124 d2/K256   13.596 GiB  KL 40.327   MET
+         R2  E126 d2/K512   14.592 GiB  KL 33.095   MET
+         R3  NOT REACHABLE — E128 run C: 26.709 mnats vs a 1.641 bar (16.3x),
+             and the d2 slope FLATTENS (x0.673/bpw at 4.0-4.5, x0.868 at 4.5-6.0)
+    35B  R1  e94b d4/K8192  14.838 GiB packed  KL 53.022 / 89.55%   MET (quality)
+         R2  e128 d4/K16384 15.783 GiB packed  KL 47.535 / 89.81%   MET on KL+top-1
+         R3  NOT TO BE FITTED — report the slope instead
 
-## THE LADDER (E128)
+**R2's ppl INVERTS** (0.0465 worse) at 1.04x an INHERITED floor — uninterpretable,
+does not re-elevate 6c. A 35B floor does not exist.
 
-    27B  R1 E124 d2/K256  13.596 GiB  KL 40.327   MET
-         R2 E126 d2/K512  14.592 GiB  KL 33.095   MET
-         R3 run C in flight — d2/K4096, 17.580 GiB packed (CONFIRMED vs 6e)
-    35B  R1 e94b d4/K8192 14.838 GiB  KL 53.022   MET   (PACKED — see below)
-         R2 e128 d4/K16384 15.783 GiB  KL unmeasured      (PACKED, fit clean)
-         R3 NOT TO BE FITTED — run C closed R3; report the slope instead
+## NEW LAWS TONIGHT (FINDINGS 909d49d, all paper-session approved)
 
-**35B SIZE CORRECTIONS, 08-22, both MEASURED and both verified here from the
-artifacts' own bytes:**
-(1) **e94b's long-cited 17.651 GiB is an UNPACKED size** (no `pack_bits` in its
-config; it was never packed) and was being compared against packed rungs — a
-III.8 violation that this file previously repeated. PACKED it is **14.838
-GiB**. On a like-for-like basis R1 14.838 < R2 15.783, which is what the
-physics demands (14 bits vs 13). The mixed comparison made the BIGGER-codebook
-rung look SMALLER; that was the tell.
-(2) **The 35B non-MLP carry is 1.706 GiB MEASURED, not the 4.53 DERIVED** used
-in HANDOFF/E128 — off by 2.82 GiB, so every 35B projection shifts DOWN by that.
-Re-measured independently: codes 13.125 + vq_scales 0.938 + codebook 0.015 +
-other 1.706 = 15.783, matching the file total exactly. **Measured ONCE, not
-closed** — the 27B carry was wrong by 1.5 GiB until three builds agreed.
+- **law 10 upgraded** — E130's rate twin gave it the second band it asked for:
+  d4 +8.6% KL at 3.00 bpw, consistent on all three metrics. Bounded: d4's rate
+  ceiling is 4.00 bpw even at K65536, so it is an R1/R2 lever, never R3.
+- **law 14 NEW** — the affine frontier passes above the VQ frontier by 6.0 bpw;
+  crossover BRACKETED 4.5-6.0 on the dense 27B (q6 3.710 vs E128C 26.709 for
+  2.77 GiB more). Keep the size clause: E128C is smaller and NOT dominated.
+- **III.13 NEW** — never assume which runtime executes; instrument the import.
+- **III.14 NEW** — cross-algorithm byte-identical greedy is luck, not a gate.
+- **IV NEW** — K*dim*2 < 32768; XPC error is a red herring; dense != MoE.
+- Earlier: 6d scoped, **III.12 NEW** (measure the floor BEFORE the family).
 
-**R3 sizing is not the risk; quality is.** Run C's 17.580 GiB packed is
-confirmed against the closed size model (6e: 11.953 codes + 0.498 + 5.129),
-Assert the MEASURED packed size. **The unpacked figure is not a size and must
-not be compared to a bar** (III.8) — stored bytes carry whole-byte padding.
-Earlier text here cited run C's unpacked 21.564 GiB as headroom against the q8
-bar; that was a III.8 violation and is withdrawn. The guard against a skipped
-pack is asserting the packed number, not a margin computed from unpacked bytes.
+## THE VINTAGE ARC — CLOSED AS UNEXPLAINED, twice
 
-**Registered expectation for run C: ~18 mnats against a 1.641 bar.** If it
-lands there, say plainly that R3 is out of reach rather than burning the
-weekend. The M4 session's recommendation, which I endorse: do NOT then fit a
-35B R3 — report the measured slope honestly instead. "8-bit-class quality is
-not reachable by this method at these rates, here is the slope" is a real
-result, and the 35B has ZERO d2 points, so picking its R3 would rest entirely
-on transferring the 27B slope across models — the exact move this project has
-been burned by.
+E129 closed it (five hypotheses falsified). E136 appeared to solve it (2.7706,
+0.0051 from shipped). **E136b WITHDREW that** — the sibling same-stack draw
+scored 2.7962, so the same-stack floor is **0.0256** and E136's agreement was
+luck inside a wide distribution. The interpreter axis is NOT established
+(effect 0.026 vs noise 0.0256).
 
-**Seed floor does NOT transfer to K4096.** 6f's floor (KL 2.085 mnats, ppl
-0.0447) was measured at d2/K256, n=3. K4096 draws 16x more centroids from the
-same sample budget; that is a different quantity and we have no data on it.
-Moot for the R3 verdict (an 11x gap dwarfs any plausible floor), but it needs
-its own n=3 before run C is ever compared to another K4096-class rung.
-Report KL AND ppl regardless (6c).
+**The floor widened every time it was measured honestly: 0.0134 inferred ->
+0.0197 mixed -> 0.0256 same-stack.** That is the durable result.
 
-## DOC GAP FOUND AND CLOSED
+**E139 explains WHY the width existed:** `kmeanspp(cap=200_000)` initialises the
+codebook from a 200k subsample drawn WITH REPLACEMENT, unseeded. Relerr moves
+0.0001 while ppl moves 0.0256 — law 11's tail effect. The referee was ruled out
+by measurement (same artifact twice, six decimals identical).
 
-E130's pre-registration existed ONLY in `run_e130_rate_twin.sh` (d05d111),
-never in EXPERIMENTS.md — despite HANDOFF §8 claiming "EXPERIMENTS.md through
-E130". The paper session cites only committed EXPERIMENTS.md entries, so it
-could not see E130 at all. Transcribed verbatim into EXPERIMENTS.md, marked as
-a transcription, no branch altered.
+**THE FITTER IS NOW SEEDED** (`--seed`, default 1234). Gated both ways: seeded
+runs diverge 0.0100%, unseeded 99.7996%. **Seeding is necessary but NOT
+sufficient** — seeded runs are still not bitwise identical, so a second source
+(Metal reduction order) exists and 6d's attribution is incomplete. Amendment
+proposed to the paper session, NOT applied.
+**Vintage fitters deliberately UNSEEDED** — they must stay byte-identical to
+the versions under test in E121/E129/E136.
 
-## OPEN — NOAH'S CALL, NOT OURS
+## OPEN — NOAH'S
 
-1. **K65536** — recommend NOT this weekend. The 40-60h estimate was taken
-   under contention, and E130 may moot it. A Saturday start lands Monday at best.
-2. **A second dense family** — genuinely blocked on Noah acquiring a model.
-   Otherwise the paper states the single-model limitation.
-3. **`chmod -R a-w` on scored artifacts** — must wait; run C and the M4 fit
-   are both writing.
-4. **`MODEL_CARD_397B_G.md`** (uncommitted, 3.1bpw flagship card, 35 added
-   lines) attributes its improvement to "a later version of our k-means
-   implementation" — **falsified by E121/E129**: running the actual 08-16
-   fitter scored 2.8292, worst of four arms. Nothing live; must not ship as
-   written.
+1. **A second dense family** — still blocked on acquiring a model.
+2. **K65536 repriced to ~37 h** (measured, 693 s/tensor, 0.9% spread) — E138 is
+   spending it now.
+3. **`chmod -R a-w` on scored artifacts** — still deferred; E138 is writing.
+4. **MODEL_CARD_397B_G.md** — falsified attribution now retracted by the M4
+   session; still not published.
 
-## E129 CAVEAT THAT MUST BE IN THE PRE-REGISTRATION BEFORE THE NUMBER EXISTS
+## RULES THAT EARNED THEMSELVES TONIGHT
 
-The M4's mlx stack was reinstalled Aug 17, AFTER the Aug 15-16 shipped fit. A
-null result therefore excludes "the box as it is today", NOT "the box". H4 —
-the mlx version the M4 carried on Aug 15 — remains unrecovered.
+- A file-list diff is not a publish check (E131).
+- Preservation is not correctness — re-verify a card against the ARTIFACT.
+- Do not mutate an artifact directory while a transfer runs.
+- Hold n=1 out of FINDINGS. Vindicated FOUR times this weekend.
+- Instrument the import; instrument the real code; prove the probe can fire.
 
 ---
 
