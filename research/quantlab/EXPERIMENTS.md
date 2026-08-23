@@ -8239,8 +8239,9 @@ experiment, which is stronger:**
     across boxes (E121 M3 vs E129 M4)    dEntropy 0.002330   7.6x that
     dead-code fraction: M4 arms 0.0498-0.0503, shipped 0.0503, M3 arm 0.0708
 
-So the codes cluster by BOX, not by interpreter, while the SCORE moves with the
-interpreter. Those two facts are not obviously compatible and the tension is
+So the codes appeared to cluster by BOX, not by interpreter, while the SCORE
+moved with the interpreter. **[RETRACTED 08-22 ~22:40 — see E140. "Clusters by
+box" is n=2 on one box and n=1 on the other and is NOT supported.]** Those two facts are not obviously compatible and the tension is
 recorded rather than resolved.
 
 ### STATUS: E129's "closed as unexplained" is SUPERSEDED
@@ -8419,7 +8420,8 @@ no mark: draw 2 (3.13) lands on E129 (3.12) to six decimals on entropy.
   moves PERPLEXITY is the one live question and needs the M3 referee.
 
 **Not claimed:** that the box explains the ppl gap. The fingerprint says the
-codes cluster by box; it does not say why 2.7655 and 2.8095 differ. That
+codes cluster by box **[RETRACTED — see E140]**; it does not say why 2.7655
+and 2.8095 differ. That
 remains open pending the score of these two draws.
 
 **Unmatched variable, named rather than left to surface later:** the recovered
@@ -8503,7 +8505,8 @@ they should not.**
 E129 closed it as unexplained. E136 appeared to reopen and solve it. **E136b
 returns it to unexplained** — with more measured than before: a same-stack
 floor, a retired wall-clock argument, H3 closed by document, and a fingerprint
-showing the codes cluster by box while the interpreter leaves no trace.
+showing the codes cluster by box **[the box half is RETRACTED — see E140;
+the interpreter half survives, being a same-box comparison]**.
 
 **E136 was correctly kept OUT of FINDINGS pending this replicate.** Had it been
 written as a law four hours ago on n=1, it would be being retracted now. This
@@ -8647,3 +8650,57 @@ could not be reproduced — the exact defect this session spent the evening
 withdrawing a headline over. Cost: 8 minutes. Its pre-registration (E138,
 b7e2686) is otherwise unchanged; `--relerr-abort 0.30` still comes from the
 14:49 probe.
+
+
+## E140 — RETRACTION: "the codes cluster by BOX" is NOT supported. Raised by the M4 session against its own claim.
+
+The M4 session retracted this itself, unprompted, after E139's mechanism made
+the hole visible. Recording it because the claim propagated into E136b and E137
+before anyone checked it, and I repeated it in three places.
+
+**THE ARGUMENT.** E139 established that the randomness is an unseeded 200k
+subsample drawn WITH REPLACEMENT (`kmeanspp(cap=200_000)`). **An unseeded draw
+is not box-correlated.** It predicts SCATTER, not a systematic split. So either
+the RNG stream itself differs by box, or E121 is simply ONE draw that landed far
+out — and the data cannot separate those.
+
+**THE STATISTICS, verified here rather than taken on report:**
+
+    within-M4 spread (n=2)        0.000308
+    M3 point from M4 mean (n=1)   0.002484
+    sigma estimated from n=2      0.000273   -> M3 sits 9.1 sigma out
+
+A sigma estimated from TWO samples has a 95% CI spanning **0.446x to 31.9x**
+itself (chi-square, 1 dof). At the upper bound the M3 point sits at **0.29
+sigma** — entirely unremarkable. **With n=2 on one box and n=1 on the other,
+"clusters by box" is not a finding.** It is one point far from a mean whose
+spread is barely estimated.
+
+**WHAT SURVIVES:** the interpreter half. Draw 2 (Python 3.13) landing on E129
+(3.12) at 0.890587 entropy, identical to six decimals, is a SAME-BOX comparison
+and does not depend on the box claim at all.
+
+**HOW THIS CHANGES TOMORROW'S READING, pre-committed now so it cannot be chosen
+later.** If the E136 draws sit near 2.81, the tempting story is "the box
+explains the codes but not the quality." Under E139's mechanism the simpler
+story is that **BOTH the codes and the ppl are draw-dependent**, the shipped
+2.7655 is a lucky draw from a distribution measured exactly twice, and there is
+no box effect requiring explanation. That returns the 0.0440 gap to a
+tail-draw question — which is where E129's own registered branch pointed
+before any of tonight's work.
+
+**THE TEST THAT WOULD SETTLE IT, for Noah's decision — NOT run and NOT queued.**
+One more UNSEEDED 397B defaults draw on the M3 with the vintage fitter
+(`fitter_0816_cdcdeab.py`, md5 22436a2c, unchanged on both boxes), then
+fingerprint against E121. Two M3 points and two M4 points separates box from
+draw properly. **It must NOT pre-empt E138** and it is not tonight's work.
+Cost: one 397B fit (~74 min on the M4's showing; unmeasured on the M3) plus a
+fingerprint.
+
+**PROCESS NOTE.** The M4 raised this against its own published claim within an
+hour of my mechanism landing, and said it should have carried the caveat when
+first written. That is the second self-retraction from that session tonight
+(the first being its label-parser bug) and the fourth n=1-shaped claim retired
+this weekend. **The mechanism did not disprove the box claim — it removed the
+reason to believe it, which is different and is why the claim had to go rather
+than be defended.**
