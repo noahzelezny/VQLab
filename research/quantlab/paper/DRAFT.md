@@ -548,7 +548,7 @@ same code.
 
 **Serve a token before shipping.** Scoring and serving exercise
 different code paths; an artifact can score perfectly and be unable to
-generate. Nothing releases until it has generated through the exact
+generate. Nothing is validated or releasable until it has generated through the exact
 runtime it ships with, on a machine configured like a user's.
 
 **Provenance is physical.** Build inputs get manifests — per-shard
@@ -570,9 +570,10 @@ the kernel conclusions — threadgroup capacity, the d8 decode tax — are
 specific to Apple Silicon.
 
 **Unmeasured regions.** The VQ/affine crossover is bracketed on the
-35B and the 27B; the 397B has no affine comparator above 3.5 bits —
-none is published, and producing a calibrated one for a 751 GB source
-is beyond this project's compute — so whether the same band holds at
+35B and the 27B, but not on the 397B: affine builds above 3.5 bits
+exist or could be produced for that model, but at ~225 GB for a 4-bit
+build and ~320 GB for 6-bit they exceed the memory of any machine
+available to this project, so whether the same crossover band holds at
 that scale is untested. Whether dimension still pays at d4's 4.0 bpw
 ceiling is a rate-twin experiment currently fitting. No dense harvest
 rung has been built: claim 2's exchange rates are measured on MoE
