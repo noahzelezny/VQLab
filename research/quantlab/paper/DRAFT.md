@@ -355,7 +355,12 @@ score 28.14 and 27.93 against 43.7 for the affine frontier
 log-interpolated to the same size — both draws a factor of ~1.6 below
 the line, 73x the draw floor. One rung higher the sign flips: at 6 bpw,
 d2/K4096 is 1.1 GiB smaller than the 6-bit affine build and scores
-1.91x worse — 57x the floor, conclusive. **The crossover on this family
+1.91x worse — 57x the floor, conclusive. (That two "6-bit" artifacts
+differ by 1.1 GiB is expected: a nominal rate names the code width on
+the quantized surface, while total bytes include each method's scale
+overhead and its treatment of the non-expert remainder — which is why
+every comparison in this paper is by measured size, never by nominal
+rate.) **The crossover on this family
 sits between 5.0 and 6.0 bits per weight.**
 
 **27B — ours (VQ):**
