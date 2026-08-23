@@ -7870,3 +7870,73 @@ requirement, and when it exceeds the cap fall back to the decode path
 dense path already does. Alternative and better: move the d4 codebook to
 DEVICE memory as d8 already did. The first is hours; the second is the real
 fix. Neither is a performance change and neither must be read as one.
+
+## E134 — RESULT: CONFIRMED architectural. Both 35B rungs are UNRELEASABLE on BOTH boxes.
+
+**PREDICTION 1: CONFIRMED.** The M3 fails the K8192 MoE smoke identically to
+the M4 — same kernel, same error, different GPU:
+
+    Unable to load kernel custom_kernel_vq_fused_packed13__float16_t_8192_512_13_...
+    Compilation failed ... XPC_ERROR_CONNECTION_INTERRUPTED
+
+Artifact `e94b-35b-K8192-refit-0821-packed`, verified MoE first (360
+switch_mlp keys, so it genuinely exercises vq_switch.py), preflight OK at
+14.838 GiB against 96 GiB. **This is Apple's 32 KB threadgroup limit, not a
+box property.** The release story does not improve on other hardware.
+
+**The M4 session's K-ladder independently pins the boundary EXACTLY**, four
+siblings, one box, minutes apart:
+
+    d4/K256    2,048 B   OK
+    d4/K2048  16,384 B   OK
+    d4/K4096  32,768 B   FAIL   <- exactly ON the cap
+    d4/K8192  65,536 B   FAIL
+
+Rule: the threadgroup path holds while **K * dim * 2 < 32768** — strictly less.
+So d4 is safe to K2048 and d2 to K4096.
+
+**`XPC_ERROR_CONNECTION_INTERRUPTED` IS A RED HERRING.** It is how Metal
+reports this over-allocation, not a compiler-service fault: a trivial custom
+kernel compiles on the same box, same venv. It cost the M4 session three
+probes. Do not chase the XPC message; compute K*dim*2 instead.
+
+**PREDICTION 2: WITHDRAWN AS ILL-POSED. It tested the wrong code path, and the
+error was mine.** I predicted E130 arm 2 (d4/K4096) would fail its smoke. It
+smoked CLEAN. Not because the boundary is wrong — the M4's ladder confirms
+K4096 fails on the MoE path — but because **arm 2 is a DENSE artifact** (0
+switch_mlp keys, 576 plain mlp) bundling `vq_dense.py`, whose fused path is
+gated on `codebook.shape[1] == 2`. A d=4 DENSE artifact never loads a fused
+kernel at all; it always falls to decode. The test could not have failed.
+I read `vq_switch.py` and predicted the behaviour of an artifact that runs
+`vq_dense.py`. **III.10's corollary — instrument the REAL code — applied to a
+pre-registration other sessions were reading.** The M4 session then made the
+mirror-image error, expecting arm 2 to fail on the M3 from its MoE ladder.
+Same confusion, opposite direction, within one hour. **Dense and MoE are
+different runtimes; a smoke on one says nothing about the other.**
+
+**PREDICTION 3: HOLDS for d2.** Arm 1 (d2/K64, dense) smoked OK. By the
+K*dim*2 rule d2 is safe to K4096, so no 27B d2 rung is implicated, and the
+published artifacts are clear: 2.4bpw is K256, 3.1bpw is K2048, 35B
+vqK256codes is K256 (smoked OK), and the newly published 2.2bpw is d8, whose
+kernels already use DEVICE memory (clean-room smoke passed 08-22).
+**No published artifact is affected.**
+
+### Consequence, as pre-committed at cc47474
+
+Both 35B rungs SCORE and cannot SERVE. e94b's KL 53.022 came from the
+streaming referee, which is prefill-shaped and never dispatches the small-N
+fused kernel — the E122 prefill-vs-fused split, now with teeth.
+
+    35B R1  e94b  d4/K8192   MET on quality, BLOCKED on III.11
+    35B R2  e128  d4/K16384  BLOCKED on III.11 (quality unmeasured)
+
+R1's "MET" is withdrawn to "MET on quality, BLOCKED" per the registered
+consequence. A quality number from a path the artifact cannot ship is not an
+offering. e94b has been the standing 35B R1 candidate all weekend on the
+strength of a number that was never accompanied by a III.11 — which is how a
+rule that exists for exactly this gets skipped.
+
+**Not fixed here.** The fix is either the guarded fallback vq_dense.py got at
+86987c1, or moving the d4 codebook to DEVICE memory as d8 already has
+(vq_switch.py:12-16). Neither has been written, and neither will be started on
+a relayed authorisation.
