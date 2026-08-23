@@ -8,7 +8,8 @@ version = "0.1.0"
 description = "Size-targeted, data-free vector quantization of large models on Apple Silicon (MLX)"
 readme = "README.md"
 requires-python = ">=3.12"
-# license: TBD (owner decision before publishing)
+license = "Apache-2.0"
+license-files = ["LICENSE"]
 dependencies = [
     "mlx>=0.32.0",
     "mlx-lm",
