@@ -8705,3 +8705,61 @@ first written. That is the second self-retraction from that session tonight
 this weekend. **The mechanism did not disprove the box claim — it removed the
 reason to believe it, which is different and is why the claim had to go rather
 than be defended.**
+
+## E141 — PRE-REGISTRATION: 35B d2/K4096, the matched-byte head-to-head with q6
+
+Noah's call, M4. Written before the fit starts; no number exists yet.
+
+**Why this one.** E140 established VQ above the affine frontier at 5 bpw on an
+MoE (two draws, 1.55x/1.57x below the log-interpolated line). That reading
+needed interpolation because no affine rung sat at 21.4 GiB. **This rung needs
+none:** d2/K4096 projects 25.238 GiB against q6's measured 26.234, so the two
+artifacts are ~1 GiB apart and compare DIRECTLY. State both measured sizes and
+compare the numbers; do not interpolate anything.
+
+**Recipe.** `vq_397b_codes.py --family qwen3_5_mlx --vq-layers 0-39 --k 4096
+--dim 2 --expert-chunk 16 --relerr-abort 0.90`, base `rotlab-35B-qwen36-e2`,
+src the mlx-community Qwen3.6-35B-A3B-bf16 snapshot. Same tool as E140 — the
+one verified to produce loadable 35B artifacts (vq_35b_codes.py has never been
+run and its output is not kl_damage-loadable, E94 amendment).
+
+**UNSEEDED, by design.** That fitter has no `--seed` and must not gain one:
+seeding it would retroactively void the E121/E129/E136 arms. So this is ONE
+DRAW, and the 35B fit-to-fit floor measured tonight (0.214 mnats = 0.76%,
+same-box same-geometry, E140/E140b) is the yardstick for any margin.
+
+**Kernel check, done before launch:** K*dim*2 = 4096*2*2 = 16,384 B, inside
+Metal's 32,768 threadgroup cap (E134), so the fused path is available and no
+device-memory fallback is needed.
+
+**Size projection, from the two-point model:** 32.47B expert params, 2.558 GiB
+remainder -> 22.680 GiB of codes at 12 bits -> **25.238 GiB**. The same model
+predicted E140 at 21.458 (measured 21.394, -0.30%) and R2 at 15.788 (measured
+15.783, -0.03%), so this is its third out-of-sample test. **Measured packed
+size governs; a large miss is a signal to check, not to absorb.**
+
+**PRE-REGISTERED READINGS.** Comparator: q6, 26.234 GiB, 13.358 mnats,
+94.65% top-1 — the affine rung we built ourselves on this family.
+
+- **VQ beats 13.358 at a smaller measured size** -> law 14's affine/VQ
+  crossover does NOT extend to MoE at 6 bpw. The bracket is a DENSE property,
+  and that is a new architectural finding: the ceiling would be a property of
+  the model class, not of the method.
+- **VQ loses to 13.358** -> the crossover IS architecture-general, measured on
+  both families in the same band, and law 14 gains its MoE half rather than
+  resting on dense evidence alone.
+- **Margin is read against the 0.214 mnat floor.** A gap of a few tenths of a
+  millinat is inside draw noise and must be reported as a tie, not a win.
+- **A BEAT WANTS A SECOND DRAW** before it anchors a paper claim, per the
+  margin rule registered at E140. Budget ~1.5h for the replicate if it wins.
+
+Both branches are publishable and neither is a wasted fit: one gives law 14 an
+MoE half it currently lacks, the other overturns its scope.
+
+### E141b (bonus, nearly free) — score the existing vq-K256-d2
+
+`qwen36-35b-rungs/vq-K256-d2` already exists and carries the loadable
+signature (model_file + 120 modules, same as e94b — verified during E140's
+tool check). Gate + III.11 + score costs one scoring run and yields a 4.0 bpw
+d2 point at ~17.7 GiB. It is also the future rate twin for d4/K65536, should
+that fit ever be worth 24 hours.
