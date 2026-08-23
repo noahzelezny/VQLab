@@ -268,7 +268,7 @@ matched rate, exact twins within megabytes of each other:
 |---|---|---|
 | 2.00 bpw (35B) | d4/K256 vs d2/K16 | d4 wins by 12.2% KL |
 | 3.00 bpw (27B) | d4/K4096 vs d2/K64 | d4 wins by 8.6% KL |
-| 1.75 bpw (397B) | d8/K16384 vs d4/K128 | d8 wins both corpora, 8.3x floor |
+| 1.75 bpw (397B) | d8/K16384 vs d4/K128 | d8 wins both corpora, 4.4x floor |
 
 Dimension pays at matched rate — consistently, and modestly, with the
 margin shrinking as the rate rises. It also has costs. d4 has a hard
