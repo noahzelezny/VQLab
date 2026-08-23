@@ -23,8 +23,9 @@ COMMANDS = {
     "pack": ("pack_artifact.py", "pack MoE codes to true bit-width; recompute sizes"),
     "pack-dense": ("pack_dense.py", "pack a dense VQ artifact"),
     # assembly
+    "build-dense": ("build_dense_vq.py", "splice dense VQ fits into a quantized base -> runnable artifact"),
     "graft": ("graft_vision.py", "graft the bf16 vision tower into an artifact"),
-    "bundle": ("add_model_file.py", "(re)write the self-contained model.py bundle"),
+    "bundle": ("add_model_file.py", "(re)write the self-contained model.py bundle (MoE)"),
     # gates
     "verify": ("verify_artifact.py", "outlier gate: decode artifact bytes vs bf16 source"),
     "check-release": ("check_release.py", "release gate: files exist and function"),

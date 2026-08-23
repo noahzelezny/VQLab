@@ -88,8 +88,17 @@ bundled runtime tested as the unit under test.
 vqlab kl cache --model <BF16-27B> --out-dir caches/qwen38 ...
 vqlab fit-dense --src <SRC-27B> --out fits/27b-d2K512 \
     --k 512 --dim 2 --family qwen3_8_dense --relerr-abort 0.6
-# splice into the affine base, pack:
-vqlab pack-dense --src <assembled> --out artifacts/27b-d2K512-packed
+# splice the VQ fits into the affine base -> a RUNNABLE artifact.
+# fit-dense alone is NOT a model: it emits only the VQ'd MLP tensors.
+# --dry-run first: it asserts every fitted module lands on a real base
+# module BEFORE any bytes are written (the name conventions differ).
+vqlab build-dense --family qwen3_8_dense --base <q4-base> \
+    --mlp fits/27b-d2K512 --out assembled/27b-d2K512 --dry-run
+vqlab build-dense --family qwen3_8_dense --base <q4-base> \
+    --mlp fits/27b-d2K512 --out assembled/27b-d2K512
+
+vqlab pack-dense --src assembled/27b-d2K512 --out artifacts/27b-d2K512-packed
+vqlab check-bundle --artifact artifacts/27b-d2K512-packed
 vqlab verify --artifact artifacts/27b-d2K512-packed --src <BF16-27B> \
     --family qwen3_8_dense --outlier 3.0
 vqlab kl score --model artifacts/27b-d2K512-packed --cache-dir caches/qwen38

@@ -77,7 +77,8 @@ fit → verify (outlier gate) → pack → graft (vision) → release checks
 pip install -e .
 
 vqlab fit-moe   --family qwen397b --model <bf16-or-base> --out fits/K256 ...
-vqlab fit-dense --model <src> --out fits/d2K512 ...
+vqlab fit-dense  --src <src> --out fits/d2K512 ...   # dense families
+vqlab build-dense --base <q4-base> --mlp fits/d2K512 --out <artifact>
 vqlab verify    <artifact> --outlier 3.0        # BEFORE believing any score
 vqlab pack      <artifact> --out <packed>       # true bit-width, measured size
 vqlab graft     <packed> --vision <bf16>        # MoE vision tower, bf16
