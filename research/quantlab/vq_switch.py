@@ -413,6 +413,120 @@ _SRC_FUSED_PACKED = _PACK_FETCH + r"""
     y[(size_t)t * OUT + r] = static_cast<T>(acc);
 """
 
+# d=4, codebook in DEVICE memory (E134, 2026-08-22).
+#
+# WHY. _SRC_FUSED_D4_BIGK and _SRC_FUSED_PACKED both cache the codebook in
+# THREADGROUP memory as half4 (8 B/entry) alongside the x cache, so the
+# allocation is (K + NSUB) * 8 bytes against Apple's hard 32768 cap. Measured
+# on the M4 across four sibling 35B artifacts (IN=2048 -> NSUB=512):
+#
+#     K256   ( 256+512)*8 =  6,144 B   loads, generates
+#     K2048  (2048+512)*8 = 20,480 B   loads, generates
+#     K4096  (4096+512)*8 = 36,864 B   FAILS to load
+#     K8192  (8192+512)*8 = 69,632 B   FAILS to load
+#
+# Metal reports this as "Unable to load kernel ... Compilation failed due to
+# an interrupted connection: XPC_ERROR_CONNECTION_INTERRUPTED", NOT as a
+# threadgroup-size error, which is why it reads like a broken compiler
+# service. It is not: a trivial custom kernel compiles on the same box
+# seconds later. Do not chase the XPC message.
+#
+# The consequence was that a K>=4096 d4 artifact SCORED normally (the
+# streaming referee is prefill-shaped and never dispatches this kernel) while
+# being unable to generate a single token. Both 35B offering candidates
+# reached release consideration in that state.
+#
+# FIX. Mirror _SRC_FUSED_D8, which has kept its codebook in device memory
+# since K4096 for exactly this reason: drop the threadgroup codebook cache
+# and read cb straight from device memory (L2-resident in practice). x stays
+# cached in threadgroup, so the allocation becomes NSUB * 8 bytes and is
+# independent of K. Arithmetic is UNCHANGED -- same half4 loads, same
+# float4 dot, same fma accumulation order -- so results are bit-identical to
+# the threadgroup variants, not merely close.
+_SRC_FUSED_D4_DEVCB = r"""
+    const int OUT  = dims[0];
+    const int IN   = dims[1];
+    const int G    = dims[3];
+    const int N    = dims[4];
+    const int NSUB = IN / 4;
+    const int NGRP = IN / G;
+    const int QPG  = G / 16;
+    uint r = thread_position_in_grid.x;
+    uint t = thread_position_in_grid.y;
+    uint lid = thread_position_in_threadgroup.x;
+    uint tgsize = threads_per_threadgroup.x;
+
+    threadgroup half4 xs[MAX_NSUB];
+    const device T* xrow = x + (size_t)t * IN;
+    for (uint i = lid; i < (uint)NSUB; i += tgsize)
+        xs[i] = half4((half)xrow[i*4], (half)xrow[i*4+1],
+                      (half)xrow[i*4+2], (half)xrow[i*4+3]);
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+    if (r >= (uint)OUT || t >= (uint)N) return;
+    const uint e = eidx[t];
+    const device CT* crow = codes + (size_t)e * OUT * NSUB + (size_t)r * NSUB;
+    const device half* srow = scales + (size_t)e * OUT * NGRP + (size_t)r * NGRP;
+    const device half4* cb = (const device half4*)codebook;
+    float acc = 0.0f;
+    int j = 0;
+    for (int g = 0; g < NGRP; ++g) {
+        float gacc = 0.0f;
+        for (int q = 0; q < QPG; ++q) {
+            gacc += dot(float4(cb[(uint)crow[j]]),   float4(xs[j]))
+                  + dot(float4(cb[(uint)crow[j+1]]), float4(xs[j+1]))
+                  + dot(float4(cb[(uint)crow[j+2]]), float4(xs[j+2]))
+                  + dot(float4(cb[(uint)crow[j+3]]), float4(xs[j+3]));
+            j += 4;
+        }
+        acc = fma((float)srow[g], gacc, acc);
+    }
+    y[(size_t)t * OUT + r] = static_cast<T>(acc);
+"""
+
+# d=4 PACKED, codebook in device memory. _SRC_FUSED_PACKED with the
+# threadgroup codebook cache removed; code fetch and accumulation identical.
+_SRC_FUSED_PACKED_D4_DEVCB = _PACK_FETCH + r"""
+    const int OUT  = dims[0];
+    const int IN   = dims[1];
+    const int G    = dims[3];
+    const int N    = dims[4];
+    const int NSUB = IN / 4;
+    const int NGRP = IN / G;
+    const int QPG  = G / 16;
+    const int WPR  = NSUB / 32 * BITS;
+    uint r = thread_position_in_grid.x;
+    uint t = thread_position_in_grid.y;
+    uint lid = thread_position_in_threadgroup.x;
+    uint tgsize = threads_per_threadgroup.x;
+
+    threadgroup half4 xs[MAX_NSUB];
+    const device T* xrow = x + (size_t)t * IN;
+    for (uint i = lid; i < (uint)NSUB; i += tgsize)
+        xs[i] = half4((half)xrow[i*4], (half)xrow[i*4+1],
+                      (half)xrow[i*4+2], (half)xrow[i*4+3]);
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+    if (r >= (uint)OUT || t >= (uint)N) return;
+    const uint e = eidx[t];
+    const device uint* crow = codes + (size_t)e * OUT * WPR + (size_t)r * WPR;
+    const device half* srow = scales + (size_t)e * OUT * NGRP + (size_t)r * NGRP;
+    const device half4* cb = (const device half4*)codebook;
+    float acc = 0.0f;
+    int j = 0;
+    for (int g = 0; g < NGRP; ++g) {
+        float gacc = 0.0f;
+        for (int q = 0; q < QPG; ++q) {
+            gacc += dot(float4(cb[VQ_CODE(crow, j)]),   float4(xs[j]))
+                  + dot(float4(cb[VQ_CODE(crow, j+1)]), float4(xs[j+1]))
+                  + dot(float4(cb[VQ_CODE(crow, j+2)]), float4(xs[j+2]))
+                  + dot(float4(cb[VQ_CODE(crow, j+3)]), float4(xs[j+3]));
+            j += 4;
+        }
+        acc = fma((float)srow[g], gacc, acc);
+    }
+    y[(size_t)t * OUT + r] = static_cast<T>(acc);
+"""
+
+
 # d=2 packed (gemma d2 K512/K1024 rungs, 2026-08-19). Same shape as
 # _SRC_FUSED_D2 — half2 codebook + x caches, QPG*4 subvectors per group —
 # with the code fetch swapped for the VQ_CODE bit-field read. The packing
@@ -762,6 +876,19 @@ def _get_kernel(name, src):
 _D8_TG_MAX_K = 1024
 
 
+# Apple's hard threadgroup allocation cap. The d4 threadgroup kernels cache
+# BOTH the codebook and x as half4, so they need (K + NSUB) * 8 bytes; past
+# this the kernel fails to LOAD (E134). Checked before dispatch rather than
+# discovered at kernel load, matching the guard vq_dense.py uses for the
+# dense d2 path.
+_TG_CAP_BYTES = 32768
+
+
+def _d4_tg_fits(K, NSUB):
+    """True if the d4 threadgroup codebook+x cache fits Metal's cap."""
+    return (K + NSUB) * 8 <= _TG_CAP_BYTES
+
+
 def _fused(x, eidx, codes, codebook, scales, pack_bits=0):
     # U8-VIEW DISPATCH (E77/E90, 2026-08-20). Unpacked uint8 d4 rows are
     # byte-for-byte the pack_bits=8 word layout (little-endian; verified
@@ -796,8 +923,15 @@ def _fused(x, eidx, codes, codebook, scales, pack_bits=0):
         # one D reads wrong memory at another D (the d4 kernel at d=2 returns
         # NaN), so anything unimplemented must raise, never fall through.
         if D == 4:
-            name = f"vq_fused_packed{pack_bits}"
-            src = _SRC_FUSED_PACKED
+            # E134: fall back to the device-memory codebook when the
+            # threadgroup cache would exceed the cap. Bit-identical, and the
+            # only thing that changes is where cb is read from.
+            if _d4_tg_fits(K, NSUB):
+                name = f"vq_fused_packed{pack_bits}"
+                src = _SRC_FUSED_PACKED
+            else:
+                name = f"vq_fused_packed{pack_bits}_d4_devcb"
+                src = _SRC_FUSED_PACKED_D4_DEVCB
         elif D == 2:
             # NSUB (= IN/2) doubles vs d4 for the same IN; MAX_NSUB below is
             # computed from the actual IN, so the threadgroup x cache is
@@ -836,6 +970,9 @@ def _fused(x, eidx, codes, codebook, scales, pack_bits=0):
                         ("BITS", pack_bits)]
             if K <= _D8_TG_MAX_K:
                 template.insert(1, ("MAX_K", K))
+        elif D == 4 and not _d4_tg_fits(K, NSUB):
+            template = [("T", x.dtype), ("MAX_NSUB", NSUB),
+                        ("BITS", pack_bits)]
         else:
             template = [("T", x.dtype), ("MAX_K", K), ("MAX_NSUB", NSUB),
                         ("BITS", pack_bits)]
@@ -843,6 +980,11 @@ def _fused(x, eidx, codes, codebook, scales, pack_bits=0):
         name, src = "vq_fused_d2", _SRC_FUSED_D2
         template = [("T", x.dtype), ("CT", codes.dtype),
                     ("MAX_K", K), ("MAX_NSUB", NSUB)]
+    elif D == 4 and K > 1024 and not _d4_tg_fits(K, NSUB):
+        # E134: (K + NSUB) * 8 over the cap -> device-memory codebook.
+        name = "vq_fused_d4_devcb"
+        src = _SRC_FUSED_D4_DEVCB
+        template = [("T", x.dtype), ("CT", codes.dtype), ("MAX_NSUB", NSUB)]
     elif D == 4 and K > 1024:
         name = "vq_fused_d4_bigk"
         src = _SRC_FUSED_D4_BIGK
