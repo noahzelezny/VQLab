@@ -150,9 +150,9 @@ class VQLinear(nn.Module):
             # instead of one thread, no expert axis. Bit-identical to the
             # expert-kernel path below (the kernel replicates its float
             # ordering exactly — verified, and the E62 KL number reproduces).
-            # SCOUT_VQ_DENSE_REF=1 keeps the old expert-shaped path callable
+            # VQ_DENSE_REF=1 keeps the old expert-shaped path callable
             # as the reference for A/B checks.
-            if os.environ.get("SCOUT_VQ_DENSE_REF"):
+            if os.environ.get("VQ_DENSE_REF"):
                 from mlx_lm.models.vq_switch import _fused
                 eidx = mx.zeros((N,), dtype=mx.uint32)
                 y = _fused(xf, eidx, self.codes[None], self.codebook,
