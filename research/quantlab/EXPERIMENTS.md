@@ -8250,3 +8250,96 @@ axis nobody had listed, and that axis lands the arm inside the wikitext floor.
 **The honest statement is now: the shipped recipe is RECOVERABLE on the
 Aug-15 stack, reproduced on wikitext to 0.26x a mixed floor, with the code
 corpus 1.37x out and a clean same-stack floor still unmeasured.**
+
+## E137 — A BUNDLED RUNTIME CAN BE BOTH EXECUTING AND BYPASSED FOR THE LAYER THAT MATTERS
+
+Joint finding, M3 + M4, 08-22 evening. Every step came from reading a process
+or a filesystem; every wrong step came from reasoning about a file.
+
+### THE MECHANISM, read from the M3's installed loader
+
+    mlx_lm/utils.py:325   if (model_file := config.get("model_file")) ...
+                          -> the ARTIFACT'S BUNDLE execs as `custom_model`
+    mlx_lm/utils.py:415   # --- quantlab VQ hook (patch_mlx_lm.py) ---
+                          _vq_prefixes = {... if weights[k].ndim == 3}
+                          from .models.vq_switch import VQSwitchLinear   # SITE-PACKAGES
+                          setattr(...)  for every expert-shaped module
+
+**Both branches run.** The bundle IS exec'd — `model_file` is honoured, not
+skipped. Then the hook walks the constructed model and REPLACES every
+expert-shaped VQ module with `VQSwitchLinear` imported from site-packages.
+So the bundle executes and is bypassed **for exactly the layers under test.**
+
+The M4 session established the other half independently: the bundle also
+SUBCLASSES the installed architecture (`_arch = import_module(f"mlx_lm.models.{model_type}")`,
+`class Model(_arch.Model)`), so two runtimes are live in one process by design
+— the bundle supplies VQ classes, the installed package supplies the rest.
+
+### WHY THE DENSE/MoE ASYMMETRY, which cost two wrong predictions
+
+The hook is scoped **`ndim == 3`** — expert-shaped codes only — with a comment
+recording that dense VQ artifacts carry 2D codes, install their own modules
+via model.py, and were BROKEN on 2026-08-19 by overwriting them with the
+expert-shaped class. **That single line is why E130 arm 2 (dense d4) ran the
+BUNDLE's vq_dense and smoked clean, while the 35B MoE rungs ran SITE-PACKAGES
+vq_switch and failed.** Both sessions predicted the other artifact's behaviour
+from the wrong file within one hour of each other (E134).
+
+### THE RELEASE ANSWER — measured, and it inverts who is at risk
+
+    stock wheel, fresh venv, no patch, no vq_switch in site-packages
+    -> the 397B d8 artifact GENERATES
+    -> it could not, since the packed-d8 kernel exists nowhere but the bundle
+
+**Downloaders execute the BUNDLE. We, on patched boxes, bench SITE-PACKAGES
+for MoE artifacts.** We are the ones at risk of benching code we do not ship —
+the E122 shape, inverted. Release smokes belong in a STOCK venv, not a working
+one.
+
+**Gap named and closed the same evening.** The E113 acceptance run on the M3
+(E135) validated the site-packages copy, i.e. the copy WE bench. The M4 then
+re-ran the full acceptance against the copy lifted from each artifact's
+`model.py`, in a stock venv:
+
+    e94b-35b-K8192-refit-0821-packed   BUNDLED-COPY ACCEPTANCE: PASS
+    e128-35b-d4K16384-packed           BUNDLED-COPY ACCEPTANCE: PASS
+    K256/K2048 BIT-IDENTICAL; K4096/K8192 correct vs reference, max 3.8e-04
+    identical to every printed digit for both, and to the site-packages run
+
+So both 35B rungs are covered on the executing copy: bundle carries the fix,
+bundle generates in a stock venv, bundle passes acceptance in a stock venv.
+
+### THE DURABLE OUTPUT IS A HARNESS DEFECT, NOT THIS KERNEL
+
+**Our acceptance harnesses import BY PATH, so they silently test whichever
+copy is on `sys.path`. A harness that takes an ARTIFACT and tests ITS BUNDLE
+is the fix** — `e134_bundle_accept.py` on the M4 now does this; point it at
+any artifact. This is III.10's corollary in different clothes: **a harness
+that cannot fail on the copy that ships.** Same class as a probe that cannot
+fire.
+
+### METHOD NOTE, recorded because both errors were reasonable
+
+Neither wrong step was carelessness. "The hook skips the model_file branch"
+was a plausible reading of source; a utils.py read killed it in one line.
+"The bundled model.py is not what runs" was a plausible reading of a
+traceback; a clean-room measurement killed it. **Both plausible, both wrong,
+and the resolution came only from instrumenting the running process.** That is
+why III.13 is worded as an instruction to instrument rather than as a fact
+about which copy wins.
+
+### Also closed here: e94b's outlier gate (III.9), skipped for five hours
+
+E132 pre-registered a gate on packed e94b. It was skipped when the family
+template did not resolve quickly, and the artifact was scored TWICE before
+anyone ran it. Run 08-22 22:0x:
+
+    verify_artifact --family qwen3_5_mlx --outlier 3.0, vs mlx-community/Qwen3.6-35B-A3B-bf16
+    120 tensors, mean gate_proj 0.1328 / up_proj 0.1325
+    median 0.1325 x3.0 -> bar 0.3975 -> PASS, no tensor over
+
+**III.9 has no vanishingly-unlikely clause**, which is exactly why it is a
+written rule and not a judgement call. The paper's 35B row was held until this
+landed and publishes as a QUALITY claim only:
+`d4/K8192: 53.022 mnats / 89.55% vs mlx 4-bit 78.557 / 85.61%, 14.838 GiB
+packed vs 19.0`.
