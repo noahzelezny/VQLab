@@ -8509,3 +8509,60 @@ showing the codes cluster by box while the interpreter leaves no trace.
 written as a law four hours ago on n=1, it would be being retracted now. This
 is the third time this weekend that holding an n=1 result out of the laws file
 was vindicated (6c demoted, E126's ppl claim withdrawn, this).
+
+## E138 — PRE-REGISTRATION: 27B d4/K65536, the exact rate twin of E124 (armed, M3)
+
+Written and committed BEFORE launch. Requested by the paper session via Noah.
+**Revision item, NOT for the paper** — it lands Monday ~11:00 and is scored
+Monday night; nothing waits on it.
+
+**THE QUESTION.** E124 (d2/K256) and this (d4/K65536) are BOTH 4.00 bpw — 8
+bits per 2 weights and 16 bits per 4 weights are the same rate — so this is
+the EXACT rate twin of R1, at the top of d4's reachable range. It asks "d or
+K?" at the 4-bit band, where E130 asked it at 3.00 bpw.
+
+    bar (E124 d2/K256, same instrument)   40.327 mnats / 90.10% top-1 / ppl 5.2330 @ 13.596 GiB
+    size model predicts                   13.594 GiB PACKED (same rate -> same code bytes)
+
+Assert the MEASURED PACKED size; quote NO unpacked figure anywhere (III.8).
+
+**REGISTERED READINGS:**
+
+    d4 WINS clear of the floor  -> "raise K first" extends to the dense 4-bit
+        band and law 10 gains a THIRD band (2.00, 3.00, 4.00), strengthening
+        it from a two-point preference to a trend.
+    d2 WINS                     -> the d/K optimum is BAND- or
+        ARCHITECTURE-dependent, which is the MORE INTERESTING finding: it
+        would mean E130's 3.00 bpw result does not extrapolate up, and law 10
+        needs a band caveat rather than a third data point.
+    INSIDE THE FLOOR            -> a wash, reported as a wash.
+
+Report KL AND ppl (6c). The floor is INHERITED from d2/K256 (KL 2.085 mnats /
+ppl 0.0447, 6f) and neither arm is that geometry — labelled INHERITED per
+III.12, and **tonight's E136b is the standing warning that honestly measured
+floors come in WIDER than inherited ones.**
+
+**--relerr-abort SET PER-GEOMETRY FROM MEASUREMENT, FIXED BEFORE LAUNCH.**
+The paper session asked for the bar to come from the first tensors rather than
+FINDINGS' K256-era numbers, and I declined to read it live and adjust — a bar
+tuned mid-run is a hand on the scale, not an instrument. The 1-layer probe was
+already run at 14:49 (`probe-27b-d4K65536-L30`, layer 30, 3 tensors):
+
+    healthy relerr at d4/K65536 = 0.0773 mean, 0.0774 worst, spread 0.0001
+
+**BAR SET AT 0.30** — ~3.9x measured healthy, far below the degenerate case
+(relerr 1.0 = reconstruction is exactly zero) and far above any plausible
+legitimate variation (run C's 192 tensors spanned 0.0204-0.0209, ~2.5%). The
+default 0.90 would be 11.6x healthy and would let a half-collapsed tensor
+through. This is a pre-registered constant, not a judgement call.
+
+**IV.1 STAGING: NOT APPLICABLE, and this is why.** `fit_dense_vq.py` has no
+`--stage-dir` (that flag belongs to the 397B fitter). It is also not needed:
+the source sits on /dev/disk11s1, a directly-attached Thunderbolt SSD, not an
+SMB share. IV.1's GPU-timeout-on-lazy-read family is a share phenomenon and
+run C read the same path for 4h38m without incident.
+
+**COST, from measurement not extrapolation:** 693 s/tensor measured across 3
+probe tensors with 0.9% spread; 192 tensors -> 133,056 s = **36.9 h**. The
+(params/d) x K cost model predicted 695 s/tensor and was right to two parts per
+thousand.
