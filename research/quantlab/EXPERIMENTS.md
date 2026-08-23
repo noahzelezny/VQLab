@@ -7806,3 +7806,67 @@ draw only — which makes a near-tie harder to interpret, not easier.
 **What this does NOT license.** It says nothing about R3: E128C at 6.0 bpw
 scored KL 26.709 against the q8 bar of 1.641 and that verdict is closed
 (E128 run C). A q6 win or loss changes the FENCE of claim 1, not the wall.
+
+## E134 — PRE-REGISTRATION: the d4 large-K fused kernel cannot load. Mechanism named BEFORE the M3 test.
+
+The M4 session found that BOTH 35B rungs fail III.11 — they cannot generate a
+token — while scoring fine. e94b d4/K8192 fails packed AND unpacked (different
+kernels), R2 d4/K16384 fails, the K256 sibling generates fine on the same box
+and venv minutes apart, a trivial custom kernel compiles, and both mlx 0.32.0
+and 0.32.1 fail identically. It asked me to test the M3 before anyone concludes
+it is M4-specific. **Mechanism registered here BEFORE that test.**
+
+**MECHANISM (read from source, not inferred from the failure):** the d4 fused
+kernels hold the codebook in THREADGROUP memory — `threadgroup half4
+cb[MAX_K]` at vq_switch.py:340 and :386, 8 bytes per entry. Apple's
+threadgroup limit is 32,768 B.
+
+    K=256     2,048 B   OK   <- why rotlab--35B-vqK256codes generates fine
+    K=2048   16,384 B   OK
+    K=4096   32,768 B   AT THE CAP — fails once xs[] is added
+    K=8192   65,536 B   2x OVER   <- e94b
+    K=16384 131,072 B   4x OVER   <- R2
+
+**This is a known class that d8 was already fixed for and d4 was not.** The
+file's own header (vq_switch.py:12-16) says d8 codebooks above 2K entries
+"cannot live in Apple's 32 KB threadgroup memory — the d8 kernels keep the
+codebook in DEVICE memory." The d4 path never got that treatment. Same class
+as the dense guard 86987c1 (E124) and as E83's device-memory-codebook warning.
+
+**REGISTERED PREDICTIONS:**
+
+1. **The M3 will fail the K8192 smoke IDENTICALLY.** The 32 KB threadgroup
+   limit is an Apple architectural constant, not an M4 property. **If the M3
+   PASSES, this mechanism is WRONG** and the failure is box-specific, which is
+   a worse outcome for publishing (the release question becomes "which
+   hardware can serve this artifact").
+2. **E130 arm 2 (d4/K4096) will ALSO fail its III.11 smoke** — it sits exactly
+   at the cap and the kernel needs `xs[]` on top of the codebook. It is fitting
+   as this is written and its smoke runs within the hour. If arm 2 smokes
+   CLEAN at K4096, the boundary is one step higher than computed and the
+   arithmetic above needs correcting.
+3. **The 27B d2 rungs are UNAFFECTED.** d2 uses `half2 cb[MAX_K]` (:261), 4
+   bytes/entry: K4096 = 16,384 B, inside the cap. R1/R2 on the 27B are not
+   implicated, and E128C (d2/K4096) is not.
+
+**WHY IT SURFACED ONLY NOW, and this is the paper-relevant part:** e94b's
+KL 53.022 came from the STREAMING referee, which is prefill-shaped and never
+dispatches the small-N fused kernel. **These rungs score fine and cannot
+serve.** That is the prefill-vs-fused split recorded at E122 for the d8
+artifact, now with teeth: a rung can carry a good number and be unable to
+produce a token. e94b has been the standing 35B R1 candidate all weekend on
+the strength of a number, which is how it got here — III.11 exists for exactly
+this and was not run on it.
+
+**CONSEQUENCE FOR THE LADDER, pre-committed:** if prediction 1 fires, BOTH 35B
+rungs are UNRELEASABLE as they stand, and R1's "MET" is withdrawn to
+"MET on quality, BLOCKED on III.11" until a fallback lands. A quality number
+from a path the artifact cannot ship is not an offering.
+
+**FIX SHAPE, not yet written and not to be written while a fit is running:**
+the same guarded fallback vq_dense.py got at 86987c1 — compute the threadgroup
+requirement, and when it exceeds the cap fall back to the decode path
+(bit-exact, decode speed). Correctness at a speed cost, which is what the
+dense path already does. Alternative and better: move the d4 codebook to
+DEVICE memory as d8 already did. The first is hours; the second is the real
+fix. Neither is a performance change and neither must be read as one.
