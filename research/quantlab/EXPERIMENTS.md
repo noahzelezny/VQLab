@@ -8125,3 +8125,50 @@ measure it.** Verdict stated as: MET on KL and top-1, ppl uninterpretable.
 **III.11 BLOCKED is LIFTED for both rungs — on the fixed runtime only.** The
 stock installed runtime still cannot load these kernels, so any release must
 ship or require the fixed vq_switch.
+
+## E133 — RESULT: q6 WINS. The VQ/affine crossover is BRACKETED in 4.5-6.0 bpw.
+
+The registered "more interesting" branch fired (8c765f2, before the number
+existed): **q6 beats E128C -> the crossover lies BETWEEN 4.5 and 6.0 bpw and
+the paper reports the BRACKET. NOT a failure.**
+
+    rung                size GiB   bpw    KL mnats    ppl      top-1
+    q4                   14.094    4.0     45.842   5.2055   89.82%
+    E126  d2/K512        14.592    4.5     33.095      -         -
+    E128C d2/K4096       17.583    6.0     26.709   5.2417   91.66%
+    q6                   20.355    6.0      3.710   5.2603   96.75%
+    q8                   26.341    8.0      1.641      -         -
+    bf16 ppl 5.2249
+
+q6 MEASURED 20.355 GiB (projection 20.36 from the q3->q4 slope, 5 MB out),
+uniform 6-bit affine group 64, per-module bits entries: ONE — the q3/q4
+convention, NOT q8's 401 overrides, so it is a genuine uniform rung.
+Smoke OK. Scored on the ORIGINAL venv, the instrument that scored E128C and
+every other 27B rung.
+
+**q6 beats E128C by 7.2x on KL and 5.1 points on top-1, for 2.77 GiB more.**
+Not close, and no floor argument touches it.
+
+**ppl, per the registered branch:** E128C is nominally better by 0.0186, which
+is INSIDE the 0.0447 floor and therefore not interpretable — and cannot offset
+a 7.2x KL gap. The registration anticipated this ("a ppl tie here is EXPECTED
+and must not be read as a tie overall"). The floor is INHERITED from d2/K256
+and is labelled so per III.12.
+
+### What this bounds, and why the bracket is the useful form
+
+    VQ PAYS below ~4.5 bpw     E124 beats q4 at 4.0; E126 beats q4 at 4.5;
+                               E130 arm1 halves q3's KL at 3.0
+    VQ HAS STOPPED by 6.0 bpw  q6 dominates the best VQ rung at that rate
+    CROSSOVER bracketed        4.5 - 6.0 bpw
+
+Claim 1's fence previously stopped at 4.5 with "4.5-8 unmeasured for lack of
+comparators." It is now bounded on both sides by measurement.
+
+**This independently corroborates E128 run C's R3 verdict from a different
+direction.** R3 asked for q8-class quality from VQ; run C showed the d2 slope
+flattens (x0.868/bpw from 4.50->6.00). q6 explains WHY that could never
+close: affine scales better at high rate — at 6.0 bpw it is already within
+2.07 mnats of q8's 1.641 while the best VQ rung sits at 26.709. **The method's
+regime is the low-bpw end, and it ends before 6 bpw.** That is a sharper and
+more defensible claim than "VQ wins," and it is falsifiable.
