@@ -150,6 +150,24 @@ at ~100 GiB residency was measured to be bimodal on the same box, same
 artifact, back to back. Load time is path-dependent (local vs network) and
 belongs in no benchmark table.
 
+## 9b. Contention is not only a timing hazard
+
+The obvious reason not to share a box mid-experiment is that timings become
+meaningless. There is a second reason, and it is unmeasured rather than
+ruled out: **contention can perturb GPU reduction order, and reduction order
+is a known source of numerical nondeterminism here.** With the RNG fully
+pinned, two fits still differ at ~0.0100% of codes from that residual alone;
+whether it is large enough to move an output metric has never been measured.
+So a fit that ran under contention may differ from one that did not by a
+term nobody can currently bound.
+
+Practical rule: **run compute one experiment at a time on a box, and record
+whether anything else was running.** If an arm ran contended and its twin did
+not, either re-run the contended arm clean or report the comparison as
+carrying an unbounded contamination term. Do not reason that "contention only
+affects timing" — that is the incomplete version of this rule, and it is the
+one most people carry.
+
 ## 10. Every gate must fail before it is trusted
 
 A new gate must FAIL on a known-bad input and PASS on a known-good one
