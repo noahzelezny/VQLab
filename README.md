@@ -75,6 +75,7 @@ fit → verify (outlier gate) → pack → graft (vision) → release checks
 
 ```bash
 pip install -e .
+vqlab selftest        # runs the real pipeline on a tiny synthetic model (<1 min)
 
 vqlab fit-moe   --family qwen397b --model <bf16-or-base> --out fits/K256 ...
 vqlab fit-dense  --src <src> --out fits/d2K512 ...   # dense families
@@ -99,6 +100,18 @@ table row.
   streams and can exceed RAM). The 397B fits used 96–128 GB machines.
 - Python ≥ 3.12, `mlx`, `mlx-lm` (stock — artifacts bundle their own
   runtime), `numpy`, `safetensors`.
+
+## Verifying your install
+
+`vqlab selftest` is not a mock: it synthesizes a small checkpoint and runs
+the shipped fitter, outlier gate, packer, manifest and Metal kernels over it
+as subprocesses, checking what each stage is supposed to guarantee — seeded
+fits reproduce, packing is bit-exact, the gate fails a collapsed tensor, the
+manifest catches altered bytes, and a dense bundle serves on a stock mlx-lm.
+Every gate is exercised in **both** directions, because a gate that only ever
+passes tells you nothing. The two stages that need a real multi-GB
+checkpoint — end-to-end generation and scoring — are reported as SKIPPED with
+the reason, never silently dropped.
 
 ## Honesty rules baked into the tool
 

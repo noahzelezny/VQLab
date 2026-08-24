@@ -72,6 +72,13 @@ ap.add_argument("--geom", default=None,
                 help="per-projection geometry override, e.g. "
                      "'gate_proj=d4k256,up_proj=d4k256,down_proj=d8k4096' "
                      "(E36: down_proj prefers d8; gate/up never recovers)")
+ap.add_argument("--seed", type=int, default=1234,
+                help="RNG seed for the k-means++ subsample and centroid "
+                     "draws. Default 1234 = seeded, so the fit is "
+                     "reproducible from recipe plus seed. Pass -1 for "
+                     "unseeded fresh draws — required when measuring a "
+                     "noise floor, and the behaviour that produced the "
+                     "paper's MoE artifacts.")
 ap.add_argument("--relerr-abort", type=float, default=0.35,
                 help="refit, then abort, if any tensor exceeds this relerr. "
                      "Healthy d4k2048 is ~0.19, d2k2048 ~0.032, worst "
@@ -114,6 +121,28 @@ ap.add_argument("--tail-geom", default=None,
                      "gemma (LADDER_GEMMA.md:180; gemma vq-tail10 scored "
                      "BELOW flat K256, 76.92 vs 79.81).")
 args = ap.parse_args()
+
+# SEEDING. mx.random is process-global, so seeding once here covers every
+# random draw in this fitter: the k-means++ subsample (kmeanspp), the first
+# centroid, the k-means++ selection draw, and the random-init path. No numpy
+# RNG is used.
+#
+# Default is SEEDED. Note this DIVERGES from the fitter that produced the
+# paper's MoE artifacts, which had no seed at all and whose every build is a
+# single unseeded draw — upstream keeps that file unseeded on purpose so the
+# vintage-comparison arms stay valid. Use `--seed -1` for the historical
+# behaviour: it is the pre-seeding code path exactly (no seed call), and it
+# is what you want when MEASURING a noise floor, where independent draws are
+# the point. Seeding is necessary but not sufficient for bitwise
+# reproducibility: with the RNG pinned, ~0.01% of codes still differ from a
+# second, unidentified nondeterminism source. See METHODOLOGY.md §3.
+if args.seed >= 0:
+    mx.random.seed(args.seed)
+    print(f"SEEDED mx.random with {args.seed} — this fit is reproducible "
+          f"from its recipe plus this seed (but not bitwise; see docs)",
+          flush=True)
+else:
+    print("UNSEEDED (--seed -1) — this fit is a fresh draw", flush=True)
 
 BASE, SRC, OUT = pathlib.Path(args.base), pathlib.Path(args.src), pathlib.Path(args.out)
 SHIP = pathlib.Path(args.ship_to) if args.ship_to else None
