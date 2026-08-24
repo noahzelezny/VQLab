@@ -144,7 +144,11 @@ tight floor as a symptom of a pinned seed, not as evidence your fits are
 unusually consistent.
 
 Measured: dense 27B d2/K256 → KL range 2.085 mnats, ppl 0.0447 (n=3);
-397B d4/K256 → 0.0134 prose / 0.0161 code (n=2, inferred). A margin inside
+397B d4/K256 → 0.0256 prose / ~0.0178 code (n=2, same-stack); 397B d4/K2048
+→ 0.0056 prose / 0.0104 code (n=2). Floors NARROW as K grows, which is why
+inheriting one across geometries is forbidden. (An earlier inferred pair,
+0.0134/0.0161, is superseded — margins computed against it read about 2x
+too favourable.) A margin inside
 its floor is noise, and the paper reports three of its own margins that way.
 
 ## §3.4 — speed
