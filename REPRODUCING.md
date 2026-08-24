@@ -1,8 +1,8 @@
 # REPRODUCING — paper table rows → commands
 
-Every row in the paper is reproducible in the *statistical* sense: fits are
-unseeded, so a re-fit reproduces aggregate scores to reporting precision,
-not exact bytes (paper §5; two artifacts of identical geometry differ, and
+Every row in the paper is reproducible in the *statistical* sense: every
+artifact the paper measures is a single UNSEEDED draw, so a re-fit
+reproduces aggregate scores to reporting precision, not exact bytes (paper §5; two artifacts of identical geometry differ, and
 the measured fit-to-fit spread is the noise floor every margin is read
 against). One historical exception is stated at the end.
 
@@ -112,14 +112,24 @@ paper); build them with stock `mlx_lm.convert` and re-verify with
 ## §2.6 — noise floors
 
 n≥3 fits of the same recipe into three NEW directories, score all, quote
-the range:
+the range. **The dense fitter seeds by default (`--seed 1234`), so the
+naive loop would produce three IDENTICAL artifacts and a floor of exactly
+zero** — which would then certify every third-decimal margin as real. A
+floor needs independent draws, so either unseed or vary the seed:
 
 ```bash
 for i in 1 2 3; do
-  vqlab fit-dense --src <SRC-27B> --out fits/floor-$i --k 256 --dim 2 --family qwen3_8_dense
+  # --seed -1 restores unseeded behaviour: a fresh draw each time.
+  # (Equivalently: --seed $i, three distinct seeds.)
+  vqlab fit-dense --src <SRC-27B> --out fits/floor-$i \
+      --k 256 --dim 2 --family qwen3_8_dense --seed -1
   # pack + score each
 done
 ```
+
+The MoE fitter takes no `--seed` at all — every MoE fit is a fresh draw,
+so the loop above is correct there as written. Check your fitter before
+trusting a floor: a floor measured with a fixed seed measures nothing.
 
 Measured: dense 27B d2/K256 → KL range 2.085 mnats, ppl 0.0447 (n=3);
 397B d4/K256 → 0.0134 prose / 0.0161 code (n=2, inferred). A margin inside

@@ -41,7 +41,8 @@ what the bytes are.
 
 ## 3. Noise floors before margins
 
-Fits are unseeded: two fits of identical geometry produce different artifacts.
+Unless you seed them, two fits of identical geometry produce different
+artifacts — every measurement in the paper is a single unseeded draw.
 Before believing a small margin at a geometry, **measure the seed-noise floor
 at that geometry** (n≥3 fits, same recipe, score all). Measured examples:
 dense-27B d2/K256 spans 2.085 mnats KL / 0.0447 ppl across three draws.
@@ -50,6 +51,21 @@ interpretable; KL separations of 5+ mnats and top-1 separations of ~1 pp are.
 
 A floor belongs to the geometry it was measured at. **Do not inherit it**
 across K or d — and when you do inherit one anyway, say so in the reading.
+
+**Check whether your fitter seeds before you measure a floor.** A seeded
+fitter run three times gives three identical artifacts and a floor of
+zero, which then certifies every margin as real — the instrument fails in
+the flattering direction. VQLab's dense fitter seeds by default (`--seed
+1234`); pass `--seed -1` (or distinct seeds) for floor work. The MoE
+fitter does not seed at all.
+
+**And check an instrument's description against the instrument itself, not
+against what it was built to achieve.** Two descriptions in this project's
+own documents survived review while being wrong — a manifest called a
+"content hash" that hashes a 1 MiB prefix, and fitters described as
+"seeded" when every published artifact was an unseeded draw. Both read as
+obviously true, which is precisely why nobody resolved them. Read the
+source of the tool you are describing.
 
 ## 4. Generate one token before calling anything releasable
 
