@@ -202,6 +202,39 @@ wearing a correctness check's name. Related: a source path that defaults to
 one lab's model makes that family the silent assumption of every downstream
 run — prefer a required argument over a default that can be wrong.
 
+### And correspondence is still not identity
+
+The width check above is a genuine correspondence check — it compares a real
+property of the source against a real property of the artifact — and it is
+**still not an identity check**, which the next incident proved at the cost of
+a second wrong graft. Two model generations shared a BYTE-IDENTICAL
+vision_config: both project to 2048, so width cannot separate them *even in
+principle*. A tower from the older generation went into the newer artifact,
+landed under a key prefix that generation does not read, and the presence gate
+again reported 333/333 PASS.
+
+**The sharper rule: correspond on something that DIFFERS between the
+candidates you are trying to tell apart.** A property two candidates share
+cannot distinguish them no matter how correct the check is — the same failure
+as ranking two builds by a metric on which they tie. Before trusting a check,
+ask what it would say about the specific wrong thing you are worried about.
+
+What settles identity here is a **byte-identical shared tensor**: norms and
+biases pass through a fit untouched, so the true base matches the artifact on
+several, while a different model, release or family matches on none. Zero
+shared tensor *names* is decisive by itself. VQLab's `graft` probes up to six
+shared non-vision tensors, prefers norms, and requires at least one exact
+match before anything is read or written.
+
+Two traps worth naming, both walked past in the real incident:
+- **`config.model_type` is not the base.** A 3.6 artifact reports
+  `qwen3_5_moe`, which actively invites the wrong source.
+- **A gate's verdict can mask its own number.** The first run returned median
+  relerr 0.3735 where a comparable rung sits near 0.041 — the wrong-source
+  signature, sitting in plain sight, read as fine because the gate printed
+  PASS. Read the magnitude, not just the verdict; a PASS with an anomalous
+  number is a result, not a clearance.
+
 ## 10. Every gate must fail before it is trusted
 
 A new gate must FAIL on a known-bad input and PASS on a known-good one

@@ -57,6 +57,67 @@ def _assert_tower_belongs(src_cfg, art_cfg, src_name, art_name):
             f"present and wrong.")
 
 
+def _assert_same_model(src_map, art_map, src_dir, art_dir, vis_prefixes,
+                       probe_n=6):
+    """Prove the source IS this artifact's base, by shared byte-identical tensors.
+
+    The width assertion above is a correspondence check and is still NOT an
+    identity check: two model generations can share a BYTE-IDENTICAL
+    vision_config (Qwen3.5 and 3.6 both project to 2048), so width cannot
+    separate them even in principle. Measured consequence: a 3.5 tower was
+    grafted into a 3.6 artifact, and because 3.6 keys its tower
+    `vision_tower.*` while 3.5 uses `model.visual.*`, 333 tensors landed in a
+    namespace the model never reads — and the presence gate reported
+    333/333 PASS.
+
+    What actually settles identity is that non-vision tensors — norms and
+    biases especially — pass through a fit UNTOUCHED. The true base shares
+    several byte-identical ones with the artifact; a different model,
+    release, or family shares none. Zero shared KEYS is decisive on its own,
+    since a different generation does not share a key namespace.
+
+    `config.model_type` is NOT the base and must not be used for this: a 3.6
+    artifact reports `qwen3_5_moe`, which actively invites the wrong source.
+    """
+    vis = tuple(p for p in vis_prefixes if p)
+    shared = [k for k in src_map
+              if k in art_map and not k.startswith(vis)]
+    if not shared:
+        raise SystemExit(
+            f"FAIL: refusing to graft. {src_dir} and {art_dir} share ZERO "
+            f"non-vision tensor names. Different key namespaces mean a "
+            f"different model generation or family — this is not this "
+            f"artifact's base. Nothing written.")
+    # norms first: small, untouched by any fit, and present in every model
+    shared.sort(key=lambda k: (0 if "norm" in k else 1 if "bias" in k else 2, k))
+    probe = shared[:probe_n]
+    matches, checked = [], []
+    for k in probe:
+        try:
+            with mx.stream(mx.cpu):
+                a = mx.load(str(SRC / src_map[k]))[k]
+                b = mx.load(str(ART / art_map[k]))[k]
+                mx.eval(a, b)
+                same = (a.shape == b.shape and a.dtype == b.dtype
+                        and bool(mx.array_equal(a, b)))
+        except Exception as e:                     # unreadable => not evidence
+            checked.append(f"{k}: unreadable ({type(e).__name__})")
+            continue
+        checked.append(f"{k}: {'identical' if same else 'DIFFERS'}")
+        if same:
+            matches.append(k)
+    if not matches:
+        raise SystemExit(
+            f"FAIL: refusing to graft. {src_dir} shares tensor NAMES with "
+            f"{art_dir} but not one probed tensor is byte-identical:\n  "
+            + "\n  ".join(checked)
+            + f"\nThe source is not this artifact's base (a different "
+              f"release will do this). Nothing written. Note config."
+              f"model_type does NOT identify the base.")
+    print(f"identity: {len(matches)}/{len(probe)} probed non-vision tensors "
+          f"byte-identical -> source is this artifact's base")
+
+
 ap = argparse.ArgumentParser()
 ap.add_argument("--artifact", required=True)
 ap.add_argument("--src", required=True,
@@ -86,6 +147,11 @@ _art_cfg = json.load(open(ART / "config.json")) if (ART / "config.json").exists(
 _assert_tower_belongs(_src_cfg, _art_cfg, str(SRC), str(ART))
 
 src_map = json.load(open(SRC / "model.safetensors.index.json"))["weight_map"]
+_art_map_early = json.load(open(ART / "model.safetensors.index.json"))["weight_map"]
+# IDENTITY, before any tower read or write. Width above is a cheap early
+# filter; this is what actually proves the source is this artifact's base.
+_assert_same_model(src_map, _art_map_early, str(SRC), str(ART),
+                   tuple(p for p in args.prefixes.split(",") if p))
 # Qwen keeps the whole tower under one prefix; gemma-4 splits it across
 # vision_tower.* AND embed_vision.* (356 tensors total), so a single-prefix
 # filter silently grafts an incomplete tower. --prefixes is additive and the
