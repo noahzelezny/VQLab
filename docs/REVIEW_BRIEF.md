@@ -8,8 +8,17 @@ read-only toward it.
 ## Run this first
 
 ```bash
-cd <repo> && pip install -e . && vqlab selftest
+# DISPOSABLE venv — not anaconda, not the lab's ./venv. This package ships a
+# model runtime; installing it beside your scoring instrument is the class of
+# hazard METHODOLOGY.md §5 is about.
+cd <repo> && python3 -m venv .venv && . .venv/bin/activate
+pip install -e . && vqlab selftest
 ```
+
+**The selftest uses the GPU.** Real Metal kernels, real k-means. Seconds of
+GPU, but it contends — **do not run it while a fit is in flight.** If your box
+is mid-experiment, do the read-only number check below first and run the
+selftest afterwards.
 
 Expected: **22 passed, 0 failed, 2 skipped** in well under a minute. It
 synthesizes a tiny checkpoint and runs the shipped fitter, gate, packer,
