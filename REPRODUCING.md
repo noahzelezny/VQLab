@@ -112,10 +112,10 @@ paper); build them with stock `mlx_lm.convert` and re-verify with
 ## §2.6 — noise floors
 
 n≥3 fits of the same recipe into three NEW directories, score all, quote
-the range. **The dense fitter seeds by default (`--seed 1234`), so the
-naive loop would produce three IDENTICAL artifacts and a floor of exactly
-zero** — which would then certify every third-decimal margin as real. A
-floor needs independent draws, so either unseed or vary the seed:
+the range. **The dense fitter seeds by default (`--seed 1234`), and a floor
+measured at a fixed seed is not a floor** — it would certify every
+third-decimal margin as real. A floor needs independent draws, so either
+unseed or vary the seed:
 
 ```bash
 for i in 1 2 3; do
@@ -128,8 +128,16 @@ done
 ```
 
 The MoE fitter takes no `--seed` at all — every MoE fit is a fresh draw,
-so the loop above is correct there as written. Check your fitter before
-trusting a floor: a floor measured with a fixed seed measures nothing.
+so the loop above is correct there as written.
+
+**What a mistakenly-seeded floor looks like:** not zero. Seeded fits are
+near-identical but not bitwise identical — 0.0100% of codes still differ
+with the RNG pinned (measured at d2/K256), because a second nondeterminism
+source survives the seed. So the mistake returns a small, nonzero,
+plausible-looking number rather than an obviously broken one, and it will
+be far tighter than any real floor at that geometry. Treat a surprisingly
+tight floor as a symptom of a pinned seed, not as evidence your fits are
+unusually consistent.
 
 Measured: dense 27B d2/K256 → KL range 2.085 mnats, ppl 0.0447 (n=3);
 397B d4/K256 → 0.0134 prose / 0.0161 code (n=2, inferred). A margin inside
