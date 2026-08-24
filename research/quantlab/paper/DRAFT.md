@@ -579,6 +579,20 @@ identifies a shard and catches a rewrite, but it does not certify every
 byte, and mtimes survive copying. Metadata answers *was this replaced*,
 never *is this unchanged*.
 
+**A label is not a measurement.** Metadata records what someone
+intended, not what the file contains. Every checkpoint in this project
+declares a `model_type` naming the wrong model release, carried forward
+silently into each derived build; we came close to grafting one model's
+vision tower onto another on the strength of that field. Our own
+descriptions failed the same way — a manifest documented as storing
+content hashes stores a hash of each shard's head, and a fitter
+documented as seeded was not seeded. None of these survived because they
+were hard to check. They survived because they were trivial to check, and
+nothing that costs nothing to believe ever gets a verification budget.
+Where a property carries a claim, it is read from the bytes: a tensor
+compared against its candidate base, a hash recomputed, a flag traced to
+the line that consumes it.
+
 None of this is novel methodology; it is ordinary unit discipline,
 applied to a setting where the wrong numbers are the plausible ones.
 

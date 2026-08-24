@@ -625,3 +625,30 @@ model in a 3.6 sweep and needs a card push. Shard-1 hashes differ across all
 three artifacts, so they are distinct fits — which rules out the easy
 explanation and settles nothing. Lineage read requested from the M4.
 
+## 08-24: LINEAGE QUESTION CLOSED — the card was fine
+
+M4 lineage read (read-only): `qwen36-35b-rungs/vq-K256-d2` and `vq-K256-d4`
+are BOTH Qwen3.6-derived (6/6 byte-identical to 3.6, 0/6 to 3.5). The two
+3.5-derived artifacts re-probed as controls: 0/6 and 6/6 the other way.
+**MODEL_CARD_QWEN_QUALITY.md's "d4·K256, 10 GiB" row belongs in its 3.6
+sweep. No card push needed.** The 10.144 size collision was geometry, not
+lineage — d4/K256 lands at the same packed size from either base because the
+code budget is identical.
+
+**LIMIT OF THAT PROBE, stated by the M4 and worth keeping:** it prefers norms,
+and norms are identical across bf16/4bit/8bit of the SAME release. So it
+discriminates RELEASE (3.5 vs 3.6), not which quantization of a release a fit
+started from. Sufficient for every question asked today and for the graft
+guard; NOT an instrument for "was this fitted from the 4-bit or the 8-bit".
+
+§3.3's d2/K256 is 3.6, so grafting it would make that row fully measured
+(18.476). Not done — awaiting Noah in the M4 session.
+
+**§5 GAINED AN EIGHTH RULE (addition, not a correction — Noah may cut it):**
+"A label is not a measurement." Four instances today (model_type, the manifest
+"content hash", "the fitter is seeded", assumed 397B size symmetry) plus the
+III.10 phantom and the word "seeding" in a vq_397b_codes.py docstring that
+read as an RNG seed. The sharper framing is the M4's: these survive review
+BECAUSE they are cheap to check — nothing that costs nothing to believe gets a
+verification budget.
+
