@@ -11,10 +11,13 @@ import sys, io, os
 os.environ.setdefault("HF_HOME", "/Volumes/Thunderbay SSD/Mlx_Models")
 from huggingface_hub import HfApi
 
+# NOTE: VQ-3.1bpw is DELIBERATELY absent. It was renamed to VQ-3bpw, and HF
+# REDIRECTS the old id - so pushing card E by the old name silently overwrote
+# card G on the live flagship. A renamed repo must be removed from this map,
+# not left to redirect.
 CARDS = {
     "Qwen3.5-397B-A17B-VQ-2.2bpw":  "MODEL_CARD_397B_F.md",
     "Qwen3.5-397B-A17B-VQ-2.4bpw":  "MODEL_CARD_397B_C.md",
-    "Qwen3.5-397B-A17B-VQ-3.1bpw":  "MODEL_CARD_397B_E.md",
     "Qwen3.6-35B-A3B-VQ-4.6bpw":    "MODEL_CARD_QWEN_QUALITY.md",
     "Qwen3.6-35B-A3B-VQ-3.4bpw":    "MODEL_CARD_QWEN_SMALL.md",
     "gemma-4-26b-a4b-it-VQ-6.2bpw": "MODEL_CARD_GEMMA_QUALITY.md",
