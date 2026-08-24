@@ -27,6 +27,8 @@ version of what this project asks of contributed results and code:
   mx.stream(mx.cpu):` + `mx.eval` inside the block + all-zero assertion.
 - Every new gate must FAIL on a known-bad input and PASS on a known-good
   before its verdict is trusted.
+- Run `vqlab selftest` before sending a change and after pulling one; it
+  exercises every gate in both directions in under a minute.
 - Run `scripts/check_scripts_sync.sh` before long chains — stale scripts on
   a second box are silent divergence.
 

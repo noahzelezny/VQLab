@@ -7,7 +7,7 @@ set -e
 cd "$(dirname "$0")/../src/vqlab"
 if command -v md5 >/dev/null 2>&1; then MD5="md5 -q"; else MD5="md5sum"; fi
 sum() { $MD5 "$@" 2>/dev/null | awk '{print $1}'; }
-FILES="${*:-vq_397b_codes.py fit_dense_vq.py vq_switch.py vq_dense.py vq_pack.py add_model_file.py verify_artifact.py pack_artifact.py pack_dense.py check_release.py check_bundle.py}"
+FILES="${*:-vq_397b_codes.py fit_dense_vq.py build_dense_vq.py families.py dense_shim.py vq_switch.py vq_dense.py vq_pack.py add_model_file.py verify_artifact.py pack_artifact.py pack_dense.py check_release.py check_bundle.py selftest.py price.py cli.py}"
 fail=0
 for f in $FILES; do
   wt=$(sum "$f"); [ -n "$wt" ] || wt=MISSING
