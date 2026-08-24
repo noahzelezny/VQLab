@@ -14,7 +14,13 @@ Pre-registered b7e2686. Revision item — the paper does NOT wait on it.
 ## THE LADDER — final for the paper
 
     27B  R1  E124 d2/K256   13.596 GiB  KL 40.327   MET
-         R2  E126 d2/K512   14.592 GiB  KL 33.095   MET
+         R2  E142 arm2      14.592 GiB  KL 32.810   MET   <- BEST 27B WE HOLD
+                d2/K512, iters=30, seed 1234, M3 — ppl 5.161691, top-1 90.84%
+                supersedes E126 (14.592 / 33.095 / 5.194289, M4, unseeded).
+                Adopted 08-24 on STATED grounds, NOT a demonstrated margin:
+                identical size, clean gate, all four metrics moved the right
+                way. The iters gain (0.0186 ppl) is 0.42x the registered bar
+                and BELOW OUR RESOLUTION — a card must not claim it measured.
          R3  NOT REACHABLE — E128 run C: 26.709 mnats vs a 1.641 bar (16.3x),
              and the d2 slope FLATTENS (x0.673/bpw at 4.0-4.5, x0.868 at 4.5-6.0)
     35B  R1  e94b d4/K8192  14.838 GiB packed  KL 53.022 / 89.55%   MET (quality)
