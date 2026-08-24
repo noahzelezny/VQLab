@@ -8960,3 +8960,34 @@ gate and the III.11 smoke.
 neither native to K512 nor re-measured; n=1 per arm; and a transfer result here
 says nothing about iters>30, which law 11 makes genuinely uncertain rather than
 obviously monotonic.
+
+### E142 ADDENDUM — written 14:05, BEFORE either arm completed (arm 1 at L10 of 63)
+
+**The registered floor is CONSERVATIVE BY CONSTRUCTION, and that creates a
+false-negative risk I want named before the numbers exist.**
+
+Verified in source: `fit_tensor()` calls `kmeanspp(Xn, K)` BEFORE the iters
+loop, and the Lloyd loop consumes no RNG. Both arms use seed 1234 and the same
+init cap, and every tensor consumes the same draws regardless of `--iters`, so
+the streams stay in sync across all 192 tensors. **Arm 2's initial centroids
+are identical to arm 1's; arm 2 IS arm 1 continued for 20 more Lloyd
+iterations.** Draw noise between the arms is not merely small — it is absent by
+construction, leaving only the Metal-reduction-order residual (E139: 0.0100% of
+codes, max|cb diff| 4.9e-04 at d2/K256).
+
+**Consequence:** the registered branch reads arm 2 against **0.0447**, the
+d2/K256 floor measured from UNSEEDED draws — i.e. a floor that includes the
+full draw variance these arms do not have. **That bar is far too high for this
+comparison.** A real iters effect of, say, 0.02 ppl would be dismissed as
+"inside the floor" when the actual resolution here is much finer.
+
+**The registered branches are NOT being amended** — they stand exactly as
+written at launch. But the verdict will additionally state: a difference below
+0.0447 is **BELOW OUR RESOLUTION, not shown to be zero**, and the honest floor
+for a shared-init comparison has never been measured. Measuring it would mean
+n=3 seeded arms at fixed iters, which costs 3 x 36 min at K512 and has not
+been run.
+
+The paper session independently noted that reading seeded arms against an
+unseeded floor is "conservative rather than flattering." Agreed — and the
+sharper form is that it is conservative enough to hide a real result.
