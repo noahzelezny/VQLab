@@ -89,3 +89,31 @@ bpw (13.8 GiB = "3.4bpw", 18.7 = "4.6bpw"), not by geometry.
   redirect — the only check that catches it is fetching the live card
   afterward. Same reason the outlier gate runs against the bytes on disk
   rather than the fitter's log. (Framing from the public-repo session.)
+
+## 4. TRAP: do not measure a floor with the dense fitter at defaults
+
+`fit_dense_vq.py` has seeded by default (`--seed 1234`) since E139 (08-22
+22:19). A naive "fit it three times and quote the range" loop now returns a
+floor that is NOT the draw distribution — and it does not return zero either,
+which would at least look broken. E139 measured seeded-vs-seeded divergence at
+**0.0100% of codes** (a second nondeterminism source survives the RNG pin;
+Metal reduction order is the untested candidate). So the loop yields a small,
+plausible, nonzero number that would certify every third-decimal margin as
+real. It fails in the flattering direction.
+
+**To measure a floor, pass `--seed -1`** (E139 says so explicitly) or use
+distinct seeds per draw.
+
+Floors already in the paper are SAFE: the dense 2.085/0.0447 came from E127,
+whose three draws were built 08-22 00:46-01:56, ~20 h before the seed landed
+(verified against the commit timestamp). The 35B and 397B fitters
+(`vq_35b_codes.py`, `vq_397b_codes.py`) have no seed at all and are
+deliberately untouched.
+
+**Forward caveat for the paper:** E138 was relaunched SEEDED. The draft now
+states that every artifact in it is a single unseeded draw. If E138 is folded
+into §4.2, that sentence needs qualifying — a seeded fit is not a draw from
+the same distribution the floors describe, and its margin against an unseeded
+floor is CONSERVATIVE, not flattering. Same applies to any same-seed A/B
+(e.g. the E142 iters arms): a shared seed removes between-arm draw variance,
+so the unseeded floor is too wide a bar for it, not too narrow.

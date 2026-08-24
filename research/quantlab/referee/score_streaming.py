@@ -32,7 +32,7 @@ def main():
                          "E30: every number in this arc is wikitext PPL, but "
                          "the actual workload is code — and the structure-bits"
                          "-vs-expert-bits trade was chosen on wikitext alone, "
-                         "so the ~1% edge over the community quant at matched "
+                         "so the ~1%% edge over the community quant at matched "
                          "size is exactly the claim a domain shift could "
                          "erase. referee_corpus_code.txt is the audit. Never "
                          "compare PPL ACROSS corpora — only models within one.")
