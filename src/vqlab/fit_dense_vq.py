@@ -41,7 +41,7 @@ ap.add_argument("--init-cap", type=int, default=200_000,
                      "200_000 is the historical value. At K=65536 that is ~3 "
                      "samples per centroid for seeding (the Lloyd loop still "
                      "refines over ALL rows, measured 22.28M / 340 per "
-                     "centroid, 0 dead codes). Cost is ~O(k*cap) and is <1% of "
+                     "centroid, 0 dead codes). Cost is ~O(k*cap) and is <1%% of "
                      "one Lloyd iteration, so raising it is nearly free. "
                      "Added 2026-08-24 to TEST whether the thin init starves "
                      "high-K fits (E141).")
