@@ -493,3 +493,27 @@ E138 (d4/K65536, M3, lands Mon ~11:00) = revision item, nothing waits on it.
   ssh+nohup — all prior M4 timings were background-priority.
 - **No present-tense measurements remain in the draft** except §4.2/§6's
   E138 reference (lands ~10:25 today).
+
+## 08-24: SEEDING CLAIM CORRECTED IN THE DRAFT (precision, no number moves)
+
+The draft said in three places that "the fitter is seeded" and that a build is
+"reproducible from recipe plus seed". FALSE for the artifacts this paper is
+about, verified from source:
+- `vq_397b_codes.py:571` — its own comment: "kmeans init is random and unseeded"
+- `vq_35b_codes.py` — no seed of any kind
+- `fit_dense_vq.py` — `--seed` (default 1234) added 2026-08-22, AFTER every
+  dense measurement reported here
+**Every artifact in the paper is a single unseeded draw.** That is not a
+weakness to hide — it is the reason the floors exist and the reason no margin
+is read without one. §2.6, §5 and §7 now say so.
+
+Also corrected: `artifact_manifest.py` records bytes, int(mtime) and a sha256
+of the FIRST 1 MiB per shard. The draft called this a "content hash" in §5,
+the section whose job is describing instruments honestly. It is an identity
+stamp: it catches a rewrite, it does not certify every byte, and mtimes
+survive `rsync -a` (the same trap as FINDINGS 6b's corollary). The strong
+check we DO run is full sha256 against the remote LFS oid at publish time —
+that is what verified the flagship 28/28 today.
+
+Caught by the public-repo session reading the draft against the tool. No
+number, table or claim standing changes.

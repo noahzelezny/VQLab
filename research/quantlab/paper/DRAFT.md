@@ -253,9 +253,11 @@ moves by 0.0001 while perplexity moves by 0.026 — the tail of the
 reconstruction moves, and the tail is what output quality responds to
 (§4.3). Every margin in §3 is stated as a multiple of the floor for its
 geometry, a margin inside its floor is reported as noise, and a floor
-is never borrowed across geometries. The fitter is now seeded, which
-narrows future divergence; the floors above describe the process that
-produced the published artifacts.
+is never borrowed across geometries. The dense-family fitter gained a
+seed on 2026-08-22, after the measurements reported here; the MoE fitters
+draw their initialization subsample unseeded by design. Every artifact in
+this paper is therefore a single unseeded draw, which is why the floors
+above exist and why no margin is read without one.
 
 ## 3. Results
 
@@ -552,10 +554,13 @@ generate. Nothing is validated or releasable until it has generated through the 
 runtime it ships with, on a machine configured like a user's.
 
 **Provenance is physical.** Build inputs get manifests — per-shard
-bytes, mtimes, content hashes, stored outside the artifact — because a
-file silently rewritten in place is otherwise indistinguishable from
-the original — a failure mode observed twice in this project. The fitter is seeded, so a build is
-reproducible from its recipe and seed.
+bytes, mtime, and a hash of each shard's head, stored outside the
+artifact — because a file silently rewritten in place is otherwise
+indistinguishable from the original, a failure mode observed twice in
+this project. The stamp is deliberately described as what it is: it
+identifies a shard and catches a rewrite, but it does not certify every
+byte, and mtimes survive copying. Metadata answers *was this replaced*,
+never *is this unchanged*.
 
 None of this is novel methodology; it is ordinary unit discipline,
 applied to a setting where the wrong numbers are the plausible ones.
@@ -590,8 +595,8 @@ sizes; we publish ratios within a session, never absolutes.
 
 **Costs we pay.** Prefill remains ~0.5x affine at 35B scale even after
 the shipped lever. Codebooks beyond threadgroup capacity pay ~19%
-decode. One published artifact predates the manifest-and-seed system
-and cannot be rebuilt — its build inputs were later overwritten — though
+decode. One published artifact cannot be rebuilt at all — it predates
+the manifests and its build inputs were later overwritten — though
 it remains downloadable, its scores reproduce exactly, and its quality
 is consistent with the measured draw distribution of its geometry.
 
@@ -602,8 +607,11 @@ with their VQ runtimes bundled in-checkpoint (stock mlx-lm, no
 patches). Where a repository's weights were upgraded in place, the
 previous build remains fetchable at its pinned revision and the card
 labels which weights produced which benchmark rows. Published
-artifacts carry external manifests, and the fitter is seeded: a build
-is reproducible from recipe plus seed.
+artifacts carry external manifests. The fits behind them are unseeded
+single draws, so a published build is reproducible in recipe and
+geometry but not bit-for-bit; that is precisely why every margin in this
+paper is quoted against a measured fit-to-fit floor rather than against
+a repeated build. The dense-family fitter has since gained a seed.
 
 Which copy of a runtime executes is environment-dependent, so
 runtime-dependent claims name the resolved, executing copy rather than
