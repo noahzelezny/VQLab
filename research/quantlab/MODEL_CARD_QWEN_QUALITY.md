@@ -16,7 +16,7 @@ tags:
 
 # Qwen3.6-35B-A3B-VQ-4.6bpw
 
-**Within 0.5% of bf16 perplexity on two corpora, and smaller than the community 4-bit.** 18.7 GiB (vision tower included): 0.991x on wikitext, 1.004x on code. The 8-bit holds 0.999x on both at 35 GiB; the 4-bit runs 1.041x / 1.046x at 19 GiB. Same harness, same files, every number. Runs on a 32 GB Mac.
+**Within 1% of bf16 perplexity on two corpora, and smaller than the community 4-bit.** 18.7 GiB (vision tower included): 0.991x on wikitext, 1.004x on code. The 8-bit holds 0.999x on both at 35 GiB; the 4-bit runs 1.041x / 1.046x at 19 GiB. Same harness, same files, every number. Runs on a 32 GB Mac.
 
 A vector-quantized build of
 [Qwen3.6-35B-A3B](https://huggingface.co/Qwen/Qwen3.6-35B-A3B) for Apple
@@ -81,7 +81,7 @@ on the same harness and corpus; nothing was discarded.
 | VQ | d2·K2048 + d4·K2048 | rich layers 20-39 | 18.1 | 4.7541 | 1.007x | 50.791 | 89.77% |
 | VQ (placement control) | d2·K512 + d4·K2048 | rich layers 0-9 (mirrored) | 17.9 | 4.8110 | 1.019x | 50.944 | 89.28% |
 | VQ | d2·K256 | uniform | 17.6 | 4.7984 | 1.016x | 36.862 | 90.92% |
-| VQ | d4·K8192 | uniform | 14.8 | 4.7814 | 1.013x | 56.413 | 89.37% |
+| VQ | d4·K8192 | uniform | 14.8 | 4.7090 | 0.997x | 53.022 | 89.55% |
 | VQ | d4·K4096 | uniform | 14.0 | 4.8100 | 1.019x | 68.546 | 87.88% |
 | **VQ — compact sibling** | d4·K2048 | uniform | 13.8* | 4.8584 | 1.029x | 85.535 | 87.33% |
 | VQ | d4·K256 | uniform | 10 | — | 1.141x | — | 79.50% |
@@ -118,14 +118,14 @@ quantization better.
 
 ## Runtime
 
-Single M3 Ultra, macOS, stock `mlx-lm`, GPU otherwise idle:
+Measured on an M4 Max (128 GB), macOS, stock `mlx-lm`, GPU otherwise idle:
 
 | | |
 |---|---|
 | peak memory | 18.0 GiB |
 | decode | **~55 tok/s** |
 
-*Measured on an M4 Max (128 GB), mlx-lm, 120-token greedy generation.*
+*120-token greedy generation.*
 
 Comfortable on a 32 GB machine with context headroom — the 8-bit needs 48 GB+.
 
@@ -180,8 +180,9 @@ Single-machine mlx-lm and pipeline sharding are unaffected.
 - Top-1 agreement is 90.75% against the 8-bit's 96.18%. If your workload is
   sensitive to exact token choice rather than distributional quality, the
   8-bit is measurably closer to bf16.
-- Perplexity was measured on one corpus. A code-heavy or non-English
-  workload may rank these builds differently.
+- The full sweep was scored on one corpus; only the released builds and the
+  two community quants were re-scored on the second (code) corpus. A
+  non-English workload may rank these builds differently again.
 - No blind human-preference evaluation was run on this model (unlike our
   gemma-4 releases, which needed one); the claim here rests on perplexity,
   which is valid for this family.

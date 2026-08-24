@@ -46,14 +46,14 @@ same files.
 
 ## Runtime
 
-Single M3 Ultra, macOS, stock `mlx-lm`, GPU otherwise idle:
+Measured on an M4 Max (128 GB), macOS, stock `mlx-lm`, GPU otherwise idle:
 
 | | |
 |---|---|
 | peak memory | 13.1 GiB |
 | decode | **~66 tok/s** |
 
-*Measured on an M4 Max (128 GB), mlx-lm, 120-token greedy generation.*
+*120-token greedy generation.*
 
 Runs on a 16 GB machine at short context; comfortable on 24 GB+.
 
@@ -73,8 +73,11 @@ Uniform vector quantization of the experts at **d=4, K=2048** (3.0
 bits/weight packed); non-expert tensors at 8-bit. Experts are ~92% of the
 model, so that is where the bytes are.
 
-Raising K further does not pay: K=4096 bought +0.55 agreement points for
-+0.9 GiB, which is why this rung stops here.
+Raising K further does not pay its way at this size point: K=4096 bought
++0.55 agreement points for **+0.9 GiB** (13.0 -> 14.0 GiB comparing text-only
+weights, before the vision tower that the released size above includes) —
+a 7% size increase for a fraction of a point. That is the wrong trade for
+the build whose whole job is being small, which is why this rung stops here.
 
 ## Verification
 
@@ -103,6 +106,6 @@ Single-machine mlx-lm and pipeline sharding are unaffected.
 - Measurably below the 18.7 GiB sibling (1.029x vs 0.991x ppl) and well
   below the 35 GiB 8-bit. This is the size-first choice, not the quality
   choice.
-- Perplexity measured on one corpus; a different workload may rank builds
-  differently.
+- Perplexity measured on two corpora (prose and code); a different workload
+  may rank builds differently again.
 - No blind human-preference evaluation was run on this model.

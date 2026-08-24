@@ -24,17 +24,19 @@ to make of this model at this size, on stock `mlx-lm`, no patches.
 
 ## Measured results
 
-All numbers measured on this exact artifact, reproduced bit-identically ×2,
-scored with an unmodified `mlx-lm` install:
+All numbers measured on this exact artifact and scored twice to an
+identical total negative log-likelihood, with an unmodified `mlx-lm` install:
 
 | | this model (143.7 GiB) | spicyneuron 3.5bit (165.6 GiB) | our `VQ-2.4bpw` build |
 |---|---|---|---|
-| wikitext perplexity (raw, prefix-8192) | **2.3519** | 2.3614 | 2.7655 |
+| wikitext perplexity (raw, prefix-8192) | 2.3519 | 2.3614 | 2.7655 |
 | code perplexity (mixed-language) | 2.5987 | 2.6005 | 2.6383 |
 
-**The honest claim: matches the community 3.5bit on code (0.07% is a tie),
-edges it on wikitext (−0.40%), at 21.9 GiB smaller.** The size difference
-is the story — this quality previously cost 165.6 GiB.
+**The honest claim: matches the community 3.5bit on both corpora at 21.9 GiB
+smaller.** Code is a tie by any reading (0.07%). The wikitext difference
+(−0.40%) is 1.7x this geometry's measured fit-to-fit noise floor — too close
+to call from a single fit of each, so we report it and do not claim it. The
+size is the claim: this quality previously cost 165.6 GiB.
 
 Domain asymmetry note: against our smaller builds, the wikitext gain is
 much larger than the code gain (codebook size buys prose more than code on
@@ -57,7 +59,7 @@ Measured on the cluster (exo, M3 Ultra 96 GB + M4 Max 128 GB over
 Thunderbolt 5 / RDMA, tensor-sharded): **~17.4 tok/s** decode on a short
 prompt, placing in ~5.5 minutes. No single-box number — we have no machine
 with ≥192 GB unified memory to measure one; for reference the `VQ-2.4bpw`
-build decodes at 19–22 tok/s on one M4 Max, so a single large-memory box
+build decodes at 19–21 tok/s on one M4 Max, so a single large-memory box
 should land in that class without the ring's communication overhead.
 
 ## Run it

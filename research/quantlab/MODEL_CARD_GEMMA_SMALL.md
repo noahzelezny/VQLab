@@ -98,14 +98,14 @@ argmax ~80% of the time. Judge against that row.
 
 ## Runtime
 
-Single M3 Ultra, macOS, stock `mlx-lm`, GPU otherwise idle:
+Measured on an M4 Max (128 GB), macOS, stock `mlx-lm`, GPU otherwise idle:
 
 | | |
 |---|---|
 | peak memory | 8.4 GiB |
 | decode | **~70 tok/s** |
 
-*Measured on an M4 Max (128 GB), mlx-lm, 120-token greedy generation.*
+*120-token greedy generation.*
 
 The fastest build in this collection, and small enough to run beside a
 larger model on a 32 GB machine.

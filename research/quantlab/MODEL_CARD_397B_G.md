@@ -32,31 +32,35 @@ All numbers measured on this exact artifact, scored with an unmodified
 | wikitext perplexity (raw, prefix-8192) | **2.3410** | 2.3614 | 2.3519 |
 | code perplexity (mixed-language) | **2.5963** | 2.6005 | 2.5987 |
 
-**The honest claim: beats the community 3.5bit on both corpora (-0.86%
-wikitext, -0.16% code) at 21.9 GiB smaller.**
+**The honest claim: 21.9 GiB smaller than the community 3.5bit, better on
+wikitext, tied on code.** The wikitext margin (-0.86%) is 3.6x this
+geometry's measured fit-to-fit noise floor, so it is a result. The code
+margin (-0.16%) is 0.4x that floor — inside the range two independent fits
+of the same recipe produce — so we report it as a tie rather than a win.
 
 **What changed against our own previous build at this size.** This artifact
 replaces `VQ-3.1bpw`. It is the **same size and same geometry** — 143.682 GiB,
 flat d4/K2048 experts, an identical footprint — and it measures **−0.46%
-wikitext and −0.09% code** better.
+wikitext and −0.09% code** against it. Neither difference is a claim: the
+code gap is 0.2x and the wikitext gap 1.9x the fit-to-fit noise floor we
+later measured at this geometry, and our bar for calling a single-fit result
+is 3x. The two artifacts are best described as equivalent, with this one
+carrying the cleaner provenance.
 
-**We do not know why, and we are not going to guess in a model card.** The
-improvement is measured and reproducible; its cause is not established. Our
-working explanation for weeks was that the codebooks came from a later version
-of our k-means implementation. We tested that directly by re-running the
-*original* fitter, at its original commit, with identical arguments — and it
-scored **worse than every current build**, which falsifies the explanation
-rather than confirming it.
-
-We also found, while testing it, that the two artifacts do not share an
-identical input: the intermediate base they are both fit from was rebuilt
-after the earlier artifact was made, so the pair was never the controlled
-comparison we had been treating it as. That is our error and it is why the
-attribution is now blank rather than merely uncertain.
+**Why there is no story here.** We spent weeks treating that gap as an effect
+with a cause — the leading theory being that the newer codebooks came from a
+later version of our k-means implementation. Testing it properly required
+something we had never measured: how much two runs of the *same* recipe differ
+from each other. Our codebook fitter draws an unseeded subsample, so it does
+not produce the same codebooks twice. When we finally measured that spread at
+this geometry it came to 0.0056 wikitext perplexity, which is most of the gap
+we had been trying to explain. There is no mechanism to report because there
+is no longer an effect large enough to need one.
 
 **What survives is the measurement, which is what the table above reports.**
-If you are choosing between this artifact and the one it replaces, the numbers
-are the reason; the mechanism is an open question in our own notes.
+If you are choosing between this artifact and the one it replaces, take this
+one for provenance rather than for the numbers — they are the same model to
+within the precision the method can deliver.
 
 **The part worth carrying away, if you fit your own codebooks,** comes out of
 the same investigation and does not depend on its unresolved half: we spent

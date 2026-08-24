@@ -1,3 +1,20 @@
+---
+language:
+- en
+license: gemma
+library_name: mlx
+pipeline_tag: image-text-to-text
+base_model: google/gemma-4-e4b-it
+base_model_relation: quantized
+tags:
+- mlx
+- quantized
+- vector-quantization
+- apple-silicon
+- gemma-4
+- multimodal
+---
+
 # gemma-4-e4b-it — VQ-PLE (7.39 GiB)
 
 **The community 8-bit, with a better embedding table.** This is
@@ -56,7 +73,7 @@ not optimized for.
 
 ```bash
 pip install mlx-lm
-mlx_lm.chat --model <this artifact>
+mlx_lm.chat --model TheDrainFlorist/__REPO_ID__
 ```
 
 The artifact is self-contained (`model.py` ships inside it); stock mlx_lm

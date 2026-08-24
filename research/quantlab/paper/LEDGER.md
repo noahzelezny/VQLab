@@ -18,9 +18,15 @@ Reading rules baked into every table below:
 
 | geometry | n | floor | status |
 |---|---|---|---|
-| 397B d4/K256 | 2 | wikitext 0.0134 / code 0.0161 | INFERRED (rests on E120) [E129] |
+| 397B d4/K256 | 2 | wikitext **0.0256** / code ~0.0178 | MEASURED, same-stack [E136/E136b] |
+| 397B d4/K2048 | 2 | wikitext **0.0056** / code **0.0104** | MEASURED [E142] |
+| 35B d4-d2 (at d2/K1024) | 2 | KL **0.214 mnats** | MEASURED, same-box [E140b] |
 | dense 27B d2/K256 | 3 | KL 2.085 mnats / ppl 0.0447 | MEASURED [E127/6f] |
 | all other geometries | — | UNMEASURED — do not inherit | III.12 |
+
+Floors NARROW as K grows (0.0256 @ K256 -> 0.0056 @ K2048). The superseded
+0.0134/0.0161 INFERRED pair must not be used: every margin computed against it
+reads ~2x too favourable. Rows below quote the floor they were judged on.
 
 Practical rule: KL separations of 5+ mnats and top-1 of ~1 pp are real;
 third-decimal ppl between single-draw artifacts is not interpretable.
@@ -29,17 +35,17 @@ third-decimal ppl between single-draw artifacts is not interpretable.
 
 ## CURRENT BEST ARTIFACTS AND THEIR TRUE COMPARISONS
 
-### 397B (referee prose/code ppl; floor 0.0134/0.0161 inferred)
+### 397B (referee prose/code ppl; floor depends on geometry — see table above)
 
 | rung | GiB | prose | code | comparison that holds |
 |---|---|---|---|---|
-| **d8-K16384 (PUBLISHED as VQ-2.2bpw)** | 100.97 | 3.0591 | 2.6728 | beats spicy 2.6bit (3.1843 @ 120.6) by 0.1252 prose = **9.3x floor**, at **19.6 GiB smaller**; beats rate-twin flat-K128 by 8.3x floor. Cost: ~19% decode vs K128 (E115). Score reproduced exactly after runtime swap (E122). |
-| flat K128 (old 2.2) | 100.93 | 3.1706 | 2.6988 | ladder point only — margin vs spicy = 1.0x floor, NOT a quality claim |
+| **d8-K16384 (PUBLISHED as VQ-2.2bpw)** | 100.97 | 3.0591 | 2.6728 | beats spicy 2.6bit (3.1843 @ 120.6) by 0.1252 prose = **4.9x the K256 floor** (no d8 floor measured; borrowed, so read as a lower bound on confidence), at **19.6 GiB smaller**; beats rate-twin flat-K128 by 0.1115 = 4.4x the K256 floor (borrowed). Cost: ~19% decode vs K128 (E115). Score reproduced exactly after runtime swap (E122). |
+| flat K128 (old 2.2) | 100.93 | 3.1706 | 2.6988 | ladder point only — margin vs spicy = 0.5x the K256 floor, NOT a quality claim |
 | harvest K64/K256 | 107.9 | 2.7790 | 2.6479 | ladder point |
 | shipped 2.4 (flat K256) | 111.617 | 2.7655 | 2.6383 | daily driver; **unreproducible by construction** (base rewritten Aug 19, E121) |
-| **flat K512 (E93)** | 122.305 | 2.5634 | 2.6123 | **CLAIM 1 LEAD ROW: beats spicy 2.6bit by 0.6209 prose = 46x floor AND 0.0544 code = 3.4x floor, at +1.7 GiB** |
+| **flat K512 (E93)** | 122.305 | 2.5634 | 2.6123 | **CLAIM 1 LEAD ROW: beats spicy 2.6bit by 0.6209 prose = 24x the K256 floor AND 0.0544 code = 3.1x the K256 code floor (borrowed; no K512 floor measured), at +1.7 GiB** |
 | harvest K512/K2048 | 139.93 | 2.3452 | 2.5969 | best-per-GiB |
-| **flat K2048 refit (flagship)** | 143.682 | 2.3410 | 2.5963 | vs spicy 3.5bit (2.3614/2.6005 @ 165.6): **SIZE claim — 21.9 GiB smaller at indistinguishable-to-slightly-better quality** (prose 1.5x floor, code 0.26x floor — "wins both corpora" is withdrawn). vs shipped 3.1: 0.0109 = 0.8x floor, not claimable. |
+| **flat K2048 refit (flagship)** | 143.682 | 2.3410 | 2.5963 | vs spicy 3.5bit (2.3614/2.6005 @ 165.6): **SIZE claim — 21.9 GiB smaller; prose BETTER (0.0204 = 3.6x the K2048 floor, CLAIMED), code TIE (0.0042 = 0.4x)** — "wins both corpora" is withdrawn [E142]. vs shipped 3.1: 0.0109 = **1.9x the K2048 floor** (0.0056), not claimable (bar is 3x). Prior readings of 0.8x/0.4x used the K256 floor — a III.12 violation, corrected 08-24. |
 
 Latest scores throughout; nothing stale. The flagship IS our best 144G build;
 what the floor forbids is claiming its thin margins as quality wins.

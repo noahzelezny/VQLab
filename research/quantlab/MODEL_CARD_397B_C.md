@@ -24,13 +24,14 @@ no patches, stock `mlx-lm`.
 
 ## Measured results
 
-All numbers measured on this exact artifact (not projected from a proxy),
-reproduced bit-identically ×2, scored with an unmodified `mlx-lm` install.
+All numbers measured on this exact artifact (not projected from a proxy) and
+scored twice to an
+identical total negative log-likelihood, with an unmodified `mlx-lm` install.
 
 | | this model (111.6 GiB) | spicyneuron 2.6bit (120.6 GiB) |
 |---|---|---|
 | wikitext perplexity (raw, prefix-8192) | **2.7655** | 3.1843 |
-| code perplexity (mixed-language) | **2.6383** | 2.6667 |
+| code perplexity (mixed-language) | 2.6383 | 2.6667 |
 
 Runtime, single M4 Max 128 GB (macOS, stock `mlx-lm`):
 
@@ -44,8 +45,10 @@ Runtime, single M4 Max 128 GB (macOS, stock `mlx-lm`):
 
 Perplexities are corpus-specific: never compare them across different
 corpora or eval harnesses, only against other models scored on the same
-files. The wikitext margin (13.2%) is much larger than the code margin
-(1.07%) — that asymmetry is real, so judge by your workload.
+files. The wikitext margin (13.2%) is a real result — 16x this geometry's
+measured fit-to-fit noise floor. The code margin (1.07%) is **not**: at 1.6x
+the floor it is inside the range two independent fits of the same recipe
+produce, so treat code as a tie and judge by your workload.
 
 ## Run it
 
@@ -237,5 +240,5 @@ one harness so the claims can be checked rather than taken on trust.
 
 Base model: Qwen/Qwen3.5-397B-A17B (Apache 2.0 — see the base model card
 for license and usage terms). Quantization: TheDrainFlorist, 2026. Built with MLX;
-referee scoring scripts and the full experiment log (E31–E36: what worked,
-what was falsified, and why) available on request.
+referee scoring scripts and the full experiment log (what worked, what was
+falsified, and why) available on request.

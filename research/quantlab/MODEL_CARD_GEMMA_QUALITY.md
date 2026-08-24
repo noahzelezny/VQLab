@@ -17,7 +17,7 @@ tags:
 
 ![chart](chart_gemma_ladder.png)
 
-# gemma-4-26b-a4b-it-VQ-d2K2048
+# gemma-4-26b-a4b-it-VQ-6.2bpw
 
 **18.7 GiB — indistinguishable from bf16 on blind literary judging, at 39% of bf16's size. Vision included.**
 
@@ -85,10 +85,11 @@ So the family guidance is:
   (2,500+ words sustained):** this artifact.
 - **~8 GiB budget:** use `gemma-4-e4b-it-8bit` — not a compromise; it wins
   that bracket on our measurements.
-- **Tighter than 8 GiB or RAM-bound:** see our VQ-PLE build of the e4b
+- **Tighter than 8 GiB or RAM-bound:** our VQ-PLE build of the e4b
   (7.39 GiB, measurably closer to bf16 than the 8-bit, 20% less RAM,
-  ~8% slower decode) — the right pick when memory is the constraint and
-  latency is not.
+  ~8% slower decode) is the right pick when memory is the constraint and
+  latency is not. **Not yet released** — this bullet names it so the
+  guidance is complete, not because you can download it today.
 
 ## Runtime
 
@@ -107,7 +108,7 @@ Fits a 32 GB machine with room for context.
 ```bash
 pip install mlx-lm
 python -m mlx_lm generate \
-  --model TheDrainFlorist/gemma-4-26b-a4b-it-VQ-d2K2048 \
+  --model TheDrainFlorist/gemma-4-26b-a4b-it-VQ-6.2bpw \
   --prompt "Continue this passage in Austen's voice: ..." \
   --max-tokens 400
 ```
@@ -118,7 +119,7 @@ same KL cache and getting identical numbers.
 
 ### Faster prefill (optional)
 
-`VQ_DECODE_CHUNK=16` speeds up prefill ~20%% (measured end-to-end on
+`VQ_DECODE_CHUNK=16` speeds up prefill ~20% (measured end-to-end on
 the 397B artifact from the same runtime; smaller chunks are faster AND use
 less memory — the auto-sizer's default of 32 is kept because it is the
 smallest chunk that reproduces our published numbers bit-exactly). Set the

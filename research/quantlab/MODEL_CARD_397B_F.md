@@ -37,8 +37,8 @@ stock `mlx-lm`.
 
 ## Measured results
 
-All numbers measured on this exact artifact, reproduced bit-identically ×2,
-scored with an unmodified `mlx-lm` install. Read the whole row, not one cell:
+All numbers measured on this exact artifact and scored twice to an
+identical total negative log-likelihood, with an unmodified `mlx-lm` install. Read the whole row, not one cell:
 
 | | **this model, v2** (101.0 GiB) | v1 (100.9 GiB) | spicyneuron 2.6bit (120.6 GiB) | `VQ-2.4bpw` (111.6 GiB) |
 |---|---|---|---|---|
@@ -47,9 +47,10 @@ scored with an unmodified `mlx-lm` install. Read the whole row, not one cell:
 
 **The honest trade:** v2 improves on v1 by 3.5% on prose and 1.0% on code at
 the same size and the same bits per weight. Against the closest community
-quant it is better on prose (−3.9%) and better on code (+0.2% — within noise),
-at **19.6 GiB smaller**. Against `VQ-2.4bpw` it still gives up real quality on
-both corpora.
+quant it is better on prose (−3.9%) and level on code (2.6728 vs 2.6667 —
+0.2%, which we do not claim in either direction; no fit-to-fit noise floor
+has been measured at this geometry), at **19.6 GiB smaller**. Against
+`VQ-2.4bpw` it still gives up real quality on both corpora.
 
 **What the size buys.** A "128 GB" machine has **119.2 GiB** of usable memory
 (vendors count in decimal GB; memory is allocated in binary GiB):
