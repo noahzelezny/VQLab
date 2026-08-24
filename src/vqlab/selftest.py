@@ -126,6 +126,10 @@ def main(argv=None) -> int:
     tmp = pathlib.Path(tempfile.mkdtemp(prefix="vqlab_selftest_"))
     v = a.verbose
     try:
+        print("NOTE: this runs REAL Metal kernels and real k-means fits. It is "
+              "small (seconds of GPU) but it CONTENDS.\n      Do not run it on a "
+              "box that is mid-experiment — strictly sequential is the rule "
+              "this project's\n      results depend on.\n")
         print(f"workspace: {tmp}\n")
         src = tmp / "src"
         make_source(src)

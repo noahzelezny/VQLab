@@ -26,18 +26,37 @@ rules that keep these numbers honest.
 | calibrated 2.6-bit comparator | 120.6 | 3.1843 | 2.6667 |
 | calibrated 3.5-bit comparator | 165.6 | 2.3614 | 2.6005 |
 
-- **flat K512 beats the calibrated 2.6-bit build by 0.62 prose ppl (46x the
-  noise floor) and on code (3.4x floor), at +1.7 GiB** — the cleanest
+- **flat K512 beats the calibrated 2.6-bit build by 0.6209 prose ppl (24x the
+  K256 floor) and by 0.0544 on code (3.1x), at +1.7 GiB** — the cleanest
   like-for-like on the ladder.
 - **d8/K16384 beats the same comparator while being 19.6 GiB smaller**
-  (prose margin 9.3x floor). It is the ~101 GiB build a 128 GB Mac can hold.
-- **The flagship matches the calibrated 3.5-bit build at 21.9 GiB smaller**
-  (quality indistinguishable at the floor — we claim the bytes, not a
-  quality edge).
+  (prose margin 0.1252 = 4.9x the K256 floor). No d8 floor has been
+  measured, so that multiple is *borrowed* and reads as a lower bound on
+  confidence, not a measurement. It is the ~101 GiB build a 128 GB Mac holds.
+- **The flagship is 21.9 GiB smaller than the calibrated 3.5-bit build**, with
+  prose better by 0.0204 = 3.6x the K2048 floor (claimed) and code a tie
+  (0.4x, inside the floor). "Wins both corpora" is withdrawn.
 
-**35B MoE (Qwen3.6-35B-A3B), KL-to-bf16:** d4/K8192 measures **53.0 mnats /
-89.55% top-1 at 14.84 GiB packed** vs the community 4-bit's 78.6 / 85.61% at
-19.0 GiB — a 32% KL reduction at 4.16 GiB smaller.
+**Read the floors with the margins.** Seed-noise floors are geometry-specific
+and narrow as K grows: 397B d4/K256 = 0.0256 prose / ~0.0178 code; d4/K2048 =
+0.0056 / 0.0104; dense 27B d2/K256 = 2.085 mnats / 0.0447 ppl. A margin
+inside its floor is not a claim, and a floor borrowed from another geometry
+is labelled as borrowed.
+
+**Size basis, disclosed rather than restated.** Our 397B builds carry the
+bf16 vision tower (0.8494 GiB); both calibrated comparators are text-only.
+Every 397B size advantage above is therefore *understated* by roughly that
+much. We keep the download-size convention and disclose the offset, because
+restating sizes would move every number in our own favour.
+
+**35B MoE (Qwen3.6-35B-A3B), KL-to-bf16:** results withheld pending
+provenance closure. The lab ledger currently carries this row under a
+III.2 hold (its size and its KL came from different bytes) *and* a later
+entry restoring it — an unresolved internal disagreement — while the 35B
+size basis is also being restated text-only against community quants that
+carry a 0.832 GiB vision tower. No 35B number is quoted here until the
+arbiter is self-consistent. This is what the instrument rules require of
+us, so it is what the README does.
 
 **Dense 27B (KL-to-bf16 + ppl):** the recipe is not an MoE phenomenon.
 d2/K512 beats the 4-bit affine conversion by 27.8% KL (6.1x floor) and
@@ -74,8 +93,12 @@ fit → verify (outlier gate) → pack → graft (vision) → release checks
 ```
 
 ```bash
+# Install into a DISPOSABLE venv, never a shared/base interpreter: this
+# package ships a model runtime, and which copy of a runtime resolves is a
+# real source of wrong conclusions (METHODOLOGY.md §5).
+python3 -m venv .venv && . .venv/bin/activate
 pip install -e .
-vqlab selftest        # runs the real pipeline on a tiny synthetic model (<1 min)
+vqlab selftest        # real pipeline on a tiny synthetic model (<1 min, uses the GPU)
 
 vqlab fit-moe   --family qwen397b --model <bf16-or-base> --out fits/K256 ...
 vqlab fit-dense  --src <src> --out fits/d2K512 ...   # dense families
@@ -102,6 +125,10 @@ table row.
   runtime), `numpy`, `safetensors`.
 
 ## Verifying your install
+
+**It does real GPU work.** The fits and kernels are genuine, so although it
+takes seconds of GPU, it *contends* — do not run it on a machine that is
+mid-experiment.
 
 `vqlab selftest` is not a mock: it synthesizes a small checkpoint and runs
 the shipped fitter, outlier gate, packer, manifest and Metal kernels over it
