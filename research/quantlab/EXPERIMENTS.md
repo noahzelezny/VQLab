@@ -4,6 +4,22 @@ Noah Zelezny + Claude, 2026-08-08/09. Hardware: M3 Ultra 96GB + M4 Max 128GB (Th
 Toolchain: mlx-optiq 0.4.18 (pinned + patched, see README.md), mlx-lm/mlx.
 Goal: choose the method for a vision-preserving ~2.6bpw quant of Qwen3.5-397B-A17B.
 
+> **E-NUMBER ALLOCATION (added 08-24, after a collision).** Multiple sessions
+> write this file concurrently and any of them can mint a number. On 08-24
+> that produced TWO E140s and TWO E141s: one citation resolved to the WRONG
+> experiment, another to NOTHING (III.7 and III.10 in the same pair). Fixed by
+> SUFFIXING, not renumbering — artifact directory names on disk are
+> load-bearing and mutating them mid-flight is the 101 GiB lesson.
+> **Going forward, ranges — lock-free, and they survive any session ending:**
+>
+>     M3 session     E140-E179
+>     M4 session     E180-E219
+>     paper session  E220-E239
+>
+> A central allocator was considered and declined: it is a bottleneck and a
+> single point of failure, since a session can be compacted or end mid-day.
+> **Suffix with the owning box (`-M3`, `-M4`) if a collision happens anyway.**
+
 > **STATE OF RECORD (2026-08-13, supersedes everything below where they
 > conflict — this is a chronological lab log and several loud mid-log claims
 > were later voided by instrument fixes):**
@@ -8240,7 +8256,7 @@ experiment, which is stronger:**
     dead-code fraction: M4 arms 0.0498-0.0503, shipped 0.0503, M3 arm 0.0708
 
 So the codes appeared to cluster by BOX, not by interpreter, while the SCORE
-moved with the interpreter. **[RETRACTED 08-22 ~22:40 — see E140. "Clusters by
+moved with the interpreter. **[RETRACTED 08-22 ~22:40 — see E140-M3. "Clusters by
 box" is n=2 on one box and n=1 on the other and is NOT supported.]** Those two facts are not obviously compatible and the tension is
 recorded rather than resolved.
 
@@ -8420,7 +8436,7 @@ no mark: draw 2 (3.13) lands on E129 (3.12) to six decimals on entropy.
   moves PERPLEXITY is the one live question and needs the M3 referee.
 
 **Not claimed:** that the box explains the ppl gap. The fingerprint says the
-codes cluster by box **[RETRACTED — see E140]**; it does not say why 2.7655
+codes cluster by box **[RETRACTED — see E140-M3]**; it does not say why 2.7655
 and 2.8095 differ. That
 remains open pending the score of these two draws.
 
@@ -8505,7 +8521,7 @@ they should not.**
 E129 closed it as unexplained. E136 appeared to reopen and solve it. **E136b
 returns it to unexplained** — with more measured than before: a same-stack
 floor, a retired wall-clock argument, H3 closed by document, and a fingerprint
-showing the codes cluster by box **[the box half is RETRACTED — see E140;
+showing the codes cluster by box **[the box half is RETRACTED — see E140-M3;
 the interpreter half survives, being a same-box comparison]**.
 
 **E136 was correctly kept OUT of FINDINGS pending this replicate.** Had it been
@@ -8653,7 +8669,7 @@ b7e2686) is otherwise unchanged; `--relerr-abort 0.30` still comes from the
 14:49 probe.
 
 
-## E140 — RETRACTION: "the codes cluster by BOX" is NOT supported. Raised by the M4 session against its own claim.
+## E140-M3 — RETRACTION: "the codes cluster by BOX" is NOT supported. Raised by the M4 session against its own claim.
 
 The M4 session retracted this itself, unprompted, after E139's mechanism made
 the hole visible. Recording it because the claim propagated into E136b and E137
@@ -8706,11 +8722,40 @@ this weekend. **The mechanism did not disprove the box claim — it removed the
 reason to believe it, which is different and is why the claim had to go rather
 than be defended.**
 
-## E141 — PRE-REGISTRATION: 35B d2/K4096, the matched-byte head-to-head with q6
+## E140-M4 — STUB: 35B d2/K1024 (result lives in paper/LEDGER.md, not here)
+
+**This is a POINTER, not an entry. Written 08-24 by the M3 session while
+de-colliding E-numbers; the experiment is the M4 session's and I did not run
+it. It exists because E141-M4 below cites "E140" six times and, without a
+heading to resolve to, the suffix fix would have replaced a wrong-resolution
+with a III.10 phantom — a citation that looks valid and resolves to nothing.**
+
+The result was never written into EXPERIMENTS.md. It lives in
+`paper/LEDGER.md` (6 mentions) and on disk as artifacts.
+
+**VERIFIED HERE, from the bytes rather than from the ledger:**
+
+    e140-35b-d2K1024-packed    21.394 GiB   1477 tensors
+    e140b-35b-d2K1024-packed   21.394 GiB   1477 tensors   (replicate)
+    e141-35b-d2K4096-packed    25.145 GiB   1477 tensors   (E141-M4's artifact)
+
+21.394 GiB matches the figure E141-M4 quotes for it, and both E140-M4 draws
+measure identically. **No quality number is repeated here** — I have not
+scored these artifacts and will not restate KL/ppl I did not measure. For the
+result, read the ledger; for the bytes, the directories above.
+
+**Note the text-only caveat that applies to all three:** every 35B rung on
+disk is text-only (0 vision tensors) while community comparators carry a
+333-tensor bf16 tower (0.832 GiB measured), so any size comparison against
+them is cross-convention until restated. The M3 queue
+(`handoff/M3_AFTER_27B.md`) now cites these by DIRECTORY NAME rather than
+E-number, which is unambiguous regardless of how headings end up.
+
+## E141-M4 — PRE-REGISTRATION: 35B d2/K4096, the matched-byte head-to-head with q6
 
 Noah's call, M4. Written before the fit starts; no number exists yet.
 
-**Why this one.** E140 established VQ above the affine frontier at 5 bpw on an
+**Why this one.** E140-M4 established VQ above the affine frontier at 5 bpw on an
 MoE (two draws, 1.55x/1.57x below the log-interpolated line). That reading
 needed interpolation because no affine rung sat at 21.4 GiB. **This rung needs
 none:** d2/K4096 projects 25.238 GiB against q6's measured 26.234, so the two
@@ -8719,14 +8764,14 @@ compare the numbers; do not interpolate anything.
 
 **Recipe.** `vq_397b_codes.py --family qwen3_5_mlx --vq-layers 0-39 --k 4096
 --dim 2 --expert-chunk 16 --relerr-abort 0.90`, base `rotlab-35B-qwen36-e2`,
-src the mlx-community Qwen3.6-35B-A3B-bf16 snapshot. Same tool as E140 — the
+src the mlx-community Qwen3.6-35B-A3B-bf16 snapshot. Same tool as E140-M4 — the
 one verified to produce loadable 35B artifacts (vq_35b_codes.py has never been
 run and its output is not kl_damage-loadable, E94 amendment).
 
 **UNSEEDED, by design.** That fitter has no `--seed` and must not gain one:
 seeding it would retroactively void the E121/E129/E136 arms. So this is ONE
 DRAW, and the 35B fit-to-fit floor measured tonight (0.214 mnats = 0.76%,
-same-box same-geometry, E140/E140b) is the yardstick for any margin.
+same-box same-geometry, E140-M4/E140b-M4) is the yardstick for any margin.
 
 **Kernel check, done before launch:** K*dim*2 = 4096*2*2 = 16,384 B, inside
 Metal's 32,768 threadgroup cap (E134), so the fused path is available and no
@@ -8734,7 +8779,7 @@ device-memory fallback is needed.
 
 **Size projection, from the two-point model:** 32.47B expert params, 2.558 GiB
 remainder -> 22.680 GiB of codes at 12 bits -> **25.238 GiB**. The same model
-predicted E140 at 21.458 (measured 21.394, -0.30%) and R2 at 15.788 (measured
+predicted E140-M4 at 21.458 (measured 21.394, -0.30%) and R2 at 15.788 (measured
 15.783, -0.03%), so this is its third out-of-sample test. **Measured packed
 size governs; a large miss is a signal to check, not to absorb.**
 
@@ -8751,15 +8796,15 @@ size governs; a large miss is a signal to check, not to absorb.**
 - **Margin is read against the 0.214 mnat floor.** A gap of a few tenths of a
   millinat is inside draw noise and must be reported as a tie, not a win.
 - **A BEAT WANTS A SECOND DRAW** before it anchors a paper claim, per the
-  margin rule registered at E140. Budget ~1.5h for the replicate if it wins.
+  margin rule registered at E140-M4. Budget ~1.5h for the replicate if it wins.
 
 Both branches are publishable and neither is a wasted fit: one gives law 14 an
 MoE half it currently lacks, the other overturns its scope.
 
-### E141b (bonus, nearly free) — score the existing vq-K256-d2
+### E141b-M4 (bonus, nearly free) — score the existing vq-K256-d2
 
 `qwen36-35b-rungs/vq-K256-d2` already exists and carries the loadable
-signature (model_file + 120 modules, same as e94b — verified during E140's
+signature (model_file + 120 modules, same as e94b — verified during E140-M4's
 tool check). Gate + III.11 + score costs one scoring run and yields a 4.0 bpw
 d2 point at ~17.7 GiB. It is also the future rate twin for d4/K65536, should
 that fit ever be worth 24 hours.
@@ -8821,7 +8866,7 @@ settle a band-dependence claim any more than E136 settled the vintage gap.
 Recorded as a data point for whoever revisits law 10 next, same discipline as
 holding n=1 out of the laws file all weekend.
 
-## E141 — PRE-REGISTRATION: did the thin init starve E138? (L34, high-impact body layer)
+## E141-M3 — PRE-REGISTRATION: did the thin init starve E138? (L34, high-impact body layer)
 
 Written before either arm runs. Question raised by Noah after E138 came back
 mixed: is d4/K65536's result depressed by the 200k init cap giving only ~3
@@ -8857,7 +8902,7 @@ it Arm A is uninterpretable.
    regardless. Arm A measures "bigger cap AND a different stream," which is
    why Arm B exists.
 2. **n=2 is a weak noise estimate.** A spread from two draws has a 95% CI
-   spanning roughly 0.45x-32x itself (E140). This test is SUGGESTIVE, NOT
+   spanning roughly 0.45x-32x itself (E140-M3). This test is SUGGESTIVE, NOT
    DECISIVE, and must not be written up as settling anything.
 3. **One layer is not the artifact.** Even a clear result here would need the
    full 192-tensor refit (36.7h) before E138's verdict changed.
@@ -8865,7 +8910,7 @@ it Arm A is uninterpretable.
 **This is a REVISION-ITEM diagnostic. It does not gate the paper and nothing
 waits on it.**
 
-## E141 — RESULT: STARVATION RULED OUT. The 200k init cap does not depress K=65536.
+## E141-M3 — RESULT: STARVATION RULED OUT. The 200k init cap does not depress K=65536.
 
 Registered branch fires: **"Arm A within the seed spread -> starvation RULED
 OUT at this layer; E138's mixed result stands as measured."**
@@ -8935,7 +8980,7 @@ variables (iters, box, seed) and could not attribute any change. So:
     ARM 2  d2/K512, iters=30, seed 1234, M3   ~109 min  <- the lever
 
 Arms 1 and 2 differ ONLY in iters. Arm 1 additionally serves as a box+seed
-replication of E126, which is worth having independently given E140 retracted
+replication of E126, which is worth having independently given E140-M3 retracted
 "the codes cluster by box" as unsupported.
 
 **REGISTERED READINGS (arm 2 vs arm 1, not vs E126):**
