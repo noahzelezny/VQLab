@@ -49,14 +49,19 @@ Every 397B size advantage above is therefore *understated* by roughly that
 much. We keep the download-size convention and disclose the offset, because
 restating sizes would move every number in our own favour.
 
-**35B MoE (Qwen3.6-35B-A3B), KL-to-bf16:** results withheld pending
-provenance closure. The lab ledger currently carries this row under a
-III.2 hold (its size and its KL came from different bytes) *and* a later
-entry restoring it — an unresolved internal disagreement — while the 35B
-size basis is also being restated text-only against community quants that
-carry a 0.832 GiB vision tower. No 35B number is quoted here until the
-arbiter is self-consistent. This is what the instrument rules require of
-us, so it is what the README does.
+**35B MoE (Qwen3.6-35B-A3B), KL-to-bf16 — quality only:** our d4/K8192
+build measures **53.022 mnats KL / 89.55% top-1**, against the community
+4-bit's 78.557 / 85.61% on the same instrument — a **32% KL reduction**.
+The packed artifact passed the outlier gate on a second box, generated
+through its shipping kernel, and reproduced its score to every printed
+digit.
+
+*No size comparison is claimed for this pair.* Our 35B rungs are text-only
+while the community quants carry a 333-tensor bf16 vision tower
+(0.832 GiB measured), so the two sizes are computed on mismatched bases
+and the delta moves once restated. Our artifact is 14.838 GiB packed,
+measured; the comparison to the incumbent's footprint is deferred rather
+than quoted on a basis we know to be mismatched.
 
 **Dense 27B (KL-to-bf16 + ppl):** the recipe is not an MoE phenomenon.
 d2/K512 beats the 4-bit affine conversion by 27.8% KL (6.1x floor) and
