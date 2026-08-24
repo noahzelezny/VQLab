@@ -16,11 +16,22 @@ tags:
 
 # Qwen3.5-397B-A17B-VQ-2.2bpw
 
-**100.9 GiB — the accessibility build.**
+**101.0 GiB — the accessibility build.**
+
+**v2 — updated 2026-08-22.** This repository now serves a rebuilt artifact at
+the same size and the *same bits per weight*, with a different codebook
+geometry that measures better on both perplexity corpora. v1's numbers are
+kept below rather than quietly overwritten, and **v1's bytes remain
+downloadable** by pinning the previous revision:
+
+```python
+snapshot_download("TheDrainFlorist/Qwen3.5-397B-A17B-VQ-2.2bpw",
+                  revision="4554635165011f67e8166fd94d4bcc8cbf91401c")  # v1
+```
 
 A vector-quantized build of [Qwen3.5-397B-A17B](https://huggingface.co/Qwen/Qwen3.5-397B-A17B)
 built to answer one question: **how small can a 397B get and still be worth
-running?** 100.9 GiB — it runs on a single 128 GB Apple Silicon machine with
+running?** 101.0 GiB — it runs on a single 128 GB Apple Silicon machine with
 ~17 GiB more headroom than our `VQ-2.4bpw` build, no cluster, no patches,
 stock `mlx-lm`.
 
@@ -29,31 +40,39 @@ stock `mlx-lm`.
 All numbers measured on this exact artifact, reproduced bit-identically ×2,
 scored with an unmodified `mlx-lm` install. Read the whole row, not one cell:
 
-| | this model (100.9 GiB) | spicyneuron 2.6bit (120.6 GiB) | our `VQ-2.4bpw` build |
-|---|---|---|---|
-| wikitext perplexity (raw, prefix-8192) | **3.1706** | 3.1843 | 2.7655 |
-| code perplexity (mixed-language) | 2.6988 | **2.6667** | 2.6383 |
+| | **this model, v2** (101.0 GiB) | v1 (100.9 GiB) | spicyneuron 2.6bit (120.6 GiB) | `VQ-2.4bpw` (111.6 GiB) |
+|---|---|---|---|---|
+| wikitext perplexity (raw, prefix-8192) | **3.0591** | 3.1706 | 3.1843 | 2.7655 |
+| code perplexity (mixed-language) | **2.6728** | 2.6988 | 2.6667 | 2.6383 |
 
-**The honest trade:** against the closest community quant this build is
-slightly better on prose (−0.43%) and slightly worse on code (+1.20%), at
-**19.6 GiB smaller**. Against our `VQ-2.4bpw` build it gives up real
-quality on both corpora in exchange for ~10.7 GiB of headroom. If your
-machine runs the `VQ-2.4bpw` build comfortably, use that one; this build
-exists for machines and workloads where those gigabytes decide whether the
-model fits at all.
+**The honest trade:** v2 improves on v1 by 3.5% on prose and 1.0% on code at
+the same size and the same bits per weight. Against the closest community
+quant it is better on prose (−3.9%) and better on code (+0.2% — within noise),
+at **19.6 GiB smaller**. Against `VQ-2.4bpw` it still gives up real quality on
+both corpora.
 
-Runtime, single M4 Max 128 GB (macOS, stock `mlx-lm`):
+**What the size buys.** A "128 GB" machine has **119.2 GiB** of usable memory
+(vendors count in decimal GB; memory is allocated in binary GiB):
 
-| | |
-|---|---|
-| load time | **~21 s** (local NVMe) · ~116 s from a network volume |
-| resident memory | 100.1 GiB (**peak 101.8 GiB at 8k context**) |
-| decode | **~18–21 tok/s** (20.8 at 2k, 18.3 at 8k) |
-| prefill | **~63–74 tok/s** at the default 512-token step; **~118–141 tok/s** at a larger step — see Tuning |
+| build | resident at 8k context | free for KV cache, OS, everything else |
+|---|---|---|
+| this build | ~101.8 GiB | **~17.4 GiB** |
+| `VQ-2.4bpw` | ~112.5 GiB | ~6.7 GiB |
 
-Note the size does **not** buy speed — this is an A17B MoE, so decode reads
-the same active experts per token as the larger builds. It buys *residency*:
-~25 GiB of free memory on a 128 GB box while serving 8k context.
+That is the reason this build exists. `VQ-2.4bpw` is the better model and it
+fits a 128 GB machine with very little room to spare. If your machine runs
+`VQ-2.4bpw` comfortably at the context you need, use that one.
+
+**Speed.** v2's 16,384-entry codebook no longer fits in Metal threadgroup
+memory, so it reads the codebook from device memory and runs roughly **20%
+slower than v1**. We are not publishing throughput figures: repeat runs of the
+same artifact on the same machine varied more than the effect we would be
+reporting, and an unreliable number is worse than none. Measure on your own
+hardware.
+
+Note the size does **not** buy speed in any case — this is an A17B MoE, so
+decode reads the same active experts per token as the larger builds. It buys
+*residency*, which is the table above.
 
 ## Run it
 
@@ -86,8 +105,8 @@ layer-wise error showed depth matters, and the last layers repay the bits.
 **Vector quantization instead of scalar rounding — the part that is
 different.** Scalar 2-bit gives each weight 4 rigid levels; over a group of 4
 weights that is 256 fixed grid combinations. This build instead learns a
-**codebook of joint 4-weight patterns** and stores one index per group.
-Each 4-weight subvector stores one **7-bit index** into a per-tensor 128-entry fp16 codebook. At the same bits, the codebook's entries sit
+**codebook of joint 8-weight patterns** and stores one index per group.
+Each 8-weight subvector stores one **14-bit index** into a per-tensor 16,384-entry fp16 codebook. At the same bits, the codebook's entries sit
 where the weight distribution actually is, rather than on a uniform lattice —
 which is why this beats scalar quantization at matched size rather than
 merely matching it. Per-tensor codebooks, with an fp16 scale per (row, 64
@@ -126,7 +145,7 @@ rather than quoting their reported figures.
 
 | model | size | HellaSwag | PIQA | WinoGrande |
 |---|---|---|---|---|
-| **Qwen3.5-397B-A17B-VQ-2.2bpw** *(this model)* | 100.9 GiB | 0.861 | 0.841 | 0.787 |
+| **Qwen3.5-397B-A17B-VQ-2.2bpw** *(v1 weights)* | 100.9 GiB | 0.861 | 0.841 | 0.787 |
 | Qwen3.5-397B-A17B-VQ-2.4bpw | 111.6 GiB | 0.883 | 0.844 | 0.784 |
 | spicyneuron 2.6bit | 120.6 GiB | 0.880 | 0.841 | 0.771 |
 | Qwen3.5-397B-A17B-VQ-3.1bpw | 143.7 GiB | 0.903 | 0.840 | 0.780 |
@@ -137,7 +156,12 @@ exact test). HellaSwag reliably separates these quants and reproduces the
 perplexity ordering; PIQA and WinoGrande separate no pair at n=1000 and
 stand as integrity checks rather than rankings.
 
-**This model** is statistically indistinguishable from every larger model
+These rows were measured on **v1's weights**; v2 has not been re-evaluated on
+this harness, and the row above is labelled accordingly rather than reused for
+different weights. v2 improves on v1 on both perplexity corpora, but that is
+not a task-suite result and is not presented as one.
+
+**v1** was statistically indistinguishable from every larger model
 here on PIQA and WinoGrande; on HellaSwag it trails them by 2–4 points
 (paired p < 0.02) — the measured cost of the smallest size in this
 comparison. It is the accessibility artifact: the one that runs on a 128 GB
@@ -151,7 +175,9 @@ Mac with real headroom.
 
 `mlx-lm` prefills prompts in 512-token steps by default. This model is a
 sparse MoE — a larger step puts more rows through each expert per call, which
-this quantization format likes. Measured on an M4 Max 128 GB, 8k context:
+this quantization format likes. **The throughput figures below were measured
+on v1**; the knob and the memory costs apply unchanged to v2, the absolute
+rates will be somewhat lower. Measured on an M4 Max 128 GB, 8k context:
 
 | `--prefill-step-size` | prefill tok/s | peak memory |
 |---|---|---|

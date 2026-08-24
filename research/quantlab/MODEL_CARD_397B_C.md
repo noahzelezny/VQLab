@@ -68,7 +68,7 @@ file carries the VQ runtime — JIT-compiled Metal kernels via
 Tips for 128 GB machines:
 - Close memory-heavy apps first; the model wants ~111 GiB resident and
   peaks ~118 GiB at long context.
-- `SCOUT_VQ_DECODE_CHUNK` (env var) trades prefill speed for peak memory
+- `VQ_DECODE_CHUNK` (env var) trades prefill speed for peak memory
   during long-prompt processing. The default auto-sizes from free memory;
   lower it (e.g. `16`) if you run close to the ceiling.
 - Machines with more memory need none of this.
@@ -145,6 +145,21 @@ class on both corpora.
 > These are **0-shot** scores. Leaderboard conventions often use 10-shot
 > HellaSwag / 5-shot WinoGrande, which run several points higher — compare
 > against other 0-shot numbers only.
+
+## Runtime update (2026-08-20)
+
+`model.py` now dispatches this artifact's uint8 codes through the faster
+fused kernel (a zero-copy view — the bytes are already in the packed-8
+layout). Verified before publishing: greedy decode is **token-identical**
+to the previous runtime on this artifact, and the perplexity above
+reproduces to every decimal. No weights changed; re-download `model.py`
+only.
+
+Measured effect at 35B scale on an M3 Ultra: prompt processing +25–32%
+(963–993 vs 769–772 tok/s at 2k/8k context), decode unchanged. **The
+prefill numbers for THIS 397B model have not been re-measured with the new
+runtime** — the table above reflects the previous runtime; treat any
+speedup here as unverified until it is measured.
 
 ## Tuning: prefill speed
 

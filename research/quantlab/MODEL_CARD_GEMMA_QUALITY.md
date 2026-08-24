@@ -15,6 +15,8 @@ tags:
 - multimodal
 ---
 
+![chart](chart_gemma_ladder.png)
+
 # gemma-4-26b-a4b-it-VQ-d2K2048
 
 **18.7 GiB — indistinguishable from bf16 on blind literary judging, at 39% of bf16's size. Vision included.**
@@ -113,6 +115,14 @@ python -m mlx_lm generate \
 Vision tower is grafted in (356 tensors, +1.07 GiB) and the text path is
 bit-identical to the text-only build — verified by scoring both against the
 same KL cache and getting identical numbers.
+
+### Faster prefill (optional)
+
+`VQ_DECODE_CHUNK=16` speeds up prefill ~20%% (measured end-to-end on
+the 397B artifact from the same runtime; smaller chunks are faster AND use
+less memory — the auto-sizer's default of 32 is kept because it is the
+smallest chunk that reproduces our published numbers bit-exactly). Set the
+env var if you don't need bit-exact reproduction.
 
 ## How it was built
 
