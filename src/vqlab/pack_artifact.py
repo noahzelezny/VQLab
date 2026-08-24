@@ -62,7 +62,10 @@ def _assert_tower_belongs(src_cfg, art_cfg, src_name, art_name):
             f"FAIL: refusing to graft. The tower in {src_name} projects to "
             f"out_hidden_size {out_h}, but {art_name} has hidden_size {txt}. "
             f"This source belongs to a different model family — nothing has "
-            f"been written. Pass the --src that matches THIS artifact.")
+            f"been written. Pass the --src that matches THIS artifact. If the "
+            f"artifact ALREADY carries another family's vision block, re-pack "
+            f"it from the fit: copy-if-absent cannot correct a key that is "
+            f"present and wrong.")
 
 
 ap = argparse.ArgumentParser()
