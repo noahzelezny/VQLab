@@ -345,17 +345,24 @@ is a size-targeting tool (§3.4), not a quality one.
 
 | build | GiB | KL mnats | top-1 |
 |---|---|---|---|
-| 4-bit (community) | 19.00 | 78.56 | 85.61% |
+| 4-bit (community) | 18.17 | 78.56 | 85.61% |
 | 6-bit (ours) | 26.23 | 13.36 | 94.65% |
-| 8-bit (community) | 35.13 | 7.45 | 96.18% |
+| 8-bit (community) | 34.30 | 7.45 | 96.18% |
+
+All 35B sizes in this section are text-only. The community artifacts ship
+a 333-tensor vision tower at bf16, measured at 0.832 GiB and identical in
+every build; it is unquantized ballast, so it is subtracted here rather
+than left to flatter our rungs, which carry no tower. This differs from
+the 397B sizes in §3.2, which are whole-artifact post-graft and therefore
+include their tower on both sides of every comparison.
 
 At the small end VQ dominates: 47.5 mnats at 15.8 GiB against affine's
-78.6 at 19.0 — 39% less divergence in 3.2 GiB fewer bytes. At 5 bits
+78.6 at 18.2 — 39% less divergence in 2.4 GiB fewer bytes. At 5 bits
 per weight the comparison becomes a placement rather than a dominance:
 d2/K1024 lands between two affine rungs, and two independent fits of it
-score 28.14 and 27.93 against 43.7 for the affine frontier
-log-interpolated to the same size — both draws a factor of ~1.6 below
-the line, 73x the draw floor. One rung higher the sign flips: at 6 bpw,
+score 28.14 and 27.93 against 38.7 for the affine frontier
+log-interpolated to the same size — both draws a factor of ~1.4 below
+the line, roughly 50x the draw floor. One rung higher the sign flips: at 6 bpw,
 d2/K4096 is 1.1 GiB smaller than the 6-bit affine build and scores
 1.91x worse — 57x the floor, conclusive. (That two "6-bit" artifacts
 differ by 1.1 GiB is expected: a nominal rate names the code width on

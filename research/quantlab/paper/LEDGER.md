@@ -517,3 +517,27 @@ that is what verified the flagship 28/28 today.
 
 Caught by the public-repo session reading the draft against the tool. No
 number, table or claim standing changes.
+
+## 08-24: 35B SIZE AXIS WAS MIXED-CONVENTION — corrected in 3.3
+
+Measured, not inferred: the community 35B quants carry a 333-tensor vision
+tower at bf16, **0.832 GiB, identical in the 4-bit and the 8-bit**. Our q6 is
+text-only (1757 tensors, 0 vision) and every 35B VQ rung on disk is text-only.
+So 3.3 was comparing our text-only rungs against with-vision comparators.
+
+Corrected by subtracting the measured tower from the two community rows
+(q4 19.001 -> 18.17, q8 35.131 -> 34.30) and stating the convention inline.
+No claim flips; three numbers move:
+- R2 vs q4: "3.2 GiB fewer" -> **2.4 GiB fewer** (39% KL gap unchanged)
+- E140 placement bar: 43.7 -> **38.7**; factor ~1.6 -> **~1.4** below the line
+- that margin: 73x -> **~50x** the 0.214 floor (still conclusive)
+- E141 vs q6 ("1.1 GiB smaller") was ALREADY consistent — both text-only.
+
+**The CARDS are unaffected**: they compare published builds (bf16 tower
+included) against community builds (same tower), which is apples-to-apples.
+The mismatch existed only where lab rungs met community comparators.
+
+Consequence for any 35B release: publishing a text-only artifact alongside
+the two published tower-carrying ones would put a third convention on the
+shelf. Graft before publishing.
+
