@@ -35,6 +35,15 @@ ap.add_argument("--layers", default=None)
 ap.add_argument("--family", default="gemma4_e4b",
                 choices=["gemma4_e4b", "qwen3_8"],
                 help="selects tensor-name template and default layer range")
+ap.add_argument("--init-cap", type=int, default=200_000,
+                help="rows subsampled for the k-means++ INIT draw. Default "
+                     "200_000 is the historical value. At K=65536 that is ~3 "
+                     "samples per centroid for seeding (the Lloyd loop still "
+                     "refines over ALL rows, measured 22.28M / 340 per "
+                     "centroid, 0 dead codes). Cost is ~O(k*cap) and is <1% of "
+                     "one Lloyd iteration, so raising it is nearly free. "
+                     "Added 2026-08-24 to TEST whether the thin init starves "
+                     "high-K fits (E141).")
 ap.add_argument("--seed", type=int, default=1234,
                 help="RNG seed for the k-means++ subsample and centroid draws. "
                      "DEFAULT IS SEEDED (1234) so fits are REPRODUCIBLE. "
@@ -84,7 +93,8 @@ def normalize(T):
     return Xn, scale.astype(mx.float16)
 
 
-def kmeanspp(X, k, cap=200_000):
+def kmeanspp(X, k, cap=None):
+    cap = args.init_cap if cap is None else cap
     n = X.shape[0]
     idx = mx.random.randint(0, n, (min(cap, n),))
     P = X[idx]

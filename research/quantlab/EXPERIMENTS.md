@@ -8820,3 +8820,47 @@ at 1.75x the floor. Whatever favored d4 at 3.00 bpw did not carry to 4.00.
 settle a band-dependence claim any more than E136 settled the vintage gap.
 Recorded as a data point for whoever revisits law 10 next, same discipline as
 holding n=1 out of the laws file all weekend.
+
+## E141 — PRE-REGISTRATION: did the thin init starve E138? (L34, high-impact body layer)
+
+Written before either arm runs. Question raised by Noah after E138 came back
+mixed: is d4/K65536's result depressed by the 200k init cap giving only ~3
+samples per centroid at seeding?
+
+**TARGET: L34.** Chosen on law 13's grounds — the body (L20+) is 8.81 GiB/bit
+against shallow's 1.87, so a body effect IS an artifact effect — and L34 owns
+two of E138's worst-five tensors (gate 0.0782, down 0.0780).
+
+    BASELINE (E138, cap 200k, seed 1234):  L34 gate 0.0782  up 0.0775  down 0.0780   mean 0.0779
+
+**ARM A — cap 2,000,000 (10x), seed 1234.** Tests whether a better-seeded init
+finds a better optimum. Cost is ~O(k*cap), <1% of one Lloyd iteration, so this
+is nearly free.
+**ARM B — cap 200,000, seed 999.** Seed-noise control at this geometry. Without
+it Arm A is uninterpretable.
+
+**REGISTERED READINGS:**
+
+    Arm A improves relerr by MORE than the A-vs-B seed spread
+        -> starvation is REAL at K=65536 and E138 UNDERSTATES d4. E138's
+           verdict would need re-running at the higher cap before it stands.
+    Arm A within the seed spread
+        -> starvation RULED OUT at this layer; E138's mixed result stands as
+           measured and the d/K band-dependence reading holds.
+    Both arms move together
+        -> the difference is stream divergence, not cap. Report as
+           uninterpretable and say so.
+
+**KNOWN WEAKNESSES, stated now so they are not discovered later as excuses:**
+1. **Same seed + different cap does NOT cleanly isolate the cap.** A different
+   number of random draws is consumed at init, so the RNG stream diverges
+   regardless. Arm A measures "bigger cap AND a different stream," which is
+   why Arm B exists.
+2. **n=2 is a weak noise estimate.** A spread from two draws has a 95% CI
+   spanning roughly 0.45x-32x itself (E140). This test is SUGGESTIVE, NOT
+   DECISIVE, and must not be written up as settling anything.
+3. **One layer is not the artifact.** Even a clear result here would need the
+   full 192-tensor refit (36.7h) before E138's verdict changed.
+
+**This is a REVISION-ITEM diagnostic. It does not gate the paper and nothing
+waits on it.**
