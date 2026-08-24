@@ -168,6 +168,28 @@ carrying an unbounded contamination term. Do not reason that "contention only
 affects timing" — that is the incomplete version of this rule, and it is the
 one most people carry.
 
+## 9c. Check correspondence, not presence
+
+A gate that asks "is it there?" cannot answer "does it belong?", and the
+second question is the one that bites. Measured instance: a packer's default
+pointed one model family's artifacts at another family's source, and five
+builds shipped a vision tower that projects into a hidden size their text
+stream does not have — 333 tensors present, every presence check green, the
+tower dimensionally incapable of doing its job.
+
+The durable fix was **not a smarter default**. Nothing in an artifact records
+which base produced it, so nothing can be auto-derived; the fix is a
+consistency assertion on whatever source is actually passed, placed BEFORE
+anything is written. VQLab asserts this in `graft` and `pack` (a tower's
+`out_hidden_size` must equal the artifact's `hidden_size`) and refuses to
+write on mismatch.
+
+Generalise it when you add a gate: if your check would pass an object from
+the wrong model, the wrong run, or the wrong family, it is a presence check
+wearing a correctness check's name. Related: a source path that defaults to
+one lab's model makes that family the silent assumption of every downstream
+run — prefer a required argument over a default that can be wrong.
+
 ## 10. Every gate must fail before it is trusted
 
 A new gate must FAIL on a known-bad input and PASS on a known-good one
