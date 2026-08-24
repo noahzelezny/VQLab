@@ -8763,3 +8763,60 @@ signature (model_file + 120 modules, same as e94b — verified during E140's
 tool check). Gate + III.11 + score costs one scoring run and yields a 4.0 bpw
 d2 point at ~17.7 GiB. It is also the future rate twin for d4/K65536, should
 that fit ever be worth 24 hours.
+
+## E138 — RESULT: MIXED, and the registered branches did not fire cleanly. d2 wins on ppl; d4's KL edge is inside a distrusted floor.
+
+Registered branches (b7e2686): d4 clear of floor -> law 10 gains a third band;
+d2 wins -> the d/K optimum is band-dependent, the more interesting outcome;
+inside floor -> wash. **None fires cleanly; the honest read is closest to
+"wash, leaning d2."**
+
+    rung              size GiB    KL mnats    ppl      top-1
+    E124 d2/K256       13.596       40.327   5.2330   90.10%   (bar)
+    E138 d4/K65536      13.689       38.113   5.3110   90.23%
+
+Fit clean: 192/192 tensors, mean relerr 0.0773, worst 0.0783, 132,136s
+(36.7h, matched the probe-based estimate to 3 decimals of an hour). Outlier
+gate PASS (median 0.0773 x3.0 -> bar 0.2318). Smoke OK. Pack correctly a
+no-op ("packed 0 code tensors") — K=65536 is 16-bit, byte-aligned, same logic
+as the derived pack-banner fix (78f171f).
+
+**KL FAVORS d4, BUT ONLY 1.06x THE FLOOR.** d4 by 2.214 mnats against an
+INHERITED floor of 2.085 (6f, measured at d2/K256, not this geometry). Every
+floor measured more carefully this weekend came in WIDER than the one
+inherited before it (0.0134 -> 0.0197 -> 0.0256 on the 397B alone, E136b). A
+1.06x margin on a floor already known to run narrow is not "clear of the
+floor" and is not read as one here.
+
+**ppl FAVORS d2, CLEARLY.** d4 is WORSE by 0.0780 — 1.75x the same inherited
+floor, genuinely outside it, and pointing the OPPOSITE direction from KL. This
+is the 6c inversion shape (KL and ppl disagree), on a comparison where KL's
+signal is too thin to trust and ppl's is not.
+
+**top-1: +0.13pp for d4. Negligible.**
+
+**SIZE WAS NOT QUITE MATCHED.** The rate-twin design predicted 13.594 GiB
+packed; MEASURED is 13.689 — 93 MB (0.7%) larger than both the prediction and
+E124's 13.596. Small, but the comparison is not the exact-size twin it was
+built to be.
+
+**VERDICT: law 10 does NOT gain a third band from this.** The registered
+"more interesting" branch is the better description of what happened: **the
+d/K optimum is band- or architecture-dependent.** E130 (3.00 bpw) found d4
+ahead by 8.6% KL, consistent across all three metrics, no inversion. E138
+(4.00 bpw) finds a KL edge too thin to trust against ppl moving the other way
+at 1.75x the floor. Whatever favored d4 at 3.00 bpw did not carry to 4.00.
+
+**CAVEATS CARRIED FROM THE PRE-REGISTRATION, now bearing on the reading:**
+- init at K=65536 draws ~3 samples/centroid from the 200k cap, though the
+  Lloyd loop refines over the FULL 22.28M rows (measured: 0/65536 dead codes,
+  340 rows/centroid post-refinement — see the codebook-utilization check run
+  before this fit). Capacity was not the risk; VARIANCE of a thinly-seeded
+  init might be, and is unmeasured at this K.
+- the floor this reading leans on is inherited, not native. A native floor at
+  either geometry would need n=3 more fits and has not been run.
+
+**NOT PROPOSED as a FINDINGS change.** One point at one new geometry does not
+settle a band-dependence claim any more than E136 settled the vintage gap.
+Recorded as a data point for whoever revisits law 10 next, same discipline as
+holding n=1 out of the laws file all weekend.
