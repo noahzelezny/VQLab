@@ -597,3 +597,31 @@ Ungrafted rungs are measured packed bytes + the measured 0.832 constant; the
 affine rows are measured as-is. Stated inline. 397B is unchanged: its
 comparators lack towers, so §3.2 states an offset rather than applying one.
 
+## 08-24: 35B RUNGS GRAFTED (measured) + a split lineage nobody had looked for
+
+M4 grafted every 35B lab artifact. Measured sizes match the projections to the
+digit: 15.670 / 16.615 / 22.226 / 25.977. §3.3 is now measured post-graft
+except d2/K256 (`qwen36-35b-rungs/vq-K256-d2`, 17.644, vision=0), which stays
+measured-plus-constant and says so inline.
+
+**`config.model_type` IS NOT THE BASE MODEL.** Every 35B artifact reports
+`qwen3_5_moe`, including the Qwen3.6-derived ones — a carried-over label. The
+M4 nearly grafted a 3.5 tower into a 3.6 artifact on that basis. The reliable
+test is byte-identity of a non-vision tensor against the candidate base.
+Fourth instance today of the same class: a description that reads as obviously
+true and is checkable in seconds (model_type names the model; the manifest is
+a "content hash"; "the fitter is seeded"; the 397B sizes are symmetric).
+
+**SPLIT LINEAGE:** `rotlab--35B-vqK256codes` and `zz35b-packed-K256` are
+Qwen3.5-derived (6/6 tensors byte-identical to mlx-community Qwen3.5-35B-A3B-4bit,
+0/6 against every 3.6 candidate). Found because the graft guard REFUSED them,
+not because anyone suspected it. Neither appears in §3.3 — the paper is clean.
+
+**OPEN, card-level:** `qwen36-35b-rungs/vq-K256-d4` (10.144, vision=0) has the
+same pre-graft size as those two, and MODEL_CARD_QWEN_QUALITY.md publishes a
+"d4·K256, 10 GiB, 1.141x, 79.50%" row inside a sweep table whose premise is
+one harness and one corpus. If that row is 3.5-derived it is a different base
+model in a 3.6 sweep and needs a card push. Shard-1 hashes differ across all
+three artifacts, so they are distinct fits — which rules out the easy
+explanation and settles nothing. Lineage read requested from the M4.
+
