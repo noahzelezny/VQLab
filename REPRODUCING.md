@@ -4,7 +4,11 @@ Every row in the paper is reproducible in the *statistical* sense: every
 artifact the paper measures is a single UNSEEDED draw, so a re-fit
 reproduces aggregate scores to reporting precision, not exact bytes (paper §5; two artifacts of identical geometry differ, and
 the measured fit-to-fit spread is the noise floor every margin is read
-against). One historical exception is stated at the end.
+against). Note the asymmetry with what you will run today: **dense fits are
+now seeded by default**, so your repeat of a dense recipe reproduces far
+more tightly than the paper's artifacts did — though still not bitwise, and
+that difference matters when measuring floors (see below). MoE fits remain
+unseeded draws. One historical exception is stated at the end.
 
 Conventions below: `<BF16>` = the family's bf16 source directory; `<BASE>` =
 the affine skeleton (397B `struct6-tail3x3`); all outputs go to NEW
