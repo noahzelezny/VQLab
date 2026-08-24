@@ -99,8 +99,14 @@ days of algorithmic hypothesizing that a directory listing would have ended.
 Concretely:
 
 - Stamp every gated artifact with an external manifest (`vqlab manifest
-  write`) — per-shard bytes, mtimes, content hashes, stored *outside* the
-  artifact — and `manifest check` before citing any number from it.
+  write`), stored *outside* the artifact, and `manifest check` before
+  citing any number from it. **Know what the stamp proves:** it records
+  per-shard bytes, mtime, and a sha256 of the first 1 MiB — an *identity*
+  stamp that answers "are these the shards I stamped," not a full-content
+  hash. A mid-shard change that preserves byte count and mtime would pass
+  it. For a publish-time check, or any conclusion that rests on content
+  being unchanged, compute full sha256 over each shard (and compare
+  against the remote object hash when publishing).
 - A refit must never aim `--out` at a scored artifact's path: fits resume,
   so it would emit a repaired-looking artifact containing the suspect bytes,
   and even a clean refit destroys the evidence for the published number.
