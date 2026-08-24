@@ -24,8 +24,8 @@ to make of this model at this size, on stock `mlx-lm`, no patches.
 
 ## Measured results
 
-All numbers measured on this exact artifact and scored twice to an
-identical total negative log-likelihood, with an unmodified `mlx-lm` install:
+All numbers measured on this exact artifact and scored twice to an identical
+total negative log-likelihood, with an unmodified `mlx-lm` install:
 
 | | this model (143.7 GiB) | spicyneuron 3.5bit (165.6 GiB) | our `VQ-2.4bpw` build |
 |---|---|---|---|
@@ -114,8 +114,9 @@ change: the packed artifact's perplexities match its unpacked twin to four
 decimals of total negative log-likelihood on both corpora.
 
 **How it was evaluated.** Perplexity on two corpora — raw wikitext
-(prefix-8192) and a mixed-language code corpus — every number reproduced
-bit-identically twice, scored with an unmodified `mlx-lm`. Two corpora
+(prefix-8192) and a mixed-language code corpus — every number scored twice to
+an identical total negative log-likelihood, with an unmodified `mlx-lm`. Two
+corpora
 because this family shows real domain asymmetry: larger codebooks buy far
 more on prose than on code, so a single-corpus number would misrepresent the
 trade. Task-suite results are reported below, measured the same way.

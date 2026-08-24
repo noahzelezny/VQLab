@@ -5,7 +5,10 @@ Only README.md is touched; no weights. Each local file was synced FROM live
 before editing (62a41f6), so the diff pushed is exactly the fix set in bd691a7.
 Run `hf auth login` first. --dry-run to preview.
 """
-import sys, io
+import sys, io, os
+# HF_HOME (and the token) live on the SSD per ~/.zshrc; non-interactive
+# shells do not source it, so an unset HF_HOME pushes UNAUTHENTICATED.
+os.environ.setdefault("HF_HOME", "/Volumes/Thunderbay SSD/Mlx_Models")
 from huggingface_hub import HfApi
 
 CARDS = {

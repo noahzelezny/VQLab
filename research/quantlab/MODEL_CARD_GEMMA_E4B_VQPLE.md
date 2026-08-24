@@ -73,7 +73,7 @@ not optimized for.
 
 ```bash
 pip install mlx-lm
-mlx_lm.chat --model TheDrainFlorist/__REPO_ID__
+mlx_lm.chat --model TheDrainFlorist/gemma-4-e4b-it-VQ-PLE
 ```
 
 The artifact is self-contained (`model.py` ships inside it); stock mlx_lm

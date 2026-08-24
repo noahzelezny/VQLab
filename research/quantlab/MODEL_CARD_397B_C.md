@@ -25,8 +25,8 @@ no patches, stock `mlx-lm`.
 ## Measured results
 
 All numbers measured on this exact artifact (not projected from a proxy) and
-scored twice to an
-identical total negative log-likelihood, with an unmodified `mlx-lm` install.
+scored twice to an identical total negative log-likelihood, with an
+unmodified `mlx-lm` install.
 
 | | this model (111.6 GiB) | spicyneuron 2.6bit (120.6 GiB) |
 |---|---|---|
@@ -110,8 +110,9 @@ change: the packed artifact's perplexities match its unpacked twin to four
 decimals of total negative log-likelihood on both corpora.
 
 **How it was evaluated.** Perplexity on two corpora — raw wikitext
-(prefix-8192) and a mixed-language code corpus — every number reproduced
-bit-identically twice, scored with an unmodified `mlx-lm`. Two corpora
+(prefix-8192) and a mixed-language code corpus — every number scored twice to
+an identical total negative log-likelihood, with an unmodified `mlx-lm`. Two
+corpora
 because this family shows real domain asymmetry: larger codebooks buy far
 more on prose than on code, so a single-corpus number would misrepresent the
 trade. Task-suite results are reported below, measured the same way.
@@ -143,7 +144,7 @@ stand as integrity checks rather than rankings.
 **This model** is statistically indistinguishable from spicyneuron's
 2.6bit on all three tasks (McNemar p = 0.76 / 0.77 / 0.29) at **9.0 GiB
 smaller** — consistent with the perplexity result, where it leads its size
-class on both corpora.
+class on prose and ties on code.
 
 > These are **0-shot** scores. Leaderboard conventions often use 10-shot
 > HellaSwag / 5-shot WinoGrande, which run several points higher — compare
