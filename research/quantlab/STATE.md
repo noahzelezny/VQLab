@@ -62,6 +62,29 @@ proposed to the paper session, NOT applied.
 **Vintage fitters deliberately UNSEEDED** — they must stay byte-identical to
 the versions under test in E121/E129/E136.
 
+## DECIDED — DO NOT RE-PROPOSE
+
+- **397B task-suite re-run: DEFERRED, twice.** Declined 08-22 ("I don't want
+  to rerun it. Maybe later") and declined AGAIN 08-24 when the paper session
+  queued it as ~3 h of M3 work. The live cards' stale-row LABELS are the
+  correct interim state; nothing is blocked and the paper does not depend on
+  it. If it is ever wanted: archive (do not delete) the two stale JSONs first
+  or the harness silently no-ops, and repoint MODELS_ROOT at
+  `rotlab--397B-d8K16384-packed` and `rotlab--397B-flatk2048-refit-packed`.
+
+## KNOWN DEFECT — E-NUMBER COLLISION (08-24)
+
+EXPERIMENTS.md carries **two E140s and two E141s** from two sessions
+allocating concurrently: mine are the box-clustering RETRACTION and the
+init-starvation test; the M4's are 35B artifacts (`e140-35b-d2K1024`,
+`e141-35b-d2K4096`) that a publish decision cites. **A citation that resolves
+to the wrong entry while looking valid is III.7's failure mode**, and worse
+than III.10's phantom because these resolve to real text. Referred to the
+paper session as documentation arbiter; recommended suffixing (E141-M3 /
+E141-M4) over renumbering, since artifact directory names on disk are
+load-bearing. Root cause is that any session can mint an E-number; the durable
+fix is single-allocator or per-session ranges.
+
 ## OPEN — NOAH'S
 
 1. **A second dense family** — still blocked on acquiring a model.
