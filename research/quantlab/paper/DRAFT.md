@@ -246,7 +246,8 @@ on an instrument that cannot reproduce its own numbers.
 geometry differ. We measured that spread where our comparisons live:
 dense 27B d2/K256, three draws — KL range 2.085 mnats, perplexity range
 0.0447; 35B d2/K1024, two draws — 0.214 mnats; 397B d4/K256, two
-same-stack draws — 0.0256 prose perplexity. The source of the width is
+same-stack draws — 0.0256 prose perplexity; 397B d4/K2048, two draws —
+0.0056 prose, 0.0104 code (the floor narrows as the codebook grows). The source of the width is
 the stochastic initialization: across draws, mean reconstruction error
 moves by 0.0001 while perplexity moves by 0.026 — the tail of the
 reconstruction moves, and the tail is what output quality responds to
@@ -308,12 +309,11 @@ calibrated build:** at 1.7 GiB larger, prose perplexity is better by
 the closest size-matched pair on the ladder and the least ambiguous
 result in the paper. **d8/K16384 vs the same build:** at 19.6
 GiB smaller, prose is better by 0.1252 (4.9x floor). **d4/K2048 vs the
-3.5-bit calibrated build:** 21.9 GiB smaller, and better on both
-corpora as measured — prose by 0.0204 and code by 0.0042 — but those
-margins are smaller than our fit-to-fit variability at the nearest
-measured geometry, so we claim the size and report the quality as
-indistinguishable pending a floor at this geometry, which is being
-measured. One asymmetry favours the comparators: the calibrated builds
+3.5-bit calibrated build:** 21.9 GiB smaller, with better prose
+perplexity by 0.0204 — 3.6 times this geometry's measured fit-to-fit
+floor of 0.0056 — and a code margin of 0.0042 that sits inside the
+0.0104 code floor and is reported as a tie. The claim is therefore:
+smaller by 21.9 GiB, better on prose, tied on code. One asymmetry favours the comparators: the calibrated builds
 are text-only, while every size in our column includes the full vision
 tower at bf16 — 0.85 GiB of capability the affine builds simply omit.
 Subtracting it for a text-to-text comparison would move every VQ row
@@ -580,10 +580,9 @@ rung has been built: claim 2's exchange rates are measured on MoE
 only, and the mechanism we propose (shallow-layer redundancy) predicts
 they should weaken on dense — a prediction, not a result.
 
-**Instrument limits.** The 397B noise floor rests on two draws, and
-the flagship geometry's floor is being measured now; until it lands,
-margins near 0.02 prose at that scale are reported as
-indistinguishable. The 35B floor bounds initialization variance only
+**Instrument limits.** The 397B noise floors rest on two draws per
+geometry (0.0256 prose at d4/K256; 0.0056 prose and 0.0104 code at
+d4/K2048 — the floor narrows substantially as the codebook grows). The 35B floor bounds initialization variance only
 (same box, same geometry). Perplexity cannot rank quantizations on the
 instruction-tuned 27B (§3.3). Decode throughput was bimodal at ~100
 GiB residency on our 128 GB machine and is uncharacterized at other
