@@ -8864,3 +8864,51 @@ it Arm A is uninterpretable.
 
 **This is a REVISION-ITEM diagnostic. It does not gate the paper and nothing
 waits on it.**
+
+## E141 — RESULT: STARVATION RULED OUT. The 200k init cap does not depress K=65536.
+
+Registered branch fires: **"Arm A within the seed spread -> starvation RULED
+OUT at this layer; E138's mixed result stands as measured."**
+
+    arm                            gate     up      down    mean    s/tensor
+    E138 baseline (cap 200k, s1234) 0.0782  0.0775  0.0780  0.0779     692
+    ARM A  (cap 2,000,000, s1234)   0.0783  0.0776  0.0781  0.0780     771
+    ARM B  (cap 200k, seed 999)     0.0782  0.0775  0.0780  0.0779     694
+
+**A 10x LARGER INIT DRAW MOVED MEAN RELERR BY +0.0001 — THE WRONG WAY — AND BY
+LESS THAN THE SEED CONTROL MOVED IT.** All three tensors reproduce to four
+decimals across all three arms. There is no starvation effect to recover.
+
+**MECHANISM, consistent with everything else measured at this K:** the cap
+bounds only the k-means++ SEEDING draw. The Lloyd loop then refines over ALL
+22,282,240 rows (verified: 0/65536 dead codes, 340 rows per centroid
+post-refinement), which washes the initialisation out. A thin init is a
+starting guess, not the fit.
+
+**Cost note, correcting my own estimate:** I predicted the 10x cap would be
+"nearly free" from O(k*cap) being <1% of one Lloyd iteration. Measured: 771 vs
+692 s/tensor, **+11.4%**. Real but modest, and it bought nothing.
+
+**COLLATERAL OBSERVATION, recorded as an observation and NOT a claim.** Arm B
+used a completely different seed and reproduced E138's L34 to within 0.0001 on
+every tensor. At 27B d2/K256 different seeds produce 99.8% different codes
+(E139). Relerr is an aggregate and can hide reshuffling, so this is NOT
+evidence the codebooks are similar — but it is consistent with K=65536 being so
+over-parameterised that the draw has little room to matter. That would also
+explain why neither init size nor (by extension) additional iterations have
+much left to move at this K. **Testing it would mean comparing codes directly
+across the arms, which has not been done.**
+
+**CONSEQUENCE FOR E138: its verdict stands unmodified.** d4/K65536's KL edge
+is 1.06x an inherited floor, its ppl loss is 1.75x that floor and points the
+other way, and the honest reading remains "wash, leaning d2" with the d/K
+optimum band-dependent. The 36.7 h produced a trustworthy answer rather than a
+compromised one.
+
+**SALVAGE ASSESSMENT, since this was the motivating question.** There is no
+cheap path to improving E138. One Lloyd iteration at K=65536 costs **3.3 h**
+across 192 tensors (22.28M rows x 65,536 centroids), so reaching iters=30 is
+**+66.7 h**, and `fit_dense_vq.py` has NO warm-start or resume (verified: 0
+matches). Adding to the run costs more than the run did. The lever moves to
+cheap geometries: iters=30 at d2/K512 is ~1.8 h for a measured 2.8x-floor ppl
+gain (E127).
