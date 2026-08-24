@@ -3,7 +3,12 @@
 Nothing here is authorized to start until the 27B run in flight is done.
 Nothing here blocks tonight's paper post.
 
-## 1. Re-run the 397B task suite for TWO artifacts  (~3 h, M3, local bytes)
+## 1. [DEFERRED BY NOAH — 08-22 and again 08-24. Do not re-propose.]
+##    Re-run the 397B task suite for TWO artifacts  (~3 h)
+
+**Noah has declined this twice.** The live cards' stale-row labels stand as
+the correct interim state; nothing is blocked and the paper does not depend
+on it. Kept below only so the work is specified if he ever asks for it.
 
 The Aug-16 sweep (`results_tasks/`) predates two of the three artifacts it
 scored. Live cards now LABEL the stale rows; this replaces them.
@@ -53,10 +58,12 @@ renamed id, and pushing by it overwrote card G once already. Add a
 
 ## 2. 35B release prep — TWO artifacts (Noah deciding; do not publish unasked)
 
-Target set (recommendation from the paper session, pending Noah):
-  - **e94b d4/K8192**  14.838 GiB text-only  -> ~15.67 with vision
-  - **E140 d2/K1024**  21.394 GiB text-only  -> ~22.22 with vision
-Explicitly NOT shipping: E141 d2/K4096 (sits ABOVE the affine frontier —
+Target set (recommendation from the paper session, pending Noah).
+**Cited by artifact directory, NOT by E-number** — E140 and E141 each name two
+different experiments (see the collision note at the end of this file):
+  - **`e94b-35b-K8192-refit-0821-packed`**  d4/K8192, 14.838 GiB text-only -> ~15.67 grafted
+  - **`e140-35b-d2K1024-packed`**  d2/K1024, 21.394 GiB text-only -> ~22.22 grafted
+Explicitly NOT shipping: `e141-35b-d2K4096-packed` (d2/K4096, sits ABOVE the affine frontier —
 1.91x worse than q6 at 1.1 GiB smaller; we would be publishing a rung the
 paper reports as a loss), flat d2/K256 (KL and ppl disagree about whether it
 beats the published 18.7, and its 36.862 predates E141 in the record while
@@ -117,3 +124,38 @@ the same distribution the floors describe, and its margin against an unseeded
 floor is CONSERVATIVE, not flattering. Same applies to any same-seed A/B
 (e.g. the E142 iters arms): a shared seed removes between-arm draw variance,
 so the unseeded floor is too wide a bar for it, not too narrow.
+
+## 5. E-NUMBER COLLISION — arbiter ruling (paper session, 08-24)
+
+E140 and E141 were each minted twice by two sessions allocating concurrently.
+Verified in the current file:
+  - `## E140` (8656) is the M3's box-clustering RETRACTION
+  - the M4's E140 (35B d2/K1024) has **NO heading in EXPERIMENTS.md at all** —
+    it lives in paper/LEDGER.md and as artifact dirs
+  - `## E141` appears THREE times (8709 M4 pre-reg; 8824 + 8868 M3 init-starvation)
+  - lines 8713/8722/8729/8737/8754/8762 cite "E140" meaning the M4's rung
+
+So one reference resolves to the WRONG experiment and the other resolves to
+NOTHING. That is III.7 and III.10 in the same pair of numbers.
+
+**RULING — suffix, do not renumber.** `E140-M3` / `E140-M4`, `E141-M3` /
+`E141-M4`. Renumbering the M4's breaks artifact directory names on disk, which
+are load-bearing and whose mid-flight mutation is the 101 GiB lesson;
+renumbering the M3's breaks commit messages, which are immutable. Suffixing
+costs heading edits.
+
+**One addition to the M3's proposal:** suffixing headings is not sufficient,
+because E140-M4 has no heading to suffix. It needs a real stub entry pointing
+at where its result lives, or `E140-M4` becomes a fresh III.10 phantom — a
+citation that looks valid and resolves to nothing.
+
+**APPLIED BY THE M3, NOT BY ME.** Two sessions writing one file without
+coordination is the root cause; a third session editing it now repeats the
+pattern. I rule, the file's owner applies.
+
+**Allocation going forward: per-session RANGES, not a central allocator.**
+The M3 offered me the allocator role; I decline it. A single allocator is a
+bottleneck and a single point of failure — this session can be compacted or
+end mid-day, and then nobody can mint a number. Ranges are lock-free and
+survive any session dying. Suggested: M3 140-179, M4 180-219, paper 220-239,
+recorded in the EXPERIMENTS.md header so the rule is where the numbers are.
