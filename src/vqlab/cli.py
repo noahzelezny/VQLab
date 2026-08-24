@@ -37,6 +37,8 @@ COMMANDS = {
     # scoring
     "score": ("referee/score_streaming.py", "streaming referee perplexity (models may exceed RAM)"),
     "kl": ("kl_damage.py", "KL-to-bf16 damage vs a cached teacher (cache/score)"),
+    # verification
+    "selftest": ("selftest.py", "run the real pipeline on a tiny synthetic model"),
     # planning / probes
     "price": ("price.py", "price a size-targeted build before fitting it"),
     "probe-init": ("probe_init_sweep.py", "per-family k-means++ vs random init sweep"),
