@@ -479,8 +479,14 @@ VQ alike.
 ### 4.2 Where the geometry axes stop paying
 
 Dimension pays at matched rate (§3.1) but the margin shrinks as rate
-rises — 12.2% at 2.0 bpw, 8.6% at 3.0 — and whether it survives at 4.0
-bpw is under test as we write. Codebook size pays with the expected
+rises — 12.2% at 2.0 bpw, 8.6% at 3.0 — and at 4.0 bpw it stops paying
+cleanly. A d4/K65536 rung matched against a d2/K256 rung of the same
+size splits: divergence favours d4 by 2.2 mnats, which is 1.06 times a
+floor measured at a different geometry and so not a margin we read,
+while perplexity favours d2 by 0.078, or 1.75 times that same borrowed
+floor. Neither pre-registered branch fired; the honest reading is a
+wash leaning d2, and the dimension advantage is not established above
+3 bpw. Codebook size pays with the expected
 diminishing returns: on the 35B d4 line, each doubling of K buys less
 (17.0, then 12.1, then 5.5 mnats). Harvest never beats the flat rung at
 its own size, at any base richness we measured; its value is
