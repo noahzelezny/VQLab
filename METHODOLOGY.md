@@ -177,12 +177,24 @@ builds shipped a vision tower that projects into a hidden size their text
 stream does not have — 333 tensors present, every presence check green, the
 tower dimensionally incapable of doing its job.
 
+**The presence gate passed green on all five affected artifacts.** That is
+the part to sit with: a gate that failed loudly would never have let this
+reach a release candidate. The check ran, reported success, and was correct
+about the only thing it measured — that 333 tensors were there.
+
 The durable fix was **not a smarter default**. Nothing in an artifact records
 which base produced it, so nothing can be auto-derived; the fix is a
 consistency assertion on whatever source is actually passed, placed BEFORE
 anything is written. VQLab asserts this in `graft` and `pack` (a tower's
 `out_hidden_size` must equal the artifact's `hidden_size`) and refuses to
 write on mismatch.
+
+**If you hit this assertion on an artifact that ALREADY carries the wrong
+block, re-pack from the fit — do not rewrite the config in place.** The
+copy-keys path only fills in keys that are absent, so it cannot correct a key
+that is present and wrong, and an in-place config rewrite leaves you with
+bytes whose provenance no longer matches anything. Rebuild is cheap next to a
+mislabelled artifact.
 
 Generalise it when you add a gate: if your check would pass an object from
 the wrong model, the wrong run, or the wrong family, it is a presence check
