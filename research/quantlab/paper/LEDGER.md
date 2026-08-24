@@ -566,3 +566,34 @@ Also corrected: 3.3's cross-reference, added by me earlier today, claimed the
 asserted symmetry without checking the comparators. Same error class as the
 35B mixed convention it was written to fix.
 
+## 08-24 (supersedes the earlier 35B-size entry): 3.3 IS ON A WITH-TOWER BASIS
+
+Noah's call, and the right one. The community 35B comparators DO ship the
+333-tensor bf16 vision tower (verified: 0.832 GiB in both q4 and q8), and so
+do both our published 35B builds. The only text-only artifacts anywhere in
+this paper are the spicyneuron 397B quants and our own ungrafted lab rungs.
+So the coherent basis is with-tower, not text-only, and it matches what a
+downloader actually gets.
+
+My earlier fix subtracted the tower from the comparators instead. Not wrong
+arithmetically, but backwards as a convention: it moved the two artifacts
+that HAVE towers onto a basis nothing on the shelf uses.
+
+**The basis is a uniform offset, so NOTHING analytic changes** — verified
+numerically both ways: gap-vs-q4 2.39 GiB either way; placement bar 38.68 and
+factor 1.375 either way (log-interpolation on size is shift-invariant);
+d2/K4096 vs q6 stays 1.1 GiB. Only the labels move.
+
+| row | text-only | with tower (now in the paper) |
+|---|---|---|
+| d4/K8192 | 14.84 | 15.67 |
+| d4/K16384 | 15.78 | 16.61 |
+| d2/K256 | 17.64 | 18.48 |
+| d2/K1024 | 21.39 | 22.23 |
+| d2/K4096 | 25.15 | 25.98 |
+| q4 / q6 / q8 | 18.17 / 26.23 / 34.30 | 19.00 / 27.07 / 35.13 |
+
+Ungrafted rungs are measured packed bytes + the measured 0.832 constant; the
+affine rows are measured as-is. Stated inline. 397B is unchanged: its
+comparators lack towers, so §3.2 states an offset rather than applying one.
+

@@ -343,28 +343,32 @@ is a size-targeting tool (§3.4), not a quality one.
 
 | build | GiB | KL mnats | top-1 |
 |---|---|---|---|
-| d4/K8192 | 14.84 | 53.02 | 89.55% |
-| **d4/K16384** | 15.78 | 47.54 | 89.81% |
-| d2/K256 | 17.64 | 36.86 | 90.92% |
-| **d2/K1024** | 21.39 | 28.03 | 92.22% |
-| d2/K4096 | 25.15 | 25.50 | 92.52% |
+| d4/K8192 | 15.67 | 53.02 | 89.55% |
+| **d4/K16384** | 16.61 | 47.54 | 89.81% |
+| d2/K256 | 18.48 | 36.86 | 90.92% |
+| **d2/K1024** | 22.23 | 28.03 | 92.22% |
+| d2/K4096 | 25.98 | 25.50 | 92.52% |
 
 **35B — affine:**
 
 | build | GiB | KL mnats | top-1 |
 |---|---|---|---|
-| 4-bit (community) | 18.17 | 78.56 | 85.61% |
-| 6-bit (ours) | 26.23 | 13.36 | 94.65% |
-| 8-bit (community) | 34.30 | 7.45 | 96.18% |
+| 4-bit (community) | 19.00 | 78.56 | 85.61% |
+| 6-bit (ours) | 27.07 | 13.36 | 94.65% |
+| 8-bit (community) | 35.13 | 7.45 | 96.18% |
 
-All 35B sizes in this section are text-only. The community artifacts ship
-a 333-tensor vision tower at bf16, measured at 0.832 GiB and identical in
-every build; it is unquantized ballast, so it is subtracted here rather
-than left to flatter our rungs, which carry no tower. The 397B section
-handles the same asymmetry in the opposite direction — see §3.2.
+Every 35B size above includes the 333-tensor bf16 vision tower, which the
+community comparators ship and which our released builds carry: 0.832 GiB,
+byte-identical across builds, unquantized in all of them. Rungs not yet
+grafted are quoted as their measured packed bytes plus that constant, and
+the affine rows are quoted as measured. The basis is a uniform offset, so
+it changes no margin and no interpolation here — only the labels. (The
+397B in §3.2 sits the other way round: our builds carry a tower its
+comparators lack, which is why that section states an offset rather than
+applying one.)
 
-At the small end VQ dominates: 47.5 mnats at 15.8 GiB against affine's
-78.6 at 18.2 — 39% less divergence in 2.4 GiB fewer bytes. At 5 bits
+At the small end VQ dominates: 47.5 mnats at 16.6 GiB against affine's
+78.6 at 19.0 — 39% less divergence in 2.4 GiB fewer bytes. At 5 bits
 per weight the comparison becomes a placement rather than a dominance:
 d2/K1024 lands between two affine rungs, and two independent fits of it
 score 28.14 and 27.93 against 38.7 for the affine frontier
