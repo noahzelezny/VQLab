@@ -326,11 +326,8 @@ GiB smaller, prose is better by 0.1252 (4.9x floor). **d4/K2048 vs the
 perplexity by 0.0204 — 3.6 times this geometry's measured fit-to-fit
 floor of 0.0056 — and a code margin of 0.0042 that sits inside the
 0.0104 code floor and is reported as a tie. The claim is therefore:
-smaller by 21.9 GiB, better on prose, tied on code. One asymmetry favours the comparators: the calibrated builds
-are text-only, while every size in our column includes the full vision
-tower at bf16 — 0.85 GiB of capability the affine builds simply omit.
-Subtracting it for a text-to-text comparison would move every VQ row
-0.85 GiB further ahead.
+smaller by 21.9 GiB, better on prose, tied on code — and 22.7 GiB
+smaller on the like-for-like basis described above.
 
 Our ladder is monotone — no mixed-allocation build beats the flat rung
 at or above its own size, and a matched-byte sweep of allocation shapes
