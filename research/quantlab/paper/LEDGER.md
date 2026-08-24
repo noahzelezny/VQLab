@@ -469,3 +469,21 @@ E138 (d4/K65536, M3, lands Mon ~11:00) = revision item, nothing waits on it.
   present and are no-ops at this geometry.
 - Draft updated: abstract fence, intro claim-1 fence, §3.2 crossover
   paragraph, §6; charts gained E141 + d2/K256.
+
+### 08-24: E142 RESOLVED — K2048 floor measured; flagship claim SPLIT
+
+    draw 1: 2.3390 / 2.6064 (8h37m, contended)   draw 2: 2.3334 / 2.5960 (6h19m, idle)
+    FLOOR: 0.0056 prose / 0.0104 code — 4.6x narrower than the K256 floor
+
+- **Flagship vs spicy 3.5bit, re-judged at own geometry: prose 0.0204 =
+  3.6x floor -> CLAIMED. Code 0.0042 = 0.4x floor -> TIE, not claimable.**
+  Draft updated: "smaller by 21.9 GiB, better on prose, tied on code."
+- Floors NARROW as K grows (0.0256 @ K256 -> 0.0056 @ K2048) — consistent
+  with richer codebooks fitting more consistently. In §2.6 and §6.
+- **Draw-2 swap = product decision, NOT a paper claim**: 1.4x prose floor
+  (marginal, best-of-2 selection inflates it), tie on code. Cleaner
+  provenance (fresh full fit). Noah's call; paper numbers stay flagship's.
+- Incidental: first clean K2048 wall-clocks; fits inherit nice 5 over
+  ssh+nohup — all prior M4 timings were background-priority.
+- **No present-tense measurements remain in the draft** except §4.2/§6's
+  E138 reference (lands ~10:25 today).

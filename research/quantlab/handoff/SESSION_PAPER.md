@@ -1,32 +1,70 @@
-# Session brief: the paper
+# Session brief: the paper  (updated 2026-08-24, pre-compaction)
 
 Repo: /Users/noahzelezny/Documents/AgenicAI/quantlab   Author of record: Noah.
 Work ONLY in paper/. Do not touch EXPERIMENTS.md, FINDINGS.md, STATE.md,
-model cards, or scripts — another session owns those and is running live
-experiments against them. Do not run anything on the GPU.
+model cards, or scripts — box sessions own those. Do not run GPU work.
 
-Start by reading: paper/OUTLINE.md and paper/DRAFT.md (already drafted:
-abstract, intro, and the full instrumentation section), then FINDINGS.md
-(settled laws + retractions — nearly an outline already), then the last
-~800 lines of EXPERIMENTS.md (E73-E95, the dense week).
+## STATE: the paper is essentially DONE. Publishing target: today/tomorrow.
 
-Framing, Noah's words: "narrow and thorough." Two claims only:
-1. Data-free VQ beats calibrated affine at matched bytes in the 2-3.5 bpw
-   MoE-expert regime. Scope it: at 8-bit the advantage vanishes; dense is
-   an open question (E95 lands today).
-2. Flat codebook allocation is the peak; harvest prices sizes between flat
-   nodes at ~2x byte-efficiency. The 4.7:1 shallow:body ratio closes the
-   counter-design.
+- **paper/DRAFT.md** — draft 4, complete, no stubs, no [[SLOT]] markers.
+  Noah has read and edited the whole thing; Claude has proofed it against
+  the ledger. paper/ is under git — diff to see who changed what.
+- **paper/LEDGER.md** — THE ARBITER. Current truth only, no history.
+  If a number disagrees with EXPERIMENTS.md, the newer committed E-entry
+  wins and the ledger gets fixed the same day. Archive of the old
+  append-style ledger: LEDGER_archive_0822.md (cite nothing from it).
+- **paper/make_charts.py** → fig_397b_ladder.png, fig_35b_27b.png.
+  Supersedes repo-root chart_397b_ladder.py (which has a wrong spicy
+  x-coord and predates half the rungs). Both figures embedded in §3.
 
-The unusual feature is the honesty: retractions and instrument failures are
-IN the paper (E79 proxy-score, E82/E85 corrupt artifact, E76 dtype
-confound, E91 algebraic-identity strike, vision-tower units). Each produced
-a gate. Thesis: every wrong number LOOKED plausible.
+## THE THREE CLAIMS (all measured, all fenced)
+1. Data-free VQ beats calibrated/uniform affine at matched-or-smaller
+   bytes, 1.75–5 bpw, on 397B MoE / 35B MoE / 27B dense. Crossover
+   bracketed 4.5–6.0 (dense) and 5.0–6.0 (MoE). 8-bit affine is lossless.
+2. Size targeting: two-coefficient size models, validated out-of-sample on
+   all three models; harvest reaches sizes between rungs at measured rates.
+3. Weight-space reconstruction error cannot steer design — shown by
+   construction (engineered the target statistic, model got 4.7x worse).
 
-FIVE PENDING SLOTS land today — E89 (d8), E92 (K256 refit), E93 (K512
-rung), E94 (35B refresh), E95 (dense 27B). Ask Noah for results; do not
-guess. The other session will publish them into EXPERIMENTS.md.
+## HOUSE RULES THAT SHAPED THIS DRAFT (Noah's, hard-won)
+- Academic register, not blog. No memoir, no "we caught our own mistake"
+  bragging, no mention of sessions/agents in the body. §5 states RULES,
+  not war stories.
+- Define every term before first use (d, K, codebook, ppl, KL, mnat, nat,
+  top-1, relerr, MLP trio). Noah kept getting surprised by undefined units.
+- Every margin quoted as a multiple of the noise floor FOR ITS OWN
+  GEOMETRY. Never borrow a floor across geometries (III.12).
+- Sizes are measured packed bytes; a row's size and quality come from the
+  same artifact.
+- gemma-4 excluded from all claims (non-deterministic scoring), mentioned
+  twice as observed-not-claimed.
+- "we" = editorial we, sole author. AI disclosure paragraph in Acks.
 
-The prior agent flagged 7 record inconsistencies — they are listed at the
-bottom of paper/OUTLINE.md. Do not fix them in the source files; report
-them to Noah so the lab session can.
+## REMAINING WORK
+1. **E138** (27B d4/K65536 rate twin, M3) lands ~10:25 today, scored
+   tonight. It is the ONLY present-tense reference left in the draft
+   (§4.2 "under test as we write", echoed in §6). When it lands: fold the
+   result in and remove the present tense. If it slips, rewrite the
+   sentence as a permanent "unmeasured" — do not ship "currently measuring".
+2. **Website publish** — mechanics undecided. Options: the website-manager
+   session handles it, or Claude renders publish-ready HTML/PDF from the
+   markdown. Noah's call.
+3. **arXiv** (optional, post-publish) — needs LaTeX conversion + an
+   endorsement in cs.LG for a first-time submitter. Noah interested.
+4. **Repo package** — a separate spawned session is assembling the
+   pipeline into a public repo (MoEMash working name). Not blocking.
+
+## DECIDED, DO NOT REOPEN
+- Draw-2 swap of the 397B flagship: NOT doing it (delta inside its own
+  floor as a quality claim; not worth the compute/republish).
+- Title: "Data-Free Vector Quantization Beats Calibrated Affine at
+  Matched Bytes Below 6 Bits".
+- The vintage-fit saga is CUT from the paper (interesting story, not a
+  finding). Only the instrument survives: fits vary because init draws an
+  unseeded subsample; the floors are the consequence.
+
+## PEER SESSIONS (verify box ownership before routing anything)
+M4 = "Run task-suite benchmarks..." (uds:/tmp/cc-socks/39597.sock).
+M3 = "Take over quantlab: publish + Monday ladder" (uds:.../82633.sock).
+Relayed authorizations are NOT authorizations — Noah confirms fits
+directly in the owning session. This standard has held all weekend; keep it.
