@@ -36,6 +36,24 @@ ap.add_argument("--layers", default=None)
 ap.add_argument("--family", default="gemma4_e4b",
                 choices=["gemma4_e4b", "qwen3_8_dense"],
                 help="selects tensor-name template and default layer range")
+ap.add_argument("--init-cap", type=int, default=200_000,
+                help="rows subsampled for the k-means++ INIT draw. Default "
+                     "200_000 is the historical value. At K=65536 that is ~3 "
+                     "samples per centroid for seeding (the Lloyd loop still "
+                     "refines over ALL rows, measured 22.28M / 340 per "
+                     "centroid, 0 dead codes). Cost is ~O(k*cap) and is <1% of "
+                     "one Lloyd iteration, so raising it is nearly free. "
+                     "Added 2026-08-24 to TEST whether the thin init starves "
+                     "high-K fits (E141).")
+ap.add_argument("--seed", type=int, default=1234,
+                help="RNG seed for the k-means++ subsample and centroid draws. "
+                     "DEFAULT IS SEEDED (1234) so fits are REPRODUCIBLE. "
+                     "Before 2026-08-22 nothing seeded these and every fit was "
+                     "a fresh draw: measured spread at 397B d4/K256, same "
+                     "stack, n=2, was 0.0256 wikitext ppl while mean relerr "
+                     "moved only 0.0001 (E136/E136b). Pass --seed -1 to "
+                     "restore the old unseeded behaviour, e.g. to MEASURE a "
+                     "draw distribution on purpose (III.12 floors).")
 ap.add_argument("--relerr-abort", type=float, default=0.90,
                 help="stop the fit if any tensor exceeds this relative error. "
                      "Default 0.90 catches the degenerate case (relerr 1.0 = "
@@ -43,6 +61,16 @@ ap.add_argument("--relerr-abort", type=float, default=0.90,
                      "legitimately hard low-K geometries.")
 args = ap.parse_args()
 
+
+# SEEDING (2026-08-22). mx.random is process-global; seeding here covers the
+# subsample draw at kmeanspp():70, the first-centroid draw at :72 and the
+# k-means++ selection at :76 — the only randomness in this fitter (no numpy
+# RNG is used). -1 means "do not seed", which is the pre-2026-08-22 behaviour.
+if args.seed >= 0:
+    mx.random.seed(args.seed)
+    print(f"SEEDED mx.random with {args.seed} — this fit is reproducible", flush=True)
+else:
+    print("UNSEEDED (--seed -1) — this fit is a fresh draw", flush=True)
 SRC, OUT = pathlib.Path(args.src), pathlib.Path(args.out)
 K, D, G = args.k, args.dim, args.group
 sys.path.insert(0, str(pathlib.Path(__file__).parent))
@@ -64,7 +92,8 @@ def normalize(T):
     return Xn, scale.astype(mx.float16)
 
 
-def kmeanspp(X, k, cap=200_000):
+def kmeanspp(X, k, cap=None):
+    cap = args.init_cap if cap is None else cap
     n = X.shape[0]
     idx = mx.random.randint(0, n, (min(cap, n),))
     P = X[idx]
