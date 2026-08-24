@@ -52,12 +52,22 @@ interpretable; KL separations of 5+ mnats and top-1 separations of ~1 pp are.
 A floor belongs to the geometry it was measured at. **Do not inherit it**
 across K or d — and when you do inherit one anyway, say so in the reading.
 
-**Check whether your fitter seeds before you measure a floor.** A seeded
-fitter run three times gives three identical artifacts and a floor of
-zero, which then certifies every margin as real — the instrument fails in
-the flattering direction. VQLab's dense fitter seeds by default (`--seed
-1234`); pass `--seed -1` (or distinct seeds) for floor work. The MoE
-fitter does not seed at all.
+**Check whether your fitter seeds before you measure a floor.** VQLab's
+dense fitter seeds by default (`--seed 1234`); pass `--seed -1` (or
+distinct seeds) for floor work. The MoE fitter does not seed at all.
+
+Know the signature of getting this wrong, because it does not look broken.
+Seeded fits are near-identical but **not bitwise identical**: with the RNG
+pinned, a measured 0.0100% of codes still differ (13,350 of 133,693,440 at
+d2/K256, max codebook delta 4.9e-04) and shard hashes differ — a second
+nondeterminism source survives the seed, unidentified, with Metal reduction
+order the untested candidate. So a floor accidentally measured with a fixed
+seed comes back **small, nonzero, and entirely plausible** rather than
+zero. That is more dangerous than zero: a zero floor is self-evidently
+broken and gets caught on sight, while a suspiciously tiny floor reads as a
+real measurement and certifies every third-decimal margin in sight. **If a
+floor comes back far tighter than you expected, suspect a pinned seed
+before congratulating your fits on their consistency.**
 
 **And check an instrument's description against the instrument itself, not
 against what it was built to achieve.** Two descriptions in this project's
