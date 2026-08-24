@@ -77,7 +77,7 @@ the revision it was published at:
 
 ```bash
 huggingface-cli download TheDrainFlorist/Qwen3.5-397B-A17B-VQ-3bpw \
-  --revision __PREDECESSOR_REVISION__
+  --revision a0da72a0c43932704a272fe3ce6a6513194570eb
 ```
 
 So the row above is not an orphaned claim: the artifact that produced it is
