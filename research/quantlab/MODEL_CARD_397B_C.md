@@ -130,10 +130,10 @@ rather than quoting their reported figures.
 
 | model | size | HellaSwag | PIQA | WinoGrande |
 |---|---|---|---|---|
-| Qwen3.5-397B-A17B-VQ-2.2bpw | 100.9 GiB | 0.861 | 0.841 | 0.787 |
+| Qwen3.5-397B-A17B-VQ-2.2bpw *(v1 weights)* | 100.9 GiB | 0.861 | 0.841 | 0.787 |
 | **Qwen3.5-397B-A17B-VQ-2.4bpw** *(this model)* | 111.6 GiB | 0.883 | 0.844 | 0.784 |
 | spicyneuron 2.6bit | 120.6 GiB | 0.880 | 0.841 | 0.771 |
-| Qwen3.5-397B-A17B-VQ-3.1bpw | 143.7 GiB | 0.903 | 0.840 | 0.780 |
+| `VQ-3bpw` *(predecessor weights, then named `VQ-3.1bpw`)* | 143.7 GiB | 0.903 | 0.840 | 0.780 |
 | spicyneuron 3.5bit | 165.6 GiB | 0.904 | 0.846 | 0.767 |
 
 Every model scored identical items, so differences are **paired** (McNemar
@@ -145,6 +145,12 @@ stand as integrity checks rather than rankings.
 2.6bit on all three tasks (McNemar p = 0.76 / 0.77 / 0.29) at **9.0 GiB
 smaller** — consistent with the perplexity result, where it leads its size
 class on prose and ties on code.
+
+> Two rows above were measured before their repos were updated: the 2.2bpw
+> figure is v1 (d4/K128; the repo now serves d8/K16384), and the 143.7 GiB
+> figure is the build that preceded the current `VQ-3bpw` weights. Both are
+> labelled rather than deleted — they were measured on real artifacts, which
+> remain fetchable at their published revisions. Re-measurement is queued.
 
 > These are **0-shot** scores. Leaderboard conventions often use 10-shot
 > HellaSwag / 5-shot WinoGrande, which run several points higher — compare
@@ -210,7 +216,7 @@ recipe, all measured the same way:
 |---|---|---|---|---|
 | `VQ-2.2bpw` (accessibility) | 100.9 GiB | 3.1706 | 2.6988 | 128 GB Mac, roomy |
 | **`VQ-2.4bpw` (this build)** | **111.6 GiB** | **2.7655** | **2.6383** | 128 GB Mac, tight |
-| `VQ-3.1bpw` (quality) | 143.7 GiB | 2.3519 | 2.5987 | ≥192 GB or cluster |
+| `VQ-3bpw` (quality) | 143.7 GiB | 2.3410 | 2.5963 | ≥192 GB or cluster |
 
 ## Known limitations
 
