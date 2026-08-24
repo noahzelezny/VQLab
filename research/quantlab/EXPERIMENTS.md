@@ -9036,3 +9036,60 @@ been run.
 The paper session independently noted that reading seeded arms against an
 unseeded floor is "conservative rather than flattering." Agreed — and the
 sharper form is that it is conservative enough to hide a real result.
+
+## E142 — RESULT: the iters lever does NOT transfer to K512. Arm 2 adopted anyway, on stated grounds.
+
+Registered branch fires: **"ppl inside the floor -> E127's effect is
+GEOMETRY-SPECIFIC and does not generalise across K."**
+
+    arm            size GiB   KL mnats   top-1      ppl        relerr   fit
+    arm 1 iters=10  14.592     32.948    90.93%   5.180243    0.0591   2154s
+    arm 2 iters=30  14.592     32.810    90.84%   5.161691    0.0584   5768s
+    delta            0.000     -0.138    -0.09pp  -0.018552  -0.0007
+    (E126, M4, unseeded, iters=10:  14.592 / 33.095 / 91.10% / 5.194289)
+
+Both gated PASS (bars 0.1772 / 0.1751), both smoked, both packed 192 code
+tensors (K512 is 9-bit, NOT byte-aligned), identical MEASURED size, 0 collapses.
+
+**ppl improved 0.0186 = 0.42x the registered 0.0447 bar. E127's effect at
+d2/K256 was 0.126 — nearly SEVEN TIMES larger.** KL moved 0.138 against a
+2.085 floor (0.07x). top-1 went DOWN 0.09pp.
+
+**BUT THIS IS NOT A NULL, AND THE ADDENDUM (bc4a845, written before the
+numbers existed) IS WHY.** These arms share BIT-IDENTICAL initial centroids —
+`kmeanspp()` runs before the iters loop and Lloyd consumes no RNG, so arm 2 is
+arm 1 continued for 20 more iterations with ZERO draw variance between them.
+The 0.0447 bar was measured from UNSEEDED draws and contains variance these
+arms do not have. **0.0186 is BELOW OUR RESOLUTION, not shown to be zero.**
+The honest shared-init floor has never been measured; the only bound is E139's
+reduction-order residual (0.0100% of codes, output-visibility UNMEASURED).
+
+**ARM 2 IS ADOPTED as the 27B artifact (Noah's call, 08-24), on stated
+grounds and not on a demonstrated margin:** identical size, clean gate, and
+ALL FOUR metrics moved the right way (ppl, KL, relerr down; only top-1 moved
+against, by 0.09pp which is noise at this resolution). It is very likely
+slightly better than arm 1. **That cannot be proven at this resolution and the
+card must not claim it as measured.**
+
+**KILLS THE iters=100 PLAN.** Tripling iterations bought 0.0186 here. Ten-fold
+is not worth 6.1 h, and law 11 makes it genuinely uncertain rather than
+monotonic — more Lloyd iterations minimise AVERAGE distortion and can trade
+away the tail (E102's mechanism, E112's precedent).
+
+**WHY IT PROBABLY DID NOT TRANSFER — HYPOTHESIS, NOT A FINDING, NOT MEASURED.**
+Rows per centroid falls as K rises: d2/K256 has 174,080, d2/K512 has 87,040,
+d4/K65536 has 340. Fewer rows per centroid means Lloyd converges SOONER, so
+less is left for extra iterations to do. That predicts the iters lever weakens
+monotonically with K — consistent with E127 (large effect at K256), E142
+(small at K512) and E138 (nothing at K65536), but those are three points
+across two d values and one is a size comparison, not an iters one.
+**Testing it means an iters sweep at fixed d across K, which has not been run.**
+
+**PROVENANCE NOTE:** arm 1's fit ran CONTENDED — the public-repo session ran
+~4 `vqlab selftest` invocations plus kernel probes on this box during it, and
+disclosed it unprompted. Arm 1's WALL-CLOCK (2154s) is therefore VOID and is
+not used for anything. Its quality numbers are not: arm 1 lands within 0.147
+mnats KL / 0.014 ppl of E126 — an independent fit on a different box, a
+different seed, and unseeded — which bounds any contamination well below the
+deltas above. A clean re-run was planned and cancelled by Noah on exactly this
+reasoning.
