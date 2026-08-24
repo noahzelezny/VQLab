@@ -168,6 +168,25 @@ if _missing:
     if _vsrc and (_vsrc / "config.json").exists():
         _vc = json.load(open(_vsrc / "config.json"))
         _copied = [k for k in _missing if k in _vc]
+        # FAMILY CHECK. The default source is the 397B, and no 35B chain ever
+        # overrode it, so every 35B artifact packed before 2026-08-24 carried
+        # the 397B's vision_config: out_hidden_size 4096 against a 2048-wide
+        # text stream. Nothing caught it — check_vision.py asserts the tower is
+        # PRESENT, not that it projects into this model. The tower's merger
+        # writes into the text residual stream, so out_hidden_size must equal
+        # this config's hidden_size; if it does not, the source is a different
+        # model and copying its block would hand exo a VisionCardConfig that
+        # cannot be satisfied by any tower we could graft.
+        if "vision_config" in _copied:
+            _th = (cfg.get("text_config") or cfg).get("hidden_size")
+            _oh = _vc["vision_config"].get("out_hidden_size")
+            if _th is not None and _oh is not None and _th != _oh:
+                raise SystemExit(
+                    f"FAIL: {_vsrc.name} vision_config has out_hidden_size "
+                    f"{_oh}, but this model's hidden_size is {_th}. That "
+                    f"source is a different model family — pass "
+                    f"--vision-config-from for THIS model's base, or \"\" to "
+                    f"skip. Not writing a cross-family vision_config.")
         for k in _copied:
             cfg[k] = _vc[k]
         if _copied:

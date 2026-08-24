@@ -42,6 +42,12 @@ ap.add_argument("--copy-config-keys", default="vision_config,image_token_id",
                      "chain-built 397B artifact shipped without vision_config "
                      "and needed a hand-graft to be exo-loadable. Copies only "
                      "keys the artifact LACKS, so it never overwrites.")
+ap.add_argument("--replace-config-keys", action="store_true",
+                help="overwrite --copy-config-keys that are already present "
+                     "and DISAGREE with --src. Off by default so a graft "
+                     "never silently rewrites a config; required to repair an "
+                     "artifact carrying another family's vision_config (every "
+                     "35B packed before 2026-08-24 carried the 397B's).")
 args = ap.parse_args()
 
 ART, SRC = pathlib.Path(args.artifact), pathlib.Path(args.src)
@@ -56,6 +62,64 @@ _PREFIXES = tuple(p for p in args.prefixes.split(",") if p)
 vis = {k: sh for k, sh in src_map.items() if k.startswith(_PREFIXES)}
 if not vis:
     raise SystemExit(f"source {SRC} has no vision tensors")
+
+# BASE-IDENTITY CHECK, before anything is read or written.
+#
+# The first version of this compared the source's vision out_hidden_size to
+# the artifact's hidden_size and called itself a family check. It is a WIDTH
+# check. It passed a Qwen3.5 tower into a Qwen3.6 artifact on 2026-08-24
+# because both project to 2048 — and 3.6 keys its tower `vision_tower.*`
+# while 3.5 uses `model.visual.*`, so the graft also landed in a namespace
+# the model does not read. Nothing downstream would have caught it:
+# check_vision.py counts tensors, and the outlier gate never looks at the
+# tower. `model_type` does not settle it either — a 3.6 artifact still
+# reports qwen3_5_moe.
+#
+# The only thing that settles which model a source is: does it share a
+# BYTE-IDENTICAL non-vision tensor with this artifact. Norms and biases are
+# copied through the fit untouched, so the true base always matches on
+# several; a different model, release, or family matches on none.
+_artcfg = json.load(open(ART / "config.json"))
+src_cfg = json.load(open(SRC / "config.json"))
+_th = (_artcfg.get("text_config") or _artcfg).get("hidden_size")
+_oh = (src_cfg.get("vision_config") or {}).get("out_hidden_size")
+if _th is not None and _oh is not None and _th != _oh:
+    raise SystemExit(
+        f"FAIL: --src {SRC.name} has a tower projecting to {_oh}, but this "
+        f"artifact's hidden_size is {_th}. Wrong model family — graft from "
+        f"THIS model's base. Nothing written. (Re-pack from the fit rather "
+        f"than rewriting config keys in place.)")
+
+_art_map0 = json.load(open(ART / "model.safetensors.index.json"))["weight_map"]
+_shared = [k for k in _art_map0
+           if k in src_map and not k.startswith(_PREFIXES)]
+if not _shared:
+    raise SystemExit(
+        f"FAIL: --src {SRC.name} shares NO tensor key with this artifact. "
+        f"Either it is a different model or it uses a different key "
+        f"namespace (Qwen3.5 keys text as model.language_model.*, Qwen3.6 as "
+        f"language_model.model.*). This is not this artifact's base. "
+        f"Nothing written.")
+
+# prefer small 1-D tensors: norms/biases pass through a fit unchanged.
+_probe = sorted(_shared, key=lambda k: ("norm" not in k, len(k)))[:6]
+_hits = []
+for _k in _probe:
+    with mx.stream(mx.cpu):
+        _a = mx.load(str(ART / _art_map0[_k]))[_k]
+        _b = mx.load(str(SRC / src_map[_k]))[_k]
+        mx.eval(_a, _b)
+    if _a.shape == _b.shape and bool(
+            mx.all(_a.astype(mx.float32) == _b.astype(mx.float32)).item()):
+        _hits.append(_k)
+if not _hits:
+    raise SystemExit(
+        f"FAIL: --src {SRC.name} shares {len(_shared)} tensor keys with this "
+        f"artifact but NOT ONE is byte-identical (probed {len(_probe)}). "
+        f"Same architecture, different model or release — its tower does not "
+        f"belong to these weights. Nothing written.")
+print(f"base-identity OK: {len(_hits)}/{len(_probe)} probed tensors are "
+      f"byte-identical to {SRC.name} (e.g. {_hits[0]})")
 
 idx_path = ART / "model.safetensors.index.json"
 idx = json.load(open(idx_path))
@@ -102,12 +166,26 @@ json.dump(idx, open(idx_path, "w"), indent=1)
 
 cfg = json.load(open(ART / "config.json"))
 if args.copy_config_keys:
-    src_cfg = json.load(open(SRC / "config.json"))
-    copied = []
+    copied, stale = [], []
     for k in args.copy_config_keys.split(","):
-        if k and k not in cfg and k in src_cfg:
+        if not k or k not in src_cfg:
+            continue
+        if k not in cfg:
             cfg[k] = src_cfg[k]
             copied.append(k)
+        elif cfg[k] != src_cfg[k]:
+            if args.replace_config_keys:
+                cfg[k] = src_cfg[k]
+                copied.append(k + " (replaced)")
+            else:
+                stale.append(k)
+    if stale:
+        raise SystemExit(
+            f"FAIL: artifact already carries {stale} and they DISAGREE with "
+            f"{SRC.name}. The tower just written is {SRC.name}'s, so shipping "
+            f"this config would describe a tower the artifact does not have. "
+            f"Re-run with --replace-config-keys to repair. (The graft shard "
+            f"is written and correct; only the config is unresolved.)")
     if copied:
         json.dump(cfg, open(ART / "config.json", "w"), indent=1)
         print(f"copied config keys from source: {copied}")
