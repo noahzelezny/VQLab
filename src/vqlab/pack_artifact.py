@@ -36,6 +36,35 @@ import numpy as np
 
 import vq_pack
 
+def _assert_tower_belongs(src_cfg, art_cfg, src_name, art_name):
+    """Refuse a vision tower that cannot project into THIS model.
+
+    Nothing in an artifact's config records which base it came from, so no
+    smarter default can rescue a wrong --src: the only durable check is a
+    CORRESPONDENCE assertion on whatever source is actually passed.
+
+    This exists because a lab default pointed one family's packer at another
+    family's bf16 dir, and five 35B artifacts were built carrying a 397B
+    vision_config — 333 tensors present, presence checks green, and a tower
+    dimensionally incapable of projecting into the model shipping it
+    (out_hidden_size 4096 into hidden_size 2048). A gate that checks
+    PRESENCE rather than CORRESPONDENCE always has this hole.
+    """
+    vc = (src_cfg or {}).get("vision_config") or {}
+    out_h = vc.get("out_hidden_size")
+    txt = (art_cfg or {}).get("hidden_size")
+    if txt is None:
+        txt = ((art_cfg or {}).get("text_config") or {}).get("hidden_size")
+    if out_h is None or txt is None:
+        return  # nothing to compare; say nothing rather than pretend
+    if int(out_h) != int(txt):
+        raise SystemExit(
+            f"FAIL: refusing to graft. The tower in {src_name} projects to "
+            f"out_hidden_size {out_h}, but {art_name} has hidden_size {txt}. "
+            f"This source belongs to a different model family — nothing has "
+            f"been written. Pass the --src that matches THIS artifact.")
+
+
 ap = argparse.ArgumentParser()
 ap.add_argument("--src", required=True)
 ap.add_argument("--out", required=True)
@@ -166,6 +195,9 @@ if _missing:
     _vsrc = pathlib.Path(args.vision_config_from) if args.vision_config_from else None
     if _vsrc and (_vsrc / "config.json").exists():
         _vc = json.load(open(_vsrc / "config.json"))
+        # CORRESPONDENCE, not presence: refuse to copy another family's
+        # vision block into this artifact. Checked before any key is copied.
+        _assert_tower_belongs(_vc, cfg, str(_vsrc), str(OUT))
         _copied = [k for k in _missing if k in _vc]
         for k in _copied:
             cfg[k] = _vc[k]
