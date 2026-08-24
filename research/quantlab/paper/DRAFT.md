@@ -358,12 +358,11 @@ is a size-targeting tool (§3.4), not a quality one.
 | 8-bit (community) | 35.13 | 7.45 | 96.18% |
 
 Every 35B size above includes the 333-tensor bf16 vision tower, which the
-community comparators ship and which our released builds carry: 0.832 GiB,
-byte-identical across builds, unquantized in all of them. Rungs not yet
-grafted are quoted as their measured packed bytes plus that constant, and
-the affine rows are quoted as measured. The basis is a uniform offset, so
-it changes no margin and no interpolation here — only the labels. (The
-397B in §3.2 sits the other way round: our builds carry a tower its
+community comparators ship and our builds now carry: 0.832 GiB,
+byte-identical across builds, unquantized in all of them. All rows are
+measured post-graft except d2/K256, which is its measured packed size plus
+that constant. Comparisons here are therefore like-for-like at face value.
+(The 397B in §3.2 sits the other way round: our builds carry a tower its
 comparators lack, which is why that section states an offset rather than
 applying one.)
 
