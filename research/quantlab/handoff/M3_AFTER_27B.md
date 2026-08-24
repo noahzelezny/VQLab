@@ -33,9 +33,16 @@ scored. Live cards now LABEL the stale rows; this replaces them.
   an affine model of similar size finished in 610 s. M4 would also have to
   stream every byte over SMB.
 - **Record what you scored.** `results_tasks/*.json` stores only a directory
-  NAME — no hash, no size. That is exactly why this staleness was invisible.
-  Add the artifact's index `total_size` and the sha256 of shard 1 to each
-  results JSON so the next reader can falsify it.
+  NAME — no hash, no size. That is exactly why this staleness was invisible;
+  it is the same name/bytes divergence as E94 and the Aug-19 base rewrite.
+  Do NOT invent a second stamping scheme: `artifact_manifest.py` already
+  exists for this and was written after those two incidents. Stamp each
+  artifact (`./artifact_manifest.py write <dir>`) and have the results writer
+  record the manifest id, which closes this for every results file at once.
+  (Suggested by the public-repo session; adopted. Caveat worth knowing: the
+  manifest hashes the FIRST 1 MiB per shard plus bytes+mtime — an identity
+  stamp, not a full-content hash. For the publish check, keep using full
+  sha256 against the remote LFS oid.)
 
 Then: update the task tables + remove the stale-row note in
 MODEL_CARD_397B_C.md, _F.md, and add the table to _G.md (which currently
@@ -77,3 +84,8 @@ bpw (13.8 GiB = "3.4bpw", 18.7 = "4.6bpw"), not by geometry.
   progress for 74 minutes while committing nothing (logs_live_upload_101).
 - Residue files (`*.pre_*`, `__pycache__`) must be EXCLUDED via
   ignore_patterns, never moved mid-upload.
+- **Read back after write.** A push tool that reports success from its own
+  exit code structurally cannot see an overwrite that happened through a
+  redirect — the only check that catches it is fetching the live card
+  afterward. Same reason the outlier gate runs against the bytes on disk
+  rather than the fitter's log. (Framing from the public-repo session.)
