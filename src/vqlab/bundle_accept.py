@@ -14,8 +14,15 @@ import sys, pathlib, importlib.util
 import mlx.core as mx
 
 import tempfile
+if len(sys.argv) == 2 and sys.argv[1] in ("-h", "--help"):
+    print(__doc__)
+    print("usage: vqlab bundle-accept <artifact-dir>\n\n"
+          "Lifts the runtime out of <artifact-dir>/model.py and runs the\n"
+          "kernel acceptance checks against THAT copy — the code a\n"
+          "downloader executes — rather than whatever is on the import path.")
+    sys.exit(0)
 if len(sys.argv) != 2:
-    sys.exit("usage: bundle_accept.py <artifact-dir>")
+    sys.exit("usage: vqlab bundle-accept <artifact-dir>")
 ART = sys.argv[1]
 bundle = pathlib.Path(ART) / "model.py"
 text = bundle.read_text()

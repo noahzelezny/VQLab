@@ -19,7 +19,7 @@ need a real multi-GB checkpoint and are reported rather than omitted.
 
 ## What is already verified, so you needn't re-derive it
 
-- All 18 CLI subcommands' surfaces load (`vqlab <cmd> --help`).
+- All 19 CLI subcommands' surfaces load (`vqlab <cmd> --help`).
 - Packing is bit-exact: decode(packed) == decode(unpacked), max delta 0.0.
 - Seeded fits reproduce; `--seed -1` diverges (both directions measured).
 - Outlier gate fails a collapsed tensor and passes a healthy artifact.
