@@ -541,3 +541,28 @@ Consequence for any 35B release: publishing a text-only artifact alongside
 the two published tower-carrying ones would put a third convention on the
 shelf. Graft before publishing.
 
+## 08-24: 397B VISION ASYMMETRY — runs AGAINST us; sizes kept, offset disclosed
+
+Measured from the artifacts: our 397B builds carry the bf16 vision tower
+(2545 tensors, 333 vision; graft file 912,057,227 B = 0.8494 GiB). BOTH spicy
+comparators are TEXT-ONLY (2212 tensors, 0 vision; 120.572 and 165.572 GiB).
+
+So every 397B size margin in the paper is UNDERSTATED by 0.849 GiB:
+
+| comparison | paper says | like-for-like |
+|---|---|---|
+| d8/K16384 vs spicy 2.6 | 19.6 GiB smaller | **20.4** |
+| 2.4bpw vs spicy 2.6 | 9.0 smaller | **9.8** |
+| flagship vs spicy 3.5 | 21.9 smaller | **22.7** |
+| flat K512 vs spicy 2.6 | +1.7 larger | **+0.88** |
+
+**DECISION: keep the download-size convention, disclose the offset in 3.2.**
+Restating sizes text-only would improve every number by changing the basis in
+our own favour. A conservative convention plus a stated offset is worth more.
+Cards unaffected — they quote download size, which is what a downloader gets.
+
+Also corrected: 3.3's cross-reference, added by me earlier today, claimed the
+397B sizes "include their tower on both sides of every comparison." False —
+asserted symmetry without checking the comparators. Same error class as the
+35B mixed convention it was written to fix.
+

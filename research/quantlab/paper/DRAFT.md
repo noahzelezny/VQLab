@@ -288,6 +288,17 @@ tax.
 
 ![397B ladder](fig_397b_ladder.png)
 
+Sizes below are whole-artifact post-graft bytes: what a user downloads.
+That convention is not symmetric here, and the asymmetry runs against us.
+Our artifacts carry the bf16 vision tower; the community comparators are
+text-only (2212 tensors, no tower), so each of our rows is 0.849 GiB
+heavier than a like-for-like comparison would make it. Every size margin
+we report against them is therefore understated by that amount — the
+d8 build's lead is 20.4 GiB rather than 19.6, and the flagship's 22.7
+rather than 21.9. We keep the download-size convention and state the
+offset rather than restate the sizes, because a convention that gets
+adjusted in the reporter's favour is worth less than a conservative one.
+
 **Ours (VQ; prose / code perplexity, packed post-graft GiB):**
 
 | build | GiB | prose | code |
@@ -352,9 +363,8 @@ is a size-targeting tool (§3.4), not a quality one.
 All 35B sizes in this section are text-only. The community artifacts ship
 a 333-tensor vision tower at bf16, measured at 0.832 GiB and identical in
 every build; it is unquantized ballast, so it is subtracted here rather
-than left to flatter our rungs, which carry no tower. This differs from
-the 397B sizes in §3.2, which are whole-artifact post-graft and therefore
-include their tower on both sides of every comparison.
+than left to flatter our rungs, which carry no tower. The 397B section
+handles the same asymmetry in the opposite direction — see §3.2.
 
 At the small end VQ dominates: 47.5 mnats at 15.8 GiB against affine's
 78.6 at 18.2 — 39% less divergence in 2.4 GiB fewer bytes. At 5 bits
