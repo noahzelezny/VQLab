@@ -8912,3 +8912,51 @@ across 192 tensors (22.28M rows x 65,536 centroids), so reaching iters=30 is
 matches). Adding to the run costs more than the run did. The lever moves to
 cheap geometries: iters=30 at d2/K512 is ~1.8 h for a measured 2.8x-floor ppl
 gain (E127).
+
+## E142 — PRE-REGISTRATION: does E127's iters lever transfer to d2/K512? (two arms, M3, seed 1234)
+
+Goal is a BETTER ARTIFACT, not a paper row. E127 measured `--iters` 10->30 as
+the only lever we have that clears the seed floor decisively (ppl -0.126,
+2.8x floor) — but it was measured at 27B **d2/K256**. E126's d2/K512 is the
+best 27B rung we hold. Does the lever transfer one band up?
+
+**THE BAR (E126, MEASURED):**
+
+    artifact         size GiB   KL mnats   top-1     ppl
+    q4 (affine)       14.094     45.842   89.82%   5.2055
+    E126 d2/K512      14.592     33.095   91.10%   5.194289
+    bf16 teacher           -          0    100%    5.2249
+
+**WHY TWO ARMS AND NOT ONE.** E126 was fit on the **M4**, **unseeded**, at
+iters=10. A single iters=30 arm on the M3 would differ from it in THREE
+variables (iters, box, seed) and could not attribute any change. So:
+
+    ARM 1  d2/K512, iters=10, seed 1234, M3   ~36 min   <- control
+    ARM 2  d2/K512, iters=30, seed 1234, M3   ~109 min  <- the lever
+
+Arms 1 and 2 differ ONLY in iters. Arm 1 additionally serves as a box+seed
+replication of E126, which is worth having independently given E140 retracted
+"the codes cluster by box" as unsupported.
+
+**REGISTERED READINGS (arm 2 vs arm 1, not vs E126):**
+
+    ppl improves by MORE than 0.0447 (the d2/K256 floor, INHERITED per III.12)
+        -> the iters lever TRANSFERS to K512. Arm 2 becomes the best 27B
+           artifact we hold and is a ship candidate.
+    ppl inside the floor
+        -> E127's effect is GEOMETRY-SPECIFIC and does not generalise across
+           K. Report as no-transfer; E126 stands as the best rung.
+    ppl WORSE at iters=30
+        -> law 11 in action: more Lloyd iterations minimise AVERAGE distortion
+           and can trade away the tail (E102's mechanism, E112's precedent).
+           This would be a real finding and must NOT be reported as a null.
+
+Report KL AND ppl (6c). Assert the MEASURED PACKED size — **K512 is 9 bits,
+NOT byte-aligned, and E126 packed 21.565 -> 14.592 GiB, so a skipped pack
+turns this rung from 4.5 bpw into 8.0 bpw** (III.8). Both arms get the outlier
+gate and the III.11 smoke.
+
+**KNOWN LIMITS, stated now:** the floor is inherited from d2/K256 and is
+neither native to K512 nor re-measured; n=1 per arm; and a transfer result here
+says nothing about iters>30, which law 11 makes genuinely uncertain rather than
+obviously monotonic.
