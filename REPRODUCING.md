@@ -40,8 +40,8 @@ vqlab check-bundle --artifact artifacts/K256-packed
 vqlab bundle-accept artifacts/K256-packed   # tests the copy that ships
 
 # 6. smoke: one generated token through the shipping fused path
-vqlab preflight-ram artifacts/K256-packed   # needs whole model resident
-python -m mlx_lm generate --model artifacts/K256-packed --prompt "hi" --max-tokens 4
+vqlab smoke artifacts/K256-packed   # preflights RAM, then generates and
+                                    # NAMES the runtime that actually resolved
 
 # 7. score, then stamp
 vqlab score --model artifacts/K256-packed                        # prose

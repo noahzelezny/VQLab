@@ -27,6 +27,8 @@ COMMANDS = {
     "graft": ("graft_vision.py", "graft the bf16 vision tower into an artifact"),
     "bundle": ("add_model_file.py", "(re)write the self-contained model.py bundle (MoE)"),
     # gates
+    "check": ("check_all.py", "run the release gates that need no source model"),
+    "smoke": ("smoke.py", "generate one token through the runtime the artifact ships"),
     "verify": ("verify_artifact.py", "outlier gate: decode artifact bytes vs bf16 source"),
     "check-release": ("check_release.py", "release gate: files exist and function"),
     "check-bundle": ("check_bundle.py", "bundle gate: shipped runtime matches repo runtime"),
