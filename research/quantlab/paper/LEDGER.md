@@ -863,3 +863,44 @@ assert output and the results are in the log) and it swept the other chains —
 only that one was affected. Same class as the E134 acceptance suite that
 silently skipped every packed check.
 
+## 08-24: E145 — MoE ROUTER PRECISION ASYMMETRY. 35B only; 397B is CLEAN.
+
+M3's finding, verified here by dtype and extended to the family it had not
+checked.
+
+    family   our VQ                    comparators
+    35B      mlp.gate BF16 [256,2048]  q4/q6/q8 all U32 [256,512] + scales
+    397B     gate BF16 [512,4096]      spicy 2.6 AND 3.5 also BF16 [512,4096]
+    27B      dense - no routers        n/a
+
+**THE 397B IS SYMMETRIC.** Both spicy builds keep routers at bf16 exactly as
+ours do, so every claim-1 lead row (K512, d8, flagship vs spicy) is
+unaffected. M3 checked gemma26b and the 35B; I checked the 397B, which is
+where the headline claims live.
+
+**I ALSO CHECKED THE 35B COMMUNITY COMPARATORS**, which M3 had not — its
+evidence was our own q6. `mlx-community` 4-bit AND 8-bit both quantize the
+router (40 weights, 40 scales, U32). So the asymmetry covers every 35B
+comparison in §3.3, not just the one against our q6.
+
+**Magnitude vs mechanism:** 20 MiB, 0.14% of the artifact — negligible as
+bytes. But a router feeds an argmax over experts, so quantizing it can flip
+which expert runs; the quality effect is NOT bounded by the byte share.
+UNMEASURED — the ablation is a VQ build with routers forced to 8-bit,
+re-scored. Not run.
+
+**DECISION (mine): disclosure, not a blocker, scoped to §3.3.** Added there,
+including the explicit statement that §3.2 is unaffected so a reader does not
+generalise it to the 397B. The ablation is worth having but it is a
+measurement we do not have, and the honest move is to say so rather than to
+delay on it.
+
+**Direction: this one favours US** — the opposite sign from E144, four hours
+later. Per M3, and I agree: do not state a net direction across the two. They
+are different models and different magnitudes, and combining them would be
+the same reason-from-one-term move that produced my wrong §6 sign.
+
+M3 self-corrected a substring match (`mlp.gate` also catches `mlp.gate_proj`)
+before trusting its own count — same class as reading a rate off pack_bits.
+My probes here are anchored (`\.mlp\.gate\.`) for that reason.
+

@@ -357,6 +357,19 @@ is a size-targeting tool (§3.4), not a quality one.
 | 6-bit (ours) | 27.07 | 13.36 | 94.65% |
 | 8-bit (community) | 35.13 | 7.45 | 96.18% |
 
+One asymmetry in these 35B comparisons runs in our favour, and it is not
+visible in the sizes. Every affine comparator here quantizes the MoE
+router — the community 4-bit and 8-bit and our own 6-bit all carry
+quantized gate projections — while our VQ builds leave the routers at
+bf16. The bytes are trivial, 20 MiB or 0.14% of the artifact. But a
+router's output feeds an argmax over experts, so quantizing it can change
+*which* expert runs rather than perturbing an output proportionally, and
+the effect is therefore not bounded by the byte share the way an ordinary
+precision difference would be. We have not measured it: that would take a
+VQ build with routers forced to 8 bits, re-scored, and we did not run one.
+The 397B comparisons in §3.2 are unaffected — there our builds and both
+comparators keep routers at bf16.
+
 Every 35B size above includes the 333-tensor bf16 vision tower, which the
 community comparators ship and our builds now carry: 0.832 GiB,
 byte-identical across builds, unquantized in all of them. Every row is a
