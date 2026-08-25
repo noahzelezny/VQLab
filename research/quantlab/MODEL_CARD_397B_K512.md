@@ -97,7 +97,8 @@ parameters, but errors there propagate through every token. The MoE *experts*
 are ~85% of the model and individually far more tolerant, so they absorb the
 aggressive quantization.
 
-**Vector quantization instead of scalar rounding.** Scalar 2-bit gives each
+**Vector quantization instead of scalar rounding — the part that is
+different.** Scalar 2-bit gives each
 weight 4 rigid levels; over a group of 4 weights that is 256 fixed grid
 combinations. This build learns a **codebook of joint 4-weight patterns** and
 stores one index per group. Each 4-weight subvector stores one **9-bit index**
@@ -126,6 +127,34 @@ against a repeated build.
 32-code blocks) rather than padded to whole bytes, which is what makes the
 non-byte-aligned size possible. Packing is a pure representation change.
 
+**How it was evaluated.** Perplexity on two corpora — raw wikitext
+(prefix-8192) and a mixed-language code corpus — scored with an unmodified
+`mlx-lm` on the same harness used for every comparator here. Two corpora
+because this family shows real domain asymmetry: larger codebooks buy far
+more on prose than on code, so a single-corpus number would misrepresent the
+trade.
+
+## Task benchmarks
+
+**Not yet measured on this artifact.** Two of the siblings above carry
+HellaSwag/PIQA/WinoGrande numbers; this build has not been run through that
+harness, and reporting a sibling's task scores here would be exactly the
+substitution this project refuses to make. They will be added once the suite
+has been run under the same harness (lm-eval 0.4.12, layer-streaming
+loglikelihood scorer, 0-shot, first 1000 items per task).
+
+## Vision
+
+The artifact includes the full 333-tensor vision tower at source precision
+(0.85 GiB). `mlx-lm` is text-only for this architecture and ignores it;
+[exo](https://github.com/exo-explore/exo) loads it from this folder
+directly. `mlx-vlm` support requires its `model_file` loader hook
+([PR #1926](https://github.com/Blaizzy/mlx-vlm/pull/1926), under review).
+
+The sizes quoted above are the download: they include this tower. Because
+`mlx-lm` does not load it, resident memory runs ~0.85 GiB below the disk
+figure.
+
 ## Siblings
 
 All from the same skeleton and recipe, all scored the same way:
@@ -144,10 +173,6 @@ free against the 3bpw build's 48.
 
 ## Known limitations
 
-- **Task-suite scores are not published for this artifact.** The siblings
-  above carry HellaSwag/PIQA/WinoGrande numbers; this one has not been run
-  through that harness yet, and reporting another artifact's task scores here
-  would be exactly the substitution this project refuses to make.
 - No throughput measurement — see Hardware.
 - Perplexities are corpus-specific. Compare only against models scored on the
   same files, never across harnesses.
