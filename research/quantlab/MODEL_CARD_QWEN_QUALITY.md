@@ -75,19 +75,23 @@ on the same harness and corpus; nothing was discarded.
 | bf16 (teacher) | — | — | 65.4 | 4.7215 | 1.000x | 0 | 100% |
 | mlx-community 8-bit | affine 8-bit | uniform | 35 | 4.7150 | 0.999x | 7.449 | 96.18% |
 | mlx-community 4-bit | affine 4-bit | uniform | 19 | 4.9154 | 1.041x | 78.557 | 85.61% |
-| **VQ — this model** | d2·K512 + d4·K2048 | rich layers 30-39 | 18.7* | 4.6812 | **0.991x** | 44.573 | 90.75% |
-| VQ | d2·K2048 + d4·K2048 | rich layers 30-39 | 20.7 | 4.7210 | 1.000x | 46.842 | 90.30% |
-| VQ | d2·K256 + d4·K2048 | rich layers 30-39 | 16.5 | 4.7321 | 1.002x | 49.264 | 89.92% |
-| VQ | d2·K2048 + d4·K2048 | rich layers 20-39 | 18.1 | 4.7541 | 1.007x | 50.791 | 89.77% |
-| VQ (placement control) | d2·K512 + d4·K2048 | rich layers 0-9 (mirrored) | 17.9 | 4.8110 | 1.019x | 50.944 | 89.28% |
-| VQ | d2·K256 | uniform | 17.6 | 4.7984 | 1.016x | 36.862 | 90.92% |
-| VQ | d4·K8192 | uniform | 14.8 | 4.7090 | 0.997x | 53.022 | 89.55% |
-| VQ | d4·K4096 | uniform | 14.0 | 4.8100 | 1.019x | 68.546 | 87.88% |
-| **VQ — compact sibling** | d4·K2048 | uniform | 13.8* | 4.8584 | 1.029x | 85.535 | 87.33% |
-| VQ | d4·K256 | uniform | 10 | — | 1.141x | — | 79.50% |
-| affine baseline (ours) | struct 8-bit base | uniform | 11 | — | 1.224x | — | 75.99% |
+| **VQ — this model** | d2·K512 + d4·K2048 | rich layers 30-39 | 18.73 | 4.6812 | **0.991x** | 44.573 | 90.75% |
+| VQ | d2·K2048 + d4·K2048 | rich layers 30-39 | 21.52 | 4.7210 | 1.000x | 46.842 | 90.30% |
+| VQ | d2·K256 + d4·K2048 | rich layers 30-39 | 17.30 | 4.7321 | 1.002x | 49.264 | 89.92% |
+| VQ | d2·K2048 + d4·K2048 | rich layers 20-39 | 18.95 | 4.7541 | 1.007x | 50.791 | 89.77% |
+| VQ (placement control) | d2·K512 + d4·K2048 | rich layers 0-9 (mirrored) | 18.71 | 4.8110 | 1.019x | 50.944 | 89.28% |
+| **VQ — released as `VQ-5.4bpw`** | d2·K1024 | uniform | 22.23 | — | — | 28.141 | 92.22% |
+| VQ | d2·K256 | uniform | 18.48 | 4.7984 | 1.016x | 36.862 | 90.92% |
+| **VQ — released as `VQ-3.8bpw`** | d4·K8192 | uniform | 15.67 | 4.7090 | 0.997x | 53.022 | 89.55% |
+| VQ | d4·K4096 | uniform | 14.73 | 4.8100 | 1.019x | 68.546 | 87.88% |
+| **VQ — compact sibling** | d4·K2048 | uniform | 13.81 | 4.8584 | 1.029x | 85.535 | 87.33% |
+| VQ | d4·K256 | uniform | 10.98 | — | 1.141x | — | 79.50% |
+| affine baseline (ours) | struct 8-bit base | uniform | 11.91 | — | 1.224x | — | 75.99% |
 
-\*Released sizes include the bf16 vision tower (+0.83 GiB); unreleased lab builds are text-only.
+Every size above includes the bf16 vision tower (0.832 GiB), which the
+community comparators ship and which every build in this sweep now carries.
+The `VQ-5.4bpw` row was measured after this sweep was run and was scored on
+KL and agreement only, hence the empty perplexity cells.
 
 Reading notes: "rich layers 30-39" means those layers carry the d4·K2048
 geometry and every other layer carries the cheap d2 geometry listed first.

@@ -23,6 +23,8 @@ A vector-quantized build of
 Silicon. Stock `mlx-lm`, no patches — the VQ runtime ships inside the
 checkpoint as `model.py`.
 
+![where these releases sit](qwen36_ladder.png)
+
 ## Measured results
 
 Referee corpus, 2048-token windows, scored against the bf16 teacher on the
@@ -124,8 +126,3 @@ Apply [exo PR #2268](https://github.com/exo-explore/exo/pull/2268) or use
   router, and this build leaves it at bf16. The bytes are trivial, but a
   router feeds an argmax over experts, so the effect is not bounded by the
   byte share. It is unmeasured.
-
-## Provenance
-
-Base model: Qwen/Qwen3.6-35B-A3B (Apache 2.0 — see the base model card for
-license and usage terms). Quantization: TheDrainFlorist, 2026. Built with MLX.

@@ -74,10 +74,10 @@ bits/weight packed); non-expert tensors at 8-bit. Experts are ~92% of the
 model, so that is where the bytes are.
 
 Raising K further does not pay its way at this size point: K=4096 bought
-+0.55 agreement points for **+0.9 GiB** (13.0 -> 14.0 GiB comparing text-only
-weights, before the vision tower that the released size above includes) —
-a 7% size increase for a fraction of a point. That is the wrong trade for
-the build whose whole job is being small, which is why this rung stops here.
++0.55 agreement points for **+0.9 GiB** (13.81 -> 14.73 GiB, both including
+the vision tower) — a 7% size increase for a fraction of a point. That is the
+wrong trade for the build whose whole job is being small, which is why this
+rung stops here.
 
 ## Verification
 
