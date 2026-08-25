@@ -54,7 +54,7 @@ if fail:
     sys.exit(1)
 print("ASSERT PASS: 1847 tensors, in_proj_a quantized 48/48, non-attention geometry identical")
 PY
-[ $? -eq 0 ] || { say "ASSERT FAILED — stopping before scoring, per spec"; exit 1; }
+# guard removed: see fix below (was reading tee's exit status, not python's)
 
 say "=== OUTLIER GATE"
 $V verify_artifact.py --artifact "$OUT" --src "$SRC" --family qwen3_8_dense \

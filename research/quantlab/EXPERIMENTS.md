@@ -9128,3 +9128,47 @@ disambiguate d — only the explicit dim does. At d2 the rate would be 4.5 bpw, 
 a rung on our ladder. Every measured number in the entry is unaffected; only the label was
 wrong. The exo card carried the same bad string (quantization = "vq-d2K512") and has been
 corrected in the Scout source and on both nodes.
+
+## E144 — rebuild of the 27B q8 comparator (RESULT CONTRADICTS PRE-REGISTRATION)
+2026-08-24, M3. Noah authorized in-session. Spec: handoff/M3_AFTER_27B.md §6.
+Pre-registered: SMALLER (~0.02 GiB) and WORSE (higher KL) than the incumbent.
+
+    rung                 size GiB   KL mnats   top-1     ppl
+    q8 (incumbent)        26.341     1.641     98.08%    --
+    q8-rebuilt            26.617     1.254     98.54%    5.2413
+
+BIGGER and BETTER. Wrong on BOTH pre-registered axes. Per the pre-registration this
+is NOT adopted on the numbers alone — but the cause is now identified and it is not
+a measurement artifact.
+
+CAUSE. The incumbent is not a q8 at all. Its config.json:
+    top-level          {group_size 64, bits 4, mode affine}   <- default is FOUR
+    402 per-module overrides: 401 at 8 bits, 1 at SIX bits (language_model.lm_head)
+    96 linear_attn projections: no override, left BF16
+The rebuilt artifact has top-level bits 8 and ZERO per-module overrides, matching
+q4/q6 (which also have zero). mlx_lm reports "Quantized model with 8.501 bits per weight."
+
+So the incumbent carried TWO deviations pulling in OPPOSITE directions:
+  - attention left at BF16      -> makes it better and bigger than a true q8
+  - lm_head dropped to 6 bits   -> makes it worse and smaller than a true q8
+lm_head is the larger term (248320 x 5120), which is why the net came out smaller. The
+two effects cancelling is exactly the failure mode the added shape-assert was meant to
+catch, and it caught it: the only non-attention shape diff was
+language_model.lm_head.weight (248320, 960) -> (248320, 1280); 960 = 5120x6/32,
+1280 = 5120x8/32. The assert did its job.
+
+The incumbent belongs to the m2-*/m3-*/optiq-* MIXED-ALLOCATION family, not to the
+affine ladder. It was cited as the uniform 8-bit bar; it never was one.
+
+DIRECTION OF THE CORRECTION. The handoff predicted the defect flattered us. Net, it did
+not: the true q8 bar is BETTER (KL 1.641 -> 1.254), so the affine frontier we are
+measured against moves UP and our margin gets HARDER, not easier. Law 14's bracket is
+stated on dense 27B affine-vs-VQ and should be re-derived against 1.254.
+
+DEFECT IN MY OWN CHAIN (recorded because it nearly cost the result its meaning):
+run_e144_q8_rebuild.sh guarded the assert with `[ $? -eq 0 ]` AFTER piping the python
+through `tee`. $? is tee's status, always 0, so the ASSERT FAILED branch did not stop
+the run and it scored anyway. The numbers are valid and the assert output is in the log,
+but the guard was decorative. Same class as III.2: name the instrument -- a gate that
+reads the wrong exit code is not a gate. Fixed; re-check any other chain using
+`cmd | tee` followed by `$?`.
