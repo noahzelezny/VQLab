@@ -467,13 +467,15 @@ measured, and several bound the claims of §3.
 ### 4.1 The 8-bit ceiling
 
 At 8 bits affine is essentially lossless: 7.4 mnats on the 35B, 1.6 on
-the 27B. One property of that bar is worth stating, because the label
-hides it: our local 27B 8-bit conversion leaves 96 linear-attention
-projections at bf16 that the 4-bit conversion quantizes, so it is an
-8-bit-class build rather than a uniformly 8-bit one. Its measured size
-includes those tensors, so the bytes are honest and the comparison is
-if anything harder for us — but it is not a uniform 8-bit grid, and we
-do not describe it as one. Nothing we measured approaches that under the byte budgets
+the 27B. The 35B figure comes from a community 8-bit whose quantized
+surface matches its 4-bit sibling exactly. The 27B figure comes from our
+own conversion, which leaves 96 linear-attention projections at bf16 that
+its 4-bit sibling quantizes — 23.6 M parameters, 0.09% of the model, a
+0.02 GiB difference in the artifact. We state it because a filename
+reading `q8` should not be taken to mean a uniform grid, not because it
+moves the result: the tensors are counted in the size, and quantizing
+them to 8 bits would change a near-lossless divergence by far less than
+the gap VQ would need to close. Nothing we measured approaches that under the byte budgets
 where VQ wins. On the 27B, the ladder's own slope says why: divergence
 falls by x0.673 per added bit near 4.5 bpw but only x0.868 per bit by
 6.0 — extrapolating the measured slope, 8-bit-class quality needs ~25

@@ -696,3 +696,21 @@ uniformity. NOT checked: whether the 35B community q8 has the same shape.
 Fifth instance of "a label is not a measurement", on the day the rule was
 added — this time the label was a filename.
 
+### 08-24 addendum: the q8 non-uniformity is REAL but IMMATERIAL — no re-test
+
+Sized after flagging it, which was the wrong order. The 96 bf16 modules are
+23.6 M parameters = **0.087% of the model**, and quantizing them to 8 bits
+would shrink the artifact by 0.021 GiB = 0.08% of 26.341. Negligible against a
+27B R3 gap of ~25 bpw.
+
+Also checked: **the 35B community 8-bit IS uniform** (2090 tensors, 512
+scales, structurally identical to its 4-bit sibling), so §4.1's other data
+point needs no caveat at all. And **no community 8-bit exists for
+Qwen3.8-27B** — only a BF16 upload — so our local conversion is the only
+8-bit that exists for that model; there is nothing better to compare against.
+
+**VERDICT: do NOT spend a box re-converting a uniform q8.** §4.1 now states
+the property with its magnitude so a reader can size it. Lesson for me: "this
+label is wrong" and "this changes the answer" are different findings, and I
+reported the first as if it were the second.
+
