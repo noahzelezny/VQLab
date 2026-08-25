@@ -159,3 +159,61 @@ bottleneck and a single point of failure — this session can be compacted or
 end mid-day, and then nobody can mint a number. Ranges are lock-free and
 survive any session dying. Suggested: M3 140-179, M4 180-219, paper 220-239,
 recorded in the EXPERIMENTS.md header so the rule is where the numbers are.
+
+## 6. REBUILD THE 27B q8 COMPARATOR (Noah authorized the work 08-24; needs his
+##    word in whichever session runs it)
+
+**Why.** `qwen38-27b-rungs/q8` leaves 96 linear-attention projections at BF16
+that everything it is compared against quantizes:
+
+    e124-27b-dense-d2K256-vq-packed   in_proj_a scales=48  QUANTIZED
+    e138-27b-dense-d4K65536-vq-packed in_proj_a scales=48  QUANTIZED
+    q4                                in_proj_a scales=48  QUANTIZED
+    q6                                in_proj_a scales=48  QUANTIZED
+    q8                                in_proj_a scales= 0  BF16, SKIPPED
+
+Verified by dtype: `linear_attn.in_proj_a` is U32 [48,640] in q4 and
+BF16 [48,5120] in q8. 1655 tensors vs 1847; 192 missing scales/biases.
+
+**It is our defect, not the format's.** `mlx-community/Qwen3.6-27B-8bit` —
+same 27B dense architecture, same linear attention — quantizes those modules
+(48 weight + 48 scales + 48 biases, U32 [48,1280]). The standard tool does
+the right thing on this architecture; our conversion did not.
+
+**Direction: it flatters US.** An unquantized-attention q8 is better than a
+uniform 8-bit, so the bar is artificially high, which makes affine look more
+lossless and makes our own negative result (27B R3 unreachable) easier to
+claim. A bar that errs toward the author's conclusion has to be rebuilt by
+the author.
+
+**SCOPE: q8 ONLY.** q2/q3/q4/q6 are all in the 1847-tensor family and are
+consistent with our VQ builds. Do not touch them. The m2-*/m3-*/optiq-*
+builds share q8's 1655-tensor shape but are mixed-allocation experiments that
+the paper does not cite as comparators.
+
+**WHAT TO RUN**
+1. `mlx_lm.convert` at 8 bits with DEFAULTS on the Qwen3.8-27B bf16 base
+   (`Qwen--Qwen3.8-27B`, 51.747 GiB). Defaults are the point — the deviation
+   came from a non-default invocation.
+2. Assert BEFORE scoring: `in_proj_a` carries scales+biases and the artifact
+   has 1847 tensors, matching q4/q6 and our VQ rungs. If it does not, stop —
+   the conversion did not fix the thing it was run to fix.
+3. Outlier gate, then KL + ppl + top-1 on `kl_cache_qwen38`, same instrument
+   as every other 27B row. Record the measured packed size.
+4. Report old vs new: 26.341 GiB / KL 1.641 / 98.08% top-1 is the incumbent.
+
+**EXPECTED, registered before the number exists:** the new q8 should be
+SMALLER (~0.02 GiB) and WORSE (higher KL) than the incumbent, because it
+quantizes 23.6 M parameters the incumbent left at bf16. If it comes back
+BETTER or IDENTICAL, something other than the skip differs between the two
+conversions and the result must not be adopted until that is explained.
+
+**WHAT IT CANNOT CHANGE.** The 27B R3 gap is ~25 bits per weight. No
+correction to a near-lossless divergence closes that, so §4.1's finding is
+not at stake — only the quality of the bar it rests on.
+
+**PAPER STATE MEANWHILE:** §4.1 discloses the defect, its direction, its
+magnitude, and that it is ours. §3.3 states that all 27B affine comparators
+are local conversions because no MLX build of this model has been published.
+The paper is publishable as it stands; this replaces a disclosed-imperfect
+bar with a clean one.
