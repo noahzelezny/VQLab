@@ -225,9 +225,13 @@ the paper does not cite as comparators.
 2. Assert BEFORE scoring: `in_proj_a` carries scales+biases and the artifact
    has 1847 tensors, matching q4/q6 and our VQ rungs. If it does not, stop —
    the conversion did not fix the thing it was run to fix.
-3. Outlier gate, then KL + ppl + top-1 on `kl_cache_qwen38`, same instrument
+3. Assert the non-attention tensors are UNCHANGED IN SHAPE from the
+   incumbent (M3's addition, adopted). Without this, "smaller and worse"
+   is not attributable to the 96 projections — two other defaults could
+   have moved and cancelled.
+4. Outlier gate, then KL + ppl + top-1 on `kl_cache_qwen38`, same instrument
    as every other 27B row. Record the measured packed size.
-4. Report old vs new: 26.341 GiB / KL 1.641 / 98.08% top-1 is the incumbent.
+5. Report old vs new: 26.341 GiB / KL 1.641 / 98.08% top-1 is the incumbent.
 
 **EXPECTED, registered before the number exists:** the new q8 should be
 SMALLER (~0.02 GiB) and WORSE (higher KL) than the incumbent, because it

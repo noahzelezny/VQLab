@@ -787,3 +787,36 @@ Noted for future readers: `vq-K8192-d4-packed` and `e94b-...-packed` are both
 18.710 — same geometry, different fits, hashes differ. Same trap as the
 10.144 collision.
 
+## 08-24: E143 — flat K512 SMOKE PASS (2-node exo ring)
+
+`rotlab--397B-flatk512-packed`, 131,344,793,064 B on disk (122.324 GiB all
+files; index total_size 122.305 GiB weights). SERVING in 99s on M3 96 GiB +
+M4 128 GiB tensor-parallel; 800-token coherent generation, finish=stop;
+graded probes 3/3 (Paris / 391 / Jane Austen). Preconditions cleared first:
+outlier gate PASS, 333 vision tensors, check_release PASS, byte-level M3->M4
+copy verify 40/40 zero mismatches. Comparator: the published 3bpw served in
+87s, also 3/3.
+
+**The paper's LEAD claim-1 evidence has now generated a token.** Before
+tonight it was a fit, a score and a size.
+
+**LABEL CORRECTION:** the M3 logged it as `vq-d2K512`. It is **d4/K512** —
+config `vq_modules` all 171 entries `{'k':512,'dim':4,'group':64,
+'pack_bits':9}`, and all 171 codebooks are shape (512,4) F16. pack_bits 9 is
+log2(512) at either d, so only dim disambiguates. At d2 the rate would be 4.5
+bpw rather than 2.25 and anyone re-deriving the ladder from that entry would
+get a rung that does not exist. Fifth label/bytes disagreement today.
+
+**CONSTRAINT for the card:** cannot be smoke-tested single-node — it does not
+fit the M4. Any re-verify is 2-node, and the card must live in both nodes'
+builtin `inference_model_cards/` (custom_model_cards is GC'd by the 1 Hz
+reconciler on reset). exo's reported storageSize.inBytes differs from the
+measured on-disk total by 21,015,432 B because exo computes its own figure;
+the measured number is the one to publish.
+
+**MY OWN ERROR, caught by re-checking:** an ad-hoc vision count of mine
+searched only for `vision` in tensor names. The 397B towers are named
+`model.visual.*`, so it returned 0 on an artifact that has 333. Re-ran with
+both patterns everywhere it mattered; the 27B "no tower on either side"
+conclusion is unaffected (both patterns return 0 there).
+
