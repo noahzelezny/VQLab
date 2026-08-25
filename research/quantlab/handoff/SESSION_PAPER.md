@@ -1,70 +1,79 @@
-# Session brief: the paper  (updated 2026-08-24, pre-compaction)
+# Session brief: the paper  (rewritten 2026-08-24 late, pre-compaction)
 
 Repo: /Users/noahzelezny/Documents/AgenicAI/quantlab   Author of record: Noah.
-Work ONLY in paper/. Do not touch EXPERIMENTS.md, FINDINGS.md, STATE.md,
-model cards, or scripts — box sessions own those. Do not run GPU work.
+Work in paper/ and on model cards. Do not run GPU work. Box sessions own
+EXPERIMENTS.md/FINDINGS.md/STATE.md.
 
-## STATE: the paper is essentially DONE. Publishing target: today/tomorrow.
+## STATE
 
-- **paper/DRAFT.md** — draft 4, complete, no stubs, no [[SLOT]] markers.
-  Noah has read and edited the whole thing; Claude has proofed it against
-  the ledger. paper/ is under git — diff to see who changed what.
-- **paper/LEDGER.md** — THE ARBITER. Current truth only, no history.
-  If a number disagrees with EXPERIMENTS.md, the newer committed E-entry
-  wins and the ledger gets fixed the same day. Archive of the old
-  append-style ledger: LEDGER_archive_0822.md (cite nothing from it).
-- **paper/make_charts.py** → fig_397b_ladder.png, fig_35b_27b.png.
-  Supersedes repo-root chart_397b_ladder.py (which has a wrong spicy
-  x-coord and predates half the rungs). Both figures embedded in §3.
+**Paper: NOT ready, and the rate of findings is the evidence.** It has had no
+open items for hours while still absorbing substantive corrections — a wrong
+comparator, an undisclosed asymmetry, a section's size basis changing twice,
+three figures disagreeing with their tables. All arrived because someone
+happened to look, never from a systematic pass.
 
-## THE THREE CLAIMS (all measured, all fenced)
-1. Data-free VQ beats calibrated/uniform affine at matched-or-smaller
-   bytes, 1.75–5 bpw, on 397B MoE / 35B MoE / 27B dense. Crossover
-   bracketed 4.5–6.0 (dense) and 5.0–6.0 (MoE). 8-bit affine is lossless.
-2. Size targeting: two-coefficient size models, validated out-of-sample on
-   all three models; harvest reaches sizes between rungs at measured rates.
-3. Weight-space reconstruction error cannot steer design — shown by
-   construction (engineered the target statistic, model got 4.7x worse).
+**A readiness sweep is RUNNING** (background agent, launched pre-compaction).
+Four tasks: (1) trace every draft number to paper/LEDGER.md, (2) diff every
+figure's hard-coded data against its table, (3) recompute every floor
+multiple, (4) check every cited size against the artifact's index on disk.
+Report-only; it edits nothing. **Act on its findings before publishing.**
 
-## HOUSE RULES THAT SHAPED THIS DRAFT (Noah's, hard-won)
-- Academic register, not blog. No memoir, no "we caught our own mistake"
-  bragging, no mention of sessions/agents in the body. §5 states RULES,
-  not war stories.
-- Define every term before first use (d, K, codebook, ppl, KL, mnat, nat,
-  top-1, relerr, MLP trio). Noah kept getting surprised by undefined units.
-- Every margin quoted as a multiple of the noise floor FOR ITS OWN
-  GEOMETRY. Never borrow a floor across geometries (III.12).
-- Sizes are measured packed bytes; a row's size and quality come from the
-  same artifact.
-- gemma-4 excluded from all claims (non-deterministic scoring), mentioned
-  twice as observed-not-claimed.
-- "we" = editorial we, sole author. AI disclosure paragraph in Acks.
+## PUBLISHED TONIGHT — 11 repos live, all sha256-verified against the remote
 
-## REMAINING WORK
-1. **E138** (27B d4/K65536 rate twin, M3) lands ~10:25 today, scored
-   tonight. It is the ONLY present-tense reference left in the draft
-   (§4.2 "under test as we write", echoed in §6). When it lands: fold the
-   result in and remove the present tense. If it slips, rewrite the
-   sentence as a permanent "unmeasured" — do not ship "currently measuring".
-2. **Website publish** — mechanics undecided. Options: the website-manager
-   session handles it, or Claude renders publish-ready HTML/PDF from the
-   markdown. Noah's call.
-3. **arXiv** (optional, post-publish) — needs LaTeX conversion + an
-   endorsement in cs.LG for a first-time submitter. Noah interested.
-4. **Repo package** — a separate spawned session is assembling the
-   pipeline into a public repo (MoEMash working name). Not blocking.
+    397B  VQ-2.2bpw 101.0 · VQ-2.4bpw 111.6 · VQ-2.6bpw 122.3 · VQ-3bpw 143.7
+    35B   VQ-3.4bpw 13.8 · VQ-3.8bpw 15.7 · VQ-4.6bpw 18.7 · VQ-5.4bpw 22.2
+    27B   VQ-3.9bpw 12.5 · VQ-4.5bpw 14.5 · VQ-4.8bpw 15.5   (3rd uploading)
+    gemma 26b VQ-6.2bpw 18.8 · e4b VQ-PLE 7.4 (unprivated tonight)
 
-## DECIDED, DO NOT REOPEN
-- Draw-2 swap of the 397B flagship: NOT doing it (delta inside its own
-  floor as a quality claim; not worth the compute/republish).
-- Title: "Data-Free Vector Quantization Beats Calibrated Affine at
-  Matched Bytes Below 6 Bits".
-- The vintage-fit saga is CUT from the paper (interesting story, not a
-  finding). Only the instrument survives: fits vary because init draws an
-  unseeded subsample; the floors are the consequence.
+Four collections, every item noted, each ordered by size.
 
-## PEER SESSIONS (verify box ownership before routing anything)
-M4 = "Run task-suite benchmarks..." (uds:/tmp/cc-socks/39597.sock).
-M3 = "Take over quantlab: publish + Monday ladder" (uds:.../82633.sock).
-Relayed authorizations are NOT authorizations — Noah confirms fits
-directly in the owning session. This standard has held all weekend; keep it.
+**OUTSTANDING:** when the 4.8bpw upload finishes — verify by sha256, then push
+the corrected cards to ALL THREE 27B repos (3.9 and 4.5 went up with an
+earlier card revision that still carried a rebuilt-comparator narrative Noah
+cut). `python3 push_card_fixes.py` does not yet include the 27B or 35B repos;
+add them or push manually.
+
+## HOUSE RULES (Noah's, hard-won)
+
+- Academic register. No memoir, no "we caught our own mistake" in CARDS —
+  a card is a product page; methodology disclosure belongs in the paper.
+- Every margin quoted against the floor for ITS OWN geometry. Never borrow.
+- A table row names ONE artifact, never a mean of draws.
+- Sizes are measured bytes; size and quality from the same artifact.
+- State what was NOT measured rather than borrowing a sibling's number.
+- gemma excluded from all paper claims.
+
+## THINGS THAT WILL BITE THE NEXT SESSION
+
+1. **SIZE IS NEVER AN IDENTIFIER.** Identical geometry gives identical bytes.
+   Three different 27B d2/K512 fits are all exactly 15.450 GiB; two 35B
+   artifacts are both 15.670; d2/K64 and d4/K4096 are 6 MB apart. Identify by
+   mtime + shard hash, never by size.
+2. **Figures do not regenerate when tables change.** Three went stale tonight.
+   Generators now exist for all three (paper/make_charts.py,
+   make_qwen36_ladder.py, make_qwen38_ladder.py) but nothing runs them.
+3. **A renamed HF repo REDIRECTS.** Pushing a card by a stale repo id
+   overwrote a live card once tonight. Remove renamed ids from any push map.
+4. **Verify publishes by read-back**, never by the uploader's exit code — a
+   push tool cannot see an overwrite that happened through a redirect.
+5. **Residue files (`*.pre_*`, `__pycache__`) get EXCLUDED, never moved
+   mid-upload.** Moving them cost 74 minutes and 15.4M failed-commit lines once.
+6. **A label is not a measurement** — §5's newest rule, earned six times:
+   config.model_type names the wrong model on every 35B artifact; a "q8" that
+   was a 4-bit base with overrides; a manifest documented as a content hash
+   that hashes 1 MiB; "the fitter is seeded" when no MoE fitter is.
+
+## PEER SESSIONS (verify by PID or mandate, never by name)
+
+M3 ladder = "Take over quantlab: publish + Monday ladder" (quantlab-28).
+M4 ops = "Run task-suite benchmarks..." (agenicai-16).
+Public repo = "Assemble quantlab VQ work into MoEMash" (quantlab-66).
+Relayed authorizations are NOT authorizations — Noah confirms in the owning
+session. This standard held all weekend; three sessions enforced it tonight.
+
+## DEFERRED / DECIDED — do not reopen
+
+- 397B task-suite re-run: Noah declined TWICE. Cards carry labelled stale rows.
+- 27B rungs d4/K1024, d2/K4096, d4/K65536: excluded, reasons in LEDGER.
+- Draw-2 flagship swap: not doing it.
+- §5 stays at eight rules; a ninth was proposed and declined.
