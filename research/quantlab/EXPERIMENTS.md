@@ -9096,7 +9096,7 @@ reasoning.
 
 ## E143 — III.11 ring smoke of rotlab/397B-flatk512-packed (publish gate)
 2026-08-24, M3 session. Instrument: exo 2-node tensor-parallel MlxRing (M3 96 GiB + M4
-128 GiB). Artifact 122.324 GiB / 131,344,793,064 B, 40 files, vq-d2K512, pack_bits 9,
+128 GiB). Artifact 122.324 GiB / 131,344,793,064 B, 40 files, vq-d4K512, pack_bits 9,
 model_file model.py (runtime rides with the artifact — no site-packages hook).
 
 Preconditions cleared before the run:
@@ -9119,3 +9119,12 @@ Loose end (not blocking): exo's placement response reported storageSize.inBytes
 131,323,777,632 while the card declares 131,344,793,064 (delta 21,015,432 B). exo
 is computing its own figure rather than reading the card's; the card's number is the
 measured on-disk total. Do not "correct" the card to match exo's number.
+
+### E143 correction (same day)
+The geometry label in the original entry read "vq-d2K512". It is **d4/K512 = 2.25 bpw**.
+Caught by the paper session, verified here independently: all 171 config.json vq_modules
+entries are {dim: 4, k: 512, group: 64, pack_bits: 9}. pack_bits 9 is log2(K) and does NOT
+disambiguate d — only the explicit dim does. At d2 the rate would be 4.5 bpw, which is not
+a rung on our ladder. Every measured number in the entry is unaffected; only the label was
+wrong. The exo card carried the same bad string (quantization = "vq-d2K512") and has been
+corrected in the Scout source and on both nodes.
