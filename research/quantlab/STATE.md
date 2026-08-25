@@ -68,6 +68,50 @@ proposed to the paper session, NOT applied.
 **Vintage fitters deliberately UNSEEDED** — they must stay byte-identical to
 the versions under test in E121/E129/E136.
 
+## EXO / RING OPS (08-24) — read this before touching exo
+
+**THE 143.7 GiB RUNG IS III.11-VERIFIED.** First time ever; it fits neither box
+alone (143.7 vs 96 and 128 GiB) so the pair was the only way. Placed in 87 s,
+loaded 60 layers on both runners in ~2 min, generated a correct definition of
+vector quantization, and passed all three graded greedy probes
+(Paris / 391 / Jane Austen). Ran on the BUNDLED runtime — `model_file =
+model.py` — with no VQ hook installed, i.e. the copy a downloader gets.
+
+**WHY CARDS KEPT "REDISCOVERING" — FIXED PERMANENTLY.** Cards in
+`~/.exo/custom_model_cards/` are garbage-collected by exo's 1 Hz reconciler
+after every reset, because `exo-reset.sh` moves the event log aside and the
+reconciler unlinks any card without a backing event. The BUILTIN dir
+(`exo/resources/inference_model_cards`) is immune. **All curated cards are now
+installed on BOTH nodes** via `scripts/exo-install-model-cards.sh`; source of
+truth is `scripts/exo_model_cards/*.toml`. Re-run after any exo reinstall.
+**Cards load at exo START — install then reset, or the running process keeps
+its boot-time cache.**
+
+**PLACEMENT PRECONDITIONS, learned the expensive way (2 failed attempts, ~1 h):**
+1. **BOTH nodes must physically hold the model.** M3's `~/.exo/models` is a
+   SYMLINK to `/Volumes/Thunderbay SSD/Exo Models`; **M4 keeps REAL LOCAL
+   COPIES** and must be `cp -R`'d to (~700 MB/s over the TB link, ~12-20 min
+   for a 122-144 GiB artifact). Until then M4 reports `DownloadPending`,
+   placement returns HTTP 200, and NO instance is ever created — it just
+   silently waits out the 1500 s timeout.
+2. **A proper card must exist in the builtin dir.** Without it `/models/add`
+   derives a stub with empty family/quantization and no `thinking` capability,
+   and placement never forms an instance. This was the actual blocker.
+3. `EXO_MODELS_DIRS` resolves via `exo.shared.constants` — check it on BOTH
+   nodes before staging anything anywhere.
+4. RDMA/Thunderbolt-bridge `enabled:false` is NORMAL here and is NOT a
+   blocker (Noah, 08-24). Do not chase it.
+5. The state API's `customModelCards` shows the DERIVED stub, not the builtin
+   card actually used. **The card you can see is not the card in use** — same
+   shape as III.13's runtime lesson.
+
+**IN FLIGHT:** `rotlab--397B-flatk512-packed` (122.324 GiB, d2/K512,
+pack_bits=9, 333 vision tensors) is a PUBLISH CANDIDATE being smoked. Gates so
+far: outlier gate PASS (E92/E93), check_release PASS (files + index +
+tokenizer round-trip), card written and installed. Needs 2-node — 122.324 GiB
+vs the M4's 128 GiB leaves no headroom under preflight's 90 % bar. M4 copy
+running; then reset -> place -> generate -> probes.
+
 ## DECIDED — DO NOT RE-PROPOSE
 
 - **397B task-suite re-run: DEFERRED, twice.** Declined 08-22 ("I don't want
