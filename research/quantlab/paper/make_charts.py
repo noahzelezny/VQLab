@@ -47,15 +47,18 @@ fig.tight_layout(); fig.savefig("paper/fig_397b_ladder.png", dpi=200)
 # ---- 35B and dense 27B: KL vs packed GiB, log y -----------------------------
 fig, axes = plt.subplots(1, 2, figsize=(11.2, 4.6))
 
-vq35 = [(14.838, 53.022, "d4/K8192"), (15.783, 47.535, "d4/K16384"),
-        (17.643, 36.862, None), (21.394, 28.03, "d2/K1024"),
-        (25.145, 25.502, "d2/K4096")]
-aff35 = [(19.000, 78.557, "4-bit"), (26.234, 13.358, "6-bit"),
+# 35B sizes are MEASURED POST-GRAFT: every rung carries the 0.832 GiB bf16
+# vision tower, as the community comparators always did. Our q6 was grafted
+# 08-24; q4 and q8 are community builds that already had it.
+vq35 = [(15.670, 53.022, "d4/K8192"), (16.615, 47.535, "d4/K16384"),
+        (18.475, 36.862, None), (22.226, 28.141, "d2/K1024"),
+        (25.977, 25.502, "d2/K4096")]
+aff35 = [(19.000, 78.557, "4-bit"), (27.066, 13.358, "6-bit"),
          (35.131, 7.449, "8-bit")]
 vq27 = [(9.7, 325.6, None), (10.61, 148.5, "d4/K1024"), (11.61, 85.8, None),
         (13.60, 40.3, "d2/K256"), (14.59, 33.1, "d2/K512"), (17.58, 26.7, None)]
 aff27 = [(7.9, 1426.9, None), (10.96, 187.8, "q3"), (14.09, 45.8, "q4"),
-         (20.36, 3.71, "q6"), (26.34, 1.64, "q8")]
+         (20.36, 3.71, "q6"), (26.617, 1.254, "q8")]  # q8 REBUILT (E144)
 
 for ax, vq, aff, title in [
         (axes[0], vq35, aff35, "Qwen3.6-35B-A3B (MoE)"),
