@@ -944,3 +944,41 @@ draft. Answered to the M4.
   check measuring one axis and named for another. Fixed; passes 5/10 bit-exact
   with a wider sample.
 
+## 08-24: E147 — e4b VQ-PLE prefill MEASURED. Two costs, not one.
+
+    prompt      VQ-PLE      8-bit      VQ slower
+      30       539.8      801.6         32.7%
+    2048      3457.6     4000.2         13.6%
+    8192      3423.3     3956.1         13.5%
+    median of 3 timed reps, discarded warmup, idle GPU, clear_cache between
+
+**My pre-registration was half right.** I registered that the ~20% gap should
+NARROW or vanish. It narrows and then STOPS, flat from 2k to 8k across a
+fourfold length change. So there are two separable costs: fixed per-call
+overhead that dominates only at chat length, and a real length-independent
+VQ-path prefill cost of ~13.5%. The card had conflated them.
+
+**The old "~20%" described NEITHER regime** — worse than that at chat length
+(33%), better at working length (13.5%). An average of two regimes is a third
+number true nowhere. Card now carries both rows.
+
+**Ratios only, never the absolutes** (M3's flag): the same pair on their box
+reads 539.8/801.6 at 30 tokens where the card recorded 392/496 — both faster,
+ratio preserved. The tok/s is not portable; the ratio is.
+
+**SEPARATE CARD ERROR THIS EXPOSED.** The card said the upstream 8-bit's 126
+redundant KV-shared tensors are ones "mlx_lm never instantiates and silently
+drops". It does not silently drop them — **it refuses the checkpoint
+outright**, reproduced on 0.31.3 and 0.31.9, so loading it at all needs
+`strict=False`. Corrected, and it makes our artifact's advantage larger, not
+smaller: this build loads with no flag.
+
+Open, flagged not chased (M3): the card's original 496 tok/s incumbent figure
+is not reproducible with a strict load, so whoever produced it used
+strict=False or an older implementation. Does not affect the ratios now
+published.
+
+Method note worth keeping: M3 verified by GENERATION (3/3 known answers)
+before taking any timing, because a model loaded with strict=False that is
+subtly wrong still produces perfectly reasonable-looking timings.
+

@@ -39,8 +39,19 @@ All numbers on the same instruments, same corpus, same teacher cache;
 | litbench (cyclic, generative, n=104) | 81.73% | 84.62% |
 | — paired McNemar | 7 discordant items, 5–2, p=0.45 — statistically indistinguishable | |
 | decode | 77.4 tok/s | 84.2 tok/s |
-| prompt processing, ~30-token prompt | 392 tok/s | 496 tok/s |
+| prefill, ~30-token prompt | 33% slower | baseline |
+| prefill, 2k–8k prompt | 13.5% slower | baseline |
 | peak memory (short chat) | **7.2 GB** | 9.0 GB |
+
+**On prefill, there are two costs and they behave differently.** At chat
+length the penalty is ~33%, and it falls to ~13.5% by 2k tokens and stays
+there through 8k — flat across a fourfold change in length. The first is
+fixed per-call overhead, which a long prompt amortises; the second is a real,
+length-independent cost in the VQ path. A single averaged figure would
+describe neither regime, so both are given. Ratios are quoted rather than
+tokens per second because the absolutes move with the machine: the same pair
+measured on a second box came out faster on both sides with the ratio
+unchanged.
 
 Honest summary: closer to the bf16 teacher on the precise instrument (KL),
 indistinguishable on the noisy one (litbench, n=104 cannot resolve a
@@ -77,9 +88,13 @@ mlx_lm.chat --model TheDrainFlorist/gemma-4-e4b-it-VQ-PLE
 ```
 
 The artifact is self-contained (`model.py` ships inside it); stock mlx_lm
-loads it with no extra code. It also loads STRICTLY — the upstream 8-bit
+loads it with no extra code. It also loads STRICTLY, which the artifact it
+came from does not: the upstream 8-bit
 artifact ships 126 tensors for KV-shared layers that mlx_lm never
-instantiates and silently drops; those are removed here.
+instantiates, and `mlx_lm` refuses the checkpoint outright rather than
+ignoring them — reproduced on 0.31.3 and 0.31.9, so it is the artifact and
+not one environment. Loading it at all requires `strict=False`. Those tensors
+are removed here, so this build loads with no flag.
 
 ## Verification
 
@@ -92,11 +107,10 @@ instantiates and silently drops; those are removed here.
 
 ## Limitations
 
-- ~8% slower decode than the 8-bit incumbent.
-- The prompt-processing row above was measured on a ~30-token chat prompt.
-  At that length it characterises fixed per-call overhead, not prefill
-  throughput, so do not read it as a long-prompt figure — long-prompt
-  prefill has not been measured on this artifact.
+- ~8% slower decode, and ~13.5% slower prefill at working prompt lengths
+  (~33% at chat length) — see above.
+- Prefill was measured at 30, 2048 and 8192 tokens, median of three timed
+  repetitions after a discarded warmup on an otherwise idle GPU.
 - litbench point estimate is 3 points below the incumbent; the paired test
   says noise (p=0.45), and the KL says closer-to-teacher, but if your use
   case resembles literary MC comprehension specifically, measure your own.
