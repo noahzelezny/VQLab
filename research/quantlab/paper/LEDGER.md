@@ -714,3 +714,25 @@ the property with its magnitude so a reader can size it. Lesson for me: "this
 label is wrong" and "this changes the answer" are different findings, and I
 reported the first as if it were the second.
 
+### 08-24: 27B comparators are OURS, and the paper now says so
+
+Searched HF: **no mlx-community (or any MLX-format) quantization of
+Qwen3.8-27B exists** — only GGUF/FP8/NVFP4 and an uncensored fine-tune. So
+every 27B affine rung (q2/q3/q4/q6/q8) is a LOCAL conversion, while §1 tells
+the reader comparators are community builds. §3.3 now states the exception
+and calls it the weaker class of evidence it is.
+
+**The q8 skip is OURS, not an MLX default** — proof: the 35B community 4-bit
+and 8-bit have identical quantized surfaces (2090 tensors, 512 scales each).
+So mlx does not skip those modules; our conversion did, and inconsistently
+(our q4 quantizes them, our q8 does not).
+
+**DIRECTION, which I had underweighted:** an unquantized-attention q8 is
+BETTER than a uniform 8-bit, so the bar is artificially high, which flatters
+affine and therefore flatters OUR OWN negative result (R3 unreachable).
+Magnitude still bounds it — 0.087% of params against a ~25 bpw gap — but the
+paper now names the direction, because a bar that errs toward the author's
+conclusion has to be disclosed by the author.
+
+Still no re-test warranted; nothing plausible closes 25 bpw.
+

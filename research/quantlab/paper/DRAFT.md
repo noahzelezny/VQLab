@@ -393,7 +393,11 @@ sits between 5.0 and 6.0 bits per weight.**
 | **d2/K512** | 14.59 | 33.1 | 91.1% | 5.194 |
 | d2/K4096 | 17.58 | 26.7 | 91.7% | 5.242 |
 
-**27B — affine:**
+**27B — affine.** No MLX-format quantization of this model has been
+published by the community, so unlike the 397B and 35B comparators these
+rungs are our own conversions. That is a weaker class of evidence — a
+comparator one builds oneself can be built badly — and one such flaw is
+recorded in §4.1.
 
 | build | GiB | KL mnats | top-1 | ppl |
 |---|---|---|---|---|
@@ -471,11 +475,15 @@ the 27B. The 35B figure comes from a community 8-bit whose quantized
 surface matches its 4-bit sibling exactly. The 27B figure comes from our
 own conversion, which leaves 96 linear-attention projections at bf16 that
 its 4-bit sibling quantizes — 23.6 M parameters, 0.09% of the model, a
-0.02 GiB difference in the artifact. We state it because a filename
-reading `q8` should not be taken to mean a uniform grid, not because it
-moves the result: the tensors are counted in the size, and quantizing
-them to 8 bits would change a near-lossless divergence by far less than
-the gap VQ would need to close. Nothing we measured approaches that under the byte budgets
+0.02 GiB difference in the artifact. The direction matters more than the
+magnitude: leaving those tensors unquantized makes the 8-bit bar better
+than a uniform 8-bit would be, which flatters affine and therefore
+flatters our own negative result. We report it for that reason. It does
+not change the finding — the tensors are counted in the size, and the
+27B gap is roughly 25 bits per weight, so no plausible correction to a
+near-lossless divergence closes it — but a bar that errs in the
+direction of one's own conclusion should be named by the person who
+built it. Nothing we measured approaches that under the byte budgets
 where VQ wins. On the 27B, the ladder's own slope says why: divergence
 falls by x0.673 per added bit near 4.5 bpw but only x0.868 per bit by
 6.0 — extrapolating the measured slope, 8-bit-class quality needs ~25
