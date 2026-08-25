@@ -39,7 +39,7 @@ All numbers on the same instruments, same corpus, same teacher cache;
 | litbench (cyclic, generative, n=104) | 81.73% | 84.62% |
 | — paired McNemar | 7 discordant items, 5–2, p=0.45 — statistically indistinguishable | |
 | decode | 77.4 tok/s | 84.2 tok/s |
-| prompt processing | 392 tok/s | 496 tok/s |
+| prompt processing, ~30-token prompt | 392 tok/s | 496 tok/s |
 | peak memory (short chat) | **7.2 GB** | 9.0 GB |
 
 Honest summary: closer to the bf16 teacher on the precise instrument (KL),
@@ -92,7 +92,11 @@ instantiates and silently drops; those are removed here.
 
 ## Limitations
 
-- ~8% slower decode and ~20% slower prefill than the 8-bit incumbent.
+- ~8% slower decode than the 8-bit incumbent.
+- The prompt-processing row above was measured on a ~30-token chat prompt.
+  At that length it characterises fixed per-call overhead, not prefill
+  throughput, so do not read it as a long-prompt figure — long-prompt
+  prefill has not been measured on this artifact.
 - litbench point estimate is 3 points below the incumbent; the paired test
   says noise (p=0.45), and the KL says closer-to-teacher, but if your use
   case resembles literary MC comprehension specifically, measure your own.
