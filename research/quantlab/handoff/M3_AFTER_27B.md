@@ -248,3 +248,47 @@ magnitude, and that it is ours. §3.3 states that all 27B affine comparators
 are local conversions because no MLX build of this model has been published.
 The paper is publishable as it stands; this replaces a disclosed-imperfect
 bar with a clean one.
+
+## 7. 27B PREP: graft vision + fix index metadata  (Noah authorized 08-24)
+
+**7a. INDEX METADATA IS MISSING — release blocker.** Every 27B packed artifact
+has NO `metadata` block in `model.safetensors.index.json`, so no `total_size`.
+Verified on e124, e138, e142-iters10; the 397B and 35B artifacts all have it.
+HF and downloaders read that field. `fix_index_total_size.py` exists for this.
+Run it on every 27B artifact before anything publishes.
+(The paper's 27B sizes are unaffected — they were computed by summing files,
+not by reading the index. e124 13.596, e138 13.689, e142-i10 14.592 all
+confirmed against actual bytes.)
+
+**7b. GRAFT THE VISION TOWER — 333 tensors, 0.8582 GiB (measured from
+`Qwen--Qwen3.8-27B`).** The base is a VLM; every 27B quantization we made
+drops the tower. Unlike the 35B there is no community build to match
+conventions against, so this is a real choice and Noah has made it: graft.
+
+**SCOPE — graft ALL ELEVEN ARTIFACTS §3.3 CITES, not just the two we publish.**
+Six VQ rungs (d4/K256, d4/K1024, d4/K4096, d2/K256, d2/K512, d2/K4096) and
+five affine comparators (q2, q3, q4, q6, q8-rebuilt). Grafting only the VQ
+side would put §3.3's 27B table into exactly the mixed convention we spent
+08-24 removing from §3.3's 35B table — our rungs carrying a tower the
+comparators lack. The M4 avoided that on the 35B by grafting our q6 too.
+
+Resulting §3.3 27B rows (VQ side; affine moves by the same constant):
+
+    d4/K256    9.700 -> 10.558      d2/K256   13.596 -> 14.454
+    d4/K1024  10.610 -> 11.468      d2/K512   14.592 -> 15.450
+    d4/K4096  11.610 -> 12.468      d2/K4096  17.583 -> 18.441
+
+Margins and the placement arithmetic are shift-invariant, so no comparison
+changes — only labels. Same as the 35B restatement.
+
+**Per artifact:** graft -> re-gate the GRAFTED bytes -> confirm the text path
+is unchanged against `kl_cache_qwen38` -> III.11 in a stock venv -> record the
+measured size. Use the lineage guard: assert a non-vision tensor is
+byte-identical to `Qwen--Qwen3.8-27B` before reading or writing, which is what
+caught the split 3.5/3.6 lineage on the 35B.
+
+**PUBLISH CANDIDATES (Noah to confirm):** d2/K512 (14.592 -> 15.450, KL 33.1,
+beats q4 by 27.8% KL, and E142 arm 1 replicated it at KL 32.948 so it has
+n=2) and d4/K1024 (10.610 -> 11.468, KL 148.5, beats q3 on both metrics at
+0.35 GiB less). Naming follows the family convention: total GiB x 8 / param
+count, rounded to one decimal — verified against both published 35B names.
