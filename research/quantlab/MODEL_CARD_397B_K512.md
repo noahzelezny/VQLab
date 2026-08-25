@@ -16,7 +16,9 @@ tags:
 
 # Qwen3.5-397B-A17B-VQ-2.6bpw
 
-**122.3 GiB.** A vector-quantized build of
+**122.3 GiB — the pound-for-pound build.** It lands in the same size class
+as the strongest community quant at this rate; the table below is the
+comparison. A vector-quantized build of
 [Qwen3.5-397B-A17B](https://huggingface.co/Qwen/Qwen3.5-397B-A17B) for Apple
 Silicon. Stock `mlx-lm`, no patches — the VQ runtime ships inside the
 checkpoint as `model.py`. It sits between the `VQ-2.4bpw` daily driver and the
