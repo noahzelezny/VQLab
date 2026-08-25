@@ -652,3 +652,25 @@ read as an RNG seed. The sharper framing is the M4's: these survive review
 BECAUSE they are cheap to check — nothing that costs nothing to believe gets a
 verification budget.
 
+## 08-24: TABLE CONVENTION SETTLED — a row is an ARTIFACT, never a mean
+
+§3.3's d2/K1024 row showed 28.03, the mean of its two draws, while every
+other row in the paper is a single artifact. Noah asked the right question:
+if one row is a mean, should all multi-draw rows be? **No — the opposite.**
+
+In every other multi-draw case the extra draws are FLOOR PROBES of a
+geometry, not replicates of the artifact in the row:
+- 397B d4/K2048: published E91 2.3410 + E142 floor draws 2.3390 / 2.3334
+- 397B d4/K256: published 2.7655 + E136/E136b floor draws 2.7706 / 2.7962
+- dense d2/K256: E124's rung + E127's three-draw floor
+Averaging those would blend a published artifact with throwaway probes and
+produce a number describing no downloadable thing — and would break III.2.
+
+d2/K1024 was the outlier (two real builds of one recipe), not the model.
+Row now reads 28.14 = draw 1, the artifact. The prose already gives both
+draws and the ~1.4 factor covers either (1.375 vs draw 1, 1.380 vs mean).
+
+**RULE: a table row names one artifact. Replication lives in prose, floors
+live in §2.6.** Also means the paper matches whatever gets published: if
+e140 draw 1 ships, its card and §3.3 quote the same number.
+
