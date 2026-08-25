@@ -404,7 +404,7 @@ recorded in §4.1.
 | q3 | 10.96 | 187.8 | 79.5% | 5.832 |
 | q4 | 14.09 | 45.8 | 89.8% | 5.206 |
 | q6 | 20.36 | 3.71 | 96.8% | 5.260 |
-| q8 | 26.34 | 1.64 | 98.1% | 5.243 |
+| q8 | 26.62 | 1.25 | 98.5% | 5.241 |
 
 The recipe is not an MoE phenomenon. Below 4.5 bpw every VQ point sits
 above the affine line at its size: d4/K1024 beats q3 on both metrics at
@@ -469,27 +469,34 @@ measured, and several bound the claims of §3.
 
 ### 4.1 The 8-bit ceiling
 
-At 8 bits affine is essentially lossless: 7.4 mnats on the 35B, 1.6 on
+At 8 bits affine is essentially lossless: 7.4 mnats on the 35B, 1.3 on
 the 27B. The 35B figure comes from a community 8-bit whose quantized
-surface matches its 4-bit sibling exactly. The 27B figure comes from our
-own conversion, which leaves 96 linear-attention projections at bf16 that
-its 4-bit sibling quantizes — 23.6 M parameters, 0.09% of the model, a
-0.02 GiB difference in the artifact. This is a defect in our conversion
-rather than a property of the format: a community 8-bit build of the
-neighbouring model in the same family, with the same attention
-structure, quantizes those modules. The direction matters more than the
-magnitude: leaving those tensors unquantized makes the 8-bit bar better
-than a uniform 8-bit would be, which flatters affine and therefore
-flatters our own negative result. We report it for that reason. It does
-not change the finding — the tensors are counted in the size, and the
-27B gap is roughly 25 bits per weight, so no plausible correction to a
-near-lossless divergence closes it — but a bar that errs in the
-direction of one's own conclusion should be named by the person who
-built it. Nothing we measured approaches that under the byte budgets
-where VQ wins. On the 27B, the ladder's own slope says why: divergence
-falls by x0.673 per added bit near 4.5 bpw but only x0.868 per bit by
-6.0 — extrapolating the measured slope, 8-bit-class quality needs ~25
-bits per weight. The 35B agrees from the other side: a 6-bit affine
+surface matches its 4-bit sibling exactly. The 27B figure was rebuilt
+late in this work, and how it was rebuilt is worth reporting. The
+artifact we had used as the 8-bit bar was not an 8-bit build: its
+configuration declares a 4-bit default with 402 per-module overrides,
+401 of them at 8 bits, one at 6, and 96 linear-attention projections
+carrying no override at all and left at bf16. Converted properly — a
+uniform 8-bit with no overrides, matching how every other rung on this
+ladder was made — it measures 1.254 millinats at 26.62 GiB against the
+old artifact's 1.641 at 26.34.
+
+The correction moves the bar the harder way. A better 8-bit build means
+a more capable affine frontier and a longer distance for vector
+quantization to cover, so the ceiling reported here is higher than the
+one we had been measuring against. Extrapolating the 27B's measured
+slope to the corrected target puts 8-bit-class quality at roughly 27
+bits per weight rather than 25. We had predicted the opposite sign
+before running it, for a reason worth recording: we had found one of the
+two deviations and reasoned from it alone, and the second — the output
+head at 6 bits — was the larger term and pulled the other way. Finding
+one defect is not the same as finding the defects.
+
+Nothing we measured approaches that ceiling under the byte budgets where
+VQ wins. On the 27B, the ladder's own slope says why: divergence falls
+by x0.673 per added bit near 4.5 bpw but only x0.868 per bit by 6.0, so
+the measured slope has to be carried a very long way to reach a
+near-lossless target. The 35B agrees from the other side: a 6-bit affine
 build inside a 28 GiB budget misses 8-bit quality by 1.8x, and our
 5-bit build misses it by 3.8x. On both models, 8-bit quality costs 8-bit bytes, for affine and for
 VQ alike.

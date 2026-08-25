@@ -820,3 +820,46 @@ searched only for `vision` in tensor names. The 397B towers are named
 both patterns everywhere it mattered; the 27B "no tower on either side"
 conclusion is unaffected (both patterns return 0 there).
 
+## 08-24: E144 — THE 27B "q8" WAS NEVER AN 8-BIT BUILD. Pre-registration failed both axes.
+
+    rung            GiB      KL       top-1     ppl
+    q8 (incumbent)  26.341   1.641    98.08%    --
+    q8-rebuilt      26.617   1.254    98.54%    5.2413      <- BIGGER and BETTER
+
+Registered prediction was smaller-and-worse. **Both axes wrong**, and the
+cause is identified, so the result is adopted rather than discarded.
+
+**The incumbent's config** (verified myself, not taken on report):
+top-level `{group_size 64, bits 4, mode affine}` — the DEFAULT is FOUR — plus
+402 per-module overrides, 401 at 8 bits and **one at SIX**
+(`language_model.lm_head`), with 96 linear_attn projections carrying no
+override and left BF16. It is a mixed-bit build that was cited as a uniform
+8-bit bar. The rebuild has top-level bits 8 and zero overrides, matching q4
+and q6. mlx_lm reports 8.501 bpw.
+
+**I VERIFIED THE REST OF THE LADDER, which the M3 had not:** q2, q3, q4, q6
+all have ZERO overrides and clean top-level bits. Only q8 was wrong.
+
+**MY §4.1 TEXT WAS WRONG IN SIGN AND IS REWRITTEN.** I wrote that the defect
+"flatters affine and therefore flatters our own negative result." It does not.
+Two deviations pulled opposite ways — attention at bf16 (better, bigger),
+lm_head at 6 bits (worse, smaller) — and lm_head is the larger term, so the
+net bar was WORSE than a true 8-bit. Correcting it raises the ceiling: the
+affine frontier is more capable and VQ has further to travel. Extrapolated
+target moves from ~25 to ~27 bpw.
+
+**The error was mine and it was a reasoning error, not a measurement one:** I
+found one deviation and reasoned about direction from it alone. Finding one
+defect is not finding the defects. That sentence is now in §4.1.
+
+Updated: §3.3's 27B affine q8 row (26.62 / 1.25 / 98.5% / 5.241) and §4.1's
+27B figure (1.3 mnats). Law 14's dense bracket is derived from q4 and q6, both
+clean, so it is unaffected.
+
+**M3 disclosed a defect in its own chain:** an assert guarded by `[ $? -eq 0 ]`
+after a `tee` pipeline read tee's status, so ASSERT FAILED printed and the
+chain scored anyway. The gate was decorative. Its numbers stand (both the
+assert output and the results are in the log) and it swept the other chains —
+only that one was affected. Same class as the E134 acceptance suite that
+silently skipped every packed check.
+
