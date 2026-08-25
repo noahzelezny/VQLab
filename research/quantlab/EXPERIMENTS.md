@@ -9318,3 +9318,43 @@ name-vs-bytes hits made me pattern-match a fifth instead of checking.
 
 Cost: no compute (config reads only), some of Noah's attention, and a spurious entry in
 the ledger. The retraction is the entry now.
+
+## E147 — long-prompt prefill, e4b VQ-PLE vs the 8-bit incumbent
+2026-08-24, M3, GPU otherwise idle. Noah authorized in-session. Instrument: same as the
+card's original number (stream_generate prompt_tps), at lengths where prefill dominates.
+Median of 3 timed reps after a discarded warmup; mx.clear_cache() between reps.
+
+    prompt tokens    VQ-PLE tok/s    8-bit tok/s    VQ slower by
+        30              539.8           801.6          32.7%
+      2048             3457.6          4000.2          13.6%
+      8192             3423.3          3956.1          13.5%
+
+    peak memory: VQ-PLE 7.25 / 8.78 / 9.48 GB;  8-bit 9.48 GB at all three lengths.
+
+PRE-REGISTRATION (b-committed before the run): the ~20% gap should NARROW or VANISH with
+length, because fixed per-call overhead amortises. VERDICT: NARROWS, does NOT vanish.
+It converges to a stable ~13.5% and is FLAT between 2k and 8k — so there is a real,
+length-independent VQ-path prefill cost of about 13.5%, on top of a per-call overhead
+that dominates only at chat-length prompts.
+
+THE CARD'S ~20% IS WRONG IN BOTH DIRECTIONS. At chat length the true penalty is worse
+(32.7%, not 20%); at working length it is better (13.5%). A single figure cannot cover
+both regimes and the ~20% happens to describe neither.
+
+DO NOT PORT THE ABSOLUTE NUMBERS. This box measured 539.8/801.6 at 30 tokens where the
+card records 392/496 — both artifacts are faster here. Absolute tok/s is not portable
+across boxes or mlx_lm versions; the RATIO is the reportable quantity. (Noah's standing
+rule, and this is a clean demonstration of why.)
+
+INSTRUMENT NOTE — the incumbent does not load strictly. mlx-community gemma-4-e4b-it-8bit
+stores 126 redundant tensors: 18 KV-SHARED layers (24-41, num_kv_shared_layers=18) x 7
+tensors each (k_norm, k_proj w/scales/biases, v_proj w/scales/biases). The current
+gemma3n implementation never invokes them, so mlx_lm rejects the artifact with
+"Received 126 parameters not in model". Reproduced identically under mlx_lm 0.31.3 AND
+0.31.9 — it is the artifact's shape, not a venv problem. Loaded with strict=False, which
+is correct for genuinely-unused tensors, and VERIFIED BY GENERATION before taking any
+timing: 3/3 known answers (Paris / 391 / Jane Austen). A timing run on a model that
+loaded but was wrong would have produced numbers that looked fine.
+Implication worth flagging: the card's incumbent figure of 496 tok/s is not reproducible
+on this box with a strict load, so whoever measured it either used strict=False or an
+older implementation. Not investigated further.

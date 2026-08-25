@@ -6,8 +6,24 @@ at 8k that is a real VQ-path throughput difference — report it, do not smooth 
 """
 import sys, time, statistics, json
 import mlx.core as mx
+from pathlib import Path
+import mlx_lm.utils as U
 from mlx_lm.utils import load
 from mlx_lm import stream_generate
+
+def load_any(path):
+    """The 8-bit incumbent stores 126 redundant K/V tensors for its 18 KV-SHARED
+    layers (24-41); the current gemma3n implementation never invokes them, so a
+    strict load rejects the artifact. strict=False is correct here and was
+    verified by generation (3/3 known answers) before any timing was taken."""
+    try:
+        return load(path)
+    except ValueError as e:
+        if "not in model" not in str(e): raise
+        mp = Path(path)
+        model, _ = U.load_model(mp, lazy=False, strict=False)
+        print(f"  [strict=False fallback: {str(e).split(chr(10))[0]}]", flush=True)
+        return model, U.load_tokenizer(mp)
 
 E = "/Volumes/Thunderbay SSD/Exo Models"
 MODELS = [("VQ-PLE", f"{E}/e4b-VQ-pleonly-packed"),
@@ -18,7 +34,7 @@ REPS = 3
 corpus = open("referee/referee_corpus.txt").read()
 out = {}
 for label, path in MODELS:
-    model, tok = load(path)
+    model, tok = load_any(path)
     ids_all = tok.encode(corpus)
     out[label] = {}
     for L in LENGTHS:
