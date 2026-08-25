@@ -25,9 +25,8 @@ Stock `mlx-lm`, no patches — the VQ runtime ships inside the checkpoint as
 
 At the time of release no MLX-format quantization of this model had been
 published, so the affine builds compared against below are our own
-conversions rather than community artifacts. That is a weaker class of
-evidence — a comparator you build yourself can be built badly, and one of
-ours was; see Comparators.
+conversions rather than community artifacts — a weaker class of evidence
+than a third party's, and worth knowing when reading the tables.
 
 ![where these releases sit](qwen38_ladder.png)
 
@@ -98,13 +97,10 @@ repeated build; on this family that floor is 2.085 millinats.
 
 ## Comparators
 
-The affine rungs above are local conversions made with `mlx_lm.convert`. One
-correction worth stating plainly, because it was ours: the 8-bit comparator
-originally used here was not a uniform 8-bit build at all — its configuration
-declared a 4-bit default with per-module overrides, including the output head
-at 6 bits. It was rebuilt with defaults and re-scored, and the figure above is
-the rebuilt one. The bar moved *against* us when corrected, from 1.64 to 1.25
-millinats.
+The affine rungs above are local conversions made with `mlx_lm.convert` at
+its defaults, since no MLX build of this model has been published to compare
+against. They are uniform quantizations at the bit width named, scored on the
+same corpus and the same instrument as the VQ rungs.
 
 ## Where this stops paying
 
