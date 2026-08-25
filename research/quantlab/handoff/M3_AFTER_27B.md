@@ -1,5 +1,32 @@
 # M3 queue — after the 27B candidate finishes  (written 2026-08-24 by the paper session)
 
+## SEQUENCING (revised 08-24 evening, Noah's call)
+
+**The paper now waits for real data rather than shipping with disclosures.**
+Publishing an hour early is worth less than a clean 8-bit bar. Order:
+
+  1. M3: K512 ring smoke (122.305 GiB, has NEVER served — §1 below)
+  2. Paper session manages the K512 upload if it smokes
+  3. M3: rebuild the 27B q8 comparator (§6)
+  4. Fold the new q8 into §4.1, then publish the paper
+
+Because the clock is no longer forcing it, three things move from
+"disclosed as imperfect" to "fixed":
+
+  - §4.1's 8-bit bar: rebuilt rather than caveated (§6)
+  - §3.3's d2/K256 row: graft `qwen36-35b-rungs/vq-K256-d2` (+0.832 ->
+    18.476 GiB) and it becomes measured like every other row, instead of
+    measured-plus-constant
+  - §3.2's lead evidence (flat K512) becomes a downloadable artifact
+    instead of a lab rung the reader has to take on trust
+
+None of these change a claim. All three replace a stated imperfection with
+the thing itself, which is the difference between a paper that discloses its
+weak points and one that does not have them.
+
+The 397B task-suite re-run stays DEFERRED (§1) — Noah declined it twice and
+the extra time does not reopen it.
+
 Nothing here is authorized to start until the 27B run in flight is done.
 Nothing here blocks tonight's paper post.
 
