@@ -85,11 +85,11 @@ So the family guidance is:
   (2,500+ words sustained):** this artifact.
 - **~8 GiB budget:** use `gemma-4-e4b-it-8bit` — not a compromise; it wins
   that bracket on our measurements.
-- **Tighter than 8 GiB or RAM-bound:** our VQ-PLE build of the e4b
+- **Tighter than 8 GiB or RAM-bound:** our
+  [VQ-PLE build of the e4b](https://huggingface.co/TheDrainFlorist/gemma-4-e4b-it-VQ-PLE)
   (7.39 GiB, measurably closer to bf16 than the 8-bit, 20% less RAM,
-  ~8% slower decode) is the right pick when memory is the constraint and
-  latency is not. **Not yet released** — this bullet names it so the
-  guidance is complete, not because you can download it today.
+  ~8% slower decode and ~13.5% slower prefill) is the right pick when
+  memory is the constraint and latency is not.
 
 ## Runtime
 
