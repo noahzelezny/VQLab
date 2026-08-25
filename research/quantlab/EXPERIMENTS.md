@@ -9093,3 +9093,29 @@ mnats KL / 0.014 ppl of E126 — an independent fit on a different box, a
 different seed, and unseeded — which bounds any contamination well below the
 deltas above. A clean re-run was planned and cancelled by Noah on exactly this
 reasoning.
+
+## E143 — III.11 ring smoke of rotlab/397B-flatk512-packed (publish gate)
+2026-08-24, M3 session. Instrument: exo 2-node tensor-parallel MlxRing (M3 96 GiB + M4
+128 GiB). Artifact 122.324 GiB / 131,344,793,064 B, 40 files, vq-d2K512, pack_bits 9,
+model_file model.py (runtime rides with the artifact — no site-packages hook).
+
+Preconditions cleared before the run:
+- outlier gate PASS (no tensor > 3.0x artifact median)
+- 333 vision tensors present
+- check_release.py PASS (4 required files, index complete, tokenizer round-trips)
+- byte-level copy verify M3 -> M4: 40/40 files, 0 size mismatches, totals equal.
+  NOTE: an earlier check reported "mismatches 1" — it raced a file still being
+  written. A copy-verify that runs before the copy has quiesced is not a verify.
+- card installed in BOTH nodes' builtin inference_model_cards/ (custom_model_cards
+  is GC'd by the 1 Hz reconciler after every reset)
+
+Result: SERVING after 99s on 2 nodes. Coherence generation 800 tokens, finish=stop,
+correct definition of vector quantization. Graded greedy probes 3/3:
+Paris / 391 / Jane Austen. III.11 PASS.
+
+Comparator: the 143.7 GiB 3bpw build served in 87s and also went 3/3 (E-log above).
+
+Loose end (not blocking): exo's placement response reported storageSize.inBytes
+131,323,777,632 while the card declares 131,344,793,064 (delta 21,015,432 B). exo
+is computing its own figure rather than reading the card's; the card's number is the
+measured on-disk total. Do not "correct" the card to match exo's number.
