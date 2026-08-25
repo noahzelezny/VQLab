@@ -736,3 +736,25 @@ conclusion has to be disclosed by the author.
 
 Still no re-test warranted; nothing plausible closes 25 bpw.
 
+### 08-24: the q8 skip is CONFIRMED our defect — settled on the right architecture
+
+Noah's suggestion, and the right instrument for the question (not as a
+comparator — a Qwen3.6-27B build has a different teacher and cannot sit on our
+KL axis; using it as one would be the substitution the cards refuse).
+
+`mlx-community/Qwen3.6-27B-8bit` — same 27B dense architecture, same
+linear-attention structure — DOES quantize `linear_attn.in_proj_a`: 48
+weight + 48 scales + 48 biases, U32 [48,1280]. Our q8 leaves the equivalent
+96 modules at BF16.
+
+**So it is not an MLX behaviour, it is our conversion deviating from the
+standard tool on this architecture.** My earlier 35B evidence was the wrong
+architecture to settle it on (MoE, different attention), and I presented it as
+if it settled the question. §4.1 now attributes the defect to us explicitly.
+
+**REVISION ITEM (not a blocker):** re-convert a uniform 8-bit with
+`mlx_lm.convert` defaults and re-score against kl_cache_qwen38. Cheap, and it
+would replace a bar we know errs in our favour with one built the standard
+way. Conclusion is robust either way — the 27B R3 gap is ~25 bpw — so this is
+about the comparator deserving to be right, not about the finding changing.
+

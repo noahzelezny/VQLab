@@ -475,7 +475,10 @@ the 27B. The 35B figure comes from a community 8-bit whose quantized
 surface matches its 4-bit sibling exactly. The 27B figure comes from our
 own conversion, which leaves 96 linear-attention projections at bf16 that
 its 4-bit sibling quantizes — 23.6 M parameters, 0.09% of the model, a
-0.02 GiB difference in the artifact. The direction matters more than the
+0.02 GiB difference in the artifact. This is a defect in our conversion
+rather than a property of the format: a community 8-bit build of the
+neighbouring model in the same family, with the same attention
+structure, quantizes those modules. The direction matters more than the
 magnitude: leaving those tensors unquantized makes the 8-bit bar better
 than a uniform 8-bit would be, which flatters affine and therefore
 flatters our own negative result. We report it for that reason. It does
