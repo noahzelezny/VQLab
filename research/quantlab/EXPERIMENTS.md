@@ -9172,3 +9172,46 @@ the run and it scored anyway. The numbers are valid and the assert output is in 
 but the guard was decorative. Same class as III.2: name the instrument -- a gate that
 reads the wrong exit code is not a gate. Fixed; re-check any other chain using
 `cmd | tee` followed by `$?`.
+
+## E145 — full config audit of every rung (79 dirs). One new asymmetry, and it favors US.
+2026-08-24, M3. Noah: "worth checking everything i suppose!" Triggered by E144 — a rung's
+NAME is not evidence about its config. Read config.json for all 79 rung dirs; no compute.
+
+AFFINE LADDER, 27B (the paper's comparators): q2/q3/q4/q6 all CLEAN — zero per-module
+overrides, top-level bits matching the name. q8 was the only defect (E144). q8-rebuilt clean.
+
+INTENTIONALLY MIXED, correctly named, not cited as uniform bars: m2-a4, m2-a4-gs32, m2-a6,
+m3-a3, m3-a4 (27B); struct6-*/struct8-* (gemma26b). No action.
+
+NEW FINDING — MoE router/gate precision is asymmetric between VQ and affine, in BOTH
+MoE families, and the asymmetry FLATTERS VQ:
+
+    family        module              VQ build      affine comparator
+    gemma26b      router.proj (x30)   BF16          8-bit (uniform-q3/q4/q8 all override to 8)
+    qwen36-35b    mlp.gate    (x40)   BF16          8-bit (q6 overrides 80 modules to 8)
+
+Verified by dtype and by vq_modules membership: 0 exact `mlp.gate` entries in the 35B VQ
+config, weights BF16 (256,2048); q6 carries them U32 (256,512) + scales + biases. Same
+shape of check on gemma routers. NOTE: an earlier pass of mine matched the substring
+"mlp.gate", which also catches `mlp.gate_proj` — a different and far larger module — and
+gave a wrong param count. Anchored the regex to `mlp\.gate\.` before trusting any number.
+Substring matching on module names is the same error class as reading a rate off pack_bits.
+
+MAGNITUDE. Size effect is negligible: 10.3 MiB (0.067%) on gemma26b, 20.0 MiB (0.142%) on
+35B. It does NOT explain any rung's position on the frontier.
+
+BUT SIZE DOES NOT BOUND THE QUALITY EFFECT HERE, and this is the part to disclose rather
+than wave off. A router's output feeds an argmax over experts. Quantizing it can FLIP a
+routing decision, and a flipped route changes which expert runs, not just by how much a
+weight is off. So a 0.07%-of-bytes difference can carry a quality effect with no
+proportionality to its size. Our VQ builds are handed exact routing; the affine
+comparators are not. UNQUANTIFIED. Measuring it means an ablation: VQ build with routers
+forced to 8-bit, re-scored. Not run.
+
+Consistency within each affine family is intact (uniform-q3/q4/q8 all treat routers the
+same), so affine-vs-affine comparisons are unaffected. It is specifically the
+VQ-vs-affine comparison that is asymmetric.
+
+DIRECTION, stated plainly because E144 got a direction wrong by reasoning from one
+deviation: this one favors us. E144's correction ran against us; this one runs for us.
+Two defects found today, opposite signs. Neither was predictable from the other.
