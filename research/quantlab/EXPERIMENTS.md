@@ -9292,3 +9292,29 @@ TODAY'S PATTERN, fourth instance: a name stood in for the bytes and was wrong. q
 a q8 (E144). "d2K512" was d4 (E143). "uniform-q*" quantizes routers at 8 (E145). "2.6bit"
 is an average over a hand-tuned allocation, on a text-only model (E146). Every one was
 found by reading config.json or dtypes, none by reading a name. Noah found this one.
+
+### E146 RETRACTED — both halves were already known and documented
+Noah: "that was accounted for. we're aware of that one." He is right on both counts, and
+I should have known both before writing the entry:
+
+- VISION: FINDINGS law 5 already stamps the tower at a fixed 912,020,960 bytes (0.849 GiB,
+  byte-identical across grafted artifacts) and requires every data point be stamped
+  pre-graft or post-graft. Law 7 cites "our 100.9 GiB beats spicy2.6's larger artifact" —
+  already a text-comparable figure, not the 122.3 headline I was "correcting".
+- MIXED ALLOCATION: paper/DRAFT.md §1 already describes the comparators as
+  "mixed-bit-depth calibrated builds from the community at large", naming spicyneuron
+  explicitly. It was never presented as a uniform affine bar.
+
+So E146 discovered nothing. The measurements in it are correct — 377 overrides, the
+6-vs-8-bit scaffolding split, 333 vision tensors vs 0, 0.849 GiB — and may be useful as a
+per-module table, but the FINDINGS are not findings and the entry must not be cited as one.
+
+WHY IT HAPPENED, since this is the actionable part: I went straight from Noah's remark to
+reading configs, and never opened FINDINGS.md or DRAFT.md to ask whether it was already
+known. My own standing note is "FINDINGS.md first — check before proposing experiments."
+E144 and E145 were real because a name disagreed with the bytes; here the bytes agreed
+with what the lab had already written down, and I did not look. Four consecutive
+name-vs-bytes hits made me pattern-match a fifth instead of checking.
+
+Cost: no compute (config reads only), some of Noah's attention, and a spurious entry in
+the ledger. The retraction is the entry now.
