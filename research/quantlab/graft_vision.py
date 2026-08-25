@@ -42,6 +42,22 @@ ap.add_argument("--copy-config-keys", default="vision_config,image_token_id",
                      "chain-built 397B artifact shipped without vision_config "
                      "and needed a hand-graft to be exo-loadable. Copies only "
                      "keys the artifact LACKS, so it never overwrites.")
+ap.add_argument("--dest-prefix", default=None,
+                help="rewrite the grafted keys' leading prefix to this. Needed "
+                     "when the source is in HF layout (model.visual.*) and the "
+                     "artifact is mlx-layout (vision_tower.*), e.g. the "
+                     "Qwen3.8-27B bf16 against our 27B rungs. Verify the "
+                     "rewritten names against the official mlx index before "
+                     "trusting them — this flag renames, it does not check.")
+ap.add_argument("--permute-conv5", action="store_true",
+                help="apply transpose(0,2,3,4,1) to every 5-D tensor. mlx "
+                     "stores the vision patch_embed conv CHANNELS-LAST: HF "
+                     "(out,C,T,H,W) -> mlx (out,T,H,W,C). Measured on the "
+                     "Qwen3.5-35B pair, where both layouts of the SAME model "
+                     "exist: 332/333 tensors are identical as-is and exactly "
+                     "one, patch_embed.proj.weight, needs this permutation. "
+                     "Without it the tower loads with 333 tensors present and "
+                     "a silently wrong patch embedding.")
 ap.add_argument("--replace-config-keys", action="store_true",
                 help="overwrite --copy-config-keys that are already present "
                      "and DISAGREE with --src. Off by default so a graft "
@@ -91,8 +107,33 @@ if _th is not None and _oh is not None and _th != _oh:
         f"than rewriting config keys in place.)")
 
 _art_map0 = json.load(open(ART / "model.safetensors.index.json"))["weight_map"]
-_shared = [k for k in _art_map0
-           if k in src_map and not k.startswith(_PREFIXES)]
+
+# CROSS-LAYOUT KEY MAPPING. HF and mlx name the same tensor differently:
+# HF `model.language_model.X` vs mlx `language_model.model.X`. A cross-layout
+# graft (HF tower into an mlx artifact, --dest-prefix) is legitimate, but the
+# identity probe still has to run — comparing raw names would find nothing
+# shared and refuse a correct source. So try the direct intersection first,
+# then the mapped one. The probe is never SKIPPED for cross-layout grafts;
+# it is the only thing standing between us and a wrong tower.
+def _pairs(art_keys):
+    direct = [(k, k) for k in art_keys
+              if k in src_map and not k.startswith(_PREFIXES)]
+    if direct:
+        return direct, "same-layout"
+    mapped = []
+    for k in art_keys:
+        if k.startswith("language_model.model."):
+            h = "model.language_model." + k[len("language_model.model."):]
+            if h in src_map:
+                mapped.append((k, h))
+    return mapped, "HF<->mlx mapped"
+
+_pair_list, _how = _pairs(list(_art_map0))
+_shared = [a for a, _ in _pair_list]
+_srckey = dict(_pair_list)
+if _shared and _how != "same-layout":
+    print(f"base-identity: comparing via {_how} key names "
+          f"({len(_shared)} tensors)")
 if not _shared:
     raise SystemExit(
         f"FAIL: --src {SRC.name} shares NO tensor key with this artifact. "
@@ -101,17 +142,36 @@ if not _shared:
         f"language_model.model.*). This is not this artifact's base. "
         f"Nothing written.")
 
-# prefer small 1-D tensors: norms/biases pass through a fit unchanged.
-_probe = sorted(_shared, key=lambda k: ("norm" not in k, len(k)))[:6]
-_hits = []
+# Prefer small 1-D tensors: norms/biases pass through a fit unchanged.
+# SAMPLE WIDELY, and do not let one tensor FAMILY dominate the probe. The
+# first version sorted norms first and took the six shortest names, which on
+# Qwen3.8-27B drew six layer-norms and reported 0/6 against the artifact's
+# actual base — that family stores RMSNorm as (1+w), so every layer-norm
+# differs by exactly 1.0 while `linear_attn.norm` matches bit-for-bit. A probe
+# that samples one shape of tensor inherits that shape's conventions.
+_norms = [k for k in _shared if "norm" in k]
+_other = [k for k in _shared if "norm" not in k]
+_probe = ([_norms[i] for i in range(0, len(_norms), max(1, len(_norms) // 6))][:6]
+          + sorted(_other, key=len)[:4])
+_hits, _offset = [], []
 for _k in _probe:
     with mx.stream(mx.cpu):
         _a = mx.load(str(ART / _art_map0[_k]))[_k]
-        _b = mx.load(str(SRC / src_map[_k]))[_k]
+        _sk = _srckey[_k]
+        _b = mx.load(str(SRC / src_map[_sk]))[_sk]
         mx.eval(_a, _b)
-    if _a.shape == _b.shape and bool(
-            mx.all(_a.astype(mx.float32) == _b.astype(mx.float32)).item()):
+    if _a.shape != _b.shape:
+        continue
+    _af, _bf = _a.astype(mx.float32), _b.astype(mx.float32)
+    if bool(mx.all(_af == _bf).item()):
         _hits.append(_k)
+    elif float(mx.max(mx.abs(_af - (_bf + 1.0))).item()) <= 0.01:
+        # known (1+w) RMSNorm convention — evidence FOR the base, not against
+        _offset.append(_k)
+if _offset and not _hits:
+    print(f"base-identity: {len(_offset)} tensors match under the (1+w) norm "
+          f"convention, none bit-exact — treating as the base")
+    _hits = _offset
 if not _hits:
     raise SystemExit(
         f"FAIL: --src {SRC.name} shares {len(_shared)} tensor keys with this "
@@ -142,6 +202,20 @@ for sh in sorted(set(vis.values())):
         mx.eval(list(picked.values()))
     out.update(picked)
     del data, picked
+if args.permute_conv5:
+    _n5 = [k for k, v in out.items() if v.ndim == 5]
+    for k in _n5:
+        out[k] = mx.transpose(out[k], (0, 2, 3, 4, 1))
+    mx.eval(list(out.values()))
+    print(f"permuted {len(_n5)} 5-D tensor(s) to mlx channels-last: {_n5}")
+
+if args.dest_prefix:
+    _src_pref = sorted({k.split(".")[0] if not k.startswith("model.visual")
+                        else "model.visual" for k in out}, key=len)[-1]
+    out = {args.dest_prefix + k[len(_src_pref):]: v for k, v in out.items()}
+    vis = {args.dest_prefix + k[len(_src_pref):]: v for k, v in vis.items()}
+    print(f"renamed graft keys: {_src_pref}.* -> {args.dest_prefix}.*")
+
 _dead = [k for k, v in out.items()
          if float(mx.max(mx.abs(v.astype(mx.float32))).item()) == 0.0]
 if _dead:
