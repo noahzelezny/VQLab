@@ -674,3 +674,25 @@ draws and the ~1.4 factor covers either (1.375 vs draw 1, 1.380 vs mean).
 live in §2.6.** Also means the paper matches whatever gets published: if
 e140 draw 1 ships, its card and §3.3 quote the same number.
 
+## 08-24: 27B checked for the vision asymmetry — CLEAN; but q8 is not uniform 8-bit
+
+Vision: every 27B artifact is TEXT-ONLY, ours and all affine comparators
+(vision=0 across e119/e124/e138 and q2/q3/q4/q6/q8). The BASE has a 333-tensor
+tower; every quantization drops it. §3.3's 27B tables are like-for-like at
+face value — no change needed. Third family checked, third different answer.
+
+**BUT: `qwen38-27b-rungs/q8` leaves 96 modules UNQUANTIZED.** Verified by
+dtype, not inferred: `linear_attn.in_proj_a` is U32 [48,640] in q4 and BF16
+[48,5120] in q8; 48 in_proj_a + 48 in_proj_b, i.e. 192 missing scales/biases
+(1655 tensors vs 1847). So the artifact anchoring §4.1's "8 bits is
+essentially lossless" and the 27B R3 bar (KL 1.641) is an 8-bit-CLASS build,
+not a uniform 8-bit grid.
+
+Claim stands: its 26.341 GiB includes those bf16 tensors, so the bytes are
+honest, and an easier bar would only make our failure to reach it less
+interesting. §4.1 now states the property rather than letting "q8" imply
+uniformity. NOT checked: whether the 35B community q8 has the same shape.
+
+Fifth instance of "a label is not a measurement", on the day the rule was
+added — this time the label was a filename.
+
