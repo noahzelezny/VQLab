@@ -982,3 +982,35 @@ Method note worth keeping: M3 verified by GENERATION (3/3 known answers)
 before taking any timing, because a model loaded with strict=False that is
 subtly wrong still produces perfectly reasonable-looking timings.
 
+## 08-24: 27B RELEASE SET FIXED — three rungs; §3.3's d2/K512 row is now arm 2
+
+**Publishing:** d4/K4096 (12.47, VQ-3.9bpw), d2/K256 (14.45, VQ-4.5bpw),
+d2/K512 arm 2 (15.45, VQ-4.8bpw). Names by the family convention, GiB x 8 /
+27.78B params.
+
+**NOT publishing, with reasons:**
+- d2/K4096 (18.44, 5.70 bpw): 2.1 mnats/GiB marginal return, an order of
+  magnitude worse than the first rung step, AND above the crossover where q6
+  is 7.2x better for 2.8 GiB more. The 27B's E141.
+- d4/K1024 (11.47): KL 148.5 would be 73% worse than anything else we
+  publish. Our released quality floor across both MoE families is ~85 mnats
+  (35B VQ-3.4bpw 85.5; 27B VQ-3.9bpw 85.8). Noah's stated reason was 16 GB
+  headroom; that is not actually the constraint (10.61 GiB resident leaves
+  ~4.3 GiB free), the lineup-coherence argument is.
+- d4/K65536 (14.55): the 37 h fit. Edges d2/K256 on KL (38.1 vs 40.3), loses
+  on ppl (5.311 vs 5.233), 0.1 GiB larger. Paper reports it a wash leaning d2.
+
+**§3.3's d2/K512 row now cites ARM 2, the artifact being published**, not
+E126: 32.81 KL / 90.84% / 5.162 (was 33.095 / 91.10% / 5.194). Dependent
+claims recomputed rather than carried: q4 margin 27.8% -> 28.4% KL, floor
+multiple 6.1x -> 6.2x, top-1 +1.28 pp -> +1.02 pp. Size claim (+3.3%) and the
+d4/K1024-vs-q3 (0.35 GiB) claim are unaffected.
+
+**The card must NOT claim arm 2 is measurably better than arms 1 or E126.**
+Arms 1 and 2 share bit-identical initial centroids (kmeanspp runs before the
+Lloyd loop; Lloyd consumes no RNG), so arm 2 is arm 1 continued 20 iterations
+with zero draw variance. All four metrics moved the right way but 0.0186 ppl
+is below our resolution, not shown to be zero — the 0.0447 floor was measured
+from unseeded draws and contains variance these arms do not have. Card says
+"more converged", not "better".
+

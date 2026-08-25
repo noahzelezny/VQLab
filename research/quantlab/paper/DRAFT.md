@@ -402,7 +402,7 @@ sits between 5.0 and 6.0 bits per weight.**
 | **d4/K1024** | 11.47 | 148.5 | 82.5% | 5.525 |
 | d4/K4096 | 12.47 | 85.8 | 86.1% | 5.229 |
 | **d2/K256** | 14.45 | 40.3 | 90.1% | 5.233 |
-| **d2/K512** | 15.45 | 33.1 | 91.1% | 5.194 |
+| **d2/K512** | 15.45 | 32.8 | 90.8% | 5.162 |
 | d2/K4096 | 18.44 | 26.7 | 91.7% | 5.242 |
 
 **27B — affine.** No MLX-format quantization of this model has been
@@ -425,7 +425,7 @@ differences carry over unchanged; ratios do not.
 
 The recipe is not an MoE phenomenon. Below 4.5 bpw every VQ point sits
 above the affine line at its size: d4/K1024 beats q3 on both metrics at
-0.35 GiB less, and d2/K512 beats q4 by 27.8% KL (6.1x floor) and +1.28
+0.35 GiB less, and d2/K512 beats q4 by 28.4% KL (6.2x floor) and +1.02
 points top-1 at q4-class size. Above, the picture inverts: q6 beats our
 best 6-bpw rung by 7.2x KL at 2.8 GiB more. **The dense crossover is
 bracketed at 4.5–6.0 bpw — nearly the same band as the MoE.** One
