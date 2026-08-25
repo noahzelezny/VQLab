@@ -16,12 +16,11 @@ tags:
 
 # Qwen3.5-397B-A17B-VQ-2.6bpw
 
-**122.3 GiB — the head-to-head build.** Same size class as the best community
-quant at this rate, measurably better on both corpora.
-
-A vector-quantized build of [Qwen3.5-397B-A17B](https://huggingface.co/Qwen/Qwen3.5-397B-A17B)
-for Apple Silicon. Stock `mlx-lm`, no patches — the VQ runtime ships inside
-the checkpoint as `model.py`.
+**122.3 GiB.** A vector-quantized build of
+[Qwen3.5-397B-A17B](https://huggingface.co/Qwen/Qwen3.5-397B-A17B) for Apple
+Silicon. Stock `mlx-lm`, no patches — the VQ runtime ships inside the
+checkpoint as `model.py`. It sits between the `VQ-2.4bpw` daily driver and the
+`VQ-3bpw` quality build, and needs the same hardware class as the latter.
 
 ## Measured results
 
@@ -137,6 +136,11 @@ All from the same skeleton and recipe, all scored the same way:
 | `VQ-2.4bpw` | 111.6 GiB | 2.7655 | 2.6383 | 128 GB Mac, tight |
 | **`VQ-2.6bpw` (this build)** | **122.3 GiB** | **2.5634** | **2.6123** | ≥192 GB or cluster |
 | `VQ-3bpw` | 143.7 GiB | 2.3410 | 2.5963 | ≥192 GB or cluster |
+
+If you can run this build you can run `VQ-3bpw`, which is better on both
+corpora for 21.4 GiB more. Take this one if those gigabytes are worth more to
+you than the quality difference — on a 192 GB machine it leaves roughly 70 GiB
+free against the 3bpw build's 48.
 
 ## Known limitations
 
