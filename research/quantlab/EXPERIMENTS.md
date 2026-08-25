@@ -9215,3 +9215,31 @@ VQ-vs-affine comparison that is asymmetric.
 DIRECTION, stated plainly because E144 got a direction wrong by reasoning from one
 deviation: this one favors us. E144's correction ran against us; this one runs for us.
 Two defects found today, opposite signs. Neither was predictable from the other.
+
+### E145 extensions (paper session, verified here independently)
+Two checks I did not run, both of which change the finding's scope:
+
+1. THE 397B IS SYMMETRIC — the asymmetry does NOT reach the lead claims. Verified by
+   dtype on all four artifacts: spicyneuron 2.6bit, spicyneuron 3.5bit, our
+   rotlab--397B-flatk512-packed and our VQ-3bpw ALL keep mlp.gate at BF16 (512,4096),
+   60 routers each, zero affine overrides and zero vq_modules entries on either side.
+   So K512-vs-spicy, d8-vs-spicy and flagship-vs-spicy are unaffected. I had scoped the
+   finding from gemma26b and the 35B alone; the 397B is where claim 1's evidence lives
+   and it is clean. This is the check that mattered and I did not think to run it.
+
+2. THE 35B IS WIDER than I found. My evidence was our own q6. The mlx-community 4-bit
+   AND 8-bit comparators also quantize the router (40 weights + 40 scales, U32 [256,512]).
+   So it covers every 35B comparison in §3.3, not a single row.
+
+DECISION (paper session's, not mine): disclosure scoped to §3.3, NOT a blocker, no
+ablation before publication. The paper states the argmax mechanism, states explicitly that
+§3.2 is unaffected so a reader cannot generalise to the 397B, and states that the ablation
+was not run. Rationale recorded because it is the right standard: the honest handling of
+an unmeasured effect that FAVOURS you is to name it and leave it unmeasured — not to delay
+publication chasing a number that might make your own case look better. If the ablation is
+run it should be because the mechanism is interesting, not because the paper needs it.
+
+METHOD NOTE. I flagged that I was the finder and therefore the wrong one to size it. The
+paper session took that seriously and re-derived the scope rather than accepting mine —
+which is precisely how the 397B check happened. A finding scoped by its finder is scoped
+by the person with the strongest reason to like the scope.
