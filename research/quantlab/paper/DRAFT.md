@@ -359,9 +359,8 @@ is a size-targeting tool (§3.4), not a quality one.
 
 Every 35B size above includes the 333-tensor bf16 vision tower, which the
 community comparators ship and our builds now carry: 0.832 GiB,
-byte-identical across builds, unquantized in all of them. All rows are
-measured post-graft except d2/K256, which is its measured packed size plus
-that constant. Comparisons here are therefore like-for-like at face value.
+byte-identical across builds, unquantized in all of them. Every row is a
+measured artifact; comparisons here are like-for-like at face value.
 (The 397B in §3.2 sits the other way round: our builds carry a tower its
 comparators lack, which is why that section states an offset rather than
 applying one.)

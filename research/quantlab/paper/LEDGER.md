@@ -758,3 +758,32 @@ would replace a bar we know errs in our favour with one built the standard
 way. Conclusion is robust either way — the 27B R3 gap is ~25 bpw — so this is
 about the comparator deserving to be right, not about the finding changing.
 
+### 08-24: 35B fully grafted — every §3.3 row is now a MEASURED artifact
+
+M4 grafted the nested `qwen36-35b-rungs/` set (its earlier sweep walked only
+the top level of Exo Models/ and missed 21 artifacts; it corrected this
+itself). All §3.3 values verified against the measured post-graft sizes:
+
+    d4/K8192 15.670 · d4/K16384 16.615 · d2/K256 18.475
+    d2/K1024 22.226 · d2/K4096 25.977 · q6 27.066
+    q4 19.00 and q8 35.13 unchanged (community, always had towers)
+
+Every table value was already correct. **The NOTE was not.** It read "all rows
+are measured post-graft except d2/K256" — but q6 was ALSO ungrafted at that
+moment, and its 27.07 was a projection I had computed and then described as
+measured. My error, and precisely the rule added to §5 today: I labelled a
+derived number as a measurement, in the sentence whose job was stating
+provenance. Both rows are now genuinely measured and the note says so.
+
+**q6 was the one that mattered** (M4's flag): it is the affine comparator, so
+while the VQ rungs carried towers and it did not, every VQ-vs-q6 size margin
+was overstated by 0.832 GiB — the spicy asymmetry again, pointing our way.
+The paper is unaffected because the table already used 27.07 and the
+placement/margin arithmetic was computed at 27.066 throughout: d2/K4096 vs q6
+is 1.089 GiB either way, and KL ratios (1.91x) are size-independent.
+
+Noted for future readers: `vq-K8192-d4-packed` and `e94b-...-packed` are both
+15.670, and `vq-headup-d2k512-packed` and `vq-tail30-d2k512-packed` are both
+18.710 — same geometry, different fits, hashes differ. Same trap as the
+10.144 collision.
+
