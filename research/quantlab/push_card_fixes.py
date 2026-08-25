@@ -20,6 +20,8 @@ CARDS = {
     "Qwen3.5-397B-A17B-VQ-2.4bpw":  "MODEL_CARD_397B_C.md",
     "Qwen3.6-35B-A3B-VQ-4.6bpw":    "MODEL_CARD_QWEN_QUALITY.md",
     "Qwen3.6-35B-A3B-VQ-3.4bpw":    "MODEL_CARD_QWEN_SMALL.md",
+    "Qwen3.5-397B-A17B-VQ-2.6bpw":  "MODEL_CARD_397B_K512.md",
+    "Qwen3.5-397B-A17B-VQ-3bpw":    "MODEL_CARD_397B_G.md",
     "gemma-4-26b-a4b-it-VQ-6.2bpw": "MODEL_CARD_GEMMA_QUALITY.md",
 }
 MSG = ("card corrections: floor-check quality claims, fix repo name, "
