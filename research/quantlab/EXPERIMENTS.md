@@ -9243,3 +9243,52 @@ METHOD NOTE. I flagged that I was the finder and therefore the wrong one to size
 paper session took that seriously and re-derived the scope rather than accepting mine —
 which is precisely how the 397B check happened. A finding scoped by its finder is scoped
 by the person with the strongest reason to like the scope.
+
+## E146 — the spicyneuron comparators are MIXED-ALLOCATION, and text-only
+2026-08-24, M3. Noah, unprompted: "worth noting that the spicyneuron builds are mixed
+weight not straight affine." Correct, and checking it turned up a second thing.
+
+(1) MIXED, NOT UNIFORM. Both spicy builds carry 377 per-module overrides. "2.6bit" and
+"3.5bit" are AGGREGATE rates, not bit widths. Only the routed experts sit at the
+top-level 2/3 bits; everything else is deliberately richer:
+
+    module                        spicy 2.6 / 3.5    ours (flatk512)
+    embed_tokens, lm_head              8                   6
+    self_attn q/k/v/o                  8                   6
+    linear_attn.out_proj               8                   6
+    linear_attn.in_proj_qkv / _z       4                   4
+    mlp.shared_expert.*                8                   6
+    routed experts (switch_mlp)     2 or 3 affine     VQ d4/K512 (+3 layers affine 3-bit)
+    mlp.gate (router)                BF16                BF16   <- symmetric, per E145
+
+So a VQ-vs-spicy delta is the SUM OF TWO CHANGES: expert coding (VQ vs affine) AND
+scaffolding precision (6-bit vs 8-bit). That is exactly the E144 cancellation hazard,
+one rung up. Note the scaffolding difference runs AGAINST us — we give ourselves 6 bits
+where spicy takes 8 — so the aggregate comparison is not flattering us on that axis.
+But "not flattering" is not "controlled", and the paper should not describe spicy as an
+affine bar without saying it is a hand-tuned mixed allocation.
+
+(2) SPICY HAS NO VISION TOWER. 2212 tensors, ZERO vision. Ours carry 333 vision tensors
+(0.849 GiB, BF16, unquantized). The headline sizes are therefore not like-for-like:
+
+    artifact                      headline    text-only    vision
+    ours  flatk512-packed         122.305      121.455      0.849
+    ours  VQ-3bpw                 143.682      142.832      0.849
+    spicy 2.6bit                  120.572      120.572      0
+    spicy 3.5bit                  165.572      165.572      0
+
+DIRECTION: this one FAVOURS US once corrected. We have been carrying 0.849 GiB of
+vision weights in a number compared against a text-only artifact — i.e. our published
+byte count is 0.849 GiB worse than our text stack actually is. Against spicy 2.6bit the
+gap narrows from +1.733 GiB to +0.883 GiB.
+
+I am NOT restating any headline on this. Two reasons. First, III.8's spirit: the
+comparison to fix is not "subtract vision from ours" but "state what each artifact IS".
+Ours is a vision-capable model; spicy is not. A reader wanting a VLM cannot use spicy at
+any size. Second, it is the paper session's call and it favours us, which is precisely
+when I should not be the one deciding — same standard as E145.
+
+TODAY'S PATTERN, fourth instance: a name stood in for the bytes and was wrong. q8 was not
+a q8 (E144). "d2K512" was d4 (E143). "uniform-q*" quantizes routers at 8 (E145). "2.6bit"
+is an average over a hand-tuned allocation, on a text-only model (E146). Every one was
+found by reading config.json or dtypes, none by reading a name. Noah found this one.
