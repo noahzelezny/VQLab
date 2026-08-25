@@ -49,8 +49,8 @@ beats the same comparator on both corpora at near-matched size, by 24
 times the measurement noise. On the 35B model, a 3.5-bit VQ build
 reaches 47.5 millinats at 15.8 GiB, where the community 4-bit affine
 build measures 78.6 millinats — 31.1 millinats more — at 19.0 GiB. On the dense 27B, two VQ builds straddle the 4-bit
-affine conversion's size: the smaller (13.6 GiB) beats it by 12% KL
-divergence while being 0.5 GiB smaller, and the larger (14.6 GiB, 3.5%
+affine conversion's size: the smaller (14.5 GiB) beats it by 12% KL
+divergence while being 0.5 GiB smaller, and the larger (15.5 GiB, 3.3%
 larger) beats it by 28%. The advantage has a measured boundary: on both architectures the
 affine frontier overtakes VQ between 5 and 6 bits per weight, and at 8
 bits affine quantization is essentially lossless, leaving nothing to
@@ -398,12 +398,12 @@ sits between 5.0 and 6.0 bits per weight.**
 
 | build | GiB | KL mnats | top-1 | ppl |
 |---|---|---|---|---|
-| d4/K256 | 9.7 | 325.6 | 76.5% | 6.403 |
-| **d4/K1024** | 10.61 | 148.5 | 82.5% | 5.525 |
-| d4/K4096 | 11.61 | 85.8 | 86.1% | 5.229 |
-| **d2/K256** | 13.60 | 40.3 | 90.1% | 5.233 |
-| **d2/K512** | 14.59 | 33.1 | 91.1% | 5.194 |
-| d2/K4096 | 17.58 | 26.7 | 91.7% | 5.242 |
+| d4/K256 | 10.56 | 325.6 | 76.5% | 6.403 |
+| **d4/K1024** | 11.47 | 148.5 | 82.5% | 5.525 |
+| d4/K4096 | 12.47 | 85.8 | 86.1% | 5.229 |
+| **d2/K256** | 14.45 | 40.3 | 90.1% | 5.233 |
+| **d2/K512** | 15.45 | 33.1 | 91.1% | 5.194 |
+| d2/K4096 | 18.44 | 26.7 | 91.7% | 5.242 |
 
 **27B — affine.** No MLX-format quantization of this model has been
 published by the community, so unlike the 397B and 35B comparators these
@@ -413,11 +413,15 @@ recorded in §4.1.
 
 | build | GiB | KL mnats | top-1 | ppl |
 |---|---|---|---|---|
-| q2 | 7.9 | 1426.9 | 46.1% | 16.435 |
-| q3 | 10.96 | 187.8 | 79.5% | 5.832 |
-| q4 | 14.09 | 45.8 | 89.8% | 5.206 |
-| q6 | 20.36 | 3.71 | 96.8% | 5.260 |
-| q8 | 26.62 | 1.25 | 98.5% | 5.241 |
+| q2 | 8.69 | 1426.9 | 46.1% | 16.435 |
+| q3 | 11.82 | 187.8 | 79.5% | 5.832 |
+| q4 | 14.95 | 45.8 | 89.8% | 5.206 |
+| q6 | 21.21 | 3.71 | 96.8% | 5.260 |
+| q8 | 27.48 | 1.25 | 98.5% | 5.241 |
+
+Every 27B size above includes the 333-tensor bf16 vision tower (0.859 GiB),
+grafted onto rungs and comparators alike. The offset is uniform, so
+differences carry over unchanged; ratios do not.
 
 The recipe is not an MoE phenomenon. Below 4.5 bpw every VQ point sits
 above the affine line at its size: d4/K1024 beats q3 on both metrics at
@@ -491,8 +495,8 @@ configuration declares a 4-bit default with 402 per-module overrides,
 401 of them at 8 bits, one at 6, and 96 linear-attention projections
 carrying no override at all and left at bf16. Converted properly — a
 uniform 8-bit with no overrides, matching how every other rung on this
-ladder was made — it measures 1.254 millinats at 26.62 GiB against the
-old artifact's 1.641 at 26.34.
+ladder was made — it measures 1.254 millinats at 27.48 GiB against the
+old artifact's 1.641 at 27.20.
 
 The correction moves the bar the harder way. A better 8-bit build means
 a more capable affine frontier and a longer distance for vector

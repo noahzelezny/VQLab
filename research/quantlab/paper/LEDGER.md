@@ -904,3 +904,43 @@ M3 self-corrected a substring match (`mlp.gate` also catches `mlp.gate_proj`)
 before trusting its own count — same class as reading a rate off pack_bits.
 My probes here are anchored (`\.mlp\.gate\.`) for that reason.
 
+## 08-24: 27B GRAFTED (21 artifacts) — §3.3 and §4.1 restated; one peer correction corrected back
+
+M4 grafted every 27B rung AND every affine comparator, +0.8582 GiB uniformly.
+Measured sizes match my projections to the digit (11.467 / 12.468 / 14.454 /
+15.450). §3.3's two 27B tables and §4.1's q8 figure restated; the convention
+is stated inline.
+
+**The offset is uniform, so DIFFERENCES survive and RATIOS do not.** Verified
+each surviving claim: d4/K1024 vs q3 still 0.35 GiB less; q6 vs d2/K4096 still
+2.8 GiB more; d2/K256 vs q4 still 0.50 GiB smaller. **One ratio moved and is
+fixed: the abstract's "3.5% larger" for d2/K512 vs q4 is now 3.3%.** Also
+updated the abstract's two absolute sizes (13.6 -> 14.5, 14.6 -> 15.5).
+
+**CORRECTING THE M4'S CORRECTION 1.** It says my "no towers anywhere in that
+family" was wrong and that "the same asymmetry was live in §4.1, undisclosed".
+Half right. My PHRASING was wrong — the Qwen3.8-27B base does carry a
+333-tensor tower, and I should have said the quantizations dropped it rather
+than that the family lacked one. But no asymmetry was live: I verified
+vision=0 on BOTH sides — ours (e119/e124/e138) and every comparator
+(q2/q3/q4/q6/q8) — so §3.3 and §4.1 were symmetric and needed no disclosure.
+Its "pointing our way IF any comparator carried a tower" is conditional on
+something that was measured false. Sloppy wording of mine, correct conclusion.
+
+**e127-* and e95-* do NOT need grafting.** E127 is cited in §2.6 as the source
+of the dense floor (2.085 mnats / 0.0447 ppl, n=3) — a floor measurement, not
+a size row; no size of it is reported anywhere. E95 appears nowhere in the
+draft. Answered to the M4.
+
+**Two method notes from the M4 worth keeping:**
+- Cross-layout graft: mlx stores the vision patch_embed conv CHANNELS-LAST,
+  HF does not. It measured this on a model where both layouts exist (332/333
+  identical, exactly one needing transpose(0,2,3,4,1)) rather than assuming.
+  A naive prefix-rename yields 333 present tensors and a silently wrong patch
+  embedding — right count, wrong bytes.
+- Its identity probe read 0/6 against the true base because Qwen3.8-27B
+  stores RMSNorm as (1+w), so every layer-norm differs by exactly 1.0. **A
+  NORM comparison presented as an IDENTITY comparison** — third instance of a
+  check measuring one axis and named for another. Fixed; passes 5/10 bit-exact
+  with a wider sample.
+
