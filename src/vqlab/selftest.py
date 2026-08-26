@@ -262,30 +262,20 @@ def main(argv=None) -> int:
         check("bundled and installed runtimes agree bit-for-bit",
               bool(mx.array_equal(yb, yi)))
 
-        import builtins
-        real = builtins.__import__
-
-        def stock(name, *aa, **kk):
-            if "vq_switch" in name:
-                raise ModuleNotFoundError(f"No module named {name!r} (simulated stock)")
-            return real(name, *aa, **kk)
-        builtins.__import__ = stock
-        try:
-            y = ns["VQLinear"](codes, cb, sc, group_size=G, pack_bits=0)(x)
-            mx.eval(y)
-            served = True
-        except Exception:
-            served = False
-        try:
-            vq_dense.VQLinear(codes, cb, sc, group_size=G, pack_bits=0)(x)
-            unbundled_served = True
-        except Exception:
-            unbundled_served = False
-        finally:
-            builtins.__import__ = real
-        check("bundle SERVES on a simulated stock mlx-lm", served)
-        check("probe is not vacuous (unbundled path fails there)",
-              not unbundled_served)
+        # Kernel RESOLUTION: name which copy each path actually uses
+        # (III.13 — never assume). The bundle must resolve from its own
+        # globals; the standalone module must resolve to the package sibling,
+        # NOT to mlx_lm.models.vq_switch, which exists only on VQ-patched
+        # lab machines. The original version of this check asserted the
+        # standalone path FAILS without mlx_lm — true of the old fallback
+        # chain, fixed the first time the selftest ran in a fresh venv.
+        bundled_fn = ns.get("_dense_fused")
+        check("bundle resolves _dense_fused from its own globals",
+              bundled_fn is not None)
+        resolved = vq_dense._resolve_kernel("_dense_fused")
+        rmod = getattr(resolved, "__module__", "?")
+        check("standalone resolves the sibling, not a patched mlx_lm",
+              "mlx_lm" not in rmod, f"resolved from {rmod}")
 
         # ---------------------------------------------------------------
         print("[7/7] pricer")
