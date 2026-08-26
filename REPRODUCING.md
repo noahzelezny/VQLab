@@ -4,11 +4,17 @@
 by this pipeline's ancestor scripts in the research repo, not by this
 package's entry points — VQLab is those scripts with documented deltas
 (seeding on by default, shared family registry, portable paths; the Metal
-runtimes are verbatim). The full pipeline is exercised end-to-end on a
-synthetic model by `vqlab selftest`; a full-scale artifact has not yet been
-built through the `vqlab` CLI itself. By this project's own rules that makes
-"these commands reproduce the paper" an expectation from near-identical
-code, not a measurement — we state it as such rather than hide it.
+runtimes are verbatim). What HAS been verified through this package, in a
+fresh venv with stock mlx-lm on a real model (gemma-4-e4b, d2/K256, full
+depth): fit -> outlier gate -> assemble -> pack -> release gates -> smoke
+generation through the bundled runtime -> KL cache + scoring of both the VQ
+artifact and an affine comparator, every stage via the `vqlab` CLI. The
+*paper's* specific rows have not been re-run through the package (their
+sources were rotated off the build machine after release), so "these
+commands reproduce the paper" remains an expectation from near-identical
+code — stated as such rather than hidden. The first full-scale dogfood run
+caught and fixed one real defect: the standalone dense runtime resolved its
+kernels from a VQ-patched mlx-lm and failed on a stock install.
 
 Every row in the paper is reproducible in the *statistical* sense: every
 artifact the paper measures is a single UNSEEDED draw, so a re-fit
