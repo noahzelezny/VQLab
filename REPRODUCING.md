@@ -14,7 +14,12 @@ sources were rotated off the build machine after release), so "these
 commands reproduce the paper" remains an expectation from near-identical
 code — stated as such rather than hidden. The first full-scale dogfood run
 caught and fixed one real defect: the standalone dense runtime resolved its
-kernels from a VQ-patched mlx-lm and failed on a stock install.
+kernels from a VQ-patched mlx-lm and failed on a stock install. A second
+run at K512 exercised true sub-byte packing at full scale: 126 code tensors
+packed 9-bit (5.4 -> 4.1 GiB), the packed artifact generated through its
+bundled runtime, and packed vs unpacked twins scored IDENTICALLY to every
+printed digit on the same teacher cache — packing is a representation
+change, and the measurement agrees.
 
 Every row in the paper is reproducible in the *statistical* sense: every
 artifact the paper measures is a single UNSEEDED draw, so a re-fit
