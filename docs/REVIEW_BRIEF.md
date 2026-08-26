@@ -42,8 +42,8 @@ need a real multi-GB checkpoint and are reported rather than omitted.
 
 1. **Claim accuracy.** Every number in README/REPRODUCING was taken from
    `paper/LEDGER.md` only, never EXPERIMENTS.md. Please check them against
-   the *current* ledger — it moves daily, and the in-repo `paper/PAPER.md`
-   is a snapshot that must be re-pulled immediately before any push.
+   the *current* ledger — it moves daily. (The in-repo paper snapshot has
+   been dropped; the README links the paper once published.)
 2. **Whether the fences are stated strongly enough.** The measured limits
    (VQ wins 2.0–4.5 bpw; crossover bracketed 4.5–6.0 on the dense 27B;
    8-bit lossless; prefill ~0.5x affine at 35B) are in the README, but a
