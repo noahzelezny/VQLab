@@ -27,6 +27,33 @@ import mlx.core as mx
 import mlx.nn as nn
 
 
+def _resolve_kernel(name):
+    """Find the fused kernel, most-local copy first.
+
+    Order: (1) this module's own globals — the BUNDLED case, where model.py
+    concatenates vq_switch + vq_dense and the kernel is already here;
+    (2) a sibling vq_switch module — the PACKAGE / same-directory case, which
+    works in a completely stock venv; (3) mlx_lm.models.vq_switch — a
+    VQ-PATCHED install only. The old order tried (3) directly after (1) and
+    therefore worked on every lab machine and failed on a stock one — found
+    the first time the selftest ran in a genuinely fresh venv.
+    """
+    f = globals().get(name)
+    if f is not None:
+        return f
+    import importlib
+    for mod in ("vq_switch", "vqlab.vq_switch", "mlx_lm.models.vq_switch"):
+        try:
+            m = importlib.import_module(mod)
+        except ImportError:
+            continue
+        if hasattr(m, name):
+            return getattr(m, name)
+    raise ImportError(
+        f"no source for {name}: not bundled alongside this module, no sibling "
+        f"vq_switch importable, and mlx_lm is not VQ-patched")
+
+
 def _decode(codes, codebook, scales, group_size, out_d, in_d):
     """codes [R, NSUB] -> dense [R, in_d] fp16, scaled group-wise."""
     w = codebook[codes.reshape(-1)].reshape(out_d, in_d)
@@ -153,14 +180,12 @@ class VQLinear(nn.Module):
             # VQ_DENSE_REF=1 keeps the old expert-shaped path callable
             # as the reference for A/B checks.
             if os.environ.get("VQ_DENSE_REF"):
-                _fused = globals().get("_fused") or __import__(
-                    "mlx_lm.models.vq_switch", fromlist=["_fused"])._fused
+                _fused = _resolve_kernel("_fused")
                 eidx = mx.zeros((N,), dtype=mx.uint32)
                 y = _fused(xf, eidx, self.codes[None], self.codebook,
                            self.vq_scales[None], pack_bits=self.pack_bits)
             else:
-                _dense_fused = globals().get("_dense_fused") or __import__(
-                    "mlx_lm.models.vq_switch", fromlist=["_dense_fused"])._dense_fused
+                _dense_fused = _resolve_kernel("_dense_fused")
                 y = _dense_fused(xf, self.codes, self.codebook,
                                  self.vq_scales, pack_bits=self.pack_bits,
                                  in_features=self._in_features)
