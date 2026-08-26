@@ -76,7 +76,13 @@ def main(argv=None) -> int:
         if cls.__name__.startswith("VQ"):
             vq_modules += 1
             origin = sys.modules.get(cls.__module__)
-            path = getattr(origin, "__file__", "<unknown>")
+            path = getattr(origin, "__file__", None)
+            if path is None:
+                import inspect
+                try:
+                    path = inspect.getfile(cls)
+                except TypeError:
+                    path = f"<module {cls.__module__!r} — exec'd, no file>"
             key = (cls.__name__, path)
             if key not in seen:
                 seen.add(key)
@@ -85,10 +91,23 @@ def main(argv=None) -> int:
         print("  (no VQ modules found — is this a VQ artifact?)")
     print(f"  {vq_modules} VQ module(s) instantiated")
 
+    # Use the model's chat template when it has one. An instruct model fed
+    # a raw prompt can emit a degenerate repetition loop that LOOKS like
+    # quantization damage — measured: a pure-affine control produced the
+    # identical loop on the same raw prompt, and the VQ artifact answered
+    # correctly once the template was applied. A smoke that alarms on the
+    # instrument rather than the artifact wastes exactly the trust it exists
+    # to build.
+    prompt = a.prompt
+    if getattr(tokenizer, "chat_template", None):
+        prompt = tokenizer.apply_chat_template(
+            [{"role": "user", "content": a.prompt}],
+            tokenize=False, add_generation_prompt=True)
+        print("(chat template applied)")
     print(f"\ngenerating {a.max_tokens} token(s) through the fused path ...",
           flush=True)
     try:
-        text = generate(model, tokenizer, prompt=a.prompt,
+        text = generate(model, tokenizer, prompt=prompt,
                         max_tokens=a.max_tokens, verbose=False)
     except Exception as e:
         print(f"\nFAIL: the artifact could not generate: "
