@@ -62,6 +62,12 @@ rules that keep these numbers honest.
   prose better by 0.0204 = 3.6x the K2048 floor (claimed) and code a tie
   (0.4x, inside the floor). "Wins both corpora" is withdrawn.
 
+*Reproducibility note:* prose-ppl rows are fully reproducible from the
+shipped corpus. The **code-ppl column was measured on a private corpus that
+does not ship**; `scripts/make_code_corpus.py` builds a public replacement
+with a provenance manifest, but that is a different instrument and its
+scores do not compare to the column above.
+
 **Read the floors with the margins.** Seed-noise floors are geometry-specific
 and narrow as K grows: 397B d4/K256 = 0.0256 prose / ~0.0178 code; d4/K2048 =
 0.0056 / 0.0104; dense 27B d2/K256 = 2.085 mnats / 0.0447 ppl. A margin
