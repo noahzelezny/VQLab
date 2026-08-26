@@ -29,10 +29,11 @@ def main():
     ap.add_argument("--trials", type=int, default=1)
     ap.add_argument("--corpus", default=None,
                     help="corpus file (default: referee_corpus.txt, wikitext). "
-                         "Score referee_corpus_code.txt too — a margin chosen "
-                         "on one corpus is exactly the claim a domain shift "
-                         "can erase. Never compare PPL ACROSS corpora — only "
-                         "models within one corpus.")
+                         "Score a code corpus too (scripts/make_code_corpus.py "
+                         "builds one) — a margin chosen on one corpus is "
+                         "exactly the claim a domain shift can erase. Never "
+                         "compare PPL ACROSS corpora — only models within "
+                         "one corpus.")
     args = ap.parse_args()
 
     mx.set_cache_limit(8 << 30)
