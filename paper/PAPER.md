@@ -2,9 +2,10 @@
 
 **Noah Zelezny**
 
-*Draft 4, 2026-08-23. Every number traces to a committed entry in the lab
+*Draft 5, 2026-08-26. Every number traces to a committed entry in the lab
 record; every margin is stated against a measured fit-to-fit noise floor
-for its geometry.*
+for its geometry. Four independent audits were run against this draft and
+the corrections they produced are recorded in the ledger alongside it.*
 
 ## Abstract
 
@@ -43,16 +44,17 @@ Three findings. **First,
 below approximately 5 bits per weight, the data-free VQ builds
 outperform the affine builds.** On the 397B model, a 1.75-bit-per-weight
 VQ build outscores the leading calibrated mixed-precision build — a
-2.6-bit-per-weight artifact — on both evaluation corpora (prose and
-code perplexity) while being 19.6 GiB smaller; a 2.25-bit VQ build
-beats the same comparator on both corpora at near-matched size, by 24
-times the measurement noise. On the 35B model, a 3.5-bit VQ build
-reaches 47.5 millinats at 15.8 GiB, where the community 4-bit affine
-build measures 78.6 millinats — 31.1 millinats more — at 19.0 GiB. On the dense 27B, two VQ builds straddle the 4-bit
-affine conversion's size: the smaller (13.6 GiB) beats it by 12% KL
-divergence while being 0.5 GiB smaller, and the larger (14.6 GiB, 3.5%
+2.6-bit-per-weight artifact — on prose perplexity while being 19.6 GiB
+smaller, and ties it on code; a 2.25-bit VQ build beats the same
+comparator on both corpora at near-matched size, by 24 times the
+measurement noise on prose. On the 35B model, a 3.5-bit VQ build
+reaches 47.5 millinats at 16.6 GiB, where the community 4-bit affine
+build measures 78.6 millinats — about 31 millinats more — at 19.0 GiB. On the dense 27B, two VQ builds straddle the 4-bit
+affine conversion's size: the smaller (14.5 GiB) beats it by 12% KL
+divergence while being 0.5 GiB smaller, and the larger (15.5 GiB, 3.3%
 larger) beats it by 28%. The advantage has a measured boundary: on both architectures the
-affine frontier overtakes VQ between 5 and 6 bits per weight, and at 8
+affine frontier overtakes VQ in the 4.5-to-6 bit range — bracketed at
+4.5–6.0 bpw on the dense model and 5.0–6.0 on the MoE — and at 8
 bits affine quantization is essentially lossless, leaving nothing to
 improve upon. VQ's regime is the low-bit range — which is precisely the
 range in which large models fit on the hardware most people have.
@@ -163,7 +165,9 @@ catastrophic at +11). The dense 27B builds splice VQ MLPs into a 4-bit
 affine conversion, carrying every other tensor through unchanged, which
 makes each build a controlled ablation of the MLP treatment against its
 base. The 397B's vision tower is kept at bf16 and grafted on last —
-exactly 912,020,960 bytes, byte-identical across builds — and every
+exactly 912,020,960 bytes of tensor data, byte-identical across builds
+(the graft file itself is 912,057,227 B; the difference is the
+safetensors header) — and every
 size is stamped as measured before or after that graft.
 
 ### 2.2 The fit
@@ -254,10 +258,14 @@ reconstruction moves, and the tail is what output quality responds to
 (§4.3). Every margin in §3 is stated as a multiple of the floor for its
 geometry, a margin inside its floor is reported as noise, and a floor
 is never borrowed across geometries. The dense-family fitter gained a
-seed on 2026-08-22, after the measurements reported here; the MoE fitters
-draw their initialization subsample unseeded by design. Every artifact in
-this paper is therefore a single unseeded draw, which is why the floors
-above exist and why no margin is read without one.
+seed on 2026-08-22; the MoE fitters draw their initialization subsample
+unseeded by design. Every artifact in this paper is therefore a single
+unseeded draw with one exception: the 27B d2/K512 row is E142-27B arm 2, fit
+under a fixed seed after that date and reproducible bit-for-bit. Its
+margins are still read against a floor measured from unseeded draws, which
+makes them conservative — the floor contains draw variance the seeded arm
+does not have. That is why the floors above exist and why no margin is
+read without one.
 
 ## 3. Results
 
@@ -271,7 +279,7 @@ matched rate, exact twins within megabytes of each other:
 |---|---|---|
 | 2.00 bpw (35B) | d4/K256 vs d2/K16 | d4 wins by 12.2% KL |
 | 3.00 bpw (27B) | d4/K4096 vs d2/K64 | d4 wins by 8.6% KL |
-| 1.75 bpw (397B) | d8/K16384 vs d4/K128 | d8 wins both corpora, 4.4x floor |
+| 1.75 bpw (397B) | d8/K16384 vs d4/K128 | d8 wins prose, 4.4x floor; code +0.0260 is 1.5x and does not clear the bar |
 
 Dimension pays at matched rate — consistently, and modestly, with the
 margin shrinking as the rate rises. It also has costs. d4 has a hard
@@ -288,26 +296,49 @@ tax.
 
 ![397B ladder](fig_397b_ladder.png)
 
+Sizes below are whole-artifact post-graft bytes: what a user downloads.
+That convention is not symmetric here, and the asymmetry runs against us.
+Our artifacts carry the bf16 vision tower; the community comparators are
+text-only (2212 tensors, no tower), so each of our rows is 0.849 GiB
+heavier than a like-for-like comparison would make it. Every size margin
+we report against them is therefore understated by that amount — the
+d8 build's lead is 20.4 GiB rather than 19.6, and the flagship's 22.7
+rather than 21.9. We keep the download-size convention and state the
+offset rather than restate the sizes, because a convention that gets
+adjusted in the reporter's favour is worth less than a conservative one.
+
 **Ours (VQ; prose / code perplexity, packed post-graft GiB):**
 
-| build | GiB | prose | code |
-|---|---|---|---|
-| flat d4/K128 | 100.93 | 3.1706 | 2.6988 |
-| **flat d8/K16384 (published)** | 100.97 | 3.0591 | 2.6728 |
-| flat d4/K256 (published) | 111.62 | 2.7655 | 2.6383 |
-| **flat d4/K512** | 122.31 | 2.5634 | 2.6123 |
-| **flat d4/K2048 (published)** | 143.68 | 2.3410 | 2.5963 |
+| build | release | GiB | prose | code |
+|---|---|---|---|---|
+| flat d4/K128 | — | 100.93 | 3.1706 | 2.6988 |
+| **flat d8/K16384** | **VQ-2.2bpw** | 100.97 | 3.0591 | 2.6728 |
+| **flat d4/K256** | **VQ-2.4bpw** | 111.62 | 2.7655 | 2.6383 |
+| **flat d4/K512** | **VQ-2.6bpw** | 122.31 | 2.5634 | 2.6123 |
+| **flat d4/K2048** | **VQ-3bpw** | 143.68 | 2.3410 | 2.5963 |
+
+Bold rows are published artifacts, downloadable at the sizes shown, under
+`TheDrainFlorist/Qwen3.5-397B-A17B-<release>`; the unbolded rung is a ladder
+point only. Release names are whole-artifact bits per weight — total bytes
+over parameter count — and so exceed the codebook rate, which covers only the
+quantized region: d4/K2048 stores 11-bit indices, 2.75 bpw of codes plus an
+fp16 scale per (row, 64). One name is not its measurement: the flagship is
+called `VQ-3bpw` but the artifact measures 3.11 bpw, a residue of an earlier
+repository rename. The measured column, not the name, is the number (§5).
 
 **Affine (calibrated, text-only):**
 
 | build | GiB | prose | code |
 |---|---|---|---|
-| spicyneuron 2.6bit | 120.6 | 3.1843 | 2.6667 |
-| spicyneuron 3.5bit | 165.6 | 2.3614 | 2.6005 |
+| spicyneuron 2.6bit | 120.57 | 3.1843 | 2.6667 |
+| spicyneuron 3.5bit | 165.57 | 2.3614 | 2.6005 |
 
 Three comparisons carry claim 1 here. **d4/K512 against the 2.6-bit
 calibrated build:** at 1.7 GiB larger, prose perplexity is better by
-0.6209 — 24 times the fit-to-fit floor — and code by 0.0544. This is
+0.6209 — 24 times the fit-to-fit floor — and code by 0.0544. No floor
+was measured at d4/K512 or d8; both here and in the d8 comparison below,
+the d4/K256 floor is borrowed, so these multiples are lower bounds on
+the margin rather than measurements of it. This is
 the closest size-matched pair on the ladder and the least ambiguous
 result in the paper. **d8/K16384 vs the same build:** at 19.6
 GiB smaller, prose is better by 0.1252 (4.9x floor). **d4/K2048 vs the
@@ -315,11 +346,8 @@ GiB smaller, prose is better by 0.1252 (4.9x floor). **d4/K2048 vs the
 perplexity by 0.0204 — 3.6 times this geometry's measured fit-to-fit
 floor of 0.0056 — and a code margin of 0.0042 that sits inside the
 0.0104 code floor and is reported as a tie. The claim is therefore:
-smaller by 21.9 GiB, better on prose, tied on code. One asymmetry favours the comparators: the calibrated builds
-are text-only, while every size in our column includes the full vision
-tower at bf16 — 0.85 GiB of capability the affine builds simply omit.
-Subtracting it for a text-to-text comparison would move every VQ row
-0.85 GiB further ahead.
+smaller by 21.9 GiB, better on prose, tied on code — and 22.7 GiB
+smaller on the like-for-like basis described above.
 
 Our ladder is monotone — no mixed-allocation build beats the flat rung
 at or above its own size, and a matched-byte sweep of allocation shapes
@@ -333,31 +361,58 @@ is a size-targeting tool (§3.4), not a quality one.
 
 **35B — ours (VQ):**
 
-| build | GiB | KL mnats | top-1 |
-|---|---|---|---|
-| d4/K8192 | 14.84 | 53.02 | 89.55% |
-| **d4/K16384** | 15.78 | 47.54 | 89.81% |
-| d2/K256 | 17.64 | 36.86 | 90.92% |
-| **d2/K1024** | 21.39 | 28.03 | 92.22% |
-| d2/K4096 | 25.15 | 25.50 | 92.52% |
+| build | release | GiB | KL mnats | top-1 |
+|---|---|---|---|---|
+| **d4/K8192** | **VQ-3.8bpw** | 15.67 | 53.02 | 89.55% |
+| d4/K16384 | — | 16.61 | 47.54 | 89.81% |
+| d2/K256 | — | 18.48 | 36.86 | 90.92% |
+| **d2/K1024** | **VQ-5.4bpw** | 22.23 | 28.14 | 92.22% |
+| d2/K4096 | — | 25.98 | 25.50 | 92.52% |
+
+Bold rows are published artifacts, under
+`TheDrainFlorist/Qwen3.6-35B-A3B-<release>`. Two further 35B builds are published but
+do not appear on this flat ladder — a 13.79 GiB d4/K2048 rung below it, and
+an 18.71 GiB tail-weighted build that is not a flat geometry and so is not a
+point on this curve.
 
 **35B — affine:**
 
 | build | GiB | KL mnats | top-1 |
 |---|---|---|---|
 | 4-bit (community) | 19.00 | 78.56 | 85.61% |
-| 6-bit (ours) | 26.23 | 13.36 | 94.65% |
+| 6-bit (ours) | 27.07 | 13.36 | 94.65% |
 | 8-bit (community) | 35.13 | 7.45 | 96.18% |
 
-At the small end VQ dominates: 47.5 mnats at 15.8 GiB against affine's
-78.6 at 19.0 — 39% less divergence in 3.2 GiB fewer bytes. At 5 bits
+One asymmetry in these 35B comparisons runs in our favour, and it is not
+visible in the sizes. Every affine comparator here quantizes the MoE
+router — the community 4-bit and 8-bit and our own 6-bit all carry
+quantized gate projections — while our VQ builds leave the routers at
+bf16. The bytes are trivial, 20 MiB or 0.14% of the artifact. But a
+router's output feeds an argmax over experts, so quantizing it can change
+*which* expert runs rather than perturbing an output proportionally, and
+the effect is therefore not bounded by the byte share the way an ordinary
+precision difference would be. We have not measured it: that would take a
+VQ build with routers forced to 8 bits, re-scored, and we did not run one.
+The 397B comparisons in §3.2 are unaffected — there our builds and both
+comparators keep routers at bf16.
+
+Every 35B size above includes the 333-tensor bf16 vision tower, which the
+community comparators ship and our builds now carry: 0.832 GiB,
+byte-identical across builds, unquantized in all of them. Every row is a
+measured artifact; comparisons here are like-for-like at face value.
+(The 397B in §3.2 sits the other way round: our builds carry a tower its
+comparators lack, which is why that section states an offset rather than
+applying one.)
+
+At the small end VQ dominates: 47.5 mnats at 16.6 GiB against affine's
+78.6 at 19.0 — 39% less divergence in 2.4 GiB fewer bytes. At 5 bits
 per weight the comparison becomes a placement rather than a dominance:
 d2/K1024 lands between two affine rungs, and two independent fits of it
-score 28.14 and 27.93 against 43.7 for the affine frontier
-log-interpolated to the same size — both draws a factor of ~1.6 below
-the line, 73x the draw floor. One rung higher the sign flips: at 6 bpw,
+score 28.14 and 27.93 against 38.7 for the affine frontier
+log-interpolated to the same size — both draws a factor of ~1.4 below
+the line, roughly 50x the draw floor. One rung higher the sign flips: at 6 bpw,
 d2/K4096 is 1.1 GiB smaller than the 6-bit affine build and scores
-1.91x worse — 57x the floor, conclusive. (That two "6-bit" artifacts
+1.91x worse — 57x the floor (the d2/K1024 floor, borrowed: no d2/K4096 floor was measured), conclusive. (That two "6-bit" artifacts
 differ by 1.1 GiB is expected: a nominal rate names the code width on
 the quantized surface, while total bytes include each method's scale
 overhead and its treatment of the non-expert remainder — which is why
@@ -367,33 +422,46 @@ sits between 5.0 and 6.0 bits per weight.**
 
 **27B — ours (VQ):**
 
+| build | release | GiB | KL mnats | top-1 | ppl |
+|---|---|---|---|---|---|
+| d4/K256 | — | 10.47 | 325.6 | 76.5% | 6.403 |
+| d4/K1024 | — | 11.47 | 148.5 | 82.5% | 5.525 |
+| **d4/K4096** | **VQ-3.9bpw** | 12.47 | 85.8 | 86.1% | 5.229 |
+| **d2/K256** | **VQ-4.5bpw** | 14.45 | 40.3 | 90.1% | 5.233 |
+| **d2/K512** | **VQ-4.8bpw** | 15.45 | 32.8 | 90.8% | 5.162 |
+| d2/K4096 | — | 18.44 | 26.7 | 91.7% | 5.242 |
+
+Bold rows are published artifacts, under
+`TheDrainFlorist/Qwen3.8-27B-<release>`; all three are the first MLX-format
+quantizations of this model.
+
+**27B — affine.** No MLX-format quantization of this model has been
+published by the community, so unlike the 397B and 35B comparators these
+rungs are our own conversions. That is a weaker class of evidence — a
+comparator one builds oneself can be built badly — and one such flaw is
+recorded in §4.1.
+
 | build | GiB | KL mnats | top-1 | ppl |
 |---|---|---|---|---|
-| d4/K256 | 9.7 | 325.6 | 76.5% | 6.403 |
-| **d4/K1024** | 10.61 | 148.5 | 82.5% | 5.525 |
-| d4/K4096 | 11.61 | 85.8 | 86.1% | 5.229 |
-| **d2/K256** | 13.60 | 40.3 | 90.1% | 5.233 |
-| **d2/K512** | 14.59 | 33.1 | 91.1% | 5.194 |
-| d2/K4096 | 17.58 | 26.7 | 91.7% | 5.242 |
+| q2 | 8.69 | 1426.9 | 46.1% | 16.435 |
+| q3 | 11.82 | 187.8 | 79.5% | 5.832 |
+| q4 | 14.95 | 45.8 | 89.8% | 5.206 |
+| q6 | 21.21 | 3.71 | 96.8% | 5.260 |
+| q8 | 27.48 | 1.25 | 98.5% | 5.241 |
 
-**27B — affine:**
-
-| build | GiB | KL mnats | top-1 | ppl |
-|---|---|---|---|---|
-| q2 | 7.9 | 1426.9 | 46.1% | 16.435 |
-| q3 | 10.96 | 187.8 | 79.5% | 5.832 |
-| q4 | 14.09 | 45.8 | 89.8% | 5.206 |
-| q6 | 20.36 | 3.71 | 96.8% | 5.260 |
-| q8 | 26.34 | 1.64 | 98.1% | 5.243 |
+Every 27B size above includes the 333-tensor bf16 vision tower (0.858 GiB),
+grafted onto rungs and comparators alike. The offset is uniform, so
+differences carry over unchanged; ratios do not.
 
 The recipe is not an MoE phenomenon. Below 4.5 bpw every VQ point sits
 above the affine line at its size: d4/K1024 beats q3 on both metrics at
-0.35 GiB less, and d2/K512 beats q4 by 27.8% KL (6.1x floor) and +1.28
+0.35 GiB less, and d2/K512 beats q4 by 28.4% KL (6.2x floor) and +1.02
 points top-1 at q4-class size. Above, the picture inverts: q6 beats our
 best 6-bpw rung by 7.2x KL at 2.8 GiB more. **The dense crossover is
 bracketed at 4.5–6.0 bpw — nearly the same band as the MoE.** One
 instrument note: the perplexity column barely moves from q3 upward
-(5.19–5.35, all inside the 0.0447 floor) while KL moves 40x. On this
+(5.21–5.26 across the affine rungs above q3, a span of 0.054 against a
+0.0447 floor) while KL moves 37x. On this
 instruction-tuned family, perplexity cannot rank quantizations;
 divergence and agreement can.
 
@@ -449,12 +517,34 @@ measured, and several bound the claims of §3.
 
 ### 4.1 The 8-bit ceiling
 
-At 8 bits affine is essentially lossless: 7.4 mnats on the 35B, 1.6 on
-the 27B. Nothing we measured approaches that under the byte budgets
-where VQ wins. On the 27B, the ladder's own slope says why: divergence
-falls by x0.673 per added bit near 4.5 bpw but only x0.868 per bit by
-6.0 — extrapolating the measured slope, 8-bit-class quality needs ~25
-bits per weight. The 35B agrees from the other side: a 6-bit affine
+At 8 bits affine is essentially lossless: 7.4 mnats on the 35B, 1.3 on
+the 27B. The 35B figure comes from a community 8-bit whose quantized
+surface matches its 4-bit sibling exactly. The 27B figure was rebuilt
+late in this work, and how it was rebuilt is worth reporting. The
+artifact we had used as the 8-bit bar was not an 8-bit build: its
+configuration declares a 4-bit default with 402 per-module overrides,
+401 of them at 8 bits, one at 6, and 96 linear-attention projections
+carrying no override at all and left at bf16. Converted properly — a
+uniform 8-bit with no overrides, matching how every other rung on this
+ladder was made — it measures 1.254 millinats at 27.48 GiB against the
+old artifact's 1.641 at 27.20.
+
+The correction moves the bar the harder way. A better 8-bit build means
+a more capable affine frontier and a longer distance for vector
+quantization to cover, so the ceiling reported here is higher than the
+one we had been measuring against. Extrapolating the 27B's measured
+slope to the corrected target puts 8-bit-class quality at roughly 27
+bits per weight rather than 25. We had predicted the opposite sign
+before running it, for a reason worth recording: we had found one of the
+two deviations and reasoned from it alone, and the second — the output
+head at 6 bits — was the larger term and pulled the other way. Finding
+one defect is not the same as finding the defects.
+
+Nothing we measured approaches that ceiling under the byte budgets where
+VQ wins. On the 27B, the ladder's own slope says why: divergence falls
+by x0.673 per added bit near 4.5 bpw but only x0.868 per bit by 6.0, so
+the measured slope has to be carried a very long way to reach a
+near-lossless target. The 35B agrees from the other side: a 6-bit affine
 build inside a 28 GiB budget misses 8-bit quality by 1.8x, and our
 5-bit build misses it by 3.8x. On both models, 8-bit quality costs 8-bit bytes, for affine and for
 VQ alike.
@@ -462,10 +552,16 @@ VQ alike.
 ### 4.2 Where the geometry axes stop paying
 
 Dimension pays at matched rate (§3.1) but the margin shrinks as rate
-rises — 12.2% at 2.0 bpw, 8.6% at 3.0 — and whether it survives at 4.0
-bpw is under test as we write. Codebook size pays with the expected
+rises — 12.2% at 2.0 bpw, 8.6% at 3.0 — and at 4.0 bpw it stops paying
+cleanly. A d4/K65536 rung matched against a d2/K256 rung 0.1 GiB smaller
+(14.55 vs 14.45) splits: divergence favours d4 by 2.2 mnats, which is 1.06 times a
+floor measured at a different geometry and so not a margin we read,
+while perplexity favours d2 by 0.078, or 1.75 times that same borrowed
+floor. Neither pre-registered branch fired; the honest reading is a
+wash leaning d2, and the dimension advantage is not established above
+3 bpw. Codebook size pays with the expected
 diminishing returns: on the 35B d4 line, each doubling of K buys less
-(17.0, then 12.1, then 5.5 mnats). Harvest never beats the flat rung at
+(17.0, then 15.5, then 5.5 mnats). Harvest never beats the flat rung at
 its own size, at any base richness we measured; its value is
 reachability, not quality. And calibration lost on its home turf where
 we tested it: an activation-calibrated method fell to uniform
@@ -508,7 +604,10 @@ a comparison of draws.
 
 Speed levers we tested and closed: a fused row-gather for prefill (the
 runtime already fuses it; recoverable ~zero), byte-aligned packing (
-saves zero bytes, costs 37% decode — packers now skip it), native-bf16
+saves zero bytes, and cost 37% decode when it was measured — a figure
+that did not reproduce at kernel level on a later recheck and has not
+been re-measured at artifact level; the packers skip it either way),
+native-bf16
 kernel execution (same speed, changes numerics). Distillation-based
 refinement at 397B/2-bit was falsified outright. Each carries a
 measured effect size in the lab record.
@@ -562,6 +661,20 @@ identifies a shard and catches a rewrite, but it does not certify every
 byte, and mtimes survive copying. Metadata answers *was this replaced*,
 never *is this unchanged*.
 
+**A label is not a measurement.** Metadata records what someone
+intended, not what the file contains. Every checkpoint in this project
+declares a `model_type` naming the wrong model release, carried forward
+silently into each derived build; we came close to grafting one model's
+vision tower onto another on the strength of that field. Our own
+descriptions failed the same way — a manifest documented as storing
+content hashes stores a hash of each shard's head, and a fitter
+documented as seeded was not seeded. None of these survived because they
+were hard to check. They survived because they were trivial to check, and
+nothing that costs nothing to believe ever gets a verification budget.
+Where a property carries a claim, it is read from the bytes: a tensor
+compared against its candidate base, a hash recomputed, a flag traced to
+the line that consumes it.
+
 None of this is novel methodology; it is ordinary unit discipline,
 applied to a setting where the wrong numbers are the plausible ones.
 
@@ -580,13 +693,15 @@ exist or could be produced for that model, but at ~225 GB for a 4-bit
 build and ~320 GB for 6-bit they exceed the memory of any machine
 available to this project, so whether the same crossover band holds at
 that scale is untested. Whether dimension still pays at d4's 4.0 bpw
-ceiling is a rate-twin experiment currently fitting. No dense harvest
+ceiling was tested and did not resolve: the d4/K65536 rate twin (§4.2)
+came out a wash leaning d2, so the dimension advantage is not established
+above 3 bpw. No dense harvest
 rung has been built: claim 2's exchange rates are measured on MoE
 only, and the mechanism we propose (shallow-layer redundancy) predicts
 they should weaken on dense — a prediction, not a result.
 
 **Instrument limits.** The 397B noise floors rest on two draws per
-geometry (0.0256 prose at d4/K256; 0.0056 prose and 0.0104 code at
+geometry (0.0256 prose and ~0.0178 code at d4/K256; 0.0056 prose and 0.0104 code at
 d4/K2048 — the floor narrows substantially as the codebook grows). The 35B floor bounds initialization variance only
 (same box, same geometry). Perplexity cannot rank quantizations on the
 instruction-tuned 27B (§3.3). Decode throughput was bimodal at ~100
@@ -607,9 +722,9 @@ with their VQ runtimes bundled in-checkpoint (stock mlx-lm, no
 patches). Where a repository's weights were upgraded in place, the
 previous build remains fetchable at its pinned revision and the card
 labels which weights produced which benchmark rows. Published
-artifacts carry external manifests. The fits behind them are unseeded
-single draws, so a published build is reproducible in recipe and
-geometry but not bit-for-bit; that is precisely why every margin in this
+artifacts carry external manifests. With the single exception noted in
+§2.6, the fits behind them are unseeded single draws, so a published build
+is reproducible in recipe and geometry but not bit-for-bit; that is precisely why every margin in this
 paper is quoted against a measured fit-to-fit floor rather than against
 a repeated build. The dense-family fitter has since gained a seed.
 
