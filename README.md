@@ -89,8 +89,9 @@ measured; the comparison to the incumbent's footprint is deferred rather
 than quoted on a basis we know to be mismatched.
 
 **Dense 27B (KL-to-bf16 + ppl):** the recipe is not an MoE phenomenon.
-d2/K512 beats the 4-bit affine conversion by 27.8% KL (6.1x floor) and
-+1.28 pp top-1 at 4-bit-class size; d4/K1024 beats q3 on both metrics at
+d2/K512 (the published artifact: 32.81 mnats / 90.84% top-1 / 5.162 ppl)
+beats the 4-bit affine conversion by 28.4% KL (6.2x floor) and +1.02 pp
+top-1 at 4-bit-class size; d4/K1024 beats q3 on both metrics at
 0.35 GiB less.
 
 **Where the method ends, measured:** the VQ advantage lives at the low-bpw
