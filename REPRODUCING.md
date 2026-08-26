@@ -45,8 +45,12 @@ vqlab smoke artifacts/K256-packed   # preflights RAM, then generates and
 
 # 7. score, then stamp
 vqlab score --model artifacts/K256-packed                        # prose
-vqlab score --model artifacts/K256-packed \
-    --corpus src/vqlab/referee/referee_corpus_code.txt           # code
+# code column: the paper's code corpus is private and does not ship.
+# Build a public one (DIFFERENT instrument — scores are internally
+# comparable but do not compare to the paper's code column):
+#   python scripts/make_code_corpus.py --repo <apache2-project> --files ... \
+#       --out code_corpus.txt --attribution "<project> @ <commit>, Apache-2.0"
+vqlab score --model artifacts/K256-packed --corpus code_corpus.txt
 vqlab manifest write artifacts/K256-packed
 ```
 
