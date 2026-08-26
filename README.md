@@ -200,5 +200,8 @@ the reason, never silently dropped.
 
 ## License
 
-Apache-2.0. If you use VQLab or its artifacts in published work, cite the
+Apache-2.0 for all code. The shipped corpus data files carry their own
+terms (CC BY-SA for the WikiText prose corpus, public domain for the
+literary corpus) — see [docs/CORPORA.md](docs/CORPORA.md) for per-file
+provenance and attribution. If you use VQLab or its artifacts in published work, cite the
 companion paper.
