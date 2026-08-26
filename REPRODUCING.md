@@ -1,5 +1,15 @@
 # REPRODUCING — paper table rows → commands
 
+**Tool provenance, stated plainly:** the published artifacts were produced
+by this pipeline's ancestor scripts in the research repo, not by this
+package's entry points — VQLab is those scripts with documented deltas
+(seeding on by default, shared family registry, portable paths; the Metal
+runtimes are verbatim). The full pipeline is exercised end-to-end on a
+synthetic model by `vqlab selftest`; a full-scale artifact has not yet been
+built through the `vqlab` CLI itself. By this project's own rules that makes
+"these commands reproduce the paper" an expectation from near-identical
+code, not a measurement — we state it as such rather than hide it.
+
 Every row in the paper is reproducible in the *statistical* sense: every
 artifact the paper measures is a single UNSEEDED draw, so a re-fit
 reproduces aggregate scores to reporting precision, not exact bytes (paper §5; two artifacts of identical geometry differ, and
