@@ -137,22 +137,38 @@ python3 -m venv .venv && . .venv/bin/activate
 pip install -e .
 vqlab selftest        # real pipeline on a tiny synthetic model (<1 min, uses the GPU)
 
-vqlab fit-moe   --family qwen397b --model <bf16-or-base> --out fits/K256 ...
-vqlab fit-dense  --src <src> --out fits/d2K512 ...   # dense families
-vqlab build-dense --base <q4-base> --mlp fits/d2K512 --out <artifact>
-vqlab verify    <artifact> --outlier 3.0        # BEFORE believing any score
-vqlab pack      <artifact> --out <packed>       # true bit-width, measured size
-vqlab graft     <packed> --vision <bf16>        # MoE vision tower, bf16
-vqlab check     <packed>                        # release + bundle gates
-vqlab smoke     <packed>                        # one token, fused path, resident
-vqlab score     <packed> --instrument referee   # or kl
-vqlab manifest  write <packed>                  # stamp provenance
+# MoE families (Qwen3.5/3.6-class): fit against an affine skeleton + bf16 source
+vqlab fit-moe --family qwen3_5 --base <affine-skeleton> --src <bf16> \
+    --vq-layers 0-56 --k 256 --dim 4 --out fits/K256
+vqlab pack  --src fits/K256 --out artifacts/K256-packed
+vqlab graft --artifact artifacts/K256-packed --src <bf16>   # vision tower
+
+# Dense families: fit the MLP trio, splice into a quantized base
+vqlab fit-dense --family qwen3_8_dense --src <bf16> --k 512 --dim 2 \
+    --out fits/d2K512
+vqlab build-dense --family qwen3_8_dense --base <q4-base> \
+    --mlp fits/d2K512 --out assembled --dry-run   # then without --dry-run
+vqlab pack-dense --src assembled --out artifacts/d2K512-packed
+
+# Gates — run these before believing anything (see METHODOLOGY.md)
+vqlab verify --artifact fits/K256 --src <bf16> --family qwen3_5 \
+    --outlier 3.0                       # BEFORE any score is believed
+vqlab check artifacts/K256-packed       # release + bundle gates
+vqlab smoke artifacts/K256-packed       # generate through the SHIPPED runtime
+
+# Score (referee ppl streams > RAM; KL needs a teacher cache)
+vqlab score --model artifacts/K256-packed
+vqlab kl cache --model <bf16> --out-dir caches/family
+vqlab kl score --model artifacts/K256-packed --cache-dir caches/family
+
+vqlab manifest write artifacts/K256-packed   # stamp provenance
 ```
 
 Every subcommand is a thin wrapper over a standalone script in
-`src/vqlab/`; `vqlab <cmd> --help` shows the full surface. See
-[REPRODUCING.md](REPRODUCING.md) for the exact commands behind each paper
-table row.
+`src/vqlab/`; `vqlab <cmd> --help` shows the full surface. The dense block
+above is exactly the sequence that was dogfooded end-to-end on a real model
+in a fresh venv (REPRODUCING.md records it, and maps each paper table to
+its commands).
 
 ## Requirements
 
