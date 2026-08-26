@@ -6,10 +6,35 @@ fit it data-free, pack to true bit-width, verify, and serve through stock
 `mlx-lm` — the runtime ships inside the artifact.
 
 The method and every number below are documented in the companion paper,
-[*Data-Free Vector Quantization Beats Affine Quantization at Matched
-Bytes*](paper/PAPER.md). Released artifacts are published under
-[TheDrainFlorist](https://huggingface.co/TheDrainFlorist) on Hugging Face
-with their VQ runtimes bundled in-checkpoint (stock `mlx-lm`, no patches). All sizes are measured packed bytes; every margin is stated against
+*Data-Free Vector Quantization Beats Affine Quantization at Matched Bytes*
+(publication pending; link will land here). Released artifacts are published
+under [TheDrainFlorist](https://huggingface.co/TheDrainFlorist) on Hugging
+Face with their VQ runtimes bundled in-checkpoint (stock `mlx-lm`, no
+patches).
+
+## Published models
+
+Every artifact this tool's pipeline has shipped:
+
+| model | family |
+|---|---|
+| [Qwen3.5-397B-A17B-VQ-2.2bpw](https://huggingface.co/TheDrainFlorist/Qwen3.5-397B-A17B-VQ-2.2bpw) | 397B MoE (d8/K16384) |
+| [Qwen3.5-397B-A17B-VQ-2.4bpw](https://huggingface.co/TheDrainFlorist/Qwen3.5-397B-A17B-VQ-2.4bpw) | 397B MoE |
+| [Qwen3.5-397B-A17B-VQ-2.6bpw](https://huggingface.co/TheDrainFlorist/Qwen3.5-397B-A17B-VQ-2.6bpw) | 397B MoE |
+| [Qwen3.5-397B-A17B-VQ-3bpw](https://huggingface.co/TheDrainFlorist/Qwen3.5-397B-A17B-VQ-3bpw) | 397B MoE (flagship) |
+| [Qwen3.6-35B-A3B-VQ-3.4bpw](https://huggingface.co/TheDrainFlorist/Qwen3.6-35B-A3B-VQ-3.4bpw) | 35B MoE |
+| [Qwen3.6-35B-A3B-VQ-3.8bpw](https://huggingface.co/TheDrainFlorist/Qwen3.6-35B-A3B-VQ-3.8bpw) | 35B MoE |
+| [Qwen3.6-35B-A3B-VQ-4.6bpw](https://huggingface.co/TheDrainFlorist/Qwen3.6-35B-A3B-VQ-4.6bpw) | 35B MoE |
+| [Qwen3.6-35B-A3B-VQ-5.4bpw](https://huggingface.co/TheDrainFlorist/Qwen3.6-35B-A3B-VQ-5.4bpw) | 35B MoE |
+| [Qwen3.8-27B-VQ-3.9bpw](https://huggingface.co/TheDrainFlorist/Qwen3.8-27B-VQ-3.9bpw) | dense 27B |
+| [Qwen3.8-27B-VQ-4.5bpw](https://huggingface.co/TheDrainFlorist/Qwen3.8-27B-VQ-4.5bpw) | dense 27B |
+| [Qwen3.8-27B-VQ-4.8bpw](https://huggingface.co/TheDrainFlorist/Qwen3.8-27B-VQ-4.8bpw) | dense 27B |
+| [gemma-4-26b-a4b-it-VQ-6.2bpw](https://huggingface.co/TheDrainFlorist/gemma-4-26b-a4b-it-VQ-6.2bpw) | gemma MoE * |
+| [gemma-4-e4b-it-VQ-PLE](https://huggingface.co/TheDrainFlorist/gemma-4-e4b-it-VQ-PLE) | gemma dense * |
+
+\* Released and usable, but no quality claims are made for the gemma family
+anywhere in this repo or the paper: its scoring instrument is
+non-deterministic (see "Known scope limits"). All sizes are measured packed bytes; every margin is stated against
 a measured seed-noise floor; see [METHODOLOGY.md](METHODOLOGY.md) for the
 rules that keep these numbers honest.
 
