@@ -25,99 +25,6 @@ import pathlib
 
 import mlx.core as mx
 
-def _assert_tower_belongs(src_cfg, art_cfg, src_name, art_name):
-    """Refuse a vision tower that cannot project into THIS model.
-
-    Nothing in an artifact's config records which base it came from, so no
-    smarter default can rescue a wrong --src: the only durable check is a
-    CORRESPONDENCE assertion on whatever source is actually passed.
-
-    This exists because a lab default pointed one family's packer at another
-    family's bf16 dir, and five 35B artifacts were built carrying a 397B
-    vision_config — 333 tensors present, presence checks green, and a tower
-    dimensionally incapable of projecting into the model shipping it
-    (out_hidden_size 4096 into hidden_size 2048). A gate that checks
-    PRESENCE rather than CORRESPONDENCE always has this hole.
-    """
-    vc = (src_cfg or {}).get("vision_config") or {}
-    out_h = vc.get("out_hidden_size")
-    txt = (art_cfg or {}).get("hidden_size")
-    if txt is None:
-        txt = ((art_cfg or {}).get("text_config") or {}).get("hidden_size")
-    if out_h is None or txt is None:
-        return  # nothing to compare; say nothing rather than pretend
-    if int(out_h) != int(txt):
-        raise SystemExit(
-            f"FAIL: refusing to graft. The tower in {src_name} projects to "
-            f"out_hidden_size {out_h}, but {art_name} has hidden_size {txt}. "
-            f"This source belongs to a different model family — nothing has "
-            f"been written. Pass the --src that matches THIS artifact. If the "
-            f"artifact ALREADY carries another family's vision block, re-pack "
-            f"it from the fit: copy-if-absent cannot correct a key that is "
-            f"present and wrong.")
-
-
-def _assert_same_model(src_map, art_map, src_dir, art_dir, vis_prefixes,
-                       probe_n=6):
-    """Prove the source IS this artifact's base, by shared byte-identical tensors.
-
-    The width assertion above is a correspondence check and is still NOT an
-    identity check: two model generations can share a BYTE-IDENTICAL
-    vision_config (Qwen3.5 and 3.6 both project to 2048), so width cannot
-    separate them even in principle. Measured consequence: a 3.5 tower was
-    grafted into a 3.6 artifact, and because 3.6 keys its tower
-    `vision_tower.*` while 3.5 uses `model.visual.*`, 333 tensors landed in a
-    namespace the model never reads — and the presence gate reported
-    333/333 PASS.
-
-    What actually settles identity is that non-vision tensors — norms and
-    biases especially — pass through a fit UNTOUCHED. The true base shares
-    several byte-identical ones with the artifact; a different model,
-    release, or family shares none. Zero shared KEYS is decisive on its own,
-    since a different generation does not share a key namespace.
-
-    `config.model_type` is NOT the base and must not be used for this: a 3.6
-    artifact reports `qwen3_5_moe`, which actively invites the wrong source.
-    """
-    vis = tuple(p for p in vis_prefixes if p)
-    shared = [k for k in src_map
-              if k in art_map and not k.startswith(vis)]
-    if not shared:
-        raise SystemExit(
-            f"FAIL: refusing to graft. {src_dir} and {art_dir} share ZERO "
-            f"non-vision tensor names. Different key namespaces mean a "
-            f"different model generation or family — this is not this "
-            f"artifact's base. Nothing written.")
-    # norms first: small, untouched by any fit, and present in every model
-    shared.sort(key=lambda k: (0 if "norm" in k else 1 if "bias" in k else 2, k))
-    probe = shared[:probe_n]
-    matches, checked = [], []
-    for k in probe:
-        try:
-            with mx.stream(mx.cpu):
-                a = mx.load(str(SRC / src_map[k]))[k]
-                b = mx.load(str(ART / art_map[k]))[k]
-                mx.eval(a, b)
-                same = (a.shape == b.shape and a.dtype == b.dtype
-                        and bool(mx.array_equal(a, b)))
-        except Exception as e:                     # unreadable => not evidence
-            checked.append(f"{k}: unreadable ({type(e).__name__})")
-            continue
-        checked.append(f"{k}: {'identical' if same else 'DIFFERS'}")
-        if same:
-            matches.append(k)
-    if not matches:
-        raise SystemExit(
-            f"FAIL: refusing to graft. {src_dir} shares tensor NAMES with "
-            f"{art_dir} but not one probed tensor is byte-identical:\n  "
-            + "\n  ".join(checked)
-            + f"\nThe source is not this artifact's base (a different "
-              f"release will do this). Nothing written. Note config."
-              f"model_type does NOT identify the base.")
-    print(f"identity: {len(matches)}/{len(probe)} probed non-vision tensors "
-          f"byte-identical -> source is this artifact's base")
-
-
 ap = argparse.ArgumentParser()
 ap.add_argument("--artifact", required=True)
 ap.add_argument("--src", required=True,
@@ -135,23 +42,34 @@ ap.add_argument("--copy-config-keys", default="vision_config,image_token_id",
                      "chain-built 397B artifact shipped without vision_config "
                      "and needed a hand-graft to be exo-loadable. Copies only "
                      "keys the artifact LACKS, so it never overwrites.")
+ap.add_argument("--dest-prefix", default=None,
+                help="rewrite the grafted keys' leading prefix to this. Needed "
+                     "when the source is in HF layout (model.visual.*) and the "
+                     "artifact is mlx-layout (vision_tower.*), e.g. the "
+                     "Qwen3.8-27B bf16 against our 27B rungs. Verify the "
+                     "rewritten names against the official mlx index before "
+                     "trusting them — this flag renames, it does not check.")
+ap.add_argument("--permute-conv5", action="store_true",
+                help="apply transpose(0,2,3,4,1) to every 5-D tensor. mlx "
+                     "stores the vision patch_embed conv CHANNELS-LAST: HF "
+                     "(out,C,T,H,W) -> mlx (out,T,H,W,C). Measured on the "
+                     "Qwen3.5-35B pair, where both layouts of the SAME model "
+                     "exist: 332/333 tensors are identical as-is and exactly "
+                     "one, patch_embed.proj.weight, needs this permutation. "
+                     "Without it the tower loads with 333 tensors present and "
+                     "a silently wrong patch embedding.")
+ap.add_argument("--replace-config-keys", action="store_true",
+                help="overwrite --copy-config-keys that are already present "
+                     "and DISAGREE with --src. Off by default so a graft "
+                     "never silently rewrites a config; required to repair an "
+                     "artifact carrying another family's vision_config (every "
+                     "35B packed before 2026-08-24 carried the 397B's).")
 args = ap.parse_args()
 
 ART, SRC = pathlib.Path(args.artifact), pathlib.Path(args.src)
 GRAFT_SHARD = "model-vision-graft.safetensors"
 
-_src_cfg = json.load(open(SRC / "config.json")) if (SRC / "config.json").exists() else {}
-_art_cfg = json.load(open(ART / "config.json")) if (ART / "config.json").exists() else {}
-# BEFORE the shard is read or written: an abort placed after the write would
-# leave the wrong family's tensors on disk and then fail.
-_assert_tower_belongs(_src_cfg, _art_cfg, str(SRC), str(ART))
-
 src_map = json.load(open(SRC / "model.safetensors.index.json"))["weight_map"]
-_art_map_early = json.load(open(ART / "model.safetensors.index.json"))["weight_map"]
-# IDENTITY, before any tower read or write. Width above is a cheap early
-# filter; this is what actually proves the source is this artifact's base.
-_assert_same_model(src_map, _art_map_early, str(SRC), str(ART),
-                   tuple(p for p in args.prefixes.split(",") if p))
 # Qwen keeps the whole tower under one prefix; gemma-4 splits it across
 # vision_tower.* AND embed_vision.* (356 tensors total), so a single-prefix
 # filter silently grafts an incomplete tower. --prefixes is additive and the
@@ -160,6 +78,108 @@ _PREFIXES = tuple(p for p in args.prefixes.split(",") if p)
 vis = {k: sh for k, sh in src_map.items() if k.startswith(_PREFIXES)}
 if not vis:
     raise SystemExit(f"source {SRC} has no vision tensors")
+
+# BASE-IDENTITY CHECK, before anything is read or written.
+#
+# The first version of this compared the source's vision out_hidden_size to
+# the artifact's hidden_size and called itself a family check. It is a WIDTH
+# check. It passed a Qwen3.5 tower into a Qwen3.6 artifact on 2026-08-24
+# because both project to 2048 — and 3.6 keys its tower `vision_tower.*`
+# while 3.5 uses `model.visual.*`, so the graft also landed in a namespace
+# the model does not read. Nothing downstream would have caught it:
+# check_vision.py counts tensors, and the outlier gate never looks at the
+# tower. `model_type` does not settle it either — a 3.6 artifact still
+# reports qwen3_5_moe.
+#
+# The only thing that settles which model a source is: does it share a
+# BYTE-IDENTICAL non-vision tensor with this artifact. Norms and biases are
+# copied through the fit untouched, so the true base always matches on
+# several; a different model, release, or family matches on none.
+_artcfg = json.load(open(ART / "config.json"))
+src_cfg = json.load(open(SRC / "config.json"))
+_th = (_artcfg.get("text_config") or _artcfg).get("hidden_size")
+_oh = (src_cfg.get("vision_config") or {}).get("out_hidden_size")
+if _th is not None and _oh is not None and _th != _oh:
+    raise SystemExit(
+        f"FAIL: --src {SRC.name} has a tower projecting to {_oh}, but this "
+        f"artifact's hidden_size is {_th}. Wrong model family — graft from "
+        f"THIS model's base. Nothing written. (Re-pack from the fit rather "
+        f"than rewriting config keys in place.)")
+
+_art_map0 = json.load(open(ART / "model.safetensors.index.json"))["weight_map"]
+
+# CROSS-LAYOUT KEY MAPPING. HF and mlx name the same tensor differently:
+# HF `model.language_model.X` vs mlx `language_model.model.X`. A cross-layout
+# graft (HF tower into an mlx artifact, --dest-prefix) is legitimate, but the
+# identity probe still has to run — comparing raw names would find nothing
+# shared and refuse a correct source. So try the direct intersection first,
+# then the mapped one. The probe is never SKIPPED for cross-layout grafts;
+# it is the only thing standing between us and a wrong tower.
+def _pairs(art_keys):
+    direct = [(k, k) for k in art_keys
+              if k in src_map and not k.startswith(_PREFIXES)]
+    if direct:
+        return direct, "same-layout"
+    mapped = []
+    for k in art_keys:
+        if k.startswith("language_model.model."):
+            h = "model.language_model." + k[len("language_model.model."):]
+            if h in src_map:
+                mapped.append((k, h))
+    return mapped, "HF<->mlx mapped"
+
+_pair_list, _how = _pairs(list(_art_map0))
+_shared = [a for a, _ in _pair_list]
+_srckey = dict(_pair_list)
+if _shared and _how != "same-layout":
+    print(f"base-identity: comparing via {_how} key names "
+          f"({len(_shared)} tensors)")
+if not _shared:
+    raise SystemExit(
+        f"FAIL: --src {SRC.name} shares NO tensor key with this artifact. "
+        f"Either it is a different model or it uses a different key "
+        f"namespace (Qwen3.5 keys text as model.language_model.*, Qwen3.6 as "
+        f"language_model.model.*). This is not this artifact's base. "
+        f"Nothing written.")
+
+# Prefer small 1-D tensors: norms/biases pass through a fit unchanged.
+# SAMPLE WIDELY, and do not let one tensor FAMILY dominate the probe. The
+# first version sorted norms first and took the six shortest names, which on
+# Qwen3.8-27B drew six layer-norms and reported 0/6 against the artifact's
+# actual base — that family stores RMSNorm as (1+w), so every layer-norm
+# differs by exactly 1.0 while `linear_attn.norm` matches bit-for-bit. A probe
+# that samples one shape of tensor inherits that shape's conventions.
+_norms = [k for k in _shared if "norm" in k]
+_other = [k for k in _shared if "norm" not in k]
+_probe = ([_norms[i] for i in range(0, len(_norms), max(1, len(_norms) // 6))][:6]
+          + sorted(_other, key=len)[:4])
+_hits, _offset = [], []
+for _k in _probe:
+    with mx.stream(mx.cpu):
+        _a = mx.load(str(ART / _art_map0[_k]))[_k]
+        _sk = _srckey[_k]
+        _b = mx.load(str(SRC / src_map[_sk]))[_sk]
+        mx.eval(_a, _b)
+    if _a.shape != _b.shape:
+        continue
+    _af, _bf = _a.astype(mx.float32), _b.astype(mx.float32)
+    if bool(mx.all(_af == _bf).item()):
+        _hits.append(_k)
+    elif float(mx.max(mx.abs(_af - (_bf + 1.0))).item()) <= 0.01:
+        # known (1+w) RMSNorm convention — evidence FOR the base, not against
+        _offset.append(_k)
+if _offset and not _hits:
+    print(f"base-identity: {len(_offset)} tensors match under the (1+w) norm "
+          f"convention, none bit-exact — treating as the base")
+    _hits = _offset
+if not _hits:
+    raise SystemExit(
+        f"FAIL: --src {SRC.name} shares {len(_shared)} tensor keys with this "
+        f"artifact but NOT ONE is byte-identical (probed {len(_probe)}). "
+        f"Same architecture, different model or release — its tower does not "
+        f"belong to these weights. Nothing written.")
+print(f"base-identity OK: {len(_hits)}/{len(_probe)} probed tensors are "
+      f"byte-identical to {SRC.name} (e.g. {_hits[0]})")
 
 idx_path = ART / "model.safetensors.index.json"
 idx = json.load(open(idx_path))
@@ -182,6 +202,20 @@ for sh in sorted(set(vis.values())):
         mx.eval(list(picked.values()))
     out.update(picked)
     del data, picked
+if args.permute_conv5:
+    _n5 = [k for k, v in out.items() if v.ndim == 5]
+    for k in _n5:
+        out[k] = mx.transpose(out[k], (0, 2, 3, 4, 1))
+    mx.eval(list(out.values()))
+    print(f"permuted {len(_n5)} 5-D tensor(s) to mlx channels-last: {_n5}")
+
+if args.dest_prefix:
+    _src_pref = sorted({k.split(".")[0] if not k.startswith("model.visual")
+                        else "model.visual" for k in out}, key=len)[-1]
+    out = {args.dest_prefix + k[len(_src_pref):]: v for k, v in out.items()}
+    vis = {args.dest_prefix + k[len(_src_pref):]: v for k, v in vis.items()}
+    print(f"renamed graft keys: {_src_pref}.* -> {args.dest_prefix}.*")
+
 _dead = [k for k, v in out.items()
          if float(mx.max(mx.abs(v.astype(mx.float32))).item()) == 0.0]
 if _dead:
@@ -206,12 +240,26 @@ json.dump(idx, open(idx_path, "w"), indent=1)
 
 cfg = json.load(open(ART / "config.json"))
 if args.copy_config_keys:
-    src_cfg = json.load(open(SRC / "config.json"))
-    copied = []
+    copied, stale = [], []
     for k in args.copy_config_keys.split(","):
-        if k and k not in cfg and k in src_cfg:
+        if not k or k not in src_cfg:
+            continue
+        if k not in cfg:
             cfg[k] = src_cfg[k]
             copied.append(k)
+        elif cfg[k] != src_cfg[k]:
+            if args.replace_config_keys:
+                cfg[k] = src_cfg[k]
+                copied.append(k + " (replaced)")
+            else:
+                stale.append(k)
+    if stale:
+        raise SystemExit(
+            f"FAIL: artifact already carries {stale} and they DISAGREE with "
+            f"{SRC.name}. The tower just written is {SRC.name}'s, so shipping "
+            f"this config would describe a tower the artifact does not have. "
+            f"Re-run with --replace-config-keys to repair. (The graft shard "
+            f"is written and correct; only the config is unresolved.)")
     if copied:
         json.dump(cfg, open(ART / "config.json", "w"), indent=1)
         print(f"copied config keys from source: {copied}")
