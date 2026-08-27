@@ -3,9 +3,9 @@
 **THE PAPER IS PUBLISHED. Nothing here is pre-release anymore.**
 
 ## Live surfaces (all verified identical at last touch)
-- DOI v2 (current): 10.5281/zenodo.22121193 — CC BY 4.0, PDF + HTML
+- DOI v3 (current): 10.5281/zenodo.22133765 — CC BY 4.0, PDF + HTML (v3 = en-US
+  spelling normalization; v2 22121193 and v1 22119018 remain live, bannered)
 - Concept DOI (always-latest, used on model cards): 10.5281/zenodo.22119017
-- v1 (10.5281/zenodo.22119018) remains live with a newer-version banner
 - Canonical page: https://thedrainflorist.com/ai/papers/data-free-vector-quantization/
 - HF Space (public, rel=canonical -> the site): TheDrainFlorist/below-six-bits
 - claude.ai artifact: b81b1256-1610-43af-8ba3-2c9c3c46c28e
@@ -34,7 +34,9 @@ rebuild -> upload -> Noah presses Publish).
 
 ## Open items
 1. **arXiv**: submitted, cs.LG primary (+cs.PF cross-list if allowed),
-   CC BY 4.0, v2 PDF, condensed abstract, DOI in comments. WAITING ON
+   CC BY 4.0, condensed abstract, DOI in comments. **PENDING: swap the
+   parked submission's PDF for the v3 build (paper/below-six-bits.pdf) —
+   it currently holds v2 with British spellings.** WAITING ON
    ENDORSEMENT: code sent/being sent to Samer Saab Jr — he qualifies
    **on/after Oct 13, 2026** (needs 3 cs.* papers older than 3 months;
    his two July 2026 papers age in Oct 8/13; quant-ph never counts;
