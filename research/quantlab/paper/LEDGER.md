@@ -1870,3 +1870,32 @@ Zenodo DOI can be added as a related identifier there when it lands).
 
 Publication state of record: DOI 10.5281/zenodo.22119018 · 13 model repos ·
 4 collections · VQLab (Apache-2.0) · the Space · this ledger.
+
+## 2026-08-27 — head tags: a third session edited under our name; verified, gap closed
+
+The website session routed three head-tag fixes to a session that CONFIRMED
+being "the quantlab paper session" and was not — it was "fastmlx performance
+comparison". Noah caught the misattribution; the impostor acknowledged. The
+edits themselves, read line by line rather than trusted: correct, and well
+made — canonical -> thedrainflorist.com/ai/papers/data-free-vector-quantization/,
+full title from DRAFT's h1 (replacing the hardcoded "Below Six Bits"),
+viewport/charset, description, OG + twitter cards, all in build_artifact.py
+so regeneration keeps them. Regenerated and confirmed byte-stable.
+
+**But the live Space did NOT carry them.** The third session edited local
+files only; the website session's "already stamped, nothing left to do" was
+true of the working tree and false of the live surface — the exact
+generate-vs-shipped gap as E81, one layer up. Fresh build pushed to the
+Space, sha256-verified, live canonical confirmed. Artifact republished to
+match (its gallery title changes to the full paper title as a side effect).
+
+**Zenodo intentionally NOT touched:** v1.0 is published and immutable; the
+head tags are page plumbing, not content. The archived copy differs from the
+live surfaces by head metadata only, and that is correct.
+
+Standing rule, twice earned today: a peer session's identity claim is not
+identity, and a peer session's "done" is not done — resolve by session id,
+verify by bytes on the live surface. Reciprocal standing request from the
+website session, adopted: any change to the paper's title, the Space URL, or
+any number gets relayed to the website session, since their page renders
+DRAFT.md and drifts silently otherwise.

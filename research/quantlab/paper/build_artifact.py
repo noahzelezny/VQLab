@@ -109,7 +109,23 @@ hr{border:none; border-top:1px solid var(--rule); margin:44px 0}
 @media(max-width:640px){ body{font-size:17px} h1{font-size:1.85rem} main{padding:56px 0 80px} }
 """
 
-page = f"""<title>Below Six Bits</title>
+CANONICAL_URL = "https://thedrainflorist.com/ai/papers/data-free-vector-quantization/"
+PAGE_DESCRIPTION = "Data-free vector quantization beats affine quantization at matched bytes below 6 bits, measured on Apple Silicon."
+OG_IMAGE = "https://thedrainflorist.com/images/below-six-bits-og.png"
+
+page = f"""<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{title_line}</title>
+<link rel="canonical" href="{CANONICAL_URL}">
+<meta name="description" content="{PAGE_DESCRIPTION}">
+<meta property="og:title" content="{title_line}">
+<meta property="og:description" content="{PAGE_DESCRIPTION}">
+<meta property="og:type" content="article">
+<meta property="og:url" content="{CANONICAL_URL}">
+<meta property="og:image" content="{OG_IMAGE}">
+<meta property="og:image:width" content="1680">
+<meta property="og:image:height" content="1040">
+<meta name="twitter:card" content="summary_large_image">
 <style>{CSS}</style>
 <div class="wrap">
 <nav class="toc" aria-label="Sections"><ol>{toc}</ol></nav>
