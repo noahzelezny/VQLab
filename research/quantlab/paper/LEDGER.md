@@ -1899,3 +1899,27 @@ verify by bytes on the live surface. Reciprocal standing request from the
 website session, adopted: any change to the paper's title, the Space URL, or
 any number gets relayed to the website session, since their page renders
 DRAFT.md and drifts silently otherwise.
+
+## 2026-08-27 — REFERENCES ADDED; Zenodo v2 staged (10.5281/zenodo.22121193)
+
+Noah's arXiv read surfaced what four audits missed: the paper had NO
+references section while name-dropping GPTQ/DWQ and claiming a first. The
+audits checked numbers against the record; none asked whether a scholarly
+paper needs a bibliography — an instrument gap, on the arbiter, not on Noah.
+
+Added: a related-work passage in 1 situating the claim against the CUDA VQ
+line — GPTVQ (Hessian-guided VQ), AQLM (additive multi-codebook, calibrated
++ fine-tuned), QuIP# (incoherence + E8 lattices) — all calibration-dependent,
+none publishing MLX artifacts; plus the method's lineage (Lloyd k-means,
+Jegou product quantization). Eight references, EVERY arXiv id verified
+against the live record before citing (2210.17323, 2306.00978, 2402.15319,
+2401.06118, 2402.04396). The novelty sentence is SHARPER with them: data-free
+where those calibrate, artifacts where those publish none for this stack.
+
+Zenodo v2 drafted via the API: new version 22121193, its reserved DOI
+restamped into the front matter, inherited v1 files replaced with the v2
+builds, checksums verified. v1 (22119018) stays live and gains a
+newer-version banner once v2 publishes. Space/artifact/cards intentionally
+NOT updated yet — they carry the live v1 DOI, and v2's is dead until Noah
+presses Publish. Propagation happens after, in one verified pass, website
+session included per the standing agreement.

@@ -2,7 +2,7 @@
 
 **Noah Zelezny**
 
-*August 2026 · doi:[10.5281/zenodo.22119018](https://doi.org/10.5281/zenodo.22119018).
+*August 2026 · doi:[10.5281/zenodo.22121193](https://doi.org/10.5281/zenodo.22121193).
 Every number traces to a committed entry in the laboratory record; every
 margin is stated against a measured fit-to-fit noise floor for its
 geometry.*
@@ -96,10 +96,25 @@ The available quantizations in this band are primarily affine: uniform
 builds published by the mlx-community project, and hand-tuned
 mixed-bit-depth builds from the community at large (for the 397B model we
 compare against the most capable we could obtain, the "spicyneuron"
-2.6-bit and 3.5-bit builds). To our knowledge, no
-vector-quantized artifacts have been published for this software stack
-at all. This paper contributes a ladder of them for each of three
-models, measured against the affine incumbents at matched bytes.
+2.6-bit and 3.5-bit builds). The refined end of the affine family
+tunes its grids on data — GPTQ orders quantization by approximate
+second-order information from a calibration set [1], and AWQ scales
+channels by activation statistics [2].
+
+Vector quantization of LLM weights is itself established in the CUDA
+ecosystem: GPTVQ interleaves Hessian-guided VQ with updates to the
+remaining weights [3], AQLM learns additive multi-codebook
+quantization on calibration data with end-to-end fine-tuning [4], and
+QuIP# combines incoherence processing with E8 lattice codebooks [5].
+All three are calibration-dependent, and none publishes runnable
+artifacts for the Apple-Silicon MLX stack. The lineage of the method
+itself is older: codebooks fit by k-means [6] over subvectors is
+product quantization [7], here applied to weights with no data in the
+loop. To our knowledge, no vector-quantized artifacts have been
+published for this software stack at all — this paper contributes a
+ladder of them for each of three models, measured against the affine
+incumbents at matched bytes, under a fit that is entirely data-free
+where the methods above calibrate.
 
 **Notation.** A VQ geometry is written dN/KM, where N is the subvector
 dimension and M the codebook size; builds in this paper range from
@@ -573,7 +588,8 @@ diminishing returns: on the 35B d4 line, each doubling of K buys less
 (17.0, then 15.5, then 5.5 mnats). Harvest never beats the flat rung at
 its own size, at any base richness we measured; its value is
 reachability, not quality. And calibration lost on its home turf where
-we tested it: an activation-calibrated method fell to uniform
+we tested it: an activation-calibrated method (a DWQ-style distilled
+scale fit in the MLX toolchain [8]) fell to uniform
 quantization on the dense 27B, and per-layer sensitivity probes rank
 layers in ways that do not survive contact with assembled-model scores
 on MoE.
@@ -718,6 +734,44 @@ drawn from a private codebase and does not ship — every code-perplexity
 number is a relative comparison between builds on that same fixed text,
 and its construction is described in the repository. Nothing was fit on
 data, so there is no train/eval overlap to disclose.
+
+## References
+
+[1] E. Frantar, S. Ashkboos, T. Hoefler, D. Alistarh. *GPTQ: Accurate
+Post-Training Quantization for Generative Pre-trained Transformers.*
+[arXiv:2210.17323](https://arxiv.org/abs/2210.17323), 2022.
+
+[2] J. Lin, J. Tang, H. Tang, S. Yang, W.-M. Chen, W.-C. Wang, G. Xiao,
+X. Dang, C. Gan, S. Han. *AWQ: Activation-aware Weight Quantization for
+On-Device LLM Compression and Acceleration.*
+[arXiv:2306.00978](https://arxiv.org/abs/2306.00978), 2023.
+
+[3] M. van Baalen, A. Kuzmin, I. Koryakovskiy, M. Nagel, P. Couperus,
+C. Bastoul, E. Mahurin, T. Blankevoort, P. Whatmough. *GPTVQ: The
+Blessing of Dimensionality for LLM Quantization.*
+[arXiv:2402.15319](https://arxiv.org/abs/2402.15319), 2024.
+
+[4] V. Egiazarian, A. Panferov, D. Kuznedelev, E. Frantar, A. Babenko,
+D. Alistarh. *Extreme Compression of Large Language Models via Additive
+Quantization.* ICML 2024;
+[arXiv:2401.06118](https://arxiv.org/abs/2401.06118).
+
+[5] A. Tseng, J. Chee, Q. Sun, V. Kuleshov, C. De Sa. *QuIP#: Even
+Better LLM Quantization with Hadamard Incoherence and Lattice
+Codebooks.* [arXiv:2402.04396](https://arxiv.org/abs/2402.04396), 2024.
+
+[6] S. Lloyd. *Least Squares Quantization in PCM.* IEEE Transactions on
+Information Theory 28(2):129–137, 1982.
+
+[7] H. Jégou, M. Douze, C. Schmid. *Product Quantization for Nearest
+Neighbor Search.* IEEE Transactions on Pattern Analysis and Machine
+Intelligence 33(1):117–128, 2011.
+
+[8] A. Hannun, J. Digani, A. Katharopoulos, R. Collobert. *MLX:
+Efficient and Flexible Machine Learning on Apple Silicon.*
+[github.com/ml-explore/mlx](https://github.com/ml-explore/mlx), 2023;
+DWQ as implemented in
+[mlx-lm](https://github.com/ml-explore/mlx-lm).
 
 ## Acknowledgments
 
