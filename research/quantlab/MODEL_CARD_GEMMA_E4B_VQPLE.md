@@ -128,6 +128,6 @@ not slice**. The guard is bundled in `model.py`; upstream fix is
 The method, the full three-model ladder, the negative results, and the
 measurement rules behind every number here:
 [**Data-Free Vector Quantization Beats Affine Quantization at Matched Bytes
-Below 6 Bits**](https://doi.org/10.5281/zenodo.22119018) (CC BY 4.0) ·
+Below 6 Bits**](https://doi.org/10.5281/zenodo.22119017) (CC BY 4.0) ·
 code: [VQLab](https://github.com/noahzelezny/VQLab) ·
 web version: [Space](https://huggingface.co/spaces/TheDrainFlorist/below-six-bits)

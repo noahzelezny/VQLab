@@ -1923,3 +1923,19 @@ newer-version banner once v2 publishes. Space/artifact/cards intentionally
 NOT updated yet — they carry the live v1 DOI, and v2's is dead until Noah
 presses Publish. Propagation happens after, in one verified pass, website
 session included per the standing agreement.
+
+## 2026-08-27 — v2 LIVE (10.5281/zenodo.22121193); propagated everywhere
+
+Noah published v2. Propagation, each step verified:
+- Space: serving the v2 build, sha256-identical to local, references + v2 DOI
+  confirmed in served bytes. Artifact republished.
+- **Cards moved to the CONCEPT DOI (10.5281/zenodo.22119017)** — it resolves
+  permanently to the latest version, so future versions cost zero card edits.
+  Generator updated too; 13/13 pushed and byte-identical. The paper's own
+  front matter keeps its version DOI (22121193), which is correct scholarly
+  practice: a document cites its own version; an index points at the record.
+- Website session notified: what changed, source file path, and the
+  concept-DOI recommendation for their JSON-LD.
+- v1 (22119018) stays live with a newer-version banner. Nothing dangles.
+
+arXiv submission uses the v2 PDF, which is what paper/below-six-bits.pdf is.
