@@ -189,6 +189,19 @@ base_cfg = json.load(open(BASE / "config.json"))
 sys.path.insert(0, str(pathlib.Path(__file__).parent))
 from families import FAMILY  # shared registry (families.py)
 FAM = FAMILY[args.family]
+
+_fam_probe = FAM["src_key"].format(li=LO, key=FAM["proj"]["down_proj"][0])
+if not any(k.startswith(_fam_probe.rsplit(".", 1)[0]) or k == _fam_probe
+           for k in src_idx):
+    _near = [k for k in list(src_idx) if "mlp" in k or "expert" in k][:3]
+    raise SystemExit(
+        f"FAIL: this source does not match --family {args.family!r}.\n"
+        f"  expected key like: {_fam_probe}\n"
+        f"  source has e.g.:   " + ("\n                     ".join(_near) or "(no mlp/expert keys)") + "\n"
+        f"To onboard a new model family: add its key template to FAMILY "
+        f"(src/vqlab/families.py) AND run docs/ONBOARDING.md's "
+        f"characterisation pass first. If the family is right, check the "
+        f"source dir (HF vs mlx layout differ; see families.py comments).")
 PROJ = FAM["proj"]
 
 
