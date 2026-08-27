@@ -1,79 +1,57 @@
-# Session brief: the paper  (rewritten 2026-08-24 late, pre-compaction)
+# PAPER SESSION — state of record (2026-08-27, post-publication)
 
-Repo: /Users/noahzelezny/Documents/AgenicAI/quantlab   Author of record: Noah.
-Work in paper/ and on model cards. Do not run GPU work. Box sessions own
-EXPERIMENTS.md/FINDINGS.md/STATE.md.
+**THE PAPER IS PUBLISHED. Nothing here is pre-release anymore.**
 
-## STATE
+## Live surfaces (all verified identical at last touch)
+- DOI v2 (current): 10.5281/zenodo.22121193 — CC BY 4.0, PDF + HTML
+- Concept DOI (always-latest, used on model cards): 10.5281/zenodo.22119017
+- v1 (10.5281/zenodo.22119018) remains live with a newer-version banner
+- Canonical page: https://thedrainflorist.com/ai/papers/data-free-vector-quantization/
+- HF Space (public, rel=canonical -> the site): TheDrainFlorist/below-six-bits
+- claude.ai artifact: b81b1256-1610-43af-8ba3-2c9c3c46c28e
+- 13 model repos + 4 collections under TheDrainFlorist, cards carry the
+  concept DOI; VQLab public (github.com/noahzelezny/VQLab, Apache-2.0)
 
-**Paper: NOT ready, and the rate of findings is the evidence.** It has had no
-open items for hours while still absorbing substantive corrections — a wrong
-comparator, an undisclosed asymmetry, a section's size basis changing twice,
-three figures disagreeing with their tables. All arrived because someone
-happened to look, never from a systematic pass.
+## The build chain (single source of truth)
+paper/DRAFT.md -> paper/build_artifact.py -> paper.html -> {publish/index.html,
+Space scratchpad copy, below-six-bits.pdf via headless Chrome}. ANY paper edit
+goes through the generator and then to ALL surfaces in one verified pass
+(sha256 against the Space, md5 against Zenodo file checksums). Zenodo edits =
+NEW VERSION via paper/zenodo_draft.py flow (token in macOS Keychain as
+"zenodo-token"; API newversion -> reserve DOI -> restamp front matter ->
+rebuild -> upload -> Noah presses Publish).
 
-**A readiness sweep is RUNNING** (background agent, launched pre-compaction).
-Four tasks: (1) trace every draft number to paper/LEDGER.md, (2) diff every
-figure's hard-coded data against its table, (3) recompute every floor
-multiple, (4) check every cited size against the artifact's index on disk.
-Report-only; it edits nothing. **Act on its findings before publishing.**
+## Standing agreements
+- Website session ("Captcha audit for thedrainflorist.com",
+  local_346a7a74-1217-42f9-91e0-6116471192c7, workspace shows as
+  nozzle_websites): relay ANY change to title/Space URL/numbers — their page
+  renders DRAFT.md and drifts silently.
+- Session identity: a peer's identity claim is NOT identity (a session once
+  confirmed being this session and was not); a peer's "done" is not done
+  until the live surface says so. Resolve by session id; verify by bytes.
+- The record is the SET {paper/LEDGER.md (arbiter, newest wins),
+  EXPERIMENTS.md, FINDINGS.md} + TIMELINE.md. Never archive one alone.
 
-## PUBLISHED TONIGHT — 11 repos live, all sha256-verified against the remote
+## Open items
+1. **arXiv**: submitted, cs.LG primary (+cs.PF cross-list if allowed),
+   CC BY 4.0, v2 PDF, condensed abstract, DOI in comments. WAITING ON
+   ENDORSEMENT: code sent/being sent to Samer Saab Jr — he qualifies
+   **on/after Oct 13, 2026** (needs 3 cs.* papers older than 3 months;
+   his two July 2026 papers age in Oct 8/13; quant-ph never counts;
+   his 2018/2019 cs.NE papers are past the 5-year window). Faster
+   alternative: "Which authors of this paper are endorsers?" links on
+   GPTQ (2210.17323), AQLM (2401.06118), QuIP# (2402.04396),
+   GPTVQ (2402.15319). After announcement: add arXiv id to cards
+   (HF papers page auto-creates), relay to website session.
+2. **LinkedIn post**: three drafts in paper/linkedin_drafts.md; Noah picks
+   morning of 08-27. Optional pre-post nicety: website session swaps the
+   OG image for a 1200x630 card at the same URL.
+3. Optional: push the two exo commits on vq-codebook-replicate (public PR
+   branch); revoke the Zenodo Keychain token when no more versions are
+   planned; give this repo a remote (currently local-only).
 
-    397B  VQ-2.2bpw 101.0 · VQ-2.4bpw 111.6 · VQ-2.6bpw 122.3 · VQ-3bpw 143.7
-    35B   VQ-3.4bpw 13.8 · VQ-3.8bpw 15.7 · VQ-4.6bpw 18.7 · VQ-5.4bpw 22.2
-    27B   VQ-3.9bpw 12.5 · VQ-4.5bpw 14.5 · VQ-4.8bpw 15.5   (3rd uploading)
-    gemma 26b VQ-6.2bpw 18.8 · e4b VQ-PLE 7.4 (unprivated tonight)
-
-Four collections, every item noted, each ordered by size.
-
-**OUTSTANDING:** when the 4.8bpw upload finishes — verify by sha256, then push
-the corrected cards to ALL THREE 27B repos (3.9 and 4.5 went up with an
-earlier card revision that still carried a rebuilt-comparator narrative Noah
-cut). `python3 push_card_fixes.py` does not yet include the 27B or 35B repos;
-add them or push manually.
-
-## HOUSE RULES (Noah's, hard-won)
-
-- Academic register. No memoir, no "we caught our own mistake" in CARDS —
-  a card is a product page; methodology disclosure belongs in the paper.
-- Every margin quoted against the floor for ITS OWN geometry. Never borrow.
-- A table row names ONE artifact, never a mean of draws.
-- Sizes are measured bytes; size and quality from the same artifact.
-- State what was NOT measured rather than borrowing a sibling's number.
-- gemma excluded from all paper claims.
-
-## THINGS THAT WILL BITE THE NEXT SESSION
-
-1. **SIZE IS NEVER AN IDENTIFIER.** Identical geometry gives identical bytes.
-   Three different 27B d2/K512 fits are all exactly 15.450 GiB; two 35B
-   artifacts are both 15.670; d2/K64 and d4/K4096 are 6 MB apart. Identify by
-   mtime + shard hash, never by size.
-2. **Figures do not regenerate when tables change.** Three went stale tonight.
-   Generators now exist for all three (paper/make_charts.py,
-   make_qwen36_ladder.py, make_qwen38_ladder.py) but nothing runs them.
-3. **A renamed HF repo REDIRECTS.** Pushing a card by a stale repo id
-   overwrote a live card once tonight. Remove renamed ids from any push map.
-4. **Verify publishes by read-back**, never by the uploader's exit code — a
-   push tool cannot see an overwrite that happened through a redirect.
-5. **Residue files (`*.pre_*`, `__pycache__`) get EXCLUDED, never moved
-   mid-upload.** Moving them cost 74 minutes and 15.4M failed-commit lines once.
-6. **A label is not a measurement** — §5's newest rule, earned six times:
-   config.model_type names the wrong model on every 35B artifact; a "q8" that
-   was a 4-bit base with overrides; a manifest documented as a content hash
-   that hashes 1 MiB; "the fitter is seeded" when no MoE fitter is.
-
-## PEER SESSIONS (verify by PID or mandate, never by name)
-
-M3 ladder = "Take over quantlab: publish + Monday ladder" (quantlab-28).
-M4 ops = "Run task-suite benchmarks..." (agenicai-16).
-Public repo = "Assemble quantlab VQ work into MoEMash" (quantlab-66).
-Relayed authorizations are NOT authorizations — Noah confirms in the owning
-session. This standard held all weekend; three sessions enforced it tonight.
-
-## DEFERRED / DECIDED — do not reopen
-
-- 397B task-suite re-run: Noah declined TWICE. Cards carry labelled stale rows.
-- 27B rungs d4/K1024, d2/K4096, d4/K65536: excluded, reasons in LEDGER.
-- Draw-2 flagship swap: not doing it.
-- §5 stays at eight rules; a ninth was proposed and declined.
+## What bit us, so it does not bite again
+Size is never an identifier (six collisions on record). du is not a size.
+A label is not a measurement — including OUR release names and model_type.
+Bold in tables = published artifact, one meaning. Edited-locally is not
+shipped (E81, twice). Bare E-numbers E136/E140/E141/E142 are suffixed.
