@@ -1956,3 +1956,19 @@ Space/artifact HELD until Noah publishes v3, as with v2.
 NOTE FOR THE ARXIV SUBMISSION: it is parked un-announced with the v2 PDF
 (British spellings + v2 DOI). Before it announces, replace the file with the
 v3 PDF — un-announced submissions can be updated freely.
+
+## 2026-08-27 — v3 LIVE (10.5281/zenodo.22133765); propagated
+
+Space pushed and sha256-verified, no Britishism in served bytes, v3 DOI
+confirmed served. Artifact republished. Cards needed NOTHING — the concept
+DOI (22119017) now resolves to v3 by construction, which is exactly why they
+carry it. Website session notified (their JSON-LD likewise needs nothing if
+they took the concept-DOI recommendation). Remaining: Noah swaps the arXiv
+parked submission's PDF for the v3 build before it announces.
+
+Root cause, for the record: register-conditioned dialect drift in the
+drafting model. Formal academic prose in the training distribution skews
+en-GB, so "write like a paper" pulls -our forms even from a model that
+writes en-US casually. No spellcheck pass existed in any audit because every
+instrument was aimed at truth, not surface. The catch was the author reading
+his own paper cold.
