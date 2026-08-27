@@ -50,7 +50,7 @@ ties are legitimate. Exact two-sided sign test on decisive pairs.
 **Statistically indistinguishable from bf16**, with the judge unable to
 separate the texts in 43% of pairs. Read that as "indistinguishable", NOT
 "better than bf16" — the judge showed a positional lean and bf16 sat in the
-disfavoured slot, so the direction is not claimable.
+disfavored slot, so the direction is not claimable.
 
 For contrast, the same instrument on weaker builds of this model: a 12.5 GiB
 d4 build lost 36-20 (p=0.044) and a 9.4 GiB build lost 34-12 (p=0.0016).

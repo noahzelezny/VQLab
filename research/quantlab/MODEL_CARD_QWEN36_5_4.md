@@ -120,7 +120,7 @@ Apply [exo PR #2268](https://github.com/exo-explore/exo/pull/2268) or use
   28.1). This is the closest VQ build here, not a lossless one.
 - No perplexity, no throughput, and no task-suite scores for this artifact —
   see above.
-- One asymmetry favours this build: the affine comparators quantize the MoE
+- One asymmetry favors this build: the affine comparators quantize the MoE
   router, and this build leaves it at bf16. The bytes are trivial, but a
   router feeds an argmax over experts, so the effect is not bounded by the
   byte share. It is unmeasured.

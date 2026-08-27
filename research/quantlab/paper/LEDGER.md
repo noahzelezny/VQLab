@@ -1939,3 +1939,20 @@ Noah published v2. Propagation, each step verified:
 - v1 (22119018) stays live with a newer-version banner. Nothing dangles.
 
 arXiv submission uses the v2 PDF, which is what paper/below-six-bits.pdf is.
+
+## 2026-08-27 — en-US normalization; Zenodo v3 staged (10.5281/zenodo.22133765)
+
+Noah caught British spelling in his own paper — 9 instances (behaviour x4,
+favour-family x5), all in passages I drafted; en-GB leakage from the
+drafter, consistent throughout so not a compliance issue, but the author is
+American and the author wins. Also 3 on live cards (disfavoured, favours x2)
+— fixed and pushed, verified. DRAFT normalized, zero Britishisms remain.
+
+v3 staged (draft 22133765, DOI reserved and restamped, files uploaded,
+checksums verified) because our own standard requires it: a page citing a
+version DOI must match what that DOI archives, and v2 is immutable.
+Space/artifact HELD until Noah publishes v3, as with v2.
+
+NOTE FOR THE ARXIV SUBMISSION: it is parked un-announced with the v2 PDF
+(British spellings + v2 DOI). Before it announces, replace the file with the
+v3 PDF — un-announced submissions can be updated freely.

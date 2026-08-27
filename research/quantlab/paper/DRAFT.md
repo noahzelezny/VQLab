@@ -2,7 +2,7 @@
 
 **Noah Zelezny**
 
-*August 2026 · doi:[10.5281/zenodo.22121193](https://doi.org/10.5281/zenodo.22121193).
+*August 2026 · doi:[10.5281/zenodo.22133765](https://doi.org/10.5281/zenodo.22133765).
 Every number traces to a committed entry in the laboratory record; every
 margin is stated against a measured fit-to-fit noise floor for its
 geometry.*
@@ -35,7 +35,7 @@ is scored on one deterministic instrument throughout. For the two
 smaller models this is KL divergence: how far the quantized model's
 next-token probabilities drift from the full-precision original's,
 reported in millinats (defined in §2.6; zero means identical
-behaviour). The 397B's
+behavior). The 397B's
 full-precision teacher is too large to run on any machine we could
 assemble, so that model is scored by perplexity on frozen prose and
 code corpora — a measure against text rather than against the teacher.
@@ -70,7 +70,7 @@ precisely the reconstruction statistic identified as decisive produced a
 model 4.7 times worse than the one it was designed to improve. Only
 evaluation of the assembled model ranks artifacts.
 
-Comparable behaviour was observed on the gemma-4 model family, which is
+Comparable behavior was observed on the gemma-4 model family, which is
 nonetheless excluded from all claims: raw likelihood is not a valid
 property of those instruction-tuned models, so no deterministic scoring
 scheme was available. The effect is likely broader than the three models
@@ -260,7 +260,7 @@ logits, in millinats, with top-1 agreement, plus referee perplexity on
 the 27B — the same wikitext-style prose corpus at its first 2048
 tokens; a single corpus, where two were used for the 397B. Comparator rows were re-verified on a second machine and agree
 to every reported digit. The gemma-4 family, where we observed similar
-size-quality behaviour, is excluded throughout: raw likelihood is
+size-quality behavior, is excluded throughout: raw likelihood is
 invalid on those instruction-tuned models as a property of the model
 itself, scoring is therefore not deterministic, and no claim here rests
 on an instrument that cannot reproduce its own numbers.
@@ -327,7 +327,7 @@ we report against them is therefore understated by that amount — the
 d8 build's lead is 20.4 GiB rather than 19.6, and the flagship's 22.7
 rather than 21.9. We keep the download-size convention and state the
 offset rather than restate the sizes, because a convention that gets
-adjusted in the reporter's favour is worth less than a conservative one.
+adjusted in the reporter's favor is worth less than a conservative one.
 
 **Ours (VQ; prose / code perplexity, packed post-graft GiB):**
 
@@ -405,7 +405,7 @@ point on this curve.
 | 6-bit (ours) | 27.07 | 13.36 | 94.65% |
 | 8-bit (community) | 35.13 | 7.45 | 96.18% |
 
-One asymmetry in these 35B comparisons runs in our favour, and it is not
+One asymmetry in these 35B comparisons runs in our favor, and it is not
 visible in the sizes. Every affine comparator here quantizes the MoE
 router — the community 4-bit and 8-bit and our own 6-bit all carry
 quantized gate projections — while our VQ builds leave the routers at
@@ -578,9 +578,9 @@ VQ alike.
 Dimension pays at matched rate (§3.1) but the margin shrinks as rate
 rises — 12.2% at 2.0 bpw, 8.6% at 3.0 — and at 4.0 bpw it stops paying
 cleanly. A d4/K65536 rung matched against a d2/K256 rung 0.1 GiB smaller
-(14.55 vs 14.45) splits: divergence favours d4 by 2.2 mnats, which is 1.06 times a
+(14.55 vs 14.45) splits: divergence favors d4 by 2.2 mnats, which is 1.06 times a
 floor measured at a different geometry and so not a margin we read,
-while perplexity favours d2 by 0.078, or 1.75 times that same borrowed
+while perplexity favors d2 by 0.078, or 1.75 times that same borrowed
 floor. Neither pre-registered branch fired; the honest reading is a
 wash leaning d2, and the dimension advantage is not established above
 3 bpw. Codebook size pays with the expected
@@ -669,7 +669,7 @@ in a setting where the wrong numbers are the plausible ones.
 
 **Coverage.** Three models from one vendor family, only one of them
 dense; a second dense model would test whether the 27B generalizes.
-(The gemma-4 family showed similar behaviour but cannot be scored
+(The gemma-4 family showed similar behavior but cannot be scored
 deterministically and is excluded.) Single software stack (MLX/Metal);
 the kernel conclusions — threadgroup capacity, the d8 decode tax — are
 specific to Apple Silicon.
@@ -703,7 +703,7 @@ recording its exact fit invocation was overwritten four days after the
 fit, so its remaining unrecoverable inputs are the fit flags themselves.
 It remains downloadable, its scores reproduce exactly on the artifact,
 and its quality sits inside the measured draw distribution of its
-geometry — a favourable but unexceptional draw, not a mystery (§2.6's
+geometry — a favorable but unexceptional draw, not a mystery (§2.6's
 floors are how we know).
 
 ## 7. Reproducibility

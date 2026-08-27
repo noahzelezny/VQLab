@@ -122,7 +122,7 @@ Apply [exo PR #2268](https://github.com/exo-explore/exo/pull/2268) or use
   8-bit is measurably closer to bf16.
 - No throughput measurement — see Runtime.
 - No task-suite scores for this artifact.
-- One asymmetry favours this build: the affine comparators quantize the MoE
+- One asymmetry favors this build: the affine comparators quantize the MoE
   router, and this build leaves it at bf16. The bytes are trivial, but a
   router feeds an argmax over experts, so the effect is not bounded by the
   byte share. It is unmeasured.
