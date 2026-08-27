@@ -214,6 +214,13 @@ the reason, never silently dropped.
 - New family? Read `docs/ONBOARDING.md` (the two-hour characterisation pass
   to run before fitting anything).
 
+## Development note
+
+This repository was assembled with AI assistance (Claude Code). Direction,
+review, measurement and every published claim are the author's; the tool
+wrote code and prose under his review, and the artifacts and numbers are
+the lab's. Recorded here as disclosure of process — a tool is not an author.
+
 ## License
 
 Apache-2.0 for all code. The shipped corpus data files carry their own
