@@ -19,7 +19,7 @@ Reading rules baked into every table below:
 | geometry | n | floor | status |
 |---|---|---|---|
 | 397B d4/K256 | 2 | wikitext **0.0256** / code ~0.0178 | MEASURED, same-stack [E136/E136b] |
-| 397B d4/K2048 | 2 | wikitext **0.0056** / code **0.0104** | MEASURED [E142] |
+| 397B d4/K2048 | 2 | wikitext **0.0056** / code **0.0104** | MEASURED [E142-397B] |
 | 35B d4-d2 (at d2/K1024) | 2 | KL **0.214 mnats** | MEASURED, same-box [E140b] |
 | dense 27B d2/K256 | 3 | KL 2.085 mnats / ppl 0.0447 | MEASURED [E127/6f] |
 | all other geometries | — | UNMEASURED — do not inherit | III.12 |
@@ -45,7 +45,7 @@ third-decimal ppl between single-draw artifacts is not interpretable.
 | shipped 2.4 (flat K256) | 111.617 | 2.7655 | 2.6383 | daily driver; **unreproducible by construction** (base rewritten Aug 19, E121) |
 | **flat K512 (E93)** | 122.305 | 2.5634 | 2.6123 | **CLAIM 1 LEAD ROW: beats spicy 2.6bit by 0.6209 prose = 24x the K256 floor AND 0.0544 code = 3.1x the K256 code floor (borrowed; no K512 floor measured), at +1.7 GiB** |
 | harvest K512/K2048 | 139.93 | 2.3452 | 2.5969 | best-per-GiB |
-| **flat K2048 refit (flagship)** | 143.682 | 2.3410 | 2.5963 | vs spicy 3.5bit (2.3614/2.6005 @ 165.6): **SIZE claim — 21.9 GiB smaller; prose BETTER (0.0204 = 3.6x the K2048 floor, CLAIMED), code TIE (0.0042 = 0.4x)** — "wins both corpora" is withdrawn [E142]. vs shipped 3.1: 0.0109 = **1.9x the K2048 floor** (0.0056), not claimable (bar is 3x). Prior readings of 0.8x/0.4x used the K256 floor — a III.12 violation, corrected 08-24. |
+| **flat K2048 refit (flagship)** | 143.682 | 2.3410 | 2.5963 | vs spicy 3.5bit (2.3614/2.6005 @ 165.6): **SIZE claim — 21.9 GiB smaller; prose BETTER (0.0204 = 3.6x the K2048 floor, CLAIMED), code TIE (0.0042 = 0.4x)** — "wins both corpora" is withdrawn [E142-397B]. vs shipped 3.1: 0.0109 = **1.9x the K2048 floor** (0.0056), not claimable (bar is 3x). Prior readings of 0.8x/0.4x used the K256 floor — a III.12 violation, corrected 08-24. |
 
 Latest scores throughout; nothing stale. The flagship IS our best 144G build;
 what the floor forbids is claiming its thin margins as quality wins.
@@ -449,21 +449,21 @@ floor-checked. Remaining work is editorial only:
 4. Website publish.
 E138 (d4/K65536, M3, lands Mon ~11:00) = revision item, nothing waits on it.
 
-### 08-23 midday: E141 — the MoE crossover is BRACKETED; law 14 goes two-family
+### 08-23 midday: E141-M4 — the MoE crossover is BRACKETED; law 14 goes two-family
 
-    E141 35B d2/K4096: 25.145 GiB MEASURED, KL 25.502, top-1 92.52%
+    E141-M4 35B d2/K4096: 25.145 GiB MEASURED, KL 25.502, top-1 92.52%
     vs q6 (26.234, 13.358): DIRECT comparison, 1.1 GiB smaller, 1.91x WORSE
     = 57x the 35B draw floor -> conclusive at n=1 (loss branch; no replicate owed)
 
 - **Crossover bracketed on the 35B: 5.0–6.0 bpw** (E140 below the line at
-  5.0, E141 above it at 6.0). Dense bracket was 4.5–6.0. **Same band, both
+  5.0, E141-M4 above it at 6.0). Dense bracket was 4.5–6.0. **Same band, both
   architectures — law 14 is no longer dense-only.** Title's "Below 6 Bits"
   is now measured on both families.
 - Size model: third 35B out-of-sample hit (−0.37%; series −0.03/−0.30/−0.37).
 - Bonus: d2/K256 scored (17.643 GiB, 36.862, 90.92%) — fifth 35B VQ point,
   ladder monotone 53.0→47.5→36.9→28.0→25.5. Also the measured bar for any
   future d4/K65536 rate twin on this family.
-- **E142 (K2048 floor) RUNNING.** Design correction from the M4 (adopted):
+- **E142-397B (K2048 floor) RUNNING.** Design correction from the M4 (adopted):
   flagship's actual args recovered from its script — --relerr-abort 0.70,
   --expert-chunk 8, --tail-from 10 --tail-geom d4k2048, --src on the LOCAL
   T7 (751 GB, still exists). Floor fits use the same. RESOLVED: the tail flags are present in the invocation but are NO-OPS at
@@ -474,9 +474,9 @@ E138 (d4/K65536, M3, lands Mon ~11:00) = revision item, nothing waits on it.
   Anyone re-deriving the recipe from the command line: the flags are
   present and are no-ops at this geometry.
 - Draft updated: abstract fence, intro claim-1 fence, §3.2 crossover
-  paragraph, §6; charts gained E141 + d2/K256.
+  paragraph, §6; charts gained E141-M4 + d2/K256.
 
-### 08-24: E142 RESOLVED — K2048 floor measured; flagship claim SPLIT
+### 08-24: E142-397B RESOLVED — K2048 floor measured; flagship claim SPLIT
 
     draw 1: 2.3390 / 2.6064 (8h37m, contended)   draw 2: 2.3334 / 2.5960 (6h19m, idle)
     FLOOR: 0.0056 prose / 0.0104 code — 4.6x narrower than the K256 floor
@@ -531,7 +531,7 @@ No claim flips; three numbers move:
 - R2 vs q4: "3.2 GiB fewer" -> **2.4 GiB fewer** (39% KL gap unchanged)
 - E140 placement bar: 43.7 -> **38.7**; factor ~1.6 -> **~1.4** below the line
 - that margin: 73x -> **~50x** the 0.214 floor (still conclusive)
-- E141 vs q6 ("1.1 GiB smaller") was ALREADY consistent — both text-only.
+- E141-M4 vs q6 ("1.1 GiB smaller") was ALREADY consistent — both text-only.
 
 **The CARDS are unaffected**: they compare published builds (bf16 tower
 included) against community builds (same tower), which is apples-to-apples.
@@ -660,7 +660,7 @@ if one row is a mean, should all multi-draw rows be? **No — the opposite.**
 
 In every other multi-draw case the extra draws are FLOOR PROBES of a
 geometry, not replicates of the artifact in the row:
-- 397B d4/K2048: published E91 2.3410 + E142 floor draws 2.3390 / 2.3334
+- 397B d4/K2048: published E91 2.3410 + E142-397B floor draws 2.3390 / 2.3334
 - 397B d4/K256: published 2.7655 + E136/E136b floor draws 2.7706 / 2.7962
 - dense d2/K256: E124's rung + E127's three-draw floor
 Averaging those would blend a published artifact with throwaway probes and
@@ -991,7 +991,7 @@ d2/K512 arm 2 (15.45, VQ-4.8bpw). Names by the family convention, GiB x 8 /
 **NOT publishing, with reasons:**
 - d2/K4096 (18.44, 5.70 bpw): 2.1 mnats/GiB marginal return, an order of
   magnitude worse than the first rung step, AND above the crossover where q6
-  is 7.2x better for 2.8 GiB more. The 27B's E141.
+  is 7.2x better for 2.8 GiB more. The 27B's E141-M4.
 - d4/K1024 (11.47): KL 148.5 would be 73% worse than anything else we
   publish. Our released quality floor across both MoE families is ~85 mnats
   (35B VQ-3.4bpw 85.5; 27B VQ-3.9bpw 85.8). Noah's stated reason was 16 GB
@@ -1014,3 +1014,859 @@ is below our resolution, not shown to be zero — the 0.0447 floor was measured
 from unseeded draws and contains variance these arms do not have. Card says
 "more converged", not "better".
 
+
+---
+
+## 2026-08-24 — READINESS SWEEP (background audit, four tasks)
+
+Twelve findings, all verified by me against the draft's own tables before
+acting. Eleven corrected in DRAFT.md; one open, below.
+
+**Corrected — overclaims.** (a) Abstract said the 1.75-bpw d8/K16384 build
+beats spicy 2.6bit "on both evaluation corpora." §3.2's own table: code
+2.6728 vs 2.6667 — spicy is better. Now reads prose-win, code-tie. (b) The
+rate-twin row claimed "d8 wins both corpora, 4.4x floor"; 4.4x is prose,
+code is 0.0260 = 1.5x borrowed floor, under the bar. Row now states both.
+(c) Abstract's shared "5 to 6 bits" crossover band contradicted the draft's
+own dense bracket of 4.5–6.0. Both brackets now stated.
+
+**Corrected — stale or unreproducible numbers.** (d) 35B d4 K-doubling
+middle step 12.1 came from the retired pre-refit K8192 score of 56.4; with
+e94b it is 15.5. (e) Abstract's "47.5 mnats at 15.8 GiB" was the text-only
+pre-graft size; §3.3 carries 16.61 on the with-tower basis. (f) 31.1 was
+computed from rounded operands; unrounded gives 31.0. (g) §4's "5.19–5.35,
+all inside the 0.0447 floor" reproduced from neither table endpoint and the
+span was 3.6x the floor, not inside it. Restated from the tables.
+
+**Corrected — undisclosed borrowed floors (house rule 1).** (h) The 24x
+d4/K512 margin and both d8 margins are all judged against the d4/K256 floor;
+disclosed inline as lower bounds. (i) The d2/K4096-vs-q6 57x borrows the
+d2/K1024 floor; disclosed.
+
+**Corrected — definitions.** (j) Draft said the 397B tower is "exactly
+912,020,960 bytes" while this ledger says the graft file is 912,057,227 B.
+Both are right and they measure different things (tensor data vs file with
+header); the draft now says which. (k) The 37% byte-aligned decode tax did
+not reproduce at kernel level (EXPERIMENTS.md:4809) and has never been
+re-measured at artifact level; the draft stated it unqualified and now
+carries the caveat.
+
+**OPEN — the 27B d4/K256 row (DRAFT.md ~401, 10.56 GiB).** This is E95,
+which this ledger's 08-24 entry states was not grafted and "appears nowhere
+in the draft." It has since appeared. On disk the e95 dirs carry no
+metadata.total_size at all and no grafted artifact exists, so 10.56 is a
+projection (E-record 9.7 G + 0.858), contradicted by the more precise
+E-record figure of 9.612 → 10.47. The row therefore violates rule 2 and the
+table's own inline note that every 27B size is a measured grafted artifact.
+Propagates to make_qwen38_ladder.py:14 and fig_35b_27b. Awaiting Noah's
+call: drop the row, or graft-and-measure e95 on the M3.
+
+**Clean.** Chart-vs-table diff across all three generators: no discrepancy,
+including the three model cards. Every other 35B and 27B size verified
+against metadata.total_size to the printed digit. All remaining margin
+multiples recompute from the newest ledger values. Draft floors match the
+ledger's measured floors exactly.
+
+## 2026-08-24 — E95 ROW RESOLVED: grafted, measured, 10.47 (not 10.56)
+
+The open item above is closed with data rather than by deletion.
+
+**Artifact identity, settled from the record, not from size.** Four e95 dirs
+exist on disk, not two: `-K256`, `-K256-refit`, `-vq`, `-vq-r2`. The E95
+RESULT entry (EXPERIMENTS.md:5127) names the scored artifact explicitly —
+`e95-27b-dense-vq-r2`, scored 2026-08-21 19:00, gate PASS, III.11 smoke PASS
+— and r2's mtime is 18:57. `-vq` and `-vq-r2` are byte-identical in shards
+1-3 and differ ONLY in shard 4. Neither size, nor du, nor the first three
+shards distinguish them. **Shard 4's sha256 is the only discriminator.**
+Both measure 10,320,471,877 B = 9.6117 GiB, confirming the E-record's 9.612
+and refuting the 9.7 that my 10.56 was built on.
+
+**Graft source.** Qwen--Qwen3.8-27B on disk is the TEXT-ONLY checkpoint
+(1199 tensors, `model.*`/`mtp.*`, zero vision) — the direct graft failed
+against it. No un-grafted VL base is present. Sourced instead from
+`e119-27b-dense-d2k512-packed`, after verifying its
+`model-vision-graft.safetensors` is byte-identical (921,497,299 B, sha256
+8f71b3e3…) across three independently grafted rungs. graft_vision.py's own
+base-identity probe passed 10/10.
+
+**Measured post-graft: 11,241,969,176 B = 10.4699 GiB.** Growth was exactly
+921,497,299 B — the law-5 exact-growth check passes. Tower is 0.85821 GiB,
+which rounds to 0.858; the draft and all three 27B cards said 0.859. Fixed
+locally in all four; the three published cards are now one digit ahead of
+what is live and need a re-push.
+
+Draft row, make_qwen38_ladder.py and make_charts.py updated to 10.47; both
+figures regenerated. No prose claim depended on the old value — the row fed
+only the table and the two ladder plots.
+
+Residual defect, NOT fixed: r2's index metadata block is `{}` — no
+total_size, same as every other 27B artifact. Sizes here are summed from the
+shards on disk, which is why they are trustworthy; the metadata is not the
+source.
+
+**Sweep false positive, recorded.** The audit's finding 13 claimed the
+ledger note "vq-K8192-d4-packed and e94b-*-packed are both 15.670" is now
+wrong on disk, reporting the former at 18.483 GiB and calling it a
+graft-on-unpacked. Checked: summing the shards named in each index gives
+**15.6702 GiB for both**, 1810 tensors, 333 vision, in both cases. The
+ledger note stands; the audit was reading block usage, not file bytes. Two
+lessons kept: du is not a size, and an audit's findings get verified before
+they are acted on — this one would have corrupted a correct ledger entry.
+
+## 2026-08-25 — SECOND INDEPENDENT PASS: 5 confirmed, all corrected
+
+Aimed at the first pass's blind spot — prose-vs-tables, and the corrections
+themselves. Findings verified against primary sources before acting.
+
+**1. The arm-2 swap falsified a load-bearing methods claim.** §2.6 said
+"Every artifact in this paper is therefore a single unseeded draw" and that
+the dense fitter gained a seed "after the measurements reported here"; §7
+repeated it. But EXPERIMENTS.md:8961 registers E142-27B as "two arms, M3, **seed
+1234**", and arm 2 is the adopted 27B d2/K512 row — carrying the 28.4%/6.2x
+claim and the abstract's 28%. A correction made a methods sentence false.
+Both passages now state the exception and note that reading a seeded arm
+against an unseeded floor is CONSERVATIVE, since the floor carries draw
+variance the arm does not.
+
+**2-4. Propagation failures from the 08-24 fixes.** The debunked "5.19-5.35,
+inside the measurement's own noise" survived in all three 27B cards AND in
+make_qwen38_cards.py, so a card re-push would have re-published the exact
+claim the draft retracted. The 0.859 tower likewise survived in
+make_qwen38_cards.py, make_qwen38_ladder.py and make_charts.py — regenerating
+would have regressed a fix made hours earlier. All corrected at the
+generator, regenerated, and confirmed to survive regeneration.
+
+**5. §6 called a finished experiment "currently fitting"** — the d4/K65536
+rate twin whose result §4.2 reports five pages earlier. §6 now states the
+outcome.
+
+**Minors corrected.** "KL moves 40x" gave 36.6x from the printed table (now
+37x); the rate-twin rungs were called "the same size" when the ledger records
+0.1 GiB apart (now stated); "saves zero bytes and cost" tense break from the
+(k) insertion.
+
+**OPEN, needs a call.** MODEL_CARD_397B_E.md:41,156 says the flagship
+"matches the community 3.5bit on both corpora"; the draft and this ledger now
+say prose BETTER (0.0204 = 3.6x the measured K2048 floor) and code TIE. The
+card is the conservative direction, but it is live and it disagrees with the
+paper.
+
+**Clean.** Every 08-24 correction re-verified as substantively right. All
+table rows re-checked against ledger current-truth with graft offsets. All
+three generators match the draft to the printed digit. No retired number
+survives anywhere (no 56.4, 12.1, 33.095, 5.194, 10.56, 15.8, 1.641-as-
+current, "wins both corpora"). House rules obeyed; the one floor-disclosure
+gap (the undisclosed ~0.0178 code floor behind the 1.5x multiple) is closed.
+
+## 2026-08-25 — CARD SWEEP (three parallel audits: 397B, 35B+gemma, draft tables)
+
+**397B — one real error, CONFIRMED and fixed.** MODEL_CARD_397B_C.md's
+Siblings table served the RETIRED flat-K128 ladder point (100.9 / 3.1706 /
+2.6988) as if it were the live VQ-2.2bpw repo, under a header reading "all
+measured the same way." The repo has served d8/K16384 since the 08-22 v2
+update. This ledger's own row calls flat-K128 "ladder point only — NOT a
+quality claim." The card's OTHER v1 references (task table, prefill advice)
+are all explicitly labelled *(v1 weights)*; this table alone was not. Fixed
+to 101.0 / 3.0591 / 2.6728. **The card is live and needs a push.**
+
+**Pass-2 open item RESOLVED AS MOOT.** The second pass flagged
+MODEL_CARD_397B_E.md claiming the flagship "matches the community 3.5bit on
+both corpora," contradicting the split claim. E is not live: its first five
+lines read "SUPERSEDED (2026-08-24) … The live card is MODEL_CARD_397B_G.md
+… cite nothing from here," with the superseded weights pinned to revision
+a0da72a0. Pass 2 read the body and missed the header. No action. Second
+audit false positive of the day, and the second time a later pass caught an
+earlier pass's error rather than compounding it.
+
+**35B + gemma — NO findings.** The single reported item (cards printing 78.6
+/ 35.1 / 7.4 where the ledger has 78.557 / 35.131 / 7.449) is correct
+rounding to one decimal, verified: 78.557→78.6, 35.131→35.1, 7.449→7.4. Not
+a contradiction. Clean on the checks that mattered: every 35B card is on the
+with-tower basis and every comparison it makes is basis-consistent — the
+specific failure mode that family had before — all four VQ sizes match
+make_qwen36_ladder.py, and all three gemma cards correctly refuse perplexity.
+
+**Draft tables — CLEAN.** Third chip walked 7 tables / 29 rows / 87+ cells
+against ledger current-truth and reported no discrepancy, no unsourced cell,
+no broken cross-reference, no basis inconsistency. A clean bill from the
+cheapest instrument is the weakest evidence in the set, so six load-bearing
+values were re-derived by hand: q8 26.617+0.858=27.475 (draft 27.48);
+0.6209/0.0256=24.3x (24x); 0.1252/0.0256=4.9x; 0.0204/0.0056=3.6x;
+(45.842-32.810)/45.842=28.4%; 15.450/14.952=+3.3%. All six reproduce, and
+the d2/K512 row carries E142-27B arm 2 (32.8 / 5.162), not the retired E126
+(33.095 / 5.194).
+
+**STOPPING CONDITION MET (as pre-registered before this round ran).** The bar
+was: a round whose findings are all cosmetic AND none of which trace to a
+correction made in the previous round. This round found one real defect, and
+it was pre-existing drift from the 08-22 v2 update in a file no prior pass
+had been pointed at — not correction-induced. Four rounds total: 12 findings,
+then 5, then 1. Severity fell from a headline overclaim in the abstract, to a
+falsified methods sentence, to one unlabelled row in a siblings table.
+
+**OUTSTANDING BEFORE PUBLICATION — four live cards are ahead of what is
+served:** MODEL_CARD_397B_C.md (retired flat-K128 row in Siblings) and the
+three QWEN38 cards (0.858 tower; the retracted "5.19-5.35, inside the
+measurement's own noise" sentence). All fixed locally and regenerated from
+their generator; none pushed.
+
+**PUSHED 2026-08-25 — four cards, verified.** Repo ids confirmed against the
+live HF listing first (13 public repos), then each local file diffed against
+its LIVE README before upload: 5 diff lines on 397B_C, 12 on each QWEN38, and
+nothing else moved. After upload each was re-fetched and sha256-compared to
+local — all four byte-identical, and a negative check confirms none still
+contains "5.19 and", "0.859 GiB", or "3.1706". No weights touched.
+
+Note for future push maps: the C/E/F/G/K512 filenames are LOCAL ONLY. Every
+card uploads as README.md and carries its own H1 (`# Qwen3.5-397B-A17B-VQ-
+3bpw`); no letter is ever public. push_card_fixes.py's map is still missing
+the three QWEN38 repos and the two 35B rungs added since it was written —
+this push used an explicit four-entry map instead. Do not re-run
+push_card_fixes.py as-is expecting full coverage.
+
+## 2026-08-25 — RECORD REPAIR: the K2048 floor now has an experiment entry
+
+Noah's authority, paper session, on the finding that the flagship's headline
+claim divided by a floor with no record in EXPERIMENTS.md.
+
+**The hole.** 397B d4/K2048 floor = 0.0056 prose / 0.0104 code. It existed
+ONLY as rows in this file, cited as bare `[E142]` — which in EXPERIMENTS.md
+resolved to a DIFFERENT experiment (27B d2/K512 iters, M3, seed 1234). A
+reviewer following the citation under the paper's strongest claim would have
+been handed an unrelated 27B test. Third cross-session collision after the
+two E140s and two E141s.
+
+**Fixed by suffixing, not renumbering** — per the allocation note at the top
+of EXPERIMENTS.md, because artifact directory names on disk are load-bearing
+(the 101 GiB lesson). The disk had already disambiguated these two by itself:
+`e142-397b-k2048-draw1/draw2` vs `e142-27b-d2K512-iters10/30`. Only the record
+had not caught up. Now **E142-397B** (floor) and **E142-27B** (iters), with a
+note at the 27B heading explaining what a pre-08-25 bare `[E142]` means.
+
+**E142-397B written in full** at EXPERIMENTS.md:9108 — question, the M4's
+design correction and the twice-verified finding that the tail flags are
+NO-OPS at this geometry (so the flagship is genuinely flat), both draws with
+wall-clock and contention noted, the floor, and every claim that divides by
+it. Nothing was re-measured; it is reconstructed from this file's 08-24
+entries plus the artifacts, which still exist.
+
+**Every number in the new record re-derived before writing:** |2.3390-2.3334|
+= 0.0056; |2.6064-2.5960| = 0.0104; 0.0256/0.0056 = 4.6x narrower;
+|2.3614-2.3410| = 0.0204 = 3.6x (CLAIMED); |2.6005-2.5963| = 0.0042 = 0.4x
+(TIE); 0.0109/0.0056 = 1.9x (not claimable). All exact.
+
+**Citations updated:** 7 in this file, 1 in DRAFT.md. No bare `[E142]` now
+survives outside the two notes that exist to explain it.
+
+**STATE.md CLOSED.** It was a live scratchpad, is stale (reports E138 as
+running), and the experiment sessions are winding down. Header now says so and
+points to the three files that are current: this ledger, EXPERIMENTS.md,
+FINDINGS.md. Kept as a contemporaneous log, marked as non-authoritative.
+
+**Artifact disposition — RELEASED (Noah, 08-25):** e142-397b-k2048-draw1 and
+draw2 (196.3 GiB each) may be deleted. They are the only bytes that could
+re-derive this floor, and that is accepted: measured and recorded IS the
+record. Standing rule adopted from this — **an artifact whose result is fully
+written down is free to delete; the write-up is the evidence, not the bytes.**
+
+## 2026-08-25 — CORPUS REVIEW (four parallel audits + a disk cross-check)
+
+**DRAFT vs BYTES ON DISK — the check that licenses deletion.** Every size in
+every draft table was matched against the actual shard-byte sum of a real
+artifact. **24 of 26 matched exactly.** The two that did not were the
+spicyneuron comparators, printed as 120.6 / 165.6 in a column where every
+other row carries two decimals; the artifacts are 120.5722 / 165.5722. A
+reader subtracting the printed values got 19.63 and 21.92 against claims of
+19.6 and 21.9. Now printed 120.57 / 165.57, which reproduce the claims
+exactly. **This cross-check is the record's warrant: every number in the paper
+was verified against bytes at least once before those bytes were deleted.**
+
+**FINDINGS.md Law 14 was stale on four axes, all corrected.** (a) It said "the
+MoEs have not been tested" at the upper bracket; E141 bracketed the 35B at
+5.0-6.0, so the law is no longer dense-only. (b) Its q8 row carried the
+RETRACTED pre-E144 number (26.341 / 1.641) — the build that was never 8-bit;
+both rows now shown, the retracted one labelled. The bracket derives from q4
+and q6, both clean, so it is unaffected. (c) Its d2/K512 row cited E126's
+unseeded draw; the adopted artifact is E142-27B arm 2. (d) Its sizes are
+pre-graft while the paper is with-tower — now stamped, per law 5. Header was
+"through E110" while the file cited E139; now dated and marked closed.
+
+**Retraction discipline: CLEAN, end to end.** An independent sweep for every
+retraction in FINDINGS §II and this file's retired list found NONE asserted as
+live in any model card or in the draft. The superseded card is marked, the
+retracted q8 number appears in the draft only as labelled history, and the
+withdrawn "wins both corpora" is absent from the live flagship card.
+
+**Artifact inventory built.** make_artifact_inventory.py -> ARTIFACTS.md +
+artifacts.json: 229 artifacts, 9,402 GiB, classified by REBUILDABILITY rather
+than size. First cut missed 84 artifacts nested inside the three *-rungs
+container dirs, which also hid every affine comparator; fixed by recursing one
+level. Sizes are read from each index's shard list, not du — du over-reports
+by ~0.02 GiB and once caused an audit to misreport 15.670 as 18.483.
+
+### 08-25 corpus review — findings acted on
+
+**Live cards, fixed locally, NOT pushed (need Noah's go):**
+- `397B_C` called the family "three-size" and listed three rungs. Four are
+  published; VQ-2.6bpw was missing. Now four, matching K512's table.
+- `397B_G` — the LIVE FLAGSHIP — had no Siblings table while every other 397B
+  card carries one. Added.
+- All three QWEN38 cards were the ONLY VQ cards of the fifteen missing the exo
+  codebook-replication warning. They are VQ artifacts with codebooks and carry
+  the identical slicing hazard. Added AT THE GENERATOR so it cannot regress,
+  and regenerated.
+- `GEMMA_E4B_VQPLE` gave the incumbent's peak memory as 9.0 GB. **No source
+  exists for 9.0 anywhere in the corpus.** E147 measured 9.48 GB at all three
+  prompt lengths. Corrected to 9.5, and the derived claim from "20% less RAM"
+  to "~24%" (7.25/9.48 = 23.5%). **This one moves a claim in OUR FAVOUR, which
+  is the direction to distrust — flagged for Noah rather than quietly kept.**
+
+**EXPERIMENTS.md:**
+- The STATE OF RECORD block at the top is dated 08-13 — the day BEFORE VQ was
+  discovered (E35, 08-14) — and names pre-VQ AFFINE builds as the "ship
+  artifacts". Anyone relying on this file alone after deletion would cite the
+  wrong artifacts. Marked superseded, scoped to entries before it, pointed at
+  the ledger.
+- **Fourth cross-session collision found:** `## E136` used twice, unsuffixed.
+  The second is the M4 replication (withdrawn by E136b); suffixed E136-M4.
+  Bare `[E136]` citations mean the M3 result and still resolve.
+
+**Audit false positives caught (verified, no action):**
+- "struct6-tail3x3 is 3.1557 in one place and 3.1580 in another, neither
+  marked superseded" — the file explains it two lines later as the known
+  1-node vs 2-node decomposition. Not a contradiction.
+- "GEMMA_SMALL reassigns 84.62% to a different artifact" — 84.62% is 88/104 on
+  a 104-item test. Two artifacts tying at 88/104 is a tie, not a reassignment.
+- "mlx-community--Qwen3.6-27B-8bit and qwen38-27b-rungs/q8-rebuilt are the
+  same artifact" (my own suspicion, not a chip's) — identical size, tensor
+  count and vision count, but DIFFERENT shard sha256. Two different models
+  whose 8-bit conversions land on the same byte count. **Fifth distinct size
+  collision found in this corpus, and the first that crosses model families.**
+
+**Known gap, deliberate:** E140-M4's quality numbers live in this ledger and
+NOT in EXPERIMENTS.md, by the M4's own choice ("I have not scored these
+artifacts and will not restate KL/ppl I did not measure"). E142-397B was the
+same and is now fixed. **Consequence: the record is the SET {LEDGER,
+EXPERIMENTS, FINDINGS}, not EXPERIMENTS alone.** Do not delete or archive any
+one of the three.
+
+### 08-25 referential-integrity sweep — E141 split, and a deletion-screen lesson
+
+**Bare `[E141]` was ambiguous in six places — same class as E142, missed when
+E142 was fixed.** EXPERIMENTS.md defines E141-M4 (35B d2/K4096 vs q6) and
+E141-M3 (did thin init starve E138). All six bare citations here describe the
+35B d2/K4096 result; all now read E141-M4. One of them was in the Law 14 fix I
+wrote earlier today — the same defect reintroduced while repairing its sibling.
+Bare `[E136]` and `[E140]` are left alone deliberately: each resolves to the
+entry that still holds the bare number, and EXPERIMENTS.md says so at both.
+
+**Citation graph otherwise CLEAN:** all 68 distinct cited E-numbers resolve
+(including the early bullet-format entries that look dangling); every FINDINGS
+"law N" reference resolves; every DRAFT section cross-reference resolves; both
+figures exist and post-date their generator; no generator/output drift.
+
+**DELETION SCREEN — a size match is NOT a citation, and I nearly acted as if
+it were.** An audit listed ~1,292 GiB of 397B artifacts that appear nowhere in
+the written corpus. Screening them by "does this size back a number in the
+paper," two came back as hits:
+`rotlab--397B-flatk512-randinit-packed` (122.31) and
+`rotlab--397B-flatk256-bodytailw4-packed` (111.62). **Both are false alarms.**
+122.31 is shared by 2 artifacts and 111.62 by FIVE; the paper's rows are
+`flatk512-packed` and the published VQ-2.4bpw, not these variants. Identical
+geometry produces identical byte counts, so a size screen cannot distinguish a
+cited artifact from an uncited twin — in either direction.
+
+**Standing rule for the deletion pass: screen by NAME and provenance against
+the ledger's current-truth tables, never by size.** Size is the one property
+guaranteed to collide. Sixth distinct size collision recorded in this corpus.
+
+## 2026-08-26 — cards pushed, exo cards repaired, TIMELINE.md built
+
+**Six cards pushed and verified byte-identical** (397B_C four-size family;
+397B_G Siblings table; three QWEN38 exo notes; gemma VQ-PLE peak memory).
+The gemma one was included though it moves a claim in our favour — flagged to
+Noah at push time, reversible in one command.
+
+**exo model cards on `vq-codebook-replicate` — three defects, committed
+locally, NOT pushed.** That branch is public and linked from PR #2268 and
+every model card, so pushing is Noah's call.
+- **VQ-3bpw had no card**; the branch shipped VQ-3.1bpw, whose model_id HF
+  REDIRECTS to the 3bpw repo — resolving to current weights under a stale
+  name. Old card removed rather than kept, since the redirect IS the hazard.
+- **VQ-2.2bpw carried its v1 byte count** (108,372,357,800). The repo has
+  served v2 d8/K16384 since 08-22; corrected to 108,417,009,678.
+- **VQ-2.6bpw had no card at all** despite being published. Added.
+
+**A correction that made a correct number wrong — caught before shipping.**
+An uncommitted draft of the 3bpw card set storage_size to 154,298,264,545 and
+carried a comment explaining that the old card's 154,277,447,647 was "20,816,898
+B short." The arithmetic is self-consistent and the premise is FALSE: the true
+safetensors total is 154,277,447,647, confirmed against the live repo and both
+local copies. The superseded card had it right. Committing that file unread
+would have shipped a wrong size AND a confident false explanation.
+**Convention established: exo storage_size = sum of .safetensors bytes only**,
+derived by checking the 2.4bpw card, which matches to the byte. All four cards
+now verified against live HF, and each model_id confirmed NOT to redirect.
+
+**TIMELINE.md + make_timeline.py.** 73 experiments in order, each with what it
+settled and a line link into EXPERIMENTS.md. **24 have a written result, 19
+were pre-registered, and 3 pre-registrations were never closed** — shown as
+such rather than hidden. Extracted from headings verbatim, never paraphrased:
+a summary written today could smuggle in what we now believe an old experiment
+showed, which is the exact failure the retraction discipline exists to stop.
+Two bugs found and fixed while building it, both instructive: the early
+bullet-format entries (E1-E40) were being dropped entirely, and MY OWN
+editorial annotations ("SUFFIXED 2026-08-25") were being read as experiment
+dates, back-dating 08-23 work to 08-25. The tool's docstring also claimed it
+never guesses a date, which stopped being true when carry-forward was added —
+fixed so the document matches the behaviour.
+
+### 08-26 — exo picker cleaned; a third uncommitted regression found
+
+Noah's ask: drop `vq-d4K512` and `vq-3.1bpw` from the exo model picker. Done,
+in the checkout exo actually runs from (main's working tree — NOT the
+vq-codebook-replicate branch, which is why yesterday's branch commit did not
+change what he sees).
+
+- `rotlab--397B-flatk512-packed` (`vq-d4K512`, 122 GB) was a PRE-PUBLICATION
+  card; its own comment says it existed to be III.11 smoked on the ring before
+  release. That smoke was E143, it passed, and the artifact shipped as
+  VQ-2.6bpw. Job done, card removed.
+- `VQ-3.1bpw` removed — the redirecting id.
+
+**Third bad uncommitted edit found in the same directory.** All three tracked
+397B cards had a working-tree change replacing the CORRECT committed comment
+("Runs on STOCK mlx_lm via the bundled model.py — patch_mlx_lm is retired")
+with the RETIRED path ("Loads via the VQ hook in each node's exo-env mlx_lm,
+patch_mlx_lm.py + vq_switch.py"). This contradicts every published HF card
+("No patches, no custom forks: config.json declares model_file: model.py").
+Reverted on 2.2 and 2.4; 3.1 was deleted anyway. **Three defects now found in
+uncommitted exo working-tree edits — a wrong storage_size, a false explanatory
+comment, and a reverted-to-retired runtime claim. Nothing in that directory
+should be committed without checking it against the published cards.**
+
+**Consequence noted, not acted on:** with `vq-d4K512` gone, no exo card points
+at the 2.6bpw rung. The published `VQ-2.6bpw` card exists only on the
+vq-codebook-replicate branch, and those weights are NOT downloaded locally
+(only the rotlab lab-name copy is on disk), so registering it would mean a
+122 GB fetch. Left for Noah.
+
+### 08-26 — VQ-2.6bpw: renamed in place, not re-downloaded
+
+Noah: prefer the official artifact locally over the smoke-test copy. The bytes
+were already on disk under the lab name, so this was a rename, not a 122 GB
+fetch.
+
+**Proved identical before touching anything:** all **29 LFS files sha256-match
+the live repo**, vision graft included. Of the 39 files, only two differed and
+both are expected — the README (updated after publish) and a stray
+`model.safetensors.index.json.pre_total_size` backup.
+
+`rotlab--397B-flatk512-packed` -> `TheDrainFlorist--Qwen3.5-397B-A17B-VQ-2.6bpw`.
+Stray backup removed; the pre-publication README replaced with the published
+card. exo resolves model_id by `org--repo` directory name, so the official
+card now finds bytes we already owned.
+
+**A wrong card was still live on main.** The 3bpw card in main's working tree
+— the one exo actually reads — still carried the bad 154,298,264,545. Yesterday's
+fix went to the vq-codebook-replicate BRANCH, which exo does not read.
+Replaced. **All four 397B rungs now verified: card in_bytes == the local
+.safetensors total, exactly.**
+
+**Pointer hygiene:** the rename breaks the link from E143 (whose heading names
+`rotlab/397B-flatk512-packed`) to the directory. Heading left as-is — it
+records what the smoke ran under — with a note stating the new name and that
+the bytes are identical. Two further mentions remain at EXPERIMENTS.md:9325
+and LEDGER.md:792; both are historical statements about that artifact and
+stay accurate under either name.
+
+## 2026-08-26 — FINAL: all 13 published models local under published names
+
+Noah's ruling: keep the published models under their published names, plus the
+bf16 teacher; delete the rest. Every rename was resolved by HASH, never by
+size or by name similarity.
+
+**Identification.** Nine artifacts lived only under lab names. Matching by
+safetensors total gave a UNIQUE candidate for six; three were ambiguous and a
+probe on the SMALLEST shard matched all candidates — those shards are shared
+base tensors. Re-probing the LARGEST shard resolved all three, and each landed
+on exactly what this ledger already claimed:
+- VQ-3.8bpw = `e94b-...-packed` (NOT `qwen36-35b-rungs/vq-K8192-d4-packed`)
+- VQ-5.4bpw = `e140-...` draw 1 (NOT `e140b`)
+- VQ-4.8bpw = `e142-27b-d2K512-iters30` arm 2 (NOT arm 1, NOT e119)
+Independent confirmation of the published lineup, by bytes.
+
+**The stale flagship-sibling caught.** The dir already named
+`TheDrainFlorist--...VQ-2.2bpw` held the **v1 (flat d4/K128)** weights;
+HF has served v2 (d8/K16384) since 08-22. Its card on main also still carried
+the v1 byte count — my earlier `git checkout` revert had restored the committed
+v1 value along with the correct runtime comment. Both fixed: v2
+(`rotlab--397B-d8K16384-packed`, total-matched and probe-matched) installed
+under the published name, v1 set aside as `zz-STALE-v1-flatk128-was-VQ-2.2bpw`
+for deletion, card corrected to 108,417,009,678. **A size screen would have
+called the v1 dir "the published 2.2bpw" — it has the published NAME. Only the
+byte total exposed it.**
+
+**Completeness verified against the live repos**, not assumed: all 13 have
+every non-pycache file the repo has, and safetensors totals matching exactly.
+Two 35B dirs were missing `qwen36_ladder.png` (their cards embed it); copied in.
+
+**Renames recorded in rename_map.json.** E-numbers in EXPERIMENTS.md still name
+the lab dirs; the results stand under either name, and that file maps old to
+new.
+
+**KEEP 1,369.2 GiB** (13 published + the 751 GiB bf16 teacher).
+**DELETE 8,033.0 GiB / 7.84 TiB, 215 artifacts** — every lab rung, unpacked
+twin, third-party comparator, cache, and the stale v1. Nothing in the delete
+set backs a number that is not already written down.
+
+**Records answer: complete.** Every paper number traces to a recorded
+measurement. The three "never closed" pre-registrations are process artifacts:
+E141-M4's result is in this ledger (25.145 + 0.832 tower = the paper's 25.98),
+E120 was closed by E129 as UNEXPLAINED, E132's deliverable (packed e94b,
+14.838) is measured here. **No further test of any old model is required.**
+
+## 2026-08-26 — DELETION EXECUTED. 8.3 TiB freed; 13 published models + bf16 kept.
+
+Disk: 1.0 TiB free -> **8.5 TiB free**. Keep set verified 14/14 present after.
+
+**Why the earlier attempts silently did nothing.** `shutil.rmtree` RAISES on a
+symlink instead of skipping it, and the first delete-set entry
+(`Qwen--Qwen3.5-35B-A3B`) is a symlink into `hub-35b-src`. Every run aborted on
+entry one having deleted nothing. The dry run could not catch it because a dry
+run never calls rmtree — **the rehearsal did not exercise the operation it was
+rehearsing.** Two symlinks total, both pointing into hub caches that were
+themselves on the delete list; unlinked, counted as zero bytes (the space frees
+when the cache goes, and counting it would double-count).
+
+**A real gap in my own inventory, found only by the leftovers.**
+make_artifact_inventory.py treats a directory as an artifact ONLY if it has a
+`model.safetensors.index.json`. Two OptiQ builds (`optiq-b30`, `optiq-b30-af6`,
+79.8 GiB) have no index, so they were never inventoried, never in the plan, and
+survived the sweep. Not published, not cited in the paper; removed by hand.
+**Anything counting artifacts by index file undercounts — verified no other
+indexless model dirs remained.**
+
+Also removed: the four now-empty container dirs and `.DS_Store` files.
+
+**FINAL STATE — `/Volumes/Thunderbay SSD/Exo Models`:**
+- `Qwen--Qwen3.5-397B-A17B-bf16` (751 GiB teacher, Noah's call to keep)
+- all **13 published models**, under their published names, each verified
+  against its live repo by total bytes + sha256 of its two largest shards
+- four stray top-level config/tokenizer json files, harmless, left alone
+
+Everything else is gone. The record — TIMELINE.md, EXPERIMENTS.md, LEDGER.md,
+FINDINGS.md, ARTIFACTS.md, rename_map.json — is a few MB and is now the sole
+evidence for every result whose artifact no longer exists. That was the plan,
+and it is executed.
+
+## 2026-08-26 — table emphasis given ONE meaning: bold = published
+
+Noah spotted it in the rendered page: the teal/bold rows didn't correspond to
+anything consistent. They didn't. Bold meant three different things in three
+tables — in 3.2 it tracked "the comparisons that carry claim 1" (which the
+prose immediately below already names), and in 3.3 it tracked neither the
+published set nor the claim-carriers.
+
+**Underneath it, a real error:** `flat d4/K512` is published — it is the
+2.6bpw model — but its row carried no "(published)" label while three other
+rows did. The paper was under-reporting its own published lineup.
+
+Now **bold = published artifact**, everywhere, with the redundant
+"(published)" text removed so there is one convention rather than two, and a
+one-line note under each VQ table saying so. Verified mechanically: the nine
+bold rows are exactly the nine ladder rungs whose sizes match a live HF repo —
+397B d8/K16384, d4/K256, d4/K512, d4/K2048; 35B d4/K8192, d2/K1024; 27B
+d4/K4096, d2/K256, d2/K512. Checked again in the RENDERED html, not just the
+markdown.
+
+**Disclosed rather than hidden:** two published 35B builds are not on the flat
+ladder (13.79 d4/K2048, and the 18.71 tail-weighted build which is not a flat
+geometry). A note under the 35B table says so, verified against
+rename_map.json. Four of the 13 published models sit outside the three ladders
+in total — the other two are the gemma pair, which the paper excludes from all
+claims by design.
+
+Republished to the artifact and to the private HF Space, the latter verified
+sha256-identical to the local file.
+
+## 2026-08-26 — ladders carry release names; bpw naming convention pinned
+
+Noah: the geometry labels are memorable but you cannot download "flat d4/K2048".
+All three VQ ladders gained a `release` column giving the repo suffix, with the
+full prefix in each caption. All nine names verified to resolve against the live
+HF account.
+
+**A sentence I wrote and then had to correct, which is the point of checking.**
+Adding the column, I wrote that release names are whole-artifact bpw and that
+d4/K2048 is "2.75 bpw in the expert region and 3.0 bpw across the file." The
+second half is false — the artifact measures **3.109** bpw whole-file. Worked
+out the actual convention across all nine: **whole-artifact bytes over parameter
+count, and it holds for eight of nine.** The lone exception is the flagship,
+named `VQ-3bpw` while measuring 3.11 — a residue of the 3.1bpw -> 3bpw
+repository rename, since the rename kept the bytes and changed the label.
+
+The caption now states the convention, states the exception, and points at §5's
+"a label is not a measurement" rule — which this is a live instance of, in our
+own release names. Expert-region rate (2.75 codes + 0.25 fp16 scales = 3.00) is
+given so the two numbers cannot be confused.
+
+Verified after rebuild: every ladder row's cell count matches its header, the
+nine release names map to the nine bold rows, 0 external references, and the HF
+Space is sha256-identical to the local file.
+
+## 2026-08-26 — 3.5 gains the prefill-slowdown mechanism (Scout's review)
+
+Scout's read of the paper surfaced one gap: 3.5 priced the prefill slowdown
+(~0.5x affine at 35B, decode within 10-20%) but never said WHY a method near
+parity on decode loses half its throughput on prefill. Added: decode is
+bandwidth-bound and a VQ artifact has fewer bytes to read, so the in-kernel
+codebook lookups hide behind memory traffic; prefill is compute-bound, the
+same per-weight decode work lands on a saturated arithmetic path with no
+bandwidth saving to pay for it. Framed explicitly as "an interpretation
+consistent with the measured split rather than a profiled attribution" — we
+never profiled the kernels, we measured the ratios.
+
+One clause of my own addition was trimmed before shipping: "stability across
+prompt lengths" is measured for the u8view lever (2k/8k, E81/E90) but NOT for
+the 0.5x-vs-affine ratio, so the sentence now claims only the pair of ratios.
+
+Also this pass: verified the abstract's "1.75-bit" and "2.25-bit" against the
+notation convention — flagged them as mixed conventions, and the flag was
+WRONG: 2.25 is d4/K512 (the 24x build), codes-only, exactly per the paper's
+stated notation. No edit made. The near-miss is recorded because "corrected a
+correct number" is this project's most persistent failure mode and it was
+nearly committed to the abstract on publish day.
+
+Artifact + Space republished, sha256-verified. OPEN GATE unchanged: 7 points
+at the project repository; VQLab must be public before or with the paper.
+
+## 2026-08-26 — Scout round 2: two fixes, one false alarm
+
+**False alarm, verified before acting:** Scout reported the 3.2 figure's
+base64 "truncated mid-string." Decoded both embedded PNGs from the shipped
+html: valid header AND IEND trailer, 134,975 and 166,737 bytes — the
+truncation was in Scout's file read, not the file. No action.
+
+**6 now NAMES the non-rebuildable artifact.** It is VQ-2.4bpw (111.6 GiB
+d4/K256): predates the manifest system, and logs_live_397b.log — the record
+of its exact fit invocation — was overwritten Aug 19, four days after the
+Aug-15 fit (EXPERIMENTS.md:8019). Everything else was verified identical in
+the vintage investigation (code by diff, defaults by document, stack by
+binary identity); the unrecoverable inputs are the fit flags. The sentence
+now says exactly that, plus the resolved reading: a favourable but
+unexceptional draw inside the measured floor.
+
+**2.6 now names the 27B ppl corpus:** the wikitext-style prose referee
+corpus, first 2048 tokens, one corpus where the 397B uses two. Verified
+against the corpus file itself (wikitext-103 formatting) and the E119/E128C
+scoring records.
+
+Checklist swept: all 13 model repos public, both figures complete in the
+shipped bytes, artifact + Space republished sha256-identical. Note for the
+record: Scout's "14 published models" counts the bf16 teacher, which is
+kept locally but is not ours and not published — the number is 13.
+
+## 2026-08-26 — NOAH'S READ: 16 fixes, one reaching the title
+
+**"Calibrated" was never established, and the TITLE claimed it.** Noah doubted
+the spicyneuron builds are calibrated. Checked their live cards: they describe
+sensitivity-based allocation (routers/attention richer), NO calibration corpus
+mentioned; mlx-community uniform builds derive scales from weights alone. So
+neither comparator class is established as calibrated, and the paper said
+"Beats Calibrated Affine" in its title. Title now "Beats Affine Quantization";
+comparators are "hand-tuned mixed-bit-depth" / "community" builds everywhere
+(9 instances fixed; the one surviving "calibrated" is our own GPTQ/DWQ-style
+internal test, which IS calibrated). §3.2's affine table header likewise.
+
+**Also from the read:** abstract's "All artifacts are published" scoped to
+"Thirteen artifacts spanning the three ladders"; §2.2's corpus sentence
+rewritten to say what data-free buys (scores cannot be flattered by
+construction); nat defined once, in §2.6, abstract points to it; 27B corpus
+clause reworded; K512-vs-2.6bit gains the vision parenthetical (1.7 GiB
+download / 0.9 like-for-like); 3bpw caption now explains the name by its
+expert-region rate (exactly 3.00) instead of "residue of a rename"; zero-copy
+lever named at point of use; decode parity scoped to this hardware's
+bandwidth-to-compute ratio; §4.1's q8-mislabel narrative cut (Noah: results,
+not failures — the corrected numbers stand on their own); "most strongly"
+added to the tail sentence; "base-vintage" jargon replaced with plain words;
+§4.4 deleted, its lever list folded into §3.5 as one sentence; §5 keeps its
+rules but drops "two weeks" and now states the borrowed-floor practice as
+practiced (disclosed lower bound), fixing a rule-vs-practice contradiction
+Noah caught; §7 discloses the code corpus does not ship (private codebase) —
+verified against referee/ contents; 57x borrow gains the n=1 direction note
+(the one measured cross-K floor pair narrowed 4.6x with larger K); chart:
+spicy sizes to 2dp matching the table, 3.5bit label lifted clear of the
+flagship's, legend wording updated.
+
+**His two questions, answered from the record:** (1) No K512 floor was ever
+measured — the 24x borrows d4/K256, disclosed; measured floors exist at K256,
+K2048 (397B), d2/K1024 (35B), d2/K256 (27B). (2) The 3bpw name: whole-file is
+3.109 (so "3.1" matched it); the defensible reading of the name is the
+expert-region rate, exactly 3.00 — the caption now says that instead of
+implying the rename tracked the measurement.
+
+All 20 post-edit checks pass in the RENDERED html; artifact + Space
+republished sha256-identical. §5 retained per arbiter judgment (rules are the
+paper's spine; targeted fixes made) — flagged to Noah as still his call.
+
+## 2026-08-26 — 5 rewritten to formal register; 3bpw name ruled a convention break
+
+**5 "Keeping the data clean" -> "Measurement discipline."** Noah asked
+directly whether 5 reads like a white paper; honest answer was no — right
+content, wrong register (aphorism headers, anecdote voice). Rewritten at half
+the length, impersonal, same rules preserved: pre-registration, own-geometry
+floors with disclosed borrows, same-artifact rows, cross-machine gating,
+gates-must-fail-first, serve-before-ship, physical provenance,
+metadata-as-intent. The (§5) citation from the ladder caption still resolves
+to the metadata-as-intent rule.
+
+**The VQ-3bpw name is a CONVENTION BREAK, ruled so.** The other eight names
+are whole-artifact bytes x8/params to one decimal (2.18->2.2, 2.42->2.4,
+2.65->2.6, 3.83->3.8, 5.44->5.4, 3.86->3.9, 4.47->4.5, 4.78->4.8). The
+flagship measures 3.109 -> convention says "3.1"; it is named "3". Yesterday's
+caption rationale (expert-region rate = 3.00) was a constructed explanation
+for a deviation, not a second convention. Noah: would never have signed off on
+3.0 knowing it deviated. **Pending his go: rename the repo back to VQ-3.1bpw**
+— touches the HF repo (auto-redirect), 4 card sibling tables, paper ladder row
++ caption, exo cards (main + branch), the collection, the local dir, and
+push_card_fixes.py. Not executed; outward-facing.
+
+Line-number map of every read-pass change generated by diffing against the
+pre-read snapshot; delivered to Noah in-session. Both surfaces republished,
+Space sha256-identical.
+
+## 2026-08-26 — FLAGSHIP RENAMED VQ-3bpw -> VQ-3.1bpw. Convention now 9/9.
+
+Noah's ruling: accuracy is the brag; the name follows the measurement. The
+"3bpw" label did not come from him and he would not have approved a deviation.
+
+**Executed, each step verified:**
+- HF repo moved; old id confirmed redirecting to the new one. The collection
+  item followed the rename automatically.
+- Paper: ladder row now VQ-3.1bpw; the caption's exception sentence DELETED —
+  with the rename there is no exception, the convention (whole-artifact bpw to
+  one decimal) is 9 for 9, and yesterday's expert-region rationale is moot.
+- Cards: G retitled + body refs; C/F/K512 sibling tables and prose; the
+  predecessor-weights rows relabelled "(predecessor weights at this name)"
+  since old and new weights now share the 3.1bpw name — the pinned revision
+  disambiguates. E's banner records both renames. All four pushed via
+  push_card_fixes.py (map updated first) and verified byte-identical.
+- exo cards renamed+edited on main AND committed on vq-codebook-replicate;
+  in_bytes matches the renamed local dir exactly. Local artifact dir renamed.
+- Grep sweep: the only remaining "VQ-3bpw" string anywhere is E's banner,
+  where it is the name history itself.
+
+**Also from Noah's follow-up:** the K512-vs-2.6bit parenthetical cut to
+"(0.9 GiB without our vision tower)" — the long version restated what §3.2
+already establishes; and §5's provenance paragraph rewritten — "recorded
+physically" dropped, and the model_type example now explains itself
+(checkpoints inherit config fields from the bases they were converted from)
+instead of asserting a bare oddity.
+
+Artifact + Space republished, sha256-identical. The naming convention is now
+uniform across all nine released rungs with zero exceptions to caveat.
+
+## 2026-08-26 — the model_type sentence was confusing because it was WRONG
+
+Noah kept pressing on 5's "every checkpoint declares a model_type naming the
+wrong model release." Read the configs: 397B = qwen3_5_moe (CORRECT — it is a
+Qwen3.5), 35B (a Qwen3.6) = qwen3_5_moe, 27B (a Qwen3.8) = qwen3_5. So "every
+one" was false, and the real fact is more useful: model_type names the LOADER
+CODE PATH, not the release — 3.6 and 3.8 share the 3.5 architecture, so the
+converter stamps them all qwen3_5* and derived builds inherit it. Passage
+rewritten to say exactly that. A reader's confusion pointed at an overclaim
+the audits missed; the confusion was the finding.
+
+Republished both surfaces, Space sha256-identical.
+
+## 2026-08-26 — publication mechanics: PDF built, Zenodo scaffolded, M4 tidied
+
+**q6_local on the M4 identified and deleted** (Noah's order, run over ssh).
+It was the 27B q6 affine comparator PRE-GRAFT: 20.3553 GiB, and the ledger's
+q6 row is 21.2136 with-tower — 21.2136 - 0.8582 = 20.3554, exact. Text-only
+twin of a fully recorded artifact, rebuildable by one convert. 20 GB freed.
+
+**paper/below-six-bits.pdf** rendered from paper.html via headless Chrome:
+21 pages, 674 KB, both figures embedded, light palette. Known limitation:
+print drops clickable hyperlinks (URLs survive as text); the HTML deposited
+alongside it keeps them.
+
+**paper/zenodo_draft.py** written: creates a PRIVATE Zenodo draft, reserves
+the DOI, uploads PDF + HTML, sets metadata (preprint, CC BY 4.0, related
+identifier -> the HF account). Reads ZENODO_TOKEN from env only — the token
+never touches this repo or my hands. Idempotent: reuses an existing draft
+rather than minting a second DOI. Publishing remains a human click on the
+Zenodo page, on publish day, after the DOI is stamped.
+
+**Sequence standing:** VQLab dogfooding (Noah) -> DOI reserve (one command,
+Noah's token) -> stamp DOI into paper/PDF/Space/cards (me) -> publish day:
+TDF site + Zenodo + Space public together -> arXiv when endorsed.
+
+## 2026-08-26 — DOI RESERVED AND STAMPED: 10.5281/zenodo.22119018
+
+Zenodo draft 22119018, private, CC BY 4.0, preprint. The DOI is stamped into
+the paper's front matter; html + PDF rebuilt from the stamped source; the
+draft's own files REFRESHED so Zenodo carries the stamped versions —
+verified by md5 against Zenodo's checksums, both files MATCH. Artifact and
+Space republished sha256-identical. First token was pasted into chat by
+accident, revoked, replaced via macOS Keychain (script falls back to it; the
+secret never enters shell history).
+
+PUBLISH-DAY CHECKLIST (all staged, nothing public yet):
+  1. VQLab dogfooding passes -> repo public   (Noah)
+  2. Zenodo: press Publish on draft 22119018  (Noah — DOI goes live)
+  3. Space -> public; TDF site live           (me / website manager)
+  4. Cards: add paper DOI + site link, push   (me, push_card_fixes.py)
+Gate order matters only for step 1; 2-4 are same-day, any order.
+
+## 2026-08-26 — 7 now NAMES VQLab with its URL (webmanager's catch)
+
+The reproducibility section said "the project repository" without ever naming
+it or linking it — the repo could have gone public and no reader of the paper
+would have found it. Now: VQLab, github.com/noahzelezny/VQLab, Apache-2.0,
+linked at DRAFT.md:713. All five surfaces refreshed (html, PDF, artifact,
+Space, Zenodo draft), Zenodo checksums re-verified MATCH. The publish gate is
+unchanged — that URL 404s until the repo goes public, which is why VQLab
+public remains step 1 of the checklist.
+
+## 2026-08-26 — E81-class check on VQLab dogfood: PASS, with a real find
+
+The VQLab session ran the bundled-runtime check rather than arguing it, and
+the concern had a live hook: their dogfood HAD patched the local runtime
+mid-run (vq_dense.py kernel resolution, fixed after a fresh-venv selftest
+failure) — exactly the E81 setup. Results: check-bundle PASS on all four
+dogfood artifacts, both runtimes verbatim against the repo; both packed
+bundles carry the fix (3 occurrences of _resolve_kernel each); and safe BY
+CONSTRUCTION — the fix landed before any build ran, so no pre-fix bundle
+ever existed.
+
+Their audit also surfaced a procedural miss their own pass had called done:
+the K512 chain skipped `vqlab check`, so bundle-verbatim went unverified
+until prompted. The distinction that emerges is a keeper:
+**generate-through-bundle and bundle-matches-benched-runtime are different
+properties, and only the second catches E81.** A chain must carry both.
+
+Third peer-check this week to find something a self-pass had called done —
+same asymmetry every time, in both directions across sessions.
+
+## 2026-08-27 — PUBLISHED. DOI 10.5281/zenodo.22119018 IS LIVE.
+
+Noah pressed Publish. Verified against the PUBLIC record (not the draft):
+title, CC BY 4.0, both files, and BOTH related works — VQLab and the HF
+account (his form edit stuck; the API tug-of-war note above is history).
+
+Same hour: Space flipped PUBLIC
+(huggingface.co/spaces/TheDrainFlorist/below-six-bits). All THIRTEEN live
+model cards gained a Paper section — DOI + VQLab + Space — inserted before
+Provenance where one exists, appended otherwise, and added AT THE GENERATOR
+for the QWEN38 trio so regeneration cannot drop it. Pushed via
+push_card_fixes.py: 13/13 verified byte-identical.
+
+The triangle is closed and every edge is live: paper cites code and models;
+Zenodo record points at code and models; models and code point back at the
+DOI. Remaining: TDF site (webmanager) and arXiv (endorsement pending — the
+Zenodo DOI can be added as a related identifier there when it lands).
+
+Publication state of record: DOI 10.5281/zenodo.22119018 · 13 model repos ·
+4 collections · VQLab (Apache-2.0) · the Space · this ledger.

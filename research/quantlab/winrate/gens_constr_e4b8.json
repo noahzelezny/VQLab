@@ -1,0 +1,108 @@
+{
+ "model": "mlx-community--gemma-4-e4b-it-8bit",
+ "prompts": "winrate/prompts_constr_fixed.json",
+ "max_tokens": 900,
+ "never_closed_channel": 20,
+ "gens": [
+  {
+   "id": 3040,
+   "text": "Begin the sky bleeding hues of bruised purple and fading orange.\nThe sturdy tower stands silhouetted against the deepening twilight.\nA lonely beam sweeps across the restless, darkening water.\nWaves whisper secrets against the rugged, stone-built base.\nThe lighthouse watches over the gathering mystery of the night.",
+   "closed_channel": false
+  },
+  {
+   "id": 3041,
+   "text": "Every morning, the air fills with the scent of salt and fresh catch.\nVibrant stalls overflow with glistening, diverse seafood.\nHaggling voices rise above the rhythmic cries of vendors.\nFishermen proudly display their morning's bounty.\nThe bustling market awakens the coastal town with energy.",
+   "closed_channel": false
+  },
+  {
+   "id": 3042,
+   "text": "Consider the gentle rocking as the ferry pulls away from the bustling dock.\nThe vast expanse of water stretches out, shimmering under the bright midday sun.\nPassengers watch the distant coastline slowly recede into the horizon.\nA smooth journey across the bay promises a peaceful arrival on the other side.",
+   "closed_channel": false
+  },
+  {
+   "id": 3043,
+   "text": "Every brittle page whispers tales of distant voyages and bustling ports.\nFaded ink records manifests of spices, timber, and exotic wares.\nThe leather cover is cracked, bearing the patina of countless years at sea.\nThis heavy ledger holds the silent history of global commerce long past.",
+   "closed_channel": false
+  },
+  {
+   "id": 3044,
+   "text": "Notice that severe weather is imminent for your area.\nResidents should prepare for strong winds, heavy rain, or lightning.\nTake necessary precautions now to ensure your safety during the storm.",
+   "closed_channel": false
+  },
+  {
+   "id": 3045,
+   "text": "Tide flows around the sturdy ledger posts of the harbour.\nIts weathered planks offer a thrilling path across the water.\nIncredible views of the bustling harbour unfold below.\nDare to walk this adventurous rope walkway today.",
+   "closed_channel": false
+  },
+  {
+   "id": 3046,
+   "text": "Begin this table provides precise times for high and low tides each day.\nIt details the expected water level changes across a 3-day period.\nConsult this resource for accurate tidal predictions for coastal navigation.",
+   "closed_channel": false
+  },
+  {
+   "id": 3047,
+   "text": "Notice the soft mist rising from the wet, dark earth.\nThe slow ebb of the tide reveals a muddy ledger of life.\nPale sunlight begins to paint the grasses a gentle gold.\nA hush settles over the 9-acre expanse before the day's stir.\nTiny creatures awaken in the cool, damp air.",
+   "closed_channel": false
+  },
+  {
+   "id": 3048,
+   "text": "Begin with the scent of aged wood and polished brass.\nThis shop stocks everything a sailor might need, from rope to rigging.\nYou might find a worn ledger detailing past voyages.\nCans of preserving salt and navigational tools are neatly arrayed.\nIt's a haven for maritime enthusiasts, offering 9 essential items.",
+   "closed_channel": false
+  },
+  {
+   "id": 3049,
+   "text": "Salt spray coats the sturdy hull of this small vessel.\nA nimble pilot boat expertly handles heavy rope.\nLightly built it navigates rough coastal waters.\nTough and reliable it serves as a vital maritime aid.",
+   "closed_channel": false
+  },
+  {
+   "id": 3050,
+   "text": "Notice the mournful sound cutting through the thick sea fog.\nIt signals ships near the dangerous rocky tide and the guiding lantern.\nThis maritime warning bell aids safe passage through the coastal mist.",
+   "closed_channel": false
+  },
+  {
+   "id": 3051,
+   "text": "Rope lines bob gently near the bustling harbour edge.\nOverlooking the water, patrons review their daily ledger.\nPerfectly positioned, the cafe offers sea air and warm brews.\nEvery visitor enjoys the charming waterfront atmosphere.",
+   "closed_channel": false
+  },
+  {
+   "id": 3052,
+   "text": "Tide washes over the weathered wooden ledger of the yard.\nInside, a single lantern casts a dim, steady glow.\nDocks hold five vessels awaiting repair or launch.\nEvery hull tells a story of sea and toil.",
+   "closed_channel": false
+  },
+  {
+   "id": 3053,
+   "text": "Salt sensors gather data with a sturdy rope.\nAtmospheric readings are tracked near a bright lantern.\nLow pressure indicators show a 9-point drop.\nTemperature and wind speed are precisely measured.",
+   "closed_channel": false
+  },
+  {
+   "id": 3054,
+   "text": "Salt air hangs heavy above the weathered wooden ledger.\nAloft the nets hang ready secured by thick rope.\nLooming shadows stretch across the dusty floorboards.\nTall masts rise toward the expansive ocean expanse.",
+   "closed_channel": false
+  },
+  {
+   "id": 3055,
+   "text": "Tide washes in bringing salt and trade goods ashore.\nIts duties involve careful record keeping in a ledger.\nInspectors check 6 items for proper declaration.\nDealing with imports and exports is its main role.",
+   "closed_channel": false
+  },
+  {
+   "id": 3056,
+   "text": "Tide washes the sand where a weathered rope lies.\nIts edge traces the ocean's relentless tide.\nDistant seabirds circle above the 6 stone rocks.\nExposed cliffs offer a wild coastal stride.",
+   "closed_channel": false
+  },
+  {
+   "id": 3057,
+   "text": "Tide markers float near the harbour providing vital navigational aid.\nIts steady presence guides vessels safely through the water.\nIlluminated by a bright lantern it offers constant visibility 4 times a day.\nDistinctive sounds help mariners locate this important offshore beacon.",
+   "closed_channel": false
+  },
+  {
+   "id": 3058,
+   "text": "Ramp supports a vessel for dry dock access like a lantern.\nOn this structure ships slide down into the water near salt spray.\nPlatform areas allow workers 5 easy access to the hull.\nEvery slipway facilitates ship movement with careful planning.",
+   "closed_channel": false
+  },
+  {
+   "id": 3059,
+   "text": "Tide charts display the ocean's shifting patterns for safe passage.\nInside the room a large map and a thick ledger await review.\nDetailed readings show 3 important currents affecting the voyage.\nEvery sailor monitors the data with focused attention.",
+   "closed_channel": false
+  }
+ ]
+}

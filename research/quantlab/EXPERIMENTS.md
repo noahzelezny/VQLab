@@ -20,9 +20,16 @@ Goal: choose the method for a vision-preserving ~2.6bpw quant of Qwen3.5-397B-A1
 > single point of failure, since a session can be compacted or end mid-day.
 > **Suffix with the owning box (`-M3`, `-M4`) if a collision happens anyway.**
 
-> **STATE OF RECORD (2026-08-13, supersedes everything below where they
-> conflict — this is a chronological lab log and several loud mid-log claims
-> were later voided by instrument fixes):**
+> **⚠ THIS BLOCK IS ITSELF SUPERSEDED (noted 2026-08-25).** It is dated
+> 2026-08-13, which is the day BEFORE vector quantization was discovered
+> (E35, 08-14). Everything it calls a "ship artifact" is a pre-VQ AFFINE
+> build; `struct6-tail3x3` survives only as the base that VQ is fit onto. The
+> artifacts actually published are the VQ builds — see the 397B/35B/27B
+> current-truth tables in paper/LEDGER.md, which is the arbiter. Read this
+> block as a snapshot of 08-13, not as current state. Its internal claim to
+> supersede what follows it applies only to entries BEFORE it.
+>
+> **STATE OF RECORD (2026-08-13, superseded — see the warning above):**
 > - **Ship artifacts: TWO, one per duty cycle (E29).** All 6-bit structure,
 >   4-bit qkv/z, bf16 routers; they differ only in how deep the 2-bit expert
 >   region reaches.
@@ -8361,7 +8368,13 @@ landed and publishes as a QUALITY claim only:
 `d4/K8192: 53.022 mnats / 89.55% vs mlx 4-bit 78.557 / 85.61%, 14.838 GiB
 packed vs 19.0`.
 
-## E136 — the Aug-15 stack, reconstructed and REPLICATED (n=2, M4)
+## E136-M4 — the Aug-15 stack, reconstructed and REPLICATED (n=2, M4)
+
+> **SUFFIXED 2026-08-25.** This was minted as a bare `## E136` while the M3's
+> result above already held that number — the FOURTH cross-session collision
+> (after two E140s, two E141s, and the E142 pair). Existing citations of bare
+> `[E136]` mean the M3 result above; this M4 replication is `E136-M4`, and its
+> headline is withdrawn by E136b below.
 
 Noah's call, run on the M4. Fit only; scoring is the M3 instrument's.
 
@@ -8958,7 +8971,18 @@ matches). Adding to the run costs more than the run did. The lever moves to
 cheap geometries: iters=30 at d2/K512 is ~1.8 h for a measured 2.8x-floor ppl
 gain (E127).
 
-## E142 — PRE-REGISTRATION: does E127's iters lever transfer to d2/K512? (two arms, M3, seed 1234)
+## E142-27B — PRE-REGISTRATION: does E127's iters lever transfer to d2/K512? (two arms, M3, seed 1234)
+
+> **NAME FIX (2026-08-25, paper session, Noah's authority).** This was minted
+> as bare `E142` on the M3 while the M4 independently minted `E142` for the
+> 397B d4/K2048 floor — the third cross-session collision after the two E140s
+> and two E141s. Both are now SUFFIXED, per the allocation note at the top of
+> this file: suffix, never renumber, because artifact directory names on disk
+> are load-bearing. The disk already disambiguated these two
+> (`e142-27b-d2K512-*` vs `e142-397b-k2048-*`); only the record had not.
+> This experiment is **E142-27B**. The floor is **E142-397B**, recorded below.
+> A citation of bare `[E142]` written before 08-25 means whichever of the two
+> matches its subject; LEDGER.md's citations were updated the same day.
 
 Goal is a BETTER ARTIFACT, not a paper row. E127 measured `--iters` 10->30 as
 the only lever we have that clears the seed floor decisively (ppl -0.126,
@@ -9006,7 +9030,7 @@ neither native to K512 nor re-measured; n=1 per arm; and a transfer result here
 says nothing about iters>30, which law 11 makes genuinely uncertain rather than
 obviously monotonic.
 
-### E142 ADDENDUM — written 14:05, BEFORE either arm completed (arm 1 at L10 of 63)
+### E142-27B ADDENDUM — written 14:05, BEFORE either arm completed (arm 1 at L10 of 63)
 
 **The registered floor is CONSERVATIVE BY CONSTRUCTION, and that creates a
 false-negative risk I want named before the numbers exist.**
@@ -9037,7 +9061,7 @@ The paper session independently noted that reading seeded arms against an
 unseeded floor is "conservative rather than flattering." Agreed — and the
 sharper form is that it is conservative enough to hide a real result.
 
-## E142 — RESULT: the iters lever does NOT transfer to K512. Arm 2 adopted anyway, on stated grounds.
+## E142-27B — RESULT: the iters lever does NOT transfer to K512. Arm 2 adopted anyway, on stated grounds.
 
 Registered branch fires: **"ppl inside the floor -> E127's effect is
 GEOMETRY-SPECIFIC and does not generalise across K."**
@@ -9094,7 +9118,92 @@ different seed, and unseeded — which bounds any contamination well below the
 deltas above. A clean re-run was planned and cancelled by Noah on exactly this
 reasoning.
 
+## E142-397B — RESULT: the d4/K2048 fit-to-fit floor. 0.0056 prose / 0.0104 code.
+
+> **RECORD WRITTEN LATE (2026-08-25, paper session, on Noah's authority).**
+> This experiment ran on the M4 on 08-24 and was resolved the same day, but
+> its only record was a set of rows in paper/LEDGER.md — it never got an entry
+> in this file, and it was cited as bare `[E142]`, which here meant a
+> different experiment on a different model. A reviewer following that
+> citation would have been handed the 27B iters test. Nothing about the
+> measurement changed; what follows is reconstructed from LEDGER.md's 08-24
+> entries and the artifacts, which still exist. **This is the floor the
+> flagship's headline claim divides by, so it gets a real entry.**
+
+**Question.** What is the fit-to-fit noise floor at 397B d4/K2048 — the
+flagship's own geometry? Until this ran, margins at that geometry were being
+read against the **d4/K256** floor (0.0256 prose), which is a III.12
+violation: a floor is never borrowed across geometries.
+
+**Design correction, raised by the M4 and adopted before the fits started.**
+The flagship's actual invocation was recovered from its own script rather
+than reconstructed from memory: `--relerr-abort 0.70`, `--expert-chunk 8`,
+`--tail-from 10 --tail-geom d4k2048`, `--src` on the local T7. The floor
+draws used the same. This mattered because the tail flags LOOK like the
+flagship is not flat.
+
+**They are no-ops at this geometry, and that was verified twice** — from the
+code (`geom_for` returns the same `(4, 2048)` tuple on both branches; group
+size is global and packing is K-driven) and from the artifact itself (171
+modules, exactly ONE geometry group, all d4/K2048/g64/11-bit). **The flagship
+is genuinely flat and the paper's descriptions of it stand.** Anyone
+re-deriving the recipe from the command line should know the flags are
+present and inert.
+
+**Result — two independent unseeded draws of the same recipe:**
+
+    draw           prose      code     wall        conditions   artifact
+    draw 1        2.3390    2.6064    8h37m       contended     e142-397b-k2048-draw1
+    draw 2        2.3334    2.5960    6h19m       idle          e142-397b-k2048-draw2
+    published     2.3410    2.5963      --        (E91)         TheDrainFlorist--...-VQ-3bpw
+    FLOOR         0.0056    0.0104
+
+Both draws are 196.3 GiB on disk. The published flagship (E91, 143.682 GiB)
+is a THIRD draw of the same recipe and is the artifact people download; the
+two above are floor probes and are not published. Per III.2 they are never
+averaged with it — averaging a published artifact with throwaway probes
+produces a number describing no downloadable thing.
+
+**The floor is 4.6x NARROWER than the K256 floor** that had been standing in
+for it. Floors in this project have widened every time they were measured
+more carefully; this one went the other way, because it is the first one
+measured AT its own geometry rather than borrowed from a coarser one.
+
+**What it decided — every claim that divides by this number:**
+
+- **Flagship vs spicyneuron 3.5bit** (2.3614 / 2.6005 @ 165.6 GiB): prose
+  better by 0.0204 = **3.6x this floor — CLAIMED**; code better by 0.0042 =
+  **0.4x — TIE**. The prior "wins both corpora" reading is **WITHDRAWN**. The
+  size claim (21.9 GiB smaller) is unaffected.
+- **Flagship vs the shipped 3.1**: 0.0109 = **1.9x — NOT claimable** (bar is
+  3x).
+- Both earlier readings of these pairs (0.8x and 0.4x) used the K256 floor
+  and were III.12 violations. Corrected 08-24.
+
+**Why the abstract now says the flagship wins prose and ties code:** this
+experiment. It is the clearest case in the project of a floor measurement
+retracting a claim we had already published — the card said "matches on both
+corpora," the paper had said "wins both," and neither survived its own
+geometry's floor.
+
+**Artifact disposition — RELEASED FOR DELETION (Noah's ruling, 2026-08-25).**
+draw1 and draw2 (196.3 GiB each) are the only bytes that could re-derive this
+floor; the fits are unseeded, so re-running the recipe yields a different pair
+and a different nearby floor. That is accepted deliberately: **the floor was
+measured and is recorded here, and a recorded measurement is the record.**
+Keeping the bytes would let someone re-derive it; it would not make it any
+more true. The recipe ships with VQLab, so anyone who wants their own floor at
+this geometry can measure one. This entry, not the artifacts, is the evidence.
+
 ## E143 — III.11 ring smoke of rotlab/397B-flatk512-packed (publish gate)
+
+> **ARTIFACT RENAMED 2026-08-26.** This gate passed, the artifact was
+> published as `TheDrainFlorist/Qwen3.5-397B-A17B-VQ-2.6bpw`, and the local
+> directory was renamed from `rotlab--397B-flatk512-packed` to
+> `TheDrainFlorist--Qwen3.5-397B-A17B-VQ-2.6bpw` so exo resolves the published
+> card instead of the pre-publication one. Same bytes: all 29 LFS files
+> verified sha256-identical to the live repo before the rename. The heading
+> keeps the name the smoke actually ran under.
 2026-08-24, M3 session. Instrument: exo 2-node tensor-parallel MlxRing (M3 96 GiB + M4
 128 GiB). Artifact 122.324 GiB / 131,344,793,064 B, 40 files, vq-d4K512, pack_bits 9,
 model_file model.py (runtime rides with the artifact — no site-packages hook).

@@ -14,7 +14,7 @@ tags:
 - qwen3.5
 ---
 
-# Qwen3.5-397B-A17B-VQ-3bpw
+# Qwen3.5-397B-A17B-VQ-3.1bpw
 
 **143.7 GiB — the quality build.**
 
@@ -76,7 +76,7 @@ and `main` now serves the improved weights, so the old URL redirects here.
 the revision it was published at:
 
 ```bash
-huggingface-cli download TheDrainFlorist/Qwen3.5-397B-A17B-VQ-3bpw \
+huggingface-cli download TheDrainFlorist/Qwen3.5-397B-A17B-VQ-3.1bpw \
   --revision a0da72a0c43932704a272fe3ce6a6513194570eb
 ```
 
@@ -121,7 +121,7 @@ claimed here.**
 ```bash
 pip install mlx-lm
 python -m mlx_lm generate \
-  --model TheDrainFlorist/Qwen3.5-397B-A17B-VQ-3bpw \
+  --model TheDrainFlorist/Qwen3.5-397B-A17B-VQ-3.1bpw \
   --prompt "Explain vector quantization briefly." \
   --max-tokens 1000
 ```
@@ -197,6 +197,22 @@ The sizes quoted above are the download: they include this tower. Because
 `mlx-lm` does not load it, resident memory runs ~0.85 GiB below the disk
 figure — the runtime tables report what was actually measured resident.
 
+## Siblings
+
+All from the same skeleton and recipe, all scored the same way:
+
+| | size | wikitext | code | needs |
+|---|---|---|---|---|
+| `VQ-2.2bpw` | 101.0 GiB | 3.0591 | 2.6728 | 128 GB Mac, roomy |
+| `VQ-2.4bpw` | 111.6 GiB | 2.7655 | 2.6383 | 128 GB Mac, tight |
+| `VQ-2.6bpw` | 122.3 GiB | 2.5634 | 2.6123 | ≥192 GB or cluster |
+| **`VQ-3.1bpw` (this build)** | **143.7 GiB** | **2.3410** | **2.5963** | ≥192 GB or cluster |
+
+This is the quality end of the ladder: best on both corpora, and the largest.
+If it does not fit, `VQ-2.6bpw` is 21.4 GiB smaller and the next step down on
+both corpora; `VQ-2.4bpw` is the largest that runs comfortably on a 128 GB
+machine.
+
 ## Known limitations
 
 - Needs ≥ 192 GB unified memory or a cluster — see Hardware above.
@@ -211,6 +227,15 @@ they were the reference this work was measured against throughout. This
 release is offered in that same spirit: the full method, the experiments that
 failed as well as the ones that worked, and comparator numbers re-measured on
 one harness so the claims can be checked rather than taken on trust.
+
+## Paper
+
+The method, the full three-model ladder, the negative results, and the
+measurement rules behind every number here:
+[**Data-Free Vector Quantization Beats Affine Quantization at Matched Bytes
+Below 6 Bits**](https://doi.org/10.5281/zenodo.22119018) (CC BY 4.0) ·
+code: [VQLab](https://github.com/noahzelezny/VQLab) ·
+web version: [Space](https://huggingface.co/spaces/TheDrainFlorist/below-six-bits)
 
 ## Provenance
 

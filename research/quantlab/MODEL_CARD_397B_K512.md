@@ -22,7 +22,7 @@ comparison. A vector-quantized build of
 [Qwen3.5-397B-A17B](https://huggingface.co/Qwen/Qwen3.5-397B-A17B) for Apple
 Silicon. Stock `mlx-lm`, no patches — the VQ runtime ships inside the
 checkpoint as `model.py`. It sits between the `VQ-2.4bpw` daily driver and the
-`VQ-3bpw` quality build, and needs the same hardware class as the latter.
+`VQ-3.1bpw` quality build, and needs the same hardware class as the latter.
 
 ## Measured results
 
@@ -166,9 +166,9 @@ All from the same skeleton and recipe, all scored the same way:
 | `VQ-2.2bpw` | 101.0 GiB | 3.0591 | 2.6728 | 128 GB Mac, roomy |
 | `VQ-2.4bpw` | 111.6 GiB | 2.7655 | 2.6383 | 128 GB Mac, tight |
 | **`VQ-2.6bpw` (this build)** | **122.3 GiB** | **2.5634** | **2.6123** | ≥192 GB or cluster |
-| `VQ-3bpw` | 143.7 GiB | 2.3410 | 2.5963 | ≥192 GB or cluster |
+| `VQ-3.1bpw` | 143.7 GiB | 2.3410 | 2.5963 | ≥192 GB or cluster |
 
-If you can run this build you can run `VQ-3bpw`, which is better on both
+If you can run this build you can run `VQ-3.1bpw`, which is better on both
 corpora for 21.4 GiB more. Take this one if those gigabytes are worth more to
 you than the quality difference — on a 192 GB machine it leaves roughly 70 GiB
 free against the 3bpw build's 48.
@@ -188,6 +188,15 @@ the first place, and they were the reference this work was measured against
 throughout. This release is offered in that spirit: the method, the failures
 as well as the wins, and comparator numbers re-measured on one harness so the
 claims can be checked rather than taken on trust.
+
+## Paper
+
+The method, the full three-model ladder, the negative results, and the
+measurement rules behind every number here:
+[**Data-Free Vector Quantization Beats Affine Quantization at Matched Bytes
+Below 6 Bits**](https://doi.org/10.5281/zenodo.22119018) (CC BY 4.0) ·
+code: [VQLab](https://github.com/noahzelezny/VQLab) ·
+web version: [Space](https://huggingface.co/spaces/TheDrainFlorist/below-six-bits)
 
 ## Provenance
 

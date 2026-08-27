@@ -1,0 +1,755 @@
+{
+ "model": "e4b-VQ-pleonly-packed",
+ "n": 104,
+ "accuracy": 0.8173,
+ "cyclic": true,
+ "chance": 0.25,
+ "per_category": {
+  "irony": 0.6923,
+  "metaphor": 1.0,
+  "narrative_causality": 0.8462,
+  "subtext": 0.7692,
+  "symbol_motif": 1.0,
+  "tone_register": 0.6154,
+  "understatement": 1.0,
+  "unreliable_narrator": 0.6154
+ },
+ "answer_distribution": [
+  32,
+  25,
+  25,
+  22
+ ],
+ "mode": "generative",
+ "unparsed": 0,
+ "per_item": [
+  {
+   "id": "met-001",
+   "category": "metaphor",
+   "pred": 3,
+   "gold": 3,
+   "correct": 1
+  },
+  {
+   "id": "met-002",
+   "category": "metaphor",
+   "pred": 3,
+   "gold": 3,
+   "correct": 1
+  },
+  {
+   "id": "met-003",
+   "category": "metaphor",
+   "pred": 1,
+   "gold": 1,
+   "correct": 1
+  },
+  {
+   "id": "met-004",
+   "category": "metaphor",
+   "pred": 2,
+   "gold": 2,
+   "correct": 1
+  },
+  {
+   "id": "met-005",
+   "category": "metaphor",
+   "pred": 1,
+   "gold": 1,
+   "correct": 1
+  },
+  {
+   "id": "met-006",
+   "category": "metaphor",
+   "pred": 0,
+   "gold": 0,
+   "correct": 1
+  },
+  {
+   "id": "met-007",
+   "category": "metaphor",
+   "pred": 3,
+   "gold": 3,
+   "correct": 1
+  },
+  {
+   "id": "met-008",
+   "category": "metaphor",
+   "pred": 3,
+   "gold": 3,
+   "correct": 1
+  },
+  {
+   "id": "met-009",
+   "category": "metaphor",
+   "pred": 3,
+   "gold": 3,
+   "correct": 1
+  },
+  {
+   "id": "met-010",
+   "category": "metaphor",
+   "pred": 3,
+   "gold": 3,
+   "correct": 1
+  },
+  {
+   "id": "met-011",
+   "category": "metaphor",
+   "pred": 3,
+   "gold": 3,
+   "correct": 1
+  },
+  {
+   "id": "met-012",
+   "category": "metaphor",
+   "pred": 3,
+   "gold": 3,
+   "correct": 1
+  },
+  {
+   "id": "met-013",
+   "category": "metaphor",
+   "pred": 0,
+   "gold": 0,
+   "correct": 1
+  },
+  {
+   "id": "iro-001",
+   "category": "irony",
+   "pred": 0,
+   "gold": 0,
+   "correct": 1
+  },
+  {
+   "id": "iro-002",
+   "category": "irony",
+   "pred": 0,
+   "gold": 0,
+   "correct": 1
+  },
+  {
+   "id": "iro-003",
+   "category": "irony",
+   "pred": 2,
+   "gold": 2,
+   "correct": 1
+  },
+  {
+   "id": "iro-004",
+   "category": "irony",
+   "pred": 0,
+   "gold": 0,
+   "correct": 1
+  },
+  {
+   "id": "iro-005",
+   "category": "irony",
+   "pred": 0,
+   "gold": 2,
+   "correct": 0
+  },
+  {
+   "id": "iro-006",
+   "category": "irony",
+   "pred": 2,
+   "gold": 0,
+   "correct": 0
+  },
+  {
+   "id": "iro-007",
+   "category": "irony",
+   "pred": 0,
+   "gold": 3,
+   "correct": 0
+  },
+  {
+   "id": "iro-008",
+   "category": "irony",
+   "pred": 0,
+   "gold": 0,
+   "correct": 1
+  },
+  {
+   "id": "iro-009",
+   "category": "irony",
+   "pred": 3,
+   "gold": 3,
+   "correct": 1
+  },
+  {
+   "id": "iro-010",
+   "category": "irony",
+   "pred": 1,
+   "gold": 0,
+   "correct": 0
+  },
+  {
+   "id": "iro-011",
+   "category": "irony",
+   "pred": 2,
+   "gold": 2,
+   "correct": 1
+  },
+  {
+   "id": "iro-012",
+   "category": "irony",
+   "pred": 0,
+   "gold": 0,
+   "correct": 1
+  },
+  {
+   "id": "iro-013",
+   "category": "irony",
+   "pred": 2,
+   "gold": 2,
+   "correct": 1
+  },
+  {
+   "id": "sub-001",
+   "category": "subtext",
+   "pred": 3,
+   "gold": 0,
+   "correct": 0
+  },
+  {
+   "id": "sub-002",
+   "category": "subtext",
+   "pred": 0,
+   "gold": 0,
+   "correct": 1
+  },
+  {
+   "id": "sub-003",
+   "category": "subtext",
+   "pred": 1,
+   "gold": 1,
+   "correct": 1
+  },
+  {
+   "id": "sub-004",
+   "category": "subtext",
+   "pred": 0,
+   "gold": 0,
+   "correct": 1
+  },
+  {
+   "id": "sub-005",
+   "category": "subtext",
+   "pred": 1,
+   "gold": 1,
+   "correct": 1
+  },
+  {
+   "id": "sub-006",
+   "category": "subtext",
+   "pred": 1,
+   "gold": 3,
+   "correct": 0
+  },
+  {
+   "id": "sub-007",
+   "category": "subtext",
+   "pred": 0,
+   "gold": 0,
+   "correct": 1
+  },
+  {
+   "id": "sub-008",
+   "category": "subtext",
+   "pred": 1,
+   "gold": 1,
+   "correct": 1
+  },
+  {
+   "id": "sub-009",
+   "category": "subtext",
+   "pred": 1,
+   "gold": 1,
+   "correct": 1
+  },
+  {
+   "id": "sub-010",
+   "category": "subtext",
+   "pred": 0,
+   "gold": 0,
+   "correct": 1
+  },
+  {
+   "id": "sub-011",
+   "category": "subtext",
+   "pred": 0,
+   "gold": 2,
+   "correct": 0
+  },
+  {
+   "id": "sub-012",
+   "category": "subtext",
+   "pred": 3,
+   "gold": 3,
+   "correct": 1
+  },
+  {
+   "id": "sub-013",
+   "category": "subtext",
+   "pred": 2,
+   "gold": 2,
+   "correct": 1
+  },
+  {
+   "id": "nar-001",
+   "category": "narrative_causality",
+   "pred": 2,
+   "gold": 2,
+   "correct": 1
+  },
+  {
+   "id": "nar-002",
+   "category": "narrative_causality",
+   "pred": 0,
+   "gold": 0,
+   "correct": 1
+  },
+  {
+   "id": "nar-003",
+   "category": "narrative_causality",
+   "pred": 1,
+   "gold": 2,
+   "correct": 0
+  },
+  {
+   "id": "nar-004",
+   "category": "narrative_causality",
+   "pred": 1,
+   "gold": 1,
+   "correct": 1
+  },
+  {
+   "id": "nar-005",
+   "category": "narrative_causality",
+   "pred": 3,
+   "gold": 3,
+   "correct": 1
+  },
+  {
+   "id": "nar-006",
+   "category": "narrative_causality",
+   "pred": 0,
+   "gold": 0,
+   "correct": 1
+  },
+  {
+   "id": "nar-007",
+   "category": "narrative_causality",
+   "pred": 0,
+   "gold": 0,
+   "correct": 1
+  },
+  {
+   "id": "nar-008",
+   "category": "narrative_causality",
+   "pred": 0,
+   "gold": 0,
+   "correct": 1
+  },
+  {
+   "id": "nar-009",
+   "category": "narrative_causality",
+   "pred": 3,
+   "gold": 2,
+   "correct": 0
+  },
+  {
+   "id": "nar-010",
+   "category": "narrative_causality",
+   "pred": 1,
+   "gold": 1,
+   "correct": 1
+  },
+  {
+   "id": "nar-011",
+   "category": "narrative_causality",
+   "pred": 0,
+   "gold": 0,
+   "correct": 1
+  },
+  {
+   "id": "nar-012",
+   "category": "narrative_causality",
+   "pred": 2,
+   "gold": 2,
+   "correct": 1
+  },
+  {
+   "id": "nar-013",
+   "category": "narrative_causality",
+   "pred": 2,
+   "gold": 2,
+   "correct": 1
+  },
+  {
+   "id": "ton-001",
+   "category": "tone_register",
+   "pred": 1,
+   "gold": 1,
+   "correct": 1
+  },
+  {
+   "id": "ton-002",
+   "category": "tone_register",
+   "pred": 1,
+   "gold": 1,
+   "correct": 1
+  },
+  {
+   "id": "ton-003",
+   "category": "tone_register",
+   "pred": 2,
+   "gold": 2,
+   "correct": 1
+  },
+  {
+   "id": "ton-004",
+   "category": "tone_register",
+   "pred": 2,
+   "gold": 2,
+   "correct": 1
+  },
+  {
+   "id": "ton-005",
+   "category": "tone_register",
+   "pred": 2,
+   "gold": 2,
+   "correct": 1
+  },
+  {
+   "id": "ton-006",
+   "category": "tone_register",
+   "pred": 0,
+   "gold": 0,
+   "correct": 1
+  },
+  {
+   "id": "ton-007",
+   "category": "tone_register",
+   "pred": 3,
+   "gold": 2,
+   "correct": 0
+  },
+  {
+   "id": "ton-008",
+   "category": "tone_register",
+   "pred": 2,
+   "gold": 0,
+   "correct": 0
+  },
+  {
+   "id": "ton-009",
+   "category": "tone_register",
+   "pred": 0,
+   "gold": 0,
+   "correct": 1
+  },
+  {
+   "id": "ton-010",
+   "category": "tone_register",
+   "pred": 2,
+   "gold": 3,
+   "correct": 0
+  },
+  {
+   "id": "ton-011",
+   "category": "tone_register",
+   "pred": 2,
+   "gold": 0,
+   "correct": 0
+  },
+  {
+   "id": "ton-012",
+   "category": "tone_register",
+   "pred": 0,
+   "gold": 0,
+   "correct": 1
+  },
+  {
+   "id": "ton-013",
+   "category": "tone_register",
+   "pred": 2,
+   "gold": 1,
+   "correct": 0
+  },
+  {
+   "id": "sym-001",
+   "category": "symbol_motif",
+   "pred": 1,
+   "gold": 1,
+   "correct": 1
+  },
+  {
+   "id": "sym-002",
+   "category": "symbol_motif",
+   "pred": 1,
+   "gold": 1,
+   "correct": 1
+  },
+  {
+   "id": "sym-003",
+   "category": "symbol_motif",
+   "pred": 0,
+   "gold": 0,
+   "correct": 1
+  },
+  {
+   "id": "sym-004",
+   "category": "symbol_motif",
+   "pred": 2,
+   "gold": 2,
+   "correct": 1
+  },
+  {
+   "id": "sym-005",
+   "category": "symbol_motif",
+   "pred": 3,
+   "gold": 3,
+   "correct": 1
+  },
+  {
+   "id": "sym-006",
+   "category": "symbol_motif",
+   "pred": 2,
+   "gold": 2,
+   "correct": 1
+  },
+  {
+   "id": "sym-007",
+   "category": "symbol_motif",
+   "pred": 0,
+   "gold": 0,
+   "correct": 1
+  },
+  {
+   "id": "sym-008",
+   "category": "symbol_motif",
+   "pred": 0,
+   "gold": 0,
+   "correct": 1
+  },
+  {
+   "id": "sym-009",
+   "category": "symbol_motif",
+   "pred": 0,
+   "gold": 0,
+   "correct": 1
+  },
+  {
+   "id": "sym-010",
+   "category": "symbol_motif",
+   "pred": 2,
+   "gold": 2,
+   "correct": 1
+  },
+  {
+   "id": "sym-011",
+   "category": "symbol_motif",
+   "pred": 3,
+   "gold": 3,
+   "correct": 1
+  },
+  {
+   "id": "sym-012",
+   "category": "symbol_motif",
+   "pred": 2,
+   "gold": 2,
+   "correct": 1
+  },
+  {
+   "id": "sym-013",
+   "category": "symbol_motif",
+   "pred": 0,
+   "gold": 0,
+   "correct": 1
+  },
+  {
+   "id": "unr-001",
+   "category": "unreliable_narrator",
+   "pred": 1,
+   "gold": 1,
+   "correct": 1
+  },
+  {
+   "id": "unr-002",
+   "category": "unreliable_narrator",
+   "pred": 1,
+   "gold": 1,
+   "correct": 1
+  },
+  {
+   "id": "unr-003",
+   "category": "unreliable_narrator",
+   "pred": 2,
+   "gold": 2,
+   "correct": 1
+  },
+  {
+   "id": "unr-004",
+   "category": "unreliable_narrator",
+   "pred": 2,
+   "gold": 2,
+   "correct": 1
+  },
+  {
+   "id": "unr-005",
+   "category": "unreliable_narrator",
+   "pred": 3,
+   "gold": 2,
+   "correct": 0
+  },
+  {
+   "id": "unr-006",
+   "category": "unreliable_narrator",
+   "pred": 1,
+   "gold": 1,
+   "correct": 1
+  },
+  {
+   "id": "unr-007",
+   "category": "unreliable_narrator",
+   "pred": 1,
+   "gold": 3,
+   "correct": 0
+  },
+  {
+   "id": "unr-008",
+   "category": "unreliable_narrator",
+   "pred": 0,
+   "gold": 3,
+   "correct": 0
+  },
+  {
+   "id": "unr-009",
+   "category": "unreliable_narrator",
+   "pred": 1,
+   "gold": 2,
+   "correct": 0
+  },
+  {
+   "id": "unr-010",
+   "category": "unreliable_narrator",
+   "pred": 1,
+   "gold": 1,
+   "correct": 1
+  },
+  {
+   "id": "unr-011",
+   "category": "unreliable_narrator",
+   "pred": 2,
+   "gold": 2,
+   "correct": 1
+  },
+  {
+   "id": "unr-012",
+   "category": "unreliable_narrator",
+   "pred": 3,
+   "gold": 3,
+   "correct": 1
+  },
+  {
+   "id": "unr-013",
+   "category": "unreliable_narrator",
+   "pred": 1,
+   "gold": 0,
+   "correct": 0
+  },
+  {
+   "id": "und-001",
+   "category": "understatement",
+   "pred": 3,
+   "gold": 3,
+   "correct": 1
+  },
+  {
+   "id": "und-002",
+   "category": "understatement",
+   "pred": 0,
+   "gold": 0,
+   "correct": 1
+  },
+  {
+   "id": "und-003",
+   "category": "understatement",
+   "pred": 3,
+   "gold": 3,
+   "correct": 1
+  },
+  {
+   "id": "und-004",
+   "category": "understatement",
+   "pred": 2,
+   "gold": 2,
+   "correct": 1
+  },
+  {
+   "id": "und-005",
+   "category": "understatement",
+   "pred": 3,
+   "gold": 3,
+   "correct": 1
+  },
+  {
+   "id": "und-006",
+   "category": "understatement",
+   "pred": 0,
+   "gold": 0,
+   "correct": 1
+  },
+  {
+   "id": "und-007",
+   "category": "understatement",
+   "pred": 1,
+   "gold": 1,
+   "correct": 1
+  },
+  {
+   "id": "und-008",
+   "category": "understatement",
+   "pred": 3,
+   "gold": 3,
+   "correct": 1
+  },
+  {
+   "id": "und-009",
+   "category": "understatement",
+   "pred": 1,
+   "gold": 1,
+   "correct": 1
+  },
+  {
+   "id": "und-010",
+   "category": "understatement",
+   "pred": 2,
+   "gold": 2,
+   "correct": 1
+  },
+  {
+   "id": "und-011",
+   "category": "understatement",
+   "pred": 0,
+   "gold": 0,
+   "correct": 1
+  },
+  {
+   "id": "und-012",
+   "category": "understatement",
+   "pred": 1,
+   "gold": 1,
+   "correct": 1
+  },
+  {
+   "id": "und-013",
+   "category": "understatement",
+   "pred": 0,
+   "gold": 0,
+   "correct": 1
+  }
+ ]
+}

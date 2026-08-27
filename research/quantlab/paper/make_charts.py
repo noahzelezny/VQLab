@@ -19,7 +19,7 @@ flat = [(100.93, 3.1706, "flat K128"),
 d8 = [(100.97, 3.0591, "d8/K16384")]
 harvest = [(97.20, 3.2730, None), (99.05, 3.2289, None),
            (107.90, 2.7790, None), (139.93, 2.3452, None)]
-spicy = [(120.6, 3.1843, "spicyneuron 2.6bit"), (165.6, 2.3614, "spicyneuron 3.5bit")]
+spicy = [(120.57, 3.1843, "spicyneuron 2.6bit"), (165.57, 2.3614, "spicyneuron 3.5bit")]
 
 fig, ax = plt.subplots(figsize=(8.4, 5.2))
 ax.plot([p[0] for p in flat], [p[1] for p in flat], "o-", color=OURS, ms=7,
@@ -29,9 +29,9 @@ ax.plot([p[0] for p in d8], [p[1] for p in d8], "s", color=OURS, ms=8,
 ax.plot([p[0] for p in harvest], [p[1] for p in harvest], "^", color=OURS,
         ms=6, alpha=.55, ls="none", label="ours — harvest rungs", zorder=3)
 ax.plot([p[0] for p in spicy], [p[1] for p in spicy], "D", color=AFFINE, ms=8,
-        ls="none", label="spicyneuron (calibrated affine, text-only)", zorder=3)
+        ls="none", label="spicyneuron (hand-tuned mixed affine, text-only)", zorder=3)
 OFFS = {"d8/K16384": (10, -12), "flat K128": (8, 4),
-        "spicyneuron 3.5bit": (-118, -4)}
+        "spicyneuron 3.5bit": (-118, 10)}
 for x, y, t in flat + d8 + spicy:
     if t:
         ax.annotate(t, (x, y), textcoords="offset points",
@@ -55,9 +55,9 @@ vq35 = [(15.670, 53.022, "d4/K8192"), (16.615, 47.535, "d4/K16384"),
         (25.977, 25.502, "d2/K4096")]
 aff35 = [(19.000, 78.557, "4-bit"), (27.066, 13.358, "6-bit"),
          (35.131, 7.449, "8-bit")]
-# 27B sizes are MEASURED POST-GRAFT (+0.859 GiB vision tower on rungs AND
+# 27B sizes are MEASURED POST-GRAFT (+0.858 GiB vision tower on rungs AND
 # comparators alike, 08-24). d2/K512 is E142 arm 2, the published artifact.
-vq27 = [(10.56, 325.6, None), (11.47, 148.5, "d4/K1024"), (12.47, 85.8, None),
+vq27 = [(10.47, 325.6, None), (11.47, 148.5, "d4/K1024"), (12.47, 85.8, None),
         (14.45, 40.3, "d2/K256"), (15.45, 32.8, "d2/K512"), (18.44, 26.7, None)]
 aff27 = [(8.69, 1426.9, None), (11.82, 187.8, "q3"), (14.95, 45.8, "q4"),
          (21.21, 3.71, "q6"), (27.48, 1.254, "q8")]  # q8 REBUILT (E144)

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """qwen38_ladder.png for the Qwen3.8-27B card lineup.
 
-All sizes measured post-graft (333-tensor bf16 vision tower, 0.859 GiB),
+All sizes measured post-graft (333-tensor bf16 vision tower, 0.858 GiB),
 rungs and comparators alike. The affine rungs are our own conversions:
 no MLX quantization of this model has been published by the community.
 """
@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 
 REL = [(12.468, 85.8, "VQ-3.9bpw"), (14.454, 40.3, "VQ-4.5bpw"),
        (15.450, 32.8, "VQ-4.8bpw")]
-LAB = [(10.558, 325.6, None), (11.468, 148.5, None), (18.441, 26.7, None)]
+LAB = [(10.470, 325.6, None), (11.468, 148.5, None), (18.441, 26.7, None)]
 AFF = [(8.690, 1426.9, "q2"), (11.821, 187.8, "q3"), (14.952, 45.8, "q4"),
        (21.214, 3.71, "q6"), (27.475, 1.254, "q8")]
 

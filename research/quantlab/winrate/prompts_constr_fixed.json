@@ -1,0 +1,395 @@
+[
+ {
+  "id": 3040,
+  "domain": "constr",
+  "tier": 3,
+  "passage": "Write a short description of a lighthouse at dusk.",
+  "task": "Write exactly 5 lines, one sentence per line, no bullets or numbering. Use at most 100 words in total. The first line must begin with \"Begin\".",
+  "constraints": {
+   "exact_lines": 5,
+   "max_words": 100,
+   "start_with": "Begin"
+  }
+ },
+ {
+  "id": 3041,
+  "domain": "constr",
+  "tier": 3,
+  "passage": "Write a short description of the morning fish market.",
+  "task": "Write exactly 5 lines, one sentence per line, no bullets or numbering. Use at most 70 words in total. The first line must begin with \"Every\".",
+  "constraints": {
+   "exact_lines": 5,
+   "max_words": 70,
+   "start_with": "Every"
+  }
+ },
+ {
+  "id": 3042,
+  "domain": "constr",
+  "tier": 3,
+  "passage": "Write a short description of a ferry crossing.",
+  "task": "Write exactly 4 lines, one sentence per line, no bullets or numbering. Use at most 85 words in total. The first line must begin with \"Consider\".",
+  "constraints": {
+   "exact_lines": 4,
+   "max_words": 85,
+   "start_with": "Consider"
+  }
+ },
+ {
+  "id": 3043,
+  "domain": "constr",
+  "tier": 3,
+  "passage": "Write a short description of an old shipping ledger.",
+  "task": "Write exactly 4 lines, one sentence per line, no bullets or numbering. Use at most 85 words in total. The first line must begin with \"Every\".",
+  "constraints": {
+   "exact_lines": 4,
+   "max_words": 85,
+   "start_with": "Every"
+  }
+ },
+ {
+  "id": 3044,
+  "domain": "constr",
+  "tier": 3,
+  "passage": "Write a short description of a storm warning.",
+  "task": "Write exactly 3 lines, one sentence per line, no bullets or numbering. Use at most 85 words in total. The first line must begin with \"Notice\".",
+  "constraints": {
+   "exact_lines": 3,
+   "max_words": 85,
+   "start_with": "Notice"
+  }
+ },
+ {
+  "id": 3045,
+  "domain": "constr",
+  "tier": 6,
+  "passage": "Write a short description of a harbour rope walk.",
+  "task": "Write exactly 4 lines, one sentence per line, no bullets or numbering. Use at most 70 words in total. The first line must begin with \"Tide\". Include these words: ledger, harbour. The final line must end with a full stop. The first letters of the lines, read downward, must spell TIDE.",
+  "constraints": {
+   "exact_lines": 4,
+   "max_words": 70,
+   "start_with": "Tide",
+   "acrostic": "TIDE",
+   "end_with": ".",
+   "must_include": [
+    "ledger",
+    "harbour"
+   ]
+  }
+ },
+ {
+  "id": 3046,
+  "domain": "constr",
+  "tier": 6,
+  "passage": "Write a short description of a tide table.",
+  "task": "Write exactly 3 lines, one sentence per line, no bullets or numbering. Use exactly 40 words in total. The first line must begin with \"Begin\". Do not use: nice, very. The digit 3 must appear.",
+  "constraints": {
+   "exact_lines": 3,
+   "start_with": "Begin",
+   "exact_words": 40,
+   "include_number": 3,
+   "forbid_words": [
+    "nice",
+    "very"
+   ]
+  }
+ },
+ {
+  "id": 3047,
+  "domain": "constr",
+  "tier": 6,
+  "passage": "Write a short description of a salt marsh at dawn.",
+  "task": "Write exactly 5 lines, one sentence per line, no bullets or numbering. Use at most 100 words in total. The first line must begin with \"Notice\". Include these words: tide, ledger. Do not use the letter 'q' anywhere. The digit 9 must appear.",
+  "constraints": {
+   "exact_lines": 5,
+   "max_words": 100,
+   "start_with": "Notice",
+   "include_number": 9,
+   "no_letter": "q",
+   "must_include": [
+    "tide",
+    "ledger"
+   ]
+  }
+ },
+ {
+  "id": 3048,
+  "domain": "constr",
+  "tier": 6,
+  "passage": "Write a short description of a chandlery shop.",
+  "task": "Write exactly 5 lines, one sentence per line, no bullets or numbering. Use at most 100 words in total. The first line must begin with \"Begin\". Include these words: ledger, salt. The final line must end with a full stop. The digit 9 must appear.",
+  "constraints": {
+   "exact_lines": 5,
+   "max_words": 100,
+   "start_with": "Begin",
+   "end_with": ".",
+   "include_number": 9,
+   "must_include": [
+    "ledger",
+    "salt"
+   ]
+  }
+ },
+ {
+  "id": 3049,
+  "domain": "constr",
+  "tier": 6,
+  "passage": "Write a short description of a pilot boat.",
+  "task": "Write exactly 4 lines, one sentence per line, no bullets or numbering. Use at most 85 words in total. The first line must begin with \"Salt\". Include these words: rope, salt. The first letters of the lines, read downward, must spell SALT. Do not use any commas.",
+  "constraints": {
+   "exact_lines": 4,
+   "max_words": 85,
+   "start_with": "Salt",
+   "acrostic": "SALT",
+   "no_commas": true,
+   "must_include": [
+    "rope",
+    "salt"
+   ]
+  }
+ },
+ {
+  "id": 3050,
+  "domain": "constr",
+  "tier": 9,
+  "passage": "Write a short description of a fog bell.",
+  "task": "Write exactly 3 lines, one sentence per line, no bullets or numbering. Use exactly 40 words in total. The first line must begin with \"Notice\". Include these words: lantern, tide. Do not use: very, really. The final line must end with a full stop. Every line must begin with a capital letter. Do not use any commas.",
+  "constraints": {
+   "exact_lines": 3,
+   "start_with": "Notice",
+   "all_sentences_start_capital": true,
+   "exact_words": 40,
+   "forbid_words": [
+    "very",
+    "really"
+   ],
+   "must_include": [
+    "lantern",
+    "tide"
+   ],
+   "no_commas": true,
+   "end_with": "."
+  }
+ },
+ {
+  "id": 3051,
+  "domain": "constr",
+  "tier": 9,
+  "passage": "Write a short description of a quayside cafe.",
+  "task": "Write exactly 4 lines, one sentence per line, no bullets or numbering. Use exactly 50 words in total. The first line must begin with \"Rope\". Include these words: harbour, ledger. The final line must end with a full stop. The first letters of the lines, read downward, must spell ROPE. Do not use the letter 'q' anywhere. Every line must begin with a capital letter.",
+  "constraints": {
+   "exact_lines": 4,
+   "start_with": "Rope",
+   "must_include": [
+    "harbour",
+    "ledger"
+   ],
+   "exact_words": 50,
+   "all_sentences_start_capital": true,
+   "end_with": ".",
+   "acrostic": "ROPE",
+   "no_letter": "q"
+  }
+ },
+ {
+  "id": 3052,
+  "domain": "constr",
+  "tier": 9,
+  "passage": "Write a short description of a boatyard.",
+  "task": "Write exactly 4 lines, one sentence per line, no bullets or numbering. Use at most 70 words in total. The first line must begin with \"Tide\". Include these words: ledger, lantern. Do not use: nice, great. The final line must end with a full stop. The first letters of the lines, read downward, must spell TIDE. Do not use the letter 'q' anywhere. The digit 5 must appear.",
+  "constraints": {
+   "exact_lines": 4,
+   "max_words": 70,
+   "start_with": "Tide",
+   "acrostic": "TIDE",
+   "include_number": 5,
+   "must_include": [
+    "ledger",
+    "lantern"
+   ],
+   "forbid_words": [
+    "nice",
+    "great"
+   ],
+   "end_with": ".",
+   "no_letter": "q"
+  }
+ },
+ {
+  "id": 3053,
+  "domain": "constr",
+  "tier": 9,
+  "passage": "Write a short description of a weather station.",
+  "task": "Write exactly 4 lines, one sentence per line, no bullets or numbering. Use at most 70 words in total. The first line must begin with \"Salt\". Include these words: rope, lantern. Do not use: nice, really. The final line must end with a full stop. The first letters of the lines, read downward, must spell SALT. Do not use the letter 'z' anywhere. The digit 9 must appear.",
+  "constraints": {
+   "exact_lines": 4,
+   "max_words": 70,
+   "start_with": "Salt",
+   "include_number": 9,
+   "no_letter": "z",
+   "forbid_words": [
+    "nice",
+    "really"
+   ],
+   "acrostic": "SALT",
+   "end_with": ".",
+   "must_include": [
+    "rope",
+    "lantern"
+   ]
+  }
+ },
+ {
+  "id": 3054,
+  "domain": "constr",
+  "tier": 9,
+  "passage": "Write a short description of a net loft.",
+  "task": "Write exactly 4 lines, one sentence per line, no bullets or numbering. Use exactly 50 words in total. The first line must begin with \"Salt\". Include these words: ledger, rope. Do not use: nice, very. The first letters of the lines, read downward, must spell SALT. Every line must begin with a capital letter. Do not use any commas.",
+  "constraints": {
+   "exact_lines": 4,
+   "start_with": "Salt",
+   "acrostic": "SALT",
+   "exact_words": 50,
+   "forbid_words": [
+    "nice",
+    "very"
+   ],
+   "no_commas": true,
+   "must_include": [
+    "ledger",
+    "rope"
+   ],
+   "all_sentences_start_capital": true
+  }
+ },
+ {
+  "id": 3055,
+  "domain": "constr",
+  "tier": 12,
+  "passage": "Write a short description of a customs house.",
+  "task": "Write exactly 4 lines, one sentence per line, no bullets or numbering. Use exactly 40 words in total. The first line must begin with \"Tide\". Include these words: salt, ledger. Do not use: very, great. The final line must end with a full stop. The first letters of the lines, read downward, must spell TIDE. Do not use the letter 'q' anywhere. Every line must begin with a capital letter. The digit 6 must appear. Do not use any commas.",
+  "constraints": {
+   "exact_lines": 4,
+   "start_with": "Tide",
+   "end_with": ".",
+   "include_number": 6,
+   "must_include": [
+    "salt",
+    "ledger"
+   ],
+   "exact_words": 40,
+   "no_letter": "q",
+   "forbid_words": [
+    "very",
+    "great"
+   ],
+   "all_sentences_start_capital": true,
+   "no_commas": true,
+   "acrostic": "TIDE"
+  }
+ },
+ {
+  "id": 3056,
+  "domain": "constr",
+  "tier": 12,
+  "passage": "Write a short description of a coastal footpath.",
+  "task": "Write exactly 4 lines, one sentence per line, no bullets or numbering. Use exactly 50 words in total. The first line must begin with \"Tide\". Include these words: rope, tide. Do not use: nice, very. The final line must end with a full stop. The first letters of the lines, read downward, must spell TIDE. Do not use the letter 'q' anywhere. Every line must begin with a capital letter. The digit 6 must appear. Do not use any commas.",
+  "constraints": {
+   "exact_lines": 4,
+   "start_with": "Tide",
+   "include_number": 6,
+   "exact_words": 50,
+   "no_commas": true,
+   "no_letter": "q",
+   "must_include": [
+    "rope",
+    "tide"
+   ],
+   "forbid_words": [
+    "nice",
+    "very"
+   ],
+   "end_with": ".",
+   "all_sentences_start_capital": true,
+   "acrostic": "TIDE"
+  }
+ },
+ {
+  "id": 3057,
+  "domain": "constr",
+  "tier": 12,
+  "passage": "Write a short description of a bell buoy.",
+  "task": "Write exactly 4 lines, one sentence per line, no bullets or numbering. Use exactly 60 words in total. The first line must begin with \"Tide\". Include these words: harbour, lantern. Do not use: great, really. The final line must end with a full stop. The first letters of the lines, read downward, must spell TIDE. Do not use the letter 'q' anywhere. Every line must begin with a capital letter. The digit 4 must appear. Do not use any commas.",
+  "constraints": {
+   "exact_lines": 4,
+   "start_with": "Tide",
+   "no_commas": true,
+   "exact_words": 60,
+   "end_with": ".",
+   "no_letter": "q",
+   "include_number": 4,
+   "forbid_words": [
+    "great",
+    "really"
+   ],
+   "must_include": [
+    "harbour",
+    "lantern"
+   ],
+   "all_sentences_start_capital": true,
+   "acrostic": "TIDE"
+  }
+ },
+ {
+  "id": 3058,
+  "domain": "constr",
+  "tier": 12,
+  "passage": "Write a short description of a slipway.",
+  "task": "Write exactly 4 lines, one sentence per line, no bullets or numbering. Use exactly 50 words in total. The first line must begin with \"Rope\". Include these words: lantern, salt. Do not use: great, really. The final line must end with a full stop. The first letters of the lines, read downward, must spell ROPE. Do not use the letter 'z' anywhere. Every line must begin with a capital letter. The digit 5 must appear. Do not use any commas.",
+  "constraints": {
+   "exact_lines": 4,
+   "start_with": "Rope",
+   "end_with": ".",
+   "forbid_words": [
+    "great",
+    "really"
+   ],
+   "include_number": 5,
+   "no_commas": true,
+   "no_letter": "z",
+   "acrostic": "ROPE",
+   "must_include": [
+    "lantern",
+    "salt"
+   ],
+   "all_sentences_start_capital": true,
+   "exact_words": 50
+  }
+ },
+ {
+  "id": 3059,
+  "domain": "constr",
+  "tier": 12,
+  "passage": "Write a short description of a chart room.",
+  "task": "Write exactly 4 lines, one sentence per line, no bullets or numbering. Use exactly 60 words in total. The first line must begin with \"Tide\". Include these words: tide, ledger. Do not use: great, really. The final line must end with a full stop. The first letters of the lines, read downward, must spell TIDE. Do not use the letter 'z' anywhere. Every line must begin with a capital letter. The digit 3 must appear. Do not use any commas.",
+  "constraints": {
+   "exact_lines": 4,
+   "start_with": "Tide",
+   "all_sentences_start_capital": true,
+   "acrostic": "TIDE",
+   "no_commas": true,
+   "must_include": [
+    "tide",
+    "ledger"
+   ],
+   "include_number": 3,
+   "end_with": ".",
+   "exact_words": 60,
+   "no_letter": "z",
+   "forbid_words": [
+    "great",
+    "really"
+   ]
+  }
+ }
+]

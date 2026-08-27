@@ -4,7 +4,8 @@
 re-opens a retraction, cite new evidence or drop it. EXPERIMENTS.md is the
 chronological lab notebook (E-numbers); this file is the distillation. Keep it
 under ~150 lines; when you add a law, delete anything it supersedes.
-Last updated: 2026-08-21 (through E110).
+Last updated: 2026-08-25 (through E147, plus the E142 split). Experiments
+are finished; this file is now a closed record, not a working one.
 
 ## I. Settled laws (each has survived at least one attempt to kill it)
 
@@ -130,23 +131,37 @@ Last updated: 2026-08-21 (through E110).
     see PROCESS.md. [E107, E108, E109]
 
 14. **THE AFFINE FRONTIER PASSES ABOVE THE VQ FRONTIER BY 6.0 bpw — the
-    crossover is bracketed 4.5-6.0 ON THE DENSE 27B.** Below 4.5 the VQ win
-    is measured on three families; the UPPER bracket is one model and the
-    MoEs have not been tested there. One instrument, all sizes MEASURED
-    PACKED:
+    crossover is bracketed 4.5-6.0 ON THE DENSE 27B, and 5.0-6.0 ON THE 35B
+    MoE.** Below 4.5 the VQ win is measured on three families. **UPDATED
+    2026-08-25:** the original text said "the upper bracket is one model and
+    the MoEs have not been tested there." E141-M4 bracketed the 35B MoE at
+    5.0-6.0 — the same band, both architectures — so this law is no longer
+    dense-only. One instrument, all sizes MEASURED PACKED and **PRE-GRAFT
+    (text-only)**; LEDGER's 08-24 entry restates every 27B size +0.8582 GiB
+    on the with-tower basis the paper uses. The table below is internally
+    consistent on ONE basis; do not compare its numbers against with-tower
+    sizes without adding the offset.
 
         rung             size GiB   bpw    KL mnats    ppl      top-1
         q3                10.963      -    187.765       -         -
         E130 d2/K64       11.604    3.00     93.887   5.3494   85.73%
         E124 d2/K256      13.596    4.00     40.327       -     90.10%
         q4                14.094    4.00     45.842   5.2055   89.82%
-        E126 d2/K512      14.592    4.50     33.095       -         -
+        E142-27B d2/K512  14.592    4.50     32.810   5.1617   90.84%
         E128C d2/K4096    17.583    6.00     26.709   5.2417   91.66%
         q6                20.355    6.00      3.710   5.2603   96.75%
-        q8                26.341    8.00      1.641       -         -
+        q8  (RETRACTED)   26.341    8.00      1.641       -         -
+        q8  (E144 rebuild) 26.617    8.00      1.254       -     98.54%
 
     BELOW: E124 beats q4 on KL at LESS than q4's size; E126 beats q4;
     d2/K64 halves q3's KL for +0.64 GiB.
+
+    **TWO ROWS CORRECTED 2026-08-25.** (a) The original q8 row was NOT an
+    8-bit build — E144 found a 4-bit base with 402 overrides, so 26.341/1.641
+    measured something else and is kept only to mark the retraction; use the
+    E144 rebuild. The bracket itself is derived from q4 and q6, both clean,
+    so it is UNAFFECTED. (b) The d2/K512 row was E126's unseeded draw; the
+    adopted artifact is E142-27B arm 2 (seeded, seed 1234, identical size).
     ABOVE: **q6 beats the best VQ rung by 7.2x on KL and 5.1 points on top-1
     FOR 2.77 GiB MORE.** Keep that size clause welded to the headline
     wherever this law is quoted: E128C is NOT dominated — it is smaller. The

@@ -1,0 +1,108 @@
+{
+ "model": "vq-K256-d4",
+ "prompts": "winrate/prompts_constr_fixed.json",
+ "max_tokens": 900,
+ "never_closed_channel": 0,
+ "gens": [
+  {
+   "id": 3040,
+   "text": "Begin the day as the sun dips below the horizon.\nThe lighthouse stands tall against a bruised purple sky.\nA single golden beam cuts through the gathering gloom.\nWaves crash rhythmically against the ancient stone base.\nNight arrives to claim the silent coastal watch.",
+   "closed_channel": true
+  },
+  {
+   "id": 3041,
+   "text": "Every morning, the docks hum with sudden energy.\nFishermen haul heavy crates onto the wet pavement.\nSilver scales glisten under the rising golden sun.\nVendors shout prices over the crashing waves.\nFresh salt air fills the bustling crowd.",
+   "closed_channel": true
+  },
+  {
+   "id": 3042,
+   "text": "Consider the rhythmic pulse of the engine against the salt spray.\nThe heavy vessel cuts a steady path through the churning waves.\nPassengers watch the distant shoreline slowly fade into a misty blur.\nA quiet transition unfolds between two worlds across the deep water.",
+   "closed_channel": true
+  },
+  {
+   "id": 3043,
+   "text": "Every page bears the faded ink of long-forgotten voyages.\nYellowed parchment crinkles under the weight of heavy history.\nDusty columns track the movement of iron and grain.\nThe ledger remains a silent witness to the ocean's secrets.",
+   "closed_channel": true
+  },
+  {
+   "id": 3044,
+   "text": "Notice a severe thunderstorm warning has been issued for this area.\nHeavy winds and intense lightning are expected to arrive shortly.\nPlease seek shelter immediately and stay away from large trees.",
+   "closed_channel": true
+  },
+  {
+   "id": 3045,
+   "text": "Tide rises against the old harbour wall.\nIn the ledger, sailors mark every knot.\nDockworkers pull heavy ropes through the mist.\nEvery line secures the vessel to the pier.",
+   "closed_channel": true
+  },
+  {
+   "id": 3046,
+   "text": "Begin by checking the daily ocean water levels.\nThis chart shows high and low tide times.\nPredicting 3 different cycles helps sailors plan their trips.",
+   "closed_channel": true
+  },
+  {
+   "id": 3047,
+   "text": "Notice the pale light breaking over the salt marsh.\nThe incoming tide fills the muddy channels.\nA bird lands on a stone like a heavy ledger.\nMist drifts past the 9 reeds in the wind.\nDawn brings a soft glow to the silent land.",
+   "closed_channel": true
+  },
+  {
+   "id": 3048,
+   "text": "Begin your journey amidst the scent of aged cedar and brine.\nThe shopkeeper records every sale in a heavy leather ledger.\nRows of hemp rope and brass fittings line the walls.\nA single 9 inch scale measures the weight of salt.\nEvery sailor finds exactly what they need here.",
+   "closed_channel": true
+  },
+  {
+   "id": 3049,
+   "text": "Salt spray coats the sturdy wooden hull.\nAlways guiding ships through the narrow channel.\nLines of rope secure the heavy anchor.\nTough vessels navigate the rising tide.",
+   "closed_channel": true
+  },
+  {
+   "id": 3050,
+   "text": "Notice the heavy iron bell hanging above the tide.\nA bright lantern guides ships through the thick mist.\nThe loud ringing warns sailors of the rocky shore.",
+   "closed_channel": true
+  },
+  {
+   "id": 3051,
+   "text": "Rope knots tie the old wooden pier.\nOcean waves splash against the stone harbour.\nPastry scents drift over a worn ledger.\nEvery morning brings fresh coffee and salt.",
+   "closed_channel": true
+  },
+  {
+   "id": 3052,
+   "text": "Tide rolls against the weathered wooden docks.\nIn the dim light, a lantern glows.\nDockworkers mark a heavy ledger.\nEvery 5 vessels rests in the bay.",
+   "closed_channel": true
+  },
+  {
+   "id": 3053,
+   "text": "Salt spray coats the metal sensors.\nAll data flows through a thick rope.\nLight from a lantern guides the crew.\nThe 9 sensors track the storm.",
+   "closed_channel": true
+  },
+  {
+   "id": 3054,
+   "text": "Salt spray coats every wooden beam.\nAll heavy rope hangs from hooks.\nLedger books track every single net.\nTangled mesh fills this dark space.",
+   "closed_channel": true
+  },
+  {
+   "id": 3055,
+   "text": "Tide brings heavy ships.\nInland goods arrive now.\nDusty salt fills air.\nEach ledger holds 6.",
+   "closed_channel": true
+  },
+  {
+   "id": 3056,
+   "text": "Tide washes over the rocky shore.\nInland paths wind past cliffs.\nDeep blue waves hit the stone.\nEvery rope holds 6 heavy nets.",
+   "closed_channel": true
+  },
+  {
+   "id": 3057,
+   "text": "Tide waves hit the metal bell.\nIn the dark harbour it rings.\nDarkness needs a bright lantern.\nEvery 4 bells sounds loud.",
+   "closed_channel": true
+  },
+  {
+   "id": 3058,
+   "text": "Rope pulls the heavy boat up the slope.\nOld wooden planks feel the salt spray.\nPale lantern light shines on 5 rocks.\nEach wave hits the steep stone ramp.",
+   "closed_channel": true
+  },
+  {
+   "id": 3059,
+   "text": "Tide levels dictate every single entry within this small room.\nInches of water mark the heavy leather bound ledger.\nData points fill the 3 old wooden shelves above.\nEvery single ocean wave affects the dark ink stains.",
+   "closed_channel": true
+  }
+ ]
+}

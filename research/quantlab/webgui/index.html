@@ -1,0 +1,923 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>quantlab — VQ size targeting</title>
+<style>
+/* quantlab webgui — exo-inspired clean localhost dashboard */
+:root {
+  --bg: #f6f7f9;
+  --surface: #ffffff;
+  --border: #e3e6ea;
+  --ink: #16181d;
+  --ink-2: #5a6270;
+  --ink-3: #8a93a2;
+  --accent: #2563eb;        /* measured */
+  --accent-soft: #dbe7fd;
+  --estimate: #2563eb;      /* same hue, hollow marks carry the distinction */
+  --pending-bg: #fef3c7;
+  --pending-ink: #92400e;
+  --comparator: #9aa2af;
+  --ok: #15803d;
+  --warn: #b45309;
+  --bad: #b91c1c;
+  --grid: #edeff2;
+  --mono: ui-monospace, "SF Mono", Menlo, monospace;
+}
+[data-theme="dark"] {
+  --bg: #0b0d11;
+  --surface: #12151b;
+  --border: #1f242c;
+  --ink: #e6e9ee;
+  --ink-2: #949cab;
+  --ink-3: #656d7c;
+  --accent: #7aa7ff;
+  --accent-soft: #16203a;
+  --estimate: #7aa7ff;
+  --pending-bg: #3a2e10;
+  --pending-ink: #f0c661;
+  --comparator: #6b7484;
+  --ok: #4ade80;
+  --warn: #fbbf24;
+  --bad: #f87171;
+  --grid: #191d24;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0b0d11; --surface: #12151b; --border: #1f242c;
+    --ink: #e6e9ee; --ink-2: #949cab; --ink-3: #656d7c;
+    --accent: #7aa7ff; --accent-soft: #16203a; --estimate: #7aa7ff;
+    --pending-bg: #3a2e10; --pending-ink: #f0c661;
+    --comparator: #6b7484; --ok: #4ade80; --warn: #fbbf24; --bad: #f87171;
+    --grid: #191d24;
+  }
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font: 14px/1.45 -apple-system, "Segoe UI", Inter, system-ui, sans-serif;
+}
+.topbar {
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  padding: 14px 22px; border-bottom: 1px solid var(--border);
+  background: var(--surface); position: sticky; top: 0; z-index: 5;
+}
+.brand { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.logo-dot { width: 10px; height: 10px; border-radius: 3px; background: var(--accent); align-self: center; }
+.topbar h1 { margin: 0; font-size: 17px; font-weight: 650; letter-spacing: .01em; }
+.sub { color: var(--ink-3); font-size: 12px; }
+.theme-toggle {
+  background: none; border: 1px solid var(--border); border-radius: 8px;
+  color: var(--ink-2); font-size: 15px; padding: 3px 10px; cursor: pointer;
+}
+.theme-toggle:hover { color: var(--ink); border-color: var(--ink-3); }
+
+/* model picker */
+.picker { display: flex; gap: 6px; align-items: center; }
+.picker button {
+  background: none; border: 1px solid var(--border); border-radius: 8px; cursor: pointer;
+  color: var(--ink-2); font: inherit; font-size: 12px; padding: 4px 10px; white-space: nowrap;
+}
+.picker button:hover { color: var(--ink); border-color: var(--ink-3); }
+.picker button[aria-pressed="true"] { color: var(--ink); border-color: var(--accent); background: var(--accent-soft); }
+.picker button .rail { color: var(--ink-3); font-size: 10px; margin-left: 5px; }
+.empty-rail {
+  border: 1px dashed var(--border); border-radius: 10px; padding: 18px 20px;
+  color: var(--ink-2); font-size: 13px; line-height: 1.6;
+}
+.empty-rail b { color: var(--ink); font-weight: 650; }
+.dim { opacity: .35; pointer-events: none; }
+
+/* strategy table */
+.strat { width: 100%; border-collapse: collapse; font-family: var(--mono); font-size: 12px; }
+.strat th {
+  text-align: left; font-weight: 600; color: var(--ink-2); font-size: 11px;
+  border-bottom: 1px solid var(--border); padding: 4px 8px 6px;
+  font-family: -apple-system, system-ui, sans-serif; white-space: nowrap;
+}
+.strat td { padding: 6px 7px; border-bottom: 1px solid var(--grid); white-space: nowrap; }
+.strat tr:last-child td { border-bottom: none; }
+.strat tr.spine td { background: var(--accent-soft); }
+.strat .geo { font-weight: 650; }
+.tag { font-size: 9.5px; font-weight: 700; letter-spacing: .04em; }
+.tag.meas { color: var(--ok); }
+.tag.est { color: var(--warn); }
+.tag.unk { color: var(--ink-3); }
+
+main { max-width: 1180px; margin: 0 auto; padding: 20px 22px 8px; }
+.card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 12px; padding: 16px 18px; margin-bottom: 18px;
+}
+.card-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
+.card h2 { margin: 0; font-size: 14px; font-weight: 650; }
+.hint { color: var(--ink-3); font-size: 12px; }
+
+/* slider */
+.slider-row { display: flex; align-items: center; gap: 18px; margin-top: 6px; }
+input[type="range"] { flex: 1; accent-color: var(--accent); height: 28px; }
+.slider-readout {
+  font-family: var(--mono); font-size: 22px; font-weight: 650; min-width: 128px; text-align: right;
+}
+.slider-ticks {
+  position: relative; height: 30px; margin: 0 132px 8px 0; font-family: var(--mono);
+  font-size: 10px; color: var(--ink-3);
+}
+.slider-ticks .tick { position: absolute; transform: translateX(-50%); text-align: center; white-space: nowrap; }
+.slider-ticks .tick.row2 { top: 14px; }
+.slider-ticks .tick.row2::before { height: 20px; margin-top: -14px; }
+.slider-ticks .tick::before { content: ""; display: block; width: 1px; height: 6px; background: var(--ink-3); margin: 0 auto 2px; }
+
+.reco-grid {
+  display: grid; grid-template-columns: 1.6fr 1fr 1fr 1fr; gap: 12px; margin-top: 10px;
+}
+@media (max-width: 900px) { .reco-grid { grid-template-columns: 1fr 1fr; } }
+.reco-cell {
+  border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; background: var(--bg);
+}
+.reco-main { border-color: var(--accent); background: var(--accent-soft); }
+.reco-cell .k { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--ink-2); }
+.reco-cell .v { font-family: var(--mono); font-size: 17px; font-weight: 650; margin: 3px 0 2px; }
+.reco-cell .s { font-size: 11.5px; color: var(--ink-2); }
+
+.legend-strip {
+  display: flex; gap: 18px; flex-wrap: wrap; margin-top: 12px;
+  font-size: 12px; color: var(--ink-2); align-items: center;
+}
+.dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; vertical-align: -1px; margin-right: 4px; }
+.dot.solid { background: var(--accent); }
+.dot.hollow { border: 2px solid var(--estimate); background: transparent; width: 7px; height: 7px; }
+.diamond {
+  display: inline-block; width: 8px; height: 8px; background: var(--comparator);
+  transform: rotate(45deg); margin-right: 5px; vertical-align: 0;
+}
+.badge-pending {
+  background: var(--pending-bg); color: var(--pending-ink); border-radius: 6px;
+  font-size: 10.5px; font-weight: 600; padding: 1px 7px; margin-right: 4px;
+}
+
+/* layout */
+.two-col { display: grid; grid-template-columns: 1.3fr 1fr; gap: 18px; align-items: start; }
+.two-col > * { min-width: 0; }
+.strat-scroll { overflow-x: auto; }
+@media (max-width: 980px) { .two-col { grid-template-columns: 1fr; } }
+.stack { display: flex; flex-direction: column; }
+
+/* chart */
+.chart-wrap { position: relative; width: 100%; cursor: ew-resize; touch-action: none; }
+.chart-slider {
+  position: absolute; margin: 0; background: none;
+  -webkit-appearance: none; appearance: none; cursor: ew-resize;
+}
+.chart-slider::-webkit-slider-runnable-track { background: transparent; height: 100%; }
+.chart-slider::-moz-range-track { background: transparent; height: 100%; }
+.chart-slider::-webkit-slider-thumb {
+  -webkit-appearance: none; width: 11px; height: 11px; border-radius: 50%;
+  background: var(--ink); border: 2px solid var(--surface); cursor: ew-resize;
+  box-shadow: 0 0 0 1px var(--ink-3);
+}
+.chart-slider::-moz-range-thumb {
+  width: 11px; height: 11px; border-radius: 50%; border: 2px solid var(--surface);
+  background: var(--ink); cursor: ew-resize; box-shadow: 0 0 0 1px var(--ink-3);
+}
+.chart-slider:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 3px var(--accent-soft); }
+.chart-wrap svg { display: block; width: 100%; height: auto; }
+.tooltip {
+  position: absolute; pointer-events: none; background: var(--surface);
+  border: 1px solid var(--border); border-radius: 8px; padding: 7px 10px;
+  font-size: 12px; box-shadow: 0 4px 14px rgba(0,0,0,.12); z-index: 4;
+  font-family: var(--mono); white-space: pre; line-height: 1.5;
+}
+
+/* geometry table */
+.geom-table { width: 100%; border-collapse: collapse; font-family: var(--mono); font-size: 12px; }
+.geom-table th {
+  text-align: left; font-weight: 600; color: var(--ink-2); font-size: 11px;
+  border-bottom: 1px solid var(--border); padding: 4px 8px 6px;
+  font-family: -apple-system, system-ui, sans-serif;
+}
+.geom-table td { padding: 5px 8px; border-bottom: 1px solid var(--grid); }
+.geom-table tr:last-child td { border-bottom: none; }
+.st-ok { color: var(--ok); font-weight: 600; }
+.st-warn { color: var(--warn); font-weight: 600; }
+.st-bad { color: var(--bad); font-weight: 600; }
+.fine { color: var(--ink-3); font-size: 11.5px; margin: 10px 0 0; }
+
+/* gates */
+.gates { list-style: none; margin: 0; padding: 0; }
+.gates li {
+  display: flex; gap: 10px; padding: 7px 0; border-bottom: 1px solid var(--grid);
+  align-items: baseline;
+}
+.gates li:last-child { border-bottom: none; }
+.gates .gname { font-family: var(--mono); font-size: 12px; font-weight: 650; min-width: 128px; }
+.gates .gdesc { color: var(--ink-2); font-size: 12px; }
+
+.foot {
+  max-width: 1180px; margin: 0 auto; padding: 6px 22px 26px;
+  color: var(--ink-3); font-size: 11.5px;
+}
+
+</style>
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <span class="logo-dot"></span>
+    <h1>quantlab</h1>
+    <span class="sub" id="modelSub">post-graft GiB, prose ppl</span>
+  </div>
+  <div class="picker" id="modelPicker"></div>
+  <button id="themeToggle" class="theme-toggle" title="Toggle theme">◐</button>
+</header>
+
+<main>
+  <div class="empty-rail" id="rail" hidden></div>
+  <div id="live">
+  <!-- ============ CORE: size-targeting slider ============ -->
+  <section class="card slider-card">
+    <div class="card-head">
+      <h2>Recommended build</h2>
+      <span class="hint">target <span id="targetVal">120.0</span> GiB — drag the marker on the ladder below</span>
+    </div>
+
+    <div class="reco-grid">
+      <div class="reco-cell reco-main">
+        <div class="k">Build</div>
+        <div class="v" id="recoBuild">—</div>
+        <div class="s" id="recoDetail">—</div>
+      </div>
+      <div class="reco-cell">
+        <div class="k">Predicted size</div>
+        <div class="v" id="recoSize">—</div>
+        <div class="s">size model: ±0.5 GiB, 6-for-6 out-of-sample</div>
+      </div>
+      <div class="reco-cell">
+        <div class="k">Est. prose ppl</div>
+        <div class="v" id="recoPpl">—</div>
+        <div class="s" id="recoPplNote">—</div>
+      </div>
+      <div class="reco-cell">
+        <div class="k">Fit time (rough)</div>
+        <div class="v" id="recoFit">—</div>
+        <div class="s" id="recoFitNote">M-series, codes fit only</div>
+      </div>
+    </div>
+    <div class="legend-strip">
+      <span><span class="dot solid"></span> measured</span>
+      <span><span class="dot hollow"></span> estimate (interpolated)</span>
+      <span><span class="badge-pending">measuring today</span> pending run</span>
+      <span><span class="diamond"></span> comparator (spicyneuron)</span>
+    </div>
+  </section>
+
+  <div class="two-col">
+    <!-- ============ Ladder chart ============ -->
+    <section class="card">
+      <div class="card-head">
+        <h2>397B ladder — drag to set target</h2>
+        <span class="hint">shallow 1.87 GiB/bit &middot; body 8.81 GiB/bit &middot; vision tower +0.849 GiB</span>
+      </div>
+      <div id="ladderChart" class="chart-wrap">
+        <div id="ladderSvg"></div>
+        <input type="range" id="sizeSlider" class="chart-slider" aria-label="target artifact size, GiB">
+      </div>
+      <div id="chartTip" class="tooltip" hidden></div>
+    </section>
+
+    <div class="stack">
+      <!-- ============ strategies at this size ============ -->
+      <section class="card">
+        <div class="card-head"><h2>Builds at this size</h2><span class="hint" id="stratHint">&nbsp;</span></div>
+        <div class="strat-scroll"><table class="strat" id="stratTable">
+          <thead><tr><th>geometry</th><th>bpw</th><th>size</th><th>quality</th><th>fit</th><th>kernel</th></tr></thead>
+          <tbody></tbody>
+        </table></div>
+        <p class="fine" id="stratFine"></p>
+      </section>
+
+    </div>
+  </div>
+  </div>
+</main>
+
+<footer class="foot">
+  Constants from EXPERIMENTS.md / FINDINGS.md. Prototype — not wired to the pipeline.
+</footer>
+
+<script>
+/* quantlab webgui — size-targeting prototype.
+   All MEASURED constants from EXPERIMENTS.md / FINDINGS.md (laws I.1–I.10, E-record).
+   Estimates are computed here and labeled as such in the UI. */
+
+"use strict";
+
+// ---------- measured data ----------
+const VISION_TOWER_GIB = 0.849;            // measured, byte-identical across grafts
+const SHALLOW_GIB_PER_BIT = 1.87;          // L0-9, measured (6-for-6 size model)
+const BODY_GIB_PER_BIT = 8.81;             // L10-56, measured
+const SIZE_TOL = 0.5;                      // size model error bound, GiB
+
+// Rate-to-size law, 397B. Two independent derivations agree to 0.07%:
+//   (a) the four measured d4 rungs are exactly linear in bpw -> 42.75 GiB/bpw, +26.088 fixed
+//   (b) per-region constants 1.87 (shallow) + 8.81 (body) = 10.68 GiB per K-bit at d4 -> 42.72
+// This prices SIZE at any (d, K) — law I.1 ("rate prices the bytes"). It does NOT
+// price quality across d; that axis is unsettled (E82 void, E85).
+const GIB_PER_BPW = 42.75;
+const GIB_FIXED = 26.088;                  // non-addressable surface + vision tower
+const sizeAtRate = bpw => GIB_FIXED + GIB_PER_BPW * bpw;
+
+// Fit-cost anchors, 397B, d4. MEASURED: K256 ~40 min, K2048 ~4 h.
+// Everything else is UNMEASURED and labeled so: repo rule — a duration is measured
+// only from a completed run of the same shape; probe timings ran 1.5-4x optimistic.
+// Assignment cost is ~N*K (d cancels), so we scale in K off the measured pair.
+const fitMinutes = K => 40 + (K - 256) * (240 - 40) / (2048 - 256);
+const fitMeasured = (d, K) => d === 4 && (K === 256 || K === 2048);
+
+// Models. Qwen MoE only — the 397B is the one with a scored VQ ladder.
+// Dims read from the checkpoints' config.json, not assumed.
+const MODELS = {
+  "397b": {
+    id: "397b", label: "Qwen3.5-397B-A17B", short: "397B", live: true,
+    sub: "post-graft GiB, prose ppl (one instrument)",
+    H: 4096, I: 1024, E: 512, L: 60, samples: 2_000_000,
+  },
+  "35b": {
+    id: "35b", label: "Qwen3.6-35B-A3B", short: "35B", live: false, rail: "fits in flight",
+    H: 4096, I: 512, E: 128, L: 48, samples: 2_000_000,
+    note: `K8192 refresh measured at 2.8 h (E94) \u2014 fits exist, a scored size/ppl ladder
+           does not. moe_intermediate 512 gives NSUB 128 at d4, so it packs cleanly.
+           Also the box where shard granularity bites: 3 shards x 40 tensors at ~84 s each,
+           so a kill can cost ~56 min.`,
+  },
+  "27b": {
+    id: "27b", label: "Qwen3.8-27B (dense)", short: "27B dense", live: false, rail: "E95 concluded",
+    note: `E95 RESULT (08-21): dense VQ carries \u2014 the recipe is not an MoE-expert phenomenon.
+           <b>KL 325.575 mnats/token, top-1 76.46%, ppl 6.4032 @ 9.7 GiB</b> \u2014
+           kl_cache_qwen38 (24x512, top-64) + referee_corpus.txt 2048 tok vs bf16_ppl 5.2249;
+           artifact e95-27b-dense-vq-r2, gate PASS. Affine ladder, same instrument:
+           q2 1426.9 @ 7.9G, q3 187.8 @ 11.0G, q4 45.8 @ 14.0G. The reading is
+           PLACEMENT-AT-SIZE \u2014 flat d4/K256 lands above the affine line at its size \u2014
+           and is never "VQ beats 4-bit" (E95 pre-registration). A K ladder (K512/1024/2048)
+           is pre-registered as E119; until those rungs are scored there is no curve to plot.
+           The harvest lever this GUI recommends stays MoE-only: cheap-shallow and the tail30
+           position law (I.2) are not established on dense.`,
+  },
+};
+let MODEL = "397b";
+
+// Candidate geometry grid. d must divide the row length; K powers of two.
+// REBUILDABILITY — keyed by (family, d, K), because the 08-18/19 commits changed
+// the k-means implementation, which acts on GEOMETRY. A named rung is just a
+// (family, d, K, layer-plan) tuple that happens to have a name; keying off the name
+// would drift the moment anyone fits an unnamed geometry. Absence from this table
+// means untested, which is the normal state and renders no marker.
+const REBUILD = [
+  { family: "397b", d: 4, K: 128,  state: "unknown",
+    note: "never re-fit with the current fitter" },
+  { family: "397b", d: 4, K: 256,  state: "regressed", band: [2.8057, 2.8158],
+    note: "a NEW build today lands 2.8057\u20132.8158 (E92 ++, E117 random) \u2014 fitter regression under investigation" },
+  { family: "397b", d: 4, K: 512,  state: "unknown",
+    note: "E118 (K512, random init) running \u2014 ~L38 at last report" },
+  { family: "397b", d: 4, K: 2048, state: "ok", n: 1,
+    note: "one comparison at one geometry (397B flagship: refit 2.3410 vs shipped 2.3519) \u2014 not a claim that d4/K2048 is broadly safe, and silent about d2 and d8 at this K" },
+];
+
+// Every state we hold is 397B d4 evidence. E119's dense 27B ladder will produce
+// d4 K512/K1024/K2048 on a different family — if those disagree, the family key
+// is already here to carry it.
+const rebuildFor = (family, d, K) =>
+  REBUILD.find(r => r.family === family && r.d === d && r.K === K) || null;
+
+// Flat ladder nodes (post-graft GiB / prose ppl, same instrument).
+// status: "measured" | "pending" (ppl run landing today; ppl field = estimate)
+const FLAT_NODES = [
+  { id: "K128",  K: 128,  size: 100.9,  ppl: 3.1706, status: "measured",
+    fitMin: 40,  slope: 0.028, },   // harvest slope ~0.024-0.032 ppl/GiB at K128 base (steep!)
+  { id: "K256",  K: 256,  size: 111.6,  ppl: 2.7655, status: "measured",
+    fitMin: 40,  slope: 0.0033,
+    // MEASURED on the shipped 2.4bpw artifact (streaming referee, referee_corpus.txt
+    // 8192 tok; code corpus 2.6383). The current fitter does NOT reproduce it with
+    // either init — E92 ++ refit 2.8057, E117 random 2.8158, identical geometry and
+    // byte-identical 111.617 GiB. Cause unresolved: two of three 08-18/19 k-means
+    // commits are still unisolated (E94/E117). A build-recipe tool must quote what
+    // the pipeline produces TODAY, so the band travels with the rung.
+    today: [2.8057, 2.8158],
+    todayNote: "shipped artifact on HF at 2.7655; a NEW build today lands 2.8057\u20132.8158 (fitter regression under investigation, E117)" },
+  { id: "K512",  K: 512,  size: 122.3,  ppl: 2.63,   status: "pending",
+    fitMin: 60,  slope: 0.0022,
+ },  // ppl ESTIMATE (log2-K interpolation); measuring today
+  { id: "K2048", K: 2048, size: 143.65, ppl: 2.3410, status: "measured",
+    fitMin: 240, slope: 0.0011, },  // harvest slope measured ~0.0011 ppl/GiB at rich base
+];
+
+// Non-flat measured point: E80 harvest rung (K2048 body, K512 shallow)
+const HARVEST_E80 = { id: "K512-shallow harvest (E80)", size: 139.93, ppl: 2.3452, status: "measured" };
+
+// Comparators (other family, grey diamonds)
+const COMPARATORS = [
+  { id: "spicyneuron 2.6bit", size: 121.0, ppl: 3.1843 },
+  { id: "spicyneuron 3.5bit", size: 165.6, ppl: 2.3614 },
+];
+
+const MAX_HARVEST_BITS = 4;  // shallow region can't shed forever; beyond this, drop to a smaller base
+
+// ---------- recommendation model ----------
+function recommend(target) {
+  const floor = FLAT_NODES[0], ceil = FLAT_NODES[FLAT_NODES.length - 1];
+
+  // At/above top flat node: just take it.
+  if (target >= ceil.size - 0.45) {
+    return flatReco(ceil, "top of ladder — nothing bigger is built here");
+  }
+
+  // Snap to a flat node when within tolerance.
+  for (const n of FLAT_NODES) {
+    if (Math.abs(n.size - target) <= 0.45) return flatReco(n, "target sits on a flat rung");
+  }
+
+  // Below the ladder floor: harvest down from K128 (steep — warn).
+  if (target < floor.size) {
+    const bits = Math.min(MAX_HARVEST_BITS, Math.round((floor.size - target) / SHALLOW_GIB_PER_BIT));
+    if (bits < 1) return flatReco(floor, "ladder floor");
+    return harvestReco(floor, bits,
+      "below the ladder floor — K128-base harvest is STEEP (~0.024–0.032 ppl/GiB)");
+  }
+
+  // General case: smallest flat base above target, harvest shallow bits down.
+  const base = FLAT_NODES.find(n => n.size >= target);
+  const bits = Math.round((base.size - target) / SHALLOW_GIB_PER_BIT);
+  if (bits < 1) return flatReco(base, "within one shallow bit of a flat rung");
+  if (bits > MAX_HARVEST_BITS) {
+    // too far to harvest — the flat node below is the honest answer
+    const below = [...FLAT_NODES].reverse().find(n => n.size <= target);
+    return flatReco(below, "gap too wide to harvest — nearest flat rung below target");
+  }
+  return harvestReco(base, bits, null);
+}
+
+function flatReco(node, why) {
+  return {
+    kind: "flat", base: node, bits: 0,
+    size: node.size, ppl: node.ppl,
+    pplMeasured: node.status === "measured",
+    fitMin: node.fitMin, why,
+  };
+}
+
+function harvestReco(base, bits, warn) {
+  const shed = bits * SHALLOW_GIB_PER_BIT;
+  return {
+    kind: "harvest", base, bits,
+    size: base.size - shed,
+    ppl: base.ppl + shed * base.slope,
+    pplMeasured: false,               // any harvest quality number is an estimate
+    fitMin: base.fitMin + 40,         // shallow refit ≈ one ~40 min fit (measured order)
+    why: warn,
+  };
+}
+
+const D_SET = [2, 4, 8, 16, 32];
+const K_SET = [];
+for (let e = 4; e <= 21; e++) K_SET.push(2 ** e);
+
+const MIN_SAMPLES_PER_CENTROID = 8;   // below this k-means has nothing to fit
+const MAX_BPW = 8;                    // above int8 affine, VQ has no reason to exist
+
+// A geometry is BUILDABLE only if all of these hold. Anything failing is not
+// rendered — a menu should not offer dishes the kitchen cannot cook.
+function feasible(d, K, m) {
+  const rows = [m.H, m.I];                                   // gate/up in-dim, down in-dim
+  if (!rows.every(r => r % d === 0)) return null;             // d must divide the row
+  if (!rows.every(r => (r / d) % 32 === 0)) return null;      // vq_pack words_per_row
+  const bpw = Math.log2(K) / d;
+  if (bpw > MAX_BPW) return null;
+  const perCentroid = m.samples / K;
+  if (perCentroid < MIN_SAMPLES_PER_CENTROID) return null;    // degenerate fit
+  // Codebooks can never outweigh the fp16 surface they encode.
+  // Per-tensor codebook is [K, d] fp16, shared across all E experts.
+  const cbBytes = K * d * 2;
+  const tensorFp16 = m.E * m.I * m.H * 2;
+  if (cbBytes >= tensorFp16) return null;
+  return { bpw, cbKB: cbBytes / 1024, perCentroid };
+}
+
+function grid() {
+  const m = MODELS["397b"];
+  const out = [];
+  for (const d of D_SET) for (const K of K_SET) {
+    const f = feasible(d, K, m);
+    if (!f) continue;
+    if (f.bpw < 1.4 || f.bpw > 3.6) continue;                 // outside the buildable band
+    const node = d === 4 ? FLAT_NODES.find(n => n.K === K) : null;
+    out.push({
+      d, K, bpw: f.bpw, size: sizeAtRate(f.bpw), cbKB: f.cbKB, node,
+      perCentroid: f.perCentroid,
+      codes: K <= 256 ? "uint8" : "uint16",
+      fast: f.cbKB <= 32,
+      thin: f.perCentroid < 32,
+      fitMin: fitMinutes(K),
+      fitKnown: fitMeasured(d, K),
+      rebuild: rebuildFor(MODEL, d, K),
+    });
+  }
+  return out.sort((a, b) => a.size - b.size);
+}
+const GRID = grid();
+
+// What the constraints actually removed — shown in the UI so the pruning is auditable.
+const PRUNED = (() => {
+  const m = MODELS["397b"];
+  let row = 0, sample = 0, cb = 0, rate = 0;
+  for (const d of D_SET) for (const K of K_SET) {
+    const rows = [m.H, m.I];
+    if (!rows.every(r => r % d === 0) || !rows.every(r => (r / d) % 32 === 0)) { row++; continue; }
+    if (Math.log2(K) / d > MAX_BPW) { rate++; continue; }
+    if (m.samples / K < MIN_SAMPLES_PER_CENTROID) { sample++; continue; }
+    if (K * d * 2 >= m.E * m.I * m.H * 2) { cb++; continue; }
+  }
+  return { row, sample, cb, rate, total: D_SET.length * K_SET.length };
+})();
+const STRAT_SHOW = 6;       // nearest candidates by size
+const STRAT_WINDOW = 3.0;   // GiB — "on target" band, used for chart highlighting
+
+function fitLabel(g) {
+  const m = g.fitMin;
+  const t = m >= 90 ? `~${fmt(m / 60, 1)} h` : `~${Math.round(m)} min`;
+  return { t, known: g.fitKnown };
+}
+
+function renderStrategies(target) {
+  const rows = [...GRID]
+    .sort((a, b) => Math.abs(a.size - target) - Math.abs(b.size - target))
+    .slice(0, STRAT_SHOW)
+    .sort((a, b) => a.size - b.size);
+
+  const tbody = $("stratTable").querySelector("tbody");
+  tbody.innerHTML = "";
+  $("stratHint").textContent = `nearest ${STRAT_SHOW} geometries to ${fmt(target, 1)} GiB`;
+
+  for (const g of rows) {
+    const tr = document.createElement("tr");
+    if (g.node) tr.className = "spine";
+
+    let q, qc;
+    const RB_MARK = { regressed: "\u00a7", unknown: "?", ok: "" };
+    const mark = g.rebuild ? RB_MARK[g.rebuild.state] + (g.rebuild.n === 1 ? "\u207f\u00b9" : "") : "";
+    if (g.node && g.node.status === "measured") { q = fmt(g.node.ppl, 4) + mark; qc = "meas"; }
+    else if (g.node) { q = `~${fmt(g.node.ppl, 2)}${mark}`; qc = "est"; }
+    else if (g.d === 2 && Math.abs(g.bpw - 2.0) < 1e-9) { q = "unmeas.\u2021"; qc = "unk"; }
+    else { q = "unmeas."; qc = "unk"; }
+
+    const f = fitLabel(g);
+    const kern = g.fast ? `<span class="st-ok">fast</span>`
+      : `<span class="st-warn" title="codebook ${fmt(g.cbKB, 0)} KB > 32 KB threadgroup limit">slow</span>`;
+    const dlt = g.size - target;
+
+    tr.innerHTML =
+      `<td class="geo">d${g.d}/K${g.K}` +
+        (g.thin ? `<span class="st-warn" title="only ${Math.round(g.perCentroid)} sampled subvectors per centroid"> thin</span>` : "") +
+      `</td>` +
+      `<td>${fmt(g.bpw, 2)}</td>` +
+      `<td>${fmt(g.size, 1)} <span style="color:var(--ink-3)">${dlt >= 0 ? "+" : ""}${fmt(dlt, 1)}</span></td>` +
+      `<td class="tag ${qc}">${q}</td>` +
+      `<td>${f.t} <span class="tag ${f.known ? "meas" : "unk"}">${f.known ? "MEAS" : "est"}</span></td>` +
+      `<td>${kern}</td>`;
+    tbody.appendChild(tr);
+  }
+
+  // "same size, wildly different compute" — only meaningful between rate-matched rows
+  let ratio = 0, pair = "";
+  const byRate = {};
+  for (const g of rows) (byRate[g.bpw.toFixed(3)] ||= []).push(g);
+  for (const set of Object.values(byRate)) {
+    if (set.length < 2) continue;
+    const lo = set.reduce((a, b) => a.fitMin < b.fitMin ? a : b);
+    const hi = set.reduce((a, b) => a.fitMin > b.fitMin ? a : b);
+    if (hi.fitMin / lo.fitMin > ratio) {
+      ratio = hi.fitMin / lo.fitMin;
+      pair = `d${lo.d}/K${lo.K} vs d${hi.d}/K${hi.K}`;
+    }
+  }
+
+  $("stratFine").innerHTML =
+    (ratio > 1.6
+      ? `Identical rate, <b>${ratio >= 10 ? Math.round(ratio) : fmt(ratio, 1)}\u00d7 the fit cost</b> (${pair}) \u2014 the E83 question, unresolved. `
+      : "") +
+    `Quality is measured only on the d4 spine (highlighted); across d it is unsettled (law I.1, E82 void). ` +
+    `Fit times are unmeasured except d4/K256 and d4/K2048 \u2014 probe-derived durations have run 1.5\u20134\u00d7 optimistic. ` +
+    `\u2021 E87 measured d4 &gt; d2 by ~12% KL at this exact rate \u2014 on a different model and instrument, so directional only, not a ppl for this ladder. ` +
+    (rows.some(r => r.rebuild?.state === "regressed")
+      ? `\u00a7 the SHIPPED artifact scored this and is on HF, so you can HAVE this rung by downloading it; ` +
+        `what nobody can currently do is REBUILD it (a new fit lands 2.8057\u20132.8158 \u2014 E92 ++, E117 random). ` +
+        `Provenance, precisely: gate PASS on the LOCAL copy of the shipped artifact (worst tensor 0.4332 against ` +
+        `a 3.0x bar); the published runtime is byte-identical to ours (model.py md5, all three repos); the ` +
+        `published WEIGHTS rest on upload provenance rather than a byte-comparison, and stay that way BY ` +
+        `DECISION \u2014 closing that link means a ~112 GiB download and Noah declined the cost. Nothing in the ` +
+        `evidence points at a problem with them; it is a priced tradeoff, not an open doubt. `
+      : "") +
+    (rows.some(r => r.rebuild?.state === "unknown")
+      ? `? = nobody has re-fit this GEOMETRY with the current fitter, so whether it still reproduces is untested. `
+      : "") +
+    (rows.some(r => r.rebuild?.n === 1)
+      ? `\u207f\u00b9 rebuildability rested on a single comparison at a single geometry \u2014 it does not generalise across d at the same K. `
+      : "") +
+    `<br><span style="color:var(--ink-3)">Grid: ${PRUNED.total} (d, K) pairs, ` +
+    `${PRUNED.row} cut by packing (d must divide 4096 and 1024, and row/d must be a multiple of 32), ` +
+    `${PRUNED.sample} cut by the fit sample budget (2,000,000 subvectors/tensor \u2014 fewer than ` +
+    `${MIN_SAMPLES_PER_CENTROID} per centroid cannot fit), ` +
+    `${PRUNED.cb + PRUNED.rate} cut as beyond fp16 or int8-affine. Impossible geometries are not listed.</span>`;
+}
+
+// ---------- helpers ----------
+const $ = id => document.getElementById(id);
+const fmt = (x, n = 2) => x.toFixed(n);
+
+// ---------- slider + readout ----------
+function renderReco(target) {
+  const r = recommend(target);
+  const b = r.base;
+
+  $("recoBuild").textContent = r.kind === "flat"
+    ? `flat ${b.id}`
+    : `${b.id} base − ${r.bits} shallow bit${r.bits > 1 ? "s" : ""}`;
+
+  let detail = r.kind === "flat"
+    ? (b.status === "pending" ? "flat rung (ppl run landing today)" : "flat rung, fully measured")
+    : `harvest L0–9 by ${r.bits} bit${r.bits > 1 ? "s" : ""} (${fmt(r.bits * SHALLOW_GIB_PER_BIT)} GiB @ 1.87 GiB/bit)`;
+  if (r.why) detail += ` — ${r.why}`;
+  $("recoDetail").textContent = detail;
+
+  $("recoSize").textContent = `${fmt(r.size)} GiB`;
+
+  const pplEl = $("recoPpl");
+  pplEl.innerHTML = "";
+  pplEl.parentElement.querySelectorAll(".today-band").forEach(n => n.remove());
+  pplEl.append(document.createTextNode(fmt(r.ppl, 4) + " "));
+  const tag = document.createElement("span");
+  if (r.pplMeasured) {
+    tag.textContent = "MEASURED"; tag.style.cssText = "font-size:10px;color:var(--ok);font-weight:700;";
+  } else if (r.kind === "flat" && b.status === "pending") {
+    tag.textContent = "measuring today"; tag.className = "badge-pending";
+  } else {
+    tag.textContent = "ESTIMATE"; tag.style.cssText = "font-size:10px;color:var(--warn);font-weight:700;";
+  }
+  pplEl.append(tag);
+
+  const rbFlat = r.kind === "flat" ? rebuildFor(MODEL, 4, b.K) : null;
+  if (rbFlat) {
+    const rb = rbFlat;
+    const note = document.createElement("div");
+    note.className = "today-band";
+    const col = rb.state === "ok" ? "var(--ok)" : rb.state === "regressed" ? "var(--warn)" : "var(--ink-3)";
+    note.style.cssText = `font-size:11px;color:${col};margin-top:3px;`;
+    note.textContent = rb.state === "regressed"
+      ? `download it: ${fmt(b.ppl, 4)} \u00b7 rebuild it today: ${fmt(rb.band[0], 4)}\u2013${fmt(rb.band[1], 4)}`
+      : rb.state === "ok" ? `rebuildable today \u2014 or better${rb.n === 1 ? " (n=1)" : ""}`
+      : "rebuildable today: unknown";
+    pplEl.parentElement.appendChild(note);
+  }
+
+  $("recoPplNote").textContent = r.pplMeasured
+    ? (b.todayNote || "same instrument as the ladder")
+    : r.kind === "harvest"
+      ? `interpolated: base ppl + shed × ${b.slope} ppl/GiB (${b.id}-base richness)`
+      : "interpolated from measured neighbors — pending run replaces this";
+
+  $("recoFit").textContent = r.fitMin >= 90 ? `~${fmt(r.fitMin / 60, 1)} h` : `~${r.fitMin} min`;
+  $("recoFitNote").textContent = r.kind === "harvest"
+    ? `${b.id} codes fit + ~40 min shallow refit (rough)`
+    : "codes fit, K-scaling probe (rough)";
+
+  renderStrategies(target);
+  drawChart(target, r);
+}
+
+// One sentence per rung on whether today's fitter can reproduce it.
+function rebuildLine(n) {
+  const rb = rebuildFor(MODEL, 4, n.K);
+  if (!rb) return "";
+  return rb.state === "regressed" ? `shipped artifact on HF · NOT rebuildable today`
+       : rb.state === "ok" ? `rebuildable today — or better${rb.n === 1 ? " (n=1, one geometry)" : ""}`
+       : `rebuildable today: unknown`;
+}
+
+// ---------- ladder chart (SVG) ----------
+const CH = { w: 760, h: 330, l: 50, r: 16, t: 16, b: 36, x0: 95, x1: 170, y0: 2.25, y1: 3.30 };
+const X = g => CH.l + (g - CH.x0) / (CH.x1 - CH.x0) * (CH.w - CH.l - CH.r);
+const Y = p => CH.t + (p - CH.y0) / (CH.y1 - CH.y0) * (CH.h - CH.t - CH.b);
+
+function drawChart(target, reco) {
+  const pts = [];
+  const S = [];
+  S.push(`<svg viewBox="0 0 ${CH.w} ${CH.h}" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="397B ladder: artifact size vs prose perplexity">`);
+
+  // grid + axes
+  for (let g = 100; g <= 170; g += 10) {
+    S.push(`<line x1="${X(g)}" y1="${CH.t}" x2="${X(g)}" y2="${CH.h - CH.b}" stroke="var(--grid)"/>`);
+    S.push(`<text x="${X(g)}" y="${CH.h - CH.b + 16}" fill="var(--ink-3)" font-size="10" text-anchor="middle">${g}</text>`);
+  }
+  for (let p = 2.3; p <= 3.3; p += 0.2) {
+    S.push(`<line x1="${CH.l}" y1="${Y(p)}" x2="${CH.w - CH.r}" y2="${Y(p)}" stroke="var(--grid)"/>`);
+    S.push(`<text x="${CH.l - 8}" y="${Y(p) + 3}" fill="var(--ink-3)" font-size="10" text-anchor="end">${p.toFixed(1)}</text>`);
+  }
+  S.push(`<text x="${(CH.l + CH.w - CH.r) / 2}" y="${CH.h - 6}" fill="var(--ink-2)" font-size="11" text-anchor="middle">artifact size (GiB, post-graft)</text>`);
+  S.push(`<text x="14" y="${(CH.t + CH.h - CH.b) / 2}" fill="var(--ink-2)" font-size="11" text-anchor="middle" transform="rotate(-90 14 ${(CH.t + CH.h - CH.b) / 2})">prose ppl (lower = better)</text>`);
+
+  // frontier line through flat nodes (dashed where either endpoint is unmeasured)
+  for (let i = 0; i < FLAT_NODES.length - 1; i++) {
+    const a = FLAT_NODES[i], c = FLAT_NODES[i + 1];
+    const est = a.status !== "measured" || c.status !== "measured";
+    S.push(`<line x1="${X(a.size)}" y1="${Y(a.ppl)}" x2="${X(c.size)}" y2="${Y(c.ppl)}" stroke="var(--accent)" stroke-width="1.5" ${est ? 'stroke-dasharray="5 4" opacity="0.55"' : 'opacity="0.8"'}/>`);
+  }
+
+  // target line
+  S.push(`<line x1="${X(target)}" y1="${CH.t}" x2="${X(target)}" y2="${CH.h - CH.b}" stroke="var(--ink-2)" stroke-dasharray="3 3" opacity="0.7"/>`);
+  S.push(`<text x="${X(target) + 4}" y="${CH.t + 10}" fill="var(--ink-2)" font-size="10">target ${fmt(target, 1)}</text>`);
+
+  // Non-d4 geometries: the rate prices the SIZE, nothing prices the quality.
+  // Drawn as vertical rules — a point would assert a ppl we have not measured,
+  // and a row of points would assert quality is flat across d. It is not known to be.
+  for (const g of GRID) {
+    if (g.node) continue;
+    if (g.size < CH.x0 || g.size > CH.x1) continue;
+    const x = X(g.size), near = Math.abs(g.size - target) <= STRAT_WINDOW;
+    S.push(`<line x1="${x}" y1="${CH.t}" x2="${x}" y2="${CH.h - CH.b}" ` +
+           `stroke="var(--ink-3)" stroke-width="1" stroke-dasharray="2 5" opacity="${near ? 0.5 : 0.2}"/>`);
+    S.push(`<text x="${x}" y="${CH.t + 9}" fill="var(--ink-3)" font-size="8" text-anchor="middle" ` +
+           `opacity="${near ? 0.9 : 0.35}">d${g.d}</text>`);
+    pts.push({ x, y: (CH.t + CH.h - CH.b) / 2,
+      label: `d${g.d}/K${g.K}\n${fmt(g.bpw, 2)} bpw  ${fmt(g.size, 1)} GiB\nsize priced by the rate law\nquality: nowhere on this line is measured` });
+  }
+
+  // comparators — grey diamonds
+  for (const c of COMPARATORS) {
+    const x = X(c.size), y = Y(c.ppl);
+    S.push(`<rect x="${x - 5}" y="${y - 5}" width="10" height="10" transform="rotate(45 ${x} ${y})" fill="var(--comparator)"/>`);
+    S.push(`<text x="${x}" y="${y - 10}" fill="var(--ink-3)" font-size="9.5" text-anchor="middle">${c.id.replace("spicyneuron ", "spicy ")}</text>`);
+    pts.push({ x, y, label: `${c.id}\n${fmt(c.size)} GiB  ppl ${fmt(c.ppl, 4)}\ncomparator (measured)` });
+  }
+
+  // E80 harvest rung — measured, solid, small square to distinguish from flat rungs
+  {
+    const x = X(HARVEST_E80.size), y = Y(HARVEST_E80.ppl);
+    S.push(`<rect x="${x - 4.5}" y="${y - 4.5}" width="9" height="9" rx="2" fill="var(--accent)"/>`);
+    S.push(`<text x="${x - 8}" y="${y + 16}" fill="var(--ink-2)" font-size="9.5" text-anchor="end">E80 harvest</text>`);
+    pts.push({ x, y, label: `${HARVEST_E80.id}\n${fmt(HARVEST_E80.size)} GiB  ppl ${fmt(HARVEST_E80.ppl, 4)}\nMEASURED — best-per-GiB` });
+  }
+
+  // flat nodes: solid = measured, hollow = pending/estimate
+  let pendIdx = 0;
+  for (const n of FLAT_NODES) {
+    const x = X(n.size), y = Y(n.ppl);
+    if (n.status === "measured") {
+      if (n.today) {
+        const y0 = Y(n.today[0]), y1 = Y(n.today[1]);
+        S.push(`<line x1="${x}" y1="${y0}" x2="${x}" y2="${y1}" stroke="var(--warn)" stroke-width="2"/>`);
+        for (const yy of [y0, y1])
+          S.push(`<line x1="${x - 3.5}" y1="${yy}" x2="${x + 3.5}" y2="${yy}" stroke="var(--warn)" stroke-width="1.5"/>`);
+        pts.push({ x, y: (y0 + y1) / 2,
+          label: `flat ${n.id} — a NEW build today\n${fmt(n.today[0], 4)}–${fmt(n.today[1], 4)} ppl\nMEASURED (E92 ++, E117 random)\nthe factory is under investigation, not the rung` });
+      }
+      S.push(`<circle cx="${x}" cy="${y}" r="5.5" fill="var(--accent)"/>`);
+      pts.push({ x, y, label: `flat ${n.id}\n${fmt(n.size)} GiB  ppl ${fmt(n.ppl, 4)}\nMEASURED${rebuildLine(n) ? "\n" + rebuildLine(n) : ""}` });
+    } else {
+      S.push(`<circle cx="${x}" cy="${y}" r="5" fill="var(--surface)" stroke="var(--estimate)" stroke-width="2.5"/>`);
+      // pending badge — alternate above/left vs above/right to avoid collisions
+      const bx = x + (pendIdx % 2 === 0 ? -40 : 40); pendIdx++;
+      S.push(`<g><rect x="${bx - 34}" y="${y - 30}" width="68" height="13" rx="6" fill="var(--pending-bg)"/>` +
+             `<text x="${bx}" y="${y - 20.5}" fill="var(--pending-ink)" font-size="8.5" font-weight="600" text-anchor="middle">measuring today</text>` +
+             `<line x1="${bx}" y1="${y - 16}" x2="${x}" y2="${y - 7}" stroke="var(--pending-ink)" stroke-width="0.8" opacity="0.6"/></g>`);
+      pts.push({ x, y, label: `flat ${n.id} (refit)\n${fmt(n.size)} GiB  ppl ~${fmt(n.ppl, 2)} ESTIMATE\nppl run landing today` });
+    }
+    S.push(`<text x="${x}" y="${y + 18}" fill="var(--ink)" font-size="10" font-weight="600" text-anchor="middle">${n.id}</text>`);
+  }
+
+  // recommended build marker (if not exactly a plotted node)
+  if (reco && reco.kind === "harvest") {
+    const x = X(reco.size), y = Y(reco.ppl);
+    S.push(`<circle cx="${x}" cy="${y}" r="6.5" fill="none" stroke="var(--warn)" stroke-width="2" stroke-dasharray="2.5 2"/>`);
+    pts.push({ x, y, label: `recommended build\n${fmt(reco.size)} GiB  ppl ~${fmt(reco.ppl, 4)}\nESTIMATE (harvest from ${reco.base.id})` });
+  }
+
+  S.push(`</svg>`);
+  const host = $("ladderSvg");
+  host.innerHTML = S.join("");
+  attachTooltip(host, pts);
+}
+
+function attachTooltip(wrap, pts) {
+  const tip = $("chartTip");
+  const svg = wrap.querySelector("svg");
+  svg.addEventListener("mousemove", e => {
+    const r = svg.getBoundingClientRect();
+    const sx = CH.w / r.width, sy = CH.h / r.height;
+    const mx = (e.clientX - r.left) * sx, my = (e.clientY - r.top) * sy;
+    let best = null, bd = 14 * 14;
+    for (const p of pts) {
+      const d = (p.x - mx) ** 2 + (p.y - my) ** 2;
+      if (d < bd) { bd = d; best = p; }
+    }
+    if (best) {
+      tip.textContent = best.label;
+      tip.hidden = false;
+      const px = best.x / sx, py = best.y / sy;
+      tip.style.left = Math.min(px + 12, r.width - 180) + "px";
+      tip.style.top = Math.max(py - 54, 0) + "px";
+    } else tip.hidden = true;
+  });
+  svg.addEventListener("mouseleave", () => { tip.hidden = true; });
+}
+
+// ---------- model picker ----------
+function renderPicker() {
+  const host = $("modelPicker");
+  host.innerHTML = "";
+  for (const m of Object.values(MODELS)) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.setAttribute("aria-pressed", String(m.id === MODEL));
+    b.innerHTML = m.short + (m.live ? "" : `<span class="rail">${m.rail}</span>`);
+    b.addEventListener("click", () => selectModel(m.id));
+    host.appendChild(b);
+  }
+}
+
+function selectModel(id) {
+  MODEL = id;
+  const m = MODELS[id];
+  renderPicker();
+  $("modelSub").textContent = m.live ? m.sub : m.rail;
+  $("live").hidden = !m.live;
+  const rail = $("rail");
+  rail.hidden = !!m.live;
+  if (!m.live) {
+    rail.innerHTML = `<b>${m.label}</b> — no scored VQ ladder yet.<br>` +
+      m.note.replace(/\s+/g, " ").trim() +
+      `<br><span style="color:var(--ink-3)">Nothing here is estimated from the 397B curve: a ladder is a per-model measurement.</span>`;
+  }
+}
+
+// ---------- theme toggle ----------
+try {
+  const saved = localStorage.getItem("quantlab-theme");
+  if (saved) document.documentElement.dataset.theme = saved;
+} catch (e) { /* file:// with storage disabled — dark default stands */ }
+$("themeToggle").addEventListener("click", () => {
+  const el = document.documentElement;
+  const next = el.dataset.theme === "dark" ? "light" : "dark";
+  el.dataset.theme = next;
+  try { localStorage.setItem("quantlab-theme", next); } catch (e) {}
+});
+
+// ---------- init ----------
+renderPicker();
+selectModel("397b");
+const slider = $("sizeSlider");
+
+// The track is positioned so slider value == chart x-coordinate, exactly.
+const SLIDER_MIN = 95, SLIDER_MAX = 148;
+slider.min = SLIDER_MIN; slider.max = SLIDER_MAX; slider.step = 0.1; slider.value = 120;
+// The wrapper is given the chart's own aspect ratio, which makes its height
+// definite — that is what lets the track's % height resolve. A range input is a
+// replaced element, so top+bottom alone would never stretch it.
+$("ladderChart").style.aspectRatio = `${CH.w} / ${CH.h}`;
+Object.assign(slider.style, {
+  left:   `${X(SLIDER_MIN) / CH.w * 100}%`,
+  width:  `${(X(SLIDER_MAX) - X(SLIDER_MIN)) / CH.w * 100}%`,
+  top:    `calc(${(CH.h - CH.b) / CH.h * 100}% - 11px)`,
+  height: "22px",
+});
+
+// ...and the whole plot area is grabbable, so you can set the target anywhere
+// on the ladder rather than hunting for the handle.
+(() => {
+  const wrap = $("ladderChart");
+  let dragging = false;
+  const setFromX = ev => {
+    const r = wrap.getBoundingClientRect();
+    if (!r.width) return;
+    const gib = CH.x0 + ((ev.clientX - r.left) / r.width * CH.w - CH.l) /
+                        (CH.w - CH.l - CH.r) * (CH.x1 - CH.x0);
+    slider.value = Math.min(SLIDER_MAX, Math.max(SLIDER_MIN, gib));
+    update();
+  };
+  wrap.addEventListener("pointerdown", ev => {
+    if (ev.target === slider) return;          // let the native thumb do its own thing
+    dragging = true; wrap.setPointerCapture(ev.pointerId); setFromX(ev);
+  });
+  wrap.addEventListener("pointermove", ev => { if (dragging) setFromX(ev); });
+  wrap.addEventListener("pointerup", ev => {
+    dragging = false;
+    if (wrap.hasPointerCapture(ev.pointerId)) wrap.releasePointerCapture(ev.pointerId);
+  });
+})();
+const update = () => { $("targetVal").textContent = fmt(+slider.value, 1); renderReco(+slider.value); };
+slider.addEventListener("input", update);
+update();
+
+</script>
+</body>
+</html>

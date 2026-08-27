@@ -1,3 +1,19 @@
+# STATE — CLOSED 2026-08-25
+
+> **This file is retired.** It was a live scratchpad for the experiment
+> sessions; experiments are finished and those sessions are being wound down,
+> so nothing below is maintained. It is kept because it is a contemporaneous
+> log, not because it is current — and it is STALE in at least one obvious way
+> (it reports E138 as running and "lands Monday"; E138 finished and its result
+> is in the paper's section 4.2).
+>
+> **Current truth lives in exactly three places:**
+>   * `paper/LEDGER.md` — the arbiter. Newest dated entry wins.
+>   * `EXPERIMENTS.md` — the per-experiment record, E-numbered.
+>   * `FINDINGS.md` — the standing laws and retractions.
+>
+> If this file and any of those disagree, those win and this is wrong.
+
 # STATE (2026-08-22 ~22:20) — the long Saturday
 
 ## WHERE THINGS STAND

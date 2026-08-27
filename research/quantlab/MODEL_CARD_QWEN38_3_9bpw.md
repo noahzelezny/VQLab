@@ -33,7 +33,7 @@ than a third party's, and worth knowing when reading the tables.
 ## Measured results
 
 Scored against the bf16 teacher on the same corpus with an unmodified
-`mlx-lm`. All sizes include the 333-tensor bf16 vision tower (0.859 GiB),
+`mlx-lm`. All sizes include the 333-tensor bf16 vision tower (0.858 GiB),
 carried by every build here.
 
 | build | size | KL to bf16 (mnats/tok) | top-1 agreement | perplexity |
@@ -52,9 +52,9 @@ divergence — 85.8 millinats against 187.8 — for 0.6 GiB more. Against the
 this rung exists for.
 
 **Rank these by KL, not perplexity.** On this instruction-tuned family
-perplexity barely moves — every build from 3-bit upward sits between 5.19 and
-5.35, inside the measurement's own noise — while divergence from the teacher
-moves by a factor of forty across the same range. Perplexity is an aggregate
+perplexity barely moves — the affine rungs above 3-bit span just 5.21 to
+5.26, a 0.054 spread against a 0.0447 measurement floor — while divergence
+from the teacher moves by a factor of 37 across the same range. Perplexity is an aggregate
 over finite text and absorbs offsetting errors; KL measures distance to the
 teacher's distribution directly.
 
@@ -117,6 +117,29 @@ error. The bundled runtime was exercised as the executing copy in a stock
 venv, not merely present in the folder. Vision tower grafted from the base
 checkpoint and verified key-for-key against the official index, including the
 channels-last patch-embedding layout that a naive rename gets silently wrong.
+
+
+### Multi-machine (exo) note
+
+This artifact fits on one machine, but if you shard it across an
+[exo](https://github.com/exo-explore/exo) cluster anyway, one guard is
+required: VQ codebooks must **replicate rather than slice**. Stock exo tensor
+parallelism slices them. The bundled `model.py` detects that and fails loudly
+with an explanatory error instead of silently generating fluent garbage that
+reads as "a broken quant" — but it cannot fix the sharding itself. To actually
+run tensor-parallel, apply [exo PR #2268](https://github.com/exo-explore/exo/pull/2268)
+or run the ready branch
+[`noahzelezny/exo:vq-codebook-replicate`](https://github.com/noahzelezny/exo/tree/vq-codebook-replicate).
+Single-machine mlx-lm and pipeline sharding are unaffected.
+
+## Paper
+
+The method, the full three-model ladder, the negative results, and the
+measurement rules behind every number here:
+[**Data-Free Vector Quantization Beats Affine Quantization at Matched Bytes
+Below 6 Bits**](https://doi.org/10.5281/zenodo.22119018) (CC BY 4.0) ·
+code: [VQLab](https://github.com/noahzelezny/VQLab) ·
+web version: [Space](https://huggingface.co/spaces/TheDrainFlorist/below-six-bits)
 
 ## Limitations
 

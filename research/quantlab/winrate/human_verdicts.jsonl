@@ -1,0 +1,8 @@
+{"vote": "A", "map": {"A": "gemma-small (VQ 2.25bpw of 26b-a4b, 9.4G)", "B": "e4b-8bit (community incumbent, 8.4G)"}, "turns": 2}
+{"vote": "B", "map": {"A": "gemma-small (VQ 2.25bpw of 26b-a4b, 9.4G)", "B": "e4b-8bit (community incumbent, 8.4G)"}, "turns": 4}
+{"vote": "A", "map": {"A": "gemma-small (VQ 2.25bpw of 26b-a4b, 9.4G)", "B": "e4b-8bit (community incumbent, 8.4G)"}, "turns": 2}
+{"vote": "tie", "map": {"A": "gemma-small (VQ 2.25bpw of 26b-a4b, 9.4G)", "B": "e4b-8bit (community incumbent, 8.4G)"}, "turns": 4}
+{"vote": "tie", "map": {"A": "gemma-small (VQ 2.25bpw of 26b-a4b, 9.4G)", "B": "e4b-8bit (community incumbent, 8.4G)"}, "turns": 2}
+{"vote": "tie", "map": {"A": "gemma-small (VQ 2.25bpw of 26b-a4b, 9.4G)", "B": "e4b-8bit (community incumbent, 8.4G)"}, "turns": 4}
+{"vote": "B", "map": {"A": "e4b-8bit (community incumbent, 8.4G)", "B": "gemma-small (VQ 2.25bpw of 26b-a4b, 9.4G)"}, "turns": 2}
+{"vote": "tie", "map": {"A": "e4b-8bit (community incumbent, 8.4G)", "B": "gemma-small (VQ 2.25bpw of 26b-a4b, 9.4G)"}, "turns": 2}

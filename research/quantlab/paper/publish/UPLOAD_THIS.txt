@@ -1,0 +1,16 @@
+THE FILE TO PUBLISH: index.html
+
+Self-contained. Both figures are embedded as base64 data URIs; there are no
+external stylesheets, scripts, fonts, or images. It renders standalone from
+any host, any path, with no build step and no dependencies.
+
+  * HF static Space  -> upload index.html + README.md (README carries the
+                        required YAML front-matter for sdk: static)
+  * GitHub Pages     -> drop index.html in /docs, enable Pages on that folder
+  * any static host  -> serve index.html
+
+DO NOT publish paper/DRAFT.md as the web version -- it is the source, and its
+figure links are relative paths that break off-repo.
+
+Regenerate after editing DRAFT.md:  python paper/build_artifact.py
+                                    cp paper/paper.html paper/publish/index.html

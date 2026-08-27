@@ -41,7 +41,7 @@ All numbers on the same instruments, same corpus, same teacher cache;
 | decode | 77.4 tok/s | 84.2 tok/s |
 | prefill, ~30-token prompt | 33% slower | baseline |
 | prefill, 2k–8k prompt | 13.5% slower | baseline |
-| peak memory (short chat) | **7.2 GB** | 9.0 GB |
+| peak memory (short chat) | **7.2 GB** | 9.5 GB |
 
 **On prefill, there are two costs and they behave differently.** At chat
 length the penalty is ~33%, and it falls to ~13.5% by 2k tokens and stays
@@ -55,7 +55,7 @@ unchanged.
 
 Honest summary: closer to the bf16 teacher on the precise instrument (KL),
 indistinguishable on the noisy one (litbench, n=104 cannot resolve a
-3-point gap — SE ±3.7), ~8% slower decode, 20% less RAM. If you are
+3-point gap — SE ±3.7), ~8% slower decode, ~24% less RAM. If you are
 RAM-bound, this is a strict upgrade; if you are latency-bound, keep the
 8-bit.
 
@@ -122,3 +122,12 @@ are removed here, so this build loads with no flag.
 If you shard this across an exo cluster: VQ codebooks must **replicate,
 not slice**. The guard is bundled in `model.py`; upstream fix is
 [exo PR #2268](https://github.com/exo-explore/exo/pull/2268).
+
+## Paper
+
+The method, the full three-model ladder, the negative results, and the
+measurement rules behind every number here:
+[**Data-Free Vector Quantization Beats Affine Quantization at Matched Bytes
+Below 6 Bits**](https://doi.org/10.5281/zenodo.22119018) (CC BY 4.0) ·
+code: [VQLab](https://github.com/noahzelezny/VQLab) ·
+web version: [Space](https://huggingface.co/spaces/TheDrainFlorist/below-six-bits)

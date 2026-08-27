@@ -1,5 +1,6 @@
 > **SUPERSEDED (2026-08-24).** This card described `VQ-3.1bpw`, whose repo
-> has been renamed to `VQ-3bpw` and now serves the E91 flat d4/K2048 refit
+> was renamed to `VQ-3bpw` and, on 2026-08-26, to `VQ-3.1bpw` (matching the
+> measured 3.11 bpw); it serves the E91 flat d4/K2048 refit
 > (2.3410 / 2.5963). The live card is MODEL_CARD_397B_G.md. These weights
 > remain fetchable at revision a0da72a0c43932704a272fe3ce6a6513194570eb.
 > Kept as ladder data; cite nothing from here.

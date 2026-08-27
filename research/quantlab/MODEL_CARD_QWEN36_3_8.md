@@ -126,3 +126,12 @@ Apply [exo PR #2268](https://github.com/exo-explore/exo/pull/2268) or use
   router, and this build leaves it at bf16. The bytes are trivial, but a
   router feeds an argmax over experts, so the effect is not bounded by the
   byte share. It is unmeasured.
+
+## Paper
+
+The method, the full three-model ladder, the negative results, and the
+measurement rules behind every number here:
+[**Data-Free Vector Quantization Beats Affine Quantization at Matched Bytes
+Below 6 Bits**](https://doi.org/10.5281/zenodo.22119018) (CC BY 4.0) ·
+code: [VQLab](https://github.com/noahzelezny/VQLab) ·
+web version: [Space](https://huggingface.co/spaces/TheDrainFlorist/below-six-bits)
