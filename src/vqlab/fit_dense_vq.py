@@ -81,6 +81,39 @@ OUT.mkdir(parents=True, exist_ok=True)
 src_idx = json.load(open(SRC / "model.safetensors.index.json"))["weight_map"]
 PROJ = ["gate_proj", "up_proj", "down_proj"]
 KEY = KEY_TMPL
+# guard call is BELOW the def (module runs top-to-bottom); see line order
+
+
+
+def _assert_family_layout(src_idx, sample_key, family, registry_name):
+    """Fail at STARTUP, helpfully, when the source does not match the family.
+
+    Without this the first miss is a bare KeyError deep in the fit loop. A
+    new model family is SUPPORTED — via a families.py entry — but the two-hour
+    characterisation pass in docs/ONBOARDING.md comes first: establish a
+    deterministic instrument, profile the weight geometry, run the init
+    sweep. Fitting an uncharacterised family at defaults produces numbers
+    nobody should believe, including you.
+    """
+    if sample_key in src_idx:
+        return
+    import difflib
+    frag = sample_key.split(".")[-2]
+    near = [k for k in src_idx if frag in k][:3] or         difflib.get_close_matches(sample_key, list(src_idx), n=3, cutoff=0.3)
+    raise SystemExit(
+        f"FAIL: this source does not match --family {family!r}.\n"
+        f"  expected key:      {sample_key}\n"
+        f"  closest in source: " + ("\n                     ".join(near) or "(nothing similar)") + "\n"
+        f"To onboard a new model family: add its key template to {registry_name} "
+        f"(src/vqlab/families.py) AND run the characterisation pass in "
+        f"docs/ONBOARDING.md first — a fit at unexamined defaults produces "
+        f"numbers nobody should believe. If the family is right, the source "
+        f"dir is probably the wrong checkpoint (quantized vs bf16, or HF vs "
+        f"mlx layout).")
+
+
+_assert_family_layout(src_idx, KEY.format(li=LO, key=PROJ[0]), args.family,
+                      "DENSE_FAMILIES")
 
 
 def normalize(T):
