@@ -94,6 +94,10 @@ def main():
     ap.add_argument("--save-topk", type=int, default=None,
                     help="also dump top-k logprobs per position (teacher "
                          "cache for KL) to --out")
+    ap.add_argument("--kl-cache", default=None,
+                    help="teacher top-k cache dir (from --save-topk): also "
+                         "report KL-to-teacher in millinats + top-1 "
+                         "agreement. Token ids must match the cache exactly.")
     ap.add_argument("--out", default=None)
     a = ap.parse_args()
 
@@ -117,8 +121,30 @@ def main():
     pk = mx.take_along_axis(logits, tgt[:, None].astype(mx.int64), axis=-1)[:, 0]
     nll = lse - pk
     ppl = math.exp(float(mx.mean(nll).item()))
-    print(json.dumps({"model": str(mp), "corpus": a.corpus,
-                      "tokens": len(ids) - 1, "ppl": round(ppl, 6)}), flush=True)
+    rec = {"model": str(mp), "corpus": a.corpus,
+           "tokens": len(ids) - 1, "ppl": round(ppl, 6)}
+
+    if a.kl_cache:
+        cd = pathlib.Path(a.kl_cache)
+        cache_tok = mx.load(str(cd / "tokens.safetensors"))["tokens"][0]
+        if cache_tok.tolist() != ids:
+            raise SystemExit("FAIL: token ids differ from the cache — the "
+                             "KL would compare different positions. Same "
+                             "corpus, same --tokens, same tokenizer required.")
+        t = mx.load(str(cd / "teacher_topk.safetensors"))
+        t_idx = t["indices"][0].astype(mx.int64)          # [S, k]
+        t_lp = t["logprobs"][0].astype(mx.float32)        # [S, k]
+        s_lp_all = logits - lse[:, None]
+        s_lp = mx.take_along_axis(s_lp_all, t_idx, axis=-1)
+        # truncated KL(teacher || student) over the teacher's top-k
+        kl = mx.sum(mx.exp(t_lp) * (t_lp - s_lp), axis=-1)
+        top1 = mx.mean(
+            (mx.argmax(s_lp_all, axis=-1) == t_idx[:, 0]).astype(mx.float32))
+        mass = mx.mean(mx.sum(mx.exp(t_lp), axis=-1))
+        rec.update(mean_kl_millinats=round(float(mx.mean(kl).item()) * 1000, 4),
+                   top1_agreement=round(float(top1.item()), 4),
+                   captured_mass=round(float(mass.item()), 4))
+    print(json.dumps(rec), flush=True)
 
     if a.save_topk:
         outd = pathlib.Path(a.out or (mp.name + "_topk"))
