@@ -1301,3 +1301,33 @@ class VQSwitchLinear(nn.Module):
                              self["codes"], self["codebook"], self["vq_scales"],
                              pack_bits=pb, in_features=IN)
         return y.astype(in_dtype).reshape(*indices.shape, 1, OUT)
+
+
+class VQPLEEmbedding(nn.Module):
+    """VQ'd embedding / PLE table shard: decode is a pure gather.
+
+    codes      uint16 [rows, cols/dim]     (unpacked; NSUB=40 defeats the
+                                            32-aligned block pack for now)
+    codebook   fp16   [K, dim]
+    vq_scales  fp16   [rows, cols/group]
+
+    __call__(ids) -> [.., cols] rows, decoded on the fly:
+    codebook[codes[ids]] reshaped, times the row's group scales. No matmul
+    anywhere in the path — the original module was already a lookup, so VQ
+    composes as a second lookup (LUT of a LUT).
+    """
+
+    def __init__(self, codes, codebook, vq_scales, group_size: int = 32):
+        super().__init__()
+        self.codes = codes
+        self.codebook = codebook
+        self.vq_scales = vq_scales
+        self.group_size = group_size
+
+    def __call__(self, ids):
+        c = self.codes[ids]                              # [.., nsub]
+        v = self.codebook[c.astype(mx.uint32)]           # [.., nsub, d]
+        flat = v.reshape(*ids.shape, -1)                 # [.., cols]
+        sc = self.vq_scales[ids]                         # [.., cols/G]
+        sc = mx.repeat(sc, self.group_size, axis=-1)
+        return (flat * sc).astype(mx.bfloat16)
