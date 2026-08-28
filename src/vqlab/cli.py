@@ -36,6 +36,7 @@ COMMANDS = {
     "bundle-accept": ("bundle_accept.py", "kernel acceptance on the runtime lifted FROM the artifact"),
     "manifest": ("artifact_manifest.py", "write/check provenance manifests"),
     "preflight-ram": ("preflight_ram.py", "refuse resident-memory ops on models bigger than RAM"),
+    "preflight-disk": ("preflight_disk.py", "refuse builds whose output volume lacks the space"),
     # scoring
     "score": ("referee/score_streaming.py", "streaming referee perplexity (models may exceed RAM)"),
     "kl": ("kl_damage.py", "KL-to-bf16 damage vs a cached teacher (cache/score)"),
