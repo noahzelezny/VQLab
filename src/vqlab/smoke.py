@@ -65,7 +65,8 @@ def main(argv=None) -> int:
     from mlx_lm import generate
 
     print(f"loading {art} ...", flush=True)
-    model, tokenizer = load(str(art))
+    # VQ artifacts ship their runtime in-checkpoint; loading it is the point.
+    model, tokenizer = load(str(art), trust_remote_code=True)
 
     # III.13: instrument the import, never assume which copy runs.
     print("\nRESOLVED RUNTIME (the copy that actually loaded):")
