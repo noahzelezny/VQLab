@@ -2087,3 +2087,33 @@ VQ'd PLE tables before (gemma e4b VQ-PLE, published). Open questions for
 that arc: geometry for 160-wide rows (d4 divides; d8 needs 20 cols x 8),
 whether the MoE body follows the 397B shape law or the dense 27B's, and
 where the fit runs (K-size vs the M4 Metal-timeout finding).
+
+## 2026-08-28 — Flash-Next VQ arc opened; VQLab is the instrument (Noah)
+
+Context: recruiter prep Monday, Apple interview Thursday — 6 working days.
+Noah's directives: (1) VQLab, not quantlab scripts, is the instrument
+moving forward; development lands as VQLab features and builds the git
+release. (2) Publishing with pending features is acceptable precedent
+(gemma4), but the window likely allows doing it whole.
+
+Gate results tonight: Flash-Next 4-bit referee ppl prose 6.4534 / code
+3.3986 at 2048 tok — sane family territory (27B 5.2, 35B 5.2-5.8); port +
+g32 ngram quantization produce a healthy model. Teacher-relative share of
+that number remains unmeasured (streaming instrument still to be adapted).
+
+Shape survey (from safetensors headers, 180.0B total): experts 120.80B
+67.1% (ALL d8-ok), ngram PLE 51.20B 28.4% (160=20x8, d8-ok), everything
+else 8.0B 4.5% -> protect. Expert key template is IDENTICAL to qwen3_5
+(model.language_model.layers.{li}.mlp.experts.{gate_up_proj,down_proj},
+fused gate+up, down [512,2560,640]) — the existing MoE fitter likely runs
+with only a family alias. The genuinely new VQLab feature is a PLE fitter
+(port of quantlab fit_e4b_ple.py, which never entered src/).
+
+VQLab README drift fixed (local commit 72e274e, NOT pushed): "publication
+pending" -> concept DOI; flagship link still pointed at retired VQ-3bpw
+(404 confirmed, HTTP 307->404). Push awaits Noah.
+
+Plan: family alias + expert fit first (validates mechanics on the 67%),
+PLE fitter port second (the 28%), pack/verify/serve through VQLab's chain,
+KL streaming adaptation for the card if the window holds. Target rung
+~3bpw-class -> ~76 GiB whole-artifact, serves on BOTH boxes.
