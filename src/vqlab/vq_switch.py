@@ -1317,15 +1317,39 @@ class VQPLEEmbedding(nn.Module):
     composes as a second lookup (LUT of a LUT).
     """
 
-    def __init__(self, codes, codebook, vq_scales, group_size: int = 32):
+    def __init__(self, codes, codebook, vq_scales, group_size: int = 32,
+                 packed_nsub: int = 0):
         super().__init__()
         self.codes = codes
         self.codebook = codebook
         self.vq_scales = vq_scales
         self.group_size = group_size
+        # packed rows: 11-bit codes, byte-aligned because nsub*11 % 8 == 0
+        # (qwen4_exp: 40*11 = 440 bits = 55 bytes exactly). Constant gather
+        # tables map code i -> its 3-byte window + shift.
+        self._pn = packed_nsub
+        if packed_nsub:
+            import numpy as _np
+            bit0 = _np.arange(packed_nsub) * 11
+            self._b0 = mx.array(bit0 // 8)
+            self._sh = mx.array((bit0 % 8).astype(_np.uint32))
+
+    def _unpack(self, rows_u8):
+        # rows_u8 [.., row_bytes] uint8 -> [.., nsub] uint32 codes
+        b = rows_u8.astype(mx.uint32)
+        # pad 2 bytes so the 3-byte window never reads past the row
+        pad = mx.zeros((*b.shape[:-1], 2), dtype=mx.uint32)
+        b = mx.concatenate([b, pad], axis=-1)
+        w = (mx.take(b, self._b0, axis=-1)
+             | (mx.take(b, self._b0 + 1, axis=-1) << 8)
+             | (mx.take(b, self._b0 + 2, axis=-1) << 16))
+        return (w >> self._sh) & 0x7FF
 
     def __call__(self, ids):
-        c = self.codes[ids]                              # [.., nsub]
+        if self._pn:
+            c = self._unpack(self.codes[ids])            # [.., nsub]
+        else:
+            c = self.codes[ids]                              # [.., nsub]
         v = self.codebook[c.astype(mx.uint32)]           # [.., nsub, d]
         flat = v.reshape(*ids.shape, -1)                 # [.., cols]
         sc = self.vq_scales[ids]                         # [.., cols/G]

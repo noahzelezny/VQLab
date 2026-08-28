@@ -34,6 +34,10 @@ for sh, mods in sorted(by_shard.items()):
     for m in mods:
         codes = data[m + ".codes"]
         cb = data[m + ".codebook"]
+        if codes.ndim == 2:
+            # PLE/embedding table (registered under config vq_ple) — not an
+            # expert module.
+            continue
         E, out_d, ncol = codes.shape
         # PACKED codes are uint32 words, so the last axis is WPR, not NSUB —
         # the shape no longer implies `in`. Bits come from the packer (via the
@@ -113,11 +117,15 @@ class Model(_arch.Model):
                 _obj = self
                 for _c in _parts[:-1]:
                     _obj = _obj[int(_c)] if _c.isdigit() else getattr(_obj, _c)
+                _rb = _g.get("row_bytes")
+                _codes0 = (mx.zeros((_rows, _rb), dtype=mx.uint8) if _rb else
+                           mx.zeros((_rows, _cols // _g["dim"]), dtype=mx.uint16))
                 setattr(_obj, _parts[-1], VQPLEEmbedding(
-                    mx.zeros((_rows, _cols // _g["dim"]), dtype=mx.uint16),
+                    _codes0,
                     mx.zeros((_g["k"], _g["dim"]), dtype=mx.float16),
                     mx.zeros((_rows, _cols // _g["group"]), dtype=mx.float16),
                     group_size=_g["group"],
+                    packed_nsub=(_cols // _g["dim"]) if _rb else 0,
                 ))
 '''
 (ART / "model.py").write_text(runtime + shim)
