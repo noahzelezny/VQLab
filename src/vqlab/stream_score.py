@@ -103,7 +103,9 @@ def main():
 
     from mlx_lm.utils import load_model, load_tokenizer
     mp = pathlib.Path(a.model)
-    model, config = load_model(mp, lazy=True)
+    # VQ artifacts ship their runtime as an in-checkpoint model.py bundle;
+    # scoring them is this tool's primary job, so the bundle import is on.
+    model, config = load_model(mp, lazy=True, trust_remote_code=True)
     mt = config.get("model_type") or config.get("text_config", {}).get("model_type")
     if mt not in SCORERS:
         raise SystemExit(f"FAIL: no streaming scorer for model_type={mt!r}. "
