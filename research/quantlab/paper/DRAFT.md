@@ -2,7 +2,7 @@
 
 **Noah Zelezny**
 
-*August 2026 · doi:[10.5281/zenodo.22133765](https://doi.org/10.5281/zenodo.22133765).
+*August 2026 · doi:[10.5281/zenodo.22136000](https://doi.org/10.5281/zenodo.22136000).
 Every number traces to a committed entry in the laboratory record; every
 margin is stated against a measured fit-to-fit noise floor for its
 geometry.*
@@ -457,14 +457,14 @@ sits between 5.0 and 6.0 bits per weight.**
 | d2/K4096 | — | 18.44 | 26.7 | 91.7% | 5.242 |
 
 Bold rows are published artifacts, under
-`TheDrainFlorist/Qwen3.8-27B-<release>`; all three are the first MLX-format
-quantizations of this model.
+`TheDrainFlorist/Qwen3.8-27B-<release>`.
 
-**27B — affine.** No MLX-format quantization of this model has been
-published by the community, so unlike the 397B and 35B comparators these
-rungs are our own conversions. That is a weaker class of evidence — a
-comparator one builds oneself can be built badly — and one such flaw is
-recorded in §4.1.
+**27B — affine.** Unlike the 397B and 35B comparators, these rungs are our
+own conversions. That is a weaker class of evidence — a comparator one
+builds oneself can be built badly — and one such flaw is recorded in §4.1.
+For q8 the risk is checkable: `mlx-community/Qwen3.8-27B-8bit`, published
+2026-08-14 at the same group-64 affine recipe, lands within 0.1 GiB of ours
+with the identical 333-tensor vision tower.
 
 | build | GiB | KL mnats | top-1 | ppl |
 |---|---|---|---|---|

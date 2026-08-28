@@ -1972,3 +1972,59 @@ en-GB, so "write like a paper" pulls -our forms even from a model that
 writes en-US casually. No spellcheck pass existed in any audit because every
 instrument was aimed at truth, not surface. The catch was the author reading
 his own paper cold.
+
+## 2026-08-27 — v4 STAGED (10.5281/zenodo.22136000): a false priority claim
+
+The published paper claimed the 27B rungs were "the first MLX-format
+quantizations of this model" and that "no MLX-format quantization of this
+model has been published by the community." Both are false and were false at
+publication. `mlx-community/Qwen3.8-27B-8bit` was created 2026-08-14 —
+eleven days before our repos (08-25) and twelve before v1. It carries
+`{group_size 64, bits 8, mode affine}` and 333 vision tensors: our own house
+recipe, independently built.
+
+Found by accident. Noah asked for a Qwen3.8-27B 8-bit to use; checking
+whether one already existed surfaced the community repo, and its creation
+date did the rest.
+
+WHY THE CHECK FAILED, MEASURED. HF cannot be enumerated for this class of
+question. `?search=Qwen3.8-27B&limit=200` returns 200 repos and OMITS our
+own three, which provably exist; `?filter=base_model:...` (three variants,
+225-500 hits) omits them too, because our cards never declared `base_model`.
+Every available method is ranked, capped, or dependent on metadata the
+author may not set. The original claim was almost certainly made in good
+faith against exactly such a search.
+
+FIX. Both sentences corrected. The replacement priority claim ("first
+vector-quantized artifacts") was drafted, then DROPPED at Noah's call on
+learning it rests on the same unverifiable enumeration — a claim you cannot
+check does not belong in the paper regardless of whether it happens to be
+true. The 27B paragraph now cites the community build as corroboration
+instead: same recipe, within 0.1 GiB, identical tower. What was an apology
+for a self-built comparator is now an independent check on it.
+
+Two remaining claims audited and LEFT: §1's "none publishes runnable
+artifacts for the Apple-Silicon MLX stack" is bounded to three named
+projects and enumerable; §1's "to our knowledge, no vector-quantized
+artifacts" is already hedged in the correct form.
+
+NEAR MISS, recorded because it nearly cost the live record. A first patch to
+zenodo_newversion.py fell back to the parent's `latest_draft` link when
+newversion returned 400. That link points at the PARENT — so the script
+resolved draft_id to the published v3 and issued DELETE against its files.
+Zenodo answered 403 and nothing was lost. The script now takes an explicit
+--draft and refuses outright on `submitted`/`state == done`; the guard was
+tested against 22133765 before staging.
+
+Also this session: check_vision.py fixed. It FAILED a good artifact while
+printing "source 333 vision tensors, artifact 333" — it compares per-prefix,
+so a --dest-prefix graft reads as a double mismatch. It now takes
+--dest-prefix and stays strict in the direction that matters (tensors left
+under the source layout are unreachable and still fail). Six cases tested:
+good graft, wrong prefix, unknown prefix, missing tower, declared text-only,
+and the legacy same-layout path.
+
+Qwen--Qwen3.8-27B-8bit built (27.48 GiB, reproducing the paper's q8 row
+exactly), vision grafted and verified tensor-by-tensor against the
+community build, exo card installed on both nodes, generation smoke-tested
+at 23.1 tok/s.

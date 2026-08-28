@@ -91,7 +91,7 @@ hr{border:none; border-top:1px solid var(--rule); margin:44px 0}
 <p class="eyebrow">Quantization &middot; Apple Silicon &middot; 2026</p>
 <h1>Data-Free Vector Quantization Beats Affine Quantization at Matched Bytes Below 6 Bits</h1>
 <p><strong>Noah Zelezny</strong></p>
-<p><em>August 2026 · doi:<a href="https://doi.org/10.5281/zenodo.22133765">10.5281/zenodo.22133765</a>.
+<p><em>August 2026 · doi:<a href="https://doi.org/10.5281/zenodo.22136000">10.5281/zenodo.22136000</a>.
 Every number traces to a committed entry in the laboratory record; every
 margin is stated against a measured fit-to-fit noise floor for its
 geometry.</em></p>
@@ -692,13 +692,13 @@ sits between 5.0 and 6.0 bits per weight.</strong></p>
 </tbody>
 </table></div>
 <p>Bold rows are published artifacts, under
-<code>TheDrainFlorist/Qwen3.8-27B-&lt;release&gt;</code>; all three are the first MLX-format
-quantizations of this model.</p>
-<p><strong>27B — affine.</strong> No MLX-format quantization of this model has been
-published by the community, so unlike the 397B and 35B comparators these
-rungs are our own conversions. That is a weaker class of evidence — a
-comparator one builds oneself can be built badly — and one such flaw is
-recorded in §4.1.</p>
+<code>TheDrainFlorist/Qwen3.8-27B-&lt;release&gt;</code>.</p>
+<p><strong>27B — affine.</strong> Unlike the 397B and 35B comparators, these rungs are our
+own conversions. That is a weaker class of evidence — a comparator one
+builds oneself can be built badly — and one such flaw is recorded in §4.1.
+For q8 the risk is checkable: <code>mlx-community/Qwen3.8-27B-8bit</code>, published
+2026-08-14 at the same group-64 affine recipe, lands within 0.1 GiB of ours
+with the identical 333-tensor vision tower.</p>
 <div class="tw"><table>
 <thead>
 <tr>
