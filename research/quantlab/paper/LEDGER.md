@@ -2051,3 +2051,39 @@ what its target section actually says. Clean.
 Remaining Noah-side: swap the parked arXiv submission's PDF for the v4
 build (it currently holds v2), LinkedIn pick, Samer endorsement (valid
 from Oct 13).
+
+## 2026-08-27 (late) — Qwen3.8-Flash-Next runs on our metal; not yet via exo
+
+New-model work, logged here until it earns its own arc. Flash-Next (180B
+MoE, 10-of-512 + 51.2B ngram PLE + MTP) converted to 4-bit on the PR #1788
+port: three defects found and fixed en route — (1) quant_predicate arity
+crash in the PR; (2) stock convert SILENTLY skips all 51.2B ngram params
+(rows are 160-wide, 160 % 64 != 0 -> pre-check drops them; "4-bit" ships at
+7.83 bpw). Fix: global g32 with the body promoted to g64 per-module ->
+4.649 bpw, 95.8 GiB; (3) Metal watchdog timeout evaluating whole shards of
+lazy quant graphs — even one layer times out; per-tensor eval (3338 tensors,
+277s) passes. First run of the official checkpoint through this PR
+anywhere: M4, 34.0 tok/s decode, 103.2 GB peak, coherent output, loaded
+over SMB.
+
+Deployment state: qwen4_exp.py dropped into BOTH exo envs (0.31.9 has every
+symbol it imports; additive, re-drop after env rebuilds); card installed
+both nodes. exo says "no valid configuration" — undiagnosed; first suspect
+is placement headroom (102.8 GB card vs 128 GB node; compare against the
+VQ-2.2bpw card at 100.97 GiB which places). Pick up tomorrow.
+
+Quality state, stated honestly: coherence only. Referee ppl NOT yet run
+(next cheap step, no new code). KL-to-teacher needs instrument work: the
+E18 block-streaming loop streams hidden state only, and Flash-Next's PLE
+threads token-derived ngram inputs into every layer — the exact class
+kl_damage.py's docstring warns breaks hand-rolled loops silently. Adapt by
+threading token ids; validate on known-good/known-bad before believing it.
+The 598.5 GiB teacher is on the Thunderbay; so is the 27B teacher
+(re-downloaded) and Qwen--Qwen3.8-27B-8bit (built, verified, exo-carded,
+23.1 tok/s local).
+
+Noah's stated intent: VQ of Flash-Next. Precedent in our favor: we have
+VQ'd PLE tables before (gemma e4b VQ-PLE, published). Open questions for
+that arc: geometry for 160-wide rows (d4 divides; d8 needs 20 cols x 8),
+whether the MoE body follows the 397B shape law or the dense 27B's, and
+where the fit runs (K-size vs the M4 Metal-timeout finding).
