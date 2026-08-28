@@ -44,6 +44,9 @@ import mlx.core as mx
 
 mx.set_cache_limit(8 << 30)
 
+sys.path.insert(0, str(pathlib.Path(__file__).parent))
+from families import FAMILY  # shared registry (families.py)
+
 ap = argparse.ArgumentParser()
 ap.add_argument("--base", required=True)
 ap.add_argument("--src", required=True)
@@ -186,8 +189,6 @@ base_cfg = json.load(open(BASE / "config.json"))
 # source-key template; its fused gate_up stack and split axis are the same
 # (mlx_lm gemma4_text.py:627 splits axis=-2 of a rank-3 [E,2I,H], which IS
 # axis 1, the same OUT-dim half-slice used here).
-sys.path.insert(0, str(pathlib.Path(__file__).parent))
-from families import FAMILY  # shared registry (families.py)
 FAM = FAMILY[args.family]
 
 _fam_probe = FAM["src_key"].format(li=LO, key=FAM["proj"]["down_proj"][0])
