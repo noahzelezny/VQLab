@@ -2195,3 +2195,13 @@ FINDING, new: Flash-Next is ~20x more quantization-sensitive than the
 27.06 / 94.9% — and that is the BEST rung). Cause unknown: ngram PLE
 tables, hybrid linear attention, or 10-of-512 sparsity. The
 body-q4/ngram-q8 diagnostic rung is the first split.
+
+## 2026-08-28 — q6 anomaly retired by measurement, not explanation
+
+Prediction registered before the run: if q6's below-teacher prose ppl is
+slice regularization, q6 lands above teacher on independent text.
+Literary corpus, 2048 tok: q6 7.7097 vs teacher 7.6643 (+0.6%) —
+confirmed. The wikitext -4.9% was the slice. Together with q6's in-line
+KL (52.8 mnats, monotone) the artifact is CLEAN; no rebuild (affine
+convert is deterministic — a rebuild is the same bytes). Precedent in our
+own record: 27B q4 5.2055 < bf16 5.2249. ppl narrates; KL ranks.
