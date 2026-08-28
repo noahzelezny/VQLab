@@ -1,0 +1,37 @@
+{
+ "attribution": "mlx (github.com/ml-explore/mlx) @ v0.30.0 (54f1cc6), Apache-2.0",
+ "files": [
+  {
+   "file": "python/mlx/nn/layers/quantized.py",
+   "bytes": 9219,
+   "sha256": "d8b5120e82989ee7a3507682108bea5906cb4098590a1f218c73ab152a078d64"
+  },
+  {
+   "file": "python/mlx/utils.py",
+   "bytes": 11390,
+   "sha256": "e09d6980d38a0d789a78f97a3e81eade1667fb9a40859151450ac521814f1105"
+  },
+  {
+   "file": "python/mlx/nn/layers/transformer.py",
+   "bytes": 12265,
+   "sha256": "700eff903c2312233b464bb0f49f0d9d22241d93801a8c137b2e0119c150e822"
+  },
+  {
+   "file": "mlx/backend/metal/kernels/quantized.metal",
+   "bytes": 8465,
+   "sha256": "04432bc05b1c12c45a343aaaa464a1df3654128a6c9198cbf7201178abec8692"
+  },
+  {
+   "file": "mlx/backend/metal/allocator.cpp",
+   "bytes": 7044,
+   "sha256": "67bb540d24ef413355b7928d76bf3ab0a866b343685d8de5d8a19cb66c1cd491"
+  },
+  {
+   "file": "mlx/array.cpp",
+   "bytes": 9218,
+   "sha256": "d2cd9579343600e69d5c13779ae0fccc1b3bba16d38918dc638b9c299bca8d91"
+  }
+ ],
+ "total_bytes": 57601,
+ "note": "different instrument from the paper's private code corpus"
+}
