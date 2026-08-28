@@ -88,6 +88,10 @@ manifest = {"geometry": {"k": K, "dim": D, "group": G, "iters": a.iters,
 t00 = time.time()
 for ki, key in enumerate(keys):
     t0 = time.time()
+    shard_path = OUT / f"ple-{ki:04d}.safetensors"
+    if shard_path.exists():
+        print(f"[{ki+1}/{len(keys)}] exists, skipping (resume)", flush=True)
+        continue
     W = mx.load(str(SRC / idx[key]))[key]
     ROWS, COLS = W.shape
     if COLS % G or G % D:
@@ -96,7 +100,14 @@ for ki, key in enumerate(keys):
 
     per_block = COLS // D
     sel = mx.random.randint(0, ROWS, (max(1, a.sample // per_block),))
-    Xs, _ = norm_block(W[sel].astype(mx.float32))
+    # materialize the sample on the CPU stream BEFORE any GPU math: the
+    # source is lazy (possibly over SMB), and a GPU kernel waiting on
+    # storage inside a command buffer trips the Metal watchdog (M4,
+    # 2026-08-28, 3 tensors in).
+    with mx.stream(mx.cpu):
+        Wsel = W[sel].astype(mx.float32)
+        mx.eval(Wsel)
+    Xs, _ = norm_block(Wsel)
 
     cap = min(200_000, Xs.shape[0])
     P = Xs[mx.random.randint(0, Xs.shape[0], (cap,))]
@@ -121,7 +132,9 @@ for ki, key in enumerate(keys):
     codes_parts, scales_parts = [], []
     num = den = 0.0
     for s in range(0, ROWS, a.rows_chunk):
-        blk = W[s:s + a.rows_chunk].astype(mx.float32)
+        with mx.stream(mx.cpu):
+            blk = W[s:s + a.rows_chunk].astype(mx.float32)
+            mx.eval(blk)
         Xn, sc = norm_block(blk)
         asn = assign(Xn, C)
         R = (C[asn].reshape(blk.shape[0], COLS // G, G)
@@ -144,7 +157,12 @@ for ki, key in enumerate(keys):
     print(f"[{ki+1}/{len(keys)}] {key.split('.layers.')[-1]}  "
           f"relerr {relerr:.4f}  [{time.time()-t0:.0f}s]", flush=True)
 
-(OUT / "ple_manifest.json").write_text(json.dumps(manifest, indent=1))
+mp = OUT / "ple_manifest.json"
+if mp.exists():
+    prev = json.loads(mp.read_text())
+    prev["tensors"].update(manifest["tensors"])
+    manifest = prev
+mp.write_text(json.dumps(manifest, indent=1))
 worst = sorted(manifest["tensors"].items(), key=lambda kv: -kv[1]["relerr"])[:5]
 bits = (K - 1).bit_length()
 print(f"\n{len(keys)} tensors  bpw {bits/D + 16/G:.2f}  worst:")
