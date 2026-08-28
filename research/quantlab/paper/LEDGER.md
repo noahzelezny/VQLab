@@ -2117,3 +2117,22 @@ Plan: family alias + expert fit first (validates mechanics on the 67%),
 PLE fitter port second (the 28%), pack/verify/serve through VQLab's chain,
 KL streaming adaptation for the card if the window holds. Target rung
 ~3bpw-class -> ~76 GiB whole-artifact, serves on BOTH boxes.
+
+## 2026-08-28 — public code corpus shipped (VQLab fd5336c); arc baselines frozen
+
+Noah's ruling: public corpora only, going forward, so others can score
+themselves against us. Prose always was (pinned WikiText, sha256). Code
+was private — VQLab's make_code_corpus.py existed for the replacement but
+no canonical corpus was ever built. Now shipped in-repo:
+referee_corpus_code_public.txt — 6 files from mlx @ v0.30.0 (54f1cc6),
+Python/Metal/C++, 57,601 bytes, per-file sha256 in the manifest.
+CORPORA.md updated; the paper's private-corpus numbers stay valid as
+relative comparisons and NEVER share a table with the new instrument.
+(The paper itself disclosed the private corpus correctly — checked,
+DRAFT ~:728 — no correction needed.)
+
+Flash-Next 4-bit (4.649 bpw) baselines, 2048 tok, M4, direct forward:
+  prose (WikiText referee)      6.4534
+  code  (PUBLIC corpus, first)  2.0638
+  code  (old private corpus)    3.3986   <- continuity only; retired
+Every VQ rung of this arc scores against the prose + public-code pair.
