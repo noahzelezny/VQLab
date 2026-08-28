@@ -2224,3 +2224,33 @@ independent decoder. Notable: L00 indistinguishable from the body
 Next: full 48-layer expert fit at d4/K2048 (the 67%), then the PLE
 fitter port (the 28%). The affine ladder waiting to be beaten: q4 294
 mnats / +24.9% prose at 4.65 bpw.
+
+## 2026-08-28 — FLASH-NEXT VQ SCORES: the crossover transfers to a post-paper model
+
+Artifact: qwen4exp_vq_packed — 66.5 GiB, ~3.1 bpw whole-artifact. Experts
+d4/K2048 block-packed (144 tensors, fit mean relerr 0.1875); PLE tables
+d4/K2048/g32 row-packed at true 11-bit (128 tensors, 0.1813; 40x11=440
+bits = 55 bytes/row, round-trip-verified per tensor); protected set 8-bit;
+router bf16. Runs RESIDENT on the 96 GB M3: 16.6 tok/s decode, 71.8 GB
+peak, via the self-contained bundle (VQSwitchLinear + new VQPLEEmbedding).
+
+Scores (2048 tok, public corpora, same instruments as the affine ladder):
+  prose 5.2911 (+2.4% vs bf16)   code 1.9384 (+1.9%)
+  KL 146.61 mnats  top-1 86.62%  (teacher top-64 cache, mass .9626)
+
+Against the ladder: beats q3 (75 GiB) by 2.4x on prose FROM BELOW ITS
+SIZE; beats q4 (96 GiB) on every column (KL 146.6 vs 293.9); within 0.9%
+prose of q5 (116 GiB) at 49.5 GiB less. The paper's crossover claim —
+data-free VQ beats affine below ~5 bpw — REPRODUCES on an architecture
+and model that postdate the paper.
+
+Assembly defects found/fixed en route, each now a durable VQLab fix:
+splice lazy-overwrite (temp+rename), mx.save appending .safetensors to
+temp names, loader glob requiring model*.safetensors (ple-* shards were
+invisible; renamed model-ple-*), stream_score needing trust_remote_code
+for its own bundles, add_model_file mis-parsing 2-D PLE codes.
+
+NOT yet run: full release gates (check-release, bundle-accept, smoke
+matrix), vision graft decision, second-geometry rungs, noise floor for
+this family. Single seeded fit, single slice per corpus — the numbers
+above are one draw of everything. Cards wait for gates.
