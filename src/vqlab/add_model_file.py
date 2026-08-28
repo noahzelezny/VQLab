@@ -104,6 +104,21 @@ class Model(_arch.Model):
                 pack_bits=_pb,
                 in_features=_m["in"] if _pb else None,
             ))
+        _ple = _cfg.get("vq_ple")
+        if _ple:
+            _g = _ple["geometry"]
+            for _key in _ple["keys"]:
+                _rows, _cols = _ple["shapes"][_key]
+                _parts = _key.split(".")
+                _obj = self
+                for _c in _parts[:-1]:
+                    _obj = _obj[int(_c)] if _c.isdigit() else getattr(_obj, _c)
+                setattr(_obj, _parts[-1], VQPLEEmbedding(
+                    mx.zeros((_rows, _cols // _g["dim"]), dtype=mx.uint16),
+                    mx.zeros((_g["k"], _g["dim"]), dtype=mx.float16),
+                    mx.zeros((_rows, _cols // _g["group"]), dtype=mx.float16),
+                    group_size=_g["group"],
+                ))
 '''
 (ART / "model.py").write_text(runtime + shim)
 print(f"wrote model.py + config keys: {len(vq_modules)} vq modules -> {ART}")
