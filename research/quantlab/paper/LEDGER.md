@@ -2136,3 +2136,37 @@ Flash-Next 4-bit (4.649 bpw) baselines, 2048 tok, M4, direct forward:
   code  (PUBLIC corpus, first)  2.0638
   code  (old private corpus)    3.3986   <- continuity only; retired
 Every VQ rung of this arc scores against the prose + public-code pair.
+
+## 2026-08-28 — Flash-Next affine ladder COMPLETE, teacher-anchored, public corpora
+
+All numbers: 2048 tok, prose = pinned WikiText referee, code = public mlx
+corpus (VQLab fd5336c). Recipe per rung: body affine g64, ngram tables
+g32, router bf16. bpw measured by mlx at quantize time (+0.649 constant).
+
+  rung  bpw     prose     vs bf16   code      vs bf16
+  q3    3.649   12.8502   +148.7%   3.0522    +60.5%
+  q4    4.649    6.4534    +24.9%   2.0638     +8.5%
+  q5    5.649    5.2434     +1.5%   1.9528     +2.7%
+  q6    6.649    4.9155     -4.9%   1.9116     +0.5%
+  q8    8.649    5.1968     +0.6%   1.9138     +0.6%
+  bf16 16        5.1662        --   1.9015        --
+
+READINGS. (1) Affine converges by q5 and collapses below it: +25% at
+4.65 bpw, +149% at 3.65. The 27B's flat-by-q4 behavior does NOT transfer;
+some component of this architecture is precision-hungry (ngram PLE is the
+unproven suspect — a body-q4/ngram-q8 diagnostic rung would isolate it).
+(2) q6 BELOW its own bf16 teacher (-4.9% prose) is a favorable draw on
+this slice, not a discovery — FINDINGS 6f applies; its code column sits
+at the floor like q8's. (3) q8 within 0.6% of teacher on both corpora
+EXONERATES the shard-streaming convert (its only build) after the q6-vs-q8
+inversion raised suspicion; the teacher number was the referee.
+
+Instruments this required, all landed in VQLab tonight (local commits):
+stream_score (layer-streamed referee, validated to all printed decimals
+against the direct forward, 32.6-38.9 GB peak for 96-176 GiB artifacts;
+--save-topk emits the KL teacher cache), preflight-disk (tested 4 ways),
+the public code corpus, and the shard-streaming convert pattern (jetsam
+class closed; to be ported into VQLab as the big-model convert path).
+Teacher top-64 KL cache saved: Exo Models/flashnext_teacher_topk_prose.
+
+The VQ target is now explicit: the 3-5.5 bpw corridor where affine dies.
