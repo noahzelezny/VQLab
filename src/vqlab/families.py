@@ -18,6 +18,23 @@ FAMILY = {
                  "up_proj": ("gate_up_proj", 1),
                  "down_proj": ("down_proj", None)},
     },
+    "qwen4_exp": {
+        # Qwen3.8-Flash-Next (180B, 10-of-512). VERIFIED IDENTICAL to
+        # qwen3_5 on every axis this table encodes (2026-08-28, from the
+        # checkpoint index + the mlx-lm PR #1788 module tree): same fused
+        # [E, 2I, H] gate_up stack halved along OUT, same HF source key
+        # template, same runtime member name (SparseMoeBlock.switch_mlp).
+        # All 48 layers are MoE — no dense head despite the Qwen4 lineage.
+        # NOT covered here: the per-layer ngram PLE tables (28.4% of
+        # params, [*, 160] rows) — those take the PLE fitter, not this
+        # one — and the per-layer shared_expert MLP, which stays in the
+        # protected budget with attention and the router.
+        "target_substr": "switch_mlp",
+        "src_key": "model.language_model.layers.{li}.mlp.experts.{key}",
+        "proj": {"gate_proj": ("gate_up_proj", 0),
+                 "up_proj": ("gate_up_proj", 1),
+                 "down_proj": ("down_proj", None)},
+    },
     "gemma4": {
         "target_substr": "switch_glu",
         # mlx-community's gemma bf16 is an MLX-FORMAT conversion, so
