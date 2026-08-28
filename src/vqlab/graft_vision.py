@@ -118,14 +118,23 @@ _art_map0 = json.load(open(ART / "model.safetensors.index.json"))["weight_map"]
 def _pairs(art_keys):
     direct = [(k, k) for k in art_keys
               if k in src_map and not k.startswith(_PREFIXES)]
-    if direct:
-        return direct, "same-layout"
+    # A quantized artifact can share a HANDFUL of names whose bytes lawfully
+    # differ (lm_head.weight keeps its name through quantization). One or two
+    # direct hits are not evidence of same-layout — fall through to mapping
+    # and let the widest candidate set win.
     mapped = []
     for k in art_keys:
         if k.startswith("language_model.model."):
             h = "model.language_model." + k[len("language_model.model."):]
             if h in src_map:
                 mapped.append((k, h))
+        elif k.startswith("model.") and not k.startswith("model.language_model."):
+            # qwen4_exp sanitize: HF model.language_model.X -> mlx model.X
+            h = "model.language_model." + k[len("model."):]
+            if h in src_map:
+                mapped.append((k, h))
+    if len(direct) >= len(mapped):
+        return direct, "same-layout"
     return mapped, "HF<->mlx mapped"
 
 _pair_list, _how = _pairs(list(_art_map0))
