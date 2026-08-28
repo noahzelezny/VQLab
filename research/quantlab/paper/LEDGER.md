@@ -2205,3 +2205,22 @@ confirmed. The wikitext -4.9% was the slice. Together with q6's in-line
 KL (52.8 mnats, monotone) the artifact is CLEAN; no rebuild (affine
 convert is deterministic — a rebuild is the same bytes). Precedent in our
 own record: 27B q4 5.2055 < bf16 5.2249. ppl narrates; KL ranks.
+
+## 2026-08-28 — VQ machinery validated on Flash-Next: the paper's method fits a post-paper model
+
+Chain proven end-to-end through VQLab: qwen4_exp family entry (verified
+alias of qwen3_5; fitter --family now registry-derived after a hardcoded
+list silently excluded new families, plus an import-order fix) -> struct
+base via streaming convert (93.8 GiB: 144 expert modules marked 2-bit,
+protected set 8-bit, router bf16) -> fit-moe layers 0-2 d4/K2048 ->
+verify_artifact independent decode.
+
+Result: 9/9 tensors, mean relerr 0.1889 (healthy d4/K2048 reference
+~0.19), spread 0.1870-0.1912, CONFIRMED from artifact bytes by the
+independent decoder. Notable: L00 indistinguishable from the body
+(0.188-0.191) where the 397B's L00 was the heavy-tailed worst case at
+0.215 — Flash-Next's shallow experts are better conditioned.
+
+Next: full 48-layer expert fit at d4/K2048 (the 67%), then the PLE
+fitter port (the 28%). The affine ladder waiting to be beaten: q4 294
+mnats / +24.9% prose at 4.65 bpw.
