@@ -462,9 +462,6 @@ Bold rows are published artifacts, under
 **27B — affine.** Unlike the 397B and 35B comparators, these rungs are our
 own conversions. That is a weaker class of evidence — a comparator one
 builds oneself can be built badly — and one such flaw is recorded in §4.1.
-For q8 the risk is checkable: `mlx-community/Qwen3.8-27B-8bit`, published
-2026-08-14 at the same group-64 affine recipe, lands within 0.1 GiB of ours
-with the identical 333-tensor vision tower.
 
 | build | GiB | KL mnats | top-1 | ppl |
 |---|---|---|---|---|
