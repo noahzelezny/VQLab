@@ -61,7 +61,7 @@ ap.add_argument("--init", choices=("kmeans++", "random"),
                 default="kmeans++",
                 help="codebook seeding. Artifacts built before 08-18 used 'random'.")
 ap.add_argument("--expert-chunk", type=int, default=32)
-ap.add_argument("--family", default="qwen3_5", choices=["qwen3_5", "gemma4", "qwen3_5_mlx"],
+ap.add_argument("--family", default="qwen3_5", choices=sorted(FAMILY),
                 help="module naming / source-key family. Default reproduces "
                      "the shipped 397B behaviour exactly.")
 ap.add_argument("--sample", type=int, default=2_000_000)
