@@ -1,9 +1,10 @@
-# PAPER SESSION — state of record (2026-08-27, post-publication)
+# PAPER SESSION — state of record (2026-08-28, post-publication)
 
 **THE PAPER IS PUBLISHED. Nothing here is pre-release anymore.**
 
 ## Live surfaces (all verified identical at last touch)
-- DOI v3 (current): 10.5281/zenodo.22133765 — CC BY 4.0, PDF + HTML (v3 = en-US
+- DOI v4 (current): 10.5281/zenodo.22136000 — CC BY 4.0, PDF + HTML (v4 removes
+  two false 27B priority claims + a stale §4.1 cross-ref; v3 22133765 = en-US
   spelling normalization; v2 22121193 and v1 22119018 remain live, bannered)
 - Concept DOI (always-latest, used on model cards): 10.5281/zenodo.22119017
 - Canonical page: https://thedrainflorist.com/ai/papers/data-free-vector-quantization/
@@ -17,7 +18,9 @@ paper/DRAFT.md -> paper/build_artifact.py -> paper.html -> {publish/index.html,
 Space scratchpad copy, below-six-bits.pdf via headless Chrome}. ANY paper edit
 goes through the generator and then to ALL surfaces in one verified pass
 (sha256 against the Space, md5 against Zenodo file checksums). Zenodo edits =
-NEW VERSION via paper/zenodo_draft.py flow (token in macOS Keychain as
+NEW VERSION via paper/zenodo_newversion.py (--parent to fork, --draft to
+stage; it REFUSES published records — a bad latest_draft link once resolved
+to live v3 and tried to delete its files, 403 saved it) (token in macOS Keychain as
 "zenodo-token"; API newversion -> reserve DOI -> restamp front matter ->
 rebuild -> upload -> Noah presses Publish).
 
@@ -35,8 +38,8 @@ rebuild -> upload -> Noah presses Publish).
 ## Open items
 1. **arXiv**: submitted, cs.LG primary (+cs.PF cross-list if allowed),
    CC BY 4.0, condensed abstract, DOI in comments. **PENDING: swap the
-   parked submission's PDF for the v3 build (paper/below-six-bits.pdf) —
-   it currently holds v2 with British spellings.** WAITING ON
+   parked submission's PDF for the v4 build (paper/below-six-bits.pdf) —
+   it currently holds v2 (British spellings AND the false 27B claims).** WAITING ON
    ENDORSEMENT: code sent/being sent to Samer Saab Jr — he qualifies
    **on/after Oct 13, 2026** (needs 3 cs.* papers older than 3 months;
    his two July 2026 papers age in Oct 8/13; quant-ph never counts;

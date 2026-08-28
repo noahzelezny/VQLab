@@ -2028,3 +2028,26 @@ Qwen--Qwen3.8-27B-8bit built (27.48 GiB, reproducing the paper's q8 row
 exactly), vision grafted and verified tensor-by-tensor against the
 community build, exo card installed on both nodes, generation smoke-tested
 at 23.1 tok/s.
+
+## 2026-08-28 — v4 LIVE (10.5281/zenodo.22136000); propagated
+
+Published by Noah 02:51 UTC. Both files byte-verified against the live
+record (pdf 60a5c0…, html ab5971…). Space pushed and sha256-verified
+identical to local (ccb7458c…); the hf CLI failed with a misleading 402
+(it attempts create_repo before upload — the Python API upload_file path
+works and is now the documented route). Cards untouched — concept DOI
+(22119017) resolves to v4 by construction. Website session notified,
+including the Space README drift (Draft 5 dateline, "Calibrated Affine"
+title, all-artifacts-published line), which is theirs to fix.
+
+Also cut before publish, caught by Noah reading the diff: the §4.1
+cross-reference clause ("one such flaw is recorded in §4.1"). §4.1 is the
+8-bit ceiling; no comparator flaw is recorded anywhere in the paper. The
+pointer resolved numerically and lied semantically — likely a leftover
+from the restructure that dropped the old §4.4. A full semantic audit of
+all 25 § references followed: every citing sentence now verified against
+what its target section actually says. Clean.
+
+Remaining Noah-side: swap the parked arXiv submission's PDF for the v4
+build (it currently holds v2), LinkedIn pick, Samer endorsement (valid
+from Oct 13).
