@@ -6,8 +6,8 @@ fit it data-free, pack to true bit-width, verify, and serve through stock
 `mlx-lm` — the runtime ships inside the artifact.
 
 The method and every number below are documented in the companion paper,
-*Data-Free Vector Quantization Beats Affine Quantization at Matched Bytes*
-(publication pending; link will land here). Released artifacts are published
+*Data-Free Vector Quantization Beats Affine Quantization at Matched Bytes
+Below 6 Bits* — doi:[10.5281/zenodo.22119017](https://doi.org/10.5281/zenodo.22119017). Released artifacts are published
 under [TheDrainFlorist](https://huggingface.co/TheDrainFlorist) on Hugging
 Face with their VQ runtimes bundled in-checkpoint (stock `mlx-lm`, no
 patches).
@@ -21,7 +21,7 @@ Every artifact this tool's pipeline has shipped:
 | [Qwen3.5-397B-A17B-VQ-2.2bpw](https://huggingface.co/TheDrainFlorist/Qwen3.5-397B-A17B-VQ-2.2bpw) | 397B MoE (d8/K16384) |
 | [Qwen3.5-397B-A17B-VQ-2.4bpw](https://huggingface.co/TheDrainFlorist/Qwen3.5-397B-A17B-VQ-2.4bpw) | 397B MoE |
 | [Qwen3.5-397B-A17B-VQ-2.6bpw](https://huggingface.co/TheDrainFlorist/Qwen3.5-397B-A17B-VQ-2.6bpw) | 397B MoE |
-| [Qwen3.5-397B-A17B-VQ-3bpw](https://huggingface.co/TheDrainFlorist/Qwen3.5-397B-A17B-VQ-3bpw) | 397B MoE (flagship) |
+| [Qwen3.5-397B-A17B-VQ-3.1bpw](https://huggingface.co/TheDrainFlorist/Qwen3.5-397B-A17B-VQ-3.1bpw) | 397B MoE (flagship) |
 | [Qwen3.6-35B-A3B-VQ-3.4bpw](https://huggingface.co/TheDrainFlorist/Qwen3.6-35B-A3B-VQ-3.4bpw) | 35B MoE |
 | [Qwen3.6-35B-A3B-VQ-3.8bpw](https://huggingface.co/TheDrainFlorist/Qwen3.6-35B-A3B-VQ-3.8bpw) | 35B MoE |
 | [Qwen3.6-35B-A3B-VQ-4.6bpw](https://huggingface.co/TheDrainFlorist/Qwen3.6-35B-A3B-VQ-4.6bpw) | 35B MoE |
