@@ -2170,3 +2170,28 @@ class closed; to be ported into VQLab as the big-model convert path).
 Teacher top-64 KL cache saved: Exo Models/flashnext_teacher_topk_prose.
 
 The VQ target is now explicit: the 3-5.5 bpw corridor where affine dies.
+
+## 2026-08-28 — q8 exonerated by KL (the right instrument); model is ~20x more quant-sensitive than 27B
+
+The q6-below-teacher / q8-above-teacher ppl inversion was NOT resolvable
+by ppl: affine converts are deterministic, so "lucky draw" (my first
+framing) was wrong in mechanism — q6's -4.9% is a fixed slice-
+regularization artifact, and ppl cannot distinguish a healthy q8 from a
+damaged one. KL-to-teacher can (non-negative by construction). Streamer
+grew --kl-cache (KL at the teacher's cached top-64 + top-1 + captured
+mass); prose results:
+
+  q4  293.86 mnats  top1 79.6%
+  q5   91.66        87.5%
+  q6   52.76        91.6%
+  q8   27.06        94.9%     captured mass 0.9626 on ALL rungs
+
+Strictly monotone; q8 least divergent -> the shard-streaming convert is
+clean, on evidence. q6's good ppl at 52.8 mnats divergence is the ppl
+blind spot the paper's 35B/27B methodology already knew about.
+
+FINDING, new: Flash-Next is ~20x more quantization-sensitive than the
+27B at matched nominal rungs (27B q8: 1.25 mnats / 98.5% top-1; here
+27.06 / 94.9% — and that is the BEST rung). Cause unknown: ngram PLE
+tables, hybrid linear attention, or 10-of-512 sparsity. The
+body-q4/ngram-q8 diagnostic rung is the first split.
