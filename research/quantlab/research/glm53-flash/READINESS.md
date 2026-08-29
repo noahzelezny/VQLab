@@ -296,3 +296,67 @@ mass) is dead weight in the artifact for that runtime. Options at struct-
 base time: fit it anyway (future-proof, costs fit time), or exclude layer
 45 from --vq-layers and graft it bf16/affine later. Decide when the
 scoring runtime is chosen; no action now.
+
+---
+
+## Addendum 2026-08-29: PROVISIONAL scorer design — glm5_next in stream_score
+
+Requested by the paper session. Everything here is read from mlx-vlm main's
+`glm5_next/language.py` via raw fetch (summarized, not line-verified) —
+**PROVISIONAL throughout; line-verify against the pinned mlx-vlm commit
+before writing the scorer.** No code changed; stream_score's SCORERS
+registry and hard-refusal on unknown model_type stay as they are until a
+scorer exists.
+
+### What qwen4_exp's scorer threads per layer (for contrast, MEASURED from
+our own stream_score.py)
+
+`(h, rope, mask, conv_mask, cache, idx_cache, ids, prev_ctx)` — the ids/
+prev_ctx pair feeds each layer's n-gram PLE lookup (the reason a
+hidden-state-only loop silently starves qwen4_exp); h is tiled x hc BEFORE
+the stack and resolved by a GLOBAL hyper_connection_mixer after it; no
+final norm.
+
+### What glm5_next's scorer needs (PROVISIONAL, from mlx-vlm main)
+
+Structurally SIMPLER than qwen4_exp on three axes, different on two:
+
+1. **Layer signature is clean:** `layer(x, mask=None, cache=None)` — no
+   ids/prev_ctx threading (no PLE), no separate idx_cache argument. The
+   streaming loop's shape is the standard embed → per-layer
+   eval/run/free → head.
+2. **hc lives INSIDE the layer** (attn_hc/ffn_hc modules per layer, expand
+   + reduce within the block), not as a global pre-tile + post-mixer. The
+   model broadcasts h to (B, S, hc_mult=4, D) once before the stack and
+   takes `h.mean(axis=2)` after — the streaming loop must reproduce both
+   bookends. Activation cost: hc_mult x the hidden state (4 x 4096 x seq),
+   still trivial next to a resident layer.
+3. **Final norm EXISTS** (`model.norm` RMSNorm after the mean) — opposite
+   of qwen4_exp; forgetting it is the classic silent-wrong-answer.
+4. **Per-layer cache is heterogeneous:** KDA layers want a 2-slot cache
+   (conv state + gated-delta recurrent state) and an ssm mask from
+   `create_ssm_mask`; DSA layers want a KV cache pair whose second slot
+   the indexer uses for pooling/top-k. For a SINGLE full-sequence teacher
+   pass (our scoring mode) cache can likely be None/fresh per layer as in
+   score_qwen4_exp — but whether the DSA indexer path tolerates cache=None
+   at prefill is UNVERIFIED and is the first thing to test.
+5. **Loader is the real fork.** stream_score loads via
+   `mlx_lm.utils.load_model`; a glm5_next artifact under today's runtime
+   needs mlx-vlm's loader, and the text stack sits at
+   `model.language_model.model.layers` (one level deeper than qwen4_exp's
+   `model.model.layers`). Options: (a) a second load path in stream_score
+   keyed off the SCORERS entry (scorer declares its loader), or (b) load
+   the LanguageModel directly and skip the VLM wrapper. Either way the
+   hard-refusal design holds: glm5_next simply stays refused until its
+   entry lands with its loader named.
+
+### Unknowns to resolve before writing it (each is one cheap check once a
+runtime is importable)
+
+- DSA indexer with cache=None at full-sequence prefill (see 4).
+- Whether sinkhorn iterations run at load/sanitize time or per forward
+  (not visible in the fetched summary; `hc_sinkhorn_iters: 20` in config).
+- MTP layer 45: today's mlx-vlm class doesn't load MTP (PR #2044 open) —
+  the scorer must count on 45 layers, not 46, under that runtime.
+- Layer-streaming memory: one GLM MoE layer resident is ~13.6 GiB bf16
+  (288 experts x 47.2 MB + overhead) — fine on either box; ESTIMATE.
