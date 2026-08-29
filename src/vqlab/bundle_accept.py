@@ -81,5 +81,30 @@ for (E, OUT, IN) in [(4, 512, 2048), (2, 256, 1024)]:
         if rel >= 2e-2: fails += 1
         print("  E%d OUT%-4d IN%-5d K%-6d ref %.1e  %s" % (E, OUT, IN, K, rel, note))
 
+# UNALIGNED PACKED TAIL BLOCK (2026-08-29): d8 NSUB=80 at 12 bits, the
+# qwen4_exp down_proj shape the padded-tail format exists for. The metal
+# reader must agree with the numpy reference through the ceil-WPR stride.
+import numpy as np
+import vq_pack
+for (E, OUT, IN, D, K, bits) in [(2, 128, 640, 8, 4096, 12),
+                                 (2, 128, 704, 4, 2048, 11)]:
+    NSUB = IN // D
+    codes_np = np.random.default_rng(3).integers(0, K, (E, OUT, NSUB),
+                                                 dtype=np.uint16)
+    packed = mx.array(vq_pack.pack(codes_np, bits))
+    codes = mx.array(codes_np)
+    cb = (mx.random.normal((K, D)) * 0.1).astype(mx.float16)
+    sc = (mx.random.uniform(shape=(E, OUT, IN // 64)) * 0.5 + 0.5).astype(mx.float16)
+    x = (mx.random.normal((8, IN)) * 0.5).astype(mx.float16)
+    eidx = mx.random.randint(0, E, (8,)).astype(mx.uint32)
+    ref = reference(x, eidx, codes, cb, sc, D, 64)
+    y = bvq._fused(x, eidx, packed, cb, sc, pack_bits=bits); mx.eval(y)
+    rel = float(mx.max(mx.abs(y.astype(mx.float32) - ref))
+                / mx.maximum(mx.max(mx.abs(ref)), 1e-6))
+    ok = rel < 2e-2
+    if not ok: fails += 1
+    print("  UNALIGNED d%d NSUB%-4d K%-6d bits%-3d ref %.1e  %s"
+          % (D, NSUB, K, bits, rel, "OK" if ok else "*** DIFFERS ***"))
+
 print("BUNDLED-COPY ACCEPTANCE:", "PASS" if fails == 0 else "FAIL (%d)" % fails)
 sys.exit(1 if fails else 0)
