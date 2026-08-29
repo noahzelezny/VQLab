@@ -88,8 +88,7 @@ def score_qwen4_exp(model, ids_list, args):
 
 
 def score_glm5_next(model, ids_list, args):
-    """GLM-5.3-Flash streamed scorer. **UNVALIDATED — refuses without
-    --allow-unvalidated, and its record carries "unvalidated": true.**
+    """GLM-5.3-Flash streamed scorer. VALIDATED per rule 5 (see below).
 
     Written 2026-08-29; LINE-VERIFIED the same day against the installed
     release (mlx-vlm 0.6.17, venv glm5vlm) — every step below mirrors
@@ -113,6 +112,14 @@ def score_glm5_next(model, ids_list, args):
         names are resolved from the model's own module (III.13: score with
         the copy that loaded, never a parallel import).
     """
+    # VALIDATED 2026-08-29 (rule 5): streamed pass vs direct forward on a
+    # tiny random-init glm5_next LanguageModel (4 layers = 3 KDA + 1 DSA,
+    # dense+sparse MLP, hc_mult=4, 33 tokens; glm5vlm venv, M3 metal):
+    # logits BITWISE IDENTICAL (max|diff| 0.0), ppl equal to all printed
+    # decimals. Same run answered the open unknown: the DSA indexer
+    # accepts cache=None at full-sequence prefill. Scope: tiny geometry,
+    # random weights — the first REAL-model score should still be
+    # cross-checked against another instrument once one exists.
     lm = getattr(model, "language_model", model)
     core = lm.model
     ids = mx.array([ids_list[:-1]])
@@ -176,7 +183,7 @@ SCORERS = {
     "qwen4_exp": {"fn": score_qwen4_exp, "family": "qwen4_exp",
                   "validated": True},
     "glm5_next": {"fn": score_glm5_next, "family": "glm5_next",
-                  "validated": False},
+                  "validated": True},   # rule-5 run 2026-08-29, see docstring
 }
 
 
