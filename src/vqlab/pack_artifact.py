@@ -71,6 +71,12 @@ def _assert_tower_belongs(src_cfg, art_cfg, src_name, art_name):
 ap = argparse.ArgumentParser()
 ap.add_argument("--src", required=True)
 ap.add_argument("--out", required=True)
+ap.add_argument("--pack-unaligned", action="store_true",
+                help="pack NSUB %% 32 != 0 tensors via the padded tail block. "
+                     "OFF until bundle_accept passes an unaligned geometry on "
+                     "metal — the CPU round-trip is proven, the kernels are "
+                     "ceil-WPR by construction, but rule 5 wants the GPU "
+                     "acceptance before an artifact ships this way.")
 ap.add_argument("--group", type=int, default=64)
 ap.add_argument("--vision-config-from", default="",
                 help="artifact dir to copy vision_config/image_token_id from "
@@ -122,13 +128,14 @@ for si, sh in enumerate(shards, 1):
         bits = vq_pack.bits_for_k(k)
         codes = np.array(val, copy=False)
         nsub = codes.shape[2]
-        # The block layout needs NSUB % 32 == 0 (vq_pack's BLOCK). Qwen shapes
-        # always satisfy it; gemma-4-26b's down_proj does not (NSUB=176 at
-        # d=4). Such a tensor is COPIED THROUGH UNPACKED rather than fataling:
-        # mixed artifacts are safe by construction, because add_model_file
-        # dispatches on codes.dtype (uint32 = packed) and so reads a skipped
-        # tensor by the original path. Absent pack_bits IS the unpacked signal.
-        if nsub % vq_pack.BLOCK:
+        # NSUB alignment: since 2026-08-29 the block layout PADS an unaligned
+        # tail block (vq_pack pads, kernels use ceil-WPR and never read the
+        # pad since n < NSUB), so gemma-26b's NSUB=176 and qwen4_exp d8
+        # down_proj's NSUB=80 pack like everything else. GPU-PENDING GATE:
+        # until bundle_accept passes an unaligned case on metal, keep the
+        # copy-through unless --pack-unaligned is set; mixed artifacts stay
+        # legal either way (dtype dispatch, absent pack_bits = unpacked).
+        if nsub % vq_pack.BLOCK and not args.pack_unaligned:
             out_data[key] = val
             skipped.append((mod, nsub))
             continue
