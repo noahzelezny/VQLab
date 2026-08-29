@@ -147,6 +147,10 @@ for mod in mods:
     with mx.stream(mx.cpu):
         T = src_tensor(li, proj)
         mx.eval(T)
+        # The ARTIFACT side is lazy too. The staged-local workflow hid it;
+        # verifying with the artifact itself on SMB (cross-box, 2026-08-28)
+        # died at the diff 74 tensors in — same watchdog, other operand.
+        mx.eval(codes, cb, scales)
 
     # W_hat = codebook[codes] * scale, group-wise along `in`
     num = den = 0.0
