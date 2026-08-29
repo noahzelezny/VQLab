@@ -39,8 +39,10 @@ def bits_for_k(k: int) -> int:
 
 
 def words_per_row(nsub: int, bits: int) -> int:
-    assert nsub % BLOCK == 0, f"NSUB={nsub} must be a multiple of {BLOCK}"
-    return nsub // BLOCK * bits
+    # ceil: an unaligned tail block is stored zero-PADDED (pack pads, unpack
+    # slices, kernels never read past n < NSUB). Identical to the old value
+    # for every aligned tensor, so existing artifacts are byte-unchanged.
+    return (nsub + BLOCK - 1) // BLOCK * bits
 
 
 def pack(codes: np.ndarray, bits: int) -> np.ndarray:
@@ -52,6 +54,12 @@ def pack(codes: np.ndarray, bits: int) -> np.ndarray:
     """
     assert codes.ndim == 3, codes.shape
     e, out, nsub = codes.shape
+    pad = (-nsub) % BLOCK
+    if pad:
+        import numpy as _np
+        codes = _np.concatenate(
+            [codes, _np.zeros((e, out, pad), dtype=codes.dtype)], axis=2)
+        nsub += pad
     assert int(codes.max(initial=0)) < (1 << bits), "code exceeds bit width"
     nblk = nsub // BLOCK
     wpr = words_per_row(nsub, bits)
@@ -72,6 +80,8 @@ def unpack(packed: np.ndarray, nsub: int, bits: int) -> np.ndarray:
     """Inverse of pack(); the reference the Metal reader must agree with."""
     e, out, wpr = packed.shape
     assert wpr == words_per_row(nsub, bits), (wpr, nsub, bits)
+    true_nsub = nsub
+    nsub = (nsub + BLOCK - 1) // BLOCK * BLOCK   # padded extent on disk
     nblk = nsub // BLOCK
     src = packed.reshape(e, out, nblk, bits).astype(np.uint64)
     mask = np.uint64((1 << bits) - 1)
@@ -83,7 +93,8 @@ def unpack(packed: np.ndarray, nsub: int, bits: int) -> np.ndarray:
         if sh + bits > 32:
             v = v | (src[:, :, :, w + 1] << np.uint64(32 - sh))
         codes[:, :, :, i] = v & mask
-    return codes.reshape(e, out, nsub).astype(np.uint16 if bits > 8 else np.uint8)
+    return codes.reshape(e, out, nsub)[:, :, :true_nsub].astype(
+        np.uint16 if bits > 8 else np.uint8)
 
 
 def packed_bytes(e: int, out: int, nsub: int, bits: int) -> int:
