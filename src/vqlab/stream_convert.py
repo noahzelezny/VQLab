@@ -34,10 +34,16 @@ import time
 
 import mlx.core as mx
 from mlx.utils import tree_flatten, tree_unflatten
-from mlx_lm.utils import load_model, load_tokenizer, quantize_model, save_config
+# load_model is NOT imported here — every model load routes through
+# runtime_load.load_for_family. quantize_model/save_config/load_tokenizer
+# are runtime-agnostic (generic nn-tree walk / json / transformers) and are
+# used for BOTH runtimes; quantize_model on an mlx_vlm-loaded model is
+# PROVISIONAL until a glm5_next struct base is built.
+from mlx_lm.utils import load_tokenizer, quantize_model, save_config
 
 sys.path.insert(0, str(pathlib.Path(__file__).parent))
 from families import FAMILY
+import runtime_load
 
 ap = argparse.ArgumentParser()
 ap.add_argument("--src", required=True)
@@ -54,11 +60,25 @@ SRC, DST = pathlib.Path(a.src), pathlib.Path(a.out)
 SHARD = int(a.shard_gib * 2**30)
 target = FAMILY[a.family]["target_substr"]
 
-model, config = load_model(SRC, lazy=True)
+# Runtime per family registry (Noah's ruling 08-29: provision for either
+# mlx-lm or mlx-vlm, never fork). mlx_lm families behave exactly as before;
+# an mlx_vlm family (glm5_next) loads the WHOLE model, vision tower
+# included — see the predicate's vision branch.
+model, config = runtime_load.load_for_family(a.family, SRC, lazy=True)
+print(runtime_load.resolved_runtime_note(model), flush=True)   # III.13
 
 def predicate(path, module):
     if path.endswith("mlp.gate"):
         return False                                     # router bf16 (E7)
+    if "vision" in path or "visual" in path:
+        # Under an mlx_vlm runtime the tower is part of the loaded model
+        # (mlx_lm's sanitize drops it, so this branch never fires there).
+        # Keep it bf16: 1.05 GiB on glm5_next, and a bf16 tower in the
+        # struct base means graft_vision is NOT needed for this family —
+        # the tower rides through the whole pipeline. PROVISIONAL until a
+        # glm5_next struct base is actually built and its tower verified
+        # non-zero (the IV deferred-read family of faults).
+        return False
     if a.struct and target in path:
         return {"group_size": 64, "bits": 2}             # fitter marker
     if "ngram_embedding" in path:
