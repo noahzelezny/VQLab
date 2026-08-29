@@ -433,3 +433,31 @@ ladder.)
   remaining step.
 - load_config/load_model/load signatures match runtime_load's calls;
   vqlab modules import clean under the venv.
+
+### 2026-08-29 validation window (M3, post-quiesce): all three items ran
+
+(a) **GPU `vqlab selftest`: 22 passed, 0 failed, 2 expected skips** — the
+expert_src rewiring is clean on real Metal kernels.
+(b) **bundle_accept incl. unaligned packed-tail: PASS.** First run FAILED
+at a stale python-side NSUB%32 dispatch guard in vq_switch (:945) — the
+ceil-WPR kernels themselves were complete (they had been accidentally
+swept into commit 0f3395c by this session's `git add -A` on the shared
+checkout; provenance noted). Guard removed; re-run: aligned suite still
+BIT-IDENTICAL, UNALIGNED d8 NSUB=80 K4096 bits12 rel 3.0e-4 OK, d4
+NSUB=176 K2048 bits11 rel 3.4e-4 OK — same error scale as the known-good
+control arms (III.14 form). **--pack-unaligned flag-removal criterion MET.**
+(c) **Rule-5 validation of score_glm5_next: PASS, bitwise.** Tiny
+random-init glm5_next LanguageModel (4 layers = 3 KDA + 1 DSA, dense +
+sparse MLP, hc_mult 4, 33 tokens, glm5vlm venv): streamed vs direct
+logits max|diff| = 0.0 (bitwise identical), ppl equal at 6 decimals.
+Open unknown ANSWERED: the DSA indexer accepts cache=None at
+full-sequence prefill. Scope: tiny geometry, random weights; first
+real-model score should still be cross-checked. SCORERS flag flipped to
+validated.
+
+**NOT YET COMMITTED to VQLab:** the guard removal (vq_switch.py) and the
+validated flip (stream_score.py) sit in the WORKING TREE — this session's
+git commits to VQLab began being denied by its permission layer mid-window
+(three attempts). The changes are compiled and test-passing; they need a
+commit from Noah or an approved session. Until committed, treat VQLab HEAD
+as NOT containing them.
