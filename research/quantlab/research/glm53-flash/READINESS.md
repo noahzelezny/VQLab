@@ -414,3 +414,22 @@ Every geometry packs cleanly; no qwen4_exp-style unpacked ride for any
 glm5_next projection. (The row-aligned kernel variant remains a separate
 VQLab roadmap item for qwen4_exp's d8 down_proj, queued after the Qwen
 ladder.)
+
+### 2026-08-29 (later): glm5vlm venv staged; PROVISIONALs upgraded
+
+- Isolated venv created at `/Volumes/Thunderbay SSD/venvs/glm5vlm`
+  (python 3.12, mlx 0.32.2, **mlx-vlm 0.6.17** — glm5_next IS in the pip
+  release, not just main). First mlx_vlm install/import in the project.
+- **Line-verified against installed code (upgraded from source-read
+  PROVISIONAL to MEASURED):** model_file bundle mechanism in
+  utils.get_model_and_args; create_attention_mask(h, cache,
+  return_array=True) + create_ssm_mask built on PRE-broadcast h; broadcast
+  to hc_mult then mx.contiguous; per-layer `is_linear` mask dispatch;
+  h.mean(axis=2) + model.norm; lm_head unless tied. switch_mlp /
+  shared_experts / SwitchGLU confirmed in the imported deepseek_v32 module
+  glm5_next composes. score_glm5_next now mirrors the installed forward
+  one-to-one (VQLab 0f3395c) and stays gated UNVALIDATED — nothing has
+  executed a forward yet; the rule-5 run in the next GPU window is the
+  remaining step.
+- load_config/load_model/load signatures match runtime_load's calls;
+  vqlab modules import clean under the venv.
