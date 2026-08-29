@@ -360,3 +360,42 @@ runtime is importable)
   the scorer must count on 45 layers, not 46, under that runtime.
 - Layer-streaming memory: one GLM MoE layer resident is ~13.6 GiB bf16
   (288 experts x 47.2 MB + overhead) — fine on either box; ESTIMATE.
+
+---
+
+## Addendum 2026-08-29: runtime abstraction BUILT; serving story settled
+
+Noah's ruling executed (VQLab d8059fe): provision for either runtime,
+never fork mlx-lm.
+
+- **`runtime_load.load_for_family()`** dispatches mlx_lm vs mlx_vlm on a
+  per-family registry field. glm5_next carries `runtime: "mlx_vlm"`,
+  `model_type: "glm5_next"`; when mlx-lm lands the class, ONE field flips
+  and no call site changes. stream_convert, stream_score and smoke all
+  route loads through it and print the III.13 resolved-runtime line.
+- **Serving story: SETTLED (source read).** mlx-vlm's utils.py honours the
+  in-checkpoint `model_file` bundle — the same mechanism as mlx_lm — so
+  bundled-runtime GLM artifacts serve under either runtime. (Read from
+  mlx-vlm main 08-29; line-verify at the pinned commit before shipping a
+  bundle claim, per III.13.)
+- **stream_convert** under an mlx_vlm runtime keeps vision modules bf16 —
+  the tower rides the whole pipeline in the struct base, so
+  **graft_vision is NOT needed for glm5_next** (supersedes §3.4's flags
+  discussion for this family; the traps there still apply to any family
+  that DOES graft). PROVISIONAL until a struct base is built and its
+  tower verified non-zero.
+- **stream_score** has a glm5_next scorer implementing the design note
+  (hc bookends, per-layer-type masks resolved from the LOADED module,
+  final norm). It is **UNVALIDATED and gated**: refuses without
+  `--allow-unvalidated`, stamps `"unvalidated": true` into its record so
+  the number cannot silently enter a ladder. Validation standard (rule 5):
+  reproduce a direct full-model forward to all printed decimals; that run
+  also answers the DSA-indexer-with-fresh-cache unknown.
+- **smoke** dispatches the same way; the mlx_vlm generate branch is
+  PROVISIONAL text-only.
+
+Still pending: GPU `vqlab selftest` of the expert_src rewiring (watcher
+armed for the M3 queue going quiet; the running d2/K1024 fit is itself the
+first real-GPU traffic through the rewired fused-path reader). No mlx_vlm
+import has ever executed in this repo's venvs — every mlx_vlm code path is
+PROVISIONAL until one does.
