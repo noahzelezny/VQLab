@@ -198,3 +198,18 @@ value-identical for all aligned artifacts. It also established that the
 original d8/K4096 pack had left down_proj UNPACKED (aligned packer
 skipped NSUB=80); an unaligned repack of the baseline would shave ~0.1
 GiB — not material.
+
+## 2026-08-29 — reallocation play launched: d8/K16384 experts + d8/K256 PLE
+
+Noah: "the best possible configuration for a 64gb tier model... might be
+the thing to do." The diagnostic's corollary, applied: move bytes FROM the
+near-damage-free PLE TO the experts. tw artifacts deleted (lever failed).
+
+M3: resume d8/K16384 expert fit (27/144 tensors already on disk from the
+mis-aborted run; --relerr-abort 0.45, d8-calibrated). M4: fresh PLE fit
+at d8/K256 (16x smaller K than the 12-bit fit -> fast; geometry otherwise
+matches the K4096 manifest: group 32, iters 12, seed 1234).
+
+Target: ~45.5 GiB (experts 12->14 bits, PLE 12->8 bits). Bet: KL
+meaningfully below the baseline's 556.10. Assembly will use
+--pack-unaligned end-to-end (load path fixed in VQLab ad6918c).
