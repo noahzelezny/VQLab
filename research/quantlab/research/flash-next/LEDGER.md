@@ -141,3 +141,20 @@ Lever fires: d8/K4096 expert refit with --tail-weight-pow 2
 --tail-weight-from 11 (E102 scarce-centroid regime; E106/E110 shallow
 guard). Same bytes; also repacking down_proj via --pack-unaligned
 (criterion met this morning) -> target ~41.3 GiB.
+
+## 2026-08-29 ~10:45 — compaction anchor: what is in flight
+
+M3: weighted expert refit d8/K4096 (--tail-weight-pow 2 --tail-weight-from
+11) -> Exo Models/qwen4exp_vq_fit_d8k4096_tw, ~2h. EXPECTATION SET: its
+relerr will read WORSE than 0.4156 by design (weighted objective trades
+mean for tail); judge by KL only. On completion: assemble via the standard
+chain, pack experts WITH --pack-unaligned (criterion met), PLE from the
+existing d8/K4096 PLE fit (diagnostic proved PLE near-damage-free), target
+~41.3 GiB, score, compare KL vs 556.
+M4: d2/K1024 assembly+scores -> fills TABLE.md's last row (~124 GiB rung,
+no smoke possible on owned boxes — 192GB-class artifact).
+Then: 64 GB ship/hold call (Noah's), release block (cards/HF/VQLab tag),
+DIAG hybrid dir is deletable after the refit scores land.
+GLM: fully validated stack, ready for teacher pass + affine ladder + fits
+whenever GPU frees; peer session had VQLab commit permission denials —
+surfaced to Noah, unresolved.
