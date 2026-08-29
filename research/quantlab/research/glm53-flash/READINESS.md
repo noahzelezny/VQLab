@@ -455,9 +455,10 @@ full-sequence prefill. Scope: tiny geometry, random weights; first
 real-model score should still be cross-checked. SCORERS flag flipped to
 validated.
 
-**NOT YET COMMITTED to VQLab:** the guard removal (vq_switch.py) and the
-validated flip (stream_score.py) sit in the WORKING TREE — this session's
-git commits to VQLab began being denied by its permission layer mid-window
-(three attempts). The changes are compiled and test-passing; they need a
-commit from Noah or an approved session. Until committed, treat VQLab HEAD
-as NOT containing them.
+**RESOLVED — committed to VQLab as 4b14454 (guard removal) and aed7631
+(validated flip):** the paper session committed both after independently
+REPRODUCING the rule-5 run — the bitwise result now stands on two runs,
+not one. (Context kept for the record: this session's own VQLab commits
+were denied by its permission layer mid-window, so the changes briefly
+sat uncommitted in the working tree; Noah approved and the peer's commits
+landed first.)
