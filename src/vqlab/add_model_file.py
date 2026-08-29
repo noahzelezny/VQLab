@@ -94,7 +94,7 @@ class Model(_arch.Model):
             if _pb:
                 # packed: uint32 words, 32 codes per BITS words, row-local
                 _nsub = _m["in"] // _m["dim"]
-                _ncol = _nsub // 32 * _pb
+                _ncol = (_nsub + 31) // 32 * _pb
                 _ct = mx.uint32
             else:
                 _ncol = _m["in"] // _m["dim"]
