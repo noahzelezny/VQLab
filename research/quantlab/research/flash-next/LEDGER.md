@@ -46,3 +46,29 @@ OVERNIGHT QUEUE (self-driving, in value order):
 GLM-5.3 readiness survey spun off as a separate session (task_378d8069);
 its deliverable lands as GLM53_VQ_READINESS.md and belongs in
 research/glm53-flash/ when it arrives.
+
+## 2026-08-29 (night) — rung 2 assembled; a decode bug caught by the identity gate; table cells filled
+
+RUNG 2 (d2/K256): fits mean relerr experts 0.0837 / PLE ~0.0795 (best
+geometry yet). Assembled 115.4 GiB -> PLE pack to 8-bit rows (80 B/row,
+round-trip-verified) -> 92.4 GiB (~4.3 bpw, 0.72 of 128 GB — on the
+sizing rule). Pre-pack scores (M3 streamer): prose 5.3825 (+4.2%), code
+1.9033 (+0.1%), KL 59.04, top-1 91.85% — q6-class fidelity 45 GiB under
+q6. Cross-box verify (M4): 144/144 from artifact bytes, means
+0.0834-0.0840. Gates: check-release/check-bundle PASS; smoke PASS on M4.
+
+DECODE BUG, caught by the packed-path identity check: post-pack streamed
+scores read NaN — VQPLEEmbedding's unpack HARDCODED 11-bit strides, so
+8-bit K256 rows were read misaligned (indices past the codebook; junk
+gather). SMOKE PASSED on the same broken decode — the sharpest proof yet
+that generation is a weak gate and the identity re-score is not optional.
+Codes on disk always correct (pack-time round trip). Fixed: stride+mask
+derived from codebook size (VQLab commit "unpack stride from codebook
+size"); bundle regenerated; re-score running — rung 2 is QUARANTINED
+until the packed path reproduces prose 5.382537 exactly.
+
+LITERARY COLUMN (M4 sweep, 2048 tok) + q3 KL — table now dense:
+  q3 19.4794 | q4 9.0975 | q5 7.8895 | q6 7.7097 | q8 7.6695
+  teacher 7.6643 | VQ d4/K2048 7.8077 (+1.9%)
+  q3 prose KL: 1083.35 mnats, top-1 61.9% (completes the KL column;
+  affine at 3.65 bpw is not merely worse, it is a different model)
