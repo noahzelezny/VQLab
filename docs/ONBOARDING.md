@@ -18,6 +18,13 @@ matter for THIS family before any codebook is fit.
 - Verify the outlier gate (`vqlab verify`) can parse the family's tensor
   layout. Adding a family entry is minutes; discovering the gate cannot read
   your artifacts after you have twenty of them is a day.
+- Source layouts all live in `expert_src.load_expert_stack` (fused gate_up
+  half-slice, pre-stacked 3D, dense 2D, and UNFUSED per-expert 2D — put
+  `{e}` in the family's `src_key` for the last, as glm5_next does; expert
+  count is discovered from the index, never the config). After adding an
+  entry, run the CPU-only loader gate — safe on a busy box:
+  `python src/vqlab/expert_src.py --selftest`, then a header-level check of
+  `expert_src.count_experts` / `probe_key` against the real index.
 
 ## 1. Profile the weight geometry (no fitting)
 

@@ -14,9 +14,13 @@ experts, --reps seeds so a delta smaller than the spread is called noise.
 K=256 only: that is where the penalty lives. The K=2048 arm is 5x the cost and
 E107/E108 already showed the penalty shrinks or reverses there.
 """
-import argparse, json, pathlib
+import argparse, json, pathlib, sys
 import mlx.core as mx
 import numpy as np
+
+sys.path.insert(0, str(pathlib.Path(__file__).parent))
+from families import FAMILY
+import expert_src
 
 ap = argparse.ArgumentParser()
 ap.add_argument("--src", required=True, help="bf16 source model dir")
@@ -29,32 +33,27 @@ ap.add_argument("--iters", type=int, default=20)
 ap.add_argument("--experts", type=int, default=8)
 ap.add_argument("--sample", type=int, default=300_000)
 ap.add_argument("--reps", type=int, default=2)
+ap.add_argument("--family", default="qwen3_5", choices=sorted(FAMILY),
+                help="source-key family (families.py). Default preserves the "
+                     "original hardcoded qwen3_5 behaviour. For unfused "
+                     "layouts (glm5_next) only the first --experts experts' "
+                     "tensors are read at all.")
 args = ap.parse_args()
 
 SRC = pathlib.Path(args.src)
 K, D, G = args.k, args.dim, args.group
 QS = [0, 50, 90, 99, 99.9, 100]
 src_idx = json.load(open(SRC / "model.safetensors.index.json"))["weight_map"]
-PROJ_KEY = {"down_proj": ("down_proj", None),
-            "gate_proj": ("gate_up_proj", 0),
-            "up_proj": ("gate_up_proj", 1)}
+FAM = FAMILY[args.family]
 _shard_cache = {}
 
 
 def load_tensor(layer, proj):
-    key, half = PROJ_KEY[proj]
-    sk = f"model.language_model.layers.{layer}.mlp.experts.{key}"
-    sh = src_idx[sk]
-    if sh not in _shard_cache:
-        _shard_cache.clear()
-        with mx.stream(mx.cpu):
-            _shard_cache[sh] = mx.load(str(SRC / sh))
+    T = expert_src.load_expert_stack(SRC, src_idx, FAM, layer, proj,
+                                     experts=args.experts,
+                                     shard_cache=_shard_cache)
     with mx.stream(mx.cpu):
-        T = _shard_cache[sh][sk]
-        if half is not None:
-            mid = T.shape[1] // 2
-            T = T[:, :mid, :] if half == 0 else T[:, mid:, :]
-        T = T[:args.experts].astype(mx.float32)
+        T = T.astype(mx.float32)
         mx.eval(T)
     return T
 

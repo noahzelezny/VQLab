@@ -35,6 +35,29 @@ FAMILY = {
                  "up_proj": ("gate_up_proj", 1),
                  "down_proj": ("down_proj", None)},
     },
+    "glm5_next": {
+        # GLM-5.3-Flash (320B, 8-of-288 routed + 1 shared, 43 MoE layers on
+        # indices 3-45 — 42 main + the MTP layer 45, which carries its own
+        # full expert stack; layers 0-2 are dense). MEASURED from the BF16
+        # checkpoint's safetensors headers 2026-08-28 (see quantlab
+        # GLM53_VQ_READINESS.md): experts are UNFUSED per-expert 2D tensors
+        # — gate/up [2048, 4096], down [4096, 2048], no gate_up stack, no
+        # [E, out, in] stack anywhere. The "{e}" in src_key marks that:
+        # expert_src.load_expert_stack gathers experts.{0..E-1} into a
+        # stack, discovering E from the index (288 measured; never trust
+        # the config's count over the index).
+        # target_substr is PROVISIONAL: it matches mlx-vlm's shipped
+        # glm5_next (DeepseekV32MoE.switch_mlp = SwitchGLU, sanitize stacks
+        # to mlp.switch_mlp.{key}.weight) and mlx-lm's own deepseek_v32
+        # convention, but mlx-lm has no glm5_next class yet (checked
+        # 2026-08-28) — re-verify the module name against the real class
+        # before the first struct base is built.
+        "target_substr": "switch_mlp",
+        "src_key": "model.language_model.layers.{li}.mlp.experts.{e}.{key}.weight",
+        "proj": {"gate_proj": ("gate_proj", None),
+                 "up_proj": ("up_proj", None),
+                 "down_proj": ("down_proj", None)},
+    },
     "gemma4": {
         "target_substr": "switch_glu",
         # mlx-community's gemma bf16 is an MLX-FORMAT conversion, so
