@@ -35,6 +35,7 @@ import vq_pack
 
 sys.path.insert(0, str(pathlib.Path(__file__).parent))
 from families import FAMILY  # shared registry (families.py)
+import expert_src            # shared source-layout loader (incl. unfused)
 
 ap = argparse.ArgumentParser()
 ap.add_argument("--artifact", required=True)
@@ -79,19 +80,11 @@ _src_cache = {}
 
 
 def src_tensor(li, proj):
-    key_t, sub = FAM["proj"][proj]
-    name = FAM["src_key"].format(li=li, key=key_t)
-    sh = src_map[name]
-    if sh not in _src_cache:
-        _src_cache.clear()                      # one src shard resident
-        _src_cache[sh] = mx.load(str(SRC / sh))
-    T = _src_cache[sh][name]
-    if sub is not None:                          # fused gate_up in HF layout
-        half = T.shape[1] // 2
-        T = T[:, half * sub:half * (sub + 1), :]
-    if T.ndim == 2:                              # dense family (e4b): E=1
-        T = T[None]
-    return T
+    # expert_src handles every source layout (fused half-slice, pre-stacked,
+    # dense E=1, and glm5_next's unfused per-expert 2D) and the CPU-stream
+    # materialization; _src_cache keeps the one-shard-resident behaviour.
+    return expert_src.load_expert_stack(SRC, src_map, FAM, li, proj,
+                                        shard_cache=_src_cache)
 
 
 def layer_of(name):
