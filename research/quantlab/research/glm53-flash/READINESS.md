@@ -399,3 +399,18 @@ armed for the M3 queue going quiet; the running d2/K1024 fit is itself the
 first real-GPU traffic through the rewired fused-path reader). No mlx_vlm
 import has ever executed in this repo's venvs — every mlx_vlm code path is
 PROVISIONAL until one does.
+
+### Pack-alignment check, 2026-08-29 (MEASURED through the packer itself)
+
+Per the paper session's request, checked not assumed: `vq_pack` requires
+`NSUB % 32 == 0` (BLOCK=32, asserted in `words_per_row`). GLM expert
+widths run through the real function:
+
+    d2: gate/up NSUB 2048, down 1024 — both %32==0
+    d4: gate/up NSUB 1024, down  512 — both %32==0
+    d8: gate/up NSUB  512, down  256 — both %32==0
+
+Every geometry packs cleanly; no qwen4_exp-style unpacked ride for any
+glm5_next projection. (The row-aligned kernel variant remains a separate
+VQLab roadmap item for qwen4_exp's d8 down_proj, queued after the Qwen
+ladder.)
