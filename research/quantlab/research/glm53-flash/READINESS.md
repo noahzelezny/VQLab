@@ -237,3 +237,62 @@ model once a struct base exists.
    through the shipping fused path (FINDINGS III.11) — d4 dense/MoE kernel
    ceilings (IV: d4 safe to K2048 threadgroup, device-codebook beyond)
    apply unchanged.
+
+---
+
+## Addendum 2026-08-28 (late): community-conversion + upstream follow-up
+
+Requested by the paper/arc session. All read-only (Hub file reads + GitHub);
+community repos treated as UNTRUSTED — inspected on the Hub only, nothing
+downloaded, installed, or executed.
+
+### Module naming now confirmed at the CHECKPOINT level
+
+`pipenetwork/GLM-5.3-Flash-MLX-4bit` (17 shards, ~178 GB, no bundled python
+— it relies on mlx-vlm's in-tree class) has, per its own
+`model.safetensors.index.json` and `config.json` (read raw on the Hub):
+
+- routed experts: `language_model.model.layers.{li}.mlp.switch_mlp.{gate,up,down}_proj.weight`
+- shared expert: `...mlp.shared_experts.{...}_proj.weight`; router:
+  `...mlp.gate.weight` + `.e_score_correction_bias`
+- hyper-connections renamed to modules: `...attn_hc.{base,fn,scale}`,
+  `...ffn_hc.{...}` (the bf16 checkpoint's flat `hc_attn_*`/`hc_ffn_*`)
+- quantization overrides: indexer modules at 8-bit, rest 4-bit g64 — and
+  NO expert/gate keys in the override map (router quantized? not visible in
+  the summary — check on a full read before using this artifact as a
+  comparator; per III.3 it must pass check_comparator regardless)
+- vision keys and layer-45 (MTP) keys: NOT VISIBLE in the fetched excerpt
+  (the index summary covered layers 0–18) — **UNKNOWN, not absent**; the
+  open mlx-vlm PR #2044 ("MTP support for GLM-5.3-Flash") implies MTP is
+  currently NOT loaded by the shipped class.
+
+So the draft family entry's `target_substr: "switch_mlp"` is now confirmed
+against a real shipped conversion's tensor names, not just mlx-vlm source
+reading. It stays PROVISIONAL only with respect to a future mlx-lm class
+(which could name modules differently). `orcarouter/GLM-5.3-Flash-MLX`
+(1.14 TB incl. bf16 + 2/3/4/6-bit subdirs) likewise ships no python and
+targets mlx-vlm.
+
+### Upstream state, pinned with links (MEASURED from GitHub)
+
+- mlx-vlm glm5_next landed **2026-08-26**, PR #2030, commit `fa27a9a`
+  (github.com/Blaizzy/mlx-vlm/pull/2030) — the earlier "~08-26 PROVISIONAL"
+  date is now confirmed.
+- Active mlx-vlm glm5_next PRs as of 08-28/29: #2044 (MTP support, open),
+  #2074 (Dflash2), #2086/#2087 (indexer fixes), #2091 (chat template) —
+  the class is under active repair; pin the mlx-vlm commit in any scoring
+  claim (III.13's instrument-the-import rule).
+- mlx-lm: still NO glm5_next class or PR (models tree re-checked 08-28).
+  **Runtime timeline reading: the mlx-vlm path is here today; mlx-lm is
+  not in flight anywhere we can see.** Planning consequence: assume
+  scoring/smoke via mlx-vlm; treat an mlx-lm class as an upside surprise,
+  not a scheduled event.
+
+### MTP consequence for the fit
+
+If scoring runs under today's mlx-vlm class (MTP not loaded, pending
+PR #2044), layer 45's 288-expert stack (~13.5 GiB bf16, 1/43 of expert
+mass) is dead weight in the artifact for that runtime. Options at struct-
+base time: fit it anyway (future-proof, costs fit time), or exclude layer
+45 from --vq-layers and graft it bf16/affine later. Decide when the
+scoring runtime is chosen; no action now.
