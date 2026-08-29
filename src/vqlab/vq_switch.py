@@ -1230,9 +1230,10 @@ class VQSwitchLinear(nn.Module):
             # power of two by construction), and rows are NSUB/32*BITS words.
             k, d = codebook.shape
             bits = int(k - 1).bit_length()
-            nsub = codes.shape[2] * 32 // bits
+            # WPR -> NSUB is lossy for padded-tail packs; the scales axis
+            # (IN/group, default group 64) carries the true input width.
             return cls(codes, codebook, vq_scales,
-                       pack_bits=bits, in_features=nsub * d)
+                       pack_bits=bits, in_features=vq_scales.shape[2] * 64)
         return cls(codes, codebook, vq_scales)
 
     @property
@@ -1245,8 +1246,12 @@ class VQSwitchLinear(nn.Module):
         # (observed 2026-08-16: M4 66 GiB loaded, M3 stalled at 16.5 GiB).
         # Single-box never shards, which is why this only bites the cluster.
         if self.pack_bits:
-            nsub = self.codes.shape[2] * 32 // self.pack_bits
-            return nsub * self.codebook.shape[1]
+            # Padded-tail packs (NSUB % 32 != 0) make WPR -> NSUB lossy:
+            # ceil(80/32)*BITS words decode back to 96 subvectors, not 80.
+            # The scales tensor's last axis is IN/group and shards on the
+            # same axis as codes, so it carries the true IN through both
+            # the unaligned format and exo's in-place sharding.
+            return self.vq_scales.shape[2] * self.group_size
         return self.codes.shape[2] * self.codebook.shape[1]
 
     @property
