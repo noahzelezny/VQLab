@@ -170,7 +170,16 @@ model once a struct base exists.
    image/video token ids (defaults now handle `vision_config,
    image_token_id`; GLM adds `video_token_id` and start/end ids — pass them
    in `--copy-config-keys`).
-5. **New for this family — expert stacking at fit time.** No existing
+5. **Expert stacking at fit time — BUILT 2026-08-28 (VQLab 2a6b8ba),
+   option (a) below.** `src/vqlab/expert_src.py` is the single loader for
+   every source layout; the glm5_next FAMILY entry exists (target_substr
+   still PROVISIONAL); vq_397b_codes / verify_artifact / probe_init_sweep
+   all route through it, and probe_init_sweep gains `--family`. CPU-only
+   selftest gates both directions; loader verified byte-identical against
+   direct reads of the real checkpoint (L3 gate_proj, L45 down_proj), and
+   288 experts confirmed from the index on layers 3/20/45. GPU `vqlab
+   selftest` NOT yet run (boxes busy — contention rule); run it once a box
+   is idle, before the first real fit. Original analysis: no existing
    FAMILY entry reads unfused per-expert keys (qwen3_5/qwen4_exp slice a
    fused stack; the _mlx variants read pre-stacked). Either (a) teach the
    fitter's reader to gather `experts.{0..287}.{proj}` into [288, out, in]
