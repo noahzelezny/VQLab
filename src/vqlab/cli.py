@@ -21,6 +21,9 @@ COMMANDS = {
     "fit-dense": ("fit_dense_vq.py", "fit VQ codebooks for a dense MLP trio"),
     # packing
     "pack": ("pack_artifact.py", "pack MoE codes to true bit-width; recompute sizes"),
+    "pack-ple": ("pack_ple.py", "pack PLE codes row-aligned to true bit-width"),
+    "stream-convert": ("stream_convert.py", "streaming affine convert / struct base for models bigger than RAM"),
+    "splice-ple": ("splice_ple.py", "splice VQ PLE codes into a packed artifact"),
     "pack-dense": ("pack_dense.py", "pack a dense VQ artifact"),
     # assembly
     "build-dense": ("build_dense_vq.py", "splice dense VQ fits into a quantized base -> runnable artifact"),
