@@ -2254,3 +2254,31 @@ NOT yet run: full release gates (check-release, bundle-accept, smoke
 matrix), vision graft decision, second-geometry rungs, noise floor for
 this family. Single seeded fit, single slice per corpus — the numbers
 above are one draw of everything. Cards wait for gates.
+
+## 2026-08-28 — Flash-Next VQ artifact through the FULL gate suite
+
+All six gates, per the published-model standard (noise floor waived by
+Noah for seeded post-paper fits):
+  check-release   PASS  files, index, tokenizer round-trip
+  check-bundle    PASS  runtime verbatim in-checkpoint
+  bundle-accept   PASS  kernels from the artifact's bundle bit-identical
+  vision          PASS  333/333 grafted; identity gate passed on 9/10
+                        unquantized probes AFTER learning the qwen4_exp
+                        rename (one shared name, lm_head.weight, lawfully
+                        differs through quantization — no longer misreads
+                        as same-layout)
+  smoke           PASS  generated through shipping runtime
+  verify (M4)     PASS  144/144 decoded from artifact bytes cross-box;
+                        worst 0.1912 (L00 gate), means 0.187-0.188
+
+Verify exposed a latent staged-local assumption: with BOTH operands on
+SMB the artifact side's lazy reads hit the M4 watchdog at tensor 74 —
+fixed like the src side (cpu-stream materialize), committed. Every gate
+that stumbled tonight stumbled on the new artifact class and each
+stumble is now a VQLab commit (trust_remote_code in smoke +
+stream_score, graft key mapping, verify artifact-side eval).
+
+The artifact is release-grade pending: card, HF push, VQLab absorption
+of the three scratchpad tools (streaming convert, struct-base builder,
+PLE splice) so the next rung is a one-command affair. Rungs next per
+Noah once absorption lands.
