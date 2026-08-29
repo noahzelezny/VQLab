@@ -108,3 +108,20 @@ ceil-WPR in all 7 packed kernels, aligned output byte-identical to HEAD
 metal. GLM arc (peer session): mlx-vlm venv staged, scorer line-verified
 against INSTALLED code (3 fixes), glm5_next confirmed in the pip
 release; GPU-window checklist agreed (selftest, bundle_accept, rule-5).
+
+## 2026-08-29 — 64GB-rung lever: diagnostic hybrid queued, prediction registered
+
+Plan (Noah-approved): (1) DIAG hybrid — d8/K4096 experts + d4/K2048 PLE
+(~57 GiB, instrumental only, never ships) — one streamed KL isolates
+whether experts or PLE tables drive rung 3's 556 mnats. (2) Apply the
+lever where diagnosis points: experts -> tail-weight-pow p~2 with
+--tail-weight-from ~11 (E102's scarce-centroid regime is exactly
+d8/K4096; E106/E110 shallow-layer guard); PLE -> weighted PLE fit or
+byte reallocation.
+
+PREDICTION, registered before the run (Noah): the experts, not the PLE,
+carry the damage — the hybrid's KL stays high (~500). If instead KL
+collapses toward ~200, the tables were the bleeder and the hunch is
+wrong. Arithmetic note either way: expert relerr 0.4156 vs PLE 0.4094 at
+this geometry are nearly equal, so relerr alone cannot adjudicate —
+which is the point of measuring at the output.
