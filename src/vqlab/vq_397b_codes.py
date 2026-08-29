@@ -84,9 +84,12 @@ ap.add_argument("--seed", type=int, default=1234,
                      "paper's MoE artifacts.")
 ap.add_argument("--relerr-abort", type=float, default=0.35,
                 help="refit, then abort, if any tensor exceeds this relerr. "
-                     "Healthy d4k2048 is ~0.19, d2k2048 ~0.032, worst "
-                     "legitimate (L00) ~0.215 — so 0.35 is well clear of "
-                     "normal and well under a collapse (1.0).")
+                     "GEOMETRY-DEPENDENT: healthy d4k2048 ~0.19, d2k2048 "
+                     "~0.032 — the 0.35 default suits those. d8 runs much "
+                     "higher by nature (397B d8k16384 MEAN was 0.3156; "
+                     "flash-next d8 worst 0.3539 aborted a run that was "
+                     "fine, 2026-08-28) — pass ~0.45 for d8. A collapse "
+                     "reads ~1.0 either way.")
 ap.add_argument("--max-refit", type=int, default=2,
                 help="refit attempts for a tensor over --relerr-abort")
 ap.add_argument("--tail-weight-from", type=int, default=0,
