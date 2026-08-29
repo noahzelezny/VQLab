@@ -83,3 +83,28 @@ all gates, three corpora, KL — the 128 GB-tier quality rung.
 Two shipped rungs now:
   d4/K2048  66.5 GiB  KL 146.6  top-1 86.6%  (96 GB tier)
   d2/K256   92.4 GiB  KL  59.0  top-1 91.9%  (128 GB tier)
+
+## 2026-08-29 — rung 3 (d8/K4096) assembled and scored: the 64 GB floor, decision pending
+
+43.8 GiB (~2.0 bpw whole; PLE rows packed to 30 B). All gates PASS incl.
+smoke; splice succeeded after splice_ple was pinned to CPU (4th watchdog
+instance; first M4 attempt corrupted the packed dir mid-splice — rebuilt
+clean from intact fit dirs). d8 down_proj (NSUB=80) rides UNPACKED
+pending the padded-tail GPU acceptance (below).
+
+Scores (2048 tok): prose 7.0390 (+36%), code 2.2605 (+19%), literary
+10.5480 (+38%), KL 556.10 mnats, top-1 74.3%. Reading: keeps the VQ
+quality-per-byte line above affine (half of q3's 1083 mnats at 58% of
+its size) but is a FLOOR rung in absolutes — worse than q4 at less than
+half q4's bytes. Precedent for shipping honest floors: 397B VQ-2.2bpw
+(~+31% prose) is the family's most-downloaded artifact. Ship / mixed-
+allocation retry / hold — Noah's call.
+
+Also this morning (walk window): padded-tail pack format landed (VQLab
+e4d5a6a + 1992ff6) — unaligned NSUB packs via zero-padded tail block,
+ceil-WPR in all 7 packed kernels, aligned output byte-identical to HEAD
+(verified), NSUB=80/12-bit round-trip exact; gated behind
+--pack-unaligned until bundle_accept's new unaligned cases pass on
+metal. GLM arc (peer session): mlx-vlm venv staged, scorer line-verified
+against INSTALLED code (3 fixes), glm5_next confirmed in the pip
+release; GPU-window checklist agreed (selftest, bundle_accept, rule-5).
