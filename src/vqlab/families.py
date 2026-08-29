@@ -52,6 +52,13 @@ FAMILY = {
         # convention, but mlx-lm has no glm5_next class yet (checked
         # 2026-08-28) — re-verify the module name against the real class
         # before the first struct base is built.
+        # runtime: mlx-lm has no glm5_next class (2026-08-29); mlx-vlm ships
+        # one (PR #2030). Flip this ONE field to "mlx_lm" when it lands
+        # there — every load site routes through runtime_load.load_for_family.
+        # model_type: lets artifact-only tools (smoke, stream_score) resolve
+        # this family from a config.json.
+        "runtime": "mlx_vlm",
+        "model_type": "glm5_next",
         "target_substr": "switch_mlp",
         "src_key": "model.language_model.layers.{li}.mlp.experts.{e}.{key}.weight",
         "proj": {"gate_proj": ("gate_proj", None),
