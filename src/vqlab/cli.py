@@ -19,6 +19,7 @@ COMMANDS = {
     # fitting
     "fit-moe": ("vq_397b_codes.py", "fit VQ codebooks for MoE expert tensors (per --family)"),
     "fit-dense": ("fit_dense_vq.py", "fit VQ codebooks for a dense MLP trio"),
+    "fit-ple": ("fit_ple.py", "fit per-tensor VQ codebooks for PLE ngram banks"),
     # packing
     "pack": ("pack_artifact.py", "pack MoE codes to true bit-width; recompute sizes"),
     "pack-ple": ("pack_ple.py", "pack PLE codes row-aligned to true bit-width"),
