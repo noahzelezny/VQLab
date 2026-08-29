@@ -173,3 +173,28 @@ beats q6 on every column at 25 GiB less, and gets within 1.26x of q8's KL
 at 66 GiB less. Literary reads below bf16 — slice artifact, noted in
 TABLE.md. Ladder table now complete; only the weighted d8 refit remains
 in flight.
+
+## 2026-08-29 — weighted refit scored: THE LEVER FAILS AT THIS RUNG
+
+d8/K4096 tail-weighted refit (--tail-weight-pow 2 --tail-weight-from 11),
+assembled with --pack-unaligned (first production use), smoke PASS:
+
+  prose 7.2576 (was 7.0390)   KL 581.30 (was 556.10)   top-1 73.3% (74.3%)
+  code  2.2162 (was 2.2605)   literary 10.9853 (was 10.5480)   43.7 GiB
+
+Verdict: WORSE on KL, top-1, prose, literary; only code improved slightly.
+The E102 scarce-centroid lever does not transfer to this family/geometry —
+at d8/K4096 on Flash-Next experts, tail emphasis buys the tail less than
+it costs the body. Negative result recorded; the BASELINE d8/K4096
+(43.8 GiB, KL 556.10) remains the 64GB-tier candidate. Refit fit dir
+(90.2 GiB) + tw artifact (44 GiB) + DIAG hybrid (58.7 GiB) now cleanup
+candidates — Noah's call.
+
+Silver lining: this run took --pack-unaligned through a full model load
+for the first time and caught two stale floor-WPR defects the GPU kernel
+acceptance could not see (bundle shim allocation; lossy WPR->NSUB in
+input_dims/from_weights). Fixed in VQLab ad6918c, smoke-verified;
+value-identical for all aligned artifacts. It also established that the
+original d8/K4096 pack had left down_proj UNPACKED (aligned packer
+skipped NSUB=80); an unaligned repack of the baseline would shave ~0.1
+GiB — not material.
