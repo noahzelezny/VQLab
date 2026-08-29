@@ -373,7 +373,7 @@ _SRC_FUSED_PACKED = _PACK_FETCH + r"""
     const int NSUB = IN / 4;
     const int NGRP = IN / G;
     const int QPG  = G / 16;
-    const int WPR  = NSUB / 32 * BITS;
+    const int WPR  = (NSUB + 31) / 32 * BITS;  // ceil: tail block padded, pad codes never read (n < NSUB)
     uint r = thread_position_in_grid.x;
     uint t = thread_position_in_grid.y;
     uint lid = thread_position_in_threadgroup.x;
@@ -489,7 +489,7 @@ _SRC_FUSED_PACKED_D4_DEVCB = _PACK_FETCH + r"""
     const int NSUB = IN / 4;
     const int NGRP = IN / G;
     const int QPG  = G / 16;
-    const int WPR  = NSUB / 32 * BITS;
+    const int WPR  = (NSUB + 31) / 32 * BITS;  // ceil: tail block padded, pad codes never read (n < NSUB)
     uint r = thread_position_in_grid.x;
     uint t = thread_position_in_grid.y;
     uint lid = thread_position_in_threadgroup.x;
@@ -541,7 +541,7 @@ _SRC_FUSED_PACKED_D2 = _PACK_FETCH + r"""
     const int NSUB = IN / 2;
     const int NGRP = IN / G;
     const int QPG  = G / 8;
-    const int WPR  = NSUB / 32 * BITS;
+    const int WPR  = (NSUB + 31) / 32 * BITS;  // ceil: tail block padded, pad codes never read (n < NSUB)
     uint r = thread_position_in_grid.x;
     uint t = thread_position_in_grid.y;
     uint lid = thread_position_in_threadgroup.x;
@@ -586,7 +586,7 @@ _SRC_FUSED_PACKED_D8 = _PACK_FETCH + r"""
     const int NX4  = IN / 4;
     const int NGRP = IN / G;
     const int SPG  = G / 8;
-    const int WPR  = NSUB / 32 * BITS;
+    const int WPR  = (NSUB + 31) / 32 * BITS;  // ceil: tail block padded, pad codes never read (n < NSUB)
     uint r = thread_position_in_grid.x;
     uint t = thread_position_in_grid.y;
     uint lid = thread_position_in_threadgroup.x;
@@ -628,7 +628,7 @@ _SRC_FUSED_PACKED_D8_TG = _PACK_FETCH + r"""
     const int NX4  = IN / 4;
     const int NGRP = IN / G;
     const int SPG  = G / 8;
-    const int WPR  = NSUB / 32 * BITS;
+    const int WPR  = (NSUB + 31) / 32 * BITS;  // ceil: tail block padded, pad codes never read (n < NSUB)
     uint r = thread_position_in_grid.x;
     uint t = thread_position_in_grid.y;
     uint lid = thread_position_in_threadgroup.x;
@@ -751,7 +751,7 @@ _SRC_DENSE_PACKED_D2 = r"""
     const int K    = dims[5];
     const int NSUB = IN / 2;
     const int NGRP = IN / G;
-    const int WPR  = NSUB / 32 * BITS;
+    const int WPR  = (NSUB + 31) / 32 * BITS;  // ceil: tail block padded, pad codes never read (n < NSUB)
     uint r = thread_position_in_grid.y;
     uint t = thread_position_in_grid.z;
     uint lane = thread_position_in_threadgroup.x;
@@ -813,7 +813,7 @@ _SRC_DECODE_PACKED = _PACK_FETCH + r"""
     const int NSUB = IN / D;
     const int NGRP = IN / G;
     const int SPG  = G / D;
-    const int WPR  = NSUB / 32 * BITS;
+    const int WPR  = (NSUB + 31) / 32 * BITS;  // ceil: tail block padded, pad codes never read (n < NSUB)
     if (g >= (uint)NGRP || r >= (uint)OUT || ec >= (uint)NE) return;
     const uint e = eidx[ec];
     const device uint* crow = codes + (size_t)e * OUT * WPR + (size_t)r * WPR;
@@ -956,10 +956,10 @@ def _fused(x, eidx, codes, codebook, scales, pack_bits=0):
             raise NotImplementedError(
                 f"no FUSED packed kernel for d={D}; only d=4, d=2 and d=8 "
                 f"are implemented and each is dispatched explicitly.")
-        if codes.shape[2] != NSUB // 32 * pack_bits:
+        if codes.shape[2] != (NSUB + 31) // 32 * pack_bits:
             raise ValueError(
                 f"packed codes are {codes.shape[2]} words/row, expected "
-                f"{NSUB // 32 * pack_bits} for IN={IN}, d={D}, "
+                f"{(NSUB + 31) // 32 * pack_bits} for IN={IN}, d={D}, "
                 f"bits={pack_bits}")
         if D == 8:
             template = [("T", x.dtype), ("MAX_NX4", IN // 4),
@@ -1049,10 +1049,10 @@ def _dense_fused(x, codes, codebook, scales, pack_bits=0, in_features=None):
         if exp_in is not None and exp_in != IN:
             raise ValueError(f"packed dense: x is IN={IN} but module says "
                              f"in_features={exp_in}")
-        if codes.shape[1] != NSUB // 32 * pack_bits:
+        if codes.shape[1] != (NSUB + 31) // 32 * pack_bits:
             raise ValueError(
                 f"packed dense: codes are {codes.shape[1]} words/row, "
-                f"expected {NSUB // 32 * pack_bits} for IN={IN}, "
+                f"expected {(NSUB + 31) // 32 * pack_bits} for IN={IN}, "
                 f"bits={pack_bits}")
         name = f"vq_dense_packed{pack_bits}_d2"
         src = _SRC_DENSE_PACKED_D2

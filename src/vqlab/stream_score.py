@@ -91,9 +91,14 @@ def score_glm5_next(model, ids_list, args):
     """GLM-5.3-Flash streamed scorer. **UNVALIDATED — refuses without
     --allow-unvalidated, and its record carries "unvalidated": true.**
 
-    Written 2026-08-29 from a source READ of mlx-vlm main's glm5_next
-    (never executed: no venv here has mlx_vlm). Validation standard before
-    the flag comes off (house rule 5 / III.11): the streamed pass must
+    Written 2026-08-29; LINE-VERIFIED the same day against the installed
+    release (mlx-vlm 0.6.17, venv glm5vlm) — every step below mirrors
+    Glm5NextModel.__call__ / LanguageModel.__call__ one-to-one: masks built
+    on the pre-broadcast h (attention mask with return_array=True),
+    broadcast to hc_mult + mx.contiguous, per-layer mask picked by the
+    layer's own `is_linear`, h.mean(axis=2), model.norm, then lm_head or
+    tied as_linear. Still NEVER EXECUTED. Validation standard before the
+    flag comes off (house rule 5 / III.11): the streamed pass must
     reproduce a direct full-model forward to all printed decimals — on a
     small resident model or a known artifact — and the DSA-indexer-with-
     fresh-cache question must be answered by that same run.
@@ -124,12 +129,13 @@ def score_glm5_next(model, ids_list, args):
                          f"{type(core).__module__} — the runtime's helper "
                          "names moved; update score_glm5_next against the "
                          "resolved module before scoring.")
-    attn_mask = make_attn(h, None)
+    # masks on the PRE-broadcast h, exactly as Glm5NextModel.__call__ does
+    attn_mask = make_attn(h, None, return_array=True)
     ssm_mask = make_ssm(h, None) if make_ssm is not None else None
 
-    hc = getattr(core, "hc", None) or getattr(core.args, "hc_mult", 4)
     h = mx.broadcast_to(h[:, :, None, :],
-                        (*h.shape[:2], hc, h.shape[-1]))
+                        (*h.shape[:2], core.hc_mult, h.shape[-1]))
+    h = mx.contiguous(h)
     mx.eval(h)
 
     n = len(core.layers)
@@ -138,10 +144,8 @@ def score_glm5_next(model, ids_list, args):
         with mx.stream(mx.cpu):
             mx.eval(blk.parameters())
         t0 = time.time()
-        is_linear = getattr(blk, "layer_type", "") == "linear_attention" or \
-            "Linear" in type(getattr(blk, "self_attn", blk)).__name__
-        mask = ssm_mask if is_linear else attn_mask
-        h = blk(h, mask, None)
+        mask = ssm_mask if blk.is_linear else attn_mask
+        h = blk(h, mask=mask, cache=None)
         mx.eval(h)
         core.layers[i] = None
         del blk
