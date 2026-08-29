@@ -1324,13 +1324,16 @@ class VQPLEEmbedding(nn.Module):
         self.codebook = codebook
         self.vq_scales = vq_scales
         self.group_size = group_size
-        # packed rows: 11-bit codes, byte-aligned because nsub*11 % 8 == 0
-        # (qwen4_exp: 40*11 = 440 bits = 55 bytes exactly). Constant gather
-        # tables map code i -> its 3-byte window + shift.
+        # packed rows: BITS-wide codes (BITS from the codebook size — a
+        # hardcoded 11 here read K256 rows on an 11-bit stride and scored
+        # NaN, 2026-08-29), byte-aligned because nsub*BITS % 8 == 0.
+        # Constant gather tables map code i -> its 3-byte window + shift.
         self._pn = packed_nsub
+        self._bits = max(1, (codebook.shape[0] - 1).bit_length())
+        self._mask = (1 << self._bits) - 1
         if packed_nsub:
             import numpy as _np
-            bit0 = _np.arange(packed_nsub) * 11
+            bit0 = _np.arange(packed_nsub) * self._bits
             self._b0 = mx.array(bit0 // 8)
             self._sh = mx.array((bit0 % 8).astype(_np.uint32))
 
@@ -1343,7 +1346,7 @@ class VQPLEEmbedding(nn.Module):
         w = (mx.take(b, self._b0, axis=-1)
              | (mx.take(b, self._b0 + 1, axis=-1) << 8)
              | (mx.take(b, self._b0 + 2, axis=-1) << 16))
-        return (w >> self._sh) & 0x7FF
+        return (w >> self._sh) & self._mask
 
     def __call__(self, ids):
         if self._pn:
