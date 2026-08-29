@@ -158,3 +158,18 @@ DIAG hybrid dir is deletable after the refit scores land.
 GLM: fully validated stack, ready for teacher pass + affine ladder + fits
 whenever GPU frees; peer session had VQLab commit permission denials —
 surfaced to Noah, unresolved.
+
+## 2026-08-29 — d2/K1024 rung lands (M4)
+
+Assembled + scored clean on the M4: packed 144 expert tensors 174.6 ->
+132.4 GiB, PLE row-packed at row_bytes=100 -> 111.6 GiB final (better
+than the ~124 estimate). check-bundle PASS; verify + smoke still owed
+(192GB-class — no owned box can smoke it; same caveat as recorded for
+the class).
+
+Scores: prose 5.2449 / code 1.8975 / literary 7.6358 / KL 34.14 mnats /
+top-1 94.1%. Sits between q6 (52.76 @ 137 GiB) and q8 (27.06 @ 178 GiB):
+beats q6 on every column at 25 GiB less, and gets within 1.26x of q8's KL
+at 66 GiB less. Literary reads below bf16 — slice artifact, noted in
+TABLE.md. Ladder table now complete; only the weighted d8 refit remains
+in flight.
