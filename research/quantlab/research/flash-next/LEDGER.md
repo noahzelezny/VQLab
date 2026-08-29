@@ -125,3 +125,19 @@ collapses toward ~200, the tables were the bleeder and the hunch is
 wrong. Arithmetic note either way: expert relerr 0.4156 vs PLE 0.4094 at
 this geometry are nearly equal, so relerr alone cannot adjudicate —
 which is the point of measuring at the output.
+
+## 2026-08-29 — DIAGNOSTIC VERDICT: experts carry the damage (prediction confirmed)
+
+Hybrid (rough d8/K4096 experts + good d4/K2048 PLE, 58.7 GiB,
+instrumental): KL 544.28 vs rung 3's 556.10, top-1 75.1% vs 74.3%,
+prose 6.9739 vs 7.0390. A 2.3x PLE reconstruction improvement moved
+~2% of the divergence: THE EXPERTS ARE THE BLEEDER. Noah's registered
+prediction confirmed. Corollary worth bits: PLE tables are nearly
+damage-free at 2.0 bpw — low rungs can push them cheaper and spend on
+experts. Also: equal relerr (0.416 vs 0.409) produced wildly unequal
+output damage — §4.3's law again, measured at component level.
+
+Lever fires: d8/K4096 expert refit with --tail-weight-pow 2
+--tail-weight-from 11 (E102 scarce-centroid regime; E106/E110 shallow
+guard). Same bytes; also repacking down_proj via --pack-unaligned
+(criterion met this morning) -> target ~41.3 GiB.
