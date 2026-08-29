@@ -11,6 +11,12 @@ import argparse
 import json, pathlib, shutil, sys
 import mlx.core as mx
 
+# Splicing is pure IO: lazy loads must never evaluate on the GPU stream —
+# over SMB that lands storage reads inside a Metal command buffer and the
+# watchdog kills it (M4, d8/K4096 assembly, 2026-08-29; fourth instance of
+# the class). The whole script runs on CPU.
+mx.set_default_device(mx.cpu)
+
 _ap = argparse.ArgumentParser()
 _ap.add_argument("--artifact", required=True)
 _ap.add_argument("--ple-fit", required=True)
