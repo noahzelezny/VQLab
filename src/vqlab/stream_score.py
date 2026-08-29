@@ -30,9 +30,13 @@ import gc
 import json
 import math
 import pathlib
+import sys
 import time
 
 import mlx.core as mx
+
+sys.path.insert(0, str(pathlib.Path(__file__).parent))
+import runtime_load
 
 
 def score_qwen4_exp(model, ids_list, args):
@@ -83,7 +87,93 @@ def score_qwen4_exp(model, ids_list, args):
     return logits
 
 
-SCORERS = {"qwen4_exp": score_qwen4_exp}
+def score_glm5_next(model, ids_list, args):
+    """GLM-5.3-Flash streamed scorer. **UNVALIDATED — refuses without
+    --allow-unvalidated, and its record carries "unvalidated": true.**
+
+    Written 2026-08-29 from a source READ of mlx-vlm main's glm5_next
+    (never executed: no venv here has mlx_vlm). Validation standard before
+    the flag comes off (house rule 5 / III.11): the streamed pass must
+    reproduce a direct full-model forward to all printed decimals — on a
+    small resident model or a known artifact — and the DSA-indexer-with-
+    fresh-cache question must be answered by that same run.
+
+    Shape per the readiness design note (research/glm53-flash/READINESS.md):
+      - text stack one level deeper: model.language_model.model.layers
+      - layer signature is (x, mask, cache) — no ids/prev_ctx (no PLE)
+      - hc bookends: broadcast h to (B, S, hc_mult, D) BEFORE the stack,
+        h.mean(axis=2) AFTER — hc mixing itself lives inside each layer
+      - final norm EXISTS (core.norm) — opposite of qwen4_exp
+      - KDA layers take an ssm mask, DSA layers an attention mask; helper
+        names are resolved from the model's own module (III.13: score with
+        the copy that loaded, never a parallel import).
+    """
+    lm = getattr(model, "language_model", model)
+    core = lm.model
+    ids = mx.array([ids_list[:-1]])
+    with mx.stream(mx.cpu):
+        mx.eval(core.embed_tokens.parameters())
+    h = core.embed_tokens(ids)
+
+    import importlib
+    lang = importlib.import_module(type(core).__module__)
+    make_attn = getattr(lang, "create_attention_mask", None)
+    make_ssm = getattr(lang, "create_ssm_mask", None)
+    if make_attn is None:
+        raise SystemExit("FAIL: create_attention_mask not found in "
+                         f"{type(core).__module__} — the runtime's helper "
+                         "names moved; update score_glm5_next against the "
+                         "resolved module before scoring.")
+    attn_mask = make_attn(h, None)
+    ssm_mask = make_ssm(h, None) if make_ssm is not None else None
+
+    hc = getattr(core, "hc", None) or getattr(core.args, "hc_mult", 4)
+    h = mx.broadcast_to(h[:, :, None, :],
+                        (*h.shape[:2], hc, h.shape[-1]))
+    mx.eval(h)
+
+    n = len(core.layers)
+    for i in range(n):
+        blk = core.layers[i]
+        with mx.stream(mx.cpu):
+            mx.eval(blk.parameters())
+        t0 = time.time()
+        is_linear = getattr(blk, "layer_type", "") == "linear_attention" or \
+            "Linear" in type(getattr(blk, "self_attn", blk)).__name__
+        mask = ssm_mask if is_linear else attn_mask
+        h = blk(h, mask, None)
+        mx.eval(h)
+        core.layers[i] = None
+        del blk
+        gc.collect()
+        mx.clear_cache()
+        print(f"  layer {i}/{n-1} {time.time()-t0:.1f}s "
+              f"(peak {mx.get_peak_memory()/1024**3:.1f}G)", flush=True)
+
+    h = h.mean(axis=2)                      # hc bookend #2
+    with mx.stream(mx.cpu):
+        mx.eval(core.norm.parameters())
+    out = core.norm(h)                      # final norm EXISTS here
+    head = getattr(lm, "lm_head", None)
+    tied = getattr(getattr(lm, "args", None), "tie_word_embeddings", False)
+    with mx.stream(mx.cpu):
+        mx.eval(head.parameters() if (head is not None and not tied)
+                else core.embed_tokens.parameters())
+    logits = (head(out) if (head is not None and not tied)
+              else core.embed_tokens.as_linear(out)).astype(mx.float32)[0]
+    return logits
+
+
+# family -> scorer entry. `runtime` names the loader (runtime_load), and
+# `validated` is house rule 5: a scorer is validated only once its streamed
+# pass has reproduced a direct forward to all printed decimals. Unvalidated
+# scorers refuse without --allow-unvalidated and stamp their output record.
+SCORERS = {
+    "qwen4_exp": {"fn": score_qwen4_exp, "family": "qwen4_exp",
+                  "validated": True},
+    "glm5_next": {"fn": score_glm5_next, "family": "glm5_next",
+                  "validated": False},
+}
 
 
 def main():
@@ -99,25 +189,41 @@ def main():
                          "report KL-to-teacher in millinats + top-1 "
                          "agreement. Token ids must match the cache exactly.")
     ap.add_argument("--out", default=None)
+    ap.add_argument("--allow-unvalidated", action="store_true",
+                    help="run a scorer that has NOT yet reproduced a direct "
+                         "forward (rule 5). The output record is stamped "
+                         "\"unvalidated\": true; such a number must never "
+                         "enter a ladder or a card.")
     a = ap.parse_args()
 
-    from mlx_lm.utils import load_model, load_tokenizer
+    from mlx_lm.utils import load_tokenizer
     mp = pathlib.Path(a.model)
-    # VQ artifacts ship their runtime as an in-checkpoint model.py bundle;
-    # scoring them is this tool's primary job, so the bundle import is on.
-    model, config = load_model(mp, lazy=True, trust_remote_code=True)
-    mt = config.get("model_type") or config.get("text_config", {}).get("model_type")
+    cfg_peek = json.load(open(mp / "config.json"))
+    mt = cfg_peek.get("model_type") or \
+        cfg_peek.get("text_config", {}).get("model_type")
     if mt not in SCORERS:
         raise SystemExit(f"FAIL: no streaming scorer for model_type={mt!r}. "
                          f"Supported: {sorted(SCORERS)}. A generic loop "
                          f"would silently mis-run this family.")
+    entry = SCORERS[mt]
+    if not entry["validated"] and not a.allow_unvalidated:
+        raise SystemExit(f"FAIL: the {mt!r} scorer is UNVALIDATED (rule 5: "
+                         "it has never reproduced a direct forward). Pass "
+                         "--allow-unvalidated to run it anyway; the record "
+                         "will be stamped.")
+    # Load via the family's declared runtime (runtime_load; mlx_lm families
+    # behave exactly as before, incl. the in-checkpoint model.py bundle —
+    # both runtimes honour model_file). III.13: print what resolved.
+    model, config = runtime_load.load_for_family(entry["family"], mp,
+                                                 lazy=True)
+    print(runtime_load.resolved_runtime_note(model), flush=True)
     tok = load_tokenizer(mp)
     ids = tok.encode(open(a.corpus).read())[: a.tokens + 1]
     bos = getattr(tok, "bos_token_id", None)
     if bos is not None and (not ids or ids[0] != bos):
         ids = [bos] + ids[: a.tokens]
 
-    logits = SCORERS[mt](model, ids, a)
+    logits = entry["fn"](model, ids, a)
     tgt = mx.array(ids[1:])
     lse = mx.logsumexp(logits, axis=-1)
     pk = mx.take_along_axis(logits, tgt[:, None].astype(mx.int64), axis=-1)[:, 0]
@@ -125,6 +231,8 @@ def main():
     ppl = math.exp(float(mx.mean(nll).item()))
     rec = {"model": str(mp), "corpus": a.corpus,
            "tokens": len(ids) - 1, "ppl": round(ppl, 6)}
+    if not entry["validated"]:
+        rec["unvalidated"] = True           # rule 5: never enters a ladder
 
     if a.kl_cache:
         cd = pathlib.Path(a.kl_cache)

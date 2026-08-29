@@ -61,12 +61,35 @@ def main(argv=None) -> int:
                   "--skip-preflight if you know better than the check.")
             return 1
 
-    from mlx_lm.utils import load
-    from mlx_lm import generate
+    # Runtime dispatch (Noah's ruling 08-29): the artifact's model_type
+    # resolves to a family, the family names its runtime. mlx_lm families
+    # take exactly the path this tool always took. Both runtimes honour the
+    # in-checkpoint model.py bundle, so "generate through the runtime the
+    # artifact SHIPS" holds under either.
+    import json as _json
+    sys.path.insert(0, str(HERE))
+    import runtime_load
+    _cfg = _json.load(open(art / "config.json"))
+    _mt = _cfg.get("model_type") or \
+        _cfg.get("text_config", {}).get("model_type")
+    _fam = runtime_load.family_for_model_type(_mt)
+    _rt = runtime_load.runtime_for(_fam) if _fam else "mlx_lm"
 
-    print(f"loading {art} ...", flush=True)
-    # VQ artifacts ship their runtime in-checkpoint; loading it is the point.
-    model, tokenizer = load(str(art), trust_remote_code=True)
+    print(f"loading {art} ... (runtime {_rt})", flush=True)
+    if _rt == "mlx_vlm":
+        # PROVISIONAL: written from a source read of mlx-vlm main, never
+        # executed here. Text-only smoke of a VLM artifact; the vision path
+        # gets its own gate when GLM vision is actually exercised.
+        from mlx_vlm import generate as vlm_generate
+        from mlx_vlm.utils import load as vlm_load
+        model, processor = vlm_load(str(art))
+        tokenizer = getattr(processor, "tokenizer", processor)
+    else:
+        from mlx_lm.utils import load
+        from mlx_lm import generate
+        # VQ artifacts ship their runtime in-checkpoint; loading it is the point.
+        model, tokenizer = load(str(art), trust_remote_code=True)
+    print(runtime_load.resolved_runtime_note(model))
 
     # III.13: instrument the import, never assume which copy runs.
     print("\nRESOLVED RUNTIME (the copy that actually loaded):")
@@ -108,8 +131,15 @@ def main(argv=None) -> int:
     print(f"\ngenerating {a.max_tokens} token(s) through the fused path ...",
           flush=True)
     try:
-        text = generate(model, tokenizer, prompt=prompt,
-                        max_tokens=a.max_tokens, verbose=False)
+        if _rt == "mlx_vlm":
+            # PROVISIONAL text-only generate; mlx_vlm's generate wants the
+            # processor and returns a result object or str per version.
+            text = vlm_generate(model, processor, prompt=prompt,
+                                max_tokens=a.max_tokens, verbose=False)
+            text = getattr(text, "text", text)
+        else:
+            text = generate(model, tokenizer, prompt=prompt,
+                            max_tokens=a.max_tokens, verbose=False)
     except Exception as e:
         print(f"\nFAIL: the artifact could not generate: "
               f"{type(e).__name__}: {e}\n\n"
