@@ -942,10 +942,11 @@ def _fused(x, eidx, codes, codebook, scales, pack_bits=0):
             # large-K variant streams the codebook from DEVICE memory exactly
             # like _SRC_FUSED_D8. Verified bit-identical to the unpacked d8
             # kernels on synthetic codes at K=256/1024/4096/16384.
-            if NSUB % 32 != 0:
-                raise NotImplementedError(
-                    f"vq_pack blocks are 32 codes; NSUB={NSUB} (IN={IN}, "
-                    f"d=8) must be a multiple of 32, i.e. IN % 256 == 0")
+            # Unaligned NSUB is legal since the padded-tail format: pack()
+            # zero-pads the last block and every packed kernel computes
+            # ceil-WPR with inner loops bounded n < NSUB, so pad codes are
+            # never read. The WPR shape assert below (already ceil) is the
+            # remaining guard against a mis-packed tensor.
             if K <= _D8_TG_MAX_K:
                 name = f"vq_fused_packed{pack_bits}_d8_tg"
                 src = _SRC_FUSED_PACKED_D8_TG
