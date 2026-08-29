@@ -72,3 +72,14 @@ LITERARY COLUMN (M4 sweep, 2048 tok) + q3 KL — table now dense:
   teacher 7.6643 | VQ d4/K2048 7.8077 (+1.9%)
   q3 prose KL: 1083.35 mnats, top-1 61.9% (completes the KL column;
   affine at 3.65 bpw is not merely worse, it is a different model)
+
+## 2026-08-29 (night, cont.) — rung 2 QUARANTINE LIFTED: packed path exact
+
+Fixed decode reproduces every printed digit: prose 5.382537, KL 59.0428,
+top-1 0.9185, code 1.903324 — bit-equivalent to pre-pack. Literary
+7.7112 (+0.6% vs teacher; q6-level). RUNG 2 IS DONE: 92.4 GiB, ~4.3 bpw,
+all gates, three corpora, KL — the 128 GB-tier quality rung.
+
+Two shipped rungs now:
+  d4/K2048  66.5 GiB  KL 146.6  top-1 86.6%  (96 GB tier)
+  d2/K256   92.4 GiB  KL  59.0  top-1 91.9%  (128 GB tier)
