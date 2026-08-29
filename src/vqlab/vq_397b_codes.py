@@ -46,6 +46,7 @@ mx.set_cache_limit(8 << 30)
 
 sys.path.insert(0, str(pathlib.Path(__file__).parent))
 from families import FAMILY  # shared registry (families.py)
+import expert_src            # shared source-layout loader (incl. unfused)
 
 ap = argparse.ArgumentParser()
 ap.add_argument("--base", required=True)
@@ -194,7 +195,7 @@ base_cfg = json.load(open(BASE / "config.json"))
 # axis 1, the same OUT-dim half-slice used here).
 FAM = FAMILY[args.family]
 
-_fam_probe = FAM["src_key"].format(li=LO, key=FAM["proj"]["down_proj"][0])
+_fam_probe = expert_src.probe_key(FAM, LO)
 if not any(k.startswith(_fam_probe.rsplit(".", 1)[0]) or k == _fam_probe
            for k in src_idx):
     _near = [k for k in list(src_idx) if "mlp" in k or "expert" in k][:3]
@@ -342,22 +343,16 @@ def _shard_path(fname):
 
 
 def load_src_expert(li, proj):
-    key, half = PROJ[proj]
-    sk = FAM["src_key"].format(li=li, key=key)
-    # Materialize the source read ON THE CPU STREAM. The lazy shard read of a
-    # remote 751G bf16 source stalls on disk INSIDE a GPU command buffer and
-    # the Metal watchdog kills the wait (kIOGPUCommandBufferCallbackErrorTimeout)
-    # — seen at the fit's sampling eval when SRC is on SMB rather than local
-    # disk. Same fault and same cure as verify_artifact.py: the stream binds at
-    # OP-CREATION time, not eval time, so the load AND the slice must be created
-    # under mx.cpu or the read chain stays on the watchdog'd stream.
-    with mx.stream(mx.cpu):
-        T = mx.load(_shard_path(src_idx[sk]))[sk]
-        if half is not None:
-            mid = T.shape[1] // 2
-            T = T[:, :mid, :] if half == 0 else T[:, mid:, :]
-        mx.eval(T)
-    return T
+    # All source layouts (fused-3D half-slice, pre-stacked 3D, unfused
+    # per-expert 2D as on glm5_next) live in expert_src.load_expert_stack —
+    # including the CPU-stream materialization (IV.1: the lazy shard read of
+    # a remote bf16 source stalls on disk INSIDE a GPU command buffer and the
+    # Metal watchdog kills the wait; the stream binds at op-creation time, so
+    # load AND slice must be created under mx.cpu). _shard_path keeps the
+    # staging behaviour: unfused reads are grouped per shard, so the
+    # one-staged-shard cache is never thrashed.
+    return expert_src.load_expert_stack(SRC, src_idx, FAM, li, proj,
+                                        shard_path=_shard_path)
 
 
 def vq_tensor_codes(li, proj, want_shape):
