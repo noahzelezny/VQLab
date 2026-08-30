@@ -537,3 +537,33 @@ one position per step while two tokens commit, which costs acceptance but
 never correctness. Both are speedup headroom, not blockers.
 
 STILL NOT SHIPPED. Noah decides whether 1.20x justifies 2.13 GiB.
+
+### Correction (same day): the 3.2bpw slowdown, and what the sim files measure
+
+I hypothesized the VQ decode kernel had a seq=1 fast path that speculative
+verification would miss. Noah asked the right question -- "wouldn't that have
+affected the 45gb artifact in the same way?" -- and the microbenchmark
+(scratchpad/seqcost.py) REFUTES the hypothesis outright:
+
+  2.1bpw: seq=1 61.09 ms, seq=2 49.15 ms, seq=4 58.29 ms
+  3.2bpw: seq=1 60.83 ms, seq=2 48.30 ms, seq=4 56.23 ms
+
+Per-forward cost is identical across artifacts, and seq=2 is CHEAPER than
+seq=1. No kernel cliff. Speculative verification is not the problem.
+
+The real cause is a measurement error of mine: the q8sim/q6sim grafts are
+quantize->DEQUANTIZE simulations, all 4.86 GiB bf16 on disk (verified). They
+measure the weight ERROR faithfully, so every acceptance number stands --
+but every decode run carried a 4.86 GiB bf16 head, never 2.13 GiB. So:
+  2.1bpw: 45.0 + 4.86 ~= 50 GiB, room to spare -> genuine 1.20x
+  3.2bpw: 69.4 + 4.86 ~= 74 GiB against an 84 GiB wired limit -> thrashing
+Both "slow" 3.2bpw runs were memory, one via swap (Safari open, Noah
+confirmed yellow pressure) and one via buffer-cache thrash with swap flat.
+
+Consequences: the 2.13 GiB figure in the headroom table is what a REAL
+quantized module would cost and remains unbuilt/unverified. A clean
+large-rung speedup number needs that module, or a box with real headroom.
+The MTP head forward is also expensive in absolute terms (~44 ms inferred
+on the 2.1bpw run, against a 48-61 ms trunk forward) precisely because it
+is bf16 with its own 512-expert MoE -- quantizing it for real should cut
+that materially and raise the speedup above 1.20x.
