@@ -359,3 +359,14 @@ MTP is a speculative-decode speed mechanism no MLX runtime implements.
 If one appears, the recipe is a graft_vision-style mtp graft (+4.9 GiB
 bf16 / ~+1.2 quantized). Cards updated to state text is decoded by the
 main model without the MTP head.
+
+## 2026-08-30 — 8-bit MTP graft shipped to all four rungs
+
+The teacher's MTP head (a full 512-expert MoE draft layer, 4.86 GiB bf16)
+now rides in every release artifact as model-mtp-graft.safetensors,
+8-bit g64 (2.58 GiB; the 3D expert tensors quantize fine — first gate
+missed them, widened to ndim 2-3). Disk-only: current runtimes sanitize
+mtp.* away, resident sizes unchanged; config carries quantization entries
++ an mtp_graft marker for any future MTP decoder. Correction recorded:
+the earlier +1.25 GiB estimate was 4-bit arithmetic; 8-bit is +2.58.
+Cards (HF + exo) updated; uploads deduped by xet (one 2.77 GB transfer).
