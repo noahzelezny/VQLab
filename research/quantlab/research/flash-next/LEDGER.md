@@ -249,3 +249,17 @@ Probe ranking confirmed CAUSAL. Rate: ~23 mnats/GiB.
 q4 (294) at 64GB does not fall out of this lever alone: full late band
 +10 GiB -> ~56 GiB (breaks headroom). Candidate next: top-4 late layers
 (L36/L35/L39/L31, +3.3 GiB -> ~48 GiB), plausibly KL ~330-350.
+
+## 2026-08-29 — late-4 splice + PLE floor found
+
+mixL01p4 (d2/K256 experts in L0,L1,L31,L35,L36,L39): KL 361.51, top-1
+80.3%, prose 5.8328, 48.3 GiB. Cumulative from the flat rung: 419.88 ->
+361.51 (-14%) for +4.6 GiB. Gates + smoke PASS throughout.
+
+PLE probe #2: K256 -> K16 tables (1.0 -> 0.5 bpw rows, fit relerr 0.78,
+~2 min on M4). KL 361.51 -> 387.50 (+26 mnats) at -3.0 GiB. THE PLE HAS A
+FLOOR between 8-bit and 4-bit rows: K256 is free, K16 is not. Exchange
+rate note: late-band expert bits buy ~8.7 mnats/GiB and K16 PLE bits lose
+~8.7 mnats/GiB — a wash, so at this margin PLE-vs-expert reallocation
+moves ALONG the frontier. The 64GB-tier candidates are 48.3 GiB @ 361.5
+(best quality) vs 43.7 @ 419.9 (max headroom); ship pick is Noah's.
