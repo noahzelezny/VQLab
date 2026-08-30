@@ -126,6 +126,19 @@ tot = sum((DST / f).stat().st_size for f in set(index.values()))
 (DST / "model.safetensors.index.json").write_text(json.dumps(
     {"metadata": {"total_size": tot}, "weight_map": index}, indent=1))
 save_config(config, config_path=DST / "config.json")
+# mlx-vlm families: quantize_model/save_config can drop top-level keys the
+# VLM loader requires (vision_config, observed on glm5_next 2026-08-30 —
+# load_model then dies in VisionConfig.from_dict). Re-merge anything the
+# source config carried that the written one lost; source values are never
+# overwritten onto keys the convert legitimately changed.
+_src_cfg = json.load(open(SRC / "config.json"))
+_dst_cfg = json.load(open(DST / "config.json"))
+_missing = {k: v for k, v in _src_cfg.items() if k not in _dst_cfg}
+if _missing:
+    _dst_cfg.update(_missing)
+    (DST / "config.json").write_text(json.dumps(_dst_cfg, indent=2))
+    print(f"re-merged config keys dropped by save path: {sorted(_missing)}",
+          flush=True)
 load_tokenizer(SRC).save_pretrained(DST)
 for pat in ("*.py", "generation_config.json"):
     for f in glob.glob(str(SRC / pat)):
