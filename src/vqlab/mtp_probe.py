@@ -80,7 +80,14 @@ def rms(x, w, eps=1e-6):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--model", required=True, help="main-model artifact dir")
-    ap.add_argument("--mtp", required=True, help="bf16 mtp graft safetensors")
+    ap.add_argument("--mtp", required=True, nargs="+",
+                    help="one or more mtp graft safetensors; all are\n"
+                         "scored against a single model load")
+    ap.add_argument("--norm-style", default="group",
+                    choices=("group", "row", "both"),
+                    help="wide hidden-norm statistic; grouped (per\n"
+                         "stream) is correct for qwen4_exp -- measured\n"
+                         "0.6992 vs 0.6562 flat")
     ap.add_argument("--corpus", required=True)
     ap.add_argument("--tokens", type=int, default=1024)
     ap.add_argument("--out", default=None)
@@ -128,121 +135,120 @@ def main():
           f"(sanity: should be ~0.4-0.7; ~0 means the capture is broken)",
           flush=True)
 
-    # ---- build the MTP block from the graft -----------------------------
-    g = report_norm_convention(
-        {k[len("mtp."):]: v for k, v in mx.load(a.mtp).items()})
+    # ---- shared setup ---------------------------------------------------
     import importlib
+    from mlx.utils import tree_flatten
     arch = importlib.import_module(type(core).__module__)
     args_t = core.args
     mtp_theta = getattr(args_t, "mtp", {}) or {}
     fa_idx = [i for i, l in enumerate(core.layers)
               if l.layer_type == "full_attention"][0]
     blk_cls = type(core.layers[fa_idx])
-    # ctor signature is (args, layer_idx); layer_type comes from
-    # args.layer_types[idx]. The PLE submodule it may build stays
-    # zero-initialized (strict=False below) and contributes nothing.
-    mblk = blk_cls(args_t, fa_idx)
-    mblk.ple = None      # the MTP head has no PLE bank; a zero-filled stand-in
-                         # is not a no-op through this class, so remove it
-    # graft keys are upstream-format: apply the same expert mapping the
-    # model's sanitize applies to main layers (gate_up split, switch_mlp
-    # rename), then FAIL LOUDLY on any key that finds no parameter slot.
-    layer_w = {}
-    for k, v in g.items():
-        if not k.startswith("layers.0."):
-            continue
-        k = k[len("layers.0."):]
-        if k.endswith("mlp.experts.gate_up_proj"):
-            mid = v.shape[-2] // 2
-            layer_w["mlp.switch_mlp.gate_proj.weight"] = v[..., :mid, :]
-            layer_w["mlp.switch_mlp.up_proj.weight"] = v[..., mid:, :]
-        elif k.endswith("mlp.experts.down_proj"):
-            layer_w["mlp.switch_mlp.down_proj.weight"] = v
-        else:
-            layer_w[k] = v
-    from mlx.utils import tree_flatten
-    slots = {k for k, _ in tree_flatten(mblk.parameters())}
-    unmatched = sorted(set(layer_w) - slots)
-    if unmatched:
-        raise SystemExit(f"FAIL: {len(unmatched)} graft keys found no "
-                         f"parameter slot, e.g. {unmatched[:4]}")
-    missing = sorted(slots - set(layer_w))
-    if missing:
-        print(f"note: {len(missing)} module params not in graft (left init), "
-              f"e.g. {missing[:4]}", flush=True)
-    mblk.load_weights(list(layer_w.items()), strict=False)
     mmixer_cls = type(mixer)
-    mmixer = mmixer_cls(args_t, use_combine=False)
-    mmixer.load_weights([(k[len("hyper_connection_mixer."):], v)
-                         for k, v in g.items()
-                         if k.startswith("hyper_connection_mixer.")],
-                        strict=False)
-    rope_theta = float(mtp_theta.get("rope_theta", 10_000_000))
-    mtp_rope = type(core.rope)(core.rope.dim, rope_theta)
-    mx.eval(mblk.parameters(), mmixer.parameters())
-
     D = args_t.hidden_size
     hc = core.hc
-
-    # ---- MTP forward, sweeping the wiring ambiguities -------------------
+    eps = getattr(args_t, "rms_norm_eps", 1e-6)
+    rope_theta = float(mtp_theta.get("rope_theta", 10_000_000))
+    mtp_rope = type(core.rope)(core.rope.dim, rope_theta)
     nxt = mx.array([ids[1:]])                              # [1, S+1]
     e_raw = core.embed_tokens(nxt)
     B, T, _ = h.shape
+    m_mask = create_attention_mask(h[..., :D], None)
 
     # qwen4_exp's RMSNorm is ZERO-CENTERED (y = norm(x) * (1 + weight)) and the
     # 10240-wide norms take per-stream statistics (group_size=hidden_size).
     # Hand-rolling `n * w` here silently drops the +1 and drove acceptance to
     # 0.0; use the architecture's own class so the convention can't drift.
-    eps = getattr(args_t, "rms_norm_eps", 1e-6)
-
     def arch_norm(dim, w, group_size=None):
         n = arch.RMSNorm(dim, group_size=group_size, eps=eps)
         n.weight = w.astype(mx.float32)
         return n
 
-    ne = arch_norm(D, g["pre_fc_norm_embedding.weight"])
-    e = ne(e_raw)
-    e_s = mx.broadcast_to(e[:, :, None, :], (B, T, hc, D))
-    W = mx.concatenate([g["fc_embedding.weight"], g["fc_hidden.weight"]], axis=1)
+    def score_graft(path):
+        g = report_norm_convention(
+            {k[len("mtp."):]: v for k, v in mx.load(path).items()})
+        # ctor signature is (args, layer_idx); layer_type comes from
+        # args.layer_types[idx]. The PLE submodule it may build stays
+        # zero-initialized (strict=False below) and contributes nothing.
+        mblk = blk_cls(args_t, fa_idx)
+        mblk.ple = None  # the MTP head has no PLE bank; a zero-filled stand-in
+                         # is not a no-op through this class, so remove it
+        # graft keys are upstream-format: apply the same expert mapping the
+        # model's sanitize applies to main layers (gate_up split, switch_mlp
+        # rename), then FAIL LOUDLY on any key that finds no parameter slot.
+        layer_w = {}
+        for k, v in g.items():
+            if not k.startswith("layers.0."):
+                continue
+            k = k[len("layers.0."):]
+            if k.endswith("mlp.experts.gate_up_proj"):
+                mid = v.shape[-2] // 2
+                layer_w["mlp.switch_mlp.gate_proj.weight"] = v[..., :mid, :]
+                layer_w["mlp.switch_mlp.up_proj.weight"] = v[..., mid:, :]
+            elif k.endswith("mlp.experts.down_proj"):
+                layer_w["mlp.switch_mlp.down_proj.weight"] = v
+            else:
+                layer_w[k] = v
+        slots = {k for k, _ in tree_flatten(mblk.parameters())}
+        unmatched = sorted(set(layer_w) - slots)
+        if unmatched:
+            raise SystemExit(f"FAIL: {len(unmatched)} graft keys found no "
+                             f"parameter slot, e.g. {unmatched[:4]}")
+        missing = sorted(slots - set(layer_w))
+        if missing:
+            print(f"note: {len(missing)} module params not in graft (left "
+                  f"init), e.g. {missing[:4]}", flush=True)
+        mblk.load_weights(list(layer_w.items()), strict=False)
+        mmixer = mmixer_cls(args_t, use_combine=False)
+        mmixer.load_weights([(k[len("hyper_connection_mixer."):], v)
+                             for k, v in g.items()
+                             if k.startswith("hyper_connection_mixer.")],
+                            strict=False)
+        mx.eval(mblk.parameters(), mmixer.parameters())
 
-    m_mask = create_attention_mask(h[..., :D], None)
-    results = {}
-    # The one genuine remaining ambiguity: whether the wide hidden norm takes
-    # one statistic per stream (as every other 10240-wide norm in this arch
-    # does) or one over the flat row. Concat order is NOT ambiguous -- the head
-    # carries separate fc_embedding / fc_hidden tensors.
-    for norm_style, gs in (("group", D), ("row", None)):
-        nh = arch_norm(hc * D, g["pre_fc_norm_hidden.weight"], group_size=gs)
-        h_s = nh(h).reshape(B, T, hc, D)
-        cat = mx.concatenate([e_s, h_s], axis=-1)
-        hin = (cat @ W.T.astype(cat.dtype)).reshape(B, T, hc * D)
-        hout = mblk(hin, mtp_rope, m_mask, None, None, None, nxt, prev_ctx)
-        lg = (head(mmixer(hout)) if head is not None
-              else core.embed_tokens.as_linear(mmixer(hout))
-              ).astype(mx.float32)
-        pred = mx.argmax(lg, axis=-1)[0]
-        mx.eval(pred)
-        acc = float(mx.mean((pred[:S] == main_pred[1 : S + 1])
-                            .astype(mx.float32)).item())
-        accc = float(mx.mean((pred[:S] == mx.array(ids[2 : S + 2]))
-                             .astype(mx.float32)).item())
-        results[norm_style] = (acc, accc)
-        print(f"variant {norm_style}-norm: acc_vs_main {acc:.4f}  "
-              f"vs_corpus {accc:.4f}  "
-              f"sample: {tok.decode([int(x) for x in pred[:8].tolist()])!r}",
-              flush=True)
-    best = max(results.items(), key=lambda kv: kv[1][0])
-    acc_main, acc_corpus = best[1]
-    mtp_pred = None
+        ne = arch_norm(D, g["pre_fc_norm_embedding.weight"])
+        e_s = mx.broadcast_to(ne(e_raw)[:, :, None, :], (B, T, hc, D))
+        W = mx.concatenate([g["fc_embedding.weight"],
+                            g["fc_hidden.weight"]], axis=1)
+        # The one genuine remaining ambiguity: whether the wide hidden norm
+        # takes one statistic per stream (as every other 10240-wide norm in
+        # this arch does) or one over the flat row. Concat order is NOT
+        # ambiguous -- separate fc_embedding / fc_hidden tensors.
+        styles = (("group", D), ("row", None)) if a.norm_style == "both" else \
+                 ((a.norm_style, D if a.norm_style == "group" else None),)
+        res = {}
+        for norm_style, gs in styles:
+            nh = arch_norm(hc * D, g["pre_fc_norm_hidden.weight"], group_size=gs)
+            h_s = nh(h).reshape(B, T, hc, D)
+            cat = mx.concatenate([e_s, h_s], axis=-1)
+            hin = (cat @ W.T.astype(cat.dtype)).reshape(B, T, hc * D)
+            hout = mblk(hin, mtp_rope, m_mask, None, None, None, nxt, prev_ctx)
+            lg = (head(mmixer(hout)) if head is not None
+                  else core.embed_tokens.as_linear(mmixer(hout))
+                  ).astype(mx.float32)
+            pred = mx.argmax(lg, axis=-1)[0]
+            mx.eval(pred)
+            # MTP at position i drafts token i+2; the main model's own greedy
+            # choice for i+2 is main_pred[i+1]. Agreement with the actual
+            # corpus token is a secondary line.
+            hits = (pred[:S] == main_pred[1 : S + 1])
+            acc = float(mx.mean(hits.astype(mx.float32)).item())
+            accc = float(mx.mean((pred[:S] == mx.array(ids[2 : S + 2]))
+                                 .astype(mx.float32)).item())
+            res[norm_style] = {"acceptance_vs_main_greedy": round(acc, 4),
+                               "agreement_vs_corpus": round(accc, 4),
+                               "hits": int(mx.sum(hits).item())}
+            print(f"  {norm_style}-norm: acc_vs_main {acc:.4f} "
+                  f"({int(mx.sum(hits).item())}/{S})  vs_corpus {accc:.4f}  "
+                  f"sample: {tok.decode([int(x) for x in pred[:8].tolist()])!r}",
+                  flush=True)
+        return res
 
-    # ---- score ----------------------------------------------------------
-    # MTP at position i drafts token i+2; the main model's own greedy
-    # choice for i+2 is main_pred[i+1]. Also report agreement with the
-    # actual corpus token as a secondary line.
-    rec = {"model": a.model, "mtp": a.mtp, "corpus": a.corpus, "positions": S,
-           "best_variant": best[0],
-           "acceptance_vs_main_greedy": round(acc_main, 4),
-           "agreement_vs_corpus": round(acc_corpus, 4)}
+    rec = {"model": a.model, "corpus": a.corpus, "positions": S,
+           "control_main_vs_corpus": round(ctrl, 4), "grafts": {}}
+    for path in a.mtp:
+        print(f"=== {pathlib.Path(path).name} ===", flush=True)
+        rec["grafts"][pathlib.Path(path).name] = score_graft(path)
     print(json.dumps(rec), flush=True)
     if a.out:
         pathlib.Path(a.out).write_text(json.dumps(rec, indent=1))
