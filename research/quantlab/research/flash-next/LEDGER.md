@@ -692,3 +692,41 @@ component loader, not the text weight download.)
 
 "Mention MTP might not work on 64GB without raising the wired limit" --
 agreed, goes in the card.
+
+## 2026-08-30 (cont) — the usability wall: DO NOT SHIP the sidecar alone
+
+Noah: "but that still makes someone running it difficult." Correct, and it
+is the decisive objection. Stating it plainly:
+
+  There is NO configuration-only path to a working MTP feature.
+  mlx-lm's generate() has no MTP hook, so no arrangement of files --
+  sidecar in-repo, sidecar in its own repo, standalone runner script --
+  makes a stock user's decoding faster. Every arrangement still ends in
+  "download a thing, then run our script instead of your normal tool."
+
+Shipping the sidecar + a script would be the SAME mistake as the pulled
+8-bit graft, one layer up: a feature that technically exists and that
+essentially nobody can practically use. The correct read of "make it an
+option" is an option people can actually take.
+
+Real usability requires code where users already are. Two venues:
+
+  1. MTPLX (github.com/youssofal/MTPLX, Apache-2.0, "Powered by MTPLX"
+     attribution clause). Purpose-built for MLX MTP spec-decode, has a
+     user-facing CLI, and is organized as ONE PATCH MODULE PER FAMILY:
+     deepseek_mtp_patch, glm_mtp_patch, hy_v3, mimo, nemotron_h,
+     qwen3_5, step3p5. A qwen4_exp_mtp_patch.py is a known-shape
+     contribution, and we now have every junction characterized and
+     measured, so it is bounded work rather than research.
+  2. Upstream mlx-lm qwen4_exp: keep mtp.* through sanitize, expose the
+     head, and hook generation. Broader reach, slower, not our timing.
+
+RECOMMENDATION: do not upload the sidecar as a standalone-script
+curiosity. Either write the MTPLX qwen4_exp patch (then the card can say
+"install MTPLX, point it at this model" -- a real instruction), or park
+the head and record the finding. The research stands either way: the head
+works, 1.56-1.80x median 1.65x, 2.12 GiB, optionality proven.
+
+Sidecars are staged in the four local artifact dirs; NOTHING uploaded.
+If we park, they should come back out of those dirs to avoid an
+accidental future upload.
