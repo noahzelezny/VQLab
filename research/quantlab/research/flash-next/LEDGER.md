@@ -606,3 +606,45 @@ the bf16 graft. Shipping needs a pre-quantized 6-bit sidecar written to
 disk (~2.1 GiB) named OUTSIDE the `model*.safetensors` glob, plus the
 runtime gate in the bundled model.py, plus an on-device smoke. Nothing
 published yet; Noah's call.
+
+## 2026-08-30 (cont) — MTP sidecar built, smoked, staged on disk
+
+Noah: "lets do it. It looks like it works and is helpful, lets make it an
+option!" Built as VQLab commands (VQLab e6eb09a):
+  vqlab mtp-pack      bf16 graft -> quantized drafting sidecar
+  vqlab mtp-generate  draft/verify loop, --benchmark for the numbers
+  src/vqlab/mtp_head.py  the wiring, in ONE place
+
+Sidecar: mtp-head-q6.safetensors, 71 tensors, 2.14 GiB on disk, 6-bit /
+group 32, router left full precision. Built lazily -- no trunk weights are
+materialized, so packing costs ~0 GiB. One file serves all four rungs
+(verified it loads against the 3.2/4.4/5.5 configs: fa_idx 3, hc 4,
+D 2560, tie False everywhere); the head depends on the config, not on the
+trunk's quantization. Copied into all four artifact dirs.
+
+OPTIONALITY PROVEN, not asserted -- this is the claim I got wrong before:
+  sidecar sitting in the 2.1bpw artifact dir              yes
+  present in the 138 files mlx-lm's model*.safetensors    NO
+    glob discovers (utils.py:349, never reads the index)
+  resident with the sidecar on disk       44.96 GiB, byte-identical
+                                          to the pre-MTP measurement
+  stock generate() still works            "Paris.\nThe capital of France
+                                          is Paris.\nIs"
+
+SMOKE PASSED end to end from the sidecar loaded off disk (2.1bpw):
+  head resident 2.12 GiB
+  speculative 25.54 tok/s vs baseline 15.72 tok/s = 1.62x
+  acceptance 0.667 (prompt differs from the 0.708 run)
+  chunk control 2/96, top-2 gaps 0.125/0.125 vs median 2.500
+
+A warmup trap worth remembering: the first sidecar run measured 1.16x with
+the SAME weights, purely because Metal compiles the 2-token trunk path and
+the quantized head kernels on first use and mtp-generate timed the
+speculative path first (mtp_decode.py had run baseline first and warmed
+them). Both paths are now warmed before timing. Any future A/B on this
+runtime needs the same care.
+
+NOT YET UPLOADED. Remaining: HF upload of the sidecar to 4 repos (8.6 GiB)
++ model card sections + exo card note. Card text goes to Noah first --
+public claims, and the wired-limit figure for stock 64GB boxes is still
+the one number neither of us has measured.
