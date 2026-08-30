@@ -648,3 +648,47 @@ NOT YET UPLOADED. Remaining: HF upload of the sidecar to 4 repos (8.6 GiB)
 + model card sections + exo card note. Card text goes to Noah first --
 public claims, and the wired-limit figure for stock 64GB boxes is still
 the one number neither of us has measured.
+
+## 2026-08-30 (cont) — Noah's four questions, answered by measurement
+
+"Is it actually 1.6x?" -- fair challenge; the single prompt used until now
+drove the model into a degenerate repetitive stretch, which is unusually
+easy to draft. Swept six prompt types, 128 tokens each, 2.1bpw, sidecar
+loaded off disk (scratchpad/mtp_bench_prompts.py):
+
+  prompt      acceptance   baseline   speculative   speedup
+  factual        0.656     13.53      21.29         1.57x
+  code           0.703     13.72      24.68         1.80x
+  prose          0.578     15.05      24.27         1.61x
+  reasoning      0.797     14.66      24.86         1.70x
+  technical      0.641     14.48      22.63         1.56x
+  chat           0.812     14.25      25.09         1.76x
+
+  speedup    min 1.56x  MEDIAN 1.65x  max 1.80x
+  acceptance min 0.578  median 0.679  max 0.812
+
+The suspicion was backwards: the degenerate "technical" prompt is the
+SLOWEST row, not the fastest. 1.6x is fair and slightly conservative;
+"1.56-1.80x, median 1.65x" is the honest card claim. Prose is the hardest
+to draft (0.578) and still returns 1.61x, because a rejected draft is not
+wasted -- the trunk's own next token comes out of the same forward.
+
+"How do you configure whether or not to use the MTP?" -- there is NO
+in-model switch, and the card must not imply one. mlx-lm's generate() has
+no MTP hook, so the head is a separate CODE PATH, not a config flag:
+stock load/generate ignores the sidecar entirely (proven: resident
+44.96 GiB with the file present), and drafting happens only when someone
+runs `vqlab mtp-generate`. Configuration == which command you run.
+
+"Will it still work with exo?" -- yes, and better than expected: exo
+builds its download allow-list from the weight_map in index.json
+(download/huggingface_utils.py:100, get_allow_patterns), and its bare
+"*.safetensors" fallback fires only for repos with NO index. Ours have
+one, and the sidecar is not in it. So exo does not even DOWNLOAD the
+sidecar: no wasted bandwidth, no resident cost, model behaves exactly as
+today. Exo users simply get no drafting. (Note exo's vision path globs a
+broader "*.safetensors" -- vision.py:361,424 -- but that is the vision
+component loader, not the text weight download.)
+
+"Mention MTP might not work on 64GB without raising the wired limit" --
+agreed, goes in the card.
