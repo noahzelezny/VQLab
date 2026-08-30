@@ -473,3 +473,67 @@ STILL NOT SHIPPED, per the smoke-first rule. Acceptance is a proxy only.
 Remaining before anything reaches HF: MTP module in the bundle -> real
 draft/verify decode loop -> measured tok/s speedup -> smoke on-device.
 Artifacts: parked_mtp_graft_bf16.safetensors + q8sim/q6sim variants.
+
+## 2026-08-30 (cont) — MTP decode loop built and measured
+
+Noah's call: the head ships OPTIONAL ("as long as its optional i think
+that's fine"), 6-bit. Precision settled at 4096 positions (2.1bpw):
+bf16 2888/4096 = 0.7051, 8-bit 2890 = 0.7056, 6-bit 2894 = 0.7065.
+The whole spread is 6 hits and 6-bit comes out nominally HIGHEST, which
+is itself proof the differences are noise (a quantized head cannot beat
+its own bf16). Binomial SE at n=4096 is +/-0.7pp vs a 0.14pp spread.
+6-bit head = 2.13 GiB. Head precision cannot affect output quality at
+all -- the trunk verifies every drafted token, so a worse draft costs a
+rejection (speed), never a wrong token.
+
+Optionality is mechanically real: mlx-lm discovers weights by globbing
+`model*.safetensors` (utils.py:349) and does NOT consult the index, so a
+file named `mtp-head-q6.safetensors` is invisible to the stock loader and
+loads only when our bundled model.py asks for it. The vision tower proves
+the other half -- model-vision-graft.safetensors DOES match the glob and
+is read every load, but sanitize drops visual.* before materialization,
+which is why resident is 44.96 GiB. Vision tower is only 0.84 GiB bf16.
+NOTE: optional means optional RESIDENCY, not optional download -- exo and
+most HF clients pull whole repos, so the gate belongs in the runtime.
+
+Headroom, 45 GiB rung, everything on: 44.96 trunk + 0.84 vision + 2.13
+head + 0.75 KV@32k = 48.68 GiB. KV is cheap here: only 12 of 48 layers
+are full-attention, 2 kv heads, head_dim 256 => 24 KiB/token (0.75 GiB
+@32k, 3.0 GiB @128k); the 36 linear layers hold ~56 MiB of constant
+state. Stock 64GB limit is ~48 GiB (75%) -- Gemini corroborates, but
+NEITHER of us measured it on a stock box, and this machine is not stock
+(iogpu.wired_limit_mb = 86016 = 88% of 96 GiB). It is the one assumed
+number in the headroom table.
+
+DECODE LOOP (scratchpad/mtp_decode.py) -- built, correct, measured.
+Rollback is O(1): every qwen4_exp cache slot is REASSIGNED, not mutated
+(cache[0] = ..., cache[1] = state), and mlx arrays are immutable, so
+keeping the old references is a free snapshot; attention uses trim() by
+the offset DELTA (trimming a hardcoded 1 left a stale key while the
+recurrent caches rolled back 2).
+
+MEASURED (2.1bpw, 96 tokens, 6-bit head): baseline 15.6 tok/s ->
+speculative 18.8 tok/s = 1.20x, acceptance 0.708 over 48 steps.
+
+Bit-identical output is NOT achievable and demanding it is a false gate.
+Chunk control: the trunk disagrees with its OWN single-token greedy
+stream at 2/96 positions when the same tokens are fed as a chunk, and
+the top-2 logit gaps there are 0.25 and exactly 0.00 against a median
+gap of 3.625 -- literal ties, numerics not meaning. Verification always
+happens inside a 2-token forward, so every correct speculative
+implementation on this runtime inherits it. Gate is now: divergence must
+be confined to near-ties.
+
+INVALID: the 3.2bpw run (0.34 tok/s speculative vs 4.71 baseline) is a
+memory-pressure artifact, not a result -- 69.4 trunk + 2.13 head + the
+2-token forward's larger buffers + live snapshot references thrashed
+against the 84 GiB wired limit (1.76 GB swap touched). Discarded, not
+relaunched. A clean large-rung number needs a box with real headroom.
+
+OPEN: 1.20x is well under the ~1.55x ceiling implied by 0.708 acceptance
+(the 2-token forward is not free, and the head forward adds cost). The
+MTP head's own KV cache is also only approximately aligned -- it advances
+one position per step while two tokens commit, which costs acceptance but
+never correctness. Both are speedup headroom, not blockers.
+
+STILL NOT SHIPPED. Noah decides whether 1.20x justifies 2.13 GiB.
