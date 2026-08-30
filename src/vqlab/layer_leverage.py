@@ -20,6 +20,16 @@ re-implements the forward; unknown model_type is a hard error.
 
     python -m vqlab.cli layer-leverage --teacher <bf16 dir> --student <dir>
         --corpus <txt> [--tokens N] [--out probe.json]
+
+Known issues, FIXED 2026-08-29 (verified equal-output on a tiny resident
+pair; large-model peak is unmeasured until the next real probe run — per
+the probe-duration rule, treat the improvement as expected, not measured):
+  - the three per-layer forwards were eval'd as one batch with both models'
+    layer weights resident (112.3 GiB peak on the 96 GiB M3 vs the 335 GiB
+    teacher) — now evaluated sequentially, teacher layer freed first;
+  - models were loaded outside a CPU-stream block, so the lazy shard-read
+    ops were GPU-stream-bound at creation (the IV.1 SMB watchdog class,
+    seen on the M4 ~22:40 08-29) — loads now happen under mx.stream(mx.cpu).
 """
 import argparse
 import gc
@@ -90,21 +100,105 @@ def probe_qwen4_exp(teacher, student, ids_list, args):
             mx.eval(t_blk.parameters())
             mx.eval(s_blk.parameters())
         t0 = time.time()
+        # MEMORY (fix 2026-08-29, see docstring known-issues): the original
+        # built all three forwards and eval'd them as ONE batch — one command
+        # buffer holding three layer graphs' intermediates, with BOTH models'
+        # layer weights resident throughout (112.3 GiB peak on the 96 GiB M3
+        # against the 335 GiB teacher). Now each forward is eval'd alone, and
+        # the teacher's layer weights are released before the student runs.
+        # Same ops, same values — only concurrency changes.
         t_out = t_blk(h_t, t_core.rope, t_mask, t_conv, None, None,
                       ids, t_prev)
+        mx.eval(t_out)
+        t_core.layers[i] = None                 # teacher weights out of the
+        del t_blk                               # peak before student runs
         s_local = s_blk(h_t, s_core.rope, s_mask, s_conv, None, None,
                         ids, s_prev)                    # injected: teacher h
+        mx.eval(s_local)
+        local = _rel(s_local, t_out)
+        del s_local                             # freed before the 3rd graph
         s_traj = s_blk(h_s, s_core.rope, s_mask, s_conv, None, None,
                        ids, s_prev)                     # student trajectory
-        mx.eval(t_out, s_local, s_traj)
+        mx.eval(s_traj)
+        traj = _rel(s_traj, t_out)
+        rows.append({"layer": i, "local_rel": round(local, 6),
+                     "traj_rel": round(traj, 6)})
+        # rebind trajectories, dropping the PREVIOUS layer's h_t/h_s before
+        # collect so no stale activation survives into the next iteration.
+        h_t, h_s = t_out, s_traj
+        s_core.layers[i] = None
+        del t_out, s_traj, s_blk
+        gc.collect()
+        mx.clear_cache()
+        print(f"  layer {i}/{n-1}  local {local:.4f}  traj {traj:.4f}  "
+              f"{time.time()-t0:.1f}s "
+              f"(peak {mx.get_peak_memory()/1024**3:.1f}G)", flush=True)
+    return rows
+
+
+def probe_glm5_next(teacher, student, ids_list, args):
+    """Mirrors stream_score.score_glm5_next (rule-5 validated, bitwise,
+    2026-08-29): masks on pre-broadcast h, hc_mult broadcast + contiguous,
+    per-layer is_linear mask dispatch, layer(x, mask, cache). The hc mean /
+    final norm / head are irrelevant here — the probe compares hidden
+    states, so trajectories stay in the (B, S, hc, D) representation.
+    Memory pattern identical to probe_qwen4_exp's fixed loop."""
+    import importlib
+
+    rows = []
+    ids = mx.array([ids_list[:-1]])
+
+    def prologue(model):
+        lm = getattr(model, "language_model", model)
+        core = lm.model
+        with mx.stream(mx.cpu):
+            mx.eval(core.embed_tokens.parameters())
+        h = core.embed_tokens(ids)
+        lang = importlib.import_module(type(core).__module__)
+        attn_mask = lang.create_attention_mask(h, None, return_array=True)
+        ssm_mask = lang.create_ssm_mask(h, None)
+        h = mx.broadcast_to(h[:, :, None, :],
+                            (*h.shape[:2], core.hc_mult, h.shape[-1]))
+        h = mx.contiguous(h)
+        mx.eval(h)
+        return core, h, attn_mask, ssm_mask
+
+    t_core, h_t, t_attn, t_ssm = prologue(teacher)
+    s_core, h_s, s_attn, s_ssm = prologue(student)
+    start_rel = _rel(h_s, h_t)
+    if start_rel > 1e-3:
+        print(f"WARNING: trajectories differ at the embedding "
+              f"(rel {start_rel:.2e}) — local numbers are still valid, "
+              f"traj numbers include this offset.", flush=True)
+
+    n = len(t_core.layers)
+    if len(s_core.layers) != n:
+        raise SystemExit(f"FAIL: layer count mismatch (teacher {n}, "
+                         f"student {len(s_core.layers)})")
+    for i in range(n):
+        t_blk, s_blk = t_core.layers[i], s_core.layers[i]
+        with mx.stream(mx.cpu):
+            mx.eval(t_blk.parameters())
+            mx.eval(s_blk.parameters())
+        t0 = time.time()
+        t_mask = t_ssm if t_blk.is_linear else t_attn
+        s_mask = s_ssm if s_blk.is_linear else s_attn
+        t_out = t_blk(h_t, mask=t_mask, cache=None)
+        mx.eval(t_out)
+        t_core.layers[i] = None
+        del t_blk
+        s_local = s_blk(h_t, mask=s_mask, cache=None)
+        mx.eval(s_local)
         local = _rel(s_local, t_out)
+        del s_local
+        s_traj = s_blk(h_s, mask=s_mask, cache=None)
+        mx.eval(s_traj)
         traj = _rel(s_traj, t_out)
         rows.append({"layer": i, "local_rel": round(local, 6),
                      "traj_rel": round(traj, 6)})
         h_t, h_s = t_out, s_traj
-        t_core.layers[i] = None
         s_core.layers[i] = None
-        del t_blk, s_blk, t_out, s_local, s_traj
+        del t_out, s_traj, s_blk
         gc.collect()
         mx.clear_cache()
         print(f"  layer {i}/{n-1}  local {local:.4f}  traj {traj:.4f}  "
@@ -115,6 +209,9 @@ def probe_qwen4_exp(teacher, student, ids_list, args):
 
 PROBES = {
     "qwen4_exp": {"fn": probe_qwen4_exp, "family": "qwen4_exp"},
+    # glm5_next: loop validated on a tiny resident pair (see docstring);
+    # runs under the mlx_vlm runtime via runtime_load, glm5vlm venv.
+    "glm5_next": {"fn": probe_glm5_next, "family": "glm5_next"},
 }
 
 
@@ -136,10 +233,22 @@ def main():
         raise SystemExit(f"FAIL: no layer-leverage probe for "
                          f"model_type={mt!r}. Supported: {sorted(PROBES)}.")
     entry = PROBES[mt]
-    teacher, _ = runtime_load.load_for_family(entry["family"],
-                                              pathlib.Path(a.teacher),
-                                              lazy=True)
-    student, _ = runtime_load.load_for_family(entry["family"], sp, lazy=True)
+    # Cap MLX's buffer cache: with three forwards per layer the cache can
+    # hold a layer's worth of freed intermediates between clear_cache calls.
+    mx.set_cache_limit(8 << 30)
+    # WATCHDOG (fix 2026-08-29): a stream binds at OP-CREATION time, and the
+    # lazy shard-read ops are created HERE, inside load_model — not at the
+    # per-layer eval. Loading outside a CPU-stream block leaves every weight
+    # read on the GPU stream, where an SMB stall inside a command buffer is
+    # a Metal watchdog kill (IV.1's class; bit fit_ple the same way). The
+    # per-layer `with mx.stream(mx.cpu): mx.eval(...)` was never enough on
+    # its own — creation is what binds.
+    with mx.stream(mx.cpu):
+        teacher, _ = runtime_load.load_for_family(entry["family"],
+                                                  pathlib.Path(a.teacher),
+                                                  lazy=True)
+        student, _ = runtime_load.load_for_family(entry["family"], sp,
+                                                  lazy=True)
     print(runtime_load.resolved_runtime_note(student), flush=True)
     tok = load_tokenizer(sp)
     ids = tok.encode(open(a.corpus).read())[: a.tokens + 1]
