@@ -379,3 +379,17 @@ retroactively on the M4: 2.1bpw PASS through the shipping runtime;
 remaining three share the identical graft/config structure and inherit
 the verdict per Noah's scoping. Rule restated: NOTHING reaches HF without
 a smoke, including metadata-only and rider-file changes.
+
+## 2026-08-30 — MTP graft PULLED (Noah)
+
+The MTP graft episode is reverted end-to-end: graft files deleted from all
+four HF repos, config markers and mtp quantization entries removed (HF +
+local), cards restored to "MTP head not included", exo cards restored,
+post-removal smoke PASS (2.1bpw, M4). One bf16 graft copy parked locally
+(Exo Models/mtp_graft_bf16_2.1.safetensors.parked) for the offline work.
+
+Process verdict, in Noah's words: shipping it was rushing to publish an
+unbuilt feature. MTP returns to HF only as a WORKING, MEASURED feature:
+module in the bundle (8-bit resident, ~+2.6 GiB), acceptance probe, then
+the draft-verify decode loop, each gated. Until then the cards claim only
+what runs.
