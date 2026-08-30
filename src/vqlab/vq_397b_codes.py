@@ -153,7 +153,15 @@ else:
 
 BASE, SRC, OUT = pathlib.Path(args.base), pathlib.Path(args.src), pathlib.Path(args.out)
 SHIP = pathlib.Path(args.ship_to) if args.ship_to else None
-LO, HI = (int(x) for x in args.vq_layers.split("-"))
+# "LO-HI" range, or a comma list ("3,8,11") for leverage-guided scatter
+# fits. LAYER_SET is the membership test; LO/HI remain for range prints
+# and --tail-from, which stays range-based.
+if "," in args.vq_layers:
+    LAYER_SET = frozenset(int(x) for x in args.vq_layers.split(","))
+    LO, HI = min(LAYER_SET), max(LAYER_SET)
+else:
+    LO, HI = (int(x) for x in args.vq_layers.split("-"))
+    LAYER_SET = frozenset(range(LO, HI + 1))
 G = args.group
 
 # per-projection (D, K); default = the uniform --dim/--k
@@ -221,7 +229,7 @@ def is_vq_target(name):
     if FAM["target_substr"] not in name:
         return False
     li = layer_of(name)
-    if not (LO <= li <= HI):
+    if li not in LAYER_SET:
         return False
     mod = name.rsplit(".", 1)[0]
     q = base_cfg["quantization"].get(mod)
