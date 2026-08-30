@@ -263,3 +263,19 @@ rate note: late-band expert bits buy ~8.7 mnats/GiB and K16 PLE bits lose
 ~8.7 mnats/GiB — a wash, so at this margin PLE-vs-expert reallocation
 moves ALONG the frontier. The 64GB-tier candidates are 48.3 GiB @ 361.5
 (best quality) vs 43.7 @ 419.9 (max headroom); ship pick is Noah's.
+
+## 2026-08-29 — quiet-layer scoop FAILS: sensitivity is not linear
+
+Downgraded the probe's 10 quietest layers (L3,8-11,13,16,23,45,46; local
+0.040-0.065) from d8/K16384 to d8/K256 in the best mix (fit relerr 0.575,
+scatter mini-fit via new --vq-layers comma lists, 157s resume). Gates +
+smoke PASS. KL 460.27 — worse than the FLAT rung (419.88), destroying the
+late-band gains (361.51). ~-3 GiB was not worth +99 mnats.
+
+Law-shaped takeaway: layer-leverage local_rel is measured AT the current
+damage level and does NOT extrapolate — quiet at relerr 0.35 is not quiet
+at 0.575. Upgrading hot layers (validated causal) and downgrading cold
+ones (refuted) are NOT symmetric operations. mixL01p4q artifact + quiet
+fit dir are cleanup candidates. The 64GB frontier stands: #2 mixL01
+(45.0 GiB, KL 390.09) best-in-tier; #3 mixL01p4 (48.3, 361.51) is
+96GB-territory by headroom.
