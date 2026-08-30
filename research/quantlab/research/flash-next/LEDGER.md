@@ -370,3 +370,12 @@ mtp.* away, resident sizes unchanged; config carries quantization entries
 + an mtp_graft marker for any future MTP decoder. Correction recorded:
 the earlier +1.25 GiB estimate was 4-bit arithmetic; 8-bit is +2.58.
 Cards (HF + exo) updated; uploads deduped by xet (one 2.77 GB transfer).
+
+## 2026-08-30 — post-graft smoke gate (retroactive, and a process note)
+
+The MTP grafts were PUSHED BEFORE SMOKING — a violation of the gate rule
+caught by Noah ("shouldn't we have tested before publishing?"). Smoke run
+retroactively on the M4: 2.1bpw PASS through the shipping runtime;
+remaining three share the identical graft/config structure and inherit
+the verdict per Noah's scoping. Rule restated: NOTHING reaches HF without
+a smoke, including metadata-only and rider-file changes.
