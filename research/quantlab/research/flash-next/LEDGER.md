@@ -279,3 +279,18 @@ ones (refuted) are NOT symmetric operations. mixL01p4q artifact + quiet
 fit dir are cleanup candidates. The 64GB frontier stands: #2 mixL01
 (45.0 GiB, KL 390.09) best-in-tier; #3 mixL01p4 (48.3, 361.51) is
 96GB-territory by headroom.
+
+## 2026-08-29 — leverage map is FAMILIAL
+
+Probed the 3.1 rung (d4/K2048) with layer-leverage: top-10 hot set and
+quietest-10 set are IDENTICAL to the 2.0 rung's, layer for layer (hot:
+L0,1,31-33,35-39; quiet: L3,8-11,13,16,23,45,46); Pearson r=0.905 across
+all 48 layers; L1 dominates both. The damage map is a property of the
+MODEL, not the quantization geometry — one probe per architecture serves
+the whole ladder. (M4 note: the probe Metal-timeouts on the M4 over SMB;
+M3 runs it clean. Instrument needs its memory pass before GLM.)
+
+#2 (mixL01, 45.0 GiB) SHIPS as the 64GB rung — Noah's call. Card scores
+complete: prose 5.9033 / code 2.0762 / literary 8.9450 / KL 390.09 /
+top-1 78.8%. Launched: hot-6 splice (L0,1,31,35,36,39 <- d2/K256) into
+the 66.5 GiB 3.1 rung -> qwen4exp_vq_packed_31mix6, ~69 GiB expected.
