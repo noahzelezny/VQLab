@@ -567,3 +567,42 @@ The MTP head forward is also expensive in absolute terms (~44 ms inferred
 on the 2.1bpw run, against a 48-61 ms trunk forward) precisely because it
 is bf16 with its own 512-expert MoE -- quantizing it for real should cut
 that materially and raise the speedup above 1.20x.
+
+## 2026-08-30 (cont) — REAL 6-bit MTP module: 1.56-1.67x measured
+
+Noah: "can we actually do the q6 since that should be faster anyway?"
+Yes -- and it roughly doubles the win. nn.quantize over the head's block
+and mixer at 6 bits / group 32, router left full precision (mirroring
+qwen4_exp's own quant_predicate). NOTE the predicate must gate on
+hasattr(mod, "to_quantized"): nn.quantize hands it EVERY submodule and
+raises on RMSNorm otherwise.
+
+MEASURED (96 tokens, greedy, real quantized head):
+
+  rung     head       baseline    speculative   speedup   acceptance
+  2.1bpw   6-bit      16.07 t/s   26.87 t/s     1.67x     0.708
+  2.1bpw   bf16       15.63 t/s   18.81 t/s     1.20x     0.708
+  3.2bpw   6-bit      15.19 t/s   23.71 t/s     1.56x     0.625
+  3.2bpw   bf16       15.95 t/s    6.14 t/s     (thrash)  0.625
+
+Head resident measured via mx.get_active_memory() delta: 2.12 GiB, which
+confirms the 2.13 GiB projection in the headroom table exactly. That
+number is no longer an assumption.
+
+Why bf16 was so much worse: acceptance is IDENTICAL (0.708 / 0.625), so
+the head drafts just as well either way -- the bf16 version simply costs
+~44 ms per draft forward gathering 512 bf16 experts, against a 48-61 ms
+trunk forward. Quantizing the head removes most of the draft cost. The
+bf16 3.2bpw row is a thrash artifact (74 GiB against an 84 GiB limit) and
+is listed only to mark it as explained, not as a speed result.
+
+1.67x sits slightly ABOVE the naive ceiling implied by 0.708 acceptance
+(~1.55x) because a seq=2 trunk forward is cheaper than seq=1 (49 vs 61
+ms, measured identically on both artifacts -- see the refuted kernel
+hypothesis above), so verification is better than free per token.
+
+REMAINING BEFORE SHIP: the head is currently quantized at runtime from
+the bf16 graft. Shipping needs a pre-quantized 6-bit sidecar written to
+disk (~2.1 GiB) named OUTSIDE the `model*.safetensors` glob, plus the
+runtime gate in the bundled model.py, plus an on-device smoke. Nothing
+published yet; Noah's call.
