@@ -319,3 +319,22 @@ convert. M4: GLM struct base (stream-convert --struct, glm5vlm venv built
 locally tonight; stream_convert also needs mlx-lm — installed).
 Peer quantlab-20 tasked (msg f68acc01): fix layer_leverage memory
 accumulation + M4 SMB Metal timeout before any GLM-teacher probe.
+
+## 2026-08-30 ~01:00 — 111.6 mix: the lever's endpoint
+
+qwen4exp_vq_packed_111mix6 (hot-6 <- fresh d2/K4096 mini-fit, relerr
+0.0205, 32 min; 12-bit pack-at-splice): 114 GiB, KL 32.69 (was 34.14),
+top-1 93.7% (94.1%), prose 5.2539 (5.2449). A WASH for +2.6 GiB — the
+hot-6 lever's curve completes: -24%, -16%, -16%, -15%, ~0% up the ladder.
+Where the base geometry already fits its hot layers well, richer donors
+buy nothing. Original d2/K1024 rung stays the shipped artifact; 111mix6 +
+hot6 fit dir are cleanup candidates (post-arc, per the don't-delete rule).
+
+92.4 mix smoke PASSED on the M4 — qwen4exp_vq_packed_92mix6 fully gated.
+
+GLM night ops: struct base relaunched CPU-PINNED on the M4 after the
+watchdog killed the GPU attempt (~37s/shard, ~75 min); teacher chain
+relaunched on the M3 after installing mlx-lm into the M3 glm5vlm venv
+(stream_score imports it for load_tokenizer; only the M4 venv had it).
+Peer's layer_leverage fix (VQLab 55864f9) reviewed + CPU-verified;
+probe_glm5_next now registered — GLM probe is code-complete.
