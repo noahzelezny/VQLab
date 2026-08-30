@@ -304,3 +304,18 @@ probe or fit needed: familial hot set + existing donors, ~30 min. Gates +
 smoke PASS after re-bundle (the old rung carried a pre-fix 1422-line
 bundle; check-bundle caught it — release block must re-bundle the shipped
 66.5/92.4/111.6 artifacts to the current runtime).
+
+## 2026-08-30 ~00:15 — overnight queue (Noah back ~09:00)
+
+92.4 mix landed earlier: qwen4exp_vq_packed_92mix6, 94.1 GiB, KL 50.33
+(was 59.04), top-1 92.8%, prose 5.2229 — beats q6 affine at 43 GiB less.
+Gates PASS; smoke on the M4 (94 GiB > M3's preflight bar).
+
+M3 chain (overnight_queue.sh -> stage2): d2/K4096 hot-6 mini-fit (running,
+relerr ~0.021) -> 111.6 mix (pack-at-splice 12-bit, ~112.9 GiB target)
+-> streamed KL -> GLM teacher prose pass (598.5 GiB, ppl + top-64 cache ->
+glm53_teacher_topk_prose) -> GLM teacher code/lit anchors -> GLM q4 affine
+convert. M4: GLM struct base (stream-convert --struct, glm5vlm venv built
+locally tonight; stream_convert also needs mlx-lm — installed).
+Peer quantlab-20 tasked (msg f68acc01): fix layer_leverage memory
+accumulation + M4 SMB Metal timeout before any GLM-teacher probe.
