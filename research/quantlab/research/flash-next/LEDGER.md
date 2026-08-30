@@ -231,3 +231,21 @@ K16384 run; K256 PLE fit took ~9 min on the M4 (vs ~80 at K4096).
 TABLE.md 64GB row replaced (update-in-place rule). The d8/K4096 baseline
 artifact (43.8 GiB) and its fit dirs are now superseded — cleanup is
 Noah's call. This artifact is the 64GB ship/hold candidate.
+
+## 2026-08-29 — layer-leverage probe + L0/L1 mixed splice
+
+New VQLab instrument (`vqlab layer-leverage`): interleaved teacher/student
+streamed pass, per-layer local damage + trajectory drift. Findings on the
+64GB rung: allocation is NOT flat — L1 is a monster (local 0.310, 2.4x any
+other layer; the traj jump across it is 0.204 of the final 0.481), L8-11
+near-free (~0.04), warm late band L28-39 (~0.11-0.14).
+
+Splice probe (mixed-K artifacts load natively; per-module vq_modules):
+d2/K256 experts into L0+L1 only, one-shard surgery + hardlinks ->
+qwen4exp_vq_packed_mixL01, 45.0 GiB. Gates + smoke PASS.
+KL 390.09 (was 419.88), top-1 78.8% (77.8%), prose 5.9033 (6.0216).
+Probe ranking confirmed CAUSAL. Rate: ~23 mnats/GiB.
+
+q4 (294) at 64GB does not fall out of this lever alone: full late band
++10 GiB -> ~56 GiB (breaks headroom). Candidate next: top-4 late layers
+(L36/L35/L39/L31, +3.3 GiB -> ~48 GiB), plausibly KL ~330-350.
