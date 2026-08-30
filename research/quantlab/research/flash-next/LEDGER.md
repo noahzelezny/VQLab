@@ -348,3 +348,14 @@ VQ-2.1bpw (45.0, KL 390.1) / VQ-3.2bpw (69.4, 123.5) / VQ-4.4bpw (94.1,
 three-curve chart, leverage-mix section, gates record; no negative-
 existence claims (v4 lesson). VQLab pushed public through 4d1497d (32
 commits). Local artifacts KEPT on disk for 397B/GLM benchmarking (Noah).
+
+## 2026-08-30 — MTP accounting (Noah's question)
+
+The teacher's MTP head (31 tensors, 4.86 GiB bf16 — draft embedding tap,
+hyper-connection mixer, one transformer layer) is NOT in any shipped
+artifact, affine or VQ: PR #1788's qwen4_exp class does not implement MTP
+and sanitizes mtp.* away, so no stage ever saw it. Zero quality impact —
+MTP is a speculative-decode speed mechanism no MLX runtime implements.
+If one appears, the recipe is a graft_vision-style mtp graft (+4.9 GiB
+bf16 / ~+1.2 quantized). Cards updated to state text is decoded by the
+main model without the MTP head.

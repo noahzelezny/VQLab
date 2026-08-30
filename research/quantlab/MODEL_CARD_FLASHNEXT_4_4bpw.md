@@ -75,6 +75,8 @@ seed 1234, recipes in the VQLab repo). Release gates passed on this
 artifact: file/index/tokenizer checks, bundle-runtime verbatim match, and
 a generation smoke through the shipping runtime on Apple Silicon.
 exo-ready: config carries vision_config + image_token_id; the vision
-tower is grafted bf16.
+tower is grafted bf16. The teacher's MTP (multi-token-prediction) head is
+not included — no MLX runtime implements MTP decoding; standard decoding
+is unaffected.
 
 Local artifact: `qwen4exp_vq_packed_92mix6`.
