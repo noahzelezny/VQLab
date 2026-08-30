@@ -338,3 +338,13 @@ relaunched on the M3 after installing mlx-lm into the M3 glm5vlm venv
 (stream_score imports it for load_tokenizer; only the M4 venv had it).
 Peer's layer_leverage fix (VQLab 55864f9) reviewed + CPU-verified;
 probe_glm5_next now registered — GLM probe is code-complete.
+
+## 2026-08-30 — RELEASED
+
+All four rungs live on HF under TheDrainFlorist, collection
+qwen38-flash-next-vq-data-free-apple-silicon-6a94513559d3614812c3d9bd:
+VQ-2.1bpw (45.0, KL 390.1) / VQ-3.2bpw (69.4, 123.5) / VQ-4.4bpw (94.1,
+50.3) / VQ-5.5bpw (111.6, 34.1). Cards carry qwen-community-1.0 rider,
+three-curve chart, leverage-mix section, gates record; no negative-
+existence claims (v4 lesson). VQLab pushed public through 4d1497d (32
+commits). Local artifacts KEPT on disk for 397B/GLM benchmarking (Noah).
