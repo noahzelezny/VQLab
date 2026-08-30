@@ -50,6 +50,9 @@ COMMANDS = {
     "price": ("price.py", "price a size-targeted build before fitting it"),
     "layer-leverage": ("layer_leverage.py", "per-layer damage probe: which layers earn bigger K"),
     "probe-init": ("probe_init_sweep.py", "per-family k-means++ vs random init sweep"),
+    "mtp-probe": ("mtp_probe.py", "MTP head draft-acceptance probe (qwen4_exp)"),
+    "mtp-pack": ("mtp_pack.py", "pack a bf16 MTP graft into a quantized drafting sidecar"),
+    "mtp-generate": ("mtp_generate.py", "generate with MTP speculative drafting (measures speedup)"),
 }
 
 
