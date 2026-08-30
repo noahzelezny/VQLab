@@ -462,3 +462,23 @@ not one. (Context kept for the record: this session's own VQLab commits
 were denied by its permission layer mid-window, so the changes briefly
 sat uncommitted in the working tree; Noah approved and the peer's commits
 landed first.)
+
+### 2026-08-29 (night): layer_leverage fixed + glm5_next probe added (VQLab 55864f9)
+
+At quantlab-e1's request. Two mechanisms, both the known IV classes:
+(1) the probe's three per-layer forwards were eval'd as ONE command buffer
+with both models' layer weights resident — now sequential, teacher layer
+freed before the student runs (112.3 GiB M3 peak was the symptom; the
+improvement is EXPECTED, not measured, until the next real probe run);
+(2) models were loaded OUTSIDE a CPU-stream block, so the lazy shard-read
+ops were GPU-stream-bound at creation — the per-layer eval-under-cpu never
+covered it (IV.1; this is the M4-over-SMB timeout). Loads now sit under
+mx.stream(mx.cpu).
+
+probe_glm5_next added, mirroring the rule-5-validated scorer; CPU-only
+gates both directions (identical tiny pair -> all zeros; perturbed pair ->
+nonzero everywhere, embedding warning fires) and the qwen4_exp loop
+verified row-identical old-vs-new on a stub. **The GLM ladder's leverage
+probe is ready**: against the 598.5 GiB teacher expect ~1 teacher + 1
+student layer resident (~14 + ~2 GiB at the struct base's sizes) plus
+activations — fits either box, ESTIMATE until run.
