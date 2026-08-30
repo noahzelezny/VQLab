@@ -213,3 +213,21 @@ matches the K4096 manifest: group 32, iters 12, seed 1234).
 Target: ~45.5 GiB (experts 12->14 bits, PLE 12->8 bits). Bet: KL
 meaningfully below the baseline's 556.10. Assembly will use
 --pack-unaligned end-to-end (load path fixed in VQLab ad6918c).
+
+## 2026-08-29 — reallocation WINS: the 64GB rung is d8/K16384 + K256 PLE
+
+Assembled (--pack-unaligned end-to-end), all gates + smoke PASS, 43.7 GiB
+— byte-neutral with the d8/K4096 baseline. Scores:
+
+  KL 419.88 (was 556.10, -24%)   top-1 77.8% (74.3%)
+  prose 6.0216 (7.0390)   code 2.1018 (2.2605)   literary 9.1096 (10.5480)
+
+Every column improved at the same bytes. The diagnostic's corollary holds
+at full strength: PLE relerr 0.409 -> 0.571 (K4096 -> K256) cost nothing
+measurable, expert relerr 0.416 -> 0.353 (K4096 -> K16384) bought 136
+mnats. Fit economics: 27/144 expert tensors reused from the mis-aborted
+K16384 run; K256 PLE fit took ~9 min on the M4 (vs ~80 at K4096).
+
+TABLE.md 64GB row replaced (update-in-place rule). The d8/K4096 baseline
+artifact (43.8 GiB) and its fit dirs are now superseded — cleanup is
+Noah's call. This artifact is the 64GB ship/hold candidate.
