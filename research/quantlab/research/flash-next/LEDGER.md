@@ -730,3 +730,45 @@ works, 1.56-1.80x median 1.65x, 2.12 GiB, optionality proven.
 Sidecars are staged in the four local artifact dirs; NOTHING uploaded.
 If we park, they should come back out of those dirs to avoid an
 accidental future upload.
+
+## 2026-08-30 (cont) — AMENDS the "DO NOT SHIP" entry above
+
+Two corrections to my own reasoning, both prompted by Noah.
+
+1. I OVERSTATED the wall. MTPLX is NOT necessary and never was: every
+   number today came from our own `vqlab mtp-generate`, which implements
+   the draft/verify loop directly against mlx-lm. MTPLX was a reference
+   for the wiring only; after reading it I never ran it. And VQLab is a
+   real package (pyproject [project.scripts] vqlab = vqlab.cli:main,
+   Apache-2.0, deps just mlx/mlx-lm/numpy/safetensors), so "pip install
+   vqlab" is the SAME size of ask as "pip install mtplx". I was treating
+   "needs our tool" as disqualifying while proposing a different tool with
+   identical friction. This is also unlike the pulled 8-bit graft, which
+   was never executed by anyone; this is built, measured across six
+   prompt types, and smoke-tested from the sidecar on disk.
+
+2. But the entry-point limit is REAL and structural, not a packaging
+   oversight. Stock mlx-lm cannot run this, for two independent reasons:
+
+   a. The MTP head cannot pose as a draft_model. mlx-lm's speculative
+      path calls _step(draft_model, draft_cache, y) (generate.py:593) --
+      the draft model gets token ids and its own cache, never the trunk's
+      hidden state, which is exactly what the head consumes.
+   b. Stock mlx-lm cannot do speculative decoding on this architecture AT
+      ALL, with any draft model: the path raises ValueError unless
+      can_trim_prompt_cache passes, and for Flash-Next it is False --
+      measured, _LayerCache.is_trimmable() == False for the 36
+      linear-attention layers (only _AttnCache is trimmable).
+
+   Our loop works precisely because it rolls recurrent caches back by
+   REFERENCE SNAPSHOT rather than trimming, which is available only
+   because qwen4_exp reassigns cache slots instead of mutating them. That
+   is a real contribution, not just glue: it is the only working
+   speculative decoding for this hybrid architecture in MLX.
+
+So the answer to "is there no way to run it except MTPLX or vqlab": yes,
+that is the complete list, and (b) means even a generic draft model is
+refused. Shipping with "pip install vqlab; vqlab mtp-generate" is an
+honest, usable story; MTPLX/upstream would only broaden reach. The card
+must state plainly that drafting is NOT available through stock mlx-lm,
+exo, or LM Studio.
