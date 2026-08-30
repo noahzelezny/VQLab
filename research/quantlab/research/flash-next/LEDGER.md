@@ -843,3 +843,36 @@ dequantized bf16 and never cost 2.13 GiB; my "DO NOT SHIP / MTPLX is
 necessary" call was overstated and is amended above; and two timing
 results were artifacts (memory pressure with Safari open, and cold Metal
 kernels -- 1.16x cold vs 1.62x warm on identical weights).
+
+--------------------------------------------------------------------
+2026-08-30 (later): MTP PARKED -- Noah's decision.
+
+Rationale (Noah's, and it holds): no runtime can drive the head today
+-- the limit is structural in mlx-lm's speculative entry points
+(_draft_generate never passes trunk hidden state; the path refuses
+non-trimmable caches, and 36 linear-attention layers are not trimmable)
+-- and anyone with the wherewithal to build a working MTP runtime env
+can pull Qwen's own head and wire it themselves. Shipping an inert
+2.14 GiB shard serves no one. VQLab-as-serving-endpoint was considered
+and rejected: a research tool standing in for mlx-lm's whole serving
+surface (sampling, streaming, templates, concurrency) is a tall order
+for zero current users. An mlx-lm fork was likewise rejected as an
+install path (runtime replacement + permanent rebase burden).
+
+Actions taken:
+  - Removed staged mtp-head-q6.safetensors from ALL FOUR artifact dirs
+    on /Volumes/Thunderbay SSD/Exo Models (so no future upload can
+    sweep them). KEPT: top-level mtp-head-q6.safetensors (2.14 GiB) and
+    parked_mtp_graft_bf16.safetensors (4.86 GiB) -- the head is
+    rebuildable in minutes via `vqlab mtp-pack` if runtimes catch up.
+  - Nothing uploaded to HF. No MTPLX issue/PR. No mlx-lm fork.
+
+Still pending Noah's approval: a reply to HF discussion #1 explaining
+the situation plainly (head exists and measures 1.5-1.8x; no runtime
+support anywhere yet; VQ release quality is independent of MTP). Draft
+is in-conversation. Revisit trigger: mlx-lm grows MTP-draft support
+upstream, or a credible runtime asks for the sidecar.
+
+The code stays: vqlab mtp-{probe,pack,generate} are merged in VQLab
+(through e6eb09a) and are the reproducible evidence for every number
+above.
