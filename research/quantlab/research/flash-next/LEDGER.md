@@ -393,3 +393,32 @@ unbuilt feature. MTP returns to HF only as a WORKING, MEASURED feature:
 module in the bundle (8-bit resident, ~+2.6 GiB), acceptance probe, then
 the draft-verify decode loop, each gated. Until then the cards claim only
 what runs.
+
+## 2026-08-30 ~evening — compaction anchor #2
+
+RELEASED + stable: four Flash-Next VQ rungs live on HF (collection
+qwen38-flash-next-vector-quantized-mlx, notes normalized); MTP graft
+pulled everywhere (Noah); VQLab pushed through 4d1497d; exo cards done
+(incl. refreshed 4bit card); artifacts renamed to exo model_id names
+with symlinks back; local artifacts KEPT for benchmarking.
+
+MTP (offline, nothing published): goal is a WORKING measured feature
+(module -> acceptance probe -> decode loop, gated). Probe harness built
+(vqlab mtp-probe + scratchpad/mtp_dense_test.py). KEY FINDING: harness
+scores 0.0 acceptance on BOTH qwen4_exp 2.1bpw AND the dense 27B teacher
+(whose head MTPLX provably makes work) -> ONE bug in shared harness
+logic, not in hc wiring. Verified clean: weight loading (checksummed,
+all slots matched), head (1.000 argmax vs model()), capture (norm-hook
+on real forward), norm styles/concat orders/orientations/shifts all
+swept. MTPLX (~/Documents/AgenicAI/MTPLX, Apache-2.0) mirrors my op
+order exactly. NEXT STEP (Noah go pending): install + RUN MTPLX on the
+27B, dump its mtp_forward intermediates, diff junction-by-junction.
+
+GLM: d8/K16384 fit PARKED at 77/129 tensors (resumable shard-skip,
+12/19 shards banked; relaunch cmd in scratchpad/glm_fit_d8k16384 log
+header / ledger 2026-08-30). Ladder q3/q4/q6 + teacher + struct base
+done. Rungs approved: ~100 (in progress), 120, 140.
+
+Also: stale pre-compaction Monitor watchers killed; stale overnight
+/loop stopped. Vision tower stays bf16 until a vision quality gate
+exists (Noah agreed).
