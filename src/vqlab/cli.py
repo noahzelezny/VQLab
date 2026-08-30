@@ -48,6 +48,7 @@ COMMANDS = {
     "selftest": ("selftest.py", "run the real pipeline on a tiny synthetic model"),
     # planning / probes
     "price": ("price.py", "price a size-targeted build before fitting it"),
+    "layer-leverage": ("layer_leverage.py", "per-layer damage probe: which layers earn bigger K"),
     "probe-init": ("probe_init_sweep.py", "per-family k-means++ vs random init sweep"),
 }
 
