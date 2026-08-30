@@ -772,3 +772,74 @@ refused. Shipping with "pip install vqlab; vqlab mtp-generate" is an
 honest, usable story; MTPLX/upstream would only broaden reach. The card
 must state plainly that drafting is NOT available through stock mlx-lm,
 exo, or LM Studio.
+
+## 2026-08-30 — COMPACTION ANCHOR #3 (MTP arc)
+
+STATE: MTP is solved, built, measured, and staged. NOTHING UPLOADED.
+
+Solved: root cause was the zero-centered RMSNorm convention (qwen3_5
+stores delta and mlx-lm's sanitize adds +1.0; qwen4_exp's own RMSNorm
+applies y = norm(x) * (1 + weight) itself). Acceptance 0.0 -> working.
+
+Measured (2.1bpw unless noted, real 6-bit head, sidecar off disk):
+  head 2.12 GiB resident (confirms the 2.13 projection exactly)
+  speedup 1.56-1.80x, MEDIAN 1.65x across six prompt types
+  acceptance 0.578-0.812, median 0.679
+  3.2bpw rung: 1.56x
+  optionality PROVEN: sidecar in the artifact dir, resident still
+    44.96 GiB (byte-identical), stock generate() unaffected
+
+Built (VQLab e6eb09a): src/vqlab/mtp_head.py (wiring in one place),
+`vqlab mtp-pack`, `vqlab mtp-generate`. Sidecar mtp-head-q6.safetensors,
+2.14 GiB, 71 tensors, staged in ALL FOUR local artifact dirs. If we park,
+REMOVE THEM so they can't be swept into a future upload.
+
+ENTRY-POINT LIMIT (structural, measured, not a packaging problem):
+  - mlx-lm's speculative path REQUIRES can_trim_prompt_cache; for this
+    model it is False (_LayerCache.is_trimmable() False on the 36 linear
+    layers). Stock mlx-lm refuses speculative decoding on this arch with
+    ANY draft model.
+  - The head needs the trunk hidden state; mlx-lm's draft_model interface
+    (generate.py:593) passes only token ids + its own cache.
+  So: VQLab today, or MTPLX/upstream later. That is the complete list.
+
+MTPLX assessed (vetted, not asserted): v2.10.1, PyPI + Homebrew tap +
+native Mac app + mtplx.com, CI, Apache-2.0, single author Youssof
+Altoukhi. Purpose-built for MTP on Apple Silicon. Runs an OpenAI-
+compatible server (/v1/chat/completions, /v1/models) and its CLI takes
+--model as a path -> real integration story. Uses exact rejection
+sampling with residual correction (Leviathan/Chen), so it is
+distribution-preserving at temperature -- technically BETTER than our
+greedy-only loop. Claims 1.6x M4 mini / 2.24x M5 Max (their numbers,
+unverified by us; consistent with our 1.65x). Risks: bus factor 1; a PR
+lands on his roadmap not ours; NOTICE adds an attribution requirement
+beyond stock Apache-2.0 -- "Powered by MTPLX" must appear IN-PRODUCT, a
+README/marketing page explicitly does not satisfy it.
+
+DEMAND IS REAL: HF discussion #1 "Is there MTP for this model?" by
+miabchdave, open, on TheDrainFlorist/Qwen3.8-Flash-Next-VQ-5.5bpw (the
+only discussion across all four repos). Notably the LARGEST rung, where
+2.12 GiB costs ~2 mnats (the 94.1->111.6 stretch is ~0.9 mnats/GiB) vs
+the steep curve at 45 GiB (~11 mnats/GiB and steepening below).
+
+AWAITING NOAH (nothing done unilaterally):
+  1. Post a reply to discussion #1? Draft written in-conversation; its
+     key ask is "what are you running it under?", which decides whether
+     the MTPLX patch is worth it.
+  2. Upload the sidecar to the 5.5bpw repo only (recommended) vs all
+     four vs a separate head repo.
+  3. MTPLX: open an issue asking whether qwen4_exp support is wanted,
+     BEFORE writing a patch.
+  4. Noah's "MTP fast variant" idea (smaller trunk + head at constant
+     footprint) -- sound, but belongs on a 128GB rung, not the 45.
+
+GLM: still parked at 12/19 shards, resumable by shard-skip. Untouched
+all day.
+
+CORRECTIONS I MADE TODAY (kept, so they are not re-derived): the VQ
+kernel hypothesis was REFUTED by Noah's question (seq=2 is cheaper than
+seq=1, identically on both artifacts); the q6sim/q8sim grafts are
+dequantized bf16 and never cost 2.13 GiB; my "DO NOT SHIP / MTPLX is
+necessary" call was overstated and is amended above; and two timing
+results were artifacts (memory pressure with Safari open, and cold Metal
+kernels -- 1.16x cold vs 1.62x warm on identical weights).
