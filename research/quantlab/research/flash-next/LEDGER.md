@@ -876,3 +876,9 @@ upstream, or a credible runtime asks for the sidecar.
 The code stays: vqlab mtp-{probe,pack,generate} are merged in VQLab
 (through e6eb09a) and are the reproducible evidence for every number
 above.
+
+2026-08-30: Replied to HF discussion #1 (5.5bpw repo) with Noah's
+approved text (comment 6a94b118334fc0cd5c373a4b): head works, 1.5-1.8x
+measured, no runtime support anywhere; rungs were sized to machine
+calibers (64/96/128 GB) without the ~2 GB q6 head; will revisit if
+mlx-lm adds support. MTP arc now fully closed pending that trigger.
