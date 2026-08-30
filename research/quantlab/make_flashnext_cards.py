@@ -31,7 +31,7 @@ MODELS = [
                    "upgraded to d=2/K=256 experts."),
          insert_after="affine q3 (ours)"),
     dict(bpw="4.4", size="94.1 GiB", kl="50.3", top1="92.8%", ppl="5.223",
-         code="PENDING", lit="PENDING", fits="128 GB machines",
+         code="1.916", lit="7.698", fits="128 GB machines",
          art="qwen4exp_vq_packed_92mix6",
          geometry=("MoE experts at d=2/K=256, PLE at d=8/K=4096, and the "
                    "six highest-leverage layers upgraded to d=2/K=1024 "

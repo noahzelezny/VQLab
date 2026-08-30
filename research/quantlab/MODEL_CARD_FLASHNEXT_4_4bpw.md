@@ -49,8 +49,8 @@ sizes include the 333-tensor bf16 vision tower (0.84 GiB).
 | affine q8 (ours) | 178 GiB | 27.1 | 94.9% | 5.197 |
 | bf16 teacher | 335 GiB | 0 | 100% | 5.166 |
 
-Additional corpora (perplexity): code PENDING (public mlx corpus,
-pinned manifest), literary PENDING (Gutenberg). Teacher reads 1.902 / 7.664.
+Additional corpora (perplexity): code 1.916 (public mlx corpus,
+pinned manifest), literary 7.698 (Gutenberg). Teacher reads 1.902 / 7.664.
 
 **Rank these by KL, not perplexity.** Perplexity is an aggregate over
 finite text and absorbs offsetting errors; KL measures distance to the
