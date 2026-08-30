@@ -294,3 +294,13 @@ M3 runs it clean. Instrument needs its memory pass before GLM.)
 complete: prose 5.9033 / code 2.0762 / literary 8.9450 / KL 390.09 /
 top-1 78.8%. Launched: hot-6 splice (L0,1,31,35,36,39 <- d2/K256) into
 the 66.5 GiB 3.1 rung -> qwen4exp_vq_packed_31mix6, ~69 GiB expected.
+
+## 2026-08-29/30 — hot-6 splice transfers to the 3.1 rung
+
+qwen4exp_vq_packed_31mix6 (66.5-GiB rung + d2/K256 experts in the familial
+hot-6): 69.4 GiB, KL 123.46 (was 146.61, -16%), top-1 87.0%, prose 5.2114
+— below q5 affine (5.2434 @ 116 GiB) and 0.045 off the teacher. No new
+probe or fit needed: familial hot set + existing donors, ~30 min. Gates +
+smoke PASS after re-bundle (the old rung carried a pre-fix 1422-line
+bundle; check-bundle caught it — release block must re-bundle the shipped
+66.5/92.4/111.6 artifacts to the current runtime).
