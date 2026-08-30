@@ -5,8 +5,9 @@ KL vs bf16 teacher top-64 cache (captured mass 0.9626 all rows). Sorted by size.
 
 | artifact | bpw | GiB | prose | code | literary | KL mnats | top-1 | fits |
 |---|---|---|---|---|---|---|---|---|
-| VQ d8/K16384 + K256 PLE | ~2.0 | 43.7 | 6.0216 | 2.1018 | 9.1096 | 419.88 | 77.8% | 64GB (decision pending) |
+| VQ d8/K16384 + K256 PLE, hot-2 mix | ~2.1 | 45.0 | 5.9033 | 2.0762 | 8.9450 | 390.09 | 78.8% | 64GB, SHIPS (Noah 08-29) |
 | VQ d4/K2048 | ~3.1 | 66.5 | 5.2911 | 1.9384 | 7.8077 | 146.61 | 86.6% | 96GB, shipped-grade |
+| VQ d4/K2048 hot-6 mix | ~3.2 | 69.4 | 5.2114 | 1.9393 | 7.8229 | 123.46 | 87.0% | 96GB (ship pick pending) |
 | q3 affine | 3.649 | 75 | 12.8502 | 3.0522 | 19.4794 | 1083.35 | 61.9% | 128GB |
 | VQ d2/K256 | ~4.3 | 92.4 | 5.3825 | 1.9033 | 7.7112 | 59.04 | 91.9% | 128GB, shipped-grade |
 | q4 affine | 4.649 | 96 | 6.4534 | 2.0638 | 9.0975 | 293.86 | 79.6% | 128GB |
