@@ -422,3 +422,54 @@ done. Rungs approved: ~100 (in progress), 120, 140.
 Also: stale pre-compaction Monitor watchers killed; stale overnight
 /loop stopped. Vision tower stays bf16 until a vision quality gate
 exists (Noah agreed).
+
+## 2026-08-30 — MTP SOLVED (root cause: RMSNorm gain convention)
+
+The 0.0-acceptance bug is found and fixed. It was never the hc wiring,
+the concat order, the capture, or the h/e pairing -- all of which I had
+verified correct. It was the +1.0 zero-centered RMSNorm convention, and
+the two architectures resolve it in OPPOSITE places, which is why one
+diagnosis could not cover both:
+
+  qwen3_5 (dense 27B): gains stored delta, applied by a conventional
+    nn.RMSNorm. mlx-lm's trunk sanitize adds 1.0 -- but mtp.* tensors
+    load outside sanitize, so the hand-loaded sidecar kept raw gains.
+    Evidence: trunk L0 input_layernorm mean -0.0334 on disk vs +0.9666
+    in the live model. Shifting the sidecar: 0.0000 -> 0.7285.
+  qwen4_exp (Flash-Next): gains also stored delta, but applied by the
+    arch's OWN zero-centered RMSNorm (y = norm(x) * (1 + weight)), which
+    adds the 1.0 itself. My hand-rolled rms() did plain `n * w` and
+    dropped it. Using arch.RMSNorm: 0.0000 -> 0.6992. Pre-shifting the
+    stored weights here would DOUBLE-count -- the MTPLX-style heuristic
+    gate was one signal from firing on this checkpoint, so mtp_probe now
+    never mutates gains and always applies them via the arch's classes.
+
+Ablations (dense 27B, 512 positions): pre_norm/e-h 0.7285, post_norm/e-h
+0.7188 (near-tie, matching MTPLX exposing hidden_variant as a knob);
+h-e concat 0.0000/0.0020 (dead). Also fixed a vacuous sweep: the probe
+permuted input AND weight together, so its eh/he "variants" were the
+same computation. qwen4_exp has separate fc_embedding/fc_hidden tensors
+([2560,2560] each), so concat order is not ambiguous at all there.
+
+MEASURED (Flash-Next 2.1bpw, the worst rung, 512 positions, teacher-
+forced greedy acceptance vs the main model's own next-token choice):
+  wide hidden norm grouped (group_size=2560, per stream)  0.6992
+  wide hidden norm flat over the 10240 row                0.6562
+Grouped wins, as the arch predicts -- every other 10240-wide norm in
+qwen4_exp is RMSNorm(hc_dim, group_size=hidden_size).
+
+MTP head precision (same probe, acceptance vs main):
+  bf16   4.86 GiB   0.6992
+  8-bit  2.73 GiB   0.6953
+  6-bit  2.13 GiB   0.6992
+Differences are 0-2 positions in 512, i.e. inside noise at this sample
+size: 8-bit and 6-bit are both indistinguishable from bf16. Note the
+head's precision cannot affect OUTPUT quality at all -- the main model
+verifies every drafted token, so a worse draft costs a rejection (speed),
+never a wrong token. Recommend 8-bit (saves 2.13 GiB/rung); 6-bit needs
+a larger corpus before claiming the extra 0.6 GiB.
+
+STILL NOT SHIPPED, per the smoke-first rule. Acceptance is a proxy only.
+Remaining before anything reaches HF: MTP module in the bundle -> real
+draft/verify decode loop -> measured tok/s speedup -> smoke on-device.
+Artifacts: parked_mtp_graft_bf16.safetensors + q8sim/q6sim variants.
