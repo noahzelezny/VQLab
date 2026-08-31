@@ -19,6 +19,7 @@ dependencies = [
 
 [project.optional-dependencies]
 score = ["transformers"]
+test = ["pytest"]
 
 [project.scripts]
 vqlab = "vqlab.cli:main"
@@ -28,3 +29,8 @@ where = ["src"]
 
 [tool.setuptools.package-data]
 vqlab = ["referee/*.txt"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+markers = ["integration: needs a real artifact; set VQLAB_MTP_MODEL"]

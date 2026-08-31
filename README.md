@@ -170,6 +170,95 @@ above is exactly the sequence that was dogfooded end-to-end on a real model
 in a fresh venv (REPRODUCING.md records it, and maps each paper table to
 its commands).
 
+## MTP speculative decoding
+
+VQLab also ships a decode strategy: **multi-token-prediction speculative
+decoding** for any mlx-lm model that has an MTP drafting head. It is a
+library, not a server and not a fork — mlx-lm loads the model and owns the
+architecture; we replace only the decode loop.
+
+```python
+from mlx_lm import load
+from vqlab import load_mtp_head, mtp_generate, mtp_stream_generate
+
+model, tok = load(path, trust_remote_code=True)
+head, _ = load_mtp_head(model, model_path=path)     # or sidecar=<file>
+
+print(mtp_generate(model, tok, "Explain VQ.", head, temp=0.7, top_p=0.9))
+
+for r in mtp_stream_generate(model, tok, "Explain VQ.", head, max_tokens=256):
+    print(r.text, end="")                            # r.acceptance, r.steps, …
+```
+
+```bash
+vqlab mtp-pack     --model <artifact> --mtp <graft.safetensors>  # build sidecar
+vqlab mtp-generate --model <artifact> --temp 0.7
+vqlab mtp-bench    --model <artifact> --tokens 128               # the numbers
+```
+
+The head drafts token t+2 from (trunk hidden at t, embedding of t+1), so each
+step verifies one speculative token inside a single 2-token trunk forward:
+accepted gives two tokens for one forward; rejected rolls the caches back and
+replays, costing one extra forward and never a wrong token.
+
+### Measured (Qwen3.8-Flash-Next, 6-bit head, greedy, 96 tokens)
+
+| rung   | head  | baseline   | speculative | speedup | acceptance |
+|--------|-------|-----------|-------------|---------|------------|
+| 2.1bpw | 6-bit | 16.07 t/s | 26.87 t/s   | 1.67x   | 0.708      |
+| 3.2bpw | 6-bit | 15.19 t/s | 23.71 t/s   | 1.56x   | 0.625      |
+
+Across runs: **1.56–1.80x (median 1.65x)**, acceptance 0.578–0.812 (median
+0.679). The 6-bit head is **2.12 GiB resident**, measured as an
+`mx.get_active_memory` delta. Sidecars are named outside mlx-lm's
+`model*.safetensors` glob, so a model directory carrying one still loads
+normally through the stock loader — the head is optional residency.
+
+Three things that are settled by measurement and should not be "simplified":
+
+- **The head's norms must be applied by the architecture's own RMSNorm.**
+  qwen4_exp's is zero-centered (`y = norm(x) * (1 + weight)`); hand-rolling
+  `n * w` drops the `+1.0` and drives acceptance to exactly **0.0**. That one
+  mistake was the entire original bug. See `src/vqlab/mtp_head.py`.
+- **Attention caches roll back by the offset DELTA, not a fixed count.**
+  Trimming a hardcoded 1 leaves a stale key while the recurrent caches roll
+  back 2, and the two streams then drift silently.
+- **Head precision cannot affect output quality.** The trunk verifies every
+  drafted token, so a worse draft costs a rejection, never a wrong token;
+  6-bit and bf16 measured identical acceptance (0.7065 vs 0.7051 at n=4096,
+  inside the ±0.7pp binomial SE).
+
+At temperature the acceptance test is exact rejection sampling with residual
+correction (Leviathan et al. 2023; Chen et al. 2023), so the output
+distribution is the one plain sampling from the trunk would give, for **any**
+draft quality. Samplers are mlx-lm's own (`sample_utils`), adapted to return
+the distribution alongside the draw. `tests/test_mtp_sampling.py` checks the
+preservation claim both in closed form and empirically.
+
+**Bit-identical output against single-token decoding is not achievable and is
+not a valid correctness gate.** MLX's chunked and single-token kernels
+disagree at genuine near-ties (measured top-2 logit gaps of 0.25 and exactly
+0.00 against a median of 3.625), and verification always happens inside a
+2-token forward. The gate is *divergence confined to near-ties*, which
+`vqlab mtp-bench` measures directly as its chunk control.
+
+### Adding a family
+
+A family is a `FamilySpec` table entry in `src/vqlab/mtp/registry.py` plus a
+head module — nothing else in the package names an architecture. The entry
+says where the head lives, which submodule's input is the pre-lm_head
+activation, which cache the head uses, and whether the family's recurrent
+caches may use free (non-copying) snapshots. That last field defaults to the
+safe `"copy"`: qwen4_exp's free snapshots work because it *reassigns* cache
+slots rather than mutating them, which is an implementation accident, not a
+contract. `caches.check_snapshot_semantics` is the measurement that earns a
+family the cheap path.
+
+Registered: `qwen4_exp`. GLM-5.3 and DeepSeek also ship MTP heads and the
+registry is shaped for them, but neither is registered here because neither
+can be tested in this repo today — a table entry without a measured
+acceptance number is not evidence of anything.
+
 ## Requirements
 
 - Apple Silicon Mac; RAM sized to the artifact for fit/smoke (scoring
@@ -189,7 +278,12 @@ as subprocesses, checking what each stage is supposed to guarantee — seeded
 fits reproduce, packing is bit-exact, the gate fails a collapsed tensor, the
 manifest catches altered bytes, and a dense bundle serves on a stock mlx-lm.
 Every gate is exercised in **both** directions, because a gate that only ever
-passes tells you nothing. The two stages that need a real multi-GB
+passes tells you nothing.
+
+`pytest` covers the MTP decode strategy on a synthetic model — rollback,
+distribution preservation, and the cache-snapshot gate, each in both
+directions. `tests/test_mtp_integration.py` runs the same checks against a
+real artifact and is skipped unless `VQLAB_MTP_MODEL` points at one. The two stages that need a real multi-GB
 checkpoint — end-to-end generation and scoring — are reported as SKIPPED with
 the reason, never silently dropped.
 
