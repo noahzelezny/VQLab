@@ -236,6 +236,17 @@ def main():
     # Cap MLX's buffer cache: with three forwards per layer the cache can
     # hold a layer's worth of freed intermediates between clear_cache calls.
     mx.set_cache_limit(8 << 30)
+    # IMPORT THE ARCH FIRST, OUTSIDE ANY CPU-STREAM BLOCK (fix 2026-08-30).
+    # mlx-vlm's hyper_connection builds its fused sinkhorn Metal kernel AT
+    # IMPORT TIME behind `if mx.default_device() != mx.gpu: return None`, and
+    # a cpu-stream context reports default_device() as CPU. Importing the arch
+    # inside the watchdog block below therefore leaves that kernel permanently
+    # None, and the first GPU forward dies with "'NoneType' object is not
+    # callable" -- 40 minutes into a streamed pass. The two concerns are
+    # separable: the watchdog needs the WEIGHT-READ ops created under the CPU
+    # stream, not the module import.
+    importlib.import_module(
+        f"{runtime_load.runtime_for(entry['family'])}.models.{mt}")
     # WATCHDOG (fix 2026-08-29): a stream binds at OP-CREATION time, and the
     # lazy shard-read ops are created HERE, inside load_model — not at the
     # per-layer eval. Loading outside a CPU-stream block leaves every weight
