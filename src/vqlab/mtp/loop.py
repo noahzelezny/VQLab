@@ -45,6 +45,11 @@ makes `cache.offset` equal the true sequence position by construction:
     committed, AFTER verification — so the head only ever consumes committed
     tokens and needs no rollback of its own.
 
+Measured worth: +5.92pp acceptance for q6 (0.8171 vs 0.7578), paired over 12
+independent prompts, t=6.34, better on 12/12 — and it replicates on two other
+head recipes. See `vqlab mtp-accept`; a single-prompt comparison has no power
+to see this and initially read it as neutral.
+
 `align="legacy"` is the original loop: one head forward per step, drafted
 before verification. Two tokens commit per step while the head advances one,
 so its rotary positions come out compressed 2x and shifted by the prompt
