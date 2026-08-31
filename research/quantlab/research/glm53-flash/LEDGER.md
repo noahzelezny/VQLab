@@ -358,3 +358,52 @@ alternating layers) is real and OFAT is blind to it, but the prize is
 bounded: full uniform K512->K2048 is 149 mnats for 17.73 GiB, so even
 perfect allocation at 3.38 GiB likely caps near 30-45 mnats against the
 15 we measured -- versus 6.32 mnats free from the seed lottery.
+
+## 2026-08-31 — SINGLE-LAYER SWEEP: targeting DOES work; the PROBE was the problem
+
+RETRACTS my earlier line "bits help; targeting does not" (this ledger,
+"MIXED-BIT ALLOCATION"). What the control experiment actually showed is
+that the LEVERAGE PROBE's targeting does not work. Targeting by MEASURED
+single-layer effect is a different and far better proposition.
+
+Method: promote ONE expert layer K512->K2048 (+0.42 GiB), score prose+KL,
+repeat for all 42. Splices come from fixed fits and scoring is a
+deterministic forward, so every delta is EXACT. ~1.22 min/sample, 42
+samples. scratchpad/glm_layer_sweep.{sh,jsonl}.
+
+d_KL by layer (positive = better than the 348.82 base):
+  L3   +0.30  L4   -5.23  L5   -4.15  L6   -3.16  L7   -2.21  L8   -0.02
+  L9   -1.20  L10  -2.30  L11  +2.33  L12  +0.74  L13  -2.84  L14  -2.65
+  L15  +2.20  L16  -0.24  L17  -1.49  L18  -4.79  L19  +1.38  L20  +6.17
+  L21  +3.42  L22  -1.87  L23  -1.79  L24  +0.59  L25  +2.69  L26  +4.90
+  L27 +19.08  L28  +3.13  L29  +7.92  L30  -2.55  L31  +9.70  L32  -2.39
+  L33  +5.00  L34  +6.37  L35  +5.10  L36  +0.37  L37  +2.30  L38  +0.30
+  L39  +6.35  L40  +4.58  L41  +2.91  L42  +2.63  L43  +4.46  L44  +2.97
+  helps 26, hurts 16; mean +1.64, median +1.06, sum +68.99.
+
+FINDINGS:
+1. L27 = +19.08 mnats ALONE, for 0.42 GiB. That is 3x the seed floor and
+   MORE than either full 8-layer mix achieved for 8x the bytes.
+2. SOME PROMOTIONS ARE NET-NEGATIVE (16 of 42; L4 -5.23 is worst). Adding
+   precision to one layer can HURT KL -- the surface is non-monotonic,
+   presumably because a layer reconstructed more finely now mismatches
+   neighbours still at K512 and breaks an error cancellation.
+3. THE PROBE PICKED BADLY. Its top-8 contained L18 (-4.79), L32 (-2.39),
+   L10 (-2.30), L3 (+0.30) -- three of its eight "highest-leverage"
+   layers are among the HARMFUL ones. local_rel is not merely uninformative
+   about output damage, it selected actively bad layers here.
+4. SUPERADDITIVITY IS REAL AND CONSISTENT:
+     probe top-8   additive +8.74 -> measured +15.23  (1.74x)
+     control       additive +9.28 -> measured +16.89  (1.82x)
+   Combinations beat the sum of their parts by a stable ~1.75-1.8x, which
+   is encouraging for modelling: a multiplicative correction may suffice.
+5. Best-8 by MEASURED effect [20,27,29,31,33,34,35,39] sums to +65.69
+   additive -- 7x either built set at IDENTICAL bytes. At the observed
+   superadditivity that projects to ~115 mnats. BUILDING AND SCORING NOW;
+   the projection is untested and the surface is non-monotonic, so it may
+   not hold.
+
+L45 IS NOT A VQ LAYER: 126 modules / 3 projections = 42 layers, L3-L44.
+L45 is GLM's MTP layer and was never quantized (the sweep's L45 KeyError
+was a wrong loop bound, not missing data). Worth remembering if the MTP
+arc is ever revived for this family.
