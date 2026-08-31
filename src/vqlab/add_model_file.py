@@ -89,7 +89,16 @@ try:
 except ModuleNotFoundError:
     _arch = _importlib.import_module(f"mlx_vlm.models.{_cfg['model_type']}")
 
-# The two runtimes read DIFFERENT names off this module: mlx_lm wants
+# Re-export the base module's WHOLE public surface, not a hand-listed few.
+# A VLM base is read for far more than Model: mlx_vlm's loader reaches for
+# TextConfig, VisionConfig, VisionModel, LanguageModel... Enumerating them one
+# at a time is whack-a-mole against a surface we do not own, and each miss is
+# an AttributeError at load. Model is excluded: our subclass below replaces it.
+for _n in dir(_arch):
+    if not _n.startswith("_") and _n != "Model":
+        globals()[_n] = getattr(_arch, _n)
+
+# The two runtimes read DIFFERENT names for the args class: mlx_lm wants
 # ModelArgs, mlx_vlm calls model_class.ModelConfig.from_dict(config). Export
 # whichever the base defines under both names so one bundle serves either.
 ModelArgs = getattr(_arch, "ModelArgs", None) or _arch.ModelConfig
