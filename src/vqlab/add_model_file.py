@@ -69,17 +69,31 @@ runtime = (pathlib.Path(__file__).parent / "vq_switch.py").read_text()
 shim = '''
 
 # ---------------------------------------------------------------------------
-# mlx_lm `model_file` shim: stock mlx_lm imports Model/ModelArgs from THIS
-# file (it lives inside the checkpoint). We reuse the registry architecture
-# and swap each VQ'd expert module for VQSwitchLinear before weights load.
+# `model_file` shim: the runtime imports Model + its args class from THIS file
+# (it lives inside the checkpoint). We reuse the registry architecture and swap
+# each VQ'd expert module for VQSwitchLinear before weights load.
+#
+# The base class may live in EITHER runtime: mlx_lm has no glm5_next class, but
+# mlx_vlm ships one, and both honour this bundle mechanism. Hardcoding mlx_lm
+# here shipped a glm5_next artifact that passed check-release AND check-bundle
+# and then died on import with ModuleNotFoundError (2026-08-30) -- neither gate
+# executes the bundle, which is what `smoke` is for.
 # ---------------------------------------------------------------------------
 import importlib as _importlib
 import json as _json
 import pathlib as _pathlib
 
 _cfg = _json.load(open(_pathlib.Path(__file__).parent / "config.json"))
-_arch = _importlib.import_module(f"mlx_lm.models.{_cfg['model_type']}")
-ModelArgs = _arch.ModelArgs
+try:
+    _arch = _importlib.import_module(f"mlx_lm.models.{_cfg['model_type']}")
+except ModuleNotFoundError:
+    _arch = _importlib.import_module(f"mlx_vlm.models.{_cfg['model_type']}")
+
+# The two runtimes read DIFFERENT names off this module: mlx_lm wants
+# ModelArgs, mlx_vlm calls model_class.ModelConfig.from_dict(config). Export
+# whichever the base defines under both names so one bundle serves either.
+ModelArgs = getattr(_arch, "ModelArgs", None) or _arch.ModelConfig
+ModelConfig = getattr(_arch, "ModelConfig", None) or _arch.ModelArgs
 
 
 class Model(_arch.Model):
