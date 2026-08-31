@@ -203,10 +203,9 @@ replays, costing one extra forward and never a wrong token.
 
 ### Measured (Qwen3.8-Flash-Next, 6-bit head, greedy, 96 tokens)
 
-> **These numbers predate the 2026-08-31 head-cache alignment fix** and were
-> taken with what is now `align="legacy"`. That loop fed the head wrong rotary
-> positions and rolled its cache back on every rejection; the aligned scheme is
-> the default now and is being re-measured. Treat the table as a floor.
+> The table below is M3 Ultra. The 2026-08-31 measurements below it are M4
+> Max over SMB — different core counts, bandwidth and thermals, so speedups
+> are **not** comparable across the two. Only within-run comparisons are.
 
 | rung   | head  | baseline   | speculative | speedup | acceptance |
 |--------|-------|-----------|-------------|---------|------------|
@@ -218,6 +217,54 @@ Across runs: **1.56–1.80x (median 1.65x)**, acceptance 0.578–0.812 (median
 `mx.get_active_memory` delta. Sidecars are named outside mlx-lm's
 `model*.safetensors` glob, so a model directory carrying one still loads
 normally through the stock loader — the head is optional residency.
+
+### Head-cache alignment: measured neutral (2026-08-31)
+
+`qwen4_exp` reads the head's rotary positions straight off its cache offset,
+so the old loop fed the head positions compressed 2x and drifting with
+generation length, rolled its cache back on every rejection, and never seeded
+it over the prompt. `align="committed"` fixes all three. On a 512-token
+greedy run at the 2.1bpw rung (M4 Max, 256 steps, one model load):
+
+| head | align | acceptance | tok/s | speedup |
+|------|-------|-----------|-------|---------|
+| q6 (2.12 GiB) | committed | 0.7812 ±5.1pp | 29.83 | 1.566x |
+| q6 (2.12 GiB) | legacy    | 0.7539 ±5.3pp | 29.43 | 1.545x |
+| experts q4 / rest q8 (1.55 GiB) | committed | 0.7773 ±5.1pp | 29.52 | 1.551x |
+| experts q3 / rest q8 (1.25 GiB) | committed | 0.7695 ±5.2pp | 22.36† | 1.402x† |
+
+**The alignment fix buys no measurable acceptance: +2.7pp at 0.73σ.** It was
+predicted to matter and it does not, at this generation length. It is kept as
+the default because it is mechanically correct, costs nothing measurable
+(+0.4pp speed, 0.06σ), and removes the draft-cache rollback entirely — not
+because it was shown to help. An earlier 96-token run showed +12.5pp, which
+was 1.53σ and did not survive the powered run; it is recorded here as a
+falsified prediction, per METHODOLOGY.
+
+The untested part of the hypothesis is length: legacy's position error grows
+with generation, so any effect should widen well beyond 512 tokens.
+
+† The e3q8 row is thermally contaminated — its baseline fell to 15.95 tok/s
+against 19.03–19.05 for the three runs before it on the same load. Its
+acceptance stands; its speed does not. Re-run in a randomised order before
+quoting it.
+
+### Mixed-bit heads
+
+The 512-expert MoE stack is 4.688 of the head's 4.856 GiB — **96.5%, in two
+tensors** — so head size is essentially one dial, and protecting the other
+3.5% at a high bit-width is nearly free (+0.02 GiB from 6- to 8-bit across
+all of it). `vqlab mtp-pack --expert-bits` sets the experts independently.
+
+**Experts at 4-bit with everything else at 8-bit is 1.55 GiB against 2.12,
+for no measurable acceptance cost (−0.4pp, 0.11σ) and no measurable speed
+cost.** That is 27% of the head's residency recovered for nothing, which
+matters most on the large rungs where headroom is tight. 3-bit experts hold
+acceptance too (−1.2pp, 0.32σ) but need a clean re-measure for speed.
+
+This search is safe by construction: head precision **cannot** affect output
+quality, because the trunk verifies every drafted token. A coarser head costs
+a rejection, never a wrong token.
 
 Four things that are settled by measurement and should not be "simplified":
 
