@@ -181,3 +181,74 @@ def test_sampled_output_distribution_matches_plain_sampling():
     tv = 0.5 * sum(abs(ref.get(k, 0) - got.get(k, 0)) for k in keys) / n
     assert tv < 0.05, f"total variation {tv:.4f} between speculative and plain"
     assert len(keys) > 3, "degenerate distribution: the test proves nothing"
+
+
+# --------------------------------------------------------------- alignment
+# qwen4_exp takes the head's ROTARY POSITIONS from its cache offset
+# (Attention.__call__: `offset = cache.offset`, then `rope(_positions(...))`),
+# so the offset the head sees at each draft is the thing that has to be right.
+# The toy head records it.
+
+def test_committed_alignment_feeds_true_sequence_positions():
+    model = toy.ToyModel()
+    head = toy.ToyHead("biased")
+    run(model, head, 12)
+    P = PROMPT.shape[1]
+    # bootstrap drafts at position P-1; each step then advances two positions
+    # over the pair that committed, so the next draft starts at P, P+2, ...
+    expected = [P - 1] + [P + 2 * k for k in range(12 // 2 - 1)]
+    assert head.draft_offsets == expected
+
+
+def test_legacy_alignment_feeds_wrong_positions():
+    """The bug, asserted as a bug so the fix cannot silently regress.
+
+    Driven by an oracle head so every step accepts and the sequence is
+    deterministic: the head advances one position per step while two tokens
+    commit, so it sees 0,1,2,... where the true positions are P-1, P+1, P+3.
+    The error is not a constant shift the rope could tolerate — it grows with
+    generation length."""
+    model = toy.ToyModel()
+    ref = plain_greedy(model, 12)
+    head = toy.ToyHead("oracle", oracle=ref)
+    assert run(model, head, 12, align="legacy") == ref
+    P = PROMPT.shape[1]
+    assert head.draft_offsets == list(range(12 // 2))
+    true_positions = [P - 1 + 2 * k for k in range(12 // 2)]
+    drift = [t - o for t, o in zip(true_positions, head.draft_offsets)]
+    assert drift == sorted(drift) and drift[-1] > drift[0]
+
+
+def test_legacy_rollback_starves_the_head_cache():
+    """A second legacy defect the alignment fix removes outright: the head's
+    cache is rolled back on every rejection, so its history is repeatedly
+    discarded rather than accumulated. With a head that never lands, it never
+    advances past position 0 across the whole generation.
+
+    align="committed" cannot do this — it feeds the head only committed
+    tokens, after verification, so there is nothing to roll back."""
+    model = toy.ToyModel()
+    ref = plain_greedy(model, 12)
+    head = toy.ToyHead("antioracle", oracle=ref)
+    run(model, head, 12, align="legacy")
+    assert head.draft_offsets == [0] * (12 // 2)
+
+    aligned = toy.ToyHead("antioracle", oracle=plain_greedy(toy.ToyModel(), 12))
+    run(toy.ToyModel(), aligned, 12)
+    assert aligned.draft_offsets == [2, 3, 5, 7, 9, 11]
+
+
+@pytest.mark.parametrize("mode", ["stubborn", "biased"])
+def test_both_schemes_agree_on_output(mode):
+    """Alignment is an ACCEPTANCE knob, not a correctness one: the trunk
+    verifies every drafted token either way, so both schemes must emit the
+    single-token reference."""
+    model = toy.ToyModel()
+    ref = plain_greedy(model, 16)
+    assert run(model, toy.ToyHead(mode), 16) == ref
+    assert run(model, toy.ToyHead(mode), 16, align="legacy") == ref
+
+
+def test_align_rejects_an_unknown_scheme():
+    with pytest.raises(ValueError, match="align must be"):
+        run(toy.ToyModel(), toy.ToyHead("biased"), 4, align="nonsense")
