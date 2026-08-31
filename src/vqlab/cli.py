@@ -52,7 +52,8 @@ COMMANDS = {
     "probe-init": ("probe_init_sweep.py", "per-family k-means++ vs random init sweep"),
     "mtp-probe": ("mtp_probe.py", "MTP head draft-acceptance probe (qwen4_exp)"),
     "mtp-pack": ("mtp_pack.py", "pack a bf16 MTP graft into a quantized drafting sidecar"),
-    "mtp-generate": ("mtp_generate.py", "generate with MTP speculative drafting (measures speedup)"),
+    "mtp-generate": ("mtp_run.py", "generate with MTP speculative drafting"),
+    "mtp-bench": ("mtp_bench.py", "measure the MTP speedup, acceptance and numerics control"),
 }
 
 
