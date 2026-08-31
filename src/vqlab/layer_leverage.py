@@ -33,6 +33,7 @@ the probe-duration rule, treat the improvement as expected, not measured):
 """
 import argparse
 import gc
+import importlib
 import json
 import pathlib
 import sys
