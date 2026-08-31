@@ -283,13 +283,19 @@ CONSEQUENCES:
    Its own docstring called it a ranking instrument requiring referee
    confirmation; the referee has now REJECTED it. Choosing layers by
    local_rel would have cost quality against choosing nearly arbitrarily.
-2. THIS CASTS DOUBT ON THE FLASH-NEXT REALLOCATION FINDING (LEDGER
-   2026-08-29, "reallocation WINS", KL 556.10 -> 419.88 byte-neutral).
-   That result was measured against a BASELINE but never against a CONTROL
-   of low-leverage layers. It may have been "any reallocation helps"
-   rather than "the probe found the right layers." A recorded finding is
-   resting on an untested assumption -- re-test with a control before it
-   informs anything further.
+2. SCOPE OF THE DOUBT (corrected 2026-08-31 -- my first write-up here
+   conflated two different Flash-Next experiments):
+   - The headline "reallocation WINS" (flash-next LEDGER 2026-08-29, KL
+     556.10 -> 419.88 byte-neutral) was reallocation ACROSS TENSOR CLASSES
+     -- PLE dropped K4096->K256, experts raised K4096->K16384. That is a
+     different hypothesis from layer selection and is NOT impugned by this
+     control.
+   - The SEPARATE L0/L1 mixed splice (same date, driven by layer-leverage:
+     "L1 is a monster, local 0.310") IS the one sharing the assumption we
+     just broke. It was never run against a low-leverage control. Re-test
+     that one before it informs anything further.
+   Noah's read that this may be a FAMILY difference is live: Flash-Next
+   showed measurable improvement, GLM shows none.
 3. The 3-layer mix (+1.27 GiB) moved KL by 0.2 mnats = nothing. Mixing
    needs scale before it registers at all.
 
