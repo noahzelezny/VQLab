@@ -116,21 +116,38 @@ class ToyHead:
         self.mode = mode
         self.oracle = oracle or []
         self.calls = 0
+        # Rotary position the head would see on each draft, i.e. the cache
+        # offset at entry. The whole point of align="committed" is that these
+        # are the true sequence positions; under "legacy" they are not.
+        self.draft_offsets: list[int] = []
+
+    def _fill(self, cache, nxt_id):
+        if cache is not None:
+            for j in range(nxt_id.shape[1]):
+                cache.update(int(nxt_id[0, j].item()))
+
+    def advance(self, h_row, nxt_id, cache):
+        """Seed rows without drafting; must not count as a draft call."""
+        self._fill(cache, nxt_id)
+        return cache
 
     def draft_logits(self, h_row, nxt_id, cache=None):
+        T = nxt_id.shape[1]
         if cache is not None:
-            cache.update(int(nxt_id[0, 0].item()))
+            self.draft_offsets.append(cache.offset)
+        self._fill(cache, nxt_id)
         i = self.calls
         self.calls += 1
-        if self.mode in ("oracle", "antioracle"):
+        if self.mode == "biased":
+            return (h_row @ _W) * 2.0 + mx.arange(VOCAB) * 0.1
+        if self.mode == "stubborn":
+            pick = VOCAB - 1
+        else:
             pick = self.oracle[2 * i + 1]
             if self.mode == "antioracle":
                 pick = (pick + 1) % VOCAB
-            return mx.where(mx.arange(VOCAB) == pick, 30.0, 0.0)[None, None]
-        if self.mode == "stubborn":
-            return mx.where(mx.arange(VOCAB) == VOCAB - 1, 30.0,
-                            0.0)[None, None]
-        return (h_row @ _W) * 2.0 + mx.arange(VOCAB) * 0.1
+        row = mx.where(mx.arange(VOCAB) == pick, 30.0, 0.0)
+        return mx.broadcast_to(row, (1, T, VOCAB))
 
 
 SPEC = FamilySpec(

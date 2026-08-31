@@ -28,6 +28,7 @@ import json
 
 import mlx.core as mx
 import mlx.nn as nn
+from mlx_lm.models.base import create_attention_mask
 from mlx.utils import tree_flatten, tree_unflatten
 
 SIDECAR_NAME = "mtp-head-q6.safetensors"
@@ -39,6 +40,31 @@ def _quantizable(path, mod):
     The MoE router stays full precision, mirroring qwen4_exp's own
     quant_predicate."""
     return hasattr(mod, "to_quantized") and not path.endswith("mlp.gate")
+
+
+# Measured from the bf16 graft header (2026-08-31): the 512-expert MoE stack
+# is 4.688 of the head's 4.856 GiB -- 96.5% of it, in TWO tensors. Everything
+# else together (attention, hyper-connections, the fc fuse, the shared expert,
+# the norms) is 0.168 GiB. So head size is essentially a single dial, the
+# expert bit-width, and protecting all the small modules at a high bit-width
+# is nearly free: +0.02 GiB going from 6-bit to 8-bit across all of them.
+#
+# This is a pure speed/memory search. Head precision CANNOT affect output
+# quality -- the trunk verifies every drafted token, so a coarser head costs
+# a rejection, never a wrong token. The only risk is acceptance, and acceptance
+# is measurable directly (`vqlab mtp-probe`).
+_EXPERT_SUBSTR = "switch_mlp"
+
+
+def _mixed_predicate(bits, expert_bits, group_size):
+    """Per-module bit-widths. nn.quantize lets a predicate return the kwargs
+    for to_quantized, so one pass can carry two bit-widths."""
+    def predicate(path, mod):
+        if not _quantizable(path, mod):
+            return False
+        b = expert_bits if _EXPERT_SUBSTR in path else bits
+        return {"group_size": group_size, "bits": b}
+    return predicate
 
 
 class MTPHead:
@@ -112,15 +138,20 @@ class MTPHead:
         mx.eval(self.block.parameters(), self.mixer.parameters())
         return self
 
-    def quantize(self, bits=6, group_size=32):
+    def quantize(self, bits=6, group_size=32, expert_bits=None):
+        """Quantize the head. `expert_bits` overrides `bits` for the MoE
+        expert stack, which is 96.5% of the weight; `bits` then applies to the
+        3.5% of small modules, where protecting precision costs almost
+        nothing. `expert_bits=None` reproduces the uniform recipe."""
+        eb = bits if expert_bits is None else expert_bits
         for m in (self.block, self.mixer):
-            nn.quantize(m, group_size=group_size, bits=bits,
-                        class_predicate=_quantizable)
+            nn.quantize(m, class_predicate=_mixed_predicate(
+                bits, eb, group_size))
         mx.eval(self.block.parameters(), self.mixer.parameters())
         return self
 
     # ------------------------------------------------------------- sidecar
-    def save(self, path, bits, group_size=32):
+    def save(self, path, bits, group_size=32, expert_bits=None):
         flat = {f"block.{k}": v
                 for k, v in tree_flatten(self.block.parameters())}
         flat.update({f"mixer.{k}": v
@@ -132,6 +163,7 @@ class MTPHead:
             "format": "mlx",
             "mtplx_compatible": "false",
             "vqlab_mtp": json.dumps({"bits": bits, "group_size": group_size,
+                                     "expert_bits": expert_bits,
                                      "fa_idx": self.fa_idx}),
         })
         return flat
@@ -144,10 +176,12 @@ class MTPHead:
         head = cls(model, arch)
         bits, gs = cfg.get("bits"), cfg.get("group_size", 32)
         if bits:
-            # Build the quantized module shape first, then fill it.
+            # Build the quantized module shape first, then fill it. The recipe
+            # must be replayed exactly -- a mixed-bit sidecar loaded as uniform
+            # gives every expert tensor the wrong packed shape.
+            eb = cfg.get("expert_bits") or bits
             for m in (head.block, head.mixer):
-                nn.quantize(m, group_size=gs, bits=bits,
-                            class_predicate=_quantizable)
+                nn.quantize(m, class_predicate=_mixed_predicate(bits, eb, gs))
         head.block.update(tree_unflatten(
             [(k[len("block."):], v) for k, v in w.items()
              if k.startswith("block.")]))
@@ -162,8 +196,16 @@ class MTPHead:
         return head
 
     # --------------------------------------------------------------- draft
-    def draft_logits(self, h_row, nxt_id, cache=None):
-        """(trunk hidden at t, token t+1) -> logits for token t+2."""
+    def _trunk(self, h_row, nxt_id, cache=None):
+        """(trunk hidden at t, token t+1) -> the head's output activation.
+
+        T > 1 is a real case, not just prefill: aligning the head's cache to
+        one row per COMMITTED token means advancing it two positions per
+        speculative step. The mask MUST therefore be built the way the trunk
+        builds its own (`create_attention_mask`) — passing None is only
+        correct at T == 1, and at T > 1 it silently lets each position attend
+        forwards, which shows up as degraded acceptance rather than an error.
+        """
         core, D, hc = self.core, self.D, self.hc
         B, T = nxt_id.shape
         e = self.norm_e(core.embed_tokens(nxt_id))
@@ -173,7 +215,20 @@ class MTPHead:
         hin = (cat @ self.fc.T.astype(cat.dtype)).reshape(B, T, hc * D)
         idx = cache.indexer if (cache is not None
                                 and hasattr(cache, "indexer")) else None
-        out = self.block(hin, self.rope, None, None, cache, idx, nxt_id, None)
-        out = self.mixer(out)
-        return (core.embed_tokens.as_linear(out) if self.tie
+        mask = create_attention_mask(hin, cache) if T > 1 else None
+        out = self.block(hin, self.rope, mask, None, cache, idx, nxt_id, None)
+        return self.mixer(out)
+
+    def draft_logits(self, h_row, nxt_id, cache=None):
+        """(trunk hidden at t, token t+1) -> logits for token t+2."""
+        out = self._trunk(h_row, nxt_id, cache)
+        return (self.core.embed_tokens.as_linear(out) if self.tie
                 else self.lm_head(out))
+
+    def advance(self, h_row, nxt_id, cache):
+        """Fill the head's cache for these positions without projecting to
+        the vocabulary. Used to seed the head over the prompt, where the
+        logits are never read and the lm_head matmul over the whole prompt
+        would be the single largest cost of the seed."""
+        self._trunk(h_row, nxt_id, cache)
+        return cache

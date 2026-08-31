@@ -28,20 +28,30 @@ def main():
     ap.add_argument("--tokens", type=int, default=128)
     ap.add_argument("--warmup", type=int, default=8)
     ap.add_argument("--out", default=None)
+    ap.add_argument("--ab", action="store_true",
+                    help="run both head-cache schemes and report the delta")
     add_sampling_args(ap)
     a = ap.parse_args()
 
     model, tok, head = load_all(a)
-    rec = benchmark(model, tok, prompt_ids(tok, a.prompt), head,
-                    tokens=a.tokens, temp=a.temp, warmup=a.warmup,
-                    family=a.family)
-    rec["model"] = a.model
+    schemes = ["committed", "legacy"] if a.ab else [a.align]
+    recs = []
+    for scheme in schemes:
+        rec = benchmark(model, tok, prompt_ids(tok, a.prompt), head,
+                        tokens=a.tokens, temp=a.temp, warmup=a.warmup,
+                        family=a.family, align=scheme)
+        rec["model"], rec["align"] = a.model, scheme
+        recs.append(rec)
+    rec = recs[0]
 
     print(f"\n{rec.pop('text')}\n", flush=True)
+    for r in recs[1:]:
+        r.pop("text", None)
     print(f"baseline:    {rec['baseline_tok_s']:.2f} tok/s", flush=True)
-    print(f"speculative: {rec['speculative_tok_s']:.2f} tok/s  "
-          f"({rec['steps']} steps, acceptance {rec['acceptance']:.3f})",
-          flush=True)
+    for r in recs:
+        print(f"speculative [{r['align']:9s}]: {r['speculative_tok_s']:.2f} "
+              f"tok/s  {r['speedup']:.2f}x  ({r['steps']} steps, acceptance "
+              f"{r['acceptance']:.3f})", flush=True)
     print(f"SPEEDUP: {rec['speedup']:.2f}x", flush=True)
     if "chunk_control_disagreements" in rec:
         n = rec["chunk_control_disagreements"]
@@ -50,9 +60,10 @@ def main():
               + (f"; top-2 logit gaps there {rec['chunk_control_gaps']} vs "
                  f"median {rec['chunk_control_median_gap']}" if n else ""),
               flush=True)
-    print(json.dumps(rec), flush=True)
+    print(json.dumps(recs if len(recs) > 1 else rec), flush=True)
     if a.out:
-        pathlib.Path(a.out).write_text(json.dumps(rec, indent=1))
+        pathlib.Path(a.out).write_text(
+            json.dumps(recs if len(recs) > 1 else rec, indent=1))
     return 0
 
 

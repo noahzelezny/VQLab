@@ -48,7 +48,7 @@ def _plain_decode(model, ids, n_tokens, dist=None):
 
 def benchmark(model, tokenizer, prompt, head, *, tokens: int = 128,
               temp: float = 0.0, warmup: int = 8, family: Optional[str] = None,
-              **kwargs) -> dict:
+              align: str = "committed", **kwargs) -> dict:
     """Run both decode paths on `prompt` and return the comparison record."""
     ids = _encode(tokenizer, prompt)
     dist = make_distribution(temp)
@@ -57,7 +57,7 @@ def benchmark(model, tokenizer, prompt, head, *, tokens: int = 128,
         toks, last = [], None
         for r in mtp_stream_generate(model, tokenizer, ids, head,
                                      max_tokens=n, temp=temp, family=family,
-                                     **kwargs):
+                                     align=align, **kwargs):
             if not r.tail:
                 toks.append(r.token)
             last = r
