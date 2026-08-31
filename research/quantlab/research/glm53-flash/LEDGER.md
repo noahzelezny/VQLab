@@ -307,3 +307,54 @@ gap is noise, targeting is useless; if real, targeting is harmful.
 ALL FITS WERE SEEDED (mx.random 1234, the --seed default, logged in every
 fit header). The noise-floor run is a DELIBERATE unseeded comparison, not
 a correction of an error.
+
+## 2026-08-31 — SEED-NOISE FLOOR (FINDINGS III.12), finally measured
+
+Unseeded refit of d4/K512 (--seed -1, fit 3161s), same geometry, same
+pipeline. This is the yardstick every comparison above was missing.
+
+  d4/K512            KL      prose    code     lit    top-1
+  seed 1234 (ours) 348.82   2.5743  1.7107  1.6166  0.8398
+  unseeded         342.51   2.5631  1.7518  1.6763  0.8433
+  DELTA              6.32   0.0112 -0.0411 -0.0597  0.0035
+
+SEED FLOOR ON KL = 6.32 mnats. Note the corpora do NOT move together:
+the reseed is BETTER on prose/KL/top-1 and WORSE on code/literary. Seed
+variation is a reshuffle, not a quality axis.
+
+RESCALING EVERY MIX RESULT AGAINST IT:
+  3-layer mix         d_KL  0.20   0.03x floor -> NOISE
+  8-layer top-8       d_KL 15.23   2.41x floor -> REAL
+  8-layer control     d_KL 16.89   2.67x floor -> REAL
+  top-8 MINUS control d_KL  1.65   0.26x floor -> NOT RESOLVABLE
+So: mixing at scale is a real effect; WHICH layers is not. Confirms the
+control verdict with a calibrated scale rather than a hunch.
+
+MEASUREMENT vs GENERALIZATION (important, and it rescues the sweep):
+the floor bounds GENERALIZATION ACROSS SEEDS, not the precision of a
+single comparison. All splice variants are built from the SAME two fits
+and scoring is a deterministic forward over fixed weights, so a
+splice-vs-splice delta is EXACT -- zero stochastic component. The 1.65
+mnat top-8/control gap is therefore a real number for THESE codebooks
+that simply would not survive a reseed (seed variation is 4x larger).
+
+THE LEVER NOBODY PULLED: the unseeded refit scored 6.32 mnats BETTER than
+the seed we shipped, i.e. our published rungs sit on the unlucky side of
+the draw. Fitting a geometry under 3-4 seeds and keeping the best costs
+~52 min/seed at K512 and ZERO BYTES, and plausibly captures much of what
+the 8-layer mix bought for +3.38 GiB. For anything we publish this looks
+like a strictly better trade than mixed-bit allocation. UNTESTED as a
+procedure -- but the single data point is already suggestive.
+
+NEXT (running): one-at-a-time layer sweep, all 43 expert layers, each
+spliced alone K512->K2048 and scored on prose+KL (scratchpad/
+glm_layer_sweep.sh, resumable JSONL, ~3.5h). Then the GO/NO-GO: re-run a
+subset against the seedB fit. If the per-layer ranking does NOT correlate
+across two independent seeds, layer sensitivity is a property of the
+k-means draw rather than the architecture, and allocation optimization
+(randomized trials, surrogate models) is dead for this family -- it would
+be modelling the lottery. Noah's interaction concern (adjacent vs
+alternating layers) is real and OFAT is blind to it, but the prize is
+bounded: full uniform K512->K2048 is 149 mnats for 17.73 GiB, so even
+perfect allocation at 3.38 GiB likely caps near 30-45 mnats against the
+15 we measured -- versus 6.32 mnats free from the seed lottery.
