@@ -32,9 +32,37 @@ disagree at genuine near-ties (measured top-2 logit gaps of 0.25 and exactly
 inherits that. The gate is "divergence confined to near-ties" — `vqlab
 mtp-bench` measures it directly.
 
-Known and deliberate: the head's own KV cache advances one position per step
-while two tokens commit, so it is only approximately aligned. That costs
-acceptance, never correctness — the trunk verifies every drafted token.
+Head-cache alignment. The head is a transformer block with its own KV cache,
+and qwen4_exp derives its ROTARY POSITIONS from that cache's offset
+(`Attention.__call__`: `offset = cache.offset`, then `rope(_positions(offset,
+S))`). The offset is not bookkeeping — it IS the position signal.
+
+`align="committed"` (default) keeps one head row per COMMITTED token, which
+makes `cache.offset` equal the true sequence position by construction:
+
+  - the head is seeded over the prompt at prefill, positions 0..P-2;
+  - each step advances it two positions, over the pair that actually
+    committed, AFTER verification — so the head only ever consumes committed
+    tokens and needs no rollback of its own.
+
+`align="legacy"` is the original loop: one head forward per step, drafted
+before verification. Two tokens commit per step while the head advances one,
+so its rotary positions come out compressed 2x and shifted by the prompt
+length, an error that grows with generation length, and its cache holds an
+entry for only every other position. Kept solely so the two schemes can be
+A/B'd on one build; it is not a supported configuration.
+
+This matches the invariant MTPLX documents for the same architecture ("the
+draft head's history cache (qwen4_exp: one QSA layer's KV + indexer streams)
+grows one row per committed token during decode"). MTPLX reaches it by
+overriding the rope offset explicitly; making the offset true by construction
+gets the same positions without re-implementing the attention layer.
+
+NOT handled yet, and both need the offset decoupled from the cache the way
+MTPLX does it: windowing the prompt seed, and resetting the head cache on
+long generations. MTPLX measured an uncapped draft cache decaying 86 -> 25
+tok/s within a single 34k-token request. Head-cache state conditions
+acceptance only — never correctness — so both are safe to add later.
 """
 from __future__ import annotations
 
@@ -163,13 +191,19 @@ def mtp_stream_generate(
     xtc_special_tokens: List[int] = [],
     logits_processors: Optional[List[Callable]] = None,
     prefill_step_size: int = 2048,
+    align: str = "committed",
 ) -> Iterator[MTPResponse]:
     """Stream tokens from `model`, drafting each second token with `head`.
 
     Sampling parameters mirror `mlx_lm.sample_utils.make_sampler`; the
     resulting output distribution is the one mlx-lm would produce for the same
     parameters, preserved through verification by rejection sampling.
+
+    `align` selects the head-cache scheme: "committed" (default) or "legacy".
+    See the module docstring -- "legacy" exists for A/B measurement only.
     """
+    if align not in ("committed", "legacy"):
+        raise ValueError(f"align must be 'committed' or 'legacy', got {align!r}")
     spec = registry.resolve(model, family)
     dist = make_distribution(temp, top_p, min_p, min_tokens_to_keep, top_k,
                              xtc_probability, xtc_threshold, xtc_special_tokens)
@@ -195,17 +229,38 @@ def mtp_stream_generate(
         cache = model.make_cache()
         dcache = spec.make_draft_cache(arch)
 
-        # prefill
+        # prefill. The per-chunk hidden states are kept when the head is
+        # being seeded, because the head's input at position j is
+        # (h_j, embed(x_{j+1})) for EVERY prompt position, not just the last.
         n = ids.shape[1]
+        h_chunks = []
         for i in range(0, n - 1, prefill_step_size):
             chunk = ids[:, i:min(i + prefill_step_size, n - 1)]
             if chunk.shape[1]:
                 mx.eval(model(chunk, cache=cache))
+                if align == "committed":
+                    h_chunks.append(get_h())
                 mx.clear_cache()
         logits = model(ids[:, max(n - 1, 0):], cache=cache)
-        h_last = get_h()[:, -1:]
+        h_chunks.append(get_h())
+        h_last = h_chunks[-1][:, -1:]
         t1, _ = pick(logits[:, -1])
         mx.eval(t1, h_last)
+
+        if align == "committed":
+            # Seed positions 0..P-2 so the head enters decoding with the same
+            # history the trunk has, and with cache.offset == P-1. Position
+            # P-1 is not seeded: its input needs x_P, the first sampled
+            # token, and it is the bootstrap draft below.
+            if n >= 2:
+                h_all = mx.concatenate(h_chunks, axis=1)
+                head.advance(h_all[:, :n - 1], ids[:, 1:n], dcache)
+                del h_all
+            h_chunks.clear()
+            mx.clear_cache()
+            # Bootstrap draft: position P-1, input (h_{P-1}, x_P).
+            draft_row = head.draft_logits(h_last, t1[None], dcache)[:, -1]
+            mx.eval(draft_row)
 
         steps = accepted = 0
         start = time.perf_counter()
@@ -213,8 +268,11 @@ def mtp_stream_generate(
 
         while finish is None:
             steps += 1
-            dsnap = snapshot([dcache], copy=copy_caches)
-            draft_row = head.draft_logits(h_last, t1[None], dcache)[:, -1]
+            if align == "legacy":
+                # Drafted BEFORE verification off a cache that advances one
+                # position per step, so it must be rolled back on rejection.
+                dsnap = snapshot([dcache], copy=copy_caches)
+                draft_row = head.draft_logits(h_last, t1[None], dcache)[:, -1]
             if dist is None:
                 d2 = mx.argmax(draft_row, axis=-1)
                 q = None
@@ -245,7 +303,8 @@ def mtp_stream_generate(
                 # Roll back to before the drafted pair and replay the tokens
                 # actually emitted, so the caches match the emitted stream.
                 restore(cache, csnap)
-                restore([dcache], dsnap)
+                if align == "legacy":
+                    restore([dcache], dsnap)
                 lg2 = model(mx.concatenate([t1, t2])[None], cache=cache)
 
             for tok, from_draft in ((t1, False), (t2, ok)):
@@ -268,9 +327,25 @@ def mtp_stream_generate(
             if finish is not None:
                 break
 
-            h_last = get_h()[:, -1:]
-            t1, _ = pick(lg2[:, 1])
-            mx.eval(t1, h_last)
+            # `get_h()` is the hidden state of the forward that actually
+            # committed — the replay on the rejection path, not the discarded
+            # speculative one — so it is (h_i, h_{i+1}) for the emitted pair.
+            h_pair = get_h()
+            h_last = h_pair[:, -1:]
+            t_next, _ = pick(lg2[:, 1])
+            mx.eval(t_next, h_pair)
+
+            if align == "committed":
+                # Advance the head over the two positions that just
+                # committed: (h_i, x_{i+1}) and (h_{i+1}, x_{i+2}). Its cache
+                # now holds one row per committed token, so cache.offset is
+                # still the true position. The second output drafts x_{i+3},
+                # which is exactly the next step's speculative token; the
+                # first is redundant as a draft and is there to fill the row.
+                pair_ids = mx.concatenate([t2, t_next])[None]
+                draft_row = head.draft_logits(h_pair, pair_ids, dcache)[:, -1]
+                mx.eval(draft_row)
+            t1 = t_next
 
         tail = detok.finalize()
         if tail:

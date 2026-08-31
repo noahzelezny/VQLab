@@ -27,6 +27,10 @@ def add_sampling_args(ap):
     ap.add_argument("--top-p", type=float, default=0.0)
     ap.add_argument("--min-p", type=float, default=0.0)
     ap.add_argument("--top-k", type=int, default=0)
+    ap.add_argument("--align", default="committed",
+                    choices=["committed", "legacy"],
+                    help="head-cache scheme; 'legacy' is the pre-2026-08-31 "
+                         "misaligned loop, kept only for A/B measurement")
     return ap
 
 
@@ -67,7 +71,7 @@ def main():
     for r in mtp_stream_generate(model, tok, prompt_ids(tok, a.prompt), head,
                                  max_tokens=a.tokens, temp=a.temp,
                                  top_p=a.top_p, min_p=a.min_p, top_k=a.top_k,
-                                 family=a.family):
+                                 family=a.family, align=a.align):
         print(r.text, end="", flush=True)
         last = r
     if last is not None:
