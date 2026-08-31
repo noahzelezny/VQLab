@@ -130,3 +130,44 @@ REQUEUED for Noah's actual targets (100/120/140), smallest K first:
   d4/K2048 3.00 bpw -> 117.8 GiB  (~2.5 h, threadgroup-safe)
   d4/K8192 3.50 bpw -> 135.9 GiB  (~10 h, device-codebook path; needs
                                    bundle-accept before it ships)
+
+## 2026-08-30 (night) — the 98.6 GiB rung: first frontier point
+
+d4/K512 packed to 98.55 GiB (2.635 bpw overall, experts 2.471) against a
+99.6 GiB projection -- within 1%, so the geometry model
+(bpw = log2(K)/d + 0.25 group-64 fp16 scales; size from param counts) is
+now VALIDATED ON TWO POINTS and should be used to price every future rung
+BEFORE fitting. Fit 3102s (~52 min, ~170s/shard), relerr median 0.2634.
+
+RELERR: d IS THE STRONGER LEVER THAN K at this scale. d4/K512 reconstructs
+BETTER than d8/K16384 (0.2634 vs 0.3521) from a codebook 32x SMALLER --
+halving the vector dimension beats a 32x larger codebook, because each code
+has half as much to represent. (Does NOT overturn FINDINGS' "raise K first"
+for a FIXED d; it says the d ladder was under-explored here.)
+
+SCORES: KL 348.82 mnats | prose ppl 2.5743 | top-1 0.8398
+  corpus     teacher    VQ81   VQ98.6 | +nats81 +nats98  drop
+  prose       1.9024  3.6339   2.5743 |   0.647   0.302   53%
+  code        1.4888  1.9619   1.7107 |   0.276   0.139   50%
+  literary    1.1580  2.9562   1.6166 |   0.937   0.334   64%
+
+FRONTIER: beats affine q3 on BOTH axes -- 98.6 GiB vs 129 GiB AND KL
+348.82 vs 377.08. First such point in this family. TEMPERED: q3 is the row
+already called collapsed, and 7% better than collapsed is not "good";
+prose ppl is still 1.35x teacher. This is the AGGRESSIVE end of the
+ladder, not the quality rung.
+
+STEEPNESS: 17.7 GiB bought 345 mnats = ~19.5 mnats/GiB. The cliff sits
+just below 100 GiB for this family -- §4.1's law on a third family, now
+with VQ measured on BOTH sides of it.
+
+MEMORIZATION COUPLING (both halves now measured): literary took the WORST
+damage at 2 bpw (0.937 nats, the largest) and recovers the MOST at 2.5 bpw
+(64%, the largest). Hit hardest, recovers fastest. Consistent with the
+teacher-pass finding that this family absorbed Gutenberg near-verbatim:
+memorization lives in precise weight values, which is exactly what coarse
+VQ erases and finer VQ restores. Worth a proper writeup.
+
+NEXT: d4/K2048 (~118 GiB, 3.00 bpw) fitting now, ~2.5h; then d4/K8192
+(~136 GiB, 3.50 bpw, ~10h, device-codebook path -> needs bundle-accept).
+STILL UNRUN on every rung: smoke (loads resident) and verify.
