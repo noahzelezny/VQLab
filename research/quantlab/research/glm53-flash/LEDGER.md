@@ -216,3 +216,31 @@ BEFORE the stream block — the watchdog needs the WEIGHT-READ ops on the
 CPU stream, not the import. Note mlx-vlm dispatches
 `hc_func = _hc_ops if use_ops else _hc_kernel`, i.e. on a FLAG, not on
 whether the kernel exists — an upstream hole worth reporting.
+
+## 2026-08-31 — the 116.3 GiB rung sweeps affine q3
+
+d4/K2048 packed to 116.28 GiB (projected 117.8, within 1.3% -- geometry
+model now holds on THREE points). 3.108 bpw overall, experts 2.959. Fit
+9545s (~2.65h). vision_config present, gates PASS.
+
+  KL 199.53 | prose 2.1954 | code 1.6187 | literary 1.3402 | top-1 88.6%
+
+BEATS affine q3 (129 GiB) ON EVERY AXIS: 12.7 GiB smaller, 47% less KL,
+better on all three corpora, +5.5pt top-1. Against q4 (166 GiB) it trades
+~2x the KL for 50 GiB. Extrapolating the affine ladder down to 116 GiB
+puts affine ABOVE q3's 377, so VQ is delivering roughly HALF the damage at
+equal size. This is the rung most people would actually run and it is the
+family's frontier claim.
+
+MEMORIZATION DEFICIT CLOSES WITH BITS (both ends now measured): literary
+is the corpus VQ handles worst -- it is the most memorized (teacher ppl
+1.1580). At 80.9 GiB literary is catastrophic (2.9562, +0.937 nats, the
+WORST of the three). At 98.5 GiB VQ still LOSES to q3 there (1.6166 vs
+1.4731) while winning everywhere else. At 116.3 GiB it WINS (1.3402 vs
+1.4731). So the near-verbatim recall VQ erases is RECOVERABLE with bits;
+it is not a structural weakness of VQ against affine, just a steeper part
+of its curve. Retracts any reading of the 98.5 result as "VQ is worse at
+memorized content, full stop."
+
+d4/K8192 (~136 GiB) fit STARTED 2026-08-31, ~10h. TABLE.md updated in
+place (4da7c459).
