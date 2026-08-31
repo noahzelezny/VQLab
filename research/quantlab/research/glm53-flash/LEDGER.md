@@ -171,3 +171,48 @@ VQ erases and finer VQ restores. Worth a proper writeup.
 NEXT: d4/K2048 (~118 GiB, 3.00 bpw) fitting now, ~2.5h; then d4/K8192
 (~136 GiB, 3.50 bpw, ~10h, device-codebook path -> needs bundle-accept).
 STILL UNRUN on every rung: smoke (loads resident) and verify.
+
+## 2026-08-30 (night) — layer-leverage on the 98.6 GiB rung
+
+Probe run (1024 tokens, streamed, peak 29.2 GiB). ALLOCATION IS NOT FLAT:
+local_rel min 0.0056 / mean 0.0765 / max 0.2611, max/mean 3.41x.
+
+TOP BY LOCAL DAMAGE      TRAJECTORY JUMPS (leverage)
+  L18  0.2611  3.41x       into L3   +0.1590  (0.0073 -> 0.1663)
+  L3   0.1661  2.17x       into L21  +0.1515  (0.3550 -> 0.5065)
+  L32  0.1350  1.76x       into L18  +0.0922  (0.2867 -> 0.3789)
+  L29  0.1204  1.57x       into L17  +0.0379
+  L43  0.1203  1.57x       into L32  +0.0331
+  L41  0.1023  1.34x       into L29  +0.0269
+  L42  0.1016  1.33x     final traj drift 0.5592
+  L10  0.1011  1.32x
+
+SHAPE DIFFERS FROM FLASH-NEXT — do NOT assume transfer between families.
+Flash-Next was front-loaded (L1 a monster at 0.310, 2.4x any other). GLM
+is a mid-model spike (L18) + the FIRST expert layer (L3) + a late cluster
+(L29/L32/L41-43). Early layers here are the CHEAPEST (L0 0.0110, L1
+0.0069, L2 0.0056 — those are pre-expert; experts are L3-45).
+
+L21 IS A SEPARATE FAILURE MODE: 2nd-biggest trajectory jump (+0.1515) but
+NOT in the top-8 local. It AMPLIFIES existing drift rather than injecting
+its own, so bigger K there may not help — worth a distinct look.
+
+PLAN (morning, Noah): each expert layer is ~2.08 GiB at 2.50 bpw;
+upgrading one to 3.00 bpw costs ~0.42 GiB, so the ~1.4 GiB of headroom to
+the 100 GiB target buys ~3 layers. Splice L18 + L3 + L32 from the
+d4/K2048 fit (running tonight, produces exactly those tensors) into the
+d4/K512 artifact -> ~99.9 GiB, then re-score. Probe is a RANKING
+instrument, not a quality score: the referee + KL must confirm the mixed
+build actually paid.
+
+TOOL FIX (VQLab 90f32fe + f612f20): the probe crashed 40 min in with
+"'NoneType' object is not callable". mlx-vlm's hyper_connection builds its
+fused sinkhorn Metal kernel AT IMPORT TIME behind
+`if mx.default_device() != mx.gpu: return None`, and a cpu-stream context
+reports default_device() as CPU (VERIFIED). The 08-29 watchdog fix had
+moved model loads inside `with mx.stream(mx.cpu)`, which imported the arch
+under CPU default and nulled the kernel forever. Fix: import the arch
+BEFORE the stream block — the watchdog needs the WEIGHT-READ ops on the
+CPU stream, not the import. Note mlx-vlm dispatches
+`hc_func = _hc_ops if use_ops else _hc_kernel`, i.e. on a FLAG, not on
+whether the kernel exists — an upstream hole worth reporting.
