@@ -218,103 +218,73 @@ Across runs: **1.56–1.80x (median 1.65x)**, acceptance 0.578–0.812 (median
 `model*.safetensors` glob, so a model directory carrying one still loads
 normally through the stock loader — the head is optional residency.
 
-### Head-cache alignment: measured neutral (2026-08-31)
+### Head-cache alignment: worth +5.9pp acceptance (2026-08-31)
 
-`qwen4_exp` reads the head's rotary positions straight off its cache offset,
-so the old loop fed the head positions compressed 2x and drifting with
-generation length, rolled its cache back on every rejection, and never seeded
-it over the prompt. `align="committed"` fixes all three. On a 512-token
-greedy run at the 2.1bpw rung (M4 Max, 256 steps, one model load):
+`qwen4_exp` reads the head's rotary positions straight off its cache offset
+(`Attention.__call__`: `offset = cache.offset`). The old loop advanced that
+cache once per step while two tokens committed, rolled it back on every
+rejection, and never seeded it over the prompt. `align="committed"` keeps one
+head row per committed token, which makes the offset the true position by
+construction.
 
-| head | align | acceptance | tok/s | speedup |
-|------|-------|-----------|-------|---------|
-| q6 (2.12 GiB) | committed | 0.7812 ±5.1pp | 29.83 | 1.566x |
-| q6 (2.12 GiB) | legacy    | 0.7539 ±5.3pp | 29.43 | 1.545x |
-| experts q4 / rest q8 (1.55 GiB) | committed | 0.7773 ±5.1pp | 29.52 | 1.551x |
-| experts q3 / rest q8 (1.25 GiB) | committed | 0.7695 ±5.2pp | 29.31† | 1.548x† |
+Measured with `vqlab mtp-accept`: 12 independent prompts, 256 tokens each,
+every prompt run through every configuration so the comparison is paired
+(2.1bpw, M4 Max, one model load).
 
-**The alignment fix buys no measurable acceptance: +2.7pp at 0.73σ.** It was
-predicted to matter and it does not, at this generation length. It is kept as
-the default because it is mechanically correct, costs nothing measurable
-(+0.4pp speed, 0.06σ), and removes the draft-cache rollback entirely — not
-because it was shown to help. An earlier 96-token run showed +12.5pp, which
-was 1.53σ and did not survive the powered run; it is recorded here as a
-falsified prediction, per METHODOLOGY.
+| head | committed | legacy | paired delta | t | wins |
+|------|-----------|--------|--------------|---|------|
+| q6 (2.12 GiB)   | 0.8171 | 0.7578 | **+5.92pp** | 6.34 | 12/12 |
+| e4q8 (1.55 GiB) | 0.8105 | 0.7598 | +5.08pp | 4.17 | 11/12 |
+| e3q8 (1.25 GiB) | 0.8151 | 0.7643 | +5.08pp | 4.14 | 11/12 |
 
-The untested part of the hypothesis is length: legacy's position error grows
-with generation, so any effect should widen well beyond 512 tokens.
+1536 steps per cell. The effect replicates independently across all three
+heads, and the 12/12 sign test alone is p ~ 0.0002.
 
-**Timing on this machine is not trustworthy and the speedups above should be
-treated as indicative only.** The M4 Max is a laptop, and a re-run of the
-identical configuration in the same process gave 1.723x and 1.135x — a 25%
-swing from thermal drift alone. The baseline pass is longer and hotter than
-the speculative one, so it degrades first and *inflates* the ratio early. A
-palindromic run order does NOT fix this (it pins whichever configuration sits
-in the middle to both hottest slots — that error is mine, and it depressed the
-legacy row). Publishable speedups need a thermally stable machine.
+**A methodological warning, recorded because we walked into it.** The first
+attempt compared a single prompt and read +12.5pp at n=48 steps; the second
+read +2.7pp at n=256 and was written up here as "measured neutral, prediction
+falsified". Both were wrong, in opposite directions. Two errors caused it:
 
-Acceptance, by contrast, is completely reliable here: greedy decode is
-deterministic and every figure above reproduced to four decimals across
-repeats. Note the corollary — repeating a greedy run yields **no** new
-statistical information, and treating one trajectory's 256 steps as 256
-independent trials overstates the power, because the steps share a prefix. The
-alignment question needs independent *prompts*, not repeats.
+- *Steps are not independent trials.* Consecutive steps of one generation
+  share a prefix, so a single trajectory's N steps carry far less information
+  than N Bernoulli trials, and any binomial interval over them is too narrow.
+- *Failure to reject is not evidence of absence.* The n=256 design had no
+  power to see a 5pp effect; calling it falsified overstated the result as
+  badly as the n=48 overclaim did.
 
-† e3q8's speed is taken from an early, thermally clean slot; an earlier reading
-of 22.36 tok/s was purely its position in the sequence.
+Independent prompts are the replicates, and pairing removes prompt
+difficulty — which dominates the spread. That design finds the effect at
+t=6.34 where the previous one could not see it at all. Repeats do NOT help:
+greedy decoding is deterministic, so re-running a prompt reproduces its
+acceptance to four decimals and adds nothing.
 
-### Mixed-bit heads
+### Mixed-bit heads: 41% smaller for nothing
 
 The 512-expert MoE stack is 4.688 of the head's 4.856 GiB — **96.5%, in two
 tensors** — so head size is essentially one dial, and protecting the other
-3.5% at a high bit-width is nearly free (+0.02 GiB from 6- to 8-bit across
-all of it). `vqlab mtp-pack --expert-bits` sets the experts independently.
+3.5% at a high bit-width is nearly free (+0.02 GiB from 6- to 8-bit across all
+of it). `vqlab mtp-pack --expert-bits` sets the experts independently; the
+recipe is recorded in the sidecar and replayed on load.
 
-**Experts at 4-bit with everything else at 8-bit is 1.55 GiB against 2.12,
-for no measurable acceptance cost (−0.4pp, 0.11σ) and no measurable speed
-cost.** That is 27% of the head's residency recovered for nothing, which
-matters most on the large rungs where headroom is tight. 3-bit experts hold
-acceptance too (−1.2pp, 0.32σ) but need a clean re-measure for speed.
+Paired across the same 12 prompts, `align="committed"`:
 
-This search is safe by construction: head precision **cannot** affect output
+| head | resident | acceptance | vs q6 | t |
+|------|----------|-----------|-------|---|
+| q6 (uniform 6-bit)   | 2.12 GiB | 0.8171 | — | — |
+| experts q4 / rest q8 | 1.55 GiB | 0.8105 | −0.65pp | 2.06 |
+| experts q3 / rest q8 | **1.25 GiB** | 0.8151 | −0.20pp | 0.54 |
+
+None of the differences is significant at 11 df, and `e3q8` scores *above*
+`e4q8` — which a strictly coarser quantization cannot genuinely do, and is
+the same tell the ledger used when 6-bit appeared to beat bf16. **Experts at
+3-bit costs 41% of the head's residency and buys no measurable acceptance
+loss**, which matters most on the large rungs where headroom decides whether
+the head ships at all.
+
+The search is safe by construction: head precision **cannot** affect output
 quality, because the trunk verifies every drafted token. A coarser head costs
-a rejection, never a wrong token.
-
-Four things that are settled by measurement and should not be "simplified":
-
-- **The head's cache offset is its position signal.** `qwen4_exp` reads rotary
-  positions straight off it (`Attention.__call__`: `offset = cache.offset`).
-  Keep one head row per *committed* token — seed over the prompt, advance two
-  positions per step after verification — and the offset is the true position
-  by construction. Advancing it once per step (two tokens) compresses positions
-  2x and drifts further every step. MTPLX documents the same invariant for this
-  architecture and reaches it by overriding the rope offset explicitly.
-
-- **The head's norms must be applied by the architecture's own RMSNorm.**
-  qwen4_exp's is zero-centered (`y = norm(x) * (1 + weight)`); hand-rolling
-  `n * w` drops the `+1.0` and drives acceptance to exactly **0.0**. That one
-  mistake was the entire original bug. See `src/vqlab/mtp_head.py`.
-- **Attention caches roll back by the offset DELTA, not a fixed count.**
-  Trimming a hardcoded 1 leaves a stale key while the recurrent caches roll
-  back 2, and the two streams then drift silently.
-- **Head precision cannot affect output quality.** The trunk verifies every
-  drafted token, so a worse draft costs a rejection, never a wrong token;
-  6-bit and bf16 measured identical acceptance (0.7065 vs 0.7051 at n=4096,
-  inside the ±0.7pp binomial SE).
-
-At temperature the acceptance test is exact rejection sampling with residual
-correction (Leviathan et al. 2023; Chen et al. 2023), so the output
-distribution is the one plain sampling from the trunk would give, for **any**
-draft quality. Samplers are mlx-lm's own (`sample_utils`), adapted to return
-the distribution alongside the draw. `tests/test_mtp_sampling.py` checks the
-preservation claim both in closed form and empirically.
-
-**Bit-identical output against single-token decoding is not achievable and is
-not a valid correctness gate.** MLX's chunked and single-token kernels
-disagree at genuine near-ties (measured top-2 logit gaps of 0.25 and exactly
-0.00 against a median of 3.625), and verification always happens inside a
-2-token forward. The gate is *divergence confined to near-ties*, which
-`vqlab mtp-bench` measures directly as its chunk control.
+a rejection, never a wrong token. There is no quality gate to defend here,
+only acceptance — and acceptance is measured directly.
 
 ### Can a VQ artifact use a native MTP runtime? Not today (2026-08-31)
 
