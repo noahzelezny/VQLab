@@ -203,6 +203,11 @@ replays, costing one extra forward and never a wrong token.
 
 ### Measured (Qwen3.8-Flash-Next, 6-bit head, greedy, 96 tokens)
 
+> **These numbers predate the 2026-08-31 head-cache alignment fix** and were
+> taken with what is now `align="legacy"`. That loop fed the head wrong rotary
+> positions and rolled its cache back on every rejection; the aligned scheme is
+> the default now and is being re-measured. Treat the table as a floor.
+
 | rung   | head  | baseline   | speculative | speedup | acceptance |
 |--------|-------|-----------|-------------|---------|------------|
 | 2.1bpw | 6-bit | 16.07 t/s | 26.87 t/s   | 1.67x   | 0.708      |
@@ -214,7 +219,15 @@ Across runs: **1.56–1.80x (median 1.65x)**, acceptance 0.578–0.812 (median
 `model*.safetensors` glob, so a model directory carrying one still loads
 normally through the stock loader — the head is optional residency.
 
-Three things that are settled by measurement and should not be "simplified":
+Four things that are settled by measurement and should not be "simplified":
+
+- **The head's cache offset is its position signal.** `qwen4_exp` reads rotary
+  positions straight off it (`Attention.__call__`: `offset = cache.offset`).
+  Keep one head row per *committed* token — seed over the prompt, advance two
+  positions per step after verification — and the offset is the true position
+  by construction. Advancing it once per step (two tokens) compresses positions
+  2x and drifts further every step. MTPLX documents the same invariant for this
+  architecture and reaches it by overriding the rope offset explicitly.
 
 - **The head's norms must be applied by the architecture's own RMSNorm.**
   qwen4_exp's is zero-centered (`y = norm(x) * (1 + weight)`); hand-rolling
