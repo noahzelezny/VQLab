@@ -231,7 +231,7 @@ greedy run at the 2.1bpw rung (M4 Max, 256 steps, one model load):
 | q6 (2.12 GiB) | committed | 0.7812 ±5.1pp | 29.83 | 1.566x |
 | q6 (2.12 GiB) | legacy    | 0.7539 ±5.3pp | 29.43 | 1.545x |
 | experts q4 / rest q8 (1.55 GiB) | committed | 0.7773 ±5.1pp | 29.52 | 1.551x |
-| experts q3 / rest q8 (1.25 GiB) | committed | 0.7695 ±5.2pp | 22.36† | 1.402x† |
+| experts q3 / rest q8 (1.25 GiB) | committed | 0.7695 ±5.2pp | 29.31† | 1.548x† |
 
 **The alignment fix buys no measurable acceptance: +2.7pp at 0.73σ.** It was
 predicted to matter and it does not, at this generation length. It is kept as
@@ -244,10 +244,24 @@ falsified prediction, per METHODOLOGY.
 The untested part of the hypothesis is length: legacy's position error grows
 with generation, so any effect should widen well beyond 512 tokens.
 
-† The e3q8 row is thermally contaminated — its baseline fell to 15.95 tok/s
-against 19.03–19.05 for the three runs before it on the same load. Its
-acceptance stands; its speed does not. Re-run in a randomised order before
-quoting it.
+**Timing on this machine is not trustworthy and the speedups above should be
+treated as indicative only.** The M4 Max is a laptop, and a re-run of the
+identical configuration in the same process gave 1.723x and 1.135x — a 25%
+swing from thermal drift alone. The baseline pass is longer and hotter than
+the speculative one, so it degrades first and *inflates* the ratio early. A
+palindromic run order does NOT fix this (it pins whichever configuration sits
+in the middle to both hottest slots — that error is mine, and it depressed the
+legacy row). Publishable speedups need a thermally stable machine.
+
+Acceptance, by contrast, is completely reliable here: greedy decode is
+deterministic and every figure above reproduced to four decimals across
+repeats. Note the corollary — repeating a greedy run yields **no** new
+statistical information, and treating one trajectory's 256 steps as 256
+independent trials overstates the power, because the steps share a prefix. The
+alignment question needs independent *prompts*, not repeats.
+
+† e3q8's speed is taken from an early, thermally clean slot; an earlier reading
+of 22.36 tok/s was purely its position in the sequence.
 
 ### Mixed-bit heads
 
@@ -301,6 +315,35 @@ disagree at genuine near-ties (measured top-2 logit gaps of 0.25 and exactly
 0.00 against a median of 3.625), and verification always happens inside a
 2-token forward. The gate is *divergence confined to near-ties*, which
 `vqlab mtp-bench` measures directly as its chunk control.
+
+### Can a VQ artifact use a native MTP runtime? Not today (2026-08-31)
+
+oMLX 0.6.3+ serves `qwen4_exp` with its own native MTP ("Lightning MTP"), so
+the obvious question is whether a VQLab VQ rung can borrow it. Tested directly
+against oMLX 0.6.4. It cannot, and **the blocker has nothing to do with the
+MTP head**:
+
+- oMLX **does** honour `model_file` — but only on its mlx-lm path
+  (`omlx/patches/deepseek_v4/utils_patch.py`). Its `qwen4_exp` is vendored into
+  **mlx-vlm**'s namespace (`omlx/patches/mlx_vlm_qwen4_exp_compat/`), and the
+  mlx-vlm loader does not honour `model_file`.
+- Its `qwen4_exp` expects **mlx-vlm key layout** — `language_model.*`,
+  `vision_tower.*`. VQLab artifacts are **mlx-lm layout** — `model.*`,
+  `lm_head.*`, `model.visual.*`. A lazy load gets all the way through
+  architecture construction and then rejects all 3671 tensors as "not in
+  model".
+
+So two changes are needed together, and only one is ours: emit VQ artifacts in
+mlx-vlm layout, **and** have the mlx-vlm path honour `model_file` — without
+which the VQ modules cannot be constructed at all and the packed codes have
+nothing to decode them. The second is an upstream feature request, and oMLX
+already implements exactly that for its mlx-lm path.
+
+What DOES work with oMLX today is `vqlab mtp-graft` output on a stock
+(non-VQ) Flash-Next checkpoint, since its `Qwen4ExpMTPModule` accepts `mtp.`,
+`language_model.mtp.`, `model.mtp.` and `model.language_model.mtp.` prefixes.
+That is not a VQLab differentiator — Qwen's own head serves the same purpose —
+but it is the reason `mtp-graft` gates on key-set parity rather than guessing.
 
 ### Adding a family
 
