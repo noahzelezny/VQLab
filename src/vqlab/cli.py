@@ -53,6 +53,7 @@ COMMANDS = {
     "mtp-probe": ("mtp_probe.py", "MTP head draft-acceptance probe (qwen4_exp)"),
     "mtp-pack": ("mtp_pack.py", "pack a bf16 MTP graft into a quantized drafting sidecar"),
     "mtp-generate": ("mtp_run.py", "generate with MTP speculative drafting"),
+    "mtp-graft": ("mtp_graft.py", "emit the MTP head in a native runtime's layout (language_model.mtp.*)"),
     "mtp-bench": ("mtp_bench.py", "measure the MTP speedup, acceptance and numerics control"),
 }
 
