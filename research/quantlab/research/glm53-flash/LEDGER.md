@@ -244,3 +244,60 @@ memorized content, full stop."
 
 d4/K8192 (~136 GiB) fit STARTED 2026-08-31, ~10h. TABLE.md updated in
 place (4da7c459).
+
+## 2026-08-31 — MIXED-BIT ALLOCATION: bits help, TARGETING DOES NOT
+
+Three splices off the d4/K512 base (98.55 GiB, KL 348.82), each swapping
+whole expert layers to d4/K2048 codes taken PACKED from the K2048 artifact
+(safe: identical weight_map, 2998 keys; entries differ only in k and
+pack_bits; untouched shards hardlinked). Tool: scratchpad/glm_mix.py.
+
+  build                     GiB     KL   prose   code    lit  top-1
+  base d4/K512            98.55  348.82  2.5743 1.7107 1.6166 0.8398
+  mix top-3 leverage      99.82  348.62  2.5795 1.6954 1.5747 0.8345
+  mix top-8 leverage     101.93  333.59  2.5461 1.6798 1.5531 0.8462
+  mix BOTTOM-8 (control) 101.93  331.93  2.4948 1.6986 1.5700 0.8481
+  full uniform K2048     116.28  199.53  2.1954 1.6187 1.3402 0.8862
+
+THE CONTROL IS THE RESULT. Top-8 (local_rel 0.101-0.261) vs bottom-8
+(0.025-0.057) -- a 4x separation in measured leverage -- at IDENTICAL byte
+spend (+3.38 GiB) and identical geometry. Outcome: control wins KL, prose
+and top-1; top-8 wins code and literary. A 2-2 split with the control
+ahead on the ranking column. THE LEVERAGE RANKING CARRIES NO USABLE
+INFORMATION about output damage for this family.
+
+(Stated precisely: NOT "anti-correlated" -- the metrics disagree in
+direction, which is the signature of no signal, not inverse signal. An
+earlier reading of mine that called it anti-correlated was corrected by
+the code/literary rows arriving.)
+
+EFFICIENCY vs JUST BUYING BITS: the full uniform K512->K2048 step is
++17.73 GiB for -149.29 mnats = 8.42 mnats/GiB. The targeted 8-layer mix
+is +3.38 GiB for -15.23 mnats = 4.51 mnats/GiB -- 0.54x the uniform rate.
+Spending 19.1% of the bytes on the "highest-leverage" layers captured only
+10.2% of the gain (8 of 43 layers = 18.6%). Targeting returned BELOW its
+proportional share.
+
+CONSEQUENCES:
+1. Do NOT use `vqlab layer-leverage` to drive allocation for glm5_next.
+   Its own docstring called it a ranking instrument requiring referee
+   confirmation; the referee has now REJECTED it. Choosing layers by
+   local_rel would have cost quality against choosing nearly arbitrarily.
+2. THIS CASTS DOUBT ON THE FLASH-NEXT REALLOCATION FINDING (LEDGER
+   2026-08-29, "reallocation WINS", KL 556.10 -> 419.88 byte-neutral).
+   That result was measured against a BASELINE but never against a CONTROL
+   of low-leverage layers. It may have been "any reallocation helps"
+   rather than "the probe found the right layers." A recorded finding is
+   resting on an untested assumption -- re-test with a control before it
+   informs anything further.
+3. The 3-layer mix (+1.27 GiB) moved KL by 0.2 mnats = nothing. Mixing
+   needs scale before it registers at all.
+
+CAVEAT STILL OPEN: seed-noise floor is RUNNING (unseeded d4/K512 refit,
+--seed -1, FINDINGS III.12). It bounds how seriously to take the 1.65
+mnat gap between the two mixes. It does NOT change the conclusion: if the
+gap is noise, targeting is useless; if real, targeting is harmful.
+
+ALL FITS WERE SEEDED (mx.random 1234, the --seed default, logged in every
+fit header). The noise-floor run is a DELIBERATE unseeded comparison, not
+a correction of an error.
