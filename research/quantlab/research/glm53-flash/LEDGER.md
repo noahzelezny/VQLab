@@ -407,3 +407,52 @@ L45 IS NOT A VQ LAYER: 126 modules / 3 projections = 42 layers, L3-L44.
 L45 is GLM's MTP layer and was never quantized (the sweep's L45 KeyError
 was a wrong loop bound, not missing data). Worth remembering if the MTP
 arc is ever revived for this family.
+
+## 2026-08-31 — BEST-8 BY MEASURED EFFECT: targeting is worth ~2x uniform
+
+Built [20,27,29,31,33,34,35,39] (the 8 best single-layer d_KL), same
++3.38 GiB / 101.93 GiB as the two earlier 8-layer mixes.
+
+  8-layer build @ 101.93 GiB        d_KL     KL   prose  top-1
+  probe top-8 (leverage-ranked)   +15.23  333.59  2.5461 0.8462
+  bottom-8 control                +16.89  331.93  2.4948 0.8481
+  BEST-8 (measured effect)        +54.98  293.84  2.4014 0.8569
+
+3.6x either earlier build at IDENTICAL bytes.
+
+EFFICIENCY -- this REVERSES the morning's "targeting is 0.54x uniform":
+  uniform K512->K2048, all layers  +17.73 GiB  -149.29 mnats   8.42 mnats/GiB
+  probe-targeted 8                  +3.38 GiB   -15.23         4.51  (0.54x)
+  MEASURED-targeted 8               +3.38 GiB   -54.98        16.27  (1.93x)
+Targeting is worth ~2x the efficiency of simply buying bits -- it captures
+37% of the full uniform step's gain for 19% of its bytes. Against affine
+q3 (129 GiB, KL 377.08) this build is 27 GiB SMALLER and 22% better.
+
+SUPERADDITIVITY IS NOT A CONSTANT (corrects my earlier "consistent 1.75x"):
+  probe top-8  additive  +8.74 -> measured +15.23  (1.74x, SUPER)
+  control      additive  +9.28 -> measured +16.89  (1.82x, SUPER)
+  best-8       additive +65.69 -> measured +54.98  (0.84x, SUB)
+Weak/negative sets beat their sum; strong sets fall short of it --
+diminishing returns against the +149.29 ceiling. So the ratio cannot be
+used as a fixed correction factor when predicting a combination.
+
+NOTE: best-8 is GREEDY selection on a non-monotonic, interacting surface.
+No optimality guarantee. The random-allocation phase may beat it.
+
+FOUR-LEVEL DESIGN SPACE NOW OPEN (Noah's idea, extended): the d8/K16384
+artifact splices into the d4 base -- weight_maps verified IDENTICAL (2998
+keys), entries differ only in k/dim/pack_bits. So a layer can sit at:
+  level 0  d8/K16384  2.00 bpw  -0.42 GiB   (DEMOTION, frees budget)
+  level 1  d4/K512    2.50 bpw   base
+  level 2  d4/K2048   3.00 bpw  +0.42 GiB
+  level 3  d4/K8192   3.50 bpw  +0.84 GiB
+Demotion is the half we never had: 16 of 42 promotions are net-NEGATIVE,
+so dropping those layers to d8 should cost little while FUNDING promotions
+elsewhere -- a better artifact at CONSTANT size, and the same logic that
+might rescue the 80.9 GiB rung. Demotion sweep queued (42 runs).
+
+TOOL NOTE: pipelining splice against scoring did NOT speed the sweep up
+(1.31 vs 1.22 min/sample, though confounded -- K8192 splices move 2x the
+bytes). The GPU gaps Noah spotted are disk-bound, not CPU-bound; both
+stages stream multi-GiB shards off the same SSD, so overlapping makes them
+contend. Any real speedup has to reduce I/O, not reorder it.
