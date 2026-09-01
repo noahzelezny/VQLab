@@ -87,6 +87,8 @@ until active cooling brought the baseline spread from 26% to 0.32%.
 |---|---|
 | alignment worth +12.5pp (n=48, one prompt) | 1.53 sigma. Did not survive. |
 | alignment "measured neutral / falsified" (n=256, one prompt) | ALSO wrong — no power to see a 5pp effect. Failure to reject is not evidence of absence. |
+| the 397B's MTP norms use a different convention from its trunk (their gains sit outside the trunk's range, by inconsistent offsets) | wrong. The offset is a uniform +1.0; a different layer simply has different learned magnitudes. Comparing magnitudes across layers was never evidence about a convention. See §8. |
+| head-cache growth would decay throughput inside a long request (the bug MTPLX documents) | not reproduced: over 8192 tokens peak memory moved 47.34 -> 47.60 GiB and throughput was flat within noise. Caveat below. |
 | the +5.9pp acceptance would convert to a large speedup | it converts to **+1.58%** wall-clock — which is near the depth-1 ceiling, not a defect. See §7. My first explanation (the extra head forward eats it) was only a third of the story. |
 
 ---
@@ -96,8 +98,8 @@ until active cooling brought the baseline spread from 26% to 0.32%.
 | family | models | head in source? | status |
 |---|---|---|---|
 | `qwen4_exp` | Qwen3.8-Flash-Next | graft on disk | **DONE** — 0.817 acceptance, 1.25 GiB head, 1.58x |
-| `qwen3_5_moe` | Qwen3.5-397B-A17B, Qwen3.6-35B-A3B | **YES**, 397B bf16 has 1553 tensors / 12.29 GiB | not implemented |
-| `qwen3_5` | Qwen3.8-27B | needs bf16 re-download | not implemented; 0.7285 measured once on a dense 27B |
+| `qwen3_5_moe` | Qwen3.5-397B-A17B, Qwen3.6-35B-A3B | **YES**, 397B bf16 has 1553 tensors / 12.29 GiB | head module written, packed to 3.19 GiB; wiring inherited from `qwen3_5` |
+| `qwen3_5` | Qwen3.8-27B | **YES**, 15 tensors / 0.79 GiB | **head module DONE** — 0.656 probe acceptance, 0.49 GiB head |
 | `glm5_next` | GLM-5.3-Flash | needs bf16 re-download | not implemented; no mlx-lm class (mlx-vlm has one) |
 | `deepseek` | — | we have no build | not a target: oMLX and MTPLX already serve it natively |
 
@@ -355,6 +357,16 @@ Flash-Next runs to 4.4bpw on M4; 397B fits ONLY at 2.2bpw (101G + head), and
 
 ### Settled
 
+**Long-request decay: not reproduced, with one caveat.** An 8192-token single
+request on Flash-Next 2.1bpw grew peak memory by 0.26 GiB total (47.34 ->
+47.60) and held throughput flat (35.7 tok/s at 2304 tokens, 32.0 at 8192 --
+consistent with ordinary trunk KV growth, not an MTP-specific leak). The
+caveat is real and limits what the second half of that run measures: from
+about token 2000 the unattended generation degenerated into repetition and
+window acceptance pinned at exactly 1.000, which is the known
+degenerate-text artifact. So the MEMORY result stands (it is structural), and
+the throughput result past ~2000 tokens is measuring the easy case.
+
 - qwen4_exp shipped: 1.25 GiB head, acceptance 0.78-0.82, **1.58x** measured
   with a 0.32% baseline spread.
 - Alignment (`align="committed"`) is worth +5.9pp at short prompts and
@@ -366,47 +378,61 @@ Flash-Next runs to 4.4bpw on M4; 397B fits ONLY at 2.2bpw (101G + head), and
 - `vqlab serve` works: OpenAI-compatible, streaming, temperature, with a
   startup self-check that refuses to run if a patch point moved.
 
-### Next: the 397B (qwen3_5_moe)
+### The 397B (qwen3_5_moe): head module written, wiring measured
 
-The graft is extracted and waiting. What is NOT done is the head module — the
-397B's head is structurally different from qwen4_exp's and needs its own:
+`vqlab/mtp_head_qwen35.py` covers both `qwen3_5` (dense 27B) and
+`qwen3_5_moe` (397B); they differ only in the mlp the stock `DecoderLayer`
+builds from `args.num_experts`, so one module serves both. Structurally it is
+much simpler than the qwen4_exp head: one residual stream, so no
+hyper-connections and no per-stream norm statistics, and the head's block is a
+stock full-attention `DecoderLayer` that owns its own rope.
 
-- single fused `mtp.fc.weight` (qwen4_exp splits embedding/hidden)
-- 1541 **unfused per-expert** mlp tensors (qwen4_exp uses a fused `[E,2I,H]`
-  stack); `expert_src.load_expert_stack` is the existing tool for this shape
-- conventional `input_layernorm` / `post_attention_layernorm` + `mtp.norm`,
-  not hyper-connections
-- shares `pre_fc_norm_embedding` / `pre_fc_norm_hidden` naming with qwen4_exp
-- **the norm convention must be SWEPT, not assumed.** Two facts are confirmed
-  from `qwen3_5.sanitize`: `mtp.*` keys are explicitly dropped
-  (`if "mtp." not in k`), so the head never gets sanitized; and the `+1.0`
-  applied to trunk norms is CONDITIONAL on `has_unsanitized_conv1d`, i.e. only
-  for raw HF-layout checkpoints.
+Three things about the head are **not recoverable from the checkpoint**, and
+each wrong choice is a silent near-zero-acceptance failure with no error --
+the same failure mode that made the qwen4_exp head look dead for a day. So
+`vqlab mtp-probe35` sweeps them against a single trunk load. Measured on the
+dense 27B (VQ-3.9bpw, 512 positions, literary corpus, control 0.596):
 
-  But the values do not support a single rule. Measured on the 397B bf16,
-  every MTP norm sits outside its trunk counterparts' range, and by
-  inconsistent offsets:
+| norm_shift | fc_order | h_source | acceptance vs main greedy |
+|---|---|---|---|
+| 1.0 | **eh** | pre_norm | **0.6562** |
+| 1.0 | **eh** | post_norm | **0.6582** |
+| 1.0 | he | pre_norm | 0.0020 |
+| 1.0 | he | post_norm | 0.0020 |
+| 0.0 | any | any | **0.0000** (all four) |
 
-  | norm | trunk means (6 layers) | MTP |
-  |------|-----------------------|-----|
-  | `input_layernorm` | -0.072 .. +0.018 | **-0.310** |
-  | `post_attention_layernorm` | -0.169 .. -0.098 | **+0.976** |
-  | `q_norm` / `k_norm` | 0.11 .. 0.39 | **0.758 / 0.725** |
-  | `pre_fc_norm_embedding` | (no trunk analogue) | -0.810 |
-  | `pre_fc_norm_hidden` | (no trunk analogue) | -0.456 |
+- **`norm_shift = 1.0` is settled.** The family stores RMSNorm gains as
+  deltas. Without the shift the head is exactly dead, in every other wiring.
+- **`fc_order = "eh"` is settled** — `[embedding | hidden]` into the fused
+  `fc`. The other order is chance.
+- **`h_source` is NOT settled** and probably cannot be by this experiment: a
+  one-token difference over 512 positions. `pre_fc_norm_hidden` is applied
+  immediately afterwards and an RMSNorm of an already-normed vector is close
+  to idempotent, so the two arms are nearly the same computation. Default
+  `pre_norm`, on the argument that the head carrying its own hidden norm
+  expects a raw hidden state.
 
-  `post_attention_layernorm` differs from the trunk by ~1.09 (as if already
-  shifted) while `input_layernorm` differs by ~0.3 and `q_norm` by ~0.5. No
-  single offset explains all of them, so the head's norms may simply have
-  different learned statistics — one layer at the very end of the network is
-  not obliged to look like layer 12.
+The 397B head packs to **3.19 GiB** at experts-3-bit / rest-8-bit (from 12.29
+GiB bf16, ratio 0.257); e4q8 is 3.91 GiB. Against the 101 GiB 2.2bpw rung
+that is ~104 GiB resident, which fits the M4's 120 GiB wired limit but is the
+one 397B rung that does.
 
-  **Therefore: make the shift a per-norm-group FLAG and sweep it, exactly as
-  `mtp-probe --norm-style` already does for qwen4_exp.** The wrong choice
-  yields exactly 0.0 acceptance, so the measurement is unambiguous and cheap.
-  Do NOT bake in a guess — that guess is what cost the original arc days.
+#### A wrong inference, recorded
 
-Order of work: head module -> registry entry -> `mtp-pack` -> **probe
-acceptance before anything else** (a 512-expert head on a 397B model has never
-been drafted from; if it does not draft well, nothing downstream matters) ->
-speedup on the 2.2bpw rung.
+Earlier the same evening I compared the 397B's MTP norm gains against their
+trunk counterparts, found no single offset that explained all of them, and
+concluded in this document that "the ledger's +1.0 rule does not survive
+contact with this checkpoint" and that the convention had to be swept because
+it might not be a uniform shift.
+
+The sweep says the offset **is** a uniform +1.0. The magnitudes differ from
+the trunk's because it is a different layer doing a different job, not
+because it uses a different convention. Comparing a norm's magnitude to
+another layer's was never evidence about the convention; the only evidence
+was `has_unsanitized_conv1d` (the 397B source stores `conv1d.weight` as
+`[12288, 1, 4]`, i.e. unsanitized, so the trunk norms ARE shifted at load)
+and, decisively, acceptance.
+
+Sweeping was still the right call -- it just was not right for the reason I
+gave.
+
