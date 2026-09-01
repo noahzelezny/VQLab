@@ -129,3 +129,23 @@ register(FamilySpec(
     # caches.check_snapshot_semantics in tests/test_mtp_caches.py.
     cache_semantics="reassign",
 ))
+
+
+# Qwen3.5 / Qwen3.8 (`qwen3_5`, and the MoE conditional-generation wrapper
+# `qwen3_5_moe`, which is the 397B). One residual stream, so the head drafts
+# from the activation going INTO the trunk's final norm -- the same place in
+# the graph as qwen4_exp's pre-mixer row, just reached by a different name.
+#
+# cache_semantics stays "copy": this family's full-attention layers use
+# mlx-lm's stock KVCache, which writes into a preallocated buffer rather than
+# reassigning it, so holding a reference is NOT a snapshot. Only move to
+# "reassign" if caches.check_snapshot_semantics says so.
+for _qwen35_name in ("qwen3_5", "qwen3_5_moe"):
+    register(FamilySpec(
+        name=_qwen35_name,
+        head="vqlab.mtp_head_qwen35:MTPHeadQwen35",
+        capture="norm",
+        draft_cache="KVCache",
+        sidecar_name="mtp-head-q6.safetensors",
+        cache_semantics="copy",
+    ))
