@@ -504,3 +504,56 @@ Resume points if V2 wants them: per-rung sweeps at 512 tokens (~1h each),
 a higher-K donor fitted for only the promotable layers (--vq-layers takes
 a comma set, so ~8 layers at d4/K16384 is ~3h not ~18h), and the same
 process applied to the 397B where the paper's claims live.
+
+## 2026-09-01 — V2 RELEASE TRUNKS built to size targets (100/120/130 incl. head)
+
+Standing convention now in force (METHOD.md §6.0): published size = trunk +
+2.9 GiB reserved for the MTP head, so a downloader who picks a rung for their
+machine still has room to add the head later. V1 was trunk-only.
+
+Solved to SIZE TARGETS (not byte-neutral) from bases with 2048-token sweeps;
+the 116 base was deliberately not used (its sweep is 512-token, R^2 0.438).
+
+  build   trunk GiB     KL   prose   code    lit  uniform@size   vs uniform
+  v2_100      97.30  338.32  2.5719 1.7114 1.5605      377.20      +10.3%
+  v2_120     116.91  182.11  2.2162 1.5841 1.2396      183.01       +0.5%
+  v2_130     126.19  136.13  2.0758 1.5532 1.2173      129.97       -4.7%
+
+v2_100 IS THE BEST ALLOCATION RESULT OF THE ARC (+10.3%). It beats its own
+98.55 base while being 1.25 GiB SMALLER (338.32 vs 348.82), and beats affine
+q3 by 10% at 28.8 GiB less. It got there by shrinking: 11 layers demoted to
+d8/K16384 funding 6 promotions.
+
+v2_130 IS WORSE THAN UNIFORM and is DOMINATED by r134opt2, which is both
+smaller (124.72) and better (KL 130.78). Discard v2_130.
+
+NO RELIABLE PREDICTOR OF SUCCESS. Across eight solves the advantage spans
+-4.7% to +10.3% with no clean relationship to layer count, displacement,
+data quality, or predicted gain. Notably the 512-token r134opt2 (+4.7%) beat
+BOTH 2048-token solves at the same base. §8's "displacement generates
+advantage" does not survive v2_120 and v2_130 and should be read as one
+observation, not a rule. The method produces good artifacts often enough to
+be worth running, and the only way to know which is to build and score.
+
+RECOMMENDED RELEASE SET (all beat uniform, all gated on check-release +
+check-bundle):
+  100 -> v2_100     trunk  97.30, KL 338.32, published 100.20   +10.3%
+  120 -> r116opt    trunk 116.28, KL 178.33, published 119.18    +4.8%
+         (or v2_120 if literary is weighted: 1.2396 vs 1.3402)
+  130 -> r134opt2   trunk 124.72, KL 130.78, published 127.62    +4.7%
+
+TWO BLOCKERS BEFORE UPLOAD:
+1. RUNTIME DRIFT. vq_switch.py changed DURING the build run (v2_100 bundled
+   1863 lines, v2_120/130 bundled 2019) and the file has UNCOMMITTED
+   working-tree edits — the other session is fixing the dense 27B kernels in
+   it. So v2_120/130 embed uncommitted code, and r116opt/r134opt2 carry the
+   older 1366-line runtime. check-bundle passes a dirty tree silently; it
+   should refuse, or record the commit + dirty flag in the manifest. Rebuild
+   the chosen set against ONE pinned commit before publishing.
+2. NOTHING HAS GENERATED A TOKEN. The 100 rung fits the M4 (128 GB) and must
+   be smoked there; 120/130 are exo-cluster targets by design and only exo can
+   execute them. Given three PUBLISHED dense 27B artifacts were found today to
+   crash on first forward for downloaders, this is not optional.
+   GLM's bundle was audited clean of that specific bug: it imports only
+   stdlib/mlx/numpy and falls back to mlx_vlm.models.glm5_next, which IS in
+   released mlx-vlm 0.6.17.
