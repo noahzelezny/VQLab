@@ -364,13 +364,24 @@ Still untested and now the most plausible remaining lever:
 | repo copy on M4 | `~/vqlab-mtp` (rsync target; `PYTHONPATH=~/vqlab-mtp/src`) |
 | heads (M4) | `~/heads/mtp-head-e3q8.safetensors` (1.25 GiB), `mtp-head-e4q8.safetensors` (1.55) |
 | q6 head | `/Volumes/Thunderbay SSD/Exo Models/mtp-head-q6.safetensors` (2.14 GiB) |
-| **397B graft** | `~/heads/mtp-graft-397b-bf16.safetensors` on M4 — 1553 tensors, 12.29 GiB, extracted and all-zero gated |
+| **397B graft** | `~/heads/mtp-graft-397b-bf16.safetensors` on **both** M3 and M4 — 1553 tensors, 12.29 GiB, all-zero gated |
+| **397B sidecar** | `~/heads/mtp-397b-e3q8.safetensors` on both — 3.19 GiB, experts 3-bit / rest 8-bit, `fc_order=eh`, `norm_shift=1.0` |
+| **27B graft / sidecar** | `~/heads/mtp-graft-27b-bf16.safetensors` (0.79 GiB, M3), `~/heads/mtp-27b-q8.safetensors` (0.49 GiB, both) |
+| corpora | `~/corpora/referee_corpus_{literary,code_public}.txt` on M3, `~/referee_corpus_*.txt` on M4 |
+| diagnostics | `~/seqcost.py` on M4 (t(seq=2)/t(seq=1)); `~/bench_plan.py`, `~/soak.py`, `~/decay_test.py`, `~/longctx_accept.py` |
 | oMLX (for interop testing) | `~/omlx-src` + `~/.venvs/omlx` on M4; removable with two `rm -rf` |
 | overnight results | `~/overnight/` on M4 (`campaign.log` + per-stage json) |
 
 Machine limits: **M3 = 96 GB / 84 GiB wired**, **M4 = 128 GB / 120 GiB wired**.
-Flash-Next runs to 4.4bpw on M4; 397B fits ONLY at 2.2bpw (101G + head), and
-2.4bpw upward needs the M3 clustered in.
+Flash-Next runs to 4.4bpw on M4; 397B fits ONLY at 2.2bpw (measured: trunk
+100.12 + head 3.13 = **103.25 GiB resident**), and 2.4bpw upward needs the M3
+clustered in. The 397B does NOT fit on the M3 at any rung.
+
+**Everything on the Thunderbay reaches the M4 over SMB**, and that link is the
+single biggest source of bad measurements in this project: it produced a 522s
+cold start in the soak and a 0.43 tok/s "baseline" in the discarded 27B run.
+Do not run two model loads at once and then trust a wall-clock number from
+either.
 
 ### Settled
 
