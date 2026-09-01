@@ -372,6 +372,9 @@ What DOES work with oMLX today is `vqlab mtp-graft` output on a stock
 That is not a VQLab differentiator — Qwen's own head serves the same purpose —
 but it is the reason `mtp-graft` gates on key-set parity rather than guessing.
 
+Per-family findings, falsified predictions and open questions live in
+[docs/MTP.md](docs/MTP.md).
+
 ### Adding a family
 
 A family is a `FamilySpec` table entry in `src/vqlab/mtp/registry.py` plus a
