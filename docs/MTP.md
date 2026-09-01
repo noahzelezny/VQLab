@@ -377,6 +377,17 @@ Flash-Next runs to 4.4bpw on M4; 397B fits ONLY at 2.2bpw (measured: trunk
 100.12 + head 3.13 = **103.25 GiB resident**), and 2.4bpw upward needs the M3
 clustered in. The 397B does NOT fit on the M3 at any rung.
 
+**A DIFFERENT 397B ships under the same directory name on the M4.**
+`~/.exo/models/TheDrainFlorist--Qwen3.5-397B-A17B-VQ-2.2bpw` is an old
+K=128/d=4 fit, not the shipped 2.2bpw --- and it has the same shard sizes AND
+the same mtimes, so `rsync --link-dest` was fooled by it and only a checksum
+catches the difference. Any measurement that loaded from that path was
+measuring a different model. The verified copy is
+`~/models/TheDrainFlorist--Qwen3.5-397B-A17B-VQ-2.2bpw` (M4 internal disk,
+checksum-verified against the SMB master, loads in seconds). Flagged to Noah
+for deletion or rename; until that happens, **checksum before trusting any
+397B number from the M4**.
+
 **Everything on the Thunderbay reaches the M4 over SMB**, and that link is the
 single biggest source of bad measurements in this project: it produced a 522s
 cold start in the soak and a 0.43 tok/s "baseline" in the discarded 27B run.
