@@ -460,19 +460,27 @@ sits in the same band as qwen4_exp's 0.78-0.82. The teacher-forced probe read
 with acceptance being a workload property (SS7) rather than the two
 instruments disagreeing.
 
-#### The 27B wall-clock is NOT measured yet (a discarded run)
+#### The 27B wall-clock, and a problem that is NOT about MTP
 
-The first attempt reported 1.437x, and it should not be quoted. Its baseline
-was **0.43 tok/s** --- roughly forty times too slow for a 12 GiB model on this
-machine --- which means the run spent its time pulling weights over SMB, not
-decoding. In that regime speculation does look faster, and for a real reason
-(half as many trunk forwards means half as much weight fetched), but that is
-an IO result wearing a compute result's clothes. A re-measure with the link
-quiet is queued.
+The 27B VQ-3.9bpw artifact benchmarks at a **0.43 tok/s baseline** on the M4 ---
+roughly forty times too slow for a 12 GiB model on that machine. My first
+explanation was SMB contention. That was wrong: a re-measure with the link
+quiet reproduced it exactly (0.43 and 0.42 tok/s, 1063s per config both
+times). Reproducible is not contention.
 
-The general rule this belongs to: a speedup ratio is only a compute speedup if
-the absolute throughput is plausible for the model. Check the baseline against
-what the machine should do BEFORE reading the ratio.
+So the number to carry forward is not the 1.43x ratio --- which is a real
+ratio inside a broken regime, and not comparable to Flash-Next's 1.58x --- but
+the baseline itself. **A dense VQ artifact appears to decode about fifty times
+slower than it should, and that has nothing to do with speculative decoding.**
+A control is queued: stock Qwen3.8-27B-8bit against the VQ-3.9bpw rung, same
+machine, same harness, no head involved. If the stock model decodes normally,
+the cost is in the VQ dense read path and belongs to the VQ side of this
+project, not the MTP side.
+
+The general rule: a speedup ratio is only a compute speedup if the absolute
+throughput is plausible for the model. Check the baseline against what the
+machine should do BEFORE reading the ratio --- and when something looks like
+contention, reproduce it before believing that.
 
 #### The recurrent-cache trap (cost 30 minutes of a run going nowhere)
 
@@ -530,6 +538,31 @@ queued.
 
 Until it reports, the honest statement is: **the 397B head drafts
 excellently and the drafting does not currently convert to throughput.**
+
+#### Flash-Next: the depth-1 cost model, measured rather than assumed
+
+`seqcost.py` measures the trade depth-1 actually makes. On Flash-Next 2.1bpw
+at 256 context:
+
+| quantity | measured |
+|---|---|
+| t(seq=1) trunk forward | 52.30 ms |
+| t(seq=2) trunk forward | 46.66 ms |
+| **ratio seq2/seq1** | **0.892** |
+| head forward | 5.17 ms = **9.9%** of a trunk forward |
+| predicted speedup at acceptance 0.78 | 1.796x |
+| measured speedup | 1.58x |
+
+Two things worth keeping. First, a 2-token forward is *cheaper* than a 1-token
+forward (ratio 0.892) --- single-token decode is overhead-bound, so the second
+token rides along free. That is exactly the condition depth-1 needs, and it is
+why this model gets 1.58x. Second, the head costs 9.9% of a trunk forward,
+which finally puts a measured number on the head-cost term that SS7 could only
+bound (it inferred h ~ 0.03 from the 1.95x ceiling; the direct measurement says
+0.099).
+
+The model still overpredicts --- 1.80x against a measured 1.58x, a 12% gap ---
+so it is a mechanism, not a calibration. Do not quote the predicted number.
 
 #### h_source is now worth a second look
 
