@@ -99,7 +99,7 @@ until active cooling brought the baseline spread from 26% to 0.32%.
 |---|---|---|---|
 | `qwen4_exp` | Qwen3.8-Flash-Next | graft on disk | **DONE** — 0.817 acceptance, 1.25 GiB head, 1.58x |
 | `qwen3_5_moe` | Qwen3.5-397B-A17B, Qwen3.6-35B-A3B | **YES**, 397B bf16 has 1553 tensors / 12.29 GiB | head module written, packed to 3.19 GiB; wiring inherited from `qwen3_5` |
-| `qwen3_5` | Qwen3.8-27B | **YES**, 15 tensors / 0.79 GiB | **head module DONE** — 0.656 probe acceptance, 0.49 GiB head |
+| `qwen3_5` | Qwen3.8-27B | **YES**, 15 tensors / 0.79 GiB | **DONE** — 0.7399 pooled acceptance (12 prompts, real loop), 0.49 GiB head |
 | `glm5_next` | GLM-5.3-Flash | needs bf16 re-download | not implemented; no mlx-lm class (mlx-vlm has one) |
 | `deepseek` | — | we have no build | not a target: oMLX and MTPLX already serve it natively |
 
@@ -428,6 +428,31 @@ dense 27B (VQ-3.9bpw, 512 positions, literary corpus, control 0.596):
   to idempotent, so the two arms are nearly the same computation. Default
   `pre_norm`, on the argument that the head carrying its own hidden norm
   expects a raw hidden state.
+
+The real decode loop -- cache rollback, alignment, verification, none of
+which the probe exercises -- confirms it on the dense 27B: **0.7399 pooled
+acceptance** over 12 prompts / 1511 steps (per-prompt 0.617 to 0.852), which
+sits in the same band as qwen4_exp's 0.78-0.82. The teacher-forced probe read
+0.656 on a literary corpus; the loop reads higher on chat prompts, consistent
+with acceptance being a workload property (SS7) rather than the two
+instruments disagreeing.
+
+#### The recurrent-cache trap (cost 30 minutes of a run going nowhere)
+
+`cache_semantics` is not just tidiness for this family, it is the difference
+between working and unusable. The trunk's cache list is MOSTLY recurrent --
+48 `ArraysCache` to 16 `KVCache` on the 27B -- and under `"copy"` every one of
+those GatedDeltaNet states is deep-copied once per speculative step. It does
+not fail; generation just crawls. `check_snapshot_semantics` against a loaded
+27B returns True (GatedDeltaNet reassigns its slots, `cache[0] = ...`, and mlx
+arrays are immutable), so the family earns `"reassign"`. Prompt 0 gives
+0.6328 under both paths, so this is a pure speed fix with the answer
+unchanged.
+
+The lesson generalises: for any family whose trunk is mostly linear/recurrent
+attention, run `check_snapshot_semantics` BEFORE concluding anything about
+speed. The conservative default is correct and slow, and slow looks like
+broken.
 
 The 397B head packs to **3.19 GiB** at experts-3-bit / rest-8-bit (from 12.29
 GiB bf16, ratio 0.257); e4q8 is 3.91 GiB. Against the 101 GiB 2.2bpw rung
