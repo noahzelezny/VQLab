@@ -74,6 +74,7 @@ def _wrap_make_sampler(real):
         except AttributeError:      # a builtin or C callable: fall back
             pass
         return fn
+    make_sampler.vqlab_patched = True
     return make_sampler
 
 
@@ -102,41 +103,46 @@ def _make_stream_generate(real_stream_generate):
 
         params = dict(getattr(sampler, "vqlab_params", None) or {})
         n_prompt = len(prompt) if hasattr(prompt, "__len__") else 0
+        logging.info("MTP: drafting this request (%d prompt tokens, temp %s)",
+                     n_prompt, params.get("temp", 0.0))
 
         def gen():
             import time
             t0 = time.perf_counter()
-            first = True
-            prompt_tps = 0.0
-            last = None
-            for r in mtp_stream_generate(
-                    model, tokenizer, prompt, head, max_tokens=max_tokens,
-                    logits_processors=logits_processors,
-                    prefill_step_size=prefill_step_size,
-                    prompt_cache=prompt_cache, **params):
-                if first:
-                    dt = time.perf_counter() - t0
-                    prompt_tps = (n_prompt / dt) if dt else 0.0
-                    first = False
-                last = r
-                yield GenerationResponse(
-                    text=r.text, token=r.token, logprobs=None,
-                    from_draft=r.from_draft, prompt_tokens=n_prompt,
-                    prompt_tps=prompt_tps,
-                    generation_tokens=r.generation_tokens,
-                    generation_tps=r.generation_tps,
-                    peak_memory=r.peak_memory,
-                    finish_reason=r.finish_reason)
-            if last is not None:
-                # Also the operator's proof that drafting actually ran, rather
-                # than the request quietly falling through to stock decoding.
-                logging.info(
-                    "MTP: acceptance %.3f over %d steps, %d tokens, "
-                    "%.2f tok/s", last.acceptance, last.steps,
-                    last.generation_tokens, last.generation_tps)
+            first, prompt_tps, last = True, 0.0, None
+            try:
+                for r in mtp_stream_generate(
+                        model, tokenizer, prompt, head, max_tokens=max_tokens,
+                        logits_processors=logits_processors,
+                        prefill_step_size=prefill_step_size,
+                        prompt_cache=prompt_cache, want_logprobs=True,
+                        **params):
+                    if first:
+                        dt = time.perf_counter() - t0
+                        prompt_tps = (n_prompt / dt) if dt else 0.0
+                        first = False
+                    last = r
+                    yield GenerationResponse(
+                        text=r.text, token=r.token, logprobs=r.logprobs,
+                        from_draft=r.from_draft, prompt_tokens=n_prompt,
+                        prompt_tps=prompt_tps,
+                        generation_tokens=r.generation_tokens,
+                        generation_tps=r.generation_tps,
+                        peak_memory=r.peak_memory,
+                        finish_reason=r.finish_reason)
+            finally:
+                # In a finally so the summary survives the server breaking out
+                # of the loop early on a stop condition -- and so an operator
+                # can always see that drafting actually ran.
+                if last is not None:
+                    logging.info(
+                        "MTP: acceptance %.3f over %d steps, %d tokens, "
+                        "%.2f tok/s", last.acceptance, last.steps,
+                        last.generation_tokens, last.generation_tps)
 
         return gen()
 
+    stream_generate.vqlab_patched = True
     return stream_generate
 
 
@@ -147,9 +153,18 @@ def install(model_path, sidecar=None, family=None, quiet=False):
     srv.make_sampler = _wrap_make_sampler(srv.make_sampler)
     srv.stream_generate = _make_stream_generate(srv.stream_generate)
 
-    # Single-sequence only; see the module docstring.
-    if hasattr(srv, "APIHandler"):
-        srv.APIHandler._is_batchable = lambda self, args: False
+    # Single-sequence only. This MUST be ResponseGenerator: mlx-lm decides
+    # batching there (`_is_batchable`), and the batch path runs BatchGenerator
+    # which never calls stream_generate at all -- so patching the wrong class
+    # leaves the server working perfectly while silently not drafting.
+    # qwen4_exp's _AttnCache defines merge(), so batching IS eligible here and
+    # this is load-bearing, not belt-and-braces.
+    if not hasattr(srv, "ResponseGenerator"):
+        raise RuntimeError(
+            "mlx_lm.server has no ResponseGenerator: the batching decision has "
+            "moved and VQLab cannot guarantee the MTP loop is used. Refusing "
+            "to serve rather than silently decode without drafting.")
+    srv.ResponseGenerator._is_batchable = lambda self, args: False
 
     # No cross-request prefix reuse while the head cannot follow a reused
     # trunk cache. Reported as a miss so the server builds a fresh one.
@@ -158,9 +173,32 @@ def install(model_path, sidecar=None, family=None, quiet=False):
         LRUPromptCache.fetch_nearest_cache = lambda self, key, prompt: (None,
                                                                         prompt)
     except Exception as e:                                   # noqa: BLE001
-        print(f"warning: could not disable prompt-cache reuse ({e}); MTP "
-              f"alignment may refuse requests", file=sys.stderr)
+        print(f"warning: could not disable prompt-cache reuse ({e}); the MTP "
+              f"loop will refuse requests rather than mis-position the head",
+              file=sys.stderr)
     return srv
+
+
+def selfcheck(srv):
+    """Refuse to start if any patch point has moved.
+
+    A server that quietly stops drafting still answers every request
+    correctly, just slower -- the failure is invisible from the outside, which
+    is exactly why it gets checked here instead of being discovered in a
+    benchmark weeks later."""
+    problems = []
+    if getattr(srv.stream_generate, "__name__", "") != "stream_generate" or \
+            not getattr(srv.stream_generate, "vqlab_patched", False):
+        problems.append("stream_generate is not the VQLab wrapper")
+    if srv.ResponseGenerator._is_batchable(object(), None) is not False:
+        problems.append("batching is still enabled")
+    if not getattr(srv.make_sampler, "vqlab_patched", False):
+        problems.append("make_sampler is not wrapped (temperature would lose "
+                        "its exactness guarantee)")
+    if problems:
+        raise RuntimeError("vqlab serve self-check failed: "
+                           + "; ".join(problems))
+    return True
 
 
 def main():
@@ -175,6 +213,8 @@ def main():
     a, rest = ap.parse_known_args()
 
     srv = install(a.model, a.sidecar, a.family)
+    selfcheck(srv)
+    print('vqlab serve: patch self-check passed', flush=True)
 
     argv = [sys.argv[0], "--model", a.model, "--host", a.host,
             "--port", str(a.port), "--trust-remote-code"]
