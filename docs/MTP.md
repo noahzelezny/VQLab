@@ -594,6 +594,30 @@ costs more and there is less fixed overhead to amortise. **Some of our
 headline 1.58x is Flash-Next collecting a kernel-selection discount at n=1
 that other models do not offer.**
 
+#### Codebook residency does NOT explain it (a wrong claim, corrected)
+
+This document briefly recorded that Flash-Next behaves differently because
+its codebook is small enough for threadgroup memory (d=2, K=256, 1 KB) while
+the 397B's (d=8, K=16384, 256 KB) must stream from device memory. That was
+wrong, and it came from reading the FIRST entry of `vq_modules` and
+generalising it to the model. The real distributions:
+
+| model | expert modules |
+|---|---|
+| Flash-Next 2.1bpw | **138 x d=8 K=16384 pack=14**, 6 x d=2 K=256 |
+| 397B 2.2bpw | 171 x d=8 K=16384 pack=14 |
+
+The six d=2 modules are layer 0 alone. **Both models are dominated by the
+same geometry and both stream the same 256 KB codebook from device memory**,
+so residency cannot be what separates 0.895 from 1.492. The seq2/seq1 gap
+remains unexplained; the active-parameter argument above (17B vs far fewer)
+is still the only account that survives, and it is an argument rather than a
+measurement.
+
+The methodological error is the same one this document already records twice:
+reading a property off one sample and asserting it of the population. Check
+the distribution.
+
 ### Depth is the lever, and the 397B is the best candidate we have
 
 SS7 already argued depth pays only at high acceptance. The 397B has the
