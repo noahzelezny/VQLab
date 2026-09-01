@@ -104,8 +104,116 @@ Two full materialisations of the weight per forward instead of one. That is
 Until a tiling kernel lands, `pack_bits` should not be set on layers that
 cannot fuse.
 
+## Why the smoke test passed
+
+`vqlab smoke` is not the problem --- its docstring says "generate one token
+through the runtime the artifact SHIPS", it loads the in-checkpoint
+`model.py`, and one token is enough to reach the fused path. It would have
+caught this.
+
+It ran in an environment where the bad import resolves. Both build venvs on
+the M4 carry a copy of our module inside the installed package:
+
+    ~/vqvenv/lib/python3.12/site-packages/mlx_lm/models/vq_switch.py
+    ~/qlab-venv/lib/python3.12/site-packages/mlx_lm/models/vq_switch.py
+
+`~/.venvs/qwen4exp` (a clean install) does not, which is why the failure only
+appeared now. So the smoke gave real assurance about a machine nobody
+downloads to.
+
+**Fix: run the release smoke in a venv with stock mlx-lm and nothing of ours
+installed.** That single change catches every failure in this document.
+
+## Bandwidth: it is not the bottleneck for VQ artifacts, and that is the point
+
+Achieved memory bandwidth, taking active parameters x bytes-per-parameter as
+the bytes a token must read, against the M4 Max's ~546 GB/s:
+
+| model | GB/token | tok/s | GB/s | % of peak |
+|---|---|---|---|---|
+| 27B stock 8-bit (dense) | 27.00 | 16.69 | **450.6** | **83%** |
+| 35B-A3B stock 8-bit (MoE) | 3.00 | 81.5 | 244.4 | 45% |
+| 27B VQ 4.5bpw (model.py fixed) | 15.19 | 7.82 | 118.8 | 22% |
+| 397B VQ 2.2bpw (MoE) | 4.67 | 18.3 | 85.7 | 16% |
+| 35B-A3B VQ 3.8bpw (MoE) | 1.43 | 59.0 | 84.1 | 15% |
+| 27B VQ 3.9bpw (every layer on fallback) | 13.16 | 0.43 | 5.7 | **1%** |
+
+The stock dense model runs at 83% of peak --- it IS bandwidth-bound, exactly
+as expected. **Every VQ artifact lands at 15-22%.** VQ moves the workload out
+of the memory system and into the ALU: each weight costs a codebook lookup
+and an fma instead of a shift-and-scale, and the current kernels are not
+close to hiding that.
+
+The sharpest single statement of the cost is the 35B pair, same model, both
+resident with room to spare:
+
+- stock 8-bit: 3.00 GB/token, **12.27 ms** per forward
+- VQ 3.8bpw: 1.43 GB/token, **16.94 ms** per forward
+
+**VQ reads 2.1x fewer bytes and runs 38% slower.** Per byte moved, the VQ
+path is roughly 2.9x less efficient than stock's quantized matmul. The whole
+promise of VQ at decode is fewer bytes per token, and today the kernels give
+that win back and then some. That gap is the headroom, and it is large.
+
+## The kernel work, in priority order
+
+**P0 (no kernel work): regenerate `model.py`.** Two dead artifacts become
+live. 4.5bpw measured at 7.82 tok/s this way.
+
+**P1: tile the threadgroup staging of `x` over NSUB.** This is the single
+highest-value kernel change and it fixes causes 2, 3 and 3b at once.
+
+The d2 dense kernel stages the entire input vector in threadgroup memory:
+
+```metal
+threadgroup half2 cb[MAX_K];      // codebook: K * 4 bytes
+threadgroup half2 xs[MAX_NSUB];   // the WHOLE input vector: NSUB * 4 bytes
+```
+
+so the allocation is `(K + NSUB) * 4 + 1024` and scales with **layer width**.
+At `IN = 17408` the `xs` term alone is 34,816 bytes against a 32,768 cap.
+
+Stage `x` in fixed tiles instead, looping over tiles and accumulating:
+
+```metal
+threadgroup half2 cb[MAX_K];
+threadgroup half2 xs[TILE];       // fixed, e.g. 2048
+for (int t0 = 0; t0 < NSUB; t0 += TILE) { load tile; barrier; accumulate; }
+```
+
+The budget becomes `(K + TILE) * 4 + 1024` --- **independent of layer width**.
+At K=4096/TILE=2048 that is 25,600 bytes; at K=512, 11,264.
+
+Two details that make it safe:
+
+- **Align tiles to group boundaries.** Scales apply per group of G=64, i.e.
+  32 sub-vectors, so a TILE that is a multiple of 32 keeps the per-group
+  `acc = fma(srow[g], gacc, acc)` sequence in exactly its current order. The
+  result stays **bit-exact**, which matters because every published score for
+  these artifacts was produced by the existing path.
+- **The same change unlocks d=4.** `vq_dense.py` notes the expert kernel
+  (`_fused` with E=1) was tried as the d != 2 dense path and died at kernel
+  load at 27B shapes needing 36,864 bytes --- the identical `xs[MAX_NSUB]`
+  problem. Tiling it makes d=4 dense work, which is the only route to fixing
+  3.9bpw without rebuilding its weights.
+
+Expected gain is large but unmeasured: 4.5bpw already has 128 of 192 layers
+fused and reaches 7.82 tok/s, so removing the remaining 64 whole-weight
+decodes should move it substantially toward stock's 16.69. Do not quote a
+number before measuring it.
+
+**P2: close the 15-22% efficiency gap.** Even fully fused, VQ is ~2.9x less
+efficient per byte than stock's quantized matmul. Directions worth profiling
+before committing to any of them: wider codebook vectors so one lookup covers
+more weights (needs dense kernels for d>2), keeping the codebook in registers
+or simdgroup storage rather than threadgroup, and using simdgroup matrix
+operations instead of scalar per-row accumulation. This is a research task,
+not a patch, and P0/P1 should land first.
+
 ## Suggested order of work
 
+0. **Move the release smoke to a clean-mlx-lm venv.** Without this, the same
+   class of defect ships again.
 1. **Regenerate `model.py` for all three rungs and republish.** Cheapest
    possible fix, turns two dead artifacts into working ones, no weights
    change. (4.5bpw -> 7.8 tok/s, 4.8bpw -> 1.1 tok/s.)
