@@ -187,8 +187,36 @@ the M4 carry a copy of our module inside the installed package:
 appeared now. So the smoke gave real assurance about a machine nobody
 downloads to.
 
-**Fix: run the release smoke in a venv with stock mlx-lm and nothing of ours
-installed.** That single change catches every failure in this document.
+**Fixed 2026-09-01: `vqlab smoke --strict` (the default) now asserts.**
+Printing the resolved runtime was never enough; the tool has to fail on it.
+Strict rejects an artifact when:
+
+- any VQ class resolves from outside the artifact directory;
+- either fused kernel (`_dense_fused`, `_fused`) resolves from outside it ---
+  checked separately, because the classes came from the artifact even in the
+  broken builds and it was the KERNEL, resolved by name at call time, that
+  came from elsewhere;
+- `mlx_lm.models.vq_switch` exists at all. "Outside site-packages" is not the
+  test and would have missed this: our build venvs carry that module INSIDE
+  site-packages, and no downloader has it;
+- mlx-lm is a repo checkout rather than an installed package.
+
+Two implementation details that the first attempt got wrong, both now pinned
+by `tests/test_smoke_strict.py`:
+
+- mlx-lm loads a checkpoint's `model.py` via
+  `spec_from_file_location("custom_model", ...)` and never registers it in
+  `sys.modules`, so `sys.modules[cls.__module__]` is None for every bundled
+  artifact --- the check silently skipped the exact case it exists for. The
+  class's own functions close over the module dict, which does carry
+  `__file__`.
+- The "exec'd, no file" placeholder string must classify as *unknown*, not as
+  a path; reading it as one failed a correct artifact.
+
+Verified both ways against a real artifact: the shipped 3.9bpw rung reports
+every class and kernel resolving from its own `model.py` and passes, while a
+deliberately mis-built bundle carrying `vq_dense` only resolves its kernels
+from the repo checkout and exits 1, naming the file.
 
 ## Bandwidth: it is not the bottleneck for VQ artifacts, and that is the point
 
