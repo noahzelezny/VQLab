@@ -136,10 +136,17 @@ register(FamilySpec(
 # from the activation going INTO the trunk's final norm -- the same place in
 # the graph as qwen4_exp's pre-mixer row, just reached by a different name.
 #
-# cache_semantics stays "copy": this family's full-attention layers use
-# mlx-lm's stock KVCache, which writes into a preallocated buffer rather than
-# reassigning it, so holding a reference is NOT a snapshot. Only move to
-# "reassign" if caches.check_snapshot_semantics says so.
+# cache_semantics="reassign", and this one is load-bearing for SPEED, not just
+# tidiness. The trunk's cache list is mostly recurrent: 48 ArraysCache to 16
+# KVCache on the dense 27B, 45 to 15 on the 397B. Attention caches snapshot as
+# an offset and cost nothing either way, but under "copy" every one of those
+# recurrent GatedDeltaNet states is deep-copied ONCE PER SPECULATIVE STEP --
+# hundreds of MB of pure copying per token, which does not fail, it just makes
+# generation crawl (measured: a 12-prompt run made no visible progress in 30
+# minutes). GatedDeltaNet reassigns its slots (`cache[0] = ...`, `cache[1] =
+# state`) and mlx arrays are immutable, so the cheap path is correct here.
+# Verified, not assumed: caches.check_snapshot_semantics returned True against
+# a loaded 27B (2026-08-31).
 for _qwen35_name in ("qwen3_5", "qwen3_5_moe"):
     register(FamilySpec(
         name=_qwen35_name,
@@ -147,5 +154,5 @@ for _qwen35_name in ("qwen3_5", "qwen3_5_moe"):
         capture="norm",
         draft_cache="KVCache",
         sidecar_name="mtp-head-q6.safetensors",
-        cache_semantics="copy",
+        cache_semantics="reassign",
     ))
