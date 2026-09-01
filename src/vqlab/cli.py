@@ -54,6 +54,7 @@ COMMANDS = {
     "mtp-pack": ("mtp_pack.py", "pack a bf16 MTP graft into a quantized drafting sidecar"),
     "mtp-generate": ("mtp_run.py", "generate with MTP speculative drafting"),
     "mtp-graft": ("mtp_graft.py", "emit the MTP head in a native runtime's layout (language_model.mtp.*)"),
+    "serve": ("serve.py", "serve an artifact over an OpenAI-compatible API (mlx-lm server + MTP decode)"),
     "mtp-accept": ("mtp_accept.py", "paired draft-acceptance across prompts (the reliable instrument)"),
     "mtp-bench": ("mtp_bench.py", "measure the MTP speedup, acceptance and numerics control"),
 }
