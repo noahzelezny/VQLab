@@ -456,3 +456,51 @@ TOOL NOTE: pipelining splice against scoring did NOT speed the sweep up
 bytes). The GPU gaps Noah spotted are disk-bound, not CPU-bound; both
 stages stream multi-GiB shards off the same SSD, so overlapping makes them
 contend. Any real speedup has to reduce I/O, not reorder it.
+
+## 2026-08-31 — LAYER EFFECTS ARE BASE-SPECIFIC (single-layer proof)
+
+The 42-layer sweep table is valid ONLY for the base it was measured on
+(d4/K512, 98.55 GiB). Applying it to other rungs fails, and not subtly:
+
+  116 rung, 34 layers rearranged byte-neutral
+    predicted +121.71  measured +21.20   realisation 0.17
+  134 rung, 9 "free shrink" demotions
+    predicted  +11.99  measured -15.36   WRONG SIGN
+
+Both changed many layers, so interactions were a live alternative
+explanation. SETTLED WITH ONE LAYER: L33 demoted K8192->K2048 at the 134
+base, no interaction confound.
+    predicted  +4.49   measured  -6.87   WRONG SIGN
+6.87 mnats is above the 6.32 seed floor, so the flip is real. Layer
+effects depend on what precision the REST of the model carries -- the
+same error-cancellation story that made 16 of 42 promotions net-negative
+at the 98.55 base, seen from the other side. PER-RUNG SWEEPS ARE REQUIRED.
+
+WHAT STANDS (measured at its own base, so unaffected):
+  101.93 GiB greedy best-8   KL 293.84  (+54.98 vs the 98.55 base)
+  101.94 GiB DP optimum      KL 291.69  (+57.13; beats greedy by exactly
+                             2.15 -- splice-vs-splice is deterministic, so
+                             that IS resolvable; only cross-SEED
+                             persistence is unknown)
+  116.28 GiB optimized       KL 178.33  (+21.20, BYTE-NEUTRAL) -- achieved
+                             with mistransferred priors, so a proper
+                             K2048-base sweep should beat it
+  130.20 GiB shrink variant  KL 109.90  -- worse than the 134 base but
+                             ~7 mnats BETTER than uniform interpolation at
+                             that size, i.e. targeting helps even with bad
+                             priors
+
+TOOLING NOTE: reduced-token sweeps need their own teacher cache. The KL
+scorer REFUSES a cache built at a different --tokens ("token ids differ
+from the cache") -- a good gate that caught a silent-garbage path. A
+512-token cache (glm53_teacher_topk_prose_512) was built for future
+sweeps; deltas against it are internally consistent for RANKING but NOT
+comparable to the 2048-token ladder numbers. Any shipped artifact must
+still be scored at 2048 against the original cache.
+
+PARKED HERE (Noah, 08-31): marginal value of further allocation work is
+low against a V1 that is blocked on generation gates, not on quality.
+Resume points if V2 wants them: per-rung sweeps at 512 tokens (~1h each),
+a higher-K donor fitted for only the promotable layers (--vq-layers takes
+a comma set, so ~8 layers at d4/K16384 is ~3h not ~18h), and the same
+process applied to the 397B where the paper's claims live.
