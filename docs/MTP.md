@@ -315,6 +315,23 @@ Two consequences, one of them load-bearing for §6:
   ranged 0.64-0.95 across twelve ordinary prompts on one model, and hit
   exactly 1.0 on repetitive synthetic text.
 
+### Single-prompt acceptance is not comparable across rungs either
+
+`bench_plan` / `mtp-bench` use ONE fixed prompt. On that prompt, acceptance
+came out 0.7695 on Flash-Next 2.1bpw and 0.6445 on 3.2bpw -- a 12.5pp gap in
+the direction that would say a better trunk drafts worse.
+
+It is not a real effect, and the reason is structural rather than statistical:
+two rungs decoding greedily from the same prompt produce DIFFERENT TEXT, so
+their acceptance figures are measured on different content. Acceptance is a
+property of the text being generated (§7), so comparing one trajectory to
+another compares workloads, not models. The 12-prompt paired instrument says
+what the single prompt cannot: 0.7823 at 3.2bpw against 0.8057 at 4.4bpw,
+alongside 0.78-0.82 at 2.1bpw -- all one band, consistent with the N=3 paired
+result that trunk quantization does not move acceptance.
+
+Read speedup out of `mtp-bench`. Read acceptance out of `mtp-accept`.
+
 ### So cross-project acceptance numbers are close to meaningless
 
 Given the above, comparing our 0.78 against oMLX's reported 96.8-97.9% says
