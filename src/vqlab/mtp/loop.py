@@ -99,6 +99,7 @@ class MTPResponse:
     generation_tps: float
     peak_memory: float
     tail: bool = False        # trailing detokenizer flush, not a new token
+    logprobs: Optional[mx.array] = None   # normalized, over the full vocab
 
 
 def load_mtp_head(model, sidecar=None, family: Optional[str] = None,
@@ -198,6 +199,7 @@ def mtp_stream_generate(
     prefill_step_size: int = 2048,
     align: str = "committed",
     prompt_cache=None,
+    want_logprobs: bool = False,
 ) -> Iterator[MTPResponse]:
     """Stream tokens from `model`, drafting each second token with `head`.
 
@@ -267,7 +269,8 @@ def mtp_stream_generate(
         logits = model(ids[:, max(n - 1, 0):], cache=cache)
         h_chunks.append(get_h())
         h_last = h_chunks[-1][:, -1:]
-        t1, _ = pick(logits[:, -1])
+        row_t1 = logits[:, -1]
+        t1, _ = pick(row_t1)
         mx.eval(t1, h_last)
 
         if align == "committed":
@@ -330,7 +333,14 @@ def mtp_stream_generate(
                     restore([dcache], dsnap)
                 lg2 = model(mx.concatenate([t1, t2])[None], cache=cache)
 
-            for tok, from_draft in ((t1, False), (t2, ok)):
+            # The logprobs reported for each token are the TRUNK's, taken
+            # from the forward that actually produced it -- for an accepted
+            # draft too, since the trunk verified it in the same forward. A
+            # rejected token's logprob is likewise the trunk's, which is the
+            # honest number: what the target model assigned to what we
+            # emitted. The head's own draft distribution is never reported.
+            for tok, from_draft, row in ((t1, False, row_t1),
+                                         (t2, ok, lg2[:, 0])):
                 token = int(tok.item())
                 emitted.append(token)
                 if token in eos:
@@ -338,12 +348,16 @@ def mtp_stream_generate(
                 elif len(emitted) >= max_tokens:
                     finish = "length"
                 elapsed = time.perf_counter() - start
+                lp = None
+                if want_logprobs:
+                    r32 = row.astype(mx.float32)
+                    lp = (r32 - mx.logsumexp(r32, axis=-1, keepdims=True))[0]
                 yield MTPResponse(
                     text=detok.add(token), token=token, from_draft=from_draft,
                     finish_reason=finish, steps=steps, accepted=accepted,
                     acceptance=accepted / steps, generation_tokens=len(emitted),
                     generation_tps=len(emitted) / elapsed if elapsed else 0.0,
-                    peak_memory=mx.get_peak_memory() / 2**30,
+                    peak_memory=mx.get_peak_memory() / 2**30, logprobs=lp,
                 )
                 if finish is not None:
                     break
@@ -355,7 +369,8 @@ def mtp_stream_generate(
             # speculative one — so it is (h_i, h_{i+1}) for the emitted pair.
             h_pair = get_h()
             h_last = h_pair[:, -1:]
-            t_next, _ = pick(lg2[:, 1])
+            row_t1 = lg2[:, 1]
+            t_next, _ = pick(row_t1)
             mx.eval(t_next, h_pair)
 
             if align == "committed":
