@@ -98,7 +98,7 @@ until active cooling brought the baseline spread from 26% to 0.32%.
 | family | models | head in source? | status |
 |---|---|---|---|
 | `qwen4_exp` | Qwen3.8-Flash-Next | graft on disk | **DONE** — 0.817 acceptance, 1.25 GiB head, 1.58x |
-| `qwen3_5_moe` | Qwen3.5-397B-A17B, Qwen3.6-35B-A3B | **YES**, 397B bf16 has 1553 tensors / 12.29 GiB | head module written, packed to 3.19 GiB; wiring inherited from `qwen3_5` |
+| `qwen3_5_moe` | Qwen3.5-397B-A17B, Qwen3.6-35B-A3B | **YES**, 397B bf16 has 1553 tensors / 12.29 GiB | **head works** — 0.9023 acceptance, our best. But **1.000x speedup**: see below |
 | `qwen3_5` | Qwen3.8-27B | **YES**, 15 tensors / 0.79 GiB | **DONE** — 0.7399 pooled acceptance (12 prompts, real loop), 0.49 GiB head |
 | `glm5_next` | GLM-5.3-Flash | needs bf16 re-download | not implemented; no mlx-lm class (mlx-vlm has one) |
 | `deepseek` | — | we have no build | not a target: oMLX and MTPLX already serve it natively |
@@ -470,6 +470,50 @@ The 397B head packs to **3.19 GiB** at experts-3-bit / rest-8-bit (from 12.29
 GiB bf16, ratio 0.257); e4q8 is 3.91 GiB. Against the 101 GiB 2.2bpw rung
 that is ~104 GiB resident, which fits the M4's 120 GiB wired limit but is the
 one 397B rung that does.
+
+#### The 397B result: the best acceptance we have measured, and no speedup
+
+Both instruments agree the head is correct, and the wiring measured on the
+dense 27B transferred to the MoE unchanged:
+
+| instrument | result |
+|---|---|
+| probe, 512 positions, literary corpus (control 0.850) | eh/pre_norm **0.8320**, eh/post_norm **0.8516**; he 0.0039 / 0.0000 |
+| real decode loop, 12 prompts / 1536 steps | **0.9023** pooled, per-prompt 0.836 to 0.953 |
+| wall-clock, 2.2bpw rung, 103.25 GiB resident | spec 17.61 vs base 17.59 tok/s = **1.001x** |
+
+0.9023 is the highest acceptance in this document --- higher than qwen4_exp's
+0.78-0.82, which is what you would expect from a much stronger model
+predicting its own next token. At that acceptance the depth-1 ceiling (SS7)
+says roughly 1.8x. We measured 1.000x, twice, with baselines agreeing to
+0.3%.
+
+**The cause is not yet isolated, and I am not going to guess at it.** Two
+guesses tonight (the prefill tax, the norm convention) were both wrong, and
+the pattern in both cases was reasoning from structure instead of measuring.
+The obvious hypothesis is that the depth-1 trade --- swap two seq=1 trunk
+forwards for one seq=2 forward --- does not pay here, because at batch 1 a
+sparse MoE can route two tokens to two different expert sets and fetch close
+to twice the expert weight. That would make a seq=2 forward cost ~2x a seq=1
+forward, and no acceptance rate could rescue it.
+
+But Flash-Next is ALSO a 512-expert MoE and gets 1.58x, so MoE-ness alone
+cannot be the answer. `seqcost.py` measures `t(seq=2) / t(seq=1)` directly on
+both models: if the ratio differs between them that is the mechanism, and if
+it does not, the hypothesis is dead and the cause is elsewhere. That run is
+queued.
+
+Until it reports, the honest statement is: **the 397B head drafts
+excellently and the drafting does not currently convert to throughput.**
+
+#### h_source is now worth a second look
+
+On the 27B, `post_norm` beat `pre_norm` by one token in 512 --- noise. On the
+397B the gap is ten tokens (436 vs 426, paired on the same positions), still
+small but no longer obviously nothing. The shipped default is `pre_norm`.
+This is cheap to settle properly (it is a flag on an already-packed sidecar,
+so it costs one model load) and should be settled before the family is
+described as tuned.
 
 #### A wrong inference, recorded
 
