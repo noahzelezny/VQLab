@@ -260,24 +260,56 @@ This is the model, not a measurement, but the shape of it is robust: it is why
 oMLX reports 2.33-2.62x with **96.8-97.9%** acceptance and we report 1.58x
 with 78%. Their win is acceptance first, depth second.
 
-### So the question is why their acceptance is 97% and ours is 78%
+### Trunk quantization does NOT affect acceptance (tested, negative)
 
-Hypotheses, cheapest first:
+The obvious hypothesis was that our 0.78 is capped by drafting from a damaged
+VQ trunk — the head was trained against bf16, and is being asked to predict
+what a 2.1bpw trunk will do. **Measured on three rungs, 12 paired prompts
+each, and it is false:**
 
-1. **Trunk quantization damage.** The head was trained against a bf16 trunk.
-   Ours drafts from a 2.1bpw VQ trunk whose hidden states are damaged, and the
-   head is asked to predict what that damaged trunk will do. If acceptance
-   rises with trunk quality, this is the dominant term — and it makes the v2
-   thesis (§6) compounding rather than merely affordable: better technique
-   buys quality AND acceptance AND, above ~0.85, the option of depth.
-   **Test: measure acceptance on the 2.1 / 3.2 / 4.4bpw rungs. Cheap, decisive.**
-2. **Hidden-state variant.** MTPLX exposes `mtp_hidden_variant`
-   (fc / pre_norm / post_norm / embedding / prev / mix) as a knob because it
-   matters. We feed the hyper-connection mixer's input and have never swept
-   the alternatives on this family. The dense-27B ablation put pre_norm 0.7285
-   against post_norm 0.7188 — a near-tie there, but untested here.
-3. **Their checkpoint differs.** oMLX's headline is on their own oQ4e build.
-   Independent numbers on a third-party Flash-Next MTP checkpoint report
-   58.3-89.5% acceptance, which brackets ours rather than theirs.
+| rung | pooled acceptance | within-rung sd |
+|------|------------------|----------------|
+| 2.1bpw | 0.8151 | 0.076 |
+| 3.2bpw | 0.7823 | 0.089 |
+| 4.4bpw | 0.8057 | 0.044 |
 
-Note (1) is the interesting one and nobody has tested it.
+| paired | delta | t | verdict |
+|--------|-------|---|---------|
+| 2.1 - 3.2 | +3.01pp | 1.50 | not significant |
+| 2.1 - 4.4 | +0.74pp | 0.34 | not significant |
+| 3.2 - 4.4 | -2.27pp | -0.97 | not significant |
+
+Not monotonic, nothing significant, and the effect is not even ordered by
+trunk quality. **Prompt-to-prompt spread within one rung dwarfs anything
+between rungs.**
+
+Two consequences, one of them load-bearing for §6:
+
+- **Trunk improvements and MTP are independent.** Better technique buys
+  quality without giving back speedup, and without buying extra acceptance
+  either. They simply do not interact. (This also retires the worry that a
+  better trunk would be HARDER to draft for and would cost speed — it does
+  not.)
+- **Acceptance is a property of the WORKLOAD, not of our quantization.** It
+  ranged 0.64-0.95 across twelve ordinary prompts on one model, and hit
+  exactly 1.0 on repetitive synthetic text.
+
+### So cross-project acceptance numbers are close to meaningless
+
+Given the above, comparing our 0.78 against oMLX's reported 96.8-97.9% says
+almost nothing: the spread from workload alone is larger than the gap being
+discussed. An easy prompt gets 1.0 on our own stack. Independent numbers on a
+third-party Flash-Next MTP checkpoint report 58.3-89.5%, which brackets ours
+rather than theirs.
+
+**Any acceptance comparison across projects needs the same prompts.** Until
+someone runs that, the honest statement is that the numbers are not
+comparable, not that theirs is better.
+
+Still untested and now the most plausible remaining lever:
+
+- **Hidden-state variant.** MTPLX exposes `mtp_hidden_variant`
+  (fc / pre_norm / post_norm / embedding / prev / mix) as a knob because it
+  matters. We feed the hyper-connection mixer's input and have never swept the
+  alternatives on this family. The dense-27B ablation put pre_norm 0.7285
+  against post_norm 0.7188 — a near-tie there, untested here.
