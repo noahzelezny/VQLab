@@ -801,6 +801,165 @@ _SRC_DENSE_PACKED_D2 = r"""
     if (lane == 0) y[(size_t)t * OUT + r] = static_cast<T>(acc);
 """
 
+
+# --- NSUB-TILED dense d2 twins ---------------------------------------------
+# The kernels above stage the WHOLE x row in threadgroup memory
+# (`xs[MAX_NSUB]`), so their allocation is (K + NSUB) * 4 + overhead and grows
+# with LAYER WIDTH. At the 27B mlp shapes (IN 17408 -> NSUB 8704) that is
+# 34,816 bytes for xs alone against Metal's 32,768 cap, so the kernel fails at
+# LOAD and VQLinear falls back to decoding the entire weight per call --- the
+# path that measured 0.43 tok/s against stock's 16.7 (docs/DENSE-VQ-DECODE.md).
+#
+# The fix is free, because the existing block loop already IS the tile. Lane
+# `lane` of block `b` owns scale-group g = b*32 + lane and touches exactly
+# xs[g*SPG .. g*SPG+SPG). Across the 32 lanes of one block that is a
+# CONTIGUOUS span of 32*SPG sub-vectors, so staging just that span is enough:
+#
+#     allocation = (K + 32*SPG) * 4 + overhead        <- no NSUB term at all
+#
+# For G=64 that is 1024 half2 = 4 KB of x regardless of how wide the layer is;
+# with K=4096 the whole thing is 20 KB. Total device traffic is unchanged ---
+# each x element is still read once per threadgroup, just later.
+#
+# BIT-EXACTNESS. Every arithmetic operation, its operands and its order are
+# untouched: the same half conversion, the same four-way dot per q, the same
+# per-lane gacc, the same simd_shuffle reduction applying srow[] in ascending
+# group order. Only the storage location of xs changes. So these kernels are
+# bit-identical to the untiled twins by construction, and that is asserted
+# against them on every shape where both can run.
+#
+# BARRIER DISCIPLINE. The untiled kernels early-return on `r >= OUT` before
+# the loop. That is illegal once barriers live INSIDE the loop --- a
+# threadgroup barrier must be reached by every thread --- so the tiled twins
+# carry the row guard as a predicate (`active`) and let inactive threads run
+# the loop for its barriers only. Inactive rows shuffle garbage among
+# themselves (one row == one simdgroup, since threadgroup.x is 32) and never
+# write y.
+_SRC_DENSE_D2_TILED = r"""
+    const int OUT  = dims[0];
+    const int IN   = dims[1];
+    const int G    = dims[3];
+    const int K    = dims[5];
+    const int NSUB = IN / 2;
+    const int NGRP = IN / G;
+    const int QPG  = G / 8;
+    const int SPG  = G / 2;
+    const int TILE = 32 * SPG;
+    uint r = thread_position_in_grid.y;
+    uint t = thread_position_in_grid.z;
+    uint lane = thread_position_in_threadgroup.x;
+    uint lid = thread_position_in_threadgroup.y * 32 + lane;
+    uint tgsize = threads_per_threadgroup.x * threads_per_threadgroup.y;
+
+    threadgroup half2 cb[MAX_K];
+    threadgroup half2 xs[MAX_TILE];
+    const device half2* cbg = (const device half2*)codebook;
+    for (uint i = lid; i < (uint)K; i += tgsize)
+        cb[i] = cbg[i];
+    const device T* xrow = x + (size_t)t * IN;
+
+    const bool active = (r < (uint)OUT);
+    const uint rr = active ? r : 0;
+    const device CT* crow = codes + (size_t)rr * NSUB;
+    const device half* srow = scales + (size_t)rr * NGRP;
+    float acc = 0.0f;
+    const int NBLK = (NGRP + 31) / 32;
+    for (int b = 0; b < NBLK; ++b) {
+        const int base = b * TILE;
+        const int span = min(TILE, NSUB - base);
+        threadgroup_barrier(mem_flags::mem_threadgroup);
+        for (uint i = lid; i < (uint)span; i += tgsize)
+            xs[i] = half2((half)xrow[(base + (int)i)*2],
+                          (half)xrow[(base + (int)i)*2 + 1]);
+        threadgroup_barrier(mem_flags::mem_threadgroup);
+        const int g = b * 32 + (int)lane;
+        float gacc = 0.0f;
+        if (active && g < NGRP) {
+            int j = g * SPG;
+            int m = j - base;
+            for (int q = 0; q < QPG; ++q) {
+                gacc += dot(float2(cb[(uint)crow[j]]),   float2(xs[m]))
+                      + dot(float2(cb[(uint)crow[j+1]]), float2(xs[m+1]))
+                      + dot(float2(cb[(uint)crow[j+2]]), float2(xs[m+2]))
+                      + dot(float2(cb[(uint)crow[j+3]]), float2(xs[m+3]));
+                j += 4; m += 4;
+            }
+        }
+        const int gmax = min(32, NGRP - b * 32);
+        for (int i = 0; i < gmax; ++i)
+            acc = fma((float)srow[b * 32 + i],
+                      simd_shuffle(gacc, (ushort)i), acc);
+    }
+    if (active && lane == 0) y[(size_t)t * OUT + r] = static_cast<T>(acc);
+"""
+
+# Packed twin. Same tiling, same guarantees; the ONLY difference from
+# _SRC_DENSE_PACKED_D2 is where xs lives, exactly as above.
+_SRC_DENSE_PACKED_D2_TILED = r"""
+    const int OUT  = dims[0];
+    const int IN   = dims[1];
+    const int G    = dims[3];
+    const int K    = dims[5];
+    const int NSUB = IN / 2;
+    const int NGRP = IN / G;
+    const int SPG  = G / 2;
+    const int TILE = 32 * SPG;
+    const int WPR  = (NSUB + 31) / 32 * BITS;
+    uint r = thread_position_in_grid.y;
+    uint t = thread_position_in_grid.z;
+    uint lane = thread_position_in_threadgroup.x;
+    uint lid = thread_position_in_threadgroup.y * 32 + lane;
+    uint tgsize = threads_per_threadgroup.x * threads_per_threadgroup.y;
+
+    threadgroup half2 cb[MAX_K];
+    threadgroup half2 xs[MAX_TILE];
+    const device half2* cbg = (const device half2*)codebook;
+    for (uint i = lid; i < (uint)K; i += tgsize)
+        cb[i] = cbg[i];
+    const device T* xrow = x + (size_t)t * IN;
+
+    const bool active = (r < (uint)OUT);
+    const uint rr = active ? r : 0;
+    const device uint* crow = codes + (size_t)rr * WPR;
+    const device half* srow = scales + (size_t)rr * NGRP;
+    float acc = 0.0f;
+    const int NBLK = (NGRP + 31) / 32;
+    for (int b = 0; b < NBLK; ++b) {
+        const int base = b * TILE;
+        const int span = min(TILE, NSUB - base);
+        threadgroup_barrier(mem_flags::mem_threadgroup);
+        for (uint i = lid; i < (uint)span; i += tgsize)
+            xs[i] = half2((half)xrow[(base + (int)i)*2],
+                          (half)xrow[(base + (int)i)*2 + 1]);
+        threadgroup_barrier(mem_flags::mem_threadgroup);
+        const int g = b * 32 + (int)lane;
+        float gacc = 0.0f;
+        if (active && g < NGRP) {
+            uint wbuf[BITS];
+            const device uint* blk = crow + (size_t)g * BITS;
+            for (int wi = 0; wi < BITS; ++wi) wbuf[wi] = blk[wi];
+            int m = g * 32 - base;
+            for (int q = 0; q < 8; ++q) {
+                const int i0 = q * 4;
+                #define LC(i) (((wbuf[((i)*BITS)>>5] >> (((i)*BITS)&31)) \
+                    | (((((i)*BITS)&31) + BITS > 32) \
+                       ? (wbuf[(((i)*BITS)>>5)+1] << (32-(((i)*BITS)&31))) \
+                       : 0u)) & ((1u<<BITS)-1u))
+                gacc += dot(float2(cb[LC(i0)]),   float2(xs[m]))
+                      + dot(float2(cb[LC(i0+1)]), float2(xs[m+1]))
+                      + dot(float2(cb[LC(i0+2)]), float2(xs[m+2]))
+                      + dot(float2(cb[LC(i0+3)]), float2(xs[m+3]));
+                m += 4;
+            }
+        }
+        const int gmax = min(32, NGRP - b * 32);
+        for (int i = 0; i < gmax; ++i)
+            acc = fma((float)srow[b * 32 + i],
+                      simd_shuffle(gacc, (ushort)i), acc);
+    }
+    if (active && lane == 0) y[(size_t)t * OUT + r] = static_cast<T>(acc);
+"""
+
 _SRC_DECODE_PACKED = _PACK_FETCH + r"""
     uint g = thread_position_in_grid.x;
     uint r = thread_position_in_grid.y;
@@ -1019,6 +1178,45 @@ def _fused(x, eidx, codes, codebook, scales, pack_bits=0):
 _DENSE_ROWS_TG = 32
 
 
+# Threadgroup budget, in bytes, for the dense d2 kernels. Both stage a half2
+# codebook (K entries) plus a half2 staging area for x; the untiled kernels
+# size that area by NSUB (layer width), the tiled ones by one block span.
+# +1024 is headroom for the compiler's own threadgroup use, matching the
+# guard vq_dense.py has always applied.
+_TG_CAP = 32768
+
+
+def _dense_tg_bytes(K, nx, tiled_span=None):
+    return (K + (tiled_span if tiled_span is not None else nx)) * 4 + 1024
+
+
+def _dense_tiled(K, NSUB, G):
+    """Use the NSUB-tiled kernel? Yes whenever the untiled one would not fit,
+    which is the case the fallback-to-full-decode used to handle at ~40x the
+    cost. The untiled kernel is kept for shapes it already serves so that
+    nothing currently working changes path, and so the two can be A/B'd for
+    bit-exactness wherever both are legal (tests/test_vq_dense_tiled.py)."""
+    if os.environ.get("VQ_DENSE_TILED") == "1":
+        return True
+    if os.environ.get("VQ_DENSE_TILED") == "0":
+        return False
+    return _dense_tg_bytes(K, NSUB) > _TG_CAP
+
+
+def dense_fits(K, IN, G, d=2):
+    """Can a dense VQ linear of this shape run on a fused kernel at all?
+    vq_dense.py asks this before choosing the decode fallback."""
+    if d != 2:
+        return False
+    NSUB = IN // d
+    # Must agree with _dense_tiled, including its debug override: reporting
+    # "fusable" for a shape the dispatcher will then build untiled is a
+    # kernel-load crash, not a fallback.
+    if _dense_tiled(K, NSUB, G):
+        return _dense_tg_bytes(K, NSUB, 32 * (G // 2)) <= _TG_CAP
+    return _dense_tg_bytes(K, NSUB) <= _TG_CAP
+
+
 def _dense_fused(x, codes, codebook, scales, pack_bits=0, in_features=None):
     """Dense d=2 fused VQ matmul: y[N, OUT] = x [N, IN] @ decode(codes).T.
 
@@ -1055,18 +1253,30 @@ def _dense_fused(x, codes, codebook, scales, pack_bits=0, in_features=None):
                 f"packed dense: codes are {codes.shape[1]} words/row, "
                 f"expected {(NSUB + 31) // 32 * pack_bits} for IN={IN}, "
                 f"bits={pack_bits}")
-        name = f"vq_dense_packed{pack_bits}_d2"
-        src = _SRC_DENSE_PACKED_D2
-        template = [("T", x.dtype), ("MAX_K", K), ("MAX_NSUB", NSUB),
-                    ("BITS", pack_bits)]
+        if _dense_tiled(K, NSUB, G):
+            name = f"vq_dense_packed{pack_bits}_d2_tiled"
+            src = _SRC_DENSE_PACKED_D2_TILED
+            template = [("T", x.dtype), ("MAX_K", K),
+                        ("MAX_TILE", 32 * (G // 2)), ("BITS", pack_bits)]
+        else:
+            name = f"vq_dense_packed{pack_bits}_d2"
+            src = _SRC_DENSE_PACKED_D2
+            template = [("T", x.dtype), ("MAX_K", K), ("MAX_NSUB", NSUB),
+                        ("BITS", pack_bits)]
     else:
         if codes.shape[1] != NSUB:
             raise ValueError(f"dense: codes are {codes.shape[1]} cols, "
                              f"expected NSUB={NSUB} for IN={IN}, d={D}")
-        name = "vq_dense_d2"
-        src = _SRC_DENSE_D2
-        template = [("T", x.dtype), ("CT", codes.dtype),
-                    ("MAX_K", K), ("MAX_NSUB", NSUB)]
+        if _dense_tiled(K, NSUB, G):
+            name = "vq_dense_d2_tiled"
+            src = _SRC_DENSE_D2_TILED
+            template = [("T", x.dtype), ("CT", codes.dtype),
+                        ("MAX_K", K), ("MAX_TILE", 32 * (G // 2))]
+        else:
+            name = "vq_dense_d2"
+            src = _SRC_DENSE_D2
+            template = [("T", x.dtype), ("CT", codes.dtype),
+                        ("MAX_K", K), ("MAX_NSUB", NSUB)]
     dims = mx.array([OUT, IN, D, G, N, K], dtype=mx.int32)
     rows = _DENSE_ROWS_TG
     (y,) = _get_kernel(name, src)(
