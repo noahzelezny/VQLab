@@ -262,9 +262,22 @@ def mtp_stream_generate(
         for i in range(0, n - 1, prefill_step_size):
             chunk = ids[:, i:min(i + prefill_step_size, n - 1)]
             if chunk.shape[1]:
-                mx.eval(model(chunk, cache=cache))
+                model(chunk, cache=cache)
+                # Evaluate the CACHE (and the captured hidden state, which the
+                # head is seeded from) -- never the logits. MLX is lazy, so
+                # forcing the returned logits here would materialize the whole
+                # lm_head projection for every prefill position: at a 2048
+                # chunk and a ~151k vocabulary that is a large matmul per
+                # chunk whose result is thrown away. mlx-lm's own prefill
+                # evaluates `[c.state for c in cache]` for exactly this
+                # reason. Only the final single-token forward below needs
+                # logits.
+                want = [c.state for c in cache if hasattr(c, "state")]
                 if align == "committed":
-                    h_chunks.append(get_h())
+                    h = get_h()
+                    h_chunks.append(h)
+                    want.append(h)
+                mx.eval(want)
                 mx.clear_cache()
         logits = model(ids[:, max(n - 1, 0):], cache=cache)
         h_chunks.append(get_h())
