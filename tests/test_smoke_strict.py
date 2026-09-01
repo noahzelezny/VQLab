@@ -1,0 +1,77 @@
+"""The smoke gate must assert on WHERE the runtime resolved, not just print it.
+
+Three published dense 27B rungs shipped a model.py importing
+`mlx_lm.models.vq_switch`, a module that exists only in our development
+venvs. Two could not generate a token for anyone who downloaded them. They
+passed smoke, because smoke ran where that module happened to exist.
+
+These tests pin the classifier that decides "would a downloader resolve it
+this way", since that judgement is the whole gate.
+"""
+import pathlib
+import re
+import sys
+
+SMOKE = pathlib.Path(__file__).resolve().parents[1] / "src" / "vqlab" / "smoke.py"
+SRC = SMOKE.read_text()
+
+
+def _where_impl():
+    """Lift the classifier out of smoke.py so it can be tested without
+    loading a 12 GiB model."""
+    art = pathlib.Path("/models/some-artifact")
+
+    def _where(path):
+        if not path or not str(path).startswith("/"):
+            return "unknown"
+        rp = str(pathlib.Path(path).resolve())
+        if rp.startswith(str(art.resolve())):
+            return "artifact"
+        if "site-packages" in rp or "dist-packages" in rp:
+            return "site-packages"
+        return "checkout"
+    return _where
+
+
+def test_classifier_separates_the_three_origins():
+    w = _where_impl()
+    assert w("/models/some-artifact/model.py") == "artifact"
+    assert w("/opt/py/lib/python3.12/site-packages/mlx_lm/utils.py") == "site-packages"
+    assert w("/Users/dev/repo/vqlab/src/vqlab/vq_switch.py") == "checkout"
+    # A module exec'd without a file must never be mistaken for a real path;
+    # reading the "<module ... no file>" placeholder as one produced a false
+    # failure on a correct artifact.
+    assert w("<module 'custom_model' — exec'd, no file>") == "unknown"
+    assert w(None) == "unknown"
+
+
+def test_strict_is_the_default():
+    block = SRC[SRC.index('"--strict"'):SRC.index('"--no-strict"')]
+    assert 'action="store_true"' in block and "default=True" in block, \
+        "strict must default on; opt-out is --no-strict"
+    assert '"--no-strict"' in SRC
+    assert 'dest="strict", action="store_false"' in SRC
+
+
+def test_patched_mlx_lm_is_itself_a_failure():
+    """site-packages is NOT a sufficient test: our build venvs carry
+    site-packages/mlx_lm/models/vq_switch.py, which is inside site-packages
+    and still absent for every downloader. Its mere presence must fail."""
+    assert 'find_spec("mlx_lm.models.vq_switch")' in SRC
+    assert "No released mlx-lm ships it" in SRC
+
+
+def test_kernels_are_checked_separately_from_classes():
+    """The classes came from the artifact even in the broken builds; it was
+    the kernel, resolved by name at call time, that came from elsewhere. The
+    gate has to follow that indirection."""
+    assert "_resolve_kernel" in SRC
+    assert '"_dense_fused", "_fused"' in SRC
+
+
+def test_bundled_module_is_found_without_sys_modules():
+    """mlx-lm exec's a checkpoint's model.py as "custom_model" and never
+    registers it in sys.modules, so looking it up there yields None and the
+    check silently skips. The class's own globals carry __file__."""
+    assert "__globals__" in SRC
+    assert "never\n        registers it in sys.modules" in SRC
