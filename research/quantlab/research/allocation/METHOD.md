@@ -309,3 +309,42 @@ proxy for it — a stricter condition than necessary, which is why it passed
 everything until it didn't.
 
 This also removes the engineering obstacle §4.1 listed for the affine test.
+
+---
+
+## 8. The benchmark was wrong (2026-09-01) — supersedes §7.2's prescription
+
+§7.2 concluded that demotion-heavy solves "realise worst" (0.17 vs 0.84) and
+prescribed discounting and capping demotions. Phase 6 applied that fix and
+produced a NULL result, while the uncapped build it was meant to improve on
+produced the night's largest win:
+
+| build | GiB | KL | uniform at that size | advantage |
+|---|---|---|---|---|
+| 134 base | 134.00 | 94.54 | 94.54 | — |
+| r134opt3 (discounted, capped at 6) | 132.52 | 103.27 | 103.31 | **+0.04** |
+| r134opt2 (512-tok, uncapped, 17 demotions) | 124.72 | 130.78 | 149.52 | **+18.74** |
+
+**THE ERROR WAS THE BENCHMARK, NOT THE SOLVER.** Realisation-against-additive-
+prediction measures whether the MODEL is right. It says nothing about whether
+the ARTIFACT is good. The benchmark that matters is uniform scaling at the
+size actually achieved — a rung fitted uniformly to that many bytes.
+
+Mechanism: advantage over uniform requires DISPLACEMENT from the base
+allocation. r134opt2 moved 9.28 GiB and had room to differ from uniform;
+r134opt3 moved 1.48 GiB and so matched uniform almost by construction. The
+cap suppressed precisely the thing that generates the gain.
+
+REVISED PRESCRIPTION:
+- Objective: maximise predicted gain subject to a SIZE TARGET, not
+  byte-neutrality-the-model-believes.
+- Do NOT penalise demotions. They are how displacement is bought.
+- Expect low realisation on aggressive solves and do not treat that as
+  failure — verify the artifact against uniform-at-size instead.
+- Keep §7.1 (sweep at the evaluation token count). That one still holds:
+  it is about MEASUREMENT validity, not objective design.
+
+SECONDARY FINDING — saturation: at the 134 rung, promotions to K16384 return
+4.76 mnats/GiB against a 5.92 uniform rate, i.e. more codebook buys less than
+more bits-everywhere. Allocation gains are largest where the rung is far from
+saturation (98.55 rung: 1.93x uniform) and vanish where it is close.
