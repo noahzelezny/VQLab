@@ -186,6 +186,107 @@ _SRC_FUSED_D8 = r"""
     y[(size_t)t * OUT + r] = static_cast<T>(acc);
 """
 
+# d=8, DEVICE codebook, ONE SIMDGROUP PER OUTPUT ROW (E141, 2026-09-01).
+#
+# WHY. _SRC_FUSED_D8 above gives each output row to ONE thread, which walks
+# its NSUB codes strictly sequentially. Every code costs two DEPENDENT device
+# loads (read the code, then index the 256 KB codebook with it), so the whole
+# row is a chain of ~2*NSUB serialised round-trips with one load in flight.
+# Measured on the 397B shapes that is 14-27 GB/s of code traffic against a
+# 546 GB/s machine: latency-bound, not bandwidth-bound.
+#
+# FIX. The layout the DENSE kernels already use (_SRC_DENSE_D4_TILED): one
+# 32-lane simdgroup per row, lane `l` owning scale group `b*32+l`. The 32
+# lanes issue their code and codebook loads independently, so a row has up to
+# 32 loads in flight instead of one, and the per-group partials are combined
+# with a simd_shuffle reduction.
+#
+# BIT-EXACTNESS. The shuffle reduction walks i = 0..31 in ASCENDING group
+# order and applies srow[b*32+i] in exactly the sequence _SRC_FUSED_D8's
+# sequential `for g` loop does, and each lane accumulates its own group in the
+# same q order with the same float4 dots — so the float op order is identical
+# and the output is bit-for-bit equal (asserted in tests/test_vq_expert_simd.py).
+# x is staged as float4, matching _SRC_FUSED_D8's cache, so no extra rounding
+# is introduced for a non-half T either.
+#
+# The row guard is a PREDICATE (`active`), never an early return: the tile
+# loop below contains threadgroup barriers, and a subset of a threadgroup
+# returning early past a barrier is undefined behaviour.
+#
+# NGRP >= 32 IS REQUIRED, AND THE DISPATCHER ENFORCES IT. Lane `l` owns scale
+# group `l`, so a layer with fewer than 32 groups leaves lanes idle. Measured
+# per-call over N=1..10, packed and unpacked:
+#
+#     NGRP     shape                       M4 Max        M3 Ultra
+#       64     397B gate/up (IN=4096)   2.15-2.34x      1.20-1.84x
+#       16     397B down    (IN=1024)   1.02-1.62x      1.20-1.83x
+#       10     F-Next down  (IN= 640)   0.94-1.03x      1.06-1.37x
+#
+# NGRP=64 wins on BOTH machines by a wide margin; NGRP<=16 is machine-
+# dependent and at NGRP=10 the M4 loses outright. So the gate is NGRP >= 32 --
+# every lane has work -- which is never slower on either box.
+#
+# WHY NOT SPLIT A GROUP ACROSS LANES to fill the idle lanes at NGRP<32? Because
+# it cannot be made BIT-EXACT. The thread-per-row kernel sums a group's SPG
+# products strictly sequentially; any lane split computes partial sums and
+# recombines them, which re-associates the fp32 adds and changes the last bits.
+# Every published number for these rungs was produced by the old ordering, so
+# a re-association is not available to us here. NGRP<32 keeps the old kernel.
+_SRC_FUSED_D8_SIMD = r"""
+    const int OUT  = dims[0];
+    const int IN   = dims[1];
+    const int G    = dims[3];
+    const int NSUB = IN / 8;
+    const int NX4  = IN / 4;
+    const int NGRP = IN / G;
+    const int SPG  = G / 8;
+    const int TILE = 32 * SPG * 2;
+    uint r = thread_position_in_grid.y;
+    uint t = thread_position_in_grid.z;
+    uint lane = thread_position_in_threadgroup.x;
+    uint lid = thread_position_in_threadgroup.y * 32 + lane;
+    uint tgsize = threads_per_threadgroup.x * threads_per_threadgroup.y;
+
+    threadgroup float4 xs[MAX_TILE];
+    const device T* xrow = x + (size_t)t * IN;
+    const device half4* cb4 = (const device half4*)codebook;
+
+    const bool active = (r < (uint)OUT);
+    const uint rr = active ? r : 0;
+    const uint e = eidx[t];
+    const device CT* crow = codes + (size_t)e * OUT * NSUB + (size_t)rr * NSUB;
+    const device half* srow = scales + (size_t)e * OUT * NGRP + (size_t)rr * NGRP;
+    float acc = 0.0f;
+    const int NBLK = (NGRP + 31) / 32;
+    for (int b = 0; b < NBLK; ++b) {
+        const int base = b * TILE;
+        const int span = min(TILE, NX4 - base);
+        threadgroup_barrier(mem_flags::mem_threadgroup);
+        for (uint i = lid; i < (uint)span; i += tgsize) {
+            const int o = (base + (int)i) * 4;
+            xs[i] = float4((float)xrow[o], (float)xrow[o+1],
+                           (float)xrow[o+2], (float)xrow[o+3]);
+        }
+        threadgroup_barrier(mem_flags::mem_threadgroup);
+        const int g = b * 32 + (int)lane;
+        float gacc = 0.0f;
+        if (active && g < NGRP) {
+            int j = g * SPG;
+            int m = 2 * j - base;
+            for (int q = 0; q < SPG; ++q, ++j, m += 2) {
+                const uint c = (uint)crow[j];
+                gacc += dot(float4(cb4[2*c]),   xs[m])
+                      + dot(float4(cb4[2*c+1]), xs[m+1]);
+            }
+        }
+        const int gmax = min(32, NGRP - b * 32);
+        for (int i = 0; i < gmax; ++i)
+            acc = fma((float)srow[b * 32 + i],
+                      simd_shuffle(gacc, (ushort)i), acc);
+    }
+    if (active && lane == 0) y[(size_t)t * OUT + r] = static_cast<T>(acc);
+"""
+
 # d=8, codebook in THREADGROUP memory — K<=1024 only (half4 pairs: K*16 B
 # = 16 KB at K1024, + x as half4 = 8 KB at IN=4096 -> 24 KB total).
 _SRC_FUSED_D8_TG = r"""
@@ -523,6 +624,82 @@ _SRC_FUSED_PACKED_D4_DEVCB = _PACK_FETCH + r"""
 """
 
 
+# d=4, DEVICE codebook, one simdgroup per output row. The d4 counterpart of
+# _SRC_FUSED_D8_SIMD, and the expert-axis counterpart of _SRC_DENSE_D4_TILED
+# (identical body once the expert stride is folded into crow/srow). x is
+# staged as half4, matching _SRC_FUSED_D4_DEVCB's cache exactly, so the dots
+# see the same values and the output is bit-identical.
+#
+# NGRP >= 32 IS A REQUIREMENT, NOT AN OPTIMISATION. Lane `l` owns scale group
+# `l`, so a layer with fewer than 32 groups leaves lanes idle and the layout
+# LOSES. Measured on the 35B down_proj shape (IN=512, G=64 -> NGRP=8) it ran
+# 0.70-0.89x the thread-per-row kernel across N=1..10.
+#
+# A PACKED twin of this kernel was written and measured, and is deliberately
+# NOT shipped: on the 35B shapes the shipped rungs actually use it scored
+# 0.94-1.07x at NGRP=32 and 0.70-0.89x at NGRP=8, i.e. no win to bank. The
+# packed thread-per-row kernel is already 1.5x the unpacked one (a packed row
+# is 4x fewer code bytes and several codes share a uint32 word), so it is not
+# the latency-bound case this layout fixes. d8, which IS, keeps its packed
+# simd twin.
+_SRC_FUSED_D4_DEVCB_SIMD = r"""
+    const int OUT  = dims[0];
+    const int IN   = dims[1];
+    const int G    = dims[3];
+    const int NSUB = IN / 4;
+    const int NGRP = IN / G;
+    const int SPG  = G / 4;
+    const int QPG  = SPG / 4;
+    const int TILE = 32 * SPG;
+    uint r = thread_position_in_grid.y;
+    uint t = thread_position_in_grid.z;
+    uint lane = thread_position_in_threadgroup.x;
+    uint lid = thread_position_in_threadgroup.y * 32 + lane;
+    uint tgsize = threads_per_threadgroup.x * threads_per_threadgroup.y;
+
+    threadgroup half4 xs[MAX_TILE];
+    const device half4* cb = (const device half4*)codebook;
+    const device T* xrow = x + (size_t)t * IN;
+
+    const bool active = (r < (uint)OUT);
+    const uint rr = active ? r : 0;
+    const uint e = eidx[t];
+    const device CT* crow = codes + (size_t)e * OUT * NSUB + (size_t)rr * NSUB;
+    const device half* srow = scales + (size_t)e * OUT * NGRP + (size_t)rr * NGRP;
+    float acc = 0.0f;
+    const int NBLK = (NGRP + 31) / 32;
+    for (int b = 0; b < NBLK; ++b) {
+        const int base = b * TILE;
+        const int span = min(TILE, NSUB - base);
+        threadgroup_barrier(mem_flags::mem_threadgroup);
+        for (uint i = lid; i < (uint)span; i += tgsize) {
+            const int o = (base + (int)i) * 4;
+            xs[i] = half4((half)xrow[o], (half)xrow[o+1],
+                          (half)xrow[o+2], (half)xrow[o+3]);
+        }
+        threadgroup_barrier(mem_flags::mem_threadgroup);
+        const int g = b * 32 + (int)lane;
+        float gacc = 0.0f;
+        if (active && g < NGRP) {
+            int j = g * SPG;
+            int m = j - base;
+            for (int q = 0; q < QPG; ++q) {
+                gacc += dot(float4(cb[(uint)crow[j]]),   float4(xs[m]))
+                      + dot(float4(cb[(uint)crow[j+1]]), float4(xs[m+1]))
+                      + dot(float4(cb[(uint)crow[j+2]]), float4(xs[m+2]))
+                      + dot(float4(cb[(uint)crow[j+3]]), float4(xs[m+3]));
+                j += 4; m += 4;
+            }
+        }
+        const int gmax = min(32, NGRP - b * 32);
+        for (int i = 0; i < gmax; ++i)
+            acc = fma((float)srow[b * 32 + i],
+                      simd_shuffle(gacc, (ushort)i), acc);
+    }
+    if (active && lane == 0) y[(size_t)t * OUT + r] = static_cast<T>(acc);
+"""
+
+
 # d=2 packed (gemma d2 K512/K1024 rungs, 2026-08-19). Same shape as
 # _SRC_FUSED_D2 — half2 codebook + x caches, QPG*4 subvectors per group —
 # with the code fetch swapped for the VQ_CODE bit-field read. The packing
@@ -615,6 +792,70 @@ _SRC_FUSED_PACKED_D8 = _PACK_FETCH + r"""
         acc = fma((float)srow[g], gacc, acc);
     }
     y[(size_t)t * OUT + r] = static_cast<T>(acc);
+"""
+
+
+# Packed twin of _SRC_FUSED_D8_SIMD: same simdgroup-per-row layout, with the
+# code fetch swapped for the VQ_CODE bit-field read. THIS is the kernel the
+# shipped 397B rungs actually dispatch (their codes are packed uint32:
+# down_proj is [512, 4096, 56] = ceil(128/32)*14 words/row, d=8, K=16384), so
+# the unpacked _SRC_FUSED_D8_SIMD above is the reference twin, not the hot
+# path. Bit-identical to _SRC_FUSED_PACKED_D8 -- same dots, same q order,
+# same ascending-group scale application.
+_SRC_FUSED_PACKED_D8_SIMD = _PACK_FETCH + r"""
+    const int OUT  = dims[0];
+    const int IN   = dims[1];
+    const int G    = dims[3];
+    const int NSUB = IN / 8;
+    const int NX4  = IN / 4;
+    const int NGRP = IN / G;
+    const int SPG  = G / 8;
+    const int TILE = 32 * SPG * 2;
+    const int WPR  = (NSUB + 31) / 32 * BITS;  // ceil: tail block padded, pad codes never read (j < NSUB)
+    uint r = thread_position_in_grid.y;
+    uint t = thread_position_in_grid.z;
+    uint lane = thread_position_in_threadgroup.x;
+    uint lid = thread_position_in_threadgroup.y * 32 + lane;
+    uint tgsize = threads_per_threadgroup.x * threads_per_threadgroup.y;
+
+    threadgroup float4 xs[MAX_TILE];
+    const device T* xrow = x + (size_t)t * IN;
+    const device half4* cb4 = (const device half4*)codebook;
+
+    const bool active = (r < (uint)OUT);
+    const uint rr = active ? r : 0;
+    const uint e = eidx[t];
+    const device uint* crow = codes + (size_t)e * OUT * WPR + (size_t)rr * WPR;
+    const device half* srow = scales + (size_t)e * OUT * NGRP + (size_t)rr * NGRP;
+    float acc = 0.0f;
+    const int NBLK = (NGRP + 31) / 32;
+    for (int b = 0; b < NBLK; ++b) {
+        const int base = b * TILE;
+        const int span = min(TILE, NX4 - base);
+        threadgroup_barrier(mem_flags::mem_threadgroup);
+        for (uint i = lid; i < (uint)span; i += tgsize) {
+            const int o = (base + (int)i) * 4;
+            xs[i] = float4((float)xrow[o], (float)xrow[o+1],
+                           (float)xrow[o+2], (float)xrow[o+3]);
+        }
+        threadgroup_barrier(mem_flags::mem_threadgroup);
+        const int g = b * 32 + (int)lane;
+        float gacc = 0.0f;
+        if (active && g < NGRP) {
+            int j = g * SPG;
+            int m = 2 * j - base;
+            for (int q = 0; q < SPG; ++q, ++j, m += 2) {
+                const uint c = VQ_CODE(crow, j);
+                gacc += dot(float4(cb4[2*c]),   xs[m])
+                      + dot(float4(cb4[2*c+1]), xs[m+1]);
+            }
+        }
+        const int gmax = min(32, NGRP - b * 32);
+        for (int i = 0; i < gmax; ++i)
+            acc = fma((float)srow[b * 32 + i],
+                      simd_shuffle(gacc, (ushort)i), acc);
+    }
+    if (active && lane == 0) y[(size_t)t * OUT + r] = static_cast<T>(acc);
 """
 
 
@@ -1183,7 +1424,30 @@ def _d4_tg_fits(K, NSUB):
     return (K + NSUB) * 8 <= _TG_CAP_BYTES
 
 
-def _fused(x, eidx, codes, codebook, scales, pack_bits=0):
+# Rows per threadgroup for the simdgroup-per-row EXPERT kernels, matching
+# _DENSE_ROWS_TG (one 32-lane simdgroup per row, 32 rows per threadgroup).
+_EXPERT_ROWS_TG = 32
+
+# E141: the simdgroup-per-row d8 kernel is bit-identical to the thread-per-row
+# one, so it is on by default; VQ_EXPERT_SIMD=0 restores the old layout for
+# A/B measurement without a rebuild.
+_EXPERT_SIMD = os.environ.get("VQ_EXPERT_SIMD", "1") != "0"
+
+# The simd layout is for SMALL N only. Measured end-to-end on the 397B 2.2bpw
+# (M4 Max, box otherwise idle, ~/seqcost.py, 2x40 reps, reproducible to
+# 0.1 ms): seq=1 53.4 vs 54.9 ms and seq=2 80.1 vs 81.3 ms favour simd, but
+# seq=3 is 108.4 vs 95.4 ms AGAINST it (-13.6%) and seq=4 137.1 vs 128.8
+# (-6.4%). The isolated-kernel microbench says the opposite (1.35x at the
+# same N=24) -- so the microbench is NOT predictive above decode-sized N and
+# the whole-forward number is the one this gate follows. The cutoff is 20
+# pairs because both measured WINS sit at or below it -- decode is
+# top_k=8..10 pairs and the 397B's seq=2 (depth-1 MTP) is 2*10=20, measured
+# 80.1 vs 81.3 ms -- while the first measured LOSS is seq=3 = 30 pairs.
+# N=21..29 is unmeasured territory and deliberately falls to the old kernel.
+_EXPERT_SIMD_MAX_N = int(os.environ.get("VQ_EXPERT_SIMD_MAX_N", "20"))
+
+
+def _fused(x, eidx, codes, codebook, scales, pack_bits=0, simd=None):
     # U8-VIEW DISPATCH (E77/E90, 2026-08-20). Unpacked uint8 d4 rows are
     # byte-for-byte the pack_bits=8 word layout (little-endian; verified
     # against vq_pack.pack), and the packed fused kernel's simdgroup layout
@@ -1204,6 +1468,10 @@ def _fused(x, eidx, codes, codebook, scales, pack_bits=0):
     G = IN // scales.shape[2]
     dims = mx.array([OUT, IN, D, G, N, K], dtype=mx.int32)
     tgx = 256 if OUT >= 256 else OUT
+    # set by the simdgroup-per-row branches; None keeps the thread-per-row grid
+    simd_rows = None
+    if simd is None:
+        simd = _EXPERT_SIMD and N <= _EXPERT_SIMD_MAX_N
     # threadgroup budget: float4 codebook cache is 16 B/entry, so K>1024 with
     # x cached overflows Apple's 32 KB. Large-K (and all packed) go through
     # the half4 variant — value-identical, half the footprint.
@@ -1248,6 +1516,10 @@ def _fused(x, eidx, codes, codebook, scales, pack_bits=0):
             if K <= _D8_TG_MAX_K:
                 name = f"vq_fused_packed{pack_bits}_d8_tg"
                 src = _SRC_FUSED_PACKED_D8_TG
+            elif simd and IN // G >= 32:
+                name = f"vq_fused_packed{pack_bits}_d8_simd"
+                src = _SRC_FUSED_PACKED_D8_SIMD
+                simd_rows = _EXPERT_ROWS_TG
             else:
                 name = f"vq_fused_packed{pack_bits}_d8"
                 src = _SRC_FUSED_PACKED_D8
@@ -1260,7 +1532,11 @@ def _fused(x, eidx, codes, codebook, scales, pack_bits=0):
                 f"packed codes are {codes.shape[2]} words/row, expected "
                 f"{(NSUB + 31) // 32 * pack_bits} for IN={IN}, d={D}, "
                 f"bits={pack_bits}")
-        if D == 8:
+        if simd_rows is not None:
+            tile = 32 * (G // 8) * 2 if D == 8 else 32 * (G // 4)
+            template = [("T", x.dtype), ("MAX_TILE", tile),
+                        ("BITS", pack_bits)]
+        elif D == 8:
             template = [("T", x.dtype), ("MAX_NX4", IN // 4),
                         ("BITS", pack_bits)]
             if K <= _D8_TG_MAX_K:
@@ -1275,6 +1551,14 @@ def _fused(x, eidx, codes, codebook, scales, pack_bits=0):
         name, src = "vq_fused_d2", _SRC_FUSED_D2
         template = [("T", x.dtype), ("CT", codes.dtype),
                     ("MAX_K", K), ("MAX_NSUB", NSUB)]
+    elif (D == 4 and K > 1024 and not _d4_tg_fits(K, NSUB)
+          and simd and G % 16 == 0 and IN // G >= 32):
+        # E134 shape, E141 layout: device codebook + one simdgroup per row.
+        name = "vq_fused_d4_devcb_simd"
+        src = _SRC_FUSED_D4_DEVCB_SIMD
+        template = [("T", x.dtype), ("CT", codes.dtype),
+                    ("MAX_TILE", 32 * (G // 4))]
+        simd_rows = _EXPERT_ROWS_TG
     elif D == 4 and K > 1024 and not _d4_tg_fits(K, NSUB):
         # E134: (K + NSUB) * 8 over the cap -> device-memory codebook.
         name = "vq_fused_d4_devcb"
@@ -1293,17 +1577,28 @@ def _fused(x, eidx, codes, codebook, scales, pack_bits=0):
         name, src = "vq_fused_d8_tg", _SRC_FUSED_D8_TG
         template = [("T", x.dtype), ("CT", codes.dtype),
                     ("MAX_K", K), ("MAX_NX4", IN // 4)]
+    elif D == 8 and simd and IN // G >= 32:
+        name, src = "vq_fused_d8_simd", _SRC_FUSED_D8_SIMD
+        template = [("T", x.dtype), ("CT", codes.dtype),
+                    ("MAX_TILE", 32 * (G // 8) * 2)]
+        simd_rows = _EXPERT_ROWS_TG
     elif D == 8:
         name, src = "vq_fused_d8", _SRC_FUSED_D8
         template = [("T", x.dtype), ("CT", codes.dtype),
                     ("MAX_NX4", IN // 4)]
     else:
         raise NotImplementedError(f"no fused kernel for subvector dim d={D}")
+    if simd_rows is not None:
+        grid = (32, ((OUT + simd_rows - 1) // simd_rows) * simd_rows, N)
+        threadgroup = (32, simd_rows, 1)
+    else:
+        grid = (((OUT + tgx - 1) // tgx) * tgx, N, 1)
+        threadgroup = (tgx, 1, 1)
     (y,) = _get_kernel(name, src)(
         inputs=[x, eidx, codes, codebook, scales, dims],
         template=template,
-        grid=(((OUT + tgx - 1) // tgx) * tgx, N, 1),
-        threadgroup=(tgx, 1, 1),
+        grid=grid,
+        threadgroup=threadgroup,
         output_shapes=[(N, OUT)],
         output_dtypes=[x.dtype],
     )
