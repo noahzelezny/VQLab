@@ -1,0 +1,133 @@
+---
+language:
+- en
+license: gemma
+library_name: mlx
+pipeline_tag: image-text-to-text
+base_model: google/gemma-4-e4b-it
+base_model_relation: quantized
+tags:
+- mlx
+- quantized
+- vector-quantization
+- apple-silicon
+- gemma-4
+- multimodal
+---
+
+# gemma-4-e4b-it — VQ-PLE (7.39 GiB)
+
+**The community 8-bit, with a better embedding table.** This is
+mlx-community's `gemma-4-e4b-it-8bit` with exactly one change: the 5.25 GiB
+per-layer-embedding table (35% of the model's bytes) is replaced by a
+vector-quantized version at 5.75 bits/weight. Everything else — attention,
+MLPs, norms, towers — is byte-identical to the artifact you already know.
+
+That one swap makes the model **measurably closer to bf16 than the 8-bit
+it came from**, at 1 GiB less disk and 1.8 GB less peak RAM.
+
+## Measured results
+
+All numbers on the same instruments, same corpus, same teacher cache;
+"incumbent" = mlx-community gemma-4-e4b-it-8bit as shipped.
+
+| | **this artifact** | incumbent 8-bit |
+|---|---|---|
+| size on disk | **7.39 GiB** | 8.38 GiB |
+| KL to bf16 (literary corpus) | **7.451 mnats/token** | 8.149 mnats/token |
+| top-1 agreement with bf16 | 95.70% | 95.70% |
+| litbench (cyclic, generative, n=104) | 81.73% | 84.62% |
+| — paired McNemar | 7 discordant items, 5–2, p=0.45 — statistically indistinguishable | |
+| decode | 77.4 tok/s | 84.2 tok/s |
+| prefill, ~30-token prompt | 33% slower | baseline |
+| prefill, 2k–8k prompt | 13.5% slower | baseline |
+| peak memory (short chat) | **7.2 GB** | 9.5 GB |
+
+**On prefill, there are two costs and they behave differently.** At chat
+length the penalty is ~33%, and it falls to ~13.5% by 2k tokens and stays
+there through 8k — flat across a fourfold change in length. The first is
+fixed per-call overhead, which a long prompt amortises; the second is a real,
+length-independent cost in the VQ path. A single averaged figure would
+describe neither regime, so both are given. Ratios are quoted rather than
+tokens per second because the absolutes move with the machine: the same pair
+measured on a second box came out faster on both sides with the ratio
+unchanged.
+
+Honest summary: closer to the bf16 teacher on the precise instrument (KL),
+indistinguishable on the noisy one (litbench, n=104 cannot resolve a
+3-point gap — SE ±3.7), ~8% slower decode, ~24% less RAM. If you are
+RAM-bound, this is a strict upgrade; if you are latency-bound, keep the
+8-bit.
+
+## Why the embedding table
+
+We first vector-quantized everything (MLPs + embeddings) and LOST to the
+8-bit decisively (20.8 vs 8.1 mnats): e4b's MLP weights do not tolerate
+5.75-bit VQ even though their reconstruction error looks excellent — fit
+error and output damage are different quantities. An ablation split the
+damage: the MLP contributed essentially all of it, and the VQ embedding
+table alone was *better* than its 8-bit affine counterpart. So this
+artifact keeps the 8-bit MLPs and ships only the swap that wins.
+
+Embeddings are the friendly case for VQ at runtime too: a lookup decodes
+only the rows a batch touches — no matmul kernel, no full-table
+materialization, which is where the RAM saving comes from.
+
+## No calibration data
+
+The VQ fit is pure weight-space k-means against the bf16 tensors: no
+calibration corpus, no forward passes, no distillation. 154 seconds of
+codebook fitting on an M3 Ultra. Every number above was measured after,
+not optimized for.
+
+## Run it
+
+```bash
+pip install mlx-lm
+mlx_lm.chat --model TheDrainFlorist/gemma-4-e4b-it-VQ-PLE
+```
+
+The artifact is self-contained (`model.py` ships inside it); stock mlx_lm
+loads it with no extra code. It also loads STRICTLY, which the artifact it
+came from does not: the upstream 8-bit
+artifact ships 126 tensors for KV-shared layers that mlx_lm never
+instantiates, and `mlx_lm` refuses the checkpoint outright rather than
+ignoring them — reproduced on 0.31.3 and 0.31.9, so it is the artifact and
+not one environment. Loading it at all requires `strict=False`. Those tensors
+are removed here, so this build loads with no flag.
+
+## Verification
+
+- VQ table verified decode-side against the bf16 source (relerr 0.0296,
+  uniform across all 262,144 rows).
+- Packed codes verified bit-exact against the unpacked reference, and the
+  packed artifact reproduces the KL score to the third decimal.
+- Corrupting the codebook garbles generation — the VQ path is provably
+  live, not a fallback.
+
+## Limitations
+
+- ~8% slower decode, and ~13.5% slower prefill at working prompt lengths
+  (~33% at chat length) — see above.
+- Prefill was measured at 30, 2048 and 8192 tokens, median of three timed
+  repetitions after a discarded warmup on an otherwise idle GPU.
+- litbench point estimate is 3 points below the incumbent; the paired test
+  says noise (p=0.45), and the KL says closer-to-teacher, but if your use
+  case resembles literary MC comprehension specifically, measure your own.
+- Vision/audio towers are carried unchanged from the incumbent artifact;
+  vision was not re-benched here.
+
+### Multi-machine (exo) note
+
+If you shard this across an exo cluster: VQ codebooks must **replicate,
+not slice**. The guard is bundled in `model.py`; upstream fix is
+[exo PR #2268](https://github.com/exo-explore/exo/pull/2268).
+
+## Paper
+
+The method, the full three-model ladder, the negative results, and the
+measurement rules behind every number here:
+[**Data-Free Vector Quantization Beats Affine Quantization at Matched Bytes
+Below 6 Bits**](https://doi.org/10.5281/zenodo.22119017) (CC BY 4.0) ·
+code: [VQLab](https://github.com/noahzelezny/VQLab) ·
+web version: [Space](https://huggingface.co/spaces/TheDrainFlorist/below-six-bits)

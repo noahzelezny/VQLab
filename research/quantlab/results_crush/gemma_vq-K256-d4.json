@@ -1,0 +1,12 @@
+{
+ "student": "/Volumes/Thunderbay SSD/Exo Models/gemma26b-rungs/vq-K256-d4",
+ "teacher": "/Volumes/Thunderbay SSD/Exo Models/../Mlx_Models/hub/models--mlx-community--gemma-4-26b-a4b-it-bf16/snapshots/e13fae2a81ec07e3092a3ebb70c80970b640dc3c/",
+ "cache_dir": "/Volumes/Thunderbay SSD/Exo Models/kl_cache_gemma26b",
+ "mean_kl_nats": 3.363109,
+ "mean_kl_millinats": 3363.109,
+ "top1_agreement": 0.426514,
+ "tokens_scored": 12288,
+ "top_k": 64,
+ "captured_mass": 0.964845,
+ "chat_wrapped": true
+}

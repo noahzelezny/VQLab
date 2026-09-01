@@ -1,0 +1,11 @@
+{
+ "qwen36-35b-rungs/vq-K2048-d4-packed": "TheDrainFlorist--Qwen3.6-35B-A3B-VQ-3.4bpw",
+ "e94b-35b-K8192-refit-0821-packed": "TheDrainFlorist--Qwen3.6-35B-A3B-VQ-3.8bpw",
+ "qwen36-35b-rungs/vq-tail30-d2k512-packed": "TheDrainFlorist--Qwen3.6-35B-A3B-VQ-4.6bpw",
+ "e140-35b-d2K1024-packed": "TheDrainFlorist--Qwen3.6-35B-A3B-VQ-5.4bpw",
+ "e130-27b-d4K4096-vq-packed": "TheDrainFlorist--Qwen3.8-27B-VQ-3.9bpw",
+ "e124-27b-dense-d2K256-vq-packed": "TheDrainFlorist--Qwen3.8-27B-VQ-4.5bpw",
+ "e142-27b-d2K512-iters30-vq-packed": "TheDrainFlorist--Qwen3.8-27B-VQ-4.8bpw",
+ "gemma26b-rungs/vq-K2048-d2-packed-sighted": "TheDrainFlorist--gemma-4-26b-a4b-it-VQ-6.2bpw",
+ "e4b-VQ-pleonly-packed": "TheDrainFlorist--gemma-4-e4b-it-VQ-PLE"
+}

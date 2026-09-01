@@ -1,0 +1,422 @@
+[
+ {
+  "id": 1000,
+  "passage": "Explain why the sky is blue.",
+  "task": "Use at most 60 words.",
+  "constraints": {
+   "max_words": 60
+  },
+  "domain": "instruct"
+ },
+ {
+  "id": 1001,
+  "passage": "Describe how yeast makes bread rise.",
+  "task": "Use at most 80 words.",
+  "constraints": {
+   "max_words": 80
+  },
+  "domain": "instruct"
+ },
+ {
+  "id": 1002,
+  "passage": "Give advice for a first job interview.",
+  "task": "Your answer must begin with the word(s) \"First,\".",
+  "constraints": {
+   "start_with": "First,"
+  },
+  "domain": "instruct"
+ },
+ {
+  "id": 1003,
+  "passage": "Explain what a checksum is.",
+  "task": "Your answer must begin with the word(s) \"A checksum\".",
+  "constraints": {
+   "start_with": "A checksum"
+  },
+  "domain": "instruct"
+ },
+ {
+  "id": 1004,
+  "passage": "List exactly 5 uses for a brick.",
+  "task": "Answer with exactly 5 lines, one item per line, no preamble.",
+  "constraints": {
+   "exact_lines": 5
+  },
+  "domain": "instruct"
+ },
+ {
+  "id": 1005,
+  "passage": "List exactly 3 famous rivers.",
+  "task": "Answer with exactly 3 lines, one item per line, no preamble.",
+  "constraints": {
+   "exact_lines": 3
+  },
+  "domain": "instruct"
+ },
+ {
+  "id": 1006,
+  "passage": "Explain photosynthesis without using the letter 'e'.",
+  "task": "Do not use the letter 'e' anywhere in your answer.",
+  "constraints": {
+   "forbid_char": "e"
+  },
+  "domain": "instruct"
+ },
+ {
+  "id": 1007,
+  "passage": "Write a two-sentence horror story.",
+  "task": "Use at most 2 sentence(s).",
+  "constraints": {
+   "max_sentences": 2
+  },
+  "domain": "instruct"
+ },
+ {
+  "id": 1008,
+  "passage": "Define recursion in one sentence.",
+  "task": "Use at most 1 sentence(s).",
+  "constraints": {
+   "max_sentences": 1
+  },
+  "domain": "instruct"
+ },
+ {
+  "id": 1009,
+  "passage": "Explain inflation to a child.",
+  "task": "Use at most 70 words.",
+  "constraints": {
+   "max_words": 70
+  },
+  "domain": "instruct"
+ },
+ {
+  "id": 1010,
+  "passage": "Give exactly 4 tips for better sleep.",
+  "task": "Answer with exactly 4 lines, one item per line, no preamble.",
+  "constraints": {
+   "exact_lines": 4
+  },
+  "domain": "instruct"
+ },
+ {
+  "id": 1011,
+  "passage": "Describe the water cycle.",
+  "task": "Your answer must begin with the word(s) \"Water\".",
+  "constraints": {
+   "start_with": "Water"
+  },
+  "domain": "instruct"
+ },
+ {
+  "id": 1012,
+  "passage": "Explain what an API is.",
+  "task": "Use at most 50 words.",
+  "constraints": {
+   "max_words": 50
+  },
+  "domain": "instruct"
+ },
+ {
+  "id": 1013,
+  "passage": "Write a haiku about autumn (3 lines).",
+  "task": "Answer with exactly 3 lines, one item per line, no preamble.",
+  "constraints": {
+   "exact_lines": 3
+  },
+  "domain": "instruct"
+ },
+ {
+  "id": 1014,
+  "passage": "List exactly 6 primary and secondary colors.",
+  "task": "Answer with exactly 6 lines, one item per line, no preamble.",
+  "constraints": {
+   "exact_lines": 6
+  },
+  "domain": "instruct"
+ },
+ {
+  "id": 1015,
+  "passage": "Explain gravity in exactly two sentences.",
+  "task": "Use at most 2 sentence(s).",
+  "constraints": {
+   "max_sentences": 2
+  },
+  "domain": "instruct"
+ },
+ {
+  "id": 1016,
+  "passage": "Give directions for boiling an egg.",
+  "task": "Your answer must begin with the word(s) \"Place\".",
+  "constraints": {
+   "start_with": "Place"
+  },
+  "domain": "instruct"
+ },
+ {
+  "id": 1017,
+  "passage": "Summarize the plot of Cinderella.",
+  "task": "Use at most 90 words.",
+  "constraints": {
+   "max_words": 90
+  },
+  "domain": "instruct"
+ },
+ {
+  "id": 1018,
+  "passage": "Explain what a firewall does.",
+  "task": "Use at most 60 words.",
+  "constraints": {
+   "max_words": 60
+  },
+  "domain": "instruct"
+ },
+ {
+  "id": 1019,
+  "passage": "List exactly 5 mammals that can swim.",
+  "task": "Answer with exactly 5 lines, one item per line, no preamble.",
+  "constraints": {
+   "exact_lines": 5
+  },
+  "domain": "instruct"
+ },
+ {
+  "id": 1100,
+  "passage": "time, most likely, Captain Carter\nwould be at Meryton again. And when you have given _your_ ball,\u201d she\nadded, \u201cI shall insist on their giving one also. I shall tell Colonel\nForster it will be quite a shame if he does not.\u201d\n\nMrs. Bennet and her daughters then departed, and Elizabeth returned\ninstantly to Jane, leaving her own and her relations\u2019 behaviour to the\nremarks of the two ladies and Mr. Darcy; the latter of whom, however,\ncould not be prevailed on to join in their censure of _her_, in spite of\nall Miss Bingley\u2019s witticisms on _fine eyes_.\n\nThe day passed much as the day before had done. Mrs. Hurst and Miss\nBingley had spent some hours of the morning with the invalid, who\ncontinued, though slowly, to mend; and, in the evening, Elizabeth joined\ntheir party in the drawing-room. The loo table, however, did not appear.\nMr. Darcy was writing, and Miss Bingley, seated near him, was watching\nthe progress of his letter, and repeatedly calling off his attention by\nmessages to his sister. Mr. Hurst and Mr. Bingley were at piquet, and\nMrs. Hurst was observing their game.",
+  "task": "Summarize this passage in 2-3 sentences. Capture who is involved and what changes. Output only the summary.",
+  "domain": "summar"
+ },
+ {
+  "id": 1101,
+  "passage": "\u201cIf you mean Darcy,\u201d cried her brother, \u201che may go to bed, if he\nchooses, before it begins; but as for the ball, it is quite a settled\nthing, and as soon as Nicholls has made white soup enough I shall send\nround my cards.\u201d\n\n\u201cI should like balls infinitely better,\u201d she replied, \u201cif they were\ncarried on in a different manner; but there is something insufferably\ntedious in the usual process of such a meeting. It would surely be much\nmore rational if conversation instead of dancing made the order of the\nday.\u201d\n\nMiss Bingley made no answer, and soon afterwards got up and walked about\nthe room. Her figure was elegant, and she walked well; but Darcy, at\nwhom it was all aimed, was still inflexibly studious. In the\ndesperation of her feelings, she resolved on one effort more; and,\nturning to Elizabeth, said,--",
+  "task": "Summarize this passage in 2-3 sentences. Capture who is involved and what changes. Output only the summary.",
+  "domain": "summar"
+ },
+ {
+  "id": 1102,
+  "passage": "\u201cHe must be an oddity, I think,\u201d said she. \u201cI cannot make him out. There\nis something very pompous in his style. And what can he mean by\napologizing for being next in the entail? We cannot suppose he would\nhelp it, if he could. Can he be a sensible man, sir?\u201d\n\nTo Catherine and Lydia neither the letter nor its writer were in any\ndegree interesting. It was next to impossible that their cousin should\ncome in a scarlet coat, and it was now some weeks since they had\nreceived pleasure from the society of a man in any other colour. As for\ntheir mother, Mr. Collins\u2019s letter had done away much of her ill-will,\nand she was preparing to see him with a degree of composure which\nastonished her husband and daughters.",
+  "task": "Summarize this passage in 2-3 sentences. Capture who is involved and what changes. Output only the summary.",
+  "domain": "summar"
+ },
+ {
+  "id": 1103,
+  "passage": "As they walked home, Elizabeth related to Jane what she had seen pass\nbetween the two gentlemen; but though Jane would have defended either or\nboth, had they appeared to be wrong, she could no more explain such\nbehaviour than her sister.\n\nMr. Collins on his return highly gratified Mrs. Bennet by admiring Mrs.\nPhilips\u2019s manners and politeness. He protested that, except Lady\nCatherine and her daughter, he had never seen a more elegant woman; for\nshe had not only received him with the utmost civility, but had even\npointedly included him in her invitation for the next evening, although\nutterly unknown to her before. Something, he supposed, might be\nattributed to his connection with them, but yet he had never met with so\nmuch attention in the whole course of his life.\n\nAs no objection was made to the young people\u2019s engagement with their\naunt, and all Mr. Collins\u2019s scruples of leaving Mr. and Mrs. Bennet for\na single evening during his visit were most steadily resisted, the coach\nconveyed him and his five cousins at a suitable hour to Meryton; and the\ngirls had the pleasure of hearing, as they entered the drawing-room,\nthat Mr. Wickham had accepted their uncle\u2019s invitation, and was then in\nthe house.",
+  "task": "Summarize this passage in 2-3 sentences. Capture who is involved and what changes. Output only the summary.",
+  "domain": "summar"
+ },
+ {
+  "id": 1104,
+  "passage": "\u201cProbably not; but Mr. Darcy can please where he chooses. He does not\nwant abilities. He can be a conversible companion if he thinks it worth\nhis while. Among those who are at all his equals in consequence, he is a\nvery different man from what he is to the less prosperous. His pride\nnever deserts him; but with the rich he is liberal-minded, just,\nsincere, rational, honourable, and, perhaps, agreeable,--allowing\nsomething for fortune and figure.\u201d\n\nThe whist party soon afterwards breaking up, the players gathered round\nthe other table, and Mr. Collins took his station between his cousin\nElizabeth and Mrs. Philips. The usual inquiries as to his success were\nmade by the latter. It had not been very great; he had lost every point;\nbut when Mrs. Philips began to express her concern thereupon, he assured\nher, with much earnest gravity, that it was not of the least importance;\nthat he considered the money as a mere trifle, and begged she would not\nmake herself uneasy.\n\n\u201cI know very well, madam,\u201d said he, \u201cthat when persons sit down to a\ncard table they must take their chance of these things,--and happily I\nam not in such circumstances as to make five shillings any object. There\nare, undoubtedly, many who could not say the same; but, thanks to Lady\nCatherine de Bourgh, I am removed far beyond the necessity of regarding\nlittle matters.\u201d",
+  "task": "Summarize this passage in 2-3 sentences. Capture who is involved and what changes. Output only the summary.",
+  "domain": "summar"
+ },
+ {
+  "id": 1105,
+  "passage": "He made no answer; and they were again silent till they had gone down\nthe dance, when he asked her if she and her sisters did not very often\nwalk to Meryton. She answered in the affirmative; and, unable to resist\nthe temptation, added, \u201cWhen you met us there the other day, we had just\nbeen forming a new acquaintance.\u201d\n\nThe effect was immediate. A deeper shade of _hauteur_ overspread his\nfeatures, but he said not a word; and Elizabeth, though blaming herself\nfor her own weakness, could not go on. At length Darcy spoke, and in a\nconstrained manner said,--\n\nDarcy made no answer, and seemed desirous of changing the subject. At\nthat moment Sir William Lucas appeared close to them, meaning to pass\nthrough the set to the other side of the room; but, on perceiving Mr.\nDarcy, he stopped, with a bow of superior courtesy, to compliment him on\nhis dancing and his partner.",
+  "task": "Summarize this passage in 2-3 sentences. Capture who is involved and what changes. Output only the summary.",
+  "domain": "summar"
+ },
+ {
+  "id": 1106,
+  "passage": "To Elizabeth it appeared, that had her family made an agreement to expose themselves as much as they could during the evening, it would have been impossible for them to play their parts with more spirit, or finer success; and happy did she think it for Bingley and her sister that some of the exhibition had escaped his notice, and that his feelings were not of a sort to be much distressed by the folly which he must have witnessed. That his two sisters and Mr. Darcy, however, should have such an opportunity of ridiculing her relations was bad enough; and she could not determine whether the silent contempt of the gentleman, or the insolent smiles of the ladies, were more intolerable. The rest of the evening brought her little amusement. She was teased by Mr. Collins, who continued most perseveringly by her side; and though he could not prevail with her to dance with him again, put it out of her power to dance with others. In vain did she entreat him to stand up with somebody else, and offered to introduce him to any young lady in the room. He assured her that, as to dancing, he was perfectly indifferent to it; that his chief object was, by delicate attentions, to recommend himself to her; and that he should therefore make a point of remaining close to her the whole evening. There was no arguing upon such a project. She owed her greatest relief to her friend Miss Lucas, who often joined them, and good-naturedly engaged Mr. Collins\u2019s",
+  "task": "Summarize this passage in 2-3 sentences. Capture who is involved and what changes. Output only the summary.",
+  "domain": "summar"
+ },
+ {
+  "id": 1107,
+  "passage": "\u201cYes, very true. How nicely you talk; I love to hear you. You\nunderstand every thing. You and Mr. Elton are one as clever as the\nother. This charade!\u2014If I had studied a twelvemonth, I could never have\nmade any thing like it.\u201d\n\n\u201cIt is one thing,\u201d said she, presently\u2014her cheeks in a glow\u2014\u201cto have\nvery good sense in a common way, like every body else, and if there is\nany thing to say, to sit down and write a letter, and say just what you\nmust, in a short way; and another, to write verses and charades like\nthis.\u201d\n\n\u201cLeave it to me. You do nothing. He will be here this evening, I dare\nsay, and then I will give it him back, and some nonsense or other will\npass between us, and you shall not be committed.\u2014Your soft eyes shall\nchuse their own time for beaming. Trust to me.\u201d",
+  "task": "Summarize this passage in 2-3 sentences. Capture who is involved and what changes. Output only the summary.",
+  "domain": "summar"
+ },
+ {
+  "id": 1108,
+  "passage": "Harriet, she found, had never in her life been inside the Vicarage, and\nher curiosity to see it was so extreme, that, considering exteriors and\nprobabilities, Emma could only class it, as a proof of love, with Mr.\nElton\u2019s seeing ready wit in her.\n\n\u201cMy being charming, Harriet, is not quite enough to induce me to marry;\nI must find other people charming\u2014one other person at least. And I am\nnot only, not going to be married, at present, but have very little\nintention of ever marrying at all.\u201d\n\n\u201cI must see somebody very superior to any one I have seen yet, to be\ntempted; Mr. Elton, you know, (recollecting herself,) is out of the\nquestion: and I do _not_ wish to see any such person. I would rather\nnot be tempted. I cannot really change for the better. If I were to\nmarry, I must expect to repent it.\u201d",
+  "task": "Summarize this passage in 2-3 sentences. Capture who is involved and what changes. Output only the summary.",
+  "domain": "summar"
+ },
+ {
+  "id": 1109,
+  "passage": "Mrs. John Knightley was a pretty, elegant little woman, of gentle, quiet manners, and a disposition remarkably amiable and affectionate; wrapt up in her family; a devoted wife, a doating mother, and so tenderly attached to her father and sister that, but for these higher ties, a warmer love might have seemed impossible. She could never see a fault in any of them. She was not a woman of strong understanding or any quickness; and with this resemblance of her father, she inherited also much of his constitution; was delicate in her own health, over-careful of that of her children, had many fears and many nerves, and was as fond of her own Mr. Wingfield in town as her father could be of Mr. Perry. They were alike too, in a general benevolence of temper, and a strong habit of regard for every old acquaintance. Mr. John Knightley was a tall, gentleman-like, and very clever man; rising in his profession, domestic, and respectable in his private character; but with reserved manners which prevented his being generally pleasing; and capable of being sometimes out of humour. He was not an ill-tempered man, not so often unreasonably cross as to deserve such a reproach; but his temper was not his great perfection; and, indeed, with such a worshipping wife, it was hardly possible that any natural defects in it should not be increased. The extreme sweetness of her temper must hurt his. He had all the clearness and quickness of mind which she wanted, and he could sometimes act an ungracious, or",
+  "task": "Summarize this passage in 2-3 sentences. Capture who is involved and what changes. Output only the summary.",
+  "domain": "summar"
+ },
+ {
+  "id": 1110,
+  "passage": "\u201cWhy, pretty well; but not quite well. Poor Perry is bilious, and he\nhas not time to take care of himself\u2014he tells me he has not time to\ntake care of himself\u2014which is very sad\u2014but he is always wanted all\nround the country. I suppose there is not a man in such practice\nanywhere. But then there is not so clever a man any where.\u201d\n\n\u201cOh! my dear sir, her throat is so much better that I have hardly any\nuneasiness about it. Either bathing has been of the greatest service to\nher, or else it is to be attributed to an excellent embrocation of Mr.\nWingfield\u2019s, which we have been applying at times ever since August.\u201d",
+  "task": "Summarize this passage in 2-3 sentences. Capture who is involved and what changes. Output only the summary.",
+  "domain": "summar"
+ },
+ {
+  "id": 1111,
+  "passage": "\u201cA sore-throat!\u2014I hope not infectious. I hope not of a putrid\ninfectious sort. Has Perry seen her? Indeed you should take care of\nyourself as well as of your friend. Let me entreat you to run no risks.\nWhy does not Perry see her?\u201d\n\nEmma, who was not really at all frightened herself, tranquillised this\nexcess of apprehension by assurances of Mrs. Goddard\u2019s experience and\ncare; but as there must still remain a degree of uneasiness which she\ncould not wish to reason away, which she would rather feed and assist\nthan not, she added soon afterwards\u2014as if quite another subject,\n\n\u201cIt is so cold, so very cold\u2014and looks and feels so very much like\nsnow, that if it were to any other place or with any other party, I\nshould really try not to go out to-day\u2014and dissuade my father from\nventuring; but as he has made up his mind, and does not seem to feel\nthe cold himself, I do not like to interfere, as I know it would be so\ngreat a disappointment to Mr. and Mrs. Weston. But, upon my word, Mr.\nElton, in your case, I should certainly excuse myself. You appear to me\na little hoarse already, and when you consider what demand of voice and\nwhat fatigues to-morrow will bring, I think it would be no more than\ncommon prudence to stay at home and take care of yourself to-night.\u201d",
+  "task": "Summarize this passage in 2-3 sentences. Capture who is involved and what changes. Output only the summary.",
+  "domain": "summar"
+ },
+ {
+  "id": 1112,
+  "passage": "The misfortune of Harriet\u2019s cold had been pretty well gone through before her arrival. Mr. Woodhouse had been safely seated long enough to give the history of it, besides all the history of his own and Isabella\u2019s coming, and of Emma\u2019s being to follow, and had indeed just got to the end of his satisfaction that James should come and see his daughter, when the others appeared, and Mrs. Weston, who had been almost wholly engrossed by her attentions to him, was able to turn away and welcome her dear Emma. Emma\u2019s project of forgetting Mr. Elton for a while made her rather sorry to find, when they had all taken their places, that he was close to her. The difficulty was great of driving his strange insensibility towards Harriet, from her mind, while he not only sat at her elbow, but was continually obtruding his happy countenance on her notice, and solicitously addressing her upon every occasion. Instead of forgetting him, his behaviour was such that she could not avoid the internal suggestion of \u201cCan it really be as my brother imagined? can it be possible for this man to be beginning to transfer his affections from Harriet to me?\u2014Absurd and insufferable!\u201d\u2014Yet he would be so anxious for her being perfectly warm, would be so interested about her father, and so delighted with Mrs. Weston; and at last would begin admiring her drawings with so much zeal and so little knowledge as seemed terribly like a would-be lover, and made it some effort with her to preserve her good",
+  "task": "Summarize this passage in 2-3 sentences. Capture who is involved and what changes. Output only the summary.",
+  "domain": "summar"
+ },
+ {
+  "id": 1113,
+  "passage": "Poor Mr. Woodhouse was silent from consternation; but every body else\nhad something to say; every body was either surprized or not surprized,\nand had some question to ask, or some comfort to offer. Mrs. Weston and\nEmma tried earnestly to cheer him and turn his attention from his\nson-in-law, who was pursuing his triumph rather unfeelingly.\n\n\u201cI admired your resolution very much, sir,\u201d said he, \u201cin venturing out\nin such weather, for of course you saw there would be snow very soon.\nEvery body must have seen the snow coming on. I admired your spirit;\nand I dare say we shall get home very well. Another hour or two\u2019s snow\ncan hardly make the road impassable; and we are two carriages; if one\nis blown over in the bleak part of the common field there will be the\nother at hand. I dare say we shall be all safe at Hartfield before\nmidnight.\u201d",
+  "task": "Summarize this passage in 2-3 sentences. Capture who is involved and what changes. Output only the summary.",
+  "domain": "summar"
+ },
+ {
+  "id": 1114,
+  "passage": "The picture!\u2014How eager he had been about the picture!\u2014and the charade!\u2014and an hundred other circumstances;\u2014how clearly they had seemed to point at Harriet. To be sure, the charade, with its \u201cready wit\u201d\u2014but then the \u201csoft eyes\u201d\u2014in fact it suited neither; it was a jumble without taste or truth. Who could have seen through such thick-headed nonsense? Certainly she had often, especially of late, thought his manners to herself unnecessarily gallant; but it had passed as his way, as a mere error of judgment, of knowledge, of taste, as one proof among others that he had not always lived in the best society, that with all the gentleness of his address, true elegance was sometimes wanting; but, till this very day, she had never, for an instant, suspected it to mean any thing but grateful respect to her as Harriet\u2019s friend. To Mr. John Knightley was she indebted for her first idea on the subject, for the first start of its possibility. There was no denying that those brothers had penetration. She remembered what Mr. Knightley had once said to her about Mr. Elton, the caution he had given, the conviction he had professed that Mr. Elton would never marry indiscreetly; and blushed to think how much truer a knowledge of his character had been there shewn than any she had reached herself. It was dreadfully mortifying; but Mr. Elton was proving himself, in many respects, the very reverse of what she had meant and believed him; proud, assuming, conceited; very full of his own claims, and little concerned about the",
+  "task": "Summarize this passage in 2-3 sentences. Capture who is involved and what changes. Output only the summary.",
+  "domain": "summar"
+ },
+ {
+  "id": 1115,
+  "passage": "\u201cA slight clinking behind me made me turn my head. Six black men advanced in a file, toiling up the path. They walked erect and slow, balancing small baskets full of earth on their heads, and the clink kept time with their footsteps. Black rags were wound round their loins, and the short ends behind waggled to and fro like tails. I could see every rib, the joints of their limbs were like knots in a rope; each had an iron collar on his neck, and all were connected together with a chain whose bights swung between them, rhythmically clinking. Another report from the cliff made me think suddenly of that ship of war I had seen firing into a continent. It was the same kind of ominous voice; but these men could by no stretch of imagination be called enemies. They were called criminals, and the outraged law, like the bursting shells, had come to them, an insoluble mystery from the sea. All their meagre breasts panted together, the violently dilated nostrils quivered, the eyes stared stonily uphill. They passed me within six inches, without a glance, with that complete, deathlike indifference of unhappy savages. Behind this raw matter one of the reclaimed, the product of the new forces at work, strolled despondently, carrying a rifle by its middle. He had a uniform jacket with one button off, and seeing a white man on the path, hoisted his weapon to his shoulder with alacrity. This was simple prudence, white men being so much alike at a distance that he",
+  "task": "Summarize this passage in 2-3 sentences. Capture who is involved and what changes. Output only the summary.",
+  "domain": "summar"
+ },
+ {
+  "id": 1116,
+  "passage": "It had become so pitch dark that we listeners could hardly see one another. For a long time already he, sitting apart, had been no more to us than a voice. There was not a word from anybody. The others might have been asleep, but I was awake. I listened, I listened on the watch for the sentence, for the word, that would give me the clue to the faint uneasiness inspired by this narrative that seemed to shape itself without human lips in the heavy night-air of the river. \u201c... Yes\u2014I let him run on,\u201d Marlow began again, \u201cand think what he pleased about the powers that were behind me. I did! And there was nothing behind me! There was nothing but that wretched, old, mangled steamboat I was leaning against, while he talked fluently about \u2018the necessity for every man to get on.\u2019 \u2018And when one comes out here, you conceive, it is not to gaze at the moon.\u2019 Mr. Kurtz was a \u2018universal genius,\u2019 but even a genius would find it easier to work with \u2018adequate tools\u2014intelligent men.\u2019 He did not make bricks\u2014why, there was a physical impossibility in the way\u2014as I was well aware; and if he did secretarial work for the manager, it was because \u2018no sensible man rejects wantonly the confidence of his superiors.\u2019 Did I see it? I saw it. What more did I want? What I really wanted was rivets, by heaven! Rivets. To get on with the work\u2014to stop the hole. Rivets I wanted. There were cases of them down at",
+  "task": "Summarize this passage in 2-3 sentences. Capture who is involved and what changes. Output only the summary.",
+  "domain": "summar"
+ },
+ {
+  "id": 1117,
+  "passage": "\u201cIt developed itself, I should say, two hours after the fog lifted, and its commencement was at a spot, roughly speaking, about a mile and a half below Kurtz\u2019s station. We had just floundered and flopped round a bend, when I saw an islet, a mere grassy hummock of bright green, in the middle of the stream. It was the only thing of the kind; but as we opened the reach more, I perceived it was the head of a long sand-bank, or rather of a chain of shallow patches stretching down the middle of the river. They were discoloured, just awash, and the whole lot was seen just under the water, exactly as a man\u2019s backbone is seen running down the middle of his back under the skin. Now, as far as I did see, I could go to the right or to the left of this. I didn\u2019t know either channel, of course. The banks looked pretty well alike, the depth appeared the same; but as I had been informed the station was on the west side, I naturally headed for the western passage. \u201cNo sooner had we fairly entered it than I became aware it was much narrower than I had supposed. To the left of us there was the long uninterrupted shoal, and to the right a high, steep bank heavily overgrown with bushes. Above the bush the trees stood in serried ranks. The twigs overhung the current thickly, and from distance to distance a large limb of some tree projected rigidly over the stream. It",
+  "task": "Summarize this passage in 2-3 sentences. Capture who is involved and what changes. Output only the summary.",
+  "domain": "summar"
+ },
+ {
+  "id": 1118,
+  "passage": "It might be thought that this was a poor way to accumulate a princely fortune\u2014and so it was, a very poor way indeed. But I am one of those that never take on about princely fortunes, and am quite content if the world is ready to board and lodge me, while I am putting up at this grim sign of the Thunder Cloud. Upon the whole, I thought that the 275th lay would be about the fair thing, but would not have been surprised had I been offered the 200th, considering I was of a broad-shouldered make. But one thing, nevertheless, that made me a little distrustful about receiving a generous share of the profits was this: Ashore, I had heard something of both Captain Peleg and his unaccountable old crony Bildad; how that they being the principal proprietors of the Pequod, therefore the other and more inconsiderable and scattered owners, left nearly the whole management of the ship\u2019s affairs to these two. And I did not know but what the stingy old Bildad might have a mighty deal to say about shipping hands, especially as I now found him on board the Pequod, quite at home there in the cabin, and reading his Bible as if at his own fireside. Now while Peleg was vainly trying to mend a pen with his jack-knife, old Bildad, to my no small surprise, considering that he was such an interested party in these proceedings; Bildad never heeded us, but went on mumbling to himself out of his book, \u201c_Lay_ not up for",
+  "task": "Summarize this passage in 2-3 sentences. Capture who is involved and what changes. Output only the summary.",
+  "domain": "summar"
+ },
+ {
+  "id": 1119,
+  "passage": "I went down to supper. After sitting a long time listening to the long stories of some sailors who had just come from a plum-pudding voyage, as they called it (that is, a short whaling-voyage in a schooner or brig, confined to the north of the line, in the Atlantic Ocean only); after listening to these plum-puddingers till nearly eleven o\u2019clock, I went up stairs to go to bed, feeling quite sure by this time Queequeg must certainly have brought his Ramadan to a termination. But no; there he was just where I had left him; he had not stirred an inch. I began to grow vexed with him; it seemed so downright senseless and insane to be sitting there all day and half the night on his hams in a cold room, holding a piece of wood on his head. Despairing of him, therefore, I determined to go to bed and to sleep; and no doubt, before a great while, he would follow me. But previous to turning in, I took my heavy bearskin jacket, and threw it over him, as it promised to be a very cold night; and he had nothing but his ordinary round jacket on. For some time, do all I would, I could not get into the faintest doze. I had blown out the candle; and the mere thought of Queequeg\u2014not four feet off\u2014sitting there in that uneasy position, stark alone in the cold and dark; this made me really wretched. Think of it; sleeping all night in the same room with a wide",
+  "task": "Summarize this passage in 2-3 sentences. Capture who is involved and what changes. Output only the summary.",
+  "domain": "summar"
+ },
+ {
+  "id": 1200,
+  "passage": "My landlord raised rent 15% with 20 days notice. What should I ask him first?",
+  "task": "Reply as a helpful conversation partner in under 150 words. Be concrete and specific.",
+  "domain": "dialog"
+ },
+ {
+  "id": 1201,
+  "passage": "I burned the garlic twice tonight. What am I doing wrong?",
+  "task": "Reply as a helpful conversation partner in under 150 words. Be concrete and specific.",
+  "domain": "dialog"
+ },
+ {
+  "id": 1202,
+  "passage": "My 8-year-old asked why the moon follows the car. How do I answer her?",
+  "task": "Reply as a helpful conversation partner in under 150 words. Be concrete and specific.",
+  "domain": "dialog"
+ },
+ {
+  "id": 1203,
+  "passage": "A coworker keeps taking credit for my ideas in meetings. Help me plan what to say.",
+  "task": "Reply as a helpful conversation partner in under 150 words. Be concrete and specific.",
+  "domain": "dialog"
+ },
+ {
+  "id": 1204,
+  "passage": "I have $60 and four dinner guests on Friday. Sketch me a menu.",
+  "task": "Reply as a helpful conversation partner in under 150 words. Be concrete and specific.",
+  "domain": "dialog"
+ },
+ {
+  "id": 1205,
+  "passage": "My sourdough starter smells like nail polish. Is it dead?",
+  "task": "Reply as a helpful conversation partner in under 150 words. Be concrete and specific.",
+  "domain": "dialog"
+ },
+ {
+  "id": 1206,
+  "passage": "I want to start running but my knees hurt after a mile. What now?",
+  "task": "Reply as a helpful conversation partner in under 150 words. Be concrete and specific.",
+  "domain": "dialog"
+ },
+ {
+  "id": 1207,
+  "passage": "My cat wakes me at 4am every day. How do I make it stop?",
+  "task": "Reply as a helpful conversation partner in under 150 words. Be concrete and specific.",
+  "domain": "dialog"
+ },
+ {
+  "id": 1208,
+  "passage": "I froze during my presentation today. How do I recover with my team tomorrow?",
+  "task": "Reply as a helpful conversation partner in under 150 words. Be concrete and specific.",
+  "domain": "dialog"
+ },
+ {
+  "id": 1209,
+  "passage": "My tomato leaves are curling and yellow at the edges. Diagnose it.",
+  "task": "Reply as a helpful conversation partner in under 150 words. Be concrete and specific.",
+  "domain": "dialog"
+ },
+ {
+  "id": 1210,
+  "passage": "Should I tell my friend her wedding band was out of tune? She asked how it was.",
+  "task": "Reply as a helpful conversation partner in under 150 words. Be concrete and specific.",
+  "domain": "dialog"
+ },
+ {
+  "id": 1211,
+  "passage": "I've reread the same page four times tonight. How do people actually focus?",
+  "task": "Reply as a helpful conversation partner in under 150 words. Be concrete and specific.",
+  "domain": "dialog"
+ },
+ {
+  "id": 1212,
+  "passage": "My teenager wants to quit piano after 6 years. Do I let him?",
+  "task": "Reply as a helpful conversation partner in under 150 words. Be concrete and specific.",
+  "domain": "dialog"
+ },
+ {
+  "id": 1213,
+  "passage": "The mechanic quoted $900 for brakes. How do I tell if that's fair?",
+  "task": "Reply as a helpful conversation partner in under 150 words. Be concrete and specific.",
+  "domain": "dialog"
+ },
+ {
+  "id": 1214,
+  "passage": "I said something dumb in the group chat and nobody replied. Damage control?",
+  "task": "Reply as a helpful conversation partner in under 150 words. Be concrete and specific.",
+  "domain": "dialog"
+ },
+ {
+  "id": 1215,
+  "passage": "My houseplant drops one leaf a day. What questions would you ask me?",
+  "task": "Reply as a helpful conversation partner in under 150 words. Be concrete and specific.",
+  "domain": "dialog"
+ },
+ {
+  "id": 1216,
+  "passage": "First time hosting Thanksgiving. What do people always forget?",
+  "task": "Reply as a helpful conversation partner in under 150 words. Be concrete and specific.",
+  "domain": "dialog"
+ },
+ {
+  "id": 1217,
+  "passage": "My neighbor's dog barks from 9 to 11 every night. What's my first move?",
+  "task": "Reply as a helpful conversation partner in under 150 words. Be concrete and specific.",
+  "domain": "dialog"
+ },
+ {
+  "id": 1218,
+  "passage": "I keep snoozing through morning workouts. Redesign my evening for me.",
+  "task": "Reply as a helpful conversation partner in under 150 words. Be concrete and specific.",
+  "domain": "dialog"
+ },
+ {
+  "id": 1219,
+  "passage": "Grandma's recipe says 'bake until done.' It's a custard pie. Help.",
+  "task": "Reply as a helpful conversation partner in under 150 words. Be concrete and specific.",
+  "domain": "dialog"
+ }
+]

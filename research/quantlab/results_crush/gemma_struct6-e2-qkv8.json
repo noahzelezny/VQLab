@@ -1,0 +1,12 @@
+{
+ "student": "/Volumes/Thunderbay SSD/Exo Models/gemma26b-rungs/rotlab-gemma26B-struct6-e2-qkv8",
+ "teacher": "/Volumes/Thunderbay SSD/Exo Models/../Mlx_Models/hub/models--mlx-community--gemma-4-26b-a4b-it-bf16/snapshots/e13fae2a81ec07e3092a3ebb70c80970b640dc3c/",
+ "cache_dir": "/Volumes/Thunderbay SSD/Exo Models/kl_cache_gemma26b",
+ "mean_kl_nats": 4.823184,
+ "mean_kl_millinats": 4823.184,
+ "top1_agreement": 0.336833,
+ "tokens_scored": 12288,
+ "top_k": 64,
+ "captured_mass": 0.964845,
+ "chat_wrapped": true
+}

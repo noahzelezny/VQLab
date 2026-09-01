@@ -1,0 +1,86 @@
+{
+ "works": [
+  {
+   "pg_id": 1342,
+   "author": "Austen",
+   "title": "Pride and Prejudice",
+   "year": 1813,
+   "contributes": "free indirect style, sustained irony",
+   "chars": 119993
+  },
+  {
+   "pg_id": 158,
+   "author": "Austen",
+   "title": "Emma",
+   "year": 1815,
+   "contributes": "irony, unreliable self-report",
+   "chars": 119975
+  },
+  {
+   "pg_id": 219,
+   "author": "Conrad",
+   "title": "Heart of Darkness",
+   "year": 1899,
+   "contributes": "metaphor, dense figurative prose",
+   "chars": 118584
+  },
+  {
+   "pg_id": 2701,
+   "author": "Melville",
+   "title": "Moby-Dick",
+   "year": 1851,
+   "contributes": "register shifts, extended metaphor",
+   "chars": 119960
+  },
+  {
+   "pg_id": 2814,
+   "author": "Joyce",
+   "title": "Dubliners",
+   "year": 1914,
+   "contributes": "subtext, understatement, epiphany",
+   "chars": 119863
+  },
+  {
+   "pg_id": 209,
+   "author": "James",
+   "title": "The Turn of the Screw",
+   "year": 1898,
+   "contributes": "indirection, unreliable narration",
+   "chars": 118234
+  },
+  {
+   "pg_id": 541,
+   "author": "Wharton",
+   "title": "The Age of Innocence",
+   "year": 1920,
+   "contributes": "social irony, subtext",
+   "chars": 119110
+  },
+  {
+   "pg_id": 145,
+   "author": "Eliot",
+   "title": "Middlemarch",
+   "year": 1871,
+   "contributes": "narrative voice, moral texture",
+   "chars": 119939
+  },
+  {
+   "pg_id": 110,
+   "author": "Hardy",
+   "title": "Tess of the d'Urbervilles",
+   "year": 1891,
+   "contributes": "description, narrative causality",
+   "chars": 119948
+  },
+  {
+   "pg_id": 1400,
+   "author": "Dickens",
+   "title": "Great Expectations",
+   "year": 1861,
+   "contributes": "first-person voice, retrospection",
+   "chars": 119970
+  }
+ ],
+ "total_chars": 1195589,
+ "note": "public domain, fetched from Project Gutenberg by id; text is not vendored into this repo"
+}

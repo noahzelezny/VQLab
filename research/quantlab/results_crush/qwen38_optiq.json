@@ -1,0 +1,21 @@
+{
+ "teacher": "/Volumes/Thunderbay SSD/Exo Models/Qwen--Qwen3.8-27B",
+ "bf16_ppl": 5.22490149745195,
+ "corpus": "referee/referee_corpus.txt",
+ "rungs": [
+  {
+   "rung": "optiq_mixed",
+   "ppl": 6.159576012360918,
+   "ppl_ratio": 1.1788884470577645,
+   "kl_millinats": 302.082,
+   "top1_agreement": 0.785726
+  },
+  {
+   "rung": "optiq_mixed",
+   "ppl": 8.469039910747528,
+   "ppl_ratio": 1.6208994398990413,
+   "kl_millinats": 681.443,
+   "top1_agreement": 0.610352
+  }
+ ]
+}

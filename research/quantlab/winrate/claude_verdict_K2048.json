@@ -1,0 +1,366 @@
+{
+ "judge": "claude-sonnet-5",
+ "n": 60,
+ "detail": [
+  {
+   "pair_id": 0,
+   "winner": "B",
+   "confidence": "weak",
+   "why": "B gives forward narrative motion (gaze meeting); A stalls without payoff"
+  },
+  {
+   "pair_id": 1,
+   "winner": "A",
+   "confidence": "weak",
+   "why": "B has a grammar slip ('the Miss Bingley's'); A reads cleaner"
+  },
+  {
+   "pair_id": 2,
+   "winner": "B",
+   "confidence": "weak",
+   "why": "B captures Mr. Bennet's ironic amusement, truer to his character"
+  },
+  {
+   "pair_id": 3,
+   "winner": "A",
+   "confidence": "weak",
+   "why": "A stays with Jane/Elizabeth focus, avoids B's odd invented tightening"
+  },
+  {
+   "pair_id": 4,
+   "winner": "A",
+   "confidence": "weak",
+   "why": "A's dialogue exchange fits the scene's conversational mode better"
+  },
+  {
+   "pair_id": 5,
+   "winner": "B",
+   "confidence": "weak",
+   "why": "B's Darcy dialogue line lands more naturally after Sir William's bow"
+  },
+  {
+   "pair_id": 6,
+   "winner": "B",
+   "confidence": "weak",
+   "why": "B avoids A's overwritten 'comedy of manners' meta-commentary"
+  },
+  {
+   "pair_id": 7,
+   "winner": "B",
+   "confidence": "weak",
+   "why": "B names Emma explicitly, slightly clearer continuity"
+  },
+  {
+   "pair_id": 8,
+   "winner": "B",
+   "confidence": "weak",
+   "why": "B avoids redundant Mr. Elton callback already dismissed in passage"
+  },
+  {
+   "pair_id": 9,
+   "winner": "A",
+   "confidence": "weak",
+   "why": "A's structure is cleaner; B has a mixed metaphor at the close"
+  },
+  {
+   "pair_id": 10,
+   "winner": "A",
+   "confidence": "weak",
+   "why": "A stays on-topic with same speaker; B's topic jump feels disjointed"
+  },
+  {
+   "pair_id": 11,
+   "winner": "B",
+   "confidence": "weak",
+   "why": "B has Elton insist on attending, matching the novel's actual plot beat"
+  },
+  {
+   "pair_id": 12,
+   "winner": "B",
+   "confidence": "weak",
+   "why": "B's dilemma phrasing is tighter and less repetitive than A's"
+  },
+  {
+   "pair_id": 13,
+   "winner": "B",
+   "confidence": "clear",
+   "why": "A's 'quite a lot of snow' repetition breaks period voice; B stays controlled"
+  },
+  {
+   "pair_id": 14,
+   "winner": "B",
+   "confidence": "weak",
+   "why": "B's humility and self-blame arc fits Emma's character better than A's"
+  },
+  {
+   "pair_id": 15,
+   "winner": "B",
+   "confidence": "weak",
+   "why": "B's imagery is more controlled and vivid than A's stock phrasing"
+  },
+  {
+   "pair_id": 16,
+   "winner": "A",
+   "confidence": "clear",
+   "why": "A keeps the ironic mundane/rivets contrast; B drifts into vague abstraction"
+  },
+  {
+   "pair_id": 17,
+   "winner": "tie",
+   "confidence": "weak",
+   "why": "Both equally strong, comparable river-menace atmosphere"
+  },
+  {
+   "pair_id": 18,
+   "winner": "A",
+   "confidence": "weak",
+   "why": "A's irony about pious avarice is sharper than B's redundant quote repeat"
+  },
+  {
+   "pair_id": 19,
+   "winner": "B",
+   "confidence": "weak",
+   "why": "B's pivot away from literal completion reads more assured"
+  },
+  {
+   "pair_id": 20,
+   "winner": "A",
+   "confidence": "weak",
+   "why": "A's terser closing line lands harder than B's longer wind-down"
+  },
+  {
+   "pair_id": 21,
+   "winner": "A",
+   "confidence": "weak",
+   "why": "A's windlass detail ties concretely to the anchor-raising action"
+  },
+  {
+   "pair_id": 22,
+   "winner": "B",
+   "confidence": "weak",
+   "why": "B extends the passage's own 'advocate' legal metaphor coherently"
+  },
+  {
+   "pair_id": 23,
+   "winner": "B",
+   "confidence": "weak",
+   "why": "B's closing 'coiled spring' image is the stronger payoff"
+  },
+  {
+   "pair_id": 24,
+   "winner": "A",
+   "confidence": "clear",
+   "why": "B awkwardly splices in an unrelated story fragment; A stays coherent"
+  },
+  {
+   "pair_id": 25,
+   "winner": "A",
+   "confidence": "weak",
+   "why": "A's dialogue beat gives Corley's characterization more edge"
+  },
+  {
+   "pair_id": 26,
+   "winner": "B",
+   "confidence": "weak",
+   "why": "B's ledger/clock imagery fits Duffy's precise clerkly character"
+  },
+  {
+   "pair_id": 27,
+   "winner": "B",
+   "confidence": "clear",
+   "why": "A has the same speaker contradict his own praise of Paris; B keeps voices consistent"
+  },
+  {
+   "pair_id": 28,
+   "winner": "B",
+   "confidence": "weak",
+   "why": "B's concrete 'Crosbie correspondence' detail grounds Alleyne's rage better"
+  },
+  {
+   "pair_id": 29,
+   "winner": "B",
+   "confidence": "clear",
+   "why": "A invents a melodramatic quarrel that overreaches the story's quiet register"
+  },
+  {
+   "pair_id": 30,
+   "winner": "B",
+   "confidence": "weak",
+   "why": "B ties in the husband's seafaring life established in the passage"
+  },
+  {
+   "pair_id": 31,
+   "winner": "B",
+   "confidence": "weak",
+   "why": "B's eerier, more ambiguous atmosphere suits the ghost story better"
+  },
+  {
+   "pair_id": 32,
+   "winner": "tie",
+   "confidence": "weak",
+   "why": "Both equally effective gothic atmosphere and control"
+  },
+  {
+   "pair_id": 33,
+   "winner": "tie",
+   "confidence": "weak",
+   "why": "Comparable psychological tension and control"
+  },
+  {
+   "pair_id": 34,
+   "winner": "A",
+   "confidence": "weak",
+   "why": "A's 'she did not offer herself to the room' is a sharper epigram"
+  },
+  {
+   "pair_id": 35,
+   "winner": "A",
+   "confidence": "weak",
+   "why": "A stays tighter and avoids B's slightly looser structure"
+  },
+  {
+   "pair_id": 36,
+   "winner": "A",
+   "confidence": "weak",
+   "why": "A avoids B's ungrounded invented Washington setting"
+  },
+  {
+   "pair_id": 37,
+   "winner": "B",
+   "confidence": "weak",
+   "why": "B's completion flows more naturally and ends on a stronger callback"
+  },
+  {
+   "pair_id": 38,
+   "winner": "A",
+   "confidence": "weak",
+   "why": "A is more compact; B runs long without added payoff"
+  },
+  {
+   "pair_id": 39,
+   "winner": "A",
+   "confidence": "clear",
+   "why": "B introduces an unmotivated 'young actor' comparison that confuses continuity"
+  },
+  {
+   "pair_id": 40,
+   "winner": "A",
+   "confidence": "weak",
+   "why": "A's closing epigram on culture vs. labor is sharper and more Wharton-like"
+  },
+  {
+   "pair_id": 41,
+   "winner": "B",
+   "confidence": "weak",
+   "why": "B builds a more dynamic exchange with Fred's deflection and Mary's probing"
+  },
+  {
+   "pair_id": 42,
+   "winner": "B",
+   "confidence": "weak",
+   "why": "B's ironic closing exchange is wittier and more controlled"
+  },
+  {
+   "pair_id": 43,
+   "winner": "B",
+   "confidence": "weak",
+   "why": "B names Rosamond, grounding the scene more accurately"
+  },
+  {
+   "pair_id": 44,
+   "winner": "A",
+   "confidence": "clear",
+   "why": "B misnames the mother 'Mrs. Noble,' a character continuity error"
+  },
+  {
+   "pair_id": 45,
+   "winner": "B",
+   "confidence": "weak",
+   "why": "B's 'psychological vise' phrasing is tighter than A's more diffuse take"
+  },
+  {
+   "pair_id": 46,
+   "winner": "tie",
+   "confidence": "weak",
+   "why": "Nearly identical openings; both closings equally vivid"
+  },
+  {
+   "pair_id": 47,
+   "winner": "B",
+   "confidence": "weak",
+   "why": "B's sharp closing retort gives her more agency and voice"
+  },
+  {
+   "pair_id": 48,
+   "winner": "B",
+   "confidence": "weak",
+   "why": "B extends her voice with an apt, character-consistent closing line"
+  },
+  {
+   "pair_id": 49,
+   "winner": "A",
+   "confidence": "weak",
+   "why": "A's closing image is slightly tighter than B's"
+  },
+  {
+   "pair_id": 50,
+   "winner": "A",
+   "confidence": "weak",
+   "why": "A moves toward resolve, a stronger forward beat than B's resignation"
+  },
+  {
+   "pair_id": 51,
+   "winner": "A",
+   "confidence": "weak",
+   "why": "A flows a touch more smoothly; both ground the same references well"
+  },
+  {
+   "pair_id": 52,
+   "winner": "B",
+   "confidence": "weak",
+   "why": "B's completion ('long ago') is more idiomatic than A's ('long vanished')"
+  },
+  {
+   "pair_id": 53,
+   "winner": "A",
+   "confidence": "weak",
+   "why": "A's closing image is marginally more controlled"
+  },
+  {
+   "pair_id": 54,
+   "winner": "B",
+   "confidence": "weak",
+   "why": "B continues Camilla's voice naturally, matching the passage's setup"
+  },
+  {
+   "pair_id": 55,
+   "winner": "B",
+   "confidence": "weak",
+   "why": "B's closing line lands with slightly more force"
+  },
+  {
+   "pair_id": 56,
+   "winner": "A",
+   "confidence": "weak",
+   "why": "A's ending ties directly to Miss Havisham's established motive"
+  },
+  {
+   "pair_id": 57,
+   "winner": "B",
+   "confidence": "weak",
+   "why": "B's concrete courtroom details (magistrate, spectacles) ground the scene better"
+  },
+  {
+   "pair_id": 58,
+   "winner": "B",
+   "confidence": "weak",
+   "why": "B's closing phrase is crisper than A's more clich\u00e9d metaphor"
+  },
+  {
+   "pair_id": 59,
+   "winner": "B",
+   "confidence": "weak",
+   "why": "B's comic invented details fit Dickens's humor about Joe's illiteracy"
+  }
+ ]
+}

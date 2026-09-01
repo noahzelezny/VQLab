@@ -1,0 +1,136 @@
+{
+ "a": "e13fae2a81ec07e3092a3ebb70c80970b640dc3c",
+ "b": "e13fae2a81ec07e3092a3ebb70c80970b640dc3c",
+ "judge": "q4",
+ "n": 20,
+ "a_wins": 0,
+ "b_wins": 0,
+ "ties": 20,
+ "inconsistent": 0,
+ "unparsed": 0,
+ "decisive": 0,
+ "a_winrate_decisive": null,
+ "sign_test_p": 1.0,
+ "detail": [
+  {
+   "id": 0,
+   "o1": "tie",
+   "o2": "tie",
+   "verdict": "tie"
+  },
+  {
+   "id": 3,
+   "o1": "tie",
+   "o2": "tie",
+   "verdict": "tie"
+  },
+  {
+   "id": 6,
+   "o1": "tie",
+   "o2": "tie",
+   "verdict": "tie"
+  },
+  {
+   "id": 9,
+   "o1": "tie",
+   "o2": "tie",
+   "verdict": "tie"
+  },
+  {
+   "id": 12,
+   "o1": "tie",
+   "o2": "tie",
+   "verdict": "tie"
+  },
+  {
+   "id": 15,
+   "o1": "tie",
+   "o2": "tie",
+   "verdict": "tie"
+  },
+  {
+   "id": 18,
+   "o1": "tie",
+   "o2": "tie",
+   "verdict": "tie"
+  },
+  {
+   "id": 21,
+   "o1": "tie",
+   "o2": "tie",
+   "verdict": "tie"
+  },
+  {
+   "id": 24,
+   "o1": "tie",
+   "o2": "tie",
+   "verdict": "tie"
+  },
+  {
+   "id": 27,
+   "o1": "tie",
+   "o2": "tie",
+   "verdict": "tie"
+  },
+  {
+   "id": 30,
+   "o1": "tie",
+   "o2": "tie",
+   "verdict": "tie"
+  },
+  {
+   "id": 33,
+   "o1": "tie",
+   "o2": "tie",
+   "verdict": "tie"
+  },
+  {
+   "id": 36,
+   "o1": "tie",
+   "o2": "tie",
+   "verdict": "tie"
+  },
+  {
+   "id": 39,
+   "o1": "tie",
+   "o2": "tie",
+   "verdict": "tie"
+  },
+  {
+   "id": 42,
+   "o1": "tie",
+   "o2": "tie",
+   "verdict": "tie"
+  },
+  {
+   "id": 45,
+   "o1": "tie",
+   "o2": "tie",
+   "verdict": "tie"
+  },
+  {
+   "id": 48,
+   "o1": "tie",
+   "o2": "tie",
+   "verdict": "tie"
+  },
+  {
+   "id": 51,
+   "o1": "tie",
+   "o2": "tie",
+   "verdict": "tie"
+  },
+  {
+   "id": 54,
+   "o1": "tie",
+   "o2": "tie",
+   "verdict": "tie"
+  },
+  {
+   "id": 57,
+   "o1": "tie",
+   "o2": "tie",
+   "verdict": "tie"
+  }
+ ]
+}

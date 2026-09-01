@@ -1,0 +1,25 @@
+{
+ "model": "rotlab-gemma26B-struct8-e2",
+ "n": 104,
+ "accuracy": 0.75,
+ "cyclic": false,
+ "chance": 0.25,
+ "per_category": {
+  "irony": 0.8462,
+  "metaphor": 0.9231,
+  "narrative_causality": 0.8462,
+  "subtext": 0.6923,
+  "symbol_motif": 0.7692,
+  "tone_register": 0.7692,
+  "understatement": 0.8462,
+  "unreliable_narrator": 0.3077
+ },
+ "answer_distribution": [
+  60,
+  12,
+  16,
+  16
+ ],
+ "mode": "generative",
+ "unparsed": 1
+}

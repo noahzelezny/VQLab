@@ -1,0 +1,92 @@
+--- /tmp/optiq-pristine/optiq/core/optimizer.py	2026-08-09 19:52:49
++++ /Users/noahzelezny/quantlab/venv/lib/python3.12/site-packages/optiq/core/optimizer.py	2026-08-09 19:51:54
+@@ -118,6 +118,41 @@
+     min_bits = candidate_bits[0]
+     max_bits = candidate_bits[-1]
+ 
++    # Forced-allocation mode (env-gated experiment, 2026-08-09): bypass the
++    # knapsack entirely and assign bits by layer family. Exists to falsify
++    # the per-layer isolation assumption end-to-end: quantize ONE family
++    # aggressively while holding everything else high, then benchmark.
++    # OPTIQ_FORCE_ATTN_BITS / OPTIQ_FORCE_MLP_BITS / OPTIQ_FORCE_OTHER_BITS.
++    import os as _os_force
++    _f_attn = int(_os_force.environ.get("OPTIQ_FORCE_ATTN_BITS", "0") or "0")
++    _f_mlp = int(_os_force.environ.get("OPTIQ_FORCE_MLP_BITS", "0") or "0")
++    _f_other = int(_os_force.environ.get("OPTIQ_FORCE_OTHER_BITS", "0") or "0")
++    if _f_attn or _f_mlp or _f_other:
++        _fallback = _f_other or max_bits
++        forced_configs = []
++        for r in sensitivity_results:
++            n = r.layer_name
++            if "attn" in n:
++                b = _f_attn or _fallback
++            elif ".mlp." in n and n.rsplit(".", 1)[-1] in ("gate_proj", "up_proj", "down_proj"):
++                b = _f_mlp or _fallback
++            else:
++                b = _fallback
++            forced_configs.append(LayerQuantConfig(
++                layer_name=n, bits=b, group_size=group_size,
++                param_count=r.param_count,
++            ))
++        _fbpw = compute_bpw(forced_configs)
++        print(f"  FORCED allocation: attn={_f_attn or _fallback} mlp={_f_mlp or _fallback} "
++              f"other={_fallback} -> bpw {_fbpw:.2f} (knapsack bypassed)")
++        return OptimizationResult(
++            configs=forced_configs, target_bpw=target_bpw, achieved_bpw=_fbpw,
++            threshold=0, n_high_bits=sum(1 for c in forced_configs if c.bits == max_bits),
++            n_low_bits=sum(1 for c in forced_configs if c.bits == min_bits),
++            total_params=sum(r.param_count for r in sensitivity_results),
++            estimated_size_mb=sum(c.bits * c.param_count for c in forced_configs) / 8 / (1024 * 1024),
++        )
++
+     # Identify layers to always protect
+     protected_layers = set()
+     protected_layers.update(_identify_output_layers(
+@@ -139,6 +174,47 @@
+     allocation = {}
+     for r in sensitivity_results:
+         allocation[r.layer_name] = min_bits
++
++    # Attention floor (env-gated experiment, 2026-08-09): per-layer KL
++    # sensitivity measures each layer quantized IN ISOLATION. On MoE models
++    # attention scores come out nearly flat across bit-widths (measured on
++    # Qwen3.5-35B-A3B: 2b=4.0e-2 vs 4b=3.2e-2), so greedy allocation crushes
++    # attention to the lowest bits — inverted from every shipped mixed quant,
++    # which holds attention/router HIGH and squeezes experts. The isolation
++    # assumption hides compounding across all-attention-at-2bit. Floor
++    # attention at OPTIQ_ATTN_FLOOR_BITS before the greedy pass so the
++    # budget math accounts for it; experts still allocate by measured KL.
++    import os as _os
++    # Expert param-count correction (env-gated, 2026-08-09): batched-expert
++    # sweep entries record the param_count of ONE expert while the chosen
++    # bit-width is applied to ALL experts in the stack. Budget math then
++    # sees ~1/N of the real expert mass (measured: 35B-A3B checkpoint sums
++    # to ~2B params) and ships artifacts far over target while reporting
++    # on-target achieved_bpw. Set OPTIQ_EXPERT_PARAM_MULT to the model's
++    # num_experts to budget against real bytes.
++    _exp_mult = int(_os.environ.get("OPTIQ_EXPERT_PARAM_MULT", "0") or "0")
++    if _exp_mult > 1:
++        _mlp_tokens = ("gate_proj", "up_proj", "down_proj")
++        _corrected = []
++        for r in sensitivity_results:
++            last = r.layer_name.rsplit(".", 1)[-1]
++            if ".mlp." in r.layer_name and last in _mlp_tokens:
++                r = SensitivityResult(
++                    layer_name=r.layer_name,
++                    sensitivities=r.sensitivities,
++                    param_count=r.param_count * _exp_mult,
++                )
++            _corrected.append(r)
++        sensitivity_results = _corrected
++        total_params = sum(r.param_count for r in sensitivity_results)
++    _attn_floor = int(_os.environ.get("OPTIQ_ATTN_FLOOR_BITS", "0") or "0")
++    if _attn_floor:
++        _floor_bits = min((b for b in candidate_bits if b >= _attn_floor),
++                          default=max_bits)
++        _attn_pats = (".self_attn.", ".linear_attn.", ".attn.")
++        for r in sensitivity_results:
++            if any(p in r.layer_name for p in _attn_pats):
++                allocation[r.layer_name] = _floor_bits
+ 
+     # Block-aware floor: pre-upgrade the most-sensitive components per
+     # transformer block. Prevents "many consecutive blocks fully at the

@@ -1,0 +1,39 @@
+{
+ "model": "spicyneuron--Qwen3.5-397B-A17B-MLX-3.5bit",
+ "tasks": [
+  "hellaswag",
+  "piqa",
+  "winogrande"
+ ],
+ "limit": 1000,
+ "num_shots": 0,
+ "seconds": 650.5,
+ "harness": "lm-eval 0.4.12 via score_tasks_streaming.py (layer-streamed loglikelihood)",
+ "results": {
+  "hellaswag": {
+   "name": "hellaswag",
+   "alias": "hellaswag",
+   "sample_len": 1000,
+   "acc,none": 0.782,
+   "acc_stderr,none": 0.013063179040595235,
+   "acc_norm,none": 0.904,
+   "acc_norm_stderr,none": 0.009320454434783257
+  },
+  "piqa": {
+   "name": "piqa",
+   "alias": "piqa",
+   "sample_len": 1000,
+   "acc,none": 0.828,
+   "acc_stderr,none": 0.011939788882495308,
+   "acc_norm,none": 0.846,
+   "acc_norm_stderr,none": 0.011419913065098805
+  },
+  "winogrande": {
+   "name": "winogrande",
+   "alias": "winogrande",
+   "sample_len": 1000,
+   "acc,none": 0.767,
+   "acc_stderr,none": 0.01337497251921999
+  }
+ }
+}

@@ -1,0 +1,376 @@
+{
+ "a": "e13fae2a81ec07e3092a3ebb70c80970b640dc3c",
+ "b": "vq-K2048-d4-sighted",
+ "judge": "q4",
+ "n": 60,
+ "a_wins": 0,
+ "b_wins": 0,
+ "ties": 0,
+ "inconsistent": 60,
+ "unparsed": 0,
+ "decisive": 0,
+ "a_winrate_decisive": null,
+ "sign_test_p": 1.0,
+ "detail": [
+  {
+   "id": 0,
+   "o1": "1",
+   "o2": "1",
+   "verdict": "inconsistent"
+  },
+  {
+   "id": 1,
+   "o1": "1",
+   "o2": "1",
+   "verdict": "inconsistent"
+  },
+  {
+   "id": 2,
+   "o1": "1",
+   "o2": "1",
+   "verdict": "inconsistent"
+  },
+  {
+   "id": 3,
+   "o1": "1",
+   "o2": "1",
+   "verdict": "inconsistent"
+  },
+  {
+   "id": 4,
+   "o1": "1",
+   "o2": "1",
+   "verdict": "inconsistent"
+  },
+  {
+   "id": 5,
+   "o1": "1",
+   "o2": "1",
+   "verdict": "inconsistent"
+  },
+  {
+   "id": 6,
+   "o1": "1",
+   "o2": "1",
+   "verdict": "inconsistent"
+  },
+  {
+   "id": 7,
+   "o1": "1",
+   "o2": "1",
+   "verdict": "inconsistent"
+  },
+  {
+   "id": 8,
+   "o1": "1",
+   "o2": "1",
+   "verdict": "inconsistent"
+  },
+  {
+   "id": 9,
+   "o1": "1",
+   "o2": "1",
+   "verdict": "inconsistent"
+  },
+  {
+   "id": 10,
+   "o1": "1",
+   "o2": "1",
+   "verdict": "inconsistent"
+  },
+  {
+   "id": 11,
+   "o1": "1",
+   "o2": "1",
+   "verdict": "inconsistent"
+  },
+  {
+   "id": 12,
+   "o1": "1",
+   "o2": "1",
+   "verdict": "inconsistent"
+  },
+  {
+   "id": 13,
+   "o1": "1",
+   "o2": "1",
+   "verdict": "inconsistent"
+  },
+  {
+   "id": 14,
+   "o1": "1",
+   "o2": "1",
+   "verdict": "inconsistent"
+  },
+  {
+   "id": 15,
+   "o1": "1",
+   "o2": "1",
+   "verdict": "inconsistent"
+  },
+  {
+   "id": 16,
+   "o1": "1",
+   "o2": "1",
+   "verdict": "inconsistent"
+  },
+  {
+   "id": 17,
+   "o1": "1",
+   "o2": "1",
+   "verdict": "inconsistent"
+  },
+  {
+   "id": 18,
+   "o1": "1",
+   "o2": "1",
+   "verdict": "inconsistent"
+  },
+  {
+   "id": 19,
+   "o1": "1",
+   "o2": "1",
+   "verdict": "inconsistent"
+  },
+  {
+   "id": 20,
+   "o1": "1",
+   "o2": "1",
+   "verdict": "inconsistent"
+  },
+  {
+   "id": 21,
+   "o1": "1",
+   "o2": "1",
+   "verdict": "inconsistent"
+  },
+  {
+   "id": 22,
+   "o1": "1",
+   "o2": "1",
+   "verdict": "inconsistent"
+  },
+  {
+   "id": 23,
+   "o1": "1",
+   "o2": "1",
+   "verdict": "inconsistent"
+  },
+  {
+   "id": 24,
+   "o1": "1",
+   "o2": "1",
+   "verdict": "inconsistent"
+  },
+  {
+   "id": 25,
+   "o1": "1",
+   "o2": "1",
+   "verdict": "inconsistent"
+  },
+  {
+   "id": 26,
+   "o1": "1",
+   "o2": "1",
+   "verdict": "inconsistent"
+  },
+  {
+   "id": 27,
+   "o1": "1",
+   "o2": "1",
+   "verdict": "inconsistent"
+  },
+  {
+   "id": 28,
+   "o1": "1",
+   "o2": "1",
+   "verdict": "inconsistent"
+  },
+  {
+   "id": 29,
+   "o1": "1",
+   "o2": "1",
+   "verdict": "inconsistent"
+  },
+  {
+   "id": 30,
+   "o1": "1",
+   "o2": "1",
+   "verdict": "inconsistent"
+  },
+  {
+   "id": 31,
+   "o1": "1",
+   "o2": "1",
+   "verdict": "inconsistent"
+  },
+  {
+   "id": 32,
+   "o1": "1",
+   "o2": "1",
+   "verdict": "inconsistent"
+  },
+  {
+   "id": 33,
+   "o1": "1",
+   "o2": "1",
+   "verdict": "inconsistent"
+  },
+  {
+   "id": 34,
+   "o1": "1",
+   "o2": "1",
+   "verdict": "inconsistent"
+  },
+  {
+   "id": 35,
+   "o1": "1",
+   "o2": "1",
+   "verdict": "inconsistent"
+  },
+  {
+   "id": 36,
+   "o1": "1",
+   "o2": "1",
+   "verdict": "inconsistent"
+  },
+  {
+   "id": 37,
+   "o1": "1",
+   "o2": "1",
+   "verdict": "inconsistent"
+  },
+  {
+   "id": 38,
+   "o1": "1",
+   "o2": "1",
+   "verdict": "inconsistent"
+  },
+  {
+   "id": 39,
+   "o1": "1",
+   "o2": "1",
+   "verdict": "inconsistent"
+  },
+  {
+   "id": 40,
+   "o1": "1",
+   "o2": "1",
+   "verdict": "inconsistent"
+  },
+  {
+   "id": 41,
+   "o1": "1",
+   "o2": "1",
+   "verdict": "inconsistent"
+  },
+  {
+   "id": 42,
+   "o1": "1",
+   "o2": "1",
+   "verdict": "inconsistent"
+  },
+  {
+   "id": 43,
+   "o1": "1",
+   "o2": "1",
+   "verdict": "inconsistent"
+  },
+  {
+   "id": 44,
+   "o1": "1",
+   "o2": "1",
+   "verdict": "inconsistent"
+  },
+  {
+   "id": 45,
+   "o1": "1",
+   "o2": "1",
+   "verdict": "inconsistent"
+  },
+  {
+   "id": 46,
+   "o1": "1",
+   "o2": "1",
+   "verdict": "inconsistent"
+  },
+  {
+   "id": 47,
+   "o1": "1",
+   "o2": "1",
+   "verdict": "inconsistent"
+  },
+  {
+   "id": 48,
+   "o1": "1",
+   "o2": "1",
+   "verdict": "inconsistent"
+  },
+  {
+   "id": 49,
+   "o1": "1",
+   "o2": "1",
+   "verdict": "inconsistent"
+  },
+  {
+   "id": 50,
+   "o1": "1",
+   "o2": "1",
+   "verdict": "inconsistent"
+  },
+  {
+   "id": 51,
+   "o1": "1",
+   "o2": "1",
+   "verdict": "inconsistent"
+  },
+  {
+   "id": 52,
+   "o1": "1",
+   "o2": "1",
+   "verdict": "inconsistent"
+  },
+  {
+   "id": 53,
+   "o1": "1",
+   "o2": "1",
+   "verdict": "inconsistent"
+  },
+  {
+   "id": 54,
+   "o1": "1",
+   "o2": "1",
+   "verdict": "inconsistent"
+  },
+  {
+   "id": 55,
+   "o1": "1",
+   "o2": "1",
+   "verdict": "inconsistent"
+  },
+  {
+   "id": 56,
+   "o1": "1",
+   "o2": "1",
+   "verdict": "inconsistent"
+  },
+  {
+   "id": 57,
+   "o1": "1",
+   "o2": "1",
+   "verdict": "inconsistent"
+  },
+  {
+   "id": 58,
+   "o1": "1",
+   "o2": "1",
+   "verdict": "inconsistent"
+  },
+  {
+   "id": 59,
+   "o1": "1",
+   "o2": "1",
+   "verdict": "inconsistent"
+  }
+ ]
+}

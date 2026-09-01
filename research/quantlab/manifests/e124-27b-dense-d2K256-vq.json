@@ -1,0 +1,25 @@
+{
+ "artifact": "/Volumes/Thunderbay SSD/Exo Models/e124-27b-dense-d2K256-vq",
+ "shards": {
+  "model-00001.safetensors": {
+   "bytes": 2119658582,
+   "mtime": 1787379479,
+   "head_sha256": "7a26e032432f58f099a2745cd324b8a3ff8036e28031ca8a06da498bdee07abe"
+  },
+  "model-00002.safetensors": {
+   "bytes": 1594027877,
+   "mtime": 1787379483,
+   "head_sha256": "186dd255a01fe4165a3318f1b4f0c24942d56b5937ae0bc967def22aa74446e0"
+  },
+  "model-00003.safetensors": {
+   "bytes": 1793355054,
+   "mtime": 1787379487,
+   "head_sha256": "80572a65fee44d728412b8aff5953d98c6616fefd2fd57a5ff99a47b53a0e31a"
+  },
+  "model-00004.safetensors": {
+   "bytes": 9091423958,
+   "mtime": 1787379502,
+   "head_sha256": "726fff74be86366ac37e90937058d02a2e53f05873a48fd231d79a25c60fa012"
+  }
+ }
+}

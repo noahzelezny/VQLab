@@ -1,0 +1,18 @@
+{
+ "model": "e13fae2a81ec07e3092a3ebb70c80970b640dc3c",
+ "prompts": "winrate/smoke_prompts.json",
+ "max_tokens": 700,
+ "never_closed_channel": 0,
+ "gens": [
+  {
+   "id": 0,
+   "text": "Elizabeth, finding the atmosphere of the drawing-room somewhat more subdued than the previous evening, sought a position near the window, where the fading light of the afternoon offered a quiet refuge from the more animated exchanges of the company. She observed Mr. Darcy with a detached curiosity; though he appeared entirely absorbed in his correspondence, there was a certain gravity in his posture that suggested his thoughts were far from the trivialities of the room. Miss Bingley, meanwhile, continued her subtle campaign of distraction, her voice rising in a pitch of studied elegance whenever she addressed her brother, yet her eyes never strayed far from Mr. Darcy\u2019s countenance.\n\nThe silence was broken occasionally by the rhythmic click of the playing cards and the low murmur of Mr. Hurst\u2019s commentary on the game. Elizabeth felt a sudden, inexplicable desire to escape the confinement of the room, for the air seemed heavy with the unspoken observations of her hosts. She wondered, with a touch of her accustomed irony, whether the quietude of Netherfield was a sign of genuine repose or merely the prelude to a more spirited social exertion. Just as she contemplated a retreat to the library, Mr. Darcy paused, his pen hovering above the parchment, and his gaze, for a fleeting moment, met hers.",
+   "closed_channel": true
+  },
+  {
+   "id": 1,
+   "text": "\u201cBut, my dear Elizabeth,\u201d she continued, her voice adopting a tone of studied lightness, \u201cdo you not agree that the fatigue of such assemblies is quite beyond endurance? One spends the entire evening performing the same repetitive steps, only to find oneself more exhausted by the trivialities of the company than by the exertion of the dance. It is a pity that true intellect is so rarely found in a ballroom.\u201d\n\nShe cast a sidelong, expectant glance toward Darcy, hoping to catch even the slightest flicker of agreement in his countenance. Elizabeth, however, was not so easily maneuvered. A small, knowing smile played upon her lips, one that suggested she perceived the artifice of the remark even if she did not care to acknowledge its target.\n\n\u201cI believe, Miss Bingley,\u201d Elizabeth replied with perfect composure, \u201cthat if the company were truly trivial, the dancing would be the least of one's concerns. It is the character of the dancers, rather than the steps themselves, that determines the pleasure of the evening.\u201d\n\nMiss Bingley\u2019s smile tightened. The barb was subtle, yet it struck with precision. She turned away, her movements more hurried than before, while Darcy remained as motionless as a statue, his eyes fixed upon his book, leaving the air between them heavy with unspoken scrutiny.",
+   "closed_channel": true
+  }
+ ]
+}

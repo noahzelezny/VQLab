@@ -1,0 +1,29 @@
+{
+ "tensor": "model.language_model.layers.30.mlp.experts.down_proj",
+ "experts": 8,
+ "dim": 4,
+ "rows": [
+  {
+   "K": 256,
+   "n": 8388608,
+   "live_bins": 256,
+   "terms_per_bin": 32768.0,
+   "scatter_add_vs_f64": 2.4340899311250463e-06,
+   "onehot_matmul_vs_f64": 5.973152156227069e-08,
+   "count_mismatch_a": 0,
+   "count_mismatch_b": 0,
+   "ratio_a_over_b": 40.75050940377408
+  },
+  {
+   "K": 2048,
+   "n": 8388608,
+   "live_bins": 2043,
+   "terms_per_bin": 4096.0,
+   "scatter_add_vs_f64": 8.811005340684794e-07,
+   "onehot_matmul_vs_f64": 9.301909581401438e-08,
+   "count_mismatch_a": 0,
+   "count_mismatch_b": 0,
+   "ratio_a_over_b": 9.472254340444058
+  }
+ ]
+}
