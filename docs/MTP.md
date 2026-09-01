@@ -127,19 +127,38 @@ module rather than a parameter:
 
 ## 5. Open questions
 
-**The MTP prefill tax is MEASURED and small** (2026-08-31, 2.1bpw, e3q8 head,
-time-to-first-token including one decode step):
+**The MTP prefill tax is small — but the first measurement of it was wrong.**
 
-| prompt | plain TTFT | MTP TTFT | tax | prefill tok/s (plain -> MTP) |
-|--------|-----------|----------|-----|------------------------------|
-| 256    | 2.36s  | 2.58s  | +0.22s (**9.2%**)  | 108 -> 99 |
-| 1024   | 3.28s  | 3.78s  | +0.50s (**15.3%**) | 313 -> 271 |
-| 4096   | 10.03s | 11.17s | +1.14s (**11.4%**) | 408 -> 367 |
-| 16384  | 42.82s | 47.38s | +4.56s (**10.6%**) | 383 -> 346 |
+A first attempt compared mlx-lm's `stream_generate` against ours and reported
+10-15%, attributing all of it to the head. That was two errors in one number.
+It charged to MTP (a) a difference between two prefill implementations, and
+(b) an outright bug in ours: the loop did `mx.eval(model(chunk, cache=cache))`,
+forcing the full `lm_head` projection for every prefill position and throwing
+it away. MLX is lazy; mlx-lm evaluates `[c.state for c in cache]` precisely to
+avoid that. Fixed in b8e2430.
 
-Seeding the head over the prompt costs a flat ~10-15% of prefill and does NOT
-grow super-linearly, so long-context prompts are not disproportionately
-punished. Windowed seeding would recover it but is not urgent.
+The correct control is our OWN loop with seeding on and off, head resident in
+every condition (2.1bpw, e3q8, TTFT = prefill + first token):
+
+| prompt | mlx-lm | ours, no seed | ours, seeded | tax_seed | tax_loop |
+|--------|--------|---------------|--------------|----------|----------|
+| 256    | 2.26s  | 2.40s  | 2.49s  | 0.10s (**4.2%**) | 0.14s (6.1%) |
+| 1024   | 2.84s  | 3.15s  | 3.20s  | 0.04s (**1.3%**) | 0.32s (11.2%) |
+| 4096   | 9.73s  | 10.63s | 11.12s | 0.49s (**4.6%**) | 0.91s (9.3%) |
+| 16384  | 42.95s | 45.31s | 47.63s | 2.32s (**5.1%**) | 2.36s (5.5%) |
+
+**Seeding the head over the prompt costs 1.3-5.1% of TTFT.** That is the
+actual MTP prefill tax and it does not grow super-linearly, so windowed
+seeding would be a small optimisation rather than a fix.
+
+`tax_loop` (5.5-11.2%) is our prefill path against mlx-lm's, and its cause is
+**NOT ISOLATED**. It was predicted to be a fixed constant — two extra forwards
+before the first token, since our first speculative step draws a draft and
+runs a 2-token verify where mlx-lm runs one 1-token forward — but it grows
+with prompt length (0.14 -> 0.32 -> 0.91 -> 2.36s), so that explanation is
+insufficient. What is established is that it is not the head: seeding is
+controlled separately above. Total MTP prefill overhead against stock mlx-lm
+is 7-15%, of which seeding is the smaller half.
 
 **The VQ prefill tax remains unquantified.** Decoding codebooks costs more per
 token at prefill than an affine kernel. The obvious comparison —
