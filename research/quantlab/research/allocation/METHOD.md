@@ -1,7 +1,11 @@
-# Splice-measured allocation — method note
+# Direct codebook sensitivity allocation — method note
 
 **Status: developing. One family (GLM-5.3-Flash), one seed. Nothing here is
-established until it replicates.** Named 2026-08-31; name not final.
+established until it replicates.** Named 2026-08-31 (Noah): DIRECT CODEBOOK
+SENSITIVITY ALLOCATION — "direct" because it measures the optimized quantity
+rather than a proxy. Name to be workshopped once findings exist; note that if
+§4.1's affine test succeeds the method is not codebook-specific and the name
+will want widening.
 
 A method for deciding which layers of a VQ-quantized model get which codebook
 geometry, under a byte budget. It differs from the mixed-precision allocation
@@ -129,9 +133,8 @@ The method alone is an engineering note. The findings in 2.2-2.4 are the
 contribution, and they are uncomfortable enough to be worth publishing IF they
 survive:
 
-1. **Replicate on a second family.** 397B is the natural target — it is where
-   the published paper's claims live, and it has the geometry ladder already.
-   Cross-family replication of 2.4 especially.
+1. **Replicate across families.** Noah's bar is 3-4; see §5 for the slate.
+   Cross-family replication of §2.4 especially.
 2. **Second seed.** Every number is seed 1234. Base-specificity must be shown
    not to be a k-means artifact. One reseeded sweep at one rung would do it.
 3. **A real baseline comparison.** We have measured-vs-leverage-probe and
@@ -146,16 +149,61 @@ result" and "publishable". Neither is expensive.
 
 ---
 
-## 4. Naming
+## 4. Scope: is any of this VQ-specific?
 
-Working name **splice-measured allocation**, chosen to foreground the swap
-trick rather than the knapsack (the knapsack is standard; the cheap exact
-measurement is not). Alternatives considered: substitution sweep, direct
-sensitivity allocation, codebook reallocation. Not settled — Noah's call.
+Open, and the most consequential question about the work. Three parts, which
+have different answers:
+
+**The method is NOT VQ-specific.** Substitute one layer's quantization,
+measure, solve a knapsack. Any per-layer quantization choice fits — affine
+bit-width per layer is the same problem and is the existing mixed-precision
+literature. Architecturally it needs only repeated blocks with independent
+quantization choices, which every family we work with has.
+
+**The cheapness is partly VQ-specific, and NOT in our favour.** VQ can only
+sweep geometries whose codebooks have already been fitted, so the donor set is
+bounded by what we have paid to fit. Affine requantization is nearly free, so
+an affine sweep should be CHEAPER than ours, not dearer.
+
+**Whether the FINDINGS are VQ-specific is unknown.** This is the one that
+matters. If base-specificity (§2.4) and non-monotonicity (§2.3) hold for
+affine too, they are properties of quantized transformers and the claim
+touches a far larger literature. If they are VQ-only, it is a narrower result
+about codebook error structure. Either answer is publishable; not knowing
+which is not.
+
+### 4.1 The affine test (cheap, decisive, not yet run)
+
+GLM's affine ladder (q3 129 GiB / q4 166 / q6 239) is already on disk. Splice
+one layer between q3 and q4, measure, then test transfer across bases exactly
+as §2.4 did for VQ.
+
+ONE ENGINEERING OBSTACLE, measured 2026-08-31: the affine artifacts share all
+2998 keys but NOT their shard assignment — 2654 keys sit in different shards,
+because differing bit-widths change tensor sizes and therefore sharding. The
+VQ artifacts shared a layout only because they were all built from one struct
+base. So the splice tool's `weight_map` equality assertion must be relaxed to
+a per-key lookup with an index rebuild. ~20 lines, and the assertion exists
+for good reason, so it should be relaxed carefully rather than deleted.
+
+## 5. Replication plan for a paper
+
+Noah's target, 2026-08-31: at least 3-4 families.
+
+| family | status | notes |
+|---|---|---|
+| GLM-5.3-Flash | done (1 seed) | all findings here come from it |
+| Qwen3.8-Flash-Next | ladder exists | VQ rungs published; hybrid attention |
+| Qwen3.5-397B | ladder exists | where the published paper's claims live |
+| DeepSeek-V4-Flash | not started | never quantized here; needs a readiness pass first |
+
+Plus, orthogonal to family count: a second SEED at one rung (§3.2), and the
+affine test above. The seed check and the affine test are each cheaper than
+any one family and constrain the claim more.
 
 ---
 
-## 5. Relationship to the V2 models
+## 6. Relationship to the V2 models
 
 The measured gains are real but modest against rung-to-rung steps: ~+21 mnats
 byte-neutral at the 116 rung, ~+55 for +3.4 GiB at the 98.55 rung. The value
