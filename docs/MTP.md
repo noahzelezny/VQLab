@@ -332,3 +332,57 @@ Still untested and now the most plausible remaining lever:
   matters. We feed the hyper-connection mixer's input and have never swept the
   alternatives on this family. The dense-27B ablation put pre_norm 0.7285
   against post_norm 0.7188 — a near-tie there, untested here.
+
+---
+
+## 8. Working state (2026-08-31, end of session)
+
+### Where things live
+
+| what | where |
+|------|-------|
+| qwen4_exp runtime venv | `~/.venvs/qwen4exp` on **both** M3 and M4 (mlx-lm 0.32.0 from the unmerged PR ml-explore/mlx-lm#1788; README inside explains why) |
+| repo copy on M4 | `~/vqlab-mtp` (rsync target; `PYTHONPATH=~/vqlab-mtp/src`) |
+| heads (M4) | `~/heads/mtp-head-e3q8.safetensors` (1.25 GiB), `mtp-head-e4q8.safetensors` (1.55) |
+| q6 head | `/Volumes/Thunderbay SSD/Exo Models/mtp-head-q6.safetensors` (2.14 GiB) |
+| **397B graft** | `~/heads/mtp-graft-397b-bf16.safetensors` on M4 — 1553 tensors, 12.29 GiB, extracted and all-zero gated |
+| oMLX (for interop testing) | `~/omlx-src` + `~/.venvs/omlx` on M4; removable with two `rm -rf` |
+| overnight results | `~/overnight/` on M4 (`campaign.log` + per-stage json) |
+
+Machine limits: **M3 = 96 GB / 84 GiB wired**, **M4 = 128 GB / 120 GiB wired**.
+Flash-Next runs to 4.4bpw on M4; 397B fits ONLY at 2.2bpw (101G + head), and
+2.4bpw upward needs the M3 clustered in.
+
+### Settled
+
+- qwen4_exp shipped: 1.25 GiB head, acceptance 0.78-0.82, **1.58x** measured
+  with a 0.32% baseline spread.
+- Alignment (`align="committed"`) is worth +5.9pp at short prompts and
+  **grows with context** (+3.9pp at 512, +9.8pp at 2048 on real prose).
+- Trunk quantization does NOT affect acceptance (N=3 rungs, paired).
+- Acceptance is a workload property: 0.64-0.95 on ordinary prompts, 1.0 on
+  repetitive text. Depth-1 ceiling measured at **1.95x**.
+- MTP prefill tax (seeding) is **1.3-5.1%**.
+- `vqlab serve` works: OpenAI-compatible, streaming, temperature, with a
+  startup self-check that refuses to run if a patch point moved.
+
+### Next: the 397B (qwen3_5_moe)
+
+The graft is extracted and waiting. What is NOT done is the head module — the
+397B's head is structurally different from qwen4_exp's and needs its own:
+
+- single fused `mtp.fc.weight` (qwen4_exp splits embedding/hidden)
+- 1541 **unfused per-expert** mlp tensors (qwen4_exp uses a fused `[E,2I,H]`
+  stack); `expert_src.load_expert_stack` is the existing tool for this shape
+- conventional `input_layernorm` / `post_attention_layernorm` + `mtp.norm`,
+  not hyper-connections
+- shares `pre_fc_norm_embedding` / `pre_fc_norm_hidden` naming with qwen4_exp
+- **the norm convention is the OPPOSITE of qwen4_exp**: qwen3_5 stores gains
+  as a delta applied by a conventional `nn.RMSNorm`, and `mtp.*` loads outside
+  mlx-lm's sanitize, so the sidecar gains MUST be shifted +1.0. Getting this
+  backwards gives exactly 0.0 acceptance and looks like a dead head. See §2.
+
+Order of work: head module -> registry entry -> `mtp-pack` -> **probe
+acceptance before anything else** (a 512-expert head on a 397B model has never
+been drafted from; if it does not draft well, nothing downstream matters) ->
+speedup on the 2.2bpw rung.
