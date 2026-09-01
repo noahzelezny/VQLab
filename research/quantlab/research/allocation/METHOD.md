@@ -348,3 +348,32 @@ SECONDARY FINDING — saturation: at the 134 rung, promotions to K16384 return
 4.76 mnats/GiB against a 5.92 uniform rate, i.e. more codebook buys less than
 more bits-everywhere. Allocation gains are largest where the rung is far from
 saturation (98.55 rung: 1.93x uniform) and vanish where it is close.
+
+---
+
+## 9. Did it actually improve anything? (2026-09-01, honest accounting)
+
+Earlier "vs uniform" figures in this document used LINEAR interpolation
+between uniform rungs. The uniform curve is convex, so that overstates
+uniform's damage and flatters the method. Against a proper fit of the four
+uniform rungs actually built and scored at 2048
+(ln KL = 9.5212 - 0.03688*GiB, R^2 0.9972):
+
+| artifact | GiB | KL | uniform @ size | verdict |
+|---|---|---|---|---|
+| 102 DP-optimized | 101.94 | 291.69 | 318.03 | **+8.3%** |
+| r116opt | 116.28 | 178.33 | 187.42 | **+4.8%** |
+| r134opt2 | 124.72 | 130.78 | 137.29 | **+4.7%** |
+| r116opt2 | 115.85 | 195.64 | 190.41 | -2.7% WORSE |
+| r134opt3 | 132.52 | 103.27 | 102.98 | -0.3% null |
+
+THREE REAL GAINS OF 4.7-8.3%, one regression, one null. That is the size of
+the effect: worth having at matched bytes, not transformative. Note two of
+the three winners came from runs that were methodologically sloppy (wrong-base
+priors; 512-token sweep, uncapped) — see §8 on why that is not the paradox it
+looks like.
+
+Also note §2.2's headline "1.93x uniform" was computed the same flawed way and
+should be read as directional, not exact. The RANKING of methods it reports
+(measured >> proxy) is unaffected — that comparison was between two
+allocations at IDENTICAL size, where no interpolation is involved.
