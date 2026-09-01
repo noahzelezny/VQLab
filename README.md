@@ -191,10 +191,29 @@ for r in mtp_stream_generate(model, tok, "Explain VQ.", head, max_tokens=256):
 ```
 
 ```bash
-vqlab mtp-pack     --model <artifact> --mtp <graft.safetensors>  # build sidecar
+vqlab mtp-extract  --src <bf16 checkpoint> --out <graft.safetensors>  # pull the head
+vqlab mtp-pack     --model <artifact> --mtp <graft.safetensors>       # build sidecar
 vqlab mtp-generate --model <artifact> --temp 0.7
-vqlab mtp-bench    --model <artifact> --tokens 128               # the numbers
+vqlab mtp-accept   --model <artifact> --head q8=<sidecar>        # acceptance
+vqlab mtp-bench    --model <artifact> --tokens 128               # speedup
 ```
+
+### Supported families
+
+A family is one table entry in `vqlab/mtp/registry.py` plus a head module;
+nothing else in the package names an architecture.
+
+| family | models | head module | measured |
+|---|---|---|---|
+| `qwen4_exp` | Qwen3.8-Flash-Next | `mtp_head.py` | 0.78–0.82 acceptance, **1.58x**, 1.25 GiB head |
+| `qwen3_5` | Qwen3.8-27B (dense) | `mtp_head_qwen35.py` | 0.63–0.85 acceptance, 0.49 GiB head |
+| `qwen3_5_moe` | Qwen3.5-397B-A17B, Qwen3.6-35B | `mtp_head_qwen35.py` | 3.19 GiB head (experts 3-bit) |
+
+The qwen3_5 head has three wiring choices the checkpoint does not determine —
+the RMSNorm delta convention, the concat order into the fused `fc`, and which
+side of the trunk's final norm it reads. Each wrong choice drafts at chance
+with no error, so `vqlab mtp-probe35` sweeps them against one model load
+instead of trusting an argument. See [docs/MTP.md](docs/MTP.md).
 
 The head drafts token t+2 from (trunk hidden at t, embedding of t+1), so each
 step verifies one speculative token inside a single 2-token trunk forward:
