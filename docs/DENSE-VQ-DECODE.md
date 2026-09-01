@@ -4,24 +4,44 @@
 2026-09-01 while benchmarking MTP; none of it is about MTP. Nothing has been
 changed, unpublished, or announced.**
 
-## RESOLVED (2026-09-01) — all three rungs now beat stock
+## RESOLVED (2026-09-01) — all three rungs work, at or near stock speed
 
-| artifact | as shipped | + `model.py` | **+ tiled kernels** | vs stock 16.687 |
+**A machine-mixing error, caught before it shipped.** The first version of
+this table said the rungs were 1.11-1.52x FASTER than stock. They are not:
+the VQ figures were measured on the M3 Ultra and the stock baseline on the
+M4 Max, and that baseline is 16.7 tok/s on the M4 against **23.7 on the M3**.
+Comparing across machines invented a win that is not there. Everything below
+is one machine, one prompt, one harness.
+
+**M3 Ultra, `mlx-lm generate`, 128 greedy tokens, clean venv:**
+
+| artifact | before | **after** | vs stock 23.7 | resident |
 |---|---|---|---|---|
-| `27B-VQ-3.9bpw` (d=4, packed 12) | 0.426 | 0.731 | **18.545** | **1.11x faster** |
-| `27B-VQ-4.5bpw` (d=2) | crash | 7.818 | **24.227** | **1.45x faster** |
-| `27B-VQ-4.8bpw` (d=2, packed 9) | crash | 1.070 | **25.322** | **1.52x faster** |
+| `27B-VQ-3.9bpw` (d=4, packed 12) | 0.731 | **18.545** (25.4x) | 0.78x | 21.3 GB |
+| `27B-VQ-4.5bpw` (d=2) | 7.818 | **24.227** (3.1x) | **1.02x** | **15.9 GB** |
+| `27B-VQ-4.8bpw` (d=2, packed 9) | 1.070 | **25.322** (23.7x) | 1.07x | 30.0 GB |
+| `Qwen3.8-27B-8bit` (stock) | — | 23.736 | 1.00x | 28.9 GB |
 
-Achieved bandwidth went from 1-22% of peak to 45-75%, against stock's 83%:
+(As *shipped*, 4.5 and 4.8 crashed outright and 3.9 measured 0.426 tok/s on
+the M4; the "before" column above is the M3, post-`model.py`-fix, so that the
+kernel effect is isolated on one machine.)
 
-| artifact | GB/s | % peak | was |
-|---|---|---|---|
-| 4.8bpw | 410 | 75% | 22% |
-| 4.5bpw | 368 | 67% | 22% |
-| 3.9bpw | 244 | 45% | 1% |
+The real result is 4.5bpw: **baseline speed at 55% of the memory**. 4.8bpw
+edges ahead of stock. 3.9bpw is still 22% slower than stock, because d=4 must
+keep its 64 KB codebook in device memory and pays per lookup for it.
 
-VQ now does what it was supposed to do at decode: fewer bytes per token AND
-more tokens per second than the 8-bit baseline, at roughly half the memory.
+Achieved bandwidth against the M3 Ultra's ~819 GB/s peak:
+
+| artifact | GB/s | % peak |
+|---|---|---|
+| stock 8-bit | 641 | **78%** |
+| 4.8bpw | 410 | 50% |
+| 4.5bpw | 368 | 45% |
+| 3.9bpw | 244 | 30% |
+
+So the fallback is gone, but VQ still runs at 30-50% of peak where stock
+reaches 78%. **There is roughly another 1.6-2.6x of headroom in the dense
+path**, and the same is likely true of the MoE kernels.
 
 Two kernels did it, both in `vq_switch.py`, both validated in
 `tests/test_vq_dense_tiled.py`:
