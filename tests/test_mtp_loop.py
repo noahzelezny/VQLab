@@ -7,6 +7,8 @@ toy has no chunked-vs-single-token kernel to disagree with itself, so any
 difference is a rollback or bookkeeping bug rather than numerics (see the
 chunk control in vqlab/mtp/bench.py for the real-model version).
 """
+import importlib
+
 import mlx.core as mx
 import pytest
 
@@ -252,3 +254,33 @@ def test_both_schemes_agree_on_output(mode):
 def test_align_rejects_an_unknown_scheme():
     with pytest.raises(ValueError, match="align must be"):
         run(toy.ToyModel(), toy.ToyHead("biased"), 4, align="nonsense")
+
+
+# --------------------------------------------------------------- registry
+
+def test_qwen35_family_entries_resolve():
+    """The qwen3_5 entries must name a class that actually imports and a
+    cache the installed mlx-lm actually has. A stale table entry otherwise
+    fails at the first token of a real generation, not here."""
+    from vqlab.mtp import registry
+
+    for name in ("qwen3_5", "qwen3_5_moe"):
+        spec = registry.FAMILIES[name]
+        cls = spec.head_cls()
+        assert hasattr(cls, "from_sidecar") and hasattr(cls, "draft_logits")
+        assert hasattr(cls, "advance")
+        arch = importlib.import_module("mlx_lm.models.qwen3_5")
+        assert isinstance(spec.make_draft_cache(arch), arch.KVCache)
+        # KVCache writes into a preallocated buffer, so the cheap
+        # snapshot path is NOT available to this family.
+        assert spec.cache_semantics == "copy"
+
+
+def test_qwen35_head_rejects_bad_wiring():
+    """Both wiring flags are load-bearing -- a wrong value is a silent
+    zero-acceptance failure at runtime, so reject it at construction."""
+    from vqlab.mtp_head_qwen35 import MTPHeadQwen35
+
+    for kw in ({"fc_order": "hh"}, {"h_source": "raw"}):
+        with pytest.raises(ValueError):
+            MTPHeadQwen35(object(), object(), **kw)

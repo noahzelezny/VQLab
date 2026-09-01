@@ -51,6 +51,7 @@ COMMANDS = {
     "layer-leverage": ("layer_leverage.py", "per-layer damage probe: which layers earn bigger K"),
     "probe-init": ("probe_init_sweep.py", "per-family k-means++ vs random init sweep"),
     "mtp-probe": ("mtp_probe.py", "MTP head draft-acceptance probe (qwen4_exp)"),
+    "mtp-probe35": ("mtp_probe35.py", "MTP wiring sweep + acceptance probe (qwen3_5 / qwen3_5_moe)"),
     "mtp-extract": ("mtp_extract.py", "pull a model's MTP head out of its source checkpoint into a graft"),
     "mtp-pack": ("mtp_pack.py", "pack a bf16 MTP graft into a quantized drafting sidecar"),
     "mtp-generate": ("mtp_run.py", "generate with MTP speculative drafting"),
