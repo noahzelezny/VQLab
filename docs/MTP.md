@@ -449,6 +449,20 @@ sits in the same band as qwen4_exp's 0.78-0.82. The teacher-forced probe read
 with acceptance being a workload property (SS7) rather than the two
 instruments disagreeing.
 
+#### The 27B wall-clock is NOT measured yet (a discarded run)
+
+The first attempt reported 1.437x, and it should not be quoted. Its baseline
+was **0.43 tok/s** --- roughly forty times too slow for a 12 GiB model on this
+machine --- which means the run spent its time pulling weights over SMB, not
+decoding. In that regime speculation does look faster, and for a real reason
+(half as many trunk forwards means half as much weight fetched), but that is
+an IO result wearing a compute result's clothes. A re-measure with the link
+quiet is queued.
+
+The general rule this belongs to: a speedup ratio is only a compute speedup if
+the absolute throughput is plausible for the model. Check the baseline against
+what the machine should do BEFORE reading the ratio.
+
 #### The recurrent-cache trap (cost 30 minutes of a run going nowhere)
 
 `cache_semantics` is not just tidiness for this family, it is the difference
