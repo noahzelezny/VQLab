@@ -960,6 +960,145 @@ _SRC_DENSE_PACKED_D2_TILED = r"""
     if (active && lane == 0) y[(size_t)t * OUT + r] = static_cast<T>(acc);
 """
 
+# --- dense d4, tiled x + DEVICE codebook -----------------------------------
+# The 3.9bpw 27B rung is d=4/K=4096 and had no dense kernel of any kind, so
+# every one of its 192 VQ linears decoded its whole weight per forward:
+# 0.426 tok/s against stock's 16.687 (docs/DENSE-VQ-DECODE.md). Tiling alone
+# does not rescue it, because at d=4 the CODEBOOK is the thing that does not
+# fit --- K=4096 float4 entries is 65,536 bytes, twice the whole 32 KB
+# threadgroup budget, before x is considered at all.
+#
+# So this kernel takes the same route _SRC_FUSED_D8 already takes for the same
+# reason: leave the codebook in DEVICE memory and let L2 hold it (64 KB of
+# fp16 is comfortably L2-resident, and every lane in the threadgroup reads the
+# same table). Only x is staged, and it is tiled, so the threadgroup
+# allocation is 32*SPG*8 bytes --- 4 KB at G=64 --- independent of BOTH K and
+# layer width.
+#
+# Arithmetic mirrors _SRC_FUSED (the d4 expert kernel) exactly: float4 dots,
+# four codes unrolled per step, one float accumulator per scale group, scales
+# applied in ascending group order. The group-parallel simd_shuffle reduction
+# is the dense d2 layout, which applies srow[] in the same ascending order as
+# the expert kernel's sequential loop, so the results agree.
+_SRC_DENSE_D4_TILED = r"""
+    const int OUT  = dims[0];
+    const int IN   = dims[1];
+    const int G    = dims[3];
+    const int NSUB = IN / 4;
+    const int NGRP = IN / G;
+    const int SPG  = G / 4;
+    const int QPG  = SPG / 4;
+    const int TILE = 32 * SPG;
+    uint r = thread_position_in_grid.y;
+    uint t = thread_position_in_grid.z;
+    uint lane = thread_position_in_threadgroup.x;
+    uint lid = thread_position_in_threadgroup.y * 32 + lane;
+    uint tgsize = threads_per_threadgroup.x * threads_per_threadgroup.y;
+
+    threadgroup half4 xs[MAX_TILE];
+    const device half4* cbg = (const device half4*)codebook;
+    const device T* xrow = x + (size_t)t * IN;
+
+    const bool active = (r < (uint)OUT);
+    const uint rr = active ? r : 0;
+    const device CT* crow = codes + (size_t)rr * NSUB;
+    const device half* srow = scales + (size_t)rr * NGRP;
+    float acc = 0.0f;
+    const int NBLK = (NGRP + 31) / 32;
+    for (int b = 0; b < NBLK; ++b) {
+        const int base = b * TILE;
+        const int span = min(TILE, NSUB - base);
+        threadgroup_barrier(mem_flags::mem_threadgroup);
+        for (uint i = lid; i < (uint)span; i += tgsize) {
+            const int o = (base + (int)i) * 4;
+            xs[i] = half4((half)xrow[o], (half)xrow[o+1],
+                          (half)xrow[o+2], (half)xrow[o+3]);
+        }
+        threadgroup_barrier(mem_flags::mem_threadgroup);
+        const int g = b * 32 + (int)lane;
+        float gacc = 0.0f;
+        if (active && g < NGRP) {
+            int j = g * SPG;
+            int m = j - base;
+            for (int q = 0; q < QPG; ++q) {
+                gacc += dot(float4(cbg[(uint)crow[j]]),   float4(xs[m]))
+                      + dot(float4(cbg[(uint)crow[j+1]]), float4(xs[m+1]))
+                      + dot(float4(cbg[(uint)crow[j+2]]), float4(xs[m+2]))
+                      + dot(float4(cbg[(uint)crow[j+3]]), float4(xs[m+3]));
+                j += 4; m += 4;
+            }
+        }
+        const int gmax = min(32, NGRP - b * 32);
+        for (int i = 0; i < gmax; ++i)
+            acc = fma((float)srow[b * 32 + i],
+                      simd_shuffle(gacc, (ushort)i), acc);
+    }
+    if (active && lane == 0) y[(size_t)t * OUT + r] = static_cast<T>(acc);
+"""
+
+# Packed twin of _SRC_DENSE_D4_TILED, i.e. _SRC_FUSED_PACKED_D4_DEVCB with the
+# expert axis removed, the group loop spread across the 32 lanes of a
+# simdgroup, and x staged one block span at a time. This is the geometry the
+# 3.9bpw 27B rung actually uses (d=4, K=4096, pack_bits=12, G=64), which is
+# why that rung had no fused path at all: d4 had no dense kernel, and its
+# codebook is 64 KB besides.
+_SRC_DENSE_PACKED_D4_TILED = _PACK_FETCH + r"""
+    const int OUT  = dims[0];
+    const int IN   = dims[1];
+    const int G    = dims[3];
+    const int NSUB = IN / 4;
+    const int NGRP = IN / G;
+    const int SPG  = G / 4;
+    const int QPG  = SPG / 4;
+    const int TILE = 32 * SPG;
+    const int WPR  = (NSUB + 31) / 32 * BITS;
+    uint r = thread_position_in_grid.y;
+    uint t = thread_position_in_grid.z;
+    uint lane = thread_position_in_threadgroup.x;
+    uint lid = thread_position_in_threadgroup.y * 32 + lane;
+    uint tgsize = threads_per_threadgroup.x * threads_per_threadgroup.y;
+
+    threadgroup half4 xs[MAX_TILE];
+    const device half4* cb = (const device half4*)codebook;
+    const device T* xrow = x + (size_t)t * IN;
+
+    const bool active = (r < (uint)OUT);
+    const uint rr = active ? r : 0;
+    const device uint* crow = codes + (size_t)rr * WPR;
+    const device half* srow = scales + (size_t)rr * NGRP;
+    float acc = 0.0f;
+    const int NBLK = (NGRP + 31) / 32;
+    for (int b = 0; b < NBLK; ++b) {
+        const int base = b * TILE;
+        const int span = min(TILE, NSUB - base);
+        threadgroup_barrier(mem_flags::mem_threadgroup);
+        for (uint i = lid; i < (uint)span; i += tgsize) {
+            const int o = (base + (int)i) * 4;
+            xs[i] = half4((half)xrow[o], (half)xrow[o+1],
+                          (half)xrow[o+2], (half)xrow[o+3]);
+        }
+        threadgroup_barrier(mem_flags::mem_threadgroup);
+        const int g = b * 32 + (int)lane;
+        float gacc = 0.0f;
+        if (active && g < NGRP) {
+            int j = g * SPG;
+            int m = j - base;
+            for (int q = 0; q < QPG; ++q) {
+                gacc += dot(float4(cb[VQ_CODE(crow, j)]),   float4(xs[m]))
+                      + dot(float4(cb[VQ_CODE(crow, j+1)]), float4(xs[m+1]))
+                      + dot(float4(cb[VQ_CODE(crow, j+2)]), float4(xs[m+2]))
+                      + dot(float4(cb[VQ_CODE(crow, j+3)]), float4(xs[m+3]));
+                j += 4; m += 4;
+            }
+        }
+        const int gmax = min(32, NGRP - b * 32);
+        for (int i = 0; i < gmax; ++i)
+            acc = fma((float)srow[b * 32 + i],
+                      simd_shuffle(gacc, (ushort)i), acc);
+    }
+    if (active && lane == 0) y[(size_t)t * OUT + r] = static_cast<T>(acc);
+"""
+
 _SRC_DECODE_PACKED = _PACK_FETCH + r"""
     uint g = thread_position_in_grid.x;
     uint r = thread_position_in_grid.y;
@@ -1206,6 +1345,11 @@ def _dense_tiled(K, NSUB, G):
 def dense_fits(K, IN, G, d=2):
     """Can a dense VQ linear of this shape run on a fused kernel at all?
     vq_dense.py asks this before choosing the decode fallback."""
+    if d == 4:
+        # The d4 kernel keeps the codebook in device memory and stages only a
+        # tile of x, so nothing about the shape can exceed the budget:
+        # 32*(G/4) half4 = 8*G bytes. Only the unroll constraint can fail.
+        return G % 16 == 0
     if d != 2:
         return False
     NSUB = IN // d
@@ -1228,14 +1372,47 @@ def _dense_fused(x, codes, codebook, scales, pack_bits=0, in_features=None):
     N, IN = x.shape
     OUT = codes.shape[0]
     K, D = codebook.shape
-    if D != 2:
+    if D not in (2, 4):
         raise NotImplementedError(
-            f"no DENSE fused kernel for d={D}; only d=2 is implemented and "
-            f"dispatched explicitly (a kernel for one D reads wrong memory "
-            f"at another D — see the expert-kernel dispatch above).")
+            f"no DENSE fused kernel for d={D}; only d=2 and d=4 are "
+            f"implemented and dispatched explicitly (a kernel for one D reads "
+            f"wrong memory at another D — see the expert-kernel dispatch).")
     NSUB = IN // D
     NGRP = scales.shape[1]
     G = IN // NGRP
+    if D == 4:
+        if G % 16 != 0:
+            raise NotImplementedError(
+                f"dense d4 kernel unrolls 4 codes at a time, so it needs "
+                f"G % 16 == 0 (SPG % 4 == 0), got G={G}")
+        if pack_bits:
+            exp_w = (NSUB + 31) // 32 * pack_bits
+            if codes.shape[1] != exp_w:
+                raise ValueError(
+                    f"packed dense d4: codes are {codes.shape[1]} words/row, "
+                    f"expected {exp_w} for IN={IN}, bits={pack_bits}")
+            name = f"vq_dense_packed{pack_bits}_d4_tiled"
+            src = _SRC_DENSE_PACKED_D4_TILED
+            tmpl = [("T", x.dtype), ("MAX_TILE", 32 * (G // 4)),
+                    ("BITS", pack_bits)]
+        else:
+            if codes.shape[1] != NSUB:
+                raise ValueError(f"dense d4: codes are {codes.shape[1]} cols, "
+                                 f"expected NSUB={NSUB} for IN={IN}")
+            name, src = "vq_dense_d4_tiled", _SRC_DENSE_D4_TILED
+            tmpl = [("T", x.dtype), ("CT", codes.dtype),
+                    ("MAX_TILE", 32 * (G // 4))]
+        dims = mx.array([OUT, IN, D, G, N, K], dtype=mx.int32)
+        rows = _DENSE_ROWS_TG
+        (y,) = _get_kernel(name, src)(
+            inputs=[x, codes, codebook, scales, dims],
+            template=tmpl,
+            grid=(32, ((OUT + rows - 1) // rows) * rows, N),
+            threadgroup=(32, rows, 1),
+            output_shapes=[(N, OUT)],
+            output_dtypes=[x.dtype],
+        )
+        return y
     if G % 8 != 0:
         raise NotImplementedError(f"dense d2 kernel needs G % 8 == 0, got {G}")
     if pack_bits:

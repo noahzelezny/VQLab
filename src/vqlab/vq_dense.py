@@ -183,14 +183,19 @@ class VQLinear(nn.Module):
         _G = IN // int(self.vq_scales.shape[-1])
         _fits_tg = _resolve_kernel("dense_fits")(
             _kk, IN, _G, int(self.codebook.shape[1]))
-        if N <= 32 and int(self.codebook.shape[1]) == 2 and _fits_tg:
+        # d is NOT re-checked here: dense_fits owns which geometries
+        # have a kernel (d=2 tiled/untiled, d=4 device-codebook), and
+        # duplicating that as `== 2` here is what kept the d4 rung on
+        # the decode path after its kernel existed.
+        if N <= 32 and _fits_tg:
             # DENSE fused kernel (2026-08-19): one simdgroup per output row
             # instead of one thread, no expert axis. Bit-identical to the
             # expert-kernel path below (the kernel replicates its float
             # ordering exactly — verified, and the E62 KL number reproduces).
             # VQ_DENSE_REF=1 keeps the old expert-shaped path callable
             # as the reference for A/B checks.
-            if os.environ.get("VQ_DENSE_REF"):
+            if os.environ.get("VQ_DENSE_REF") and self.pack_bits == 0 \
+                    and int(self.codebook.shape[1]) == 2:
                 _fused = _resolve_kernel("_fused")
                 eidx = mx.zeros((N,), dtype=mx.uint32)
                 y = _fused(xf, eidx, self.codes[None], self.codebook,
