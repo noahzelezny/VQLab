@@ -177,8 +177,10 @@ class VQLinear(nn.Module):
         # (K + 32*(G/2)) * 4 and does not depend on width at all. Ask
         # vq_switch whether EITHER kernel can serve the shape; it picks.
         # Bit-exactness against the untiled path is asserted in
-        # tests/test_vq_dense_tiled.py, and matters because these artifacts'
-        # published scores were produced by the paths this replaces.
+        # tests/test_vq_dense_tiled.py. Note this gate is DECODE ONLY
+        # (N <= 32): scoring and prefill are large-N and take the
+        # decode-to-dense path below, which is untouched, so no published
+        # quality number depends on anything here.
         _kk = int(self.codebook.shape[0])
         _G = IN // int(self.vq_scales.shape[-1])
         _fits_tg = _resolve_kernel("dense_fits")(
