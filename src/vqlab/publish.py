@@ -96,10 +96,29 @@ def main(argv=None) -> int:
 
     before = {p: _digest(p) for p in targets}
 
-    print("\n--- release gate ---", flush=True)
-    r = subprocess.run([sys.executable, str(HERE / "check_release.py"),
-                        "--artifact", str(art),
-                        "--max-tokens", str(a.max_tokens)])
+    # DOCUMENTATION-ONLY uploads skip the generation smoke, and this is a
+    # distinction rather than an escape hatch. The smoke certifies that the
+    # RUNTIME loads and generates; a README cannot affect that. Meanwhile the
+    # smoke needs the whole model resident, so demanding it for a doc fix
+    # means a 112 GiB load to correct a sentence -- and a gate that expensive
+    # for a trivial change is one people route around entirely, which is the
+    # failure it exists to prevent.
+    #
+    # The static scan still runs either way: bundle imports, and the bundle
+    # compiling. Anything that touches the runtime or the config takes the
+    # full gate, no exceptions.
+    DOC_SUFFIXES = {".md", ".txt", ".jinja"}
+    docs_only = all(pathlib.Path(t).suffix.lower() in DOC_SUFFIXES
+                    for t in targets)
+    gate = [sys.executable, str(HERE / "check_release.py"),
+            "--artifact", str(art), "--max-tokens", str(a.max_tokens)]
+    if docs_only:
+        gate.append("--no-smoke")
+        print("\n--- release gate (documentation-only upload: static checks "
+              "run, generation NOT re-verified) ---", flush=True)
+    else:
+        print("\n--- release gate ---", flush=True)
+    r = subprocess.run(gate)
     if r.returncode != 0:
         print("\nREFUSING TO UPLOAD: the release gate failed. Fix the "
               "artifact and run again. There is deliberately no override.")
@@ -126,8 +145,9 @@ def main(argv=None) -> int:
         info = api.upload_file(path_or_fileobj=str(p), path_in_repo=rel,
                                repo_id=a.repo, commit_message=msg)
         print(f"   {rel} -> {getattr(info, 'commit_url', info)}")
-    print(f"\nPASS: {len(targets)} file(s) uploaded to {a.repo} after a "
-          f"clean release gate.")
+    how = ("static checks only (documentation-only upload)" if docs_only
+           else "a clean release gate including a generation smoke")
+    print(f"\nPASS: {len(targets)} file(s) uploaded to {a.repo} after {how}.")
     return 0
 
 
