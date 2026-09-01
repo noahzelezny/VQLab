@@ -392,8 +392,20 @@ the throughput result past ~2000 tokens is measuring the easy case.
 - Acceptance is a workload property: 0.64-0.95 on ordinary prompts, 1.0 on
   repetitive text. Depth-1 ceiling measured at **1.95x**.
 - MTP prefill tax (seeding) is **1.3-5.1%**.
-- `vqlab serve` works: OpenAI-compatible, streaming, temperature, with a
-  startup self-check that refuses to run if a patch point moved.
+- `vqlab serve` works, and has now been soaked: **643 requests over 60
+  minutes, zero errors, and every single one drafted.** The two numbers that
+  matter are the ones that caught the earlier silent failure --- 644 `MTP:
+  acceptance` lines (one per request) and **0** `Prompt processing progress`
+  lines, which only stock mlx-lm emits. The patches held for the full hour.
+  Throughput was flat: mean 26.76 tok/s, median 26.79, p05 25.18, p95 28.20,
+  and first-half to second-half drift of **+0.41%**. Cold start was 522s to
+  page 46 GiB over SMB, which is a storage number, not a serving one.
+
+- Speedup by rung on Flash-Next, same fixed prompt: **1.58x** at 2.1bpw
+  (acceptance 0.77), **1.52x** at 3.2bpw (0.64), **1.65x** at 4.4bpw (0.70).
+  It tracks acceptance, not bit-width --- and since each rung writes different
+  text, those three acceptance figures are three workloads, not three models
+  (see SS7).
 
 ### The 397B (qwen3_5_moe): head module written, wiring measured
 
