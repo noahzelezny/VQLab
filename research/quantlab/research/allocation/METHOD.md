@@ -217,6 +217,33 @@ any one family and constrain the claim more.
 
 ## 6. Relationship to the V2 models
 
+### 6.0 STANDING CONVENTION (Noah, 2026-09-01): reserve head room in every rung
+
+Every V2 rung is sized so that PUBLISHED SIZE = TRUNK + MTP HEAD, with the
+head's bytes reserved even before a head exists for that family.
+
+Rationale, in his words: a downloader who is excited that a model fits their
+machine and then has no room left for a ~50% speedup is a bummer. V1 models
+were sized trunk-only, so adding a head later would push them over the
+machine class they were chosen for. Reserving up front means the head — and
+the VQLab adapter that drives it — can arrive without disqualifying anyone
+who already committed to the rung.
+
+Current reservation: 2.9 GiB, from the measured GLM head (7.43B params at
+layer 45) quantized at 3-bit + scales = 2.81 GiB. 3-bit is safe because HEAD
+PRECISION IS QUALITY-FREE: the trunk verifies every drafted token, so a worse
+draft costs a rejection, never a wrong token (VQLab docs/MTP.md §6, measured
+-0.2pp acceptance and 0.5% speed at 3-bit vs 6-bit). The head is also
+RUNG-INDEPENDENT — grafted from upstream bf16, not derived from the trunk's
+quantization — so one head file serves every rung and its cost is paid once.
+
+Caveat to carry: as of this date NO GLM MTP head exists. VQLab has qwen4_exp
+implemented and four families identified but unimplemented. So the reservation
+is currently a hole for something not yet built. Model cards should either say
+so or stay silent about the head until it ships.
+
+### 6.1 Quality headroom
+
 The measured gains are real but modest against rung-to-rung steps: ~+21 mnats
 byte-neutral at the 116 rung, ~+55 for +3.4 GiB at the 98.55 rung. The value
 for V2 is that byte-neutral gains create headroom that can be spent elsewhere
