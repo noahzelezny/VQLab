@@ -72,6 +72,11 @@ until active cooling brought the baseline spread from 26% to 0.32%.
   prefix; a binomial interval over one trajectory's N steps is far too narrow.
 - **Pair across prompts.** Prompt difficulty dominates the spread; pairing
   removes it. `vqlab mtp-accept` does this.
+- **Never measure acceptance on synthetic repeated text.** A prompt built by
+  repeating filler drove acceptance to exactly 1.0 at 1k-16k tokens: the model
+  continues the pattern and the head predicts it perfectly. Prefill timings
+  from such a prompt are still valid (prefill does not care what the text
+  says); every decode, acceptance and speedup number from it is worthless.
 - **Do not use a palindromic run order.** `(a,b,c,d,d,c,b,a)` pins the middle
   configuration to both hottest slots — worse than no design. Use balanced
   blocks shuffled within each, plus a cooldown.
@@ -122,18 +127,26 @@ module rather than a parameter:
 
 ## 5. Open questions
 
-**Two prefill taxes, both unquantified.** They stack and are separate:
+**The MTP prefill tax is MEASURED and small** (2026-08-31, 2.1bpw, e3q8 head,
+time-to-first-token including one decode step):
 
-1. *The VQ tax.* Decoding codebooks costs more per token at prefill than an
-   affine kernel does. This predates MTP and is a property of the artifacts.
-2. *The MTP tax.* The committed alignment seeds the head over the whole
-   prompt: a full MoE head forward over N positions. Every benchmark so far
-   used ~62-68 token prompts, where this is noise. At 4k-32k it may not be,
-   and that is exactly what a server sees.
+| prompt | plain TTFT | MTP TTFT | tax | prefill tok/s (plain -> MTP) |
+|--------|-----------|----------|-----|------------------------------|
+| 256    | 2.36s  | 2.58s  | +0.22s (**9.2%**)  | 108 -> 99 |
+| 1024   | 3.28s  | 3.78s  | +0.50s (**15.3%**) | 313 -> 271 |
+| 4096   | 10.03s | 11.17s | +1.14s (**11.4%**) | 408 -> 367 |
+| 16384  | 42.82s | 47.38s | +4.56s (**10.6%**) | 383 -> 346 |
 
-Neither has a number. A decode speedup paid for at prefill is a different
-product for a chat user than for an agent with a long context, so this
-determines who the v2 release is actually for.
+Seeding the head over the prompt costs a flat ~10-15% of prefill and does NOT
+grow super-linearly, so long-context prompts are not disproportionately
+punished. Windowed seeding would recover it but is not urgent.
+
+**The VQ prefill tax remains unquantified.** Decoding codebooks costs more per
+token at prefill than an affine kernel. The obvious comparison —
+Flash-Next-VQ-2.1bpw (46G) against the stock affine 4-bit (96G) — is
+confounded by size, though it is decisive in one direction: if the 46G VQ
+artifact prefills SLOWER than the 96G affine one, the kernel tax is
+unambiguous.
 
 **The MTPLX strategy.** MTPLX decouples the rope offset from the cache offset
 (passing `position_offset` explicitly) instead of making the offset true by
@@ -213,6 +226,20 @@ The measured +1.58% from a 2.7pp acceptance change fits this with h ~ 0.5:
 the ceiling for that delta is +2.24% with a free head, and the head absorbs
 about a third of it. **The depth-1 loop is close to its own ceiling.** Chasing
 acceptance further, or making the head cheaper, buys single-digit percentages.
+
+### The empirical depth-1 ceiling is 1.95x
+
+Measured by accident and worth more than the run it came from: with a
+repetitive synthetic prompt the head drafts perfectly, and at **acceptance
+1.0 the depth-1 loop hits 1.95x** (1.93-1.95x at 1k/4k/16k). That is the
+ceiling of the CURRENT design. We sit at 1.58x with acceptance 0.78, so
+roughly **+0.37x is available from acceptance alone**, with no depth-k work.
+
+It also falsifies the analytic head-cost estimate above: at alpha = 1.0 that
+model predicts 2/(1+h), so 1.95x implies h ~ 0.03, not the ~0.5 inferred from
+the alignment delta. The model assumed a speculative seq=2 forward costs the
+same as a baseline seq=1 forward, and the ledger measured seq=2 as CHEAPER
+(49ms vs 61ms). Trust the empirical ceiling, not the algebra.
 
 ### Depth is the lever — but only at high acceptance
 
