@@ -4,6 +4,52 @@
 2026-09-01 while benchmarking MTP; none of it is about MTP. Nothing has been
 changed, unpublished, or announced.**
 
+## RESOLVED (2026-09-01) — all three rungs now beat stock
+
+| artifact | as shipped | + `model.py` | **+ tiled kernels** | vs stock 16.687 |
+|---|---|---|---|---|
+| `27B-VQ-3.9bpw` (d=4, packed 12) | 0.426 | 0.731 | **18.545** | **1.11x faster** |
+| `27B-VQ-4.5bpw` (d=2) | crash | 7.818 | **24.227** | **1.45x faster** |
+| `27B-VQ-4.8bpw` (d=2, packed 9) | crash | 1.070 | **25.322** | **1.52x faster** |
+
+Achieved bandwidth went from 1-22% of peak to 45-75%, against stock's 83%:
+
+| artifact | GB/s | % peak | was |
+|---|---|---|---|
+| 4.8bpw | 410 | 75% | 22% |
+| 4.5bpw | 368 | 67% | 22% |
+| 3.9bpw | 244 | 45% | 1% |
+
+VQ now does what it was supposed to do at decode: fewer bytes per token AND
+more tokens per second than the 8-bit baseline, at roughly half the memory.
+
+Two kernels did it, both in `vq_switch.py`, both validated in
+`tests/test_vq_dense_tiled.py`:
+
+- **`_SRC_DENSE_D2_TILED` / `_SRC_DENSE_PACKED_D2_TILED`** — stage one block
+  span of x instead of the whole row, so the threadgroup budget is
+  `(K + 32*(G/2)) * 4` with no width term. Bit-identical to the untiled
+  kernels wherever both are legal.
+- **`_SRC_DENSE_D4_TILED` / `_SRC_DENSE_PACKED_D4_TILED`** — d=4 had no dense
+  kernel at all, and at K=4096 its codebook is 64 KB, twice the entire
+  threadgroup budget. These keep the codebook in device memory (L2-resident,
+  the route `_SRC_FUSED_D8` already takes) and tile x. Bit-identical to the
+  expert kernels they were derived from.
+
+One gate bug was worth more than either kernel: `VQLinear` re-checked
+`codebook.shape[1] == 2` alongside the fits test, so the d4 rung stayed on
+the decode path even after its kernel existed. `dense_fits()` is now the
+single authority on which geometries have a kernel.
+
+**Still open:** the MoE VQ path sits at 15-16% of achieved bandwidth
+(35B-A3B VQ 84 GB/s, 397B 86 GB/s) and its expert kernels use the same
+whole-row staging. They fit today because expert widths are small, so nothing
+falls back --- but the efficiency headroom the dense path just realised is
+probably there too. That is the next piece of work, and it is also the
+likeliest lever on the 397B's seq2/seq1 = 1.49 (docs/MTP.md).
+
+The three causes below are what was wrong, kept for the record.
+
 ## What a downloader gets today
 
 One machine (M4 Max / M3), one harness (`mlx_lm generate`), one prompt, 128
