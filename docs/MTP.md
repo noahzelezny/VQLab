@@ -122,11 +122,18 @@ module rather than a parameter:
 
 ## 5. Open questions
 
-**Prefill cost is UNMEASURED.** The committed alignment seeds the head over
-the whole prompt: a full MoE head forward over N positions. Every benchmark so
-far used ~62-68 token prompts where this is noise. At 4k-32k it may not be,
-and that is exactly what a server sees. Measure before shipping to anyone with
-long prompts.
+**Two prefill taxes, both unquantified.** They stack and are separate:
+
+1. *The VQ tax.* Decoding codebooks costs more per token at prefill than an
+   affine kernel does. This predates MTP and is a property of the artifacts.
+2. *The MTP tax.* The committed alignment seeds the head over the whole
+   prompt: a full MoE head forward over N positions. Every benchmark so far
+   used ~62-68 token prompts, where this is noise. At 4k-32k it may not be,
+   and that is exactly what a server sees.
+
+Neither has a number. A decode speedup paid for at prefill is a different
+product for a chat user than for an agent with a long context, so this
+determines who the v2 release is actually for.
 
 **The MTPLX strategy.** MTPLX decouples the rope offset from the cache offset
 (passing `position_offset` explicitly) instead of making the offset true by
@@ -158,21 +165,34 @@ either runtime.
 
 ---
 
-## 6. The v2 question: is trading trunk bits for a head a good deal?
+## 6. The v2 plan: fund the head from better technique, not a worse trunk
 
-The proposal is to tighten the mixed-bit trunk recipe to reclaim the ~1.25 GiB
-the head needs, and re-release each model with MTP.
+The proposal is NOT to spend trunk quality on the head. It is to pull more
+quality out of the same bits — better fitting, better per-layer allocation,
+better codebook use — so the reclaimed GiB funds the head while output quality
+goes UP, not down. That is the size-targeting thesis applied to a new budget
+line, and it is the version worth doing.
 
-The asymmetry that matters: **head bits are quality-free, trunk bits are not.**
-A coarser head costs a rejection; a coarser trunk costs output quality. So this
-trades measurable quality for measurable speed, and both sides are already
-instrumented — `vqlab kl` and `vqlab score` price the trunk damage, and
-`mtp-accept` plus a cooled `mtp-bench` price the gain.
+Two asymmetries make it favourable:
 
-Do not ship this on intuition. The specific number to produce is: KL-to-bf16
-damage from reclaiming N GiB of trunk budget, against the decode speedup that
-N GiB of head buys, at the same total residency.
+- **Head bits are quality-free.** The trunk verifies every drafted token, so
+  the head can be quantized as hard as acceptance tolerates. Measured: experts
+  at 3-bit is 1.25 GiB against 2.14, indistinguishable in both acceptance
+  (-0.2pp, t=0.54) and speed (0.5%).
+- **The head is rung-independent.** It is grafted from the upstream bf16 MTP
+  tensors, not derived from the trunk's quantization, so ONE head file serves
+  every rung of a model. Technique improvements to the trunk compound across
+  rungs; the head cost is paid once.
 
-Note also that the head is **rung-independent** — it is grafted from the
-upstream bf16 MTP tensors, not derived from the trunk's quantization, so one
-head file serves every rung of a model.
+What this needs before it becomes a release plan:
+
+1. A trunk recipe that is measurably BETTER at equal or smaller size —
+  priced with `vqlab kl` and `vqlab score` against the current rungs, not
+  assumed. `docs/ONBOARDING.md` and `layer-leverage` are the existing tools.
+2. The head's true cost per family (measured, not projected).
+3. **Both prefill taxes quantified** (see §5). A decode speedup that is paid
+  for at prefill is a different product for a chat user than for an agent.
+
+The failure mode to avoid is shipping a v2 whose headline is "now with MTP"
+while quality quietly regressed to pay for it. The gates that prevent that
+already exist and are cheap to run.
