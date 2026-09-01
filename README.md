@@ -201,6 +201,34 @@ step verifies one speculative token inside a single 2-token trunk forward:
 accepted gives two tokens for one forward; rejected rolls the caches back and
 replays, costing one extra forward and never a wrong token.
 
+### Serving
+
+```bash
+vqlab serve --model <artifact-dir> [--sidecar mtp-head-e3q8.safetensors] --port 8080
+```
+
+An OpenAI-compatible endpoint at `http://127.0.0.1:8080/v1`. Without
+`--sidecar` it serves the artifact with no drafting, which is the useful
+default: a VQ artifact needs the codebook kernels in its own bundled
+`model.py`, so the environment that runs it is not interchangeable, and
+shipping a server we know loads our artifacts is most of the value.
+
+It is an **adapter, not a server**. mlx-lm already ships a complete
+OpenAI-compatible server and calls generation at exactly one site, so VQLab
+borrows that surface — templates, streaming, stop sequences, request schema —
+and replaces only the decode strategy. Four patch points, verified at startup;
+`serve` refuses to start if any has moved, because a server that quietly stops
+drafting still answers every request correctly and only looks slower.
+
+Verified on the 2.1bpw rung: greedy and temperature+top_p to 256 tokens,
+streaming SSE, natural stop, served acceptance 0.773–0.925 — matching the
+offline `mtp-accept` sweep, which is what confirms the served loop is the
+measured loop.
+
+Known limits: single user, no continuous batching, no cross-request prefix
+reuse (a reused prefix cache would mis-position the drafting head, so the loop
+**raises** rather than decoding at wrong positions).
+
 ### Measured (Qwen3.8-Flash-Next, 6-bit head, greedy, 96 tokens)
 
 > The table below is M3 Ultra. The 2026-08-31 measurements below it are M4
