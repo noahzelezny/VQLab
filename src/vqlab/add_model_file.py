@@ -107,6 +107,23 @@ ModelConfig = getattr(_arch, "ModelConfig", None) or _arch.ModelArgs
 
 class Model(_arch.Model):
     def __init__(self, args):
+        # mlx_lm's loader passes nested module configs (text_config,
+        # vision_config, ...) through as plain dicts; mlx_vlm's own loader
+        # coerces them to config objects first (ModelConfig.from_dict +
+        # update_module_configs + apply_generation_config_defaults). A VLM
+        # arch then does `args.text_config.model_type` and dies on the dict.
+        # Coerce here so ONE bundle loads under either runtime -- exo serves
+        # VLM artifacts through mlx_lm.utils.load_model, which is exactly the
+        # dict path. No-op for text-only models and for mlx_vlm-loaded ones.
+        if isinstance(getattr(args, "text_config", None), dict):
+            from mlx_vlm.utils import (
+                apply_generation_config_defaults,
+                update_module_configs,
+            )
+            args = update_module_configs(
+                args, _arch, _cfg,
+                ["text", "vision", "perceiver", "projector", "audio"])
+            args = apply_generation_config_defaults(args, _cfg)
         super().__init__(args)
         for _path, _m in _cfg.get("vq_modules", {}).items():
             _obj = self
