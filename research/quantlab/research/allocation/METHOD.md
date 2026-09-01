@@ -223,3 +223,53 @@ for V2 is that byte-neutral gains create headroom that can be spent elsewhere
 — e.g. the ~2.1 GiB MTP head, if the parallel MTP work produces a runnable
 one. That framing is the reason to develop this, and it is worth stating
 that the headroom argument is currently a PLAN, not a measured result.
+
+---
+
+## 7. Two more axes of non-transfer (2026-09-01, overnight run)
+
+The overnight per-rung sweeps produced a WORSE 116 artifact than the earlier
+build made with knowingly mistransferred priors. Diagnosed, and it is two
+compounding failures — both worth recording because both were mistakes I made
+on purpose, for good-sounding reasons.
+
+### 7.1 Sensitivity is TOKEN-SCALE-specific too
+
+Sweeps were run at 512 tokens to save time (ranking "needs less precision
+than a ladder score"). The resulting artifact:
+
+| evaluated at | base KL | optimum KL | d_KL |
+|---|---|---|---|
+| 512 tok (its own scale) | 284.19 | 264.14 | +20.05 |
+| 2048 tok (the ladder) | 199.53 | 195.64 | **+3.89** |
+
+Most of the gain does not survive the change of evaluation window. Same
+failure mode as §2.4 base-specificity, along the corpus axis: sensitivity
+measured on one sample partly fails to transfer to another.
+
+**Rule: sweep at the token count you will be judged at.** The 4x saving is
+not worth it — and note the saving was small anyway (~1.5 -> ~1.4 min/sample),
+because the splice dominates, not the score.
+
+### 7.2 Realisation degrades with DEMOTION fraction
+
+Additive-prediction realisation across every solve so far:
+
+| solve | changes | demotions | realisation |
+|---|---|---|---|
+| best-8, 98.55 base | 8 | 0 | 0.84 |
+| DP optimum, 98.55 base | 19 | 7 | 0.68 |
+| r116opt2, 116 base | 19 | 10 | **0.17** |
+
+Promotions compose roughly additively; demotions do not. A demotion-heavy
+allocation should be treated as barely predictable, and the solver's objective
+badly overstates it. Any future solve should either penalise demotions
+explicitly or verify demotion-heavy solutions before trusting them.
+
+### 7.3 The uncomfortable comparison
+
+Best 116-class artifact remains the one built from PRIORS MEASURED AT THE
+WRONG BASE (KL 178.33), beating the carefully swept one (195.64). That is not
+evidence the careful method is wrong — the careful one was crippled by 7.1 and
+7.2 — but it is a caution against assuming rigour in the procedure implies
+quality in the artifact. Verify the artifact; the procedure is not the claim.
