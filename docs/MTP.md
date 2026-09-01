@@ -569,19 +569,63 @@ machine does not produce a 1.49 ratio.
 across M3+M4 will not fix it.** That is worth knowing before anyone spends a
 day on exo for this.
 
-What remains is a property of the 397B's forward pass itself. The leading
-candidate is expert gather: at top-10 of 512 experts and 17B active
-parameters, two positions route to largely disjoint expert sets, so a 2-token
-forward fetches close to two tokens' worth of expert weight. That is a
-hypothesis, not a finding --- and given the record tonight it stays labelled
-as one. A sequence-scaling sweep (seq = 1,2,3,4,8,16 on both models)
-distinguishes overhead-bound from work-bound directly and is queued; it also
-answers whether a deeper draft could ever help here, since a work-bound
-forward defeats every depth, not just depth-1.
+**Our VQ path is not the cause either.** The dense-VQ investigation
+(DENSE-VQ-DECODE.md) made "our kernels behave badly at some shapes" a live
+hypothesis for the MoE side too. The 35B-A3B settles it, being the same model
+in both forms:
 
-Until then: **the 397B head drafts excellently, and the drafting does not
-convert to throughput --- for reasons that are about the model, not the
-machine.**
+| model | t(1) | t(2) | ratio |
+|---|---|---|---|
+| Flash-Next 2.1bpw (VQ) | 52.27 | 46.78 | **0.895** |
+| 27B 8-bit (stock, dense) | 62.28 | 63.41 | 1.018 |
+| 35B-A3B 8-bit (stock, MoE) | 12.27 | 14.02 | 1.143 |
+| 35B-A3B 3.8bpw (VQ, MoE) | 16.94 | 20.07 | 1.185 |
+| 397B 2.2bpw (VQ, MoE) | 54.54 | 81.35 | **1.492** |
+
+VQ costs ~38% of absolute time on the 35B (16.94 vs 12.27) and barely touches
+the ratio (1.185 vs 1.143). So VQ is not eating the n=2 discount.
+
+**The real lesson is that Flash-Next is the outlier, not the 397B.** It is
+the only model measured whose 2-token forward is CHEAPER than its 1-token
+forward. Everything else sits at 1.02-1.19, and the 397B's 1.49 is the
+extreme end of a normal spectrum rather than a pathology --- consistent with
+it having by far the most active parameters (17B), so the marginal token
+costs more and there is less fixed overhead to amortise. **Some of our
+headline 1.58x is Flash-Next collecting a kernel-selection discount at n=1
+that other models do not offer.**
+
+### Depth is the lever, and the 397B is the best candidate we have
+
+SS7 already argued depth pays only at high acceptance. The 397B has the
+highest acceptance in this document (0.9023), and at depth-1 that asset is
+wasted. Working the measured scaling curves --- a depth-d step is ONE trunk
+forward of length d+1, d head forwards, and 1 + a + ... + a^d committed
+tokens in expectation:
+
+| model | depth | seq | E[commit] | cost | predicted |
+|---|---|---|---|---|---|
+| Flash-Next | 1 | 2 | 1.78 | 51.99 ms | 1.790x |
+| Flash-Next | **2** | 3 | 2.39 | 68.00 ms | **1.836x** |
+| Flash-Next | 3 | 4 | 2.86 | 87.57 ms | 1.709x |
+| 397B | 1 | 2 | 1.90 | 90.70 ms | 1.142x |
+| 397B | **2** | 3 | 2.71 | 114.14 ms | **1.295x** |
+| 397B | 3 | 4 | 3.44 | 156.14 ms | 1.201x |
+
+Depth-2 is optimal for both, and it is worth far more to the 397B (+13%
+relative) than to Flash-Next (+3%), precisely because acceptance is higher.
+
+Two corrections to apply before believing 1.295x: the cost model overshot
+depth-1 by ~13% on both models, and geometric decay (a^2) flatters a
+multi-step draft, since step 2 feeds the head its own hidden state rather
+than the trunk's. Realistically depth-2 on the 397B is **~1.1-1.15x** --- not
+the 1.6x Flash-Next gets, but no longer nothing.
+
+**So: "the 397B buys nothing" is true only of depth-1.** The head is correct,
+drafts better than any other family we have, and is currently being run in
+the one configuration that cannot use it. Implementing depth-2 is real work
+(multi-step drafting off the head's own hidden state, per-step acceptance
+decay to measure rather than assume) and is a scoping decision, not something
+to start unasked.
 
 #### Flash-Next: the depth-1 cost model, measured rather than assumed
 
