@@ -82,7 +82,7 @@ until active cooling brought the baseline spread from 26% to 0.32%.
 |---|---|
 | alignment worth +12.5pp (n=48, one prompt) | 1.53 sigma. Did not survive. |
 | alignment "measured neutral / falsified" (n=256, one prompt) | ALSO wrong — no power to see a 5pp effect. Failure to reject is not evidence of absence. |
-| the +5.9pp acceptance would convert to a large speedup | it converts to **+1.58%** wall-clock. The committed scheme spends most of it on the extra head forward. |
+| the +5.9pp acceptance would convert to a large speedup | it converts to **+1.58%** wall-clock — which is near the depth-1 ceiling, not a defect. See §7. My first explanation (the extra head forward eats it) was only a third of the story. |
 
 ---
 
@@ -196,3 +196,61 @@ What this needs before it becomes a release plan:
 The failure mode to avoid is shipping a v2 whose headline is "now with MTP"
 while quality quietly regressed to pay for it. The gates that prevent that
 already exist and are cheap to run.
+
+---
+
+## 7. Why we are stuck near 1.6x, and what actually moves it
+
+At depth 1 every step emits exactly two tokens whatever happens — the
+committed `t1`, plus either the accepted draft or the trunk's own `t2`.
+Acceptance therefore only controls how often a rejection costs a replay
+forward. That caps what acceptance can buy:
+
+    tokens per unit cost = 2 / (1 + (1 - alpha) + h)      h = head cost in
+                                                          trunk-forward units
+
+The measured +1.58% from a 2.7pp acceptance change fits this with h ~ 0.5:
+the ceiling for that delta is +2.24% with a free head, and the head absorbs
+about a third of it. **The depth-1 loop is close to its own ceiling.** Chasing
+acceptance further, or making the head cheaper, buys single-digit percentages.
+
+### Depth is the lever — but only at high acceptance
+
+Tokens per trunk-forward, modelled (head = 0.5 trunk-forwards each, geometric
+acceptance along the chain):
+
+| acceptance | depth 1 | depth 2 | depth 3 |
+|-----------|---------|---------|---------|
+| 0.70 | 1.13 | 1.09 | 1.01 |
+| **0.78 (us)** | **1.19** | 1.19 | 1.15 |
+| 0.85 | 1.23 | 1.29 | 1.27 |
+| 0.92 | 1.28 | 1.38 | 1.42 |
+| 0.97 | 1.31 | 1.46 | 1.53 |
+
+**At our acceptance, going deeper is worthless** — each extra drafted token
+costs a head forward and is probably rejected. Depth only pays above ~0.85.
+This is the model, not a measurement, but the shape of it is robust: it is why
+oMLX reports 2.33-2.62x with **96.8-97.9%** acceptance and we report 1.58x
+with 78%. Their win is acceptance first, depth second.
+
+### So the question is why their acceptance is 97% and ours is 78%
+
+Hypotheses, cheapest first:
+
+1. **Trunk quantization damage.** The head was trained against a bf16 trunk.
+   Ours drafts from a 2.1bpw VQ trunk whose hidden states are damaged, and the
+   head is asked to predict what that damaged trunk will do. If acceptance
+   rises with trunk quality, this is the dominant term — and it makes the v2
+   thesis (§6) compounding rather than merely affordable: better technique
+   buys quality AND acceptance AND, above ~0.85, the option of depth.
+   **Test: measure acceptance on the 2.1 / 3.2 / 4.4bpw rungs. Cheap, decisive.**
+2. **Hidden-state variant.** MTPLX exposes `mtp_hidden_variant`
+   (fc / pre_norm / post_norm / embedding / prev / mix) as a knob because it
+   matters. We feed the hyper-connection mixer's input and have never swept
+   the alternatives on this family. The dense-27B ablation put pre_norm 0.7285
+   against post_norm 0.7188 — a near-tie there, but untested here.
+3. **Their checkpoint differs.** oMLX's headline is on their own oQ4e build.
+   Independent numbers on a third-party Flash-Next MTP checkpoint report
+   58.3-89.5% acceptance, which brackets ours rather than theirs.
+
+Note (1) is the interesting one and nobody has tested it.
