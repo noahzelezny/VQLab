@@ -606,21 +606,23 @@ bandwidth-bound"); real per-kernel timing needs chained submits. It does NOT
 move the seq2/seq1 numbers below, which are trunk forwards of 46-81 ms:
 floor-correcting them changes Flash-Next by -0.07% and the 397B by +0.20%.
 
-**A 36 GB VLM server resident on the M4 during the 397B runs.** The 397B at
-2.2bpw is 101 GiB; with `scout_vlm_server` alongside it that is ~137 GB on a
-128 GB box, i.e. the 397B timings in this document were taken under genuine
-memory pressure that nobody was accounting for. Acceptance is unaffected
-(greedy decoding is deterministic), so 0.9023 stands. Every 397B WALL-CLOCK
-number is provisional until the clean re-run lands.
+**A 36 GB VLM server resident on the M4 during the 397B runs** --- checked,
+and it changed nothing. The 397B at 2.2bpw is 101 GiB, so with
+`scout_vlm_server` alongside it that was ~137 GB on a 128 GB box, and every
+397B timing here was taken under real memory pressure nobody was accounting
+for. Re-measured on an idle M4 (VLM stopped, exo idle at <300 MB):
 
-Note what this does and does not do to the pressure argument above. The
-falsification logic survives --- Flash-Next at 95 GiB was under the same
-confound and still measured 0.838, so pressure alone does not produce a high
-ratio --- but the absolute 397B figures (t1 54.54 ms, ratio 1.492, MTP
-1.000x) were all taken with an unmeasured 36 GB tenant and should be replaced
-rather than defended.
+| | t(1) | t(2) | ratio |
+|---|---|---|---|
+| under a 36 GB tenant | 54.54 | 81.35 | 1.4916 |
+| idle box, 2 reps | 54.86 | 81.33 | **1.4826 / 1.4803** |
 
-The 35B figures are unaffected: at ~16 GB it never approached the limit.
+A 0.6% shift. **The depth-1 no-payoff result is real and is not an artifact
+of measurement conditions.** The 35B figures were never at risk (~16 GB).
+
+Worth separating the two judgements: flagging the confound was right, and the
+conclusion it threatened survived it. A confound that turns out not to bite
+is still worth having measured rather than argued about.
 
 #### Codebook residency does NOT explain it (a wrong claim, corrected)
 
@@ -646,6 +648,43 @@ The methodological error is the same one this document already records twice:
 reading a property off one sample and asserting it of the population. Check
 the distribution.
 
+### The expert-kernel layout is not the cause either (measured)
+
+The simdgroup-per-row expert kernels (E141, commit 108fe9e) were built partly
+on the theory that the 397B's ratio was launch/latency-bound in the expert
+kernel. Measured on the same idle box:
+
+| 397B 2.2bpw | t(1) | t(2) | ratio |
+|---|---|---|---|
+| thread-per-row (old) | 54.86 | 81.33 | 1.4826 |
+| simdgroup-per-row | 53.43 | 80.26 | **1.50** |
+
+The kernel is faster in absolute terms at every sequence length and the ratio
+does not move. **So the seq2/seq1 gap is not expert-kernel launch latency
+either.** Ruled out so far: memory pressure, our VQ path in general, codebook
+residency, and now the expert-kernel layout. The only account still standing
+is the crude one --- the 397B has 17B active parameters, so its marginal
+token costs more and there is proportionally less fixed overhead to amortise
+--- and that remains an argument rather than a measurement.
+
+### A microbenchmark that inverted at real sizes
+
+Worth carrying forward beyond MTP. The isolated expert kernel wins 1.35x at
+N = 24-30 pairs in a microbenchmark, and the same layout made a whole-forward
+seq=3 **13.6% slower** (108.4 vs 95.4 ms, reproducible to 0.1 ms over 2x40
+reps). Dispatch is therefore gated on N <= 20 pairs as well as NGRP >= 32.
+
+Two consequences. Decode (top-k 8-10) and the 397B's seq=2 (2 x 10 = 20 pairs,
+measured 80.1 vs 81.3 in the new kernel's favour) keep the win, so speculative
+decoding is inside the gate. And **any seqcost sweep at seq >= 3 is measuring
+the OLD kernel by design** --- do not read those rows as evidence about the
+new one.
+
+That is the third harness artifact in this document, after the thermal
+wall-clock spread and the mx.eval submit floor. The pattern is consistent
+enough to state as a rule: a kernel measured alone is not the same kernel
+measured in a model.
+
 ### Depth is the lever, and the 397B is the best candidate we have
 
 SS7 already argued depth pays only at high acceptance. The 397B has the
@@ -659,9 +698,15 @@ tokens in expectation:
 | Flash-Next | 1 | 2 | 1.78 | 51.99 ms | 1.790x |
 | Flash-Next | **2** | 3 | 2.39 | 68.00 ms | **1.836x** |
 | Flash-Next | 3 | 4 | 2.86 | 87.57 ms | 1.709x |
-| 397B | 1 | 2 | 1.90 | 90.70 ms | 1.142x |
-| 397B | **2** | 3 | 2.71 | 114.14 ms | **1.295x** |
-| 397B | 3 | 4 | 3.44 | 156.14 ms | 1.201x |
+| 397B | 1 | 2 | 1.90 | 89.61 ms | 1.134x |
+| 397B | **2** | 3 | 2.72 | 114.25 ms | **1.270x** |
+| 397B | 3 | 4 | 3.45 | 156.38 ms | 1.179x |
+
+(397B rows recomputed on the clean idle-box timings, seq1 53.43 / seq2 80.26 /
+seq3 95.55 / seq4 128.33. The head-forward term is still the 9.35 ms measured
+under the old conditions --- it was not re-measured clean, so treat the 397B
+depth numbers as good to about a percent, not better. Note also that seq3 and
+seq4 are OLD-kernel numbers per the N <= 20 gate above.)
 
 Depth-2 is optimal for both, and it is worth far more to the 397B (+13%
 relative) than to Flash-Next (+3%), precisely because acceptance is higher.
@@ -669,7 +714,7 @@ relative) than to Flash-Next (+3%), precisely because acceptance is higher.
 Two corrections to apply before believing 1.295x: the cost model overshot
 depth-1 by ~13% on both models, and geometric decay (a^2) flatters a
 multi-step draft, since step 2 feeds the head its own hidden state rather
-than the trunk's. Realistically depth-2 on the 397B is **~1.1-1.15x** --- not
+than the trunk's. Realistically depth-2 on the 397B is **~1.1x** --- not
 the 1.6x Flash-Next gets, but no longer nothing.
 
 **So: "the 397B buys nothing" is true only of depth-1.** The head is correct,
