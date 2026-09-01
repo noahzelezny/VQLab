@@ -60,3 +60,27 @@ def test_dry_run_uploads_nothing():
     i = SRC.index("if a.dry_run:")
     assert "return 0" in SRC[i:i + 200]
     assert SRC.index("if a.dry_run:") < SRC.index("from huggingface_hub")
+
+
+def test_docs_only_uploads_skip_the_smoke_but_not_the_static_checks():
+    """A README cannot break the runtime, and the smoke needs the whole model
+    resident -- 112 GiB for the largest Flash-Next rung. Demanding that to fix
+    a sentence produces a gate people route around, which is the failure the
+    gate exists to prevent. So documentation-only uploads run the static scan
+    and skip the generation smoke, and say so in the output.
+
+    Anything touching the runtime or config still takes the full gate."""
+    assert 'DOC_SUFFIXES = {".md", ".txt", ".jinja"}' in SRC
+    assert "docs_only = all(" in SRC
+    # the static half is NOT skipped -- --no-smoke keeps check_release's
+    # import scan and compile check
+    assert 'gate.append("--no-smoke")' in SRC
+    # check_release is invoked on BOTH paths -- the gate command is built
+    # once and only gains --no-smoke for docs.
+    assert SRC.count("check_release.py") >= 1
+    i = SRC.index("gate = [sys.executable")
+    j = SRC.index("r = subprocess.run(gate)")
+    assert "check_release.py" in SRC[i:j]
+    assert SRC.index("r = subprocess.run(gate)") < SRC.index("from huggingface_hub")
+    # and the user is told which verification actually happened
+    assert "generation NOT re-verified" in SRC
