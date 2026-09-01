@@ -197,6 +197,7 @@ def mtp_stream_generate(
     logits_processors: Optional[List[Callable]] = None,
     prefill_step_size: int = 2048,
     align: str = "committed",
+    prompt_cache=None,
 ) -> Iterator[MTPResponse]:
     """Stream tokens from `model`, drafting each second token with `head`.
 
@@ -206,6 +207,10 @@ def mtp_stream_generate(
 
     `align` selects the head-cache scheme: "committed" (default) or "legacy".
     See the module docstring -- "legacy" exists for A/B measurement only.
+
+    `prompt_cache` lets a caller (a server) own the trunk cache. It must be
+    EMPTY: the head is seeded from this prompt starting at position 0, so a
+    cache carrying a reused prefix would shift every rotary position.
     """
     if align not in ("committed", "legacy"):
         raise ValueError(f"align must be 'committed' or 'legacy', got {align!r}")
@@ -231,7 +236,20 @@ def mtp_stream_generate(
         return d.sample(), d
 
     with capture_input(model.model, spec.capture) as get_h:
-        cache = model.make_cache()
+        cache = model.make_cache() if prompt_cache is None else prompt_cache
+        # A caller-supplied cache that already holds a prefix would put the
+        # head's positions back exactly where the alignment fix took them
+        # from: the head is seeded from THIS prompt starting at position 0,
+        # so a trunk cache at offset O silently shifts every rotary position
+        # by O. Refuse rather than degrade -- a server reusing prompt caches
+        # must either pair a head cache with each trunk cache or disable
+        # reuse (see vqlab/serve.py).
+        used = max((getattr(c, "offset", 0) or 0) for c in cache) if cache else 0
+        if used and align == "committed":
+            raise ValueError(
+                f"prompt_cache already holds {used} positions; the MTP head "
+                f"cannot be aligned to a reused trunk cache yet. Pass a fresh "
+                f"cache, or use align='legacy' (which is misaligned anyway).")
         dcache = spec.make_draft_cache(arch)
 
         # prefill. The per-chunk hidden states are kept when the head is
