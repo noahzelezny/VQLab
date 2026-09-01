@@ -470,12 +470,16 @@ times). Reproducible is not contention.
 
 So the number to carry forward is not the 1.43x ratio --- which is a real
 ratio inside a broken regime, and not comparable to Flash-Next's 1.58x --- but
-the baseline itself. **A dense VQ artifact appears to decode about fifty times
-slower than it should, and that has nothing to do with speculative decoding.**
-A control is queued: stock Qwen3.8-27B-8bit against the VQ-3.9bpw rung, same
-machine, same harness, no head involved. If the stock model decodes normally,
-the cost is in the VQ dense read path and belongs to the VQ side of this
-project, not the MTP side.
+the baseline itself. The control settles it: on the same machine, same
+harness, same prompt, no head involved, stock `Qwen3.8-27B-8bit` generates at
+**16.687 tok/s** and our `27B-VQ-3.9bpw` at **0.426 tok/s** --- 39x slower,
+while using 7 GB LESS memory.
+
+**That is a VQ finding, not an MTP finding, and it is the most consequential
+thing this campaign turned up.** It is written up separately in
+[DENSE-VQ-DECODE.md](DENSE-VQ-DECODE.md). The MoE VQ path measures clean
+(Flash-Next 18.85 tok/s, 397B 17.59), so it points at the dense read path
+specifically.
 
 The general rule: a speedup ratio is only a compute speedup if the absolute
 throughput is plausible for the model. Check the baseline against what the
