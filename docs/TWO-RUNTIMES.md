@@ -54,21 +54,43 @@ same mechanism kept operating for every MoE artifact.
 3. **So they drifted, invisibly.** exo's installed copy is **228 lines, dated
    Aug 15 (M4) / Aug 24 (M3)**: `d=4` only, `_fused()` with no `pack_bits`
    parameter, no d8 kernels. The bundle is **2048 lines** with d8, packed and
-   tiled kernels. Two weeks apart, and no check would ever say so.
+   tiled kernels. Two weeks apart, and no check would ever say so. Note the
+   drift is only harmful WHERE THE HOOK FIRES: remove the hook and the pin
+   keeps working, because 0.31.9 runs the bundle on its own.
 4. **The dense bundle broke and only downloaders saw it.** `model.py`
    imported `mlx_lm.models.vq_switch` — which resolves on every patched
    machine and on none of theirs.
 
 ## Consequences that are still live
 
-- **exo does not run the bundle.** `utils_mlx.py` calls
-  `load_model(model_path, lazy=True, strict=False)`, and that signature is
-  `trust_remote_code: bool = False`, so the bundle is not even read; the
-  patched runtime supplies the modules. None of the kernel work from the last
-  two weeks reaches exo-served inference.
-- **exo's runtime cannot serve the current MoE artifacts.** They are
-  `d=8 / K=16384 / pack_bits=14`; the installed copy has no packing support
-  and no d8 kernels at all.
+- **exo DOES run the bundle, and then discards part of it.** An earlier
+  version of this document said exo never reads `model.py`. That was wrong:
+  it came from reading `load_model`'s signature in a 0.32 venv, while exo
+  pins **mlx-lm 0.31.9**, whose `load_model` takes no `trust_remote_code`
+  argument at all and executes `model_file` unconditionally. Corrected by the
+  expert-kernel session; verified on both boxes.
+
+  What actually happens on an exo machine is a hybrid, and it is worse than
+  either half alone:
+
+  1. `load_model` executes the artifact's `model.py` and builds the bundle's
+     own `VQSwitchLinear` modules.
+  2. The `patch_mlx_lm.py` hook, still installed at **line 501 of
+     `utils.py` INSIDE `load_model`** on both the M3 and M4 venvs, then
+     overwrites them with the site-packages copy for every `ndim == 3`
+     `.codes` tensor.
+
+  So the bundle runs and is then thrown away, for MoE artifacts specifically.
+  Dense artifacts store 2-D codes, so the hook does not fire and their
+  bundles survive intact --- which is exactly the carve-out its 2026-08-19
+  comment describes.
+- **The copy that wins cannot serve the current MoE artifacts.** The
+  installed `vq_switch.py` is 228 lines (`d=4 only, v1`), its
+  `VQSwitchLinear.from_weights(codes, codebook, vq_scales)` takes no
+  `pack_bits`, and our MoE artifacts are `d=8 / K=16384 / pack_bits=14`. The
+  hook hands it packed uint32 words as if they were plain codes. Expect a
+  shape error, or silent garbage --- and it will present as a bug in the
+  artifact rather than in the environment.
 - **The name collision follows from this.**
   `~/.exo/models/TheDrainFlorist--Qwen3.5-397B-A17B-VQ-2.2bpw` on the M4 is an
   old `K=128 / d=4` fit. That is not a stray copy: it is the generation the
@@ -94,9 +116,13 @@ the "our machines are unrepresentative" hole.
 problem, not either one:
 
 - *Bundle only* matches the model cards and gives one artifact one runtime.
-  It needs exo to pass `trust_remote_code=True` into `load_model` (a change
-  to the fork, alongside the existing 8-line codebook-replicate guard), and
-  the patch removed from every venv.
+  On the current 0.31.9 pin it needs only the HOOK REMOVED from both venvs ---
+  nothing else, because 0.31.9 already executes `model_file`. It additionally
+  needs the fork to thread `trust_remote_code=True` into `load_model` BEFORE
+  any pin bump to >= 0.32, where that argument appears and defaults to False;
+  without that, a routine dependency bump kills every VQ model at load. The
+  expert-kernel session has drafted exactly that change (detect the kwarg via
+  `inspect`, no-op on 0.31.9).
 - *Patch only* keeps exo's current behaviour and requires re-running
   `patch_mlx_lm.py` on every venv whenever the runtime changes, plus a gate
   that compares the installed copy against the repo. The cards would need to
