@@ -169,9 +169,20 @@ class VQLinear(nn.Module):
         # generate a token. Does not bite at any rung on disk today
         # (d2/K4096 at NSUB 2560 needs 26,624 B) and would have bitten at
         # d2/K8192.
-        _nsub = IN // int(self.codebook.shape[1])
+        # NSUB TILING (2026-09-01). The budget above is the UNTILED
+        # kernel's, and it grows with layer width: at 27B mlp shapes it
+        # reports "too big" and every forward then decoded the whole weight,
+        # which measured 0.43 tok/s against stock's 16.7. The tiled kernels
+        # stage one block span instead of the whole x row, so their budget is
+        # (K + 32*(G/2)) * 4 and does not depend on width at all. Ask
+        # vq_switch whether EITHER kernel can serve the shape; it picks.
+        # Bit-exactness against the untiled path is asserted in
+        # tests/test_vq_dense_tiled.py, and matters because these artifacts'
+        # published scores were produced by the paths this replaces.
         _kk = int(self.codebook.shape[0])
-        _fits_tg = (_kk + _nsub) * 4 + 1024 <= 32768
+        _G = IN // int(self.vq_scales.shape[-1])
+        _fits_tg = _resolve_kernel("dense_fits")(
+            _kk, IN, _G, int(self.codebook.shape[1]))
         if N <= 32 and int(self.codebook.shape[1]) == 2 and _fits_tg:
             # DENSE fused kernel (2026-08-19): one simdgroup per output row
             # instead of one thread, no expert axis. Bit-identical to the
