@@ -45,17 +45,18 @@ import mlx.nn as nn
 # decode is 1.65 ms flat. So the fused path stays ahead six times longer when
 # codes are packed.
 #
-# Memory is the other reason, and for packed artifacts it is the bigger one.
-# The decode path builds a 170 MB fp16 weight per layer, plus the unpack
-# temporaries, and mlx builds the whole forward before evaluating -- so a
-# packed 27B rung peaked at 30 GB for a 15.5 GB model, i.e. it needed twice
-# its own weight in RAM and could OOM a machine its model card says it fits.
-# Routing short prompts through the fused path, which materialises nothing,
-# took that peak to 16.1 GB.
+# Allocation CHURN is the other reason -- though NOT the emergency it first
+# looked like, and the correction is worth keeping. The decode path allocates
+# and frees a ~170 MB fp16 weight per VQ linear, so mx.get_peak_memory(),
+# which is a cumulative high-water counter of transient allocations, reads
+# 37.9 GiB at 2048 context on a 14.6 GiB model. That is not resident memory:
+# the same run completes under a 22 GiB mx.set_memory_limit cap, and process
+# RSS stays at 15.2 GiB (12.2 / 14.2 / 15.2 for the 3.9 / 4.5 / 4.8 rungs,
+# i.e. each runs in its own size).
 #
-# Prompts longer than these thresholds still take the decode path and still
-# pay the transient. Bounding it there needs chunked decode with forced
-# evaluation and is NOT done -- see docs/DENSE-VQ-DECODE.md.
+# So the fused path wins here on speed and churn, not on survival. Never
+# quote get_peak_memory() as a RAM requirement -- measure RSS. Doing the
+# former produced a false alarm that briefly went into a public model card.
 _DENSE_FUSED_MAX_N_PACKED = int(os.environ.get("VQ_DENSE_FUSED_MAX_N", 96))
 _DENSE_FUSED_MAX_N_PLAIN = int(os.environ.get("VQ_DENSE_FUSED_MAX_N_PLAIN", 12))
 
