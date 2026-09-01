@@ -246,6 +246,34 @@ Across runs: **1.56–1.80x (median 1.65x)**, acceptance 0.578–0.812 (median
 `model*.safetensors` glob, so a model directory carrying one still loads
 normally through the stock loader — the head is optional residency.
 
+### What the speedup depends on
+
+**The MTP speedup is a function of how predictable your text is, not a
+property of the model.** The head drafts a token, the trunk verifies it, and
+the gain is however often the draft was right. Measured on one model with one
+head, acceptance ranged **0.64 to 0.95 across twelve ordinary prompts**, and
+hit exactly **1.0** on repetitive synthetic text.
+
+| workload | acceptance | speedup |
+|----------|-----------|---------|
+| hardest prompt measured | 0.64 | ~1.35x (implied) |
+| typical prose questions | 0.78-0.82 | **1.58-1.65x (measured)** |
+| easiest prompt measured | 0.95 | ~1.87x (implied) |
+| repetitive / boilerplate | 1.00 | 1.95x (measured) |
+
+Only the bolded row and the last are measured directly; the others are
+implied by interpolating between them. The practical reading: the feature is
+strongest on code completion, structured output and boilerplate — where
+drafts land — and weakest on short high-entropy answers, where decode time
+matters least anyway.
+
+The same fact makes **cross-project acceptance numbers meaningless without
+shared prompts**: the spread from workload alone (0.64-1.0) is wider than the
+gaps usually quoted between implementations.
+
+Trunk quantization, by contrast, does NOT affect acceptance — measured across
+three rungs, paired, nothing significant. See [docs/MTP.md](docs/MTP.md).
+
 ### Speedup, measured on a thermally stable machine (2026-08-31)
 
 2.1bpw rung, 512 tokens greedy, M4 Max with active cooling, 12 runs in
