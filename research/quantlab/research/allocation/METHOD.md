@@ -273,3 +273,23 @@ WRONG BASE (KL 178.33), beating the carefully swept one (195.64). That is not
 evidence the careful method is wrong — the careful one was crippled by 7.1 and
 7.2 — but it is a caution against assuming rigour in the procedure implies
 quality in the artifact. Verify the artifact; the procedure is not the claim.
+
+### 7.4 Splice donors need not share a shard layout
+
+The splice tool originally asserted `weight_map` equality between base and
+donor. That held only because the GLM VQ artifacts were all built from ONE
+struct base, so every geometry sharded identically. It breaks for:
+
+- a PARTIALLY fitted donor (only some layers at the new geometry — the rest
+  keep their old sizes, so shard boundaries move), and
+- the affine ladder (§4.1: 2654 of 2998 keys sit in different shards across
+  q3/q4/q6, because bit-width changes tensor size).
+
+Fixed 2026-09-01: look each donor tensor up in the DONOR's own weight_map and
+load from whatever shard holds it; the OUTPUT keeps the base's layout. The
+safety property that actually matters is "every module we intend to splice
+exists in the donor", which is now what gets checked. Layout equality was a
+proxy for it — a stricter condition than necessary, which is why it passed
+everything until it didn't.
+
+This also removes the engineering obstacle §4.1 listed for the affine test.
