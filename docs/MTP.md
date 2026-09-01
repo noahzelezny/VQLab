@@ -594,6 +594,34 @@ costs more and there is less fixed overhead to amortise. **Some of our
 headline 1.58x is Flash-Next collecting a kernel-selection discount at n=1
 that other models do not offer.**
 
+#### Two measurement confounds found afterwards (2026-09-01)
+
+Both were found by the expert-kernel session, in my measurements.
+
+**A ~0.33 ms `mx.eval` submit floor.** A 4x4 matmul times the same as a real
+kernel on the M3, so any per-call timing near a millisecond was measuring the
+harness. This invalidates the MoE per-kernel microbenchmark wholesale (it
+reported 0.30-0.52 ms/call and concluded "latency-bound, not
+bandwidth-bound"); real per-kernel timing needs chained submits. It does NOT
+move the seq2/seq1 numbers below, which are trunk forwards of 46-81 ms:
+floor-correcting them changes Flash-Next by -0.07% and the 397B by +0.20%.
+
+**A 36 GB VLM server resident on the M4 during the 397B runs.** The 397B at
+2.2bpw is 101 GiB; with `scout_vlm_server` alongside it that is ~137 GB on a
+128 GB box, i.e. the 397B timings in this document were taken under genuine
+memory pressure that nobody was accounting for. Acceptance is unaffected
+(greedy decoding is deterministic), so 0.9023 stands. Every 397B WALL-CLOCK
+number is provisional until the clean re-run lands.
+
+Note what this does and does not do to the pressure argument above. The
+falsification logic survives --- Flash-Next at 95 GiB was under the same
+confound and still measured 0.838, so pressure alone does not produce a high
+ratio --- but the absolute 397B figures (t1 54.54 ms, ratio 1.492, MTP
+1.000x) were all taken with an unmeasured 36 GB tenant and should be replaced
+rather than defended.
+
+The 35B figures are unaffected: at ~16 GB it never approached the limit.
+
 #### Codebook residency does NOT explain it (a wrong claim, corrected)
 
 This document briefly recorded that Flash-Next behaves differently because
