@@ -267,13 +267,14 @@ from a laptop means anything; quote it alongside, or do not quote the speedup.
 **All three heads are within 0.5% of each other**, so the 1.25 GiB head buys
 its 0.87 GiB back for essentially nothing in speed as well as acceptance.
 
-The alignment fix is worth **+1.58% wall-clock** (t=9.7) — real, but far less
-than its +5.9pp of acceptance suggests, because the committed scheme runs the
-head over two positions per step instead of one and spends most of the gain on
-that extra forward. MTPLX instead decouples the rope offset from the cache
-offset and keeps one head forward per step; doing the same here would likely
-capture the acceptance at half the head cost, and is the obvious next
-optimization.
+The alignment fix is worth **+1.58% wall-clock** (t=9.7). That is close to
+the most it *could* be worth, and the reason is structural rather than a
+defect: at depth 1 each step emits exactly two tokens regardless, so
+acceptance only changes how often a rejection costs a replay. On this prompt
+the delta was 2.7pp, whose ceiling is +2.24% even with a free head; the
+measured +1.58% implies the head costs ~0.5 of a trunk forward, absorbing
+about a third of the available gain. Alignment's value is in acceptance, which
+is what a deeper draft would spend — not in wall-clock at depth 1.
 
 ### Head-cache alignment: worth +5.9pp acceptance (2026-08-31)
 
