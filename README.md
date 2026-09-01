@@ -490,6 +490,16 @@ the reason, never silently dropped.
 - New family? Read `docs/ONBOARDING.md` (the two-hour characterisation pass
   to run before fitting anything).
 
+## Research archive
+
+[research/quantlab/](research/quantlab/) is the project's original research
+tree ("quantlab" — same project, earlier name), merged here with its full
+603-commit history: the experiment log (E60–E147), the quantization ladders,
+the DWQ/GPTQ arcs, and the drafts behind the companion paper. Everything in
+it is frozen history. The runtime files it contains are the vintages the
+experiments ran on; the canonical, maintained versions live in
+[src/vqlab/](src/vqlab/).
+
 ## Development note
 
 This repository was assembled with AI assistance (Claude Code). Direction,
