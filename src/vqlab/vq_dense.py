@@ -27,6 +27,39 @@ import mlx.core as mx
 import mlx.nn as nn
 
 
+# Rows below which the fused kernel beats decode-the-weight-then-GEMM.
+#
+# This is TWO numbers, because the decode path's cost depends entirely on
+# whether the codes are packed. Measured 2026-09-01 on the 27B mlp shape
+# (OUT 17408, IN 5120, d=2), ms per call:
+#
+#   packed (K512/bits9)   N      1     8    32    68   128   256
+#                         fused  0.6   1.4   4.2   8.3  14.9  29.2
+#                         decode 9.6   9.5   9.7  10.2  10.2  11.3   -> cross ~100
+#
+#   unpacked (K256)       N      1     8    16    32    68    96
+#                         fused  0.5   1.2   2.2   3.9   7.9  11.1
+#                         decode 1.7   1.5   1.7   1.7   2.3   2.3   -> cross ~12
+#
+# Packed decode is ~9.5 ms flat because _unpack_rows dominates it; unpacked
+# decode is 1.65 ms flat. So the fused path stays ahead six times longer when
+# codes are packed.
+#
+# Memory is the other reason, and for packed artifacts it is the bigger one.
+# The decode path builds a 170 MB fp16 weight per layer, plus the unpack
+# temporaries, and mlx builds the whole forward before evaluating -- so a
+# packed 27B rung peaked at 30 GB for a 15.5 GB model, i.e. it needed twice
+# its own weight in RAM and could OOM a machine its model card says it fits.
+# Routing short prompts through the fused path, which materialises nothing,
+# took that peak to 16.1 GB.
+#
+# Prompts longer than these thresholds still take the decode path and still
+# pay the transient. Bounding it there needs chunked decode with forced
+# evaluation and is NOT done -- see docs/DENSE-VQ-DECODE.md.
+_DENSE_FUSED_MAX_N_PACKED = int(os.environ.get("VQ_DENSE_FUSED_MAX_N", 96))
+_DENSE_FUSED_MAX_N_PLAIN = int(os.environ.get("VQ_DENSE_FUSED_MAX_N_PLAIN", 12))
+
+
 def _resolve_kernel(name):
     """Find the fused kernel, most-local copy first.
 
@@ -68,21 +101,45 @@ def _unpack_rows(packed, nsub, bits):
     Runs on-GPU at gather time so packed EMBEDDING rows never round-trip
     through numpy. Same 32-codes-per-block layout as vq_pack.py; verified
     against vq_pack.unpack bit-exactly before first use.
+
+    MEMORY (2026-09-01). This is called on the PREFILL path, once per VQ
+    linear, and mlx builds the whole forward before evaluating it -- so every
+    layer's temporaries are alive at once and this function sets the peak.
+    The original cast the slab to uint64 (8 bytes per element) and returned
+    uint32, which cost ~630 MB of transient per 27B mlp layer against the
+    unpacked path's 178 MB. Across 64 layers that is the difference between a
+    15.9 GB peak and a 30.0 GB one: the 4.8bpw artifact needed twice its own
+    weight in RAM, which defeats the entire point of packing and can OOM a
+    machine the model card says it fits on.
+
+    Two changes, both bit-preserving:
+      - stay in uint32. bits <= 16 always, so a field either lies inside one
+        word or straddles two, and both cases are exact in 32-bit as long as
+        the shift that would be >= 32 is never evaluated (see below).
+      - return the narrowest dtype the codebook needs, not always uint32.
+
+    The `sh + bits > 32` branch is why the uint64 was there: `32 - sh` is a
+    32-bit shift by 32 when sh == 0, which is undefined. sh == 0 also means
+    the field cannot straddle (bits <= 32), so that branch is unreachable
+    then, and it is a Python-level `if` on compile-time constants here rather
+    than a data-dependent select -- the bad shift is never emitted at all.
     """
     R, wpr = packed.shape
     nblk = nsub // 32
-    src = packed.reshape(R, nblk, bits).astype(mx.uint64)
-    mask = mx.array(( 1 << bits) - 1, dtype=mx.uint64)
+    src = packed.reshape(R, nblk, bits)
+    mask = mx.array((1 << bits) - 1, dtype=mx.uint32)
     outs = []
     for i in range(32):
         off = i * bits
         w, sh = divmod(off, 32)
-        v = src[:, :, w] >> mx.array(sh, dtype=mx.uint64)
+        v = src[:, :, w] >> mx.array(sh, dtype=mx.uint32) if sh else src[:, :, w]
         if sh + bits > 32:
-            v = v | (src[:, :, w + 1] << mx.array(32 - sh, dtype=mx.uint64))
-        outs.append((v & mask).astype(mx.uint32))
+            # sh > 0 here, so 32 - sh is in [1, 31] and the shift is defined.
+            v = v | (src[:, :, w + 1] << mx.array(32 - sh, dtype=mx.uint32))
+        outs.append(v & mask)
+    ct = mx.uint8 if bits <= 8 else mx.uint16
     # outs[i] is code i of every block -> interleave back to row order
-    return mx.stack(outs, axis=-1).reshape(R, nsub)
+    return mx.stack(outs, axis=-1).reshape(R, nsub).astype(ct)
 
 
 class VQLinear(nn.Module):
@@ -189,7 +246,9 @@ class VQLinear(nn.Module):
         # have a kernel (d=2 tiled/untiled, d=4 device-codebook), and
         # duplicating that as `== 2` here is what kept the d4 rung on
         # the decode path after its kernel existed.
-        if N <= 32 and _fits_tg:
+        _maxn = (_DENSE_FUSED_MAX_N_PACKED if self.pack_bits
+                 else _DENSE_FUSED_MAX_N_PLAIN)
+        if N <= _maxn and _fits_tg:
             # DENSE fused kernel (2026-08-19): one simdgroup per output row
             # instead of one thread, no expert axis. Bit-identical to the
             # expert-kernel path below (the kernel replicates its float
