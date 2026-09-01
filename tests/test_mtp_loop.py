@@ -271,9 +271,10 @@ def test_qwen35_family_entries_resolve():
         assert hasattr(cls, "advance")
         arch = importlib.import_module("mlx_lm.models.qwen3_5")
         assert isinstance(spec.make_draft_cache(arch), arch.KVCache)
-        # KVCache writes into a preallocated buffer, so the cheap
-        # snapshot path is NOT available to this family.
-        assert spec.cache_semantics == "copy"
+        # Earned by measurement, and load-bearing: this family's trunk cache
+        # is mostly recurrent (48 of 64 entries on the 27B), so "copy" would
+        # deep-copy every GatedDeltaNet state once per speculative step.
+        assert spec.cache_semantics == "reassign"
 
 
 def test_qwen35_head_rejects_bad_wiring():
