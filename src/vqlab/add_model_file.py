@@ -65,7 +65,14 @@ cfg["model_file"] = "model.py"
 cfg["vq_modules"] = vq_modules
 json.dump(cfg, open(ART / "config.json", "w"), indent=1)
 
-runtime = (pathlib.Path(__file__).parent / "vq_switch.py").read_text()
+# The bundle carries BOTH runtimes, matching build_dense_vq.py's dense
+# bundles: vq_switch.py has the MoE kernels, vq_dense.py has VQLinear and --
+# what strict smoke (8e15861) actually requires of every bundle --
+# _resolve_kernel, so the shipped kernels can be traced to a source. A
+# vq_switch-only bundle fails that gate.
+runtime = ((pathlib.Path(__file__).parent / "vq_switch.py").read_text()
+           + "\n\n"
+           + (pathlib.Path(__file__).parent / "vq_dense.py").read_text())
 shim = '''
 
 # ---------------------------------------------------------------------------
