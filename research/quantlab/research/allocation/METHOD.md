@@ -178,6 +178,18 @@ GLM's affine ladder (q3 129 GiB / q4 166 / q6 239) is already on disk. Splice
 one layer between q3 and q4, measure, then test transfer across bases exactly
 as §2.4 did for VQ.
 
+CONFOUND, raised by Noah 2026-08-31 and it is a real one: the affine ladder
+steps ~1.0 bpw (q3 3.524 / q4 4.524 / q6 6.524) where our VQ levels step ~0.5
+(2.50 / 3.00 / 3.50), and affine's collapse sits ~1 bpw HIGHER than VQ's --
+q3 is already collapsed at KL 377 where VQ at 3.58 bpw scores 94.5. So a
+q4->q3 demotion pushes that layer across the cliff, which is analogous to our
+d8 demotions (~-10 mnats each) rather than to any above-cliff move. A NULL
+result on affine could therefore be explained by step size rather than by
+anything about affine, leaving the question open rather than answered.
+Mitigation if the test is run: use q4->q5 (mlx affine supports intermediate
+bit-widths, and group_size gives finer control still) so the step is
+comparable, rather than the ladder rungs we happen to have built.
+
 ONE ENGINEERING OBSTACLE, measured 2026-08-31: the affine artifacts share all
 2998 keys but NOT their shard assignment — 2654 keys sit in different shards,
 because differing bit-widths change tensor sizes and therefore sharding. The
