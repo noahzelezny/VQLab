@@ -1,8 +1,14 @@
-# research/ — per-model-family arcs
+# research/ — per-model-family arcs (plus method arcs)
 
 One directory per model family under active investigation. Each carries a
 LEDGER.md: the family's arc ledger, dated entries, newest wins — same
 conventions as paper/LEDGER.md, scoped to the family.
+
+DELIBERATE EXCEPTION: `allocation/` is a METHOD arc, not a family arc. It
+carries METHOD.md rather than a family LEDGER, because splice-measured
+allocation is developed across families and its findings are candidates for
+promotion to FINDINGS.md once they replicate. Family-specific allocation
+numbers stay in the family ledger that produced them.
 
 Division of authority (unchanged by this structure):
 - FINDINGS.md (root)      cross-family LAWS and retractions. A result that
