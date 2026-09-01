@@ -377,10 +377,34 @@ The graft is extracted and waiting. What is NOT done is the head module — the
 - conventional `input_layernorm` / `post_attention_layernorm` + `mtp.norm`,
   not hyper-connections
 - shares `pre_fc_norm_embedding` / `pre_fc_norm_hidden` naming with qwen4_exp
-- **the norm convention is the OPPOSITE of qwen4_exp**: qwen3_5 stores gains
-  as a delta applied by a conventional `nn.RMSNorm`, and `mtp.*` loads outside
-  mlx-lm's sanitize, so the sidecar gains MUST be shifted +1.0. Getting this
-  backwards gives exactly 0.0 acceptance and looks like a dead head. See §2.
+- **the norm convention must be SWEPT, not assumed.** Two facts are confirmed
+  from `qwen3_5.sanitize`: `mtp.*` keys are explicitly dropped
+  (`if "mtp." not in k`), so the head never gets sanitized; and the `+1.0`
+  applied to trunk norms is CONDITIONAL on `has_unsanitized_conv1d`, i.e. only
+  for raw HF-layout checkpoints.
+
+  But the values do not support a single rule. Measured on the 397B bf16,
+  every MTP norm sits outside its trunk counterparts' range, and by
+  inconsistent offsets:
+
+  | norm | trunk means (6 layers) | MTP |
+  |------|-----------------------|-----|
+  | `input_layernorm` | -0.072 .. +0.018 | **-0.310** |
+  | `post_attention_layernorm` | -0.169 .. -0.098 | **+0.976** |
+  | `q_norm` / `k_norm` | 0.11 .. 0.39 | **0.758 / 0.725** |
+  | `pre_fc_norm_embedding` | (no trunk analogue) | -0.810 |
+  | `pre_fc_norm_hidden` | (no trunk analogue) | -0.456 |
+
+  `post_attention_layernorm` differs from the trunk by ~1.09 (as if already
+  shifted) while `input_layernorm` differs by ~0.3 and `q_norm` by ~0.5. No
+  single offset explains all of them, so the head's norms may simply have
+  different learned statistics — one layer at the very end of the network is
+  not obliged to look like layer 12.
+
+  **Therefore: make the shift a per-norm-group FLAG and sweep it, exactly as
+  `mtp-probe --norm-style` already does for qwen4_exp.** The wrong choice
+  yields exactly 0.0 acceptance, so the measurement is unambiguous and cheap.
+  Do NOT bake in a guess — that guess is what cost the original arc days.
 
 Order of work: head module -> registry entry -> `mtp-pack` -> **probe
 acceptance before anything else** (a 512-expert head on a 397B model has never
