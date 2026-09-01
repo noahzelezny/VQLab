@@ -557,3 +557,46 @@ TWO BLOCKERS BEFORE UPLOAD:
    GLM's bundle was audited clean of that specific bug: it imports only
    stdlib/mlx/numpy and falls back to mlx_vlm.models.glm5_next, which IS in
    released mlx-vlm 0.6.17.
+
+## 2026-09-01 — FINAL V2 RELEASE SET (100 / 120 / 140, head-inclusive)
+
+Targets softened by Noah: "I don't want to ship a worse model over 1-2gb,
+particularly at 120GB and above" — only the 100 sits near a hard constraint
+(M4, 128 GB). Selection is therefore BEST-IN-CLASS, not nearest-to-target.
+
+  rung      trunk  published      KL   prose   code    lit   total nats
+  v2_100    97.30     100.20  338.32  2.5719 1.7114 1.5605      0.739
+  v2_120   116.91     119.81  182.11  2.2162 1.5841 1.2396      0.283
+  v2_140   135.06     137.96   89.21  2.0108 1.5490 1.1952      0.127
+  affine reference: q3 129 GiB 0.766 | q4 166 GiB 0.155 | q6 239 GiB 0.024
+
+BOTH ENDPOINTS BEAT THEIR AFFINE COUNTERPARTS ON EVERY CORPUS AT ~28 GiB LESS:
+v2_100 vs q3 (0.739 vs 0.766 at 100.2 vs 129) and v2_140 vs q4 (0.127 vs 0.155
+at 137.96 vs 166). v2_140 is the strongest artifact of the arc.
+
+v2_140 = the 134 base plus the FIVE measured-positive promotions to
+d4/K16384 (L6, L9, L33, L36, L38), +1.06 GiB for -29 mnats. Promotions
+realised well, consistent with every other promotion-only solve (~0.84) and
+in contrast to every demotion-heavy one (0.17-0.68).
+
+METRIC CORRECTION — OUR "KL" IS PROSE-ONLY. The teacher cache is
+glm53_teacher_topk_prose and --kl-cache is passed only on the prose run; code
+and literary report perplexity alone. So ranking artifacts by KL weights prose
+at 100%. Consequence: v2_120 LOSES to r116opt on KL (182.11 vs 178.33) but
+carries 24% LESS TOTAL DAMAGE (0.283 vs 0.373 summed nats), because it is much
+better on code and literary. Several earlier better/worse calls in this ledger
+were made on KL alone and should be re-read as prose-only statements —
+including "v2_130 is worse than uniform", which was a prose-only claim.
+Use SUMMED ADDED NATS across the three corpora for artifact selection.
+
+REJECTED FROM THE SET: v2_130 (dominated by r134opt2 on size AND prose-KL);
+r116opt (worse total nats than v2_120); r134opt2 (superseded by v2_140).
+
+BLOCKERS UNCHANGED, both required before upload:
+1. Runtime drift — v2_100 bundles 1863 lines, v2_120 2019, v2_140 2035, all
+   from an UNCOMMITTED vq_switch.py the other session is actively editing.
+   Rebuild the three against ONE pinned commit once that work lands. Noah:
+   "we'll add the corrected runtimes once it finishes."
+2. No token has been generated. v2_100 (100.2 GiB) fits the M4 and must be
+   smoked there. v2_120/v2_140 are exo-cluster rungs by design. Noah: "Not
+   publishing without smoke anyway."
