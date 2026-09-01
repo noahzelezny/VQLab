@@ -545,22 +545,39 @@ the cost model overpredicts by 12-14% on both models, so the real ceiling is
 about 1.06x. No acceptance rate rescues this, and neither does a cheaper head:
 the head is only a tenth of the denominator.
 
-**What is NOT yet settled is why the ratio differs**, and the two candidates
-have opposite consequences:
+**Memory pressure was the obvious explanation, and it is wrong.** The 397B
+sits at 103.25 GiB against a 120 GiB wired limit, so bandwidth-bound decode
+was the natural guess. Flash-Next tests it directly, being the same
+architecture at three residencies:
 
-- *memory pressure* --- 103.25 GiB resident against a 120 GiB wired limit
-  makes decode bandwidth-bound, and a 2-token forward through a sparse MoE
-  touches close to two tokens' worth of experts. If this is it, the 397B head
-  is not dead weight; it needs a machine with headroom (exo cluster).
-- *something specific to the 397B* --- in which case depth-1 is simply the
-  wrong tool for it and more RAM changes nothing.
+| model | resident | ratio seq2/seq1 |
+|---|---|---|
+| Flash-Next 2.1bpw | 46 GiB | 0.892 |
+| Flash-Next 3.2bpw | 70 GiB | 0.874 |
+| Flash-Next 4.4bpw | **95 GiB** | **0.838** |
+| 397B 2.2bpw | 103 GiB | **1.491** |
 
-Flash-Next discriminates them cleanly, because it is the same architecture at
-three residencies (46, 70, 95 GiB). A ratio that climbs with the rung is
-pressure; a flat 0.89 is not. That curve is queued.
+The ratio does not climb with residency --- it falls slightly, and it is still
+0.838 at 95 GiB, within 8 GiB of where the 397B sits. Memory pressure on this
+machine does not produce a 1.49 ratio.
 
-Until it reports: **the 397B head drafts excellently, and the drafting does
-not convert to throughput on this machine.**
+**So this is not a "needs a bigger machine" problem, and clustering the 397B
+across M3+M4 will not fix it.** That is worth knowing before anyone spends a
+day on exo for this.
+
+What remains is a property of the 397B's forward pass itself. The leading
+candidate is expert gather: at top-10 of 512 experts and 17B active
+parameters, two positions route to largely disjoint expert sets, so a 2-token
+forward fetches close to two tokens' worth of expert weight. That is a
+hypothesis, not a finding --- and given the record tonight it stays labelled
+as one. A sequence-scaling sweep (seq = 1,2,3,4,8,16 on both models)
+distinguishes overhead-bound from work-bound directly and is queued; it also
+answers whether a deeper draft could ever help here, since a work-bound
+forward defeats every depth, not just depth-1.
+
+Until then: **the 397B head drafts excellently, and the drafting does not
+convert to throughput --- for reasons that are about the model, not the
+machine.**
 
 #### Flash-Next: the depth-1 cost model, measured rather than assumed
 
