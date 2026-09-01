@@ -521,23 +521,46 @@ predicting its own next token. At that acceptance the depth-1 ceiling (SS7)
 says roughly 1.8x. We measured 1.000x, twice, with baselines agreeing to
 0.3%.
 
-**The cause is not yet isolated, and I am not going to guess at it.** Two
-guesses tonight (the prefill tax, the norm convention) were both wrong, and
-the pattern in both cases was reasoning from structure instead of measuring.
-The obvious hypothesis is that the depth-1 trade --- swap two seq=1 trunk
-forwards for one seq=2 forward --- does not pay here, because at batch 1 a
-sparse MoE can route two tokens to two different expert sets and fetch close
-to twice the expert weight. That would make a seq=2 forward cost ~2x a seq=1
-forward, and no acceptance rate could rescue it.
+**The mechanism is measured.** Depth-1 swaps two seq=1 trunk forwards for one
+seq=2 forward, so it pays only when the second token is nearly free.
+`seqcost.py` measures that directly, and the two models could hardly differ
+more:
 
-But Flash-Next is ALSO a 512-expert MoE and gets 1.58x, so MoE-ness alone
-cannot be the answer. `seqcost.py` measures `t(seq=2) / t(seq=1)` directly on
-both models: if the ratio differs between them that is the mechanism, and if
-it does not, the hypothesis is dead and the cause is elsewhere. That run is
-queued.
+| | Flash-Next 2.1bpw | 397B 2.2bpw |
+|---|---|---|
+| t(seq=1) | 52.30 ms | 54.48 ms |
+| t(seq=2) | 46.66 ms | **81.24 ms** |
+| **ratio seq2/seq1** | **0.892** | **1.491** |
+| head / trunk1 | 0.099 | 0.168 |
+| predicted at its acceptance | 1.80x | 1.15x |
+| measured | 1.58x | 1.00x |
 
-Until it reports, the honest statement is: **the 397B head drafts
-excellently and the drafting does not currently convert to throughput.**
+On Flash-Next the second token rides along free --- single-token decode is
+overhead-bound, so a 2-token forward is *cheaper* than a 1-token one. On the
+397B the second token costs half a forward again.
+
+That ratio is fatal on its own. At 1.491 with a head at 0.168, the ceiling at
+PERFECT acceptance is 2 x 54.48 / (81.24 + 9.17) = 1.205x predicted --- and
+the cost model overpredicts by 12-14% on both models, so the real ceiling is
+about 1.06x. No acceptance rate rescues this, and neither does a cheaper head:
+the head is only a tenth of the denominator.
+
+**What is NOT yet settled is why the ratio differs**, and the two candidates
+have opposite consequences:
+
+- *memory pressure* --- 103.25 GiB resident against a 120 GiB wired limit
+  makes decode bandwidth-bound, and a 2-token forward through a sparse MoE
+  touches close to two tokens' worth of experts. If this is it, the 397B head
+  is not dead weight; it needs a machine with headroom (exo cluster).
+- *something specific to the 397B* --- in which case depth-1 is simply the
+  wrong tool for it and more RAM changes nothing.
+
+Flash-Next discriminates them cleanly, because it is the same architecture at
+three residencies (46, 70, 95 GiB). A ratio that climbs with the rung is
+pressure; a flat 0.89 is not. That curve is queued.
+
+Until it reports: **the 397B head drafts excellently, and the drafting does
+not convert to throughput on this machine.**
 
 #### Flash-Next: the depth-1 cost model, measured rather than assumed
 
