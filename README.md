@@ -191,6 +191,7 @@ for r in mtp_stream_generate(model, tok, "Explain VQ.", head, max_tokens=256):
 ```
 
 ```bash
+vqlab publish      --artifact <dir> --repo <owner/name>           # gated upload
 vqlab mtp-extract  --src <bf16 checkpoint> --out <graft.safetensors>  # pull the head
 vqlab mtp-pack     --model <artifact> --mtp <graft.safetensors>       # build sidecar
 vqlab mtp-generate --model <artifact> --temp 0.7
