@@ -246,6 +246,35 @@ Across runs: **1.56–1.80x (median 1.65x)**, acceptance 0.578–0.812 (median
 `model*.safetensors` glob, so a model directory carrying one still loads
 normally through the stock loader — the head is optional residency.
 
+### Speedup, measured on a thermally stable machine (2026-08-31)
+
+2.1bpw rung, 512 tokens greedy, M4 Max with active cooling, 12 runs in
+randomised balanced blocks with a 25s cooldown, each keeping its own adjacent
+baseline:
+
+| head | align | acceptance | speedup | tok/s |
+|------|-------|-----------|---------|-------|
+| q6 (2.12 GiB)   | committed | 0.7812 | **1.591x** ±0.0006 | 29.99 |
+| e4q8 (1.55 GiB) | committed | 0.7773 | 1.586x ±0.0017 | 29.90 |
+| e3q8 (1.25 GiB) | committed | 0.7695 | 1.583x ±0.0081 | 29.85 |
+| q6 (2.12 GiB)   | legacy    | 0.7539 | 1.566x ±0.0044 | 29.52 |
+
+Baseline **18.85 tok/s**, spread 18.83–18.89 across all twelve runs — **0.32%**.
+The same measurement without active cooling spread 13.98–19.04 (26%) and was
+worthless. The baseline spread is the readout for whether a speedup number
+from a laptop means anything; quote it alongside, or do not quote the speedup.
+
+**All three heads are within 0.5% of each other**, so the 1.25 GiB head buys
+its 0.87 GiB back for essentially nothing in speed as well as acceptance.
+
+The alignment fix is worth **+1.58% wall-clock** (t=9.7) — real, but far less
+than its +5.9pp of acceptance suggests, because the committed scheme runs the
+head over two positions per step instead of one and spends most of the gain on
+that extra forward. MTPLX instead decouples the rope offset from the cache
+offset and keeps one head forward per step; doing the same here would likely
+capture the acceptance at half the head cost, and is the obvious next
+optimization.
+
 ### Head-cache alignment: worth +5.9pp acceptance (2026-08-31)
 
 `qwen4_exp` reads the head's rotary positions straight off its cache offset
