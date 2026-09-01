@@ -251,6 +251,22 @@ measured on one sample partly fails to transfer to another.
 not worth it — and note the saving was small anyway (~1.5 -> ~1.4 min/sample),
 because the splice dominates, not the score.
 
+QUANTIFIED 2026-09-01 by re-running the SAME 42 demotions at both scales,
+same base, same corpus — only the evaluation window differs:
+
+| 512 vs 2048 agreement | value |
+|---|---|
+| R^2 | **0.438** |
+| sign flips | 7/42 |
+| layers scored as "helps" | 14 @512 vs 11 @2048 |
+
+So a 512-token sweep explains 44% of the 2048-token variance. It also
+SYSTEMATICALLY OVERSTATES magnitudes: L6 -22.56 -> -4.96, L40 -16.51 ->
+-3.71, L9 -9.79 -> -1.68. Fewer positions means each token disagreement
+weighs more, inflating apparent effects. That inflation is what selected L6
+and L40 as donor targets for the K16384 fit — and when promoted at 2048 they
+measured +3.50 and -2.08, i.e. the second pick actively hurt.
+
 ### 7.2 Realisation degrades with DEMOTION fraction
 
 Additive-prediction realisation across every solve so far:
