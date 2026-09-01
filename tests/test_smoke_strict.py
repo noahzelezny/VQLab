@@ -107,3 +107,31 @@ def test_release_gate_fails_closed_on_smoke_failure():
     """A non-zero smoke must become a gate failure, not a warning."""
     i = CSRC.index("strict smoke failed")
     assert "fails.append" in CSRC[max(0, i - 200):i]
+
+
+def test_kernel_check_follows_each_family_s_own_route():
+    """Dense bundles resolve kernels BY NAME via _resolve_kernel; MoE bundles
+    call _fused straight out of module globals, because vq_switch.py defines
+    the class and the kernel in one file.
+
+    The first cut of this gate demanded _resolve_kernel of everything, so
+    every MoE bundle failed with "exposes no _resolve_kernel" even when its
+    kernels were fine -- and the proposed workaround was to make the packer
+    ship dense code into MoE artifacts that never call it. A gate with false
+    positives is a gate people pass --no-strict to, so the gate checks what
+    each family actually does instead."""
+    assert '_rk = (bundle_ns or {}).get("_resolve_kernel")' in SRC
+    # falls back to the namespace when there is no indirection to follow
+    assert 'fn = (bundle_ns or {}).get(kname)' in SRC
+    # and only complains when NO route finds a kernel at all
+    assert "checked == 0" in SRC
+    assert "no fused kernel entry point" in SRC
+    # the old unconditional demand must be gone
+    assert "the bundle exposes no _resolve_kernel" not in SRC
+
+
+def test_kernel_route_is_reported_not_just_the_path():
+    """Which route resolved it is part of the evidence: a dense bundle that
+    silently stopped using _resolve_kernel would otherwise look identical."""
+    assert 'via {via}' in SRC or "via " in SRC
+    assert '"_resolve_kernel" if _rk is not None else "module globals"' in SRC

@@ -190,24 +190,43 @@ def main(argv=None) -> int:
     # B. the fused kernel is resolved by NAME at call time, separately from
     #    the classes, and that indirection is exactly what broke. Ask the
     #    bundle to resolve it and check where the answer came from.
+    # Families reach their kernels differently, and the gate has to check what
+    # each one ACTUALLY does rather than impose one family's contract on all.
+    #
+    # Dense bundles resolve BY NAME at call time via _resolve_kernel -- that
+    # indirection is precisely what shipped broken, so follow it. MoE bundles
+    # call _fused straight out of module globals (vq_switch.py defines the
+    # class and the kernel in the same file), so there is no indirection and
+    # no _resolve_kernel. Requiring one of them was a false failure, and the
+    # packer should not have to ship dense code it never uses just to satisfy
+    # this check. A gate that cries wolf is a gate people pass --no-strict to.
     _rk = (bundle_ns or {}).get("_resolve_kernel")
-    if _rk is None and bundle_ns is not None:
-        problems.append("the bundle exposes no _resolve_kernel; its kernels "
-                        "cannot be traced to a source")
-    if _rk is not None:
-        for kname in ("_dense_fused", "_fused"):
+    checked = 0
+    for kname in ("_dense_fused", "_fused"):
+        fn = None
+        if _rk is not None:
             try:
                 fn = _rk(kname)
-            except Exception as e:
-                print(f"  {kname:18s} <- unresolvable ({type(e).__name__})")
-                continue
-            fpath = getattr(fn, "__globals__", {}).get("__file__")
-            w = _where(fpath)
-            print(f"  {kname:18s} <- {fpath} [{w}]")
-            if w != "artifact":
-                problems.append(
-                    f"{kname} resolved from {w} ({fpath}); the bundle must "
-                    f"carry its own kernels")
+            except Exception:
+                fn = None
+        if fn is None:
+            fn = (bundle_ns or {}).get(kname)
+        if fn is None:
+            continue
+        checked += 1
+        fpath = getattr(fn, "__globals__", {}).get("__file__")
+        w = _where(fpath)
+        via = "_resolve_kernel" if _rk is not None else "module globals"
+        print(f"  {kname:18s} <- {fpath} [{w}, via {via}]")
+        if w != "artifact":
+            problems.append(
+                f"{kname} resolved from {w} ({fpath}); the bundle must "
+                f"carry its own kernels")
+    if bundle_ns is not None and checked == 0:
+        problems.append(
+            "the bundle exposes no fused kernel entry point (_fused or "
+            "_dense_fused) by any route; its kernels cannot be traced to a "
+            "source")
 
     # C. a VQ-patched mlx-lm masks exactly this class of defect.
     import importlib.util as _ilu
