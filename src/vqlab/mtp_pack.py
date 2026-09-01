@@ -1,4 +1,4 @@
-"""Pack a bf16 qwen4_exp MTP graft into a quantized drafting sidecar.
+"""Pack a bf16 MTP graft into a quantized drafting sidecar.
 
     python -m vqlab.cli mtp-pack --model <artifact> --mtp <graft.safetensors>
         [--bits 6] [--group-size 32] [--out <dir-or-file>]
@@ -23,7 +23,9 @@ import sys
 import mlx.core as mx
 
 sys.path.insert(0, str(pathlib.Path(__file__).parent))
-from mtp_head import SIDECAR_NAME, MTPHead
+from vqlab.mtp import registry
+
+SIDECAR_NAME = "mtp-head-q6.safetensors"
 
 
 def main():
@@ -40,6 +42,23 @@ def main():
                          "96.5%% of the head and therefore sets its size "
                          "(default: same as --bits)")
     ap.add_argument("--group-size", type=int, default=32)
+    ap.add_argument("--family", default=None,
+                    help="override the family resolved from the model's "
+                         f"model_type (registered: see registry.py)")
+    ap.add_argument("--norm-shift", type=float, default=None,
+                    help="qwen3_5 only: delta added to the head's RMSNorm "
+                         "gains at load. This family stores norms as deltas "
+                         "and mlx-lm's sanitize drops every mtp.* key before "
+                         "shifting them, so the head owns the convention; "
+                         "the wrong choice gives exactly 0.0 acceptance. "
+                         "Default 1.0 (the head module's own default)")
+    ap.add_argument("--fc-order", default=None, choices=("he", "eh"),
+                    help="qwen3_5 only: concat order into the fused fc "
+                         "projection; not recoverable from the checkpoint")
+    ap.add_argument("--h-source", default=None,
+                    choices=("pre_norm", "post_norm"),
+                    help="qwen3_5 only: whether the head reads the trunk "
+                         "hidden state before or after the trunk final norm")
     ap.add_argument("--out", default=None,
                     help="output file, or a directory to write "
                          f"{SIDECAR_NAME} into (default: the artifact dir)")
@@ -49,10 +68,24 @@ def main():
     # lazy=True: we need the architecture classes and args, not the weights.
     model, _ = load(a.model, lazy=True, trust_remote_code=True)
     arch = importlib.import_module(type(model.model).__module__)
+    spec = registry.resolve(model, a.family)
+    cls = spec.head_cls()
+    print(f"family {spec.name} -> {spec.head}", flush=True)
+
+    # Head-specific wiring options, passed only when the user set them, so a
+    # head class that does not take them is unaffected.
+    kw = {}
+    for flag, name in (("norm_shift", "norm-shift"), ("fc_order", "fc-order"),
+                       ("h_source", "h-source")):
+        v = getattr(a, flag.replace("-", "_"))
+        if v is not None:
+            kw[flag] = v
+    if kw:
+        print(f"  wiring: {kw}", flush=True)
 
     g = {k[len("mtp."):] if k.startswith("mtp.") else k: v
          for k, v in mx.load(a.mtp).items()}
-    head = MTPHead(model, arch).load_graft(g)
+    head = cls(model, arch, **kw).load_graft(g)
     del g
 
     before = mx.get_active_memory()
@@ -64,8 +97,9 @@ def main():
     eb = a.bits if a.expert_bits is None else a.expert_bits
     out = pathlib.Path(a.out) if a.out else pathlib.Path(a.model)
     if out.is_dir():
+        SIDECAR_NAME_ = spec.sidecar_name
         if a.bits == 6 and eb == 6:
-            out = out / SIDECAR_NAME
+            out = out / SIDECAR_NAME_
         elif eb == a.bits:
             out = out / f"mtp-head-q{a.bits}.safetensors"
         else:
