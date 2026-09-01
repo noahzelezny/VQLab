@@ -75,3 +75,35 @@ def test_bundled_module_is_found_without_sys_modules():
     check silently skips. The class's own globals carry __file__."""
     assert "__globals__" in SRC
     assert "never\n        registers it in sys.modules" in SRC
+
+
+# ------------------------------------------------------- the release gate
+CHECK = pathlib.Path(__file__).resolve().parents[1] / "src" / "vqlab" / "check_release.py"
+CSRC = CHECK.read_text()
+
+
+def test_release_gate_statically_rejects_dev_only_imports():
+    """The cheapest check that would have prevented the whole incident: no
+    model load, no GPU, just read the bundle. Verified against the model.py
+    we actually shipped -- it names lines 144 and 149."""
+    assert '"from mlx_lm.models.vq_"' in CSRC
+    assert '"import mlx_lm.models.vq_"' in CSRC
+    assert "cannot run outside our venvs" in CSRC
+
+
+def test_release_gate_runs_strict_smoke_by_default():
+    assert '"--strict"' in CSRC, "the gate must pass --strict explicitly"
+    assert "--no-smoke" in CSRC
+    # Opting out has to be loud: silence is what made three broken artifacts
+    # look certified.
+    assert "generation NOT verified" in CSRC
+
+
+def test_release_gate_compiles_the_bundle():
+    assert 'compile(_src, _mf, "exec")' in CSRC
+
+
+def test_release_gate_fails_closed_on_smoke_failure():
+    """A non-zero smoke must become a gate failure, not a warning."""
+    i = CSRC.index("strict smoke failed")
+    assert "fails.append" in CSRC[max(0, i - 200):i]
