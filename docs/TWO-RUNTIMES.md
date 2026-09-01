@@ -1,133 +1,90 @@
-# Two VQ runtimes, one silently shadowing the other
+# The VQ runtime: which copy actually runs, and how we kept getting it wrong
 
-**How three published artifacts shipped broken while every check passed.
-Written 2026-09-01 after the dense 27B incident; the mechanism is still
-live for MoE artifacts and is a decision, not a bug to patch.**
+**Written 2026-09-01 after the dense 27B incident. The conclusions below were
+wrong twice before they were right, both times for the same reason, and that
+reason is the point of the document.**
 
-## There are two delivery mechanisms, not one
+## Current state (verified, three sessions independently)
 
-**The bundle.** `model.py` inside the checkpoint, loaded by stock mlx-lm via
-`spec_from_file_location("custom_model", ...)` when `config.json` names
-`model_file`. This is what the model cards describe and what a downloader
-gets: *"Stock `mlx-lm`, no patches — the VQ runtime ships inside the
-checkpoint."*
+**The live exo serving path is clean and runs the artifact's own bundle.**
 
-**The patch.** `quantlab/patch_mlx_lm.py` copies `vq_switch.py` into
-`site-packages/mlx_lm/models/` and inserts a hook into `load_model`.
+| | mlx-lm | `load_model` hook | `models/vq_switch.py` |
+|---|---|---|---|
+| `/opt/anaconda3/envs/exo` (M3, **live**) | 0.31.9 | **none** | **absent** |
+| `/opt/homebrew/anaconda3/envs/exo` (M4, **live**) | 0.31.9 | **none** | **absent** |
+| `~/exo/.venv` (both boxes, **dormant**) | 0.31.9 | present, line 501 | present, 228 lines |
 
-Both exist. Only the first is documented on the cards.
+The running process on the M3 is `/opt/anaconda3/envs/exo/bin/python3.13`;
+the M4's supervised process is the equivalent homebrew conda env. mlx-lm
+0.31.9's `load_model` takes no `trust_remote_code` argument at all and
+executes a config's `model_file` unconditionally, so on the live path the
+bundle loads and **nothing overwrites it**.
 
-## The patch silently wins
+So a re-bundled artifact does reach exo-served inference, kernels and all.
+The model cards' claim that exo runs stock `mlx-lm` is true of every env that
+can actually serve.
 
-The hook runs immediately before `model.load_weights` and does this:
+## Two real issues remain
 
-```python
-_vq_prefixes = sorted({k[:-6] for k in weights if k.endswith(".codes")
-                       and weights[k].ndim == 3})
-if _vq_prefixes:
-    from .models.vq_switch import VQSwitchLinear
-    for _p in _vq_prefixes:
-        setattr(_obj, _parts[-1], VQSwitchLinear.from_weights(...))
-```
+**A dormant landmine.** `~/exo/.venv` carries the `patch_mlx_lm.py` hook
+inside `load_model` (line 501) plus a 228-line `vq_switch.py` from Aug 15/24:
+`d=4 only, v1`, `VQSwitchLinear.from_weights(codes, codebook, vq_scales)`
+with no `pack_bits`. Launch exo from the fork's own venv and that hook
+overwrites the bundle's modules for every `ndim == 3` `.codes` tensor, then
+hands a `pack_bits=14` artifact's packed uint32 words to a runtime that has
+no packing support. Expect a shape error or silent garbage, presenting as a
+bug in the artifact rather than in the environment. Deleting the hook and
+the module from both dormant venvs removes it.
 
-It **overwrites the modules the bundle just created** with the copy from
-site-packages. So on any patched machine, an expert-shaped artifact's own
-runtime is inert: the bundle is loaded, then discarded.
+**A forward-compat trap.** mlx-lm >= 0.32 adds `trust_remote_code` to
+`load_model` and defaults it to `False`. exo calls
+`load_model(model_path, lazy=True, strict=False)` and never passes it, and
+`model_file` appears nowhere in exo's source — so a routine pin bump silently
+turns every VQ artifact into a load-time `ValueError`. The fix is to thread
+`model_card.trust_remote_code` through both call sites in
+`utils_mlx.py` (detecting the kwarg with `inspect`, so it no-ops on 0.31.9).
+Drafted in the fork; not committed.
 
-This had already bitten once. The hook's own comment records it: *"Dense VQ
-artifacts install their own modules via model.py; this hook overwriting them
-with the expert-shaped VQSwitchLinear breaks them (2026-08-19)."* The fix
-narrowed the hook to `ndim == 3` rather than removing the shadowing, so the
-same mechanism kept operating for every MoE artifact.
+Note the asymmetry: the dormant hook is a landmine that only fires if someone
+picks the wrong binary, while the pin bump fires on an ordinary dependency
+update and takes everything with it.
 
-## Why that turned into shipped breakage
+## How this document was wrong twice
 
-1. **Every development machine is patched.** Both build venvs
-   (`~/vqvenv`, `~/qlab-venv`) carry `mlx_lm/models/vq_switch.py`. So our
-   machines were unrepresentative in precisely the dimension that mattered:
-   the bundle could be broken and nothing here would notice, because nothing
-   here was running it.
-2. **Nothing compared the two.** `check-bundle` checked substrings.
-   `vqlab smoke` printed which runtime resolved and asserted nothing — its
-   own docstring said the resolved copy "depends on the loader and the
-   environment" and then only printed it.
-3. **So they drifted, invisibly.** exo's installed copy is **228 lines, dated
-   Aug 15 (M4) / Aug 24 (M3)**: `d=4` only, `_fused()` with no `pack_bits`
-   parameter, no d8 kernels. The bundle is **2048 lines** with d8, packed and
-   tiled kernels. Two weeks apart, and no check would ever say so. Note the
-   drift is only harmful WHERE THE HOOK FIRES: remove the hook and the pin
-   keeps working, because 0.31.9 runs the bundle on its own.
-4. **The dense bundle broke and only downloaders saw it.** `model.py`
-   imported `mlx_lm.models.vq_switch` — which resolves on every patched
-   machine and on none of theirs.
+Both errors were the same error, and it is the same one that shipped three
+broken artifacts.
 
-## Consequences that are still live
+**First: "exo never runs the bundle."** I read `load_model`'s signature from
+`~/.venvs/qwen4exp` — a 0.32 install — and applied it to exo's call sites.
+exo pins 0.31.9, where the argument does not exist. I inspected the wrong
+environment and reported it as fact.
 
-- **exo DOES run the bundle, and then discards part of it.** An earlier
-  version of this document said exo never reads `model.py`. That was wrong:
-  it came from reading `load_model`'s signature in a 0.32 venv, while exo
-  pins **mlx-lm 0.31.9**, whose `load_model` takes no `trust_remote_code`
-  argument at all and executes `model_file` unconditionally. Corrected by the
-  expert-kernel session; verified on both boxes.
+**Second: "the hook is live on both boxes."** I then measured `~/exo/.venv`,
+found the hook and a two-week-stale runtime, and concluded exo's serving path
+was shadowed. The hook is really there and really stale — but that venv is
+dormant. exo is launched from a conda env that has neither. I inspected the
+wrong environment again, this time more carefully, and was wrong again.
 
-  What actually happens on an exo machine is a hybrid, and it is worse than
-  either half alone:
+The peer session had the complementary halves each time: right about the pin
+and wrong about the hook's presence, because it had grepped the conda envs.
+Neither of us was careless; we were each looking at a real environment and
+assuming it was THE environment.
 
-  1. `load_model` executes the artifact's `model.py` and builds the bundle's
-     own `VQSwitchLinear` modules.
-  2. The `patch_mlx_lm.py` hook, still installed at **line 501 of
-     `utils.py` INSIDE `load_model`** on both the M3 and M4 venvs, then
-     overwrites them with the site-packages copy for every `ndim == 3`
-     `.codes` tensor.
+**That is precisely the original defect.** Three artifacts shipped a
+`model.py` importing `mlx_lm.models.vq_switch` because it resolved in the
+venvs we built and tested in. The gate now refuses to certify from an
+environment a downloader would not have. This document then reproduced the
+same mistake twice while explaining it.
 
-  So the bundle runs and is then thrown away, for MoE artifacts specifically.
-  Dense artifacts store 2-D codes, so the hook does not fire and their
-  bundles survive intact --- which is exactly the carve-out its 2026-08-19
-  comment describes.
-- **The copy that wins cannot serve the current MoE artifacts.** The
-  installed `vq_switch.py` is 228 lines (`d=4 only, v1`), its
-  `VQSwitchLinear.from_weights(codes, codebook, vq_scales)` takes no
-  `pack_bits`, and our MoE artifacts are `d=8 / K=16384 / pack_bits=14`. The
-  hook hands it packed uint32 words as if they were plain codes. Expect a
-  shape error, or silent garbage --- and it will present as a bug in the
-  artifact rather than in the environment.
-- **The name collision follows from this.**
-  `~/.exo/models/TheDrainFlorist--Qwen3.5-397B-A17B-VQ-2.2bpw` on the M4 is an
-  old `K=128 / d=4` fit. That is not a stray copy: it is the generation the
-  Aug-15 runtime was built for. An old model and an old runtime that match
-  each other, under the current name.
-- **A card claim needs re-verifying.** The 397B card says exo serving was
-  *"verified ... with an unpatched `mlx-lm`, producing output identical to the
-  patched run."* That may well have been true when written; it cannot be
-  demonstrated on these machines now, because both exo venvs are patched.
-
-## What is already fixed
-
-`vqlab smoke --strict` (2026-09-01) fails when the runtime resolves from
-anywhere a downloader would not have it, and **treats the presence of
-`mlx_lm.models.vq_switch` as a failure in its own right** — that check exists
-precisely because "inside site-packages" was never the right test. `vqlab
-publish` runs the gate before upload with no override. Together those close
-the "our machines are unrepresentative" hole.
+The rule worth keeping: **before reporting what an environment does,
+establish that it is the one that runs.** `ps aux` on the live process beats
+any amount of reading in a plausible-looking directory. Every claim in the
+table above is backed by the running binary, not by a path that looked right.
 
 ## What is not decided
 
-**Whether exo should use the bundle or the patch.** Having both is the
-problem, not either one:
-
-- *Bundle only* matches the model cards and gives one artifact one runtime.
-  On the current 0.31.9 pin it needs only the HOOK REMOVED from both venvs ---
-  nothing else, because 0.31.9 already executes `model_file`. It additionally
-  needs the fork to thread `trust_remote_code=True` into `load_model` BEFORE
-  any pin bump to >= 0.32, where that argument appears and defaults to False;
-  without that, a routine dependency bump kills every VQ model at load. The
-  expert-kernel session has drafted exactly that change (detect the kwarg via
-  `inspect`, no-op on 0.31.9).
-- *Patch only* keeps exo's current behaviour and requires re-running
-  `patch_mlx_lm.py` on every venv whenever the runtime changes, plus a gate
-  that compares the installed copy against the repo. The cards would need to
-  stop saying exo runs stock mlx-lm.
-
-Either is defensible. What is not defensible is the present state, where the
-cards describe one mechanism, the machines run the other, and nothing
-compares them.
+Whether to delete the hook and `vq_switch.py` from the dormant `~/exo/.venv`
+on both boxes (recommended, removes the landmine, costs nothing since that
+venv serves nothing), and whether to land the `inspect`-based
+`trust_remote_code` change in the fork before any pin bump (recommended, and
+the more urgent of the two). Both are Noah's; no venv has been modified.
