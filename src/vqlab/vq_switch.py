@@ -384,6 +384,200 @@ _SRC_FUSED_D2 = r"""
     y[(size_t)t * OUT + r] = static_cast<T>(acc);
 """
 
+# d=2, THREADGROUP codebook, ONE SIMDGROUP PER OUTPUT ROW (E14x, 2026-09-02).
+#
+# MEASURED AND DELIBERATELY NOT DISPATCHED --- kept as the reference twin and
+# so the negative result is not re-derived. On real 2.1bpw codes (M3 Ultra,
+# 48 dispatches/eval, E=64 slice) it runs 0.80-1.09x the thread-per-row kernel:
+#
+#     tensor      N   NGRP   uchar us   simd us
+#     gate_proj  10     40      57.8      70.7
+#     gate_proj  20     40      78.3      93.8
+#     up_proj    10     40      69.5      61.9
+#     up_proj    20     40      69.9      84.2
+#     down_proj  10     10      57.6      58.8
+#
+# WHY IT DOES NOT WIN, unlike its d8 twin. The layout exists to hide DEPENDENT
+# DEVICE round-trips: at d=8/K=16384 the 256 KB codebook lives in device memory,
+# so every code costs read-then-index against L2 and only one load is in flight
+# per row. At d=2/K=256 the codebook is 1 KB and sits in THREADGROUP memory, so
+# there is no device round-trip to hide, and the layout's own costs (two barriers
+# per block, a 32-step shuffle reduction, 31 of 32 lanes idle at the write) are
+# pure overhead. It is not occupancy either: this launches 204,800 threads
+# against the old kernel's 6,400 for the same time. The d2 bottleneck was the
+# WIDTH OF THE CODE LOAD, which _SRC_FUSED_D2_U32 below fixes instead (1.47-1.86x).
+#
+# WHY. This is the geometry the Flash-Next 2.1bpw rung actually dispatches --- its
+# expert geometry is d=2 / K=256 / unpacked uint8 (codebook [256,2]), so the d4
+# u8-view fast path does not apply and the D==2 branch above is taken. Until now
+# d2 had NO simdgroup expert kernel at all: _SRC_FUSED_D2 gives each output row
+# to ONE thread walking NSUB codes strictly sequentially. At the gate/up shape
+# (OUT=640, IN=2560 -> NSUB=1280) a decode step with N=10 pairs launches only
+# 6,400 threads for 8.2M dependent code reads --- latency-bound AND badly
+# under-occupied on an 80-core M3 Ultra.
+#
+# MEASURED COST OF THE OLD LAYOUT (M3 Ultra, 2026-09-02, artifact resident,
+# 377-token greedy, stub-ablation of VQSwitchLinear.__call__): the VQ expert
+# path costs 9.84 ms/token against stock gather_qmm's 3.09 on the same
+# architecture and prompt --- 34% of the whole 19.7 ms/token decode gap.
+#
+# FIX. The layout _SRC_DENSE_D2_TILED already uses, with the expert stride
+# folded into crow/srow: one 32-lane simdgroup per row, lane `l` owning scale
+# group `b*32+l`, per-group partials combined by simd_shuffle. 32 independent
+# loads in flight per row instead of one, and 32x the threads.
+#
+# BIT-EXACTNESS. _SRC_FUSED_D2's sequential `for g` loop covers group g with
+# subvectors j in [g*SPG, (g+1)*SPG) (its running j advances 4 per q over
+# QPG = G/8 iterations, i.e. G/2 = SPG per group), accumulating the same four
+# dots per q into one float gacc, then applying srow[g] by fma in ASCENDING g.
+# Each lane here computes exactly that expression for its own g, and the
+# shuffle loop applies srow[b*32+i] for i = 0..31 ascending --- same operands,
+# same order, same rounding. x is staged as half2 exactly as the old kernel
+# caches it, and cb is the same threadgroup half2 copy. So the output is
+# bit-for-bit equal, not merely close (asserted in tests/test_vq_expert_simd.py).
+#
+# The row guard is a PREDICATE (`active`), never an early return: the tile loop
+# contains threadgroup barriers and a subset of a threadgroup returning early
+# past a barrier is undefined behaviour.
+#
+# NGRP >= 32 IS REQUIRED AND THE DISPATCHER ENFORCES IT, for the same reason as
+# the d4/d8 twins: lane `l` owns group `l`, so fewer than 32 groups idles lanes.
+# On this rung gate_proj/up_proj have NGRP = 2560/64 = 40 (gated in, 96 of the
+# 144 expert calls) and down_proj has NGRP = 640/64 = 10 (gated out, keeps the
+# thread-per-row kernel, where its 2560 rows already give decent occupancy).
+_SRC_FUSED_D2_SIMD = r"""
+    const int OUT  = dims[0];
+    const int IN   = dims[1];
+    const int G    = dims[3];
+    const int K    = dims[5];
+    const int NSUB = IN / 2;
+    const int NGRP = IN / G;
+    const int QPG  = G / 8;
+    const int SPG  = G / 2;
+    const int TILE = 32 * SPG;
+    uint r = thread_position_in_grid.y;
+    uint t = thread_position_in_grid.z;
+    uint lane = thread_position_in_threadgroup.x;
+    uint lid = thread_position_in_threadgroup.y * 32 + lane;
+    uint tgsize = threads_per_threadgroup.x * threads_per_threadgroup.y;
+
+    threadgroup half2 cb[MAX_K];
+    threadgroup half2 xs[MAX_TILE];
+    const device half2* cbg = (const device half2*)codebook;
+    for (uint i = lid; i < (uint)K; i += tgsize)
+        cb[i] = cbg[i];
+    const device T* xrow = x + (size_t)t * IN;
+
+    const bool active = (r < (uint)OUT);
+    const uint rr = active ? r : 0;
+    const uint e = eidx[t];
+    const device CT* crow = codes + (size_t)e * OUT * NSUB + (size_t)rr * NSUB;
+    const device half* srow = scales + (size_t)e * OUT * NGRP + (size_t)rr * NGRP;
+    float acc = 0.0f;
+    const int NBLK = (NGRP + 31) / 32;
+    for (int b = 0; b < NBLK; ++b) {
+        const int base = b * TILE;
+        const int span = min(TILE, NSUB - base);
+        threadgroup_barrier(mem_flags::mem_threadgroup);
+        for (uint i = lid; i < (uint)span; i += tgsize)
+            xs[i] = half2((half)xrow[(base + (int)i)*2],
+                          (half)xrow[(base + (int)i)*2 + 1]);
+        threadgroup_barrier(mem_flags::mem_threadgroup);
+        const int g = b * 32 + (int)lane;
+        float gacc = 0.0f;
+        if (active && g < NGRP) {
+            int j = g * SPG;
+            int m = j - base;
+            for (int q = 0; q < QPG; ++q) {
+                gacc += dot(float2(cb[(uint)crow[j]]),   float2(xs[m]))
+                      + dot(float2(cb[(uint)crow[j+1]]), float2(xs[m+1]))
+                      + dot(float2(cb[(uint)crow[j+2]]), float2(xs[m+2]))
+                      + dot(float2(cb[(uint)crow[j+3]]), float2(xs[m+3]));
+                j += 4; m += 4;
+            }
+        }
+        const int gmax = min(32, NGRP - b * 32);
+        for (int i = 0; i < gmax; ++i)
+            acc = fma((float)srow[b * 32 + i],
+                      simd_shuffle(gacc, (ushort)i), acc);
+    }
+    if (active && lane == 0) y[(size_t)t * OUT + r] = static_cast<T>(acc);
+"""
+
+# d=2, unpacked uint8 codes read FOUR AT A TIME as uint32 (E14x, 2026-09-02).
+#
+# WHY. _SRC_FUSED_D2 reads `crow[j]` as a uchar, one code per load. Measured on
+# the shipped 2.1bpw gate_proj (real codes, E=64 slice, N=10, 48 dispatches per
+# eval, M3 Ultra): 68.4 us/dispatch to move 8.7 MB of codes+scales = 128 GB/s on
+# an 819 GB/s machine, i.e. 16% of peak, while stock gather_qmm at 3-bit hits
+# 292 GB/s on the same shape in situ. The kernel is neither latency-bound (the
+# 1 KB K=256 codebook is in threadgroup memory, so there is no dependent device
+# round-trip per code, which is why the simdgroup-per-row twin above buys
+# nothing here: 1.01-1.09x) nor occupancy-bound (that twin launches 32x the
+# threads for the same time). It is spending its bandwidth on scalar byte loads.
+#
+# FIX. This is the d=2 analogue of the U8-VIEW dispatch the d4 path already
+# uses: an unpacked uint8 code row is byte-for-byte a little-endian uint32 word
+# stream, so the host reinterprets `codes` with mx.view (zero copy) and the
+# kernel reads ONE word per four codes. The existing loop already steps four
+# subvectors per q (QPG = G/8 iterations of four dots), so a q is exactly one
+# word and the restructuring is mechanical.
+#
+# BIT-EXACTNESS. Byte i of the little-endian word is code j+i --- the same
+# uint8 values the uchar loads produced --- fed to the same cb[] lookups, the
+# same four dots summed in the same a+b+c+d expression, the same per-group
+# float accumulator and the same ascending-group fma of srow[g]. Nothing about
+# the arithmetic or its order changes; only the width of the code load does.
+# Output is bit-for-bit equal (asserted in tests/test_vq_expert_simd.py against
+# _SRC_FUSED_D2 on real artifact codes).
+#
+# REQUIRES NSUB % 4 == 0 so a row is a whole number of words and rows stay
+# word-aligned; the dispatcher checks it and otherwise keeps the uchar kernel.
+_SRC_FUSED_D2_U32 = r"""
+    const int OUT  = dims[0];
+    const int IN   = dims[1];
+    const int G    = dims[3];
+    const int N    = dims[4];
+    const int K    = dims[5];
+    const int NSUB = IN / 2;
+    const int NWRD = NSUB / 4;
+    const int NGRP = IN / G;
+    const int QPG  = G / 8;
+    uint r = thread_position_in_grid.x;
+    uint t = thread_position_in_grid.y;
+    uint lid = thread_position_in_threadgroup.x;
+    uint tgsize = threads_per_threadgroup.x;
+
+    threadgroup half2 cb[MAX_K];
+    threadgroup half2 xs[MAX_NSUB];
+    const device half2* cbg = (const device half2*)codebook;
+    for (uint i = lid; i < (uint)K; i += tgsize)
+        cb[i] = cbg[i];
+    const device T* xrow = x + (size_t)t * IN;
+    for (uint i = lid; i < (uint)NSUB; i += tgsize)
+        xs[i] = half2((half)xrow[i*2], (half)xrow[i*2+1]);
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+    if (r >= (uint)OUT || t >= (uint)N) return;
+    const uint e = eidx[t];
+    const device uint* crow = codes + (size_t)e * OUT * NWRD + (size_t)r * NWRD;
+    const device half* srow = scales + (size_t)e * OUT * NGRP + (size_t)r * NGRP;
+    float acc = 0.0f;
+    int j = 0;
+    for (int g = 0; g < NGRP; ++g) {
+        float gacc = 0.0f;
+        for (int q = 0; q < QPG; ++q) {
+            const uint w = crow[j >> 2];
+            gacc += dot(float2(cb[ w        & 255u]), float2(xs[j]))
+                  + dot(float2(cb[(w >>  8) & 255u]), float2(xs[j+1]))
+                  + dot(float2(cb[(w >> 16) & 255u]), float2(xs[j+2]))
+                  + dot(float2(cb[ w >> 24         ]), float2(xs[j+3]));
+            j += 4;
+        }
+        acc = fma((float)srow[g], gacc, acc);
+    }
+    y[(size_t)t * OUT + r] = static_cast<T>(acc);
+"""
+
 # --- packed-code variants (d=4) -------------------------------------------
 # Codes live as uint32 words, BITS per code, blocks of 32 codes = BITS words
 # (see vq_pack.py for the format and its bit-exactness tests). The fetch is
@@ -1446,8 +1640,13 @@ _EXPERT_SIMD = os.environ.get("VQ_EXPERT_SIMD", "1") != "0"
 # N=21..29 is unmeasured territory and deliberately falls to the old kernel.
 _EXPERT_SIMD_MAX_N = int(os.environ.get("VQ_EXPERT_SIMD_MAX_N", "20"))
 
+# E14x: read unpacked uint8 d2 codes four-at-a-time as uint32. Bit-identical,
+# so on by default; VQ_D2_U32=0 restores the uchar kernel for A/B.
+_D2_U32 = os.environ.get("VQ_D2_U32", "1") != "0"
 
-def _fused(x, eidx, codes, codebook, scales, pack_bits=0, simd=None):
+
+def _fused(x, eidx, codes, codebook, scales, pack_bits=0, simd=None,
+           d2_u32=None):
     # U8-VIEW DISPATCH (E77/E90, 2026-08-20). Unpacked uint8 d4 rows are
     # byte-for-byte the pack_bits=8 word layout (little-endian; verified
     # against vq_pack.pack), and the packed fused kernel's simdgroup layout
@@ -1461,6 +1660,17 @@ def _fused(x, eidx, codes, codebook, scales, pack_bits=0, simd=None):
             and codebook.shape[1] == 4 and codes.shape[2] % 4 == 0):
         codes = mx.view(codes, dtype=mx.uint32)
         pack_bits = 8
+    # d=2 U8-VIEW (E14x, 2026-09-02): the same zero-copy reinterpret for d=2,
+    # feeding _SRC_FUSED_D2_U32 (four codes per uint32 load instead of four
+    # uchar loads). Guarded on NSUB % 4 == 0 so a row is a whole number of
+    # words. Kept as a separate flag from pack_bits because the d2 packed
+    # kernels take the generic VQ_CODE path, which re-reads a word per code.
+    if d2_u32 is None:
+        d2_u32 = _D2_U32
+    _d2_view = (d2_u32 and pack_bits == 0 and codes.dtype == mx.uint8
+                and codebook.shape[1] == 2 and codes.shape[2] % 4 == 0)
+    if _d2_view:
+        codes = mx.view(codes, dtype=mx.uint32)
     N, IN = x.shape
     E, OUT, _ = codes.shape
     K, D = codebook.shape
@@ -1547,6 +1757,10 @@ def _fused(x, eidx, codes, codebook, scales, pack_bits=0, simd=None):
         else:
             template = [("T", x.dtype), ("MAX_K", K), ("MAX_NSUB", NSUB),
                         ("BITS", pack_bits)]
+    elif _d2_view:
+        # four uint8 codes per uint32 load; see _SRC_FUSED_D2_U32.
+        name, src = "vq_fused_d2_u32", _SRC_FUSED_D2_U32
+        template = [("T", x.dtype), ("MAX_K", K), ("MAX_NSUB", NSUB)]
     elif D == 2:
         name, src = "vq_fused_d2", _SRC_FUSED_D2
         template = [("T", x.dtype), ("CT", codes.dtype),
@@ -2019,7 +2233,16 @@ class VQPLEEmbedding(nn.Module):
         self._pn = packed_nsub
         self._bits = max(1, (codebook.shape[0] - 1).bit_length())
         self._mask = (1 << self._bits) - 1
-        if packed_nsub:
+        # BITS == 8 MAKES _unpack AN IDENTITY (E14x, 2026-09-02). At K<=256 the
+        # "packed" row is one byte per code, so bit0 = arange(nsub)*8 gives
+        # window byte i, shift 0, mask 0xFF -- the extraction reproduces its own
+        # input exactly. It was still being executed: a concatenate, three
+        # mx.take gathers and six elementwise ops per shard per token, on the
+        # Flash-Next 2.1bpw's 16 touched n-gram shards, i.e. ~160 tiny
+        # dispatches a token to compute the identity function. Skip it; the
+        # result is the same ARRAY, so bit-identity is not merely likely.
+        self._byte_codes = bool(packed_nsub) and self._bits == 8
+        if packed_nsub and not self._byte_codes:
             import numpy as _np
             bit0 = _np.arange(packed_nsub) * self._bits
             self._b0 = mx.array(bit0 // 8)
@@ -2037,12 +2260,18 @@ class VQPLEEmbedding(nn.Module):
         return (w >> self._sh) & self._mask
 
     def __call__(self, ids):
-        if self._pn:
+        if self._pn and not self._byte_codes:
             c = self._unpack(self.codes[ids])            # [.., nsub]
         else:
             c = self.codes[ids]                              # [.., nsub]
         v = self.codebook[c.astype(mx.uint32)]           # [.., nsub, d]
-        flat = v.reshape(*ids.shape, -1)                 # [.., cols]
+        # Apply the group scales by BROADCAST over a [.., ngrp, G] view rather
+        # than materialising mx.repeat(sc, G)'s full-width copy: element
+        # flat[g*G+k] is multiplied by sc[g] either way, so the products and
+        # their rounding are identical, but the repeat's [.., cols] temporary
+        # (and the dispatch that fills it) is gone.
+        G = self.group_size
         sc = self.vq_scales[ids]                         # [.., cols/G]
-        sc = mx.repeat(sc, self.group_size, axis=-1)
-        return (flat * sc).astype(mx.bfloat16)
+        ngrp = sc.shape[-1]
+        prod = v.reshape(*ids.shape, ngrp, G) * sc[..., None]
+        return prod.reshape(*ids.shape, ngrp * G).astype(mx.bfloat16)
