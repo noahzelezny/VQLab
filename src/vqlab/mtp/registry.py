@@ -168,11 +168,16 @@ for _qwen35_name in ("qwen3_5", "qwen3_5_moe"):
 # mean-collapsed (B,S,D) hidden, which is what hnorm/eh_proj consume.
 # draft_cache is vestigial — the head class provides make_draft_cache()
 # (CacheList(main-KV, indexer-KV)); the loop prefers that.
-# cache_semantics="copy" until check_snapshot_semantics passes against a
-# loaded trunk: the deltanet ArraysCache slots LOOK reassigned
-# (cache[0] = ..., cache[1] = state in Glm5NextLinearAttention), but the
-# registry rule stands — no measurement, no cheap path.
-# NO ACCEPTANCE NUMBER YET (2026-09-02): entry is wiring, not evidence.
+# cache_semantics="reassign": check_snapshot_semantics returned True
+# against the loaded 2.7bpw trunk (M4, 2026-09-02) — the deltanet slots
+# reassign (cache[0] = ..., cache[1] = state), so the free snapshot is
+# correct. Measured NOT to be the 1.05x bottleneck (copy and reassign
+# both 19.9 tok/s); it is kept because it is the correct cheap path.
+# ACCEPTANCE (2026-09-02, q6 head, 2.7bpw trunk, M4, 12 prompts x 128
+# tokens): pooled 0.8516, range 0.73-0.97. Speedup is NOT banked: the
+# same session measured 1.05x end-to-end (baseline 18.9 -> 19.9 tok/s)
+# — the T=2 verification forward eats the win; see the flash-next
+# ledger 2026-09-02 for the investigation.
 # Registered under both names: the VLM wrapper's config says glm5_next,
 # the TextConfig on the bound LanguageModel says glm5_next_text.
 for _glm_name in ("glm5_next", "glm5_next_text"):
@@ -182,5 +187,5 @@ for _glm_name in ("glm5_next", "glm5_next_text"):
         capture="norm",
         draft_cache="KVCache",
         sidecar_name="mtp-head-q6.safetensors",
-        cache_semantics="copy",
+        cache_semantics="reassign",
     ))
