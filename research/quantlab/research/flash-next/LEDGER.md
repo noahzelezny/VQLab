@@ -882,3 +882,32 @@ approved text (comment 6a94b118334fc0cd5c373a4b): head works, 1.5-1.8x
 measured, no runtime support anywhere; rungs were sized to machine
 calibers (64/96/128 GB) without the ~2 GB q6 head; will revisit if
 mlx-lm adds support. MTP arc now fully closed pending that trigger.
+
+## 2026-09-02 — Two suspected MTP obstacles measured; both null
+
+exo stage-0 A/B (M3, 2.1bpw, sequential engine, warm, 378-token greedy)
+landed at 1.28x vs the 1.56-1.80x banked at 128 tokens, and the gap drew
+two theories. Both died under measurement:
+
+1. "exo overhead": direct-runtime A/B on the same box, same lengths —
+   baseline 17.2 vs exo 16.9, MTP 22.1 vs exo 22.8, acceptance equal
+   (0.772). exo adds ~nothing; the loop just IS ~1.3x at this length on
+   this text.
+2. "head-cache decay, window it": a 2048-token run with per-128-token
+   segment stats shows rate tracking SEGMENT ACCEPTANCE, not length —
+   segments 1408-1920 (head cache at max) ran 25.9-26.5 tok/s at
+   acceptance 1.0, FASTER than the opening. The 128->378 "decay"
+   (1.38x -> 1.28x) was the text's acceptance profile. Windowing stays
+   unbuilt until someone measures a real decay at 8k+ (MTPLX's collapse
+   was at 34k). Head KV is ~1KB/token — memory is a non-issue at agent
+   lengths.
+
+Also re-confirmed from the shipped model.py's own commentary: the
+packed-d4 SIMD twin was measured 0.94-1.07x and deliberately not
+shipped; the 2.1bpw already dispatches its best-known route. Absolute
+decode (17.4 vs stock-3bit's 27.0 on the same box/prompt) is the kernel
+research frontier, not a missed flag — and stock 3bit is 30 GiB larger.
+
+Context numbers for the eventual card: exo + MTP serves 2.1bpw at
+22.8 tok/s where stock affine 3bit (75G, no MTP) serves 27.0 — within
+17% at 60% of the size.
