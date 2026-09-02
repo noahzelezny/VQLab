@@ -1297,3 +1297,18 @@ Sep-1 dual-runtime config coercion fired for mlx_lm arches and broke
 qwen4_exp re-bundles under mlx-lm 0.31.9 (fixed same day, hasattr
 TextConfig guard; published artifacts unaffected — they carry their
 original bundles).
+
+## 2026-09-02 — rows=8 on the 397B over TCP tensor: NULL (interconnect-dominated)
+
+Controlled A/B on the cluster (fresh instance per arm, warm discard, six
+300-token runs each, same prompt): baseline median 17.06 tok/s
+(16.93-17.20), rows8 median 17.13 (16.48-17.75). +0.4%, arms overlap —
+no effect. Reading: TCP tensor pays per-layer all-reduces every token;
+at ~58 ms/token that sync term dominates and hides per-dispatch expert
+kernel gains entirely (consistent with tensor ~= pipeline speeds on this
+pair). The single-box +3.6% stands; the cluster lever is the
+interconnect (RDMA/TB5), not the kernel. rows8 bundle left deployed on
+both boxes' 3.1bpw (bit-identical outputs; .pre-rows8 backups on M3).
+Methodology note: an OOM-contaminated first attempt produced a
+declining 15.6->8.4 series — fresh-instance-per-arm was required for a
+0.27 tok/s baseline spread.
