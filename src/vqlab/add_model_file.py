@@ -115,7 +115,13 @@ class Model(_arch.Model):
         # Coerce here so ONE bundle loads under either runtime -- exo serves
         # VLM artifacts through mlx_lm.utils.load_model, which is exactly the
         # dict path. No-op for text-only models and for mlx_vlm-loaded ones.
-        if isinstance(getattr(args, "text_config", None), dict):
+        # The hasattr guard scopes the coercion to mlx_vlm-style arches:
+        # mlx_lm arches (qwen4_exp) carry a nested `text` config the loader
+        # already parses natively, and update_module_configs against them
+        # dies on the missing TextConfig class (caught 2026-09-02 when a
+        # re-bundled 2.1bpw stopped loading under mlx_lm 0.31.9).
+        if (isinstance(getattr(args, "text_config", None), dict)
+                and hasattr(_arch, "TextConfig")):
             from mlx_vlm.utils import (
                 apply_generation_config_defaults,
                 update_module_configs,
