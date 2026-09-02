@@ -30,7 +30,8 @@ def load_trunk(model_path, lazy: bool = False):
     from mlx_vlm.utils import load as vlm_load
     model, processor = vlm_load(str(model_path), lazy=lazy)
     tok = getattr(processor, "tokenizer", processor)
-    return getattr(model, "language_model", model), tok
+    lang = getattr(model, "language_model", model)
+    return _LogitsAdapter(lang), tok
 
 
 def encode_chat(tok, text):
@@ -47,3 +48,20 @@ def encode_chat(tok, text):
     if ids and isinstance(ids[0], str):
         return tok.encode("".join(ids))
     return ids
+
+
+class _LogitsAdapter:
+    """mlx_vlm LanguageModels return LanguageModelOutput(logits=...); the
+    loop's contract is `model(tokens, cache=...) -> logits`. Unwrap at the
+    call and delegate everything else, so capture paths (model.model.*),
+    make_cache, args and lm_head all reach the real module untouched."""
+
+    def __init__(self, lang):
+        self._lang = lang
+
+    def __call__(self, *args, **kwargs):
+        out = self._lang(*args, **kwargs)
+        return getattr(out, "logits", out)
+
+    def __getattr__(self, name):
+        return getattr(self._lang, name)
