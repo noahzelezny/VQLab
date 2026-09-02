@@ -911,3 +911,217 @@ research frontier, not a missed flag — and stock 3bit is 30 GiB larger.
 Context numbers for the eventual card: exo + MTP serves 2.1bpw at
 22.8 tok/s where stock affine 3bit (75G, no MTP) serves 27.0 — within
 17% at 60% of the size.
+
+## 2026-09-02 — the decode gap is NOT in the VQ kernels (M3 Ultra)
+
+Opened to close the 17.4 vs 27.0 tok/s gap on the 2.1bpw against stock
+affine 3-bit, on the premise (M1_KERNEL_PLAN.md, "Decode") that VQ reads
+FEWER bytes per token so the roofline says it should WIN. It measures the
+other way, and the premise is true only of the expert tensors, which turn
+out to be a tenth of the per-token read.
+
+MEASUREMENT SETUP. One driver for both artifacts (scratchpad/bench.py):
+same box, same prompt, chat template applied, `tok.eos_token_ids = set()`
+so BOTH sides generate exactly 377 timed tokens, first-token-to-last
+timing, two 24-token warmups before any timed run (the Metal-JIT trap from
+the 08-30 entry). Never both models resident at once. A CAUTION for anyone
+repeating this: with the RAW prompt the stock 3-bit repo emits EOS as its
+FIRST token and the run silently measures nothing (0 tokens), while the VQ
+one generates normally -- clearing the eos set is what makes the two
+comparable at all.
+
+Attribution is by STUB ABLATION: replace a module class's `__call__` with a
+shape-correct `mx.zeros` return, so its work leaves the step while the token
+count is held fixed. The generated text changes; the timing share is real.
+
+    ms/token            stock 3-bit    VQ 2.1bpw    delta
+    TOTAL                    37.05        56.76    +19.71
+      MoE experts             3.09         9.84     +6.75   (34% of gap)
+      n-gram embedding        2.11         3.54     +1.43   ( 7% of gap)
+      everything else        30.10        41.14    +11.04   (56% of gap)
+    tok/s                    26.99        17.62
+
+Both baselines reproduce the reported figures exactly (26.99 / 27.00 on
+repeat; 17.62 / 17.59, and 17.43 under the raw-prompt driver).
+
+SO THE MAJORITY OF THE GAP IS IN CODE THAT CONTAINS NO VQ AT ALL. "Everything
+else" is the same architecture on both sides -- linear attention, hyper-
+connections, dense projections, lm_head. The only difference is what the
+build recipe quantized them to: this artifact keeps every non-expert tensor
+at 8-bit / group 64, the stock comparator is 3-bit / group 32. Per-token
+weight bytes, straight from the safetensors headers (scratchpad/bytes.py):
+
+                       VQ 2.1bpw   stock 3-bit
+    dense (per token)    5.878 GiB     2.111 GiB    2.78x MORE
+    experts (10/512)     0.646 GiB     0.961 GiB    0.67x
+    TOTAL per token      6.525 GiB     3.073 GiB    2.12x MORE
+
+The plan's roofline argument holds for the expert tensors and is swamped by
+everything around them. 3.77 GiB of extra dense traffic against 11.04 ms of
+extra time is 366 GB/s -- a plausible achieved streaming rate on this box,
+so the "everything else" gap is bandwidth on weights the VQ work never
+touches. NOTE the isolated-matvec bench does NOT show this (8-bit and 3-bit
+measure the same ~30 us at N=1 on every projection shape except lm_head,
+2.10x): a single weight benched in a loop is cache-resident, so that bench
+reports a launch floor, not the streaming cost. It misled me for an hour;
+the ablation on the resident model is the honest instrument.
+
+    => The single largest available decode win on this rung is a BUILD
+       RECIPE change -- quantize the non-expert tensors lower -- not a
+       kernel change. Not actioned here: it is a new artifact and a
+       quality re-referee, not a kernel edit.
+
+WHICH KERNELS THE 2.1bpw ACTUALLY DISPATCHES. Worth stating because I got it
+wrong first and benched an unrepresentative layer for an hour. The artifact
+is MIXED GEOMETRY (config.json vq_modules, 144 expert modules):
+
+    layers 0-1    d2 / K256  unpacked uint8      6 modules   ( 4%)
+    layers 2-47   d8 / K16384 14-bit packed    138 modules   (96%)
+                    gate/up NGRP=40 -> vq_fused_packed14_d8_simd  (92)
+                    down    NGRP=10 -> vq_fused_packed14_d8       (46)
+
+So the hot path is the packed-d8 simdgroup kernel from the 09-01 entry,
+already shipped. Layer 1 is the d2 outlier -- do not bench it and call it
+the model.
+
+WHERE THE d8 KERNEL'S TIME GOES (real artifact codes, 48 dispatches per eval
+so the ~265 us eval round-trip is amortised; run-to-run variance on this
+harness is ~4%, which bounds every claim below):
+
+    gate/up  N=10   66.7 us   (4.1 MB of codes+scales ->  61 GB/s)
+    down     N=10   49.1 us   (4.4 MB                  ->  97 GB/s)
+    projected expert cost/token, 46 layers x 3:  8.33 ms
+      (the stub ablation says 9.84 ms/token; the balance is the 144 Python
+       calls and their broadcast/reshape, so the microbench IS predictive
+       here at decode N -- unlike above N=20, per the 09-01 note)
+
+Stock gather_qmm on the same shape reaches ~290 GB/s in situ. Ours is at
+7-12% of the machine's 819 GB/s. Two candidate causes were tested and BOTH
+ARE REFUTED:
+
+  1. CODEBOOK RESIDENCY. Held the code stream and the arithmetic fixed and
+     shrank only the codebook's DISTINCT hot set by tiling a K-entry table
+     across the same 256 KiB address range (scratchpad/split.py):
+
+         hot set    256 KiB   64 KiB   16 KiB   4 KiB
+         gate/up      69.2     66.6     64.5     63.6  us
+         down         49.5     47.8     49.2     48.8  us
+
+     8% from a 64x smaller hot set. L2 residency holds exactly as the M1f
+     entry claimed; the gather footprint is not what costs.
+
+  2. CODEBOOK LOAD WIDTH. The two adjacent half4 loads per code (cb4[2c],
+     cb4[2c+1]) were folded into one 16-byte uint4 load with as_type --
+     bit-identical, strictly fewer loads. Measured 8.11 ms/token against
+     8.41 ms for the SAME code on a second run of the unmodified kernel:
+     the effect is inside run-to-run variance. NOT BANKED, reverted.
+
+What is left, and it is the concrete next lever: the kernel issues roughly
+four device loads per code (one or two packed words through the generic
+VQ_CODE macro, plus the two codebook loads) and sustains ~123 G loads/s,
+i.e. about one per core per cycle -- it is LOAD-ISSUE bound. The fix with
+precedent is the one _SRC_DENSE_PACKED_D2 already uses: buffer a lane's
+packed words in REGISTERS once and extract its codes from registers,
+which measured 82 vs 169 us there. It does not port mechanically to d8/14-bit
+because a lane's 8 codes span 112 bits at a runtime bit offset, and a
+runtime index into a register array spills; the offset is compile-time only
+after specialising on (j0 & 31)/SPG parity (sh0 is 0 or 16 for BITS=14,
+SPG=8). Bounded but fiddly, and NOT ATTEMPTED here -- a subtle bit-extraction
+kernel is not something to rush against a bit-identity gate.
+
+SMALL-N SCALING (asked for by the GLM-5.3 MTP arc, whose T=2 trunk costs
+1.50x a T=1 and which suspected the VQ switch kernels of paying full kernel
+latency per (token, expert) pair). Real artifact codes, both geometries,
+against gather_qmm at 3-bit on the same shapes (scratchpad/nscale.py):
+
+    Flash-Next d8/K16384/14-bit, top_k=10, N=10 -> N=20 (T=1 -> T=2)
+        gate  68.3 -> 110.5 us  = 1.62x     gather_qmm 1.36x
+        down  58.4 ->  79.0 us  = 1.35x     gather_qmm 1.48x
+
+    GLM-5.3 d4 packed, top_k=8, N=8 -> N=16 (T=1 -> T=2)
+        K512  down  106.2 -> 173.7 = 1.64x  gather_qmm 1.71x
+        K512  gate  103.6 -> 173.5 = 1.67x  gather_qmm 1.47x
+        K2048 down  115.7 -> 200.7 = 1.73x  gather_qmm 1.75x
+        K2048 gate  128.2 -> 213.7 = 1.67x  gather_qmm 1.47x
+
+    => THE HYPOTHESIS IS REFUTED. Doubling the pairs costs 1.35-1.73x, not
+       2x, on every shape, and mlx's OWN gather_qmm scales 1.36-1.75x on the
+       same shapes -- statistically indistinguishable. The VQ kernels are not
+       worse than native at multi-token scaling, so a T=2 trunk costing 1.50x
+       is what this MoE shape does under ANY quantization and is not a VQ
+       defect. On GLM that leaves the DSA indexer L>1 path as the suspect
+       still standing.
+       Both kernel families are strongly LATENCY-bound at small N: per-pair
+       cost falls 8.8x (VQ) and 20x (gather_qmm) from N=1 to N=80, so VQ's
+       disadvantage GROWS with N (1.7x at N=1, 2.8x at N=10, 3.9x at N=80) --
+       it saturates earlier. That is the same load-issue ceiling as above.
+
+TWO KERNEL CHANGES MADE, both BIT-IDENTICAL on live weights, NEITHER
+measurable end-to-end on this rung:
+
+  a. _SRC_FUSED_D2_U32. The d=2 analogue of the d4 U8-VIEW dispatch: an
+     unpacked uint8 code row is byte-for-byte a little-endian uint32 stream,
+     so codes are reinterpreted with mx.view (zero copy) and the kernel reads
+     ONE word per four codes instead of four uchar loads. The existing loop
+     already steps four subvectors per q, so a q is exactly one word.
+     Measured on real 2.1bpw layer-1 codes:
+
+         tensor      N   NGRP   uchar us   u32 us   speedup
+         gate_proj  10     40       57.8     39.3     1.47x
+         gate_proj  20     40       78.3     51.4     1.52x
+         up_proj    10     40       69.5     37.4     1.86x
+         up_proj    20     40       69.9     48.4     1.44x
+         down_proj  10     10       57.6     39.2     1.47x
+         down_proj  20     10       72.1     47.8     1.51x
+
+     Bit-identical on every row (mx.array_equal on real codes, and on the
+     LIVE 45 GiB artifact for both d2 geometries). Worth 1.47-1.86x on the
+     d2 path -- but this rung has only 6 d2 modules of 144, so end-to-end it
+     is ~0.2 ms/token, inside noise. It is the WHOLE expert path on the
+     gemma d2 rungs, which is why it is kept.
+
+  b. VQPLEEmbedding: `_unpack` IS THE IDENTITY FUNCTION AT BITS=8 and was
+     being executed anyway. At K<=256 a "packed" row is one byte per code, so
+     bit0 = arange(nsub)*8 gives window byte i, shift 0, mask 0xFF -- the
+     three-byte-window extraction reproduces its own input. It cost a
+     concatenate, three mx.take gathers and six elementwise ops per shard per
+     token, on the 16 n-gram shards a token touches (~160 tiny dispatches).
+     Skipped now. The group scales are also applied by broadcast over a
+     [.., ngrp, G] view instead of materialising mx.repeat's full-width copy
+     -- same products, same rounding, one fewer temporary. Bit-identical on a
+     live shard; 480 -> 388 us per shard-call in isolation.
+
+END-TO-END, both changes bound into the loaded 45 GiB artifact (the bundle
+embeds its own vq_switch, so `custom_model._fused` and
+`VQPLEEmbedding.__call__` are rebound to the repo's; all FOUR live expert
+geometries gated bit-identical first, and the generated text is unchanged):
+
+    before (bundle)      17.41 tok/s   57.43 ms/tok
+    + d2 uint32 kernel   17.19 tok/s
+    + PLE unpack/repeat  17.19 tok/s
+
+i.e. NO END-TO-END WIN on this rung -- the changes are real and measured in
+isolation, and they land on 4% of the modules and on a path worth 1.4 ms.
+Recorded as such rather than dressed up.
+
+ALSO MEASURED AND DELIBERATELY NOT SHIPPED: _SRC_FUSED_D2_SIMD, the
+simdgroup-per-row d2 twin (source kept in vq_switch.py with the numbers, so
+the negative is not re-derived). 0.80-1.09x the thread-per-row kernel on real
+codes. It does not win because the layout exists to hide DEPENDENT DEVICE
+round-trips, and at d2/K256 the codebook is 1 KB in THREADGROUP memory --
+there is no device round-trip to hide, so the two barriers per block, the
+32-step shuffle and 31 idle lanes at the write are pure overhead. Not
+occupancy either: it launches 204,800 threads against 6,400 for the same
+time. The d2 bottleneck was the WIDTH OF THE CODE LOAD, which (a) fixes.
+
+WHAT I DID NOT GET TO
+  - the register-buffered packed-code fetch for d8/14-bit (the live lever)
+  - the NGRP=10 down_proj layout (46 modules run thread-per-row because the
+    NGRP>=32 gate excludes them; a multi-row-per-simdgroup variant that packs
+    3 rows of 10 groups into one simdgroup would fill 30/32 lanes and is
+    bit-exact by construction, since each row keeps its own ascending-group
+    fma chain). Not written.
+  - the build-recipe change that owns 56% of the gap: non-expert tensors at
+    8-bit. Needs a new artifact and a quality re-referee.
+  - re-bundling. Kernel changes here are in-repo only; artifacts embed their
+    own kernel source and were touched READ-ONLY throughout.
