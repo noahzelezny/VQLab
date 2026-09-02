@@ -170,3 +170,90 @@ def test_simd_is_the_default():
     """The d8 device-codebook path ships with the simd layout on; VQ_EXPERT_SIMD
     is only an A/B escape hatch."""
     assert V._EXPERT_SIMD is True
+
+
+# --- d=2 code-load width (E14x, 2026-09-02) --------------------------------
+# _SRC_FUSED_D2_U32 reads FOUR unpacked uint8 codes per uint32 load instead of
+# four uchar loads, by reinterpreting the code row with mx.view. That is the
+# d2 analogue of the d4 U8-VIEW dispatch and is worth 1.47-1.86x on the d2
+# expert path (real 2.1bpw layer-1 codes, M3 Ultra) -- but only if it is
+# EXACT, for the same reason as everything else in this file: the gemma d2
+# rungs' published KL numbers were scored through the uchar kernel.
+#
+# The shapes are the ones shipped artifacts dispatch: the Flash-Next 2.1bpw
+# uses d2/K256 for layers 0-1 (gate/up NGRP=40, down NGRP=10), and the gemma
+# d2 rungs use d2 throughout.
+D2_SHAPES = [
+    (8,  640, 2560, 256, 2, 64),   # F-Next 2.1bpw gate/up  (NGRP = 40)
+    (8, 2560,  640, 256, 2, 64),   # F-Next 2.1bpw down     (NGRP = 10)
+    (4,  100, 2816, 256, 2, 64),   # ragged OUT, gemma-ish width
+    (4,  128, 2048, 256, 2, 32),   # G = 32
+]
+
+
+@pytest.mark.parametrize("N", [1, 2, 5, 8, 10, 20])
+@pytest.mark.parametrize("shape", D2_SHAPES)
+def test_d2_u32_bit_exact(shape, N):
+    E, OUT, IN, K, d, G = shape
+    args = _rand_experts(E, OUT, IN, K, d, G, N)
+    base = np.array(V._fused(*args, d2_u32=False))
+    u32 = np.array(V._fused(*args, d2_u32=True))
+    assert np.array_equal(base, u32)
+
+
+@pytest.mark.parametrize("N", [1, 8])
+@pytest.mark.parametrize("shape", D2_SHAPES)
+def test_d2_simd_bit_exact(shape, N):
+    """_SRC_FUSED_D2_SIMD is measured-and-not-dispatched (0.80-1.09x), but it
+    is kept as the reference twin, so it must stay correct."""
+    E, OUT, IN, K, d, G = shape
+    if IN // G < 32:
+        pytest.skip("simd layout needs NGRP >= 32")
+    args = _rand_experts(E, OUT, IN, K, d, G, N)
+    base = np.array(V._fused(*args, d2_u32=False, simd=False))
+    _, eidx, codes, cb, sc = args
+    x = args[0]
+    NSUB = IN // d
+    y, = V._get_kernel("vq_fused_d2_simd_t", V._SRC_FUSED_D2_SIMD)(
+        inputs=[x, eidx, codes, cb, sc,
+                mx.array([OUT, IN, d, G, N, K], dtype=mx.int32)],
+        template=[("T", x.dtype), ("CT", codes.dtype),
+                  ("MAX_K", K), ("MAX_TILE", 32 * (G // 2))],
+        grid=(32, ((OUT + 31) // 32) * 32, N),
+        threadgroup=(32, 32, 1),
+        output_shapes=[(N, OUT)], output_dtypes=[x.dtype])
+    assert np.array_equal(base, np.array(y))
+
+
+def test_d2_u32_is_the_default_and_dispatches():
+    """Unpacked uint8 d2 codes must take the uint32 kernel by default."""
+    assert V._D2_U32 is True
+    V._KERNELS.clear()
+    V._fused(*_rand_experts(E=4, OUT=256, IN=2560, K=256, d=2, G=64, N=8))
+    assert any("d2_u32" in n for n in V._KERNELS)
+    V._KERNELS.clear()
+
+
+def test_ple_byte_codes_skips_the_identity_unpack():
+    """At BITS=8 a 'packed' PLE row is one byte per code, so _unpack is the
+    identity -- the fast path must be selected AND agree with it exactly."""
+    rng = np.random.default_rng(0)
+    rows, nsub, d, G = 512, 20, 8, 32
+    cols = nsub * d
+    codes = mx.array(rng.integers(0, 256, size=(rows, nsub), dtype=np.uint8))
+    cb = mx.array(rng.normal(0, 1, size=(256, d)).astype(np.float16))
+    sc = mx.array(rng.normal(0, 0.05, size=(rows, cols // G)).astype(np.float16))
+    m = V.VQPLEEmbedding(codes, cb, sc, group_size=G, packed_nsub=nsub)
+    assert m._byte_codes is True
+    # rebuild the ORIGINAL extraction tables and run the old path
+    bit0 = np.arange(nsub) * m._bits
+    m._b0 = mx.array(bit0 // 8)
+    m._sh = mx.array((bit0 % 8).astype(np.uint32))
+    ids = mx.array(rng.integers(0, rows, size=16).astype(np.uint32))
+    c = m._unpack(m.codes[ids])
+    v = m.codebook[c.astype(mx.uint32)]
+    old = (v.reshape(*ids.shape, -1)
+           * mx.repeat(m.vq_scales[ids], G, axis=-1)).astype(mx.bfloat16)
+    # compared with mx.array_equal: numpy has no bfloat16, so np.array() on
+    # the bf16 output raises rather than converting.
+    assert bool(mx.array_equal(old, m(ids)))
