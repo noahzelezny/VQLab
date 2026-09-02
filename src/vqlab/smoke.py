@@ -107,8 +107,28 @@ def main(argv=None) -> int:
     else:
         from mlx_lm.utils import load
         from mlx_lm import generate
-        # VQ artifacts ship their runtime in-checkpoint; loading it is the point.
-        model, tokenizer = load(str(art), trust_remote_code=True)
+        # VQ artifacts ship their runtime in-checkpoint; loading it is the
+        # point. Released mlx-lm (0.31.x) has NO trust_remote_code kwarg — it
+        # honours a bundled model.py unconditionally — while our exo fork and
+        # some newer builds do. Passing it unconditionally made this gate FAIL
+        # on shipped artifacts against the installed runtime, which silently
+        # gated check-release. Probe for the kwarg, and keep the TypeError
+        # fallback (mtp/runtime.py::load_trunk precedent) for loaders whose
+        # signature is a **kwargs passthrough that inspect cannot see.
+        import inspect as _inspect
+        _load_kw = {}
+        try:
+            _params = _inspect.signature(load).parameters
+            if "trust_remote_code" in _params:
+                _load_kw["trust_remote_code"] = True
+        except (TypeError, ValueError):
+            pass
+        try:
+            model, tokenizer = load(str(art), **_load_kw)
+        except TypeError:
+            if not _load_kw:
+                raise
+            model, tokenizer = load(str(art))
     print(runtime_load.resolved_runtime_note(model))
 
     # III.13: instrument the import, never assume which copy runs.
