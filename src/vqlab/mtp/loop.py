@@ -252,7 +252,12 @@ def mtp_stream_generate(
                 f"prompt_cache already holds {used} positions; the MTP head "
                 f"cannot be aligned to a reused trunk cache yet. Pass a fresh "
                 f"cache, or use align='legacy' (which is misaligned anyway).")
-        dcache = spec.make_draft_cache(arch)
+        # A head that knows its own cache shape builds it (glm5_next needs
+        # a CacheList(main-KV, indexer-KV), which a single registry attr
+        # name cannot express); otherwise the registry's factory applies.
+        dcache = (head.make_draft_cache()
+                  if hasattr(head, "make_draft_cache")
+                  else spec.make_draft_cache(arch))
 
         # prefill. The per-chunk hidden states are kept when the head is
         # being seeded, because the head's input at position j is
