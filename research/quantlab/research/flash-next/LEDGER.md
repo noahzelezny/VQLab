@@ -1312,3 +1312,18 @@ both boxes' 3.1bpw (bit-identical outputs; .pre-rows8 backups on M3).
 Methodology note: an OOM-contaminated first attempt produced a
 declining 15.6->8.4 series — fresh-instance-per-arm was required for a
 0.27 tok/s baseline spread.
+
+## 2026-09-02 — the 397B 2x2: interconnect is the whole story (+19% RDMA)
+
+TB5 cable connected; first jaccl/RDMA run on this pair. Six 300-token
+runs per cell, fresh instance per arm, medians:
+
+                 old bundle   rows=8
+  TCP  tensor      17.06       17.13   (+0.4%, null)
+  RDMA tensor      20.26       20.41   (+0.7%, sub-noise)
+
+RDMA buys +19% and collapses variance (spread 0.33 vs up to 1.3 on
+TCP). rows=8 is sub-noise on the 397B in BOTH interconnects — the
+Flash-Next +3.6% does not transfer; this model's per-rank expert
+shapes don't live where the rows sweep bites. rows=8 left deployed
+(bit-identical, mildly positive trend, one bundle version fleetwide).
