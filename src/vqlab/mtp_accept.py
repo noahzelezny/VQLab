@@ -84,14 +84,14 @@ def main():
     ap.add_argument("--out", default=None)
     a = ap.parse_args()
 
-    from mlx_lm.utils import load
     from vqlab.mtp import load_mtp_head, mtp_stream_generate
+    from vqlab.mtp.runtime import load_trunk
 
     prompts = (json.loads(pathlib.Path(a.prompts).read_text())
                if a.prompts else DEFAULT_PROMPTS)
     aligns = a.aligns.split(",")
 
-    model, tok = load(a.model, lazy=False, trust_remote_code=True)
+    model, tok = load_trunk(a.model)
     heads = {}
     for spec in a.head:
         label, _, path = spec.partition("=")
