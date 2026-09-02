@@ -64,9 +64,29 @@ def main(argv=None) -> int:
         print(f"FAIL: {art} is not a directory")
         return 1
 
+    def _publishable(p: pathlib.Path) -> bool:
+        # Working files accumulate in artifact dirs and MUST NOT ship: a
+        # stale model.py.pre-* next to the live model.py is exactly the
+        # runtime ambiguity check-bundle exists to kill, and 2026-09-02 an
+        # --all upload would have swept two of them plus OS litter. Deny by
+        # name pattern, not by allowlist, so new legitimate files still ship.
+        if "__pycache__" in p.parts:
+            return False
+        n = p.name
+        if n in (".DS_Store", ".gitignore") or n.endswith((".pyc", ".tmp")):
+            return False
+        if ".pre-" in n or n.endswith((".bak", ".orig")):  # local backups
+            return False
+        return True
+
     if a.all:
         targets = sorted(p for p in art.rglob("*")
-                         if p.is_file() and "__pycache__" not in p.parts)
+                         if p.is_file() and _publishable(p))
+        skipped = sorted(p.name for p in art.rglob("*")
+                         if p.is_file() and not _publishable(p))
+        if skipped:
+            print(f"excluded {len(skipped)} working files: "
+                  f"{skipped[:6]}{'...' if len(skipped) > 6 else ''}")
     else:
         rels = a.files or ["model.py", "README.md"]
         targets = []
