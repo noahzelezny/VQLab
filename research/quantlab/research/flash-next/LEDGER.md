@@ -1280,3 +1280,20 @@ than assumed, real down_proj [E,2560,42] / IN=640:
     packed, so there were no real tensors to sweep them on. Same inheritance,
     same suspicion, no measurement. Cheap to do on an unpacked artifact.
   * The profiling arc's ledger entry should be merged into this file.
+
+## 2026-09-02 — rows=8 validated END-TO-END (+3.6% on the dense-heavy rung)
+
+A-B-A on the shipped 2.1bpw vs an APFS clone re-bundled with the merged
+runtime (3 warmed 377-token runs per side, shipped run twice bracketing):
+shipped 17.39/17.40/17.41 then 16.99/17.09/17.25; rows8 17.91/17.94/17.95.
+Medians 17.32 -> 17.94 tok/s (+3.6%), rows8 strictly above both shipped
+brackets. Matches the stub-ablation arithmetic (experts are 9.8 of
+58 ms/token here; a ~1.25x expert kernel predicts ~+4%) — the microbench
+did NOT invert end-to-end this time. Expected to matter far more on the
+397B, where the expert share of each token dominates; unmeasured there.
+
+Bycatch: the first A/B attempt caught a bundle-template regression — the
+Sep-1 dual-runtime config coercion fired for mlx_lm arches and broke
+qwen4_exp re-bundles under mlx-lm 0.31.9 (fixed same day, hasattr
+TextConfig guard; published artifacts unaffected — they carry their
+original bundles).
