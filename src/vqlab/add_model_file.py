@@ -167,6 +167,31 @@ class Model(_arch.Model):
                     group_size=_g["group"],
                     packed_nsub=(_cols // _g["dim"]) if _rb else 0,
                 ))
+
+    # mlx_lm's generate loop indexes the model's return value directly
+    # (`logits[:, -1, :]`); mlx_vlm callers read `.logits` and the other
+    # LanguageModelOutput dataclass fields. Text-only archs return a bare
+    # mx.array and pass straight through. For a VLM output, swap in a
+    # subclass (built once per output type) that delegates array behaviour
+    # to `.logits`, so ONE bundle serves both runtimes.
+    _ARRAYISH = {}
+
+    def __call__(self, *_a, **_kw):
+        _out = super().__call__(*_a, **_kw)
+        if isinstance(_out, mx.array) or not hasattr(_out, "logits"):
+            return _out
+        _cls = type(_out)
+        _sub = Model._ARRAYISH.get(_cls)
+        if _sub is None:
+            _sub = type(_cls.__name__, (_cls,), {
+                "__getitem__": lambda _s, _k: _s.logits[_k],
+                "shape": property(lambda _s: _s.logits.shape),
+                "dtype": property(lambda _s: _s.logits.dtype),
+                "ndim": property(lambda _s: _s.logits.ndim),
+            })
+            Model._ARRAYISH[_cls] = _sub
+        _out.__class__ = _sub
+        return _out
 '''
 (ART / "model.py").write_text(runtime + shim)
 print(f"wrote model.py + config keys: {len(vq_modules)} vq modules -> {ART}")
