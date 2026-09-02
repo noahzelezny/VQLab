@@ -1327,3 +1327,17 @@ TCP). rows=8 is sub-noise on the 397B in BOTH interconnects — the
 Flash-Next +3.6% does not transfer; this model's per-rank expert
 shapes don't live where the rows sweep bites. rows=8 left deployed
 (bit-identical, mildly positive trend, one bundle version fleetwide).
+
+## 2026-09-02 — post-kernel retest: rows=8 and MTP multiply (24.4 tok/s)
+
+Re-bundled the local 2.1bpw with rows=8 and re-ran the direct A/B (same
+prompt/lengths as the morning's numbers): baseline 17.2-17.5 -> 18.0-18.2
+(+3.9%, matches the A-B-A), MTP 22.1-22.8 -> 24.37/24.45 (+8%),
+acceptance identical (0.772). MTP gains double the baseline's because
+every speculative step is a T=2 forward and rows=8's win grows with N —
+the two optimizations multiply rather than add. Net stack: 24.4 tok/s
+with drafting, within 10% of stock affine 3-bit (27.0) at 60% of its
+size; +40% over the pre-kernel baseline. GLM measured the same day:
+rows=8 does NOT move its T=2 ratio (see glm53 ledger) — indexer remains
+its sole gate. Published HF repos still carry the original bundles;
+republish is a separate, gated decision.
