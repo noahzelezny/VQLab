@@ -64,9 +64,28 @@ def main():
                          f"{SIDECAR_NAME} into (default: the artifact dir)")
     a = ap.parse_args()
 
-    from mlx_lm.utils import load
-    # lazy=True: we need the architecture classes and args, not the weights.
-    model, _ = load(a.model, lazy=True, trust_remote_code=True)
+    # lazy=True everywhere: we need the architecture classes and args, not
+    # the weights. Families mlx-lm has no class for (glm5_next) load via
+    # mlx_vlm; the head binds to the LanguageModel, matching the registry's
+    # arch_module contract either way.
+    import json as _json
+    model_type = _json.load(
+        open(pathlib.Path(a.model) / "config.json")).get("model_type")
+    try:
+        importlib.import_module(f"mlx_lm.models.{model_type}")
+        have_mlx_lm_class = True
+    except ImportError:
+        have_mlx_lm_class = False
+    if have_mlx_lm_class:
+        from mlx_lm.utils import load
+        try:
+            model, _ = load(a.model, lazy=True, trust_remote_code=True)
+        except TypeError:  # older mlx-lm: no trust_remote_code kwarg
+            model, _ = load(a.model, lazy=True)
+    else:
+        from mlx_vlm.utils import load_model
+        model = load_model(pathlib.Path(a.model), lazy=True)
+        model = getattr(model, "language_model", model)
     arch = importlib.import_module(type(model.model).__module__)
     spec = registry.resolve(model, a.family)
     cls = spec.head_cls()
