@@ -859,6 +859,143 @@ _SRC_FUSED_PACKED_D8_SIMD = _PACK_FETCH + r"""
 """
 
 
+# REGISTER-BUFFERED twin of _SRC_FUSED_PACKED_D8_SIMD (2026-09-02).
+#
+# The kernel above is LOAD-ISSUE bound, not bandwidth bound: it moves 61-97
+# GB/s of the M3 Ultra's 819, and the profiling arc that measured it REFUTED
+# both codebook residency (shrinking the hot set 256 KiB -> 4 KiB buys 8%)
+# and load width. What is left is issue: ~4 device loads per code against one
+# load issued per core per cycle, and 1-2 of those four are the VQ_CODE
+# bit-field read, which re-reads the SAME uint32 word for every code that
+# lands in it.
+#
+# _SRC_DENSE_PACKED_D2 already fixes this for d=2 (82 us vs 169 on a
+# comparable dependent chain) by copying a lane's code words into registers
+# once. It does not port mechanically, and that is the whole difficulty: at
+# d=2/G=64 a lane's group is EXACTLY one 32-code block, so its words start at
+# bit 0 of the block and every extraction offset is compile-time. At d=8 a
+# lane owns only SPG = G/8 codes, so NPH = 32/SPG lanes share a block and
+# lane p starts at bit p*SPG*BITS INTO it -- a runtime offset, and indexing a
+# register array with a runtime index SPILLS TO MEMORY on Apple GPUs, which
+# is strictly worse than the device reads it replaces.
+#
+# The obvious fix -- an if/else chain over the NPH phases with each body
+# compile-time specialised -- was BUILT AND MEASURED FIRST, and it is 1.9x
+# SLOWER (see the ledger, 2026-09-02). The reason is structural and is the
+# thing that makes d=8 hard: the phase p = g & (NPH-1) varies WITHIN a
+# simdgroup (lane L owns group b*32+L, so consecutive lanes have consecutive
+# phases), so all NPH bodies are executed serially by the whole simdgroup.
+# Compile-time specialisation on a per-lane-varying value buys specialisation
+# and pays NPH-way divergence. Regrouping lanes by phase does not help --
+# divergence on Apple GPUs is per-simdgroup, and every branch still has an
+# active lane.
+#
+# So the phase is handled BRANCHLESSLY instead. Each lane loads the SAME
+# constexpr NW words from a runtime word offset (pointer arithmetic, not
+# register indexing, so no spill and no divergence), then FUNNEL-SHIFTS that
+# window down by the runtime bit offset SH0:
+#
+#     v[i] = (wb[i] >> SH0) | (wb[i+1] << (32 - SH0))
+#
+# after which every code sits at bit q*BITS from v[0] and every v[] index and
+# shift in the extraction is a literal, exactly as in the d=2 kernel. The
+# funnel is a uniform-cost select, identical work on every lane.
+#
+# Word footprint per lane, at the shipped SPG=8/BITS=14: a lane's 8 codes are
+# 112 bits starting at p*112 within the block's 14 words, so p in {0,1,2,3}
+# starts at word {0,3,7,10} bit {0,16,0,16}, and NW = 4 words covers the
+# widest case (16 + 112 = 128 bits) -- 4 loads per 8 codes where VQ_CODE
+# issued ~12. The window NEVER leaves the block: the largest read is
+# blk[10+3] = blk[13] = blk[BITS-1]. _d8_regbuf_ok asserts that in Python
+# rather than trusting it.
+#
+# BIT-EXACTNESS. Extraction order, the two dots per code, the per-lane gacc,
+# and the ascending-group simd_shuffle scale reduction are copied verbatim
+# from the kernel above; only WHERE the code words are read from changes.
+# Output is bit-identical by construction and asserted as such against
+# _SRC_FUSED_PACKED_D8_SIMD (tests/test_vq_expert_simd.py).
+_SRC_FUSED_PACKED_D8_SIMD_RB = r"""
+    const int OUT  = dims[0];
+    const int IN   = dims[1];
+    const int G    = dims[3];
+    const int NSUB = IN / 8;
+    const int NX4  = IN / 4;
+    const int NGRP = IN / G;
+    const int TILE = 32 * SPG_C * 2;
+    const int WPR  = (NSUB + 31) / 32 * BITS;  // ceil: tail block padded, pad codes never read (j < NSUB)
+    constexpr int NPH  = 32 / SPG_C;           // lanes sharing one 32-code block
+    constexpr uint MASK = (1u << BITS) - 1u;
+    // widest start bit any phase can land on, and the window that covers it
+    constexpr int SH0MAX = ((NPH - 1) * SPG_C * BITS) & 31;
+    constexpr int NW = (SH0MAX + SPG_C * BITS + 31) >> 5;
+    uint r = thread_position_in_grid.y;
+    uint t = thread_position_in_grid.z;
+    uint lane = thread_position_in_threadgroup.x;
+    uint lid = thread_position_in_threadgroup.y * 32 + lane;
+    uint tgsize = threads_per_threadgroup.x * threads_per_threadgroup.y;
+
+    threadgroup float4 xs[MAX_TILE];
+    const device T* xrow = x + (size_t)t * IN;
+    const device half4* cb4 = (const device half4*)codebook;
+
+    const bool active = (r < (uint)OUT);
+    const uint rr = active ? r : 0;
+    const uint e = eidx[t];
+    const device uint* crow = codes + (size_t)e * OUT * WPR + (size_t)rr * WPR;
+    const device half* srow = scales + (size_t)e * OUT * NGRP + (size_t)rr * NGRP;
+    float acc = 0.0f;
+    const int NBLK = (NGRP + 31) / 32;
+
+    for (int b = 0; b < NBLK; ++b) {
+        const int base = b * TILE;
+        const int span = min(TILE, NX4 - base);
+        threadgroup_barrier(mem_flags::mem_threadgroup);
+        for (uint i = lid; i < (uint)span; i += tgsize) {
+            const int o = (base + (int)i) * 4;
+            xs[i] = float4((float)xrow[o], (float)xrow[o+1],
+                           (float)xrow[o+2], (float)xrow[o+3]);
+        }
+        threadgroup_barrier(mem_flags::mem_threadgroup);
+        const int g = b * 32 + (int)lane;
+        float gacc = 0.0f;
+        if (active && g < NGRP) {
+            const int j0 = g * SPG_C;
+            const int SB = (g & (NPH - 1)) * SPG_C * BITS;   // start bit in block
+            const device uint* blk = crow + (size_t)(j0 >> 5) * BITS + (SB >> 5);
+            const uint SH0 = (uint)(SB & 31);
+            // one window, then funnel it down so every extraction below is at
+            // a compile-time offset. wb/v are indexed only by unrolled loop
+            // counters, so they stay in registers.
+            uint wb[NW + 1];
+            #pragma clang loop unroll(full)
+            for (int wi = 0; wi < NW; ++wi) wb[wi] = blk[wi];
+            wb[NW] = 0u;      // bits at/after 32*NW are never needed (see above)
+            uint v[NW];
+            #pragma clang loop unroll(full)
+            for (int wi = 0; wi < NW; ++wi)
+                v[wi] = SH0 ? ((wb[wi] >> SH0) | (wb[wi + 1] << (32 - SH0)))
+                            : wb[wi];
+            int m = 2 * j0 - base;
+            #pragma clang loop unroll(full)
+            for (int q = 0; q < SPG_C; ++q, m += 2) {
+                const int wi = (q * BITS) >> 5;
+                const int sh = (q * BITS) & 31;
+                uint c = v[wi] >> sh;
+                if (sh + BITS > 32) c |= v[wi + 1] << (32 - sh);
+                c &= MASK;
+                gacc += dot(float4(cb4[2*c]),   xs[m])
+                      + dot(float4(cb4[2*c+1]), xs[m+1]);
+            }
+        }
+        const int gmax = min(32, NGRP - b * 32);
+        for (int i = 0; i < gmax; ++i)
+            acc = fma((float)srow[b * 32 + i],
+                      simd_shuffle(gacc, (ushort)i), acc);
+    }
+    if (active && lane == 0) y[(size_t)t * OUT + r] = static_cast<T>(acc);
+"""
+
+
 _SRC_FUSED_PACKED_D8_TG = _PACK_FETCH + r"""
     const int OUT  = dims[0];
     const int IN   = dims[1];
@@ -1428,6 +1565,57 @@ def _d4_tg_fits(K, NSUB):
 # _DENSE_ROWS_TG (one 32-lane simdgroup per row, 32 rows per threadgroup).
 _EXPERT_ROWS_TG = 32
 
+# Rows (= 32-lane simdgroups) per threadgroup for the PACKED d8 simd kernel.
+# The shipped value was 32, inherited from the dense kernels where it was
+# swept. Re-swept 2026-09-02 on REAL Flash-Next 2.1bpw expert tensors
+# (E=64, M3 Ultra, interleaved A/B, 21 reps x 50 dispatches, min/median):
+#
+#   gate L2  N=10   r2 69.2  r4 51.9  r8 49.9  r16 54.7  r32 61.9 us
+#   gate L2  N=20   r2 111.5 r4 81.7  r8 82.2  r16 93.0  r32 103.4
+#   up   L2  N=10   r2 66.3  r4 49.0  r8 52.1  r16 56.8  r32 60.9
+#   up   L20 N=20            r4 83.3  r8 84.4              r32 101.3
+#
+# A clear interior optimum: r2 starves the machine of threadgroups, r32
+# starves each thread of registers, and 4/8 are indistinguishable from each
+# other while beating r32 by 1.18-1.24x on every shape/N measured. 8 is
+# chosen over 4 for the larger x tile amortisation at equal measured cost.
+# N=1 is dispatch-bound and flat across the whole sweep (23.4-24.5 us), so
+# nothing regresses there. The kernel source is UNCHANGED, so the output is
+# bit-identical by construction and asserted as such in the tests.
+_EXPERT_ROWS_TG_D8_PACKED = int(os.environ.get("VQ_D8_ROWS_TG", "8"))
+
+# Register-buffered packed-d8 simd kernel (2026-09-02). It is MEASURED SLOWER
+# (see the ledger) and is therefore OFF; VQ_D8_REGBUF=1 dispatches it so the
+# negative stays reproducible without a rebuild.
+_D8_REGBUF = os.environ.get("VQ_D8_REGBUF", "0") != "0"
+
+
+def _d8_regbuf_ok(G):
+    """Can the register-buffered d8 kernel serve this G?
+
+    SPG = G/8 codes per lane must tile a 32-code pack block exactly (so a
+    lane's codes never straddle two blocks and NPH = 32/SPG is an integer),
+    and only NPH <= 4 phases are emitted in the source. That is SPG in
+    {8, 16, 32}, i.e. G in {64, 128, 256} -- G=64 is what every shipped d8
+    artifact uses. Anything else keeps the existing kernel.
+    """
+    if not _D8_REGBUF or G % 8 != 0:
+        return False
+    spg = G // 8
+    if spg not in (8, 16, 32):
+        return False
+    # the funnel window must never leave the lane's own 32-code pack block,
+    # for EVERY bit width the packer can emit (a read past blk[BITS-1] would
+    # be an out-of-bounds device read on the last block of a row).
+    nph = 32 // spg
+    for bits in range(2, 17):
+        sh0max = ((nph - 1) * spg * bits) & 31
+        nw = (sh0max + spg * bits + 31) >> 5
+        w0max = ((nph - 1) * spg * bits) >> 5
+        if w0max + nw - 1 > bits - 1:
+            return False
+    return True
+
 # E141: the simdgroup-per-row d8 kernel is bit-identical to the thread-per-row
 # one, so it is on by default; VQ_EXPERT_SIMD=0 restores the old layout for
 # A/B measurement without a rebuild.
@@ -1517,9 +1705,13 @@ def _fused(x, eidx, codes, codebook, scales, pack_bits=0, simd=None):
                 name = f"vq_fused_packed{pack_bits}_d8_tg"
                 src = _SRC_FUSED_PACKED_D8_TG
             elif simd and IN // G >= 32:
-                name = f"vq_fused_packed{pack_bits}_d8_simd"
-                src = _SRC_FUSED_PACKED_D8_SIMD
-                simd_rows = _EXPERT_ROWS_TG
+                if _d8_regbuf_ok(G):
+                    name = f"vq_fused_packed{pack_bits}_d8_simd_rb"
+                    src = _SRC_FUSED_PACKED_D8_SIMD_RB
+                else:
+                    name = f"vq_fused_packed{pack_bits}_d8_simd"
+                    src = _SRC_FUSED_PACKED_D8_SIMD
+                simd_rows = _EXPERT_ROWS_TG_D8_PACKED
             else:
                 name = f"vq_fused_packed{pack_bits}_d8"
                 src = _SRC_FUSED_PACKED_D8
@@ -1536,6 +1728,11 @@ def _fused(x, eidx, codes, codebook, scales, pack_bits=0, simd=None):
             tile = 32 * (G // 8) * 2 if D == 8 else 32 * (G // 4)
             template = [("T", x.dtype), ("MAX_TILE", tile),
                         ("BITS", pack_bits)]
+            if name.endswith("_d8_simd_rb"):
+                # SPG must be a COMPILE-TIME constant: the phase bodies are
+                # specialised on it, and a runtime SPG would put a runtime
+                # index on the register array and spill it.
+                template.append(("SPG_C", G // 8))
         elif D == 8:
             template = [("T", x.dtype), ("MAX_NX4", IN // 4),
                         ("BITS", pack_bits)]
