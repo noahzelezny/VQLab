@@ -600,3 +600,32 @@ BLOCKERS UNCHANGED, both required before upload:
 2. No token has been generated. v2_100 (100.2 GiB) fits the M4 and must be
    smoked there. v2_120/v2_140 are exo-cluster rungs by design. Noah: "Not
    publishing without smoke anyway."
+
+## 2026-09-02 — GLM MTP head: wiring PROVEN, speedup BLOCKED on T=2 cost
+
+Head extracted (layers.45, 889 tensors, 13.84 GiB bf16 graft), packed q6
+(6.09 GiB sidecar), head module mtp_head_glm5.py (plain-residual block —
+the graft has NO hc weights and its OWN shared_head.norm). All numbers
+M4, 2.7bpw trunk, greedy:
+
+  acceptance (12 prompts x 128 tok)   pooled 0.8516, range 0.73-0.97
+  end-to-end                          baseline 18.9 -> mtp 19.9 = 1.05x
+
+The 1.8x-theoretical is eaten by verification: a T=2 trunk forward costs
+1.50x a T=1 (78.9 vs 52.6 ms), and 1.81 committed tokens per ~94ms step
+(incl. rejection replays) back-solves to ~19.9 tok/s with the head ~free.
+Eliminated by measurement, in order:
+  - cache copy-vs-reassign: identical 19.9 both ways
+    (check_snapshot_semantics=True banked in the registry regardless);
+  - the S==1-only MoE compile gate: extending to S<=2 gives 78.9->76.6ms
+    (1.45x) — real but marginal, not the eater.
+Remaining suspects, both isolable with shape microbenches: the VQ switch
+kernels' multi-token scaling (each (token,expert) pair may pay full
+kernel latency — the same small-M frontier as the 17.4-vs-27 absolute
+gap on Flash-Next), and the DSA indexer's L>1 sparse-mask path (12 fa
+layers). Contrast: Flash-Next measured T=2 CHEAPER than T=1 (49 vs
+61ms), which is why its identical loop pays 1.65x.
+
+Consequence: GLM MTP ships nothing until T=2/T=1 comes down; the fix
+most likely lives in the VQ kernel arc, where it pays absolute decode
+speed AND the MTP multiplier at once.
