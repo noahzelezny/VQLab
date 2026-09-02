@@ -35,11 +35,13 @@ def load_trunk(model_path, lazy: bool = False):
 
 def encode_chat(tok, text):
     """Chat-template a single user message to token ids, whichever of the
-    three shapes this tokenizer's apply_chat_template returns (ids, a
+    four shapes this tokenizer's apply_chat_template returns (ids, a BatchEncoding,
     rendered string, or a list of rendered strings — bare HF tokenizers
     from mlx_vlm do the latter two)."""
     ids = tok.apply_chat_template([{"role": "user", "content": text}],
                                   add_generation_prompt=True)
+    if hasattr(ids, "get") and "input_ids" in ids:  # BatchEncoding
+        return list(ids["input_ids"])
     if isinstance(ids, str):
         return tok.encode(ids)
     if ids and isinstance(ids[0], str):
