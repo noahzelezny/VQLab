@@ -882,3 +882,158 @@ approved text (comment 6a94b118334fc0cd5c373a4b): head works, 1.5-1.8x
 measured, no runtime support anywhere; rungs were sized to machine
 calibers (64/96/128 GB) without the ~2 GB q6 head; will revisit if
 mlx-lm adds support. MTP arc now fully closed pending that trigger.
+
+## 2026-09-02 — d8 REGISTER-BUFFERING ARC: the lever failed, the threadgroup shape paid
+
+Follow-up to the packed-d8 profiling arc. Target was the register-buffered
+packed-d8 kernel; what shipped is a threadgroup-shape fix found while
+isolating why the register buffer lost. Everything below is measured on REAL
+Flash-Next 2.1bpw expert tensors read straight out of the artifact
+(`model.layers.L.mlp.switch_mlp.{gate,up,down}_proj.{codes,codebook,
+vq_scales}`, expert axis sliced to E=64 — no model was loaded; another agent
+had the box).
+
+NOTE ON THE INHERITED RECORD: the profiling arc's ledger entry is NOT in this
+tree (the last entry here is 2026-08-30, MTP). Its diagnosis was carried in
+by hand and is reproduced faithfully in the kernel comments; if that entry
+lives on another branch it should be merged so this one has its antecedent.
+
+### Method (the box was contended, and that changed the methodology)
+
+Another agent ran builds and model loads throughout. One-shot numbers were
+worthless, so: every variant JIT-warmed and run once before timing; variants
+timed INTERLEAVED inside each rep (A,B,A,B,...) so a contention burst hits
+both arms; 50 back-to-back dispatches per timed window; 13-21 reps; headline
+is MIN over reps (contention can only make a window slower) with the median
+alongside, and a claimed win must hold on BOTH.
+
+TWO MEASUREMENT TRAPS were hit and are worth recording, because each produced
+a confident wrong number first:
+  * building 50 lazy dispatches and calling `mx.eval` on only the LAST array
+    leaves the other 49 dead and never executed. That measures submit
+    overhead: every shape and every N pinned at ~14 us and reported 2.5 TB/s.
+    `mx.eval(list)` is required.
+  * serialising with `mx.eval` per dispatch measures ~380 us of sync, not the
+    kernel.
+With the harness fixed, gate_proj at E=64/N=10 reproduced the prior arc's
+68.4 us/dispatch (measured 65.5), which is what confirmed the harness.
+
+### 1. REGISTER BUFFERING: BUILT, BIT-IDENTICAL, 1.66x SLOWER. Negative banked.
+
+Built as `_SRC_FUSED_PACKED_D8_SIMD_RB`. Bit-identical to the shipped kernel
+on real gate_proj tensors and on synthetic codes at every geometry tested,
+verified before any timing.
+
+Real gate_proj, N=10, min/med us:  regbuf 106.3/119.4 vs VQ_CODE 64.0/68.4.
+At N=20: 205.3/236.8 vs 105.9/113.2. Arms do not overlap.
+
+TWO forms were built, because the first failure had an obvious suspect:
+  (a) compile-time specialisation on the phase p = g & (NPH-1), an if/else
+      chain of NPH bodies with every word index and shift a literal — the
+      form the profiling arc prescribed. 1.9x slower.
+  (b) branchless: load a constexpr NW-word window from a runtime word offset
+      (pointer arithmetic, no register indexing), then FUNNEL-SHIFT it down
+      by the runtime bit offset so every extraction index is a literal.
+      Built because (a)'s phase varies WITHIN a simdgroup — lane L owns group
+      b*32+L, so consecutive lanes have consecutive phases and all NPH bodies
+      execute serially. 1.75x slower — i.e. essentially identical to (a).
+
+So divergence is NOT the cause, and that is the finding. The isolating
+experiment, base kernel only, real gate_proj N=10:
+
+    base (runtime SPG, rolled loop)              60.3 us
+    base + compile-time SPG, still rolled        64.2 us   (free)
+    base + compile-time SPG + unroll(full)       94.2 us   (1.56x SLOWER)
+    register-buffered (needs the unroll)        106.3 us
+
+WHY IT CANNOT BE RESCUED AT d=8. The unroll is not incidental to register
+buffering, it is a precondition: the register array must be indexed by
+compile-time values or it spills to memory, which is strictly worse than the
+device reads it replaces. So any register-buffered d8 kernel pays the ~1.5x
+unroll penalty, and the prize it is playing for is bounded above by ~25% —
+the profiling arc's own count is ~4 device loads per code, of which 2 are
+codebook and only 1-2 are the code read. Paying 1.5x for at most 1.33x is a
+losing trade, and no amount of bit-extraction cleverness changes the ratio.
+
+This is the structural difference from `_SRC_DENSE_PACKED_D2` (82 vs 169 us),
+where the precedent came from: at d=2/G=64 a lane's scale group is EXACTLY
+one 32-code pack block, so its 32 codes amortise the unroll over 4x more
+work AND start at bit 0 with no phase at all. At d=8 a lane owns only
+SPG = G/8 = 8 codes. The precedent does not transfer, and now we know the
+reason is the work-per-unrolled-body ratio, not the bit arithmetic.
+
+KEPT IN TREE, correct and tested, dispatched only under `VQ_D8_REGBUF=1`, so
+the negative is reproducible without a rebuild.
+
+### 2. THE WIN: 8 rows/threadgroup, not 32. 1.21-1.28x, bit-identical.
+
+Found while sweeping occupancy to explain the unroll penalty. The packed-d8
+simd kernel took `_EXPERT_ROWS_TG = 32` from the DENSE kernels, where that
+value was swept (2026-08-19) and where it is correct. It was never swept
+here. Re-swept, real tensors, min us/dispatch:
+
+  gate L2  N=10   r2 69.2  r4 51.9  r8 49.9  r16 54.7  r32 61.9
+  gate L2  N=20   r2 111.5 r4 81.7  r8 82.2  r16 93.0  r32 103.4
+  up   L2  N=10   r2 66.3  r4 49.0  r8 52.1  r16 56.8  r32 60.9
+  up   L2  N=20   r2 109.2 r4 78.9  r8 80.7  r16 89.1  r32 106.5
+
+A clear INTERIOR optimum: r2 starves the machine of threadgroups, r32 starves
+each thread of registers (the same pressure the unroll experiment exposed),
+4 and 8 are indistinguishable. Held on a second and third layer (L20, L35)
+and on a 21-rep re-run. 8 chosen over 4 for x-tile amortisation at equal
+measured cost. Through the REAL dispatcher, min/med us, r32 -> r8:
+
+  gate N=1    24.3/28.2  -> 22.9/28.0    1.06x / 1.01x   (dispatch-bound)
+  gate N=5    42.8/45.2  -> 36.8/40.5    1.16x / 1.12x
+  gate N=10   59.2/72.2  -> 49.1/55.3    1.21x / 1.31x
+  gate N=20   99.3/103.2 -> 77.8/80.4    1.28x / 1.28x
+  up   N=5    39.1/41.8  -> 33.5/35.7    1.17x / 1.17x
+  up   N=10   59.7/61.7  -> 48.0/49.2    1.24x / 1.25x
+  up   N=20   97.1/101.2 -> 77.3/78.7    1.26x / 1.29x
+
+Code-stream bandwidth, N=10: 61 -> 73 GB/s of the M3 Ultra's 819. N=20:
+74 -> 93. N=1 is flat across the entire sweep (23.4-24.5 us), so nothing
+regresses at seq=1 decode. The kernel SOURCE is untouched — only the
+threadgroup shape — so bit-identity is by construction, and is asserted
+(r4/r8/r32 against r32 on the 397B gate/up geometry) rather than argued. The
+DENSE constant is deliberately left at 32; only the packed-d8 expert path
+moves, via its own `_EXPERT_ROWS_TG_D8_PACKED`.
+
+### 3. STRETCH TARGET REASSESSED: the NGRP=10 down_proj is not the laggard.
+
+The prior arc flagged the NGRP=10 down_proj shape (46 modules) as untouched,
+because the NGRP>=32 gate declines it from the simd layout. Measured rather
+than assumed, real down_proj [E,2560,42] / IN=640:
+
+  tgx sweep of the thread-per-row kernel it actually dispatches (N=10):
+    tg32 56.3  tg64 51.3  tg128 46.7  tg256 45.6  tg512 44.9  tg1024 48.8
+  The shipped tgx=256 is already at the optimum; tg512's 1.5% is inside
+  variance. There is no free threadgroup-shape win here.
+
+  And per code byte it is the FASTEST shape measured, not the slowest:
+    down_proj N=10  44.9 us   95.8 GB/s codes      (gate at r8: 71.8)
+    down_proj N=20  70.9 us  121.3 GB/s codes      (gate at r8: 88.3)
+  i.e. ABOVE the 61-97 GB/s band the profiling arc reported. Its short IN
+  (640) means one thread walks only 80 codes, so the thread-per-row latency
+  chain that motivated the simd layout is 4x shorter here — the layout it is
+  declined from is the layout it does not need. A multi-row-per-simdgroup
+  kernel for NGRP<32 was NOT built: the measurement says the headroom is not
+  there. Reopen only if a shape with NGRP<32 AND long IN appears.
+
+### What remains
+
+  * END-TO-END TOK/S IS NOT MEASURED. Explicitly out of scope this session
+    (no model may be loaded — shared box). The 1.21-1.28x is per-dispatch on
+    isolated real shapes; the prior arc's own record shows the microbench is
+    NOT predictive above decode-sized N (the simd layout's 1.35x microbench
+    vs -13.6% end-to-end at seq=3), so the rows=8 change MUST be validated
+    end-to-end on the 397B and Flash-Next rungs before any published claim.
+    Note the two are not the same kind of change — rows/TG is bit-identical
+    and shape-only where the simd layout was a different reduction — but the
+    gate that caught that regression (`_EXPERT_SIMD_MAX_N = 20`) was set by
+    end-to-end measurement and its interaction with rows=8 is unmeasured.
+  * The unpacked d8 simd and d4 devcb simd kernels still use
+    `_EXPERT_ROWS_TG = 32` and were NOT swept — the 2.1bpw artifact is
+    packed, so there were no real tensors to sweep them on. Same inheritance,
+    same suspicion, no measurement. Cheap to do on an unpacked artifact.
+  * The profiling arc's ledger entry should be merged into this file.
