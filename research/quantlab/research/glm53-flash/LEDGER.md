@@ -629,3 +629,13 @@ layers). Contrast: Flash-Next measured T=2 CHEAPER than T=1 (49 vs
 Consequence: GLM MTP ships nothing until T=2/T=1 comes down; the fix
 most likely lives in the VQ kernel arc, where it pays absolute decode
 speed AND the MTP multiplier at once.
+
+## 2026-09-02 — rows=8 does NOT move the T=2 ratio; indexer is the last suspect
+
+Re-bundled the 2.7bpw with the rows=8 packed-d8 kernel (provenance
+verified: installed mlx_vlm honors config model_file, so the probe ran
+the new bundle) and re-measured the verification cost: T=1 52.7 ms,
+T=2 78.7 ms, ratio 1.49 vs 1.50 before — unchanged. Expert dispatch is
+now formally exonerated for GLM's T=2 cost, on top of the earlier
+gather_qmm-parity refutation. The DSA indexer's L>1 sparse-mask path
+(12 fa layers) is the sole remaining suspect gating GLM MTP at 1.05x.
