@@ -146,6 +146,8 @@ def _encode(tokenizer, prompt) -> mx.array:
 
 def _eos_ids(tokenizer) -> set:
     ids = getattr(tokenizer, "eos_token_ids", None)
+    if isinstance(ids, int):  # bare HF tokenizers (mlx_vlm) store an int here
+        return {ids}
     if ids:
         return set(ids)
     tid = getattr(tokenizer, "eos_token_id", None)
