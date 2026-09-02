@@ -105,8 +105,8 @@ def main():
 
     rows = []
     for pi, text in enumerate(prompts):
-        ids = tok.apply_chat_template([{"role": "user", "content": text}],
-                                      add_generation_prompt=True)
+        from vqlab.mtp.runtime import encode_chat
+        ids = encode_chat(tok, text)
         for label, head in heads.items():
             for align in aligns:
                 last = None

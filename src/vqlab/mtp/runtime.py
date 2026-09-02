@@ -31,3 +31,17 @@ def load_trunk(model_path, lazy: bool = False):
     model, processor = vlm_load(str(model_path), lazy=lazy)
     tok = getattr(processor, "tokenizer", processor)
     return getattr(model, "language_model", model), tok
+
+
+def encode_chat(tok, text):
+    """Chat-template a single user message to token ids, whichever of the
+    three shapes this tokenizer's apply_chat_template returns (ids, a
+    rendered string, or a list of rendered strings — bare HF tokenizers
+    from mlx_vlm do the latter two)."""
+    ids = tok.apply_chat_template([{"role": "user", "content": text}],
+                                  add_generation_prompt=True)
+    if isinstance(ids, str):
+        return tok.encode(ids)
+    if ids and isinstance(ids[0], str):
+        return tok.encode("".join(ids))
+    return ids
