@@ -170,3 +170,85 @@ def test_simd_is_the_default():
     """The d8 device-codebook path ships with the simd layout on; VQ_EXPERT_SIMD
     is only an A/B escape hatch."""
     assert V._EXPERT_SIMD is True
+
+
+# --- register-buffering arc (2026-09-02) -----------------------------------
+
+@pytest.mark.parametrize("N", [1, 8])
+@pytest.mark.parametrize("shape", [s for s in D8_SHAPES if s[2] // s[5] >= 32])
+def test_d8_regbuf_bit_exact(shape, N, monkeypatch):
+    """The register-buffered packed-d8 kernel is bit-identical to the VQ_CODE
+    one it was meant to replace. It is measured SLOWER and therefore OFF by
+    default (see _D8_REGBUF), but it stays in-tree as the reproducible record
+    of that negative -- so it must stay CORRECT, or the record is worthless.
+    The funnel-shift window it reads must also never leave the pack block;
+    that is what _d8_regbuf_ok guards and what a wrong answer here would
+    expose."""
+    E, OUT, IN, K, d, G = shape
+    args = _rand_experts(E, OUT, IN, K, d, G, N, packed=14)
+    V._KERNELS.clear()
+    monkeypatch.setattr(V, "_D8_REGBUF", False)
+    base = np.array(V._fused(*args, pack_bits=14, simd=True))
+    assert any(n.endswith("_d8_simd") for n in V._KERNELS)
+    V._KERNELS.clear()
+    monkeypatch.setattr(V, "_D8_REGBUF", True)
+    rb = np.array(V._fused(*args, pack_bits=14, simd=True))
+    assert any(n.endswith("_d8_simd_rb") for n in V._KERNELS)
+    V._KERNELS.clear()
+    assert np.array_equal(base, rb)
+
+
+def test_regbuf_is_off_by_default():
+    """It measured 1.66x SLOWER than the kernel it replaces (real gate_proj,
+    N=10: 106 vs 64 us). Nothing may dispatch it unless VQ_D8_REGBUF=1."""
+    assert V._D8_REGBUF is False
+
+
+@pytest.mark.parametrize("G", [64, 128, 256])
+def test_regbuf_window_stays_inside_the_pack_block(G):
+    """_d8_regbuf_ok's whole job: at every bit width the packer emits, the
+    NW-word funnel window of the LAST phase must end at or before the block's
+    last word. A window that ran past it would read the next row (or off the
+    end of the tensor) on the last block of a row."""
+    spg = G // 8
+    nph = 32 // spg
+    for bits in range(2, 17):
+        sh0max = ((nph - 1) * spg * bits) & 31
+        nw = (sh0max + spg * bits + 31) >> 5
+        w0max = ((nph - 1) * spg * bits) >> 5
+        assert w0max + nw - 1 <= bits - 1, (G, bits)
+
+
+def test_regbuf_declines_geometries_it_cannot_serve():
+    """Only SPG in {8,16,32} (G in {64,128,256}) is emitted; anything else
+    must fall back to the VQ_CODE kernel rather than read wrong memory."""
+    assert not V._d8_regbuf_ok(32)     # SPG = 4  -> 8 phases, not emitted
+    assert not V._d8_regbuf_ok(16)     # SPG = 2
+    assert not V._d8_regbuf_ok(512)    # SPG = 64 -> straddles two blocks
+
+
+def test_packed_d8_simd_rows_per_threadgroup():
+    """Swept on real Flash-Next expert tensors 2026-09-02: 8 rows/threadgroup
+    beats the inherited 32 by 1.18-1.24x at every shape and N measured, and
+    is bit-identical (same kernel source, different threadgroup shape). This
+    pins the value so a future edit to the DENSE constant cannot silently
+    drag the expert path back to 32."""
+    assert V._EXPERT_ROWS_TG_D8_PACKED == 8
+    assert V._EXPERT_ROWS_TG == 32
+
+
+@pytest.mark.parametrize("rows", [4, 8, 32])
+def test_rows_per_threadgroup_is_bit_neutral(rows, monkeypatch):
+    """Changing rows/threadgroup must not move a single bit: the reduction is
+    within one simdgroup and only the number of simdgroups sharing the x tile
+    changes."""
+    E, OUT, IN, K, d, G = 8, 1024, 4096, 16384, 8, 64
+    args = _rand_experts(E, OUT, IN, K, d, G, 8, packed=14)
+    V._KERNELS.clear()
+    monkeypatch.setattr(V, "_EXPERT_ROWS_TG_D8_PACKED", 32)
+    ref = np.array(V._fused(*args, pack_bits=14, simd=True))
+    V._KERNELS.clear()
+    monkeypatch.setattr(V, "_EXPERT_ROWS_TG_D8_PACKED", rows)
+    got = np.array(V._fused(*args, pack_bits=14, simd=True))
+    V._KERNELS.clear()
+    assert np.array_equal(ref, got)
