@@ -173,11 +173,14 @@ for _qwen35_name in ("qwen3_5", "qwen3_5_moe"):
 # (cache[0] = ..., cache[1] = state in Glm5NextLinearAttention), but the
 # registry rule stands — no measurement, no cheap path.
 # NO ACCEPTANCE NUMBER YET (2026-09-02): entry is wiring, not evidence.
-register(FamilySpec(
-    name="glm5_next",
-    head="vqlab.mtp_head_glm5:MTPHeadGlm5",
-    capture="norm",
-    draft_cache="KVCache",
-    sidecar_name="mtp-head-q6.safetensors",
-    cache_semantics="copy",
-))
+# Registered under both names: the VLM wrapper's config says glm5_next,
+# the TextConfig on the bound LanguageModel says glm5_next_text.
+for _glm_name in ("glm5_next", "glm5_next_text"):
+    register(FamilySpec(
+        name=_glm_name,
+        head="vqlab.mtp_head_glm5:MTPHeadGlm5",
+        capture="norm",
+        draft_cache="KVCache",
+        sidecar_name="mtp-head-q6.safetensors",
+        cache_semantics="copy",
+    ))
