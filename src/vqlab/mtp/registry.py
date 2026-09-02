@@ -27,11 +27,13 @@ architectures genuinely differ:
 Families that ship an MTP head upstream but are NOT registered here, because
 nothing in this repo can test them today:
 
-  glm5_next   GLM-5.3 ships an MTP layer (layer 45, its own full expert
-              stack — see families.py). mlx-lm has no glm5_next class yet, so
-              there is no arch module to build a head against.
   deepseek_v3 DeepSeek's MTP module is a different shape again (its own
               embed/norm/head rather than a shared lm_head).
+
+(glm5_next graduated 2026-09-02: the blocker was "mlx-lm has no glm5_next
+class", but the trunk runs under mlx_vlm's class — which exo also uses —
+so the head is built against THAT arch module. Its entry stays
+acceptance-unproven until the probe runs; see the entry's comment.)
 
 Registering either means writing its head module and running
 `caches.check_snapshot_semantics` plus the acceptance probe first. A table
@@ -156,3 +158,26 @@ for _qwen35_name in ("qwen3_5", "qwen3_5_moe"):
         sidecar_name="mtp-head-q6.safetensors",
         cache_semantics="reassign",
     ))
+
+
+# GLM-5.3 (glm5_next, via mlx_vlm's classes — bind the LanguageModel, not
+# the VLM wrapper). The head is upstream `layers.45`: plain-residual
+# DeepSeek-style block (NoPE MLA + DSA indexer + 288-expert MoE + its own
+# shared_head.norm) — see mtp_head_glm5.py for why it is NOT the trunk's
+# hc DecoderLayer. capture="norm": the trunk's final-norm INPUT is the
+# mean-collapsed (B,S,D) hidden, which is what hnorm/eh_proj consume.
+# draft_cache is vestigial — the head class provides make_draft_cache()
+# (CacheList(main-KV, indexer-KV)); the loop prefers that.
+# cache_semantics="copy" until check_snapshot_semantics passes against a
+# loaded trunk: the deltanet ArraysCache slots LOOK reassigned
+# (cache[0] = ..., cache[1] = state in Glm5NextLinearAttention), but the
+# registry rule stands — no measurement, no cheap path.
+# NO ACCEPTANCE NUMBER YET (2026-09-02): entry is wiring, not evidence.
+register(FamilySpec(
+    name="glm5_next",
+    head="vqlab.mtp_head_glm5:MTPHeadGlm5",
+    capture="norm",
+    draft_cache="KVCache",
+    sidecar_name="mtp-head-q6.safetensors",
+    cache_semantics="copy",
+))

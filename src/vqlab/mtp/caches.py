@@ -31,11 +31,24 @@ def is_attention(c) -> bool:
     return hasattr(c, "keys") and hasattr(c, "trim")
 
 
+def is_attention_composite(c) -> bool:
+    """mlx_vlm's CacheList (glm5_next fa layers: main-KV + indexer-KV).
+    No `keys` of its own, but every member is a plain attention cache, so
+    the composite rolls back like one: trim each member by its offset
+    delta. A CacheList holding anything non-attention falls through to
+    the TypeError — its rollback is unproven."""
+    subs = getattr(c, "caches", None)
+    return (subs is not None and len(subs) > 0
+            and all(is_attention(s) for s in subs))
+
+
 def snapshot(caches, *, copy: bool = True) -> list:
     snaps = []
     for c in caches:
         if is_attention(c):
             snaps.append(("attn", c.offset, None))
+        elif is_attention_composite(c):
+            snaps.append(("attn-list", [s.offset for s in c.caches], None))
         elif hasattr(c, "cache"):
             state = list(c.cache)
             if copy:
@@ -62,6 +75,15 @@ def restore(caches, snaps) -> None:
                 raise RuntimeError(
                     f"attention cache went BACKWARDS since the snapshot "
                     f"({c.offset} < {offset}); rollback would corrupt it")
+        elif kind == "attn-list":
+            for sub, off in zip(c.caches, offset):
+                n = sub.offset - off
+                if n > 0:
+                    sub.trim(n)
+                elif n < 0:
+                    raise RuntimeError(
+                        f"attention cache went BACKWARDS since the snapshot "
+                        f"({sub.offset} < {off}); rollback would corrupt it")
         else:
             c.cache = list(state)
             if offset is not None:
@@ -81,13 +103,14 @@ def check_snapshot_semantics(caches, advance) -> bool:
     on an in-place cache by construction — see tests/test_mtp_caches.py, where
     it is run against both a reassigning and a mutating cache.
     """
+    _ATTN_KINDS = ("attn", "attn-list")
     snaps = snapshot(caches, copy=False)
     witness = [[mx.array(x) if isinstance(x, mx.array) else x for x in s[2]]
-               for s in snaps if s[0] != "attn"]
+               for s in snaps if s[0] not in _ATTN_KINDS]
     for w in witness:
         mx.eval(*[x for x in w if isinstance(x, mx.array)])
     advance()
-    held = [s[2] for s in snaps if s[0] != "attn"]
+    held = [s[2] for s in snaps if s[0] not in _ATTN_KINDS]
     for kept, ref in zip(held, witness):
         for a, b in zip(kept, ref):
             if not isinstance(a, mx.array) or not isinstance(b, mx.array):
