@@ -338,3 +338,36 @@ def test_rows_per_threadgroup_is_bit_neutral(rows, monkeypatch):
     got = np.array(V._fused(*args, pack_bits=14, simd=True))
     V._KERNELS.clear()
     assert np.array_equal(ref, got)
+
+
+def test_simdsum_is_off_by_default():
+    """Arc 4's simd_sum reduction is 1.16-1.20x on gate/up but re-associates
+    the fp32 sum, so it fails the bit-identity gate the kernel arcs hold. It
+    must stay opt-in until that gate is deliberately relaxed."""
+    assert V._D8_SIMDSUM is False
+    assert V._SRC_FUSED_PACKED_D8_SIMD_SS != V._SRC_FUSED_PACKED_D8_SIMD
+    assert "simd_sum" in V._SRC_FUSED_PACKED_D8_SIMD_SS
+    assert "simd_sum" not in V._SRC_FUSED_PACKED_D8_SIMD
+
+
+@pytest.mark.parametrize("N", [1, 10, 20])
+def test_simdsum_matches_within_one_ulp(N, monkeypatch):
+    """It is NOT bit-identical -- that is the whole reason it is off -- but it
+    must be a last-place-bit difference and nothing larger. Measured on real
+    2.1bpw tensors: 0.05-0.16% of elements differ, every one by one half-ULP,
+    and the two tie against an fp32 reference. This pins that bound so a
+    future edit cannot quietly turn a rounding tie into a real error."""
+    E, OUT, IN, K, d, G = 8, 512, 2560, 16384, 8, 64
+    args = _rand_experts(E, OUT, IN, K, d, G, N, packed=14)
+    V._KERNELS.clear()
+    monkeypatch.setattr(V, "_D8_SIMDSUM", False)
+    ref = np.array(V._fused(*args, pack_bits=14, simd=True)).astype(np.float32)
+    V._KERNELS.clear()
+    monkeypatch.setattr(V, "_D8_SIMDSUM", True)
+    got = np.array(V._fused(*args, pack_bits=14, simd=True)).astype(np.float32)
+    V._KERNELS.clear()
+    # one half-ULP is 2**-10 of the magnitude; allow a hair over for values
+    # sitting just below a binade boundary.
+    tol = np.maximum(np.abs(ref), np.abs(got)) * (2.0 ** -9) + 1e-6
+    assert np.all(np.abs(ref - got) <= tol)
+    assert np.mean(ref != got) < 0.02
