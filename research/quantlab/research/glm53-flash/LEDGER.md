@@ -755,3 +755,73 @@ inherit the parent's imports). Killing the supervisor itself and letting
 launchd re-exec the script is the only full refresh.
 
 GLM long-prompt serving is now bounded and boring. Ship-ready.
+
+## 2026-09-03 — shipped 2.7bpw scored on all three corpora; repack proven value-neutral; an instrument offset quantified
+
+The published artifact was the only row in TABLE.md without a full
+three-corpus score (prose/KL/top-1 only, from the 2026-08-31 best-8 sweep).
+Closed. All numbers below measured in one session, one instrument, M3,
+mlx-vlm 0.6.17 (exo env), streamed — peak 4.7-5.1 G resident against a
+101.9 GiB artifact, which is the streaming referee behaving as designed.
+
+INSTRUMENT. `python -m vqlab.stream_score --model <dir> --corpus <c>
+--tokens 2048 [--kl-cache "…/glm53_teacher_topk_prose"]`. Worth recording
+because a prior handoff went looking for chunk/traversal flags: THIS SCORER
+HAS NONE. Its entire argparse is --model/--corpus/--tokens/--save-topk/
+--kl-cache/--out/--allow-unvalidated. There is no chunk, seq, traversal,
+order, topk, seed or dtype knob to mismatch, so instrument-matching the
+comparator rows reduces to matching corpus file + token count, and that is
+exact. (The `--chunk` flag lives on the OTHER, older scorer,
+referee/score_streaming.py, which has no KL capability and was not used for
+this family.) Corpora: src/vqlab/referee/referee_corpus.txt,
+referee_corpus_code_public.txt, referee_corpus_literary.txt. Teacher cache
+meta.json pins model snapshot + corpus + tokens 2049 + top_k 64.
+
+SHIPPED ROW (TheDrainFlorist--GLM-5.3-Flash-VQ-2.7bpw):
+
+    prose 2.3978 | code 1.6696 | literary 1.4843
+    KL 291.46 mnats | top-1 86.18% | captured mass 0.9906
+
+Both new corpora land where the bracket requires — code 1.7077 (K512) ->
+1.6696 (mix) -> 1.6168 (K2048), literary 1.6285 -> 1.4843 -> 1.3406 — so
+the mix behaves like a mix on the two corpora it had never been scored on,
+which was the open question and is now answered.
+
+FINDING 1 — THE ROWS=8 REPACK IS VALUE-NEUTRAL. The shipped artifact and
+the local `glm53_vq_packed_mix_best8` score BIT-IDENTICAL: 2.397798 /
+291.4628 / 0.8618 / 0.9906, every digit, both directories. The re-bundle
+changed the kernel and not one output bit. This retires the worry that the
+published artifact drifted from the build the ladder numbers describe.
+
+FINDING 2 — TODAY'S ENVIRONMENT IS ~0.1-0.2% OPTIMISTIC vs THE LADDER.
+Re-measured comparators, today vs the published cell:
+
+    d4/K512   prose  2.5722 vs 2.5743   (-0.08%)
+    d4/K512   KL     347.17 vs 348.82   (-1.65 mnats)
+    d4/K512   code   1.7077 vs 1.7107   (-0.18%)
+    d4/K2048  code   1.6168 vs 1.6187   (-0.12%)
+    d4/K2048  literary 1.3406 vs 1.3402 (+0.03%)
+
+Small, consistently signed, above the ~0.04% cross-instrument floor but an
+order of magnitude below every margin the table argues from. The mix's own
+published prose-only numbers (2.4014 / 293.84 / 85.7%) sit in exactly the
+same relation to today's, which is itself evidence the offset is
+environmental and not artifact-specific. The shipped row is therefore
+reported at today's values with the offset stated, rather than mixing two
+instruments inside one row. No ordering or sign in the table changes.
+
+OPEN — d4/K512 LITERARY DOES NOT REPRODUCE. Today 1.6285 vs published
+1.6166: +0.74%, wrong-signed against every other cell and ~18x the drift
+seen anywhere else, while the neighbouring K2048 literary reproduces to
+0.03%. Recorded as an open discrepancy rather than silently overwritten —
+one of the two values is wrong and it is not yet known which. Nothing
+downstream depends on it: the "at 98.5 GiB VQ loses to q3 on literary"
+claim (1.6166 or 1.6285 vs 1.4731) holds either way. Re-measure before
+citing that cell alone.
+
+NOTE ON KL SCOPE, unchanged: KL and top-1 remain PROSE-ONLY. The only GLM
+teacher cache on disk is glm53_teacher_topk_prose (plus a _512 variant that
+is not ladder-comparable). Code and literary KL are NOT reproducible with
+what is on disk — they would need a fresh bf16 teacher pass on those two
+corpora, which is a 598.5 GiB forward we have not run. Stated as a real
+limit, not approximated.
