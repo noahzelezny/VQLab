@@ -28,8 +28,18 @@ def load_trunk(model_path, lazy: bool = False):
         except TypeError:  # older mlx-lm: no trust_remote_code kwarg
             return load(model_path, lazy=lazy)
     from mlx_vlm.utils import load as vlm_load
-    model, processor = vlm_load(str(model_path), lazy=lazy)
-    tok = getattr(processor, "tokenizer", processor)
+    try:
+        model, processor = vlm_load(str(model_path), lazy=lazy)
+        tok = getattr(processor, "tokenizer", processor)
+    except OSError:
+        # VQ artifacts ship no preprocessor_config.json (they are served
+        # text-only), and AutoProcessor refuses to build without the image
+        # half. MTP needs only the tokenizer, so load the model and the
+        # tokenizer separately.
+        from mlx_vlm.utils import load_model as vlm_load_model
+        from transformers import AutoTokenizer
+        model = vlm_load_model(model_path, lazy=lazy, trust_remote_code=True)
+        tok = AutoTokenizer.from_pretrained(str(model_path))
     lang = getattr(model, "language_model", model)
     return _LogitsAdapter(lang), tok
 
