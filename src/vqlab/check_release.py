@@ -36,6 +36,18 @@ ap.add_argument("--no-smoke", action="store_true",
                      "can produce a token on a machine that is not ours -- "
                      "which is exactly how three broken rungs shipped.")
 ap.add_argument("--max-tokens", type=int, default=4)
+ap.add_argument("--cluster-smoke", metavar="URL", default=None,
+                help="run the generation smoke through an exo cluster API "
+                     "(e.g. http://localhost:52415) instead of a local "
+                     "load. For artifacts too large for any single box we "
+                     "gate on. The exo node on THIS machine must be serving "
+                     "the exact directory being gated (checked by realpath, "
+                     "not trusted).")
+ap.add_argument("--cluster-peer", metavar="USER@HOST", default=None,
+                help="with --cluster-smoke: ssh peer(s) holding the other "
+                     "pipeline rank's copy; their model.py/config.json/"
+                     "index are hashed and shard sizes compared against "
+                     "this artifact before the smoke counts.")
 args = ap.parse_args()
 A = pathlib.Path(args.artifact)
 
@@ -109,10 +121,114 @@ if _mf and (A / _mf).exists():
     except SyntaxError as e:
         fails.append(f"{_mf} does not compile: {e}")
 
+# CLUSTER SMOKE. Rungs larger than any single box we gate on (GLM 3.1/3.6,
+# 397B 2.4+) used to be un-smokeable: the RAM preflight refused, and their
+# first publish was impossible without a bypass -- which this gate refuses
+# to have. This path replaces the local load with a real generation through
+# a 2-node exo pipeline, which exercises the same bundle, the same shards
+# and the same kernels. It is NOT an attestation flag: the gate itself
+# drives the generation and first proves the cluster is serving the very
+# bytes being gated:
+#   - the artifact dir must carry the exo naming (<Owner--Name>) for the
+#     served model id. exo resolves that name inside its models roots, and
+#     on the gate box the publish source IS in a models root -- verified by
+#     shard atimes advancing at instance load (2026-09-03). The gate cannot
+#     see exo's config from here, so this leg is convention + naming, not a
+#     realpath proof; the peer legs below are byte checks.
+#   - each --cluster-peer's copy is checked over ssh -- sha256 of model.py /
+#     config.json / model.safetensors.index.json, plus size of every shard.
+#     (Shard CONTENT on the peer is not re-hashed -- 100G+ per rung -- so a
+#     peer copy corrupted at equal size with equal index would pass; every
+#     copy we make is rsync'd from this artifact, and the smoke still has
+#     to decode coherent tokens through those bytes.)
+def _cluster_smoke() -> list[str]:
+    import hashlib
+    import subprocess as sp
+    import urllib.request
+    probs = []
+    base = args.cluster_smoke.rstrip("/")
+    dirname = A.resolve().name                     # Owner--Name
+    model_id = dirname.replace("--", "/", 1)
+    served = json.load(urllib.request.urlopen(f"{base}/v1/models",
+                                              timeout=10))
+    ids = {m["id"] for m in served["data"]}
+    if model_id not in ids:
+        return [f"cluster at {base} does not list {model_id}"]
+    # local-rank identity: exo's models root is the parent of dirs named
+    # Owner--Name; the artifact being gated must be that exact directory.
+    node_dir = A.resolve()
+    if node_dir.name != dirname or not (node_dir / "config.json").exists():
+        return [f"artifact dir {node_dir} does not look like the served "
+                f"model dir for {model_id}"]
+    ident = ["model.py", "config.json", "model.safetensors.index.json"]
+    local_hashes = {}
+    for f in ident:
+        p = A / f
+        if p.exists():
+            local_hashes[f] = hashlib.sha256(p.read_bytes()).hexdigest()
+    shard_sizes = {sh: (A / sh).stat().st_size for sh in sorted(set(
+        json.load(open(A / "model.safetensors.index.json"))["weight_map"]
+        .values()))}
+    peers = [p for p in (args.cluster_peer,) if p]
+    if not peers:
+        probs.append("cluster smoke requires --cluster-peer: the other "
+                     "rank's copy must be identity-checked, not assumed")
+        return probs
+    for peer in peers:
+        script = ("cd \"$HOME/Exo Models/" + dirname + "\" && "
+                  "shasum -a 256 " + " ".join(local_hashes) + " && "
+                  "stat -f '%N %z' " + " ".join(shard_sizes))
+        r = sp.run(["ssh", peer, script], capture_output=True, text=True,
+                   timeout=120)
+        if r.returncode != 0:
+            probs.append(f"peer {peer}: identity check failed to run: "
+                         f"{r.stderr.strip()[:200]}")
+            continue
+        seen = {}
+        for line in r.stdout.splitlines():
+            parts = line.split()
+            if len(parts) == 2:
+                val, name = ((parts[0], parts[1]) if len(parts[0]) == 64
+                             else (parts[1], parts[0]))
+                seen[pathlib.Path(name).name] = val
+        for f, h in local_hashes.items():
+            if seen.get(f) != h:
+                probs.append(f"peer {peer}: {f} hash mismatch "
+                             f"(theirs {str(seen.get(f))[:12]}..., "
+                             f"ours {h[:12]}...)")
+        for sh, sz in shard_sizes.items():
+            if seen.get(sh) != str(sz):
+                probs.append(f"peer {peer}: shard {sh} size "
+                             f"{seen.get(sh)} != {sz}")
+    if probs:
+        return probs
+    body = json.dumps({
+        "model": model_id,
+        "messages": [{"role": "user",
+                      "content": "Name three colors, then stop."}],
+        "max_tokens": max(args.max_tokens, 16), "temperature": 0,
+    }).encode()
+    req = urllib.request.Request(
+        f"{base}/v1/chat/completions", data=body,
+        headers={"Content-Type": "application/json"})
+    resp = json.load(urllib.request.urlopen(req, timeout=900))
+    text = (resp.get("choices") or [{}])[0].get("message", {}).get(
+        "content", "")
+    if not text.strip():
+        return [f"cluster smoke returned no content: "
+                f"{json.dumps(resp)[:300]}"]
+    print(f"  cluster smoke output: {text.strip()[:120]!r}")
+    return []
+
+
+if args.cluster_smoke and not args.no_smoke and not fails:
+    print("running CLUSTER smoke (2-node exo pipeline; peer identity "
+          "checked first) ...", flush=True)
+    fails += _cluster_smoke()
 # A real token, through the artifact's own runtime, with the resolution
 # assertions on. This is the step that costs a model load, and the one that
 # actually certifies the thing.
-if not args.no_smoke and not fails:
+elif not args.no_smoke and not fails:
     print(f"running strict smoke ({args.max_tokens} token) ...", flush=True)
     r = subprocess.run([sys.executable, str(HERE / "smoke.py"), str(A),
                         "--strict", "--max-tokens", str(args.max_tokens)])
@@ -128,7 +244,10 @@ if fails:
     for f in fails:
         print(f"    {f}")
     sys.exit(1)
-_smoked = "" if args.no_smoke else ", strict smoke generated a token"
+_smoked = ("" if args.no_smoke else
+           ", CLUSTER smoke generated tokens through a peer-verified "
+           "2-node pipeline" if args.cluster_smoke else
+           ", strict smoke generated a token")
 print(f"PASS: {len(REQUIRED)} required files present, index complete, "
       f"tokenizer round-trips, bundle imports nothing a downloader "
       f"lacks{_smoked}")
