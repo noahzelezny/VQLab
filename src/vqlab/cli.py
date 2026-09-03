@@ -55,6 +55,7 @@ COMMANDS = {
     "mtp-probe35": ("mtp_probe35.py", "MTP wiring sweep + acceptance probe (qwen3_5 / qwen3_5_moe)"),
     "mtp-extract": ("mtp_extract.py", "pull a model's MTP head out of its source checkpoint into a graft"),
     "mtp-pack": ("mtp_pack.py", "pack a bf16 MTP graft into a quantized drafting sidecar"),
+    "mtp-smoke-head": ("mtp_smoke_head.py", "head-alone load + T=1/T=2 forward timing (no trunk)"),
     "mtp-generate": ("mtp_run.py", "generate with MTP speculative drafting"),
     "mtp-graft": ("mtp_graft.py", "emit the MTP head in a native runtime's layout (language_model.mtp.*)"),
     "serve": ("serve.py", "serve an artifact over an OpenAI-compatible API (mlx-lm server + MTP decode)"),
