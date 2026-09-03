@@ -11,10 +11,16 @@ which should ship in the same pass.
 
 **2026-09 bundle refresh.** The bundled `model.py` runtime is updated:
 
-- Faster MoE expert kernels (threadgroup occupancy fix for the packed
-  d8 geometry; uint32 code loads for d2). Outputs are **bit-identical**
-  to the previous bundle — verified per kernel against real weights —
-  so nothing about the model's quality numbers changes.
+- Faster MoE expert kernels: threadgroup occupancy fix, template-free
+  specialized dispatch, device-direct activation reads, and a simd_sum
+  reduction for the packed d8 geometry; uint32 code loads for d2.
+  Everything except the reduction is **bit-identical** to the previous
+  bundle (verified per kernel against real weights); the reduction is
+  1-ULP equivalent — measured quality delta is exactly zero (identical
+  perplexity to every digit, KL 0.0 between old and new logits), only
+  the last-bit rounding of ties differs. Nothing about the model's
+  quality numbers changes. Set VQ_D8_SS=0 to restore bit-identical
+  legacy behavior.
 - The bundle now loads under BOTH `mlx-lm` and `mlx_vlm` (nested-config
   coercion is scoped per runtime).
 - **Nothing you have already downloaded breaks.** The previous revision
@@ -24,12 +30,12 @@ which should ship in the same pass.
   it always worked on.
 
 Measured effect (same box, same prompt, A-B-A):
-[FLASH 2.1bpw] decode 17.4 -> 18.1 tok/s (+3.9%); with speculative
-decoding (below) 24.4 tok/s.
+[FLASH 2.1bpw] decode 17.4 -> 18.8 tok/s (+8%); with speculative
+decoding (below) ~25 tok/s.
 [397B] no measurable decode change (the cluster interconnect dominates);
 the refresh is for runtime consistency across the lineup.
 [35B / gemma-26b] not separately measured; same kernels, same
-bit-identity guarantee.
+equivalence guarantee as above.
 
 ## [ALL] Run it with `vqlab serve` (new section, after "Run it")
 
@@ -50,7 +56,7 @@ OpenAI-compatible API on localhost. Flags worth knowing:
   card-section-prefill-memory.md draft — prefill chunk sizing,
   mx.set_memory_limit, per-chunk eval].
 
-## [FLASH] Speculative decoding (MTP) — OPTIONAL, only if we ship sidecars
+## [ALL MoE w/ MTP head] Speculative decoding (MTP) — SHIPPING (decision 2026-09-02)
 
 This repo includes `mtp-head-q6.safetensors` (2.1 GiB): the model's own
 multi-token-prediction head, quantized, packaged so that stock loaders
@@ -60,9 +66,11 @@ Measured on this artifact (M3 Ultra, greedy, 378-token runs):
 distribution preserved by exact rejection sampling. `vqlab serve
 --sidecar` or `vqlab mtp-generate` enables it; nothing else changes.
 
-DECISION NEEDED: shipping sidecars adds 2.1 GiB x 4 Flash repos and
-makes the MTP claims public. If deferred, this whole section is dropped
-and the sidecars stay local.
+DECIDED 2026-09-02: sidecars SHIP for every family with an MTP head —
+Flash (4 repos), GLM (pending shim validation), 397B (pending head
+build/probe; single-box serving via vqlab serve at day one, cluster MTP
+under exo lands with pipeline-verify later). Stock loaders ignore the
+sidecar file; nothing changes for users who don't opt in.
 
 ## [ALL] exo branch pointer correction (edit existing Hardware section)
 
@@ -92,6 +100,10 @@ matched-or-better quality. We win on bytes, they win on tok/s; say so.]
       cold), Flash 5.5 PASS (6.96 tok/s cold) 2026-09-02 evening
 - [x] spicyneuron 2.6bit vs VQ 2.6bpw RDMA table (29.9 vs 20.3 tok/s;
       affine reads 5.3% more bytes/token — we win bytes, they win tok/s)
-- [ ] Noah: sidecar ship/defer decision
+- [x] Noah: sidecar decision — SHIP for all MTP-capable families
+- [ ] GLM full-trunk shim validation (queued in consolidated pass)
+- [ ] 397B head build + probe (agent running)
+- [ ] final-kernel confirm A-B-A + re-bundle x13 + check-release canary
+      (one consolidated pass, after everything settles)
 - [ ] Noah: card text review
 - [ ] Push = new revision per repo, old revision noted as pinnable
