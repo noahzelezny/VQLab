@@ -36,7 +36,10 @@ def add_sampling_args(ap):
 
 def load_all(a):
     from mlx_lm.utils import load
-    model, tok = load(a.model, lazy=False, trust_remote_code=True)
+    try:
+        model, tok = load(a.model, lazy=False, trust_remote_code=True)
+    except TypeError:  # older mlx-lm: no trust_remote_code kwarg
+        model, tok = load(a.model, lazy=False)
     before = mx.get_active_memory()
     head, spec = load_mtp_head(model, sidecar=a.sidecar, model_path=a.model,
                                family=a.family)
