@@ -86,9 +86,12 @@ matched-or-better quality. We win on bytes, they win on tok/s; say so.]
 - [x] publish --all exclude list (working files can no longer ship)
 - [x] check-release PASS on re-bundled 2.1bpw (full gate incl. smoke)
 - [x] static gates PASS: 35B x4, Flash 2.1/3.2, gemma-26b
-- [ ] referee spot-check on re-bundled 2.1bpw (running)
-- [ ] exo serve-smoke: Flash 4.4/5.5, 397B 2.2/2.4/2.6 (queued after benches)
-- [ ] spicyneuron + 2.6bpw RDMA table (running)
+- [x] referee spot-check on re-bundled 2.1bpw (5.9025 vs published 5.9003,
+      attributed to traversal order; within cross-instrument floor)
+- [x] exo serve-smoke: 397B 2.2/2.4/2.6 PASS; Flash 4.4 PASS (9.05 tok/s
+      cold), Flash 5.5 PASS (6.96 tok/s cold) 2026-09-02 evening
+- [x] spicyneuron 2.6bit vs VQ 2.6bpw RDMA table (29.9 vs 20.3 tok/s;
+      affine reads 5.3% more bytes/token — we win bytes, they win tok/s)
 - [ ] Noah: sidecar ship/defer decision
 - [ ] Noah: card text review
 - [ ] Push = new revision per repo, old revision noted as pinnable
