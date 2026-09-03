@@ -36,21 +36,33 @@ PROMPT = ("Write a detailed technical explanation of how vector "
           "codebooks, residuals and rate-distortion tradeoffs. ")
 
 
+# Files this script WRITES in the shadow dir. They must never be symlinked
+# to the artifact, because open(path, "w") on a symlink writes THROUGH it to
+# the target -- which is how an earlier version of this function silently
+# reformatted the artifact's own config.json (content unchanged, indentation
+# lost) while claiming to be read-only. Named explicitly, and asserted below
+# to be real files rather than links before either is opened for writing.
+_WRITES = ("model.py", "config.json")
+
+
 def shadow(art, dst, src_dir):
-    """Symlink the artifact, rebuild model.py from this worktree's sources."""
+    """Symlink the artifact READ-ONLY, rebuild the files we generate."""
     dst = pathlib.Path(dst)
     if dst.exists():
         shutil.rmtree(dst)
     dst.mkdir(parents=True)
     art = pathlib.Path(art)
     for p in art.iterdir():
-        if p.name == "model.py" or p.name.endswith((".pre-arc5", ".pre-rows8",
-                                                    ".pre-cachelimit",
-                                                    ".pre_total_size")):
+        if p.name in _WRITES or p.is_dir():
             continue
-        if p.is_dir():
+        if ".pre-" in p.name or ".pre_" in p.name:
             continue
         (dst / p.name).symlink_to(p)
+    for name in _WRITES:
+        t = dst / name
+        assert not t.is_symlink(), (
+            f"{name} is a symlink into the artifact; writing it would "
+            f"modify the artifact")
     src_dir = pathlib.Path(src_dir)
     sys.path.insert(0, str(src_dir))
     SHIM = __import__("dense_shim").SHIM

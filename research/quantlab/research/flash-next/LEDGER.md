@@ -2738,6 +2738,48 @@ globals, `scripts/dense_e2e_aba.py`:
   The likely difference is prompt chunking (this harness does one 2048-wide
   forward, so the graph is at its deepest).
 
+### 9. INCIDENT: I wrote through a symlink into the 3.9bpw artifact. NEEDS ONE COMMAND FROM NOAH.
+
+Reported rather than buried, because it touched a release-in-flight artifact.
+
+WHAT HAPPENED. `shadow()` in scripts/dense_e2e_aba.py symlinked every
+artifact file into the scratch dir and then opened two of them for writing
+(model.py, config.json) to replace them with generated versions. model.py was
+excluded from the symlink loop; config.json was NOT. `open(link, "w")` writes
+THROUGH a symlink to its target, so the artifact's own
+`~/.exo/models/TheDrainFlorist--Qwen3.8-27B-VQ-3.9bpw/config.json` was
+rewritten by `json.dump(cfg)` at 09:18 -- while the function's docstring
+claimed the artifact was never written to.
+
+BLAST RADIUS, characterised: exactly one file. The parsed content is
+IDENTICAL to both on-disk backups (`config.json.pre-rows8` and
+`config.json.pre-arc5`) -- verified key-by-key, `cur == old` is True for both
+-- because the only mutation was `cfg["model_file"] = "model.py"`, which the
+self-contained artifact already had. What was lost is the FORMATTING: the
+original is `indent=1` pretty-printed (35,653 B), the rewrite is compact
+(30,083 B). No value, key, or geometry changed. The other two 27B rungs are
+untouched (config.json mtimes still Aug 24), and the other four scripts in
+this arc never open a file for writing at all.
+
+RESTORE, one command, not run because writing into the artifact dir was
+refused (correctly -- the same guard that should have stopped the original
+write):
+
+    cp -p ~/.exo/models/TheDrainFlorist--Qwen3.8-27B-VQ-3.9bpw/config.json.pre-rows8 \
+          ~/.exo/models/TheDrainFlorist--Qwen3.8-27B-VQ-3.9bpw/config.json
+
+That backup is byte-for-byte the original formatting and parsed-identical to
+the current content, so the restore is lossless. Nothing functional depends
+on it -- every loader parses JSON -- but a release gate that checksums or
+diffs config.json would flag the artifact, so it should be restored before
+the release goes out.
+
+FIXED IN THE SCRIPT so it cannot recur: the files shadow() generates are now
+a named `_WRITES` tuple, excluded from the symlink loop, and asserted to be
+non-symlinks before either is opened. The lesson generalises past this arc --
+"read-only" is a property of the FILE HANDLE, not of the intent, and a
+symlink farm plus a `"w"` is a write to the source.
+
 ### VERDICT
 
   SHIPPED ON BY DEFAULT, all bit-identical, escape hatches without rebuild:
