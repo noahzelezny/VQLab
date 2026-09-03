@@ -68,26 +68,14 @@ stay bf16.
 The affine builds compared against below are our own conversions of the same
 base, made with the same tooling, scored on the same instrument.
 
-## What vector quantization is
-
-Affine quantization (`q3`/`q4`/`q6`) rounds each weight independently onto a
-uniform grid; below about 5 bits the grid is too coarse for the weight
-distribution. VQ stores shapes instead of numbers: weights are grouped into
-vectors of `d` consecutive values, each stored as an index into a codebook
-of `K` representative vectors learned by k-means over the weight matrix
-itself — `log2(K)/d` bits per weight, with the codebook free to put entries
-where the weights actually are. The fit is data-free: no calibration corpus,
-no activations, no teacher forward.
-
-This build goes beyond our published recipe. The paper
-([*Data-Free Vector Quantization Beats Affine Quantization at Matched Bytes
-Below 6 Bits*](https://doi.org/10.5281/zenodo.22136000), CC BY 4.0)
-establishes the VQ-over-affine result on flat rungs — one geometry applied
-uniformly. This model uses the newer mixed-codebook strategy: individual
-expert layers promoted to a richer codebook by measured effect, every
-candidate promoted one at a time and scored on the assembled model. That
-buys 1.93x the KL-per-GiB of adding bits uniformly (details under **How it
-was built**).
+Instead of rounding each weight onto a uniform grid the way affine
+quantization does, VQ stores small groups of weights as indices into
+codebooks fitted to the weights themselves — which is why it beats affine at
+matched bytes below 6 bits. The method and results are in our paper,
+[*Data-Free Vector Quantization Beats Affine Quantization at Matched Bytes
+Below 6 Bits*](https://doi.org/10.5281/zenodo.22136000) (CC BY 4.0). This
+build goes beyond the published recipe: it mixes codebook sizes, promoting
+individual expert layers by measured effect (see **How it was built**).
 
 ## Requirements
 
@@ -237,24 +225,14 @@ the 101.93 GiB shipped size. Codes are packed sub-byte into uint32 words
 The "2.7bpw" in the name is derived from the measured sizes; GiB is the
 measured quantity and is what the card quotes.
 
-**The eight layers were chosen by measurement, not by a heuristic**, and the
-comparison was run at identical bytes and geometry:
-
-| 8-layer build @ 101.93 GiB | KL | prose ppl | top-1 |
-|---|---|---|---|
-| picked by a layer-leverage probe | 333.59 | 2.5461 | 84.6% |
-| bottom-8 by the same probe (control) | 331.93 | 2.4948 | 84.8% |
-| **best-8 by measured single-layer effect (shipped)** | **293.84** | **2.4014** | **85.7%** |
-
-The control beat the probe's pick — the leverage probe carries no usable
-information about output damage for this family. What works is direct
-measurement: all 42 layers promoted one at a time and scored (26 help, 16
-hurt; the surface is non-monotonic). Targeting this way is 1.93x the
-efficiency of buying bits uniformly, capturing 37% of the full K512→K2048
-step's gain for 19% of its bytes. Layer effects are base-specific — the same
-sweep on a different rung produced wrong-sign predictions — so this table
-does not transfer to other rungs or families. The seed-noise floor for this
-geometry is 6.32 mnats on KL, below every margin argued from here.
+**The eight promoted layers were chosen by measurement, not a heuristic**:
+all 42 expert layers were promoted one at a time and scored on the
+assembled model, and the eight with the largest measured effect shipped.
+Targeting this way is 1.93x the efficiency of buying bits uniformly,
+capturing 37% of the full K512→K2048 step's gain for 19% of its bytes.
+Layer effects are base-specific and do not transfer to other rungs or
+families; the full sweep, the controls, and the probe it falsified are in
+the project ledger.
 
 ## Known limitations
 
