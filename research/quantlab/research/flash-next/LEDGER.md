@@ -1350,7 +1350,7 @@ Same boxes, same RDMA tensor topology, same 300-token protocol:
                                         (two colder runs 15.8/21.0 —
                                         first-touch; median-of-clean ~29.9)
   VQ 2.6bpw (122.3 GiB)                 20.3 median (19.86-20.39, tight)
-  VQ 3.1bpw (154 GiB)                   20.4 median
+  VQ 3.1bpw (143.7 GiB weights; 154 on-disk)                   20.4 median
 
 Affine decodes ~1.45x faster at matched bytes — the third independent
 measurement of the ~1.5x VQ decode tax (Flash-Next single-box: 27.0 vs
