@@ -708,3 +708,28 @@ it was never the acceptance that was short.
 PENDING GATE (explicitly out of scope tonight, both boxes were running
 queues): full-trunk re-measurement of T=2/T=1 on the loaded 2.7bpw with the
 shim installed, and the MTP A/B. Nothing here has run inside a loaded model.
+
+## 2026-09-02 (night) — shim validated on the full trunk: GLM MTP 1.05x -> 1.43x
+
+The absorbed-MLA shim (glm5_shim, L<=8, merged 3cf0af9) was the missing
+piece, as projected. On the shipping 2.7bpw artifact, M4, exo conda env,
+warm (one discarded full cycle), three interleaved pairs, 300-token
+greedy runs:
+
+    baseline  4.60 / 4.60 / 4.60 tok/s
+    MTP       6.58 / 6.57 / 6.63 tok/s   acceptance 0.82 (all runs)
+
+= 1.43x, up from the 1.05x measured pre-shim this morning. Acceptance
+unchanged (0.82 vs morning's 0.8516 ballpark) — the whole gain is the
+T=2 verify getting cheaper, which is what the shim does.
+
+Method notes: the first (cold) run of the night measured baseline 0.56
+-> 2.56 tok/s across arms purely from paging (100.9 GiB resident on the
+128 GiB box) — uninterleaved cold numbers on this model are worthless;
+discard a full cycle first. T=2/T=1 forward ratios measured under paging
+(1.20 -> 1.16 shim off->on) are compressed and not comparable to the
+morning's 1.49; the A/B above is the trustworthy measurement.
+
+GLM ship remains gated on the prefill-spike blocker (see
+docs/CARD-UPDATE-DRAFT.md checklist + the memory note): this result
+makes the sidecar worth shipping, the blocker decides when.
