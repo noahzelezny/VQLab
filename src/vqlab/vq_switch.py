@@ -1180,6 +1180,35 @@ assert ("xs[" not in _SRC_FUSED_PACKED_D8_SIMD_DEVX
 
 _D8_DEVX = os.environ.get("VQ_D8_DEVX", "1") != "0"
 
+# DEVX + SIMD_SUM COMPOSITION (2026-09-02, acceptance eval d4855e4). The SS
+# reduction rewrite applies verbatim on top of the devx source because devx
+# replaced the staging and dot text, not the reduction. This is the shipping
+# default: quality delta measured EXACTLY ZERO with the kernel exercised
+# (chunk-16 referee: identical nll to every digit over 2048 tokens, KL
+# mean/max 0.0 over 459 positions) and +2.4% end-to-end over devx alone
+# (18.39 -> 18.84 tok/s A-B-A). Not bit-identical to the pre-arc-4 kernel:
+# ~0.1% of elements differ by one half-ULP (rounding ties; equally accurate
+# vs fp32). The bit-identity gate is relaxed to 1-ULP equivalence for this
+# kernel only, by decision 2026-09-02. VQ_D8_SS=0 restores plain devx
+# (bit-identical to the legacy kernel) without a rebuild.
+_SRC_FUSED_PACKED_D8_SIMD_DEVX_SS = _SRC_FUSED_PACKED_D8_SIMD_DEVX.replace(
+    """        const int gmax = min(32, NGRP - b * 32);
+        for (int i = 0; i < gmax; ++i)
+            acc = fma((float)srow[b * 32 + i],
+                      simd_shuffle(gacc, (ushort)i), acc);
+""",
+    """        {
+            const int gg = b * 32 + (int)lane;
+            const float sv = (gg < NGRP) ? (float)srow[gg] : 0.0f;
+            acc += simd_sum(sv * gacc);
+        }
+""")
+assert _SRC_FUSED_PACKED_D8_SIMD_DEVX_SS != _SRC_FUSED_PACKED_D8_SIMD_DEVX, (
+    "the packed-d8 reduction text drifted; the devx+ss composition did not "
+    "apply and would silently fall back to plain devx")
+
+_D8_SS = os.environ.get("VQ_D8_SS", "1") != "0"
+
 
 # REGISTER-BUFFERED twin of _SRC_FUSED_PACKED_D8_SIMD (2026-09-02).
 #
@@ -2046,7 +2075,7 @@ def _fused(x, eidx, codes, codebook, scales, pack_bits=0, simd=None,
            d2_u32=None):
     key = ("plan", x.shape, x.dtype, codes.shape, codes.dtype, codebook.shape,
            scales.shape, pack_bits, simd, d2_u32,
-           _D8_SIMDSUM, _D8_REGBUF, _D8_DEVX, _SPEC_KERNELS)
+           _D8_SIMDSUM, _D8_REGBUF, _D8_DEVX, _D8_SS, _SPEC_KERNELS)
     plan = _KERNELS.get(key)
     if plan is not None:
         view_u32, kern, name, src, template, grid, threadgroup, dims, N, OUT \
@@ -2160,10 +2189,17 @@ def _fused_resolve(_plan_key, x, eidx, codes, codebook, scales, pack_bits=0,
                     # 0.05-0.16% of elements). Off by default; see the source.
                     name = f"vq_fused_packed{pack_bits}_d8_simd_ss"
                     src = _SRC_FUSED_PACKED_D8_SIMD_SS
+                elif _D8_DEVX and _D8_SS:
+                    # DEFAULT since 2026-09-02: arc 5 devx + arc 4 simd_sum
+                    # composed. 1-ULP equivalent to legacy (measured zero
+                    # quality delta), +2.4% over devx alone. VQ_D8_SS=0
+                    # drops back to plain devx (bit-identical to legacy).
+                    name = f"vq_fused_packed{pack_bits}_d8_simd_devx_ss"
+                    src = _SRC_FUSED_PACKED_D8_SIMD_DEVX_SS
                 elif _D8_DEVX:
                     # arc 5: 1.19-1.23x at decode N, BIT-IDENTICAL (device x
-                    # reads instead of the staged tile). On by default; see
-                    # the source comment. VQ_D8_DEVX=0 restores the old one.
+                    # reads instead of the staged tile). VQ_D8_DEVX=0
+                    # restores the staged kernel.
                     name = f"vq_fused_packed{pack_bits}_d8_simd_devx"
                     src = _SRC_FUSED_PACKED_D8_SIMD_DEVX
                 else:
