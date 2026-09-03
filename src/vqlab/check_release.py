@@ -175,10 +175,15 @@ def _cluster_smoke() -> list[str]:
                      "rank's copy must be identity-checked, not assumed")
         return probs
     for peer in peers:
-        script = ("cd \"$HOME/Exo Models/" + dirname + "\" && "
+        # peer syntax: user@host[:models-root]; default root is the exo
+        # convention "$HOME/Exo Models". A peer whose root lives elsewhere
+        # (the M3 keeps models on an external volume) names it explicitly.
+        host, _, root = peer.partition(":")
+        root = root or "$HOME/Exo Models"
+        script = ("cd \"" + root + "/" + dirname + "\" && "
                   "shasum -a 256 " + " ".join(local_hashes) + " && "
                   "stat -f '%N %z' " + " ".join(shard_sizes))
-        r = sp.run(["ssh", peer, script], capture_output=True, text=True,
+        r = sp.run(["ssh", host, script], capture_output=True, text=True,
                    timeout=120)
         if r.returncode != 0:
             probs.append(f"peer {peer}: identity check failed to run: "
