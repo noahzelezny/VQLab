@@ -111,11 +111,16 @@ matched-or-better quality. We win on bytes, they win on tok/s; say so.]
 - [x] Noah: sidecar decision — SHIP for all MTP-capable families
 - [ ] GLM full-trunk shim validation (warm A/B running; acceptance 0.82
       confirmed on shipping artifact)
-- [ ] **GLM prefill spike: HALF-measured — claim retracted** (Noah observed
-      +50G during the same run). The <2G/flat result below is the M3 RANK
-      ONLY; the M4 rank was running month-old exo code WITHOUT the chunking
-      fixes and has no instrumentation. Action: sync M4's exo checkout to
-      M3's commit (in progress), then re-measure with both ranks logging.
+- [x] **GLM prefill: fully diagnosed, both ranks** (2026-09-02 night, after
+      syncing M4's exo to M3's commit). Transient is FIXED on both ranks
+      (M3 peak +2.4G, M4 peak +2.6G per chunk, flat over 26k tokens). The
+      +50G Noah observed on the M4 = its ~70G shard + ~5G KV/state + ~35G
+      MLX allocator/wired retention above active — box hit 0.1G free at
+      minimum. Mitigation deployed: EXO_MLX_MEM_LIMIT_GB=82 in the M4's
+      ~/.exo/exo-env.sh (hook added to its supervisor, mirroring M3's).
+      Takes effect on next M4 exo restart; verify headroom on next GLM
+      session. GLM un-gated for the push; card gets the honest memory-
+      requirement sentence.
       26,423-token prompt through the 2-node pipeline: per-chunk transient
       <2G, flat across all 13 chunks (peak 50.5G -> 52.2G on a 48.8G-resident
       rank; the rise is KV growth). The morning's chunk-2048 + per-chunk
