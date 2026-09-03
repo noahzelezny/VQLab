@@ -1118,6 +1118,69 @@ assert _SRC_FUSED_PACKED_D8_SIMD_SS != _SRC_FUSED_PACKED_D8_SIMD, (
 _D8_SIMDSUM = os.environ.get("VQ_D8_SIMDSUM", "0") != "0"
 
 
+# DEVICE-X twin of _SRC_FUSED_PACKED_D8_SIMD (2026-09-02, kernel arc 5).
+# ON BY DEFAULT: it is BIT-IDENTICAL and 1.19-1.23x at decode N.
+#
+# WHAT IT CHANGES. Only where x is read from. The base kernel stages x into a
+# threadgroup tile in 32-group blocks (two threadgroup_barriers per block) and
+# the inner loop reads the tile. This one deletes the tile, the staging loop
+# and every barrier: each lane reads its own x slice straight from device
+# memory as half4 and converts with the same float4(half4) widening, so the
+# values entering the dots -- and the dot/fma order -- are exactly the base
+# kernel's. mx.array_equal on real L20 gate/up tensors at N=1/5/10/20 holds
+# (asserted in scripts/bench_d8_stage.py before any timing, and pinned by the
+# test suite's simd-vs-base bit-exact parametrisation).
+#
+# WHY IT WINS (scripts/bench_d8_stage.py, real L20 tensors, E=64, arc-standard
+# interleaved min/med): the cost split of the ~36% arc 4 left unprobed is
+#     staging deleted  0.52 of base   barriers deleted  0.98   empty  0.15
+# i.e. the BARRIERS are ~2% and the STAGING is nearly half the dispatch. The
+# tile was built to save device reads of x, but at rows=8 every threadgroup
+# re-stages the whole row (OUT/8 = 80 threadgroups re-read 5 KiB per token
+# row), and the threadgroup store+load round-trip plus the barrier convoy
+# costs far more than L1-served device reads of the same bytes. Reading x
+# directly measures 0.81-0.84 of base at N=10/20 on both gate and up
+# (1.19-1.23x), 0.95-1.02 at the launch-bound N=1, and composes with nothing
+# it invalidates: the reduction, code fetch and scale walk are untouched.
+#
+# VQ_D8_DEVX=0 restores the staged kernel for A/B without a rebuild. The
+# simd_sum twin above still derives from the STAGED base so the arc 4
+# negative stays reproducible bit-for-bit; a devx+simd_sum combination is a
+# one-line replace if the bit-identity gate is ever relaxed.
+_SRC_FUSED_PACKED_D8_SIMD_DEVX = _SRC_FUSED_PACKED_D8_SIMD.replace(
+    """    threadgroup float4 xs[MAX_TILE];
+""", "").replace(
+    """    const int NBLK = (NGRP + 31) / 32;
+    for (int b = 0; b < NBLK; ++b) {
+        const int base = b * TILE;
+        const int span = min(TILE, NX4 - base);
+        threadgroup_barrier(mem_flags::mem_threadgroup);
+        for (uint i = lid; i < (uint)span; i += tgsize) {
+            const int o = (base + (int)i) * 4;
+            xs[i] = float4((float)xrow[o], (float)xrow[o+1],
+                           (float)xrow[o+2], (float)xrow[o+3]);
+        }
+        threadgroup_barrier(mem_flags::mem_threadgroup);
+""",
+    """    const device vec<T,4>* xr4 = (const device vec<T,4>*)xrow;
+    const int NBLK = (NGRP + 31) / 32;
+    for (int b = 0; b < NBLK; ++b) {
+        const int base = 0;
+""").replace(
+    """                gacc += dot(float4(cb4[2*c]),   xs[m])
+                      + dot(float4(cb4[2*c+1]), xs[m+1]);
+""",
+    """                gacc += dot(float4(cb4[2*c]),   float4(xr4[m]))
+                      + dot(float4(cb4[2*c+1]), float4(xr4[m+1]));
+""")
+assert ("xs[" not in _SRC_FUSED_PACKED_D8_SIMD_DEVX
+        and "barrier" not in _SRC_FUSED_PACKED_D8_SIMD_DEVX), (
+    "the packed-d8 simd staging text drifted; the devx twin did not fully "
+    "apply")
+
+_D8_DEVX = os.environ.get("VQ_D8_DEVX", "1") != "0"
+
+
 # REGISTER-BUFFERED twin of _SRC_FUSED_PACKED_D8_SIMD (2026-09-02).
 #
 # The kernel above is LOAD-ISSUE bound, not bandwidth bound: it moves 61-97
@@ -1789,6 +1852,77 @@ _SRC_DECODE = r"""
 
 _KERNELS = {}
 
+# SPECIALIZED (template-free) kernel cache, arc 5 (2026-09-02). Passing
+# `template=` to a mx.fast.metal_kernel call costs ~4.5-7 us of HOST time PER
+# CALL (measured: a null kernel goes 0.8 -> 5.3 us the moment any template is
+# passed, and the packed-d8 simd call drops 8.9 -> 2.0 us without it), which
+# at 144 expert dispatches/token is ~1 ms/token of pure Python-binding
+# overhead -- most of the "module glue" arc 3 SS4 measured. The fix: bake the
+# template values into the source as #defines (header), build ONE kernel per
+# (name, template values) pair, and call it with NO template argument. The
+# generated Metal code is the same code the template instantiation produced
+# -- outputs are BIT-IDENTICAL (asserted in tests on real tensors) and the
+# GPU time is unchanged (measured 36.9 vs 37.0 us/dispatch). VQ_SPEC_KERNELS=0
+# restores the template path for A/B without a rebuild.
+_SPEC_KERNELS = os.environ.get("VQ_SPEC_KERNELS", "1") != "0"
+
+# mx dtype -> Metal source type name, for template values that are dtypes.
+_METAL_TYPE = {}
+
+
+def _metal_type_name(dt):
+    if not _METAL_TYPE:
+        _METAL_TYPE.update({
+            mx.float16: "half", mx.bfloat16: "bfloat16_t",
+            mx.float32: "float", mx.uint8: "uchar", mx.uint16: "ushort",
+            mx.uint32: "uint", mx.int32: "int",
+        })
+    return _METAL_TYPE.get(dt)
+
+
+def _get_kernel_spec(name, src, template):
+    """A kernel with `template` baked in as #defines, callable WITHOUT the
+    template argument. Falls back to the generic path (None) when a template
+    value has no source spelling."""
+    parts = []
+    for tname, tval in template:
+        if isinstance(tval, bool):  # bool is an int subclass; keep C spelling
+            parts.append((tname, "true" if tval else "false"))
+        elif isinstance(tval, int):
+            parts.append((tname, str(tval)))
+        else:
+            mt = _metal_type_name(tval)
+            if mt is None:
+                return None
+            parts.append((tname, mt))
+    # string key so tests inspecting _KERNELS names ("simd" in n) keep working
+    key = name + "|" + "|".join(f"{n}={v}" for n, v in parts)
+    k = _KERNELS.get(key)
+    if k is None:
+        hdr = "".join(f"#define {n} {v}\n" for n, v in parts)
+        spec_name = name + "_s" + "_".join(
+            v.replace(" ", "") for _, v in parts)
+        k = mx.fast.metal_kernel(
+            name=spec_name,
+            input_names=["x", "eidx", "codes", "codebook", "scales", "dims"],
+            output_names=["y"], source=src, header=hdr)
+        _KERNELS[key] = k
+    return k
+
+
+# dims arrays are tiny constant int32 uploads; building one per call costs
+# ~0.6 us of host time x 144 calls/token. Cached by value instead.
+_DIMS_CACHE = {}
+
+
+def _dims_array(*vals):
+    a = _DIMS_CACHE.get(vals)
+    if a is None:
+        a = mx.array(vals, dtype=mx.int32)
+        mx.eval(a)
+        _DIMS_CACHE[vals] = a
+    return a
+
 
 def _get_kernel(name, src):
     if name not in _KERNELS:
@@ -1898,8 +2032,44 @@ _EXPERT_SIMD_MAX_N = int(os.environ.get("VQ_EXPERT_SIMD_MAX_N", "20"))
 _D2_U32 = os.environ.get("VQ_D2_U32", "1") != "0"
 
 
+# PLAN MEMO, arc 5 (2026-09-02). The dispatch logic below is pure on
+# (shapes, dtypes, flags) -- ~2 us of Python per call, 144 calls/token. The
+# resolved plan (which kernel, grid, threadgroup, dims, code view) is cached
+# on exactly the values the logic reads, so a repeat call skips straight to
+# the kernel invocation. The three module-level env flags in the key make the
+# bench scripts' flag flips (V._D8_SIMDSUM etc.) still take effect. Plans
+# live INSIDE _KERNELS (under ("plan", ...) keys) so the tests' existing
+# _KERNELS.clear() invalidates them too.
+
+
 def _fused(x, eidx, codes, codebook, scales, pack_bits=0, simd=None,
            d2_u32=None):
+    key = ("plan", x.shape, x.dtype, codes.shape, codes.dtype, codebook.shape,
+           scales.shape, pack_bits, simd, d2_u32,
+           _D8_SIMDSUM, _D8_REGBUF, _D8_DEVX, _SPEC_KERNELS)
+    plan = _KERNELS.get(key)
+    if plan is not None:
+        view_u32, kern, name, src, template, grid, threadgroup, dims, N, OUT \
+            = plan
+        if view_u32:
+            codes = mx.view(codes, dtype=mx.uint32)
+        if kern is not None:
+            (y,) = kern(inputs=[x, eidx, codes, codebook, scales, dims],
+                        grid=grid, threadgroup=threadgroup,
+                        output_shapes=[(N, OUT)], output_dtypes=[x.dtype])
+        else:
+            (y,) = _get_kernel(name, src)(
+                inputs=[x, eidx, codes, codebook, scales, dims],
+                template=list(template), grid=grid, threadgroup=threadgroup,
+                output_shapes=[(N, OUT)], output_dtypes=[x.dtype])
+        return y
+    return _fused_resolve(key, x, eidx, codes, codebook, scales, pack_bits,
+                          simd, d2_u32)
+
+
+def _fused_resolve(_plan_key, x, eidx, codes, codebook, scales, pack_bits=0,
+                   simd=None, d2_u32=None):
+    _view_u32 = False
     # U8-VIEW DISPATCH (E77/E90, 2026-08-20). Unpacked uint8 d4 rows are
     # byte-for-byte the pack_bits=8 word layout (little-endian; verified
     # against vq_pack.pack), and the packed fused kernel's simdgroup layout
@@ -1913,6 +2083,7 @@ def _fused(x, eidx, codes, codebook, scales, pack_bits=0, simd=None,
             and codebook.shape[1] == 4 and codes.shape[2] % 4 == 0):
         codes = mx.view(codes, dtype=mx.uint32)
         pack_bits = 8
+        _view_u32 = True
     # d=2 U8-VIEW (E14x, 2026-09-02): the same zero-copy reinterpret for d=2,
     # feeding _SRC_FUSED_D2_U32 (four codes per uint32 load instead of four
     # uchar loads). Guarded on NSUB % 4 == 0 so a row is a whole number of
@@ -1924,12 +2095,13 @@ def _fused(x, eidx, codes, codebook, scales, pack_bits=0, simd=None,
                 and codebook.shape[1] == 2 and codes.shape[2] % 4 == 0)
     if _d2_view:
         codes = mx.view(codes, dtype=mx.uint32)
+        _view_u32 = True
     N, IN = x.shape
     E, OUT, _ = codes.shape
     K, D = codebook.shape
     NSUB = IN // D
     G = IN // scales.shape[2]
-    dims = mx.array([OUT, IN, D, G, N, K], dtype=mx.int32)
+    dims = _dims_array(OUT, IN, D, G, N, K)
     tgx = 256 if OUT >= 256 else OUT
     # set by the simdgroup-per-row branches; None keeps the thread-per-row grid
     simd_rows = None
@@ -1988,6 +2160,12 @@ def _fused(x, eidx, codes, codebook, scales, pack_bits=0, simd=None,
                     # 0.05-0.16% of elements). Off by default; see the source.
                     name = f"vq_fused_packed{pack_bits}_d8_simd_ss"
                     src = _SRC_FUSED_PACKED_D8_SIMD_SS
+                elif _D8_DEVX:
+                    # arc 5: 1.19-1.23x at decode N, BIT-IDENTICAL (device x
+                    # reads instead of the staged tile). On by default; see
+                    # the source comment. VQ_D8_DEVX=0 restores the old one.
+                    name = f"vq_fused_packed{pack_bits}_d8_simd_devx"
+                    src = _SRC_FUSED_PACKED_D8_SIMD_DEVX
                 else:
                     name = f"vq_fused_packed{pack_bits}_d8_simd"
                     src = _SRC_FUSED_PACKED_D8_SIMD
@@ -2075,6 +2253,18 @@ def _fused(x, eidx, codes, codebook, scales, pack_bits=0, simd=None,
     else:
         grid = (((OUT + tgx - 1) // tgx) * tgx, N, 1)
         threadgroup = (tgx, 1, 1)
+    kern = _get_kernel_spec(name, src, template) if _SPEC_KERNELS else None
+    _KERNELS[_plan_key] = (_view_u32, kern, name, src, tuple(template),
+                           grid, threadgroup, dims, N, OUT)
+    if kern is not None:
+        (y,) = kern(
+            inputs=[x, eidx, codes, codebook, scales, dims],
+            grid=grid,
+            threadgroup=threadgroup,
+            output_shapes=[(N, OUT)],
+            output_dtypes=[x.dtype],
+        )
+        return y
     (y,) = _get_kernel(name, src)(
         inputs=[x, eidx, codes, codebook, scales, dims],
         template=template,

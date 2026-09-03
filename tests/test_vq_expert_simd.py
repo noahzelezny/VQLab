@@ -55,6 +55,8 @@ D8_SHAPES = [
     (8, 1024, 4096, 16384, 8, 64),   # 397B gate/up_proj   (NGRP = 64)  -> simd
     (4,   96, 4096,  4096, 8, 64),   # OUT ragged vs the 32-row tile    -> simd
     (4,  100, 8192,  4096, 8, 64),   # NGRP = 128, two 32-lane blocks   -> simd
+    (8,  640, 2560, 16384, 8, 64),   # Flash-Next gate/up (NGRP = 40,
+                                     #  partial second block)           -> simd
     (8, 4096, 1024, 16384, 8, 64),   # 397B down_proj      (NGRP = 16)  -> declined
     (8, 2560,  640, 16384, 8, 64),   # Flash-Next down     (NGRP = 10)  -> declined
 ]
@@ -275,11 +277,13 @@ def test_d8_regbuf_bit_exact(shape, N, monkeypatch):
     V._KERNELS.clear()
     monkeypatch.setattr(V, "_D8_REGBUF", False)
     base = np.array(V._fused(*args, pack_bits=14, simd=True))
-    assert any(n.endswith("_d8_simd") for n in V._KERNELS)
+    assert any(isinstance(n, str) and "_d8_simd" in n
+               and "_d8_simd_rb" not in n for n in V._KERNELS)
     V._KERNELS.clear()
     monkeypatch.setattr(V, "_D8_REGBUF", True)
     rb = np.array(V._fused(*args, pack_bits=14, simd=True))
-    assert any(n.endswith("_d8_simd_rb") for n in V._KERNELS)
+    assert any(isinstance(n, str) and "_d8_simd_rb" in n
+               for n in V._KERNELS)
     V._KERNELS.clear()
     assert np.array_equal(base, rb)
 
@@ -371,3 +375,94 @@ def test_simdsum_matches_within_one_ulp(N, monkeypatch):
     tol = np.maximum(np.abs(ref), np.abs(got)) * (2.0 ** -9) + 1e-6
     assert np.all(np.abs(ref - got) <= tol)
     assert np.mean(ref != got) < 0.02
+
+
+# --- specialized (template-free) kernels + plan memo, arc 5 (2026-09-02) ----
+
+def test_spec_kernels_on_by_default():
+    """Baking template values into the source and calling without `template=`
+    saves ~7 us of HOST time per dispatch (~1 ms/token over 144 expert
+    calls). It is bit-identical -- same generated Metal code -- so it is ON;
+    VQ_SPEC_KERNELS=0 restores the template path for A/B."""
+    assert V._SPEC_KERNELS is True
+
+
+@pytest.mark.parametrize("shape", D8_SHAPES)
+@pytest.mark.parametrize("N", [1, 8])
+def test_spec_kernels_bit_identical(shape, N, monkeypatch):
+    """The #define-specialized kernel must produce the same bits as the
+    template-instantiated one on every dispatched geometry, simd and not."""
+    E, OUT, IN, K, d, G = shape
+    args = _rand_experts(E, OUT, IN, K, d, G, N, packed=14)
+    monkeypatch.setattr(V, "_SPEC_KERNELS", False)
+    ref = np.array(V._fused(*args, pack_bits=14, simd=True))
+    monkeypatch.setattr(V, "_SPEC_KERNELS", True)
+    got = np.array(V._fused(*args, pack_bits=14, simd=True))
+    assert np.array_equal(ref, got)
+
+
+def test_spec_kernels_bit_identical_unpacked_d4_and_d2(monkeypatch):
+    """The non-packed dispatch branches go through the same specialization."""
+    for (E, OUT, IN, K, d, G) in ((4, 128, 512, 512, 4, 64),
+                                  (4, 128, 512, 256, 2, 64)):
+        args = _rand_experts(E, OUT, IN, K, d, G, 4)
+        monkeypatch.setattr(V, "_SPEC_KERNELS", False)
+        ref = np.array(V._fused(*args))
+        monkeypatch.setattr(V, "_SPEC_KERNELS", True)
+        got = np.array(V._fused(*args))
+        assert np.array_equal(ref, got)
+
+
+def test_plan_memo_respects_flag_flips(monkeypatch):
+    """The plan memo keys on the module-level kernel flags, so a bench
+    script's V._D8_SIMDSUM flip must reach the dispatcher on the NEXT call,
+    not serve a stale plan."""
+    E, OUT, IN, K, d, G = 4, 96, 4096, 4096, 8, 64
+    args = _rand_experts(E, OUT, IN, K, d, G, 2, packed=14)
+    V._KERNELS.clear()
+    monkeypatch.setattr(V, "_D8_SIMDSUM", False)
+    V._fused(*args, pack_bits=14, simd=True)
+    assert not any(isinstance(n, str) and "_d8_simd_ss" in n
+                   for n in V._KERNELS)
+    monkeypatch.setattr(V, "_D8_SIMDSUM", True)
+    V._fused(*args, pack_bits=14, simd=True)
+    assert any(isinstance(n, str) and "_d8_simd_ss" in n for n in V._KERNELS)
+    V._KERNELS.clear()
+
+
+def test_plan_memo_is_invalidated_by_kernel_clear():
+    """Plans live inside _KERNELS under ("plan", ...) keys precisely so the
+    existing clear() used across this suite wipes them too."""
+    E, OUT, IN, K, d, G = 4, 96, 4096, 4096, 8, 64
+    args = _rand_experts(E, OUT, IN, K, d, G, 2, packed=14)
+    V._fused(*args, pack_bits=14, simd=True)
+    assert any(isinstance(n, tuple) and n and n[0] == "plan"
+               for n in V._KERNELS)
+    V._KERNELS.clear()
+    assert not V._KERNELS
+
+
+# --- device-x packed-d8 simd kernel, arc 5 (2026-09-02) ---------------------
+
+def test_devx_on_by_default():
+    """Reading x from device memory instead of the staged threadgroup tile is
+    BIT-IDENTICAL (same half4 values, same float widening, same dot/fma
+    order) and measured 1.19-1.23x at decode N on real L20 gate/up -- the
+    staging (not the barriers) was ~half the dispatch. VQ_D8_DEVX=0 restores
+    the staged kernel for A/B."""
+    assert V._D8_DEVX is True
+
+
+@pytest.mark.parametrize("shape", [s for s in D8_SHAPES if s[2] // s[5] >= 32])
+@pytest.mark.parametrize("N", [1, 8])
+def test_devx_bit_identical_to_staged(shape, N, monkeypatch):
+    """devx vs the staged kernel, bit for bit, on every simd-eligible packed
+    geometry -- including the ragged-OUT and NGRP-not-multiple-of-32 shapes
+    where the tile bookkeeping differed most."""
+    E, OUT, IN, K, d, G = shape
+    args = _rand_experts(E, OUT, IN, K, d, G, N, packed=14)
+    monkeypatch.setattr(V, "_D8_DEVX", False)
+    staged = np.array(V._fused(*args, pack_bits=14, simd=True))
+    monkeypatch.setattr(V, "_D8_DEVX", True)
+    devx = np.array(V._fused(*args, pack_bits=14, simd=True))
+    assert np.array_equal(staged, devx)
