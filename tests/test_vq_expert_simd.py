@@ -80,13 +80,19 @@ def test_d8_simd_bit_exact(shape, N):
 @pytest.mark.parametrize("N", [1, 8])
 @pytest.mark.parametrize("bits", [12, 14])
 @pytest.mark.parametrize("shape", D8_SHAPES)
-def test_d8_packed_simd_bit_exact(shape, bits, N):
+def test_d8_packed_simd_bit_exact(shape, bits, N, monkeypatch):
+    # SS re-associates the reduction by design (see the devx_ss default), so
+    # the layout-equivalence contract is tested with it pinned off; the
+    # default path's 1-ULP contract is test_default_devx_ss_within_one_ulp.
+    monkeypatch.setattr(V, "_D8_SS", False)
+    V._KERNELS.clear()
     E, OUT, IN, K, d, G = shape
     if K > (1 << bits):
         pytest.skip(f"K={K} does not fit {bits}-bit codes")
     args = _rand_experts(E, OUT, IN, K, d, G, N, packed=bits)
     base = np.array(V._fused(*args, pack_bits=bits, simd=False))
     simd = np.array(V._fused(*args, pack_bits=bits, simd=True))
+    V._KERNELS.clear()
     assert np.array_equal(base, simd)
 
 
@@ -275,6 +281,7 @@ def test_d8_regbuf_bit_exact(shape, N, monkeypatch):
     E, OUT, IN, K, d, G = shape
     args = _rand_experts(E, OUT, IN, K, d, G, N, packed=14)
     V._KERNELS.clear()
+    monkeypatch.setattr(V, "_D8_SS", False)
     monkeypatch.setattr(V, "_D8_REGBUF", False)
     base = np.array(V._fused(*args, pack_bits=14, simd=True))
     assert any(isinstance(n, str) and "_d8_simd" in n
@@ -344,14 +351,42 @@ def test_rows_per_threadgroup_is_bit_neutral(rows, monkeypatch):
     assert np.array_equal(ref, got)
 
 
-def test_simdsum_is_off_by_default():
-    """Arc 4's simd_sum reduction is 1.16-1.20x on gate/up but re-associates
-    the fp32 sum, so it fails the bit-identity gate the kernel arcs hold. It
-    must stay opt-in until that gate is deliberately relaxed."""
+def test_simdsum_default_policy():
+    """2026-09-02 decision: the bit-identity gate is relaxed to 1-ULP
+    equivalence for the packed-d8 reduction ONLY, on the strength of the
+    acceptance eval (d4855e4): zero measured quality delta with the kernel
+    exercised, +2.4% end-to-end. The shipping default is the devx+ss
+    composition (_D8_SS); the arc-4 standalone SS gate stays opt-in as the
+    reproducible record, and VQ_D8_SS=0 must restore a kernel bit-identical
+    to legacy."""
+    assert V._D8_SS is True
     assert V._D8_SIMDSUM is False
     assert V._SRC_FUSED_PACKED_D8_SIMD_SS != V._SRC_FUSED_PACKED_D8_SIMD
     assert "simd_sum" in V._SRC_FUSED_PACKED_D8_SIMD_SS
     assert "simd_sum" not in V._SRC_FUSED_PACKED_D8_SIMD
+    assert "simd_sum" in V._SRC_FUSED_PACKED_D8_SIMD_DEVX_SS
+    assert "barrier" not in V._SRC_FUSED_PACKED_D8_SIMD_DEVX_SS
+
+
+@pytest.mark.parametrize("N", [1, 10, 20])
+def test_default_devx_ss_within_one_ulp(N, monkeypatch):
+    """The shipping default (devx+ss) vs the legacy-identical path
+    (VQ_D8_SS=0): differences must be last-place-bit rounding ties and
+    nothing larger, and the dispatched kernel must actually be devx_ss."""
+    E, OUT, IN, K, d, G = 8, 512, 2560, 16384, 8, 64
+    args = _rand_experts(E, OUT, IN, K, d, G, N, packed=14)
+    V._KERNELS.clear()
+    monkeypatch.setattr(V, "_D8_SS", False)
+    ref = np.array(V._fused(*args, pack_bits=14, simd=True)).astype(np.float32)
+    V._KERNELS.clear()
+    monkeypatch.setattr(V, "_D8_SS", True)
+    got = np.array(V._fused(*args, pack_bits=14, simd=True)).astype(np.float32)
+    assert any(isinstance(n, str) and "_d8_simd_devx_ss" in n
+               for n in V._KERNELS)
+    V._KERNELS.clear()
+    tol = np.maximum(np.abs(ref), np.abs(got)) * (2.0 ** -9) + 1e-6
+    assert np.all(np.abs(ref - got) <= tol)
+    assert np.mean(ref != got) < 0.02
 
 
 @pytest.mark.parametrize("N", [1, 10, 20])
@@ -461,6 +496,7 @@ def test_devx_bit_identical_to_staged(shape, N, monkeypatch):
     where the tile bookkeeping differed most."""
     E, OUT, IN, K, d, G = shape
     args = _rand_experts(E, OUT, IN, K, d, G, N, packed=14)
+    monkeypatch.setattr(V, "_D8_SS", False)
     monkeypatch.setattr(V, "_D8_DEVX", False)
     staged = np.array(V._fused(*args, pack_bits=14, simd=True))
     monkeypatch.setattr(V, "_D8_DEVX", True)
