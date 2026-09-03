@@ -2275,3 +2275,124 @@ is T<=2), so mtp-probe35 gained --head-dtype (default bfloat16) which casts
 the head's own tensors rather than shortening the window.
 
 `pytest tests/`: 203 passed, 11 skipped.
+
+## 2026-09-02 — RELEASE VALIDATION PASS (final kernel): +5.5% end-to-end on the 2.1bpw, all 18 artifacts re-bundled, referee identical to 16 digits — and two dense bundles were shipping-broken in a way no gate had caught on them.
+
+Overnight consolidated pass: confirm the final kernel end-to-end, re-bundle
+every artifact the rows-8 pass had touched, re-gate them, and stage the MTP
+sidecars. No src/ change: this arc measures and packages the kernel that
+f6aa628 already made the default. Nothing pushed to any remote.
+
+### 1. A-B-A ON THE FINAL KERNEL: 18.09 -> 19.09 tok/s (+5.49%).
+
+One 44.96 GiB load of the 2.1bpw (the arc-5 shadow-bundle technique:
+symlinked artifact + model.py rebuilt from this tree's src; the on-disk
+artifact was NOT touched). Arms flipped IN-PROCESS by rebinding the 144
+VQSwitchLinear + 128 VQPLEEmbedding instances' `__class__` between two
+lifted runtime namespaces, so both arms run over ONE copy of the weights.
+Greedy, 300 tokens, chat template applied, A,B,A,B,A,B after a throwaway
+plus an old-arm warm:
+
+    arm A (artifact's shipped rows-8 bundle)  18.124 18.091 18.023  med 18.091
+    arm B (current src: devx + simd_sum)      19.029 19.285 19.085  med 19.085
+    speedup 1.0549 (+5.49%); each arm self-consistent across its 3 runs
+
+This composes the two banked wins as expected: arc 5's devx (+3.5% over the
+rows-8 state) and arc 6's simd_sum reduction (+2.4% over devx) multiply to
++6.0% predicted, and +5.5% measured on a different prompt/length is well
+inside that. It is NOT a new lever — it is the first end-to-end number for
+the shipped composition measured against what downloaders actually have.
+
+### 2. GREEDY DIVERGENCE: token 36 of 300, and it is the sanctioned one.
+
+    A[36] = ' careful'    B[36] = ' detailed'    identical prefix: 36 tokens
+
+Both continuations stay coherent and on-topic (A: "Need produce careful
+detail..."; B: "Need produce detailed explanation..."). Same signature arc 6
+recorded at token 66 of 378 — a near-tie argmax that eventually flips after
+~48 layers of independent half-ULP noise. Earlier here than arc 6 because
+arm A is the rows-8 kernel, two numerics-changes away rather than one.
+
+### 3. THE REFEREE STILL SEES EXACTLY ZERO. Chunk 16, so the decode-shape
+kernel actually dispatches (the blindness arc 6 diagnosed). Old bundle
+(.pre-arc5, shadow dir) vs new, two separate processes:
+
+    old   nll 1.7778030182234943   ppl 5.916842932532446
+    new   nll 1.7778030182234943   ppl 5.916842932532446
+
+Identical to all 16 digits, reproducing d4855e4. The decode stream diverges
+at token 36 and the scored quality does not move at all: chaotic divergence
+without quality cost, which is the whole content of the 1-ULP relaxation.
+
+### 4. RE-BUNDLE: 18, not 13 — and TWO FAMILIES, not one.
+
+The re-bundle set is the artifacts carrying a `model.py.pre-rows8` backup.
+That is **18 physical dirs**; a naive glob finds 23 because five names on
+the store are SYMLINK aliases (`qwen4exp_vq_packed_*`, `glm53_vq_packed_
+mix_best8`) pointing at dirs already in the set. Re-bundling through the
+aliases would have double-processed them.
+
+More important, they are not all MoE. Four are DENSE artifacts whose config
+declares `vq_linear`/`vq_embed` and NOT `vq_modules`:
+
+    Qwen3.8-27B-VQ-3.9 / 4.5 / 4.8      gemma-4-e4b-it-VQ-PLE
+
+`add_model_file.py` writes the MoE loader shim and recomputes `vq_modules`
+from the shards. Run against these four it would have written an empty
+`vq_modules`, dropped `vq_linear`/`vq_embed`, and emitted a shim that cannot
+instantiate their modules — it would have destroyed four artifacts, quietly,
+because their weights would then not map. The correct dense recipe is
+build_dense_vq.py's: `vq_switch.py + vq_dense.py + dense_shim.SHIM`.
+
+Both recipes were VERIFIED before use by reconstructing the rows-8-era
+bundle from git rev 1757f3d and diffing against what is on disk: all 14 MoE
+bundles reproduce BYTE-EXACT. The four dense ones did not — see §5.
+
+Result: 18/18 re-bundled. Every model.py carries
+`_SRC_FUSED_PACKED_D8_SIMD_DEVX_SS`, compiles, and passes check-bundle.
+`config.json` is byte-unchanged on all 18 (the bundler's config rewrite is
+a no-op against an already-correct config). Backups written next to each:
+`model.py.pre-arc5`, `config.json.pre-arc5`. No `.pre-*` backup was
+modified; no weight file was touched.
+
+### 5. BYCATCH — FOUR DENSE ARTIFACTS WERE SHIPPING BROKEN.
+
+The reason the dense reconstruction failed is not a recipe mismatch; it is
+that those four bundles were already wrong on disk:
+
+    27B 3.9 / 4.5 / 4.8      carried vq_dense.py but NOT vq_switch.py
+    gemma-4-e4b-it-VQ-PLE    carried NEITHER (9,960 bytes: shim only), and
+                             a literal `from mlx_lm.models.vq_...` import
+
+This is exactly the failure class check_bundle.py §III.11 exists for: the
+fused path resolves against site-packages, so the artifact needs a
+VQ-patched mlx-lm and raises ModuleNotFoundError on a stock install. It
+scores fine locally and cannot serve. All four now carry both runtimes and
+pass check-bundle and check_release --no-smoke. They have NOT been
+generation-smoked (one real load each); that is the open item.
+
+Note the gate asymmetry that let this sit: check_release's byte scan only
+rejects `from mlx_lm.models.vq_` — it caught the gemma one, but the three
+27B bundles named nothing forbidden, they were merely INCOMPLETE, and only
+check-bundle's dense branch looks for that. Static release gating alone
+would not have found them.
+
+### 6. GATES AND SIDECARS.
+
+  - check_release --no-smoke on all 18 re-bundled artifacts: 18/18 PASS
+    (23/23 counting the symlink aliases).
+  - Full check-release incl. strict smoke on the re-bundled 2.1bpw: PASS.
+    The strict resolution block confirms VQSwitchLinear, VQPLEEmbedding,
+    `_fused` and `_dense_fused` all resolve FROM THE ARTIFACT — i.e. the
+    +5.5% kernel is the one a downloader now executes.
+  - MTP sidecar staged into all four Flash-Next VQ dirs (2.1/3.2/4.4/5.5),
+    2.140 GiB each, copied from the store-root master. None had one.
+    THREE different files on the store share the name
+    `mtp-head-q6.safetensors` and they are NOT interchangeable:
+        root (Flash)  2.140 GiB  hidden 2560
+        397B 2.2bpw   5.412 GiB  hidden 4096
+        GLM 2.7bpw    6.094 GiB  hidden 4096, inter 12288
+    Family was confirmed by header geometry against each config before the
+    copy; the GLM and 397B sidecars were not touched.
+
+`pytest tests/`: 203 passed, 11 skipped (unchanged; no src/ change).
