@@ -55,6 +55,13 @@ def main(argv=None) -> int:
                     help="upload the whole directory (a first publish)")
     ap.add_argument("--message", default=None)
     ap.add_argument("--max-tokens", type=int, default=4)
+    ap.add_argument("--cluster-smoke", metavar="URL", default=None,
+                    help="passed to the gate: run the generation smoke "
+                         "through an exo cluster for artifacts too large "
+                         "for any single gate box. Requires --cluster-peer.")
+    ap.add_argument("--cluster-peer", metavar="USER@HOST", default=None,
+                    help="passed to the gate: peer holding the other "
+                         "pipeline rank's copy, identity-checked over ssh.")
     ap.add_argument("--dry-run", action="store_true",
                     help="run the gate and print the plan, upload nothing")
     a = ap.parse_args(argv)
@@ -144,6 +151,10 @@ def main(argv=None) -> int:
                     for t in targets)
     gate = [sys.executable, str(HERE / "check_release.py"),
             "--artifact", str(art), "--max-tokens", str(a.max_tokens)]
+    if a.cluster_smoke:
+        gate += ["--cluster-smoke", a.cluster_smoke]
+        if a.cluster_peer:
+            gate += ["--cluster-peer", a.cluster_peer]
     if docs_only:
         gate.append("--no-smoke")
         print("\n--- release gate (documentation-only upload: static checks "
