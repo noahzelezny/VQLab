@@ -28,6 +28,16 @@ _cfg = _json.load(open(_pathlib.Path(__file__).parent / "config.json"))
 _arch = _importlib.import_module(f"mlx_lm.models.{_cfg['model_type']}")
 ModelArgs = _arch.ModelArgs
 
+# The dtype the REST of the stack computes in. VQEmbedding decodes in fp16;
+# handing fp16 back into a bf16 model promotes everything downstream to fp32
+# (mlx's bf16+fp16 rule) and blows out attention's threadgroup memory, so the
+# decode result is cast to this on the way out. Read from the checkpoint
+# rather than assumed, so an fp16 or fp32 artifact stays in its own dtype.
+_DTYPE = {"bfloat16": mx.bfloat16, "float16": mx.float16,
+          "float32": mx.float32}[
+    _cfg.get("dtype") or _cfg.get("torch_dtype")
+    or _cfg.get("text_config", {}).get("dtype") or "bfloat16"]
+
 
 def _reach(root, path):
     obj = root
@@ -63,5 +73,6 @@ class Model(_arch.Model):
                 mx.zeros((_m["rows"], _m["in"] // _m["group"]),
                          dtype=mx.float16),
                 group_size=_m["group"], pack_bits=_pb,
-                in_features=_m["in"] if _pb else None))
+                in_features=_m["in"] if _pb else None,
+                out_dtype=_DTYPE))
 '''
