@@ -1053,6 +1053,71 @@ _SRC_FUSED_PACKED_D8_SIMD = _PACK_FETCH + r"""
 """
 
 
+# SIMD_SUM REDUCTION twin of _SRC_FUSED_PACKED_D8_SIMD (2026-09-02, arc 4).
+# OFF BY DEFAULT: it is NOT bit-identical, and this arc's gate is bit-identity.
+#
+# WHAT IT CHANGES. Only the per-block reduction. The shipped kernel finishes
+# each 32-group block with 32 SEQUENTIALLY DEPENDENT steps
+#     acc = fma(srow[b*32+i], simd_shuffle(gacc, i), acc)
+# so every lane redundantly walks a 32-long fp32 dependency chain and issues 32
+# scale loads, against only SPG = G/8 = 8 iterations of actual code work. This
+# variant has each lane hold its own group's scale and calls simd_sum once.
+#
+# WHY IT EXISTS. Arc 4 ablated the kernel instruction by instruction (cost-only
+# arms, each WRONG on purpose, each a lower bound), real L20 tensors, E=64,
+# rows=8, min/median over 15 interleaved reps x 50 dispatches:
+#
+#     arm (N=10 / N=20, fraction of base)      gate      up
+#       inner code loop deleted             0.57/0.52  0.57/0.52
+#       reduction deleted                   0.86/0.82  0.84/0.81
+#       reduction's scale loads deleted     0.91/0.88  0.91/0.88
+#       reduction chain broken into 4 ILP   0.91/0.90  0.92/0.90
+#       simd_sum (this variant)             0.87/0.84  0.85/0.84
+#
+# i.e. the reduction owns ~19% of the dispatch and simd_sum recovers ~16 of
+# those 19 points -- it lands essentially ON the "reduction is free" floor.
+# The chain is LATENCY, not shuffle throughput: breaking it into 4 independent
+# partials recovers most of the same ground.
+#
+# This also explains an asymmetry arc 2 recorded but did not attribute: the
+# NGRP=10 down_proj, which is DECLINED from this simd layout and runs
+# thread-per-row with NO reduction, was the FASTEST shape per code byte
+# (95.8 GB/s vs gate's 71.8). The layout it is excluded from is the layout
+# carrying the reduction tax.
+#
+# WHY IT IS OFF. simd_sum re-associates the sum into a tree and un-fuses the
+# scale multiply, so the last mantissa bit can move. Measured on real tensors:
+# 0.05-0.16% of output elements differ, every one of them by ONE half-ULP.
+# Against an independent fp32 mlx reference the two are a TIE -- identical max
+# error to every printed digit, identical mean error, and which one is closer
+# flips between shapes. So this is a last-place-bit tie, not a loss of
+# accuracy. It still is not bit-identity, and bit-identity is the gate, so
+# turning it on is a POLICY decision (relax the gate to 1-ULP equivalence plus
+# a ppl/KL re-referee and an end-to-end A/B) that this arc does not take
+# unilaterally. VQ_D8_SIMDSUM=1 dispatches it so the finding stays reproducible.
+#
+# Untouched by construction: the d2/K256 layers 0-1 never reach this kernel,
+# and the NGRP=10 down_proj is declined from the simd layout by the NGRP>=32
+# gate, so neither can regress.
+_SRC_FUSED_PACKED_D8_SIMD_SS = _SRC_FUSED_PACKED_D8_SIMD.replace(
+    """        const int gmax = min(32, NGRP - b * 32);
+        for (int i = 0; i < gmax; ++i)
+            acc = fma((float)srow[b * 32 + i],
+                      simd_shuffle(gacc, (ushort)i), acc);
+""",
+    """        {
+            const int gg = b * 32 + (int)lane;
+            const float sv = (gg < NGRP) ? (float)srow[gg] : 0.0f;
+            acc += simd_sum(sv * gacc);
+        }
+""")
+assert _SRC_FUSED_PACKED_D8_SIMD_SS != _SRC_FUSED_PACKED_D8_SIMD, (
+    "the packed-d8 simd reduction text drifted; the simd_sum twin did not "
+    "apply and would silently be a duplicate of the base kernel")
+
+_D8_SIMDSUM = os.environ.get("VQ_D8_SIMDSUM", "0") != "0"
+
+
 # REGISTER-BUFFERED twin of _SRC_FUSED_PACKED_D8_SIMD (2026-09-02).
 #
 # The kernel above is LOAD-ISSUE bound, not bandwidth bound: it moves 61-97
@@ -1918,6 +1983,11 @@ def _fused(x, eidx, codes, codebook, scales, pack_bits=0, simd=None,
                 if _d8_regbuf_ok(G):
                     name = f"vq_fused_packed{pack_bits}_d8_simd_rb"
                     src = _SRC_FUSED_PACKED_D8_SIMD_RB
+                elif _D8_SIMDSUM:
+                    # arc 4: 1.15-1.23x, NOT bit-identical (1 half-ULP on
+                    # 0.05-0.16% of elements). Off by default; see the source.
+                    name = f"vq_fused_packed{pack_bits}_d8_simd_ss"
+                    src = _SRC_FUSED_PACKED_D8_SIMD_SS
                 else:
                     name = f"vq_fused_packed{pack_bits}_d8_simd"
                     src = _SRC_FUSED_PACKED_D8_SIMD

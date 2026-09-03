@@ -1535,3 +1535,253 @@ measurements pointing at it and no competing explanation left standing.
        stub ablation says owns 56% of the Flash-Next gap and which no kernel
        work can reach;
     3. the 1.07 ms/token of module glue found in §4, unchased, cheap to try.
+
+## 2026-09-02 — KERNEL ARC 4: the "load-issue bound" diagnosis is WRONG. The reduction is the second cost centre, and the only lever that reaches it costs bit-identity.
+
+Fourth kernel arc on the packed-d8 expert kernel. Two targets were briefed:
+depth-2 software pipelining (build it, it's cheap) and an AQLM-style LUT
+precompute (model it first, build only if the model says it can win). Depth-2
+is a MEASURED NULL. The LUT is REFUTED ON PAPER and was not built. But the
+ablation run to explain the null overturned the diagnosis all three prior arcs
+were working from, and turned up a real 1.16-1.20x that this arc declines to
+ship because it fails the bit-identity gate.
+
+Instrument: `scripts/bench_d8_inner.py` (committed; every arm reproducible).
+Real L20/L35 2.1bpw tensors, expert axis sliced to E=64, ~1 GiB resident, read
+READ-ONLY. NO MODEL LOADED. Arc-standard harness: JIT-warm, interleaved
+A,B,A,B arms, 50 dispatches per timed window, min over 13-15 reps with median
+alongside, `mx.eval` on the FULL output list. Box was quiet; base gate_proj at
+N=10 reproduced 36-38 us across four independent runs, which is what confirms
+the harness. Note that is well under the 49.1 us the profiling arc recorded --
+that number predates rows=8; the shipped kernel now moves 111-125 GB/s of code
+stream, not 61-97. The gap to affine's ~290 is 2.4x, not 3-5x.
+
+### 1. DEPTH-2 SOFTWARE PIPELINING: BIT-IDENTICAL, AND NULL.
+
+Three forms built, all bit-identical on real gate/up tensors at N=1/5/10/20
+(asserted before any timing; the script refuses to print timings otherwise):
+
+  p2rot   depth-2, rotation form -- prefetch code i+1 into a second register,
+          rotate, loop NOT unrolled (arc 3 measured the unroll alone at 1.56x
+          slower, so the unroll is the thing to avoid);
+  p2pp    depth-2, explicit unroll-by-2 with compile-time ping/pong registers,
+          i.e. exactly the form the brief prescribed;
+  p3rot   depth-3, two codes in flight.
+
+Real gate_proj and up_proj, min/median us, ratio to base (>1 = SLOWER):
+
+    N     p2rot        p2pp        p3rot
+    5   1.02/1.04   1.22/1.11   1.05/1.01
+   10   1.00/1.02   1.03/1.08   1.04/1.13
+   20   1.00/1.00   1.05/1.04   1.04/1.06
+
+Nothing outside noise, and the two forms that touch the loop STRUCTURE (p2pp,
+p3rot) are consistently a shade worse. Reading: the Metal compiler already
+hoists the next iteration's `VQ_CODE` load out of the rolled loop -- the
+address is loop-invariant-computable from `crow` and `j` and nothing aliases
+it -- so the hand-written prefetch is a no-op the compiler had already done,
+while the explicit unroll re-introduces the register pressure arc 3 measured.
+NEGATIVE BANKED. Kept in the script, not in the kernel.
+
+### 2. THE ABLATION: no single load owns the cost. The diagnosis was wrong.
+
+Depth-2 being null is only interesting against a claim that the loop is a
+dependent-load chain, so the loop was taken apart instruction by instruction.
+Every arm below is WRONG ON PURPOSE -- each deletes work, so each is a LOWER
+BOUND on any kernel that still has to do what it removed. Fraction of base,
+min (median), real L20 tensors:
+
+    arm                                  gate N=10    gate N=20    up N=20
+    nocode     code stream never read    0.81 (0.90)  0.78 (0.79)  0.79 (0.81)
+    nogather   codebook never read       0.78 (0.79)  0.76 (0.79)  0.77 (0.77)
+    noxs       x tile never read         0.80 (0.83)  0.76 (0.76)  0.77 (0.77)
+    hotgather  gather to 2 entries       0.90 (0.90)  0.88 (0.92)  0.90 (0.89)
+    warmgather gather to 128 entries     1.00 (1.02)  0.98 (0.97)  0.99 (1.01)
+    noinner    whole code loop deleted   0.57 (0.61)  0.51 (0.54)  0.52 (0.52)
+    nored      whole reduction deleted   0.83 (0.87)  0.82 (0.86)  0.81 (0.81)
+    noscale    reduction's 32 scale
+               loads deleted             0.90 (0.95)  0.86 (0.85)  0.88 (0.89)
+    redilp     reduction chain split
+               into 4 ILP partials       0.91 (0.92)  0.90 (0.92)  0.90 (0.90)
+
+TWO FINDINGS, and the first kills the standing story.
+
+  (a) DELETING ANY ONE OF THE THREE LOADS BUYS ONLY ~20-24%. If the loop were
+      a dependent-load chain with one culprit, removing that culprit would
+      collapse it. Instead all three -- the packed code word, the codebook
+      gather, the threadgroup x read -- cost about the same, and the whole
+      inner loop is only 43-49% of the dispatch. There is no single load to
+      fix, which is why three arcs of load-focused work (register buffering,
+      load width, codebook residency) all landed on nothing. The kernel is
+      ISSUE-throughput bound across the entire loop body, not latency-bound
+      on one chain. The prize for ANY inner-loop instruction-scheduling trick
+      is bounded at ~20%, and depth-2 already spent that budget for zero.
+
+  (b) `warmgather` SETTLES THE RESIDENCY QUESTION AT THE INSTRUCTION LEVEL.
+      Shrinking the gather's working set 128x (16384 entries -> 128, 256 KiB
+      -> 2 KiB) is a 0-2% effect. The profiling arc measured 8% for the same
+      thing at the tensor level and called codebook residency refuted; this
+      confirms it with the arithmetic held fixed. The codebook gather is
+      effectively FREE. Remember this for section 3.
+
+### 3. THE LUT (AQLM-STYLE) PRECOMPUTE: REFUTED ON PAPER, NOT BUILT.
+
+The brief asked for the arithmetic-intensity model BEFORE any code. Here it
+is, and it says don't. Per (expert, token, tensor); K=16384, d=8; gate/up are
+IN=2560 OUT=640 NSUB=320, down is IN=640 OUT=2560 NSUB=80.
+
+Proposal: LUT[k][s] = dot(codebook[k], x[8s:8s+8]) for every code k and every
+d-wide input slice s; each output row's contribution becomes scale * LUT[code],
+one gather instead of gather + 8-wide dot.
+
+  A. REUSE FACTOR IS THE WHOLE ARGUMENT AND IT IS BELOW 1.
+     LUT entries built:  K * NSUB
+     LUT entries read:   OUT * NSUB
+     reuse = OUT / K  =  640/16384 = 0.039 (gate/up)
+                      = 2560/16384 = 0.156 (down)
+     So 96.1% (gate/up) and 84.4% (down) of the table is computed and NEVER
+     READ. Break-even needs OUT >= K, i.e. OUT >= 16384. The largest shipped
+     OUT in the fleet is the 397B's 4096 -- still 4x short. AQLM's LUT works
+     because its K is small (256) against large OUT; at K=16384 the identical
+     structure runs backwards.
+
+  B. ARITHMETIC. Precompute costs K*NSUB*8 MACs against the matvec's own
+     OUT*NSUB*8:
+         gate/up  41.9M  vs  1.64M   = 25.6x the entire matvec it accelerates
+         down     10.5M  vs  1.64M   =  6.4x
+     Not a tie-break -- an order of magnitude, in the wrong direction.
+
+  C. BYTES AND THE THREADGROUP BUDGET. The fp16 LUT is K*NSUB*2 B = 10.5 MB
+     (gate/up) / 2.6 MB (down) of INTERMEDIATE traffic per token per tensor,
+     against a 4.1 MB code stream for all 10 experts. It cannot be staged: the
+     32 KiB threadgroup budget holds K=16384 fp16 EXACTLY, i.e. one slice's
+     column and no room for x. So it tiles over s with 320 (resp. 80) passes,
+     each re-reading the code stream column-wise -- strided and uncoalesced
+     where the shipped kernel reads it row-contiguous. Tiling K instead does
+     not help: the code stream is then re-read once per K tile.
+
+  D. AND IT OPTIMISES A COST THAT DOES NOT EXIST. The LUT's purpose is to
+     replace the codebook gather. Section 2(b) measured that gather at 0-2%.
+
+  => NOT BUILT. Three independent reasons, any one sufficient. Reopen only
+     for a geometry with OUT >= K, which no artifact in the fleet has.
+
+### 4. THE REDUCTION IS THE UN-CHARGED COST CENTRE (~19%).
+
+The structure nobody had looked at. Each block closes with
+
+    for (i = 0; i < 32; ++i)
+        acc = fma(srow[b*32+i], simd_shuffle(gacc, i), acc);
+
+-- 32 SEQUENTIALLY DEPENDENT fp32 fmas and 32 scale loads, executed
+redundantly by all 32 lanes, against only SPG = G/8 = 8 iterations of actual
+code work. At NGRP=40 that is 64 chained fmas per output row. `nored` prices
+it at 18-19% of the dispatch; `redilp` shows it is CHAIN LATENCY, not shuffle
+throughput (breaking the chain into 4 independent partials recovers most of
+the same ground); `noscale` prices its loads at 10-14%.
+
+This retro-explains an asymmetry arc 3 recorded but did not attribute: the
+NGRP=10 down_proj, DECLINED from the simd layout by the NGRP>=32 gate and
+running thread-per-row with NO reduction at all, was the FASTEST shape per
+code byte (95.8 GB/s vs gate's 71.8; re-measured here at 144-167 GB/s vs
+gate/up's 112-125). The layout it is excluded from is the layout carrying the
+reduction tax. Arc 3 read that as "the short IN shortens the latency chain" --
+half right; the other half is that it never pays the reduction.
+
+TWO BIT-IDENTICAL ATTEMPTS ON IT, BOTH NULL. `sshuf` / `sshuf_h` replace the
+32 device scale loads with `simd_shuffle` of a per-lane scale -- the value is
+exactly `(float)srow[b*32+i]` and the fma order is untouched, so bit-identity
+is by construction and is asserted. Measured 0.99-1.03 (min) on both shapes at
+every N. The scale loads are uniform/broadcast and were already cheap; the
+cost is the CHAIN, and the chain cannot be shortened without re-associating.
+
+### 5. THE LEVER THAT WORKS, AND WHY IT IS NOT SHIPPED.
+
+`simd_sum` replaces the 32-step chain with one reduction. Through the REAL
+dispatcher, VQ_D8_SIMDSUM off -> on, real L20 tensors, us/dispatch min/med and
+code-stream GB/s:
+
+    shape              N      off          on       GB/s off -> on   speedup
+    gate_proj (NGRP=40) 1  13.2/14.3   11.7/13.4      31 ->  35     1.13/1.07
+                        5  22.7/24.7   19.9/20.6      90 -> 103     1.14/1.20
+                       10  36.4/38.6   30.8/33.2     113 -> 133     1.18/1.16
+                       20  65.6/67.4   55.2/56.0     125 -> 149     1.19/1.20
+    up_proj   (NGRP=40) 5  22.4/23.4   18.8/20.5      92 -> 109     1.19/1.14
+                       10  36.7/37.9   31.7/32.4     112 -> 129     1.16/1.17
+                       20  65.7/67.4   54.9/57.0     125 -> 149     1.20/1.18
+    down_proj (NGRP=10) 10  33.4/34.5   34.0/36.1     144 -> 141    0.98/0.96
+                       20  57.5/59.2   57.8/59.0     168 -> 167    0.99/1.00
+
+Positive on min AND median at every N>=5 on both simd shapes, on three layers
+(L20 gate/up, L35 gate). down_proj is flat BY CONSTRUCTION -- NGRP=10 declines
+it from the simd layout, so it never reaches this kernel -- and that it
+measures flat is the control that the harness is attributing correctly. The
+d2/K256 layers 0-1 cannot regress either; they never reach this kernel.
+It lands essentially ON the `nored` floor: simd_sum recovers ~16 of the ~19
+available points.
+
+IT IS NOT BIT-IDENTICAL, AND THAT IS WHY IT IS OFF. simd_sum re-associates the
+sum into a tree and un-fuses the scale multiply. Measured on real tensors:
+
+    shape/N      differing elements    max |delta|
+    gate  N=10     5 / 6400  (0.08%)    1.22e-04
+    gate  N=20     7 /12800  (0.05%)    6.10e-05
+    up    N=10     3 / 6400  (0.05%)    1.53e-05
+    up    N=20     7 /12800  (0.05%)    1.53e-05
+
+Every difference is ONE half-ULP. And scored against an independent fp32
+reference computed in mlx (codes unpacked host-side, no kernel involved), the
+two arms are a TIE -- identical max error to every printed digit, identical
+mean error, and which one is closer FLIPS between shapes (base closer on gate,
+simd_sum closer on up). This is a last-place-bit tie, not a loss of accuracy;
+a tree sum of 40 fp32 partials is normally the more accurate one.
+
+But "ties against fp32" is not "bit-identical", and bit-identity is this arc
+family's gate. Turning it on is a POLICY decision -- relax the gate to 1-ULP
+equivalence plus a ppl/KL re-referee and an A-B-A end-to-end -- and this arc
+does not take that unilaterally on a shipped fleet. SHIPPED OFF, behind
+VQ_D8_SIMDSUM=1, exactly as arc 3 kept its regbuf negative: reproducible
+without a rebuild. Two tests pin it (off by default; agrees within one ULP).
+
+  PROJECTED VALUE IF THE GATE IS RELAXED, so the decision has a number: the
+  stub ablation put experts at 9.84 ms of a 56.8 ms token, which rows=8 cut to
+  ~7.9 ms of ~55.7. gate+up are ~69% of expert dispatch time (down is
+  untouched), so 1.17x on that share is ~0.8 ms/token, about +1.4-1.8%
+  end-to-end -- and more under MTP, whose every step is a T=2 forward where
+  the measured win is 1.19-1.20x. Modest, real, and NOT worth relaxing a
+  correctness gate for without someone deciding that deliberately.
+
+### VERDICT
+
+Two briefed targets, two negatives -- but the arc's actual output is that the
+diagnosis three arcs shared was wrong. "Load-issue bound, ~4 dependent loads
+per code" predicted that fixing the load pattern would pay; four attempts at
+that (register buffering, load width, codebook residency, and now depth-2
+pipelining) have all returned nothing, and section 2 shows why: no single load
+owns more than ~24%, the whole inner loop is under half the dispatch, and the
+gather the last three arcs were fighting over is free. The honest model is:
+~45% inner loop (issue-throughput bound across three roughly equal loads),
+~19% reduction chain, ~36% tile staging, barriers and launch.
+
+  SHIPPED: nothing on by default. `_SRC_FUSED_PACKED_D8_SIMD_SS` and
+  `scripts/bench_d8_inner.py` are committed as the evidence, the simd_sum
+  kernel gated OFF. The default dispatch path is byte-for-byte unchanged --
+  the existing 95-test expert suite passes unmodified, plus 4 new tests.
+
+  PENDING GATE: none, because nothing ships. If VQ_D8_SIMDSUM is ever turned
+  on it needs (1) a ppl/KL re-referee on the 2.1bpw, (2) an A-B-A end-to-end
+  on the rebundled artifact, (3) a decision to accept 1-ULP equivalence in
+  place of bit-identity, in that order.
+
+  THE LIVE LEVERS, re-ranked by this arc's measurements:
+    1. the 1.07 ms/token of module glue in `VQSwitchLinear.__call__` (arc 3
+       section 4, still unchased) -- now the LARGEST unclaimed kernel-adjacent
+       item, and bigger than the simd_sum prize it would compose with;
+    2. the build-recipe change -- non-expert tensors below 8-bit -- which owns
+       56% of the Flash-Next gap and which no kernel work can reach;
+    3. simd_sum, IF someone relaxes the bit-identity gate (+1.4-1.8%);
+    4. the ~36% of the dispatch in tile staging/barriers/launch, which no arc
+       has yet attacked and which is now the single largest un-probed slice of
+       the kernel. A layout that stages x once for more rows, or drops a
+       barrier, is the obvious first probe -- and unlike everything in
+       sections 1-3 it has not been measured at all.
