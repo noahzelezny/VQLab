@@ -1360,3 +1360,178 @@ sync-bound, not weight-byte-bound, for the VQ builds. The quality side
 is unchanged (our 2.6bpw beats their 2.6bit on both corpora, published);
 cards get the honest split: they win tok/s, we win quality-per-byte,
 and the tax is the kernel arc's target number.
+
+## 2026-09-02 — DISPATCH-REDUCTION ARC: the launch floor is ~5 us, not 14. Hypothesis REFUTED, both cluster fingerprints dissolve.
+
+Third kernel arc of the day, opened on two independent fingerprints that both
+smelled like a per-DISPATCH latency floor rather than a bandwidth wall:
+
+  1. the packed-d8 kernel sits at 61-97 GB/s of the M3 Ultra's 819 with the
+     absolute floor unexplained (register-buffering refuted, occupancy banked);
+  2. on the cluster, VQ 2.6bpw (122 GiB) and VQ 3.1bpw decode at the SAME speed
+     (20.3 vs 20.4 tok/s, RDMA tensor) while affine 2.6bit at matched bytes runs
+     1.45x faster — "speed not scaling with bytes".
+
+A decode step dispatches ~144 VQ kernels (48 layers x gate/up/down). At the ~14
+us/dispatch an earlier arc reported that is ~2 ms/token and worth chasing.
+
+EVERY ARM BELOW IS NEGATIVE. Nothing shipped. Both fingerprints have simpler
+explanations that are measured, not argued.
+
+Instrument: `scripts/bench_dispatch_floor.py` (kept in tree so the negative is
+reproducible). Real layer-20 2.1bpw tensors (d8/K16384 14-bit packed — the 96%
+geometry), expert axis sliced to E=64, ~1 GiB resident. NO MODEL LOADED (both
+boxes ran a validation queue). Arc-standard methodology: JIT-warm, interleaved
+A,B,A,B arms, min over 15 reps with median alongside, `mx.eval` on the FULL
+output list.
+
+### 1. THE LAUNCH FLOOR IS ~5 us DEPENDENT / ~3.5 us INDEPENDENT
+
+Trivial kernel (one store), chain of M, us per dispatch, min/median:
+
+     grid      M   dependent   independent
+        1    144    4.36/5.41    3.89/4.68
+        1    288    4.75/5.21    3.31/4.18
+     1024    288    5.01/5.24    3.72/4.28
+    65536    288    6.63/8.07    3.33/4.11
+
+The dependent number (~5 us) is the honest one — decode IS a dependency chain.
+It is flat in grid size across 1 -> 65536 threads, i.e. it is launch cost.
+
+WHERE THE "14 us" CAME FROM. It is the same quantity measured at small M, where
+the ~140-200 us eval round-trip has not amortised: M=8 reports 20 us/launch,
+M=48 reports 5.2, M=288 reports 2.6. The prior arc's 14 us was a submit-overhead
+artifact of the dead-work trap it documented, not a per-launch cost. Correcting
+it is what kills this arc's premise.
+
+### 2. MULTIPLY IT OUT: the launch budget is ~1% of the token
+
+    dispatches/token   at 5.0 us   share of 56.8 ms/tok   share of 19.7 ms gap
+      144 (VQ only)      0.72 ms          1.3%                  3.7%
+      304 (+ ~160 PLE)   1.52 ms          2.7%                  7.7%
+      600 (everything)   3.00 ms          5.3%                 15.2%
+
+Even at a deliberately generous 600 dispatches per token, pure launch overhead
+cannot account for the 19.7 ms gap to stock affine 3-bit. THE DISPATCH
+HYPOTHESIS IS REFUTED on this box.
+
+Corroborating, from the same run: if decode were dispatch-bound, per-dispatch
+cost would be flat in N. It is not — real gate_proj at M=48 runs 11.1 us at N=1
+and 37.2 us at N=10, a 3.4x. The work is the cost.
+
+WHERE THE FLOOR ACTUALLY IS. Decomposing one real gate_proj dispatch at N=10
+(45.1 us dependent-chain cost at M=48):
+
+    ~5 us   launch                      (arm A)
+    ~2 us   kernel fixed cost above launch — the OUT sweep intercepts at 7.7 us
+            at OUT=8 and rises linearly to 36.6 at OUT=640
+    ~5 us   wave-drain / serialisation premium on real work: the dependent
+            arm costs 1.27x the independent one at M=48 (49.2 vs 38.7 us),
+            and only ~5 of that ~10 us delta is launch
+    ~33 us  ACTUAL WORK — the load-issue bound the d8 arc already located
+
+So ~16% of a dispatch is fixed cost and ~84% is the kernel doing its job badly.
+The frontier is still the 61-97 GB/s load-issue ceiling, unchanged.
+
+### 3. CANDIDATE (a) — FUSE gate_proj + up_proj: NULL AT ITS OWN UPPER BOUND
+
+Chain of 46 real layer-shaped MLP steps (gate | up | SwiGLU | down), dependent
+layer to layer. The fused arm concatenates codes and scales along OUT into one
+OUT=1280 dispatch — exactly the geometry a real fusion would build at load
+time — but reuses gate's codebook for BOTH halves, so it is charged nothing for
+the two-codebook selection a real fusion needs. Upper bound, min ms (median):
+
+       N    unfused        fused        saving
+       1    2.815(2.920)   2.809(2.903)   +0.2% [med +0.6%]
+       5    4.188(4.279)   4.249(4.359)   -1.4% [med -1.9%]
+      10    5.794(5.890)   5.873(6.011)   -1.3% [med -2.1%]
+      20    9.201(9.320)   9.269(9.358)   -0.7% [med -0.4%]
+
+Zero to slightly negative at every N, including the decode point N=10.
+
+WHY, AND THIS IS THE STRUCTURAL POINT: gate and up are INDEPENDENT of each
+other, so they already overlap. The MLP's dependency chain is depth-2 per layer
+(gate‖up, then down), not depth-3. Fusing them removes a LAUNCH but not a
+SERIALISATION STEP, and per §2 a launch is worth 5 us against a 5.8 ms chain.
+The 46 launches saved are worth 0.23 ms in principle and measure as nothing.
+NOT BUILT — and note the real version would also have to solve the two
+codebooks (gate and up codebooks are NOT identical in this artifact; verified
+with mx.array_equal), i.e. a kernel change and a load-time repack, for a prize
+its own upper bound says is zero.
+
+### 4. CANDIDATE (b) — mx.compile / graph-level batching: NULL
+
+Same 46 layer-steps, top_k=10, one token's expert path. Three arms over the
+same work, min ms (median):
+
+    raw _fused calls                 5.837 (5.939)
+    VQSwitchLinear.__call__          6.903 (7.114)   +1.066 ms
+    the same under mx.compile        6.803 (6.927)   +0.966 ms
+
+mx.compile buys 1.4%, inside this harness's variance. MLX does NOT coalesce the
+VQ call sequence and cannot: `mx.fast.metal_kernel` dispatches are opaque to
+the compiler, so there is nothing for it to fuse across. Measured rather than
+assumed, as the arc brief asked.
+
+BYCATCH WORTH KEEPING: the module glue costs 1.07 ms/token (18% on top of the
+kernels) — the broadcast / reshape / astype dance in `VQSwitchLinear.__call__`,
+on 144 modules. That is a real, un-chased number, larger than the entire launch
+budget for the VQ path, and it is NOT dispatch (compile does not touch it).
+Nobody has tried to remove it. It is the one live lever this arc turned up.
+
+### 5. CANDIDATE (c) — M1_KERNEL_PLAN.md dispatch fusion: nothing to test
+
+The plan has no dispatch-fusion item beyond the per-module dispatch it already
+describes; its only "launch" mention is the note that M=1 microbench numbers are
+launch-overhead jitter — which §1 now quantifies.
+
+### 6. THE CLUSTER FINGERPRINT DISSOLVES: it was never a latency floor
+
+"VQ 2.6 and 3.1 decode at the SAME speed despite 32 GiB size difference" needs
+no floor to explain it. An MoE decode step reads all the dense weights but only
+top-8 of 512 experts, so TOTAL size is a poor predictor of decode cost.
+Per-token reads, from safetensors headers only (`scripts/per_token_bytes.py`,
+no model load):
+
+                        dense    experts/token   PER-TOKEN    total
+    VQ 2.6bpw          7.320 GiB   1.797 GiB      9.116 GiB  122.3 GiB
+    VQ 3.1bpw          7.322 GiB   2.131 GiB      9.453 GiB  143.7 GiB
+    affine 2.6bit      7.838 GiB   1.761 GiB      9.599 GiB  120.6 GiB
+
+    VQ3.1 / VQ2.6 per-token = 1.037   (measured decode 20.4/20.3 = 1.005)
+    affine / VQ2.6 per-token = 1.053  (measured decode 29.9/20.3 = 1.47)
+
+The two VQ rungs differ by 21 GiB on disk but only 3.7% PER TOKEN, and decode
+at 0.5% apart. Size-invariance is arithmetic, not a floor. Meanwhile affine
+reads 5.3% MORE bytes per token and still runs 1.45x faster — so the ~1.5x VQ
+tax is an ACHIEVED-BANDWIDTH deficit at matched traffic, which is exactly the
+61-97 vs ~290 GB/s the d8 arc measured. Same wall, third sighting, no new
+mechanism.
+
+(Note: the header sum makes the 3.1bpw 143.7 GiB where the matched-bytes entry
+above says 154; the ratio is unaffected, but the 154 should be re-sourced.)
+
+### VERDICT AND WHAT IS LEFT
+
+A third measured negative, and the cleanest of the three: the arc's premise was
+built on a mis-measured constant, and correcting the constant removed the
+question. The VQ decode tax is NOT per-dispatch. It is the packed-d8 kernel's
+load-issue ceiling, which now has all three of this session's independent
+measurements pointing at it and no competing explanation left standing.
+
+  NOTHING SHIPPED — no kernel or dispatcher change survived, because none was
+  built past the measurement that killed it. `scripts/bench_dispatch_floor.py`
+  and `scripts/per_token_bytes.py` are committed as the reproducible evidence.
+  No bit-identity gate was run, because no kernel changed; the fusion arm is a
+  cost-only upper bound and is labelled as such in the script.
+
+  PENDING GATE: none for this arc — there is no change to validate end-to-end.
+  The rows=8 end-to-end gate from the prior arc is already closed (+3.6%).
+
+  THE LIVE LEVERS, in the order the measurements rank them:
+    1. the packed-d8 load-issue ceiling (~84% of a dispatch; unbroken after
+       three attempts: register buffering, load width, codebook residency);
+    2. the build-recipe change — non-expert tensors below 8-bit — which the
+       stub ablation says owns 56% of the Flash-Next gap and which no kernel
+       work can reach;
+    3. the 1.07 ms/token of module glue found in §4, unchased, cheap to try.
