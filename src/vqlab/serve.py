@@ -48,6 +48,7 @@ is the useful default for a model whose runtime is the hard part.
 """
 import argparse
 import logging
+import os
 import sys
 
 import mlx.core as mx
@@ -82,13 +83,23 @@ def _make_stream_generate(real_stream_generate):
     """Route through the MTP loop when a head is loaded; else stock mlx-lm."""
     from mlx_lm.generate import GenerationResponse
 
-    from vqlab.mtp import mtp_stream_generate
+    from vqlab.mtp import mtp_stream_generate, prefill_chunk_size
 
     def stream_generate(model=None, tokenizer=None, prompt=None,
                         max_tokens=256, sampler=None, logits_processors=None,
                         prompt_cache=None, draft_model=None,
                         num_draft_tokens=None, prompt_progress_callback=None,
-                        prefill_step_size=2048, **kw):
+                        prefill_step_size=None, **kw):
+        # The chunk width bounds the prefill memory transient, which is what
+        # OOMs a fat trunk on a long prompt. mlx-lm's server does not expose
+        # it, so VQLAB_PREFILL_CHUNK is the operator's only knob here and it
+        # WINS over the caller's value -- it is set precisely when the
+        # built-in width has already been observed to be too large. It is
+        # applied to the stock path too: the spike is the runtime's, not the
+        # MTP loop's.
+        env = (os.environ.get("VQLAB_PREFILL_CHUNK") or "").strip()
+        prefill_step_size = prefill_chunk_size(
+            None if env else prefill_step_size)
         head = _HEAD.get("head")
         if head is None or draft_model is not None:
             # No head, or the operator asked for stock draft-model

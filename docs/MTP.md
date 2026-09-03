@@ -162,6 +162,20 @@ insufficient. What is established is that it is not the head: seeding is
 controlled separately above. Total MTP prefill overhead against stock mlx-lm
 is 7-15%, of which seeding is the smaller half.
 
+**Prefill is chunked, and the head is seeded inside the chunk loop.** The
+chunk width is `prefill_step_size` (default 2048, override
+`VQLAB_PREFILL_CHUNK`); it exists to bound the prefill MEMORY TRANSIENT, which
+is what OOMs a fat trunk on a long prompt (GLM-5.3: 102G of weights on a 128G
+box). Each chunk is forced with `mx.eval` on the cache state and the captured
+hidden, then `mx.clear_cache()` — the same semantics exo's generator uses.
+Because the head's input at position j is `(h_j, x_{j+1})` for every prompt
+position, the head is advanced PER CHUNK over `(h_i..h_{end-1},
+x_{i+1}..x_{end})` rather than over a concatenation of every chunk's hidden
+states: `head.advance` appends to the head cache in order, so the two are
+identical, and the per-chunk form keeps nothing of size O(prompt) resident.
+The width changes memory only, never the tokens
+(`tests/test_mtp_prefill.py`).
+
 **The VQ prefill tax remains unquantified.** Decoding codebooks costs more per
 token at prefill than an affine kernel. The obvious comparison —
 Flash-Next-VQ-2.1bpw (46G) against the stock affine 4-bit (96G) — is
