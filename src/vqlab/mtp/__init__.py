@@ -11,12 +11,20 @@ Adding a model family is a `FamilySpec` in registry.py plus a head module;
 see that docstring. `vqlab mtp-pack` builds a sidecar, `vqlab mtp-bench`
 measures the speedup, the acceptance and the near-tie divergence gate.
 """
-from .loop import MTPResponse, load_mtp_head, mtp_generate, mtp_stream_generate
+from .loop import (
+    DEFAULT_PREFILL_CHUNK,
+    MTPResponse,
+    load_mtp_head,
+    mtp_generate,
+    mtp_stream_generate,
+    prefill_chunk_size,
+)
 from .registry import FAMILIES, FamilySpec, register, resolve
 from .sampling import Distribution, make_distribution, rejection_correct
 
 __all__ = [
     "MTPResponse", "load_mtp_head", "mtp_generate", "mtp_stream_generate",
+    "prefill_chunk_size", "DEFAULT_PREFILL_CHUNK",
     "FAMILIES", "FamilySpec", "register", "resolve",
     "Distribution", "make_distribution", "rejection_correct",
 ]
