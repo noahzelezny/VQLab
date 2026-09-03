@@ -86,8 +86,8 @@ def main():
         from mlx_vlm.utils import load_model
         model = load_model(pathlib.Path(a.model), lazy=True)
         model = getattr(model, "language_model", model)
-    arch = importlib.import_module(type(model.model).__module__)
     spec = registry.resolve(model, a.family)
+    arch = spec.arch_module(model)
     cls = spec.head_cls()
     print(f"family {spec.name} -> {spec.head}", flush=True)
 
