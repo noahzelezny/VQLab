@@ -29,6 +29,7 @@ import pathlib
 import sys
 
 import mlx.core as mx
+from mlx.utils import tree_map
 
 sys.path.insert(0, str(pathlib.Path(__file__).parent))
 from vqlab.mtp import registry
@@ -47,12 +48,24 @@ def main():
     ap.add_argument("--fc-orders", default="eh,he")
     ap.add_argument("--h-sources", default="pre_norm,post_norm")
     ap.add_argument("--out", default=None)
+    ap.add_argument("--head-dtype", default="bfloat16",
+                    choices=("bfloat16", "float16", "float32"),
+                    help="activation dtype inside the head for this batched "
+                         "scoring pass; float32 cannot run a long-sequence "
+                         "SDPA at head_dim 256 on Metal")
     a = ap.parse_args()
 
     from mlx_lm.utils import load
-    model, tok = load(a.model, lazy=False, trust_remote_code=True)
+    try:
+        model, tok = load(a.model, lazy=False, trust_remote_code=True)
+    except TypeError:                    # older mlx-lm: no trust_remote_code
+        model, tok = load(a.model, lazy=False)
     spec = registry.resolve(model, a.family)
     arch = spec.arch_module(model)
+    # Vision-capable artifacts (the 397B's custom_model.Model) have no
+    # `.model` of their own; the core -- and the norm we capture -- hangs off
+    # `.language_model`. Same walk arch_module does.
+    core = getattr(getattr(model, "language_model", model), "model")
     print(f"family {spec.name}; capture {spec.capture!r}; "
           f"resident {mx.get_active_memory() / 2**30:.2f} GiB", flush=True)
 
@@ -65,7 +78,7 @@ def main():
     nxt = mx.array([ids[1:]])             # token t+1 at every position
 
     # ---- one trunk pass: hidden row + the trunk's own greedy choice ------
-    with capture_input(model.model, spec.capture) as get_h:
+    with capture_input(core, spec.capture) as get_h:
         logits = model(inp)
         mx.eval(logits)
         h = get_h()
@@ -92,6 +105,26 @@ def main():
         name = pathlib.Path(path).name
         print(f"=== {name} ===", flush=True)
         head = spec.head_cls().from_sidecar(model, arch, path)
+        if a.head_dtype != "float32":
+            # The head's norms are stored float32, so every activation in it
+            # is float32 -- fine at T=1, but a float32 SDPA over hundreds of
+            # positions at head_dim 256 asks for 53 KiB of Metal threadgroup
+            # memory against a 32 KiB limit and fails to load the kernel.
+            # This is a probe-only shape (real decode is T<=2); cast the
+            # head's own tensors instead of shrinking the window. Head
+            # precision cannot change trunk output -- 6-bit and bf16 measured
+            # identical acceptance -- so this does not bias the number.
+            dt = getattr(mx, a.head_dtype)
+            for n in ("norm_e", "norm_h", "norm_out"):
+                getattr(head, n).weight = getattr(head, n).weight.astype(dt)
+            head.fc = head.fc.astype(dt)
+            # The block's own norms are float32 too (load_graft casts them to
+            # apply the delta shift), and one float32 norm upcasts the whole
+            # attention again. Quantized weights (uint32) are left alone.
+            head.block.update(tree_map(
+                lambda x: x.astype(dt) if x.dtype == mx.float32 else x,
+                head.block.parameters()))
+            mx.eval(head.block.parameters())
         res = {}
         for fc_order in orders:
             for h_source in sources:

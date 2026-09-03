@@ -2205,3 +2205,73 @@ not an engineering gap.
 read-only against the 2.1bpw artifact's L20 tensors, no model loaded.
 `pytest tests/` unaffected: 200 passed, 11 skipped, unchanged from arc 6 (no
 src/ file touched by this arc).
+
+## 2026-09-02 — 397B MTP head: wiring proven at 0.73 acceptance on the 2.2bpw, first try, no new head module needed
+
+The head this arc was going to write ALREADY EXISTED. `mtp_head_qwen35.py`
+was authored against the 397B's own key set (its docstring says so) and
+its unfused-expert branch — 512 experts x 3 projections, stacked into the
+SwitchGLU layout — was written for exactly this checkpoint. `qwen3_5_moe`
+was already a registered FamilySpec. What was missing was the artifacts and
+the evidence, not the code: every wiring default in that module had been
+measured on the DENSE 27B and merely assumed to carry to the 397B.
+
+HEAD STRUCTURE (from the bf16 index, not guessed). Prefix is plain `mtp.*`,
+so `mtp-extract`'s default matcher finds it — no --key-regex, unlike GLM's
+`layers.45`. 1553 tensors of 2924, confined to shards 91-94 of 94:
+
+    mtp.pre_fc_norm_embedding / pre_fc_norm_hidden   the two input norms
+    mtp.fc                    [4096, 8192]           fused, order unrecoverable
+    mtp.layers.0              ONE full-attention MoE block
+                              (512 experts UNFUSED = 1536 tensors,
+                               + shared_expert, gate, q/k_norm)
+    mtp.norm                                         the head's own final norm
+
+`mtp_num_hidden_layers: 1`, `mtp_use_dedicated_embeddings: false` in
+text_config — the head shares the trunk's embed_tokens and lm_head, which is
+what makes the sidecar cheap.
+
+ARTIFACTS
+  graft    q397_mtp_graft_bf16.safetensors     12.29 GiB, 1553 tensors
+           (/Volumes/Thunderbay SSD/Exo Models/)
+  sidecar  mtp-head-q6.safetensors              5.41 GiB, 40 tensors,
+           6-bit / group 32, in the VQ-2.2bpw artifact dir (M3 + M4)
+
+Smaller than GLM's (13.84 -> 6.09 GiB) as predicted: 512x1024 experts against
+GLM's 288 wider ones. Extraction cost 12.3 GiB resident on a 96 GB box that
+cannot hold 1% of the 790 GiB trunk — the index maps `mtp.*` to 4 shards and
+only those 4 are opened.
+
+ACCEPTANCE (M4, 2.2bpw trunk resident 100.12 GiB, 256 positions, teacher-
+forced greedy proxy; control main-vs-corpus 0.512, healthy):
+
+    eh / pre_norm    0.7227      he / pre_norm    0.0000
+    eh / post_norm   0.7344      he / post_norm   0.0000
+
+The module's defaults are CONFIRMED ON THIS MODEL, not inherited: fc_order
+"eh" is the live one and "he" is not merely worse but exactly zero — 0/256,
+the signature of a wrong concat order. h_source stays unresolved for the same
+reason as on the 27B (post_norm +0.012 = 3 tokens, and an RMSNorm of an
+already-normed vector is near-idempotent); the default pre_norm is kept.
+0.7344 sits between Flash-Next's 0.708 and GLM's 0.8516.
+
+HEAD-ALONE COST (M3, sidecar only, trunk never loaded — `mtp-smoke-head`,
+new): T=1 4.93 ms, T=2 5.16 ms. The head's second position is nearly FREE
+(+0.23 ms, 2.58 ms/position), so on this family the head is not the thing
+that could eat a speedup. Whether the TRUNK's T=2/T=1 ratio behaves like
+Flash-Next's (0.80, pays 1.65x) or GLM's (1.50, pays only 1.05x) is
+UNMEASURED here and is the one number standing between this head and a
+speedup claim. Do not quote a speedup for the 397B until it is measured.
+
+BYCATCH — three wrapper bugs, all the same bug. The 397B artifact ships
+`custom_model.Model`, a vision-capable wrapper with NO `.model`: the core
+hangs off `.language_model`. `registry.arch_module`, `loop.py`'s capture and
+`mtp_probe35`'s capture all did `model.model` and all three crashed on it.
+Fixed by one walk (`.language_model` first, then `.model`), so mtp-generate
+and serve --sidecar reach this family at all. Also: a float32 SDPA at
+head_dim 256 over 256 positions asks Metal for 53 KiB of threadgroup memory
+against a 32 KiB limit and cannot load the kernel — probe-only (real decode
+is T<=2), so mtp-probe35 gained --head-dtype (default bfloat16) which casts
+the head's own tensors rather than shortening the window.
+
+`pytest tests/`: 203 passed, 11 skipped.
