@@ -639,3 +639,72 @@ T=2 78.7 ms, ratio 1.49 vs 1.50 before — unchanged. Expert dispatch is
 now formally exonerated for GLM's T=2 cost, on top of the earlier
 gather_qmm-parity refutation. The DSA indexer's L>1 sparse-mask path
 (12 fa layers) is the sole remaining suspect gating GLM MTP at 1.05x.
+
+## 2026-09-02 — INDEXER EXONERATED; the T=2 tax is UNABSORBED MLA. Fix measured 13.9x
+
+Module-level microbench (no model load: one Glm5NextSparseAttention built
+from the 2.7bpw config.json with random bf16 weights — cost is shape-
+determined; M4, B=1, real causal masks, min-of-2x15 interleaved reps).
+
+PER-LAYER fa TIMINGS, L=1 vs L=2 (ms):
+
+  Kv      L=1    L=2 stock  ratio   L=2 patched  ratio   speedup
+    128  0.820      1.289    1.57       1.063     1.30     1.21
+    512  0.830      2.526    3.04       1.114     1.34     2.27
+   2048  1.305      7.488    5.74       1.955     1.50     3.83
+   8192  1.287     19.447   15.11       2.077     1.61     9.36
+  13312  1.263     29.152   23.09       2.100     1.66    13.88
+
+INDEXER IS NOT THE CULPRIT. Forcing the indexer to bypass (index_topk=inf,
+so topk_indices=None and no put_along_axis sparse mask at all) barely moves
+L=2: Kv=13312 33.43 ms bypassed vs 34.13 ms with the indexer live — the
+whole DSA selection path is ~0.7 ms of a ~33 ms layer. Independently, at
+Kv<=2048 the indexer bypasses ON ITS OWN (T <= index_topk) and L=2 is
+STILL 3.0-5.7x L=1. The L>1 sparse-mask path is exonerated.
+
+THE ACTUAL CAUSE is two lines below the indexer: `if L == 1:` selects the
+ABSORBED MLA route (project the queries into the 512-d latent, attend
+against the latent cache, unembed the output — O(L*H*Kv*512)); every L>1
+takes the UNABSORBED route, which first expands the ENTIRE latent cache per
+head into k=embed_q(kv_latent) and v=unembed_out(kv_latent), both
+[B,64,Kv,256]. That expansion costs O(Kv*H*512*256) and is INDEPENDENT OF L
+— it is the right trade for a thousand-token prefill and pure loss for a
+2-token MTP verify. Hence the near-linear growth in Kv above (~2.2 us per
+cached row per layer) while L=1 stays flat at ~1.3 ms.
+
+BUDGET. Measured per-layer L2-L1 deltas: fa stock +1.70 ms at Kv=512,
++18.16 at 8192; deltanet (linear attention) +0.49 ms, FLAT in Kv (ratio
+1.63 at both 512 and 8192). Trunk arithmetic at a ~512-row cache:
+12 fa x 1.70 = 20.4 ms and 34 deltanet x 0.49 = 16.7 ms, i.e. 37 ms of
+module-level delta against the 26.0 ms measured on the real trunk (78.7 -
+52.7). The absolute over-prediction (1.4x) is expected — these modules are
+dense bf16, the trunk is VQ/affine-quantized and overlaps dispatch — so
+read the SPLIT, not the total: ~55% fa / ~45% deltanet at 512 rows, rising
+to ~93% fa at 8k. The deltanet share is a constant ~17 ms tax with no fix
+in sight (a 2-step sequential scan); the fa share is fixable and grows
+without bound in context.
+
+THE FIX (patches/glm5_next-indexer-L2.patch + src/vqlab/glm5_shim.py):
+take the absorbed route for all L <= absorb_max_L (8), leaving the topk /
+sparse-mask construction upstream wrote it BYTE-FOR-BYTE unchanged. Only
+k/v construction switches. NUMERICAL EQUIVALENCE VERIFIED, not asserted:
+  fp32, reduced head dims (real fp32 at qk_nope=256 cannot run — Metal
+  steel_attention bd256 fp32 wants 53760 B of threadgroup memory > 32768):
+  Kv in {200,600,1024} x L in {2,3,4}, max abs diff 3.9e-08..5.2e-08 on
+  outputs of magnitude ~0.11 (rel ~4e-07) — float reassociation only.
+  bf16, REAL dims: Kv in {300,2100,4096} x L in {2,4}, max abs diff
+  2.4e-04..4.9e-04 = exactly ONE bf16 ULP at that magnitude.
+  Indexer cache state (selected-index sets) bitwise identical in every case.
+
+PROJECTED, NOT MEASURED: removing ~84% of the fa delta should cut the trunk
+delta from 26.0 to ~14 ms, i.e. T2/T1 1.49 -> ~1.27, and at 1.81 committed
+tokens/step that is 1.81/1.27 = 1.43 theoretical against today's 1.21;
+applying the same 0.87 overhead haircut that turned 1.21 into the observed
+1.05 gives ~1.24x end-to-end. Long contexts gain far more (the stock path
+is 23x at 13k). CEILING even with a perfect r=1.0: 1.81x, and break-even is
+r < 1.81 — so 0.8516 acceptance clears the bar comfortably ONCE r is fixed;
+it was never the acceptance that was short.
+
+PENDING GATE (explicitly out of scope tonight, both boxes were running
+queues): full-trunk re-measurement of T=2/T=1 on the loaded 2.7bpw with the
+shim installed, and the MTP A/B. Nothing here has run inside a loaded model.
