@@ -92,10 +92,18 @@ matched-or-better quality. We win on bytes, they win on tok/s; say so.]
 ## Pre-push checklist (internal, not card text)
 
 - [x] publish --all exclude list (working files can no longer ship)
-- [x] check-release PASS on re-bundled 2.1bpw (full gate incl. smoke)
-- [x] static gates PASS: 35B x4, Flash 2.1/3.2, gemma-26b
+- [x] check-release PASS on re-bundled 2.1bpw (full gate incl. smoke) —
+      re-run 2026-09-02 on the FINAL kernel: PASS, 8 tokens, strict
+      resolution confirms `_fused`/`_dense_fused`/`VQSwitchLinear`/
+      `VQPLEEmbedding` all resolve from the artifact's own model.py
+- [x] static gates PASS: all 18 re-bundled artifacts (23 paths incl. the 5
+      symlink aliases), check_release --no-smoke, 2026-09-02. 18/18 PASS.
 - [x] referee spot-check on re-bundled 2.1bpw (5.9025 vs published 5.9003,
       attributed to traversal order; within cross-instrument floor)
+- [x] referee spot-check, FINAL kernel, prefill chunk 16 so the decode
+      kernel actually dispatches (old .pre-arc5 bundle vs new, two separate
+      processes): nll 1.7778030182234943 / ppl 5.916842932532446 on BOTH
+      arms — identical to all 16 digits, reproducing d4855e4 exactly.
 - [x] exo serve-smoke: 397B 2.2/2.4/2.6 PASS; Flash 4.4 PASS (9.05 tok/s
       cold), Flash 5.5 PASS (6.96 tok/s cold) 2026-09-02 evening
 - [x] spicyneuron 2.6bit vs VQ 2.6bpw RDMA table (29.9 vs 20.3 tok/s;
@@ -111,7 +119,37 @@ matched-or-better quality. We win on bytes, they win on tok/s; say so.]
       needs the same chunked prefill (vqlab/mtp/loop.py, currently
       unchunked single-shot). Flash/397B sidecars NOT gated on this.
 - [ ] 397B head build + probe (agent running)
-- [ ] final-kernel confirm A-B-A + re-bundle x13 + check-release canary
-      (one consolidated pass, after everything settles)
+- [x] final-kernel confirm A-B-A + re-bundle + check-release canary (one
+      consolidated pass, 2026-09-02 overnight). The count was x13 in this
+      draft; the actual backup-marked set is **18** physical artifacts
+      (the 5 extra `.pre-rows8` paths are SYMLINK aliases onto the same
+      dirs). A-B-A on the 2.1bpw, one 44.96 GiB load, 300-token greedy,
+      A,B,A,B,A,B:
+        arm A (shipped rows-8 bundle) 18.124 / 18.091 / 18.023  med 18.091
+        arm B (final devx+simd_sum)   19.029 / 19.285 / 19.085  med 19.085
+        +5.49%; each arm self-consistent across its 3 runs.
+      Greedy divergence at token 36 of 300 (' careful' -> ' detailed'),
+      both continuations coherent — the sanctioned 1-ULP signature, and
+      the referee scores zero delta on the same weights (above).
+- [x] all 18 re-bundled onto the final kernel; every model.py carries
+      `_SRC_FUSED_PACKED_D8_SIMD_DEVX_SS`, compiles, and check-bundle
+      PASSes. config.json byte-unchanged on all 18 (the bundler's config
+      rewrite is a no-op here). Backups: model.py.pre-arc5 +
+      config.json.pre-arc5 next to each.
+- [x] MTP sidecar staged into all 4 Flash-Next VQ dirs (2.1/3.2/4.4/5.5),
+      2.140 GiB each, from the store-root master. GLM (6.094) and 397B
+      (5.412) sidecars are DIFFERENT heads and were not touched — the
+      three files share the name `mtp-head-q6.safetensors` but differ in
+      geometry (hidden 2560 / 4096 / 4096); never cross-copy them.
+- [ ] **MORNING REVIEW — two pre-existing bundle defects, found and fixed
+      by this pass, that no gate had caught on these four artifacts**:
+      the 3 dense 27B artifacts shipped a model.py carrying vq_dense.py
+      but NOT vq_switch.py, and gemma-4-e4b-it-VQ-PLE carried NEITHER
+      runtime (9,960 bytes: loader shim only) plus a literal
+      `from mlx_lm.models.vq_...` import. All four therefore required a
+      VQ-patched mlx-lm and would have raised ModuleNotFoundError on a
+      stock install. They now carry both runtimes and pass check-bundle +
+      check-release --no-smoke. NOT yet smoke-tested (needs a real load
+      each) — Noah should decide whether to smoke them before push.
 - [ ] Noah: card text review
 - [ ] Push = new revision per repo, old revision noted as pinnable
