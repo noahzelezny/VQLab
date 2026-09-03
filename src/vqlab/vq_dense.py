@@ -441,11 +441,27 @@ class VQEmbedding(nn.Module):
     """
 
     def __init__(self, codes, codebook, vq_scales, group_size=64,
-                 pack_bits=0, in_features=None):
+                 pack_bits=0, in_features=None, out_dtype=mx.bfloat16):
         super().__init__()
         self.codes = codes
         self.codebook = codebook
         self.vq_scales = vq_scales
+        # The decode runs in fp16 (fp16 codebook gather x fp16 scales) for
+        # speed and footprint, but the RESULT has to leave in the model's
+        # dtype. nn.Embedding, which this replaces, returns its weight dtype.
+        #
+        # Returning fp16 into a bf16 stack is not a rounding detail: mlx
+        # promotes bf16 (+,*) fp16 to FLOAT32, so one fp16 PLE output turns
+        # every downstream activation -- h, q/k/v, and the attention mask --
+        # fp32 from that layer on. On gemma4 that lands in
+        # mx.fast.scaled_dot_product_attention at head_dim 256/512 in fp32
+        # with an fp32 mask, whose steel_attention kernel wants 53760 B of
+        # threadgroup memory against Metal's 32768 B limit -- so generation
+        # dies with "Unable to load kernel" as soon as the prompt is long
+        # enough to leave the vector kernel. VQPLEEmbedding (vq_switch) has
+        # always cast on the way out; this is the same rule, and the dense
+        # PLE path is the one that lost it.
+        self.out_dtype = out_dtype
         self.group_size = group_size
         self.pack_bits = pack_bits
         if pack_bits and in_features is None:
@@ -477,7 +493,7 @@ class VQEmbedding(nn.Module):
         w = self.codebook.astype(mx.float16)[rows.reshape(-1)].reshape(N, IN)
         w = (w.reshape(N, IN // self.group_size, self.group_size)
              * sc[..., None]).reshape(N, IN)
-        return w.reshape(*ids.shape, IN)
+        return w.reshape(*ids.shape, IN).astype(self.out_dtype)
 
     def as_linear(self, x):
         OUT = self.codes.shape[0]
