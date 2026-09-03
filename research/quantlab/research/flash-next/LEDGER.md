@@ -1937,3 +1937,99 @@ microharness agrees (8.98 -> 6.99 ms, arc-3-comparable).
        different schedule;
     4. the launch floor (~15% of a dispatch at N=20) -- only reachable by
        fewer dispatches, which arc 4's fusion bound priced at ~zero.
+
+## 2026-09-02 — KERNEL ARC 6 (simd_sum acceptance): the quality delta is not "under the floor", it is ZERO on the referee — and the house referee cannot even see the kernel. As gated, simd_sum buys +0.2% because it REPLACES devx; composed devx+ss is +2.4% end-to-end.
+
+Acceptance run for the arc 4 lever, exactly the three-step gate arc 4 wrote
+down: (1) ppl/KL re-referee on the 2.1bpw, (2) A-B-A end-to-end, (3) the
+policy decision — which this arc still does not take. No src/ change, no
+default flipped; the shadow bundle (symlinked 2.1bpw artifact + model.py from
+this tree's vq_switch.py) loaded once per process, everything local on the M3.
+
+### 0. THE REFEREE IS BLIND TO THE KERNEL. First finding, and it is about the
+instrument, not the kernel. The simd layout only dispatches at N <=
+_EXPERT_SIMD_MAX_N (20); a chunk-512 prefill — which is what the streaming
+referee and score_ppl_resident both run — never reaches the simd branch at
+all. The first OFF/ON pair (chunk 512) came back NLL-identical to 16 digits,
+which is a statement about the eval's dispatch shapes, not about simd_sum.
+Any future referee pass on a decode-path kernel must force chunk <= 20 or it
+is measuring nothing. (The chunk-512 number, 5.9003, also reproduces today's
+streaming-referee 5.9025 to ~0.04% — the cross-instrument floor as expected.)
+
+### 1. QUALITY: with the kernel actually exercised, the arms are IDENTICAL.
+score_ppl_resident --chunk 16 (every expert dispatch N <= 16, simd path
+confirmed live by a direct probe: through the real dispatcher on real L20
+gate_proj tensors, SS off->on differs on 3/6400 elements at N=10, 11/10240 at
+N=16, max 4.9e-4 — arc 4's half-ULP picture reproduced), separate process per
+arm, VQ_D8_SIMDSUM=0 vs 1:
+
+    OFF  nll 1.7778030182234943   ppl 5.916843
+    ON   nll 1.7778030182234943   ppl 5.916843     delta: 0.0000%
+
+Identical to every representable digit over 2048 tokens. And per-token KL
+between the arms' full log-softmax logits (prompt + 378 greedy tokens, 459
+positions, chunk-16 teacher-forced, single load, in-process flag flip):
+
+    KL mean 0.0   KL max 0.0   argmax mismatches 0/459
+
+The mechanism: the kernel-level half-ULP flips on ~0.1% of gate/up
+pre-activations are absorbed by the downstream fp16 rounding (silu product,
+down_proj accumulation) before they reach a logit. The measured quality cost
+is not "below the 0.04% floor" — it is literally zero on this instrument.
+
+### 2. SPEED A-B-A, single 44.96 GiB load, arc 5's prompt/settings (greedy,
+378 tokens), arms interleaved A,B,A,B,A,B, tok/s:
+
+  Sequence 1 — A = shipped default (devx) vs B1 = VQ_D8_SIMDSUM=1 AS GATED
+  TODAY. The elif chain puts SS above devx, and SS derives from the STAGED
+  base — so flipping the env var today does not compose, it SWAPS KERNELS:
+
+    A  (devx)      18.345  18.154  18.469   median 18.345
+    B1 (gated SS)  18.262  18.386  18.392   median 18.386   1.0023x — a WASH
+
+  Exactly what arcs 4+5's per-dispatch numbers predict (SS 1.16-1.20x vs
+  devx 1.19-1.23x over the same staged base): the two prizes do not add by
+  env var, they substitute.
+
+  Sequence 2 — A vs B2 = the COMPOSED devx+simd_sum, i.e. the arc 5 ledger's
+  "one-line replace" (the SS reduction rewrite applied to the DEVX source),
+  patched into the loaded module's globals for this process only:
+
+    A  (devx)      18.406  18.348  18.389   median 18.389
+    B2 (devx+ss)   18.810  18.847  18.839   median 18.839   1.0245x
+
+  +2.4% end-to-end on top of devx — arc 4's +1.4-1.8% projection was
+  conservative. Composed correctness check: B2's greedy token stream is
+  IDENTICAL to B1's (same math, different x-read path — bit-identical by the
+  devx construction), so the composed kernel is the SS numerics, not a third
+  numerics.
+
+### 3. GREEDY DIVERGENCE: token 66 of 378. OFF and ON decode streams first
+differ at index 66; both texts stay coherent (same register, same content
+trajectory). Note the KL instrument above scored the SAME positions at
+exactly 0 through the chunk-16 prefill path — the divergence lives in the
+decode-shape (N=1..k) dispatch path, where a near-tie argmax eventually
+flips after ~48 layers x 66 steps of independent half-ULP noise. This is the
+expected chaotic-divergence signature of an equal-quality numerics change,
+not a quality signal.
+
+### VERDICT
+
+  Does simd_sum's quality delta clear the ~0.04% cross-instrument floor?
+  It does not merely clear it — the measured delta is 0.0000% ppl and 0.0 KL
+  on the only instrument configuration that exercises the kernel at all.
+  Indistinguishable from noise is an overstatement; it is indistinguishable
+  from NOTHING.
+
+  Composed end-to-end gain: 18.39 -> 18.84 tok/s (+2.4%) over the shipped
+  devx default. The gated form as it stands is +0.2% (it replaces devx) and
+  is NOT the thing to ship.
+
+  RECOMMENDATION (decision still Noah's, per arc 4): the quality half of the
+  gate-relaxation question is now answered with the strongest possible
+  number. If 1-ULP equivalence is accepted, the shippable object is the
+  one-line devx+ss composition (derive _SRC_FUSED_PACKED_D8_SIMD_SS from the
+  DEVX source instead of the staged base), NOT VQ_D8_SIMDSUM=1 as gated.
+  Nothing flipped here; measurements in scratchpad aba_ss.py pattern
+  (in-process flag flips, sanctioned by the plan-memo flag keys) + two
+  separate-process score_ppl_resident --chunk 16 runs.
