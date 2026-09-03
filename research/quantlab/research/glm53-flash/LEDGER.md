@@ -733,3 +733,25 @@ morning's 1.49; the A/B above is the trustworthy measurement.
 GLM ship remains gated on the prefill-spike blocker (see
 docs/CARD-UPDATE-DRAFT.md checklist + the memory note): this result
 makes the sidecar worth shipping, the blocker decides when.
+
+## 2026-09-03 (night) — prefill memory closed: the footprint was the MLX buffer cache, and set_cache_limit deletes it
+
+Three-run progression on the same 26,423-token prompt, 2-node pipeline:
+
+1. Both ranks same code, no cache limit: ledger transients ~2.5G/chunk
+   (active-based), but SYSTEM memory +24G (M3) / +43G (M4) — Noah's
+   screenshots. get_active_memory cannot see it.
+2. Diagnosis: intermediates freed inside a chunk park in MLX's reuse
+   cache until end-of-chunk clear_cache; the cache is excluded from
+   active/peak. The ledger was watching the counter that behaves.
+3. EXO_MLX_CACHE_LIMIT_GB=6 (new plumbing in utils_mlx, exo 6de2f466),
+   ledger gains cache= column: cache=0.0-0.2G every chunk on BOTH ranks,
+   peaks 51.8G / 66.0G, wall 134s vs 128-137s uncapped — free.
+
+Operational trap that hid the fix for an hour: the M4's supervisor
+SCRIPT had been running since boot, so edits to it (the env hook) and
+even the synced code did not reach respawned exo processes (runners
+inherit the parent's imports). Killing the supervisor itself and letting
+launchd re-exec the script is the only full refresh.
+
+GLM long-prompt serving is now bounded and boring. Ship-ready.
