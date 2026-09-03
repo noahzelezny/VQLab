@@ -1785,3 +1785,155 @@ gather the last three arcs were fighting over is free. The honest model is:
        the kernel. A layout that stages x once for more rows, or drops a
        barrier, is the obvious first probe -- and unlike everything in
        sections 1-3 it has not been measured at all.
+
+## 2026-09-02 — KERNEL ARC 5: the module glue was the TEMPLATE ARGUMENT, and the "staging/barriers/launch" slice was staging all along. Two bit-identical wins ship: +3.5% end-to-end.
+
+Fifth kernel arc. Two briefed targets: the 1.07 ms/token of Python glue in
+`VQSwitchLinear.__call__` (arc 3 SS4, unchased) and the ~36% of a dispatch
+arc 4 left as "tile staging, barriers, launch". Both attacked, both landed,
+both BIT-IDENTICAL (asserted before every timing; end-to-end texts
+byte-identical). A-B-A on the 2.1bpw: 17.81 -> 18.44 tok/s median (+3.5%).
+
+Instruments: `scripts/bench_module_glue.py` (glue attribution),
+`scripts/bench_d8_stage.py` (staging/barrier/launch split), both committed.
+
+### 1. THE GLUE DECOMPOSED: it is not the broadcast/reshape dance.
+
+Method: every arm timed in two phases -- graph BUILD (host, after
+mx.synchronize, before any eval) and eval -- so the host glue separates
+cleanly; plus per-op lazy timings x1000. On the arc 3 harness (46
+layer-steps, top_k=10, L20 tensors), BEFORE this arc:
+
+    raw _fused build 1.63 ms   module build 1.98 ms   module total 8.98 ms
+    per __call__ 15.0 us, of which _fused 10.8 us, of which the bare
+    mx.fast.metal_kernel invocation 8.5-9.3 us
+
+The broadcast/reshape/astype ops arc 3 blamed are 0.1-0.9 us EACH. The cost
+is the KERNEL BINDING CALL, and inside it, the `template=` ARGUMENT:
+
+    null kernel, no template     0.81 us/call
+    null kernel, template=[T]    5.34 us/call        <- the smoking gun
+    packed-d8 call, template     8.49 us
+    packed-d8 call, header spec  1.96 us   (bit-identical, GPU unchanged
+                                            36.9 vs 37.0 us/dispatch)
+
+MLX re-processes the template list on every invocation (name mangling +
+lookup). At 144 expert dispatches/token that alone is ~1 ms/token -- most of
+arc 3's 1.07, hiding not in OUR Python but in the binding argument.
+
+  SHIPPED (on by default, VQ_SPEC_KERNELS=0 reverts):
+  (a) specialized kernels -- template values baked into the source as
+      #defines at build time, one cached kernel per (name, values), called
+      with NO template argument. Same generated Metal code; bit-identity
+      asserted on real tensors (3 projections x N=1/5/10/20) and pinned by
+      tests across every dispatched geometry incl. unpacked d4/d2.
+  (b) a dims-array cache (the [OUT,IN,D,G,N,K] int32 upload was rebuilt
+      every call, ~0.6 us) and a dispatch-PLAN memo keyed on
+      (shapes, dtypes, flags) that skips the ~2 us of dispatch Python on
+      repeat calls. Plans live inside _KERNELS under ("plan", ...) keys so
+      the tests' _KERNELS.clear() invalidates them; the memo keys on
+      _D8_SIMDSUM/_D8_REGBUF/_D8_DEVX/_SPEC_KERNELS so bench flag-flips
+      still dispatch correctly (pinned by test).
+
+  AFTER: _fused 10.8 -> 2.7 us, __call__ 15.0 -> 6.2 us, module-chain build
+  1.98 -> 0.86 ms. What remains is real work (kernel binding floor ~1.7 us,
+  the actual broadcast/reshape graph nodes) -- the recoverable glue is
+  recovered.
+
+  REFUTATION HONORED, NOT RE-LITIGATED: call COUNT was not reduced. Arc 4's
+  gate+up fusion upper bound already showed merging dispatches buys ~zero
+  even before the two-codebook problem; nothing here contradicts it. The win
+  was per-call cost, exactly where the brief pointed.
+
+### 2. THE "36%": barriers are ~2%, launch ~15%, STAGING is nearly half.
+
+`scripts/bench_d8_stage.py`, cost-only arms (each WRONG on purpose, each a
+LOWER BOUND), real L20 gate/up, fraction of base min/med:
+
+    arm            gate N=10    gate N=20    up N=20
+    nostage        0.57/0.54    0.51/0.51    0.52/0.55   staging deleted
+    nobar          0.98/0.98    0.97/1.03    0.98/0.99   barriers deleted
+    nostagebar     0.57/0.60    0.51/0.51    0.51/0.58   both deleted
+    empty          0.24/0.25    0.15/0.15    0.15/0.16   launch+grid floor
+
+The picture arc 4 could not see: the threadgroup_barriers cost ~2% (the
+"barrier convoy" theory is DEAD), the launch floor is ~10 us at this grid
+(consistent with the dispatch arc's ~5 us on trivial grids), and the x
+STAGING is ~45-49% of the whole dispatch. Why: at rows=8, every threadgroup
+(OUT/8 = 80 of them per token-row) re-stages the ENTIRE 5 KiB x row through
+threadgroup memory -- a device-read + tg-store + tg-load round trip per
+block, repeated 80x for bytes that L1 would have served.
+
+  SHIPPED (on by default, VQ_D8_DEVX=0 reverts): the DEVX kernel --
+  threadgroup tile, staging loop and BOTH barriers deleted; each lane reads
+  its own x slice from device as vec<T,4> and widens with the same
+  float4(half4) conversion. The values entering every dot, and the dot/fma
+  order, are exactly the base kernel's => BIT-IDENTICAL BY CONSTRUCTION,
+  asserted on real tensors at N=1/5/10/20 both shapes before timing, and
+  pinned by tests on every simd-eligible geometry (incl. a new NGRP=40
+  partial-block shape in D8_SHAPES matching L20 gate/up).
+
+  Through the REAL dispatcher, off -> on, us/dispatch min/med and speedup:
+
+    gate (NGRP=40)  N=1  13.8/15.1 -> 12.7/13.5   1.08/1.12
+                    N=5  23.2/27.5 -> 19.7/23.4   1.18/1.18
+                    N=10 37.0/38.0 -> 30.6/33.8   1.21/1.12
+                    N=20 66.7/67.9 -> 53.6/54.9   1.24/1.24
+    up   (NGRP=40)  N=10 37.5/39.6 -> 32.0/33.6   1.17/1.18
+                    N=20 67.2/72.1 -> 54.7/58.8   1.23/1.23
+    down (NGRP=10)  N=10 34.8/38.2 -> 34.4/37.6   1.01/1.02  <- control:
+      declined from the simd layout, must not move, and does not.
+
+  This matches simd_sum's prize (arc 4's 1.16-1.20x) WITHOUT costing
+  bit-identity -- the two attack different structures and would compose if
+  the simd_sum gate is ever relaxed (the SS twin still derives from the
+  staged base so the arc 4 record stays reproducible; a devx+ss combo is a
+  one-line replace then).
+
+  ALSO MEASURED, NOT SHIPPED: `fullstage` (stage the whole row once, one
+  barrier pair instead of one per block) is bit-identical but only
+  0.95-0.98x -- consistent with barriers being ~2%: there was never a
+  barrier prize to win. Banked as a negative in the script.
+
+### 3. END-TO-END: +3.5%, texts byte-identical, single load.
+
+One 44.96 GiB load of the 2.1bpw (shadow bundle: symlinked artifact +
+model.py rebuilt from this arc's vq_switch.py; the on-disk artifact was NOT
+touched), exo env mlx-lm, greedy 378 tokens, arms flipped IN-PROCESS
+(A,B,A,B,A,B after a throwaway + old-arm warm):
+
+    old (arc 4 state)   17.909 / 17.697 / 17.812   median 17.81 tok/s
+    new (this arc)      18.247 / 18.440 / 18.451   median 18.44 tok/s
+    speedup 1.035; generated texts IDENTICAL byte-for-byte
+
+Matches the components: ~1.0 ms/token host glue + ~17-24% off gate/up
+dispatches ~= 2.0 ms of a ~56 ms token ~= +3.6% predicted. The module-chain
+microharness agrees (8.98 -> 6.99 ms, arc-3-comparable).
+
+### VERDICT
+
+  SHIPPED ON BY DEFAULT, both bit-identical, escape hatches without rebuild:
+    VQ_SPEC_KERNELS=0  template-path kernels + no plan memo bypass
+    VQ_D8_DEVX=0       staged-tile packed-d8 simd kernel
+  Suite: 200 passed, 11 skipped (from 111/7 pre-arc: new tests pin spec
+  bit-identity, devx bit-identity, flag-flip plan invalidation, the on-by-
+  default policy, and a new NGRP=40 shape in D8_SHAPES widens every
+  existing parametrised identity test; two kernel-NAME assertions in the
+  regbuf tests were updated for the specialized key format, their
+  substance unchanged).
+
+  PENDING GATE: the shipped artifacts bundle their own model.py SNAPSHOT of
+  vq_switch.py, so end users see none of this until a re-bundle/re-publish
+  (same situation rows=8 was in). The A-B-A above is the evidence for that
+  decision; re-run `vqlab` bundle + smoke per artifact when taken.
+
+  THE LIVE LEVERS, re-ranked:
+    1. the build-recipe change (non-expert tensors below 8-bit) -- still 56%
+       of the Flash-Next gap, untouched by any kernel work;
+    2. simd_sum IF the bit-identity gate is relaxed (+1.4-1.8%, composes
+       with devx);
+    3. the inner loop's issue-throughput bound (~45%): no lever found in
+       five arcs; the honest next probe is a different CODE LAYOUT, not a
+       different schedule;
+    4. the launch floor (~15% of a dispatch at N=20) -- only reachable by
+       fewer dispatches, which arc 4's fusion bound priced at ~zero.
