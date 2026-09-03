@@ -12,7 +12,7 @@ the ranking column and is stricter here, not weaker.
 |---|---|---|---|---|---|---|---|---|
 | VQ d8/K16384 | 2.162 | 80.9 | 3.6339 | 1.9619 | 2.9562 | 692.25 | 74.8% | 128GB |
 | VQ d4/K512 | 2.635 | 98.5 | 2.5743 | 1.7107 | 1.6166 | 348.82 | 84.0% | 128GB |
-| **VQ mix best8 (SHIPPED 2.7bpw)** | 2.73 | 101.9 | **2.3978** | **1.6696** | **1.4843** | **291.46** | **86.2%** | 128GB |
+| **VQ mix best8 (SHIPPED 2.7bpw)** | 2.73 | 101.9 | **2.4014** | **1.6671** | **1.4811** | **293.84** | **85.7%** | 128GB |
 | VQ d4/K2048 | 3.108 | 116.3 | 2.1954 | 1.6187 | 1.3402 | 199.53 | 88.6% | 192GB |
 | q3 affine | 3.524 | 129 | 2.6824 | 1.7842 | 1.4731 | 377.08 | 83.1% | 192GB |
 | VQ d4/K8192 | 3.582 | 134.0 | 2.0379 | 1.5475 | 1.2154 | 94.54 | 92.1% | 192GB |
@@ -20,42 +20,46 @@ the ranking column and is stricter here, not weaker.
 | q6 affine | 6.524 | 239 | 1.9285 | 1.4929 | 1.1660 | 13.47 | 97.1% | — |
 | bf16 teacher | 16 | 598.5 | 1.9024 | 1.4888 | 1.1580 | 0 | 100% | — |
 
-SHIPPED ROW ADDED 2026-09-03, AND ITS INSTRUMENT OFFSET IS STATED. The
-2.7bpw row above is the first full three-corpus score of the published
-artifact; all six of its numbers were measured in ONE session on ONE
-instrument (`python -m vqlab.stream_score --model <dir> --corpus <c>
---tokens 2048 [--kl-cache glm53_teacher_topk_prose]`, mlx-vlm 0.6.17, M3).
-That scorer has no chunk/traversal/seed/dtype flags at all, so "matching
-the instrument" reduces to matching corpus + token count, which is exact.
+EVERY ROW IN THIS TABLE IS MEASURED ON ONE INSTRUMENT, NAMED HERE:
+`/Volumes/Thunderbay SSD/venvs/glm5vlm/bin/python -m vqlab.stream_score
+--model <dir> --corpus <c> --tokens 2048 [--kl-cache
+glm53_teacher_topk_prose]` — py3.12.2, mlx 0.32.2, mlx-vlm 0.6.17,
+mlx-lm 0.31.3, M3, streamed. That scorer has no chunk/traversal/seed/dtype
+flag at all, so matching it reduces to matching corpus file + token count.
+DO NOT MIX IN NUMBERS FROM THE exo ENV (`/opt/anaconda3/envs/exo`, mlx
+0.32.0.dev20260622 grafted): it is a different MLX build and it disagrees
+with this one by up to 0.74% on a single cell — see LEDGER 2026-09-03
+(late). The exo env is for serving and cluster work, not for this table.
+
+SHIPPED ROW ADDED 2026-09-03, CORRECTED TO THIS INSTRUMENT the same day.
+The 2.7bpw row above is the first full three-corpus score of the published
+artifact. Its prose/KL/top-1 (2.401392 / 293.8429 / 85.69%) reproduce the
+Aug-31 best-8 sweep's published values to every printed decimal, which is
+what a same-instrument re-score looks like here.
 
 Two reconciliation facts, both measured rather than assumed:
 
 1. THE REPACK WAS VALUE-NEUTRAL. The shipped artifact and the local build
    `glm53_vq_packed_mix_best8` score BIT-IDENTICAL on prose (2.397798 /
-   291.4628 / 0.8618 / mass 0.9906, both). The rows=8 packed-d8 re-bundle
-   changed the kernel and not the outputs. That is a release finding.
+   291.4628 / 0.8618 / mass 0.9906, both — exo instrument, which is fine:
+   this is a claim about two directories, not about the ladder). The
+   rows=8 packed-d8 re-bundle changed the kernel and not the outputs.
+   That is a release finding.
 
-2. TODAY'S ENVIRONMENT SCORES ~0.1-0.2% BETTER THAN THE ROWS ABOVE, and
-   the shipped row therefore carries a small favourable bias against them.
-   Re-measured comparators, today vs published:
+2. THE "~0.1-0.2% ENVIRONMENT OFFSET" REPORTED EARLIER TODAY IS RETRACTED.
+   It was not drift; it was the exo interpreter. Re-run on the instrument
+   above, the ladder reproduces EXACTLY — d4/K512 literary 1.616585,
+   d4/K512 prose 2.574259, d4/K2048 literary 1.340184, against published
+   1.6166 / 2.5743 / 1.3402. There is no offset to state.
 
-     d4/K512    prose 2.5722 vs 2.5743 | KL 347.17 vs 348.82 | code 1.7077 vs 1.7107
-     d4/K2048   code  1.6168 vs 1.6187 | literary 1.3406 vs 1.3402
+   What does exist is a NON-UNIFORM, SIGN-VARYING disagreement between the
+   two MLX builds on identical weights and identical token ids (exo minus
+   ladder, added nats/token): K512 literary +0.00732 (+0.74%), K512 code
+   -0.00176, K512 prose -0.00082, K2048 literary +0.00030. It cannot be
+   quoted as one number, which is exactly why no cross-env number belongs
+   in this table.
 
-   Prose, KL and code drift consistently negative and small (-0.08% to
-   -0.18%, KL -1.65 mnats) — above the ~0.04% cross-instrument floor but
-   far below every margin this table argues from. The published prose-only
-   numbers for the mix (2.4014 / 293.84 / 85.7%) sit in the same relation
-   to today's 2.3978 / 291.46 / 86.2%. NO CLAIM IN THIS TABLE CHANGES SIGN
-   OR ORDER under the offset.
-
-   OPEN DISCREPANCY, flagged not smoothed: d4/K512 LITERARY does not
-   reproduce. Today 1.6285 vs published 1.6166 — +0.74%, wrong-signed
-   against every other cell, and ~18x the drift seen anywhere else, while
-   d4/K2048 literary reproduces to +0.03%. One of the two 1.6166 or 1.6285
-   is wrong. The narrative below ("at 98.5 GiB VQ LOSES to q3 on literary")
-   survives either value, so nothing downstream is blocked, but the K512
-   literary cell should be re-measured before it is cited on its own.
+   The d4/K512 literary cell is CLOSED: 1.6166 was right all along.
 
 VQ d4/K2048 (116.3 GiB) BEATS q3 affine (129 GiB) ON EVERY AXIS: 12.7 GiB
 smaller, 47% less KL damage, better on all three corpora, +5.5pt top-1.

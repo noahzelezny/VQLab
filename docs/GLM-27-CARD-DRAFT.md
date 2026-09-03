@@ -20,9 +20,13 @@ Outstanding before push (tracked here, not on the card):
 - [ ] Confirm sidecar-outside-`vqlab serve` behavior (exo path) — the card
       currently says the shim ships with `vqlab serve` and stays silent on
       exo; verify that's the honest minimum.
-- [ ] d4/K512 literary comparator cell (1.6166) under investigation; not
-      load-bearing for any claim on this card, but if it moves, update the
-      table row.
+- [x] d4/K512 literary comparator cell (1.6166) RESOLVED 2026-09-03: the
+      published value is correct and reproduces exactly on the ladder
+      instrument (1.616585). The 1.6285 seen earlier came from the exo
+      interpreter (different MLX build) and is not ladder-comparable.
+      Same cause corrected this model's own row — see LEDGER 2026-09-03
+      (late). Every number in the results table below is measured on
+      /Volumes/Thunderbay SSD/venvs/glm5vlm (mlx 0.32.2, mlx-vlm 0.6.17).
 
 ---
 
@@ -111,12 +115,13 @@ the vision tower ships bf16. For cluster serving use the
 Referee: 2048 tokens; prose = WikiText, code = public mlx corpus (pinned
 manifest), literary = Gutenberg. KL is against the bf16 teacher's cached
 top-64 logits (captured mass 0.9906 on every row). This model's row was
-measured on the published artifact itself, all three corpora.
+measured on the published artifact itself, all three corpora, on the same
+interpreter as every comparator row (mlx 0.32.2 / mlx-vlm 0.6.17).
 
 | build | size | KL to bf16 (mnats/tok) | top-1 agreement | prose ppl | code ppl | literary ppl |
 |---|---|---|---|---|---|---|
 | VQ d4/K512 (this build's base) | 98.5 GiB | 348.82 | 84.0% | 2.5743 | 1.7107 | 1.6166 |
-| **this model** | **101.9 GiB** | **291.46** | **86.2%** | **2.3978** | **1.6696** | **1.4843** |
+| **this model** | **101.9 GiB** | **293.84** | **85.7%** | **2.4014** | **1.6671** | **1.4811** |
 | VQ d4/K2048 (uniform) | 116.3 GiB | 199.53 | 88.6% | 2.1954 | 1.6187 | 1.3402 |
 | affine q3 (ours) | 129 GiB | 377.08 | 83.1% | 2.6824 | 1.7842 | 1.4731 |
 | VQ d4/K8192 (uniform) | 134.0 GiB | 94.54 | 92.1% | 2.0379 | 1.5475 | 1.2154 |
@@ -125,8 +130,8 @@ measured on the published artifact itself, all three corpora.
 | bf16 teacher | 598.5 GiB | 0 | 100% | 1.9024 | 1.4888 | 1.1580 |
 
 **This is the fits-a-128 GB-Mac rung.** Against affine q3 it is 27 GiB
-smaller *and* ~23% better on KL (291.46 vs 377.08), with clear wins on prose
-and code; q3 edges it narrowly on literary (1.4731 vs 1.4843), the corpus
+smaller *and* ~22% better on KL (293.84 vs 377.08), with clear wins on prose
+and code; q3 edges it narrowly on literary (1.4731 vs 1.4811), the corpus
 this family memorized hardest, and the gap closes with bits — the 116 GiB
 rung wins literary outright. It is not q4-class: reaching q4 quality from
 this family costs 134 GiB (the d4/K8192 rung, which matches or beats affine
@@ -257,7 +262,7 @@ geometry is 6.32 mnats on KL, below every margin argued from here.
 - **This is the aggressive end of the ladder.** Prose perplexity is 1.26x
   the teacher's. If you have the memory, the 134 GiB rung reaches q4-class
   quality (not yet published).
-- **q3 edges it on literary** (1.4731 vs 1.4843) — the one axis where
+- **q3 edges it on literary** (1.4731 vs 1.4811) — the one axis where
   smaller-and-better does not hold. VQ damage lands hardest on the most
   memorized corpus, so test a literary-heavy workload yourself.
 - **Tight on 128 GB with the sidecar** (~107 GiB resident). Cold runs page;

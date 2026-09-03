@@ -778,6 +778,11 @@ referee_corpus_code_public.txt, referee_corpus_literary.txt. Teacher cache
 meta.json pins model snapshot + corpus + tokens 2049 + top_k 64.
 
 SHIPPED ROW (TheDrainFlorist--GLM-5.3-Flash-VQ-2.7bpw):
+[SUPERSEDED by the 2026-09-03 (late) entry below: every number in this
+section was measured on the exo interpreter, not the ladder's. The
+ladder-instrument values are 2.401392 / 1.667105 / 1.481141 / 293.8429 /
+85.69%, and the "instrument offset" reasoning here is retracted. Kept
+verbatim as the record of what was believed this morning.]
 
     prose 2.3978 | code 1.6696 | literary 1.4843
     KL 291.46 mnats | top-1 86.18% | captured mass 0.9906
@@ -825,3 +830,120 @@ is not ladder-comparable). Code and literary KL are NOT reproducible with
 what is on disk — they would need a fresh bf16 teacher pass on those two
 corpora, which is a 598.5 GiB forward we have not run. Stated as a real
 limit, not approximated.
+
+## 2026-09-03 (late) — the K512 literary discrepancy resolved: it was never drift, it was two interpreters
+
+VERDICT: THE PUBLISHED 1.6166 IS CORRECT AND EXACTLY REPRODUCIBLE. Today's
+1.6285 is also correct — for a DIFFERENT interpreter. The two numbers were
+produced by two Python environments with two different MLX builds, on
+byte-identical weights and byte-identical token ids. Nothing drifted.
+
+THE MEASUREMENT. Same artifact dir, same corpus file, same --tokens, run
+today in both environments:
+
+  instrument                      K512 lit   K512 prose   K2048 lit
+  glm5vlm venv (ladder's own)     1.616585    2.574259     1.340184
+  published ladder value          1.6166      2.5743       1.3402
+  exo env (yesterday's)           1.628498    2.572200     1.340600
+
+The ladder instrument reproduces the published cells to EVERY PRINTED
+DECIMAL — not to 0.04%, exactly. The exo env reproduces ITSELF exactly too
+(1.628498 twice today, and 1.628498 yesterday). Both instruments are
+deterministic; they simply disagree with each other.
+
+THE TWO INSTRUMENTS, named so this never repeats:
+  ladder instrument  /Volumes/Thunderbay SSD/venvs/glm5vlm/bin/python
+                     py3.12.2, mlx 0.32.2, mlx-vlm 0.6.17, mlx-lm 0.31.3
+  exo instrument     /opt/anaconda3/envs/exo/bin/python
+                     py3.13.12, mlx 0.32.0.dev20260622+4c8d2590 (grafted
+                     dev build), mlx-vlm 0.6.17, mlx-lm 0.31.9
+Every row of TABLE.md except the shipped 2.7bpw row was measured on the
+ladder instrument. The shipped row (and yesterday's whole reconciliation
+pass) was measured on the exo instrument. That is the entire story.
+
+FALSIFIED ON THE WAY, each with a measurement rather than an argument:
+  1. Proxy-vs-packed. No. The 1.6166 came from `stream_score` on
+     `glm53_vq_packed_d4k512` — the packed artifact, not a fit/struct
+     proxy. Raw record, 2026-08-31T04:25:51Z: {"model": ".../
+     glm53_vq_packed_d4k512", "corpus": ".../referee_corpus_literary.txt",
+     "tokens": 2048, "ppl": 1.616585}. Not the older score_streaming.py
+     (which has no glm5_next support at all).
+  2. Wrong directory yesterday. No. Yesterday's run names the same dir.
+  3. Artifact changed under us. No. All 19 shards + config.json + model.py
+     mtime Aug 30 21:23, i.e. BEFORE the Aug 31 04:25 scoring. The shards
+     carry link counts 2-9 because the mix builds HARDLINK the untouched
+     ones; an inode sweep shows d4k512 shares inodes only with mixes that
+     reused them, and nothing was rewritten in place.
+  4. Corpus drift. No. referee_corpus_literary.txt is sha256
+     c2c4b075add42d283616a8dd244e4f5b06dbe7bf8e3b722bd0a86ee3f5417eb6,
+     identical in vqlab and quantlab, untouched in git since the initial
+     import, mtime Aug 17, manifest (10 Gutenberg works, 1195589 chars)
+     unchanged.
+  5. Tokenizer drift. No. tokenizer.json is one hash across d4k512,
+     d4k2048 and the shipped artifact; and the two interpreters produce
+     the SAME 2049 ids for the literary corpus (sha256 of the id list
+     745a17adc6768ef9 in both). Independently corroborated by the prose
+     KL run, whose cache token-id equality check passed.
+  6. Scorer code changed. No. stream_score.py untouched since 2026-08-29;
+     the artifact's bundled model.py imports no vqlab code, so the VQ
+     kernels are frozen inside the checkpoint.
+
+So: identical bytes in, identical ids in, different float out. The only
+remaining variable is MLX itself.
+
+THE DIVERGENCE IS NOT UNIFORM, which is the part that matters. exo minus
+ladder, in added nats/token (the honest unit; ratios mislead here):
+
+  d4/K512  literary   +0.00732   (+0.74%)
+  d4/K512  code       -0.00176   (-0.18%)
+  d4/K512  prose      -0.00082   (-0.08%)
+  d4/K2048 literary   +0.00030   (+0.03%)
+
+Yesterday's write-up read the three small negative cells as a "consistent
+~0.1-0.2% optimistic environment offset" and the literary cell as an
+anomaly on top of it. That framing is WRONG and is retracted: there is no
+offset to state, because the ladder instrument has zero error against the
+ladder. What exists is a per-cell, sign-varying divergence between two MLX
+builds, whose magnitude on the K512 rung reaches 0.74% on one corpus and
+0.03% on another. An "offset" you can quote as a single number is exactly
+what this is not.
+
+WHY LITERARY AMPLIFIES — hypothesis, consistent with the data, NOT proven:
+mean-NLL over a near-memorized corpus is dominated by a handful of
+high-loss positions (teacher ppl 1.1580; most tokens sit near zero nll).
+A small per-token numeric perturbation therefore moves the literary mean
+far more than the prose mean, where loss is spread. That would make
+literary ppl the LEAST numerically stable of the three corpora, not the
+most sensitive to quantization damage in some deeper sense. Testing it
+needs per-token nll dumps from both builds; not run.
+
+CONSEQUENCE, and it is bigger than the cell that started this. The shipped
+2.7bpw row added to TABLE.md earlier today was measured on the exo
+instrument while every row it is compared against was measured on the
+ladder instrument. Re-scored today on the LADDER instrument, the shipped
+artifact gives:
+
+    prose 2.401392 | code 1.667105 | literary 1.481141
+    KL 293.8429 mnats | top-1 85.69% | captured mass 0.9906
+
+versus the exo numbers published this morning (2.3978 / 1.6696 / 1.4843 /
+291.46 / 86.18%). The prose/KL/top-1 triple matches the mix's OWN earlier
+published values (2.4014 / 293.84 / 85.7%) to every printed decimal —
+which is the same exactness seen on every other ladder cell, and settles
+that the Aug-31 best-8 prose sweep and today's re-score are one
+instrument. TABLE.md is corrected to the ladder-instrument values so that
+the row is comparable to the rows above and below it. No ordering, sign or
+conclusion in the table changes — but the row now belongs to the same
+instrument as its comparators, which the earlier version did not.
+
+FINDING 1 OF THIS MORNING STANDS, with its scope narrowed: the shipped
+artifact and glm53_vq_packed_mix_best8 scored bit-identical on prose. That
+was measured on the exo instrument; it is a statement about the two
+directories, not about the instrument, and re-measurement is not needed.
+
+STANDING RULE ADDED: a number entering TABLE.md, a card, or a comparison
+must name its interpreter. The ladder is glm5vlm. The exo env is for
+serving and cluster work, and its scores are NOT ladder-comparable. Two
+MLX builds, one deterministic scorer, and no seed/chunk/dtype knob to
+blame is precisely the situation in which "same command, same files" feels
+like sufficient provenance and is not.
