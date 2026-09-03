@@ -71,6 +71,7 @@ acceptance only — never correctness — so both are safe to add later.
 """
 from __future__ import annotations
 
+import os
 import time
 from dataclasses import dataclass
 from typing import Any, Callable, Iterator, List, Optional, Union
@@ -82,7 +83,36 @@ from .capture import capture_input
 from .caches import restore, snapshot
 from .sampling import Distribution, make_distribution, rejection_correct
 
-__all__ = ["MTPResponse", "load_mtp_head", "mtp_generate", "mtp_stream_generate"]
+__all__ = ["MTPResponse", "load_mtp_head", "mtp_generate", "mtp_stream_generate",
+           "prefill_chunk_size", "DEFAULT_PREFILL_CHUNK"]
+
+DEFAULT_PREFILL_CHUNK = 2048
+PREFILL_CHUNK_ENV = "VQLAB_PREFILL_CHUNK"
+
+
+def prefill_chunk_size(requested: Optional[int] = None) -> int:
+    """Resolve the prefill chunk width: explicit argument > env > default.
+
+    The chunk bounds the prefill TRANSIENT, which is what OOMs a fat trunk
+    (GLM-5.3: a 102G trunk on a 128G box, where an unchunked prefill's lazy
+    graph adds tens of GiB). Per-family chunk tables belong to the runtime
+    that knows the topology (exo has one); vqlab exposes a plain default and
+    an override so an operator can shrink it without a code change.
+    """
+    if requested is not None:
+        n = int(requested)
+    else:
+        raw = os.environ.get(PREFILL_CHUNK_ENV)
+        if raw is None or not raw.strip():
+            return DEFAULT_PREFILL_CHUNK
+        try:
+            n = int(raw)
+        except ValueError:
+            raise ValueError(
+                f"{PREFILL_CHUNK_ENV}={raw!r} is not an integer") from None
+    if n < 1:
+        raise ValueError(f"prefill chunk must be >= 1, got {n}")
+    return n
 
 
 @dataclass
@@ -196,7 +226,7 @@ def mtp_stream_generate(
     xtc_threshold: float = 0.0,
     xtc_special_tokens: List[int] = [],
     logits_processors: Optional[List[Callable]] = None,
-    prefill_step_size: int = 2048,
+    prefill_step_size: Optional[int] = None,
     align: str = "committed",
     prompt_cache=None,
     want_logprobs: bool = False,
@@ -209,6 +239,11 @@ def mtp_stream_generate(
 
     `align` selects the head-cache scheme: "committed" (default) or "legacy".
     See the module docstring -- "legacy" exists for A/B measurement only.
+
+    `prefill_step_size` is the prompt chunk width; None resolves through
+    `prefill_chunk_size` (env VQLAB_PREFILL_CHUNK, else 2048). It changes the
+    prefill's memory transient ONLY -- the tokens generated are identical at
+    every chunk width (tests/test_mtp_prefill.py gates this).
 
     `prompt_cache` lets a caller (a server) own the trunk cache. It must be
     EMPTY: the head is seeded from this prompt starting at position 0, so a
@@ -254,13 +289,34 @@ def mtp_stream_generate(
                 f"cache, or use align='legacy' (which is misaligned anyway).")
         dcache = spec.make_draft_cache(arch)
 
-        # prefill. The per-chunk hidden states are kept when the head is
-        # being seeded, because the head's input at position j is
-        # (h_j, embed(x_{j+1})) for EVERY prompt position, not just the last.
+        # Prefill, in chunks. The chunk width is a MEMORY knob only: the trunk
+        # sees the same token stream either way (a KV cache makes the split
+        # associative), and the head is seeded chunk by chunk below over
+        # exactly the positions an unchunked seed would cover, in the same
+        # order.
+        #
+        # The head's input at position j is (h_j, x_{j+1}) for EVERY prompt
+        # position, not just the last -- so the hidden states of every chunk
+        # are consumed, not only the tail. They are consumed IN the chunk
+        # loop rather than accumulated: `head.advance` appends to the head's
+        # own cache in order, so seeding chunkwise is identical to seeding
+        # once over the concatenation, and nothing of size O(prompt) has to
+        # stay resident. (Accumulating them would put a prompt-length
+        # activation buffer, plus a concatenate that briefly doubles it, on
+        # top of the transient this chunking exists to bound.)
+        #
+        # Positions covered: the trunk chunk loop runs over ids[:, :n-1] and
+        # the seed over (h_i, x_{i+1}) for i in 0..n-2. The final prompt
+        # token is processed by the single-token forward below, whose hidden
+        # state is h_{n-1} -- position n-1 is NOT seeded, because its head
+        # input needs x_n, the first sampled token; that is the bootstrap
+        # draft.
+        step = prefill_chunk_size(prefill_step_size)
         n = ids.shape[1]
-        h_chunks = []
-        for i in range(0, n - 1, prefill_step_size):
-            chunk = ids[:, i:min(i + prefill_step_size, n - 1)]
+        seed = align == "committed"
+        for i in range(0, n - 1, step):
+            end = min(i + step, n - 1)
+            chunk = ids[:, i:end]
             if chunk.shape[1]:
                 model(chunk, cache=cache)
                 # Evaluate the CACHE (and the captured hidden state, which the
@@ -273,29 +329,27 @@ def mtp_stream_generate(
                 # reason. Only the final single-token forward below needs
                 # logits.
                 want = [c.state for c in cache if hasattr(c, "state")]
-                if align == "committed":
+                if seed:
+                    # (h_i..h_{end-1}, x_{i+1}..x_{end}) -- the head rows for
+                    # this chunk's positions, and only this chunk's.
                     h = get_h()
-                    h_chunks.append(h)
+                    head.advance(h, ids[:, i + 1:end + 1], dcache)
                     want.append(h)
+                    dstate = getattr(dcache, "state", None)
+                    if dstate is not None:
+                        want.append(dstate)
                 mx.eval(want)
                 mx.clear_cache()
         logits = model(ids[:, max(n - 1, 0):], cache=cache)
-        h_chunks.append(get_h())
-        h_last = h_chunks[-1][:, -1:]
+        h_last = get_h()[:, -1:]
         row_t1 = logits[:, -1]
         t1, _ = pick(row_t1)
         mx.eval(t1, h_last)
 
         if align == "committed":
-            # Seed positions 0..P-2 so the head enters decoding with the same
-            # history the trunk has, and with cache.offset == P-1. Position
-            # P-1 is not seeded: its input needs x_P, the first sampled
-            # token, and it is the bootstrap draft below.
-            if n >= 2:
-                h_all = mx.concatenate(h_chunks, axis=1)
-                head.advance(h_all[:, :n - 1], ids[:, 1:n], dcache)
-                del h_all
-            h_chunks.clear()
+            # Positions 0..P-2 were seeded inside the chunk loop above, so the
+            # head enters decoding with the same history the trunk has and
+            # with cache.offset == P-1.
             mx.clear_cache()
             # Bootstrap draft: position P-1, input (h_{P-1}, x_P).
             draft_row = head.draft_logits(h_last, t1[None], dcache)[:, -1]
