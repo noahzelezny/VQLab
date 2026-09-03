@@ -882,3 +882,80 @@ approved text (comment 6a94b118334fc0cd5c373a4b): head works, 1.5-1.8x
 measured, no runtime support anywhere; rungs were sized to machine
 calibers (64/96/128 GB) without the ~2 GB q6 head; will revisit if
 mlx-lm adds support. MTP arc now fully closed pending that trigger.
+
+2026-09-03: gemma-4-e4b-it-VQ-PLE crashed in the metal attention kernel
+-- the dense PLE path was returning fp16 and promoting the whole
+forward to fp32. Root cause found, fixed, ours.
+
+SYMPTOM. `mlx_lm generate` on the repaired bundle died as soon as the
+prompt left the vector-attention path (a 6-token raw prompt worked; a
+~28-token chat-templated one did not), on M3 AND M4:
+
+    RuntimeError: [metal::Device] Unable to load kernel
+    steel_attention_float32_bq32_bk16_bd256_wm4_wn1_maskfloat32_..._has_sinks_n
+    Threadgroup memory size (53760) exceeds the maximum (32768)
+
+WHAT IT WAS NOT. Not hardware -- reproduced on both boxes, and the M3/M4
+split was noise. Not stock mlx-lm: gemma4 runs daily through exo's own
+arch path. Not the artifact's weights: every tensor in the three shards
+is BF16 or the U32/F16 quantised packs -- there is no fp32 weight in the
+checkpoint (checked in the safetensors headers, which is the cheap
+decisive test and should be the first move next time). Not the kernel
+either -- synthetic mx.fast.scaled_dot_product_attention at head_dim 256
+in fp32, with an fp32 array mask, up to L=256, loads fine. Every one of
+those was a plausible suspect and every one was wrong.
+
+ROOT CAUSE (ours). vq_dense.VQEmbedding decodes in fp16 -- fp16 codebook
+gather times fp16 scales, deliberate, for speed and footprint -- and
+RETURNED that fp16. nn.Embedding, which it replaces, returns its weight
+dtype. The damage is not a rounding error, it is a dtype rule:
+
+    mlx promotes bfloat16 (+,*) float16 -> FLOAT32
+
+so the single fp16 per-layer-embedding output turned h, then q/k/v, then
+the attention mask fp32 from layer 1 onward. Instrumented on the real
+artifact: layer 0 dispatches SDPA bf16/bd256, every layer after it fp32
+at bd256 and bd512. In fp32 with a materialised fp32 mask the
+steel_attention kernel's threadgroup allocation lands at 53760 B against
+Metal's 32768 B cap and simply will not load. The fp32 was never
+intended by anything; nobody wrote a cast to it.
+
+WHY IT SURFACED NOW, AND WHAT WAS LOST. VQPLEEmbedding (vq_switch.py,
+the flash PLE path) has always ended `.astype(mx.bfloat16)` -- the rule
+was known and was carried by the earlier PLE work. The generic dense
+VQEmbedding (vq_dense.py), which the bundle's Qwen-shaped dense_shim
+wires the PLE through, never had it. Nothing caught the gap because
+until last night's repair pass nobody had executed gemma4 through that
+shim at all: the old bundle failed the static gate before generation
+was ever attempted, and Qwen has no PLE, so the dense path had never fed
+an embedding into a bf16 residual stream. The shim's attention wiring is
+innocent; it is stock mlx_lm.models.gemma4 and only swaps modules.
+
+FIX. VQEmbedding gains `out_dtype` (default bfloat16) and casts on the
+way out; dense_shim resolves it from the checkpoint's declared dtype
+rather than hardcoding, so an fp16 or fp32 artifact stays in its own
+dtype. Three lines of behaviour. This is a cast, not a different decode
+-- test_vq_embedding_dtype asserts the returned array is exactly the
+fp16 decode rounded once, so the fp16 decode's numerics are untouched
+and no published number moves. What DOES change is the accidental fp32
+forward, which was never a scored path.
+
+The artifact's baked model.py was patched in place (backup at
+model.py.pre-ple-dtype). NOTE: the artifact's model.py was generated
+from a NEWER source tree than this worktree's base, so it was patched
+surgically rather than regenerated -- rebuild it with build_dense_vq
+once this lands on master, and diff before shipping.
+
+VERIFIED. Post-fix the instrumented forward dispatches bf16 at bd256 AND
+bd512 with no fp32 anywhere; chat-templated generation is coherent at
+100 tokens on three prompts and on a 326-token prompt (the length that
+crashed); pytest 122 passed / 7 skipped.
+
+THE 'France is France is...' RED HERRING. That degenerate output was
+blamed on the fp32 path. It is not: A/B'd against the pre-fix bundle at
+temp 0 it is BYTE-IDENTICAL before and after the fix. It is a raw,
+non-chat-templated prompt fed to an instruction-tuned model, which loops.
+Chat-templated prompts on the same weights answer correctly ("The
+capital of France is Paris."). The artifact's quality is fine and was
+never implicated -- a degenerate sample is evidence about the PROMPT
+until an A/B says otherwise.
