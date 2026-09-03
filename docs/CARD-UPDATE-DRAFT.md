@@ -101,7 +101,15 @@ matched-or-better quality. We win on bytes, they win on tok/s; say so.]
 - [x] spicyneuron 2.6bit vs VQ 2.6bpw RDMA table (29.9 vs 20.3 tok/s;
       affine reads 5.3% more bytes/token — we win bytes, they win tok/s)
 - [x] Noah: sidecar decision — SHIP for all MTP-capable families
-- [ ] GLM full-trunk shim validation (queued in consolidated pass)
+- [ ] GLM full-trunk shim validation (warm A/B running; acceptance 0.82
+      confirmed on shipping artifact)
+- [ ] **GLM SHIP BLOCKER — prefill spike**: bounded (2048 chunks + mem
+      limit) but per-chunk transient still ~50-60G class on long prompts.
+      Before GLM ships: (1) read per-chunk ledger from a GLM serving
+      session (instrumentation already in exo), (2) per-layer eval inside
+      the chunk if layers-in-flight confirmed, else shrink chunk. MTP loop
+      needs the same chunked prefill (vqlab/mtp/loop.py, currently
+      unchunked single-shot). Flash/397B sidecars NOT gated on this.
 - [ ] 397B head build + probe (agent running)
 - [ ] final-kernel confirm A-B-A + re-bundle x13 + check-release canary
       (one consolidated pass, after everything settles)
