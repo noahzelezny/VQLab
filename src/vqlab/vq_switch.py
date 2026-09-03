@@ -2580,6 +2580,41 @@ def _prefill(xf, idx_sorted_np, codes, codebook, scales, pack_bits=0,
     return y[mx.array(inv)]
 
 
+# DEFAULT BUFFER-CACHE CEILING (2026-09-03). Long prompts through a VQ
+# model allocate and free a decoded-weight-sized buffer per layer; MLX
+# parks every freed buffer in its reuse cache and returns nothing to the
+# OS until someone calls clear_cache. On a 12 GiB model that reads as a
+# ~38 GB "Peak memory" and real system pressure -- allocator behavior,
+# not a property of the model, and measured to cost NOTHING to cap
+# (GLM-5.3 26k-token prefill: identical wall time, cache pinned at
+# 0.0-0.2 GiB; ledger 2026-09-03). So the runtime ships with a sane
+# ceiling instead of a card footnote. A user- or host-set limit that is
+# ALREADY stricter is respected (set_cache_limit returns the previous
+# value, so we can peek without clobbering); VQLAB_CACHE_LIMIT_GB
+# overrides ours, and =0 disables entirely.
+_DEFAULT_CACHE_LIMIT_GB = 4.0
+
+
+def _apply_default_cache_limit() -> None:
+    raw = os.environ.get("VQLAB_CACHE_LIMIT_GB")
+    if raw is not None:
+        try:
+            gb = float(raw)
+        except ValueError:
+            return
+        if gb <= 0:
+            return
+    else:
+        gb = _DEFAULT_CACHE_LIMIT_GB
+    want = int(gb * (1 << 30))
+    prev = mx.set_cache_limit(want)
+    if prev < want and raw is None:  # someone set a stricter limit; keep it
+        mx.set_cache_limit(prev)
+
+
+_apply_default_cache_limit()
+
+
 class VQSwitchLinear(nn.Module):
     """Drop-in for QuantizedSwitchLinear over VQ codes. No bias support
     (Qwen3.5 experts are bias-free)."""
