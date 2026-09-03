@@ -2396,3 +2396,28 @@ would not have found them.
     copy; the GLM and 397B sidecars were not touched.
 
 `pytest tests/`: 203 passed, 11 skipped (unchanged; no src/ change).
+
+### 7. SMOKING THE REPAIRED DENSE BUNDLES: 3 PASS, and the fourth reveals
+that its packaging defect was HIDING a runtime defect.
+
+    27B 3.9 / 4.5 / 4.8      PASS (8 tokens, 192 VQ modules, runtime
+                             resolved from the artifact via _resolve_kernel)
+    gemma-4-e4b-it-VQ-PLE    FAIL, and not for anything in this arc:
+
+    [metal::Device] Unable to load kernel steel_attention_float32_bq32_
+    bk16_bd256_wm4_wn1_... Threadgroup memory size (53760) exceeds the
+    maximum threadgroup memory allowed (32768)
+
+That is mlx's OWN attention kernel, not VQ code: bd256 = head_dim 256, and
+32768 is the M3 threadgroup ceiling — the same 32 KiB limit already banked
+against the mtp-probe35 head. The important part is the ordering. The OLD
+bundle never reached generation at all: it fails check_release's byte scan
+first (`from mlx_lm.models.vq_` at line 114). So the artifact has two
+independent defects stacked, and the outer one made the inner one
+unobservable. Repairing the bundle did not break this artifact; it made an
+existing no-ship visible for the first time.
+
+gemma-4-e4b-it-VQ-PLE is therefore a NO-SHIP pending a fix to the attention
+path (or confirmation on hardware with a larger threadgroup limit — not
+checked here). The other 17 artifacts are clean through every gate this
+pass ran.

@@ -149,7 +149,22 @@ matched-or-better quality. We win on bytes, they win on tok/s; say so.]
       `from mlx_lm.models.vq_...` import. All four therefore required a
       VQ-patched mlx-lm and would have raised ModuleNotFoundError on a
       stock install. They now carry both runtimes and pass check-bundle +
-      check-release --no-smoke. NOT yet smoke-tested (needs a real load
-      each) — Noah should decide whether to smoke them before push.
+      check-release --no-smoke. Smoked after the repair: the three 27B
+      artifacts PASS the full gate (8 tokens, runtime resolved from the
+      artifact). gemma-4-e4b-it-VQ-PLE does NOT — see below.
+- [ ] **gemma-4-e4b-it-VQ-PLE — NO-SHIP, new blocker, unrelated to the
+      kernel work**: with the bundle repaired it now gets far enough to
+      generate and dies in mlx's OWN attention kernel:
+        [metal::Device] Unable to load kernel steel_attention_float32_
+        bq32_bk16_bd256_... Threadgroup memory size (53760) exceeds the
+        maximum threadgroup memory allowed (32768)
+      bd256 = head_dim 256; 32768 is the M3 threadgroup limit. This is not
+      VQ code and not the re-bundle. Confirmed pre-existing and previously
+      INVISIBLE: the old bundle fails the static gate first (forbidden
+      `from mlx_lm.models.vq_` at line 114), so it could never reach
+      generation — the packaging defect was masking a runtime defect.
+      Same 32 KiB threadgroup ceiling already noted for the mtp-probe35
+      head. Likely M3-specific; NOT verified on the M4 (out of scope for
+      this pass). Do not publish this artifact on the strength of a score.
 - [ ] Noah: card text review
 - [ ] Push = new revision per repo, old revision noted as pinnable
