@@ -239,7 +239,14 @@ def mtp_stream_generate(
         d = dist(row)
         return d.sample(), d
 
-    with capture_input(model.model, spec.capture) as get_h:
+    # Vision-capable artifacts (the 397B's custom_model.Model, the GLM VLM
+    # wrapper) carry no `.model`; the core the capture path is relative to
+    # hangs off `.language_model`. Same walk as spec.arch_module.
+    core = getattr(getattr(model, "language_model", model), "model", None)
+    if core is None:
+        raise RuntimeError(f"{type(model).__name__} exposes neither `.model` "
+                           f"nor `.language_model.model`")
+    with capture_input(core, spec.capture) as get_h:
         cache = model.make_cache() if prompt_cache is None else prompt_cache
         # A caller-supplied cache that already holds a prefix would put the
         # head's positions back exactly where the alignment fix took them

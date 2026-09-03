@@ -60,8 +60,20 @@ class FamilySpec:
 
     def arch_module(self, model):
         """The module the trunk's classes were defined in. Artifacts ship a
-        `model.py` that subclasses the registry arch, so walk to the core."""
-        return importlib.import_module(type(model.model).__module__)
+        `model.py` that subclasses the registry arch, so walk to the core.
+
+        Vision-capable artifacts (the 397B's `custom_model.Model`, the GLM
+        VLM wrapper) have no `.model` of their own -- the core hangs off
+        `.language_model` -- so walk that first when it is there. The bound
+        text model is what every head class binds to anyway."""
+        text = getattr(model, "language_model", model)
+        core = getattr(text, "model", None)
+        if core is None:
+            raise RuntimeError(
+                f"family {self.name}: {type(model).__name__} exposes neither "
+                f"`.model` nor `.language_model.model`; cannot resolve the "
+                f"architecture module")
+        return importlib.import_module(type(core).__module__)
 
     def make_draft_cache(self, arch):
         try:
@@ -149,6 +161,16 @@ register(FamilySpec(
 # state`) and mlx arrays are immutable, so the cheap path is correct here.
 # Verified, not assumed: caches.check_snapshot_semantics returned True against
 # a loaded 27B (2026-08-31).
+#
+# ACCEPTANCE, 397B (2026-09-02, q6 sidecar off the bf16 `mtp.*` graft,
+# VQ-2.2bpw trunk, M4, 256 teacher-forced positions, control 0.512):
+# 0.7227 at the module defaults (fc_order "eh" / h_source "pre_norm"),
+# 0.7344 at eh/post_norm — a 3-token difference, so the default stands.
+# fc_order "he" scores exactly 0.0000, which is what a wrong concat order
+# looks like on this family. Head-alone cost (M3): T=1 4.93 ms, T=2
+# 5.16 ms. NO end-to-end speedup is banked for the 397B: the trunk's
+# T=2/T=1 verification ratio is unmeasured there, and it is the ratio,
+# not acceptance, that decided GLM's 1.05x.
 for _qwen35_name in ("qwen3_5", "qwen3_5_moe"):
     register(FamilySpec(
         name=_qwen35_name,
