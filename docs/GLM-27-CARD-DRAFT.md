@@ -144,11 +144,11 @@ text and absorbs offsetting errors; KL measures distance to the teacher's
 distribution directly. KL here is prose-only (the teacher cache is a prose
 cache).
 
-**Do not compare these perplexities to any other model family.** The bf16
-teacher has near-verbatim memorized the public corpora used here (mean top-1
-probability 0.857 on prose, measured, with a causality test ruling out a
-leaky mask), so absolute perplexity is contamination-dominated. KL to that
-teacher stays fully valid — a sharp teacher is *harder* to track.
+**These perplexity scores aren't comparable across model families.** The
+bf16 teacher has near-verbatim memorized the public corpora used here (mean
+top-1 probability 0.857 on prose, measured), so absolute perplexity for this
+family is contamination-dominated. KL to that teacher stays fully valid — a
+sharp teacher is *harder* to track.
 
 ## Runtime
 
@@ -176,14 +176,13 @@ rejection sampling, so the output distribution is exactly the base model's.
 speculation pays: pipelined multi-node decoding (in validation) and batch
 serving. No single-box speedup is claimed.
 
-The sidecar path includes an absorbed-MLA fix worth knowing about: GLM's
-sparse attention takes its absorbed route only at L=1 upstream, so a 2-token
-verify paid a full unabsorbed expansion of the latent cache — a measured 23x
-per-layer tax that grows with context. The bundled runtime takes the
-absorbed route for all L ≤ 8, byte-for-byte identical topk/sparse-mask
-construction, verified numerically equivalent (max abs difference one bf16
-ULP, indexer cache bitwise identical). `vqlab serve` installs it; without
-it, the sidecar is a net loss.
+**Run the sidecar through `vqlab serve` (or `vqlab mtp-generate`), not your
+own loop.** Verifying drafted tokens sends multi-token steps through GLM's
+attention, and the upstream fast path only handles single tokens — a
+2-token verify falls off it and pays a measured 23x per-layer attention
+tax, making the sidecar a net loss. `vqlab serve` includes the fix (the
+fast path extended to short verify steps, verified numerically equivalent
+to within one bf16 ULP).
 
 To use it:
 
@@ -268,8 +267,8 @@ geometry is 6.32 mnats on KL, below every margin argued from here.
 - **Tight on 128 GB with the sidecar** (~107 GiB resident). Cold runs page;
   discard a cycle before benchmarking.
 - **MTP is single-box parity, not a speedup** (19.99 vs 19.7 tok/s), and it
-  requires the bundled absorbed-MLA fix — without it the sidecar is a net
-  loss.
+  must run through `vqlab serve` / `mtp-generate` — a homegrown verify loop
+  makes it a net loss (see the MTP section).
 - **Decode small-M kernel behaviour** is a known open frontier for this
   lineup, not a property of the quantization quality.
 
