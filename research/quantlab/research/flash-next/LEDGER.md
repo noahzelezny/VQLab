@@ -2421,3 +2421,63 @@ gemma-4-e4b-it-VQ-PLE is therefore a NO-SHIP pending a fix to the attention
 path (or confirmation on hardware with a larger threadgroup limit — not
 checked here). The other 17 artifacts are clean through every gate this
 pass ran.
+## 2026-09-02 — ROWS_TG bycatch closed out: `_EXPERT_ROWS_TG` (unpacked-d8 /
+d4-devcb) has NO local dispatch surface under ~25 GiB; nothing to sweep
+
+Picking up the open item left two entries above ("the unpacked d8 simd and
+d4 devcb simd kernels still use `_EXPERT_ROWS_TG = 32` and were NOT swept").
+FINDING FIRST: **there is nothing local to sweep it on.** `_EXPERT_ROWS_TG`
+is the only other ROWS_TG-style constant in `src/vqlab/vq_switch.py`
+(`_DENSE_ROWS_TG` is a separate, already-swept dense-kernel constant, not an
+expert/switch one) and it is shared by exactly two dispatch arms in
+`_fused_resolve`: `vq_fused_d8_simd` (unpacked D=8, K > `_D8_TG_MAX_K`=1024,
+`IN//G >= 32`) and `vq_fused_d4_devcb_simd` (unpacked D=4, K > 1024, doesn't
+fit the threadgroup codebook cache, `G % 16 == 0`, `IN//G >= 32`). Both
+require **unpacked** codes (`pack_bits` absent/0, per `VQSwitchLinear.
+from_weights` — codes.dtype uint32 is the sole packed signal, and the actual
+pack_bits/dim/k per module live in each artifact's `config.json[
+"vq_modules"]`, not guessable from tensor dtype alone).
+
+CHECK METHOD: walked every local artifact directory (`du -sm` at the top
+level of `/Volumes/Thunderbay SSD/Exo Models`), and for every one at or
+under ~25 GiB that carries a `vq_modules` config, tallied `(dim, k,
+pack_bits)` across its 120-144 expert modules directly from the config (no
+model load):
+
+    TheDrainFlorist--Qwen3.8-Flash-Next-VQ-2.1bpw (48G, the packed-d8 rung):
+        (dim=8, k=16384, pack_bits=14): 138   <- _EXPERT_ROWS_TG_D8_PACKED, tuned
+        (dim=2, k=256,   pack_bits=None): 6   <- vq_fused_d2, no rows_tg at all
+    TheDrainFlorist--Qwen3.6-35B-A3B-VQ-3.4bpw (14G): (4, 2048, 11) x120  [packed]
+    TheDrainFlorist--Qwen3.6-35B-A3B-VQ-3.8bpw (16G): (4, 8192, 13) x120  [packed]
+    TheDrainFlorist--Qwen3.6-35B-A3B-VQ-4.6bpw (19G): (4,2048,11)x30 + (2,512,9)x90 [packed]
+    TheDrainFlorist--Qwen3.6-35B-A3B-VQ-5.4bpw (23G): (2, 1024, 10) x120  [packed]
+    qwen4exp_vq_fit_d2k256 (28G, just over budget): (2, 256, None) x144  [D=2, no rows_tg]
+    qwen4exp_vq_packed_d8k16384 (16G): (8, 16384, 14) x144  [same tuned geometry]
+    qwen4exp_vq_packed_mixL01p4 (20M, stub/empty): (2,256,None)x18 + (8,16384,14)x126
+
+Every under-25-GiB switch_mlp artifact is either the already-tuned packed-d8
+geometry, or D=2/D=4 packed (neither touches `_EXPERT_ROWS_TG` — packed D=4
+goes to `vq_fused_packed{bits}_d4_devcb`, which is thread-per-row and sets
+no `simd_rows` at all; D=2 has its own non-simd kernels). Widening the walk
+to every remaining local directory (`glm53_vq_fit_d4k16384_partial`,
+`glm53_vq_fit_d4k2048/d512`, `glm53_vq_fit_d8k16384`, `qwen4exp_vq_fit_
+d8k16384`, `qwen4exp_vq_fit_full`, the 397B rungs) DOES find real unpacked
+geometry that would dispatch `_EXPERT_ROWS_TG` — `glm53_vq_fit_d8k16384`
+(90G, dim=8/k=16384/pack_bits=None), `qwen4exp_vq_fit_d8k16384` (90G, same),
+and `glm53_vq_fit_d4k16384_partial` (110G, dim=4/k=16384/pack_bits=None,
+would need the not-fits-threadgroup / G%16==0 check confirmed too) — but all
+three are 90-110 GiB, 3.6-4.4x the ~25 GiB local-machine budget this task is
+scoped to.
+
+VERDICT: `_EXPERT_ROWS_TG` is unswept and STAYS unswept — not because the
+question is uninteresting, but because no local artifact under ~25 GiB
+exercises either kernel that reads it. This isn't the same as "irrelevant":
+`d4-devcb-simd` and `d8-simd` (unpacked) are the fallback path for any
+*unpacked* large-K rung, which is exactly what the 90-110 GiB `_fit_`
+artifacts are — future work, not this pass. No constant changed, no test
+added (there is nothing bit-neutral to pin — `test_packed_d8_simd_rows_per_
+threadgroup` already asserts `_EXPERT_ROWS_TG == 32` unchanged, so the
+current value stays pinned as-is), `pytest tests/`: 203 passed, 11 skipped,
+unchanged.
+
+stand-in offered as a substitute measurement.
