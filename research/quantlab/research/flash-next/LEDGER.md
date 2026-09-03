@@ -2033,3 +2033,175 @@ not a quality signal.
   Nothing flipped here; measurements in scratchpad aba_ss.py pattern
   (in-process flag flips, sanctioned by the plan-memo flag keys) + two
   separate-process score_ppl_resident --chunk 16 runs.
+
+## 2026-09-02 — KERNEL ARC 7 (devx cost-map refresh): the well IS smeared now. No new single term clears the ~25% bar bit-identically; the only >25% term (the reduction) is the SAME lever arc 4/6 already found and did not ship.
+
+Arc 4 mapped the OLD (staged) kernel: inner loop 43-49%, reduction ~19%,
+staging+barriers+launch ~36%. Arc 5 shipped `devx` on by default
+(`_SRC_FUSED_PACKED_D8_SIMD_DEVX`, `VQ_D8_DEVX=1`): the threadgroup tile, the
+staging loop and both barriers are gone, so that three-way split is stale for
+the kernel actually running today. This arc re-runs the same wrong-on-purpose
+cost-only ablation against **devx as base** to answer one question: with
+staging gone, is there a NEW concentrated target, or is cost now smeared
+across terms too small to be worth an arc 7 build?
+
+Instrument: `scripts/bench_d8_devx.py` (new, committed; reuses
+`bench_d8_inner.py`'s harness plumbing -- `load_proj`, `make_inputs`,
+`interleaved`, `dispatch` -- unmodified). Real L20 gate/up/down 2.1bpw
+tensors, expert axis sliced to E=64 (~1 GiB resident, READ-ONLY, no model
+loaded). Arc-standard: JIT-warm, interleaved A,B,A,B, 50 dispatches/window,
+min over 15 reps with median alongside, `mx.eval` on the full output list. No
+src/ change -- `_SRC_FUSED_PACKED_D8_SIMD_DEVX` is read as-is from
+`vq_switch.py`; every arm is a text substitution on a local copy of that
+string, same discipline as arcs 4/5.
+
+### 1. COST-ONLY ABLATION ON devx. Fraction of base, min (median), N=20:
+
+    arm                                  gate N=20    up N=20      down N=20
+    nocode     code word load only       0.78 (0.78)  0.80 (0.80)  0.74 (0.76)
+    nogather   codebook gather only      0.90 (0.85)  0.90 (0.88)  0.89 (0.92)
+    noxs       device x read only        0.94 (0.90)  0.94 (0.93)  0.94 (0.95)
+    noinner    whole inner loop deleted  0.65 (0.63)  0.63 (0.64)  0.50 (0.54)
+    nored      whole reduction deleted   0.71 (0.73)  0.71 (0.69)  0.70 (0.74)
+    noscale    reduction's 40 scale
+               loads deleted             0.89 (0.85)  0.88 (0.86)  0.91 (0.90)
+    empty      launch + grid floor       0.18 (0.22)  0.19 (0.20)  0.21 (0.26)
+
+Owned share (1 - fraction), N=20 median, the honest read:
+
+    term                              gate    up    down
+    inner loop (code+gather+x-read)   37%    36%    46%
+      of which: code word load        22%    20%    24%
+                codebook gather       15%    12%     8%
+                device x read         10%     7%     5%
+    reduction chain (simd_shuffle)    27%    31%    26%
+    launch + grid floor               22%    20%    26%
+
+(rows do not sum to 100% -- deleting one thing changes the compiler's
+scheduling of what's left, same caveat arc 4 flagged; these are LOWER BOUNDS,
+read as relative sizes, not an exact partition.)
+
+Individual N=1/N=10 rows (min/med) for the record, gate_proj:
+
+    N     nocode      nogather    noxs        noinner     nored       empty
+    1   0.93/0.88   0.98/0.93   1.00/0.96   0.92/0.79   0.98/0.94   0.81/0.74
+   10   0.84/0.82   0.95/0.88   0.98/0.88   0.69/0.62   0.77/0.71   0.31/0.35
+   20   0.81/0.78   0.90/0.85   0.94/0.90   0.65/0.63   0.71/0.73   0.18/0.22
+
+**FOUR FINDINGS.**
+
+  (a) THE STAGING TERM DID NOT MOVE ELSEWHERE AS ONE BLOCK -- IT WAS REAL AND
+      IS GONE. Arc 4's staged-kernel inner loop was 43-49%; devx's is 36-46%.
+      Arc 4's reduction was ~19%; devx's is 26-31% (the SAME absolute
+      microseconds, over a smaller total -- devx did not touch the
+      reduction, so its unchanged cost is now a bigger SLICE of a cheaper
+      dispatch). Arc 4's staging+barriers+launch was ~36%; devx's launch-only
+      floor is 18-26%. Arithmetic checks: devx deleted ~45-49% of the
+      dispatch (arc 5's headline), and 100% - (36 to 46) - (26 to 31) =
+      23-38%, consistent with the measured 18-26% launch floor plus rounding
+      slop from the non-additivity caveat above.
+
+  (b) NO SINGLE LOAD CLEARS 25%, SAME AS ARC 4, NOW CONFIRMED AGAINST THE
+      SHIPPED KERNEL. The code word load is the largest individual term at
+      20-24% (up from arc 4's ~20-24% on the staged kernel -- essentially
+      unchanged, because devx never touched this load), the codebook gather
+      is 8-15% (still cheap, confirming arc 4's `warmgather` finding that
+      residency is not the cost), and the device x read is now only 5-10%
+      (replacing a threadgroup round-trip with a raw device read did not
+      just remove the staging overhead, it made the READ ITSELF cheaper --
+      consistent with arc 5's read of L1-served device reads beating a
+      tg-store/tg-load round trip). Depth-2 pipelining was already ruled a
+      null on this loop structure by arc 4 and nothing here reopens it.
+
+  (c) THE REDUCTION IS NOW THE SINGLE LARGEST TERM ON GATE/UP (27-31%),
+      ahead of every individual load and ahead of the launch floor. This is
+      the ONE term that clears the >25% bar. It is not a new discovery --
+      arc 4 found and priced this exact chain (`nored`/`noscale`), and arc 4
+      built the fix (`simd_sum`, `_SRC_FUSED_PACKED_D8_SIMD_SS`). It grew
+      from ~19% to ~27-31% of the dispatch not because it got slower in
+      absolute terms but because devx made everything AROUND it cheaper.
+
+  (d) THE LAUNCH/GRID FLOOR (18-26%) IS THE SECOND-LARGEST TERM AND HAS NO
+      NEW LEVER. Arc 4 already priced dispatch fusion at ~zero (two-codebook
+      problem) and arc 5 already killed the per-call Python/template
+      overhead that sat on top of it. Nothing in this ablation reopens
+      either.
+
+### 2. GB/s ACHIEVED vs the ~290 GB/s device ceiling (code-stream bytes only,
+per-expert `codes.nbytes/E + vq_scales.nbytes/E`, times N, over min latency):
+
+    shape       N=1     N=10    N=20    % of ceiling @N=20
+    gate_proj   41.6   137.6   153.5    53%
+    up_proj     40.7   124.6   152.8    53%
+    down_proj   46.2   111.6   123.2    42%
+
+Same shape as arc 4's read: N=1 is launch-dominated (14-16% of ceiling), and
+by N=20 gate/up are at ~53% of the ceiling -- up from arc 4's pre-devx
+111-125 GB/s (~40-43% of ceiling) to devx's 153-155 GB/s. down_proj (NGRP=10,
+thread-per-row, no reduction, declined from the simd layout by construction)
+sits lower at 42% because it is launch-floor-dominated at every N tested here
+(OUT=2560 but NSUB=80, a much smaller per-row workload).
+
+### 3. devx+simd_sum COMPOSITION, measured directly against devx-as-base
+(module-global patch on `V._SRC_FUSED_PACKED_D8_SIMD_SS`, same technique arc
+6 used for its acceptance run -- NOT a src/ change, reverted in a `finally`
+block). Real dispatcher, `V._D8_DEVX=True` held fixed, `V._D8_SIMDSUM`
+flipped:
+
+    shape       N     devx us(min/med)   devx+ss us(min/med)   speedup min/med   GB/s devx->+ss
+    gate_proj    1      9.6/11.0            9.0/10.7            1.06/1.03         42.7 -> 45.3
+                 5     19.5/25.3           16.2/17.6            1.20/1.44        105.1 -> 126.0
+                10     31.0/32.3           23.6/25.5            1.31/1.27        132.3 -> 173.4
+                20     53.6/55.1           38.5/40.9            1.39/1.35        152.9 -> 212.9
+    up_proj      1      9.7/10.6            9.2/11.9            1.06/0.89         42.1 -> 44.5
+                 5     19.0/20.7           15.9/17.4            1.20/1.19        107.6 -> 129.2
+                10     30.6/33.2           23.7/24.5            1.29/1.36        134.0 -> 172.5
+                20     53.5/56.0           39.5/46.5            1.35/1.20        153.2 -> 207.5
+
+1.3-1.4x at N=20 on both shapes, min AND median positive at every N>=5 --
+bigger than arc 4's 1.16-1.20x (SS alone, over the staged base) and than arc
+5's 1.19-1.24x (devx alone, over the staged base), because the two no longer
+compose over the SAME staged floor -- each is now removing a bigger relative
+share of a smaller total. This is directly comparable to arc 6's in-process
+end-to-end composed number (18.39 -> 18.84 tok/s, +2.4%): this per-dispatch
+read is consistent with that end-to-end figure once launch-floor and
+non-expert time are folded back in. **NOT bit-identical** -- same half-ULP
+story as arc 4/6 (0.05-0.16% of elements, one half-ULP each, ties against an
+fp32 reference). Nothing shipped, nothing gated-flipped; `V._D8_SIMDSUM`/
+`V._D8_DEVX` and the swapped SS source string are restored before the script
+returns.
+
+### VERDICT: cost is smeared; bit-identical headroom is exhausted at
+**~10% (the largest single un-shippable-without-fusion load)**, and the one
+term over 25% (the reduction, 27-31%) is not a NEW target -- it is arc 4's
+`simd_sum` lever, unshipped for the same reason it was unshipped in arc 4/6:
+it is not bit-identical, and shipping it is a policy decision on Noah's desk,
+not an engineering gap.
+
+  Restated against the brief's question directly: is any single term
+  concentrated enough (>25% AND plausibly attackable) to justify a future
+  arc? **No new one.** The reduction clears >25% but is not a NEW target --
+  it is the SAME lever arc 4 built and arc 6 already ran the full
+  ppl/KL/A-B-A acceptance gate on (zero measured quality delta, +2.4%
+  composed with devx). Every other term is either provably unfixable within
+  the bit-identity gate (individual loads, each <25%, already the subject of
+  four failed load-pattern arcs) or unfixable by any means arc 4 already
+  costed at zero (the launch floor, reachable only by dispatch fusion, which
+  arc 4 priced at ~zero due to the two-codebook problem).
+
+  So the honest framing is not "arc 7 target exists" in the sense of a NEW
+  build -- it is: **the decision arc 4 and arc 6 already handed to Noah is
+  still the only lever on the table**, and this pass adds one number to it:
+  composed devx+ss is now measured at 1.3-1.4x per-dispatch at decode N
+  (up from arc 4's 1.16-1.20x projection made against the staged kernel),
+  which is CONSISTENT with, not a revision of, arc 6's +2.4% end-to-end
+  figure. There is no bit-identical well left to draw from; what remains is
+  the same relax-the-gate call as before.
+
+### Artifacts
+
+`scripts/bench_d8_devx.py` (new, committed) -- devx-base cost ablation
+(`--mode cost`) and the devx+simd_sum composition probe (`--mode ss`), both
+read-only against the 2.1bpw artifact's L20 tensors, no model loaded.
+`pytest tests/` unaffected: 200 passed, 11 skipped, unchanged from arc 6 (no
+src/ file touched by this arc).
