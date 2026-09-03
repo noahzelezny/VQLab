@@ -1341,3 +1341,22 @@ size; +40% over the pre-kernel baseline. GLM measured the same day:
 rows=8 does NOT move its T=2 ratio (see glm53 ledger) — indexer remains
 its sole gate. Published HF repos still carry the original bundles;
 republish is a separate, gated decision.
+
+## 2026-09-02 — matched-bytes 397B cluster comparison: the VQ tax measured at scale
+
+Same boxes, same RDMA tensor topology, same 300-token protocol:
+
+  spicyneuron 2.6bit affine (121 GiB)   29.8/29.8/30.2 clean runs
+                                        (two colder runs 15.8/21.0 —
+                                        first-touch; median-of-clean ~29.9)
+  VQ 2.6bpw (122.3 GiB)                 20.3 median (19.86-20.39, tight)
+  VQ 3.1bpw (154 GiB)                   20.4 median
+
+Affine decodes ~1.45x faster at matched bytes — the third independent
+measurement of the ~1.5x VQ decode tax (Flash-Next single-box: 27.0 vs
+17.4; GLM T=2 scaling parity aside). Also: VQ 2.6 and 3.1 decode at the
+SAME speed despite 32 GiB size difference — cluster decode is dispatch/
+sync-bound, not weight-byte-bound, for the VQ builds. The quality side
+is unchanged (our 2.6bpw beats their 2.6bit on both corpora, published);
+cards get the honest split: they win tok/s, we win quality-per-byte,
+and the tax is the kernel arc's target number.
