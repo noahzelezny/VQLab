@@ -60,6 +60,47 @@ import mlx.nn as nn
 _DENSE_FUSED_MAX_N_PACKED = int(os.environ.get("VQ_DENSE_FUSED_MAX_N", 96))
 _DENSE_FUSED_MAX_N_PLAIN = int(os.environ.get("VQ_DENSE_FUSED_MAX_N_PLAIN", 12))
 
+# THE PACKED CUTOFF IS GEOMETRY-DEPENDENT, and 96 was a d=2 number.
+#
+# The table above was measured on the 27B **d=2** mlp shape (K512/bits9,
+# i.e. the 4.8bpw rung). The 3.9bpw rung is d=4/K=4096/packed-12 and got a
+# dense kernel only later, so it inherited a cutoff nothing had measured for
+# it -- and at d=4 the fused kernel does 4 codes per step against a 64 KB
+# DEVICE codebook, which is a different cost curve entirely.
+#
+# Re-measured per rung with BOTH current paths (scripts/bench_dense_crossover.py,
+# real L20 gate_proj, ms/call min, fused/decode ratio):
+#
+#     N            32     64     96    128
+#     3.9 (d4)    0.90   1.62   2.27   2.85    crossover ~35
+#     4.8 (d2p9)  0.45   0.87   1.20   1.61    crossover ~72
+#     4.5 (d2)    1.47   2.77   3.46   4.31    crossover ~20
+#
+# So at d=4 the shipped 96 ran the fused kernel 2.27x SLOWER than decoding
+# the weight over the whole band N=36..96; at d=2 packed it was mildly high;
+# and the unpacked default of 12 is conservative but safe (crossover ~20).
+#
+# Keyed on d, because that is what the measurement says the curve depends
+# on. VQ_DENSE_FUSED_MAX_N still overrides, and still wins, for A/B.
+#
+# NOTE ON NUMERICS. The fused and decode paths are NOT bit-identical to each
+# other and never were (the fused kernel keeps an fp32 accumulator per scale
+# group; the decode path materialises fp16 weights and hands them to the
+# GEMM) -- only fused-vs-fused and decode-vs-decode identity is claimed
+# anywhere. Lowering the cutoff therefore moves the N=36..96 band from the
+# fused path onto the DECODE path, which is the path every published score
+# for these artifacts was produced on. The change moves those shapes toward
+# the scored numerics, not away from them.
+_DENSE_FUSED_MAX_N_BY_D = {2: 72, 4: 32}
+
+
+def _fused_max_n(pack_bits, d):
+    if not pack_bits:
+        return _DENSE_FUSED_MAX_N_PLAIN
+    if "VQ_DENSE_FUSED_MAX_N" in os.environ:
+        return _DENSE_FUSED_MAX_N_PACKED
+    return _DENSE_FUSED_MAX_N_BY_D.get(d, _DENSE_FUSED_MAX_N_PACKED)
+
 
 def _resolve_kernel(name):
     """Find the fused kernel, most-local copy first.
@@ -141,6 +182,124 @@ def _unpack_rows(packed, nsub, bits):
     ct = mx.uint8 if bits <= 8 else mx.uint16
     # outs[i] is code i of every block -> interleave back to row order
     return mx.stack(outs, axis=-1).reshape(R, nsub).astype(ct)
+
+
+# PREFILL PEAK: the transient that made a 11.6 GiB model need 18.7 GiB.
+#
+# THE MEASUREMENT (Noah, 2026-09-03, 27B 3.9bpw, 2048-token prompt, stock
+# mlx-lm): peak 18.7 G against 11.6 G active. The ~7 G is this file's
+# large-N path -- above _DENSE_FUSED_MAX_N_PACKED every VQLinear leaves the
+# fused kernel and materialises a decoded fp16 weight (17408 x 5120 x 2 B =
+# 178 MB per mlp linear, and the packed rungs allocate an unpacked code slab
+# on the way there too).
+#
+# WHY IT IS NOT 178 MB. mlx is LAZY: it builds the entire forward graph
+# before evaluating any of it, so nothing forces layer L's decoded weight to
+# be freed before layer L+1's is allocated. Across 64 layers x 3 linears the
+# live set is bounded only by how far ahead the graph is built -- which is
+# how 178 MB of legitimate working memory becomes ~7 G of peak.
+#
+# WHY PEAK IS THE BUDGET, NOT RSS. The earlier note in this file (correctly)
+# said not to quote get_peak_memory() as a RAM requirement, because a single
+# model in isolation completes under a much smaller cap. That still holds for
+# the single-model case. It does NOT hold for Noah's use case: several models
+# resident at once, where every model's peak is charged against the same
+# machine at the same time. There, "space-saving model" has to mean
+# peak ~= resident + KV + a small BOUNDED buffer, so this path has to have a
+# fixed transient budget rather than a graph-depth-dependent one.
+#
+# THE FIX IS THE FORCED EVAL, NOT THE TILING -- and that distinction cost a
+# wrong claim, so it is written down. The plan was to decode in OUT-row tiles
+# under a byte budget, on the reasoning that splitting along OUT reorders no
+# reduction: output element (n, o) is the same length-IN dot product
+# whichever tile row o lands in. That reasoning is correct about the MATH and
+# wrong about MLX. Measured: at 51-row tiles the output bits DIFFER from the
+# untiled path (tests/test_vq_dense_peak.py caught it), because mlx's GEMM
+# chooses how to split its own K reduction based on the operand SHAPE -- so
+# changing the output width changes the accumulation order inside the matmul,
+# even though nothing in this file reordered anything. Row tiling is
+# therefore NOT bit-identical in general, and whether it happens to be at any
+# given shape is luck (it holds at 64 MB on the real 27B shapes; it does not
+# at 51 rows).
+#
+# So the DEFAULT is the part that IS provably bit-identical: decode the whole
+# weight exactly as before -- one tile, one GEMM, same shapes, same bits --
+# and simply mx.eval the result before returning. Forcing evaluation cannot
+# change a value; it only decides WHEN the graph runs. That alone caps the
+# live set at ONE layer's transient instead of the whole forward's, which is
+# 13x of the 14x that was available.
+#
+# Row tiling stays reachable (VQ_DENSE_DECODE_TILE_MB > 0) for anyone who
+# needs a harder, width-independent bound and can accept a GEMM-shape
+# dependent last bit. It is OFF by default, like every other
+# non-bit-identical option in this codebase.
+#
+# MEASURED (scripts/bench_dense_prefill_peak.py, 48 REAL VQLinears from the
+# 3.9bpw artifact, N=2048, transient = peak - resident, every arm checked
+# against arm 0 by uint16 BIT PATTERN -- not array_equal, which reports
+# NaN != NaN on a deep unnormalised chain):
+#
+#     tile_MB       0     512     256      64      16
+#     transient  6.811G  0.519G  0.519G  0.390G  0.227G
+#     wall       1.072s  1.054s  1.058s  1.057s  1.378s
+#     bits         ref    same    same    same    same   (at THESE shapes)
+#
+# and the old path's transient GROWS WITH DEPTH -- 2.758 G at 16 linears,
+# 6.811 G at 48 -- exactly as the lazy-graph diagnosis predicts, while every
+# forced-eval arm is FLAT in depth. The 6.8 G at 48 linears is the ~7 G Noah
+# measured on the real 192-linear forward.
+#
+# DEFAULTS: eval ON, row tiling OFF. The eval is free (1.054 vs 1.072 s --
+# it pays for itself by not building a 48-layer-deep graph) and takes the
+# transient from 6.811 G to 0.519 G, i.e. 13.1x of the 30x that row tiling
+# down to 16 MB would reach. The remaining factor is not worth a bit that
+# depends on which GEMM mlx picked, and the 16 MB arm is also where the sync
+# cost finally bites (+30%).
+#
+# VQ_DENSE_DECODE_EVAL=0 restores the fully lazy pre-arc path for A/B.
+# VQ_DENSE_DECODE_TILE_MB=<mb> additionally row-tiles to a hard byte budget:
+# width-independent, but NOT bit-identity-guaranteed (see above).
+_DENSE_DECODE_EVAL = os.environ.get("VQ_DENSE_DECODE_EVAL", "1") != "0"
+_DENSE_DECODE_TILE_MB = float(
+    os.environ.get("VQ_DENSE_DECODE_TILE_MB", 0))
+
+
+def _decode_matmul(xf, codes_in, codebook, scales, group_size, OUT, IN,
+                   pack_bits):
+    """xf @ decode(codes).T, with a bounded transient. Returns [N, OUT].
+
+    Default arm (eval on, no row tiling) is BIT-IDENTICAL to the pre-arc
+    path: identical shapes, identical GEMM, only the evaluation TIME differs.
+    """
+    cbk = codebook.astype(mx.float16)
+    budget = int(_DENSE_DECODE_TILE_MB * (1 << 20))
+    row_bytes = IN * 2
+    D = int(codebook.shape[1])
+
+    def _tile(r0, r1):
+        c = codes_in[r0:r1]
+        if pack_bits:
+            c = _unpack_rows(c, IN // D, pack_bits)
+        w = _decode(c, cbk, scales[r0:r1], group_size, r1 - r0, IN)
+        return xf @ w.T.astype(xf.dtype)
+
+    if budget <= 0 or row_bytes * OUT <= budget:
+        # ONE tile -- the whole weight, exactly the shapes the pre-arc path
+        # used, so exactly its bits. The mx.eval is the entire mechanism:
+        # it caps the live set at one layer's transient.
+        y = _tile(0, OUT)
+        if _DENSE_DECODE_EVAL:
+            mx.eval(y)
+        return y
+    # Row-tiled arm: harder bound, and the output width per GEMM changes, so
+    # the last bit can move (see the block comment). Opt-in only.
+    tile_rows = max(1, budget // row_bytes)
+    parts = []
+    for r0 in range(0, OUT, tile_rows):
+        p = _tile(r0, min(r0 + tile_rows, OUT))
+        mx.eval(p)          # frees this tile's decoded weight before the next
+        parts.append(p)
+    return mx.concatenate(parts, axis=-1)
 
 
 class VQLinear(nn.Module):
@@ -247,8 +406,7 @@ class VQLinear(nn.Module):
         # have a kernel (d=2 tiled/untiled, d=4 device-codebook), and
         # duplicating that as `== 2` here is what kept the d4 rung on
         # the decode path after its kernel existed.
-        _maxn = (_DENSE_FUSED_MAX_N_PACKED if self.pack_bits
-                 else _DENSE_FUSED_MAX_N_PLAIN)
+        _maxn = _fused_max_n(self.pack_bits, int(self.codebook.shape[1]))
         if N <= _maxn and _fits_tg:
             # DENSE fused kernel (2026-08-19): one simdgroup per output row
             # instead of one thread, no expert axis. Bit-identical to the
@@ -268,13 +426,9 @@ class VQLinear(nn.Module):
                                  self.vq_scales, pack_bits=self.pack_bits,
                                  in_features=self._in_features)
             return y.astype(x.dtype).reshape(*orig_shape[:-1], OUT)
-        codes = self.codes
-        if self.pack_bits:
-            codes = _unpack_rows(codes, IN // self.codebook.shape[1],
-                                 self.pack_bits)
-        w = _decode(codes, self.codebook.astype(mx.float16),
-                    self.vq_scales, self.group_size, OUT, IN)
-        return (xf @ w.T.astype(x.dtype)).reshape(*orig_shape[:-1], OUT)
+        y = _decode_matmul(xf, self.codes, self.codebook, self.vq_scales,
+                           self.group_size, OUT, IN, self.pack_bits)
+        return y.reshape(*orig_shape[:-1], OUT)
 
 
 class VQEmbedding(nn.Module):
