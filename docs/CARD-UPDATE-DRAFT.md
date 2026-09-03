@@ -111,13 +111,14 @@ matched-or-better quality. We win on bytes, they win on tok/s; say so.]
 - [x] Noah: sidecar decision — SHIP for all MTP-capable families
 - [ ] GLM full-trunk shim validation (warm A/B running; acceptance 0.82
       confirmed on shipping artifact)
-- [ ] **GLM SHIP BLOCKER — prefill spike**: bounded (2048 chunks + mem
-      limit) but per-chunk transient still ~50-60G class on long prompts.
-      Before GLM ships: (1) read per-chunk ledger from a GLM serving
-      session (instrumentation already in exo), (2) per-layer eval inside
-      the chunk if layers-in-flight confirmed, else shrink chunk. MTP loop
-      needs the same chunked prefill (vqlab/mtp/loop.py, currently
-      unchunked single-shot). Flash/397B sidecars NOT gated on this.
+- [x] **GLM prefill spike: RESOLVED by measurement** (2026-09-02 night).
+      26,423-token prompt through the 2-node pipeline: per-chunk transient
+      <2G, flat across all 13 chunks (peak 50.5G -> 52.2G on a 48.8G-resident
+      rank; the rise is KV growth). The morning's chunk-2048 + per-chunk
+      eval + mem-limit fixes were the whole cure; per-layer eval not needed.
+      vqlab MTP loop head-seeding also now chunked (O(chunk) not O(prompt),
+      identical-tokens + identical-seed gates, 296 tests green). GLM is
+      un-gated for the push pending normal card review.
 - [ ] 397B head build + probe (agent running)
 - [x] final-kernel confirm A-B-A + re-bundle + check-release canary (one
       consolidated pass, 2026-09-02 overnight). The count was x13 in this
