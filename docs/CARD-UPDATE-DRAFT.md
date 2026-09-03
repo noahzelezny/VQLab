@@ -111,7 +111,11 @@ matched-or-better quality. We win on bytes, they win on tok/s; say so.]
 - [x] Noah: sidecar decision — SHIP for all MTP-capable families
 - [ ] GLM full-trunk shim validation (warm A/B running; acceptance 0.82
       confirmed on shipping artifact)
-- [x] **GLM prefill spike: RESOLVED by measurement** (2026-09-02 night).
+- [ ] **GLM prefill spike: HALF-measured — claim retracted** (Noah observed
+      +50G during the same run). The <2G/flat result below is the M3 RANK
+      ONLY; the M4 rank was running month-old exo code WITHOUT the chunking
+      fixes and has no instrumentation. Action: sync M4's exo checkout to
+      M3's commit (in progress), then re-measure with both ranks logging.
       26,423-token prompt through the 2-node pipeline: per-chunk transient
       <2G, flat across all 13 chunks (peak 50.5G -> 52.2G on a 48.8G-resident
       rank; the rise is KV growth). The morning's chunk-2048 + per-chunk
