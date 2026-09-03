@@ -71,6 +71,25 @@ if (A / "tokenizer.json").exists():
     except Exception as e:
         fails.append(f"tokenizer failed to load/encode: {e}")
 
+# The gate itself must be running against a STOCK mlx-lm, or every check
+# below is meaningless: the quantlab-era patch_mlx_lm.py installed
+# vq_switch.py INTO the venv's mlx_lm, silently and persistently, and a
+# gate run in such an env blessed incomplete bundles that ModuleNotFoundError
+# for every real downloader (the 27B rungs, discovered 2026-09-02 night).
+# The env that did it was deleted, but the failure mode is one
+# patch_mlx_lm.py invocation away from coming back -- so the gate checks.
+try:
+    import mlx_lm.models as _mlm
+    _patched = pathlib.Path(_mlm.__file__).parent / "vq_switch.py"
+    if _patched.exists():
+        fails.append(
+            f"THIS VENV IS PATCHED: {_patched} exists (quantlab-era "
+            f"patch_mlx_lm.py residue). A gate run here cannot certify "
+            f"anything -- bundles that depend on the patch pass here and "
+            f"break for every downloader. Remove the file and re-run.")
+except ImportError:
+    pass
+
 # The bundled runtime must not reach for anything a downloader lacks. This
 # is a byte check -- no model load, no GPU -- and it alone would have caught
 # all three broken rungs the moment they were built.
