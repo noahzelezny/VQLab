@@ -2481,3 +2481,307 @@ current value stays pinned as-is), `pytest tests/`: 203 passed, 11 skipped,
 unchanged.
 
 stand-in offered as a substitute measurement.
+
+## 2026-09-03 — DENSE-KERNEL ARC: the expert arcs' devx twin is worth MORE on the dense side (1.6-1.7x/dispatch, +39.5% e2e, bit-identical), and the dense prefill's +12 GiB peak was mlx laziness, not the decode itself
+
+Sixth kernel arc, first one on the DENSE side. Briefed to check which of the
+packed-d8 expert wins have applicable twins in the dense kernels
+(`src/vqlab/vq_dense.py` -> `vq_switch.py`'s `_SRC_DENSE_*`, the path the 27B
+line dispatches) and to ship the ones that apply; then, mid-arc, to make the
+dense prefill's peak stop being +50% of resident. Both landed.
+
+Instruments, all committed: `scripts/bench_dense_stage.py` (cost map +
+candidate arms), `scripts/dense_devx_accept.py` (bit-identity through the
+REAL dispatcher on every rung on disk), `scripts/bench_dense_prefill_peak.py`
+(peak vs resident on a chain of real VQLinears, no model load),
+`scripts/bench_dense_crossover.py` (fused-vs-decode crossover per rung),
+`scripts/dense_e2e_aba.py` (the single-load end-to-end).
+
+FIRST, A PROCESS NOTE. The worktree this arc opened in was cut 68 commits
+behind master, so arcs 4/5/6/7 and all three `bench_d8_*.py` harnesses were
+absent from it. Read as "the briefed prior work does not exist", the arc
+would have opened with a false refutation. Fast-forwarding the branch first
+is the fix, and checking that the briefed artifacts are actually reachable is
+now the first step of any arc that inherits a worktree.
+
+### 1. THE DENSE COST MAP IS NOT THE EXPERT COST MAP.
+
+`scripts/bench_dense_stage.py`, cost-only arms (each WRONG on purpose, each a
+LOWER BOUND), real 27B 3.9bpw L20 tensors (d4/K4096/packed-12/G64), fraction
+of base min/med:
+
+    arm         gate N=1    gate N=20   down N=1    down N=20
+    nostage     0.36/0.36   0.34/0.34   0.36/0.36   0.34/0.33
+    nobar       0.68/0.68   0.66/0.66   0.62/0.63   0.61/0.60
+    nostagebar  0.36/0.37   0.34/0.34   0.36/0.36   0.34/0.34
+    nored       0.68/0.69   0.67/0.66   0.69/0.69   0.68/0.67
+    empty       0.04/0.04  0.006/0.006  0.04/0.04  0.003/0.003
+
+Three differences from arc 5's expert map, and each one changed a decision:
+
+  * STAGING is ~66% of a dense dispatch, not ~48%.
+  * THE BARRIERS ARE ~32-39%, not ~2%. Arc 5 killed the "barrier convoy"
+    theory for the expert kernel; on the dense side the convoy is REAL. The
+    reason is occupancy, not the barrier instruction: a dense threadgroup is
+    `_DENSE_ROWS_TG=32` simdgroups (1024 threads) against the expert
+    kernel's 8, so each barrier synchronises 4x the threads while they all
+    wait on the same 4 KiB staging loop.
+  * THE LAUNCH FLOOR IS NOISE (0.3-4%), not arc 5's ~15%. One dense
+    dispatch covers a whole [17408, 5120] layer and costs 200-4200 us
+    against an expert dispatch's 13-67. So "fewer dispatches" — the lever
+    arc 4 priced at ~zero and arc 5 listed as remaining headroom — does not
+    exist on this side of the house at all. Nothing to chase.
+
+### 2. devx APPLIES, AND IS THE BIGGEST SINGLE KERNEL WIN OF ANY ARC SO FAR.
+
+All six dense kernels staged x through threadgroup memory, so all six got a
+twin: `_SRC_DENSE_{,PACKED_}D4_TILED_DEVX`, `_SRC_DENSE_{,PACKED_}D2_TILED_DEVX`,
+`_SRC_DENSE_{,PACKED_}D2_DEVX`. SHIPPED ON BY DEFAULT (`VQ_DENSE_DEVX=0`
+reverts).
+
+Two things that had to be right and are pinned by tests:
+
+  * THE NARROWING CAST. The staging loop wrote `half4((half)xrow[o], ...)`,
+    narrowing T to half on the way into the tile, so the twins read
+    `float4(half4(xr4[m]))` and not the bare `float4(xr4[m])` arc 5 could
+    afford. The bare form is identical at T=half and silently keeps mantissa
+    bits the tile would have discarded at bf16/fp32. Identity is therefore
+    tested at fp16, bf16 AND fp32.
+  * THE d2 BARRIER. The d2 kernels stage the CODEBOOK in threadgroup memory,
+    published by what used to be the first in-loop barrier. Deleting every
+    barrier there is a data race — garbage codebook reads, not a slower
+    kernel. The d2 twins keep exactly ONE barrier, hoisted out of the loop;
+    the d4 twins (device codebook) keep none. Asserted on the source.
+
+Through the REAL dispatcher (`scripts/dense_devx_accept.py`), every rung on
+disk, off -> on, us/dispatch min at N=1, bit-identity asserted before any
+timing was printed:
+
+    rung   geometry            gate          up            down
+    3.9    d4/K4096/pk12   223.5->137.8  223.5->138.7  228.6->134.9
+                              1.62x         1.61x         1.70x
+    4.5    d2/K256         124.6->116.8  125.2->116.9  188.9->114.1
+                              1.07x         1.07x         1.66x
+    4.8    d2/K512/pk9     130.4->118.5  130.2->115.4  177.8->110.2
+                              1.10x         1.13x         1.61x
+
+THE PRIZE IS PROPORTIONAL TO HOW OFTEN THE TILE IS RE-STAGED, which explains
+the split cleanly and predicts where the twin is worth having. The TILED
+kernels re-stage per 32-group block and win 1.6-1.7x. The UNTILED d2 kernels
+(gate/up of the 4.5/4.8 rungs, whose narrower NSUB fits the cap) stage the
+whole row ONCE and win only 1.07-1.13x — which is arc 5's `fullstage`
+negative (0.95-0.98x) seen from the other side, and consistent with it.
+
+### 3. THE ROWS QUESTION ANSWERS ITSELF, AND CATCHES A MIS-TUNED CONSTANT.
+
+Re-swept on the NEW kernel per arc 5's lesson (`--mode rows`), us/dispatch
+min at N=1, gate / down:
+
+    rows        4            8           16           32
+    base   149.7/154.5  158.9/164.8  188.3/208.0  215.2/216.7
+    devx   130.4/127.4  131.0/127.0  130.7/126.8  130.7/127.5
+
+devx is FLAT in rows — with no tile to share, the knob stops meaning
+anything, so `_DENSE_ROWS_TG` stays 32 and needs no per-kernel value. NO
+CHANGE, and that is the finding.
+
+BYCATCH: `_DENSE_ROWS_TG = 32` was the WORST of the four for the INCUMBENT
+kernel — base at rows=4 is 149.7 us against 215.2 at rows=32, i.e. the
+shipped dense kernel was leaving 1.44x on the table to a one-line constant,
+the same shape of miss as the `_EXPERT_ROWS_TG` bycatch. It is MOOT rather
+than actionable: devx at any rows (130.4) already beats base at its best
+rows (149.7), so the fix is the kernel, not the constant. Recorded because
+if devx is ever reverted, rows=4 is worth 1.44x on its own.
+
+### 4. simd_sum APPLIES, IS FAST, AND IS **NOT** COVERED BY THE 1-ULP DECISION.
+
+The dense reduction text is character-identical to the packed-d8 one, so
+arc 4's rewrite applies verbatim. Composed on devx it is 2.01-2.10x vs the
+staged base — a further 1.19-1.22x on top of devx alone (gate N=20 2451 ->
+2004 us), which the ablation predicts: the reduction is ~33% of a dense
+dispatch against ~19% in the expert kernel.
+
+IT IS SHIPPED OFF (`VQ_DENSE_SS=1` opts in), and the reason is a measurement,
+not caution. The 2026-09-02 gate relaxation (f6aa628) is explicitly scoped
+"for this reduction only", i.e. the packed-d8 expert kernel, where the
+divergence was ~0.1% of elements at ONE HALF-ULP. The dense divergence is an
+order of magnitude larger: max 1.00 / 4.00 / 2.00 / 7.00 ULP on gate at
+N=1/5/10/20, up to 8.00 on down_proj. Two structural reasons — a dense row
+reduces over NGRP=80-272 groups across NBLK=3-9 blocks, so the tree/serial
+disagreement compounds per block instead of once, and there is no expert axis
+to average it away. So the existing decision does not reach this: turning it
+on needs its own referee pass at dense ULP on the dense line. NOAH'S CALL,
+deliberately left un-taken; the twin and its numbers are committed as the
+reproducible record.
+
+### 5. A PATTERN THE BRIEF DID NOT LIST, AND A BUG THAT CAUSED IT.
+
+Arc 5's OTHER shipped win — specialized template-free kernels — had never
+reached the dense path, and not by choice: `_get_kernel_spec` HARDCODED the
+expert input signature `["x","eidx","codes","codebook","scales","dims"]`. A
+dense kernel has no `eidx`, so the dense dispatcher could never have used the
+spec route without binding the wrong buffers, and it silently kept paying the
+template cost. Fixed by extracting `_kernel_sig(name)` as the single source
+of truth for both `_get_kernel` and `_get_kernel_spec`, and routing every
+dense launch through one `_dense_dispatch` that also uses the `_dims_array`
+cache.
+
+Measured on the dense gate dispatch, host GRAPH-BUILD time only (no eval),
+which is where host cost lives:
+
+    spec=False  10.60 us/dispatch (median 11.86)
+    spec=True    4.18 us/dispatch (median  4.98)
+
+6.4 us x 192 dense dispatches/token = ~1.23 ms/token, ~2.9% of a 42 ms
+token. Bit-identical (same generated Metal, values baked as #defines);
+pinned by test. `VQ_SPEC_KERNELS=0` still reverts it globally.
+
+### 6. THE PREFILL PEAK: +12 GiB of transient, and the fix is one mx.eval.
+
+Noah's measurement (2048-token prompt, 27B 3.9bpw): peak 18.7 G vs 11.6 G
+active. Reproduced and localised WITHOUT a model load, on a chain of real
+VQLinears (`scripts/bench_dense_prefill_peak.py`, N=2048, transient =
+peak - resident, arms compared by uint16 BIT PATTERN — `array_equal` reports
+NaN != NaN once a deep unnormalised chain saturates fp16, which cost one
+false failure before it was caught):
+
+    tile_MB       0     512     256      64      16
+    transient  6.811G  0.519G  0.519G  0.390G  0.227G
+    wall       1.072s  1.054s  1.058s  1.057s  1.378s
+
+and the pre-arc arm's transient GROWS WITH DEPTH — 2.758 G at 16 linears,
+6.811 G at 48 — while every forced-eval arm is FLAT. That is the whole
+diagnosis: the 178 MB decoded weight per linear is legitimate working
+memory, but mlx is LAZY, so nothing forced layer L's weight to be freed
+before layer L+1's was allocated and the live set was bounded only by graph
+depth.
+
+  THE FIX IS THE FORCED EVAL, NOT THE TILING — and getting that backwards
+  produced this arc's one wrong claim, so it is written down. Row tiling
+  along OUT reorders no reduction *mathematically*: element (n, o) is the
+  same length-IN dot product whichever tile row o lands in. It still MOVES
+  THE BITS, because mlx's GEMM chooses its own K-split from the operand
+  SHAPE — so narrowing the output width changes the accumulation order
+  INSIDE the matmul even though this code reorders nothing. Caught by a
+  51-row tile in tests/test_vq_dense_peak.py, and now pinned there as a
+  REFUTATION (it fails loudly if a future mlx makes it identical).
+
+  So the default is the provably-exact half: decode the whole weight exactly
+  as before — one tile, one GEMM, same shapes, same bits — and `mx.eval` the
+  result before returning. Forcing evaluation cannot change a value; it only
+  decides when the graph runs. That is 13.1x of the 30x available, and row
+  tiling stays opt-in (`VQ_DENSE_DECODE_TILE_MB=<mb>`) for anyone needing a
+  width-independent bound who can accept a GEMM-dependent last bit.
+  `VQ_DENSE_DECODE_EVAL=0` restores the lazy path.
+
+### 7. NOAH'S DIRECTION (2) — RAISE THE FUSED N CUTOFF — POINTS THE OTHER WAY.
+
+`scripts/bench_dense_crossover.py`, real L20 gate_proj, both CURRENT paths,
+fused/decode ratio (< 1 = fused still winning):
+
+    N            32     64     96    128     crossover
+    3.9 (d4)    0.90   1.62   2.27   2.85       ~35
+    4.8 (d2p9)  0.45   0.87   1.20   1.61       ~72
+    4.5 (d2)    1.47   2.77   3.46   4.31       ~20
+
+Raising the cutoff would make prefill much SLOWER, and at a real prefill
+width (N=2048) the fused path is ~7x slower than materialising — so it can
+never be the peak fix. The measurement instead found the cutoff was too
+HIGH: `_DENSE_FUSED_MAX_N_PACKED = 96` was measured on the 27B **d=2** shape
+(its own note says so) and inherited by the d4 rung, which got a dense
+kernel later and whose crossover is ~35. Over N=36..96 the 3.9bpw rung was
+running the fused kernel up to 2.27x slower than decoding the weight.
+
+Now keyed on d (`_DENSE_FUSED_MAX_N_BY_D = {2: 72, 4: 32}`), env override
+unchanged. NUMERICS NOTE: fused and decode are NOT bit-identical to each
+other and never were (fp32-per-group accumulator vs materialised fp16 + GEMM)
+— only fused-vs-fused and decode-vs-decode identity is claimed anywhere. So
+this moves N=36..96 onto the DECODE path, which is the path every published
+score for these artifacts was produced on: toward the scored numerics, not
+away.
+
+### 8. END-TO-END, ONE 11.61 GiB LOAD, BOTH QUESTIONS.
+
+Shadow bundle (symlinked artifact + model.py rebuilt from this worktree's
+vq_switch.py + vq_dense.py; the on-disk artifact was NOT touched — a release
+is in flight), arms flipped IN-PROCESS through the loaded bundle's own
+globals, `scripts/dense_e2e_aba.py`:
+
+  PREFILL, real 2048-token prompt:
+
+    eval    peak      peak-resident   prefill tok/s
+    off    23.601G       11.991G          320.1
+    on     13.543G        1.934G          328.2
+
+  peak goes from 2.03x resident to 1.17x resident — peak ~= resident + 1.93 G
+  — and prefill is very slightly FASTER (+2.5%), because not building a
+  192-linear-deep graph is worth more than the syncs cost. Prefill logits
+  BIT-IDENTICAL across the arms.
+
+  DECODE A-B-A, greedy, 300 tokens, 3 rounds:
+
+    devx=off  16.952 / 16.945 / 16.933   median 16.945 tok/s
+    devx=on   23.609 / 23.669 / 23.635   median 23.635 tok/s
+    speedup 1.395x; generated texts IDENTICAL byte-for-byte
+
+  BASELINE CAVEAT, stated rather than smoothed over: 16.945 is this
+  harness's devx-OFF arm, not the card's 18.6 tok/s. The two are not the
+  same configuration — the off arm here still carries the spec-kernel and
+  dims-cache wins (§5), and the prompt/length/settings differ from the
+  card's. The 1.395x is an internal A-B-A of devx ALONE and should be quoted
+  that way; the card number will need its own re-measure at re-bundle.
+
+  ALSO NOTE the pre-arc peak measured here (23.601 G) is higher than Noah's
+  18.7 G on the same artifact and prompt length. Not reconciled, and it does
+  not need to be for the decision: both are ~2x resident, both come from the
+  same lazily-accumulated transient, and the fixed arm is 1.17x resident.
+  The likely difference is prompt chunking (this harness does one 2048-wide
+  forward, so the graph is at its deepest).
+
+### VERDICT
+
+  SHIPPED ON BY DEFAULT, all bit-identical, escape hatches without rebuild:
+    VQ_DENSE_DEVX=0         staged-tile dense kernels (all six)
+    VQ_DENSE_DECODE_EVAL=0  lazy (unbounded-peak) prefill decode path
+    VQ_SPEC_KERNELS=0       template-path kernels (now reaches dense too)
+  SHIPPED OFF, opt-in, NOT bit-identical:
+    VQ_DENSE_SS=1           dense simd_sum reduction (up to 8 ULP)
+    VQ_DENSE_DECODE_TILE_MB=<mb>  hard-bounded row tiling (GEMM-dependent)
+  CONSTANT CHANGED: _DENSE_FUSED_MAX_N_BY_D = {2: 72, 4: 32} (was a flat 96
+  inherited from a d=2 measurement).
+  Suite: 331 passed, 11 skipped (from 296/11 pre-arc; +35 in
+  tests/test_vq_dense_devx.py and tests/test_vq_dense_peak.py pinning devx
+  bit-identity on every geometry and dtype, the d2 barrier discipline, the
+  spec-signature regression, the eval-arm identity, the row-tiling
+  refutation, the defaults policy, and the d-keyed cutoff).
+
+  WHAT A RE-BUNDLE OF THE 27B LINE PICKS UP. The artifacts bundle their own
+  model.py SNAPSHOT of vq_switch.py + vq_dense.py, so end users see NONE of
+  this until re-bundle/re-publish (same standing situation as arc 5 and
+  rows=8). On re-bundle each rung gets:
+    * 3.9bpw — decode +39.5% (A-B-A above); per-dispatch 1.61-1.70x on all
+      three mlp projections; prefill peak 23.6 -> 13.5 GiB; the d4 cutoff
+      correction (up to 2.27x on N=36..96 shapes).
+    * 4.5bpw — down_proj 1.66x, gate/up 1.07x (untiled, little to win);
+      same prefill-peak fix; cutoff unchanged (unpacked, crossover ~20 vs
+      the shipped 12 — conservative, left alone).
+    * 4.8bpw — down_proj 1.61x, gate/up 1.10-1.13x; same prefill-peak fix;
+      cutoff 96 -> 72.
+  Plus, for every dense family (incl. the gemma e4b PLE line), the
+  spec-kernel host win that `_get_kernel_spec`'s hardcoded signature had
+  been silently withholding.
+
+  THE LIVE LEVERS AFTER THIS ARC:
+    1. dense simd_sum (+1.19-1.22x per dispatch) — gated on a dense-line
+       referee pass, Noah's call;
+    2. the dense inner loop: with staging and barriers gone the ablation's
+       remaining terms are the code/codebook fetch and the reduction, i.e.
+       the same issue-throughput wall five expert arcs failed to move — the
+       honest next probe is a different CODE LAYOUT, as arc 5 concluded;
+    3. dense_fits / _dense_tiled are now over-conservative: with devx the
+       kernels no longer allocate a threadgroup x tile at all, so the
+       (K + NSUB)*4 budget that decides fused-vs-decode-fallback is
+       measuring memory nothing reserves any more. Widening it would put
+       more shapes on the fused path. NOT touched here (it changes which
+       kernel serves a shape, which is a dispatch-semantics change deserving
+       its own pass), but it is now the cheapest reachable win.

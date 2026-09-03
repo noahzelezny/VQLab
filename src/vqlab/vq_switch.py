@@ -1828,6 +1828,238 @@ _SRC_DENSE_PACKED_D4_TILED = _PACK_FETCH + r"""
     if (active && lane == 0) y[(size_t)t * OUT + r] = static_cast<T>(acc);
 """
 
+
+# --- DEVICE-X twins of every dense kernel (2026-09-03, dense-kernel arc) ---
+# ON BY DEFAULT: bit-identical by construction and 1.66-1.77x per dispatch.
+#
+# THE TWIN OF ARC 5's devx, AND A BIGGER PRIZE THAN THE EXPERT ONE. Arc 5
+# found that the packed-d8 EXPERT kernel spent ~48% of a dispatch staging x
+# through a threadgroup tile and ~2% on its barriers, and deleting the tile
+# bought 1.17-1.24x. Every dense kernel has the same structure, so the same
+# ablation was run on the dense side first (scripts/bench_dense_stage.py, real
+# 27B 3.9bpw L20 tensors, cost-only arms each WRONG on purpose = lower
+# bounds, fraction of base min/med at N=1 / N=20):
+#
+#     arm         gate N=1    gate N=20   down N=1    down N=20
+#     nostage     0.36/0.36   0.34/0.34   0.36/0.36   0.34/0.33
+#     nobar       0.68/0.68   0.66/0.66   0.62/0.63   0.61/0.60
+#     nostagebar  0.36/0.37   0.34/0.34   0.36/0.36   0.34/0.34
+#     nored       0.68/0.69   0.67/0.66   0.69/0.69   0.68/0.67
+#     empty       0.04/0.04   0.006/0.006 0.04/0.04   0.003/0.003
+#
+# The dense cost map is NOT the expert one, and two of the differences matter:
+#   * staging is ~66% of a dense dispatch, not ~48%;
+#   * the BARRIERS are ~32-39%, not ~2%. Arc 5 killed the "barrier convoy"
+#     theory for the expert kernel; on the dense side the convoy is REAL,
+#     because a dense threadgroup is 32 simdgroups (1024 threads) against the
+#     expert kernel's 8, so every barrier synchronises 4x the threads and the
+#     staging loop they are all waiting on is the same 4 KB.
+#   * the launch floor is NOISE here (0.3-4%), not arc 5's ~15%: one dense
+#     dispatch covers the whole [17408, 5120] layer and costs 200-4200 us
+#     against an expert dispatch's 13-67, so there is nothing to win by
+#     dispatching less often. The "fewer dispatches" lever does not exist on
+#     this side of the house.
+#
+# WHAT THE TWINS CHANGE. Only where x is read from: the threadgroup tile, the
+# staging loop and (where legal) the barriers are deleted, and each lane reads
+# its own x slice from device as vec<T,2> / vec<T,4>.
+#
+# BIT-IDENTITY. The staging loop narrowed T to half on the way in
+# (`xs[i] = half2((half)xrow[..], ..)`), so the twins narrow the same way with
+# an explicit `half2(...)` / `half4(...)` cast around the device read rather
+# than a bare `float2(xr2[m])`. That distinction is load-bearing: a bare widen
+# would be identical only for T=half and would silently skip the narrowing for
+# a bf16 or fp32 activation. With the cast the values entering every dot --
+# and the dot/fma order, the code fetch, the scale walk and the reduction --
+# are exactly the base kernel's, so these are bit-identical for EVERY T by
+# construction, asserted on real tensors before any timing was printed
+# (scripts/bench_dense_stage.py) and pinned by tests/test_vq_dense_devx.py.
+#
+# BARRIER DISCIPLINE, and why the d2 twins keep one. The d4 kernels hold their
+# codebook in DEVICE memory, so once x staging is gone they need no barrier at
+# all. The d2 kernels stage the CODEBOOK into threadgroup memory
+# (`cb[MAX_K]`), and today the barrier that publishes it is the first one
+# inside the block loop. Deleting every barrier there would leave the codebook
+# fill unsynchronised -- a data race that would read garbage codebook entries,
+# not a slower kernel. So the d2 twins keep exactly ONE barrier, hoisted out
+# of the loop, immediately after the codebook fill.
+#
+# MEASURED, through the real dispatcher, off -> on, us/dispatch min/med
+# (27B 3.9bpw L20, d4/K4096/packed-12, rows=32):
+#
+#     gate (OUT 17408, IN 5120, NGRP 80)
+#       N=1   215.2/216.1 -> 130.7/132.0   1.65/1.64
+#       N=10 2091.2/2116.8 -> 1229.9/1231.9 1.70/1.72
+#       N=20 4152.0/4183.4 -> 2451.2/2453.2 1.69/1.71
+#     down (OUT 5120, IN 17408, NGRP 272)
+#       N=1   216.7/219.6 -> 127.5/128.6   1.70/1.71
+#       N=20 4114.1/4161.4 -> 2356.4/2361.4 1.75/1.76
+#
+# VQ_DENSE_DEVX=0 restores the staged kernels for A/B without a rebuild.
+def _devx_dots(src, w, idx, name):
+    """`float{w}(xs[{idx}+k])` -> `float{w}(half{w}(xr{w}[{idx}+k]))`.
+
+    Explicit per-use-site rewrite with a hard assert, rather than a loose
+    substring swap: the narrowing cast has to land on EVERY dot or the twin
+    is silently no longer bit-identical at non-half T.
+    """
+    n = 0
+    for k in range(4):
+        sub = idx if k == 0 else f"{idx}+{k}"
+        old = f"float{w}(xs[{sub}])"
+        if old not in src:
+            continue
+        src = src.replace(old, f"float{w}(half{w}(xr{w}[{sub}]))")
+        n += 1
+    assert n == 4, f"{name}: rewrote {n}/4 dense dot sites, not all four"
+    assert "xs[" not in src, f"{name}: a threadgroup x read survived"
+    return src
+
+
+def _dense_devx(src, w, tiled, staged_cb, name):
+    """Build the device-x twin of a dense kernel source."""
+    out = src.replace(f"    threadgroup half{w} xs[MAX_TILE];\n", "", 1)
+    out = out.replace(f"    threadgroup half{w} xs[MAX_NSUB];\n", "", 1)
+    assert out != src, f"{name}: no threadgroup x declaration to delete"
+    ptr = f"    const device vec<T,{w}>* xr{w} = (const device vec<T,{w}>*)xrow;\n"
+    if tiled:
+        # per-block staging + its two barriers -> one device pointer, and
+        # `base = 0` so the inner `m = j - base` addresses the whole row.
+        # staged_cb keeps ONE barrier, hoisted out of the loop, so the
+        # codebook fill above is still published before it is read.
+        bar = "    threadgroup_barrier(mem_flags::mem_threadgroup);\n" if staged_cb else ""
+        d4_stage = """    const int NBLK = (NGRP + 31) / 32;
+    for (int b = 0; b < NBLK; ++b) {
+        const int base = b * TILE;
+        const int span = min(TILE, NSUB - base);
+        threadgroup_barrier(mem_flags::mem_threadgroup);
+        for (uint i = lid; i < (uint)span; i += tgsize) {
+            const int o = (base + (int)i) * 4;
+            xs[i] = half4((half)xrow[o], (half)xrow[o+1],
+                          (half)xrow[o+2], (half)xrow[o+3]);
+        }
+        threadgroup_barrier(mem_flags::mem_threadgroup);
+"""
+        d2_stage = """    const int NBLK = (NGRP + 31) / 32;
+    for (int b = 0; b < NBLK; ++b) {
+        const int base = b * TILE;
+        const int span = min(TILE, NSUB - base);
+        threadgroup_barrier(mem_flags::mem_threadgroup);
+        for (uint i = lid; i < (uint)span; i += tgsize)
+            xs[i] = half2((half)xrow[(base + (int)i)*2],
+                          (half)xrow[(base + (int)i)*2 + 1]);
+        threadgroup_barrier(mem_flags::mem_threadgroup);
+"""
+        stage = d4_stage if w == 4 else d2_stage
+        assert stage in out, f"{name}: tiled staging text drifted"
+        out = out.replace(stage, ptr + bar + """    const int NBLK = (NGRP + 31) / 32;
+    for (int b = 0; b < NBLK; ++b) {
+        const int base = 0;
+""")
+        idx = "m"
+    else:
+        # untiled: the whole row was staged once, before the single barrier
+        # that also publishes the codebook. Drop the x loop, keep the barrier.
+        stage = """    for (uint i = lid; i < (uint)NSUB; i += tgsize)
+        xs[i] = half2((half)xrow[i*2], (half)xrow[i*2+1]);
+"""
+        assert stage in out, f"{name}: untiled staging text drifted"
+        out = out.replace(stage, ptr)
+        idx = "j"
+    out = _devx_dots(out, w, idx, name)
+    nbar = out.count("threadgroup_barrier")
+    assert nbar == (1 if staged_cb else 0), (
+        f"{name}: {nbar} barriers left, expected {1 if staged_cb else 0}")
+    return out
+
+
+_SRC_DENSE_D4_TILED_DEVX = _dense_devx(
+    _SRC_DENSE_D4_TILED, 4, True, False, "dense_d4_tiled")
+_SRC_DENSE_PACKED_D4_TILED_DEVX = _dense_devx(
+    _SRC_DENSE_PACKED_D4_TILED, 4, True, False, "dense_packed_d4_tiled")
+_SRC_DENSE_D2_TILED_DEVX = _dense_devx(
+    _SRC_DENSE_D2_TILED, 2, True, True, "dense_d2_tiled")
+_SRC_DENSE_PACKED_D2_TILED_DEVX = _dense_devx(
+    _SRC_DENSE_PACKED_D2_TILED, 2, True, True, "dense_packed_d2_tiled")
+_SRC_DENSE_D2_DEVX = _dense_devx(
+    _SRC_DENSE_D2, 2, False, True, "dense_d2")
+_SRC_DENSE_PACKED_D2_DEVX = _dense_devx(
+    _SRC_DENSE_PACKED_D2, 2, False, True, "dense_packed_d2")
+
+_DENSE_DEVX = os.environ.get("VQ_DENSE_DEVX", "1") != "0"
+
+
+# --- dense simd_sum twins: OFF BY DEFAULT, and they must stay that way -----
+# The dense reduction text is character-identical to the packed-d8 one, so
+# arc 4's simd_sum rewrite applies verbatim: instead of a 32-step serial
+# `acc = fma(srow[i], simd_shuffle(gacc, i), acc)` chain, each lane scales its
+# own group partial and one simd_sum reduces the 32 of them in tree order.
+#
+# IT IS FAST. Composed on devx, per dispatch: 2.01-2.10x vs the staged base,
+# i.e. a further 1.19-1.22x on top of devx alone (gate N=20 2451 -> 2004 us).
+# The ablation says why -- the reduction is ~33% of a dense dispatch (nored
+# 0.66-0.69), against ~19% in the expert kernel.
+#
+# IT IS NOT COVERED BY THE 1-ULP DECISION, AND IT IS NOT MINE TO TURN ON.
+# The 2026-09-02 gate relaxation (f6aa628) is explicitly "for this reduction
+# only", meaning the packed-d8 expert kernel, where the measured divergence
+# was ~0.1% of elements at ONE HALF-ULP. The dense divergence is an order of
+# magnitude larger: measured max 1.00 / 4.00 / 2.00 / 7.00 ULP (gate, N=1/5/
+# 10/20) and up to 8.00 ULP on down_proj. Two structural reasons -- a dense
+# row reduces over NGRP=80-272 groups spread across NBLK=3-9 blocks, so the
+# tree/serial disagreement compounds per block instead of once; and there is
+# no expert axis to average it away.
+#
+# So this is NOT a 1-ULP change and the existing decision does not reach it:
+# turning it on would need its own referee pass, on the dense line, at dense
+# ULP. That is Noah's call, not this arc's. Shipped OFF, behind
+# VQ_DENSE_SS=1, as the reproducible record of what it costs and buys.
+def _dense_ss(src, name):
+    old = """        const int gmax = min(32, NGRP - b * 32);
+        for (int i = 0; i < gmax; ++i)
+            acc = fma((float)srow[b * 32 + i],
+                      simd_shuffle(gacc, (ushort)i), acc);
+"""
+    assert old in src, f"{name}: dense reduction text drifted"
+    return src.replace(old, """        {
+            const int gg = b * 32 + (int)lane;
+            const float sv = (gg < NGRP) ? (float)srow[gg] : 0.0f;
+            acc += simd_sum(sv * gacc);
+        }
+""")
+
+
+_SRC_DENSE_D4_TILED_DEVX_SS = _dense_ss(
+    _SRC_DENSE_D4_TILED_DEVX, "dense_d4_tiled")
+_SRC_DENSE_PACKED_D4_TILED_DEVX_SS = _dense_ss(
+    _SRC_DENSE_PACKED_D4_TILED_DEVX, "dense_packed_d4_tiled")
+_SRC_DENSE_D2_TILED_DEVX_SS = _dense_ss(
+    _SRC_DENSE_D2_TILED_DEVX, "dense_d2_tiled")
+_SRC_DENSE_PACKED_D2_TILED_DEVX_SS = _dense_ss(
+    _SRC_DENSE_PACKED_D2_TILED_DEVX, "dense_packed_d2_tiled")
+_SRC_DENSE_D2_DEVX_SS = _dense_ss(_SRC_DENSE_D2_DEVX, "dense_d2")
+_SRC_DENSE_PACKED_D2_DEVX_SS = _dense_ss(
+    _SRC_DENSE_PACKED_D2_DEVX, "dense_packed_d2")
+
+# OFF by default, deliberately: see the block comment above.
+_DENSE_SS = os.environ.get("VQ_DENSE_SS", "0") == "1"
+
+
+def _dense_src(base_name, base_src, devx, devx_ss):
+    """Pick the dense kernel source and NAME for the current flag state.
+
+    The name carries the arm, so _KERNELS never serves a devx kernel to a
+    VQ_DENSE_DEVX=0 caller (or the reverse) out of a stale cache entry.
+    """
+    if _DENSE_DEVX and _DENSE_SS:
+        return base_name + "_devx_ss", devx_ss
+    if _DENSE_DEVX:
+        return base_name + "_devx", devx
+    if _DENSE_SS:
+        return base_name + "_ss", _dense_ss(base_src, base_name)
+    return base_name, base_src
+
+
 _SRC_DECODE_PACKED = _PACK_FETCH + r"""
     uint g = thread_position_in_grid.x;
     uint r = thread_position_in_grid.y;
@@ -1931,10 +2163,10 @@ def _get_kernel_spec(name, src, template):
         hdr = "".join(f"#define {n} {v}\n" for n, v in parts)
         spec_name = name + "_s" + "_".join(
             v.replace(" ", "") for _, v in parts)
+        inp, outn = _kernel_sig(name)
         k = mx.fast.metal_kernel(
-            name=spec_name,
-            input_names=["x", "eidx", "codes", "codebook", "scales", "dims"],
-            output_names=["y"], source=src, header=hdr)
+            name=spec_name, input_names=inp, output_names=outn,
+            source=src, header=hdr)
         _KERNELS[key] = k
     return k
 
@@ -1953,14 +2185,27 @@ def _dims_array(*vals):
     return a
 
 
+def _kernel_sig(name):
+    """Input/output names for a kernel, chosen from its NAME prefix.
+
+    Single source of truth, shared by _get_kernel and _get_kernel_spec. It
+    used to be inlined in _get_kernel only, and _get_kernel_spec hardcoded
+    the EXPERT signature -- which is why arc 5's specialized-kernel win never
+    reached the dense path: a dense kernel has no `eidx` input, so asking for
+    one would have bound the wrong buffers. Dense simply never called the
+    spec path, and silently kept paying ~5-7 us of template processing per
+    dispatch (2026-09-03, dense-kernel arc).
+    """
+    if name.startswith("vq_dense"):
+        return ["x", "codes", "codebook", "scales", "dims"], ["y"]
+    if name.startswith("vq_fused"):
+        return ["x", "eidx", "codes", "codebook", "scales", "dims"], ["y"]
+    return ["codes", "codebook", "scales", "eidx", "dims"], ["w"]
+
+
 def _get_kernel(name, src):
     if name not in _KERNELS:
-        if name.startswith("vq_dense"):
-            inp, out = ["x", "codes", "codebook", "scales", "dims"], ["y"]
-        elif name.startswith("vq_fused"):
-            inp, out = ["x", "eidx", "codes", "codebook", "scales", "dims"], ["y"]
-        else:
-            inp, out = ["codes", "codebook", "scales", "eidx", "dims"], ["w"]
+        inp, out = _kernel_sig(name)
         _KERNELS[name] = mx.fast.metal_kernel(
             name=name, input_names=inp, output_names=out, source=src)
     return _KERNELS[name]
@@ -2363,6 +2608,36 @@ def dense_fits(K, IN, G, d=2):
     return _dense_tg_bytes(K, NSUB) <= _TG_CAP
 
 
+def _dense_dispatch(name, src, template, x, codes, codebook, scales,
+                    OUT, IN, D, G, N, K):
+    """The one place a dense kernel is launched.
+
+    Carries arc 5's HOST-side wins across to the dense path, where they had
+    never been applied (2026-09-03): a specialized template-free kernel when
+    VQ_SPEC_KERNELS is on, and a cached dims array. Arc 5 measured the
+    `template=` argument at ~5-7 us of host time PER CALL; the 27B dense line
+    dispatches 192 VQ linears per token, so that argument alone was ~1.0-1.3
+    ms of a ~54 ms token. Both changes are BIT-IDENTICAL: the specialized
+    kernel is the same generated Metal code with the template values baked in
+    as #defines, and the dims array is the same six int32s.
+    """
+    rows = _DENSE_ROWS_TG
+    dims = _dims_array(OUT, IN, D, G, N, K)
+    grid = (32, ((OUT + rows - 1) // rows) * rows, N)
+    tg = (32, rows, 1)
+    kern = _get_kernel_spec(name, src, template) if _SPEC_KERNELS else None
+    if kern is not None:
+        (y,) = kern(inputs=[x, codes, codebook, scales, dims],
+                    grid=grid, threadgroup=tg,
+                    output_shapes=[(N, OUT)], output_dtypes=[x.dtype])
+        return y
+    (y,) = _get_kernel(name, src)(
+        inputs=[x, codes, codebook, scales, dims], template=template,
+        grid=grid, threadgroup=tg,
+        output_shapes=[(N, OUT)], output_dtypes=[x.dtype])
+    return y
+
+
 def _dense_fused(x, codes, codebook, scales, pack_bits=0, in_features=None):
     """Dense d=2 fused VQ matmul: y[N, OUT] = x [N, IN] @ decode(codes).T.
 
@@ -2393,28 +2668,24 @@ def _dense_fused(x, codes, codebook, scales, pack_bits=0, in_features=None):
                 raise ValueError(
                     f"packed dense d4: codes are {codes.shape[1]} words/row, "
                     f"expected {exp_w} for IN={IN}, bits={pack_bits}")
-            name = f"vq_dense_packed{pack_bits}_d4_tiled"
-            src = _SRC_DENSE_PACKED_D4_TILED
+            name, src = _dense_src(
+                f"vq_dense_packed{pack_bits}_d4_tiled",
+                _SRC_DENSE_PACKED_D4_TILED,
+                _SRC_DENSE_PACKED_D4_TILED_DEVX,
+                _SRC_DENSE_PACKED_D4_TILED_DEVX_SS)
             tmpl = [("T", x.dtype), ("MAX_TILE", 32 * (G // 4)),
                     ("BITS", pack_bits)]
         else:
             if codes.shape[1] != NSUB:
                 raise ValueError(f"dense d4: codes are {codes.shape[1]} cols, "
                                  f"expected NSUB={NSUB} for IN={IN}")
-            name, src = "vq_dense_d4_tiled", _SRC_DENSE_D4_TILED
+            name, src = _dense_src(
+                "vq_dense_d4_tiled", _SRC_DENSE_D4_TILED,
+                _SRC_DENSE_D4_TILED_DEVX, _SRC_DENSE_D4_TILED_DEVX_SS)
             tmpl = [("T", x.dtype), ("CT", codes.dtype),
                     ("MAX_TILE", 32 * (G // 4))]
-        dims = mx.array([OUT, IN, D, G, N, K], dtype=mx.int32)
-        rows = _DENSE_ROWS_TG
-        (y,) = _get_kernel(name, src)(
-            inputs=[x, codes, codebook, scales, dims],
-            template=tmpl,
-            grid=(32, ((OUT + rows - 1) // rows) * rows, N),
-            threadgroup=(32, rows, 1),
-            output_shapes=[(N, OUT)],
-            output_dtypes=[x.dtype],
-        )
-        return y
+        return _dense_dispatch(name, src, tmpl, x, codes, codebook, scales,
+                               OUT, IN, D, G, N, K)
     if G % 8 != 0:
         raise NotImplementedError(f"dense d2 kernel needs G % 8 == 0, got {G}")
     if pack_bits:
@@ -2433,13 +2704,17 @@ def _dense_fused(x, codes, codebook, scales, pack_bits=0, in_features=None):
                 f"expected {(NSUB + 31) // 32 * pack_bits} for IN={IN}, "
                 f"bits={pack_bits}")
         if _dense_tiled(K, NSUB, G):
-            name = f"vq_dense_packed{pack_bits}_d2_tiled"
-            src = _SRC_DENSE_PACKED_D2_TILED
+            name, src = _dense_src(
+                f"vq_dense_packed{pack_bits}_d2_tiled",
+                _SRC_DENSE_PACKED_D2_TILED,
+                _SRC_DENSE_PACKED_D2_TILED_DEVX,
+                _SRC_DENSE_PACKED_D2_TILED_DEVX_SS)
             template = [("T", x.dtype), ("MAX_K", K),
                         ("MAX_TILE", 32 * (G // 2)), ("BITS", pack_bits)]
         else:
-            name = f"vq_dense_packed{pack_bits}_d2"
-            src = _SRC_DENSE_PACKED_D2
+            name, src = _dense_src(
+                f"vq_dense_packed{pack_bits}_d2", _SRC_DENSE_PACKED_D2,
+                _SRC_DENSE_PACKED_D2_DEVX, _SRC_DENSE_PACKED_D2_DEVX_SS)
             template = [("T", x.dtype), ("MAX_K", K), ("MAX_NSUB", NSUB),
                         ("BITS", pack_bits)]
     else:
@@ -2447,26 +2722,19 @@ def _dense_fused(x, codes, codebook, scales, pack_bits=0, in_features=None):
             raise ValueError(f"dense: codes are {codes.shape[1]} cols, "
                              f"expected NSUB={NSUB} for IN={IN}, d={D}")
         if _dense_tiled(K, NSUB, G):
-            name = "vq_dense_d2_tiled"
-            src = _SRC_DENSE_D2_TILED
+            name, src = _dense_src(
+                "vq_dense_d2_tiled", _SRC_DENSE_D2_TILED,
+                _SRC_DENSE_D2_TILED_DEVX, _SRC_DENSE_D2_TILED_DEVX_SS)
             template = [("T", x.dtype), ("CT", codes.dtype),
                         ("MAX_K", K), ("MAX_TILE", 32 * (G // 2))]
         else:
-            name = "vq_dense_d2"
-            src = _SRC_DENSE_D2
+            name, src = _dense_src(
+                "vq_dense_d2", _SRC_DENSE_D2,
+                _SRC_DENSE_D2_DEVX, _SRC_DENSE_D2_DEVX_SS)
             template = [("T", x.dtype), ("CT", codes.dtype),
                         ("MAX_K", K), ("MAX_NSUB", NSUB)]
-    dims = mx.array([OUT, IN, D, G, N, K], dtype=mx.int32)
-    rows = _DENSE_ROWS_TG
-    (y,) = _get_kernel(name, src)(
-        inputs=[x, codes, codebook, scales, dims],
-        template=template,
-        grid=(32, ((OUT + rows - 1) // rows) * rows, N),
-        threadgroup=(32, rows, 1),
-        output_shapes=[(N, OUT)],
-        output_dtypes=[x.dtype],
-    )
-    return y
+    return _dense_dispatch(name, src, template, x, codes, codebook, scales,
+                           OUT, IN, D, G, N, K)
 
 
 def _decode_chunk(codes, codebook, scales, eidx_chunk, pack_bits=0,
