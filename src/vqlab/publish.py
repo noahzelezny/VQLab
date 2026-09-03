@@ -128,7 +128,19 @@ def main(argv=None) -> int:
     # compiling. Anything that touches the runtime or the config takes the
     # full gate, no exceptions.
     DOC_SUFFIXES = {".md", ".txt", ".jinja"}
+    # ADDITIVE SIDECARS ship like docs: the smoke certifies that the bundled
+    # RUNTIME loads and generates, and a sidecar is defined by the runtime
+    # never touching it unless a user opts in by name -- stock loaders ignore
+    # it entirely, so it cannot affect what the smoke certifies, exactly the
+    # docs argument. This exists because rungs too large for any single box
+    # (397B 2.4/2.6/3.1) cannot re-run the smoke here, and 2026-09-03 the
+    # decision was to ship their MTP sidecars with an explicit
+    # untested-on-this-rung caveat on the card rather than strand them.
+    # The allowlist is by exact NAME, not suffix -- a weights shard is never
+    # additive.
+    ADDITIVE_SIDECARS = {"mtp-head-q6.safetensors"}
     docs_only = all(pathlib.Path(t).suffix.lower() in DOC_SUFFIXES
+                    or pathlib.Path(t).name in ADDITIVE_SIDECARS
                     for t in targets)
     gate = [sys.executable, str(HERE / "check_release.py"),
             "--artifact", str(art), "--max-tokens", str(a.max_tokens)]
