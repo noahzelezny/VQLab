@@ -947,3 +947,48 @@ serving and cluster work, and its scores are NOT ladder-comparable. Two
 MLX builds, one deterministic scorer, and no seed/chunk/dtype knob to
 blame is precisely the situation in which "same command, same files" feels
 like sufficient provenance and is not.
+
+
+## 2026-09-03 (night) — shimmed single-box A/B; the shim helps clusters and does nothing for one box
+
+The glm5_shim install gap (fixed 5e937f9: neither serve nor mtp-generate
+ever installed it) forced a re-measurement of the card's single-box
+numbers. Instrument, recorded verbatim this time (M4, exo conda env
+/opt/homebrew/anaconda3/envs/exo, PYTHONPATH=~/vqlab-src, artifact
+/Users/noahzelezny/Exo Models/TheDrainFlorist--GLM-5.3-Flash-VQ-2.7bpw):
+
+    python -m mlx_lm generate --model <artifact> --prompt "Explain why
+      vector quantization compresses neural network weights better than
+      scalar rounding." --max-tokens {300,1000,2000} --temp 0
+    python -m vqlab.mtp_run --model <artifact> --tokens {300,1000,2000}
+      --temp 0        # sidecar auto-resolved; shim now installs
+
+Warm, interleaved. RESULTS (plain / shimmed-mtp):
+  1000 tok: 20.40 / 20.00   2000 tok: 20.32 / 17.12
+Plain is flat in generation length; shimmed mtp is parity to ~1000 and
+~15% behind at 2000. VERDICT: no single-box speedup, shim or no shim —
+the card's standing claim holds and strengthens.
+
+Two findings worth their own lines:
+
+- **Short-run mtp numbers from fresh processes are garbage on this box.**
+  0.92 / 0.97 / 3.52 / 5.14 / 13.95 tok/s across "warm" 100-300-token
+  runs: each fresh mtp process re-faults the 6.5G head plus trunk pages
+  it evicted, and short runs never amortize it. The earlier
+  19.99-vs-19.7 "parity" (shimless) and tonight's parity (shimmed) agree
+  only because both were long enough to amortize. Rule: single-box mtp
+  A/Bs on 128 GB hardware are quoted at >= 1000 tokens.
+- **The shim moves acceptance: 0.827 shimless -> 0.747-0.758 shimmed**
+  on the identical run config. The absorbed route is one bf16 ULP off
+  per layer; across 46 layers that flips greedy argmax at near-ties, and
+  flipped drafts get rejected. Output correctness is untouched (exact
+  rejection sampling); only the draft hit-rate pays. Not investigated
+  further tonight.
+
+Cluster context (exo, 2-node M3+M4 TB4/TCP pipeline, same artifact, exo
+mtp-stage1 f1c01ea9): stock exo decode collapses with generation length
+(19.5 tok/s at 300 -> 5.7 at 2000, batch engine); stage-1 MTP holds
+22.3 -> 11.0 (acceptance 0.887 -> 0.701). That 1.9x at length is the
+cluster payoff; a single box that FITS the model beats the pipeline
+either way (20.3), so the claim belongs to the rungs that need the
+cluster. TB4 TCP is the transport floor here; TB5/RDMA re-bench queued.

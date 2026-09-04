@@ -20,6 +20,16 @@ Outstanding before push (tracked here, not on the card):
 - [ ] Confirm sidecar-outside-`vqlab serve` behavior (exo path) — the card
       currently says the shim ships with `vqlab serve` and stays silent on
       exo; verify that's the honest minimum.
+- [x] **RESOLVED 2026-09-03 night: shim gap fixed (5e937f9) and the A/B
+      re-measured shimmed on the M4** (interleaved, warm, invocations in
+      LEDGER). Result: plain ~20.3 tok/s flat to 2000 tokens; shimmed
+      mtp-generate 20.0 at 1000 / 17.1 at 2000, acceptance ~0.75 (down
+      from 0.827 shimless — the per-layer one-ULP difference compounds
+      into argmax flips at near-ties). "No single-box speedup" HOLDS and
+      strengthens; Runtime + MTP sections above now carry the shimmed
+      numbers and the serve sentence is now true. The published card on
+      HF still shows the old numbers — ship this draft's sections as the
+      correction (docs-class publish from the M4).
 - [x] d4/K512 literary comparator cell (1.6166) RESOLVED 2026-09-03: the
       published value is correct and reproduces exactly on the ladder
       instrument (1.616585). The 1.6285 seen earlier came from the exo
@@ -145,8 +155,8 @@ badly at ~101 GiB resident; discard one before benchmarking):
 
 | | |
 |---|---|
-| decode, stock generate | **19.7 tok/s** |
-| decode, MTP sidecar (`vqlab mtp-generate`) | 19.99 tok/s, acceptance 0.827 |
+| decode, stock generate | **20.3 tok/s** (flat out to 2000 tokens) |
+| decode, MTP sidecar (`vqlab mtp-generate`) | 20.0 tok/s at 1000 tokens, 17.1 at 2000; acceptance ~0.75 |
 | prefill | ~88 tok/s (lower bound, derived from wall time) |
 
 ## Speculative decoding (MTP) — optional sidecar
@@ -157,20 +167,23 @@ graft, packed to q6. It is never named in the weight index, so stock loaders
 ignore it entirely; it costs nothing unless you opt in by name.
 
 **When enabled it adds ~6.3 GiB resident** (head weights + its cache).
-Acceptance is **0.827**, and the trunk verifies every drafted token by exact
-rejection sampling, so the output distribution is exactly the base model's.
-**On a single box it runs at parity with plain decode** (19.99 vs
-19.7 tok/s) — download it for the draft quality and the serving setups where
-speculation pays: pipelined multi-node decoding (in validation) and batch
-serving. No single-box speedup is claimed.
+Acceptance is **~0.75**, and the trunk verifies every drafted token by
+exact rejection sampling, so the output distribution is exactly the base
+model's. **On a single box it does not make decoding faster** — parity
+with plain decode out to ~1000 generated tokens (20.0 vs 20.3 tok/s),
+drifting ~15% behind by 2000. Where speculation pays is **pipelined
+multi-node decoding** (exo clusters, for the rungs of this family too
+large for one machine — see their cards), where stock decode degrades
+with generation length and drafting roughly doubles long-generation
+throughput. On one 128 GB box, run this model plain.
 
-**Run the sidecar through `vqlab serve` (or `vqlab mtp-generate`), not your
-own loop.** Verifying drafted tokens sends multi-token steps through GLM's
-attention, and the upstream fast path only handles single tokens — a
-2-token verify falls off it and pays a measured 23x per-layer attention
-tax, making the sidecar a net loss. `vqlab serve` includes the fix (the
-fast path extended to short verify steps, verified numerically equivalent
-to within one bf16 ULP).
+**Run the sidecar through `vqlab serve` (or `vqlab mtp-generate`), not
+your own loop.** Verifying drafted tokens sends multi-token steps through
+GLM's attention, and the upstream fast path only handles single tokens —
+a 2-token verify falls off it and pays a measured 23x per-layer attention
+tax that grows with context. Every vqlab drafting entry point installs
+the fix (the fast path extended to short verify steps, numerically
+equivalent to within one bf16 ULP per layer).
 
 To use it:
 
