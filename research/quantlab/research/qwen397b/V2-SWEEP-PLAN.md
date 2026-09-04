@@ -426,3 +426,24 @@ cd research/quantlab/research/qwen397b
 ./v2_sweep.py --combo <best2> --tag k2048x2 --donor k2048 \
               --state state_k2048.json --tsv sweep_k2048.tsv --code --keep
 ```
+
+
+---
+
+## RULING (Noah, 2026-09-04): size is part of quality — BEST6 does not ship
+
+"Being any bigger invalidates it. There's no qualitative improvement if it
+requires more bpw." BEST6 (+0.94 GiB) is therefore EVIDENCE, not a release:
+it proved targeting transfers to this family (prose +0.0667, code
+2.6383->2.6289, additive composition, bottom-6 control loses at identical
+bytes) and located the leverage (late band L37-L55).
+
+THE SHIPPABLE SHAPE — iso-size v2 at exactly the base's 111.805 GiB:
+promote best-6, pay with ~5 demotions (K256->K128, -0.1875 GiB/layer).
+Stages: (0) fit K128 codebooks from the bf16 for ~10 demotion candidates
+(bottom of the promotion sweep is a HINT, not a license — the surface is
+non-monotonic); (1) demotion mini-sweep, one layer at a time, same driver
++ TSV; (2) compose promote+demote at iso-bytes; (3) score prose+code vs
+base with a shuffled control; ship only if better-or-equal on BOTH.
+Same bar applies to any Flash v2 (its BEST2 was also byte-heavier and is
+likewise shelved; the shipped byte-matched hot-2 already won anyway).
