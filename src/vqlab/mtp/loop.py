@@ -71,6 +71,7 @@ acceptance only — never correctness — so both are safe to add later.
 """
 from __future__ import annotations
 
+import logging
 import os
 import time
 from dataclasses import dataclass
@@ -132,6 +133,38 @@ class MTPResponse:
     logprobs: Optional[mx.array] = None   # normalized, over the full vocab
 
 
+#: families whose runtime needs the absorbed-MLA shim before drafting.
+_GLM5_FAMILIES = ("glm5_next", "glm5_next_text")
+
+
+def _maybe_install_glm5_shim(spec) -> bool:
+    """Widen glm5_next's absorbed-MLA route to L <= 8, for MTP verify only.
+
+    Upstream `Glm5NextSparseAttention` takes the absorbed route at L == 1
+    only; the MTP verify forward is L == 2 and falls off it, onto a per-layer
+    latent-cache expansion measured at up to 23-40x the absorbed cost at long
+    Kv (see glm5_shim.py). Without this, drafting on glm5_next is a net LOSS.
+    The two routes are algebraically identical (equal to one bf16 ULP), so
+    this changes cost, not output.
+
+    Called from `load_mtp_head` only, i.e. only once drafting actually
+    engages: family resolved to glm5 AND the sidecar exists. A plain
+    non-drafting load never reaches it and the stock path stays untouched.
+    The patch is process-wide once installed (a class monkeypatch), which is
+    why it is deliberately not installed at import time. Mirrors exo's
+    plan-level install (exo commit f1c01ea9).
+    """
+    if spec.name not in _GLM5_FAMILIES:
+        return False
+    from vqlab import glm5_shim
+
+    installed = glm5_shim.install()
+    if installed:
+        logging.info("glm5_next absorbed-MLA shim installed (L <= %d) "
+                     "for MTP verification", glm5_shim.ABSORB_MAX_L)
+    return installed
+
+
 def load_mtp_head(model, sidecar=None, family: Optional[str] = None,
                   model_path=None):
     """Load a drafting head for `model`.
@@ -155,6 +188,7 @@ def load_mtp_head(model, sidecar=None, family: Optional[str] = None,
         raise FileNotFoundError(
             f"no MTP sidecar at {sidecar}; build one with `vqlab mtp-pack`. "
             f"The head is optional — without it the model decodes normally.")
+    _maybe_install_glm5_shim(spec)
     arch = spec.arch_module(model)
     return spec.head_cls().from_sidecar(model, arch, sidecar), spec
 
