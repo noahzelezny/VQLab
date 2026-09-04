@@ -719,6 +719,19 @@
    "tokens": 8192,
    "utc": "2026-09-04T07:28:14Z",
    "wall_s": 176.6
+  },
+  "BEST6-code": {
+   "candidate": "BEST6-code",
+   "layers": "40,42,44,45,47,48",
+   "donor": "k512",
+   "gib": 112.742,
+   "d_gib": 1.1251,
+   "prose_ppl": 2.6957,
+   "d_prose": 0.0667,
+   "tokens": 8192,
+   "utc": "2026-09-04T20:29:34Z",
+   "code_ppl": 2.6289,
+   "wall_s": 297.2
   }
  },
  "base": "TheDrainFlorist--Qwen3.5-397B-A17B-VQ-2.4bpw",
