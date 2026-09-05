@@ -1,0 +1,33 @@
+--- a/src/vqlab/vq_switch.py
++++ b/src/vqlab/vq_switch.py
+@@ -2820,10 +2820,20 @@ def _prefill(xf, idx_sorted_np, codes, codebook, scales, pack_bits=0,
+     # is to return rows in its input order (__call__ applies its own `inv`
+     # on top). Track the xf row each output row came from and undo it below.
+     row_ids = []
++    vq_stats_enabled = os.environ.get("VQ_PREFILL_STATS", "0") == "1"
++    total_valid_rows = 0
++    total_padded_rows = 0
+     for c0 in range(0, len(touched), _DECODE_CHUNK):
+         eids = touched[c0:c0 + _DECODE_CHUNK]
+         ne = len(eids)
+         cap = int(counts[eids].max())
++        chunk_idx = c0 // _DECODE_CHUNK
++        valid_rows = int(np.sum(counts[eids]))
++        padded_rows = ne * cap
++        if vq_stats_enabled:
++            print(f"VQ_PREFILL_CHUNK chunk_idx={chunk_idx} n_experts={ne} cap={cap} valid_rows={valid_rows} padded_rows={padded_rows}")
++        total_valid_rows += valid_rows
++        total_padded_rows += padded_rows
+         # gather map rows -> [ne, cap]; pads point at row 0 (discarded)
+         gmap = np.zeros((ne, cap), np.uint32)
+         vmask = np.zeros((ne, cap), bool)
+@@ -2851,6 +2861,9 @@ def _prefill(xf, idx_sorted_np, codes, codebook, scales, pack_bits=0,
+     # Undo the count-sort: output row j currently holds input row row_ids[j].
+     # inv[row_ids[j]] = j, so y[inv] restores the caller's row order. One
+     # [N, OUT] gather (~2 ms at N=92k) against ~190 ms of padding saved.
++    if vq_stats_enabled and total_padded_rows > 0:
++        waste_ratio = total_padded_rows / total_valid_rows
++        print(f"VQ_PREFILL_STATS total_valid={total_valid_rows} total_padded={total_padded_rows} waste_ratio={waste_ratio:.4f}")
+     rid = np.concatenate(row_ids)
+     inv = np.empty(rid.shape[0], np.uint32)
+     inv[rid] = np.arange(rid.shape[0], dtype=np.uint32)

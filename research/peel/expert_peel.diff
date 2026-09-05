@@ -1,0 +1,37 @@
+--- /private/tmp/claude-501/-Users-noahzelezny-Documents-AgenicAI/fa5739fa-f375-497b-9e19-352995560392/scratchpad/vq_switch_truncated.py	2026-09-05 16:40:43
++++ /private/tmp/claude-501/-Users-noahzelezny-Documents-AgenicAI/fa5739fa-f375-497b-9e19-352995560392/scratchpad/vq_peeled.py	2026-09-05 16:46:34
+@@ -2815,13 +2815,32 @@
+     touched = touched[np.argsort(counts[touched], kind="stable")]
+     starts = np.zeros(E + 1, np.int64)
+     starts[1:] = np.cumsum(counts)
++    # HEAVY-EXPERT PEELING (2026-09-05, swarm doc survivor #1). Even with
++    # count-sorted chunking, a chunk's single heaviest expert sets its cap;
++    # peel experts whose count exceeds VQ_PEEL_FACTOR x the touched median
++    # into SINGLETON groups (an ne=1 group pads to its own count — exact
++    # size, zero waste). Groups still run the identical loop body below, so
++    # every row's GEMM sees the same operands in the same order: the change
++    # is only WHICH experts share a dispatch. VQ_PEEL_FACTOR<=0 disables.
++    _peel_factor = float(os.environ.get("VQ_PEEL_FACTOR", "2.0"))
++    groups = []
++    if _peel_factor > 0 and len(touched) > 1:
++        med = float(np.median(counts[touched]))
++        heavy = counts[touched] > _peel_factor * med
++        light = touched[~heavy]
++        for e in touched[heavy]:
++            groups.append(np.array([e], dtype=touched.dtype))
++        for c0 in range(0, len(light), _DECODE_CHUNK):
++            groups.append(light[c0:c0 + _DECODE_CHUNK])
++    else:
++        for c0 in range(0, len(touched), _DECODE_CHUNK):
++            groups.append(touched[c0:c0 + _DECODE_CHUNK])
+     ys = []
+     # Reordering experts reorders OUTPUT ROWS, and this function's contract
+     # is to return rows in its input order (__call__ applies its own `inv`
+     # on top). Track the xf row each output row came from and undo it below.
+     row_ids = []
+-    for c0 in range(0, len(touched), _DECODE_CHUNK):
+-        eids = touched[c0:c0 + _DECODE_CHUNK]
++    for eids in groups:
+         ne = len(eids)
+         cap = int(counts[eids].max())
+         # gather map rows -> [ne, cap]; pads point at row 0 (discarded)
