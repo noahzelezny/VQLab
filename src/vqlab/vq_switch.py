@@ -2764,21 +2764,30 @@ def _decode_chunk(codes, codebook, scales, eidx_chunk, pack_bits=0,
     # packed d=2 through THIS path is verified D-generic: decoded against a
     # numpy vq_pack.unpack reference at max rel 2.6e-4 (K=512, pack_bits=9).
     # The fused path has its own dedicated packed-d2 kernel (2026-08-19).
-    dims = mx.array([OUT, IN, D, G, NE], dtype=mx.int32)
+    # Arc-5 host-overhead caches applied to THIS call site too (2026-09-05,
+    # swarm design doc props 3+4): cached dims array + specialized
+    # template-free kernel. Measured 7.9 -> 2.4 us/call host issue (3.29x),
+    # bit-identical output (asserted on real tensors); ~0.8 ms/token at the
+    # 144-dispatch rate. VQ_SPEC_KERNELS=0 restores the template path.
+    dims = _dims_array(OUT, IN, D, G, NE)
     if pack_bits:
         name, src = f"vq_decode_packed{pack_bits}", _SRC_DECODE_PACKED
         template = [("BITS", pack_bits)]
     else:
         name, src = "vq_decode", _SRC_DECODE
         template = [("CT", codes.dtype)]
-    (w,) = _get_kernel(name, src)(
+    kern = _get_kernel_spec(name, src, template) if _SPEC_KERNELS else None
+    common = dict(
         inputs=[codes, codebook, scales, eidx_chunk, dims],
-        template=template,
         grid=(NGRP, OUT, NE),
         threadgroup=(min(32, NGRP), 8, 1),
         output_shapes=[(NE, OUT, IN)],
         output_dtypes=[mx.float16],
     )
+    if kern is None:
+        (w,) = _get_kernel(name, src)(template=template, **common)
+    else:
+        (w,) = kern(**common)
     return w
 
 
