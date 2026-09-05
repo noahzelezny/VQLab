@@ -61,6 +61,17 @@ cfg = json.load(open(A / "config.json")) if (A / "config.json").exists() else {}
 if cfg.get("model_file") and not (A / cfg["model_file"]).exists():
     fails.append(f"config names model_file={cfg['model_file']} but it is absent")
 
+# a vision-capable config commits us to the image-processor contract: any
+# runtime that sees vision_config (mlx_vlm, exo) instantiates an
+# AutoImageProcessor from the artifact dir, and its absence fails EVERY
+# request, text included, after prefill -- which presents as a warmup hang,
+# not a clean error. Fifth exhibit, 2026-09-04: all four Flash-Next rungs
+# shipped without preprocessor_config.json; the fitting pipeline never
+# touches images so nothing ever staged it.
+if "vision_config" in cfg and not (A / "preprocessor_config.json").exists():
+    fails.append("config carries vision_config but preprocessor_config.json "
+                 "is absent (vision runtimes fail every request without it)")
+
 # index integrity: every mapped shard exists
 if (A / "model.safetensors.index.json").exists():
     wm = json.load(open(A / "model.safetensors.index.json"))["weight_map"]
