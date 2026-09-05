@@ -160,3 +160,32 @@ K4096 demotion row shows outsized damage.
 PLE tables, affine-side reallocation, the leverage probe (falsified —
 do not reach for it), any byte-heavier shape (BEST6-class results are
 evidence only).
+
+---
+
+## RESULTS (2026-09-05, measured on the M4, mlx-lm 0.31.3)
+
+Gate #1 PASSED: cross-dim L0 candidate loads and generates coherently
+(27 tok/s, peak 108 GB) and scores sanely. Full 57-layer promotion sweep
+COMPLETE (~65 s/row; table in the M4's `~/v2sweep22/sweep-2.2.tsv`,
+to be synced here).
+
+- BASE (shipped 2.2): prose ppl **3.0568** (8192-token instrument).
+- Top-6 by measured effect: **L43 +0.0342, L45 +0.0219, L47 +0.0183,
+  L29 +0.0175, L44 +0.0171, L48 +0.0152**. Hot zone is L41–L49 + L29.
+  The 2.4-base best-6 would have been the WRONG set here (its #1, L40,
+  is +0.0060 mid-pack) — base-specificity confirmed a third time.
+- All of L1–L11 are NET-NEGATIVE when promoted (GLM's "some promotions
+  hurt" reproduces).
+- **BEST6 {29,43,44,45,47,48}: 2.9624 = +0.0944** (76% of the naive
+  +0.1242 sum — composition holds). **CTRL6 (bottom-6, identical
+  +1.1208 GiB): 3.0606 = −0.0038 — control loses.** Both evidence rows;
+  both over iso-size and NOT shippable shapes.
+- Demotion candidates (least promotion-sensitive, all early):
+  L9, L3, L8, L16, L24, L31, L6, L26, L5, L1.
+
+Demotion pipeline (next): `fit-moe --dim 8 --k 4096` (and 8192) for the
+10 candidates from the bf16 (M4, `--stage-dir` one 8-GB shard at a time —
+the M4 data volume has only ~17 GiB free) → `pack_artifact` to 12/13-bit
+block packing → splice as demotion donor → mini-sweep → compose
+promote-6 + pay at ≤100.971 GiB → prose+code vs base with control.

@@ -66,6 +66,11 @@ DONORS = {
     # card's). Both land exactly.
     "k512": ("TheDrainFlorist--Qwen3.5-397B-A17B-VQ-2.6bpw", 512, 9, 0.1875),
     "k2048": ("TheDrainFlorist--Qwen3.5-397B-A17B-VQ-3.1bpw", 2048, 11, 0.5625),
+    # Cross-dim donor for the 2.2 (d8/K16384, 1.75 bpw) base: the shipped
+    # 2.4 rung's d4/K256 modules (2.00 bpw, byte-aligned codes). Mixed-dim
+    # artifacts are runtime-legal and shipped (Flash-Next 2.1 = d8 base +
+    # d2/K256 promoted; vq_modules is per-module). See V2-SWEEP-PLAN-2.2.md.
+    "d4k256": ("TheDrainFlorist--Qwen3.5-397B-A17B-VQ-2.4bpw", 256, 8, 0.1868),
 }
 PROJECTIONS = ("gate_proj", "up_proj", "down_proj")
 VQ_SUFFIXES = ("codebook", "codes", "vq_scales")
@@ -149,12 +154,23 @@ def preflight(base, donor, args, layers):
         die(f"non-flat geometry: base k={sorted(bk)} donor k={sorted(dk)}. "
             "This driver assumes a flat base; a mixed base needs the "
             "per-module levels tracked in the state file.")
+    # A promotion must be RICHER in bits/weight = log2(K)/d. Same-dim
+    # donors compare by K; cross-dim donors (2.2 base d8/K16384 = 1.75 bpw
+    # vs 2.4 donor d4/K256 = 2.00 bpw) are allowed — vq_modules is
+    # per-module and mixed-dim artifacts ship (Flash-Next 2.1: d8 base +
+    # d2/K256 promoted). Gate #1 in V2-SWEEP-PLAN-2.2.md still applies:
+    # one splice must load + generate before any sweep trusts this path.
+    import math
+    b_bpw = math.log2(sorted(bk)[0]) / sorted(bd)[0]
+    d_bpw = math.log2(sorted(dk)[0]) / sorted(dd)[0]
+    if d_bpw <= b_bpw:
+        die(f"donor is not richer: base {sorted(bd)[0]}d/K{sorted(bk)[0]} "
+            f"= {b_bpw:.3f} bpw vs donor {sorted(dd)[0]}d/K{sorted(dk)[0]} "
+            f"= {d_bpw:.3f} bpw")
     if bd != dd:
-        die(f"dim differs: base d={sorted(bd)} donor d={sorted(dd)}. A "
-            "promotion must change K only; changing d changes the "
-            "reconstruction, not just the codebook size.")
-    if dk <= bk:
-        die(f"donor K {sorted(dk)} is not richer than base K {sorted(bk)}")
+        print(f"PREFLIGHT  CROSS-DIM promotion: d{sorted(bd)[0]} -> "
+              f"d{sorted(dd)[0]} ({b_bpw:.3f} -> {d_bpw:.3f} bpw); "
+              "per-module vq_modules carries the geometry")
 
     for layer in layers:
         for proj in PROJECTIONS:
@@ -178,6 +194,10 @@ def preflight(base, donor, args, layers):
     biggest = max(
         sum(os.path.getsize(bp / f) for f in sh) for sh in touched.values()
     ) / GiB
+    # a multi-layer combo rewrites the UNION of its shard groups; disk need
+    # is that sum, not the largest group (BEST6 on the M4 hit exactly this)
+    union = {f for sh in touched.values() for f in sh}
+    union_gib = sum(os.path.getsize(bp / f) for f in union) / GiB
 
     # A rewrite holds the shard's tensors in memory while writing the new
     # one: budget 2x the shard (read side + write side) plus slack.
@@ -203,7 +223,7 @@ def preflight(base, donor, args, layers):
     st = os.statvfs(args.workdir if os.path.isdir(args.workdir) else E_DEFAULT)
     free = st.f_bavail * st.f_frsize / GiB
     concurrent = len(layers) if args.keep else 1
-    disk_need = biggest * 1.05 * concurrent
+    disk_need = max(biggest, union_gib) * 1.05 if concurrent == 1 else union_gib * 1.05 * concurrent
     print(f"PREFLIGHT  disk need {disk_need:.1f} GiB "
           f"({'all candidates kept' if args.keep else 'one at a time'})   "
           f"free {free:.1f} GiB   -> {'OK' if disk_need <= free else 'FAIL'}")
@@ -415,6 +435,10 @@ def main():
     ap.add_argument("--scorer", default=None)
     ap.add_argument("--corpus", default=None)
     ap.add_argument("--corpus-code", default=None)
+    ap.add_argument("--build-only", action="store_true",
+                    help="splice candidates and KEEP them, skip scoring and "
+                         "state/tsv writes (build on the box that holds the "
+                         "artifacts locally, score from another)")
     ap.add_argument("--dry-run", action="store_true",
                     help="validate paths, geometry and budget; load nothing")
     a = ap.parse_args()
@@ -480,7 +504,7 @@ def main():
             "(LEDGER.md:460-478); use a separate --state.")
 
     # baseline score, once
-    if "BASE" not in st["done"]:
+    if "BASE" not in st["done"] and not a.build_only:
         print("\n=== scoring the base (reference row) ===", flush=True)
         rec = score(a, base, a.corpus)
         row = {"candidate": "BASE", "layers": "", "donor": a.donor,
@@ -499,8 +523,8 @@ def main():
         print(f"  BASE prose ppl {row['prose_ppl']}  "
               f"({row['wall_s']}s)", flush=True)
 
-    base_prose = st["done"]["BASE"]["prose_ppl"]
-    base_code = st["done"]["BASE"].get("code_ppl")
+    base_prose = st["done"]["BASE"]["prose_ppl"] if "BASE" in st["done"] else None
+    base_code = st["done"]["BASE"].get("code_ppl") if "BASE" in st["done"] else None
 
     n_new = 0
     for tag, layers in combos:
@@ -512,6 +536,11 @@ def main():
         print(f"\n=== {tag}  (layers {layers}) ===", flush=True)
         t0 = time.time()
         cand = os.path.join(a.workdir, f"397b-v2-{tag}")
+        if a.build_only:
+            size = splice(pf, layers, cand)
+            print(f"  {tag}: built {size:.3f} GiB at {cand} (not scored)",
+                  flush=True)
+            continue
         try:
             size = splice(pf, layers, cand)
             rec = score(a, cand, a.corpus)
