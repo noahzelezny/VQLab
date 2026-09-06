@@ -164,9 +164,11 @@ def cmd_run(a):
             lines.append(
                 "- ready to review for publish (gated, manual — see "
                 "docs/PUSH-RUNBOOK.md):")
+            repo = e["name"].replace("--", "/", 1) if "--" in e["name"] \
+                else f"TheDrainFlorist/{e['name']}"
             lines.append(
                 f"  `python -m vqlab.cli publish --artifact \"{e['artifact']}\""
-                f" --repo TheDrainFlorist/{e['name']} --files model.py"
+                f" --repo {repo} --files model.py"
                 f" README.md --message \"...\"`")
         else:
             lines.append(f"- failed at: `{failed_cmd}`")
