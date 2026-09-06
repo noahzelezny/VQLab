@@ -35,6 +35,7 @@ COMMANDS = {
     "smoke": ("smoke.py", "generate one token through the runtime the artifact ships"),
     "verify": ("verify_artifact.py", "outlier gate: decode artifact bytes vs bf16 source"),
     "publish": ("publish.py", "upload to the Hub, gated on check-release passing"),
+    "validate": ("validate_queue.py", "overnight validation queue: drain artifacts through the gates, never publish"),
     "check-release": ("check_release.py", "release gate: files exist and function"),
     "check-bundle": ("check_bundle.py", "bundle gate: shipped runtime matches repo runtime"),
     "check-comparator": ("check_comparator.py", "comparator gate: tensor-set parity vs teacher"),
