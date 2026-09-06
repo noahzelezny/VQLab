@@ -83,3 +83,49 @@ Order of work: convert L57 alone → score → if neutral-or-better, convert
 Also to fix once the result lands: `N_VQ_LAYERS` in `v2_sweep.py`, and
 every future sweep's layer range (the hot-layer sweep has never seen
 layers 57–59, so v2's best-6 was chosen from an incomplete pool).
+
+---
+
+## Measured (2026-09-06). Conversion is a BYTE REFUND, not free quality.
+
+Base = shipped 2.2: prose 3.0568, code 2.6728, literary 1.2820 @ 100.971 GiB.
+Converted to VQ **d8/K16384** (2.00 bpw, matching layers 0–56):
+
+| converted | Δ prose | Δ code | Δ literary | size |
+|---|---|---|---|---|
+| L57 only | −0.0010 | −0.0057 | −0.0036 | 99.847 |
+| L58 only | −0.0093 | −0.0064 | −0.0029 | 99.847 |
+| L59 only | −0.0063 | **−0.0160** | −0.0037 | 99.847 |
+| **all three** | **−0.0218** | **−0.0319** | **−0.0121** | **97.598** |
+
+Size arithmetic landed exactly as predicted (−1.124 GiB/layer, −3.373
+total). Three findings:
+
+1. **The "smaller AND better" hypothesis is FALSIFIED at this target.**
+   Affine 3-bit and VQ d8/K16384 are roughly quality-equivalent on these
+   layers; VQ is simply 1.25 bpw cheaper. The win is bytes, not quality.
+2. **Damage COMPOUNDS (super-additive, 131% of the sum of singles)** —
+   the mirror of promotions, which compose at 76%. Sequential late layers
+   degrade together.
+3. **L59 is a code specialist**: mid-pack on prose, 2.5x the code damage
+   of its neighbours. This is fatal for a straight d8 conversion, because
+   v2's promotions are code-NEUTRAL — there is no mechanism to buy a
+   −0.032 code regression back. **Do not ship the d8/K16384 conversion.**
+
+### The right target is d4/K256, not d8/K16384
+
+Per module: affine 3-bit = 0.875 GiB @ **3.25 bpw**; VQ d8/K16384 = 0.500
+@ **2.00**; VQ **d4/K256 = 0.5625 @ 2.25**. d4/K256 still refunds **2.81
+GiB** across the three layers while giving up only 1.0 bpw instead of
+1.25 — and it is the level whose quality the family already knows.
+Neither the 2.2 nor the 2.4 rung has a donor for these layers (identical
+gap in every rung), so they need fresh fits; K256 is cheap to fit.
+IN FLIGHT: singles + composite at d4/K256, all three corpora.
+
+### Also still open
+
+Layers 57–59 have **never been in a promotion sweep** (every sweep
+inherited `--vq-layers 0-56` / `N_VQ_LAYERS = 57`). The v2 hot band was
+L41–L49 — the late layers — so the three latest layers in the model are
+unmeasured candidates, and v2's best-6 was selected from an incomplete
+pool. Sweep them once they carry VQ codes.
