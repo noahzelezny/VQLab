@@ -1,0 +1,85 @@
+# 397B: layers 57–59 were never VQ-fitted (all four published rungs)
+
+Found 2026-09-06 while auditing the affine byte budget for the v2 arc.
+**Status: confirmed defect; fix in progress; quality impact PENDING
+measurement — do not publish a correction until it is measured.**
+
+## What is wrong
+
+`Qwen3.5-397B-A17B` has **60 hidden layers** (`config.json` →
+`text_config.num_hidden_layers: 60`). Every shipped VQ rung fits experts
+for layers **0–56 only**. Layers **57, 58, 59** fall through to the
+affine path and ship at **3 bits** — the lowest precision anywhere in
+these artifacts.
+
+Verified identical in all four published rungs:
+
+| rung | VQ layers | 3-bit affine modules |
+|---|---|---|
+| VQ-2.2bpw | 0–56 (57) | 9 |
+| VQ-2.4bpw | 0–56 (57) | 9 |
+| VQ-2.6bpw | 0–56 (57) | 9 |
+| VQ-3.1bpw | 0–56 (57) | 9 |
+
+The nine modules are exactly
+`language_model.model.layers.{57,58,59}.mlp.switch_mlp.{gate,up,down}_proj`.
+
+**These are ordinary routed-expert layers on the main forward path.**
+Not MTP layers (the config carries no next-n-predict key; the 397B MTP
+head is a separate 3.19 GiB sidecar), not dense layers, not structurally
+special: same `[512, 1024, in=4096]` expert stacks as their neighbours,
+and the bf16 source stores them in the SAME fused `gate_up_proj` /
+`down_proj` layout as layer 56. Nothing prevented fitting them.
+
+**Cause:** the fit was invoked `--vq-layers 0-56` on a 60-layer model.
+`v2_sweep.py` then inherited the same off-by-three as a constant
+(`N_VQ_LAYERS = 57  # vq_modules covers layers 0-56, no gaps`), so every
+sweep since has silently scoped itself to the same 57 layers.
+
+## What it costs (2.2 rung, measured from the artifact)
+
+| storage | per module | per layer | 9 modules |
+|---|---|---|---|
+| affine 3-bit (`weight`+`scales`+`biases`) | 0.875 GiB | 2.625 GiB | **7.875 GiB** |
+| VQ d8/K16384 (`codes`+`codebook`+`vq_scales`) | 0.500 GiB | 1.500 GiB | **4.502 GiB** |
+| **saving** | 0.375 GiB | 1.124 GiB | **3.373 GiB** |
+
+In stored bits per weight that is **3.25 bpw affine vs 2.00 bpw VQ** for
+the same tensors. For scale: the entire v2 reallocation moved 1.125 GiB.
+
+## Expected quality direction — NOT YET MEASURED
+
+The family's own ladder says VQ beats affine at fewer bytes (on
+Flash-Next: affine q3 at 75 GiB scores KL 1083.4; VQ at 45 GiB scores
+390.1). If that holds here, converting these layers is smaller AND
+better at once. **But it must be measured**: 57–59 are the last layers
+before the output, and late-layer sensitivity is the one honest reason
+someone might deliberately leave them alone — though 3-bit, the lowest
+precision in the artifact, is a strange way to protect anything.
+
+## Effect on published claims
+
+Every rung carries the defect **identically**, so all rung-to-rung
+comparisons in the published tables and the paper hold exactly as
+printed. The defect makes the published results **conservative**: the
+artifacts are ~3.4 GiB heavier, and slightly worse, than the method
+actually delivers, because three expert layers ship in the affine format
+the work argues against. The error runs in the direction of underselling
+VQ, not overstating it.
+
+## Fix
+
+`demote_fit.py` grew an affine→VQ conversion path (2026-09-06): it
+detects a module sitting in `quantization` rather than `vq_modules`,
+fits it from bf16, and on splice drops `weight`/`scales`/`biases`, adds
+`codes`/`codebook`/`vq_scales`, moves the `weight_map` entries, deletes
+the module from BOTH `quantization` and `quantization_config`, and adds
+a full `vq_modules` entry (`experts`/`out`/`in`/`k`/`dim`/`group`/
+`pack_bits` — the keys the bundled `model.py` reads at line ~3148).
+
+Order of work: convert L57 alone → score → if neutral-or-better, convert
+58 and 59 → runtime smoke → then decide about republishing the family.
+
+Also to fix once the result lands: `N_VQ_LAYERS` in `v2_sweep.py`, and
+every future sweep's layer range (the hot-layer sweep has never seen
+layers 57–59, so v2's best-6 was chosen from an incomplete pool).

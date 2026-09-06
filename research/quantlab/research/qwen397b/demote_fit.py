@@ -246,6 +246,40 @@ def main():
         fdir = pathlib.Path(a.save_fit)
         fdir.mkdir(parents=True, exist_ok=True)
         fit_file = fdir / f"layer{a.layer}-d{D}k{K}.safetensors"
+    # CONVERT vs DEMOTE. A layer already carrying VQ codes is re-fitted at a
+    # new K (demote). A layer still in `quantization` is AFFINE and has never
+    # been VQ'd at all -- layers 57-59 of every shipped 397B rung, which the
+    # original fit missed by running --vq-layers 0-56 on a 60-layer model
+    # (found 2026-09-06). Converting one rewrites its tensor NAMES
+    # (weight/scales/biases -> codes/codebook/vq_scales), so the weight_map
+    # and both quantization dicts have to move with it.
+    def _is_affine(m):
+        return m not in cfg["vq_modules"] and m in cfg.get("quantization", {})
+
+    convert = {module_name(a.layer, p) for p in PROJECTIONS
+               if _is_affine(module_name(a.layer, p))}
+    if convert:
+        bits = cfg["quantization"][sorted(convert)[0]].get("bits")
+        print(f"== CONVERT layer {a.layer}: {len(convert)} AFFINE modules "
+              f"({bits}-bit) -> VQ d{D}/K{K}. Tensor names change.", flush=True)
+
+    def _vq_entry(m):
+        """vq_modules entry the bundled runtime needs (model.py reads
+        experts/out/in/k/dim/group/pack_bits). For a demote, inherit the
+        existing entry; for a convert, derive the shape from the affine
+        weight, which is packed uint32: [experts, out, in*bits/32]."""
+        if m in cfg["vq_modules"]:
+            e = dict(cfg["vq_modules"][m])
+        else:
+            h = mx.load(str(bp / wm[m + ".weight"]))
+            sc = h[m + ".scales"]          # [experts, out, in/group] -- exact
+            e = {"experts": int(sc.shape[0]), "out": int(sc.shape[1]),
+                 "in": int(sc.shape[2]) * G}
+            del h, sc
+            mx.clear_cache()
+        e.update({"k": K, "dim": D, "group": G, "pack_bits": pack_bits})
+        return e
+
     new_tensors = {}
     vq_entries = {}
     if fit_file is not None and fit_file.exists():
@@ -253,13 +287,11 @@ def main():
               flush=True)
         new_tensors = dict(mx.load(str(fit_file)))
         for proj in PROJECTIONS:
-            m = module_name(a.layer, proj)
-            vq_entries[m] = dict(cfg["vq_modules"][m])
-            vq_entries[m].update({"dim": D, "k": K, "group": G,
-                                  "pack_bits": pack_bits})
+            vq_entries[module_name(a.layer, proj)] = _vq_entry(
+                module_name(a.layer, proj))
     for proj in (() if new_tensors else PROJECTIONS):
         m = module_name(a.layer, proj)
-        assert m in cfg["vq_modules"], m
+        assert m in cfg["vq_modules"] or m in cfg["quantization"], m
         print(f"== fit {m}  d{D}/K{K} (pack {pack_bits})", flush=True)
         T = expert_src.load_expert_stack(pathlib.Path(a.src), src_idx, fam,
                                          a.layer, proj, shard_path=shard_path)
@@ -272,9 +304,7 @@ def main():
         new_tensors[m + ".codes"] = mx.array(packed)
         new_tensors[m + ".codebook"] = cb
         new_tensors[m + ".vq_scales"] = scales
-        vq_entries[m] = dict(cfg["vq_modules"][m])
-        vq_entries[m].update({"dim": D, "k": K, "group": G,
-                              "pack_bits": pack_bits})
+        vq_entries[m] = _vq_entry(m)
         del codes, cb, scales, packed
         gc.collect(); mx.clear_cache()
     if fit_file is not None and not fit_file.exists() and new_tensors:
@@ -284,8 +314,22 @@ def main():
         print(f"   archived fit -> {fit_file}", flush=True)
 
     # splice into a candidate: hardlink untouched shards, rewrite touched
-    touched = sorted({wm[module_name(a.layer, p) + "." + s]
-                      for p in PROJECTIONS for s in VQ_SUFFIXES})
+    AFFINE_SUFFIXES = ("weight", "scales", "biases")
+    old_keys = {}                       # module -> [key, ...] to DROP
+    dest = {}                           # NEW tensor name -> shard it lands in
+    touched = set()
+    for proj in PROJECTIONS:
+        m = module_name(a.layer, proj)
+        sufs = AFFINE_SUFFIXES if m in convert else VQ_SUFFIXES
+        keys = [m + "." + s for s in sufs if m + "." + s in wm]
+        old_keys[m] = keys
+        # a converted module's VQ tensors land in the shard its affine
+        # weight occupied; a demoted module's names are unchanged.
+        home = wm[keys[0]]
+        touched.update(wm[k] for k in keys)
+        for suf in VQ_SUFFIXES:
+            dest[m + "." + suf] = wm.get(m + "." + suf, home)
+    touched = sorted(touched)
     if out.exists():
         shutil.rmtree(out)
     out.mkdir(parents=True)
@@ -299,19 +343,39 @@ def main():
             os.link(bp / sh, out / sh)
             continue
         t = mx.load(str(bp / sh))
-        n = 0
-        for name in list(t):
-            if name in new_tensors:
-                t[name] = new_tensors[name]
+        n = dropped = 0
+        # drop the affine tensors of any module being converted
+        for m in convert:
+            for k in old_keys[m]:
+                if k in t:
+                    del t[k]
+                    dropped += 1
+        for name, arr in new_tensors.items():
+            if dest.get(name) == sh:
+                t[name] = arr
                 n += 1
         tmp = out / (sh[:-len('.safetensors')] + '.tmp.safetensors')
         mx.save_safetensors(str(tmp), t)
         os.replace(tmp, out / sh)
         del t
-        print(f"   rewrote {sh}: {n} tensors", flush=True)
+        print(f"   rewrote {sh}: {n} tensors in, {dropped} affine dropped",
+              flush=True)
 
     cfg["vq_modules"].update(vq_entries)
+    # a converted module leaves BOTH quantization dicts (mlx reads
+    # `quantization`, HF tooling reads `quantization_config`); leaving it in
+    # either makes the loader build a QuantizedSwitchLinear for weights that
+    # are no longer there.
+    for m in convert:
+        for d in ("quantization", "quantization_config"):
+            cfg.get(d, {}).pop(m, None)
+        # weight_map follows the rename, or the loader looks for .weight
+        for k in old_keys[m]:
+            wm.pop(k, None)
+        for suf in VQ_SUFFIXES:
+            wm[m + "." + suf] = dest[m + "." + suf]
     json.dump(cfg, open(out / "config.json", "w"), indent=1)
+    idx["weight_map"] = wm
     idx.setdefault("metadata", {})["total_size"] = sum(
         os.path.getsize(out / s) for s in sorted(set(wm.values())))
     json.dump(idx, open(out / "model.safetensors.index.json", "w"), indent=1)
