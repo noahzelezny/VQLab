@@ -189,3 +189,18 @@ Demotion pipeline (next): `fit-moe --dim 8 --k 4096` (and 8192) for the
 the M4 data volume has only ~17 GiB free) → `pack_artifact` to 12/13-bit
 block packing → splice as demotion donor → mini-sweep → compose
 promote-6 + pay at ≤100.971 GiB → prose+code vs base with control.
+
+## Demotion mini-sweep (2026-09-05 evening, measured, K4096 pack-12)
+
+`demote-sweep.tsv` (M4, demote_fit.py — fit-moe math verbatim, standalone
+because the affine skeleton was deleted; vintage gate: L9 refit at K16384
+scored 3.0605 vs base 3.0568, in-family, and refit noise is HONEST cost
+since v2 ships these tensors). All rows exactly −0.1875 GiB (100.783).
+
+Damage vs base 3.0568: L31 −0.0002 (FREE), L24 −0.0001 (FREE), L3 0.0036,
+L1 0.0044, L5 0.0065, L26 0.0067, L9 0.0079... L16 0.0097 (worst).
+
+Cheapest-6 pay = ~0.021. COMPOSED CANDIDATE (in flight): promote
+{29,43,44,45,47,48} + demote {31,24,3,1,5,26} = `397b-v2-iso100` at
+~100.97 GiB, projected prose ≈ +0.073 net; code corpus is the open
+question (never measured per-layer). Ship bar: >= shipped 2.2 on BOTH.
