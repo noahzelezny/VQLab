@@ -92,6 +92,16 @@ Attempted the same 9k prompt through exo's API:
   that is why the instance vanished mid-experiment. Any long prompt to
   the served 35B kills the instance until model.py is regenerated.
 
+## Counter-measurement (2026-09-06): placement is the whole story
+
+The same Flash-Next-VQ-3.2bpw, placed by the prewarm watcher (not the
+ad-hoc ring re-place): **8,006-token prefill in 19 s (411 tok/s)**
+through exo's API — vs >20 MINUTES for the same-size prompt on the
+previous night's placement. Same model, same stack, same box family;
+only the placement differed. Confirms attribution #1 in both
+directions: a well-placed instance serves long prompts fine; an
+oversubscribed one is 60x+ slower.
+
 ## Revised attribution for Scout's ~120 s
 
 1. **Serving memory regime** (oversubscription/paging on the ring) —
