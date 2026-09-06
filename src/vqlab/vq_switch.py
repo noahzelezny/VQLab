@@ -2911,10 +2911,39 @@ def _decode_chunk(codes, codebook, scales, eidx_chunk, pack_bits=0,
     return w
 
 
+# GATHER FUSION (2026-09-06, swarm r3 fusion survivor + measured 24%).
+# The legacy prefill input chain materializes the same rows three times:
+# broadcast_to(x).reshape (a stride-0 axis forced into a full [N, IN]
+# copy), xf[order] (a second full copy), then xf_sorted[gmap] -> xp. All
+# three are row-gathers of the ORIGINAL token matrix, so the indices
+# compose on the host for free: xp = x_tokens[(order // K_rep)[gmap]] —
+# ONE gather, from a source K_rep(=top_k)x smaller. The gathered VALUES
+# are the same rows, so GEMM operands are byte-identical and the output
+# is bit-exact by construction (gated in tests/test_vq_prefill_paths.py).
+# VQ_MOE_FUSE_GATHER=0 restores the legacy three-copy chain.
+_FUSE_GATHER = os.environ.get("VQ_MOE_FUSE_GATHER", "1") != "0"
+
+# EXACT-LENGTH PER-EXPERT GEMMs (2026-09-06, r3 compute survivor).
+# Kills ALL padding (measured pad ratio 1.567 at chunk=32 on real 35B
+# routing = ~57% wasted GEMM FLOPs) by running one GEMM per expert on its
+# already-contiguous sorted row slice — no gmap, no vmask, no pad rows.
+# NOT bit-identical to the padded batched GEMM: a different GEMM shape
+# picks a different Metal tiling and fp16 sums in a different order (the
+# published-score law), so this ships DEFAULT OFF, for unscored serving
+# where wall time matters more than bit-reproducibility.
+# VQ_MOE_EXACT_GEMM=1 opts in.
+_EXACT_GEMM = os.environ.get("VQ_MOE_EXACT_GEMM", "0") != "0"
+
+
 def _prefill(xf, idx_sorted_np, codes, codebook, scales, pack_bits=0,
-             in_features=None):
+             in_features=None, xsrc=None, src_rows=None):
     """xf [N, IN] rows sorted by expert; idx_sorted_np = matching np expert
-    ids. Decode touched experts in chunks; one padded batched GEMM each."""
+    ids. Decode touched experts in chunks; one padded batched GEMM each.
+
+    Fused-gather form: ``xsrc`` [T, IN] (the original token rows, fp16) +
+    ``src_rows`` [N] (sorted-row -> token-row map) replace ``xf``; the xp
+    gather then reads xsrc[src_rows[gmap]] directly and xf may be None.
+    """
     global _DECODE_CHUNK
     if _DECODE_CHUNK is None:
         _DECODE_CHUNK = _default_decode_chunk()
@@ -2943,6 +2972,29 @@ def _prefill(xf, idx_sorted_np, codes, codebook, scales, pack_bits=0,
     for c0 in range(0, len(touched), _DECODE_CHUNK):
         eids = touched[c0:c0 + _DECODE_CHUNK]
         ne = len(eids)
+        w = _decode_chunk(codes, codebook, scales,
+                          mx.array(eids.astype(np.uint32)),
+                          pack_bits=pack_bits, in_features=in_features)
+        if _EXACT_GEMM:
+            # One GEMM per expert on its contiguous sorted slice: zero
+            # padding, zero gather maps. Rows/outputs stay in sorted
+            # order, so row_ids is just the slice ranges. Eval EVERY y of
+            # this chunk (not just the last) so `w` can actually be freed
+            # before the next chunk decodes — the same lazy-graph trap the
+            # per-chunk eval below exists for.
+            chunk_ys = []
+            for i, e in enumerate(eids):
+                s0, c = int(starts[e]), int(counts[e])
+                if xsrc is not None:
+                    xe = xsrc[mx.array(src_rows[s0:s0 + c])]
+                else:
+                    xe = xf[s0:s0 + c]
+                chunk_ys.append(xe @ w[i].T)
+                row_ids.append(np.arange(s0, s0 + c, dtype=np.uint32))
+            mx.eval(chunk_ys)
+            ys.extend(chunk_ys)
+            del w, chunk_ys
+            continue
         cap = int(counts[eids].max())
         # gather map rows -> [ne, cap]; pads point at row 0 (discarded)
         gmap = np.zeros((ne, cap), np.uint32)
@@ -2951,10 +3003,11 @@ def _prefill(xf, idx_sorted_np, codes, codebook, scales, pack_bits=0,
             c = counts[e]
             gmap[i, :c] = np.arange(starts[e], starts[e] + c, dtype=np.uint32)
             vmask[i, :c] = True
-        w = _decode_chunk(codes, codebook, scales,
-                          mx.array(eids.astype(np.uint32)),
-                          pack_bits=pack_bits, in_features=in_features)
-        xp = xf[mx.array(gmap.reshape(-1))].reshape(ne, cap, -1)
+        if xsrc is not None:
+            xp = xsrc[mx.array(src_rows[gmap.reshape(-1)])] \
+                .reshape(ne, cap, -1)
+        else:
+            xp = xf[mx.array(gmap.reshape(-1))].reshape(ne, cap, -1)
         yp = xp @ mx.swapaxes(w, 1, 2)                      # [ne, cap, OUT]
         flat_valid = np.nonzero(vmask.reshape(-1))[0].astype(np.uint32)
         ys.append(yp.reshape(ne * cap, OUT)[mx.array(flat_valid)])
@@ -3115,7 +3168,36 @@ class VQSwitchLinear(nn.Module):
                        pack_bits=pb)
         else:
             idx_np = np.array(idx_flat, copy=False)
-            if not sorted_indices:
+            # Fused-gather form: xf above is broadcast_to(x).reshape — a
+            # stride-0 axis forced into a FULL [N, IN] copy, and the
+            # unsorted branch then copies it AGAIN via xf[order]. Both are
+            # row-repeats/permutations of the true token matrix x2 [T, IN]
+            # (row j of xf is x2[j // K_rep]), so the gathers compose on
+            # the host and _prefill reads x2 directly: one gather, from a
+            # K_rep-times-smaller source, same rows -> bit-identical.
+            T = x.size // IN
+            if _FUSE_GATHER and N % max(T, 1) == 0:
+                x2 = x.reshape(T, IN)
+                if x2.dtype not in (mx.float16,):
+                    x2 = x2.astype(mx.float16)
+                k_rep = N // T
+                if not sorted_indices:
+                    order = np.argsort(idx_np, kind="stable")
+                    inv = np.argsort(order, kind="stable")
+                    src = (order // k_rep).astype(np.uint32)
+                    y = _prefill(None, idx_np[order],
+                                 self["codes"], self["codebook"],
+                                 self["vq_scales"], pack_bits=pb,
+                                 in_features=IN, xsrc=x2, src_rows=src)
+                    y = y[mx.array(inv.astype(np.uint32))]
+                else:
+                    src = (np.arange(N, dtype=np.uint32) // k_rep) \
+                        .astype(np.uint32)
+                    y = _prefill(None, idx_np,
+                                 self["codes"], self["codebook"],
+                                 self["vq_scales"], pack_bits=pb,
+                                 in_features=IN, xsrc=x2, src_rows=src)
+            elif not sorted_indices:
                 order = np.argsort(idx_np, kind="stable")
                 inv = np.argsort(order, kind="stable")
                 y = _prefill(xf[mx.array(order.astype(np.uint32))],
