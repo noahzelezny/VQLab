@@ -101,4 +101,8 @@ Attempted the same 9k prompt through exo's API:
    in isolation yet; the vq-serving branch knobs exist.
 3. **In-runtime levers** (pad ratio 1.567, padded xp gather) — real but
    bounded ~2x of an 11.5 s baseline; worth doing after 1-2.
-4. **Bundle crash** (35B) — not slowness but availability; re-bundle.
+4. **Bundle crash** — not slowness but availability; re-bundle. Audit
+   2026-09-06: ALL FOUR Qwen3.6-35B rungs (3.4/3.8/4.6/5.4bpw) carry the
+   bugged `_get_kernel_spec`; every other family's bundle has the shared
+   `_kernel_sig` fix. Re-bundle scope = the 35B ladder; revalidate via
+   `vqlab validate` before any publish.
