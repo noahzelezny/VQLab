@@ -272,6 +272,22 @@ if args.copy_config_keys:
     if copied:
         json.dump(cfg, open(ART / "config.json", "w"), indent=1)
         print(f"copied config keys from source: {copied}")
+# Processor configs travel WITH the tower (2026-09-06). Grafting weights
+# without them shipped twice — all four Flash-Next rungs (fifth exhibit,
+# 2026-09-04) and then the entire 35B ladder, found only when the
+# vision_config gate met those artifacts. A vision tower without its
+# preprocessor fails every request, so the grafter now copies them from
+# the source rather than trusting a later manual step.
+import shutil
+for pf in ("preprocessor_config.json", "video_preprocessor_config.json"):
+    s, d2 = SRC / pf, ART / pf
+    if s.is_file() and not d2.exists():
+        shutil.copy2(s, d2)
+        print(f"copied {pf} from {SRC.name}")
+    elif not s.is_file() and not d2.exists() and pf == "preprocessor_config.json":
+        print(f"WARNING: neither source nor artifact has {pf} — the "
+              "vision_config release gate will refuse this artifact.")
+
 missing = [k for k in ("vision_config", "image_token_id") if k not in cfg]
 print(f"grafted {len(out)} vision tensors ({total / 1024**3:.2f} GiB) -> "
       f"{ART / GRAFT_SHARD}")

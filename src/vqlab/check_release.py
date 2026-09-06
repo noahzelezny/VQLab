@@ -36,6 +36,15 @@ ap.add_argument("--no-smoke", action="store_true",
                      "can produce a token on a machine that is not ours -- "
                      "which is exactly how three broken rungs shipped.")
 ap.add_argument("--max-tokens", type=int, default=4)
+ap.add_argument("--no-prefill-smoke", action="store_true",
+                help="skip the LARGE-N prefill smoke. The 4-token smoke only "
+                     "exercises the fused (small-N) path; the entire 35B "
+                     "ladder shipped a _prefill that CRASHED on any long "
+                     "prompt (arc-5 sig mis-binding, 2026-09-06) and every "
+                     "gate stayed green because nothing ever pushed N past "
+                     "the fused cutoff. ~1500 prompt tokens exceeds both the "
+                     "dense packed cutoff (N>96) and the MoE pair cutoff "
+                     "(4096 pairs = 512 tokens at top_k 8).")
 ap.add_argument("--cluster-smoke", metavar="URL", default=None,
                 help="run the generation smoke through an exo cluster API "
                      "(e.g. http://localhost:52415) instead of a local "
@@ -252,6 +261,21 @@ elif not args.no_smoke and not fails:
         fails.append("strict smoke failed — see its output above. The "
                      "artifact either could not generate, or resolved its "
                      "runtime from a copy a downloader does not have.")
+    elif not args.no_prefill_smoke:
+        # Large-N arm: force the PREFILL path (decode fallback / _prefill),
+        # which the 4-token smoke never touches — see --no-prefill-smoke.
+        long_prompt = ("The quick brown fox jumps over the lazy dog. "
+                       "Numbers: 0 1 2 3 4 5 6 7 8 9. ") * 90   # ~1.5k tok
+        print("running LARGE-N prefill smoke (~1.5k-token prompt) ...",
+              flush=True)
+        r = subprocess.run([sys.executable, str(HERE / "smoke.py"), str(A),
+                            "--strict", "--max-tokens", "2",
+                            "--prompt", long_prompt])
+        if r.returncode != 0:
+            fails.append("LARGE-N prefill smoke failed — the artifact "
+                         "generates fine at decode N but its prefill path "
+                         "(large-N fallback) cannot process a long prompt. "
+                         "This is the failure the 35B ladder shipped with.")
 elif args.no_smoke:
     print("NOTE: --no-smoke; static checks only, generation NOT verified.")
 
