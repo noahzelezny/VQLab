@@ -210,6 +210,13 @@ def main():
     ap.add_argument("--seed", type=int, default=1234)
     ap.add_argument("--expert-chunk", type=int, default=32)
     ap.add_argument("--family", default="qwen3_5")
+    ap.add_argument("--save-fit", default=None,
+                    help="dir for the raw fitted tensors (codes/codebook/"
+                         "vq_scales, one safetensors per layer+K). Refits "
+                         "have burned hours twice; ALWAYS pass the archive "
+                         "(HDD: .../vqlab-fits/<model>/<geom>/) so a fit is "
+                         "paid for once. Existing file = fit is SKIPPED and "
+                         "loaded from the archive.")
     a = ap.parse_args()
 
     D, K = a.dim, a.k
@@ -225,9 +232,23 @@ def main():
     shard_path = make_shard_path(a.src, a.stage_dir)
 
     # fit all three projections on the CPU-stream-load / GPU-fit pattern
+    fit_file = None
+    if a.save_fit:
+        fdir = pathlib.Path(a.save_fit)
+        fdir.mkdir(parents=True, exist_ok=True)
+        fit_file = fdir / f"layer{a.layer}-d{D}k{K}.safetensors"
     new_tensors = {}
     vq_entries = {}
-    for proj in PROJECTIONS:
+    if fit_file is not None and fit_file.exists():
+        print(f"== fit ARCHIVE HIT {fit_file.name} — skipping k-means",
+              flush=True)
+        new_tensors = dict(mx.load(str(fit_file)))
+        for proj in PROJECTIONS:
+            m = module_name(a.layer, proj)
+            vq_entries[m] = dict(cfg["vq_modules"][m])
+            vq_entries[m].update({"dim": D, "k": K, "group": G,
+                                  "pack_bits": pack_bits})
+    for proj in (() if new_tensors else PROJECTIONS):
         m = module_name(a.layer, proj)
         assert m in cfg["vq_modules"], m
         print(f"== fit {m}  d{D}/K{K} (pack {pack_bits})", flush=True)
@@ -247,6 +268,11 @@ def main():
                               "pack_bits": pack_bits})
         del codes, cb, scales, packed
         gc.collect(); mx.clear_cache()
+    if fit_file is not None and not fit_file.exists() and new_tensors:
+        tmp = fit_file.with_suffix(".tmp.safetensors")
+        mx.save_safetensors(str(tmp), new_tensors)
+        os.replace(tmp, fit_file)
+        print(f"   archived fit -> {fit_file}", flush=True)
 
     # splice into a candidate: hardlink untouched shards, rewrite touched
     touched = sorted({wm[module_name(a.layer, p) + "." + s]
