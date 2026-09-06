@@ -70,6 +70,35 @@ and is unaffected, which is why smoke and tok/s look fine. Workaround:
 the current dev tree (which shares `_kernel_sig`) — same class of fix as
 the pending wdec re-bundle.
 
-Caveat: this measures the 35B on one box. Scout's front line is the 397B
-on the exo ring; the serving-layer measurement must be run there before
-attributing its 120 s with confidence.
+## Serving-layer measurement (same night, exo ring)
+
+Attempted the same 9k prompt through exo's API:
+
+- **Flash-Next-VQ-3.2bpw, ring-sharded across M3+M4 (auto-re-placed by
+  the prewarm watcher): cold 9k prefill exceeded 20 MINUTES** (curl
+  timeout at 1200 s, 0 bytes; exo logged CancelTask on disconnect — the
+  request was processing, just glacially).
+- Runner stdout explains it: `"Generating with a model that requires
+  146552 MB which is close to the maximum recommended size of 86016 MB.
+  This can be slow"` — repeated on every request. The instance is in
+  mlx's OVERSUBSCRIBED regime: working set over the recommended wired
+  limit → paging per forward → the 10-100x class. This, not kernels, is
+  the shape of the user-visible ~120 s symptom (Noah's tuned placements
+  set EXO_PREFILL_STEP_SIZE / EXO_MLX_MEM_LIMIT_GB per the vq-serving
+  branch; the auto-re-placed instance may lack that tuning).
+- **The shipped-bundle _prefill crash is PRODUCTION-CONFIRMED**: exo's
+  log shows the 35B instance died in `model.py:2522 _decode_chunk`
+  (the arc-5 mis-binding above) the moment the 9k request reached it —
+  that is why the instance vanished mid-experiment. Any long prompt to
+  the served 35B kills the instance until model.py is regenerated.
+
+## Revised attribution for Scout's ~120 s
+
+1. **Serving memory regime** (oversubscription/paging on the ring) —
+   dominant, order 10-100x, fix is placement/limits/rung choice, zero
+   kernel work.
+2. **Ring chunked prefill + prefix-cache behavior** — unmeasured
+   in isolation yet; the vq-serving branch knobs exist.
+3. **In-runtime levers** (pad ratio 1.567, padded xp gather) — real but
+   bounded ~2x of an 11.5 s baseline; worth doing after 1-2.
+4. **Bundle crash** (35B) — not slowness but availability; re-bundle.
