@@ -180,6 +180,15 @@ def make_shard_path(src, stage_dir):
     if not stage_dir:
         return lambda f: str(pathlib.Path(src) / f)
     st = pathlib.Path(stage_dir)
+    # SWEEP THE DIR ON STARTUP, not just between shards. `_staged` is
+    # per-process, so the last shard of every run survived its exit: a
+    # 10-layer arc leaked ~8 GiB x 10 and filled the M4 to 112 MiB free,
+    # killing its own last three layers (2026-09-06). This dir is scratch
+    # by contract -- the caller passes --stage-dir precisely to say
+    # "expendable copies live here".
+    if st.is_dir():
+        for stale in st.glob("*.safetensors"):
+            stale.unlink(missing_ok=True)
 
     def _p(fname):
         st.mkdir(parents=True, exist_ok=True)

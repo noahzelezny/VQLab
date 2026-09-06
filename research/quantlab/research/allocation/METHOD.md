@@ -448,3 +448,77 @@ loses by 0.077. What this arc TAUGHT, so nobody re-learns it:
 (65 s/row streaming score at 101 GiB); one demotion fit ~20 min/layer
 (d8 K4096, M4); compose chain = fits + seconds of splice. The bottleneck
 is k-means, and it is only paid when the archive misses.
+
+---
+
+## 11. The v3 exploration (2026-09-06) — two closed doors and a noise floor
+
+Data: `research/qwen397b/overnight-v3.tsv`. Nothing here changed what
+ships; all three results are things not to spend money on again.
+
+### 11.1 Deep donors lose. Promote SHALLOW and WIDE.
+
+Off the 2.2 base (d8/K16384, 1.75 bpw), promoting one layer deeper costs
++0.3743 GiB at d4/K512 and +0.75 at d4/K2048, against +0.1868 at d4/K256:
+
+| layer | donor | gain | cost GiB | gain/GiB |
+|---|---|---|---|---|
+| L43 | K256 | +0.0342 | 0.187 | **0.183** |
+| L43 | K512 | +0.0402 | 0.374 | 0.107 |
+| L43 | K2048 | +0.0601 | 0.750 | 0.080 |
+| L45 | K256 | +0.0219 | 0.187 | **0.117** |
+| L45 | K512 | +0.0349 | 0.374 | 0.093 |
+
+Doubling a hot layer's codebook bought 18% more gain for 100% more
+bytes. Returns to depth are steeply sublinear; returns to BREADTH (more
+layers at the cheapest step) are near-linear until the layer pool runs
+out of hot candidates. The iso-size recipe's shape — six shallow
+promotions — is therefore the right shape, not merely a convenient one.
+
+### 11.2 Single-layer effects have a ~0.004 (1σ) FIT-NOISE floor.
+
+K8192 is strictly richer than K4096, so its damage must be <= K4096's on
+every layer. Measured on seven layers, **three violate that by up to
++0.0088**, and mean damage came out HIGHER at K8192 (+0.0055) than at
+K4096 (+0.0041) while saving half the bytes. Since the scorer is
+deterministic, the variance is in the FIT — k-means path-dependence
+(++ seeding on a 200k subsample, 20 Lloyd steps, a different local
+optimum per run) — not in the measurement. Implied per-row sigma ~0.004.
+
+Consequences, all binding:
+
+- **"Free demotions" is RETRACTED.** L24 and L31 read -0.0002/-0.0001 at
+  K4096 and were reported as costing nothing. Re-fitting them at K8192
+  put them at +0.0080/+0.0087 — the worst two of the batch. They were the
+  lucky tail of a noisy draw, not insensitive layers.
+- **Do not rank individual rows whose effects are under ~0.01.** That
+  covers most of a demotion sweep and the tail of a promotion sweep.
+  Sets of top rows remain meaningful; their internal order does not.
+- **Expect winner's curse.** Choosing the best 6 of 57 by one noisy fit
+  selects partly for luck, so a composed candidate lands below the sum of
+  its singles. The 397B v2 composed at 76% of that sum — previously
+  charged entirely to sub-additivity; some of it is this.
+- **K4096 is the currency of choice.** It saves 2x the bytes of K8192 for
+  damage that is statistically indistinguishable at this precision.
+- To actually rank near-tied candidates: fit N seeds per layer and keep
+  the best, or replicate and average. Both cost N x 20 min/layer.
+
+### 11.3 relerr does NOT predict ppl damage. (Third falsified proxy.)
+
+Pearson(mean fit relerr, measured ppl damage) = **+0.08** (n=10, K4096)
+and **+0.23** (n=7, K8192). The two K4096 fits with the HIGHEST
+reconstruction error were the two that scored as free. Reconstruction
+error is a per-tensor objective; end-to-end damage is not a function of
+it. Joins `vqlab layer-leverage` (§2.2) and the leverage probe's cold end
+on the list of cheap proxies that do not survive contact with
+measurement. There is still no substitute for scoring the assembled
+model.
+
+### 11.4 What this does NOT touch
+
+The shipped candidate stands. `397b-v2-iso100` was measured directly, not
+inferred: prose +0.0838 with a byte-identical shuffled control at +0.0067
+(a gap of ~18 sigma against the floor above), and independently confirmed
+on a held-out literary corpus never used for selection (+0.0403 vs the
+control's +0.0052). Composed artifacts are measured; only the per-layer
+attributions inside them are noisy.

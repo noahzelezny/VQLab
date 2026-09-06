@@ -1,0 +1,13 @@
+LIT_BASE	1.282	heldout
+LIT_ISO100	1.2417	heldout
+LIT_CTRL100	1.2768	heldout
+L43k512	3.0166	deep-donor k512
+L45k512	3.0219	deep-donor k512
+L43k2048	2.9967	deep-donor k2048
+demL31k8192	3.0648	k8192 pay
+demL24k8192	3.0655	k8192 pay
+demL3k8192	3.0661	k8192 pay
+demL1k8192	3.0593	k8192 pay
+demL5k8192	3.0582	k8192 pay
+demL26k8192	3.0623	k8192 pay
+demL9k8192	3.06	k8192 pay
