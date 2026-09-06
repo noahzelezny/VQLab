@@ -277,6 +277,16 @@ def _decode_matmul(xf, codes_in, codebook, scales, group_size, OUT, IN,
     D = int(codebook.shape[1])
 
     def _tile(r0, r1):
+        if pack_bits:
+            wdec_fits = _resolve_kernel("wdec_fits")
+            if wdec_fits(D, IN // D, group_size, pack_bits):
+                # One kernel replaces slab + gather + scale-mul; bit-identity
+                # against the graph arm is gated by tests/test_vq_wdec.py.
+                # Full codes/scales tensors — the row base rides in dims.
+                w = _resolve_kernel("wdec_decode")(
+                    codes_in, cbk, scales, r1 - r0, IN, group_size,
+                    pack_bits, r0=r0)
+                return xf @ w.T.astype(xf.dtype)
         c = codes_in[r0:r1]
         if pack_bits:
             c = _unpack_rows(c, IN // D, pack_bits)
