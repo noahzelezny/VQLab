@@ -142,3 +142,23 @@ def test_fused_gather_sorted_indices_path(setup):
         assert bool(mx.array_equal(a.view(mx.uint16), b.view(mx.uint16)))
     finally:
         VS.VQ_FUSED_MAX_N = old
+
+
+def test_vector_decode_bit_identical(setup):
+    """VQ_DECODE_VEC pairs stores/reads but keeps per-element fp32
+    arithmetic — must be bit-identical to the scalar decode kernel."""
+    mod, x, idx = setup
+    old = VS.VQ_FUSED_MAX_N
+    VS.VQ_FUSED_MAX_N = 1
+    try:
+        y_scalar = _run(mod, x, idx, fuse=True, exact=False)
+        VS._DECODE_VEC = True
+        try:
+            y_vec = _run(mod, x, idx, fuse=True, exact=False)
+        finally:
+            VS._DECODE_VEC = False
+    finally:
+        VS.VQ_FUSED_MAX_N = old
+    assert bool(mx.array_equal(y_scalar.view(mx.uint16),
+                               y_vec.view(mx.uint16))), \
+        "vector decode changed bits — paired store must not alter values"
