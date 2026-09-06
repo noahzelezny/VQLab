@@ -2111,6 +2111,81 @@ _SRC_DECODE = r"""
     }
 """
 
+# Vector-store variant (2026-09-06, r3 compute survivor, conservative
+# form). The ARITHMETIC is unchanged — each element is still one
+# fp32 multiply + one RTNE round, so bits cannot move — only the store
+# pairs into half2 (and the codebook read pairs likewise), halving the
+# store instructions of a store-bound kernel. Requires D % 2 == 0 and
+# G % 2 == 0 (every shipped artifact). Gated bit-exact against
+# _SRC_DECODE in tests/test_vq_prefill_paths.py; VQ_DECODE_VEC=0 (the
+# default until benched on a free box) keeps the scalar kernel.
+_SRC_DECODE_VEC = r"""
+    uint g = thread_position_in_grid.x;
+    uint r = thread_position_in_grid.y;
+    uint ec = thread_position_in_grid.z;
+    const int OUT  = dims[0];
+    const int IN   = dims[1];
+    const int D    = dims[2];
+    const int G    = dims[3];
+    const int NE   = dims[4];
+    const int NSUB = IN / D;
+    const int NGRP = IN / G;
+    const int SPG  = G / D;
+    if (g >= (uint)NGRP || r >= (uint)OUT || ec >= (uint)NE) return;
+    const uint e = eidx[ec];
+    const device CT* crow = codes + (size_t)e * OUT * NSUB + (size_t)r * NSUB;
+    const float s = (float)scales[(size_t)e * OUT * NGRP + (size_t)r * NGRP + g];
+    device half2* wrow2 = (device half2*)(
+        w + (size_t)ec * OUT * IN + (size_t)r * IN + (size_t)g * G);
+    const int j0 = g * SPG;
+    const int D2 = D / 2;
+    for (int q = 0; q < SPG; ++q) {
+        const uint c = (uint)crow[j0 + q];
+        const device half2* cb2 = (const device half2*)(codebook + c * D);
+        for (int u = 0; u < D2; ++u) {
+            const half2 cv = cb2[u];
+            wrow2[q * D2 + u] = half2((half)(s * (float)cv.x),
+                                      (half)(s * (float)cv.y));
+        }
+    }
+"""
+
+# Packed twin: identical to _SRC_DECODE_PACKED except the paired
+# codebook read + half2 store (same bit-exactness argument).
+_SRC_DECODE_PACKED_VEC = _PACK_FETCH + r"""
+    uint g = thread_position_in_grid.x;
+    uint r = thread_position_in_grid.y;
+    uint ec = thread_position_in_grid.z;
+    const int OUT  = dims[0];
+    const int IN   = dims[1];
+    const int D    = dims[2];
+    const int G    = dims[3];
+    const int NE   = dims[4];
+    const int NSUB = IN / D;
+    const int NGRP = IN / G;
+    const int SPG  = G / D;
+    const int WPR  = (NSUB + 31) / 32 * BITS;
+    if (g >= (uint)NGRP || r >= (uint)OUT || ec >= (uint)NE) return;
+    const uint e = eidx[ec];
+    const device uint* crow = codes + (size_t)e * OUT * WPR + (size_t)r * WPR;
+    const float s = (float)scales[(size_t)e * OUT * NGRP + (size_t)r * NGRP + g];
+    device half2* wrow2 = (device half2*)(
+        w + (size_t)ec * OUT * IN + (size_t)r * IN + (size_t)g * G);
+    const int j0 = g * SPG;
+    const int D2 = D / 2;
+    for (int q = 0; q < SPG; ++q) {
+        const uint c = VQ_CODE(crow, j0 + q);
+        const device half2* cb2 = (const device half2*)(codebook + c * D);
+        for (int u = 0; u < D2; ++u) {
+            const half2 cv = cb2[u];
+            wrow2[q * D2 + u] = half2((half)(s * (float)cv.x),
+                                      (half)(s * (float)cv.y));
+        }
+    }
+"""
+
+_DECODE_VEC = os.environ.get("VQ_DECODE_VEC", "0") != "0"
+
 _KERNELS = {}
 
 # SPECIALIZED (template-free) kernel cache, arc 5 (2026-09-02). Passing
@@ -2890,11 +2965,17 @@ def _decode_chunk(codes, codebook, scales, eidx_chunk, pack_bits=0,
     # bit-identical output (asserted on real tensors); ~0.8 ms/token at the
     # 144-dispatch rate. VQ_SPEC_KERNELS=0 restores the template path.
     dims = _dims_array(OUT, IN, D, G, NE)
+    vec = _DECODE_VEC and D % 2 == 0 and G % 2 == 0
     if pack_bits:
-        name, src = f"vq_decode_packed{pack_bits}", _SRC_DECODE_PACKED
+        if vec:
+            name, src = f"vq_decode_vec_packed{pack_bits}", \
+                _SRC_DECODE_PACKED_VEC
+        else:
+            name, src = f"vq_decode_packed{pack_bits}", _SRC_DECODE_PACKED
         template = [("BITS", pack_bits)]
     else:
-        name, src = "vq_decode", _SRC_DECODE
+        name, src = ("vq_decode_vec", _SRC_DECODE_VEC) if vec \
+            else ("vq_decode", _SRC_DECODE)
         template = [("CT", codes.dtype)]
     kern = _get_kernel_spec(name, src, template) if _SPEC_KERNELS else None
     common = dict(
