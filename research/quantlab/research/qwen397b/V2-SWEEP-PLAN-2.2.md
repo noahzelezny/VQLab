@@ -204,3 +204,27 @@ Cheapest-6 pay = ~0.021. COMPOSED CANDIDATE (in flight): promote
 {29,43,44,45,47,48} + demote {31,24,3,1,5,26} = `397b-v2-iso100` at
 ~100.97 GiB, projected prose ≈ +0.073 net; code corpus is the open
 question (never measured per-layer). Ship bar: >= shipped 2.2 on BOTH.
+
+## FINAL VERDICT (2026-09-05 night) — ALL GATES PASS
+
+`397b-v2-iso100` = promote {29,43,44,45,47,48} (d4/K256 from the 2.4
+rung) + demote {31,24,3,1,5,26} (d8/K4096, fresh fits, archived to HDD
+vqlab-fits/). **100.964 GiB** (7 MiB under the shipped 2.2).
+
+| build (100.964 GiB) | prose | code |
+|---|---|---|
+| shipped 2.2 (100.971) | 3.0568 | 2.6728 |
+| **v2-iso100** | **2.9730 (+0.0838)** | 2.6729 (even) |
+| ctrl100 (shuffled: promote {0,4,8,10,35,49} seed-1234, same pay) | 3.0501 | 2.6692 |
+
+Candidate beats the byte-identical shuffled control by 0.077 prose —
+selection is causal. Closes 28% of the 2.2->2.4 gap (2.4 rung: 2.7624 @
+111.62 GiB) at zero bytes. MTP head reservation intact by construction.
+Artifacts: M4 ~/v2sweep22/work/{397b-v2-iso100,397b-v2-ctrl100}; iso100
+rsyncing to E/v2sweep397b/. Fits archived (HDD vqlab-fits, 6/6 archive
+hits on the control rebuild — convention already paying).
+
+SHIP DECISION: Noah's (nothing published without his go-ahead).
+Remaining pre-publish work if GO: runtime smoke via shipping bundle,
+check_release gates, card update (rung-honest: v2 replaces the 2.2
+slot; 2.4 unchanged), HF upload (Noah runs credentials).
