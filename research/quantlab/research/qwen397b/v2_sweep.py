@@ -231,14 +231,20 @@ def preflight(base, donor, args, layers):
         die(f"need {disk_need:.1f} GiB of scratch and only {free:.1f} GiB is "
             "free. Drop --keep, or free space.")
 
-    # instruments must exist before anything runs
-    for label, path in (("scorer", args.scorer), ("corpus", args.corpus)):
-        if not os.path.exists(path):
-            die(f"{label} not found: {path}")
-    if args.corpus_code and not os.path.exists(args.corpus_code):
-        die(f"code corpus not found: {args.corpus_code}")
-    if not os.path.exists(args.python):
-        die(f"interpreter not found: {args.python}")
+    # instruments must exist before anything runs -- EXCEPT under
+    # --build-only, which never scores. The defaults are derived from
+    # __file__'s grandparent (correct in the repo, garbage when the driver
+    # is copied to a box standalone: /Users/referee/...), so demanding them
+    # for a pure build killed a compose chain AND a whole overnight arc
+    # (2026-09-05/06) with a scorer path nothing was going to use.
+    if not args.build_only:
+        for label, path in (("scorer", args.scorer), ("corpus", args.corpus)):
+            if not os.path.exists(path):
+                die(f"{label} not found: {path}")
+        if args.corpus_code and not os.path.exists(args.corpus_code):
+            die(f"code corpus not found: {args.corpus_code}")
+        if not os.path.exists(args.python):
+            die(f"interpreter not found: {args.python}")
 
     print(f"PREFLIGHT  base   {bp.name}  {b_tot / GiB:.3f} GiB")
     print(f"PREFLIGHT  donor  {dp.name}  {d_tot / GiB:.3f} GiB  "
