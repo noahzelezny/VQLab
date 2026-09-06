@@ -123,6 +123,11 @@ def main():
     ap.add_argument("--tokens", type=int, default=9000)
     ap.add_argument("--fenced", action="store_true",
                     help="phase-fence _prefill (attribution mode)")
+    ap.add_argument("--no-instrument", action="store_true",
+                    help="run the bundle's OWN _prefill untouched — for "
+                         "A/B of the runtime's env-flag arms, where the "
+                         "instrumented replica would mask the flag under "
+                         "test. Only the end-to-end wall is reported.")
     a = ap.parse_args()
 
     from mlx_lm import load
@@ -140,8 +145,14 @@ def main():
             break
     if mod_globals is None:
         raise SystemExit("no VQSwitchLinear found — not a MoE VQ artifact")
-    _instrument(mod_globals, a.fenced)
-    print(f"instrumented _prefill (fenced={a.fenced})")
+    if a.no_instrument:
+        print("running the bundle's own _prefill (no instrumentation); "
+              f"flags: FUSE_GATHER={mod_globals.get('_FUSE_GATHER')} "
+              f"EXACT_GEMM={mod_globals.get('_EXACT_GEMM')} "
+              f"DECODE_VEC={mod_globals.get('_DECODE_VEC')}")
+    else:
+        _instrument(mod_globals, a.fenced)
+        print(f"instrumented _prefill (fenced={a.fenced})")
 
     text = open(os.path.join(a.art, "README.md")).read()
     ids = tok.encode(text)
