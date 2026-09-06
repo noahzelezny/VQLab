@@ -2196,6 +2196,10 @@ def _kernel_sig(name):
     spec path, and silently kept paying ~5-7 us of template processing per
     dispatch (2026-09-03, dense-kernel arc).
     """
+    if name.startswith("vq_wdec"):
+        # Weight-decode kernel: no x, no eidx. MUST precede the fallthrough
+        # or it binds the expert signature's eidx — the arc-5 defect class.
+        return ["codes", "codebook", "scales", "dims"], ["w"]
     if name.startswith("vq_dense"):
         return ["x", "codes", "codebook", "scales", "dims"], ["y"]
     if name.startswith("vq_fused"):
@@ -2735,6 +2739,122 @@ def _dense_fused(x, codes, codebook, scales, pack_bits=0, in_features=None):
                         ("MAX_K", K), ("MAX_NSUB", NSUB)]
     return _dense_dispatch(name, src, template, x, codes, codebook, scales,
                            OUT, IN, D, G, N, K)
+
+
+# --------------------------------------------------------------------------- #
+# vq_wdec — packed codes -> dense fp16 weight tile, one dispatch.
+#
+# Serves the PACKED arm of vq_dense._decode_matmul's fallback (prefill,
+# N > _fused_max_n). Replaces _unpack_rows (the [R, NSUB] slab) + _decode's
+# gather + broadcast-scale — three full materialisations — with one kernel
+# whose only buffer is the [rows, IN] fp16 output. The GEMM downstream is
+# untouched: same w shape/dtype/strides, so mlx picks the same tiling and
+# bits cannot move there (the row-tiling lesson).
+#
+# Bit-exactness is structural: every w[r, e] is an independent
+# (half)(float(s) * float(cb)) — no reduction, no ordering. The exact product
+# of two fp16 significands fits fp32, so the float path applies exactly one
+# RTNE rounding, same as mlx's half*half elementwise op. That one assumption
+# is the ship gate: tests/test_vq_wdec.py compares uint16 BIT PATTERNS (not
+# array_equal — NaN != NaN) against _decode(_unpack_rows(...)).
+#
+# Codebook stays in DEVICE memory — zero threadgroup allocation, so the E134
+# "Threadgroup memory size exceeds" load-failure class is structurally
+# impossible and wdec_fits has no cap term. (A threadgroup-cached variant was
+# considered and rejected: a write kernel reads each codebook vector once per
+# code with no intra-threadgroup reuse to pay for the barrier, and
+# K4096*d4*2 B is exactly the 32 KB cap anyway.)
+# --------------------------------------------------------------------------- #
+
+_SRC_WDEC = _PACK_FETCH + r"""
+    // dims: [TROWS, IN, NGRP, r0]   (BITS, D_BAKE, GROUP are baked)
+    const int TROWS = dims[0];   // rows in THIS tile, not the module's OUT
+    const int IN    = dims[1];
+    const int NGRP  = dims[2];
+    const int r0    = dims[3];
+
+    const int D    = D_BAKE;
+    const int G    = GROUP;      // compile-time => SPG folds to mul/shift
+    const int NSUB = IN / D;
+    const int SPG  = G / D;      // codes per scale group
+    const int WPR  = (NSUB / 32) * BITS;
+
+    uint g = thread_position_in_grid.x;   // scale-group index
+    uint r = thread_position_in_grid.y;   // row within tile
+    if (g >= (uint)NGRP || r >= (uint)TROWS) return;
+
+    const device uint* crow = codes  + (size_t)(r0 + r) * WPR;
+    const device half* srow = scales + (size_t)(r0 + r) * NGRP;
+    device half* wrow       = w + (size_t)r * IN + (size_t)g * G;
+
+    const float s = (float)srow[g];       // one broadcast scalar per thread
+
+    const int j0 = g * SPG;
+    for (int q = 0; q < SPG; ++q) {
+        const uint c = VQ_CODE(crow, j0 + q);
+        const device half* cbp = codebook + (size_t)c * D;
+        for (int u = 0; u < D; ++u)
+            wrow[q * D + u] = (half)(s * (float)cbp[u]);
+    }
+"""
+
+# rows of w each threadgroup covers. The expert sweep found 4-8 beats 32 for
+# its dot-product kernel; this one is store-bound, so the value must be swept
+# on real tensors (VQ_WDEC_ROWS_TG for the sweep), not inherited.
+_WDEC_ROWS_TG = int(os.environ.get("VQ_WDEC_ROWS_TG", "4"))
+
+# Escape hatch: VQ_DENSE_DECODE_FUSE=0 restores _unpack_rows + _decode for
+# A/B without a rebuild. Read at import like every other arm switch.
+_WDEC_FUSE = os.environ.get("VQ_DENSE_DECODE_FUSE", "1") != "0"
+
+
+def wdec_fits(D, NSUB, G, pack_bits):
+    """May the packed fallback take the vq_wdec kernel? On False the caller
+    falls through to _unpack_rows + _decode unchanged. NSUB % 32 mirrors
+    _unpack_rows' own hard precondition, so A/B parity is exact; unpacked
+    codes (pack_bits == 0) keep their bit-frozen one-gather path."""
+    return (_WDEC_FUSE
+            and D in (2, 4)
+            and 0 < pack_bits <= 16
+            and NSUB % 32 == 0
+            and G % D == 0)
+
+
+def wdec_decode(codes, codebook, scales, rows, IN, G, pack_bits, r0=0):
+    """Decode packed rows [r0, r0+rows) into a [rows, IN] fp16 weight tile.
+
+    `codes`/`scales` are the FULL module tensors — the row base travels in
+    dims, so no Python-side slice (and no packed-slab copy) is ever made.
+    `codebook` must already be fp16 (the caller's astype), never the raw
+    tensor: a bf16 source read as device half* would be silent garbage.
+    """
+    D = int(codebook.shape[1])
+    NGRP = IN // G
+    name = f"vq_wdec_packed{pack_bits}_d{D}"
+    template = [("BITS", pack_bits), ("D_BAKE", D), ("GROUP", G)]
+    dims = _dims_array(rows, IN, NGRP, r0)
+    rtg = _WDEC_ROWS_TG
+    grid = (((NGRP + 31) // 32) * 32, ((rows + rtg - 1) // rtg) * rtg, 1)
+    tg = (min(32, max(1, NGRP)), rtg, 1)
+    kern = _get_kernel_spec(name, _SRC_WDEC, template) if _SPEC_KERNELS \
+        else None
+    if kern is not None:
+        (w,) = kern(inputs=[codes, codebook, scales, dims],
+                    grid=grid, threadgroup=tg,
+                    output_shapes=[(rows, IN)], output_dtypes=[mx.float16])
+        return w
+    (w,) = _get_kernel(name, _SRC_WDEC)(
+        inputs=[codes, codebook, scales, dims], template=template,
+        grid=grid, threadgroup=tg,
+        output_shapes=[(rows, IN)], output_dtypes=[mx.float16])
+    return w
+
+
+# T5, at import: the sig table must bind this kernel's actual buffers. A
+# vq_wdec* name reaching the expert fallthrough binds an eidx that does not
+# exist — silent garbage, not an error (the documented arc-5 defect).
+assert _kernel_sig("vq_wdec_packed9_d2") == (
+    ["codes", "codebook", "scales", "dims"], ["w"])
 
 
 def _decode_chunk(codes, codebook, scales, eidx_chunk, pack_bits=0,
