@@ -404,3 +404,47 @@ Also note §2.2's headline "1.93x uniform" was computed the same flawed way and
 should be read as directional, not exact. The RANKING of methods it reports
 (measured >> proxy) is unaffected — that comparison was between two
 allocations at IDENTICAL size, where no interpolation is involved.
+
+---
+
+## 10. The 397B v2 arc (2026-09-05) — what transferred, what was new
+
+Full record: `research/qwen397b/V2-SWEEP-PLAN-2.2.md` (+ TSVs). Result:
+iso-size v2 at 100.964 GiB, prose +0.0838, code even, shuffled control
+loses by 0.077. What this arc TAUGHT, so nobody re-learns it:
+
+**Confirmed a third time (now a law, not a finding):**
+- Layer effects are base-specific. The 2.4-base best-6 was the WRONG set
+  at the 2.2 base (2.4's #1 pick, L40, was mid-pack). A sweep table
+  transfers to NO other rung. Budget the re-sweep; do not argue with it.
+- Measured selection >> any proxy, and the shuffled control at identical
+  bytes is non-negotiable — ours landed at base+0.007 while the measured
+  set took +0.084 from the same bytes.
+- Additivity holds at ~76% (composed/sum-of-singles), consistent with
+  GLM. Project composed gains at ~0.75-0.8x the single-layer sum.
+
+**New this arc:**
+- **Cross-dim splicing works and is now a tool** (v2_sweep --donor
+  d4k256). A d8 base takes d4 promoted modules; vq_modules is per-module;
+  the runtime dispatches per tensor. Promotion levels can come from any
+  SHIPPED rung — zero new fitting for the promotion side, ever again.
+- **Demotion-by-measurement works** and is NOT the refuted "downgrade
+  the probe's cold layers" move (Flash L-note): candidates were chosen
+  by measured promotion-insensitivity, then each demotion was scored
+  individually. Two of ten (L24, L31) demoted for FREE — richer codes
+  were pure waste there. Free demotions are the iso-size method's fuel.
+- **Refit noise is honest cost.** The affine skeleton was deleted, so
+  demotion fits re-derive scales from bf16 (demote_fit.py, fit-moe math
+  verbatim). Vintage gate: refit-at-shipped-K scored base -0.0037 — in
+  family. Whatever ships carries the refit, so no correction is applied.
+- **Archive every fit** (HDD vqlab-fits/, [[fit-archive-convention]]).
+  The control rebuild hit 6/6 archived fits and took ~25 min instead of
+  2.5 h. Candidates are disposable; fits are not.
+- **Selection-corpus hygiene**: after two greedy rounds on the same
+  8K-token wikitext prefix, held-out scoring (literary corpus, never
+  selected against) is required before shipping any further iteration.
+
+**Costs, for planning the next family:** 57-row promotion sweep ~2 h
+(65 s/row streaming score at 101 GiB); one demotion fit ~20 min/layer
+(d8 K4096, M4); compose chain = fits + seconds of splice. The bottleneck
+is k-means, and it is only paid when the archive misses.
