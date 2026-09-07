@@ -228,3 +228,34 @@ SHIP DECISION: Noah's (nothing published without his go-ahead).
 Remaining pre-publish work if GO: runtime smoke via shipping bundle,
 check_release gates, card update (rung-honest: v2 replaces the 2.2
 slot; 2.4 unchanged), HF upload (Noah runs credentials).
+
+---
+
+## v3 SUPERSEDES iso100 (2026-09-06) — the defect refund replaces the demotions
+
+`397b-v3` = promote {29,43,44,45,47,48} to d4/K256 (+1.125 GiB) + convert
+the orphaned layers 57/58/59 from affine 3-bit to d4/K2048 (-1.125 GiB,
+and it IMPROVES quality -- see DEFECT-layers-57-59.md). **Zero demotions.**
+
+| candidate | GiB | prose | code | literary | structure |
+|---|---|---|---|---|---|
+| shipped 2.2 | 100.971 | 3.0568 | 2.6728 | 1.2820 | flat + 3 orphaned affine layers |
+| v2 `iso100` | 100.964 | 2.9730 | 2.6729 | 1.2417 | 6 promoted, 6 DEMOTED |
+| **v3** | **100.967** | **2.9643** | **2.6727** | **1.2422** | 6 promoted, 3 CONVERTED |
+
+vs shipped: **prose +0.0925, code +0.0001 (even), literary +0.0398.**
+vs iso100: prose +0.0087 (~2 sigma), code and literary tied inside the
+noise floor, same bytes. Load smoke passes (27.2 tok/s, 107.8 GB peak).
+
+Why it wins on more than the number: iso100 had to DAMAGE six layers to
+fund six promotions. v3 funds them from bytes that were being wasted, so
+it carries six fewer degraded layers. It is also LESS selected -- the
+promotion set is the same control-validated best-6, and the conversion
+involves no choice at all (all three orphaned layers are converted, there
+is nothing to pick), so v3 adds no new overfitting surface over v2. The
+shuffled-control result already earned by iso100 covers v3's only
+selected component.
+
+Also settled: 57-59 are NOT hot promotion candidates. Within the VQ
+ladder, K2048 -> K8192 buys +0.0057 prose for 1.125 GiB = 0.005 per GiB,
+against 0.18 per GiB for the best promotion. Leave them at K2048.
