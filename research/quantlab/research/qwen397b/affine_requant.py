@@ -112,8 +112,16 @@ def main():
     if out.exists():
         shutil.rmtree(out)
     out.mkdir(parents=True)
+    # non-shard files come across as-is. A .safetensors file that the INDEX
+    # does not reference is a SIDECAR (mtp-head-q6, vision grafts), not a
+    # shard -- skipping every .safetensors dropped the 397B's published
+    # 5.4 GiB MTP head from a rebuild (caught 2026-09-07, before it could
+    # be uploaded over the live repo).
+    _idx_shards = set(wm.values())
     for f in bp.iterdir():
-        if f.suffix == ".safetensors" or f.is_dir():
+        if f.is_dir():
+            continue
+        if f.suffix == ".safetensors" and f.name in _idx_shards:
             continue
         shutil.copy2(f, out / f.name)
     for sh in sorted(set(wm.values())):
