@@ -23,6 +23,21 @@ ART = pathlib.Path(args.artifact)
 idx = json.load(open(ART / "model.safetensors.index.json"))["weight_map"]
 cfg = json.load(open(ART / "config.json"))
 
+# DENSE REFUSAL (2026-09-07). This is the MoE bundler: it scans for 3-D
+# `.codes` (expert modules) and splices vq_switch.py + the MoE shim. Run
+# on a DENSE artifact it found no expert modules, wrote an empty
+# vq_modules, and silently replaced a correct dense bundle (which must
+# also carry vq_dense.py) with one that cannot serve — caught only
+# because check-bundle then failed on three published 27B rungs. A
+# bundler that quietly produces an unusable artifact is the exact class
+# of defect the release gates exist for; refuse instead.
+if cfg.get("vq_linear") or cfg.get("vq_embed"):
+    raise SystemExit(
+        "REFUSING: this is a DENSE artifact (config carries vq_linear/"
+        "vq_embed). Its bundle must contain vq_switch.py AND vq_dense.py "
+        "plus the dense shim — use build-dense, not bundle. Running this "
+        "command would overwrite the dense runtime with a MoE-only one.")
+
 vq_modules = {}
 by_shard = {}
 for k, sh in idx.items():
