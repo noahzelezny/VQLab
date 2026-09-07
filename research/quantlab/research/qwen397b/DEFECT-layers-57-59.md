@@ -169,3 +169,19 @@ exactly 1.125 GiB -- precisely the cost of the best-6 promotions -- while
 IMPROVING quality instead of costing it. Candidate `397b-v3` = promote
 {29,43,44,45,47,48} + convert 57-59 to d4/K2048, landing back at the
 shipped 100.971 GiB with six fewer damaged layers. IN FLIGHT.
+
+## Reproducing v3 (artifacts are disposable, fits are not)
+
+`397b-v3` needs no k-means to rebuild — ~10 minutes of pure splicing:
+
+1. promotions: `v2_sweep.py --combo 29,43,44,45,47,48 --donor d4k256
+   --build-only` off the shipped 2.2 base (donor tensors come from the
+   shipped 2.4 rung; deterministic copy).
+2. conversions: `demote_fit.py --layer {57,58,59} --k 2048 --dim 4
+   --save-fit <archive>` — all three are ARCHIVE HITS at
+   `/Volumes/Thunderbay HDD/vqlab-fits/qwen3.5-397b/demote_fit-d4/
+   layer{57,58,59}-d4k2048.safetensors`, so no fitting runs.
+
+Driver: `build_v3.sh` (committed alongside). Promotions must run FIRST —
+`v2_sweep.py`'s preflight refuses a non-flat base and the conversion makes
+it non-flat.
