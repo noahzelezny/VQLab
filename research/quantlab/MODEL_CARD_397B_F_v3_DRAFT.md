@@ -64,6 +64,7 @@ at 0.33 Hz while generating:
 | workload | MLX peak | machine memory consumed |
 |---|---|---|
 | short prompts, 200-token generations | 107.9 GB | ~101.6 GiB |
+| long decode (3 x 1024 tokens, varied) | 107.9 GB | ~100.3 GiB |
 | 7721-token prefill + 256 new | 115.0 GB | ~108.3 GiB |
 
 An 8k prefill costs only **6.6 GiB over the short-prompt peak** rather than
@@ -71,10 +72,11 @@ a multiple of it — the runtime caps MLX's buffer-reuse cache by default
 (`VQLAB_CACHE_LIMIT_GB`). On a 128 GB machine that leaves ~20 GiB at 8k
 context for KV cache and everything else.
 
-Note a 40-token smoke reads only ~55 GiB resident. That is a
-mixture-of-experts artefact, not a memory saving: 10 of 512 experts fire
-per token per layer, so a short run never faults in most expert weights.
-Budget the numbers above.
+**Do not trust `ps` RSS for this model.** It reads ~57 GiB no matter the
+workload — unchanged across a 40-token smoke, three varied 1024-token
+generations, and an 8k prefill — while the machine actually gives up
+100-108 GiB. MLX's mapped weight pages are not accounted the way anonymous
+memory is. Budget the "machine memory consumed" column above.
 
 ## 4. Speculative decoding (MTP)
 
