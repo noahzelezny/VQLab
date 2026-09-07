@@ -164,19 +164,51 @@ def test_vector_decode_bit_identical(setup):
         "vector decode changed bits — paired store must not alter values"
 
 
-def _mk_packed(E=16, OUT=48, IN=128, K=64, seed=0):
-    """Packed d=2 module at the gemmseg-eligible geometry (G=64)."""
+def _mk_packed(E=16, OUT=48, IN=128, K=64, seed=0, D=2):
+    """Packed module at a gemmseg-eligible geometry (G=64, d in 2/4)."""
     from vqlab import vq_pack
     r = np.random.default_rng(seed)
-    NSUB = IN // 2
+    NSUB = IN // D
     bits = vq_pack.bits_for_k(K)
     raw = r.integers(0, K, (E, OUT, NSUB)).astype(np.uint32)
     codes = mx.array(vq_pack.pack(raw, bits))
-    cbk = mx.array((r.standard_normal((K, 2)) * 0.05).astype(np.float16))
+    cbk = mx.array((r.standard_normal((K, D)) * 0.05).astype(np.float16))
     sc = mx.array((r.standard_normal((E, OUT, IN // 64)) * 0.1 + 1)
                   .astype(np.float16))
     return VS.VQSwitchLinear(codes, cbk, sc, group_size=64,
                              pack_bits=bits, in_features=IN)
+
+
+@pytest.mark.parametrize("D,K,IN", [(2, 64, 128), (4, 64, 256),
+                                    (4, 2048, 256)])
+def test_gemmseg_numeric_gate_d2_d4(D, K, IN):
+    """d2 and d4 (incl. K=2048, the tight 28KB threadgroup budget):
+    fused vs legacy within rel<1e-3 on skewed routing."""
+    mod = _mk_packed(K=K, IN=IN, D=D)
+    idx = _routing()
+    T = idx.shape[0]
+    r = np.random.default_rng(7)
+    x = mx.array((r.standard_normal((T, 1, 1, IN)) * 0.2).astype(np.float16))
+    old = (VS.VQ_FUSED_MAX_N, VS._FUSED_GEMM, VS._FUSED_GEMM_V2)
+    VS.VQ_FUSED_MAX_N = 1
+    try:
+        VS._FUSED_GEMM = False
+        y_ref = mod(x, mx.array(idx)); mx.eval(y_ref)
+        VS._FUSED_GEMM, VS._FUSED_GEMM_V2 = True, True
+        y_fg = mod(x, mx.array(idx)); mx.eval(y_fg)
+    finally:
+        VS.VQ_FUSED_MAX_N, VS._FUSED_GEMM, VS._FUSED_GEMM_V2 = old
+    a = y_ref.astype(mx.float32); b = y_fg.astype(mx.float32)
+    rel = float(mx.max(mx.abs(a - b))) / max(1e-6, float(mx.max(mx.abs(a))))
+    assert rel < 1e-3, f"d{D} K{K} fused diverged: rel {rel}"
+
+
+def test_gemmseg_bigK_falls_through():
+    """K=8192/d4 exceeds the 32KB threadgroup budget — the gate must
+    REFUSE (fall through to legacy), never reach kernel LOAD (E134)."""
+    assert VS.gemmseg_fits(4, 8192, 64, 13, 4096) is False
+    assert VS.gemmseg_fits(4, 2048, 64, 11, 256) is True
+    assert VS.gemmseg_fits(2, 512, 64, 9, 128) is True
 
 
 def test_gemmseg_numeric_gate():
