@@ -1,0 +1,25 @@
+  window 0: 60000 chars
+  window 1: 60000 chars
+  window 2: 60000 chars
+  window 3: 60000 chars
+  window 4: 60000 chars
+  window 5: 60000 chars
+W0 BASE "ppl": 1.282
+W0 ISO100 "ppl": 1.2417
+W0 V3 "ppl": 1.2422
+W1 BASE "ppl": 1.3059
+W1 ISO100 "ppl": 1.2559
+W1 V3 "ppl": 1.2541
+W2 BASE "ppl": 1.9402
+W2 ISO100 "ppl": 1.8471
+W2 V3 "ppl": 1.8356
+W3 BASE "ppl": 1.8557
+W3 ISO100 "ppl": 1.7653
+W3 V3 "ppl": 1.7537
+W4 BASE "ppl": 1.4751
+W4 ISO100 "ppl": 1.4095
+W4 V3 "ppl": 1.4029
+W5 BASE "ppl": 1.5249
+W5 ISO100 "ppl": 1.4432
+W5 V3 "ppl": 1.4337
+WINDOW STUDY DONE

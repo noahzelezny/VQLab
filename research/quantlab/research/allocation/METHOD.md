@@ -593,3 +593,50 @@ only ON AVERAGE (0.134 / 0.094 / 0.044 prose/GiB) and not per layer.
 The mechanism story -- down_proj writes into the residual stream while
 gate_proj feeds a SiLU whose saturation absorbs error -- is SPECULATION
 and is not supported per-layer by the table above.
+
+---
+
+## 13. Corpus-window variance (2026-09-06) — the last error term, and it is big
+
+Every number in the 397B v2/v3 arc came from ONE 8192-token prefix. Fit
+noise is characterised (§11.2, ~0.004 sigma) but applies only to fits;
+**promotions are deterministic splices of shipped donor tensors and carry
+no fit noise at all**, so window variance is the ONLY error term on them
+and it had never been measured.
+
+Six DISJOINT windows of the literary corpus (60 KB apart, ~33 KB
+consumed each), three artifacts scored on each:
+
+| window | base 2.2 | iso100 (v2) | v3 | v3−base | v3−iso100 |
+|---|---|---|---|---|---|
+| w0 (the window used all day) | 1.2820 | 1.2417 | 1.2422 | +0.0398 | −0.0005 |
+| w1 | 1.3059 | 1.2559 | 1.2541 | +0.0518 | +0.0018 |
+| w2 | 1.9402 | 1.8471 | 1.8356 | +0.1046 | +0.0115 |
+| w3 | 1.8557 | 1.7653 | 1.7537 | +0.1020 | +0.0116 |
+| w4 | 1.4751 | 1.4095 | 1.4029 | +0.0722 | +0.0066 |
+| w5 | 1.5249 | 1.4432 | 1.4337 | +0.0912 | +0.0095 |
+| **mean / sd** | | | | **+0.0769 / 0.0269** | **+0.0068 / 0.0051** |
+
+1. **Direction is robust; magnitude is not.** v3 beats base on **6/6**
+   windows, but the delta ranges +0.0398 to +0.1046 — a **35% relative
+   standard deviation**. Absolute ppl deltas scale with how hard the
+   window is (easy w0 at 1.28 gives +0.040; hard w2 at 1.94 gives +0.105),
+   so a single-window delta is a point on a wide distribution, not a
+   measurement to three decimals. **Quote ranked direction, not
+   precision, from a single window.**
+2. **Close comparisons do NOT survive.** v3 over iso100 is +0.0068 mean
+   with sd 0.0051 — about 1.3 sigma, winning 5/6 windows and LOSING on
+   w0, which happens to be the window the whole arc used. The "v3 beats
+   v2 by ~2 sigma" claim made from w0's prose row is not supported;
+   the honest statement is v3 >= iso100, probably slightly better, and
+   its real advantage is structural (no demoted layers, less selection
+   surface) rather than numerical.
+3. **The window we happened to pick was the least favourable to v3** of
+   the six. Not cherry-picked — it was simply the corpus prefix — but it
+   is a reminder that a single window can understate as easily as
+   overstate.
+
+**Standing rule from here:** any margin under ~0.02 measured on one
+window is not a result. Either score several windows, or report it as a
+tie. Cost is trivial — six windows is ~6 minutes per artifact — and this
+study cost less than one demotion fit.
