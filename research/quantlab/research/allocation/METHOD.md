@@ -640,3 +640,38 @@ consumed each), three artifacts scored on each:
 window is not a result. Either score several windows, or report it as a
 tie. Cost is trivial — six windows is ~6 minutes per artifact — and this
 study cost less than one demotion fit.
+
+---
+
+## 14. Affine-side probe (2026-09-07) — embeddings were over-provisioned
+
+First measurement ever taken on the 397B's affine allocation. Null test
+first: re-quantizing `lm_head` at its CURRENT 6 bits reproduced the base
+to +0.0003 prose / +0.0005 literary, so the tool
+(`research/qwen397b/affine_requant.py`) is sound.
+
+| change | Δ size | Δ prose | Δ lit_w2 |
+|---|---|---|---|
+| lm_head 6 -> 4 | **−0.177 GiB** | **−0.0161** | −0.0093 |
+| lm_head 6 -> 8 | +0.237 GiB | +0.0004 | +0.0010 |
+| **embed_tokens 6 -> 4** | **−0.177 GiB** | **−0.0003** | **+0.0009** |
+| embed_tokens 6 -> 8 | +0.237 GiB | −0.0012 | −0.0010 |
+
+- **`embed_tokens` at 6 bits is WASTE.** Dropping it to 4 costs nothing
+  measurable on either corpus (both inside the noise floor, literary
+  even signs positive) and refunds **0.177 GiB** — ~2.8 projection-units
+  of promotion budget, free.
+- **`lm_head` at 6 bits is CORRECT.** Going down to 4 costs a real
+  −0.0161 prose (4x the noise floor); going up to 8 buys nothing. The
+  original choice was well made, and the two tensors are NOT
+  interchangeable despite being the same size and both 6-bit.
+- Asymmetry is the finding: identical-looking tensors on the two ends of
+  the model have opposite sensitivity. Input embeddings tolerate coarse
+  quantization; the output head does not.
+
+Scoped but NOT run: `shared_expert` (180 modules, 6-bit, ~0.57 GiB) and
+the linear-attention input projections (90 modules at 4-bit, ~1.98 GiB).
+Both span 27 of 28 shards, so each candidate is a ~100 GiB rewrite --
+affordable only with substantial free space, and never with another
+sweep running. The shared expert is the interesting one: every token
+passes through it, unlike a routed expert seen by ~10 tokens in 512.
