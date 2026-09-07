@@ -3131,7 +3131,15 @@ _SRC_GEMMSEG2 = _PACK_FETCH + r"""
     const int G     = GROUP;
     const int SPG   = G / D_BAKE;
     const int NSUB  = IN / D_BAKE;
+#if BITS == 0
+    // UNPACKED codes (uint8/uint16): one CT element per code. The packed
+    // row stride ((NSUB+31)/32*BITS) DEGENERATES TO 0 at BITS==0, so every
+    // row would read row 0 — silent garbage, the exact class the
+    // 2026-08-18 prefill guard exists for. Stride is NSUB CT elements.
+    const int WPR   = NSUB;
+#else
     const int WPR   = (NSUB + 31) / 32 * BITS;
+#endif
 
     uint lane = thread_position_in_threadgroup.x;   // 0..31
     uint sg   = thread_position_in_threadgroup.y;   // 0..3
@@ -3163,8 +3171,15 @@ _SRC_GEMMSEG2 = _PACK_FETCH + r"""
     // decode assignment: thread -> w row wr=tid/4, code span q0..q0+SPG/4
     const int wr = (int)tid / 4;
     const int q0 = ((int)tid % 4) * (SPG / 4);
+#if BITS == 0
+    const device CT* wrow_codes = codes
+        + (size_t)e * OUT * WPR + (size_t)(o0 + wr) * WPR;
+    #define VQ_FETCH(j) ((uint)wrow_codes[j])
+#else
     const device uint* wrow_codes = codes
         + (size_t)e * OUT * WPR + (size_t)(o0 + wr) * WPR;
+    #define VQ_FETCH(j) VQ_CODE(wrow_codes, j)
+#endif
     const device half* srow_w = scales
         + (size_t)e * OUT * NGRP + (size_t)(o0 + wr) * NGRP;
     const int xr = (int)tid / 4;
@@ -3181,7 +3196,7 @@ _SRC_GEMMSEG2 = _PACK_FETCH + r"""
         if (o0 + wr < OUT) {
             const float s = (float)srow_w[g];
             for (int q = q0; q < q0 + SPG / 4; ++q) {
-                const uint c = VQ_CODE(wrow_codes, j0 + q);
+                const uint c = VQ_FETCH(j0 + q);
 #if D_BAKE == 2
                 const half2 v = cb[c];
                 wtT[q * 2][wr]     = (half)(s * (float)v.x);
@@ -3261,7 +3276,10 @@ _FUSED_GEMM_V2 = os.environ.get("VQ_MOE_FUSED_GEMM", "2") == "2"
 def gemmseg_fits(D, K, G, pack_bits, IN):
     """May prefill take the fused segmented VQ-GEMM? Conservative first
     ship: exactly the measured MoE geometry class."""
-    if not (_FUSED_GEMM and D in (2, 4) and 0 < pack_bits <= 16
+    # pack_bits == 0 is the UNPACKED arm (plain uint8/uint16 codes, K<=64k):
+    # legal, and it is how every Flash-Next rung stores its d2 shared
+    # modules. Anything above 16 bits is not a format we emit.
+    if not (_FUSED_GEMM and D in (2, 4) and 0 <= pack_bits <= 16
             and G == 64 and (IN // D) % 32 == 0 and IN % G == 0
             and (G // D) % 4 == 0):   # SPG/4 codes per thread must divide
         return False
@@ -3295,9 +3313,14 @@ def _gemmseg_prefill(xsrc, src_rows, idx_sorted_np, codes, codebook, scales,
     dims = _dims_array(OUT, IN, IN // 64, K, ntiles)
     D = int(codebook.shape[1])
     if _FUSED_GEMM_V2:
-        name, src = f"vq_gemmseg2_packed{pack_bits}_d{D}", _SRC_GEMMSEG2
+        name = (f"vq_gemmseg2_packed{pack_bits}_d{D}" if pack_bits
+                else f"vq_gemmseg2_u{codes.dtype.size * 8}_d{D}")
+        src = _SRC_GEMMSEG2
         template = [("BITS", pack_bits), ("GROUP", 64), ("MAX_K", K),
                     ("D_BAKE", D)]
+        if not pack_bits:
+            # unpacked arm reads codes as CT (uchar/ushort), not uint words
+            template.append(("CT", codes.dtype))
     else:
         # v1 (scalar MAC, measured 0.74x) was only ever written for d2.
         if D != 2:
