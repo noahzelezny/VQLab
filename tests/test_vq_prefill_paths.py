@@ -193,13 +193,17 @@ def test_gemmseg_numeric_gate():
     try:
         VS._FUSED_GEMM, VS._FUSE_GATHER = False, True
         y_ref = mod(x, mx.array(idx)); mx.eval(y_ref)
-        VS._FUSED_GEMM = True
-        y_fg = mod(x, mx.array(idx)); mx.eval(y_fg)
+        a = y_ref.astype(mx.float32)
+        for v2 in (False, True):
+            VS._FUSED_GEMM, VS._FUSED_GEMM_V2 = True, v2
+            y_fg = mod(x, mx.array(idx)); mx.eval(y_fg)
+            b = y_fg.astype(mx.float32)
+            rel = float(mx.max(mx.abs(a - b))) / \
+                max(1e-6, float(mx.max(mx.abs(a))))
+            assert rel < 1e-3, f"fused VQ-GEMM v2={v2} diverged: rel {rel}"
     finally:
         VS.VQ_FUSED_MAX_N, VS._FUSED_GEMM, VS._FUSE_GATHER = old
-    a = y_ref.astype(mx.float32); b = y_fg.astype(mx.float32)
-    rel = float(mx.max(mx.abs(a - b))) / max(1e-6, float(mx.max(mx.abs(a))))
-    assert rel < 1e-3, f"fused VQ-GEMM diverged: rel {rel}"
+        VS._FUSED_GEMM_V2 = False
 
 
 def test_gemmseg_default_off():
