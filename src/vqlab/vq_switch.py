@@ -3061,7 +3061,127 @@ _SRC_GEMMSEG = _PACK_FETCH + r"""
     }
 """
 
+# v2 (2026-09-07, same night): v1's scalar threadgroup MAC measured 34%
+# SLOWER than legacy (11.4 vs 8.5s) — scalar fp32 against threadgroup
+# memory loses to steel GEMM's simdgroup pipelines, exactly the mission's
+# R3-class warning. v2 keeps v1's segmentation + decode-once staging but
+# runs phase 3 as simdgroup_half8x8 matmuls: wt is decoded TRANSPOSED and
+# PRE-SCALED into threadgroup (scale applied at half precision — numerics
+# covered by the same rel<1e-3 gate), C tiles accumulate in
+# simdgroup_float8x8 registers across the whole group loop.
+# VQ_MOE_FUSED_GEMM=1 selects v1 (scalar, kept for A/B), =2 selects v2.
+_SRC_GEMMSEG2 = _PACK_FETCH + r"""
+    // dims: [OUT, IN, NGRP, K, NTILES]; tmeta int32 [NTILES,3]
+    // baked: BITS, GROUP(=64), MAX_K; tiles fixed 32x32
+    const int OUT   = dims[0];
+    const int IN    = dims[1];
+    const int NGRP  = dims[2];
+    const int K     = dims[3];
+    const int G     = GROUP;
+    const int SPG   = G / 2;
+    const int NSUB  = IN / 2;
+    const int WPR   = (NSUB + 31) / 32 * BITS;
+
+    uint lane = thread_position_in_threadgroup.x;   // 0..31
+    uint sg   = thread_position_in_threadgroup.y;   // 0..3
+    uint tid  = sg * 32 + lane;
+    uint otile = thread_position_in_grid.x / 32;
+    uint rtile = thread_position_in_grid.y / 4;
+
+    const int e    = tmeta[rtile * 3 + 0];
+    const int r0   = tmeta[rtile * 3 + 1];
+    const int nrow = tmeta[rtile * 3 + 2];
+    const int o0   = (int)otile * 32;
+
+    threadgroup half2 cb[MAX_K];
+    threadgroup half  wtT[GROUP][32];   // transposed, pre-scaled
+    threadgroup half  xt[32][GROUP];
+    threadgroup float ybuf[32][32];
+
+    for (uint i = tid; i < (uint)K; i += 128u)
+        cb[i] = ((const device half2*)codebook)[i];
+
+    // decode assignment: thread -> w row wr=tid/4, code span q0..q0+SPG/4
+    const int wr = (int)tid / 4;
+    const int q0 = ((int)tid % 4) * (SPG / 4);
+    const device uint* wrow_codes = codes
+        + (size_t)e * OUT * WPR + (size_t)(o0 + wr) * WPR;
+    const device half* srow_w = scales
+        + (size_t)e * OUT * NGRP + (size_t)(o0 + wr) * NGRP;
+    const int xr = (int)tid / 4;
+
+    simdgroup_float8x8 C0 = simdgroup_float8x8(0);
+    simdgroup_float8x8 C1 = simdgroup_float8x8(0);
+    simdgroup_float8x8 C2 = simdgroup_float8x8(0);
+    simdgroup_float8x8 C3 = simdgroup_float8x8(0);
+
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+
+    for (int g = 0; g < NGRP; ++g) {
+        const int j0 = g * SPG;
+        if (o0 + wr < OUT) {
+            const float s = (float)srow_w[g];
+            for (int q = q0; q < q0 + SPG / 4; ++q) {
+                const uint c = VQ_CODE(wrow_codes, j0 + q);
+                const half2 v = cb[c];
+                wtT[q * 2][wr]     = (half)(s * (float)v.x);
+                wtT[q * 2 + 1][wr] = (half)(s * (float)v.y);
+            }
+        } else {
+            for (int q = q0; q < q0 + SPG / 4; ++q) {
+                wtT[q * 2][wr] = (half)0; wtT[q * 2 + 1][wr] = (half)0;
+            }
+        }
+        {
+            const device half* xrow = 0;
+            if (xr < nrow)
+                xrow = xsrc + (size_t)srcrows[r0 + xr] * IN + (size_t)g * G;
+            for (int q = q0; q < q0 + SPG / 4; ++q) {
+                xt[xr][q * 2]     = (xr < nrow) ? xrow[q * 2]     : (half)0;
+                xt[xr][q * 2 + 1] = (xr < nrow) ? xrow[q * 2 + 1] : (half)0;
+            }
+        }
+        threadgroup_barrier(mem_flags::mem_threadgroup);
+        // phase 3: C[tokens 32 x outs 32] += X[32 x G] @ WtT[G x 32]
+        // simdgroup sg owns out-block col sg*8; ti indexes token blocks.
+        for (int k8 = 0; k8 < G / 8; ++k8) {
+            simdgroup_half8x8 B;
+            simdgroup_load(B, &wtT[k8 * 8][(int)sg * 8], 32);
+            simdgroup_half8x8 A;
+            simdgroup_load(A, &xt[0][k8 * 8], GROUP);
+            simdgroup_multiply_accumulate(C0, A, B, C0);
+            simdgroup_load(A, &xt[8][k8 * 8], GROUP);
+            simdgroup_multiply_accumulate(C1, A, B, C1);
+            simdgroup_load(A, &xt[16][k8 * 8], GROUP);
+            simdgroup_multiply_accumulate(C2, A, B, C2);
+            simdgroup_load(A, &xt[24][k8 * 8], GROUP);
+            simdgroup_multiply_accumulate(C3, A, B, C3);
+        }
+        threadgroup_barrier(mem_flags::mem_threadgroup);
+    }
+
+    simdgroup_store(C0, &ybuf[0][(int)sg * 8], 32);
+    simdgroup_store(C1, &ybuf[8][(int)sg * 8], 32);
+    simdgroup_store(C2, &ybuf[16][(int)sg * 8], 32);
+    simdgroup_store(C3, &ybuf[24][(int)sg * 8], 32);
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+
+    // guarded copy: thread tid -> token row tt=tid/4, out span lane%4*8..
+    {
+        const int tt = (int)tid / 4;
+        const int c0 = ((int)tid % 4) * 8;
+        if (tt < nrow) {
+            for (int c = c0; c < c0 + 8; ++c) {
+                const int oc = o0 + c;
+                if (oc < OUT)
+                    y[(size_t)(r0 + tt) * OUT + oc] = (half)ybuf[tt][c];
+            }
+        }
+    }
+"""
+
 _FUSED_GEMM = os.environ.get("VQ_MOE_FUSED_GEMM", "0") != "0"
+_FUSED_GEMM_V2 = os.environ.get("VQ_MOE_FUSED_GEMM", "0") == "2"
 
 
 def gemmseg_fits(D, K, G, pack_bits, IN):
@@ -3095,9 +3215,13 @@ def _gemmseg_prefill(xsrc, src_rows, idx_sorted_np, codes, codebook, scales,
     cbk = codebook.astype(mx.float16) if codebook.dtype != mx.float16 \
         else codebook
     dims = _dims_array(OUT, IN, IN // 64, K, ntiles)
-    name = f"vq_gemmseg_packed{pack_bits}_d2"
-    template = [("BITS", pack_bits), ("GROUP", 64), ("OTILE", 32),
-                ("RTILE", 32), ("MAX_K", K)]
+    if _FUSED_GEMM_V2:
+        name, src = f"vq_gemmseg2_packed{pack_bits}_d2", _SRC_GEMMSEG2
+        template = [("BITS", pack_bits), ("GROUP", 64), ("MAX_K", K)]
+    else:
+        name, src = f"vq_gemmseg_packed{pack_bits}_d2", _SRC_GEMMSEG
+        template = [("BITS", pack_bits), ("GROUP", 64), ("OTILE", 32),
+                    ("RTILE", 32), ("MAX_K", K)]
     N = int(idx_sorted_np.shape[0])
     grid = (32 * ((OUT + 31) // 32), 4 * ntiles, 1)
     tg = (32, 4, 1)
@@ -3106,12 +3230,12 @@ def _gemmseg_prefill(xsrc, src_rows, idx_sorted_np, codes, codebook, scales,
         grid=grid, threadgroup=tg,
         output_shapes=[(N, OUT)], output_dtypes=[mx.float16],
     )
-    kern = _get_kernel_spec(name, _SRC_GEMMSEG, template) \
+    kern = _get_kernel_spec(name, src, template) \
         if _SPEC_KERNELS else None
     if kern is not None:
         (y,) = kern(**common)
     else:
-        (y,) = _get_kernel(name, _SRC_GEMMSEG)(template=template, **common)
+        (y,) = _get_kernel(name, src)(template=template, **common)
     return y
 
 
