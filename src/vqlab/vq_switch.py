@@ -2312,6 +2312,24 @@ def _d4_tg_fits(K, NSUB):
     return (K + NSUB) * 8 <= _TG_CAP_BYTES
 
 
+def _d2_tg_fits(K, NSUB):
+    """True if the d2 threadgroup codebook+x cache fits Metal's cap.
+
+    All THREE fused d2 kernels (_SRC_FUSED_D2, _SRC_FUSED_D2_U32,
+    _SRC_FUSED_PACKED_D2) allocate `half2 cb[MAX_K]` + `half2 xs[MAX_NSUB]`
+    = (K + NSUB) * 4 B, so one predicate covers packed and unpacked alike.
+    Every shipped d2 artifact is K<=2048 and lands far under the cap
+    (gate/up at K2048/NSUB1408 = 13,824 B), so this is a LATENT cliff, not
+    a live one -- found while auditing the gemma divergence (see
+    docs/GEMMA-DIVERGENCE-2026-09-07.md). Without it, a K=4096 d2 artifact
+    on a wide layer would fail at kernel LOAD (E134) with no graceful path,
+    which is exactly the failure mode _d4_tg_fits was added to prevent on
+    the d4 side. There is no device-cb d2 kernel, so the fallback is the
+    decode path (see _fused), which caches nothing in threadgroup memory.
+    """
+    return (K + NSUB) * 4 <= _TG_CAP_BYTES
+
+
 # Rows per threadgroup for the simdgroup-per-row EXPERT kernels, matching
 # _DENSE_ROWS_TG (one 32-lane simdgroup per row, 32 rows per threadgroup).
 _EXPERT_ROWS_TG = 32
@@ -2400,8 +2418,35 @@ _D2_U32 = os.environ.get("VQ_D2_U32", "1") != "0"
 # _KERNELS.clear() invalidates them too.
 
 
+def _fused_decode_fallback(x, eidx, codes, codebook, scales, pack_bits):
+    """Serve a fused call through the decode path, in fused row order.
+
+    _prefill wants rows grouped by expert, so sort, run, and invert the
+    permutation. A gather is a pure row permutation, so the returned rows
+    are the same rows _prefill computed -- no arithmetic is redone here.
+    """
+    idx_np = np.array(eidx, copy=False)
+    order = np.argsort(idx_np, kind="stable")
+    inv = np.argsort(order, kind="stable")
+    y = _prefill(x[mx.array(order.astype(np.uint32))], idx_np[order],
+                 codes, codebook, scales, pack_bits=pack_bits,
+                 in_features=x.shape[1])
+    return y[mx.array(inv.astype(np.uint32))]
+
+
 def _fused(x, eidx, codes, codebook, scales, pack_bits=0, simd=None,
            d2_u32=None):
+    # d2 threadgroup-capacity fallback. Mirrors the d4 _d4_tg_fits routing,
+    # except d4 has a device-codebook kernel to fall back TO and d2 does not,
+    # so the graceful path is the decode path -- _prefill decodes weights
+    # with vq_decode, which caches nothing in threadgroup memory and is
+    # capacity-independent at any K. Without this an oversized d2 artifact
+    # fails at kernel LOAD (E134), which no try/except downstream can catch
+    # into a useful answer. Latent today: max shipped d2 K is 2048.
+    if codebook.shape[1] == 2 and not _d2_tg_fits(codebook.shape[0],
+                                                  x.shape[1] // 2):
+        return _fused_decode_fallback(x, eidx, codes, codebook, scales,
+                                      pack_bits)
     key = ("plan", x.shape, x.dtype, codes.shape, codes.dtype, codebook.shape,
            scales.shape, pack_bits, simd, d2_u32,
            _D8_SIMDSUM, _D8_REGBUF, _D8_DEVX, _D8_SS, _SPEC_KERNELS)
