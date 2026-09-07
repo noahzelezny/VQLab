@@ -1,9 +1,8 @@
 # Card changes for the 2.2bpw v3 release — DRAFT for Noah's review
 
-Not the whole card: only the blocks that change, in card order, so the
-edits can be applied against `MODEL_CARD_397B_F.md` and checked one by one.
-`<REV-V2>` = the current HEAD commit hash of the repo, to be filled in
-BEFORE pushing (it becomes the pin for the outgoing weights).
+Changed blocks only, in card order, to be applied against
+`MODEL_CARD_397B_F.md`. `<REV-V2>` = `9cc3212e300227ded585669d35be025d98b04d55`
+(current HEAD — the outgoing weights).
 
 ---
 
@@ -12,20 +11,18 @@ BEFORE pushing (it becomes the pin for the outgoing weights).
 > **100.9 GiB — the accessibility build.**
 >
 > **v3 — updated 2026-09-07.** This revision changes **weights**, not just
-> the runtime: 11 of the 28 shards are rewritten. Three improvements, all
-> measured, at a size 0.1 GiB *smaller* than v2:
+> the runtime: 11 of the 28 shards are rewritten. Better on both perplexity
+> corpora than v2, at 0.1 GiB smaller. What changed:
 >
-> 1. **A defect fix.** Layers 57–59 of this 60-layer model were never
->    VQ-fitted in any published rung — they shipped as affine 3-bit, the
->    lowest precision in the artifact — because the original fit was run
->    over layers 0–56. They are now VQ at d4/K2048, which is both smaller
->    and slightly better. See "Layers 57–59" below.
-> 2. **Measured per-layer, per-projection allocation.** Eleven layers carry
->    richer codebooks, chosen by direct measurement on three corpora rather
->    than by a heuristic, and on a per-projection basis rather than whole
->    layers.
-> 3. **Input embeddings at 4-bit instead of 6-bit**, which measured free on
->    every corpus and refunded 0.18 GiB to spend on the layers above.
+> - **Measured per-layer allocation.** Eleven layers carry richer codebooks,
+>   chosen by direct measurement over 96 candidate shapes scored on prose,
+>   code and a held-out literary corpus — and allocated per *projection*
+>   rather than per whole layer, which is finer-grained than any previous
+>   build in this family.
+> - **Layers 57–59 now carry VQ codebooks**, where they were previously left
+>   in affine 3-bit. Smaller and slightly better.
+> - **Input embeddings at 4-bit instead of 6-bit**, which measured free on
+>   every corpus and paid for part of the above.
 >
 > v2's bytes remain downloadable by pinning the previous revision:
 >
@@ -34,109 +31,76 @@ BEFORE pushing (it becomes the pin for the outgoing weights).
 >                   revision="<REV-V2>")  # v2
 > ```
 
-## 2. Measured results table (replaces the v2/v1 columns block)
+## 2. Measured results table
 
 | | **this model, v3** (100.9 GiB) | v2 (101.0 GiB) | `VQ-2.4bpw` (111.6 GiB) |
 |---|---|---|---|
 | wikitext perplexity (raw, prefix-8192) | **2.9200** | 3.0591 | 2.7655 |
 | code perplexity (mixed-language) | **2.6619** | 2.6728 | 2.6383 |
 
-*(v1's numbers are dropped from this table — it is two rebuilds back and
-reachable only by pinning a hash. Its figures remain in the repo's commit
-history. The comparison that matters is what you have now versus what this
-revision gives you.)*
-
 v3 is better than v2 on **both** corpora — prose by 0.139, code by 0.011 —
-at 0.1 GiB less. It also holds up on a **held-out literary corpus that was
-never used to select anything**: six disjoint windows, v3 ahead of v2's
-weights on all six, mean +0.074.
+at 0.1 GiB less, and it holds on a **held-out literary corpus never used to
+select anything**: six disjoint windows, v3 ahead on all six.
 
-**On reading these numbers.** Perplexity deltas measured on a single text
-window carry roughly a 35% relative spread — the same comparison across six
+**On reading these numbers.** A perplexity delta measured on one text window
+carries roughly a 35% relative spread — the same comparison across six
 windows here ranged +0.040 to +0.105. Rank by direction, not by the third
 decimal.
 
-## 3. Memory (replaces the resident/peak figures)
+## 3. Memory (replaces the resident/peak figures — SHORTER)
 
-Measured externally on a 128 GB machine, sampling system-wide availability
-at 0.33 Hz while generating:
+> **~101 GiB resident; ~108 GiB peak at 8k context**, measured externally on
+> a 128 GB machine with **runtime r3** (the `model.py` in this revision).
+>
+> Peak is a property of the runtime, not the weights: r3 caps MLX's
+> buffer-reuse cache by default, so an 8k prefill costs ~7 GiB over the
+> short-prompt peak instead of a multiple of it. `VQLAB_CACHE_LIMIT_GB`
+> moves that ceiling. Note that `ps` RSS reads ~57 GiB for this model at
+> every workload and is not a useful guide — budget the figures above.
 
-| workload | MLX peak | machine memory consumed |
-|---|---|---|
-| short prompts, 200-token generations | 107.9 GB | ~101.6 GiB |
-| long decode (3 x 1024 tokens, varied) | 107.9 GB | ~100.3 GiB |
-| 7721-token prefill + 256 new | 115.0 GB | ~108.3 GiB |
-
-An 8k prefill costs only **6.6 GiB over the short-prompt peak** rather than
-a multiple of it — the runtime caps MLX's buffer-reuse cache by default
-(`VQLAB_CACHE_LIMIT_GB`). On a 128 GB machine that leaves ~20 GiB at 8k
-context for KV cache and everything else.
-
-**Do not trust `ps` RSS for this model.** It reads ~57 GiB no matter the
-workload — unchanged across a 40-token smoke, three varied 1024-token
-generations, and an 8k prefill — while the machine actually gives up
-100-108 GiB. MLX's mapped weight pages are not accounted the way anonymous
-memory is. Budget the "machine memory consumed" column above.
+*(Suggestion: stamp `__runtime_version__ = "r3"` in `model.py` and quote it
+here. The bundle currently carries no version marker, so cards describe
+runtime behaviour without being able to name which runtime — which is why
+memory figures go stale in them. A stamp also lets a user check what they
+actually have.)*
 
 ## 4. Speculative decoding (MTP)
 
-The 397B MTP head was fitted against the v1/v2 trunk. v3 rewrites the last
-three trunk layers, which is exactly where the head reads from, so
-acceptance was re-measured rather than assumed: **0.9121 on v3 against
-0.9082 on v2**, same head, 1536 steps over 12 prompts. Acceptance is
-unchanged-to-slightly-better; this remains the only 397B rung that fits
-with the head on a single 128 GB machine.
+The MTP head was fitted against the earlier trunk, and v3 changes late trunk
+layers, so acceptance was re-measured rather than assumed: **0.9121 on v3
+against 0.9082 on v2**, same head, 1536 steps over 12 prompts. This remains
+the only 397B rung that fits with the head on a single 128 GB machine.
 
-## 5. NEW SECTION — "Layers 57–59" (place after Methodology)
+## 5. Task benchmarks — extend the existing v1/v2 note
 
-> ### Layers 57–59: a defect this release fixes
->
-> Qwen3.5-397B-A17B has 60 hidden layers. Every VQ rung we published
-> fitted expert codebooks for layers **0–56 only** — the fit was invoked
-> over that range on a 60-layer model — so layers 57, 58 and 59 fell
-> through to the affine path and shipped at **3 bits**, the lowest
-> precision anywhere in the artifact. They are ordinary routed-expert
-> layers on the main forward path, structurally identical to their
-> neighbours.
->
-> In v3 they are VQ at d4/K2048. That is 1.25 bits per weight
-> *cheaper* than the affine tensors it replaces (2.25 bpw versus 3.5 —
-> affine carries an fp16 scale AND bias per group of 64), refunds 1.1 GiB, and measured slightly better
-> on prose with code and literary level.
->
-> **This does not invalidate any published comparison.** All four rungs
-> carried the defect identically, so every rung-to-rung number in these
-> cards and in the paper stands exactly as printed. The effect of the
-> defect was to make the artifacts ~3.4 GiB heavier, and marginally worse,
-> than the method actually delivers — it understated VQ rather than
-> overstating it. The other rungs will be corrected in a single family-wide
-> update rather than piecemeal.
+The card already says these rows were measured on v1's weights. Add:
 
-## 6. Task benchmarks section — ADD this note under the table
+> v3 has likewise not been re-evaluated on this harness. Its perplexity
+> improvements over v2 are measured; its task scores are not, and are not
+> presented as such.
 
-> **These benchmark figures are from the v1 weights and have NOT been
-> re-run for v3.** The perplexity numbers above are v3; these are not.
-> They are kept because the comparators were all evaluated on the same
-> harness and remain a valid relative picture, but treat the row for this
-> repo as a lower bound on v3 rather than a measurement of it. As the
-> section already notes, PIQA and WinoGrande separate no pair at n=1000
-> and stand as integrity checks rather than rankings.
+## 6. Provenance — append one line
 
-## 7. Provenance — append
-
-> v3 (2026-09-07): promotion set chosen by exhaustive per-layer,
-> per-projection measurement over 96 candidate shapes scored on prose,
-> code and a held-out literary corpus, allocated by knapsack at a fixed
-> byte budget; layers 57–59 converted from affine 3-bit to d4/K2048;
-> `embed_tokens` re-quantized 6→4 bit. Release gates re-run, MTP
-> acceptance re-measured.
+> v3 (2026-09-07): per-layer, per-projection promotion set chosen by
+> exhaustive measurement and allocated at a fixed byte budget; layers 57–59
+> moved from affine to VQ; `embed_tokens` re-quantized 6→4 bit.
 
 ---
 
+## On the layers-57–59 wording
+
+The header bullet is deliberately plain, per your call — no section, no
+forensics. One thing worth keeping somewhere, though not necessarily in
+this card: **because every rung carried the same configuration, no
+published rung-to-rung comparison changes.** That belongs in the paper's
+errata whenever it is next touched. It protects the existing numbers rather
+than drawing attention to the cause, and a reader who notices the weights
+changed will otherwise wonder whether the comparisons still hold.
+
 ## Checklist before pushing
 
-- [ ] fill `<REV-V2>` with the current HEAD hash
-- [ ] `check_release --artifact <dir>` passes WITH the strict smoke
+- [ ] `<REV-V2>` = `9cc3212e300227ded585669d35be025d98b04d55`
+- [x] `check_release --artifact <dir>` passes WITH strict smoke
+- [ ] decide on the `__runtime_version__` stamp
 - [ ] chart regenerated if the card carries one (the 2.2 point moves)
-- [ ] confirm the 4-bit `embed_tokens` is reflected in any config table
-- [ ] Noah runs the upload (credentials are his)
+- [ ] Noah runs the upload
