@@ -72,7 +72,13 @@ DONORS = {
     # d2/K256 promoted; vq_modules is per-module). See V2-SWEEP-PLAN-2.2.md.
     "d4k256": ("TheDrainFlorist--Qwen3.5-397B-A17B-VQ-2.4bpw", 256, 8, 0.1868),
 }
-PROJECTIONS = ("gate_proj", "up_proj", "down_proj")
+ALL_PROJECTIONS = ("gate_proj", "up_proj", "down_proj")
+# The ACTIVE selection -- --projections narrows it. vq_modules is keyed per
+# MODULE and a module IS a projection, so promoting a subset of a layer's
+# projections is already legal for the runtime; the byte step just drops from
+# 0.1868 GiB/layer to 0.0623 GiB/projection (all three are exactly 2.147B
+# params). Set once in main() before preflight.
+PROJECTIONS = ALL_PROJECTIONS
 VQ_SUFFIXES = ("codebook", "codes", "vq_scales")
 N_VQ_LAYERS = 57            # vq_modules covers layers 0-56, no gaps
 
@@ -181,7 +187,8 @@ def preflight(base, donor, args, layers):
     # byte cost, derived from the two indexes rather than assumed
     b_tot = bidx.get("metadata", {}).get("total_size")
     d_tot = didx.get("metadata", {}).get("total_size")
-    per_layer_gib = (d_tot - b_tot) / N_VQ_LAYERS / GiB
+    per_layer_gib = ((d_tot - b_tot) / N_VQ_LAYERS / GiB
+                     * len(PROJECTIONS) / len(ALL_PROJECTIONS))
 
     # shards touched, and the largest one -- that is the working set
     touched = {}
@@ -441,6 +448,10 @@ def main():
     ap.add_argument("--scorer", default=None)
     ap.add_argument("--corpus", default=None)
     ap.add_argument("--corpus-code", default=None)
+    ap.add_argument("--projections", default=None,
+                    help="comma-separated subset of gate_proj,up_proj,"
+                         "down_proj to promote (default: all three). Each is "
+                         "an exact third of a layer -- 0.0623 GiB/projection.")
     ap.add_argument("--build-only", action="store_true",
                     help="splice candidates and KEEP them, skip scoring and "
                          "state/tsv writes (build on the box that holds the "
@@ -465,11 +476,21 @@ def main():
         if not os.path.isdir(p):
             die(f"artifact not found: {p}")
 
+    global PROJECTIONS
+    if a.projections:
+        sel = tuple(p.strip() for p in a.projections.split(",") if p.strip())
+        bad = [p for p in sel if p not in ALL_PROJECTIONS]
+        if bad:
+            die(f"unknown projection(s) {bad}; pick from {ALL_PROJECTIONS}")
+        PROJECTIONS = sel
+    psuf = "" if len(PROJECTIONS) == 3 else "_" + "+".join(
+        p.split("_")[0] for p in PROJECTIONS)
+
     if a.combo:
-        combos = [(a.tag or "combo_" + "_".join(a.combo.split(",")),
+        combos = [(a.tag or "combo_" + "_".join(a.combo.split(",")) + psuf,
                    parse_layers(a.combo))]
     else:
-        combos = [(f"L{l}", [l]) for l in parse_layers(a.layers)]
+        combos = [(f"L{l}{psuf}", [l]) for l in parse_layers(a.layers)]
 
     all_layers = sorted({l for _, ls in combos for l in ls})
     pf = preflight(base, donor, a, all_layers)

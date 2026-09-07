@@ -522,3 +522,51 @@ inferred: prose +0.0838 with a byte-identical shuffled control at +0.0067
 on a held-out literary corpus never used for selection (+0.0403 vs the
 control's +0.0052). Composed artifacts are measured; only the per-layer
 attributions inside them are noisy.
+
+---
+
+## 12. Per-PROJECTION allocation (2026-09-06) — a third of every promotion was wasted
+
+Until now every promotion moved a layer's three expert projections
+together, because that is what the tooling did (`PROJECTIONS` was a
+hardcoded tuple). `vq_modules` is keyed per MODULE and a module IS a
+projection, so this was never a runtime constraint — nobody had written
+a config that split them. All three are exactly 2.147B params on the
+397B (gate/up map 4096->1024, down maps 1024->4096), so a projection is
+an exact third of a layer: **0.0623 GiB instead of 0.1868.**
+
+L43, the hottest layer in the 2.2 sweep, promoted d8/K16384 -> d4/K256
+one projection at a time (each 0.0623 GiB, vs +0.0342 for all three):
+
+| promoted | Δ prose | prose/GiB | Δ code | Δ literary |
+|---|---|---|---|---|
+| gate_proj | **−0.0006** | **−0.010** | +0.0005 | +0.0001 |
+| up_proj | +0.0094 | 0.151 | +0.0012 | +0.0023 |
+| **down_proj** | **+0.0227** | **0.364** | +0.0015 | +0.0060 |
+| whole layer | +0.0342 | 0.183 | — | — |
+
+- **gate_proj buys NOTHING** — it is inside the noise floor and signed
+  negative. Every promotion this project has ever made spent a third of
+  its bytes on it.
+- **down_proj carries 66% of the layer's gain for 33% of its bytes**, at
+  **2.0x the byte-efficiency** of promoting the whole layer. It leads on
+  all three corpora, and it carries the literary gain almost entirely.
+- Decomposition is **92% additive** (singles sum +0.0315 vs +0.0342
+  measured together), so composing by projection should behave.
+
+Ordering down > up > gate ~ 0 has a plausible mechanism — down_proj
+writes straight into the residual stream, while gate_proj feeds a SiLU
+gate whose saturation can absorb error — but that is SPECULATION; only
+the numbers above are measured. Generality across layers is IN FLIGHT
+(L45/L29/L47).
+
+**If it generalizes, the currency changes.** Promoting {down, up} only
+buys ~94% of a layer's gain for 67% of the bytes; down alone buys 66%
+for 33%. The same 1.125 GiB that funded six whole-layer promotions
+would fund eighteen down_proj promotions instead.
+
+Caveat carried from §11.2: per-projection effects are a third the size
+of per-layer ones, so most sit AT the ±0.004 noise floor, and splitting
+57 layers into 171 modules triples the winner's-curse surface. Decompose
+only where the layer-level signal clearly exceeds noise, and keep the
+shuffled-control discipline.
