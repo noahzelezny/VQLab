@@ -162,3 +162,47 @@ def test_vector_decode_bit_identical(setup):
     assert bool(mx.array_equal(y_scalar.view(mx.uint16),
                                y_vec.view(mx.uint16))), \
         "vector decode changed bits — paired store must not alter values"
+
+
+def _mk_packed(E=16, OUT=48, IN=128, K=64, seed=0):
+    """Packed d=2 module at the gemmseg-eligible geometry (G=64)."""
+    from vqlab import vq_pack
+    r = np.random.default_rng(seed)
+    NSUB = IN // 2
+    bits = vq_pack.bits_for_k(K)
+    raw = r.integers(0, K, (E, OUT, NSUB)).astype(np.uint32)
+    codes = mx.array(vq_pack.pack(raw, bits))
+    cbk = mx.array((r.standard_normal((K, 2)) * 0.05).astype(np.float16))
+    sc = mx.array((r.standard_normal((E, OUT, IN // 64)) * 0.1 + 1)
+                  .astype(np.float16))
+    return VS.VQSwitchLinear(codes, cbk, sc, group_size=64,
+                             pack_bits=bits, in_features=IN)
+
+
+def test_gemmseg_numeric_gate():
+    """Fused segmented VQ-GEMM vs legacy _prefill: max rel error < 1e-3
+    on skewed routing (fp32 in-tile accumulation; NOT bit-gated — the
+    reduction order legitimately differs, see the acceptance contract)."""
+    mod = _mk_packed()
+    idx = _routing()
+    T = idx.shape[0]
+    r = np.random.default_rng(3)
+    x = mx.array((r.standard_normal((T, 1, 1, 128)) * 0.2).astype(np.float16))
+    old = (VS.VQ_FUSED_MAX_N, VS._FUSED_GEMM, VS._FUSE_GATHER)
+    VS.VQ_FUSED_MAX_N = 1
+    try:
+        VS._FUSED_GEMM, VS._FUSE_GATHER = False, True
+        y_ref = mod(x, mx.array(idx)); mx.eval(y_ref)
+        VS._FUSED_GEMM = True
+        y_fg = mod(x, mx.array(idx)); mx.eval(y_fg)
+    finally:
+        VS.VQ_FUSED_MAX_N, VS._FUSED_GEMM, VS._FUSE_GATHER = old
+    a = y_ref.astype(mx.float32); b = y_fg.astype(mx.float32)
+    rel = float(mx.max(mx.abs(a - b))) / max(1e-6, float(mx.max(mx.abs(a))))
+    assert rel < 1e-3, f"fused VQ-GEMM diverged: rel {rel}"
+
+
+def test_gemmseg_default_off():
+    import os as _os
+    assert VS._FUSED_GEMM is False or \
+        _os.environ.get("VQ_MOE_FUSED_GEMM") == "1"
