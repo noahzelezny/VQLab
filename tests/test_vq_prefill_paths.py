@@ -203,6 +203,39 @@ def test_gemmseg_numeric_gate_d2_d4(D, K, IN):
     assert rel < 1e-3, f"d{D} K{K} fused diverged: rel {rel}"
 
 
+@pytest.mark.parametrize("D,K,IN", [(2, 256, 128), (4, 256, 256)])
+def test_gemmseg_unpacked_bits0(D, K, IN):
+    """BITS=0 arm: plain uint8/uint16 codes. The packed row stride
+    degenerates to 0 at BITS==0 — if that regressed, every row would
+    decode row 0's codes (silent garbage, not a crash), so this gate is
+    a VALUE comparison against legacy, not a smoke test."""
+    r = np.random.default_rng(11)
+    NSUB = IN // D
+    codes = mx.array(r.integers(0, K, (16, 48, NSUB)).astype(
+        np.uint8 if K <= 256 else np.uint16))
+    cbk = mx.array((r.standard_normal((K, D)) * 0.05).astype(np.float16))
+    sc = mx.array((r.standard_normal((16, 48, IN // 64)) * 0.1 + 1)
+                  .astype(np.float16))
+    mod = VS.VQSwitchLinear(codes, cbk, sc, group_size=64)
+    idx = _routing()
+    T = idx.shape[0]
+    x = mx.array((r.standard_normal((T, 1, 1, IN)) * 0.2).astype(np.float16))
+    old_s = (VS.VQ_FUSED_MAX_N, VS._FUSED_GEMM, VS._FUSED_GEMM_V2)
+    VS.VQ_FUSED_MAX_N = 1
+    try:
+        VS._FUSED_GEMM = False
+        y_ref = mod(x, mx.array(idx)); mx.eval(y_ref)
+        VS._FUSED_GEMM, VS._FUSED_GEMM_V2 = True, True
+        y_fg = mod(x, mx.array(idx)); mx.eval(y_fg)
+    finally:
+        VS.VQ_FUSED_MAX_N, VS._FUSED_GEMM, VS._FUSED_GEMM_V2 = old_s
+    a = y_ref.astype(mx.float32); b = y_fg.astype(mx.float32)
+    rel = float(mx.max(mx.abs(a - b))) / max(1e-6, float(mx.max(mx.abs(a))))
+    assert rel < 1e-3, f"unpacked d{D} K{K} diverged: rel {rel}"
+    # and it must not be trivially "all rows equal" (the WPR=0 signature)
+    assert float(mx.max(mx.abs(b[0] - b[-1]))) > 0
+
+
 def test_gemmseg_bigK_falls_through():
     """K=8192/d4 exceeds the 32KB threadgroup budget — the gate must
     REFUSE (fall through to legacy), never reach kernel LOAD (E134)."""
