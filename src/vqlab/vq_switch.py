@@ -3117,14 +3117,20 @@ _SRC_GEMMSEG = _PACK_FETCH + r"""
 # VQ_MOE_FUSED_GEMM=1 selects v1 (scalar, kept for A/B), =2 selects v2.
 _SRC_GEMMSEG2 = _PACK_FETCH + r"""
     // dims: [OUT, IN, NGRP, K, NTILES]; tmeta int32 [NTILES,3]
-    // baked: BITS, GROUP(=64), MAX_K; tiles fixed 32x32
+    // baked: BITS, GROUP(=64), MAX_K, D_BAKE(2|4); tiles fixed 32x32
+    // ONE source serves d2 and d4 (2026-09-07, r5 swarm): only phase 1
+    // changes — codebook entry width (half2 vs half4) and how many halves
+    // one code contributes. SPG folds at compile time so every thread
+    // still stages exactly 16 halves of wtT and 16 of xt either way
+    // (d2: 8 codes x 2 halves; d4: 4 codes x 4). Phase 3's simdgroup
+    // matmul is OUT x TOKEN geometry — completely d-independent.
     const int OUT   = dims[0];
     const int IN    = dims[1];
     const int NGRP  = dims[2];
     const int K     = dims[3];
     const int G     = GROUP;
-    const int SPG   = G / 2;
-    const int NSUB  = IN / 2;
+    const int SPG   = G / D_BAKE;
+    const int NSUB  = IN / D_BAKE;
     const int WPR   = (NSUB + 31) / 32 * BITS;
 
     uint lane = thread_position_in_threadgroup.x;   // 0..31
@@ -3138,13 +3144,21 @@ _SRC_GEMMSEG2 = _PACK_FETCH + r"""
     const int nrow = tmeta[rtile * 3 + 2];
     const int o0   = (int)otile * 32;
 
-    threadgroup half2 cb[MAX_K];
-    threadgroup half  wtT[GROUP][32];   // transposed, pre-scaled
-    threadgroup half  xt[32][GROUP];
-    threadgroup float ybuf[32][32];
+#if D_BAKE == 2
+    threadgroup half2 cb[MAX_K];        // K*4 B
+#else
+    threadgroup half4 cb[MAX_K];        // K*8 B
+#endif
+    threadgroup half  wtT[GROUP][32];   // transposed, pre-scaled (4 KB)
+    threadgroup half  xt[32][GROUP];    // 4 KB
+    threadgroup float ybuf[32][32];     // 4 KB
 
     for (uint i = tid; i < (uint)K; i += 128u)
+#if D_BAKE == 2
         cb[i] = ((const device half2*)codebook)[i];
+#else
+        cb[i] = ((const device half4*)codebook)[i];
+#endif
 
     // decode assignment: thread -> w row wr=tid/4, code span q0..q0+SPG/4
     const int wr = (int)tid / 4;
@@ -3168,13 +3182,22 @@ _SRC_GEMMSEG2 = _PACK_FETCH + r"""
             const float s = (float)srow_w[g];
             for (int q = q0; q < q0 + SPG / 4; ++q) {
                 const uint c = VQ_CODE(wrow_codes, j0 + q);
+#if D_BAKE == 2
                 const half2 v = cb[c];
                 wtT[q * 2][wr]     = (half)(s * (float)v.x);
                 wtT[q * 2 + 1][wr] = (half)(s * (float)v.y);
+#else
+                const half4 v = cb[c];
+                wtT[q * 4][wr]     = (half)(s * (float)v.x);
+                wtT[q * 4 + 1][wr] = (half)(s * (float)v.y);
+                wtT[q * 4 + 2][wr] = (half)(s * (float)v.z);
+                wtT[q * 4 + 3][wr] = (half)(s * (float)v.w);
+#endif
             }
         } else {
             for (int q = q0; q < q0 + SPG / 4; ++q) {
-                wtT[q * 2][wr] = (half)0; wtT[q * 2 + 1][wr] = (half)0;
+                for (int u = 0; u < D_BAKE; ++u)
+                    wtT[q * D_BAKE + u][wr] = (half)0;
             }
         }
         {
@@ -3182,8 +3205,9 @@ _SRC_GEMMSEG2 = _PACK_FETCH + r"""
             if (xr < nrow)
                 xrow = xsrc + (size_t)srcrows[r0 + xr] * IN + (size_t)g * G;
             for (int q = q0; q < q0 + SPG / 4; ++q) {
-                xt[xr][q * 2]     = (xr < nrow) ? xrow[q * 2]     : (half)0;
-                xt[xr][q * 2 + 1] = (xr < nrow) ? xrow[q * 2 + 1] : (half)0;
+                for (int u = 0; u < D_BAKE; ++u)
+                    xt[xr][q * D_BAKE + u] =
+                        (xr < nrow) ? xrow[q * D_BAKE + u] : (half)0;
             }
         }
         threadgroup_barrier(mem_flags::mem_threadgroup);
@@ -3237,11 +3261,15 @@ _FUSED_GEMM_V2 = os.environ.get("VQ_MOE_FUSED_GEMM", "2") == "2"
 def gemmseg_fits(D, K, G, pack_bits, IN):
     """May prefill take the fused segmented VQ-GEMM? Conservative first
     ship: exactly the measured MoE geometry class."""
-    if not (_FUSED_GEMM and D == 2 and 0 < pack_bits <= 16
-            and G == 64 and (IN // D) % 32 == 0 and IN % G == 0):
+    if not (_FUSED_GEMM and D in (2, 4) and 0 < pack_bits <= 16
+            and G == 64 and (IN // D) % 32 == 0 and IN % G == 0
+            and (G // D) % 4 == 0):   # SPG/4 codes per thread must divide
         return False
-    # threadgroup budget: cb K*4B + wt 32*G*2B + xt 32*G*2B <= 30KB
-    return K * 4 + 2 * 32 * G * 2 <= 30 * 1024
+    # E134 budget, exact: cb K*2*D B + wtT 4096 + xt 4096 + ybuf 4096.
+    # d2 -> K <= 5120; d4 -> K <= 2560 (so K512/K2048 in, K8192+ out —
+    # big-K needs the unwritten device-codebook arm, which falls through
+    # to legacy _prefill here rather than failing at kernel LOAD).
+    return K * 2 * D + 3 * 4096 <= _TG_CAP_BYTES
 
 
 def _gemmseg_prefill(xsrc, src_rows, idx_sorted_np, codes, codebook, scales,
@@ -3265,10 +3293,16 @@ def _gemmseg_prefill(xsrc, src_rows, idx_sorted_np, codes, codebook, scales,
     cbk = codebook.astype(mx.float16) if codebook.dtype != mx.float16 \
         else codebook
     dims = _dims_array(OUT, IN, IN // 64, K, ntiles)
+    D = int(codebook.shape[1])
     if _FUSED_GEMM_V2:
-        name, src = f"vq_gemmseg2_packed{pack_bits}_d2", _SRC_GEMMSEG2
-        template = [("BITS", pack_bits), ("GROUP", 64), ("MAX_K", K)]
+        name, src = f"vq_gemmseg2_packed{pack_bits}_d{D}", _SRC_GEMMSEG2
+        template = [("BITS", pack_bits), ("GROUP", 64), ("MAX_K", K),
+                    ("D_BAKE", D)]
     else:
+        # v1 (scalar MAC, measured 0.74x) was only ever written for d2.
+        if D != 2:
+            raise NotImplementedError(
+                "vq_gemmseg v1 is d2-only; use VQ_MOE_FUSED_GEMM=2")
         name, src = f"vq_gemmseg_packed{pack_bits}_d2", _SRC_GEMMSEG
         template = [("BITS", pack_bits), ("GROUP", 64), ("OTILE", 32),
                     ("RTILE", 32), ("MAX_K", K)]
