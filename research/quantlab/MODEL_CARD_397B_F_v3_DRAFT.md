@@ -35,11 +35,11 @@ Changed blocks only, in card order, to be applied against
 
 | | **this model, v3** (100.9 GiB) | v2 (101.0 GiB) | `VQ-2.4bpw` (111.6 GiB) |
 |---|---|---|---|
-| wikitext perplexity (raw, prefix-8192) | **2.9200** | 3.0591 | 2.7655 |
-| code perplexity (mixed-language) | **2.6619** | 2.6728 | 2.6383 |
+| wikitext perplexity (raw, prefix-8192) | **2.9235** | 3.0591 | 2.7655 |
+| code perplexity (mixed-language) | **2.6632** | 2.6728 | 2.6383 |
 
-v3 is better than v2 on **both** corpora — prose by 0.139, code by 0.011 —
-at 0.1 GiB less, and it holds on a **held-out literary corpus never used to
+v3 is better than v2 on **both** corpora — prose by 0.135, code by 0.010 —
+at 0.12 GiB less, and it holds on a **held-out literary corpus never used to
 select anything**: six disjoint windows, v3 ahead on all six.
 
 **On reading these numbers.** A perplexity delta measured on one text window
@@ -104,3 +104,31 @@ changed will otherwise wonder whether the comparisons still hold.
 - [ ] decide on the `__runtime_version__` stamp
 - [ ] chart regenerated if the card carries one (the 2.2 point moves)
 - [ ] Noah runs the upload
+
+
+---
+
+## POST-DRAFT CORRECTION (2026-09-07, after the exo failure)
+
+The first build of this artifact carried **float32** `embed_tokens`
+scales/biases: `affine_requant.py` upcast the weight to fp32 before
+`mx.quantize`, and mx.quantize returns scales in the INPUT dtype. That
+made the embedding output fp32, which propagated through the whole
+forward pass, which at `head_dim: 256` asked Metal for a 53 KB
+threadgroup attention kernel against a 32 KB limit -- crashing every exo
+prefill while single-box `mlx_lm` worked fine.
+
+Fixed (scales cast back to the source dtype). Numbers above are the
+CORRECTED build: 100.855 GiB, prose 2.9235, code 2.6632. The fp32 scales
+were also 0.059 GiB of pure waste.
+
+**Two gate gaps this exposed, both still open:**
+
+1. **No gate checks dtypes.** `check_release`, the strict smoke and every
+   perplexity run passed on the broken artifact, because they are all
+   single-box and never reach the distributed prefill path. A dtype
+   census against the source artifact belongs in `check_release`.
+2. **No gate exercises exo.** The only failure mode was in exo's
+   sharded prefill. `check_release` has a `--cluster-smoke` flag; it was
+   not run here and should be mandatory for any artifact that ships for
+   distributed serving.

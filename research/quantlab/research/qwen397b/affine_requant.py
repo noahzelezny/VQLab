@@ -100,11 +100,20 @@ def main():
     for i, (sh, mods) in enumerate(sorted(by_src.items()), 1):
         t = mx.load(str(sp / sh))
         for m in mods:
-            w = t[to_src_name(m)].astype(mx.float32)
-            wq, sc, bi = mx.quantize(w, group_size=a.group, bits=a.bits)
+            src_t = t[to_src_name(m)]
+            # PRESERVE THE SOURCE DTYPE. mx.quantize returns scales/biases in
+            # the INPUT dtype, so upcasting to fp32 here emitted fp32 scales
+            # for embed_tokens -- which makes the embedding output fp32, which
+            # makes the WHOLE forward pass fp32, which at head_dim 256 asks
+            # Metal for a 53 KB threadgroup attention kernel against a 32 KB
+            # limit and crashes every exo prefill. (2026-09-07: this shipped
+            # to both boxes and broke serving before it was caught.)
+            wq, sc, bi = mx.quantize(src_t, group_size=a.group, bits=a.bits)
+            want = src_t.dtype
+            sc, bi = sc.astype(want), bi.astype(want)
             mx.eval(wq, sc, bi)
             new[m + ".weight"], new[m + ".scales"], new[m + ".biases"] = wq, sc, bi
-            del w
+            del src_t
         del t
         mx.clear_cache()
         print(f"  [{i}/{len(by_src)}] {sh}: {len(mods)} module(s)", flush=True)
