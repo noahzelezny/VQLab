@@ -3397,16 +3397,6 @@ def _gemmseg_prefill(xsrc, src_rows, idx_sorted_np, codes, codebook, scales,
         (y,) = kern(**common)
     else:
         (y,) = _get_kernel(name, src)(template=template, **common)
-    # EVAL FENCE (2026-09-07). MLX is lazy: returning an unevaluated y
-    # lets every layer's output stay in one graph, and the whole model's
-    # prefill intermediates then have to be live simultaneously when
-    # something finally forces evaluation. On a 107 GB 397B that is
-    # `[METAL] Command buffer execution failed: Insufficient Memory`
-    # during warmup — observed 2026-09-07. The legacy path fences per
-    # chunk for exactly this reason (see its CRITICAL comment below);
-    # the fused path replaced the chunk loop and dropped the fence with
-    # it. One eval per linear, matching the legacy cadence.
-    mx.eval(y)
     return y
 
 
