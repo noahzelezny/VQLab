@@ -295,3 +295,47 @@ bought without the code regression.
 **Standing rule added:** a candidate's selection objective must include
 EVERY corpus in its ship gate. Filtering on a subset of the gate selects
 for damage on whatever was left out.
+
+---
+
+## v5 — FINAL. Passes every gate, and is SMALLER than the shipped rung.
+
+v5 = three-corpus knapsack promotion + the 57-59 conversion + the
+`embed_tokens` refund. Strictly additive over v3.
+
+    promotions   +1.246 GiB  20 projection-units, 11 layers, mixed subsets
+      SPEC: 29:up,down 37:gate 38:down 40:down 41:all 42:gate
+            43:up,down 44:gate,down 47:up,down 48:all 49:up,down
+    convert 57-59 -> d4/K2048   -1.125 GiB (improves quality; DEFECT fix)
+    embed_tokens 6 -> 4 bit     -0.177 GiB (free, METHOD.md 14)
+    => 100.914 GiB, 0.057 GiB UNDER the shipped 100.971
+
+| vs shipped 2.2 | prose | code | literary (6 windows) | size |
+|---|---|---|---|---|
+| v3 | +0.0925 | +0.0001 | +0.0769, 6/6 | 100.967 |
+| **v5** | **+0.1368** | **+0.0109** | **+0.0736, 6/6** | **100.914** |
+
+Head to head v5 beats v3 by **+0.0443 prose and +0.0108 code**; literary
+differs by -0.0033 mean (sd 0.0087, t = -0.93 over six windows) which is
+NOT significant -- a tie. Smoke passes (24.6 tok/s, 107.9 GB peak).
+
+**v5 dominates v3: better prose, better code, tied literary, smaller.**
+Unlike v3 it does not merely hold code level, it IMPROVES it.
+
+### Two predictions made in advance, both confirmed
+
+1. **Composition.** Raw prose sum 0.1602 -> measured +0.1368 = **85%**,
+   against the 76-79% seen previously. Mixed subsets composed BETTER than
+   whole layers did.
+2. **Code compounding.** v4 showed code damage compounding super-additively
+   (items +0.0025, artifact -0.0050, gap 0.0075), so v5 was selected with a
+   deliberate +0.0180 code margin. Measured: raw +0.0180 -> +0.0109, gap
+   **0.0071**. The compounding is consistent and PREDICTABLE, and budgeting
+   for it worked exactly as designed.
+
+### The v4 -> v5 lesson, in one line
+
+v4 optimised prose+literary and regressed code; v5 added code to the same
+objective and gained on ALL THREE for 3% less raw prose value. Filtering
+on a subset of the ship gate does not merely risk the omitted corpus --
+it actively selects against it.
