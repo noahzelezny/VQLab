@@ -47,3 +47,32 @@ Remaining gap to affine (~6.0 vs 4.0s): the non-MoE share (attention,
 norms) plus residual kernel headroom (bank-conflict padding on wtT ld,
 larger row tiles to amortize decode further, dual-buffer x staging).
 Diminishing returns expected; measure before believing any of it.
+
+
+## d4 extension (same day, r5 swarm design)
+
+One parametric source now serves d2 and d4 (`D_BAKE` baked; phase 1
+switches codebook entry width and halves-per-code, phase 3 untouched).
+gemmseg_fits computes the E134 budget exactly: cb K*2*D + 3 tiles
+<= 32KB, so d2 K<=5120 / d4 K<=2560 fuse and K8192+ falls THROUGH to
+legacy (asserted in tests — never a kernel-LOAD failure).
+
+Real 9k prefills, interleaved legacy/fused, M3 idle:
+
+| artifact | geometry | legacy | fused | gain |
+|---|---|---|---|---|
+| 35B-3.4bpw | pure d4 K2048 (**no fusing before**) | 9.2 / 9.6 s | 7.2 / 7.2 s | **1.30x** |
+| 35B-4.6bpw | mixed d2-K512 + d4-K2048 | 9.3 / 9.8 s | 5.8 / 5.7 s | **1.65x** |
+
+The 4.6 number rose from this morning's 1.43x because its d4 half now
+fuses too (both numbers are same-session interleaved; the morning's
+legacy baseline measured 8.4-8.5 s vs 9.3-9.8 s now — run-to-run
+machine drift of ~10%, which is exactly why arms must be interleaved
+and why the ratio is the reportable quantity, not the absolute).
+
+Score gate, 35B-3.4, prefill path FORCED: legacy 5.6820 vs fused 5.6840
+(0.04%) — within the reordering-noise band, same as d2.
+
+Still uncovered: d4/d8 big-K (8192/16384 — needs the device-codebook
+arm; GLM-3.6, 397B-2.2, 35B-3.8) and unpacked d2 K256 (BITS=0 arm).
+Both designed in logs/reviews/vqgemm-design-r5-d4d8.checkpoint.json.
