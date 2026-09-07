@@ -236,12 +236,51 @@ def test_gemmseg_unpacked_bits0(D, K, IN):
     assert float(mx.max(mx.abs(b[0] - b[-1]))) > 0
 
 
-def test_gemmseg_bigK_falls_through():
-    """K=8192/d4 exceeds the 32KB threadgroup budget — the gate must
-    REFUSE (fall through to legacy), never reach kernel LOAD (E134)."""
-    assert VS.gemmseg_fits(4, 8192, 64, 13, 4096) is False
-    assert VS.gemmseg_fits(4, 2048, 64, 11, 256) is True
+def test_gemmseg_bigK_gated_off_by_default():
+    """Big-K needs the device-codebook arm; it is DEFAULT OFF (speed
+    unproven), so the gate must refuse until armed — and must never let
+    an over-budget threadgroup layout reach kernel LOAD (E134)."""
+    assert VS._FUSED_GEMM_BIGK is False or \
+        __import__("os").environ.get("VQ_MOE_FUSED_GEMM_BIGK") == "1"
+    assert VS.gemmseg_fits(4, 8192, 64, 13, 4096) is False   # not armed
+    assert VS.gemmseg_fits(4, 2048, 64, 11, 256) is True     # threadgroup
     assert VS.gemmseg_fits(2, 512, 64, 9, 128) is True
+
+
+@pytest.mark.parametrize("D,K,IN", [(4, 8192, 256), (2, 8192, 128)])
+def test_gemmseg_cbdev_numeric(D, K, IN):
+    """Device-codebook arm (armed explicitly): same numeric gate. K here
+    is over the threadgroup cap, so this also proves the kernel LOADS —
+    an over-budget threadgroup allocation would fail at load, not run."""
+    from vqlab import vq_pack
+    r = np.random.default_rng(23)
+    NSUB = IN // D
+    bits = vq_pack.bits_for_k(K)
+    raw = r.integers(0, K, (8, 32, NSUB)).astype(np.uint32)
+    codes = mx.array(vq_pack.pack(raw, bits))
+    cbk = mx.array((r.standard_normal((K, D)) * 0.05).astype(np.float16))
+    sc = mx.array((r.standard_normal((8, 32, IN // 64)) * 0.1 + 1)
+                  .astype(np.float16))
+    mod = VS.VQSwitchLinear(codes, cbk, sc, group_size=64,
+                            pack_bits=bits, in_features=IN)
+    idx = _routing(E=8)
+    T = idx.shape[0]
+    x = mx.array((r.standard_normal((T, 1, 1, IN)) * 0.2).astype(np.float16))
+    old_s = (VS.VQ_FUSED_MAX_N, VS._FUSED_GEMM, VS._FUSED_GEMM_V2,
+             VS._FUSED_GEMM_BIGK)
+    VS.VQ_FUSED_MAX_N = 1
+    try:
+        VS._FUSED_GEMM, VS._FUSED_GEMM_BIGK = False, False
+        y_ref = mod(x, mx.array(idx)); mx.eval(y_ref)
+        VS._FUSED_GEMM, VS._FUSED_GEMM_V2 = True, True
+        VS._FUSED_GEMM_BIGK = True
+        y_fg = mod(x, mx.array(idx)); mx.eval(y_fg)
+    finally:
+        (VS.VQ_FUSED_MAX_N, VS._FUSED_GEMM, VS._FUSED_GEMM_V2,
+         VS._FUSED_GEMM_BIGK) = old_s
+    a = y_ref.astype(mx.float32); b = y_fg.astype(mx.float32)
+    rel = float(mx.max(mx.abs(a - b))) / max(1e-6, float(mx.max(mx.abs(a))))
+    assert rel < 1e-3, f"cbdev d{D} K{K} diverged: rel {rel}"
 
 
 def test_gemmseg_numeric_gate():

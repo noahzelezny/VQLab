@@ -3152,20 +3152,38 @@ _SRC_GEMMSEG2 = _PACK_FETCH + r"""
     const int nrow = tmeta[rtile * 3 + 2];
     const int o0   = (int)otile * 32;
 
-#if D_BAKE == 2
-    threadgroup half2 cb[MAX_K];        // K*4 B
+#if CB_DEV
+    // BIG-K arm (2026-09-07): K*2*D exceeds the 32 KB threadgroup cap
+    // (d4 K8192 = 64 KB, d8 K16384 = 256 KB), so the codebook stays in
+    // DEVICE memory. This is only viable because phase 1 decodes each
+    // [32 out-rows x G] tile ONCE and phase 3 reuses it across 32 token
+    // rows: the random-gather cost is paid once per tile, not per token,
+    // and 128 threads issue their lookups independently (the E141 fix —
+    // no dependent-load chain). Whether that amortization actually holds
+    // is a MEASUREMENT, not a claim; see VQGEMM-BENCH.
+  #if D_BAKE == 2
+    const device half2* cb = (const device half2*)codebook;
+  #else
+    const device half4* cb = (const device half4*)codebook;
+  #endif
 #else
+  #if D_BAKE == 2
+    threadgroup half2 cb[MAX_K];        // K*4 B
+  #else
     threadgroup half4 cb[MAX_K];        // K*8 B
+  #endif
 #endif
     threadgroup half  wtT[GROUP][32];   // transposed, pre-scaled (4 KB)
     threadgroup half  xt[32][GROUP];    // 4 KB
     threadgroup float ybuf[32][32];     // 4 KB
 
+#if !CB_DEV
     for (uint i = tid; i < (uint)K; i += 128u)
-#if D_BAKE == 2
+  #if D_BAKE == 2
         cb[i] = ((const device half2*)codebook)[i];
-#else
+  #else
         cb[i] = ((const device half4*)codebook)[i];
+  #endif
 #endif
 
     // decode assignment: thread -> w row wr=tid/4, code span q0..q0+SPG/4
@@ -3271,6 +3289,11 @@ _SRC_GEMMSEG2 = _PACK_FETCH + r"""
 # kernel (kept for A/B; measured 0.74x — do not use for speed).
 _FUSED_GEMM = os.environ.get("VQ_MOE_FUSED_GEMM", "2") != "0"
 _FUSED_GEMM_V2 = os.environ.get("VQ_MOE_FUSED_GEMM", "2") == "2"
+# Big-K device-codebook arm (d4 K>2560, d8 K>1280). Correct by the same
+# gates as the threadgroup arm, but its SPEED is a separate question —
+# the codebook gather goes to device memory. Default OFF until the
+# resident-block bench says otherwise; VQ_MOE_FUSED_GEMM_BIGK=1 arms it.
+_FUSED_GEMM_BIGK = os.environ.get("VQ_MOE_FUSED_GEMM_BIGK", "0") != "0"
 
 
 def gemmseg_fits(D, K, G, pack_bits, IN):
@@ -3284,10 +3307,12 @@ def gemmseg_fits(D, K, G, pack_bits, IN):
             and (G // D) % 4 == 0):   # SPG/4 codes per thread must divide
         return False
     # E134 budget, exact: cb K*2*D B + wtT 4096 + xt 4096 + ybuf 4096.
-    # d2 -> K <= 5120; d4 -> K <= 2560 (so K512/K2048 in, K8192+ out —
-    # big-K needs the unwritten device-codebook arm, which falls through
-    # to legacy _prefill here rather than failing at kernel LOAD).
-    return K * 2 * D + 3 * 4096 <= _TG_CAP_BYTES
+    # Over the cap the codebook moves to DEVICE memory (CB_DEV arm) —
+    # the tiles alone are 12 KB, so the kernel always loads. Big-K is
+    # therefore covered too, unless the operator pins it off.
+    if K * 2 * D + 3 * 4096 <= _TG_CAP_BYTES:
+        return True
+    return _FUSED_GEMM_BIGK
 
 
 def _gemmseg_prefill(xsrc, src_rows, idx_sorted_np, codes, codebook, scales,
@@ -3316,8 +3341,12 @@ def _gemmseg_prefill(xsrc, src_rows, idx_sorted_np, codes, codebook, scales,
         name = (f"vq_gemmseg2_packed{pack_bits}_d{D}" if pack_bits
                 else f"vq_gemmseg2_u{codes.dtype.size * 8}_d{D}")
         src = _SRC_GEMMSEG2
-        template = [("BITS", pack_bits), ("GROUP", 64), ("MAX_K", K),
-                    ("D_BAKE", D)]
+        cb_dev = K * 2 * D + 3 * 4096 > _TG_CAP_BYTES
+        if cb_dev:
+            name += "_cbdev"
+        template = [("BITS", pack_bits), ("GROUP", 64),
+                    ("MAX_K", 1 if cb_dev else K), ("D_BAKE", D),
+                    ("CB_DEV", 1 if cb_dev else 0)]
         if not pack_bits:
             # unpacked arm reads codes as CT (uchar/ushort), not uint words
             template.append(("CT", codes.dtype))
