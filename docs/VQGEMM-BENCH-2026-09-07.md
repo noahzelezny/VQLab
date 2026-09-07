@@ -29,9 +29,16 @@ variants; NOT bit-identical by design — reduction order differs; the
 acceptance contract is in the source block). tests/test_vq_prefill_paths
 covers both. DEFAULT OFF — VQ_MOE_FUSED_GEMM=2 opts in.
 
+Score gate (2026-09-07 03:00): resident ppl, prefill path FORCED
+(VQ_FUSED_MAX_N=1 — the scorer's default chunk=512 x top_k 8 = exactly
+4096 pairs never crosses the threshold, so an unforced score measures
+nothing; first run proved that by matching to 15 decimals):
+legacy-prefill 5.4929, v2 5.4900 — a 0.05% shift, WITHIN the documented
+benign float-reordering band (~0.16%, the chunk-8/16/32 shifts in the
+runtime's own comments). Also noteworthy: standard published scoring
+(chunk 512) rides the small-N fused path and would be UNCHANGED by v2.
+
 NOT yet done (Noah's calls):
-- score-identity run (ppl on a real eval through v2) before any default
-  flip or artifact re-bundle carrying it ON;
 - Flash/GLM geometry check (gate currently requires d2/G64/packed —
   every current MoE rung qualifies, but only 35B was benched);
 - promotion/publish.
