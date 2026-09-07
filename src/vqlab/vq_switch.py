@@ -2271,6 +2271,11 @@ def _kernel_sig(name):
     spec path, and silently kept paying ~5-7 us of template processing per
     dispatch (2026-09-03, dense-kernel arc).
     """
+    if name.startswith("vq_gemmseg"):
+        # Fused segmented-tile VQ-GEMM (2026-09-07). MUST precede the
+        # fallthrough or it binds the expert signature — arc-5 class.
+        return (["codes", "codebook", "scales", "xsrc", "srcrows",
+                 "tmeta", "dims"], ["y"])
     if name.startswith("vq_wdec"):
         # Weight-decode kernel: no x, no eidx. MUST precede the fallthrough
         # or it binds the expert signature's eidx — the arc-5 defect class.
@@ -2932,6 +2937,184 @@ assert _kernel_sig("vq_wdec_packed9_d2") == (
     ["codes", "codebook", "scales", "dims"], ["w"])
 
 
+# --------------------------------------------------------------------------- #
+# vq_gemmseg — fused segmented-tile VQ-GEMM for MoE prefill (2026-09-07,
+# r4 swarm design: survivors 0/2/6 architecture + survivor 5 inner loop).
+#
+# Dequantizes packed VQ codes INSIDE the matmul tile loop — the fp16 expert
+# weight matrix is never materialized. One dispatch per linear covers ALL
+# touched experts via per-tile metadata over the count-sorted contiguous
+# rows: (expert, row_start, nrows) per 32-row tile, so a tile never
+# straddles experts and padding is bounded by <32 rows per expert instead
+# of the padded-GEMM's chunk-cap (measured pad 1.567 -> ~1.0x).
+#
+# Marlin-style amortization (the E141 fix at prefill scale): each scale
+# group's [32 out-rows x G] weight tile is decoded ONCE into threadgroup
+# memory by 128 cooperating threads (independent VQ_CODE fetches, no
+# dependent-load chain) and reused across 32 token rows — a 32x
+# amortization of code extraction vs the per-(row,token) fused kernels.
+#
+# Threadgroup budget @ K512/d2/G64: cb 2KB + w_tile 4KB + x_tile 4KB
+# ~= 10KB << 32KB cap (E134-safe; budget asserted in gemmseg_fits).
+#
+# ACCEPTANCE CONTRACT (mission r4): fp32 accumulation in-tile; this is
+# NOT bit-identical to decode+GEMM (reduction order differs by design);
+# gates are numeric (max rel < 1e-3 on real routing) + score-identity,
+# and the path is DEFAULT OFF: VQ_MOE_FUSED_GEMM=1 opts in (unscored
+# serving) until promoted.
+# --------------------------------------------------------------------------- #
+
+_SRC_GEMMSEG = _PACK_FETCH + r"""
+    // dims: [OUT, IN, NGRP, K, NTILES]
+    // tmeta: int32 [NTILES, 3] = (expert, row_start, nrows)
+    // baked: BITS, GROUP, OTILE(=32), RTILE(=32)
+    const int OUT   = dims[0];
+    const int IN    = dims[1];
+    const int NGRP  = dims[2];
+    const int K     = dims[3];
+    const int G     = GROUP;
+    const int SPG   = G / 2;                 // d=2 codes per scale group
+    const int NSUB  = IN / 2;
+    const int WPR   = (NSUB + 31) / 32 * BITS;
+
+    uint lane = thread_position_in_threadgroup.x;   // 0..31
+    uint sg   = thread_position_in_threadgroup.y;   // 0..3
+    uint tid  = sg * 32 + lane;                     // 0..127
+    uint otile = thread_position_in_grid.x / 32;    // OUT/OTILE tiles
+    uint rtile = thread_position_in_grid.y / 4;     // row tiles
+
+    const int e    = tmeta[rtile * 3 + 0];
+    const int r0   = tmeta[rtile * 3 + 1];
+    const int nrow = tmeta[rtile * 3 + 2];
+    const int o0   = (int)otile * OTILE;
+
+    threadgroup half2 cb[MAX_K];
+    threadgroup half  wt[OTILE][GROUP];
+    threadgroup half  xt[RTILE][GROUP];
+
+    for (uint i = tid; i < (uint)K; i += 128u)
+        cb[i] = ((const device half2*)codebook)[i];
+
+    // fp32 accumulators: thread owns out-row (o0+lane) x tokens sg*8..+8
+    float acc[8];
+    for (int i = 0; i < 8; ++i) acc[i] = 0.0f;
+
+    const int my_r   = o0 + (int)lane;               // output row (col of y)
+    const device uint* crow = codes
+        + (size_t)e * OUT * WPR + (size_t)my_r * WPR;
+    const device half* srow = scales
+        + (size_t)e * OUT * NGRP + (size_t)my_r * NGRP;
+
+    // decode assignment: thread tid covers w-tile row wr = tid/4,
+    // code slots q = (tid%4)*SPG/4 .. +SPG/4 (SPG=32 -> 8 codes = 16 halfs)
+    const int wr  = (int)tid / 4;
+    const int q0  = ((int)tid % 4) * (SPG / 4);
+    const device uint* wrow_codes = codes
+        + (size_t)e * OUT * WPR + (size_t)(o0 + wr) * WPR;
+    // x assignment: thread tid covers x-tile row xr = tid/4, same q span
+    const int xr = (int)tid / 4;
+
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+
+    for (int g = 0; g < NGRP; ++g) {
+        const int j0 = g * SPG;
+        // Phase 1: decode this group's [OTILE x G] weight tile, unscaled
+        if (o0 + wr < OUT) {
+            for (int q = q0; q < q0 + SPG / 4; ++q) {
+                const uint c = VQ_CODE(wrow_codes, j0 + q);
+                const half2 v = cb[c];
+                wt[wr][q * 2]     = v.x;
+                wt[wr][q * 2 + 1] = v.y;
+            }
+        }
+        // Phase 2: stage this group's [RTILE x G] x tile (zeros past nrow)
+        {
+            const device half* xrow = 0;
+            if (xr < nrow)
+                xrow = xsrc + (size_t)srcrows[r0 + xr] * IN + (size_t)g * G;
+            for (int q = q0; q < q0 + SPG / 4; ++q) {
+                xt[xr][q * 2]     = (xr < nrow) ? xrow[q * 2]     : (half)0;
+                xt[xr][q * 2 + 1] = (xr < nrow) ? xrow[q * 2 + 1] : (half)0;
+            }
+        }
+        threadgroup_barrier(mem_flags::mem_threadgroup);
+        // Phase 3: accumulate. Thread: out-row (o0+lane), tokens sg*8..+8
+        if (my_r < OUT) {
+            const float s = (float)srow[g];
+            for (int t = 0; t < 8; ++t) {
+                const int tt = (int)sg * 8 + t;
+                float gacc = 0.0f;
+                for (int k = 0; k < G; ++k)
+                    gacc += (float)wt[lane][k] * (float)xt[tt][k];
+                acc[t] = fma(s, gacc, acc[t]);
+            }
+        }
+        threadgroup_barrier(mem_flags::mem_threadgroup);
+    }
+
+    if (my_r < OUT) {
+        for (int t = 0; t < 8; ++t) {
+            const int tt = (int)sg * 8 + t;
+            if (tt < nrow)
+                y[(size_t)(r0 + tt) * OUT + my_r] = (half)acc[t];
+        }
+    }
+"""
+
+_FUSED_GEMM = os.environ.get("VQ_MOE_FUSED_GEMM", "0") != "0"
+
+
+def gemmseg_fits(D, K, G, pack_bits, IN):
+    """May prefill take the fused segmented VQ-GEMM? Conservative first
+    ship: exactly the measured MoE geometry class."""
+    if not (_FUSED_GEMM and D == 2 and 0 < pack_bits <= 16
+            and G == 64 and (IN // D) % 32 == 0 and IN % G == 0):
+        return False
+    # threadgroup budget: cb K*4B + wt 32*G*2B + xt 32*G*2B <= 30KB
+    return K * 4 + 2 * 32 * G * 2 <= 30 * 1024
+
+
+def _gemmseg_prefill(xsrc, src_rows, idx_sorted_np, codes, codebook, scales,
+                     pack_bits, IN):
+    """One fused dispatch per linear: y[sorted_row, OUT] with dequant
+    inside the tile loop. Rows must be count-sorted by expert (they are:
+    __call__ sorts, _prefill's contract)."""
+    E, OUT, _ = codes.shape
+    K = codebook.shape[0]
+    counts = np.bincount(idx_sorted_np, minlength=E)
+    touched = np.nonzero(counts)[0]
+    starts = np.zeros(E + 1, np.int64)
+    starts[1:] = np.cumsum(counts)
+    metas = []
+    for e in touched:
+        c0 = int(starts[e])
+        for r in range(0, int(counts[e]), 32):
+            metas.append((int(e), c0 + r, min(32, int(counts[e]) - r)))
+    tmeta = mx.array(np.array(metas, np.int32).reshape(-1))
+    ntiles = len(metas)
+    cbk = codebook.astype(mx.float16) if codebook.dtype != mx.float16 \
+        else codebook
+    dims = _dims_array(OUT, IN, IN // 64, K, ntiles)
+    name = f"vq_gemmseg_packed{pack_bits}_d2"
+    template = [("BITS", pack_bits), ("GROUP", 64), ("OTILE", 32),
+                ("RTILE", 32), ("MAX_K", K)]
+    N = int(idx_sorted_np.shape[0])
+    grid = (32 * ((OUT + 31) // 32), 4 * ntiles, 1)
+    tg = (32, 4, 1)
+    common = dict(
+        inputs=[codes, cbk, scales, xsrc, mx.array(src_rows), tmeta, dims],
+        grid=grid, threadgroup=tg,
+        output_shapes=[(N, OUT)], output_dtypes=[mx.float16],
+    )
+    kern = _get_kernel_spec(name, _SRC_GEMMSEG, template) \
+        if _SPEC_KERNELS else None
+    if kern is not None:
+        (y,) = kern(**common)
+    else:
+        (y,) = _get_kernel(name, _SRC_GEMMSEG)(template=template, **common)
+    return y
+
+
 def _decode_chunk(codes, codebook, scales, eidx_chunk, pack_bits=0,
                   in_features=None):
     NE = eidx_chunk.shape[0]
@@ -3028,6 +3211,16 @@ def _prefill(xf, idx_sorted_np, codes, codebook, scales, pack_bits=0,
     global _DECODE_CHUNK
     if _DECODE_CHUNK is None:
         _DECODE_CHUNK = _default_decode_chunk()
+    # Fused segmented VQ-GEMM (opt-in, see _SRC_GEMMSEG block): dequant
+    # inside the tile loop, no w materialization, no chunk loop. Needs
+    # the fused-gather form (xsrc+src_rows); falls through untouched
+    # otherwise. Output is already in this function's input row order.
+    if xsrc is not None and gemmseg_fits(
+            int(codebook.shape[1]), int(codebook.shape[0]),
+            in_features // (scales.shape[2]) if in_features else 64,
+            pack_bits, in_features or 0):
+        return _gemmseg_prefill(xsrc, src_rows, idx_sorted_np, codes,
+                                codebook, scales, pack_bits, in_features)
     E, OUT, _ = codes.shape
     counts = np.bincount(idx_sorted_np, minlength=E)
     touched = np.nonzero(counts)[0]
