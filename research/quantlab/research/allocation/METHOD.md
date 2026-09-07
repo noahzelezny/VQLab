@@ -554,19 +554,42 @@ one projection at a time (each 0.0623 GiB, vs +0.0342 for all three):
 - Decomposition is **92% additive** (singles sum +0.0315 vs +0.0342
   measured together), so composing by projection should behave.
 
-Ordering down > up > gate ~ 0 has a plausible mechanism — down_proj
-writes straight into the residual stream, while gate_proj feeds a SiLU
-gate whose saturation can absorb error — but that is SPECULATION; only
-the numbers above are measured. Generality across layers is IN FLIGHT
-(L45/L29/L47).
+### GENERALITY TESTED (same day): L43 was an OUTLIER. Lever mostly CLOSED.
 
-**If it generalizes, the currency changes.** Promoting {down, up} only
-buys ~94% of a layer's gain for 67% of the bytes; down alone buys 66%
-for 33%. The same 1.125 GiB that funded six whole-layer promotions
-would fund eighteen down_proj promotions instead.
+Three more hot layers decomposed the same way. Every column is a
+promotion, so these carry NO fit noise (a splice of shipped 2.4 donor
+tensors is deterministic); the only error term is corpus window.
 
-Caveat carried from §11.2: per-projection effects are a third the size
-of per-layer ones, so most sit AT the ±0.004 noise floor, and splitting
-57 layers into 171 modules triples the winner's-curse surface. Decompose
-only where the layer-level signal clearly exceeds noise, and keep the
-shuffled-control discipline.
+| layer | gate | up | down | sum | whole | additivity | winner |
+|---|---|---|---|---|---|---|---|
+| L43 | -0.0006 | +0.0094 | **+0.0227** | +0.0315 | +0.0342 | 92% | down |
+| L45 | **+0.0081** | +0.0032 | -0.0038 | +0.0075 | +0.0219 | **34%** | gate |
+| L29 | -0.0008 | +0.0024 | **+0.0088** | +0.0104 | +0.0175 | 59% | down |
+| L47 | +0.0043 | **+0.0085** | +0.0058 | +0.0186 | +0.0183 | 102% | up |
+
+- **No projection is universally dead or universally best.** gate_proj
+  looked worthless on L43 and is the WINNER on L45. down_proj is the star
+  on L43 (+0.0227) and NEGATIVE on L45 (-0.0038). All three win somewhere.
+- **The 2x byte-efficiency does NOT survive.** Averaged over four layers,
+  down_proj buys 0.134 prose/GiB against 0.123 for promoting the whole
+  layer -- **+10%, not +100%.** The L43 result was one layer.
+- **Additivity is unreliable: 34% to 102%.** On L45 the three projections
+  sum to a third of what they deliver together, i.e. most of that layer's
+  gain is EMERGENT from promoting them jointly and splitting destroys it.
+  This is the real blocker: per-module tables cannot be composed by
+  addition the way per-layer tables can.
+- Best-per-layer picking would give 0.193 prose/GiB (+57% over whole
+  layer), but that is the max of three draws per layer and therefore
+  winner's-curse inflated, and it needs the full 171-module sweep (~8.5 h,
+  no fitting) to know the winners at all.
+
+**Verdict: do not adopt a per-projection rule.** "Promote down_proj only"
+is refuted. A measured per-layer-per-projection sweep might still buy
+something real, but it triples the selection surface against effects a
+third the size, on a family where composition is already sub-additive.
+Whole-layer promotion stays the default. Ordering down > up > gate holds
+only ON AVERAGE (0.134 / 0.094 / 0.044 prose/GiB) and not per layer.
+
+The mechanism story -- down_proj writes into the residual stream while
+gate_proj feeds a SiLU whose saturation absorbs error -- is SPECULATION
+and is not supported per-layer by the table above.
