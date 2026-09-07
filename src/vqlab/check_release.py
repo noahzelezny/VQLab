@@ -77,9 +77,18 @@ if cfg.get("model_file") and not (A / cfg["model_file"]).exists():
 # not a clean error. Fifth exhibit, 2026-09-04: all four Flash-Next rungs
 # shipped without preprocessor_config.json; the fitting pipeline never
 # touches images so nothing ever staged it.
-if "vision_config" in cfg and not (A / "preprocessor_config.json").exists():
-    fails.append("config carries vision_config but preprocessor_config.json "
-                 "is absent (vision runtimes fail every request without it)")
+# 2026-09-07: the file NAME is family-dependent. Qwen-VL ships
+# preprocessor_config.json; gemma-4 ships processor_config.json and no
+# preprocessor at all — its own mlx-community bf16 base has only the
+# latter, so demanding the former failed a correct artifact. Require
+# that SOME processor config is present, and (below) that the artifact
+# is not missing one its own base ships.
+_PROC_FILES = ("preprocessor_config.json", "processor_config.json")
+if "vision_config" in cfg and not any((A / f).exists() for f in _PROC_FILES):
+    fails.append(f"config carries vision_config but none of {list(_PROC_FILES)} "
+                 "is present (vision runtimes instantiate a processor from the "
+                 "artifact dir and fail every request, text included, without "
+                 "one)")
 
 # index integrity: every mapped shard exists
 if (A / "model.safetensors.index.json").exists():
