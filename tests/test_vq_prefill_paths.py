@@ -249,7 +249,8 @@ def test_gemmseg_bigK_gated_off_by_default():
     assert VS.gemmseg_fits(2, 512, 64, 9, 128) is True
 
 
-@pytest.mark.parametrize("D,K,IN", [(4, 8192, 256), (2, 8192, 128)])
+@pytest.mark.parametrize("D,K,IN", [(4, 8192, 256), (2, 8192, 128),
+                                    (8, 16384, 512), (8, 4096, 512)])
 def test_gemmseg_cbdev_numeric(D, K, IN):
     """Device-codebook arm (armed explicitly): same numeric gate. K here
     is over the threadgroup cap, so this also proves the kernel LOADS —
@@ -269,17 +270,17 @@ def test_gemmseg_cbdev_numeric(D, K, IN):
     T = idx.shape[0]
     x = mx.array((r.standard_normal((T, 1, 1, IN)) * 0.2).astype(np.float16))
     old_s = (VS.VQ_FUSED_MAX_N, VS._FUSED_GEMM, VS._FUSED_GEMM_V2,
-             VS._FUSED_GEMM_BIGK)
+             VS._FUSED_GEMM_BIGK, VS._FUSED_GEMM_D8)
     VS.VQ_FUSED_MAX_N = 1
     try:
         VS._FUSED_GEMM, VS._FUSED_GEMM_BIGK = False, False
         y_ref = mod(x, mx.array(idx)); mx.eval(y_ref)
         VS._FUSED_GEMM, VS._FUSED_GEMM_V2 = True, True
-        VS._FUSED_GEMM_BIGK = True
+        VS._FUSED_GEMM_BIGK, VS._FUSED_GEMM_D8 = True, True
         y_fg = mod(x, mx.array(idx)); mx.eval(y_fg)
     finally:
         (VS.VQ_FUSED_MAX_N, VS._FUSED_GEMM, VS._FUSED_GEMM_V2,
-         VS._FUSED_GEMM_BIGK) = old_s
+         VS._FUSED_GEMM_BIGK, VS._FUSED_GEMM_D8) = old_s
     a = y_ref.astype(mx.float32); b = y_fg.astype(mx.float32)
     rel = float(mx.max(mx.abs(a - b))) / max(1e-6, float(mx.max(mx.abs(a))))
     assert rel < 1e-3, f"cbdev d{D} K{K} diverged: rel {rel}"
