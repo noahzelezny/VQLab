@@ -36,10 +36,15 @@ BEFORE pushing (it becomes the pin for the outgoing weights).
 
 ## 2. Measured results table (replaces the v2/v1 columns block)
 
-| | **this model, v3** (100.9 GiB) | v2 (101.0 GiB) | v1 (100.9 GiB) | `VQ-2.4bpw` (111.6 GiB) |
-|---|---|---|---|---|
-| wikitext perplexity (raw, prefix-8192) | **2.9200** | 3.0591 | 3.1706 | 2.7655 |
-| code perplexity (mixed-language) | **2.6619** | 2.6728 | 2.6988 | 2.6383 |
+| | **this model, v3** (100.9 GiB) | v2 (101.0 GiB) | `VQ-2.4bpw` (111.6 GiB) |
+|---|---|---|---|
+| wikitext perplexity (raw, prefix-8192) | **2.9200** | 3.0591 | 2.7655 |
+| code perplexity (mixed-language) | **2.6619** | 2.6728 | 2.6383 |
+
+*(v1's numbers are dropped from this table — it is two rebuilds back and
+reachable only by pinning a hash. Its figures remain in the repo's commit
+history. The comparison that matters is what you have now versus what this
+revision gives you.)*
 
 v3 is better than v2 on **both** corpora — prose by 0.139, code by 0.011 —
 at 0.1 GiB less. It also holds up on a **held-out literary corpus that was
