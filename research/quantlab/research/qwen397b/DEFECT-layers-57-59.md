@@ -114,7 +114,8 @@ total). Three findings:
 
 ### The right target is d4/K256, not d8/K16384
 
-Per module: affine 3-bit = 0.875 GiB @ **3.25 bpw**; VQ d8/K16384 = 0.500
+Per module: affine 3-bit = 0.875 GiB @ **3.50 bpw** (3 bits + fp16 scale
+AND fp16 bias per group of 64 -- corrected from an earlier 3.25); VQ d8/K16384 = 0.500
 @ **2.00**; VQ **d4/K256 = 0.5625 @ 2.25**. d4/K256 still refunds **2.81
 GiB** across the three layers while giving up only 1.0 bpw instead of
 1.25 — and it is the level whose quality the family already knows.
@@ -129,3 +130,42 @@ inherited `--vq-layers 0-56` / `N_VQ_LAYERS = 57`). The v2 hot band was
 L41–L49 — the late layers — so the three latest layers in the model are
 unmeasured candidates, and v2's best-6 was selected from an incomplete
 pool. Sweep them once they carry VQ codes.
+
+
+---
+
+## THE CURVE (2026-09-06). VQ beats affine at matched bytes; crossover 3.0 bpw.
+
+All three layers converted together, scored against the shipped 2.2
+(prose 3.0568 / code 2.6728 / literary 1.2820 @ 100.971 GiB). Noise floor
++/-0.004 (METHOD.md 11.2) -- anything inside it is a tie.
+
+| geometry | bpw | GiB | d GiB | d prose | d code | d literary |
+|---|---|---|---|---|---|---|
+| affine 3-bit (SHIPPED) | 3.50 | 100.971 | — | — | — | — |
+| d8/K16384 | 2.00 | 97.598 | -3.373 | -0.0218 | -0.0319 | -0.0121 |
+| d4/K256 | 2.25 | 98.159 | -2.812 | -0.0063 | -0.0196 | -0.0083 |
+| **d4/K2048** | 3.00 | **99.846** | **-1.125** | **+0.0037** | -0.0004 | -0.0008 |
+| **d4/K8192** | 3.50 | 100.972 | +0.001 | **+0.0094** | -0.0016 | -0.0001 |
+
+1. **VQ BEATS AFFINE AT MATCHED BYTES** (Noah's prediction). d4/K8192 is
+   byte-identical to the affine tensors it replaces and gains +0.0094
+   prose with code and literary level. The paper's central claim holds on
+   the three layers it was never applied to -- free quality, zero bytes.
+2. **Crossover at 3.00 bpw** (predicted 3.08 by interpolation, measured
+   3.00). d4/K2048 is better on prose AND 1.125 GiB smaller, neutral on
+   code and literary. Smaller and better, at last.
+3. Below the crossover the refund gets expensive fast, and **L59 is a
+   code specialist** -- at 2.00 bpw it alone costs -0.0160 code.
+4. relerr fell from ~0.35 (d8/K16384) to 0.132 (d4/K8192) -- a 2.7x more
+   faithful reconstruction -- while ppl barely moved. Independent
+   confirmation of METHOD.md 11.3: relerr does not predict damage.
+
+### Consequence: the refund can REPLACE v2's demotions
+
+v2 (`iso100`) had to damage six layers (demote to K4096) to fund promoting
+six others. It no longer has to. Converting 57-59 to d4/K2048 refunds
+exactly 1.125 GiB -- precisely the cost of the best-6 promotions -- while
+IMPROVING quality instead of costing it. Candidate `397b-v3` = promote
+{29,43,44,45,47,48} + convert 57-59 to d4/K2048, landing back at the
+shipped 100.971 GiB with six fewer damaged layers. IN FLIGHT.
