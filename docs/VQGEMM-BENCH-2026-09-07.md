@@ -76,3 +76,36 @@ Score gate, 35B-3.4, prefill path FORCED: legacy 5.6820 vs fused 5.6840
 Still uncovered: d4/d8 big-K (8192/16384 — needs the device-codebook
 arm; GLM-3.6, 397B-2.2, 35B-3.8) and unpacked d2 K256 (BITS=0 arm).
 Both designed in logs/reviews/vqgemm-design-r5-d4d8.checkpoint.json.
+
+
+## Big-K device-codebook arm (CB_DEV) — the largest win
+
+d4 K8192 (64 KB codebook), d4 K16384 (128 KB) and d8 K16384 (256 KB)
+are 2-8x over the 32 KB threadgroup cap, so the codebook stays in
+DEVICE memory and the staging loop is dropped (`CB_DEV` bake). Viable
+only because phase 1 decodes each [32 x G] tile ONCE and phase 3
+reuses it across 32 token rows, with 128 threads issuing independent
+lookups — no E141 dependent-load chain.
+
+The r6 swarm (DeepSeek V4-Flash) HYPOTHESISED the amortization holds
+but did not compute it; measurement settled it:
+
+| artifact | geometry | legacy | CB_DEV | gain |
+|---|---|---|---|---|
+| 35B-3.8bpw | d4 K8192, **no fast path before** | 8.9 / 8.9 s | 4.7 / 4.7 s | **1.89x** |
+
+1914 tok/s vs the affine-8bit floor of 2246 — **85% of affine**, from
+44% this morning. Score gate (forced prefill): 5.5041 -> 5.4966, inside
+the reordering band. PROMOTED (VQ_MOE_FUSED_GEMM_BIGK=0 pins it off).
+
+Counter-intuitive and worth remembering: the geometry that looked
+WORST for fusion (biggest codebook, no threadgroup residency possible)
+produced the BIGGEST win. The reason is that its legacy path is the
+most expensive one — a K8192/d4 codebook makes decode-to-fp16 costly
+per expert — while the fused path's cost is set by the tile reuse, not
+by K. Codebook size hurts the old path and is nearly free in the new
+one.
+
+Open question worth measuring: at K where BOTH arms are legal (d4
+K2048), is CB_DEV faster anyway? It frees 16 KB of threadgroup and
+doubles occupancy. Needs a force-flag to test.
