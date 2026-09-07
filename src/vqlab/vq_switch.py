@@ -3164,6 +3164,8 @@ _SRC_GEMMSEG2 = _PACK_FETCH + r"""
   #if D_BAKE == 2
     const device half2* cb = (const device half2*)codebook;
   #else
+    // d4: one half4 per code. d8: TWO (Metal has no half8) — the same
+    // cb4[2*c], cb4[2*c+1] pairing _SRC_FUSED_D8 ships.
     const device half4* cb = (const device half4*)codebook;
   #endif
 #else
@@ -3219,12 +3221,23 @@ _SRC_GEMMSEG2 = _PACK_FETCH + r"""
                 const half2 v = cb[c];
                 wtT[q * 2][wr]     = (half)(s * (float)v.x);
                 wtT[q * 2 + 1][wr] = (half)(s * (float)v.y);
-#else
+#elif D_BAKE == 4
                 const half4 v = cb[c];
                 wtT[q * 4][wr]     = (half)(s * (float)v.x);
                 wtT[q * 4 + 1][wr] = (half)(s * (float)v.y);
                 wtT[q * 4 + 2][wr] = (half)(s * (float)v.z);
                 wtT[q * 4 + 3][wr] = (half)(s * (float)v.w);
+#else
+                const half4 v0 = cb[2 * c];
+                const half4 v1 = cb[2 * c + 1];
+                wtT[q * 8][wr]     = (half)(s * (float)v0.x);
+                wtT[q * 8 + 1][wr] = (half)(s * (float)v0.y);
+                wtT[q * 8 + 2][wr] = (half)(s * (float)v0.z);
+                wtT[q * 8 + 3][wr] = (half)(s * (float)v0.w);
+                wtT[q * 8 + 4][wr] = (half)(s * (float)v1.x);
+                wtT[q * 8 + 5][wr] = (half)(s * (float)v1.y);
+                wtT[q * 8 + 6][wr] = (half)(s * (float)v1.z);
+                wtT[q * 8 + 7][wr] = (half)(s * (float)v1.w);
 #endif
             }
         } else {
@@ -3297,6 +3310,7 @@ _FUSED_GEMM_V2 = os.environ.get("VQ_MOE_FUSED_GEMM", "2") == "2"
 # (forced-prefill), inside the reordering band.
 # VQ_MOE_FUSED_GEMM_BIGK=0 pins it back off.
 _FUSED_GEMM_BIGK = os.environ.get("VQ_MOE_FUSED_GEMM_BIGK", "1") != "0"
+_FUSED_GEMM_D8 = os.environ.get("VQ_MOE_FUSED_GEMM_D8", "0") != "0"
 
 
 def gemmseg_fits(D, K, G, pack_bits, IN):
@@ -3305,7 +3319,15 @@ def gemmseg_fits(D, K, G, pack_bits, IN):
     # pack_bits == 0 is the UNPACKED arm (plain uint8/uint16 codes, K<=64k):
     # legal, and it is how every Flash-Next rung stores its d2 shared
     # modules. Anything above 16 bits is not a format we emit.
-    if not (_FUSED_GEMM and D in (2, 4) and 0 <= pack_bits <= 16
+    # d8 is CB_DEV-only by construction (K*16 B never fits threadgroup).
+    # It is NUMERICALLY gated (incl. K16384, the 397B-2.2 geometry) but
+    # UNBENCHED: the only local d8 artifact (Flash-2.1) needs qwen4_exp,
+    # which plain mlx_lm cannot load, and the 397B is cluster-sized. v1
+    # of this kernel was correct and 0.74x, so an unmeasured arm does not
+    # ship armed. VQ_MOE_FUSED_GEMM_D8=1 arms it for the bench.
+    if D == 8 and not _FUSED_GEMM_D8:
+        return False
+    if not (_FUSED_GEMM and D in (2, 4, 8) and 0 <= pack_bits <= 16
             and G == 64 and (IN // D) % 32 == 0 and IN % G == 0
             and (G // D) % 4 == 0):   # SPG/4 codes per thread must divide
         return False
