@@ -3180,8 +3180,13 @@ _SRC_GEMMSEG2 = _PACK_FETCH + r"""
     }
 """
 
-_FUSED_GEMM = os.environ.get("VQ_MOE_FUSED_GEMM", "0") != "0"
-_FUSED_GEMM_V2 = os.environ.get("VQ_MOE_FUSED_GEMM", "0") == "2"
+# PROMOTED 2026-09-07 (Noah): default ON at v2 after 1.43x (35B-4.6,
+# K512) and 1.35x (gemma-26b, K2048) measured on real 9k prefills, both
+# score-gated within the reordering-noise band. VQ_MOE_FUSED_GEMM=0
+# restores the legacy decode+padded-GEMM path; =1 selects the v1 scalar
+# kernel (kept for A/B; measured 0.74x — do not use for speed).
+_FUSED_GEMM = os.environ.get("VQ_MOE_FUSED_GEMM", "2") != "0"
+_FUSED_GEMM_V2 = os.environ.get("VQ_MOE_FUSED_GEMM", "2") == "2"
 
 
 def gemmseg_fits(D, K, G, pack_bits, IN):

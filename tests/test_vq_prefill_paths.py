@@ -188,7 +188,8 @@ def test_gemmseg_numeric_gate():
     T = idx.shape[0]
     r = np.random.default_rng(3)
     x = mx.array((r.standard_normal((T, 1, 1, 128)) * 0.2).astype(np.float16))
-    old = (VS.VQ_FUSED_MAX_N, VS._FUSED_GEMM, VS._FUSE_GATHER)
+    old = (VS.VQ_FUSED_MAX_N, VS._FUSED_GEMM, VS._FUSE_GATHER,
+           VS._FUSED_GEMM_V2)
     VS.VQ_FUSED_MAX_N = 1
     try:
         VS._FUSED_GEMM, VS._FUSE_GATHER = False, True
@@ -202,11 +203,13 @@ def test_gemmseg_numeric_gate():
                 max(1e-6, float(mx.max(mx.abs(a))))
             assert rel < 1e-3, f"fused VQ-GEMM v2={v2} diverged: rel {rel}"
     finally:
-        VS.VQ_FUSED_MAX_N, VS._FUSED_GEMM, VS._FUSE_GATHER = old
-        VS._FUSED_GEMM_V2 = False
+        (VS.VQ_FUSED_MAX_N, VS._FUSED_GEMM, VS._FUSE_GATHER,
+         VS._FUSED_GEMM_V2) = old
 
 
-def test_gemmseg_default_off():
+def test_gemmseg_default_promoted_v2():
+    # Promoted 2026-09-07: default is v2 unless the env opts out.
     import os as _os
-    assert VS._FUSED_GEMM is False or \
-        _os.environ.get("VQ_MOE_FUSED_GEMM") == "1"
+    env = _os.environ.get("VQ_MOE_FUSED_GEMM")
+    if env is None:
+        assert VS._FUSED_GEMM and VS._FUSED_GEMM_V2
