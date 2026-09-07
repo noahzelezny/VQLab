@@ -30,6 +30,7 @@ COMMANDS = {
     "build-dense": ("build_dense_vq.py", "splice dense VQ fits into a quantized base -> runnable artifact"),
     "graft": ("graft_vision.py", "graft the bf16 vision tower into an artifact"),
     "bundle": ("add_model_file.py", "(re)write the self-contained model.py bundle (MoE)"),
+    "rebundle-dense": ("rebundle_dense.py", "re-splice a DENSE artifact's model.py from the current runtime, in place"),
     # gates
     "check": ("check_all.py", "run the release gates that need no source model"),
     "smoke": ("smoke.py", "generate one token through the runtime the artifact ships"),
