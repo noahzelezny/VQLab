@@ -240,9 +240,11 @@ def test_gemmseg_bigK_gated_off_by_default():
     """Big-K needs the device-codebook arm; it is DEFAULT OFF (speed
     unproven), so the gate must refuse until armed — and must never let
     an over-budget threadgroup layout reach kernel LOAD (E134)."""
-    assert VS._FUSED_GEMM_BIGK is False or \
-        __import__("os").environ.get("VQ_MOE_FUSED_GEMM_BIGK") == "1"
-    assert VS.gemmseg_fits(4, 8192, 64, 13, 4096) is False   # not armed
+    # promoted 2026-09-07 (1.89x measured): armed unless pinned off
+    import os as _os
+    if _os.environ.get("VQ_MOE_FUSED_GEMM_BIGK") != "0":
+        assert VS._FUSED_GEMM_BIGK is True
+        assert VS.gemmseg_fits(4, 8192, 64, 13, 4096) is True
     assert VS.gemmseg_fits(4, 2048, 64, 11, 256) is True     # threadgroup
     assert VS.gemmseg_fits(2, 512, 64, 9, 128) is True
 

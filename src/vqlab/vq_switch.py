@@ -3289,11 +3289,14 @@ _SRC_GEMMSEG2 = _PACK_FETCH + r"""
 # kernel (kept for A/B; measured 0.74x — do not use for speed).
 _FUSED_GEMM = os.environ.get("VQ_MOE_FUSED_GEMM", "2") != "0"
 _FUSED_GEMM_V2 = os.environ.get("VQ_MOE_FUSED_GEMM", "2") == "2"
-# Big-K device-codebook arm (d4 K>2560, d8 K>1280). Correct by the same
-# gates as the threadgroup arm, but its SPEED is a separate question —
-# the codebook gather goes to device memory. Default OFF until the
-# resident-block bench says otherwise; VQ_MOE_FUSED_GEMM_BIGK=1 arms it.
-_FUSED_GEMM_BIGK = os.environ.get("VQ_MOE_FUSED_GEMM_BIGK", "0") != "0"
+# Big-K device-codebook arm (d4 K>2560, d8 K>1280). PROMOTED 2026-09-07
+# after measurement: 35B-3.8bpw (d4 K8192, which had NO fast path at
+# all) went 8.9s -> 4.7s on a real 9k prefill, 1.89x — the largest gain
+# of any arm, on the geometry that looked worst. The 32x tile reuse does
+# amortize the device gather, as hypothesised; ppl 5.5041 -> 5.4966
+# (forced-prefill), inside the reordering band.
+# VQ_MOE_FUSED_GEMM_BIGK=0 pins it back off.
+_FUSED_GEMM_BIGK = os.environ.get("VQ_MOE_FUSED_GEMM_BIGK", "1") != "0"
 
 
 def gemmseg_fits(D, K, G, pack_bits, IN):
