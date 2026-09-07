@@ -259,3 +259,39 @@ selected component.
 Also settled: 57-59 are NOT hot promotion candidates. Within the VQ
 ladder, K2048 -> K8192 buys +0.0057 prose for 1.125 GiB = 0.005 per GiB,
 against 0.18 per GiB for the best promotion. Leave them at K2048.
+
+---
+
+## v4 (knapsack shape) — MEASURED, and it FAILS the ship gate (2026-09-07)
+
+v4 = the exact knapsack optimum over all 96 measured (layer, subset)
+options at v3's identical budget: 11 layers, mixed subsets
+(`43:up,down 49:up,down 45:all 47:up,down 29:up,down 42:gate,up 44:down
+37:gate 38:up 41:down 48:gate`), funded by the same 57-59 conversion.
+
+| vs shipped 2.2 | prose | code | literary (6 windows) |
+|---|---|---|---|
+| **v3** | **+0.0925** | **+0.0001** | +0.0769 mean, **6/6 wins** |
+| v4 | **+0.1301** | **−0.0050** | +0.0775 mean, 6/6 wins |
+
+**The allocation method worked; the objective did not.** Composition held
+at 79% of the knapsack's raw 0.1646 (predicted ~0.125, measured +0.1301),
+so the machinery is sound and +33% more prose value for identical bytes
+was real. But v4 lands 0.0050 BELOW the shipped base on code, and the
+standing bar is better-or-equal on BOTH corpora. **v3 remains the
+shippable artifact; v4 does not ship.**
+
+Root cause is mine: the shape sweep scored prose + literary only, so the
+win-on-both filter never saw CODE. Eleven subsets were selected against
+an objective that ignored the corpus they damaged. Head-to-head, v4 buys
++0.0376 prose over v3, ties literary (mean +0.0006, sd 0.0091, 3/6
+windows), and pays −0.0051 code.
+
+**Fix if pursued:** score the 96 subsets on the code corpus (~2 h, no
+fitting) and re-solve with a three-corpus filter. There is real headroom
+— v4 proves +0.0376 prose is reachable at these bytes — but it must be
+bought without the code regression.
+
+**Standing rule added:** a candidate's selection objective must include
+EVERY corpus in its ship gate. Filtering on a subset of the gate selects
+for damage on whatever was left out.

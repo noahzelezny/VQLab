@@ -1,0 +1,6 @@
+candidate	module	bits	gib	prose	lit_w2
+nulltest_lmhead6	language_model.lm_head	6	101.0304	3.0565	1.9397
+lmhead4	language_model.lm_head	4	100.7936	3.0729	1.9495
+lmhead8	language_model.lm_head	8	101.2672	3.0564	1.9392
+embed4	language_model.model.embed_tokens	4	100.7936	3.0571	1.9393
+embed8	language_model.model.embed_tokens	8	101.2672	3.058	1.9412
