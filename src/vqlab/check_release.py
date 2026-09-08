@@ -86,12 +86,27 @@ if cfg.get("model_file") and not (A / cfg["model_file"]).exists():
 # latter, so demanding the former failed a correct artifact. Require
 # that SOME processor config is present, and (below) that the artifact
 # is not missing one its own base ships.
+# 2026-09-07 (second correction): this was a blanket FAIL, and it appended
+# to `fails`, which SUPPRESSES the smoke below (`and not fails`) -- so the
+# gate asserted "fails every request, text included" while preventing the
+# one test that could check that claim. It false-failed GLM-5.3-Flash
+# 2.7/3.6, which carry vision_config, ship no processor config in ANY
+# build (including zai-org's own upstream 3/4/6-bit), and serve coherent
+# text on the 2-node ring -- measured twice. The base-comparison the
+# comment above promises was never actually written.
+# Defer the verdict instead: let the smoke run, then judge on evidence.
+#   smoke PASSES -> the "text included" claim is disproven for this
+#                   artifact; the real limitation is that IMAGE requests
+#                   cannot work. Report it loudly, do not fail the gate.
+#   smoke FAILS / skipped -> nothing disproves it; keep the hard FAIL
+#                   (this is the gemma-4 and Flash-Next case, where the
+#                   missing processor presented as a warmup hang).
 _PROC_FILES = ("preprocessor_config.json", "processor_config.json")
-if "vision_config" in cfg and not any((A / f).exists() for f in _PROC_FILES):
-    fails.append(f"config carries vision_config but none of {list(_PROC_FILES)} "
-                 "is present (vision runtimes instantiate a processor from the "
-                 "artifact dir and fail every request, text included, without "
-                 "one)")
+_proc_gap = ("vision_config" in cfg
+             and not any((A / f).exists() for f in _PROC_FILES))
+_PROC_MSG = (f"config carries vision_config but none of {list(_PROC_FILES)} "
+             "is present; a runtime that instantiates an image processor "
+             "from the artifact dir cannot serve IMAGE requests")
 
 # index integrity: every mapped shard exists
 if (A / "model.safetensors.index.json").exists():
@@ -384,6 +399,17 @@ elif not args.no_smoke and not fails:
                          "This is the failure the 35B ladder shipped with.")
 elif args.no_smoke:
     print("NOTE: --no-smoke; static checks only, generation NOT verified.")
+
+# Resolve the deferred processor-config finding now that the smoke has (or
+# has not) demonstrated that this artifact can actually serve.
+if _proc_gap:
+    if args.no_smoke or fails:
+        fails.append(_PROC_MSG + " -- and no smoke proved this artifact can "
+                     "serve at all, so the text-path risk stands unrefuted")
+    else:
+        print(f"WARNING: {_PROC_MSG}. Text generation was VERIFIED by the "
+              "smoke above, so this does not block release; vision requests "
+              "on this artifact are expected to fail.")
 
 if fails:
     print("FAIL:")
