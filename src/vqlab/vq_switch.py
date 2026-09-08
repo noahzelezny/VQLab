@@ -3175,9 +3175,14 @@ _SRC_GEMMSEG2 = _PACK_FETCH + r"""
     threadgroup half4 cb[MAX_K];        // K*8 B
   #endif
 #endif
-    threadgroup half  wtT[GROUP][32];   // transposed, pre-scaled (4 KB)
-    threadgroup half  xt[32][GROUP];    // 4 KB
-    threadgroup float ybuf[32][32];     // 4 KB
+    // RTILE = token rows per threadgroup. 32 is the shipped tiling; 64
+    // pairs two token tiles so phase 1 (the weight decode) runs ONCE per
+    // 64 rows instead of twice. wtT is unchanged (it is OUT x G, not
+    // token-shaped); xt and ybuf double. CB_DEV only: with a threadgroup
+    // codebook at d4-K2048 the sum would be 16384 + 20480 = 36864 > cap.
+    threadgroup half  wtT[GROUP][32];    // transposed, pre-scaled (4 KB)
+    threadgroup half  xt[RTILE][GROUP];  // 4 KB @32, 8 KB @64
+    threadgroup float ybuf[RTILE][32];   // 4 KB @32, 8 KB @64
 
 #if !CB_DEV
     for (uint i = tid; i < (uint)K; i += 128u)
@@ -3208,6 +3213,12 @@ _SRC_GEMMSEG2 = _PACK_FETCH + r"""
     simdgroup_float8x8 C1 = simdgroup_float8x8(0);
     simdgroup_float8x8 C2 = simdgroup_float8x8(0);
     simdgroup_float8x8 C3 = simdgroup_float8x8(0);
+#if RTILE == 64
+    simdgroup_float8x8 C4 = simdgroup_float8x8(0);
+    simdgroup_float8x8 C5 = simdgroup_float8x8(0);
+    simdgroup_float8x8 C6 = simdgroup_float8x8(0);
+    simdgroup_float8x8 C7 = simdgroup_float8x8(0);
+#endif
 
     threadgroup_barrier(mem_flags::mem_threadgroup);
 
@@ -3255,6 +3266,18 @@ _SRC_GEMMSEG2 = _PACK_FETCH + r"""
                     xt[xr][q * D_BAKE + u] =
                         (xr < nrow) ? xrow[q * D_BAKE + u] : (half)0;
             }
+#if RTILE == 64
+            // paired half: same thread stages row xr+32
+            const int xr2 = xr + 32;
+            const device half* xrow2 = 0;
+            if (xr2 < nrow)
+                xrow2 = xsrc + (size_t)srcrows[r0 + xr2] * IN + (size_t)g * G;
+            for (int q = q0; q < q0 + SPG / 4; ++q) {
+                for (int u = 0; u < D_BAKE; ++u)
+                    xt[xr2][q * D_BAKE + u] =
+                        (xr2 < nrow) ? xrow2[q * D_BAKE + u] : (half)0;
+            }
+#endif
         }
         threadgroup_barrier(mem_flags::mem_threadgroup);
         // phase 3: C[tokens 32 x outs 32] += X[32 x G] @ WtT[G x 32]
@@ -3271,6 +3294,16 @@ _SRC_GEMMSEG2 = _PACK_FETCH + r"""
             simdgroup_multiply_accumulate(C2, A, B, C2);
             simdgroup_load(A, &xt[24][k8 * 8], GROUP);
             simdgroup_multiply_accumulate(C3, A, B, C3);
+#if RTILE == 64
+            simdgroup_load(A, &xt[32][k8 * 8], GROUP);
+            simdgroup_multiply_accumulate(C4, A, B, C4);
+            simdgroup_load(A, &xt[40][k8 * 8], GROUP);
+            simdgroup_multiply_accumulate(C5, A, B, C5);
+            simdgroup_load(A, &xt[48][k8 * 8], GROUP);
+            simdgroup_multiply_accumulate(C6, A, B, C6);
+            simdgroup_load(A, &xt[56][k8 * 8], GROUP);
+            simdgroup_multiply_accumulate(C7, A, B, C7);
+#endif
         }
         threadgroup_barrier(mem_flags::mem_threadgroup);
     }
@@ -3279,6 +3312,12 @@ _SRC_GEMMSEG2 = _PACK_FETCH + r"""
     simdgroup_store(C1, &ybuf[8][(int)sg * 8], 32);
     simdgroup_store(C2, &ybuf[16][(int)sg * 8], 32);
     simdgroup_store(C3, &ybuf[24][(int)sg * 8], 32);
+#if RTILE == 64
+    simdgroup_store(C4, &ybuf[32][(int)sg * 8], 32);
+    simdgroup_store(C5, &ybuf[40][(int)sg * 8], 32);
+    simdgroup_store(C6, &ybuf[48][(int)sg * 8], 32);
+    simdgroup_store(C7, &ybuf[56][(int)sg * 8], 32);
+#endif
     threadgroup_barrier(mem_flags::mem_threadgroup);
 
     // guarded copy: thread tid -> token row tt=tid/4, out span lane%4*8..
@@ -3292,6 +3331,16 @@ _SRC_GEMMSEG2 = _PACK_FETCH + r"""
                     y[(size_t)(r0 + tt) * OUT + oc] = (half)ybuf[tt][c];
             }
         }
+#if RTILE == 64
+        const int tt2 = tt + 32;
+        if (tt2 < nrow) {
+            for (int c = c0; c < c0 + 8; ++c) {
+                const int oc = o0 + c;
+                if (oc < OUT)
+                    y[(size_t)(r0 + tt2) * OUT + oc] = (half)ybuf[tt2][c];
+            }
+        }
+#endif
     }
 """
 
@@ -3326,6 +3375,17 @@ _FUSED_GEMM_BIGK = os.environ.get("VQ_MOE_FUSED_GEMM_BIGK", "1") != "0"
 # size hold, but treat the exact ratio as softer than the interleaved ones.
 # VQ_MOE_FUSED_GEMM_D8=0 pins it back off.
 _FUSED_GEMM_D8 = os.environ.get("VQ_MOE_FUSED_GEMM_D8", "1") != "0"
+# RTILE: token rows per threadgroup in gemmseg v2. 32 is shipped; 64 pairs
+# two token tiles so the phase-1 weight decode runs once per 64 rows instead
+# of twice — codes (WPR*4 B/row), scales (NGRP*2 B/row) and the CB_DEV
+# codebook loads all halve, while x bytes and MAC counts are invariant.
+# CB_DEV ONLY by budget: xt and ybuf double (12288 -> 20480 B), which still
+# fits the 32768 cap alone but not beside a 16 KB threadgroup codebook.
+# DEFAULT 32 (unmeasured). Set VQ_MOE_GEMMSEG_RTILE=64 to arm it. Ships off
+# for the same reason d8 did: an unbenched arm does not ship armed.
+_GEMMSEG_RTILE = int(os.environ.get("VQ_MOE_GEMMSEG_RTILE", "32"))
+if _GEMMSEG_RTILE not in (32, 64):
+    raise ValueError(f"VQ_MOE_GEMMSEG_RTILE must be 32 or 64, got {_GEMMSEG_RTILE}")
 
 
 def gemmseg_fits(D, K, G, pack_bits, IN):
@@ -3380,11 +3440,19 @@ def _gemmseg_prefill(xsrc, src_rows, idx_sorted_np, codes, codebook, scales,
     touched = np.nonzero(counts)[0]
     starts = np.zeros(E + 1, np.int64)
     starts[1:] = np.cumsum(counts)
+    # Tile granularity MUST equal the kernel's RTILE: tmeta rows are
+    # (expert, row_start, nrows) and the kernel guards on nrow, so a
+    # mismatch would silently drop rows past 32 of every 64-row tile.
+    # cb_dev is recomputed here (cheaply) because the tiling is decided
+    # before the kernel branch below.
+    _rt = 64 if (_GEMMSEG_RTILE == 64 and _FUSED_GEMM_V2
+                 and codebook.shape[0] * 2 * int(codebook.shape[1])
+                 + 3 * 4096 > _TG_CAP_BYTES) else 32
     metas = []
     for e in touched:
         c0 = int(starts[e])
-        for r in range(0, int(counts[e]), 32):
-            metas.append((int(e), c0 + r, min(32, int(counts[e]) - r)))
+        for r in range(0, int(counts[e]), _rt):
+            metas.append((int(e), c0 + r, min(_rt, int(counts[e]) - r)))
     tmeta = mx.array(np.array(metas, np.int32).reshape(-1))
     ntiles = len(metas)
     cbk = codebook.astype(mx.float16) if codebook.dtype != mx.float16 \
@@ -3398,9 +3466,14 @@ def _gemmseg_prefill(xsrc, src_rows, idx_sorted_np, codes, codebook, scales,
         cb_dev = K * 2 * D + 3 * 4096 > _TG_CAP_BYTES
         if cb_dev:
             name += "_cbdev"
+        # RTILE=64 needs the CB_DEV budget; silently fall back otherwise so
+        # arming the flag can never produce an E134 kernel-load failure.
+        rtile = 64 if (_GEMMSEG_RTILE == 64 and cb_dev) else 32
+        if rtile != 32:
+            name += f"_r{rtile}"
         template = [("BITS", pack_bits), ("GROUP", 64),
                     ("MAX_K", 1 if cb_dev else K), ("D_BAKE", D),
-                    ("CB_DEV", 1 if cb_dev else 0)]
+                    ("CB_DEV", 1 if cb_dev else 0), ("RTILE", rtile)]
         if not pack_bits:
             # unpacked arm reads codes as CT (uchar/ushort), not uint words
             template.append(("CT", codes.dtype))
