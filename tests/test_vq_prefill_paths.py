@@ -307,6 +307,59 @@ def test_gemmseg_cbdev_numeric(D, K, IN):
     assert rel < 1e-3, f"cbdev d{D} K{K} diverged: rel {rel}"
 
 
+def test_gemmseg_ragged_nsub_numeric():
+    """NSUB=80 ragged tail: the EXACT Flash-2.1 geometry (d8, K16384,
+    in=640, bits=14) that gemmseg_fits used to refuse.
+
+    Verified on the shipped artifact before relaxing the gate: codes are
+    stored [512, 2560, 42] = ceil(80/32)*14, i.e. the tail block IS
+    zero-padded on disk, and vq_scales is [..., 10] = NGRP = 640/64. The
+    kernel is safe on this because (a) WPR is already ceil, (b) the decode
+    loop covers exactly NGRP*SPG = (IN/G)*(G/D) = NSUB codes so pad codes
+    are never read, and (c) at BITS=14 a 32-code block is 32*14 = 448 bits
+    = 14 whole words, so the straddle read crow[VQ_W(j)+1] never crosses
+    out of the row. This test is what proves it rather than argues it.
+    """
+    from vqlab import vq_pack
+    D, K, IN, E = 8, 16384, 640, 8
+    NSUB = IN // D
+    assert NSUB % 32 != 0, "geometry must be ragged or this tests nothing"
+    r = np.random.default_rng(80)
+    bits = vq_pack.bits_for_k(K)
+    raw = r.integers(0, K, (E, 32, NSUB)).astype(np.uint32)
+    packed = vq_pack.pack(raw, bits)
+    # the padded-tail invariant, asserted against the packer itself
+    assert packed.shape[-1] == -(-NSUB // 32) * bits, (
+        f"packer emitted WPR={packed.shape[-1]}, expected ceil tail "
+        f"{-(-NSUB // 32) * bits}")
+    codes = mx.array(packed)
+    cbk = mx.array((r.standard_normal((K, D)) * 0.05).astype(np.float16))
+    sc = mx.array((r.standard_normal((E, 32, IN // 64)) * 0.1 + 1)
+                  .astype(np.float16))
+    mod = VS.VQSwitchLinear(codes, cbk, sc, group_size=64,
+                            pack_bits=bits, in_features=IN)
+    idx = _routing(E=E)
+    T = idx.shape[0]
+    x = mx.array((r.standard_normal((T, 1, 1, IN)) * 0.2).astype(np.float16))
+    old_s = (VS.VQ_FUSED_MAX_N, VS._FUSED_GEMM, VS._FUSED_GEMM_V2,
+             VS._FUSED_GEMM_BIGK, VS._FUSED_GEMM_D8)
+    VS.VQ_FUSED_MAX_N = 1
+    try:
+        VS._FUSED_GEMM, VS._FUSED_GEMM_BIGK = False, False
+        y_ref = mod(x, mx.array(idx)); mx.eval(y_ref)
+        VS._FUSED_GEMM, VS._FUSED_GEMM_V2 = True, True
+        VS._FUSED_GEMM_BIGK, VS._FUSED_GEMM_D8 = True, True
+        assert VS.gemmseg_fits(D, K, 64, bits, IN), (
+            "gate still refuses the ragged tail — the relaxation is missing")
+        y_fg = mod(x, mx.array(idx)); mx.eval(y_fg)
+    finally:
+        (VS.VQ_FUSED_MAX_N, VS._FUSED_GEMM, VS._FUSED_GEMM_V2,
+         VS._FUSED_GEMM_BIGK, VS._FUSED_GEMM_D8) = old_s
+    a = y_ref.astype(mx.float32); b = y_fg.astype(mx.float32)
+    rel = float(mx.max(mx.abs(a - b))) / max(1e-6, float(mx.max(mx.abs(a))))
+    assert rel < 1e-3, f"ragged NSUB={NSUB} diverged: rel {rel}"
+
+
 def test_gemmseg_numeric_gate():
     """Fused segmented VQ-GEMM vs legacy _prefill: max rel error < 1e-3
     on skewed routing (fp32 in-tile accumulation; NOT bit-gated — the
