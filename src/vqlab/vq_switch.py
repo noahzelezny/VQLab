@@ -3310,7 +3310,22 @@ _FUSED_GEMM_V2 = os.environ.get("VQ_MOE_FUSED_GEMM", "2") == "2"
 # (forced-prefill), inside the reordering band.
 # VQ_MOE_FUSED_GEMM_BIGK=0 pins it back off.
 _FUSED_GEMM_BIGK = os.environ.get("VQ_MOE_FUSED_GEMM_BIGK", "1") != "0"
-_FUSED_GEMM_D8 = os.environ.get("VQ_MOE_FUSED_GEMM_D8", "0") != "0"
+# d8 PROMOTED 2026-09-07 after the arm was finally measured on both d8
+# artifacts (it shipped off only because it was unbenched, never because it
+# was suspect — correctness was gated at K16384, the exact flagship
+# geometry, from the start):
+#   397B-2.2, 2-node ring, 151/180 modules d8: 25.184s -> 19.489s = 1.29x
+#   Flash-2.1, M3 single-box, 138/144 d8:      15.190s -> 11.587s = 1.31x
+# Two artifacts, two topologies, agreeing within 0.02x, with non-overlapping
+# rep ranges in both pairs. Flash is the stronger of the two: single-box, so
+# no pipeline to confound it, and a 1.2% spread. It also takes that artifact
+# from 6/144 fused to 144/144.
+# CAVEAT ON METHOD: flipping this flag needs a process restart, so unlike
+# the d2/d4 numbers these arms are separate loads, NOT interleaved in one
+# process. Margins are 3-25x the observed spread, so the direction and rough
+# size hold, but treat the exact ratio as softer than the interleaved ones.
+# VQ_MOE_FUSED_GEMM_D8=0 pins it back off.
+_FUSED_GEMM_D8 = os.environ.get("VQ_MOE_FUSED_GEMM_D8", "1") != "0"
 
 
 def gemmseg_fits(D, K, G, pack_bits, IN):
@@ -3320,11 +3335,9 @@ def gemmseg_fits(D, K, G, pack_bits, IN):
     # legal, and it is how every Flash-Next rung stores its d2 shared
     # modules. Anything above 16 bits is not a format we emit.
     # d8 is CB_DEV-only by construction (K*16 B never fits threadgroup).
-    # It is NUMERICALLY gated (incl. K16384, the 397B-2.2 geometry) but
-    # UNBENCHED: the only local d8 artifact (Flash-2.1) needs qwen4_exp,
-    # which plain mlx_lm cannot load, and the 397B is cluster-sized. v1
-    # of this kernel was correct and 0.74x, so an unmeasured arm does not
-    # ship armed. VQ_MOE_FUSED_GEMM_D8=1 arms it for the bench.
+    # Numerically gated (incl. K16384, the 397B-2.2 geometry) and, since
+    # 2026-09-07, benched on both d8 artifacts and armed by default —
+    # see the _FUSED_GEMM_D8 note above. VQ_MOE_FUSED_GEMM_D8=0 pins it off.
     if D == 8 and not _FUSED_GEMM_D8:
         return False
     if not (_FUSED_GEMM and D in (2, 4, 8) and 0 <= pack_bits <= 16
