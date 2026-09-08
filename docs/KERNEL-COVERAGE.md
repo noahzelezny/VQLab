@@ -17,7 +17,7 @@ geometries inside single artifacts. ✅ = dedicated fast kernel,
 | d4 packed K8192 b13 | GLM-3.1/3.6 (part), 35B-3.8 | ✅ | ✅ **1.89x** CB_DEV arm |
 | d4 packed K16384 b14 | GLM-3.6 (part) | ✅ | ✅ CB_DEV (unbenched at this K) |
 | d4 unpacked K256 | 397B-2.4 | ✅ | ✅ BITS=0 arm |
-| d8 packed K16384 b14 | **397B-2.2 (flagship)**, Flash-2.1 (part) | ✅ | ⚠️ written + numerically gated, **DEFAULT OFF** — unbenched (needs cluster; VQ_MOE_FUSED_GEMM_D8=1) |
+| d8 packed K16384 b14 | **397B-2.2 (flagship)**, Flash-2.1 (part) | ✅ | ✅ **1.29x** (397B, ring) / **1.31x** (Flash-2.1, single-box) — PROMOTED to default 2026-09-07, see D8-BENCH-2026-09-07.md. ⚠️ 46 Flash-2.1 modules have NSUB=80 and stay legacy (gate wants a multiple of 32) |
 
 Mixed-geometry artifacts fuse per module, so a rung with d2 and d4
 halves gets both (35B-4.6 measured **1.65x** once d4 landed).
@@ -40,10 +40,14 @@ NO-SHIP (pre-existing Metal threadgroup defect).
 
 ## What remains
 
-1. **d8 bench** — the only unarmed arm. Needs a cluster window (the sole
-   local d8 artifact, Flash-2.1, needs qwen4_exp which our gate venv's
-   mlx-lm 0.31.3 lacks; the 397B is 107 GB). Correctness already gated
-   at K16384, the exact flagship geometry.
+1. ~~**d8 bench**~~ — DONE 2026-09-07: 1.29x (397B) / 1.31x (Flash-2.1),
+   promoted to default. See D8-BENCH-2026-09-07.md.
+   **Successor item: the NSUB=80 tail.** 46 of Flash-2.1's 138 d8 modules
+   have in=640 -> NSUB=80, and `gemmseg_fits` requires NSUB % 32 == 0, so
+   they stay legacy. This is now the ONLY artifact in the fleet below 100%
+   fused (98/144). Whether the kernel can take a ragged tail segment is
+   unexamined. It was invisible until d8 was armed, because coverage
+   previously reported all 138 as "arm unarmed".
 2. **CB_DEV vs threadgroup where BOTH are legal** (d4 K2048): device is
    simpler and frees 16 KB — is it also faster? One measurement, needs
    a force-flag. Could delete a whole branch.
