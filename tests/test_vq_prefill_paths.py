@@ -249,6 +249,27 @@ def test_gemmseg_bigK_gated_off_by_default():
     assert VS.gemmseg_fits(2, 512, 64, 9, 128) is True
 
 
+def test_gemmseg_d8_armed_by_default():
+    """d8 is ARMED as of 2026-09-07, and this ratchets that.
+
+    It shipped off for one reason only — unbenched — never because it was
+    numerically suspect (test_gemmseg_cbdev_numeric has gated K16384, the
+    exact 397B-2.2 geometry, since the kernel landed). Measured on both d8
+    artifacts: 397B-2.2 on the ring 25.184s -> 19.489s (1.29x, 151/180
+    modules), Flash-2.1 single-box 15.190s -> 11.587s (1.31x, 138/144, and
+    6/144 -> 144/144 fused). Non-overlapping rep ranges in both pairs.
+
+    If this fails, someone flipped the default back: that needs a measured
+    reason in the commit message, not a quiet revert.
+    """
+    import os as _os
+    if _os.environ.get("VQ_MOE_FUSED_GEMM_D8") == "0":
+        pytest.skip("explicitly pinned off in this environment")
+    assert VS._FUSED_GEMM_D8 is True
+    # the two shipped d8 geometries: 397B-2.2 / Flash-2.1 are both K16384
+    assert VS.gemmseg_fits(8, 16384, 64, 14, 512) is True
+
+
 @pytest.mark.parametrize("D,K,IN", [(4, 8192, 256), (2, 8192, 128),
                                     (8, 16384, 512), (8, 4096, 512)])
 def test_gemmseg_cbdev_numeric(D, K, IN):
