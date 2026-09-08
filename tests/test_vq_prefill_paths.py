@@ -307,6 +307,53 @@ def test_gemmseg_cbdev_numeric(D, K, IN):
     assert rel < 1e-3, f"cbdev d{D} K{K} diverged: rel {rel}"
 
 
+@pytest.mark.parametrize("D,K,IN", [(4, 8192, 256), (8, 16384, 512),
+                                    (8, 16384, 640)])
+def test_gemmseg_rtile64_numeric(D, K, IN):
+    """RTILE=64 (paired token tiles) vs the shipped RTILE=32.
+
+    Pairing changes ONLY how many token rows a threadgroup owns; the
+    weight decode, the operands and the fp32 accumulation order within a
+    tile are untouched, so this must land inside the same rel<1e-3 band
+    as every other gemmseg gate. IN=640 is the ragged-NSUB geometry, so
+    this also proves pairing and the ragged tail compose.
+
+    Also a LOAD gate: RTILE=64 raises the threadgroup allocation from
+    12288 to 20480 B, and an over-budget kernel fails at load (E134).
+    """
+    from vqlab import vq_pack
+    r = np.random.default_rng(64)
+    NSUB = IN // D
+    bits = vq_pack.bits_for_k(K)
+    raw = r.integers(0, K, (8, 32, NSUB)).astype(np.uint32)
+    codes = mx.array(vq_pack.pack(raw, bits))
+    cbk = mx.array((r.standard_normal((K, D)) * 0.05).astype(np.float16))
+    sc = mx.array((r.standard_normal((8, 32, IN // 64)) * 0.1 + 1)
+                  .astype(np.float16))
+    mod = VS.VQSwitchLinear(codes, cbk, sc, group_size=64,
+                            pack_bits=bits, in_features=IN)
+    idx = _routing(E=8)
+    T = idx.shape[0]
+    x = mx.array((r.standard_normal((T, 1, 1, IN)) * 0.2).astype(np.float16))
+    old_s = (VS.VQ_FUSED_MAX_N, VS._FUSED_GEMM, VS._FUSED_GEMM_V2,
+             VS._FUSED_GEMM_BIGK, VS._FUSED_GEMM_D8, VS._GEMMSEG_RTILE)
+    VS.VQ_FUSED_MAX_N = 1
+    try:
+        VS._FUSED_GEMM, VS._FUSED_GEMM_V2 = True, True
+        VS._FUSED_GEMM_BIGK, VS._FUSED_GEMM_D8 = True, True
+        VS._GEMMSEG_RTILE = 32
+        y32 = mod(x, mx.array(idx)); mx.eval(y32)
+        VS._GEMMSEG_RTILE = 64
+        y64 = mod(x, mx.array(idx)); mx.eval(y64)
+    finally:
+        (VS.VQ_FUSED_MAX_N, VS._FUSED_GEMM, VS._FUSED_GEMM_V2,
+         VS._FUSED_GEMM_BIGK, VS._FUSED_GEMM_D8,
+         VS._GEMMSEG_RTILE) = old_s
+    a = y32.astype(mx.float32); b = y64.astype(mx.float32)
+    rel = float(mx.max(mx.abs(a - b))) / max(1e-6, float(mx.max(mx.abs(a))))
+    assert rel < 1e-3, f"RTILE=64 d{D} K{K} IN{IN} diverged: rel {rel}"
+
+
 def test_gemmseg_ragged_nsub_numeric():
     """NSUB=80 ragged tail: the EXACT Flash-2.1 geometry (d8, K16384,
     in=640, bits=14) that gemmseg_fits used to refuse.
