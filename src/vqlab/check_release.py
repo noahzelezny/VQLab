@@ -21,8 +21,11 @@ artifact itself. Nothing should be uploaded that has not passed this.
     ./check_release.py --artifact <dir> [--no-smoke]
 """
 import argparse
+import collections
 import json
 import pathlib
+import re
+import struct
 import subprocess
 import sys
 
@@ -96,6 +99,100 @@ if (A / "model.safetensors.index.json").exists():
     for sh in sorted(set(wm.values())):
         if not (A / sh).exists():
             fails.append(f"index names missing shard {sh}")
+
+# DTYPE CENSUS. Two artifacts shipped in one day (2026-09-07) with a single
+# tensor class silently promoted to float32, and NOTHING here caught either:
+# every other gate is single-box, and fp32 only fails once a model is
+# sharded. embed_tokens got fp32 scales (mx.quantize returns scales in the
+# INPUT dtype and the requant tool had upcast); the MTP sidecar carries fp32
+# RMSNorm gains (residue of a `+shift` never cast back). Both make the whole
+# forward pass fp32, and at head_dim 256 that asks Metal for a 53 KB
+# threadgroup attention kernel against a 32 KB cap -- every sharded prefill
+# dies, while single-box generation is fine.
+#
+# The check compares each tensor against a SOURCE OF TRUTH for its own
+# class, never a fixed allowlist: this family legitimately stores 45 float32
+# `linear_attn.A_log` tensors, so a blanket "no fp32" rule would fire on
+# every correct build and be muted within a week.
+def _st_header(p):
+    with open(p, "rb") as fh:
+        n = struct.unpack("<Q", fh.read(8))[0]
+        return {k: v for k, v in json.loads(fh.read(n)).items()
+                if k != "__metadata__"}
+
+if (A / "model.safetensors.index.json").exists() and cfg:
+    _wm = json.load(open(A / "model.safetensors.index.json"))["weight_map"]
+    _dt = {}
+    for _sh in sorted(set(_wm.values())):
+        if (A / _sh).exists():
+            for _k, _v in _st_header(A / _sh).items():
+                _dt[_k] = _v["dtype"]
+
+    # (a) every affine module's scales/biases share one dtype, and likewise
+    #     every VQ module's codebook/vq_scales. Catches one mis-quantized
+    #     module among hundreds.
+    _q = {m for m, v in cfg.get("quantization", {}).items()
+          if isinstance(v, dict) and "bits" in v}
+    _vq = set(cfg.get("vq_modules", {}))
+    for _label, _mods, _sufs in (("affine", _q, ("scales", "biases")),
+                                 ("VQ", _vq, ("codebook", "vq_scales"))):
+        for _suf in _sufs:
+            _names = [f"{m}.{_suf}" for m in _mods if f"{m}.{_suf}" in _dt]
+            _c = collections.Counter(_dt[n] for n in _names)
+            if len(_c) > 1:
+                _odd = _c.most_common()[-1]
+                _ex = next(n for n in _names if _dt[n] == _odd[0])
+                fails.append(f"{_label} .{_suf} tensors disagree on dtype: "
+                             f"{dict(_c)} — {_odd[1]} outlier(s), e.g. "
+                             f"{_ex} is {_odd[0]}")
+
+    # (b) a codes tensor's dtype is a FUNCTION of its own geometry (uint32
+    #     when packed, else uint8 for K<=256, else uint16), so a
+    #     mixed-geometry artifact holds several LEGITIMATELY. Test each
+    #     against its own entry -- stronger than peer uniformity, and it
+    #     catches a config/tensor divergence no peer comparison could.
+    for _m, _e in cfg.get("vq_modules", {}).items():
+        _k = _m + ".codes"
+        if _k not in _dt:
+            continue
+        _want = ("U32" if _e.get("pack_bits")
+                 else ("U8" if _e.get("k", 0) <= 256 else "U16"))
+        if _dt[_k] != _want:
+            fails.append(f"{_k} is {_dt[_k]} but its vq_modules entry "
+                         f"(dim={_e.get('dim')} k={_e.get('k')} "
+                         f"pack_bits={_e.get('pack_bits')}) implies {_want}")
+
+    # (c) tensors filling the same role across layers must agree. `codes` is
+    #     exempt -- (b) owns it. Uniformly-fp32 classes (A_log) never fire.
+    _cls = collections.defaultdict(list)
+    for _k in _dt:
+        if not _k.endswith(".codes"):
+            _cls[re.sub(r"\.\d+\.", ".", _k)].append(_k)
+    for _cn, _names in sorted(_cls.items()):
+        _c = collections.Counter(_dt[n] for n in _names)
+        if len(_c) > 1:
+            _odd = _c.most_common()[-1]
+            _ex = next(n for n in _names if _dt[n] == _odd[0])
+            fails.append(f"role class {_cn} has mixed dtypes {dict(_c)} "
+                         f"— e.g. {_ex} is {_odd[0]}")
+
+    # (d) a .safetensors the index does not reference is a SIDECAR (MTP
+    #     head, vision graft). Its tensors must match the dtype the trunk
+    #     uses for the same role -- this is what catches the published MTP
+    #     heads' fp32 norms.
+    _tail = {}
+    for _k, _d in _dt.items():
+        _tail.setdefault(".".join(_k.split(".")[-2:]), set()).add(_d)
+    for _f in sorted(A.glob("*.safetensors")):
+        if _f.name in set(_wm.values()):
+            continue
+        for _k, _v in _st_header(_f).items():
+            _ref = _tail.get(".".join(_k.split(".")[-2:]))
+            if _ref and len(_ref) == 1 and _v["dtype"] not in _ref:
+                fails.append(f"sidecar {_f.name}: {_k} is {_v['dtype']} but "
+                             f"the trunk stores "
+                             f"{'.'.join(_k.split('.')[-2:])} as "
+                             f"{next(iter(_ref))}")
 
 # the tokenizer must FUNCTION, not merely exist (the failure that bit us
 # loaded fine and encoded everything to zero tokens)
