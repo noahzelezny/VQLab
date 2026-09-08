@@ -3396,6 +3396,15 @@ if _GEMMSEG_RTILE not in (32, 64):
     raise ValueError(f"VQ_MOE_GEMMSEG_RTILE must be 32 or 64, got {_GEMMSEG_RTILE}")
 
 
+def gemmseg_cb_dev(D, K):
+    """Does this geometry take the DEVICE codebook arm? Single source of
+    truth — `coverage` asks this instead of restating the rule, which is
+    how its arm label silently went stale when the 16 KB preference landed
+    on 2026-09-08."""
+    cb = K * 2 * D
+    return cb + 3 * 4096 > _TG_CAP_BYTES or cb >= 16384
+
+
 def gemmseg_fits(D, K, G, pack_bits, IN):
     """May prefill take the fused segmented VQ-GEMM? Conservative first
     ship: exactly the measured MoE geometry class."""

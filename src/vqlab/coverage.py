@@ -34,8 +34,12 @@ def classify(D, K, G, bits, IN, vq):
             return "legacy", "big-K needs CB_DEV arm (VQ_MOE_FUSED_GEMM_BIGK=1)"
         return "legacy", "geometry outside gemmseg_fits"
     cb_bytes = K * 2 * D
-    arm = "CB_DEV (device codebook)" if cb_bytes + 3 * 4096 > 32768 \
-        else f"threadgroup ({cb_bytes // 1024} KB cb)"
+    # ASK the runtime, never restate it: this label read "threadgroup" for
+    # d4-K2048 for the first hour after the 16 KB device-arm preference
+    # landed, because it carried its own copy of the rule (2026-09-08).
+    arm = (f"CB_DEV (device codebook, {cb_bytes // 1024} KB)"
+           if vq.gemmseg_cb_dev(D, K)
+           else f"threadgroup ({cb_bytes // 1024} KB cb)")
     fetch = "packed" if bits else "unpacked (BITS=0)"
     return "gemmseg v2", f"{arm}, {fetch}"
 
