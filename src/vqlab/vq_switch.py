@@ -3383,6 +3383,14 @@ _FUSED_GEMM_D8 = os.environ.get("VQ_MOE_FUSED_GEMM_D8", "1") != "0"
 # fits the 32768 cap alone but not beside a 16 KB threadgroup codebook.
 # DEFAULT 32 (unmeasured). Set VQ_MOE_GEMMSEG_RTILE=64 to arm it. Ships off
 # for the same reason d8 did: an unbenched arm does not ship armed.
+# CB_DEV arm selection. "auto" = by budget (the shipped rule: device
+# codebook only when K*2*D + 3*4096 exceeds the 32 KB cap). "1"/"0" force it
+# on/off where BOTH arms are legal, which is what makes the d4-K2048 A/B
+# possible at all — there the threadgroup arm fits (16384 + 12288 = 28672)
+# and is chosen today, but the two have opposite traffic profiles and nobody
+# had measured which is faster. Forcing OFF is ignored when the budget makes
+# it illegal; the gate would refuse the geometry anyway.
+_GEMMSEG_CBDEV = os.environ.get("VQ_MOE_GEMMSEG_CBDEV", "auto")
 _GEMMSEG_RTILE = int(os.environ.get("VQ_MOE_GEMMSEG_RTILE", "32"))
 if _GEMMSEG_RTILE not in (32, 64):
     raise ValueError(f"VQ_MOE_GEMMSEG_RTILE must be 32 or 64, got {_GEMMSEG_RTILE}")
@@ -3463,7 +3471,29 @@ def _gemmseg_prefill(xsrc, src_rows, idx_sorted_np, codes, codebook, scales,
         name = (f"vq_gemmseg2_packed{pack_bits}_d{D}" if pack_bits
                 else f"vq_gemmseg2_u{codes.dtype.size * 8}_d{D}")
         src = _SRC_GEMMSEG2
-        cb_dev = K * 2 * D + 3 * 4096 > _TG_CAP_BYTES
+        _cb_bytes = K * 2 * D
+        # Arm selection. The budget still FORCES the device codebook when the
+        # threadgroup copy cannot fit. On top of that, 2026-09-08: prefer the
+        # device arm at cb >= 16 KB even where the threadgroup arm is legal.
+        #
+        # Measured, 9k prefills, threadgroup -> CB_DEV:
+        #   d4-K2048 16KB single-box  1316 -> 1942 tok/s  1.475x  WIN
+        #   d4-K512   4KB 2-node       335 ->  334 tok/s  0.997x  tie
+        #   d2-K2048  8KB single-box  1209 -> 1194 tok/s  0.988x  tie
+        #   d2-K1024  4KB single-box  1787 -> 1872 tok/s  1.047x
+        #
+        # So it is NOT D (d4-K512 ties) and NOT codebook size monotonically
+        # (8 KB ties while 4 KB is marginally positive). The one decisive case
+        # is the LARGEST threadgroup-legal codebook: at 16 KB the bulk load is
+        # maximal and leaves only 4096 B of the 32768 B budget spare.
+        # MECHANISM UNMEASURED — occupancy pressure at the budget edge is a
+        # hypothesis, not a finding.
+        # ~447 fleet modules are d4-K2048 (397B-3.1, Flash-3.2, 35B-3.4/4.6).
+        cb_dev = _cb_bytes + 3 * 4096 > _TG_CAP_BYTES or _cb_bytes >= 16384
+        if _GEMMSEG_CBDEV == "1":
+            cb_dev = True                      # force device codebook
+        elif _GEMMSEG_CBDEV == "0" and _cb_bytes + 3 * 4096 <= _TG_CAP_BYTES:
+            cb_dev = False                     # force threadgroup (if legal)
         if cb_dev:
             name += "_cbdev"
         # RTILE=64 needs the CB_DEV budget; silently fall back otherwise so

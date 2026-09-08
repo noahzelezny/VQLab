@@ -354,6 +354,47 @@ def test_gemmseg_rtile64_numeric(D, K, IN):
     assert rel < 1e-3, f"RTILE=64 d{D} K{K} IN{IN} diverged: rel {rel}"
 
 
+def test_gemmseg_cbdev_vs_threadgroup_equivalent():
+    """d4-K2048: both codebook arms are legal, and they must agree.
+
+    16384 + 12288 = 28672 <= 32768, so the threadgroup arm fits and is
+    chosen today. The device arm reads the codebook straight from device
+    memory instead of bulk-loading 16 KB per threadgroup — opposite traffic
+    profiles, identical arithmetic, so this is a rel<1e-3 gate and the
+    speed question is decided by measurement, not by this test.
+    """
+    from vqlab import vq_pack
+    D, K, IN = 4, 2048, 256
+    r = np.random.default_rng(2048)
+    NSUB = IN // D
+    bits = vq_pack.bits_for_k(K)
+    raw = r.integers(0, K, (8, 32, NSUB)).astype(np.uint32)
+    codes = mx.array(vq_pack.pack(raw, bits))
+    cbk = mx.array((r.standard_normal((K, D)) * 0.05).astype(np.float16))
+    sc = mx.array((r.standard_normal((8, 32, IN // 64)) * 0.1 + 1)
+                  .astype(np.float16))
+    mod = VS.VQSwitchLinear(codes, cbk, sc, group_size=64,
+                            pack_bits=bits, in_features=IN)
+    idx = _routing(E=8)
+    T = idx.shape[0]
+    x = mx.array((r.standard_normal((T, 1, 1, IN)) * 0.2).astype(np.float16))
+    old_s = (VS.VQ_FUSED_MAX_N, VS._FUSED_GEMM, VS._FUSED_GEMM_V2,
+             VS._FUSED_GEMM_BIGK, VS._GEMMSEG_CBDEV)
+    VS.VQ_FUSED_MAX_N = 1
+    try:
+        VS._FUSED_GEMM, VS._FUSED_GEMM_V2, VS._FUSED_GEMM_BIGK = True, True, True
+        VS._GEMMSEG_CBDEV = "0"          # threadgroup codebook (shipped)
+        y_tg = mod(x, mx.array(idx)); mx.eval(y_tg)
+        VS._GEMMSEG_CBDEV = "1"          # forced device codebook
+        y_dev = mod(x, mx.array(idx)); mx.eval(y_dev)
+    finally:
+        (VS.VQ_FUSED_MAX_N, VS._FUSED_GEMM, VS._FUSED_GEMM_V2,
+         VS._FUSED_GEMM_BIGK, VS._GEMMSEG_CBDEV) = old_s
+    a = y_tg.astype(mx.float32); b = y_dev.astype(mx.float32)
+    rel = float(mx.max(mx.abs(a - b))) / max(1e-6, float(mx.max(mx.abs(a))))
+    assert rel < 1e-3, f"cbdev/threadgroup arms disagree: rel {rel}"
+
+
 def test_gemmseg_ragged_nsub_numeric():
     """NSUB=80 ragged tail: the EXACT Flash-2.1 geometry (d8, K16384,
     in=640, bits=14) that gemmseg_fits used to refuse.
