@@ -3340,8 +3340,24 @@ def gemmseg_fits(D, K, G, pack_bits, IN):
     # see the _FUSED_GEMM_D8 note above. VQ_MOE_FUSED_GEMM_D8=0 pins it off.
     if D == 8 and not _FUSED_GEMM_D8:
         return False
+    # NSUB (= IN/D) need NOT be a multiple of 32. That was conservatism from
+    # the first ship ("exactly the measured geometry class"), and it cost
+    # Flash-2.1 its 46 d8 in=640 modules (NSUB=80) — the only sub-100%-fused
+    # artifact in the fleet. Relaxed 2026-09-08 after verifying, not arguing:
+    #   * the PACKER already zero-pads the tail block: the shipped artifact
+    #     stores codes [512, 2560, 42] = ceil(80/32)*14, and scales [..,10]
+    #     = NGRP = 640/64.
+    #   * WPR is already ceil((NSUB+31)/32)*BITS in both kernel sources.
+    #   * the decode loop covers exactly NGRP*SPG = (IN/G)*(G/D) = NSUB
+    #     codes, so a pad code is never read.
+    #   * a 32-code block is 32*BITS bits = a whole number of words for any
+    #     BITS, so VQ_CODE's straddle read crow[VQ_W(j)+1] never crosses out
+    #     of the row.
+    # Gated by test_gemmseg_ragged_nsub_numeric at the exact Flash-2.1
+    # geometry. What still MUST divide is SPG/4 (below) — that one is a real
+    # thread-assignment constraint, not conservatism.
     if not (_FUSED_GEMM and D in (2, 4, 8) and 0 <= pack_bits <= 16
-            and G == 64 and (IN // D) % 32 == 0 and IN % G == 0
+            and G == 64 and IN % G == 0
             and (G // D) % 4 == 0):   # SPG/4 codes per thread must divide
         return False
     # E134 budget, exact: cb K*2*D B + wtT 4096 + xt 4096 + ybuf 4096.
