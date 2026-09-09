@@ -10,6 +10,48 @@ edit the entry in place and say CORRECTED. Keep it readable in one sitting.
 
 ## 2026-09-09 (morning, running the overnight proposals)
 
+**F37 · The 8.4% tail-tile waste is worth at most ~1.1% of wall time. The
+whole tail-tile cluster (a1/a6/a9/b11) is dead.**
+`nrow` guards the x-gather (3262-3278) and the write-back (3327-3336) but NOT
+phase 3, so idle rows do run real simdgroup MACs on zeros. a1 guards the
+phase-3 token blocks by nrow — implemented, and it is BIT-IDENTICAL
+(logits checksum -7707798016.000000 both arms) and 10% SLOWER
+(2050.2 -> 1835.1 tok/s).
+
+Attribution run to explain that, dropping 3 of 4 token blocks unconditionally
+(output deliberately wrong, timing only):
+
+    all 4 blocks      2069.1 tok/s
+    1 of 4 blocks     2303.5 tok/s     1.11x
+
+So removing 75% of phase-3 MAC work buys 11% => phase 3 is ~13.5% of runtime.
+The 8.4% idle SLOTS are 8.4% OF THAT: a ceiling of **~1.1% of wall time**.
+a1 paid a 10% branch to chase 1.1%, which is why it lost.
+
+Verdicts, all four from measurement or arithmetic rather than opinion:
+* a1 — correct, 0.90x. The opportunity is real and an order of magnitude
+  smaller than the mechanism needed to claim it.
+* a6 (straddle) — needs a 2nd weight tile in threadgroup, +4-8 KB. F36's
+  measured curve prices that at 1.11-1.25x. Costs more than it recovers.
+* a9 (pad rows to an RTILE multiple) — replaces zero rows with duplicated
+  real ones: same MAC cost, PLUS gathers that nrow currently skips. Strictly
+  worse.
+* b11 (gate tail work on a tmeta histogram) — gating machinery for a 1.1%
+  ceiling. Not worth the dispatch.
+
+F24 stands as arithmetic and is hereby demoted in importance: 8.4% of token
+SLOTS is a COVERAGE statistic, not a speed opportunity — the same distinction
+D8-BENCH drew about "100% fused". Four of the fifteen overnight proposals were
+aimed at it.
+
+Also killed this round: **b3** (raise simdgroups/threadgroup 4 -> 5) is
+structurally impossible, not merely untested. `sg` indexes the output tile
+(`simdgroup_load(B, &wtT[k8*8][(int)sg*8], 32)`), so NSG is pinned at
+OTILE/8 = 4; NSG=5 reads column 32 of a 32-wide array. Raising it needs
+OTILE=40, which breaks the 32x32 simdgroup_half8x8 tiling the kernel is built
+on.
+
+
 **F36 · OCCUPANCY IS THE MECHANISM — proven causally, prediction hit within
 1%.** (proposal b0, with the instrument fixed per F35)
 Dead threadgroup bytes injected into _SRC_GEMMSEG2, `cb` NEVER touched,
