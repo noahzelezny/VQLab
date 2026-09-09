@@ -8,6 +8,42 @@ edit the entry in place and say CORRECTED. Keep it readable in one sitting.
 
 ---
 
+## 2026-09-09 (morning, running the overnight proposals)
+
+**F30 · The NSUB=80 "same kernel, opposite result" framing is WRONG for the
+decode path and RIGHT for prefill — and the two got conflated.**
+Proposal b4 claimed the two d8 shapes run different kernels, explaining the
+null with no new physics. Verified in `_fused_resolve` (line 2557,
+`elif simd and IN // G >= 32`), G=64, K=16384 > _D8_TG_MAX_K=1024:
+
+    A  in=2560 out=640  NSUB=320:  IN//G = 40  -> PASSES -> simd kernel
+    B  in=640  out=2560 NSUB=80 :  IN//G = 10  -> FAILS  -> device-cb variant
+
+True. But that gate is the SMALL-N DECODE path. The null was measured in
+gemmseg PREFILL (D8-BENCH:126-127, ragged REFUSED 11.587 s vs ADMITTED
+11.645 s), and gemmseg dispatches exactly one source (`_SRC_GEMMSEG2`,
+line 3465) with no shape branching — so there both shapes DO run the same
+kernel and b4's mechanism cannot explain the null.
+SURVIVING FACT, new and unlogged: on the decode path shape B falls off the
+simd kernel onto the device-codebook variant. Worth measuring separately;
+NOT an explanation for the prefill null.
+
+**F29 · Proposal a7 is unrunnable: G is not an env knob.**
+Its 2x2 sweep varies G (64 vs 256) by flag. Grep of the bundled runtime finds
+no env control of G — the only ROWS_TG-style knob is `_WDEC_ROWS_TG`. G is the
+scale-group size BAKED INTO each artifact's `scales` tensor layout; changing it
+means repacking weights and re-uploading. The sweep axis does not exist.
+
+**F28b · The out-of-exo probe needs the EXO env on the M3, not the repo venv.**
+`probe_moe_prefill_attrib.py` on Flash-2.1 dies in the repo `.venv`
+(`ModuleNotFoundError: mlx_vlm.models.qwen4_exp`) — the same gate-venv limit
+D8-BENCH recorded. Use `/opt/anaconda3/envs/exo/bin/python3.13` (M3) and
+`/opt/homebrew/anaconda3/envs/exo/bin/python3.13` (M4). Also: `timeout(1)` does
+not exist on the M4, and its absence silently turned six benchmark cells into
+"FAILED" that were never run.
+
+---
+
 ## 2026-09-09 (overnight)
 
 **F27 · The overnight swarms hung for 85 minutes producing zero tokens, and
