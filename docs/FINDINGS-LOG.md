@@ -47,26 +47,17 @@ Excluded by measurement: collectives (0.17%), the ring (1.11x), weight
 bandwidth (1-5% of 819 GB/s). Flash-2.1 and 35B-A3B move nearly identical
 bytes/token and differ 2.3x. Unexplained.
 
-**PUBLISH STATE.** 18 of 20 artifacts FAIL `vqlab check-bundle`, and every
-one of them fails for the SAME reason: the bundled model.py predates the
-current repo runtime. There is no fatal subset. The earlier claim that four
-DENSE bundles (27B-VQ-3.9/4.5/4.8, gemma-e4b-PLE) were missing vq_switch.py
-and would raise ModuleNotFoundError on a stock install was **FALSE** — the
-gate decided "missing" from verbatim text containment, which answers "is this
-the current text", not "is the runtime here at all". All four carry vq_switch
-inline (VQSwitchLinear, _dense_fused, _fused, _resolve_kernel all DEFINED in
-model.py, 2509 of 2571 non-comment lines present); they differ from the repo
-only by the ~62 lines of RTILE/CB_DEV work spliced in after they were built,
-and the one top-level def they lack (gemmseg_cb_dev) did not exist when they
-were bundled and is never called by them. They load on a stock install. Gate
-fixed 2026-09-09 to decide absence from load-bearing anchors instead;
-`tests/test_check_bundle_dense.py` ratchets BOTH directions. Rebundle+gate is
-proven on the flagship; backups of every runtime file are at
-~/.exo/model_py_backups_2026-09-09.
-
-Nothing published carries the September kernel work: `PUSH-RUNBOOK.md` was
-never run. The Hub has the artifacts and 7 refreshed cards; the d8/CB_DEV/
-ragged-NSUB runtime is local only.
+**PUBLISH STATE (arc6, 2026-09-09 15:20).** All 20 local artifacts are
+spliced with the frozen release runtime (d8 + CB_DEV + ragged-NSUB + routing
+memo) and PASS `check-bundle`; `.pre-arc6` backups sit beside every model.py.
+Full `check-release` (load + strict smoke) PASSES on the 13 single-box rungs:
+27B x3, 35B x4, gemma x2, Flash 2.1/3.2 (Flash gates must run in the exo
+conda env -- the bundles import mlx_vlm.models.qwen4_exp, which vqlab's venv
+lacks; that is a harness-env fact, not an artifact defect -- Flash has always
+required mlx-vlm). NOT yet smoked: Flash 4.4/5.5, 397B x4, GLM x3 -- they
+exceed the M3's 96 GB; 397B-2.2 fits the M4, the rest need the two-node path
+arc5 used. The Hub still carries the pre-arc6 runtime everywhere: NOTHING has
+been pushed. Push runbook: docs/PUSH-RUNBOOK.md, gated on Noah.
 
 **METHOD RULES THAT EARNED THEIR PLACE TODAY** (each caught a wrong result)
 1. **One harness.** Never compare an exo number to a local-probe number. That
