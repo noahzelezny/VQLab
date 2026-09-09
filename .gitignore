@@ -10,3 +10,6 @@ fits/
 artifacts/
 caches/
 *.log
+
+# agent tooling state — never publish
+.claude/
