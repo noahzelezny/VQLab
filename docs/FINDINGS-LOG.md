@@ -10,8 +10,39 @@ edit the entry in place and say CORRECTED. Keep it readable in one sitting.
 
 ## 2026-09-09 (morning, running the overnight proposals)
 
-**F38 · gemmseg's three phase bodies are only ~34% of its runtime. Two-thirds
-is elsewhere.** (the per-phase profile proposals a4/b5/b15 asked for)
+**F39 · The ENTIRE gemmseg group loop is 33% of prefill. Deleting all three
+phases buys only 1.49x.** And this corrects F38's framing.
+
+    baseline                                   2025.5 tok/s
+    NGRP loop forced to zero iterations        3015.5 tok/s   1.49x
+
+So phases 1+2+3 together = 1 - 2025.5/3015.5 = **32.8% of prefill wall time**.
+F38's separate arms summed to 33.7% (10.6 + 9.6 + 13.5) — an independent
+cross-check agreeing within a point, which validates both the arms and this.
+
+**F38 said "two-thirds is unattributed" and implied a hole INSIDE gemmseg.
+Wrong framing.** The percentages are of TOTAL PREFILL, so the other ~67% is
+attention, the router, the non-MoE layers, write-back, per-dispatch overhead
+and host work — i.e. the rest of the forward pass, exactly where it should be.
+There is no mystery residual in the kernel; the three phases ARE the loop and
+they add up.
+
+**THE BOUND THAT MATTERS FOR PARITY.** VQ prefill sits at 87% of affine
+(AFFINE-BASELINE-397B). If gemmseg's whole body is 33% of prefill, then
+making the VQ kernel INFINITELY FAST caps out at 1.49x, and any realistic
+kernel win is a fraction of that. The remaining ~13% gap to affine cannot be
+closed from inside gemmseg alone — a large part of it lives in the other 67%,
+which no proposal in four swarm rounds has targeted.
+
+Consequence for the survivors: a2 (contiguous xsrc pre-gather) attacks the
+9.6% x-gather, b6/b7 attack phase-1/2 internals. Their combined ceiling is
+~20% of prefill and each would claim only a slice. Worth knowing before
+building any of them.
+
+
+**F38 · gemmseg's three phase bodies are ~34% of TOTAL PREFILL (not of gemmseg).
+CORRECTED by F39 — see below; the residual is other model work, not a hole
+inside the kernel.** (the per-phase profile proposals a4/b5/b15 asked for)
 35B-3.4, 9k, step 4096, each arm deletes one thing and produces deliberately
 WRONG output; timing only:
 
