@@ -10,6 +10,40 @@ edit the entry in place and say CORRECTED. Keep it readable in one sitting.
 
 ## 2026-09-09 (morning, running the overnight proposals)
 
+**F38 · gemmseg's three phase bodies are only ~34% of its runtime. Two-thirds
+is elsewhere.** (the per-phase profile proposals a4/b5/b15 asked for)
+35B-3.4, 9k, step 4096, each arm deletes one thing and produces deliberately
+WRONG output; timing only:
+
+    baseline                        2046.0 tok/s
+    skip phase-1 codebook+scale     2289.1      => 10.6% of runtime
+    skip phase-2 x gather           2262.3      =>  9.6%
+    skip 3/4 phase-3 MACs (F37)     2303.5      => 13.5% (extrapolated to 4/4)
+                                                  ------
+                                                  ~33.7% accounted
+                                                  ~66%   UNATTRIBUTED
+
+CAVEAT ON METHOD, stated because it bounds the claim: the skip arms are
+PARTIAL. "skip phase-1" removes the codebook gather and the scale multiply but
+leaves `VQ_FETCH` (the packed bit-extraction) and the scale LOAD in place;
+"skip phase-2" removes the strided device read but keeps the xt store. So the
+unattributed ~66% contains VQ_FETCH, the stores, barriers, write-back and
+per-dispatch overhead — it is a residual, not a measured single cause.
+
+**It independently corroborates F36.** The codebook gather that CB_DEV
+relocates is only 10.6% of runtime, and CB_DEV is worth 1.46x. Relocating a
+10.6% component cannot produce a 46% gain by making that component faster, so
+the win must come from something else — which is precisely what the dead-bytes
+pad experiment proved it to be (occupancy).
+
+**Consequence for the remaining proposals.** a2 (contiguous xsrc pre-gather),
+b6 (device-x) and b7 (lane-span restructure) all target phase-1/2 internals,
+i.e. a combined 20.2% ceiling, and each would claim only a fraction of that.
+The 66% residual is a bigger target than everything the swarm proposed, and
+nobody proposed it — the same shape as F23, where decode's cost turned out to
+be 99.83% inside a forward nobody had opened.
+
+
 **F37 · The 8.4% tail-tile waste is worth at most ~1.1% of wall time. The
 whole tail-tile cluster (a1/a6/a9/b11) is dead.**
 `nrow` guards the x-gather (3262-3278) and the write-back (3327-3336) but NOT
