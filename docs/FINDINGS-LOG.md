@@ -12,14 +12,22 @@ edit the entry in place and say CORRECTED. Keep it readable in one sitting.
 
 **F34 · The CB_DEV mechanism is occupancy pressure, and it is MONOTONIC in
 threadgroup-budget utilisation.** (proposal b1, static audit, zero GPU)
-gemmseg v2 threadgroup arrays are cb[K*D halves] + wtT[G][32] + xt[RTILE][G].
-Against the 32768 B cap, versus every CB_DEV result measured so far:
+CORRECTED WITHIN THE HOUR: the first pass omitted `ybuf[RTILE][32]` (float,
+4 KB @ RTILE=32). v2 declares FOUR threadgroup arrays, not three:
+cb[MAX_K] (half2 @ d2 = K*4 B, half4 @ d4 = K*8 B) + wtT[G][32] + xt[RTILE][G]
++ ybuf[RTILE][32]. Corrected against the 32768 B cap:
 
-    geometry    cb      total_tg   %cap   CB_DEV effect
-    d4-K512     4096    12288      37%    0.83x  REGRESSION (F26)
-    d2-K1024    4096    12288      37%    1.047x
-    d2-K2048    8192    16384      50%    0.988x tie
-    d4-K2048   16384    24576      75%    1.46x  WIN (F32)
+    geometry    cb     wtT    xt   ybuf   TOTAL  %cap  spare  CB_DEV effect
+    d4-K512    4096   4096  4096   4096   16384   50%  16384  0.83x REGRESSION (F26)
+    d2-K1024   4096   4096  4096   4096   16384   50%  16384  1.047x
+    d2-K2048   8192   4096  4096   4096   20480   62%  12288  0.988x tie
+    d4-K2048  16384   4096  4096   4096   28672   88%   4096  1.46x WIN (F32)
+
+The monotonic relationship SURVIVES the correction (50% -> 62% -> 88% rather
+than 37/50/75), and the corrected figure now agrees exactly with the source
+comment at the arm rule, which says the threadgroup arm at d4-K2048 "leaves
+only 4096 B of the 32768 B budget spare". My first pass said 8192 and
+contradicted a comment that was right. Read the kernel, not your memory of it.
 
 Monotonic: at 37% of budget moving the codebook to device COSTS you, at 50%
 it is a wash, at 75% it is a 1.46x win. That is the "occupancy pressure at the
