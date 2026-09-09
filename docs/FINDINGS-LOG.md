@@ -10,6 +10,43 @@ edit the entry in place and say CORRECTED. Keep it readable in one sitting.
 
 ## 2026-09-09 (morning, running the overnight proposals)
 
+**F35 · The occupancy discriminator (proposal b0) ran, produced a clean flat
+result, and the result is INVALID — the compiler deleted the instrument.**
+Method: inject `threadgroup half _pad[N]`, written at a runtime index and
+never read, into _SRC_GEMMSEG2 via the loaded module's globals; sweep N. This
+varies TOTAL threadgroup budget without touching `cb`, which is the one thing
+F34's four points cannot separate.
+
+    pad  0 KB (tg 12 KB)  2022.4 tok/s
+    pad  4 KB (tg 16 KB)  2041.2
+    pad  8 KB (tg 20 KB)  2045.8
+    pad 12 KB (tg 24 KB)  2056.1
+    pad 16 KB (tg 28 KB)  2075.1     <- prediction was ~1400 if occupancy-bound
+
+Flat, even slightly rising. That reads as a clean refutation of occupancy —
+and it is worth nothing, because the VALIDITY CHECK failed: pad=24 KB puts the
+total at 36 KB, over the 32768 B cap, and it LOADED AND RAN at 1975 tok/s
+instead of raising E134. A threadgroup array that is written and never read is
+dead-code-eliminated by the Metal compiler, so every point in the sweep
+compiled the SAME kernel. The experiment measured nothing.
+
+F34's monotonic correlation is therefore still just a correlation: neither
+confirmed nor refuted. Occupancy remains the leading hypothesis and remains
+UNPROVEN.
+
+**The check that caught it is the reusable part**: for any experiment that
+adds a resource, push the resource PAST a known hard limit and confirm the
+failure you expect. If it does not fail, your instrument is not installed.
+That is now three saves today from the same discipline — the ring-env override
+that would have measured RTILE=32 twice (F33), the ragged bundle whose ADMITTED
+arm ran refusing code (F31), and this.
+
+Retry in flight with the array READ behind a never-true guard
+(`if ((float)_pad[...] > 1.0e4f) ybuf[0][0] += 1.0f;`) plus a barrier, which
+the compiler cannot prove dead while leaving output bit-identical. The over-cap
+case MUST fail before any timing from it is believed.
+
+
 **F34 · The CB_DEV mechanism is occupancy pressure, and it is MONOTONIC in
 threadgroup-budget utilisation.** (proposal b1, static audit, zero GPU)
 CORRECTED WITHIN THE HOUR: the first pass omitted `ybuf[RTILE][32]` (float,
