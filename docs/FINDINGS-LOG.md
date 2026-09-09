@@ -79,7 +79,31 @@ GLM-2.7, same 2-node placement both arms, 3 reps: threadgroup 251 tok/s,
 forced CB_DEV 209. The old "0.997x tie" row was uncontrolled. The 16 KB
 threshold is now bracketed from both sides: 4 KB regresses, 16 KB is 1.76x.
 
-**F25 · RTILE=64 flips sign on GEOMETRY: 0.75x on d4-K2048.**
+**F25 · CORRECTED 2026-09-09 — there is NO geometry flip. RTILE=64 is
+uniformly slower in every controlled measurement.**
+Matched harness (mlx_lm.generate, M3, 9k, warm rep discarded, min of 2):
+
+    35B-3.4  uniform d4-K2048    R32 2002/2067   R64 1515/1558   0.75x
+    Flash-2.1 mixed d8           R32  830/ 818   R64  770/ 791   0.93-0.97x
+
+Flash's milder penalty is DILUTION, not physics: only 138 of its 272 modules
+are RTILE-eligible (d8-K16384, cb 256 KB, CB_DEV forced); the other 128 are
+d8-K256 (cb 4 KB, threadgroup) and silently stay at RTILE=32. A ~25% penalty
+applied to ~51% of modules lands at ~0.93x. One mechanism, two dilutions.
+Also falsified en route: the prefill-chunk-size hypothesis (RTILE=64 needs
+enough rows/expert/dispatch). Swept 2048/4096/8192 — 0.93/0.97/0.97x, sign
+never flips.
+The ORIGINAL F25 claim ("the sign flips on geometry") came from comparing the
+doc's EXO Flash number against my LOCAL 35B number — cross-harness, the same
+uncontrolled-comparison error as F19 and the model bake-off. The shipped
+default (32) is unchanged and still correct; the reasoning is now simply
+"RTILE=64 is slower," with no geometry gate needed.
+OPEN: the doc's exo-measured 1.23x on Flash-2.1 has NOT reproduced under any
+local harness (3 independent runs, both boxes). Either exo's serving path
+interacts with RTILE differently, or that number is an artifact. Requires an
+exo-side re-measurement to close.
+
+**F25-original (superseded) · RTILE=64 flips sign on GEOMETRY: 0.75x on d4-K2048.**
 35B-3.4 single-box, out-of-exo harness, 3 interleaved reps: 1834 vs 1379
 tok/s, spreads ≤1.2%. Same box where d8-K16384 (Flash-2.1) measured 1.23x.
 RTILE=64 requires the CB_DEV budget, so it was UNREACHABLE on d4-K2048 until
