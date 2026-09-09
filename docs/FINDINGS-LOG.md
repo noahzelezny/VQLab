@@ -42,11 +42,26 @@ Excluded by measurement: collectives (0.17%), the ring (1.11x), weight
 bandwidth (1-5% of 819 GB/s). Flash-2.1 and 35B-A3B move nearly identical
 bytes/token and differ 2.3x. Unexplained.
 
-**PUBLISH STATE.** 19 of 20 artifacts FAIL `vqlab check-bundle`. Four
-(27B-VQ-3.9/4.5/4.8, gemma-e4b-PLE) are DENSE bundles missing vq_switch.py and
-raise ModuleNotFoundError on a stock install — they score fine and cannot
-serve. Rebundle+gate is proven on the flagship; backups of every runtime file
-are at ~/.exo/model_py_backups_2026-09-09.
+**PUBLISH STATE.** 18 of 20 artifacts FAIL `vqlab check-bundle`, and every
+one of them fails for the SAME reason: the bundled model.py predates the
+current repo runtime. There is no fatal subset. The earlier claim that four
+DENSE bundles (27B-VQ-3.9/4.5/4.8, gemma-e4b-PLE) were missing vq_switch.py
+and would raise ModuleNotFoundError on a stock install was **FALSE** — the
+gate decided "missing" from verbatim text containment, which answers "is this
+the current text", not "is the runtime here at all". All four carry vq_switch
+inline (VQSwitchLinear, _dense_fused, _fused, _resolve_kernel all DEFINED in
+model.py, 2509 of 2571 non-comment lines present); they differ from the repo
+only by the ~62 lines of RTILE/CB_DEV work spliced in after they were built,
+and the one top-level def they lack (gemmseg_cb_dev) did not exist when they
+were bundled and is never called by them. They load on a stock install. Gate
+fixed 2026-09-09 to decide absence from load-bearing anchors instead;
+`tests/test_check_bundle_dense.py` ratchets BOTH directions. Rebundle+gate is
+proven on the flagship; backups of every runtime file are at
+~/.exo/model_py_backups_2026-09-09.
+
+Nothing published carries the September kernel work: `PUSH-RUNBOOK.md` was
+never run. The Hub has the artifacts and 7 refreshed cards; the d8/CB_DEV/
+ragged-NSUB runtime is local only.
 
 **METHOD RULES THAT EARNED THEIR PLACE TODAY** (each caught a wrong result)
 1. **One harness.** Never compare an exo number to a local-probe number. That
