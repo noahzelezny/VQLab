@@ -5,12 +5,17 @@
 If you read nothing else in this file, read this block. Everything here is
 MEASURED, and several items overturned a confidently-documented claim.
 
-**THE CEILING (F39).** Deleting gemmseg's entire NGRP loop — phases 1, 2 and 3
-— makes prefill 1.49x faster (2025.5 -> 3015.5 tok/s). So the whole VQ kernel
-body is **33% of prefill**. An infinitely fast kernel is worth 1.49x. VQ sits
-at 87% of affine; the last ~13% CANNOT be closed from inside the kernel. Four
-swarm rounds and 60+ proposals aimed at that 33%. **The other 67% (attention,
-router, non-MoE layers, dispatch, host) has never been examined.**
+**THE CEILING (F39, REFINED BY F41).** Deleting gemmseg's entire NGRP loop —
+phases 1, 2 and 3 — makes prefill 1.49x faster. So the kernel BODY is ~30% of
+prefill and an infinitely fast kernel is worth ~1.49x. But deleting the WHOLE
+VQ module (F41) gives **1.76-1.78x**: the module is **44% of prefill**, and the
+extra **14 points are host, dispatch, gather/scatter and cast** — reachable
+from Python, no Metal. That 14% is about the size of the entire remaining
+VQ-vs-affine gap. Of it, the unsorted-path argsort/scatter is only 1.2%
+(measured); the rest is the per-call numpy tile build, the mx.array uploads and
+dispatch, and is UNSEPARATED. Four swarm rounds and 60+ proposals aimed only at
+the 30%. **Attention, router and base arch (~56%) still have never been
+examined.**
 
 **WHAT ACTUALLY SHIPS AND WORKS**
 * CB_DEV at cb >= 16 KB: **1.46x**, verified in two harnesses (F21/F32).
@@ -604,3 +609,50 @@ Open mechanisms, ranked: NSUB=80 null (28.4% of work, zero gain);
 RTILE geometry flip (F25); tail-tile 8.4% (F24, structural).
 Decode: bounded inside the forward (F23) — per-layer dispatch / template
 instantiation are the unprobed suspects.
+
+## F41 (2026-09-09) — the kernel is 30% of prefill, but the VQ MODULE is 44%. The 14% outside the kernel body is addressable without touching Metal.
+
+F39 deleted gemmseg's NGRP loop (phases 1+2+3) and measured 1.49x, which the
+READ-THIS-FIRST block turned into "an infinitely fast kernel is worth 1.49x,
+the other 67% has never been examined". That arm kept the dispatch, the
+per-call numpy tile build, the tmeta/src_rows uploads, the gather/scatter and
+the output cast. **Deleting the whole module measures those too**, and the gap
+is large.
+
+One harness (`scratchpad/whole_module_delete.py`), 35B-A3B-VQ-3.4bpw, 9000
+tokens, prefill_step_size 4096, two independent runs:
+
+| arm | run 1 | run 2 | vs baseline |
+|---|---|---|---|
+| baseline | 2048.6 | 2036.2 tok/s | 1.00x |
+| F39 arm: NGRP loop -> 0 iterations (kernel BODY deleted) | 2930.7 | 3012.5 | **1.43-1.48x** |
+| WHOLE module deleted (`__call__` returns zeros) | 3609.7 | 3632.3 | **1.76-1.78x** |
+
+The middle row reproduces F39 in this harness, so the third row is comparable
+to it. Wall-time decomposition at 4.42 s baseline:
+
+* kernel body ...................... ~30% of prefill
+* VQ module OUTSIDE the kernel body . ~14% of prefill
+* everything else (attention, router, base arch, host) ~56%
+
+**The correction to F39's framing.** The VQ path is 44% of prefill, not 33%,
+and 14 points of it are host/dispatch/gather/cast -- reachable from Python,
+with no Metal involved. That 14% is about the size of the entire remaining
+VQ-vs-affine parity gap (~13%).
+
+**What it is NOT (measured, same harness).** Forcing `sorted_indices=True`
+deletes both numpy argsorts, the `inv` permutation and the `y[inv]` row-scatter
+and buys only **1.2%** (2073.5 vs 2048.6). The unsorted-path overhead the swarm
+kept nominating is real but small; the remaining ~12-13% is the per-call numpy
+tile build in `_gemmseg_prefill`, the `mx.array` uploads, kernel dispatch, and
+the broadcast/cast in `__call__`. Not yet separated.
+
+**INVALID ARM -- do not cite.** Stubbing `np.argsort` to an identity
+permutation ran SLOWER than baseline (1984.8 tok/s). It is not an attribution:
+handing the kernel unsorted expert order changes its memory access pattern, so
+the arm alters the thing it is trying to hold fixed. Recorded because it looks
+like a finding and is not.
+
+Four independent swarm frames (bank B `occupancy`, bank A `fusion`, `batching`,
+`host`) nominated `_gemmseg_prefill`'s numpy prefix. This arm says their target
+region is worth ~12-13%; it does not yet say the prefix is the part.
