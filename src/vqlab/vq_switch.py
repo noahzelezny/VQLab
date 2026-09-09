@@ -3446,6 +3446,30 @@ def gemmseg_fits(D, K, G, pack_bits, IN):
     return _FUSED_GEMM_BIGK
 
 
+# ROUTING MEMO (F42, 2026-09-09). Within one forward pass the gate/up/down
+# projections of an MoE layer are called with the SAME routing, so exactly 1
+# in 3 tile builds is fresh (measured: 240 repeats of 720 calls per prefill,
+# and the whole numpy prefix is 3.9% of prefill wall -- a memo recovers
+# ~2.6%). Keys are the routing BYTES, not a hash digest: dict equality does a
+# memcmp on collision, so a hit is exact by construction and the cached
+# tensors are bit-identical to what the prefix would rebuild. Values are
+# immutable (mx arrays are; the ints are). Bounded: routing changes every
+# prefill step, so entries go stale in one step -- keep a few layers' worth
+# and evict FIFO.
+_ROUTING_MEMO: "dict[tuple, tuple]" = {}
+_ROUTING_MEMO_MAX = 8
+
+
+def _memo_get(key):
+    return _ROUTING_MEMO.get(key)
+
+
+def _memo_put(key, value):
+    if len(_ROUTING_MEMO) >= _ROUTING_MEMO_MAX:
+        _ROUTING_MEMO.pop(next(iter(_ROUTING_MEMO)))
+    _ROUTING_MEMO[key] = value
+
+
 def _gemmseg_prefill(xsrc, src_rows, idx_sorted_np, codes, codebook, scales,
                      pack_bits, IN):
     """One fused dispatch per linear: y[sorted_row, OUT] with dequant
@@ -3453,10 +3477,6 @@ def _gemmseg_prefill(xsrc, src_rows, idx_sorted_np, codes, codebook, scales,
     __call__ sorts, _prefill's contract)."""
     E, OUT, _ = codes.shape
     K = codebook.shape[0]
-    counts = np.bincount(idx_sorted_np, minlength=E)
-    touched = np.nonzero(counts)[0]
-    starts = np.zeros(E + 1, np.int64)
-    starts[1:] = np.cumsum(counts)
     # Tile granularity MUST equal the kernel's RTILE: tmeta rows are
     # (expert, row_start, nrows) and the kernel guards on nrow, so a
     # mismatch would silently drop rows past 32 of every 64-row tile.
@@ -3465,13 +3485,23 @@ def _gemmseg_prefill(xsrc, src_rows, idx_sorted_np, codes, codebook, scales,
     _rt = 64 if (_GEMMSEG_RTILE == 64 and _FUSED_GEMM_V2
                  and codebook.shape[0] * 2 * int(codebook.shape[1])
                  + 3 * 4096 > _TG_CAP_BYTES) else 32
-    metas = []
-    for e in touched:
-        c0 = int(starts[e])
-        for r in range(0, int(counts[e]), _rt):
-            metas.append((int(e), c0 + r, min(_rt, int(counts[e]) - r)))
-    tmeta = mx.array(np.array(metas, np.int32).reshape(-1))
-    ntiles = len(metas)
+    _mk = ("tiles", idx_sorted_np.tobytes(), E, _rt)
+    _hit = _memo_get(_mk)
+    if _hit is not None:
+        tmeta, ntiles = _hit
+    else:
+        counts = np.bincount(idx_sorted_np, minlength=E)
+        touched = np.nonzero(counts)[0]
+        starts = np.zeros(E + 1, np.int64)
+        starts[1:] = np.cumsum(counts)
+        metas = []
+        for e in touched:
+            c0 = int(starts[e])
+            for r in range(0, int(counts[e]), _rt):
+                metas.append((int(e), c0 + r, min(_rt, int(counts[e]) - r)))
+        tmeta = mx.array(np.array(metas, np.int32).reshape(-1))
+        ntiles = len(metas)
+        _memo_put(_mk, (tmeta, ntiles))
     cbk = codebook.astype(mx.float16) if codebook.dtype != mx.float16 \
         else codebook
     dims = _dims_array(OUT, IN, IN // 64, K, ntiles)
@@ -3882,14 +3912,27 @@ class VQSwitchLinear(nn.Module):
                     x2 = x2.astype(mx.float16)
                 k_rep = N // T
                 if not sorted_indices:
-                    order = np.argsort(idx_np, kind="stable")
-                    inv = np.argsort(order, kind="stable")
-                    src = (order // k_rep).astype(np.uint32)
-                    y = _prefill(None, idx_np[order],
+                    # Same memo, same reason (F42): gate/up/down share
+                    # idx_np, so the two argsorts and the idx gather repeat
+                    # verbatim for 2 of every 3 calls. idx_sorted is cached
+                    # too -- it feeds the tile memo in _gemmseg_prefill, so a
+                    # hit there needs the identical bytes object anyway.
+                    _sk = ("sort", idx_np.tobytes(), int(k_rep))
+                    _sh = _memo_get(_sk)
+                    if _sh is not None:
+                        idx_sorted, src, inv_mx = _sh
+                    else:
+                        order = np.argsort(idx_np, kind="stable")
+                        inv = np.argsort(order, kind="stable")
+                        src = (order // k_rep).astype(np.uint32)
+                        idx_sorted = idx_np[order]
+                        inv_mx = mx.array(inv.astype(np.uint32))
+                        _memo_put(_sk, (idx_sorted, src, inv_mx))
+                    y = _prefill(None, idx_sorted,
                                  self["codes"], self["codebook"],
                                  self["vq_scales"], pack_bits=pb,
                                  in_features=IN, xsrc=x2, src_rows=src)
-                    y = y[mx.array(inv.astype(np.uint32))]
+                    y = y[inv_mx]
                 else:
                     src = (np.arange(N, dtype=np.uint32) // k_rep) \
                         .astype(np.uint32)
