@@ -1,5 +1,70 @@
 # FINDINGS LOG — the tended record
 
+## READ THIS FIRST — the load-bearing facts (2026-09-09)
+
+If you read nothing else in this file, read this block. Everything here is
+MEASURED, and several items overturned a confidently-documented claim.
+
+**THE CEILING (F39).** Deleting gemmseg's entire NGRP loop — phases 1, 2 and 3
+— makes prefill 1.49x faster (2025.5 -> 3015.5 tok/s). So the whole VQ kernel
+body is **33% of prefill**. An infinitely fast kernel is worth 1.49x. VQ sits
+at 87% of affine; the last ~13% CANNOT be closed from inside the kernel. Four
+swarm rounds and 60+ proposals aimed at that 33%. **The other 67% (attention,
+router, non-MoE layers, dispatch, host) has never been examined.**
+
+**WHAT ACTUALLY SHIPS AND WORKS**
+* CB_DEV at cb >= 16 KB: **1.46x**, verified in two harnesses (F21/F32).
+  Mechanism PROVEN = **occupancy**, not codebook locality (F36): injecting
+  dead threadgroup bytes with cb untouched reproduces it to three decimals
+  (1.464x vs 1.463x). Budget curve: 12 KB -> 2065 tok/s, 20 KB -> 1864,
+  28 KB -> 1411.
+* Ragged-NSUB relaxation: **1.34x** on Flash-2.1 (F31), NOT the "null" it was
+  documented as. The original benchmark ran 7 minutes before the bundle it was
+  testing got the change.
+* d8 fused arm: ~1.3x, promoted and holding.
+
+**WHAT IS FALSE — do not rediscover**
+* RTILE=64 is SLOWER everywhere: 0.75x on d4-K2048, 0.87-0.97x on Flash-2.1,
+  across two boxes and two harnesses (F25c/F33). The documented 1.23x and the
+  "topology/geometry flips the sign" story do not reproduce. Doc superseded.
+* There is no NSUB=80 mystery (F31). It is 1.34x.
+* gemmseg tail-tile waste: 8.4% of SLOTS but only **~1.1% of wall time**
+  (F37). The whole cluster of tail-tile ideas is dead.
+* xsrc scatter penalty: **1.8% of prefill** (F40).
+* Unreachable on a 100%-fused fleet (below the gemmseg early return):
+  `_decode_chunk`, `_DECODE_CHUNK`, `VQ_DECODE_VEC`, `VQ_MOE_EXACT_GEMM`.
+* NSG (simdgroups/threadgroup) is pinned at OTILE/8 = 4 — `sg` indexes the
+  output tile. Not a knob.
+* `G` is baked into each artifact's scales layout, not an env knob.
+
+**DECODE IS OPEN (F23).** 99.83% of a decode step is inside mlx-lm's forward.
+Excluded by measurement: collectives (0.17%), the ring (1.11x), weight
+bandwidth (1-5% of 819 GB/s). Flash-2.1 and 35B-A3B move nearly identical
+bytes/token and differ 2.3x. Unexplained.
+
+**PUBLISH STATE.** 19 of 20 artifacts FAIL `vqlab check-bundle`. Four
+(27B-VQ-3.9/4.5/4.8, gemma-e4b-PLE) are DENSE bundles missing vq_switch.py and
+raise ModuleNotFoundError on a stock install — they score fine and cannot
+serve. Rebundle+gate is proven on the flagship; backups of every runtime file
+are at ~/.exo/model_py_backups_2026-09-09.
+
+**METHOD RULES THAT EARNED THEIR PLACE TODAY** (each caught a wrong result)
+1. **One harness.** Never compare an exo number to a local-probe number. That
+   error produced the phantom RTILE flip and three wrong decode causes.
+2. **Verify the change is in the RUNNING PROCESS**, not the file you edited.
+   `ps eww` the runner. Caught: a ring-env override that would have measured
+   RTILE=32 twice; a bundle benchmarked before it was rewritten.
+3. **Push an added resource past a hard limit and confirm the expected
+   failure.** A pad sweep produced a beautiful flat refutation of occupancy —
+   invalid, because the compiler had deleted the never-read array. The
+   over-cap case must FAIL or your instrument is not installed.
+4. **Attribution beats argument.** Every finding today came from deleting a
+   component and timing the difference. 60+ swarm proposals, ~0 adopted; the
+   one implemented was bit-exact and 10% slower.
+
+---
+
+
 One entry per finding: the NUMBER, how it was measured, what it changed.
 Newest first. This file exists because no context window survives the arc —
 write here the moment a number lands, not at the end of the night.
