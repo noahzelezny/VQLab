@@ -819,3 +819,54 @@ codebook, which is exactly the shape of the 2.3x; (3) launch census per
 decode step (encoder count via Metal capture); (4) attention-deletion arm on
 the non-VQ 56% of prefill; (5) ship-or-kill decode nocast after gates;
 (6) PLE stub arm on Flash.
+
+## F47 (2026-09-09) — attention is HALF of prefill (linear attention alone 29%), and decode decomposes for the first time: VQ 31% / attention 25% / remainder 37% / +7% launch overlap.
+
+Measurement agent's full report: `scratchpad/fable_measure.md` (probes
+`attn_delete.py`, `decode_ladder.py`). 35B-A3B-VQ-3.4bpw, F41 harness for
+prefill; decode via stream_generate, 200 tokens, shares within one harness.
+
+**Prefill (baseline 4.31 s / 2089 tok/s).** The arch is HYBRID: 30
+GatedDeltaNet (linear-attention) + 10 Qwen3NextAttention layers.
+
+* VQ module -> zeros: 43.2% (reproduces F41's 44% in this process)
+* ALL attention -> zeros: **49.2%**, splitting EXACTLY additively into
+  GatedDeltaNet **29.0%** + full attention 20.2% (SDPA core 14.6% +
+  QKV/RoPE/o_proj 5.6%)
+* remainder ~7.6% (norms, router, embedding, lm_head, glue) — a floor, since
+  decode showed super-additivity
+
+**The headline: GatedDeltaNet, never on any suspect list in five rounds of
+proposals, is the single largest non-VQ prefill consumer at 29%.** Caveat as
+measured: zeroing attention perturbs routing downstream, so 49.2% may be a
+mild over-credit; the exact additivity of the sub-arms is the consistency
+check we have.
+
+**Decode (baseline 17.71 ms/tok / 56.5 tok/s) — first-ever decomposition:**
+
+| slice | ms/tok | share |
+|---|---|---|
+| VQ module | 5.44 | 30.7% (rep spread makes this a 24-31% band) |
+| attention (both kinds) | 4.44 | 25.1% |
+| remainder (router, norms, lm_head, sampling, loop) | 6.58 | **37.2%** |
+| super-additive interaction (both deleted) | 1.25 | +7.1% |
+
+An infinitely fast VQ module buys decode at most **1.44x** on 35B. The
+remainder is the LARGEST slice and has never been examined; its prime suspect
+is lm_head (a vocab-width gemm every token). The +7.1% super-additivity is
+the classic launch/gap-overlap signature — direct support for the launch-
+census hypothesis (F46 program item 3).
+
+Cross-check: an independent manual-step-loop ladder (decode_ladder2.py) gives
+shares within a few points (VQ ~29%, attn ~24%, remainder ~44%) — convergent
+across two harnesses, never mixed in one comparison.
+
+**Contention note.** A same-afternoon lm_head arm produced a 64 ms/tok
+baseline — the Studio GPU was at 100% serving interactive traffic. Numbers
+taken while the box serves are garbage; every table above predates that.
+lm_head arm queued for an idle window.
+
+**Agent's ranked next steps:** (1) split the decode remainder (lm_head arm,
+recorded-routing router arm, launch census); (2) the same decode ladder on
+Flash-2.1 — the 2.3x question now has a per-slice baseline to diff against;
+(3) probe GatedDeltaNet's 29% before any further gemmseg work.
