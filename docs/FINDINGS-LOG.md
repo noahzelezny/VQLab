@@ -10,6 +10,47 @@ edit the entry in place and say CORRECTED. Keep it readable in one sitting.
 
 ## 2026-09-09 (morning, running the overnight proposals)
 
+**F31 · The ragged-NSUB relaxation is worth 1.34x on Flash-2.1 — it was
+shipped and documented as a NULL, and that null was almost certainly measured
+against a runtime that did not yet contain the change.**
+Controlled 2-arm, one harness, M3, 9k, prefill_step 4096, warm rep discarded:
+
+    ragged ADMITTED  834.3 / 825.0 tok/s   (spread 1.1%)
+    ragged REFUSED   615.3 / 616.3 tok/s   (spread 0.16%)   = 1.34x
+
+Refusal reimposes the pre-relaxation gate by wrapping the LOADED module's
+gemmseg_fits; instrumentation confirms it rejects exactly 552 calls, all
+`d8 K16384 IN=640 NSUB=80`, and nothing else.
+
+WHY THE ORIGINAL SAID NULL — the arms diverge in a diagnostic way:
+
+    arm        D8-BENCH (exo)   here (local)   agree?
+    REFUSED    601 tok/s        615, 616       YES, ~2%
+    ADMITTED   598 tok/s        825, 834       NO, 40%
+
+Two different harnesses land on the SAME refused number, which validates
+comparing them; they diverge only on the arm whose code changed. And
+`model.py` in the artifact was rewritten at 10:36 while D8-BENCH was written
+at 10:29 — the doc's ADMITTED arm was very likely running a bundle that still
+refused, i.e. it measured the same path twice and correctly reported 0.995x.
+Same failure shape as the CB_DEV patch a `cd` silently short-circuited: a
+confident null measured on an unapplied change. mtime is circumstantial;
+the 1.34x is not.
+
+SCOPE: Flash-2.1 only. The 397B (hidden 4096, moe_inter 1024) has d8 experts
+at NSUB=512 and NSUB=128, both multiples of 32 — no ragged modules, nothing
+to gain. KERNEL-COVERAGE records Flash-2.1 as the only artifact that was
+below 100% fused. The published Flash-2.1 bundle DOES carry the relaxation
+(mtime 10:36), so downloaders already get the 1.34x; only the documentation
+was wrong.
+
+CONSEQUENCE: D8-BENCH's "NSUB=80 relaxation is a NULL" section, and every
+inference drawn from it — including "at in=640/out=2560 the fused kernel is
+not faster than legacy", which the overnight mission carried forward as a
+headline open mechanism and five proposals were aimed at — rests on that
+measurement. The small-NSUB shape is not mysteriously null; it is 1.34x.
+
+
 **F30 · The NSUB=80 "same kernel, opposite result" framing is WRONG for the
 decode path and RIGHT for prefill — and the two got conflated.**
 Proposal b4 claimed the two d8 shapes run different kernels, explaining the
