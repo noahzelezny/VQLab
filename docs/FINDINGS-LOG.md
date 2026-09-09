@@ -738,3 +738,32 @@ SLOWER than baseline (1801.6 tok/s): the wrapper ADDS a full-tensor cast of
 the [T, IN] hidden state on every call and the module still performs its own
 casts. It removed nothing. A deletion arm must delete; wrapping the boundary
 added work and measured the addition.
+
+## F44 (2026-09-09) — deleting the tail cast makes prefill 12% SLOWER. The dtype-boundary class is closed for Python-level fixes.
+
+compute:5 (salvaged) asked what the fp16<->bf16 boundary casts cost. Activations
+are bf16 (norms/gates bf16, measured), codebook fp16, so the tail
+`y.astype(in_dtype)` is a real conversion of [N, OUT] per module. Arm done
+properly this time: a symlinked artifact copy whose model.py returns `y` in
+fp16 with the astype deleted (nothing added, nothing wrapped).
+
+* baseline ............ 2035.4 tok/s
+* tail cast deleted ... **1796.2 tok/s (0.88x)**
+
+And this reproduces the number the INVALID boundary-cast arm produced (1801.6)
+— that arm was invalid for its stated purpose but was accidentally measuring
+the same thing: fp16 activations meeting bf16 weights downstream. Mixed-dtype
+ops promote, and the promotion costs far more than the cast saves. The cast is
+PROTECTIVE, not overhead.
+
+Consequences:
+* Hoisting/eliding the output cast in Python: **dead** — it makes things worse.
+* The remaining ~4-5% preamble/epilogue is dominated by the fp16 boundary
+  round-trip (x2 bf16->fp16 in, y fp16->bf16 out, per module call), and the
+  only real lever left is a kernel variant with bf16 I/O — a Metal change with
+  a ~4-5% ceiling. Parked; below the effort bar while splice+validate is due.
+
+With F41-F44 the VQ module's 44% is fully attributed and every non-kernel
+class has a measured verdict: dispatch dead (~2%), argsort/scatter small
+(1.2%), host prefix cacheable for ~2.6%, dtype boundary protective. The only
+still-unexamined prefill territory is the non-VQ 56%.
