@@ -10,6 +10,30 @@ edit the entry in place and say CORRECTED. Keep it readable in one sitting.
 
 ## 2026-09-09 (morning, running the overnight proposals)
 
+**F33 · The exo-vs-local RTILE discrepancy is CLOSED: exo agrees, RTILE=64 is
+slower there too. The documented 1.23x does not reproduce in any harness.**
+Flash-2.1, M4 single-box, 9k prefill, 3 reps, flag set through ring-env.sh
+(the canon) and verified in the live runner's env before each arm:
+
+    exo   RTILE=32  519 tok/s     RTILE=64  493 tok/s     0.95x
+    local RTILE=32  472-497       RTILE=64  425-427       0.87x
+
+Same box, both harnesses, same direction. Combined with F25-corrected
+(35B-3.4 uniform d4-K2048 at 0.75x, matched harness), RTILE=64 is now slower
+in FIVE independent measurements across two boxes, two harnesses and two
+artifacts. The 1.23x in RTILE-2026-09-08 is an erroneous measurement, not a
+configuration this repo can reach. Shipped default (32) unchanged.
+
+PROCESS NOTE — a near-miss worth keeping. The first attempt set
+VQ_MOE_GEMMSEG_RTILE=64 in the M4's `~/.exo/exo-env.sh`. That file is sourced
+BEFORE `ring-env.sh`, which assigns RTILE=32 unconditionally by design, so the
+edit would have been silently overridden and arm 2 would have measured
+RTILE=32 a second time — reported as "no difference". Caught only by reading
+the live process env (`ps eww`) before measuring. This is the same
+unapplied-change shape as F31 and the CB_DEV `cd` short-circuit. **Verify the
+flag in the running process, not in the file you edited.**
+
+
 **F32 · CB_DEV (F21, the arc's largest win) VERIFIED independently: 1.46x.**
 35B-3.4, M3, 9k, step 4096, warm rep discarded, local harness — a different
 harness from the one that produced F21's 1.43x:
