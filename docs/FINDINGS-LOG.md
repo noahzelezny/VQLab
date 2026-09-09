@@ -699,3 +699,42 @@ touches no unevaluated array — which is why the `_gemmseg_prefill` number
 (whose input is already a numpy array) stands and this one does not. Second
 arm today killed by measuring something other than what it named; see method
 rule 1.
+
+## F43 (2026-09-09) — the 9% splits: dispatch is ~2%, the __call__ epilogue/preamble GPU ops are ~4-5%. The full VQ-module ladder, one sitting.
+
+New arm: **null-kernel** — `_gemmseg_prefill` runs its entire numpy prefix
+(bincount/nonzero/cumsum, the Python tile loop, the tmeta upload) and then
+returns zeros WITHOUT dispatching. Between the existing arms this isolates the
+last unattributed slices. Two full ladders, same harness as F41/F42:
+
+| arm | run 1 | run 2 | step means |
+|---|---|---|---|
+| whole module deleted | 2.48 s | 2.50 s | — |
+| null-kernel (host prefix, no dispatch) | 2.88 s | 2.94 s | +~9-10% preamble+host |
+| empty loop (dispatch, empty body) | 2.99 s | 3.01 s | +~2% dispatch+write-back |
+| baseline | 4.47 s | 4.38 s | +~31-33% kernel body |
+
+**Final decomposition of the VQ module's 44% of prefill:**
+
+* kernel body .......................... ~31-33%
+* `__call__` preamble/epilogue GPU ops .. **~4-5%** (largest non-kernel slice)
+* `_gemmseg_prefill` host numpy prefix .. ~3.9% (F42)
+* kernel dispatch + write-back ......... **~2%** — dispatch is nearly free
+* argsort + inv + y[inv] scatter ....... ~1.2% (F41)
+* residual / run-to-run ................ ~2%
+
+The dispatch-cost class of proposals (fewer/larger dispatches, batched
+launches) is now **dead**: ~2% ceiling. The live target is the ~4-5% of
+per-call GPU ops around the kernel — prime suspect is the output
+`y.astype(in_dtype).reshape(...)` at the tail (a real fp16->bf16 conversion of
+[N, OUT] per module if activations are bf16), exactly salvaged proposal
+compute:5. NOT yet attributed further; the broadcast_to preamble may be free
+under laziness on the prefill branch (the fused-gather path reads x2 directly
+and xf's graph node may never evaluate).
+
+**INVALID ARM — do not cite (third of the day).** "no-out-cast" fed x to the
+module pre-cast to fp16 so the tail astype would be an identity. It ran
+SLOWER than baseline (1801.6 tok/s): the wrapper ADDS a full-tensor cast of
+the [T, IN] hidden state on every call and the module still performs its own
+casts. It removed nothing. A deletion arm must delete; wrapping the boundary
+added work and measured the addition.
