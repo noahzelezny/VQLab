@@ -10,6 +10,44 @@ edit the entry in place and say CORRECTED. Keep it readable in one sitting.
 
 ## 2026-09-09 (morning, running the overnight proposals)
 
+**F36 · OCCUPANCY IS THE MECHANISM — proven causally, prediction hit within
+1%.** (proposal b0, with the instrument fixed per F35)
+Dead threadgroup bytes injected into _SRC_GEMMSEG2, `cb` NEVER touched,
+CB_DEV arm throughout so the codebook is on device in every cell:
+
+    pad  0 KB -> tg 12 KB   2065.1 tok/s
+    pad  8 KB -> tg 20 KB   1863.6
+    pad 16 KB -> tg 28 KB   1410.6      (pre-registered prediction: ~1400)
+
+Now against F32's CB_DEV arms, which moved `cb` instead of adding dead bytes:
+
+    pad experiment   2065.1 / 1410.6 = 1.464x     cb never changed
+    CB_DEV   (F32)   2027.7 / 1385.4 = 1.463x     cb moved to device
+
+Agreement to three decimals — and the ABSOLUTE values match too: pad=16 KB
+puts the total at 28 KB, threadgroup-arm d4-K2048 sits at 28672 B, and they
+measure 1410.6 vs 1385.4, 1.8% apart. Same budget, same speed.
+
+**The whole 1.46x CB_DEV win is freeing 16 KB of threadgroup memory.** Not
+device-vs-threadgroup latency, not codebook caching, not L2 residency. Sixteen
+kilobytes that nothing ever reads reproduce the entire effect. F34's
+correlation is now a cause, and the source comment's "occupancy pressure at
+the budget edge is a hypothesis, not a finding" can be retired.
+
+CONSEQUENCE FOR THE ARM RULE. `cb_dev = ... or _cb_bytes >= 16384` is written
+in terms of CODEBOOK SIZE, but the physics is TOTAL THREADGROUP BUDGET. They
+coincide today only because wtT+xt+ybuf is a constant 12 KB at RTILE=32, so
+cb >= 16 KB is exactly total >= 28 KB. Any future change to RTILE, OTILE or
+ybuf breaks that coincidence silently and the rule stops tracking the thing
+that matters. The rule should be expressed as a budget threshold. NOT changed
+today — it is behaviourally identical at every shipped geometry, and this is
+the wrong hour to touch the arm that 447 modules depend on.
+
+Method note: the pre-registered prediction is what makes this convincing. ~1400
+was computed from the CB_DEV ratio BEFORE the run, published in the turn that
+launched it, and the measurement returned 1410.6.
+
+
 **F35 · The occupancy discriminator (proposal b0) ran, produced a clean flat
 result, and the result is INVALID — the compiler deleted the instrument.**
 Method: inject `threadgroup half _pad[N]`, written at a runtime index and
