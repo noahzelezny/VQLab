@@ -784,3 +784,38 @@ Acceptance, one harness, fresh bundle vs the deployed 3.4bpw artifact:
 or E must MISS), the FIFO bound (mutation-verified), and that a memo hit's
 tmeta is bit-identical to an independent rebuild. check-bundle PASSES on a
 bundle written from this runtime. Neighbor suites green (47).
+
+## F46 (2026-09-09) — fresh-eyes review (Fable): decode nocast is +3.6% but NOT bit-identical; a10's epitaph is wrong for Flash. Full review: scratchpad/fable_review.md (6 proposals, decode program).
+
+An outside review of the whole runtime + F16-F44 concurred prefill's VQ module
+is exhausted and produced six anchored proposals, all decode / non-VQ. Two were
+cheap enough to run before the release freeze:
+
+**Decode fp16 round-trip deletion (#5): +3.6%, but numerics change.** The
+fused decode kernels are templated on `x.dtype`, so at decode bf16 can flow
+straight through and both boundary casts genuinely disappear (F44's "only
+lever is a Metal change" was a prefill-only conclusion). Measured on 35B-3.4,
+one harness: 53.3 -> 55.2 tok/s decode (+3.6%). BUT the decode-shape logits
+checksum moved (-3138743.5 -> -3126615.75): with T=bf16 the kernel's rounding
+differs from the fp16-staged path, so the review's "bit-identical for
+halfN-staged kernels" prediction is WRONG on d4. A numerics-changing +3.6%
+needs the quality gates, not just a checksum — **parked out of this release**,
+first item of the post-release decode program.
+
+**a10's epitaph is wrong (#6, verified).** F40 dismissed the PLE
+micro-dispatch chain because `vq_ple: no` on 35B-3.4 and 397B-2.2 — but the
+Flash-2.1 bundle's config CARRIES `vq_ple` and its model.py instantiates
+VQPLEEmbedding. Flash pays ~70-80 tiny PLE dispatches per token that 35B does
+not, and Flash is the slow side of the unexplained decode 2.3x. a10 is dead on
+the two models it was checked on and LIVE on Flash.
+
+**The decode program (post-release, in order):** (1) the F41 deletion ladder
+run AT DECODE on Flash + 35B — note the pre-registered number already in the
+source: a 2026-09-02 stub-ablation comment (vq_switch.py ~line 419) measured
+the pre-simd-fix VQ expert path at 9.84 ms/token vs stock's 3.09 on Flash;
+(2) the fixed-code / no-cb kernel arms — F22's bytes/token accounting is
+blind to Flash's dependent codebook-gather chains vs 35B's threadgroup
+codebook, which is exactly the shape of the 2.3x; (3) launch census per
+decode step (encoder count via Metal capture); (4) attention-deletion arm on
+the non-VQ 56% of prefill; (5) ship-or-kill decode nocast after gates;
+(6) PLE stub arm on Flash.
