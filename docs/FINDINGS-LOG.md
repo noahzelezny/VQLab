@@ -10,6 +10,27 @@ edit the entry in place and say CORRECTED. Keep it readable in one sitting.
 
 ## 2026-09-09 (morning, running the overnight proposals)
 
+**F32 · CB_DEV (F21, the arc's largest win) VERIFIED independently: 1.46x.**
+35B-3.4, M3, 9k, step 4096, warm rep discarded, local harness — a different
+harness from the one that produced F21's 1.43x:
+
+    CB_DEV=1 (device, shipped)      2027.7 tok/s
+    CB_DEV=0 (threadgroup, pre-F21) 1385.4 tok/s     = 1.46x
+
+Within 2% of the original claim. The threshold rule shipped yesterday
+(`cb_dev = budget-forced or _cb_bytes >= 16384`, line 3492 of the bundle) is
+sound, and the ~447 modules moved to the device arm were moved correctly.
+
+### Verification scoreboard for the arc's three headline numbers
+    CB_DEV       claimed 1.43x   ->  VERIFIED 1.46x
+    RTILE=64     claimed 1.23x   ->  DOES NOT REPRODUCE (0.75-0.97x, 4 runs)
+    ragged NSUB  claimed null    ->  WRONG, it is 1.34x
+Two of three documented claims were wrong; the one the fleet default rests on
+is right. Both errors were cross-harness or unapplied-change artifacts, not
+kernel physics — and both were caught by re-running in ONE controlled harness,
+which is now the standing requirement before any number enters this log.
+
+
 **F31 · The ragged-NSUB relaxation is worth 1.34x on Flash-2.1 — it was
 shipped and documented as a NULL, and that null was almost certainly measured
 against a runtime that did not yet contain the change.**
