@@ -10,6 +10,46 @@ edit the entry in place and say CORRECTED. Keep it readable in one sitting.
 
 ## 2026-09-09 (morning, running the overnight proposals)
 
+**F40 · The overnight swarm is finished: 14 of 15 proposals dead, 1 survivor,
+5 findings — and every finding came from ATTRIBUTION, not from a proposal.**
+
+Final batch:
+* **a2** (contiguous xsrc pre-gather) — DEAD, measured. Swapping the
+  `srcrows[]` indirection for a contiguous index (same bytes, same
+  instructions, only the address pattern) gives 2050.3 -> 2087.8 tok/s. The
+  ENTIRE scatter penalty is **1.8% of prefill**, and a2 proposes adding a
+  host-side gather pass to reclaim it.
+* **b15** — DEAD twice: anchors line 3666, below the gemmseg return at 3639
+  (unreachable), and premised on the NSUB=80 null.
+* **b6, b7** — DEAD. Both state their decision criterion as "if B's null
+  closes". F31 showed that null is a 1.34x WIN, so there is nothing to close.
+* **a10** — DEAD as written. Its named prime suspect, `VQPLEEmbedding`'s
+  per-shard micro-dispatch chain, does not exist in either shipping model
+  (`vq_ple: no` on 35B-3.4 and 397B-2.2); it is only in the NO-SHIP gemma PLE
+  rung. Its general ask (count dispatches per token) survives inside b9.
+
+### Final scorecard, 15 live proposals
+    DEAD, unreachable code        a0, b13, b15
+    DEAD, structurally impossible b3
+    DEAD, measured too small      a1 (0.90x), a2 (1.8% ceiling), a6, a9, b11
+    DEAD, falsified premise       b6, b7, b15, a10
+    PRODUCED A FINDING            b1 -> F34, b0 -> F36
+    STILL LIVE                    b9 (per-module decode breakdown)
+
+**Five findings came out of this: F34, F36, F37, F38, F39.** Not one came
+from implementing a proposal as designed. Every one came from ATTRIBUTION
+experiments — deleting a component and timing the difference — that I built to
+evaluate proposals rather than from the proposals themselves. The single
+implemented proposal (a1) was bit-exact and 10% slower.
+
+The pattern across four rounds is now unambiguous and worth acting on: swarms
+locate real code and reliably draw wrong conclusions from it, while the cheap
+attribution probe answers the question the proposal was arguing about. The
+next round should ask for MEASUREMENTS TO TAKE, not changes to make — and
+should be pointed at the 67% of prefill that is NOT gemmseg (F39), which no
+proposal in four rounds has touched.
+
+
 **F39 · The ENTIRE gemmseg group loop is 33% of prefill. Deleting all three
 phases buys only 1.49x.** And this corrects F38's framing.
 
