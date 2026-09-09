@@ -57,12 +57,20 @@ local weights + the spliced model.py). Flash/GLM gates must run in the exo
 conda env (bundles import mlx_vlm.models.qwen4_exp) -- harness-env fact, not
 an artifact defect. GLM rungs WARN: vision_config with no processor files;
 text verified, image requests expected to fail (pre-existing).
-**5 rungs CANNOT smoke on hardware we own** -- the RAM preflight (incident-
-born, do not skip) refuses them: 397B-2.4 (117.0 GiB vs M4's 115.2 bar,
-marginal), 397B-2.6/3.1, GLM-3.1/3.6 (122-144 GiB). No single downloader box
-under 192 GB can run them either; they are cluster models. Their coverage is
-check-bundle (runtime text verbatim) + the same runtime generation-proven on
-the other 15. The Hub still carries pre-arc6 everywhere: NOTHING pushed.
+**The 5 cluster-only rungs are now GENERATION-VERIFIED via exo 2-node
+serving** (397B-2.4/2.6/3.1 in ~1-1.5 min each; GLM-3.1/3.6 in 8-10 min, M4
+rank reading its shard over the SMB symlink): place -> real chat completion ->
+teardown, on the exact packages that ship. exo executes the artifact's own
+bundled model.py (trust_remote_code; no vendored runtime anywhere), so these
+smokes exercised the arc6 bundle. The single-box strict-smoke claim remains
+impossible for them on hardware we own (RAM preflight, incident-born, not
+skipped) and for any downloader box under ~192 GB -- they are cluster models.
+**Every node-local package copy on both boxes now carries the arc6 bundle**
+(M4's 10 copies synced with .pre-arc6 backups; M3's ~/.exo entries resolve to
+the SSD artifacts directly). VERIFICATION LEDGER: 20/20 check-bundle, 15/20
+strict single-box smoke, 5/20 2-node serving smoke = 20/20 generation-proven.
+The exo fork (github.com/noahzelezny/exo, mtp-stage1) is pushed through
+68bc1177 incl. the recv-dtype and event-log fixes and the EXO_MTP README row.
 Push runbook: docs/PUSH-RUNBOOK.md, gated on Noah.
 
 **METHOD RULES THAT EARNED THEIR PLACE TODAY** (each caught a wrong result)
