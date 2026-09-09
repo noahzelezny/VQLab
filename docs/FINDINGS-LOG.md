@@ -8,6 +8,34 @@ edit the entry in place and say CORRECTED. Keep it readable in one sitting.
 
 ---
 
+## 2026-09-09 (overnight)
+
+**F27 · The overnight swarms hung for 85 minutes producing zero tokens, and
+nothing noticed.** Both swarm4 runs spawned 5 workers, opened sockets, and
+never streamed one token; M4 runner CPU 4.8%; a single 24k-token prompt then
+timed out at 280s — the serving layer was wedged. Two holes: (a) launch
+verification stopped at "N connections established", which is exactly the
+looks-alive trap; liveness = TOKEN COUNTS ADVANCING, nothing less. (b) the
+1500s silence timeout did not fire on a never-started stream in 85 min —
+harness hole, unfixed, logged for the morning. Prime suspect for the wedge:
+10 concurrent ~24k-token cold prefills against two co-located instances
+(gen-lock exempted), unproven. Recovery: full exo restart, one 27B per node
+placed EXPLICITLY (POST /instance with nodeToRunner), relaunch at lower
+concurrency with a token-liveness gate.
+
+**F28 · Placement stacks one node because the Studio's memory metric lies.**
+exo on the M3 falls back to psutil ("macmon not found"); it reported 14.9 GB
+available while memory_pressure said 61% free (~30 GB reclaimable inactive +
+20 GB swapped). filter_cycles_by_memory believes the metric, so every 27 GB
+auto-placement excluded the Studio and stacked the M4. The HTTP
+place_instance param schema exposes NO node targeting (required_nodes is
+internal-only); explicit placement = POST /instance with a full Instance
+carrying nodeToRunner. Also corrected: the "both on the Studio" claims
+earlier were memory-delta inferences; nodeToRunner is the ground truth and
+said M4 both times it was checked.
+
+---
+
 ## 2026-09-08 (one day, in order of discovery)
 
 **F26 · CB_DEV at d4-K512 is a 0.83x REGRESSION, not a tie.**
