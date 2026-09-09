@@ -870,3 +870,47 @@ lm_head arm queued for an idle window.
 recorded-routing router arm, launch census); (2) the same decode ladder on
 Flash-2.1 — the 2.3x question now has a per-slice baseline to diff against;
 (3) probe GatedDeltaNet's 29% before any further gemmseg work.
+
+## F48 (2026-09-09) — the decode 2.3x is NOT the VQ runtime. Flash's VQ module costs the same absolute ms as 35B's; the whole gap is in the non-VQ trunk. Plus: lm_head 2.5%, GDN 29% = honest compute.
+
+The three wrap-up arms, all on the idle M3.
+
+**Flash vs 35B decode, same script, same box, same env** (the exo conda env —
+Flash's bundle is a VLM and imports mlx_vlm.models.qwen4_exp, which .venv
+lacks; the 35B reference arms were re-run in the same env for comparability):
+
+| | 35B-3.4 | Flash-2.1 |
+|---|---|---|
+| decode baseline | 18.64 ms/tok | 54.31 ms/tok (2.9x) |
+| VQ module (-> zeros) | 5.47 ms (29%) | **6.54 ms (12%)** |
+| PLE (-> zeros) | n/a | ~2.7 ms (~5%, 128 shards) |
+| non-VQ trunk | 13.2 ms | **~45 ms — 3.4x the 35B's** |
+
+**The unexplained 2.3x (F22/F23) is answered in kind: it is not in the VQ
+kernels.** Flash's VQ module is within 1.2x of 35B's in absolute terms; the
+entire gap is the non-VQ trunk — the mlx_vlm text path, attention stack, PLE
+(~5%), per-layer op count. Suspects for the ~45 ms are the launch census and
+the attention arms (Flash's attn-zeros arm still crashes on its VLM cache
+classes — the stub seed written for the 35B arch does not transfer; left for
+the census pass). The VQ runtime is exonerated at decode on both models.
+
+**lm_head is 2.5% of 35B decode** — the "prime suspect" for the 37% remainder
+is a bandwidth blip (19.3 -> 18.8 ms/tok). The remainder is therefore most
+likely many-small-ops / launch gaps, consistent with F47's +7.1%
+super-additivity. Two invalid arms on the way to this number, both logged
+shapes: a class-level stub of QuantizedLinear deleted every attention
+projection (lm_head shares the class — patch INSTANCES, not classes), and a
+free-standing zeros return made the whole model dead code under laziness
+(4.20 ms/tok, "lm_head 78%") — a terminal-node stub MUST depend on its input.
+
+**GDN's 29% of prefill decomposes to honest work:** delta-rule scan kernel
+8.0%, depthwise conv ~2%, projections+norms ~19% — and the shard headers show
+the five GDN projections are already affine-quantized (U32+scales), so the
+19% is quantized-GEMM compute, not an oversight. No cheap runtime lever.
+
+**Attribution campaign closed.** Prefill: VQ 43% (fully decomposed, F41-F45)
++ attention 49% (GDN 29 = honest compute; full attn 20) + ~8% rest. Decode:
+VQ ~29-31% / attention ~25% / remainder ~37% (lm_head exonerated; launch-gap
+signature). Cross-model: the 2.3x is not ours. Post-release program: launch
+census (Flash first), decode-nocast through the quality gates, bf16-I/O
+kernel variant (4-5% prefill ceiling).
