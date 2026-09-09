@@ -10,6 +10,37 @@ edit the entry in place and say CORRECTED. Keep it readable in one sitting.
 
 ## 2026-09-09 (morning, running the overnight proposals)
 
+**F34 · The CB_DEV mechanism is occupancy pressure, and it is MONOTONIC in
+threadgroup-budget utilisation.** (proposal b1, static audit, zero GPU)
+gemmseg v2 threadgroup arrays are cb[K*D halves] + wtT[G][32] + xt[RTILE][G].
+Against the 32768 B cap, versus every CB_DEV result measured so far:
+
+    geometry    cb      total_tg   %cap   CB_DEV effect
+    d4-K512     4096    12288      37%    0.83x  REGRESSION (F26)
+    d2-K1024    4096    12288      37%    1.047x
+    d2-K2048    8192    16384      50%    0.988x tie
+    d4-K2048   16384    24576      75%    1.46x  WIN (F32)
+
+Monotonic: at 37% of budget moving the codebook to device COSTS you, at 50%
+it is a wash, at 75% it is a 1.46x win. That is the "occupancy pressure at the
+budget edge" hypothesis the source comment flags as UNMEASURED — now with a
+shape and a threshold rather than a guess. Four points, one harness each, so
+this is a strong correlation and not yet a proven cause; the clean
+discriminator would vary total budget WITHOUT varying cb, which the current
+flags cannot do (RTILE is the only xt lever and it is gated on cb_dev).
+
+COROLLARY, and it is a nice one: d4-K2048 is the ONLY fleet geometry that is
+threadgroup-LEGAL yet forced to device by the `>= 16384` clause. Everything
+larger is budget-forced regardless; everything smaller is left on threadgroup,
+where the audit says it belongs. The clause is precisely targeted at the 447
+modules where it pays and touches nothing else.
+
+Also killed cheaply this round, both by reachability rather than measurement:
+proposal a0 (`VQ_DECODE_VEC`, a genuinely dormant flag) and b13
+(`VQ_MOE_EXACT_GEMM`) both gate code below the gemmseg early return at line
+3648 — unreachable on a 100%-fused fleet.
+
+
 **F33 · The exo-vs-local RTILE discrepancy is CLOSED: exo agrees, RTILE=64 is
 slower there too. The documented 1.23x does not reproduce in any harness.**
 Flash-2.1, M4 single-box, 9k prefill, 3 reps, flag set through ring-env.sh
