@@ -47,17 +47,23 @@ Excluded by measurement: collectives (0.17%), the ring (1.11x), weight
 bandwidth (1-5% of 819 GB/s). Flash-2.1 and 35B-A3B move nearly identical
 bytes/token and differ 2.3x. Unexplained.
 
-**PUBLISH STATE (arc6, 2026-09-09 15:20).** All 20 local artifacts are
-spliced with the frozen release runtime (d8 + CB_DEV + ragged-NSUB + routing
-memo) and PASS `check-bundle`; `.pre-arc6` backups sit beside every model.py.
-Full `check-release` (load + strict smoke) PASSES on the 13 single-box rungs:
-27B x3, 35B x4, gemma x2, Flash 2.1/3.2 (Flash gates must run in the exo
-conda env -- the bundles import mlx_vlm.models.qwen4_exp, which vqlab's venv
-lacks; that is a harness-env fact, not an artifact defect -- Flash has always
-required mlx-vlm). NOT yet smoked: Flash 4.4/5.5, 397B x4, GLM x3 -- they
-exceed the M3's 96 GB; 397B-2.2 fits the M4, the rest need the two-node path
-arc5 used. The Hub still carries the pre-arc6 runtime everywhere: NOTHING has
-been pushed. Push runbook: docs/PUSH-RUNBOOK.md, gated on Noah.
+**PUBLISH STATE (arc6 final, 2026-09-09 15:40).** All 20 artifacts spliced
+with the frozen release runtime (d8 + CB_DEV + ragged-NSUB + routing memo),
+`.pre-arc6` backups beside every model.py, 20/20 PASS `check-bundle`.
+**15 of 20 PASS full `check-release`** (load + strict smoke through the
+shipping bundle): 27B x3, 35B x4, gemma x2, Flash 2.1/3.2 on the M3; Flash
+4.4/5.5, 397B-2.2 and GLM-2.7 on the M4 (staged as symlink dirs over M4's
+local weights + the spliced model.py). Flash/GLM gates must run in the exo
+conda env (bundles import mlx_vlm.models.qwen4_exp) -- harness-env fact, not
+an artifact defect. GLM rungs WARN: vision_config with no processor files;
+text verified, image requests expected to fail (pre-existing).
+**5 rungs CANNOT smoke on hardware we own** -- the RAM preflight (incident-
+born, do not skip) refuses them: 397B-2.4 (117.0 GiB vs M4's 115.2 bar,
+marginal), 397B-2.6/3.1, GLM-3.1/3.6 (122-144 GiB). No single downloader box
+under 192 GB can run them either; they are cluster models. Their coverage is
+check-bundle (runtime text verbatim) + the same runtime generation-proven on
+the other 15. The Hub still carries pre-arc6 everywhere: NOTHING pushed.
+Push runbook: docs/PUSH-RUNBOOK.md, gated on Noah.
 
 **METHOD RULES THAT EARNED THEIR PLACE TODAY** (each caught a wrong result)
 1. **One harness.** Never compare an exo number to a local-probe number. That
