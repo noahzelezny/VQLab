@@ -1,46 +1,54 @@
 # Morning report — 2026-09-09
 
-## The night, in one paragraph
-Both overnight swarms initially HUNG for 85 minutes producing zero tokens
-(F27: the serving layer wedged; a lone 24k-token prompt timed out). Recovery:
-full exo restart, one 27B per node placed EXPLICITLY via POST /instance with
-nodeToRunner (F28: the Studio's psutil-fallback memory metric lies, which is
-why auto-placement stacks one node), relaunch at concurrency 3 behind a
-token-liveness gate. After that: clean. Both banks completed with
-checkpoints, and every harness fix earned its keep — per-proposer landing,
-resume, and salvage (three non-submitters left 40-57k chars of prose EACH
-instead of nothing; contrast the 75k tokens vaporised on 09-08).
+## Headline: two "open mechanisms" were measurement errors, and the big win is real
 
-## The haul: 27 proposals, and the mission steering worked
-Bank A (original frames): 11. Bank B (occupancy/shape/scheduling/numerics/
-measurement): 16. Mechanical screen: 25/27 survive (the screen only catches
-geometry + dead-path errors — anchor-verify before building ANYTHING).
+The overnight swarms aimed 12 of 27 proposals at two phenomena. Both turned
+out not to exist. The arc's largest win was independently verified.
 
-Nearly all 27 are MEASUREMENTS, clustered on exactly the open mechanisms:
+    CB_DEV @ >=16KB   claimed 1.43x   VERIFIED 1.46x   (F32)
+    RTILE=64          claimed 1.23x   DOES NOT REPRODUCE, 0.75-0.97x (F25 corrected)
+    ragged-NSUB       claimed null    WRONG — it is 1.34x (F31)
 
-| open question | proposals aimed at it |
-|---|---|
-| WHY RTILE=64 flips sign on geometry (F25) | a3 a5 a7 · b2 b8 b12 b14 |
-| WHY the NSUB=80 fused null (28.4% of work) | a4 a8 · b4 b5 b10 |
-| the 8.4% tail-tile waste (F24) | a1 a6 a9 · b11 |
-| decode's fixed cost inside the forward (F23) | a0 a10 · b9 b15 |
-| occupancy mechanism behind CB_DEV 1.76x | b0 b1 |
+**The fleet default is sound.** CB_DEV is what moved ~447 modules to the
+device arm yesterday, and it reproduces in a second harness within 2%.
 
-Notable singles, unverified: a0 resurrects a DORMANT VQ_DECODE_VEC kernel
-flag for the decode path (check it exists before excitement); b14 wants to
-decompose the 1.76x into CB_DEV-vs-RTILE components — pointed, since F25
-showed the two flags interact; b4's "gate-identity A/B" forces the NSUB=80
-shape through gemmseg vs fused vs legacy under one routing.
+## What dissolved, and why it matters
 
-## Suggested morning order
-1. Pick ONE RTILE-flip experiment (b8 and a7 look cheapest: env-flag NGRP
-   sweeps) and ONE NSUB-null experiment (b4). Run on the out-of-exo harness
-   (probe_moe_prefill_attrib.py pattern — no placements, per-process env).
-2. Read the three salvage blobs in swarm4a/ideas.partial.json (fusion,
-   batching, host) — 137k chars of 27B reasoning that never got structured.
-3. The wedge (F27) is UNREPRODUCED and unexplained: 10 concurrent 24k
-   prefills is the suspect. One controlled blast test would settle it.
-4. Publish gate (19 artifacts) still awaits Noah.
+**There is no RTILE geometry flip.** Matched harness, both artifacts:
+35B-3.4 (uniform d4-K2048) 0.75x, Flash-2.1 0.93-0.97x. Flash's milder
+number is DILUTION — only 138 of its 272 modules are RTILE-eligible; the
+other 128 are d8-K256 on the threadgroup arm and ignore the flag. The
+original "flip" compared an exo number against a local one. Also falsified:
+prefill chunk size is not the mechanism (2048/4096/8192, sign never moves).
+OPEN: exo's 1.23x has not reproduced locally in four runs across both boxes.
 
-Everything above is claims-by-swarm until anchor-checked. The night's rule
-held: nothing was built on any of it.
+**The NSUB=80 "null" is a 1.34x win.** Admitted 834/825 vs refused 615/616
+tok/s, refusal instrumented to reject exactly the 552 intended calls. The
+original null was measured at 10:29; the artifact's model.py was rewritten at
+10:36 — its ADMITTED arm was running a bundle that still refused. Diagnostic
+tell: the two harnesses AGREE on refused (601 vs 615) and diverge 40% only on
+the arm whose code changed. Flash-2.1 only; the 397B has no ragged modules.
+
+Consequence: five overnight proposals were aimed at explaining a phenomenon
+that does not exist, and D8-BENCH's "the null matters more than the win would
+have" reasoning is void.
+
+## Proposals verified and killed BEFORE burning GPU time
+* **a7** unrunnable — its sweep axis (G) is baked into artifact `scales`
+  layout, not an env knob.
+* **b4** mis-aimed — its different-kernel mechanism is real but lives in
+  `_fused_resolve` (decode); the null it explains was measured in gemmseg
+  prefill, which has one source and no shape branching. Surviving new fact:
+  on decode, shape B falls off the simd kernel onto the device-cb variant.
+
+## Still genuinely open
+1. exo-vs-local RTILE discrepancy (needs an exo-side re-measurement).
+2. Decode: 99.83% inside mlx-lm's forward (F23), mechanism unprobed.
+3. gemmseg tail-tile waste 8.4% (F24), structural.
+4. CB_DEV's occupancy mechanism (F21/F32) — the win is verified, the WHY is not.
+5. The 85-minute serving wedge (F27), unreproduced.
+6. Publish gate (19 artifacts) — Noah's call.
+
+## Method note that earned its keep
+Every correction today came from re-running a claim in ONE controlled
+harness. That is now the standing bar before a number enters FINDINGS-LOG.
