@@ -656,3 +656,46 @@ like a finding and is not.
 Four independent swarm frames (bank B `occupancy`, bank A `fusion`, `batching`,
 `host`) nominated `_gemmseg_prefill`'s numpy prefix. This arm says their target
 region is worth ~12-13%; it does not yet say the prefix is the part.
+
+## F42 (2026-09-09) — splitting F41's 14%: the host prefix is 3.9%, not 12%. The four frames that nominated it were right about the place and wrong about the size.
+
+F41 left ~14% of prefill inside the VQ module but outside the kernel body, and
+four independent swarm frames all nominated `_gemmseg_prefill`'s numpy prefix.
+Same harness as F41 (35B-A3B-VQ-3.4bpw, 9000 tokens, step 4096).
+
+**Host wall inside `_gemmseg_prefill`** (instrumented, output CORRECT — this is
+a wrap-and-accumulate, not a deletion): 360 calls per prefill, **0.171-0.177 s
+= 3.8-4.0% of wall**. Treat as an UPPER bound: the timer also catches any queue
+backpressure on the `mx.array` uploads.
+
+**Running total of F41's 14%:**
+
+| slice | cost | how measured |
+|---|---|---|
+| `_gemmseg_prefill` numpy prefix + uploads | 3.9% | wrapped timer |
+| argsort + inv + `y[inv]` scatter | 1.2% | `sorted_indices=True` arm (F41) |
+| dispatch + GPU-side gather/cast + `__call__` preamble | **~9%** | UNSEPARATED |
+
+So the prefix is real but a third of what the convergence implied, and the
+biggest remaining slice is still unattributed.
+
+**A cache is worth ~2.6%, not 3.9%.** The tile build is keyed on the routing
+bytes, and **33% of calls repeat within one forward** (240 of 720) — exactly
+1 in 3, matching the gate/up/down projections of one MoE layer sharing routing.
+A correct memo collapses three identical prefixes into one, so it can recover
+two thirds of 3.9%.
+
+**Watch the trap here.** The first version of that probe reported **100%** cache
+hits, because the reps replay the same prompt and the cache persisted across
+them. It was measuring "the same prompt routes the same way", which no shipped
+cache could exploit. Clearing per rep gives the 33% that is actually reachable.
+
+**INVALID ARM — do not cite.** Wrapping `VQSwitchLinear.__call__` in the same
+host timer reported **93.5% of wall**, of which 89.5% "preamble/epilogue". That
+is not host work: `np.array(idx_flat, copy=False)` forces evaluation of a lazy
+MLX array, so the timer blocks on the GPU queue and measures GPU time as host
+time. Under MLX laziness a host timer is only meaningful around code that
+touches no unevaluated array — which is why the `_gemmseg_prefill` number
+(whose input is already a numpy array) stands and this one does not. Second
+arm today killed by measuring something other than what it named; see method
+rule 1.
