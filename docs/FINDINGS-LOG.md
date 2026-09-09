@@ -767,3 +767,20 @@ With F41-F44 the VQ module's 44% is fully attributed and every non-kernel
 class has a measured verdict: dispatch dead (~2%), argsort/scatter small
 (1.2%), host prefix cacheable for ~2.6%, dtype boundary protective. The only
 still-unexamined prefill territory is the non-VQ 56%.
+
+## F45 (2026-09-09) — routing memo SHIPPED into the runtime: +1.9% prefill, logits bit-identical.
+
+The one surviving Python win from F42. `_gemmseg_prefill`'s tile build and the
+fused-gather branch's argsort trio are memoised on the routing BYTES (exact
+memcmp keys, FIFO-bounded at 8). Gate/up/down share a layer's routing, so 2 of
+3 rebuilds are eliminated.
+
+Acceptance, one harness, fresh bundle vs the deployed 3.4bpw artifact:
+* logits checksum, 4096-token forward: **-3428763136.0 both** (identical)
+* prefill: 2046.3 -> **2084.9 tok/s (+1.9%)** (predicted ~2.6% from the 33%
+  hit rate x 3.9% prefix; measured a bit under, as usual)
+
+`tests/test_routing_memo.py` pins exact keying (same bytes / different RTILE
+or E must MISS), the FIFO bound (mutation-verified), and that a memo hit's
+tmeta is bit-identical to an independent rebuild. check-bundle PASSES on a
+bundle written from this runtime. Neighbor suites green (47).
