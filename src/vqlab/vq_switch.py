@@ -3415,6 +3415,13 @@ _GEMMSEG_XT_PAD = os.environ.get("VQ_GEMMSEG_XT_PAD", "0") == "1"
 # (the class d8/devx shipped under; gated by the comparator, not checksum).
 # "0" is the kill switch back to the cast pipeline.
 _GEMMSEG_BF16IO = os.environ.get("VQ_GEMMSEG_BF16IO", "1") == "1"
+# Decode-side bf16 I/O (F46: +3.6% decode measured on 35B-3.4). The small-N
+# _fused kernels are templated on x.dtype, so bf16 flows straight through and
+# both per-call casts disappear -- ~144+ elementwise passes/token. Numerics
+# CHANGE (halfN-staged kernels round in-kernel where the host astype did;
+# d8 float4-staged skip the fp16 rounding entirely) -- covered by the v2
+# release policy: PPL is retested before anything ships. Kill switch = "0".
+_DECODE_BF16IO = os.environ.get("VQ_DECODE_BF16IO", "1") == "1"
 _XT_PAD_HALVES = 8 if _GEMMSEG_XT_PAD else 0
 # Extra threadgroup bytes the pad costs at each RTILE (halves * 2 B * rows).
 _XT_PAD_BYTES_R32 = _XT_PAD_HALVES * 2 * 32
@@ -3929,7 +3936,11 @@ class VQSwitchLinear(nn.Module):
         N = idx_flat.size
         xf = mx.broadcast_to(x, (*indices.shape, 1, IN)).reshape(N, IN)
         in_dtype = xf.dtype
-        if in_dtype not in (mx.float16,):
+        # Decode (N <= VQ_FUSED_MAX_N) may keep bf16: _fused templates on
+        # x.dtype and returns it, so the tail astype becomes an identity.
+        # Prefill and the legacy xf paths still get the fp16 cast below.
+        _keep_bf16 = (_DECODE_BF16IO and in_dtype == mx.bfloat16)
+        if in_dtype not in (mx.float16,) and not _keep_bf16:
             xf = xf.astype(mx.float16)
         pb = self.pack_bits
         # Packed d=2 now has its own fused kernel (vq_fused_packed{bits}_d2,
@@ -3989,6 +4000,8 @@ class VQSwitchLinear(nn.Module):
                                  self["vq_scales"], pack_bits=pb,
                                  in_features=IN, xsrc=x2, src_rows=src)
             elif not sorted_indices:
+                if xf.dtype != mx.float16:      # legacy path is fp16-only
+                    xf = xf.astype(mx.float16)
                 order = np.argsort(idx_np, kind="stable")
                 inv = np.argsort(order, kind="stable")
                 y = _prefill(xf[mx.array(order.astype(np.uint32))],
@@ -3997,6 +4010,8 @@ class VQSwitchLinear(nn.Module):
                              pack_bits=pb, in_features=IN)
                 y = y[mx.array(inv.astype(np.uint32))]
             else:
+                if xf.dtype != mx.float16:      # legacy path is fp16-only
+                    xf = xf.astype(mx.float16)
                 y = _prefill(xf, idx_np,
                              self["codes"], self["codebook"], self["vq_scales"],
                              pack_bits=pb, in_features=IN)
