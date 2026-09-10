@@ -3265,24 +3265,27 @@ _SRC_GEMMSEG2 = _PACK_FETCH + r"""
             }
         }
         {
-            const device half* xrow = 0;
+            // TIO = I/O element type (half or bfloat16_t). The (half)
+            // convert at stage-in is round-to-nearest -- bit-identical to
+            // the host astype it replaces; MACs stay half8x8 regardless.
+            const device TIO* xrow = 0;
             if (xr < nrow)
                 xrow = xsrc + (size_t)srcrows[r0 + xr] * IN + (size_t)g * G;
             for (int q = q0; q < q0 + SPG / 4; ++q) {
                 for (int u = 0; u < D_BAKE; ++u)
                     xt[xr][q * D_BAKE + u] =
-                        (xr < nrow) ? xrow[q * D_BAKE + u] : (half)0;
+                        (xr < nrow) ? (half)xrow[q * D_BAKE + u] : (half)0;
             }
 #if RTILE == 64
             // paired half: same thread stages row xr+32
             const int xr2 = xr + 32;
-            const device half* xrow2 = 0;
+            const device TIO* xrow2 = 0;
             if (xr2 < nrow)
                 xrow2 = xsrc + (size_t)srcrows[r0 + xr2] * IN + (size_t)g * G;
             for (int q = q0; q < q0 + SPG / 4; ++q) {
                 for (int u = 0; u < D_BAKE; ++u)
                     xt[xr2][q * D_BAKE + u] =
-                        (xr2 < nrow) ? xrow2[q * D_BAKE + u] : (half)0;
+                        (xr2 < nrow) ? (half)xrow2[q * D_BAKE + u] : (half)0;
             }
 #endif
         }
@@ -3335,7 +3338,7 @@ _SRC_GEMMSEG2 = _PACK_FETCH + r"""
             for (int c = c0; c < c0 + 8; ++c) {
                 const int oc = o0 + c;
                 if (oc < OUT)
-                    y[(size_t)(r0 + tt) * OUT + oc] = (half)ybuf[tt][c];
+                    y[(size_t)(r0 + tt) * OUT + oc] = (TIO)(half)ybuf[tt][c];
             }
         }
 #if RTILE == 64
@@ -3344,7 +3347,7 @@ _SRC_GEMMSEG2 = _PACK_FETCH + r"""
             for (int c = c0; c < c0 + 8; ++c) {
                 const int oc = o0 + c;
                 if (oc < OUT)
-                    y[(size_t)(r0 + tt2) * OUT + oc] = (half)ybuf[tt2][c];
+                    y[(size_t)(r0 + tt2) * OUT + oc] = (TIO)(half)ybuf[tt2][c];
             }
         }
 #endif
@@ -3403,6 +3406,13 @@ _GEMMSEG_RTILE = int(os.environ.get("VQ_MOE_GEMMSEG_RTILE", "32"))
 # affine steel pattern); default OFF until the bench promotes it. The budget
 # arithmetic below MUST follow this flag or an edge geometry E134s at load.
 _GEMMSEG_XT_PAD = os.environ.get("VQ_GEMMSEG_XT_PAD", "0") == "1"
+# bf16 I/O for gemmseg (F49 wrapper item 1). "1" lets the prefill kernel read
+# bf16 activations and write bf16 output directly, deleting both full-tensor
+# boundary casts. Numerics are BIT-IDENTICAL to the cast pipeline by
+# construction: stage-in converts bf16->half with the same round-to-nearest
+# the astype used, MACs stay half8x8, and the store double-rounds
+# float->half->bf16 exactly as astype did. Default off until benched.
+_GEMMSEG_BF16IO = os.environ.get("VQ_GEMMSEG_BF16IO", "0") == "1"
 _XT_PAD_HALVES = 8 if _GEMMSEG_XT_PAD else 0
 # Extra threadgroup bytes the pad costs at each RTILE (halves * 2 B * rows).
 _XT_PAD_BYTES_R32 = _XT_PAD_HALVES * 2 * 32
@@ -3566,10 +3576,13 @@ def _gemmseg_prefill(xsrc, src_rows, idx_sorted_np, codes, codebook, scales,
             name += f"_r{rtile}"
         if _GEMMSEG_XT_PAD:
             name += "_xp8"
+        # TIO follows xsrc's dtype so the kernel cache never mixes builds.
+        if xsrc.dtype == mx.bfloat16:
+            name += "_bf16io"
         template = [("BITS", pack_bits), ("GROUP", 64),
                     ("MAX_K", 1 if cb_dev else K), ("D_BAKE", D),
                     ("CB_DEV", 1 if cb_dev else 0), ("RTILE", rtile),
-                    ("XPAD", _XT_PAD_HALVES)]
+                    ("XPAD", _XT_PAD_HALVES), ("TIO", xsrc.dtype)]
         if not pack_bits:
             # unpacked arm reads codes as CT (uchar/ushort), not uint words
             template.append(("CT", codes.dtype))
@@ -3578,6 +3591,8 @@ def _gemmseg_prefill(xsrc, src_rows, idx_sorted_np, codes, codebook, scales,
         if D != 2:
             raise NotImplementedError(
                 "vq_gemmseg v1 is d2-only; use VQ_MOE_FUSED_GEMM=2")
+        if xsrc.dtype != mx.float16:
+            raise NotImplementedError("gemmseg v1 is fp16-I/O only")
         name, src = f"vq_gemmseg_packed{pack_bits}_d2", _SRC_GEMMSEG
         template = [("BITS", pack_bits), ("GROUP", 64), ("OTILE", 32),
                     ("RTILE", 32), ("MAX_K", K)]
@@ -3587,7 +3602,7 @@ def _gemmseg_prefill(xsrc, src_rows, idx_sorted_np, codes, codebook, scales,
     common = dict(
         inputs=[codes, cbk, scales, xsrc, mx.array(src_rows), tmeta, dims],
         grid=grid, threadgroup=tg,
-        output_shapes=[(N, OUT)], output_dtypes=[mx.float16],
+        output_shapes=[(N, OUT)], output_dtypes=[xsrc.dtype],
     )
     kern = _get_kernel_spec(name, src, template) \
         if _SPEC_KERNELS else None
@@ -3935,7 +3950,11 @@ class VQSwitchLinear(nn.Module):
             T = x.size // IN
             if _FUSE_GATHER and N % max(T, 1) == 0:
                 x2 = x.reshape(T, IN)
-                if x2.dtype not in (mx.float16,):
+                # bf16 flows straight through when the bf16-I/O kernel is
+                # armed (the kernel converts at its edges, bit-identically);
+                # otherwise the historical host cast.
+                if x2.dtype not in (mx.float16,) and not (
+                        _GEMMSEG_BF16IO and x2.dtype == mx.bfloat16):
                     x2 = x2.astype(mx.float16)
                 k_rep = N // T
                 if not sorted_indices:
