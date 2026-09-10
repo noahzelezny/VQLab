@@ -3338,7 +3338,7 @@ _SRC_GEMMSEG2 = _PACK_FETCH + r"""
             for (int c = c0; c < c0 + 8; ++c) {
                 const int oc = o0 + c;
                 if (oc < OUT)
-                    y[(size_t)(r0 + tt) * OUT + oc] = (TIO)(half)ybuf[tt][c];
+                    y[(size_t)(r0 + tt) * OUT + oc] = (TIO)ybuf[tt][c];
             }
         }
 #if RTILE == 64
@@ -3347,7 +3347,7 @@ _SRC_GEMMSEG2 = _PACK_FETCH + r"""
             for (int c = c0; c < c0 + 8; ++c) {
                 const int oc = o0 + c;
                 if (oc < OUT)
-                    y[(size_t)(r0 + tt2) * OUT + oc] = (TIO)(half)ybuf[tt2][c];
+                    y[(size_t)(r0 + tt2) * OUT + oc] = (TIO)ybuf[tt2][c];
             }
         }
 #endif
@@ -3406,13 +3406,15 @@ _GEMMSEG_RTILE = int(os.environ.get("VQ_MOE_GEMMSEG_RTILE", "32"))
 # affine steel pattern); default OFF until the bench promotes it. The budget
 # arithmetic below MUST follow this flag or an edge geometry E134s at load.
 _GEMMSEG_XT_PAD = os.environ.get("VQ_GEMMSEG_XT_PAD", "0") == "1"
-# bf16 I/O for gemmseg (F49 wrapper item 1). "1" lets the prefill kernel read
-# bf16 activations and write bf16 output directly, deleting both full-tensor
-# boundary casts. Numerics are BIT-IDENTICAL to the cast pipeline by
-# construction: stage-in converts bf16->half with the same round-to-nearest
-# the astype used, MACs stay half8x8, and the store double-rounds
-# float->half->bf16 exactly as astype did. Default off until benched.
-_GEMMSEG_BF16IO = os.environ.get("VQ_GEMMSEG_BF16IO", "0") == "1"
+# bf16 I/O for gemmseg (F49/F50, rev-2 DEFAULT). The prefill kernel reads
+# bf16 activations and writes bf16 output directly, deleting both full-tensor
+# boundary casts (+1.3-1.8% measured). Stage-in converts bf16->half with the
+# astype's own round-to-nearest (bit-identical); the store SINGLE-rounds
+# float->bf16 -- one convert fewer and strictly more accurate than the old
+# float->half->bf16 double round, differing from shipped by <=1 bf16 ULP
+# (the class d8/devx shipped under; gated by the comparator, not checksum).
+# "0" is the kill switch back to the cast pipeline.
+_GEMMSEG_BF16IO = os.environ.get("VQ_GEMMSEG_BF16IO", "1") == "1"
 _XT_PAD_HALVES = 8 if _GEMMSEG_XT_PAD else 0
 # Extra threadgroup bytes the pad costs at each RTILE (halves * 2 B * rows).
 _XT_PAD_BYTES_R32 = _XT_PAD_HALVES * 2 * 32
