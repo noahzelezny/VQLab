@@ -965,3 +965,26 @@ deepcopy+pool is the named suspect in llm_client's own comments. Next
 reproduction must go THROUGH exo serving (repeated 25k-prompt requests, two
 streams), not local mlx_lm. Daylight item; the artifacts themselves are not
 implicated by current evidence.
+
+## F50 (2026-09-10) — the F49 build round: +3.0% bit-identical over shipped; one survivor promoted-ready, one closed null.
+
+All three F49 wrapper/kernel items built and benched, one harness, checksums
+identical to shipped on every arm.
+
+* **bf16-I/O gemmseg (VQ_GEMMSEG_BF16IO=1): +1.3-1.8%.** TIO template; both
+  boundary casts deleted; BIT-IDENTICAL by construction (stage-in uses the
+  astype's own rounding, store preserves the float->half->bf16 double-round).
+  182 kernel tests green both flag states. Default off pending the next
+  runtime rev decision.
+* **Vectorized tile build: +0.5-0.8%,** bit-identical tmeta (200-trial
+  equivalence pin). Default ON (it is simply better code).
+* **xt ld-padding: NULL — measured tie inside noise** across interleaved
+  reps, bit-exact. The proposal priced this outcome; the compiler/hardware
+  already handles the 128 B stride. Flag kept (default off), hunt closed.
+
+**Cumulative vs the SHIPPED arc6 bundle, one session, interleaved:** 2151.5 /
+2157.3 -> 2215.5 tok/s = **+3.0%**, moving 35B-3.4 from 82% to **84.5% of
+affine-8bit prefill**. Remaining measured headroom to ~95%: the rest of the
+F49 wrapper (dispatch is dead, scatter small — mostly the broadcast/epilogue
+residue) and the ~8% kernel-body gap to affine's qmm. Decode nocast (+3.6%,
+F46) still awaits quality gates.
