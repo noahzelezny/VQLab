@@ -65,9 +65,12 @@ base architecture.
 upstream exo pins a released `mlx-lm` that lacks `qwen4_exp`, so stock exo
 cannot serve this model. Our [exo fork, branch
 `mtp-stage1`](https://github.com/noahzelezny/exo) serves it, and speculative
-decoding there is one opt-in knob: set `EXO_MTP=1` in the worker's
-environment and it loads `mtp-head-q6.safetensors` and drafts; leave it
-unset (the default) and the sidecar is never read — no memory cost.
+decoding there is one opt-in knob: launch each node with `exo --mtp`
+(equivalently, `EXO_MTP=1` in the worker's environment) and it loads
+`mtp-head-q6.safetensors` and drafts; leave it off (the default) and the
+sidecar is never read — no memory cost. Drafting serves requests
+sequentially (the batch engine has no MTP path), so leave it off for
+concurrent workloads.
 Budget ≈2.2 GiB extra resident when drafting is enabled. Through-exo throughput is
 measured so far only on the 2.1bpw rung (23.7–25.5 tok/s, acceptance
 0.82–0.88); the sidecar head is the same file on every rung.

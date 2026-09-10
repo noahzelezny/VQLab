@@ -164,7 +164,8 @@ sampling). It is never named in the weight index, so stock loaders ignore it
 entirely; nothing changes unless you opt in.
 
 **Cluster speculative decoding is live for this rung** on the [`mtp-stage1`](https://github.com/noahzelezny/exo/tree/mtp-stage1)
-branch of our exo fork: set `EXO_MTP=1` on every node and serve as usual —
+branch of our exo fork: launch each node with `exo --mtp` (equivalently
+`EXO_MTP=1`) and serve as usual —
 drafting engages automatically, and the trunk verifies every drafted token
 by exact rejection sampling, so outputs are exactly the base model's.
 Validated on this exact artifact on a 2-node pipeline; acceptance 0.70–0.87
