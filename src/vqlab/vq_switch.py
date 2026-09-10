@@ -3181,7 +3181,14 @@ _SRC_GEMMSEG2 = _PACK_FETCH + r"""
     // token-shaped); xt and ybuf double. CB_DEV only: with a threadgroup
     // codebook at d4-K2048 the sum would be 16384 + 20480 = 36864 > cap.
     threadgroup half  wtT[GROUP][32];    // transposed, pre-scaled (4 KB)
-    threadgroup half  xt[RTILE][GROUP];  // 4 KB @32, 8 KB @64
+    // XPAD (0 or 8): leading-dimension pad on xt. GROUP = 64 halves is an
+    // exact 128 B row stride, so all eight rows of a simdgroup A fragment
+    // land on one bank column -- the worst-conflict geometry. Affine's
+    // steel pads EVERY staged tile by +16 B for exactly this
+    // (quantized.h BK_padded/BN_padded); swarm7 survivor #1, F49 arm.
+    // +8 halves = +16 B/row = 512 B total @RTILE=32. Bit-exact: same
+    // logical elements, only the row stride changes.
+    threadgroup half  xt[RTILE][GROUP + XPAD];  // 4/4.5 KB @32, 8/9 KB @64
     threadgroup float ybuf[RTILE][32];   // 4 KB @32, 8 KB @64
 
 #if !CB_DEV
@@ -3286,22 +3293,22 @@ _SRC_GEMMSEG2 = _PACK_FETCH + r"""
             simdgroup_half8x8 B;
             simdgroup_load(B, &wtT[k8 * 8][(int)sg * 8], 32);
             simdgroup_half8x8 A;
-            simdgroup_load(A, &xt[0][k8 * 8], GROUP);
+            simdgroup_load(A, &xt[0][k8 * 8], GROUP + XPAD);
             simdgroup_multiply_accumulate(C0, A, B, C0);
-            simdgroup_load(A, &xt[8][k8 * 8], GROUP);
+            simdgroup_load(A, &xt[8][k8 * 8], GROUP + XPAD);
             simdgroup_multiply_accumulate(C1, A, B, C1);
-            simdgroup_load(A, &xt[16][k8 * 8], GROUP);
+            simdgroup_load(A, &xt[16][k8 * 8], GROUP + XPAD);
             simdgroup_multiply_accumulate(C2, A, B, C2);
-            simdgroup_load(A, &xt[24][k8 * 8], GROUP);
+            simdgroup_load(A, &xt[24][k8 * 8], GROUP + XPAD);
             simdgroup_multiply_accumulate(C3, A, B, C3);
 #if RTILE == 64
-            simdgroup_load(A, &xt[32][k8 * 8], GROUP);
+            simdgroup_load(A, &xt[32][k8 * 8], GROUP + XPAD);
             simdgroup_multiply_accumulate(C4, A, B, C4);
-            simdgroup_load(A, &xt[40][k8 * 8], GROUP);
+            simdgroup_load(A, &xt[40][k8 * 8], GROUP + XPAD);
             simdgroup_multiply_accumulate(C5, A, B, C5);
-            simdgroup_load(A, &xt[48][k8 * 8], GROUP);
+            simdgroup_load(A, &xt[48][k8 * 8], GROUP + XPAD);
             simdgroup_multiply_accumulate(C6, A, B, C6);
-            simdgroup_load(A, &xt[56][k8 * 8], GROUP);
+            simdgroup_load(A, &xt[56][k8 * 8], GROUP + XPAD);
             simdgroup_multiply_accumulate(C7, A, B, C7);
 #endif
         }
@@ -3392,6 +3399,14 @@ _FUSED_GEMM_D8 = os.environ.get("VQ_MOE_FUSED_GEMM_D8", "1") != "0"
 # it illegal; the gate would refuse the geometry anyway.
 _GEMMSEG_CBDEV = os.environ.get("VQ_MOE_GEMMSEG_CBDEV", "auto")
 _GEMMSEG_RTILE = int(os.environ.get("VQ_MOE_GEMMSEG_RTILE", "32"))
+# xt leading-dimension pad (F49 arm). "1" pads by 8 halves (+16 B/row, the
+# affine steel pattern); default OFF until the bench promotes it. The budget
+# arithmetic below MUST follow this flag or an edge geometry E134s at load.
+_GEMMSEG_XT_PAD = os.environ.get("VQ_GEMMSEG_XT_PAD", "0") == "1"
+_XT_PAD_HALVES = 8 if _GEMMSEG_XT_PAD else 0
+# Extra threadgroup bytes the pad costs at each RTILE (halves * 2 B * rows).
+_XT_PAD_BYTES_R32 = _XT_PAD_HALVES * 2 * 32
+_XT_PAD_BYTES_R64 = _XT_PAD_HALVES * 2 * 64
 if _GEMMSEG_RTILE not in (32, 64):
     raise ValueError(f"VQ_MOE_GEMMSEG_RTILE must be 32 or 64, got {_GEMMSEG_RTILE}")
 
@@ -3402,7 +3417,7 @@ def gemmseg_cb_dev(D, K):
     how its arm label silently went stale when the 16 KB preference landed
     on 2026-09-08."""
     cb = K * 2 * D
-    return cb + 3 * 4096 > _TG_CAP_BYTES or cb >= 16384
+    return cb + 3 * 4096 + _XT_PAD_BYTES_R32 > _TG_CAP_BYTES or cb >= 16384
 
 
 def gemmseg_fits(D, K, G, pack_bits, IN):
@@ -3441,7 +3456,7 @@ def gemmseg_fits(D, K, G, pack_bits, IN):
     # Over the cap the codebook moves to DEVICE memory (CB_DEV arm) —
     # the tiles alone are 12 KB, so the kernel always loads. Big-K is
     # therefore covered too, unless the operator pins it off.
-    if K * 2 * D + 3 * 4096 <= _TG_CAP_BYTES:
+    if K * 2 * D + 3 * 4096 + _XT_PAD_BYTES_R32 <= _TG_CAP_BYTES:
         return True
     return _FUSED_GEMM_BIGK
 
@@ -3484,7 +3499,7 @@ def _gemmseg_prefill(xsrc, src_rows, idx_sorted_np, codes, codebook, scales,
     # before the kernel branch below.
     _rt = 64 if (_GEMMSEG_RTILE == 64 and _FUSED_GEMM_V2
                  and codebook.shape[0] * 2 * int(codebook.shape[1])
-                 + 3 * 4096 > _TG_CAP_BYTES) else 32
+                 + 3 * 4096 + _XT_PAD_BYTES_R32 > _TG_CAP_BYTES) else 32
     _mk = ("tiles", idx_sorted_np.tobytes(), E, _rt)
     _hit = _memo_get(_mk)
     if _hit is not None:
@@ -3494,13 +3509,22 @@ def _gemmseg_prefill(xsrc, src_rows, idx_sorted_np, codes, codebook, scales,
         touched = np.nonzero(counts)[0]
         starts = np.zeros(E + 1, np.int64)
         starts[1:] = np.cumsum(counts)
-        metas = []
-        for e in touched:
-            c0 = int(starts[e])
-            for r in range(0, int(counts[e]), _rt):
-                metas.append((int(e), c0 + r, min(_rt, int(counts[e]) - r)))
-        tmeta = mx.array(np.array(metas, np.int32).reshape(-1))
-        ntiles = len(metas)
+        # Vectorized tile build (swarm7 compute:7 / F42 follow-up): the
+        # Python double loop was the memo's miss-path cost. Same rows in the
+        # same order -- touched ascends (np.nonzero) and within-expert tiles
+        # ascend by construction -- so tmeta is BIT-IDENTICAL to the loop
+        # (pinned by tests/test_routing_memo.py::test_vectorized_tile_build).
+        tc = counts[touched]
+        ntiles_per = (tc + _rt - 1) // _rt
+        eids = np.repeat(touched, ntiles_per)
+        cum = np.cumsum(ntiles_per)
+        within = (np.arange(int(cum[-1]) if len(cum) else 0)
+                  - np.repeat(cum - ntiles_per, ntiles_per)) * _rt
+        rows = starts[eids] + within
+        nrows = np.minimum(_rt, counts[eids] - within)
+        metas_np = np.stack([eids, rows, nrows], axis=1).astype(np.int32)
+        tmeta = mx.array(metas_np.reshape(-1))
+        ntiles = int(metas_np.shape[0])
         _memo_put(_mk, (tmeta, ntiles))
     cbk = codebook.astype(mx.float16) if codebook.dtype != mx.float16 \
         else codebook
@@ -3528,10 +3552,10 @@ def _gemmseg_prefill(xsrc, src_rows, idx_sorted_np, codes, codebook, scales,
         # MECHANISM UNMEASURED — occupancy pressure at the budget edge is a
         # hypothesis, not a finding.
         # ~447 fleet modules are d4-K2048 (397B-3.1, Flash-3.2, 35B-3.4/4.6).
-        cb_dev = _cb_bytes + 3 * 4096 > _TG_CAP_BYTES or _cb_bytes >= 16384
+        cb_dev = _cb_bytes + 3 * 4096 + _XT_PAD_BYTES_R32 > _TG_CAP_BYTES or _cb_bytes >= 16384
         if _GEMMSEG_CBDEV == "1":
             cb_dev = True                      # force device codebook
-        elif _GEMMSEG_CBDEV == "0" and _cb_bytes + 3 * 4096 <= _TG_CAP_BYTES:
+        elif _GEMMSEG_CBDEV == "0" and _cb_bytes + 3 * 4096 + _XT_PAD_BYTES_R32 <= _TG_CAP_BYTES:
             cb_dev = False                     # force threadgroup (if legal)
         if cb_dev:
             name += "_cbdev"
@@ -3540,9 +3564,12 @@ def _gemmseg_prefill(xsrc, src_rows, idx_sorted_np, codes, codebook, scales,
         rtile = 64 if (_GEMMSEG_RTILE == 64 and cb_dev) else 32
         if rtile != 32:
             name += f"_r{rtile}"
+        if _GEMMSEG_XT_PAD:
+            name += "_xp8"
         template = [("BITS", pack_bits), ("GROUP", 64),
                     ("MAX_K", 1 if cb_dev else K), ("D_BAKE", D),
-                    ("CB_DEV", 1 if cb_dev else 0), ("RTILE", rtile)]
+                    ("CB_DEV", 1 if cb_dev else 0), ("RTILE", rtile),
+                    ("XPAD", _XT_PAD_HALVES)]
         if not pack_bits:
             # unpacked arm reads codes as CT (uchar/ushort), not uint words
             template.append(("CT", codes.dtype))
