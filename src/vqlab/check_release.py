@@ -127,6 +127,52 @@ _PROC_MSG = (f"config carries vision_config but none of {list(_PROC_FILES)} "
              "is present; a runtime that instantiates an image processor "
              "from the artifact dir cannot serve IMAGE requests")
 
+# BASE COMPARISON -- the check the 09-07 note promised and never wrote.
+# Without it this gate cannot tell "this family genuinely ships no processor
+# config" from "we forgot to stage one", and it guessed wrong on GLM for two
+# days. The artifact does not record its base anywhere except README.md's
+# `base_model:` frontmatter, so read it there.
+# Strictly BEST EFFORT: the Hub is a network dependency and a gate must work
+# offline. A lookup that cannot run leaves the deferred verdict exactly as it
+# was; only a POSITIVE answer -- the base demonstrably ships a processor
+# config this artifact lacks -- is allowed to decide anything, and that one
+# is a hard FAIL regardless of the smoke, because it is a staging omission,
+# not a property of the family.
+_base_verdict = None          # None = unknown, True = base ships one, False = it does not
+if _proc_gap:
+    _base = None
+    _rm = A / "README.md"
+    if _rm.exists():
+        _fm = re.match(r"^---\n(.*?)\n---", _rm.read_text(), re.S)
+        if _fm:
+            _m = re.search(r"^base_model:\s*(\S+)\s*$", _fm.group(1), re.M)
+            if _m:
+                _base = _m.group(1).strip().strip('"\'')
+    if _base:
+        try:
+            import urllib.request
+            with urllib.request.urlopen(
+                    f"https://huggingface.co/api/models/{_base}", timeout=10) as r:
+                _files = [s["rfilename"] for s in json.load(r).get("siblings", [])]
+            _base_has = [f for f in _PROC_FILES if f in _files]
+            _base_verdict = bool(_base_has)
+            if _base_verdict:
+                fails.append(
+                    f"base {_base} ships {_base_has[0]} but this artifact has "
+                    f"none of {list(_PROC_FILES)} -- stage it from the base. "
+                    "This is a packaging omission, not a family without a "
+                    "processor config.")
+            else:
+                print(f"NOTE: base {_base} ships no processor config either; "
+                      "the gap is a property of the family, not a staging miss.")
+        except Exception as e:
+            print(f"NOTE: could not reach the Hub to compare against base "
+                  f"{_base} ({type(e).__name__}); processor-config verdict "
+                  "left to the smoke.")
+    else:
+        print("NOTE: no base_model in README frontmatter; cannot compare the "
+              "processor config against the base.")
+
 # index integrity: every mapped shard exists
 if (A / "model.safetensors.index.json").exists():
     wm = json.load(open(A / "model.safetensors.index.json"))["weight_map"]
