@@ -953,3 +953,15 @@ like a Metal BUFFER-COUNT limit — hypothesis: the VQ decode path accumulates
 small allocations per step. Reproduce locally watching active buffers; if
 real, this is a shippable reliability fix and belongs ahead of any speed
 work.
+
+**F49 addendum — leak probe result.** A 2000-token local decode on the 3.4bpw
+shows NO byte-level leak: active memory 13.984 -> 14.020 GB (linear KV growth,
+~18 KB/token, exactly the cache), allocator cache 0.045 -> 0.196 GB, peak
+stable. The shipped runtime's single-stream decode is clean. So the runner
+crash is NOT a simple runtime memory leak; suspicion moves to (a) a Metal
+buffer-COUNT limit these byte counters cannot see, or (b) exo's serving layer
+under repeated large-prompt requests — the per-request prefix-cache
+deepcopy+pool is the named suspect in llm_client's own comments. Next
+reproduction must go THROUGH exo serving (repeated 25k-prompt requests, two
+streams), not local mlx_lm. Daylight item; the artifacts themselves are not
+implicated by current evidence.
