@@ -47,31 +47,21 @@ Excluded by measurement: collectives (0.17%), the ring (1.11x), weight
 bandwidth (1-5% of 819 GB/s). Flash-2.1 and 35B-A3B move nearly identical
 bytes/token and differ 2.3x. Unexplained.
 
-**PUBLISH STATE (arc6 final, 2026-09-09 15:40).** All 20 artifacts spliced
-with the frozen release runtime (d8 + CB_DEV + ragged-NSUB + routing memo),
-`.pre-arc6` backups beside every model.py, 20/20 PASS `check-bundle`.
-**15 of 20 PASS full `check-release`** (load + strict smoke through the
-shipping bundle): 27B x3, 35B x4, gemma x2, Flash 2.1/3.2 on the M3; Flash
-4.4/5.5, 397B-2.2 and GLM-2.7 on the M4 (staged as symlink dirs over M4's
-local weights + the spliced model.py). Flash/GLM gates must run in the exo
-conda env (bundles import mlx_vlm.models.qwen4_exp) -- harness-env fact, not
-an artifact defect. GLM rungs WARN: vision_config with no processor files;
-text verified, image requests expected to fail (pre-existing).
-**The 5 cluster-only rungs are now GENERATION-VERIFIED via exo 2-node
-serving** (397B-2.4/2.6/3.1 in ~1-1.5 min each; GLM-3.1/3.6 in 8-10 min, M4
-rank reading its shard over the SMB symlink): place -> real chat completion ->
-teardown, on the exact packages that ship. exo executes the artifact's own
-bundled model.py (trust_remote_code; no vendored runtime anywhere), so these
-smokes exercised the arc6 bundle. The single-box strict-smoke claim remains
-impossible for them on hardware we own (RAM preflight, incident-born, not
-skipped) and for any downloader box under ~192 GB -- they are cluster models.
-**Every node-local package copy on both boxes now carries the arc6 bundle**
-(M4's 10 copies synced with .pre-arc6 backups; M3's ~/.exo entries resolve to
-the SSD artifacts directly). VERIFICATION LEDGER: 20/20 check-bundle, 15/20
-strict single-box smoke, 5/20 2-node serving smoke = 20/20 generation-proven.
-The exo fork (github.com/noahzelezny/exo, mtp-stage1) is pushed through
-68bc1177 incl. the recv-dtype and event-log fixes and the EXO_MTP README row.
-Push runbook: docs/PUSH-RUNBOOK.md, gated on Noah.
+**PUBLISH STATE — SHIPPED (2026-09-09 17:45).** All 20 repos on the Hub
+carry the arc6 runtime, the updated card with the 2026-09-09 changelog entry,
+and (11 repos) the MTP sidecar. Every upload went through a clean release
+gate WITH a generation smoke: 11 single-box gates on the M3, 9 cluster gates
+(--cluster-smoke through a live 2-node exo instance placed per rung and torn
+down after; the gate realpath-checks the local rank and hashes the peer's
+copies). One refusal en route, root-caused: the M4's 397B-2.2 config.json was
+an older serialization (semantically identical) — the peer-hash check caught
+it; byte-synced and re-gated. gemma-e4b-PLE published for the first time
+since its Metal defect cleared. exo fork pushed through 95ab95c7 (--mtp flag,
+recv-dtype + event-log fixes). Ops notes: big-rung loads MUST be from a
+node-local copy — tar-over-ssh push per exo-stage-m4.sh (~7 min for 141 GB);
+an SMB-symlink load sat at 45% after 30 min. DeepSeek-V4-Flash and
+spicyneuron-2.6bit were deleted from the M4 for staging room, both
+diff-verified complete on the Thunderbay SSD first.
 
 **METHOD RULES THAT EARNED THEIR PLACE TODAY** (each caught a wrong result)
 1. **One harness.** Never compare an exo number to a local-probe number. That
