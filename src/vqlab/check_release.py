@@ -90,10 +90,8 @@ if cfg.get("model_file") and not (A / cfg["model_file"]).exists():
 # to `fails`, which SUPPRESSES the smoke below (`and not fails`) -- so the
 # gate asserted "fails every request, text included" while preventing the
 # one test that could check that claim. It false-failed GLM-5.3-Flash
-# 2.7/3.6, which carry vision_config, ship no processor config in ANY
-# build (including zai-org's own upstream 3/4/6-bit), and serve coherent
-# text on the 2-node ring -- measured twice. The base-comparison the
-# comment above promises was never actually written.
+# 2.7/3.6, which carry vision_config and serve coherent text on the 2-node
+# ring -- measured twice.
 # Defer the verdict instead: let the smoke run, then judge on evidence.
 #   smoke PASSES -> the "text included" claim is disproven for this
 #                   artifact; the real limitation is that IMAGE requests
@@ -101,6 +99,27 @@ if cfg.get("model_file") and not (A / cfg["model_file"]).exists():
 #   smoke FAILS / skipped -> nothing disproves it; keep the hard FAIL
 #                   (this is the gemma-4 and Flash-Next case, where the
 #                   missing processor presented as a warmup hang).
+# 2026-09-09 (third correction -- the 09-07 note was WRONG on its premise):
+# it claimed GLM-5.3-Flash ships "no processor config in ANY build,
+# including zai-org's own upstream". zai-org/GLM-5.3-Flash ships
+# processor_config.json (909 bytes, verified against the live repo). So the
+# GLM rungs were missing a file their own base ships -- exactly the case the
+# 09-07 note said it was excusing, and exactly what the base-comparison it
+# admits was never written would have caught. That comparison is STILL not
+# written; until it is, this check cannot tell "the family genuinely has no
+# processor config" from "we forgot to stage it", and the deferred verdict
+# below is the only thing standing between those two.
+# The file has since been staged into all three GLM artifacts from upstream
+# (geometry cross-checked: patch_size 14, spatial_merge_size/merge_size 2,
+# temporal_patch_size 2 all agree with the grafted tower).
+#
+# Note on cost, because it shapes behaviour: processor_config.json is not in
+# publish.py's DOC_SUFFIXES, so shipping this 909-byte config takes the full
+# gate -- a generation smoke, which loads the whole artifact (108 GiB for
+# GLM-2.7) to emit two tokens. That is the same disproportion DOC_SUFFIXES
+# exists to prevent, and the same one that gets gates routed around. If a
+# processor-config fix is ever wanted as doc-class, decide it there, not by
+# weakening this check.
 _PROC_FILES = ("preprocessor_config.json", "processor_config.json")
 _proc_gap = ("vision_config" in cfg
              and not any((A / f).exists() for f in _PROC_FILES))
