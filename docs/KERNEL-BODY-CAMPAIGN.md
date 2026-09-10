@@ -37,6 +37,20 @@ slope ~ +1.2%/KB freed), one barrier, and a full scalar copy pass.
 CAUTION (F44's lesson): the store dtype must preserve the shipping rounding
 (float accum -> TIO), and CB_DEV budget arithmetic must follow the -4 KB.
 
+## Arm 1.5 — prefetch-pipelined decode (single barrier per g-step)  [salvaged, unrefuted]
+
+From bank B's recovered affine_diff analysis: gemmseg alternates
+decode-barrier-MAC-barrier per group step; affine's steel overlaps its next
+tile load with the current MMA. The salvaged proposal:
+
+> Issue code and scale device loads for iteration g+1 into registers before the matmul of iteration g (inside phase 3, before MMA loop). After the matmul barrier completes (proving all simdgroups done reading wtT), perform only the dependent codebook gather and write wtT[g+1]. This overlaps independent device loads (code words, scale halves) with MMA computation. Pipeline: issue code/scale loads for g+1 → matmul(g) executes → barrier (both matmul done and prefetch in-flight) → dependent codebook g
+
+Convergence note: bank B independently designed today's bf16-I/O
+implementation (decode pass-through + TIO-templated gemmseg with in-kernel
+staging) before it existed, and its "direct simdgroup_store epilogue" is Arm
+2 verbatim -- two models agreeing with each other and with the built code
+raises confidence in this whole arm family.
+
 ## Arm 3 — phase-2 staging shape  [refuted on win-size; keep small]
 
 Per-element predicated 2-byte loads vs affine's BlockLoader with hoisted
