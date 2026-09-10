@@ -988,3 +988,22 @@ affine-8bit prefill**. Remaining measured headroom to ~95%: the rest of the
 F49 wrapper (dispatch is dead, scatter small — mostly the broadcast/epilogue
 residue) and the ~8% kernel-body gap to affine's qmm. Decode nocast (+3.6%,
 F46) still awaits quality gates.
+
+## F51 (2026-09-10) — single vs double round: dead tie on speed; single-round + bf16-I/O locked as the v2 runtime default.
+
+Three interleaved pairs on the idle M3: single 2119.7-2127.2, double
+2124.4-2136.1 tok/s — fully overlapping. The epilogue convert is buried in a
+bandwidth-bound store, exactly as predicted. Quality (F50 gates): single
+measured −0.05% NLL (referee) and +0.6% of existing KL damage (Flash teacher,
+single 2048-token sample) — consistent with zero-mean noise from 48 layers of
+moved last bits; not provable either way on this corpus. Decision (Noah):
+single-round for elegance, PPL retested at the v2 model release as the
+control. bf16-I/O now DEFAULT ON in the repo runtime; VQ_GEMMSEG_BF16IO=0 is
+the kill switch. The shipped arc6 fleet is unchanged until v2.
+
+Gate-tooling debt found en route: the flashnext teacher cache predates
+kl_damage.py's current schema (meta keys + a 2049-vs-2048 token off-by-one;
+causality makes trimming safe). A shim lives at scratchpad/flash_teacher_shim;
+regenerating fleet teacher caches in the current format, with MORE than one
+2048-token sample, is a prerequisite for any future numerics gate that needs
+error bars.
