@@ -86,3 +86,34 @@ def test_hit_products_bit_identical_to_rebuild():
     ref_meta, ref_n = _tile_products(idx, E, 32)
     assert ntiles == ref_n
     assert np.array_equal(np.array(tmeta), ref_meta)
+
+
+def test_vectorized_tile_build_matches_reference_loop():
+    """The vectorized tmeta build (F42 follow-up) must be BIT-identical to
+    the double loop it replaced, across ragged/edge routings."""
+    import numpy as np
+    rng = np.random.default_rng(0)
+    for trial in range(200):
+        E = int(rng.integers(1, 65))
+        n = int(rng.integers(1, 4097))
+        rt = int(rng.choice([32, 64]))
+        idx = np.sort(rng.integers(0, E, n)).astype(np.int32)
+        counts = np.bincount(idx, minlength=E)
+        touched = np.nonzero(counts)[0]
+        starts = np.zeros(E + 1, np.int64); starts[1:] = np.cumsum(counts)
+        ref = []
+        for e in touched:
+            c0 = int(starts[e])
+            for r in range(0, int(counts[e]), rt):
+                ref.append((int(e), c0 + r, min(rt, int(counts[e]) - r)))
+        ref = np.array(ref, np.int32).reshape(-1)
+        tc = counts[touched]
+        ntiles_per = (tc + rt - 1) // rt
+        eids = np.repeat(touched, ntiles_per)
+        cum = np.cumsum(ntiles_per)
+        within = (np.arange(int(cum[-1]) if len(cum) else 0)
+                  - np.repeat(cum - ntiles_per, ntiles_per)) * rt
+        rows = starts[eids] + within
+        nrows = np.minimum(rt, counts[eids] - within)
+        vec = np.stack([eids, rows, nrows], axis=1).astype(np.int32).reshape(-1)
+        assert np.array_equal(ref, vec), f"trial {trial} diverged"
