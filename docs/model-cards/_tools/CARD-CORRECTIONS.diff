@@ -1,0 +1,2660 @@
+════════════════════════════════════════
+  GLM-5.3-Flash-VQ-2.7bpw
+════════════════════════════════════════
+@@ -13,9 +13,10 @@
+ - vector-quantization
+ - apple-silicon
+ - glm
++- multimodal
+ ---
+ 
+-# TheDrainFlorist/GLM-5.3-Flash-VQ-2.7bpw
++# GLM-5.3-Flash-VQ-2.7bpw
+ 
+ **101.9 GiB — GLM-5.3-Flash on one 128 GB Mac.**
+ 
+@@ -39,7 +40,7 @@
+ codebooks fitted to the weights themselves — which is why it beats affine at
+ matched bytes below 6 bits. The method and results are in our paper,
+ [*Data-Free Vector Quantization Beats Affine Quantization at Matched Bytes
+-Below 6 Bits*](https://doi.org/10.5281/zenodo.22136000) (CC BY 4.0). This
++Below 6 Bits*](https://doi.org/10.5281/zenodo.22119017) (CC BY 4.0). This
+ build goes beyond the published recipe: it mixes codebook sizes, promoting
+ individual expert layers by measured effect (see **How it was built**).
+ 
+@@ -52,12 +53,7 @@
+ `mlx_vlm`.
+ 
+ ```bash
+-pip install mlx-vlm
+-
+-python -m mlx_vlm generate \
+-  --model TheDrainFlorist/GLM-5.3-Flash-VQ-2.7bpw \
+-  --prompt "Explain vector quantization briefly." \
+-  --max-tokens 512
++pip install 'mlx-vlm>=0.6.17'
+ ```
+ 
+ exo-ready: `config.json` carries `vision_config` and `image_token_id`, and
+@@ -115,8 +111,44 @@
+ | decode, MTP sidecar (`vqlab mtp-generate`) | 20.0 tok/s at 1000 tokens, 17.1 at 2000; acceptance ~0.75 |
+ | prefill | ~88 tok/s (lower bound, derived from wall time) |
+ 
+-## Speculative decoding (MTP) — optional sidecar
++## Memory
+ 
++Process RSS sampled at 5 Hz from outside the process, M4 128 GB, single box:
++
++- **61.1 GiB** peak for load + 2048-token prefill + 128-token decode.
++  Weights are memory-mapped, so RSS counts only pages actually touched —
++  useful for comparing artifacts on the same instrument, **not for capacity
++  planning**.
++- **~100.9 GiB** sustained resident once routing has touched the experts;
++  budget this. Trunk + MTP head is ~107 GiB — it runs on a 128 GB box and is
++  tight there; close memory-heavy applications.
++
++Long-prompt peaks stay near resident: the bundled runtime caps MLX's
++buffer-reuse cache by default (`VQLAB_CACHE_LIMIT_GB` overrides, `0`
++disables), measured free on wall time. Under exo, set
++`EXO_MLX_CACHE_LIMIT_GB=6` and `EXO_MLX_MEM_LIMIT_GB` a few GiB under
++physical RAM so an overrun is a traceback rather than a frozen Mac; a
++26,423-token prompt through a 2-node pipeline held per-chunk transients
++under 2 GiB, flat across all 13 chunks. If you run your own serving loop,
++chunk the prefill (2048) and call `mx.eval([c.state for c in cache])` plus
++`mx.clear_cache()` after every chunk — the chunk size only bounds the peak
++if each chunk is actually forced.
++
++## Run it
++
++```bash
++python -m mlx_vlm generate \
++  --model TheDrainFlorist/GLM-5.3-Flash-VQ-2.7bpw \
++  --prompt "Explain vector quantization briefly." \
++  --max-tokens 512
++```
++
++The VQ runtime needs no patches — it ships inside the checkpoint as
++`model.py`, declared via `model_file` in `config.json`, and resolves
++under both `mlx-lm` and `mlx_vlm`.
++
++## Speculative decoding (MTP)
++
+ This repo includes `mtp-head-q6.safetensors` (6.09 GiB): GLM's own
+ multi-token-prediction head — `layers.45`, 889 tensors, 13.84 GiB as a bf16
+ graft, packed to q6. It is never named in the weight index, so stock loaders
+@@ -161,31 +193,8 @@
+ Qwen 397B 5.41 GiB, GLM 6.09 GiB) are different heads with different
+ geometry and share only a filename — never cross-copy them between families.
+ 
+-## Memory, measured externally
+-
+-Process RSS sampled at 5 Hz from outside the process, M4 128 GB, single box:
+-
+-- **61.1 GiB** peak for load + 2048-token prefill + 128-token decode.
+-  Weights are memory-mapped, so RSS counts only pages actually touched —
+-  useful for comparing artifacts on the same instrument, **not for capacity
+-  planning**.
+-- **~100.9 GiB** sustained resident once routing has touched the experts;
+-  budget this. Trunk + MTP head is ~107 GiB — it runs on a 128 GB box and is
+-  tight there; close memory-heavy applications.
++## Methodology
+ 
+-Long-prompt peaks stay near resident: the bundled runtime caps MLX's
+-buffer-reuse cache by default (`VQLAB_CACHE_LIMIT_GB` overrides, `0`
+-disables), measured free on wall time. Under exo, set
+-`EXO_MLX_CACHE_LIMIT_GB=6` and `EXO_MLX_MEM_LIMIT_GB` a few GiB under
+-physical RAM so an overrun is a traceback rather than a frozen Mac; a
+-26,423-token prompt through a 2-node pipeline held per-chunk transients
+-under 2 GiB, flat across all 13 chunks. If you run your own serving loop,
+-chunk the prefill (2048) and call `mx.eval([c.state for c in cache])` plus
+-`mx.clear_cache()` after every chunk — the chunk size only bounds the peak
+-if each chunk is actually forced.
+-
+-## How it was built
+-
+ Fitted data-free from the bf16 checkpoint — k-means / Lloyd over weight
+ subvectors, seed 1234, no Hessian, no activation statistics, no calibration
+ corpus. The base is a uniform d=4/K=512 fit of the 42 expert layers (L3–L44;
+@@ -205,8 +214,16 @@
+ families; the full sweep, the controls, and the probe it falsified are in
+ the project ledger.
+ 
+-## Known limitations
++## Verification
+ 
++Release gates passed on this artifact before upload: file, index and
++tokenizer checks, a verbatim match between the bundled runtime and its
++source, and a generation smoke through the shipping runtime on Apple
++Silicon. The upload path runs the gate itself and refuses to publish
++without it.
++
++## Limitations
++
+ - **This is the aggressive end of the ladder.** Prose perplexity is 1.26x
+   the teacher's. If you have the memory, the 134 GiB rung reaches q4-class
+   quality (not yet published).
+@@ -221,16 +238,22 @@
+ - **Decode small-M kernel behaviour** is a known open frontier for this
+   lineup, not a property of the quantization quality.
+ 
+-## Provenance and gates
++## Paper
+ 
+-Base model:
+-[zai-org/GLM-5.3-Flash](https://huggingface.co/zai-org/GLM-5.3-Flash) —
+-**MIT licensed**; this is a quantized derivative and inherits that license.
+-Quantization: TheDrainFlorist, 2026. Release gates passed on this artifact:
+-file/index/tokenizer checks, bundle-runtime verbatim match, and a generation
+-smoke through the shipping runtime on Apple Silicon; the full three-corpus
+-referee row was measured against the published artifact directory itself.
++The method, the full model ladder, the negative results, and the measurement
++rules behind every number here:
++[**Data-Free Vector Quantization Beats Affine Quantization at Matched Bytes
++Below 6 Bits**](https://doi.org/10.5281/zenodo.22119017) (CC BY 4.0) ·
++code: [VQLab](https://github.com/noahzelezny/VQLab) ·
++web version: [Space](https://huggingface.co/spaces/TheDrainFlorist/below-six-bits)
+ 
++## Provenance
++
++Base model: [zai-org/GLM-5.3-Flash](https://huggingface.co/zai-org/GLM-5.3-Flash) — **MIT licensed**.
++This is a quantized derivative and inherits that licence; using it
++means accepting the base model's terms.
++Quantization: TheDrainFlorist, 2026.
++
+ The upstream authors ask that their technical report be cited in research
+ use:
+ 
+@@ -246,8 +269,6 @@
+ }
+ ```
+ 
+-Quantization method and measurement rules:
+-[**Data-Free Vector Quantization Beats Affine Quantization at Matched Bytes
+-Below 6 Bits**](https://doi.org/10.5281/zenodo.22136000) (CC BY 4.0).
+-
+ Local artifact: `glm53_vq_packed_mix_best8`.
++
++Built with MLX and [VQLab](https://github.com/noahzelezny/VQLab).
+
+════════════════════════════════════════
+  GLM-5.3-Flash-VQ-3.1bpw
+════════════════════════════════════════
+@@ -13,9 +13,10 @@
+ - vector-quantization
+ - apple-silicon
+ - glm
++- multimodal
+ ---
+ 
+-# TheDrainFlorist/GLM-5.3-Flash-VQ-3.1bpw
++# GLM-5.3-Flash-VQ-3.1bpw
+ 
+ **116.3 GiB — the balanced GLM rung, for exo clusters and 192 GB-class
+ Macs.**
+@@ -35,11 +36,26 @@
+ codebooks fitted to the weights themselves — which is why it beats affine at
+ matched bytes below 6 bits. The method and results are in our paper,
+ [*Data-Free Vector Quantization Beats Affine Quantization at Matched Bytes
+-Below 6 Bits*](https://doi.org/10.5281/zenodo.22136000) (CC BY 4.0).
++Below 6 Bits*](https://doi.org/10.5281/zenodo.22119017) (CC BY 4.0).
+ 
+ The affine builds compared against below are our own conversions of the same
+ base, made with the same tooling and scored on the same instrument.
+ 
++## Requirements
++
++The `glm5_next` architecture ships in **released `mlx-vlm` 0.6.17** — a
++normal `pip install`, not a fork. The VQ runtime needs no patches: it ships
++inside the checkpoint as `model.py`, declared via `model_file` in
++`config.json`, and resolves under both `mlx-lm` and `mlx_vlm`.
++
++```bash
++pip install 'mlx-vlm>=0.6.17'
++```
++
++exo-ready: `config.json` carries `vision_config` and `image_token_id`, and
++the vision tower ships bf16. For cluster serving use the
++[`vq-serving`](https://github.com/noahzelezny/exo/tree/vq-serving) branch.
++
+ ## Measured results
+ 
+ Referee: 2048 tokens; prose = WikiText, code = public mlx corpus (pinned
+@@ -84,8 +100,39 @@
+ byte-identical to the one gated and generation-verified single-box on the
+ [2.7bpw rung](https://huggingface.co/TheDrainFlorist/GLM-5.3-Flash-VQ-2.7bpw).
+ 
+-## Speculative decoding (MTP) — optional sidecar
++## Memory
+ 
++- Download: **116.3 GiB** (19 shards); repo total including the sidecar is
++  ~122.4 GiB. Expect resident memory near the download size once routing has
++  touched all experts; a single 128 GB Mac is not enough headroom — this is
++  a 2-node exo or 192 GB-class rung.
++- **Keep prefill bounded.** The bundled runtime caps MLX's buffer-reuse
++  cache (4 GiB default, `VQLAB_CACHE_LIMIT_GB` to override, `=0` disables),
++  which is what keeps long-prompt peaks near resident size. Under exo,
++  additionally set `EXO_MLX_CACHE_LIMIT_GB=6` and `EXO_MLX_MEM_LIMIT_GB` a
++  few GiB under physical RAM so an overrun is a traceback, not a frozen Mac.
++- If you run your own serving loop: chunk the prefill (2048) and call
++  `mx.eval([c.state for c in cache])` plus `mx.clear_cache()` after
++  **every** chunk — the chunk size only bounds the peak if each chunk is
++  actually forced.
++- Single-box peak memory is not measured for this rung: it does not
++  fit one machine. Cluster figures are above.
++
++## Run it
++
++```bash
++python -m mlx_vlm generate \
++  --model TheDrainFlorist/GLM-5.3-Flash-VQ-3.1bpw \
++  --prompt "Explain vector quantization briefly." \
++  --max-tokens 512
++```
++
++The VQ runtime needs no patches — it ships inside the checkpoint as
++`model.py`, declared via `model_file` in `config.json`, and resolves
++under both `mlx-lm` and `mlx_vlm`.
++
++## Speculative decoding (MTP)
++
+ `mtp-head-q6.safetensors` (6.09 GiB) is GLM's own multi-token-prediction
+ head — `layers.45`, 889 tensors, packed to q6. The head is shared across the
+ GLM-5.3-Flash-VQ lineup because that layer is never quantized in any rung;
+@@ -113,40 +160,8 @@
+ > geometry** across families and share only a filename. Never cross-copy
+ > them between families.
+ 
+-## Requirements
++## Methodology
+ 
+-The `glm5_next` architecture ships in **released `mlx-vlm` 0.6.17** — a
+-normal `pip install`, not a fork. The VQ runtime needs no patches: it ships
+-inside the checkpoint as `model.py`, declared via `model_file` in
+-`config.json`, and resolves under both `mlx-lm` and `mlx_vlm`.
+-
+-```bash
+-pip install mlx-vlm
+-```
+-
+-exo-ready: `config.json` carries `vision_config` and `image_token_id`, and
+-the vision tower ships bf16. For cluster serving use the
+-[`vq-serving`](https://github.com/noahzelezny/exo/tree/vq-serving) branch.
+-
+-## Memory
+-
+-- Download: **116.3 GiB** (19 shards); repo total including the sidecar is
+-  ~122.4 GiB. Expect resident memory near the download size once routing has
+-  touched all experts; a single 128 GB Mac is not enough headroom — this is
+-  a 2-node exo or 192 GB-class rung.
+-- **Keep prefill bounded.** The bundled runtime caps MLX's buffer-reuse
+-  cache (4 GiB default, `VQLAB_CACHE_LIMIT_GB` to override, `=0` disables),
+-  which is what keeps long-prompt peaks near resident size. Under exo,
+-  additionally set `EXO_MLX_CACHE_LIMIT_GB=6` and `EXO_MLX_MEM_LIMIT_GB` a
+-  few GiB under physical RAM so an overrun is a traceback, not a frozen Mac.
+-- If you run your own serving loop: chunk the prefill (2048) and call
+-  `mx.eval([c.state for c in cache])` plus `mx.clear_cache()` after
+-  **every** chunk — the chunk size only bounds the peak if each chunk is
+-  actually forced.
+-- [TO MEASURE: external-RSS peak on hardware that fits this rung.]
+-
+-## How it was built
+-
+ Fitted **data-free** from the bf16 checkpoint — k-means / Lloyd over weight
+ subvectors, seed 1234, no Hessian, no activation statistics, no calibration
+ corpus. All 42 expert layers (L3–L44) at uniform d=4/K=2048; codes are
+@@ -154,8 +169,15 @@
+ (row, 64 weights). The seed-noise floor for this family's geometry is
+ 6.32 mnats on KL, well below every gap in the table above.
+ 
+-## Known limitations
++## Verification
+ 
++Release gates passed on this artifact before upload: file, index and
++tokenizer checks, a verbatim match between the bundled runtime and its
++source, and a generation smoke through the shipping runtime on Apple
++Silicon. The upload path runs the gate itself and refuses to publish
++without it.
++## Limitations
++
+ - **Verified on a 2-node cluster, not single-box.** Generation on this
+   exact artifact ran through an exo pipeline; no single-box throughput or
+   peak-memory figures exist yet.
+@@ -164,10 +186,20 @@
+ - MTP throughput on clusters is placement-sensitive (see the MTP
+   section); single-box, this rung does not fit one machine.
+ 
++## Paper
++
++The method, the full model ladder, the negative results, and the measurement
++rules behind every number here:
++[**Data-Free Vector Quantization Beats Affine Quantization at Matched Bytes
++Below 6 Bits**](https://doi.org/10.5281/zenodo.22119017) (CC BY 4.0) ·
++code: [VQLab](https://github.com/noahzelezny/VQLab) ·
++web version: [Space](https://huggingface.co/spaces/TheDrainFlorist/below-six-bits)
++
+ ## Provenance
+ 
+-Base model: [zai-org/GLM-5.3-Flash](https://huggingface.co/zai-org/GLM-5.3-Flash)
+-— **MIT licensed**; this is a quantized derivative and inherits that license.
++Base model: [zai-org/GLM-5.3-Flash](https://huggingface.co/zai-org/GLM-5.3-Flash) — **MIT licensed**.
++This is a quantized derivative and inherits that licence; using it
++means accepting the base model's terms.
+ Quantization: TheDrainFlorist, 2026.
+ 
+ The upstream authors ask that their technical report be cited in research
+
+════════════════════════════════════════
+  GLM-5.3-Flash-VQ-3.6bpw
+════════════════════════════════════════
+@@ -13,9 +13,10 @@
+ - vector-quantization
+ - apple-silicon
+ - glm
++- multimodal
+ ---
+ 
+-# TheDrainFlorist/GLM-5.3-Flash-VQ-3.6bpw
++# GLM-5.3-Flash-VQ-3.6bpw
+ 
+ **134.0 GiB — q4-class quality at 32 GiB less than affine q4.**
+ 
+@@ -34,11 +35,26 @@
+ codebooks fitted to the weights themselves — which is why it beats affine at
+ matched bytes below 6 bits. The method and results are in our paper,
+ [*Data-Free Vector Quantization Beats Affine Quantization at Matched Bytes
+-Below 6 Bits*](https://doi.org/10.5281/zenodo.22136000) (CC BY 4.0).
++Below 6 Bits*](https://doi.org/10.5281/zenodo.22119017) (CC BY 4.0).
+ 
+ The affine builds compared against below are our own conversions of the same
+ base, made with the same tooling and scored on the same instrument.
+ 
++## Requirements
++
++The `glm5_next` architecture ships in **released `mlx-vlm` 0.6.17** — a
++normal `pip install`, not a fork. The VQ runtime needs no patches: it ships
++inside the checkpoint as `model.py`, declared via `model_file` in
++`config.json`, and resolves under both `mlx-lm` and `mlx_vlm`.
++
++```bash
++pip install 'mlx-vlm>=0.6.17'
++```
++
++exo-ready: `config.json` carries `vision_config` and `image_token_id`, and
++the vision tower ships bf16. For cluster serving use the
++[`vq-serving`](https://github.com/noahzelezny/exo/tree/vq-serving) branch.
++
+ ## Measured results
+ 
+ Referee: 2048 tokens; prose = WikiText, code = public mlx corpus (pinned
+@@ -83,8 +99,39 @@
+ byte-identical to the one gated and generation-verified single-box on the
+ [2.7bpw rung](https://huggingface.co/TheDrainFlorist/GLM-5.3-Flash-VQ-2.7bpw).
+ 
+-## Speculative decoding (MTP) — optional sidecar
++## Memory
+ 
++- Download: **134.0 GiB** (19 shards); repo total including the sidecar is
++  ~140.1 GiB. Expect resident memory near the download size once routing has
++  touched all experts. This is a 2-node exo rung, or a single 192 GB-class
++  Mac.
++- **Keep prefill bounded.** The bundled runtime caps MLX's buffer-reuse
++  cache (4 GiB default, `VQLAB_CACHE_LIMIT_GB` to override, `=0` disables),
++  which is what keeps long-prompt peaks near resident size. Under exo,
++  additionally set `EXO_MLX_CACHE_LIMIT_GB=6` and `EXO_MLX_MEM_LIMIT_GB` a
++  few GiB under physical RAM so an overrun is a traceback, not a frozen Mac.
++- If you run your own serving loop: chunk the prefill (2048) and call
++  `mx.eval([c.state for c in cache])` plus `mx.clear_cache()` after
++  **every** chunk — the chunk size only bounds the peak if each chunk is
++  actually forced.
++- Single-box peak memory is not measured for this rung: it does not
++  fit one machine. Cluster figures are above.
++
++## Run it
++
++```bash
++python -m mlx_vlm generate \
++  --model TheDrainFlorist/GLM-5.3-Flash-VQ-3.6bpw \
++  --prompt "Explain vector quantization briefly." \
++  --max-tokens 512
++```
++
++The VQ runtime needs no patches — it ships inside the checkpoint as
++`model.py`, declared via `model_file` in `config.json`, and resolves
++under both `mlx-lm` and `mlx_vlm`.
++
++## Speculative decoding (MTP)
++
+ `mtp-head-q6.safetensors` (6.09 GiB) is GLM's own multi-token-prediction
+ head — `layers.45`, 889 tensors, packed to q6. The head is shared across the
+ GLM-5.3-Flash-VQ lineup because that layer is never quantized in any rung;
+@@ -112,40 +159,8 @@
+ > geometry** across families and share only a filename. Never cross-copy
+ > them between families.
+ 
+-## Requirements
++## Methodology
+ 
+-The `glm5_next` architecture ships in **released `mlx-vlm` 0.6.17** — a
+-normal `pip install`, not a fork. The VQ runtime needs no patches: it ships
+-inside the checkpoint as `model.py`, declared via `model_file` in
+-`config.json`, and resolves under both `mlx-lm` and `mlx_vlm`.
+-
+-```bash
+-pip install mlx-vlm
+-```
+-
+-exo-ready: `config.json` carries `vision_config` and `image_token_id`, and
+-the vision tower ships bf16. For cluster serving use the
+-[`vq-serving`](https://github.com/noahzelezny/exo/tree/vq-serving) branch.
+-
+-## Memory
+-
+-- Download: **134.0 GiB** (19 shards); repo total including the sidecar is
+-  ~140.1 GiB. Expect resident memory near the download size once routing has
+-  touched all experts. This is a 2-node exo rung, or a single 192 GB-class
+-  Mac.
+-- **Keep prefill bounded.** The bundled runtime caps MLX's buffer-reuse
+-  cache (4 GiB default, `VQLAB_CACHE_LIMIT_GB` to override, `=0` disables),
+-  which is what keeps long-prompt peaks near resident size. Under exo,
+-  additionally set `EXO_MLX_CACHE_LIMIT_GB=6` and `EXO_MLX_MEM_LIMIT_GB` a
+-  few GiB under physical RAM so an overrun is a traceback, not a frozen Mac.
+-- If you run your own serving loop: chunk the prefill (2048) and call
+-  `mx.eval([c.state for c in cache])` plus `mx.clear_cache()` after
+-  **every** chunk — the chunk size only bounds the peak if each chunk is
+-  actually forced.
+-- [TO MEASURE: external-RSS peak on hardware that fits this rung.]
+-
+-## How it was built
+-
+ Fitted **data-free** from the bf16 checkpoint — k-means / Lloyd over weight
+ subvectors, seed 1234, no Hessian, no activation statistics, no calibration
+ corpus. All 42 expert layers (L3–L44) at uniform d=4/K=8192; codes are
+@@ -153,8 +168,15 @@
+ (row, 64 weights). The seed-noise floor for this family's geometry is
+ 6.32 mnats on KL, well below every gap in the table above.
+ 
+-## Known limitations
++## Verification
+ 
++Release gates passed on this artifact before upload: file, index and
++tokenizer checks, a verbatim match between the bundled runtime and its
++source, and a generation smoke through the shipping runtime on Apple
++Silicon. The upload path runs the gate itself and refuses to publish
++without it.
++## Limitations
++
+ - **Verified on a 2-node cluster, not single-box.** Generation on this
+   exact artifact ran through an exo pipeline; no single-box throughput or
+   peak-memory figures exist yet.
+@@ -163,10 +185,20 @@
+ - MTP throughput on clusters is placement-sensitive (see the MTP
+   section); single-box, this rung does not fit one machine.
+ 
++## Paper
++
++The method, the full model ladder, the negative results, and the measurement
++rules behind every number here:
++[**Data-Free Vector Quantization Beats Affine Quantization at Matched Bytes
++Below 6 Bits**](https://doi.org/10.5281/zenodo.22119017) (CC BY 4.0) ·
++code: [VQLab](https://github.com/noahzelezny/VQLab) ·
++web version: [Space](https://huggingface.co/spaces/TheDrainFlorist/below-six-bits)
++
+ ## Provenance
+ 
+-Base model: [zai-org/GLM-5.3-Flash](https://huggingface.co/zai-org/GLM-5.3-Flash)
+-— **MIT licensed**; this is a quantized derivative and inherits that license.
++Base model: [zai-org/GLM-5.3-Flash](https://huggingface.co/zai-org/GLM-5.3-Flash) — **MIT licensed**.
++This is a quantized derivative and inherits that licence; using it
++means accepting the base model's terms.
+ Quantization: TheDrainFlorist, 2026.
+ 
+ The upstream authors ask that their technical report be cited in research
+
+════════════════════════════════════════
+  Qwen3.5-397B-A17B-VQ-2.2bpw
+════════════════════════════════════════
+@@ -50,40 +50,6 @@
+ expert pages never load. Budget the weight size for worst-case varied
+ traffic. Peak ≈ what routing touches, plus ~3 GiB.
+ 
+-## Speculative decoding (MTP) — optional sidecar
+-
+-This repo includes `mtp-head-q6.safetensors` (5.4 GiB): the model's own
+-multi-token-prediction head, quantized. Stock loaders ignore it; it
+-costs nothing unless you opt in by name, and **adds ~5.6 GiB resident
+-when enabled**.
+-
+-Measured on this artifact: draft acceptance **0.72** (256 positions,
+-control-ruled-out). Day one this is a single-box feature via VQLab's
+-server — this rung fits a 128 GB machine:
+-
+-```bash
+-git clone https://github.com/noahzelezny/VQLab && cd VQLab
+-python3 -m venv .venv && source .venv/bin/activate
+-pip install .
+-python -m vqlab.cli serve \
+-  --model TheDrainFlorist/Qwen3.5-397B-A17B-VQ-2.2bpw \
+-  --sidecar mtp-head-q6.safetensors
+-```
+-
+-Cluster (exo) speculative decoding for pipeline-sharded instances is
+-implemented and in cluster validation; it will arrive in the serving
+-fork rather than in this artifact. No end-to-end cluster speedup is
+-claimed yet — the number above is acceptance, not throughput.
+-
+-**Cluster speculative decoding is live** on the [`mtp-stage1`](https://github.com/noahzelezny/exo/tree/mtp-stage1)
+-branch of our exo fork (`EXO_MTP=1` on every node; outputs exactly the
+-base model's via rejection sampling). Measured on this family's 2.6bpw
+-rung on a 2-node pipeline: acceptance **0.85**, throughput at **parity**
+-with exo's stock decode — the head drafts well, but this family's stock
+-pipeline decode does not degrade with generation length, so there is
+-little for speculation to recover. Enable it to experiment; expect
+-parity; per-rung numbers for this artifact are not yet measured.
+-
+ ## Measured results
+ 
+ All numbers measured on this exact artifact, reproduced bit-identically ×2,
+@@ -123,64 +89,6 @@
+ decode reads the same active experts per token as the larger builds. It buys
+ *residency*, which is the table above.
+ 
+-## Run it
+-
+-```bash
+-pip install mlx-lm
+-python -m mlx_lm generate \
+-  --model TheDrainFlorist/Qwen3.5-397B-A17B-VQ-2.2bpw \
+-  --prompt "Explain vector quantization briefly." \
+-  --max-tokens 1000
+-```
+-
+-`max-tokens` is deliberately generous: this is a reasoning model and a small
+-budget gets consumed by its thinking, leaving the visible answer truncated.
+-
+-No patches, no forks: `config.json` declares `model_file: model.py`, and
+-`mlx-lm` imports the bundled `model.py` from inside this folder. That file
+-carries the VQ runtime (JIT-compiled Metal kernels via
+-`mx.fast.metal_kernel`), including the sub-byte packed-code reader.
+-
+-## Methodology
+-
+-**Mixed precision by layer sensitivity.** Not all weights deserve the same
+-bits. Attention, MoE routers, embeddings, and the output head stay at higher
+-precision — they are a small fraction of the parameters but errors there
+-propagate through every token. The MoE *experts* are ~85% of the model and
+-individually far more tolerant, so they absorb the aggressive quantization.
+-A tail of later layers is also promoted above the expert baseline; measured
+-layer-wise error showed depth matters, and the last layers repay the bits.
+-
+-**Vector quantization instead of scalar rounding — the part that is
+-different.** Scalar 2-bit gives each weight 4 rigid levels; over a group of 4
+-weights that is 256 fixed grid combinations. This build instead learns a
+-**codebook of joint 8-weight patterns** and stores one index per group.
+-Each 8-weight subvector stores one **14-bit index** into a per-tensor 16,384-entry fp16 codebook. At the same bits, the codebook's entries sit
+-where the weight distribution actually is, rather than on a uniform lattice —
+-which is why this beats scalar quantization at matched size rather than
+-merely matching it. Per-tensor codebooks, with an fp16 scale per (row, 64
+-weights), for 2.00 bits/weight stored in the expert region.
+-
+-**Codebooks are fit in pure weight space** — k-means over the weight
+-subvectors, no Hessian, no activation statistics, no calibration corpus. That
+-is a deliberate choice: calibration-fitted methods we tested (GPTQ- and
+-DWQ-style) reduced *layer* error while making *end-to-end* perplexity worse
+-on this architecture, and they bias the result toward whatever text the
+-calibration set contains. Weight-space fitting has no such domain preference.
+-
+-**Sub-byte bit-packing.** Codes are packed into uint32 words (row-local,
+-32-code blocks) rather than padded to whole bytes, which is what makes the
+-non-byte-aligned sizes possible at all. Packing is a pure representation
+-change: the packed artifact's perplexities match its unpacked twin to four
+-decimals of total negative log-likelihood on both corpora.
+-
+-**How it was evaluated.** Perplexity on two corpora — raw wikitext
+-(prefix-8192) and a mixed-language code corpus — every number reproduced
+-bit-identically twice, scored with an unmodified `mlx-lm`. Two corpora
+-because this family shows real domain asymmetry: larger codebooks buy far
+-more on prose than on code, so a single-corpus number would misrepresent the
+-trade. Task-suite results are reported below, measured the same way.
+-
+ ## Task benchmarks
+ 
+ All five models below — this repo's three VQ artifacts and the two community
+@@ -219,7 +127,71 @@
+ > These are **0-shot** scores. Leaderboard conventions often use 10-shot
+ > HellaSwag / 5-shot WinoGrande, which run several points higher — compare
+ > against other 0-shot numbers only.
++
++## Run it
++
++```bash
++pip install 'mlx-lm>=0.31.3'
++python -m mlx_lm generate \
++  --model TheDrainFlorist/Qwen3.5-397B-A17B-VQ-2.2bpw \
++  --prompt "Explain vector quantization briefly." \
++  --max-tokens 1000
++```
++
++`max-tokens` is deliberately generous: this is a reasoning model and a small
++budget gets consumed by its thinking, leaving the visible answer truncated.
++
++No patches, no forks: `config.json` declares `model_file: model.py`, and
++`mlx-lm` imports the bundled `model.py` from inside this folder. That file
++carries the VQ runtime (JIT-compiled Metal kernels via
++`mx.fast.metal_kernel`), including the sub-byte packed-code reader.
++
++## Speculative decoding (MTP)
++
++This repo includes `mtp-head-q6.safetensors` (5.4 GiB): the model's own
++multi-token-prediction head, quantized. Stock loaders ignore it; it
++costs nothing unless you opt in by name, and **adds ~5.6 GiB resident
++when enabled**.
++
++Measured on this artifact: draft acceptance **0.72** (256 positions,
++control-ruled-out). Day one this is a single-box feature via VQLab's
++server — this rung fits a 128 GB machine:
+ 
++```bash
++git clone https://github.com/noahzelezny/VQLab && cd VQLab
++python3 -m venv .venv && source .venv/bin/activate
++pip install .
++python -m vqlab.cli serve \
++  --model TheDrainFlorist/Qwen3.5-397B-A17B-VQ-2.2bpw \
++  --sidecar mtp-head-q6.safetensors
++```
++
++Cluster (exo) speculative decoding for pipeline-sharded instances is
++implemented and in cluster validation; it will arrive in the serving
++fork rather than in this artifact. No end-to-end cluster speedup is
++claimed yet — the number above is acceptance, not throughput.
++
++**Cluster speculative decoding is live** on the [`mtp-stage1`](https://github.com/noahzelezny/exo/tree/mtp-stage1)
++branch of our exo fork (`EXO_MTP=1` on every node; outputs exactly the
++base model's via rejection sampling). Measured on this family's 2.6bpw
++rung on a 2-node pipeline: acceptance **0.85**, throughput at **parity**
++with exo's stock decode — the head drafts well, but this family's stock
++pipeline decode does not degrade with generation length, so there is
++little for speculation to recover. Enable it to experiment; expect
++parity; per-rung numbers for this artifact are not yet measured.
++
++## Vision
++
++The artifact includes the full 333-tensor vision tower at source precision
++(0.85 GiB). `mlx-lm` is text-only for this architecture and ignores it;
++[exo](https://github.com/exo-explore/exo) loads it from this folder
++directly. `mlx-vlm` support requires its `model_file` loader hook
++([PR #1926](https://github.com/Blaizzy/mlx-vlm/pull/1926), under review).
++
++The sizes quoted above are the download: they include this tower. Because
++`mlx-lm` does not load it, resident memory runs ~0.85 GiB below the disk
++figure — the runtime tables report what was actually measured resident.
++
+ ## Tuning: prefill speed
+ 
+ `mlx-lm` prefills prompts in 512-token steps by default. This model is a
+@@ -244,20 +216,55 @@
+ Note: perplexity is deterministic; wall-time figures are not, and will vary
+ with whatever else your machine is doing.
+ 
+-## Vision
++## Methodology
+ 
+-The artifact includes the full 333-tensor vision tower at source precision
+-(0.85 GiB). `mlx-lm` is text-only for this architecture and ignores it;
+-[exo](https://github.com/exo-explore/exo) loads it from this folder
+-directly. `mlx-vlm` support requires its `model_file` loader hook
+-([PR #1926](https://github.com/Blaizzy/mlx-vlm/pull/1926), under review).
++**Mixed precision by layer sensitivity.** Not all weights deserve the same
++bits. Attention, MoE routers, embeddings, and the output head stay at higher
++precision — they are a small fraction of the parameters but errors there
++propagate through every token. The MoE *experts* are ~85% of the model and
++individually far more tolerant, so they absorb the aggressive quantization.
++A tail of later layers is also promoted above the expert baseline; measured
++layer-wise error showed depth matters, and the last layers repay the bits.
+ 
+-The sizes quoted above are the download: they include this tower. Because
+-`mlx-lm` does not load it, resident memory runs ~0.85 GiB below the disk
+-figure — the runtime tables report what was actually measured resident.
++**Vector quantization instead of scalar rounding — the part that is
++different.** Scalar 2-bit gives each weight 4 rigid levels; over a group of 4
++weights that is 256 fixed grid combinations. This build instead learns a
++**codebook of joint 8-weight patterns** and stores one index per group.
++Each 8-weight subvector stores one **14-bit index** into a per-tensor 16,384-entry fp16 codebook. At the same bits, the codebook's entries sit
++where the weight distribution actually is, rather than on a uniform lattice —
++which is why this beats scalar quantization at matched size rather than
++merely matching it. Per-tensor codebooks, with an fp16 scale per (row, 64
++weights), for 2.00 bits/weight stored in the expert region.
+ 
+-## Known limitations
++**Codebooks are fit in pure weight space** — k-means over the weight
++subvectors, no Hessian, no activation statistics, no calibration corpus. That
++is a deliberate choice: calibration-fitted methods we tested (GPTQ- and
++DWQ-style) reduced *layer* error while making *end-to-end* perplexity worse
++on this architecture, and they bias the result toward whatever text the
++calibration set contains. Weight-space fitting has no such domain preference.
+ 
++**Sub-byte bit-packing.** Codes are packed into uint32 words (row-local,
++32-code blocks) rather than padded to whole bytes, which is what makes the
++non-byte-aligned sizes possible at all. Packing is a pure representation
++change: the packed artifact's perplexities match its unpacked twin to four
++decimals of total negative log-likelihood on both corpora.
++
++**How it was evaluated.** Perplexity on two corpora — raw wikitext
++(prefix-8192) and a mixed-language code corpus — every number reproduced
++bit-identically twice, scored with an unmodified `mlx-lm`. Two corpora
++because this family shows real domain asymmetry: larger codebooks buy far
++more on prose than on code, so a single-corpus number would misrepresent the
++trade. Task-suite results are reported below, measured the same way.
++
++## Verification
++
++Release gates passed on this artifact before upload: file, index and
++tokenizer checks, a verbatim match between the bundled runtime and its
++source, and a generation smoke through the shipping runtime on Apple
++Silicon. The upload path runs the gate itself and refuses to publish
++without it.
++## Limitations
++
+ - Code-heavy workloads measurably prefer the `VQ-2.4bpw` build (+1.2% code
+   perplexity here vs the community 2.6bit, +2.3% vs our `VQ-2.4bpw` build).
+ - This is a *thinking* model (Qwen3.5 family): it spends tokens reasoning
+@@ -281,9 +288,20 @@
+ failed as well as the ones that worked, and comparator numbers re-measured on
+ one harness so the claims can be checked rather than taken on trust.
+ 
++## Paper
++
++The method, the full model ladder, the negative results, and the measurement
++rules behind every number here:
++[**Data-Free Vector Quantization Beats Affine Quantization at Matched Bytes
++Below 6 Bits**](https://doi.org/10.5281/zenodo.22119017) (CC BY 4.0) ·
++code: [VQLab](https://github.com/noahzelezny/VQLab) ·
++web version: [Space](https://huggingface.co/spaces/TheDrainFlorist/below-six-bits)
++
+ ## Provenance
+ 
+-Base model: Qwen/Qwen3.5-397B-A17B (Apache 2.0 — see the base model card
+-for license and usage terms). Quantization: TheDrainFlorist, 2026. Built with MLX;
+-referee scoring scripts and the full experiment log (what worked, what was
+-falsified, and why) available on request.
++Base model: [Qwen/Qwen3.5-397B-A17B](https://huggingface.co/Qwen/Qwen3.5-397B-A17B) — **Apache-2.0**.
++This is a quantized derivative and inherits that licence; using it
++means accepting the base model's terms.
++Quantization: TheDrainFlorist, 2026.
++
++Built with MLX and [VQLab](https://github.com/noahzelezny/VQLab).
+
+════════════════════════════════════════
+  Qwen3.5-397B-A17B-VQ-2.4bpw
+════════════════════════════════════════
+@@ -34,19 +34,6 @@
+ real generation on a 2-node exo pipeline, with the peer rank's copy
+ identity-checked before the generation counted.
+ 
+-## Speculative decoding (MTP) — sidecar included
+-
+-`mtp-head-q6.safetensors` (5.4 GiB) is the model's own MTP draft head —
+-the same file validated on the 2.2bpw rung (acceptance 0.72, single-box
+-via `vqlab serve --sidecar`). **Cluster speculative decoding is live** on the [`mtp-stage1`](https://github.com/noahzelezny/exo/tree/mtp-stage1)
+-branch of our exo fork (`EXO_MTP=1` on every node; outputs exactly the
+-base model's via rejection sampling). Measured on this family's 2.6bpw
+-rung on a 2-node pipeline: acceptance **0.85**, throughput at **parity**
+-with exo's stock decode — the head drafts well, but this family's stock
+-pipeline decode does not degrade with generation length, so there is
+-little for speculation to recover. Enable it to experiment; expect
+-parity; per-rung numbers for this artifact are not yet measured.
+-
+ ## Measured results
+ 
+ All numbers measured on this exact artifact (not projected from a proxy),
+@@ -75,7 +62,7 @@
+ ## Run it
+ 
+ ```bash
+-pip install mlx-lm
++pip install 'mlx-lm>=0.31.3'
+ python -m mlx_lm generate \
+   --model TheDrainFlorist/Qwen3.5-397B-A17B-VQ-2.4bpw \
+   --prompt "Explain vector quantization briefly." \
+@@ -98,6 +85,38 @@
+   lower it (e.g. `16`) if you run close to the ceiling.
+ - Machines with more memory need none of this.
+ 
++## Speculative decoding (MTP)
++
++`mtp-head-q6.safetensors` (5.4 GiB) is the model's own MTP draft head —
++the same file validated on the 2.2bpw rung (acceptance 0.72, single-box
++via `vqlab serve --sidecar`). **Cluster speculative decoding is live** on the [`mtp-stage1`](https://github.com/noahzelezny/exo/tree/mtp-stage1)
++branch of our exo fork (`EXO_MTP=1` on every node; outputs exactly the
++base model's via rejection sampling). Measured on this family's 2.6bpw
++rung on a 2-node pipeline: acceptance **0.85**, throughput at **parity**
++with exo's stock decode — the head drafts well, but this family's stock
++pipeline decode does not degrade with generation length, so there is
++little for speculation to recover. Enable it to experiment; expect
++parity; per-rung numbers for this artifact are not yet measured.
++
++## Vision
++
++The artifact includes the full 333-tensor vision tower at source precision
++(0.85 GiB). `mlx-lm` is text-only for this architecture and ignores it;
++[exo](https://github.com/exo-explore/exo) loads it from this folder
++directly. `mlx-vlm` support requires its `model_file` loader hook
++([PR #1926](https://github.com/Blaizzy/mlx-vlm/pull/1926), under review).
++
++## Siblings
++
++This is the middle of a three-size family, all from the same skeleton and
++recipe, all measured the same way:
++
++| | size | wikitext | code | needs |
++|---|---|---|---|---|
++| `VQ-2.2bpw` (accessibility) | 100.1 GiB | 3.1706 | 2.6988 | 128 GB Mac, roomy |
++| **`VQ-2.4bpw` (this build)** | **110.8 GiB** | **2.7655** | **2.6383** | 128 GB Mac, tight |
++| `VQ-3.1bpw` (quality) | 142.8 GiB | 2.3519 | 2.5987 | ≥192 GB or cluster |
++
+ ## Methodology
+ 
+ **Mixed precision by layer sensitivity.** Not all weights deserve the same
+@@ -139,27 +158,15 @@
+ trade. Task-suite evals (HellaSwag/PIQA/WinoGrande and friends) have **not**
+ been run; only what is reported above is measured.
+ 
+-## Vision
++## Verification
+ 
+-The artifact includes the full 333-tensor vision tower at source precision
+-(0.85 GiB). `mlx-lm` is text-only for this architecture and ignores it;
+-[exo](https://github.com/exo-explore/exo) loads it from this folder
+-directly. `mlx-vlm` support requires its `model_file` loader hook
+-([PR #1926](https://github.com/Blaizzy/mlx-vlm/pull/1926), under review).
++Release gates passed on this artifact before upload: file, index and
++tokenizer checks, a verbatim match between the bundled runtime and its
++source, and a generation smoke through the shipping runtime on Apple
++Silicon. The upload path runs the gate itself and refuses to publish
++without it.
++## Limitations
+ 
+-## Siblings
+-
+-This is the middle of a three-size family, all from the same skeleton and
+-recipe, all measured the same way:
+-
+-| | size | wikitext | code | needs |
+-|---|---|---|---|---|
+-| `VQ-2.2bpw` (accessibility) | 100.1 GiB | 3.1706 | 2.6988 | 128 GB Mac, roomy |
+-| **`VQ-2.4bpw` (this build)** | **110.8 GiB** | **2.7655** | **2.6383** | 128 GB Mac, tight |
+-| `VQ-3.1bpw` (quality) | 142.8 GiB | 2.3519 | 2.5987 | ≥192 GB or cluster |
+-
+-## Known limitations
+-
+ - **Tight on 128 GB.** ~118 GiB peak against ~120 GiB usable leaves little
+   room for other software. It runs; it is not roomy.
+ - This is a *thinking* model (Qwen3.5 family): by default it spends tokens
+@@ -171,9 +178,20 @@
+   this model across two Macs with an unpatched `mlx-lm`, producing output
+   identical to the patched run. Single-box users are unaffected.
+ 
++## Paper
++
++The method, the full model ladder, the negative results, and the measurement
++rules behind every number here:
++[**Data-Free Vector Quantization Beats Affine Quantization at Matched Bytes
++Below 6 Bits**](https://doi.org/10.5281/zenodo.22119017) (CC BY 4.0) ·
++code: [VQLab](https://github.com/noahzelezny/VQLab) ·
++web version: [Space](https://huggingface.co/spaces/TheDrainFlorist/below-six-bits)
++
+ ## Provenance
+ 
+-Base model: Qwen/Qwen3.5-397B-A17B (Apache 2.0 — see the base model card
+-for license and usage terms). Quantization: TheDrainFlorist, 2026. Built with MLX;
+-referee scoring scripts and the full experiment log (E31–E36: what worked,
+-what was falsified, and why) available on request.
++Base model: [Qwen/Qwen3.5-397B-A17B](https://huggingface.co/Qwen/Qwen3.5-397B-A17B) — **Apache-2.0**.
++This is a quantized derivative and inherits that licence; using it
++means accepting the base model's terms.
++Quantization: TheDrainFlorist, 2026.
++
++Built with MLX and [VQLab](https://github.com/noahzelezny/VQLab).
+
+════════════════════════════════════════
+  Qwen3.5-397B-A17B-VQ-2.6bpw
+════════════════════════════════════════
+@@ -36,19 +36,6 @@
+ real generation on a 2-node exo pipeline, with the peer rank's copy
+ identity-checked before the generation counted.
+ 
+-## Speculative decoding (MTP) — sidecar included
+-
+-`mtp-head-q6.safetensors` (5.4 GiB) is the model's own MTP draft head —
+-the same file validated on the 2.2bpw rung (acceptance 0.72, single-box
+-via `vqlab serve --sidecar`). **Cluster speculative decoding is live** on the [`mtp-stage1`](https://github.com/noahzelezny/exo/tree/mtp-stage1)
+-branch of our exo fork (`EXO_MTP=1` on every node; outputs exactly the
+-base model's via rejection sampling). Measured on this family's 2.6bpw
+-rung on a 2-node pipeline: acceptance **0.85**, throughput at **parity**
+-with exo's stock decode — the head drafts well, but this family's stock
+-pipeline decode does not degrade with generation length, so there is
+-little for speculation to recover. Enable it to experiment; expect
+-parity.
+-
+ ## Measured results
+ 
+ Scored on this exact artifact with an unmodified `mlx-lm` install, on the same
+@@ -78,6 +65,15 @@
+ +1.7.** We quote the download figure above because that is what you actually
+ fetch, but the like-for-like number is the smaller one.
+ 
++## Task benchmarks
++
++**Not yet measured on this artifact.** Two of the siblings above carry
++HellaSwag/PIQA/WinoGrande numbers; this build has not been run through that
++harness, and reporting a sibling's task scores here would be exactly the
++substitution this project refuses to make. They will be added once the suite
++has been run under the same harness (lm-eval 0.4.12, layer-streaming
++loglikelihood scorer, 0-shot, first 1000 items per task).
++
+ ## Hardware
+ 
+ **This build does not fit a 128 GB machine.** You need either:
+@@ -101,7 +97,7 @@
+ ## Run it
+ 
+ ```bash
+-pip install mlx-lm
++pip install 'mlx-lm>=0.31.3'
+ python -m mlx_lm generate \
+   --model TheDrainFlorist/Qwen3.5-397B-A17B-VQ-2.6bpw \
+   --prompt "Explain vector quantization briefly." \
+@@ -116,6 +112,47 @@
+ carries the VQ runtime — JIT-compiled Metal kernels via
+ `mx.fast.metal_kernel` — including the sub-byte packed-code reader.
+ 
++## Speculative decoding (MTP)
++
++`mtp-head-q6.safetensors` (5.4 GiB) is the model's own MTP draft head —
++the same file validated on the 2.2bpw rung (acceptance 0.72, single-box
++via `vqlab serve --sidecar`). **Cluster speculative decoding is live** on the [`mtp-stage1`](https://github.com/noahzelezny/exo/tree/mtp-stage1)
++branch of our exo fork (`EXO_MTP=1` on every node; outputs exactly the
++base model's via rejection sampling). Measured on this family's 2.6bpw
++rung on a 2-node pipeline: acceptance **0.85**, throughput at **parity**
++with exo's stock decode — the head drafts well, but this family's stock
++pipeline decode does not degrade with generation length, so there is
++little for speculation to recover. Enable it to experiment; expect
++parity.
++
++## Vision
++
++The artifact includes the full 333-tensor vision tower at source precision
++(0.85 GiB). `mlx-lm` is text-only for this architecture and ignores it;
++[exo](https://github.com/exo-explore/exo) loads it from this folder
++directly. `mlx-vlm` support requires its `model_file` loader hook
++([PR #1926](https://github.com/Blaizzy/mlx-vlm/pull/1926), under review).
++
++The sizes quoted above are the download: they include this tower. Because
++`mlx-lm` does not load it, resident memory runs ~0.85 GiB below the disk
++figure.
++
++## Siblings
++
++All from the same skeleton and recipe, all scored the same way:
++
++| | size | wikitext | code | needs |
++|---|---|---|---|---|
++| `VQ-2.2bpw` | 101.0 GiB | 3.0591 | 2.6728 | 128 GB Mac, roomy |
++| `VQ-2.4bpw` | 111.6 GiB | 2.7655 | 2.6383 | 128 GB Mac, tight |
++| **`VQ-2.6bpw` (this build)** | **122.3 GiB** | **2.5634** | **2.6123** | ≥192 GB or cluster |
++| `VQ-3bpw` | 143.7 GiB | 2.3410 | 2.5963 | ≥192 GB or cluster |
++
++If you can run this build you can run `VQ-3bpw`, which is better on both
++corpora for 21.4 GiB more. Take this one if those gigabytes are worth more to
++you than the quality difference — on a 192 GB machine it leaves roughly 70 GiB
++free against the 3bpw build's 48.
++
+ ## Methodology
+ 
+ **Mixed precision by layer sensitivity.** Attention, MoE routers, embeddings
+@@ -161,45 +198,15 @@
+ more on prose than on code, so a single-corpus number would misrepresent the
+ trade.
+ 
+-## Task benchmarks
++## Verification
+ 
+-**Not yet measured on this artifact.** Two of the siblings above carry
+-HellaSwag/PIQA/WinoGrande numbers; this build has not been run through that
+-harness, and reporting a sibling's task scores here would be exactly the
+-substitution this project refuses to make. They will be added once the suite
+-has been run under the same harness (lm-eval 0.4.12, layer-streaming
+-loglikelihood scorer, 0-shot, first 1000 items per task).
++Release gates passed on this artifact before upload: file, index and
++tokenizer checks, a verbatim match between the bundled runtime and its
++source, and a generation smoke through the shipping runtime on Apple
++Silicon. The upload path runs the gate itself and refuses to publish
++without it.
++## Limitations
+ 
+-## Vision
+-
+-The artifact includes the full 333-tensor vision tower at source precision
+-(0.85 GiB). `mlx-lm` is text-only for this architecture and ignores it;
+-[exo](https://github.com/exo-explore/exo) loads it from this folder
+-directly. `mlx-vlm` support requires its `model_file` loader hook
+-([PR #1926](https://github.com/Blaizzy/mlx-vlm/pull/1926), under review).
+-
+-The sizes quoted above are the download: they include this tower. Because
+-`mlx-lm` does not load it, resident memory runs ~0.85 GiB below the disk
+-figure.
+-
+-## Siblings
+-
+-All from the same skeleton and recipe, all scored the same way:
+-
+-| | size | wikitext | code | needs |
+-|---|---|---|---|---|
+-| `VQ-2.2bpw` | 101.0 GiB | 3.0591 | 2.6728 | 128 GB Mac, roomy |
+-| `VQ-2.4bpw` | 111.6 GiB | 2.7655 | 2.6383 | 128 GB Mac, tight |
+-| **`VQ-2.6bpw` (this build)** | **122.3 GiB** | **2.5634** | **2.6123** | ≥192 GB or cluster |
+-| `VQ-3bpw` | 143.7 GiB | 2.3410 | 2.5963 | ≥192 GB or cluster |
+-
+-If you can run this build you can run `VQ-3bpw`, which is better on both
+-corpora for 21.4 GiB more. Take this one if those gigabytes are worth more to
+-you than the quality difference — on a 192 GB machine it leaves roughly 70 GiB
+-free against the 3bpw build's 48.
+-
+-## Known limitations
+-
+ - No throughput measurement — see Hardware.
+ - Perplexities are corpus-specific. Compare only against models scored on the
+   same files, never across harnesses.
+@@ -214,7 +221,20 @@
+ as well as the wins, and comparator numbers re-measured on one harness so the
+ claims can be checked rather than taken on trust.
+ 
++## Paper
++
++The method, the full model ladder, the negative results, and the measurement
++rules behind every number here:
++[**Data-Free Vector Quantization Beats Affine Quantization at Matched Bytes
++Below 6 Bits**](https://doi.org/10.5281/zenodo.22119017) (CC BY 4.0) ·
++code: [VQLab](https://github.com/noahzelezny/VQLab) ·
++web version: [Space](https://huggingface.co/spaces/TheDrainFlorist/below-six-bits)
++
+ ## Provenance
+ 
+-Base model: Qwen/Qwen3.5-397B-A17B (Apache 2.0 — see the base model card for
+-license and usage terms). Quantization: TheDrainFlorist, 2026. Built with MLX.
++Base model: [Qwen/Qwen3.5-397B-A17B](https://huggingface.co/Qwen/Qwen3.5-397B-A17B) — **Apache-2.0**.
++This is a quantized derivative and inherits that licence; using it
++means accepting the base model's terms.
++Quantization: TheDrainFlorist, 2026.
++
++Built with MLX and [VQLab](https://github.com/noahzelezny/VQLab).
+
+════════════════════════════════════════
+  Qwen3.5-397B-A17B-VQ-3.1bpw
+════════════════════════════════════════
+@@ -14,7 +14,7 @@
+ - qwen3.5
+ ---
+ 
+-# Qwen3.5-397B-A17B-VQ-3bpw
++# Qwen3.5-397B-A17B-VQ-3.1bpw
+ 
+ **143.7 GiB — the quality build.**
+ 
+@@ -34,19 +34,6 @@
+ real generation on a 2-node exo pipeline, with the peer rank's copy
+ identity-checked before the generation counted.
+ 
+-## Speculative decoding (MTP) — sidecar included
+-
+-`mtp-head-q6.safetensors` (5.4 GiB) is the model's own MTP draft head —
+-the same file validated on the 2.2bpw rung (acceptance 0.72, single-box
+-via `vqlab serve --sidecar`). **Cluster speculative decoding is live** on the [`mtp-stage1`](https://github.com/noahzelezny/exo/tree/mtp-stage1)
+-branch of our exo fork (`EXO_MTP=1` on every node; outputs exactly the
+-base model's via rejection sampling). Measured on this family's 2.6bpw
+-rung on a 2-node pipeline: acceptance **0.85**, throughput at **parity**
+-with exo's stock decode — the head drafts well, but this family's stock
+-pipeline decode does not degrade with generation length, so there is
+-little for speculation to recover. Enable it to experiment; expect
+-parity; per-rung numbers for this artifact are not yet measured.
+-
+ ## Measured results
+ 
+ All numbers measured on this exact artifact, scored with an unmodified
+@@ -118,6 +105,16 @@
+ this family). Judge by your workload; never compare perplexities across
+ different corpora or eval harnesses.
+ 
++## Task benchmarks
++
++**Not yet re-measured on this artifact.** The task-suite table published on
++the previous build was measured on *that* artifact; although this one is the
++same size and geometry, its codebooks are different, and reporting another
++artifact's task scores here would be exactly the substitution this project
++refuses to make. They will be added once the suite has been re-run under the
++same harness (lm-eval 0.4.12, layer-streaming loglikelihood scorer, 0-shot,
++first 1000 items per task).
++
+ ## Hardware
+ 
+ 143.7 GiB on disk (~142.8 GiB resident) does **not** fit a 128 GB machine. You need either:
+@@ -144,7 +141,7 @@
+ ## Run it
+ 
+ ```bash
+-pip install mlx-lm
++pip install 'mlx-lm>=0.31.3'
+ python -m mlx_lm generate \
+   --model TheDrainFlorist/Qwen3.5-397B-A17B-VQ-3bpw \
+   --prompt "Explain vector quantization briefly." \
+@@ -159,6 +156,31 @@
+ carries the VQ runtime (JIT-compiled Metal kernels via
+ `mx.fast.metal_kernel`), including the sub-byte packed-code reader.
+ 
++## Speculative decoding (MTP)
++
++`mtp-head-q6.safetensors` (5.4 GiB) is the model's own MTP draft head —
++the same file validated on the 2.2bpw rung (acceptance 0.72, single-box
++via `vqlab serve --sidecar`). **Cluster speculative decoding is live** on the [`mtp-stage1`](https://github.com/noahzelezny/exo/tree/mtp-stage1)
++branch of our exo fork (`EXO_MTP=1` on every node; outputs exactly the
++base model's via rejection sampling). Measured on this family's 2.6bpw
++rung on a 2-node pipeline: acceptance **0.85**, throughput at **parity**
++with exo's stock decode — the head drafts well, but this family's stock
++pipeline decode does not degrade with generation length, so there is
++little for speculation to recover. Enable it to experiment; expect
++parity; per-rung numbers for this artifact are not yet measured.
++
++## Vision
++
++The artifact includes the full 333-tensor vision tower at source precision
++(0.85 GiB). `mlx-lm` is text-only for this architecture and ignores it;
++[exo](https://github.com/exo-explore/exo) loads it from this folder
++directly. `mlx-vlm` support requires its `model_file` loader hook
++([PR #1926](https://github.com/Blaizzy/mlx-vlm/pull/1926), under review).
++
++The sizes quoted above are the download: they include this tower. Because
++`mlx-lm` does not load it, resident memory runs ~0.85 GiB below the disk
++figure — the runtime tables report what was actually measured resident.
++
+ ## Methodology
+ 
+ **Mixed precision by layer sensitivity.** Not all weights deserve the same
+@@ -200,30 +222,15 @@
+ trade. Task-suite results for this artifact are not yet available — see
+ below.
+ 
+-## Task benchmarks
++## Verification
+ 
+-**Not yet re-measured on this artifact.** The task-suite table published on
+-the previous build was measured on *that* artifact; although this one is the
+-same size and geometry, its codebooks are different, and reporting another
+-artifact's task scores here would be exactly the substitution this project
+-refuses to make. They will be added once the suite has been re-run under the
+-same harness (lm-eval 0.4.12, layer-streaming loglikelihood scorer, 0-shot,
+-first 1000 items per task).
++Release gates passed on this artifact before upload: file, index and
++tokenizer checks, a verbatim match between the bundled runtime and its
++source, and a generation smoke through the shipping runtime on Apple
++Silicon. The upload path runs the gate itself and refuses to publish
++without it.
++## Limitations
+ 
+-## Vision
+-
+-The artifact includes the full 333-tensor vision tower at source precision
+-(0.85 GiB). `mlx-lm` is text-only for this architecture and ignores it;
+-[exo](https://github.com/exo-explore/exo) loads it from this folder
+-directly. `mlx-vlm` support requires its `model_file` loader hook
+-([PR #1926](https://github.com/Blaizzy/mlx-vlm/pull/1926), under review).
+-
+-The sizes quoted above are the download: they include this tower. Because
+-`mlx-lm` does not load it, resident memory runs ~0.85 GiB below the disk
+-figure — the runtime tables report what was actually measured resident.
+-
+-## Known limitations
+-
+ - Needs ≥ 192 GB unified memory or a cluster — see Hardware above.
+ - This is a *thinking* model (Qwen3.5 family): it spends tokens reasoning
+   before answering. Budget `max_tokens` accordingly.
+@@ -237,9 +244,20 @@
+ failed as well as the ones that worked, and comparator numbers re-measured on
+ one harness so the claims can be checked rather than taken on trust.
+ 
++## Paper
++
++The method, the full model ladder, the negative results, and the measurement
++rules behind every number here:
++[**Data-Free Vector Quantization Beats Affine Quantization at Matched Bytes
++Below 6 Bits**](https://doi.org/10.5281/zenodo.22119017) (CC BY 4.0) ·
++code: [VQLab](https://github.com/noahzelezny/VQLab) ·
++web version: [Space](https://huggingface.co/spaces/TheDrainFlorist/below-six-bits)
++
+ ## Provenance
+ 
+-Base model: Qwen/Qwen3.5-397B-A17B (Apache 2.0 — see the base model card
+-for license and usage terms). Quantization: TheDrainFlorist, 2026. Built with MLX;
+-referee scoring scripts and the full experiment log (what worked, what was
+-falsified, and why) available on request.
++Base model: [Qwen/Qwen3.5-397B-A17B](https://huggingface.co/Qwen/Qwen3.5-397B-A17B) — **Apache-2.0**.
++This is a quantized derivative and inherits that licence; using it
++means accepting the base model's terms.
++Quantization: TheDrainFlorist, 2026.
++
++Built with MLX and [VQLab](https://github.com/noahzelezny/VQLab).
+
+════════════════════════════════════════
+  Qwen3.6-35B-A3B-VQ-3.4bpw
+════════════════════════════════════════
+@@ -12,6 +12,7 @@
+ - vector-quantization
+ - apple-silicon
+ - qwen3.6
++- multimodal
+ ---
+ 
+ # Qwen3.6-35B-A3B-VQ-3.4bpw
+@@ -22,7 +23,6 @@
+ [Qwen3.6-35B-A3B](https://huggingface.co/Qwen/Qwen3.6-35B-A3B) for machines
+ where the 18.7 GiB parity build is too large. Stock `mlx-lm`.
+ 
+-
+ ![where these releases sit](qwen36_ladder.png)
+ 
+ ## Recent changes (2026-09)
+@@ -40,7 +40,6 @@
+   `model.py` is replaced, and the prior revision stays pinnable by
+   commit hash.
+ 
+-
+ ## Measured results
+ 
+ | build | size | vs bf16 ppl | top-1 agreement |
+@@ -76,14 +75,14 @@
+ ## Run it
+ 
+ ```bash
+-pip install mlx-lm
++pip install 'mlx-lm>=0.31.3'
+ python -m mlx_lm generate \
+   --model TheDrainFlorist/Qwen3.6-35B-A3B-VQ-3.4bpw \
+   --prompt "Explain the difference between a mutex and a semaphore." \
+   --max-tokens 512
+ ```
+ 
+-## How it was built
++## Methodology
+ 
+ Uniform vector quantization of the experts at **d=4, K=2048** (3.0
+ bits/weight packed); non-expert tensors at 8-bit. Experts are ~92% of the
+@@ -99,7 +98,6 @@
+ error. Packing verified as a pure representation change — packed and
+ unpacked score identically to three decimals.
+ 
+-
+ ### Multi-machine (exo) note
+ 
+ These artifacts fit on one machine, but if you shard them across an
+@@ -122,3 +120,20 @@
+ - Perplexity measured on one corpus; a different workload may rank builds
+   differently.
+ - No blind human-preference evaluation was run on this model.
++
++## Paper
++
++The method, the full model ladder, the negative results, and the measurement
++rules behind every number here:
++[**Data-Free Vector Quantization Beats Affine Quantization at Matched Bytes
++Below 6 Bits**](https://doi.org/10.5281/zenodo.22119017) (CC BY 4.0) ·
++code: [VQLab](https://github.com/noahzelezny/VQLab) ·
++web version: [Space](https://huggingface.co/spaces/TheDrainFlorist/below-six-bits)
++## Provenance
++
++Base model: [Qwen/Qwen3.6-35B-A3B](https://huggingface.co/Qwen/Qwen3.6-35B-A3B) — **Apache-2.0**.
++This is a quantized derivative and inherits that licence; using it
++means accepting the base model's terms.
++Quantization: TheDrainFlorist, 2026.
++
++Built with MLX and [VQLab](https://github.com/noahzelezny/VQLab).
+
+════════════════════════════════════════
+  Qwen3.6-35B-A3B-VQ-3.8bpw
+════════════════════════════════════════
+@@ -12,6 +12,7 @@
+ - vector-quantization
+ - apple-silicon
+ - qwen3.6
++- multimodal
+ ---
+ 
+ # Qwen3.6-35B-A3B-VQ-3.8bpw
+@@ -38,7 +39,6 @@
+   `model.py` is replaced, and the prior revision stays pinnable by
+   commit hash.
+ 
+-
+ ## Measured results
+ 
+ Referee corpus, 2048-token windows, scored against the bf16 teacher on the
+@@ -81,14 +81,14 @@
+ ## Run it
+ 
+ ```bash
+-pip install mlx-lm
++pip install 'mlx-lm>=0.31.3'
+ python -m mlx_lm generate \
+   --model TheDrainFlorist/Qwen3.6-35B-A3B-VQ-3.8bpw \
+   --prompt "Write a Python function that ..." \
+   --max-tokens 512
+ ```
+ 
+-## How it was built
++## Methodology
+ 
+ Uniform vector quantization of the experts at **d=4, K=8192** — each
+ 4-weight subvector stores one 13-bit index into a per-tensor 8192-entry fp16
+@@ -141,7 +141,20 @@
+   router feeds an argmax over experts, so the effect is not bounded by the
+   byte share. It is unmeasured.
+ 
++## Paper
++
++The method, the full model ladder, the negative results, and the measurement
++rules behind every number here:
++[**Data-Free Vector Quantization Beats Affine Quantization at Matched Bytes
++Below 6 Bits**](https://doi.org/10.5281/zenodo.22119017) (CC BY 4.0) ·
++code: [VQLab](https://github.com/noahzelezny/VQLab) ·
++web version: [Space](https://huggingface.co/spaces/TheDrainFlorist/below-six-bits)
++
+ ## Provenance
+ 
+-Base model: Qwen/Qwen3.6-35B-A3B (Apache 2.0 — see the base model card for
+-license and usage terms). Quantization: TheDrainFlorist, 2026. Built with MLX.
++Base model: [Qwen/Qwen3.6-35B-A3B](https://huggingface.co/Qwen/Qwen3.6-35B-A3B) — **Apache-2.0**.
++This is a quantized derivative and inherits that licence; using it
++means accepting the base model's terms.
++Quantization: TheDrainFlorist, 2026.
++
++Built with MLX and [VQLab](https://github.com/noahzelezny/VQLab).
+
+════════════════════════════════════════
+  Qwen3.6-35B-A3B-VQ-4.6bpw
+════════════════════════════════════════
+@@ -12,6 +12,7 @@
+ - vector-quantization
+ - apple-silicon
+ - qwen3.6
++- multimodal
+ ---
+ 
+ # Qwen3.6-35B-A3B-VQ-4.6bpw
+@@ -22,7 +23,6 @@
+ [Qwen3.6-35B-A3B](https://huggingface.co/Qwen/Qwen3.6-35B-A3B) for Apple
+ Silicon. Stock `mlx-lm`, no patches.
+ 
+-
+ ![where these releases sit](qwen36_ladder.png)
+ 
+ ## Recent changes (2026-09)
+@@ -40,7 +40,6 @@
+   `model.py` is replaced, and the prior revision stays pinnable by
+   commit hash.
+ 
+-
+ ## Measured results
+ 
+ Referee corpus, 2048-token windows, scored against the bf16 teacher on the
+@@ -76,7 +75,6 @@
+ perplexity absorbs and argmax-agreement punishes. Both numbers are honest;
+ quote both.
+ 
+-
+ ## The full sweep — every build we measured
+ 
+ Two codebook geometries were swept end to end. Every point below was scored
+@@ -131,7 +129,6 @@
+ teacher on code than on prose — the domain is more predictable, not the
+ quantization better.
+ 
+-
+ ## Runtime
+ 
+ Single M3 Ultra, macOS, stock `mlx-lm`, GPU otherwise idle:
+@@ -148,14 +145,14 @@
+ ## Run it
+ 
+ ```bash
+-pip install mlx-lm
++pip install 'mlx-lm>=0.31.3'
+ python -m mlx_lm generate \
+   --model TheDrainFlorist/Qwen3.6-35B-A3B-VQ-4.6bpw \
+   --prompt "Write a Python function that ..." \
+   --max-tokens 512
+ ```
+ 
+-## How it was built
++## Methodology
+ 
+ A **depth schedule**, not a uniform quantization. Layers 10-39 (the "tail")
+ carry vector-quantized experts at d=2/K=512; layers 0-9 stay at d=4/K=2048.
+@@ -176,7 +173,6 @@
+ representation change: the packed model scores identically to the unpacked
+ one to three decimals.
+ 
+-
+ ### Multi-machine (exo) note
+ 
+ These artifacts fit on one machine, but if you shard them across an
+@@ -201,3 +197,20 @@
+ - No blind human-preference evaluation was run on this model (unlike our
+   gemma-4 releases, which needed one); the claim here rests on perplexity,
+   which is valid for this family.
++
++## Paper
++
++The method, the full model ladder, the negative results, and the measurement
++rules behind every number here:
++[**Data-Free Vector Quantization Beats Affine Quantization at Matched Bytes
++Below 6 Bits**](https://doi.org/10.5281/zenodo.22119017) (CC BY 4.0) ·
++code: [VQLab](https://github.com/noahzelezny/VQLab) ·
++web version: [Space](https://huggingface.co/spaces/TheDrainFlorist/below-six-bits)
++## Provenance
++
++Base model: [Qwen/Qwen3.6-35B-A3B](https://huggingface.co/Qwen/Qwen3.6-35B-A3B) — **Apache-2.0**.
++This is a quantized derivative and inherits that licence; using it
++means accepting the base model's terms.
++Quantization: TheDrainFlorist, 2026.
++
++Built with MLX and [VQLab](https://github.com/noahzelezny/VQLab).
+
+════════════════════════════════════════
+  Qwen3.6-35B-A3B-VQ-5.4bpw
+════════════════════════════════════════
+@@ -12,6 +12,7 @@
+ - vector-quantization
+ - apple-silicon
+ - qwen3.6
++- multimodal
+ ---
+ 
+ # Qwen3.6-35B-A3B-VQ-5.4bpw
+@@ -38,7 +39,6 @@
+   `model.py` is replaced, and the prior revision stays pinnable by
+   commit hash.
+ 
+-
+ ## Measured results
+ 
+ Referee corpus, 2048-token windows, scored against the bf16 teacher on the
+@@ -81,14 +81,14 @@
+ ## Run it
+ 
+ ```bash
+-pip install mlx-lm
++pip install 'mlx-lm>=0.31.3'
+ python -m mlx_lm generate \
+   --model TheDrainFlorist/Qwen3.6-35B-A3B-VQ-5.4bpw \
+   --prompt "Write a Python function that ..." \
+   --max-tokens 512
+ ```
+ 
+-## How it was built
++## Methodology
+ 
+ Uniform vector quantization of the experts at **d=2, K=1024** — each
+ 2-weight subvector stores one 10-bit index into a per-tensor 1024-entry fp16
+@@ -139,7 +139,20 @@
+   router feeds an argmax over experts, so the effect is not bounded by the
+   byte share. It is unmeasured.
+ 
++## Paper
++
++The method, the full model ladder, the negative results, and the measurement
++rules behind every number here:
++[**Data-Free Vector Quantization Beats Affine Quantization at Matched Bytes
++Below 6 Bits**](https://doi.org/10.5281/zenodo.22119017) (CC BY 4.0) ·
++code: [VQLab](https://github.com/noahzelezny/VQLab) ·
++web version: [Space](https://huggingface.co/spaces/TheDrainFlorist/below-six-bits)
++
+ ## Provenance
+ 
+-Base model: Qwen/Qwen3.6-35B-A3B (Apache 2.0 — see the base model card for
+-license and usage terms). Quantization: TheDrainFlorist, 2026. Built with MLX.
++Base model: [Qwen/Qwen3.6-35B-A3B](https://huggingface.co/Qwen/Qwen3.6-35B-A3B) — **Apache-2.0**.
++This is a quantized derivative and inherits that licence; using it
++means accepting the base model's terms.
++Quantization: TheDrainFlorist, 2026.
++
++Built with MLX and [VQLab](https://github.com/noahzelezny/VQLab).
+
+════════════════════════════════════════
+  Qwen3.8-27B-VQ-3.9bpw
+════════════════════════════════════════
+@@ -14,7 +14,7 @@
+ - qwen3.8
+ ---
+ 
+-# TheDrainFlorist/Qwen3.8-27B-VQ-3.9bpw
++# Qwen3.8-27B-VQ-3.9bpw
+ 
+ **12.5 GiB — the smallest build here that we would actually recommend.**
+ 
+@@ -48,7 +48,6 @@
+ previous bundle and peak memory now equals the on-disk size (figures
+ below are re-measured on this revision).
+ 
+-
+ ## Measured results
+ 
+ Scored against the bf16 teacher on the same corpus with an unmodified
+@@ -77,6 +76,18 @@
+ over finite text and absorbs offsetting errors; KL measures distance to the
+ teacher's distribution directly.
+ 
++## Comparators
++
++The affine rungs above are local conversions made with `mlx_lm.convert`
++using default settings, verified uniform per-module.
++
++## Where this stops paying
++
++Above roughly 5 bits per weight the advantage reverses on this model: our
++6-bit affine conversion reaches 3.7 millinats at 21.2 GiB, which no VQ rung we
++measured approaches at that size. Builds larger than the ones released here
++were measured and deliberately not published for that reason.
++
+ ## Runtime
+ 
+ **Decode 23.3 tok/s · prefill ~23 tok/s · resident 12.2 GB.**
+@@ -115,14 +126,14 @@
+ ## Run it
+ 
+ ```bash
+-pip install mlx-lm
++pip install 'mlx-lm>=0.31.3'
+ python -m mlx_lm generate \
+   --model TheDrainFlorist/Qwen3.8-27B-VQ-3.9bpw \
+   --prompt "Explain vector quantization briefly." \
+   --max-tokens 512
+ ```
+ 
+-## How it was built
++## Methodology
+ 
+ Vector quantization of the dense MLP trio at **d=4, K=4096**. Each 4-weight
+ subvector stores one 12-bit index into a per-tensor 4096-entry fp16 codebook. With an fp16 scale
+@@ -140,18 +151,6 @@
+ are therefore quoted against a measured fit-to-fit floor rather than against a
+ repeated build; on this family that floor is 2.085 millinats.
+ 
+-## Comparators
+-
+-The affine rungs above are local conversions made with `mlx_lm.convert`
+-using default settings, verified uniform per-module.
+-
+-## Where this stops paying
+-
+-Above roughly 5 bits per weight the advantage reverses on this model: our
+-6-bit affine conversion reaches 3.7 millinats at 21.2 GiB, which no VQ rung we
+-measured approaches at that size. Builds larger than the ones released here
+-were measured and deliberately not published for that reason.
+-
+ ## Verification
+ 
+ Every tensor was decoded **from the published artifact** and compared against
+@@ -171,3 +170,20 @@
+ - The affine comparators are our own conversions, not community builds.
+ - Above ~5 bpw affine wins outright on this model; this collection stops
+   below that line deliberately.
++
++## Paper
++
++The method, the full model ladder, the negative results, and the measurement
++rules behind every number here:
++[**Data-Free Vector Quantization Beats Affine Quantization at Matched Bytes
++Below 6 Bits**](https://doi.org/10.5281/zenodo.22119017) (CC BY 4.0) ·
++code: [VQLab](https://github.com/noahzelezny/VQLab) ·
++web version: [Space](https://huggingface.co/spaces/TheDrainFlorist/below-six-bits)
++## Provenance
++
++Base model: [Qwen/Qwen3.8-27B](https://huggingface.co/Qwen/Qwen3.8-27B) — **Apache-2.0**.
++This is a quantized derivative and inherits that licence; using it
++means accepting the base model's terms.
++Quantization: TheDrainFlorist, 2026.
++
++Built with MLX and [VQLab](https://github.com/noahzelezny/VQLab).
+
+════════════════════════════════════════
+  Qwen3.8-27B-VQ-4.5bpw
+════════════════════════════════════════
+@@ -14,7 +14,7 @@
+ - qwen3.8
+ ---
+ 
+-# TheDrainFlorist/Qwen3.8-27B-VQ-4.5bpw
++# Qwen3.8-27B-VQ-4.5bpw
+ 
+ **14.5 GiB — smaller than our 4-bit conversion, and closer to bf16.**
+ 
+@@ -48,7 +48,6 @@
+ previous bundle and peak memory now equals the on-disk size (figures
+ below are re-measured on this revision).
+ 
+-
+ ## Measured results
+ 
+ Scored against the bf16 teacher on the same corpus with an unmodified
+@@ -77,6 +76,18 @@
+ over finite text and absorbs offsetting errors; KL measures distance to the
+ teacher's distribution directly.
+ 
++## Comparators
++
++The affine rungs above are local conversions made with `mlx_lm.convert`
++using default settings, verified uniform per-module.
++
++## Where this stops paying
++
++Above roughly 5 bits per weight the advantage reverses on this model: our
++6-bit affine conversion reaches 3.7 millinats at 21.2 GiB, which no VQ rung we
++measured approaches at that size. Builds larger than the ones released here
++were measured and deliberately not published for that reason.
++
+ ## Runtime
+ 
+ **Decode 23.7 tok/s · prefill ~103 tok/s · resident 14.2 GB.**
+@@ -115,14 +126,14 @@
+ ## Run it
+ 
+ ```bash
+-pip install mlx-lm
++pip install 'mlx-lm>=0.31.3'
+ python -m mlx_lm generate \
+   --model TheDrainFlorist/Qwen3.8-27B-VQ-4.5bpw \
+   --prompt "Explain vector quantization briefly." \
+   --max-tokens 512
+ ```
+ 
+-## How it was built
++## Methodology
+ 
+ Vector quantization of the dense MLP trio at **d=2, K=256**. Each 2-weight
+ subvector stores one 8-bit index into a per-tensor 256-entry fp16 codebook. With an fp16 scale
+@@ -140,18 +151,6 @@
+ are therefore quoted against a measured fit-to-fit floor rather than against a
+ repeated build; on this family that floor is 2.085 millinats.
+ 
+-## Comparators
+-
+-The affine rungs above are local conversions made with `mlx_lm.convert`
+-using default settings, verified uniform per-module.
+-
+-## Where this stops paying
+-
+-Above roughly 5 bits per weight the advantage reverses on this model: our
+-6-bit affine conversion reaches 3.7 millinats at 21.2 GiB, which no VQ rung we
+-measured approaches at that size. Builds larger than the ones released here
+-were measured and deliberately not published for that reason.
+-
+ ## Verification
+ 
+ Every tensor was decoded **from the published artifact** and compared against
+@@ -171,3 +170,20 @@
+ - The affine comparators are our own conversions, not community builds.
+ - Above ~5 bpw affine wins outright on this model; this collection stops
+   below that line deliberately.
++
++## Paper
++
++The method, the full model ladder, the negative results, and the measurement
++rules behind every number here:
++[**Data-Free Vector Quantization Beats Affine Quantization at Matched Bytes
++Below 6 Bits**](https://doi.org/10.5281/zenodo.22119017) (CC BY 4.0) ·
++code: [VQLab](https://github.com/noahzelezny/VQLab) ·
++web version: [Space](https://huggingface.co/spaces/TheDrainFlorist/below-six-bits)
++## Provenance
++
++Base model: [Qwen/Qwen3.8-27B](https://huggingface.co/Qwen/Qwen3.8-27B) — **Apache-2.0**.
++This is a quantized derivative and inherits that licence; using it
++means accepting the base model's terms.
++Quantization: TheDrainFlorist, 2026.
++
++Built with MLX and [VQLab](https://github.com/noahzelezny/VQLab).
+
+════════════════════════════════════════
+  Qwen3.8-27B-VQ-4.8bpw
+════════════════════════════════════════
+@@ -14,7 +14,7 @@
+ - qwen3.8
+ ---
+ 
+-# TheDrainFlorist/Qwen3.8-27B-VQ-4.8bpw
++# Qwen3.8-27B-VQ-4.8bpw
+ 
+ **15.5 GiB — the best quality here, and the only reproducible fit.**
+ 
+@@ -48,7 +48,6 @@
+ previous bundle and peak memory now equals the on-disk size (figures
+ below are re-measured on this revision).
+ 
+-
+ ## Measured results
+ 
+ Scored against the bf16 teacher on the same corpus with an unmodified
+@@ -85,6 +84,18 @@
+ over finite text and absorbs offsetting errors; KL measures distance to the
+ teacher's distribution directly.
+ 
++## Comparators
++
++The affine rungs above are local conversions made with `mlx_lm.convert`
++using default settings, verified uniform per-module.
++
++## Where this stops paying
++
++Above roughly 5 bits per weight the advantage reverses on this model: our
++6-bit affine conversion reaches 3.7 millinats at 21.2 GiB, which no VQ rung we
++measured approaches at that size. Builds larger than the ones released here
++were measured and deliberately not published for that reason.
++
+ ## Runtime
+ 
+ **Decode 25.1 tok/s · prefill ~37 tok/s · resident 15.2 GB.**
+@@ -123,14 +134,14 @@
+ ## Run it
+ 
+ ```bash
+-pip install mlx-lm
++pip install 'mlx-lm>=0.31.3'
+ python -m mlx_lm generate \
+   --model TheDrainFlorist/Qwen3.8-27B-VQ-4.8bpw \
+   --prompt "Explain vector quantization briefly." \
+   --max-tokens 512
+ ```
+ 
+-## How it was built
++## Methodology
+ 
+ Vector quantization of the dense MLP trio at **d=2, K=512**. Each 2-weight
+ subvector stores one 9-bit index into a per-tensor 512-entry fp16 codebook. With an fp16 scale
+@@ -147,18 +158,6 @@
+ recipe and seed. Margins are still quoted against the family's measured
+ fit-to-fit floor of 2.085 millinats, which was measured from unseeded draws.
+ 
+-## Comparators
+-
+-The affine rungs above are local conversions made with `mlx_lm.convert`
+-using default settings, verified uniform per-module.
+-
+-## Where this stops paying
+-
+-Above roughly 5 bits per weight the advantage reverses on this model: our
+-6-bit affine conversion reaches 3.7 millinats at 21.2 GiB, which no VQ rung we
+-measured approaches at that size. Builds larger than the ones released here
+-were measured and deliberately not published for that reason.
+-
+ ## Verification
+ 
+ Every tensor was decoded **from the published artifact** and compared against
+@@ -178,3 +177,20 @@
+ - The affine comparators are our own conversions, not community builds.
+ - Above ~5 bpw affine wins outright on this model; this collection stops
+   below that line deliberately.
++
++## Paper
++
++The method, the full model ladder, the negative results, and the measurement
++rules behind every number here:
++[**Data-Free Vector Quantization Beats Affine Quantization at Matched Bytes
++Below 6 Bits**](https://doi.org/10.5281/zenodo.22119017) (CC BY 4.0) ·
++code: [VQLab](https://github.com/noahzelezny/VQLab) ·
++web version: [Space](https://huggingface.co/spaces/TheDrainFlorist/below-six-bits)
++## Provenance
++
++Base model: [Qwen/Qwen3.8-27B](https://huggingface.co/Qwen/Qwen3.8-27B) — **Apache-2.0**.
++This is a quantized derivative and inherits that licence; using it
++means accepting the base model's terms.
++Quantization: TheDrainFlorist, 2026.
++
++Built with MLX and [VQLab](https://github.com/noahzelezny/VQLab).
+
+════════════════════════════════════════
+  Qwen3.8-Flash-Next-VQ-2.1bpw
+════════════════════════════════════════
+@@ -16,7 +16,7 @@
+ - qwen3.8
+ ---
+ 
+-# TheDrainFlorist/Qwen3.8-Flash-Next-VQ-2.1bpw
++# Qwen3.8-Flash-Next-VQ-2.1bpw
+ 
+ **45.0 GiB — a 335 GiB frontier MoE on 64 GB machines.**
+ 
+@@ -33,13 +33,12 @@
+ 
+ ![where these releases sit](chart_ladder.png)
+ 
++## Requirements
+ 
+-## Requirements — read before downloading
+-
+ **This model needs an `mlx-lm` that has the `qwen4_exp` architecture, which no
+ released version has yet.** The architecture is in
+ [ml-explore/mlx-lm PR #1788](https://github.com/ml-explore/mlx-lm/pull/1788),
+-still unmerged at the time of writing. On a stock `pip install mlx-lm` you
++still unmerged as of 2026-09-09. On a stock `pip install mlx-lm` you
+ will get:
+ 
+ ```
+@@ -101,8 +100,47 @@
+ allocations as they free, so peak ≈ resident (without the MTP sidecar;
+ add ~2.2 GiB when enabled).
+ 
+-## Speculative decoding (MTP) — optional sidecar
++## Measured results
+ 
++Prose referee, 2048 tokens; KL against the bf16 teacher's cached top-64
++(captured mass 0.963 for every row — same cache, same positions). All
++sizes include the 333-tensor bf16 vision tower (0.84 GiB).
++
++| build | size | KL to bf16 (mnats/tok) | top-1 agreement | perplexity |
++|---|---|---|---|---|
++| affine q3 (ours) | 75 GiB | 1083.4 | 61.9% | 12.850 |
++| **this model** | **45.0 GiB** | **390.1** | **78.8%** | **5.903** |
++| affine q4 (ours) | 96 GiB | 293.9 | 79.6% | 6.453 |
++| affine q5 (ours) | 116 GiB | 91.7 | 87.5% | 5.243 |
++| affine q6 (ours) | 137 GiB | 52.8 | 91.6% | 4.916 |
++| affine q8 (ours) | 178 GiB | 27.1 | 94.9% | 5.197 |
++| bf16 teacher | 335 GiB | 0 | 100% | 5.166 |
++
++Additional corpora (perplexity): code 2.076 (public mlx corpus,
++pinned manifest), literary 8.945 (Gutenberg). Teacher reads 1.902 / 7.664.
++
++**Rank these by KL, not perplexity.** Perplexity is an aggregate over
++finite text and absorbs offsetting errors; KL measures distance to the
++teacher's distribution directly. Several rungs here read within noise of
++the teacher on perplexity while differing by an order of magnitude in KL.
++
++## Run it
++
++```bash
++pip install git+https://github.com/ml-explore/mlx-lm.git@refs/pull/1788/head
++
++python -m mlx_lm generate \
++  --model TheDrainFlorist/Qwen3.8-Flash-Next-VQ-2.1bpw \
++  --prompt "Explain vector quantization briefly." \
++  --max-tokens 512
++```
++
++The VQ runtime needs no patches — it ships inside the checkpoint as
++`model.py` and stock `mlx-lm` executes it. The PR above is required only for
++the base architecture; see Requirements.
++
++## Speculative decoding (MTP)
++
+ This repo includes `mtp-head-q6.safetensors` (2.1 GiB): the model's own
+ multi-token-prediction head, quantized. Stock loaders ignore it — it
+ costs nothing on disk-to-RAM unless you opt in by name.
+@@ -130,32 +168,12 @@
+ OpenAI-compatible API on localhost; `vqlab mtp-generate` for one-shot
+ CLI use. Without `--sidecar`, nothing about the model changes.
+ 
+-## Measured results
++## Methodology
+ 
+-Prose referee, 2048 tokens; KL against the bf16 teacher's cached top-64
+-(captured mass 0.963 for every row — same cache, same positions). All
+-sizes include the 333-tensor bf16 vision tower (0.84 GiB).
++Fitted **data-free** from the bf16 checkpoint — k-means / Lloyd over weight
++subvectors, seed 1234, no Hessian, no activation statistics, no calibration
++corpus. Recipes are in the VQLab repo.
+ 
+-| build | size | KL to bf16 (mnats/tok) | top-1 agreement | perplexity |
+-|---|---|---|---|---|
+-| affine q3 (ours) | 75 GiB | 1083.4 | 61.9% | 12.850 |
+-| **this model** | **45.0 GiB** | **390.1** | **78.8%** | **5.903** |
+-| affine q4 (ours) | 96 GiB | 293.9 | 79.6% | 6.453 |
+-| affine q5 (ours) | 116 GiB | 91.7 | 87.5% | 5.243 |
+-| affine q6 (ours) | 137 GiB | 52.8 | 91.6% | 4.916 |
+-| affine q8 (ours) | 178 GiB | 27.1 | 94.9% | 5.197 |
+-| bf16 teacher | 335 GiB | 0 | 100% | 5.166 |
+-
+-Additional corpora (perplexity): code 2.076 (public mlx corpus,
+-pinned manifest), literary 8.945 (Gutenberg). Teacher reads 1.902 / 7.664.
+-
+-**Rank these by KL, not perplexity.** Perplexity is an aggregate over
+-finite text and absorbs offsetting errors; KL measures distance to the
+-teacher's distribution directly. Several rungs here read within noise of
+-the teacher on perplexity while differing by an order of magnitude in KL.
+-
+-## The leverage mix
+-
+ Quantization damage is not uniform across layers. A one-pass probe
+ (teacher and student streamed together, per-layer local damage measured
+ with no compounding) shows the same hot set on every rung of this family:
+@@ -165,13 +183,44 @@
+ probe, the mixing, and the verdicts are all reproducible with VQLab
+ (`vqlab layer-leverage`, scatter fits via `fit-moe --vq-layers`).
+ 
+-## Provenance and gates
++## Verification
+ 
+-Fitted data-free from the bf16 checkpoint (k-means / Lloyd on weights,
+-seed 1234, recipes in the VQLab repo). Release gates passed on this
+-artifact: file/index/tokenizer checks, bundle-runtime verbatim match, and
+-a generation smoke through the shipping runtime on Apple Silicon.
+-exo-ready: config carries vision_config + image_token_id; the vision
+-tower is grafted bf16.
++Release gates passed on this artifact before upload: file, index and
++tokenizer checks, a verbatim match between the bundled runtime and its
++source, and a generation smoke through the shipping runtime on Apple
++Silicon. The upload path runs the gate itself and refuses to publish
++without it.
+ 
++## Limitations
++
++- **This model needs an unreleased `mlx-lm`.** The `qwen4_exp` architecture is
++  in [PR #1788](https://github.com/ml-explore/mlx-lm/pull/1788), still unmerged
++  as of 2026-09-09. See Requirements.
++- **Stock exo cannot serve it** — upstream pins a released `mlx-lm` that lacks
++  the architecture. Use our fork's `mtp-stage1` branch.
++- **Rank the table by KL, not perplexity.** Perplexity is an aggregate over
++  finite text and absorbs offsetting errors; several rungs read within noise of
++  the teacher on perplexity while differing by an order of magnitude in KL.
++- **The affine comparators are our own conversions**, not community builds.
++- **Perplexity is not comparable across model families** — only within this
++  table, which is one instrument on one corpus set.
++
++## Paper
++
++The method, the full model ladder, the negative results, and the measurement
++rules behind every number here:
++[**Data-Free Vector Quantization Beats Affine Quantization at Matched Bytes
++Below 6 Bits**](https://doi.org/10.5281/zenodo.22119017) (CC BY 4.0) ·
++code: [VQLab](https://github.com/noahzelezny/VQLab) ·
++web version: [Space](https://huggingface.co/spaces/TheDrainFlorist/below-six-bits)
++
++## Provenance
++
++Base model: [Qwen/Qwen3.8-Flash-Next](https://huggingface.co/Qwen/Qwen3.8-Flash-Next) — released under the **Qwen Community License 1.0**.
++This is a quantized derivative and inherits that licence; using it
++means accepting the base model's terms.
++Quantization: TheDrainFlorist, 2026.
++
+ Local artifact: `qwen4exp_vq_packed_mixL01`.
++
++Built with MLX and [VQLab](https://github.com/noahzelezny/VQLab).
+
+════════════════════════════════════════
+  Qwen3.8-Flash-Next-VQ-3.2bpw
+════════════════════════════════════════
+@@ -16,7 +16,7 @@
+ - qwen3.8
+ ---
+ 
+-# TheDrainFlorist/Qwen3.8-Flash-Next-VQ-3.2bpw
++# Qwen3.8-Flash-Next-VQ-3.2bpw
+ 
+ **69.4 GiB — a 335 GiB frontier MoE on 96 GB machines.**
+ 
+@@ -33,13 +33,12 @@
+ 
+ ![where these releases sit](chart_ladder.png)
+ 
++## Requirements
+ 
+-## Requirements — read before downloading
+-
+ **This model needs an `mlx-lm` that has the `qwen4_exp` architecture, which no
+ released version has yet.** The architecture is in
+ [ml-explore/mlx-lm PR #1788](https://github.com/ml-explore/mlx-lm/pull/1788),
+-still unmerged at the time of writing. On a stock `pip install mlx-lm` you
++still unmerged as of 2026-09-09. On a stock `pip install mlx-lm` you
+ will get:
+ 
+ ```
+@@ -100,8 +99,47 @@
+ allocations as they free, so peak ≈ resident (without the MTP sidecar;
+ add ~2.2 GiB when enabled).
+ 
+-## Speculative decoding (MTP) — optional sidecar
++## Measured results
+ 
++Prose referee, 2048 tokens; KL against the bf16 teacher's cached top-64
++(captured mass 0.963 for every row — same cache, same positions). All
++sizes include the 333-tensor bf16 vision tower (0.84 GiB).
++
++| build | size | KL to bf16 (mnats/tok) | top-1 agreement | perplexity |
++|---|---|---|---|---|
++| affine q3 (ours) | 75 GiB | 1083.4 | 61.9% | 12.850 |
++| **this model** | **69.4 GiB** | **123.5** | **87.0%** | **5.211** |
++| affine q4 (ours) | 96 GiB | 293.9 | 79.6% | 6.453 |
++| affine q5 (ours) | 116 GiB | 91.7 | 87.5% | 5.243 |
++| affine q6 (ours) | 137 GiB | 52.8 | 91.6% | 4.916 |
++| affine q8 (ours) | 178 GiB | 27.1 | 94.9% | 5.197 |
++| bf16 teacher | 335 GiB | 0 | 100% | 5.166 |
++
++Additional corpora (perplexity): code 1.939 (public mlx corpus,
++pinned manifest), literary 7.823 (Gutenberg). Teacher reads 1.902 / 7.664.
++
++**Rank these by KL, not perplexity.** Perplexity is an aggregate over
++finite text and absorbs offsetting errors; KL measures distance to the
++teacher's distribution directly. Several rungs here read within noise of
++the teacher on perplexity while differing by an order of magnitude in KL.
++
++## Run it
++
++```bash
++pip install git+https://github.com/ml-explore/mlx-lm.git@refs/pull/1788/head
++
++python -m mlx_lm generate \
++  --model TheDrainFlorist/Qwen3.8-Flash-Next-VQ-3.2bpw \
++  --prompt "Explain vector quantization briefly." \
++  --max-tokens 512
++```
++
++The VQ runtime needs no patches — it ships inside the checkpoint as
++`model.py` and stock `mlx-lm` executes it. The PR above is required only for
++the base architecture; see Requirements.
++
++## Speculative decoding (MTP)
++
+ This repo includes `mtp-head-q6.safetensors` (2.1 GiB): the model's own
+ multi-token-prediction head, quantized. Stock loaders ignore it — it
+ costs nothing on disk-to-RAM unless you opt in by name.
+@@ -129,32 +167,12 @@
+ OpenAI-compatible API on localhost; `vqlab mtp-generate` for one-shot
+ CLI use. Without `--sidecar`, nothing about the model changes.
+ 
+-## Measured results
++## Methodology
+ 
+-Prose referee, 2048 tokens; KL against the bf16 teacher's cached top-64
+-(captured mass 0.963 for every row — same cache, same positions). All
+-sizes include the 333-tensor bf16 vision tower (0.84 GiB).
++Fitted **data-free** from the bf16 checkpoint — k-means / Lloyd over weight
++subvectors, seed 1234, no Hessian, no activation statistics, no calibration
++corpus. Recipes are in the VQLab repo.
+ 
+-| build | size | KL to bf16 (mnats/tok) | top-1 agreement | perplexity |
+-|---|---|---|---|---|
+-| affine q3 (ours) | 75 GiB | 1083.4 | 61.9% | 12.850 |
+-| **this model** | **69.4 GiB** | **123.5** | **87.0%** | **5.211** |
+-| affine q4 (ours) | 96 GiB | 293.9 | 79.6% | 6.453 |
+-| affine q5 (ours) | 116 GiB | 91.7 | 87.5% | 5.243 |
+-| affine q6 (ours) | 137 GiB | 52.8 | 91.6% | 4.916 |
+-| affine q8 (ours) | 178 GiB | 27.1 | 94.9% | 5.197 |
+-| bf16 teacher | 335 GiB | 0 | 100% | 5.166 |
+-
+-Additional corpora (perplexity): code 1.939 (public mlx corpus,
+-pinned manifest), literary 7.823 (Gutenberg). Teacher reads 1.902 / 7.664.
+-
+-**Rank these by KL, not perplexity.** Perplexity is an aggregate over
+-finite text and absorbs offsetting errors; KL measures distance to the
+-teacher's distribution directly. Several rungs here read within noise of
+-the teacher on perplexity while differing by an order of magnitude in KL.
+-
+-## The leverage mix
+-
+ Quantization damage is not uniform across layers. A one-pass probe
+ (teacher and student streamed together, per-layer local damage measured
+ with no compounding) shows the same hot set on every rung of this family:
+@@ -164,13 +182,48 @@
+ probe, the mixing, and the verdicts are all reproducible with VQLab
+ (`vqlab layer-leverage`, scatter fits via `fit-moe --vq-layers`).
+ 
+-## Provenance and gates
++## Verification
+ 
+-Fitted data-free from the bf16 checkpoint (k-means / Lloyd on weights,
+-seed 1234, recipes in the VQLab repo). Release gates passed on this
+-artifact: file/index/tokenizer checks, bundle-runtime verbatim match, and
+-a generation smoke through the shipping runtime on Apple Silicon.
+-exo-ready: config carries vision_config + image_token_id; the vision
+-tower is grafted bf16.
++Release gates passed on this artifact before upload: file, index and
++tokenizer checks, a verbatim match between the bundled runtime and its
++source, and a generation smoke through the shipping runtime on Apple
++Silicon. The upload path runs the gate itself and refuses to publish
++without it.
+ 
++## Limitations
++
++- **This model needs an unreleased `mlx-lm`.** The `qwen4_exp` architecture is
++  in [PR #1788](https://github.com/ml-explore/mlx-lm/pull/1788), still unmerged
++  as of 2026-09-09. See Requirements.
++- **Stock exo cannot serve it** — upstream pins a released `mlx-lm` that lacks
++  the architecture. Use our fork's `mtp-stage1` branch.
++- **Through-exo throughput is measured on the 2.1bpw rung only**
++  (23.7–25.5 tok/s, acceptance 0.82–0.88). The sidecar head is the
++  same file on every rung, but this rung's cluster numbers are not
++  measured.
++- **Rank the table by KL, not perplexity.** Perplexity is an aggregate over
++  finite text and absorbs offsetting errors; several rungs read within noise of
++  the teacher on perplexity while differing by an order of magnitude in KL.
++- **The affine comparators are our own conversions**, not community builds.
++- **Perplexity is not comparable across model families** — only within this
++  table, which is one instrument on one corpus set.
++
++## Paper
++
++The method, the full model ladder, the negative results, and the measurement
++rules behind every number here:
++[**Data-Free Vector Quantization Beats Affine Quantization at Matched Bytes
++Below 6 Bits**](https://doi.org/10.5281/zenodo.22119017) (CC BY 4.0) ·
++code: [VQLab](https://github.com/noahzelezny/VQLab) ·
++web version: [Space](https://huggingface.co/spaces/TheDrainFlorist/below-six-bits)
++
++## Provenance
++
++Base model: [Qwen/Qwen3.8-Flash-Next](https://huggingface.co/Qwen/Qwen3.8-Flash-Next) — released under the **Qwen Community License 1.0**.
++This is a quantized derivative and inherits that licence; using it
++means accepting the base model's terms.
++Quantization: TheDrainFlorist, 2026.
++
+ Local artifact: `qwen4exp_vq_packed_31mix6`.
++
++Built with MLX and [VQLab](https://github.com/noahzelezny/VQLab).
+
+════════════════════════════════════════
+  Qwen3.8-Flash-Next-VQ-4.4bpw
+════════════════════════════════════════
+@@ -16,7 +16,7 @@
+ - qwen3.8
+ ---
+ 
+-# TheDrainFlorist/Qwen3.8-Flash-Next-VQ-4.4bpw
++# Qwen3.8-Flash-Next-VQ-4.4bpw
+ 
+ **94.1 GiB — a 335 GiB frontier MoE on 128 GB machines.**
+ 
+@@ -33,13 +33,12 @@
+ 
+ ![where these releases sit](chart_ladder.png)
+ 
++## Requirements
+ 
+-## Requirements — read before downloading
+-
+ **This model needs an `mlx-lm` that has the `qwen4_exp` architecture, which no
+ released version has yet.** The architecture is in
+ [ml-explore/mlx-lm PR #1788](https://github.com/ml-explore/mlx-lm/pull/1788),
+-still unmerged at the time of writing. On a stock `pip install mlx-lm` you
++still unmerged as of 2026-09-09. On a stock `pip install mlx-lm` you
+ will get:
+ 
+ ```
+@@ -109,8 +108,47 @@
+ peak tracks what the routing touches rather than a multiple of it.
+ Add ~2.2 GiB when the MTP sidecar is enabled.
+ 
+-## Speculative decoding (MTP) — optional sidecar
++## Measured results
+ 
++Prose referee, 2048 tokens; KL against the bf16 teacher's cached top-64
++(captured mass 0.963 for every row — same cache, same positions). All
++sizes include the 333-tensor bf16 vision tower (0.84 GiB).
++
++| build | size | KL to bf16 (mnats/tok) | top-1 agreement | perplexity |
++|---|---|---|---|---|
++| affine q3 (ours) | 75 GiB | 1083.4 | 61.9% | 12.850 |
++| affine q4 (ours) | 96 GiB | 293.9 | 79.6% | 6.453 |
++| **this model** | **94.1 GiB** | **50.3** | **92.8%** | **5.223** |
++| affine q5 (ours) | 116 GiB | 91.7 | 87.5% | 5.243 |
++| affine q6 (ours) | 137 GiB | 52.8 | 91.6% | 4.916 |
++| affine q8 (ours) | 178 GiB | 27.1 | 94.9% | 5.197 |
++| bf16 teacher | 335 GiB | 0 | 100% | 5.166 |
++
++Additional corpora (perplexity): code 1.916 (public mlx corpus,
++pinned manifest), literary 7.698 (Gutenberg). Teacher reads 1.902 / 7.664.
++
++**Rank these by KL, not perplexity.** Perplexity is an aggregate over
++finite text and absorbs offsetting errors; KL measures distance to the
++teacher's distribution directly. Several rungs here read within noise of
++the teacher on perplexity while differing by an order of magnitude in KL.
++
++## Run it
++
++```bash
++pip install git+https://github.com/ml-explore/mlx-lm.git@refs/pull/1788/head
++
++python -m mlx_lm generate \
++  --model TheDrainFlorist/Qwen3.8-Flash-Next-VQ-4.4bpw \
++  --prompt "Explain vector quantization briefly." \
++  --max-tokens 512
++```
++
++The VQ runtime needs no patches — it ships inside the checkpoint as
++`model.py` and stock `mlx-lm` executes it. The PR above is required only for
++the base architecture; see Requirements.
++
++## Speculative decoding (MTP)
++
+ This repo includes `mtp-head-q6.safetensors` (2.1 GiB): the model's own
+ multi-token-prediction head, quantized. Stock loaders ignore it — it
+ costs nothing on disk-to-RAM unless you opt in by name.
+@@ -138,32 +176,12 @@
+ OpenAI-compatible API on localhost; `vqlab mtp-generate` for one-shot
+ CLI use. Without `--sidecar`, nothing about the model changes.
+ 
+-## Measured results
++## Methodology
+ 
+-Prose referee, 2048 tokens; KL against the bf16 teacher's cached top-64
+-(captured mass 0.963 for every row — same cache, same positions). All
+-sizes include the 333-tensor bf16 vision tower (0.84 GiB).
++Fitted **data-free** from the bf16 checkpoint — k-means / Lloyd over weight
++subvectors, seed 1234, no Hessian, no activation statistics, no calibration
++corpus. Recipes are in the VQLab repo.
+ 
+-| build | size | KL to bf16 (mnats/tok) | top-1 agreement | perplexity |
+-|---|---|---|---|---|
+-| affine q3 (ours) | 75 GiB | 1083.4 | 61.9% | 12.850 |
+-| affine q4 (ours) | 96 GiB | 293.9 | 79.6% | 6.453 |
+-| **this model** | **94.1 GiB** | **50.3** | **92.8%** | **5.223** |
+-| affine q5 (ours) | 116 GiB | 91.7 | 87.5% | 5.243 |
+-| affine q6 (ours) | 137 GiB | 52.8 | 91.6% | 4.916 |
+-| affine q8 (ours) | 178 GiB | 27.1 | 94.9% | 5.197 |
+-| bf16 teacher | 335 GiB | 0 | 100% | 5.166 |
+-
+-Additional corpora (perplexity): code 1.916 (public mlx corpus,
+-pinned manifest), literary 7.698 (Gutenberg). Teacher reads 1.902 / 7.664.
+-
+-**Rank these by KL, not perplexity.** Perplexity is an aggregate over
+-finite text and absorbs offsetting errors; KL measures distance to the
+-teacher's distribution directly. Several rungs here read within noise of
+-the teacher on perplexity while differing by an order of magnitude in KL.
+-
+-## The leverage mix
+-
+ Quantization damage is not uniform across layers. A one-pass probe
+ (teacher and student streamed together, per-layer local damage measured
+ with no compounding) shows the same hot set on every rung of this family:
+@@ -173,13 +191,48 @@
+ probe, the mixing, and the verdicts are all reproducible with VQLab
+ (`vqlab layer-leverage`, scatter fits via `fit-moe --vq-layers`).
+ 
+-## Provenance and gates
++## Verification
+ 
+-Fitted data-free from the bf16 checkpoint (k-means / Lloyd on weights,
+-seed 1234, recipes in the VQLab repo). Release gates passed on this
+-artifact: file/index/tokenizer checks, bundle-runtime verbatim match, and
+-a generation smoke through the shipping runtime on Apple Silicon.
+-exo-ready: config carries vision_config + image_token_id; the vision
+-tower is grafted bf16.
++Release gates passed on this artifact before upload: file, index and
++tokenizer checks, a verbatim match between the bundled runtime and its
++source, and a generation smoke through the shipping runtime on Apple
++Silicon. The upload path runs the gate itself and refuses to publish
++without it.
+ 
++## Limitations
++
++- **This model needs an unreleased `mlx-lm`.** The `qwen4_exp` architecture is
++  in [PR #1788](https://github.com/ml-explore/mlx-lm/pull/1788), still unmerged
++  as of 2026-09-09. See Requirements.
++- **Stock exo cannot serve it** — upstream pins a released `mlx-lm` that lacks
++  the architecture. Use our fork's `mtp-stage1` branch.
++- **Through-exo throughput is measured on the 2.1bpw rung only**
++  (23.7–25.5 tok/s, acceptance 0.82–0.88). The sidecar head is the
++  same file on every rung, but this rung's cluster numbers are not
++  measured.
++- **Rank the table by KL, not perplexity.** Perplexity is an aggregate over
++  finite text and absorbs offsetting errors; several rungs read within noise of
++  the teacher on perplexity while differing by an order of magnitude in KL.
++- **The affine comparators are our own conversions**, not community builds.
++- **Perplexity is not comparable across model families** — only within this
++  table, which is one instrument on one corpus set.
++
++## Paper
++
++The method, the full model ladder, the negative results, and the measurement
++rules behind every number here:
++[**Data-Free Vector Quantization Beats Affine Quantization at Matched Bytes
++Below 6 Bits**](https://doi.org/10.5281/zenodo.22119017) (CC BY 4.0) ·
++code: [VQLab](https://github.com/noahzelezny/VQLab) ·
++web version: [Space](https://huggingface.co/spaces/TheDrainFlorist/below-six-bits)
++
++## Provenance
++
++Base model: [Qwen/Qwen3.8-Flash-Next](https://huggingface.co/Qwen/Qwen3.8-Flash-Next) — released under the **Qwen Community License 1.0**.
++This is a quantized derivative and inherits that licence; using it
++means accepting the base model's terms.
++Quantization: TheDrainFlorist, 2026.
++
+ Local artifact: `qwen4exp_vq_packed_92mix6`.
++
++Built with MLX and [VQLab](https://github.com/noahzelezny/VQLab).
+
+════════════════════════════════════════
+  Qwen3.8-Flash-Next-VQ-5.5bpw
+════════════════════════════════════════
+@@ -16,7 +16,7 @@
+ - qwen3.8
+ ---
+ 
+-# TheDrainFlorist/Qwen3.8-Flash-Next-VQ-5.5bpw
++# Qwen3.8-Flash-Next-VQ-5.5bpw
+ 
+ **111.6 GiB — a 335 GiB frontier MoE on 128 GB machines (tight).**
+ 
+@@ -33,13 +33,12 @@
+ 
+ ![where these releases sit](chart_ladder.png)
+ 
++## Requirements
+ 
+-## Requirements — read before downloading
+-
+ **This model needs an `mlx-lm` that has the `qwen4_exp` architecture, which no
+ released version has yet.** The architecture is in
+ [ml-explore/mlx-lm PR #1788](https://github.com/ml-explore/mlx-lm/pull/1788),
+-still unmerged at the time of writing. On a stock `pip install mlx-lm` you
++still unmerged as of 2026-09-09. On a stock `pip install mlx-lm` you
+ will get:
+ 
+ ```
+@@ -108,8 +107,47 @@
+ peak tracks what the routing touches rather than a multiple of it.
+ Add ~2.2 GiB when the MTP sidecar is enabled.
+ 
+-## Speculative decoding (MTP) — optional sidecar
++## Measured results
+ 
++Prose referee, 2048 tokens; KL against the bf16 teacher's cached top-64
++(captured mass 0.963 for every row — same cache, same positions). All
++sizes include the 333-tensor bf16 vision tower (0.84 GiB).
++
++| build | size | KL to bf16 (mnats/tok) | top-1 agreement | perplexity |
++|---|---|---|---|---|
++| affine q3 (ours) | 75 GiB | 1083.4 | 61.9% | 12.850 |
++| affine q4 (ours) | 96 GiB | 293.9 | 79.6% | 6.453 |
++| affine q5 (ours) | 116 GiB | 91.7 | 87.5% | 5.243 |
++| **this model** | **111.6 GiB** | **34.1** | **94.1%** | **5.245** |
++| affine q6 (ours) | 137 GiB | 52.8 | 91.6% | 4.916 |
++| affine q8 (ours) | 178 GiB | 27.1 | 94.9% | 5.197 |
++| bf16 teacher | 335 GiB | 0 | 100% | 5.166 |
++
++Additional corpora (perplexity): code 1.898 (public mlx corpus,
++pinned manifest), literary 7.636 (Gutenberg). Teacher reads 1.902 / 7.664.
++
++**Rank these by KL, not perplexity.** Perplexity is an aggregate over
++finite text and absorbs offsetting errors; KL measures distance to the
++teacher's distribution directly. Several rungs here read within noise of
++the teacher on perplexity while differing by an order of magnitude in KL.
++
++## Run it
++
++```bash
++pip install git+https://github.com/ml-explore/mlx-lm.git@refs/pull/1788/head
++
++python -m mlx_lm generate \
++  --model TheDrainFlorist/Qwen3.8-Flash-Next-VQ-5.5bpw \
++  --prompt "Explain vector quantization briefly." \
++  --max-tokens 512
++```
++
++The VQ runtime needs no patches — it ships inside the checkpoint as
++`model.py` and stock `mlx-lm` executes it. The PR above is required only for
++the base architecture; see Requirements.
++
++## Speculative decoding (MTP)
++
+ This repo includes `mtp-head-q6.safetensors` (2.1 GiB): the model's own
+ multi-token-prediction head, quantized. Stock loaders ignore it — it
+ costs nothing on disk-to-RAM unless you opt in by name.
+@@ -137,32 +175,12 @@
+ OpenAI-compatible API on localhost; `vqlab mtp-generate` for one-shot
+ CLI use. Without `--sidecar`, nothing about the model changes.
+ 
+-## Measured results
++## Methodology
+ 
+-Prose referee, 2048 tokens; KL against the bf16 teacher's cached top-64
+-(captured mass 0.963 for every row — same cache, same positions). All
+-sizes include the 333-tensor bf16 vision tower (0.84 GiB).
++Fitted **data-free** from the bf16 checkpoint — k-means / Lloyd over weight
++subvectors, seed 1234, no Hessian, no activation statistics, no calibration
++corpus. Recipes are in the VQLab repo.
+ 
+-| build | size | KL to bf16 (mnats/tok) | top-1 agreement | perplexity |
+-|---|---|---|---|---|
+-| affine q3 (ours) | 75 GiB | 1083.4 | 61.9% | 12.850 |
+-| affine q4 (ours) | 96 GiB | 293.9 | 79.6% | 6.453 |
+-| affine q5 (ours) | 116 GiB | 91.7 | 87.5% | 5.243 |
+-| **this model** | **111.6 GiB** | **34.1** | **94.1%** | **5.245** |
+-| affine q6 (ours) | 137 GiB | 52.8 | 91.6% | 4.916 |
+-| affine q8 (ours) | 178 GiB | 27.1 | 94.9% | 5.197 |
+-| bf16 teacher | 335 GiB | 0 | 100% | 5.166 |
+-
+-Additional corpora (perplexity): code 1.898 (public mlx corpus,
+-pinned manifest), literary 7.636 (Gutenberg). Teacher reads 1.902 / 7.664.
+-
+-**Rank these by KL, not perplexity.** Perplexity is an aggregate over
+-finite text and absorbs offsetting errors; KL measures distance to the
+-teacher's distribution directly. Several rungs here read within noise of
+-the teacher on perplexity while differing by an order of magnitude in KL.
+-
+-## The leverage mix
+-
+ Quantization damage is not uniform across layers. A one-pass probe
+ (teacher and student streamed together, per-layer local damage measured
+ with no compounding) shows the same hot set on every rung of this family:
+@@ -172,13 +190,48 @@
+ probe, the mixing, and the verdicts are all reproducible with VQLab
+ (`vqlab layer-leverage`, scatter fits via `fit-moe --vq-layers`).
+ 
+-## Provenance and gates
++## Verification
+ 
+-Fitted data-free from the bf16 checkpoint (k-means / Lloyd on weights,
+-seed 1234, recipes in the VQLab repo). Release gates passed on this
+-artifact: file/index/tokenizer checks, bundle-runtime verbatim match, and
+-a generation smoke through the shipping runtime on Apple Silicon.
+-exo-ready: config carries vision_config + image_token_id; the vision
+-tower is grafted bf16.
++Release gates passed on this artifact before upload: file, index and
++tokenizer checks, a verbatim match between the bundled runtime and its
++source, and a generation smoke through the shipping runtime on Apple
++Silicon. The upload path runs the gate itself and refuses to publish
++without it.
+ 
++## Limitations
++
++- **This model needs an unreleased `mlx-lm`.** The `qwen4_exp` architecture is
++  in [PR #1788](https://github.com/ml-explore/mlx-lm/pull/1788), still unmerged
++  as of 2026-09-09. See Requirements.
++- **Stock exo cannot serve it** — upstream pins a released `mlx-lm` that lacks
++  the architecture. Use our fork's `mtp-stage1` branch.
++- **Through-exo throughput is measured on the 2.1bpw rung only**
++  (23.7–25.5 tok/s, acceptance 0.82–0.88). The sidecar head is the
++  same file on every rung, but this rung's cluster numbers are not
++  measured.
++- **Rank the table by KL, not perplexity.** Perplexity is an aggregate over
++  finite text and absorbs offsetting errors; several rungs read within noise of
++  the teacher on perplexity while differing by an order of magnitude in KL.
++- **The affine comparators are our own conversions**, not community builds.
++- **Perplexity is not comparable across model families** — only within this
++  table, which is one instrument on one corpus set.
++
++## Paper
++
++The method, the full model ladder, the negative results, and the measurement
++rules behind every number here:
++[**Data-Free Vector Quantization Beats Affine Quantization at Matched Bytes
++Below 6 Bits**](https://doi.org/10.5281/zenodo.22119017) (CC BY 4.0) ·
++code: [VQLab](https://github.com/noahzelezny/VQLab) ·
++web version: [Space](https://huggingface.co/spaces/TheDrainFlorist/below-six-bits)
++
++## Provenance
++
++Base model: [Qwen/Qwen3.8-Flash-Next](https://huggingface.co/Qwen/Qwen3.8-Flash-Next) — released under the **Qwen Community License 1.0**.
++This is a quantized derivative and inherits that licence; using it
++means accepting the base model's terms.
++Quantization: TheDrainFlorist, 2026.
++
+ Local artifact: `qwen4exp_vq_packed_d2k1024`.
++
++Built with MLX and [VQLab](https://github.com/noahzelezny/VQLab).
+
+════════════════════════════════════════
+  gemma-4-26b-a4b-it-VQ-6.2bpw
+════════════════════════════════════════
+@@ -17,7 +17,7 @@
+ 
+ ![chart](chart_gemma_ladder.png)
+ 
+-# gemma-4-26b-a4b-it-VQ-d2K2048
++# gemma-4-26b-a4b-it-VQ-6.2bpw
+ 
+ **18.7 GiB — indistinguishable from bf16 on blind literary judging, at 39% of bf16's size. Vision included.**
+ 
+@@ -111,13 +111,12 @@
+ | peak memory | 17.7 GiB |
+ | decode | **~48 tok/s** |
+ 
+-
+ Fits a 32 GB machine with room for context.
+ 
+ ## Run it
+ 
+ ```bash
+-pip install mlx-lm
++pip install 'mlx-lm>=0.31.3'
+ python -m mlx_lm generate \
+   --model TheDrainFlorist/gemma-4-26b-a4b-it-VQ-d2K2048 \
+   --prompt "Continue this passage in Austen's voice: ..." \
+@@ -136,7 +135,7 @@
+ smallest chunk that reproduces our published numbers bit-exactly). Set the
+ env var if you don't need bit-exact reproduction.
+ 
+-## How it was built
++## Methodology
+ 
+ Experts are vector-quantized at **d=2, K=2048** (5.75 bits/weight packed);
+ everything else — attention, router, embeddings, the per-layer dense MLP —
+@@ -157,7 +156,6 @@
+ written file held destroyed tensors — so it is a standing gate, not a
+ formality.
+ 
+-
+ ### Multi-machine (exo) note
+ 
+ These artifacts fit on one machine, but if you shard them across an
+@@ -182,3 +180,20 @@
+   decisive pairs. The ordering across builds is robust; the absolute margin
+   is not tightly bounded.
+ - Audio is not included: this checkpoint ships zero audio tensors upstream.
++
++## Paper
++
++The method, the full model ladder, the negative results, and the measurement
++rules behind every number here:
++[**Data-Free Vector Quantization Beats Affine Quantization at Matched Bytes
++Below 6 Bits**](https://doi.org/10.5281/zenodo.22119017) (CC BY 4.0) ·
++code: [VQLab](https://github.com/noahzelezny/VQLab) ·
++web version: [Space](https://huggingface.co/spaces/TheDrainFlorist/below-six-bits)
++## Provenance
++
++Base model: [google/gemma-4-26b-a4b-it](https://huggingface.co/google/gemma-4-26b-a4b-it) — governed by the **Gemma Terms of Use**.
++This is a quantized derivative and inherits that licence; using it
++means accepting the base model's terms.
++Quantization: TheDrainFlorist, 2026.
++
++Built with MLX and [VQLab](https://github.com/noahzelezny/VQLab).
+
+════════════════════════════════════════
+  gemma-4-e4b-it-VQ-PLE
+════════════════════════════════════════
+@@ -8,14 +8,18 @@
+ base_model_relation: quantized
+ tags:
+ - mlx
++- quantized
+ - vector-quantization
++- apple-silicon
++- gemma-4
++- multimodal
+ ---
+ 
+ ![chart](chart_e4b_vqple.png)
+ 
+-# gemma-4-e4b-it — VQ-PLE (7.39 GiB)
++# gemma-4-e4b-it-VQ-PLE
+ 
+-**The community 8-bit, with a better embedding table.** This is
++**7.39 GiB — the community 8-bit, with a better embedding table.** This is
+ mlx-community's `gemma-4-e4b-it-8bit` with exactly one change: the 5.25 GiB
+ per-layer-embedding table (35% of the model's bytes) is replaced by a
+ vector-quantized version at 5.75 bits/weight. Everything else — attention,
+@@ -73,6 +77,18 @@
+ 3-point gap — SE ±3.7), decode at parity, ~12% less RAM, 1 GiB less
+ disk. There is no axis left on which the 8-bit is the better download.
+ 
++## Run it
++
++```bash
++pip install 'mlx-lm>=0.31.3'
++mlx_lm.chat --model <this artifact>
++```
++
++The artifact is self-contained (`model.py` ships inside it); stock mlx_lm
++loads it with no extra code. It also loads STRICTLY — the upstream 8-bit
++artifact ships 126 tensors for KV-shared layers that mlx_lm never
++instantiates and silently drops; those are removed here.
++
+ ## Why the embedding table
+ 
+ We first vector-quantized everything (MLPs + embeddings) and LOST to the
+@@ -94,17 +110,15 @@
+ codebook fitting on an M3 Ultra. Every number above was measured after,
+ not optimized for.
+ 
+-## Run it
++## Methodology
+ 
+-```bash
+-pip install mlx-lm
+-mlx_lm.chat --model <this artifact>
+-```
++Fitted **data-free** from the bf16 checkpoint — k-means / Lloyd over weight
++subvectors, seed 1234, no Hessian, no activation statistics, no calibration
++corpus. Recipes are in the VQLab repo.
+ 
+-The artifact is self-contained (`model.py` ships inside it); stock mlx_lm
+-loads it with no extra code. It also loads STRICTLY — the upstream 8-bit
+-artifact ships 126 tensors for KV-shared layers that mlx_lm never
+-instantiates and silently drops; those are removed here.
++Only the per-layer-embedding table is replaced; every other tensor is
++carried over from the 8-bit conversion unchanged. See *Why the embedding
++table* above for why that is the high-leverage target.
+ 
+ ## Verification
+ 
+@@ -129,3 +143,25 @@
+ If you shard this across an exo cluster: VQ codebooks must **replicate,
+ not slice**. The guard is bundled in `model.py`; upstream fix is
+ [exo PR #2268](https://github.com/exo-explore/exo/pull/2268).
++
++## Paper
++
++The method, the full model ladder, the negative results, and the measurement
++rules behind every number here:
++[**Data-Free Vector Quantization Beats Affine Quantization at Matched Bytes
++Below 6 Bits**](https://doi.org/10.5281/zenodo.22119017) (CC BY 4.0) ·
++code: [VQLab](https://github.com/noahzelezny/VQLab) ·
++web version: [Space](https://huggingface.co/spaces/TheDrainFlorist/below-six-bits)
++## Provenance
++
++Base model: [google/gemma-4-e4b-it](https://huggingface.co/google/gemma-4-e4b-it) — governed by the **Gemma Terms of Use**.
++This is a quantized derivative and inherits that licence; using it
++means accepting the base model's terms.
++Quantization: TheDrainFlorist, 2026.
++
++This build starts from
++[mlx-community/gemma-4-e4b-it-8bit](https://huggingface.co/mlx-community/gemma-4-e4b-it-8bit)
++and replaces its per-layer-embedding table; that conversion's
++authors are credited accordingly.
++
++Built with MLX and [VQLab](https://github.com/noahzelezny/VQLab).
+
