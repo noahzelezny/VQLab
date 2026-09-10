@@ -909,3 +909,47 @@ VQ ~29-31% / attention ~25% / remainder ~37% (lm_head exonerated; launch-gap
 signature). Cross-model: the 2.3x is not ours. Post-release program: launch
 census (Flash first), decode-nocast through the quality gates, bf16-I/O
 kernel variant (4-5% prefill ceiling).
+
+## F49 (2026-09-10, overnight) — the parity gap is the WRAPPER, not the kernel: VQ's kernel body is within ~9% of affine's entire expert path.
+
+The measurement the parity round was built around: the F41 deletion ladder run
+on an AFFINE build for the first time. mlx-community/Qwen3.6-35B-A3B-8bit,
+same 9k/4096 harness, MoE block -> x*0 (residual keeps the trunk live):
+
+| | affine 8bit | VQ 3.4bpw (F41) |
+|---|---|---|
+| baseline | 3.43 s (2622 tok/s) | 4.42 s (~2040) |
+| expert path deleted | 2.17 s | 2.48 s |
+| **expert path cost** | **1.26 s (37%)** | **1.94 s (44%)** |
+
+VQ's expert path is **1.54x** affine's in absolute seconds. Decomposed
+(F41-F43): kernel body 1.37 s + wrapper 0.57 s. **The kernel body alone is
+within ~9% of affine's whole expert path** — the gemmseg Metal work is
+essentially parity-class. The gap is the WRAPPER: dtype round-trip ~0.20 s,
+host prefix ~0.17 s (memo recovers part), dispatch ~0.09 s, scatter ~0.05 s.
+Closing the wrapper puts VQ at ~93-95% of affine; the last ~8% must come out
+of the kernel body (first candidate: the xt leading-dimension padding lifted
+from quantized.h — swarm7's one "viable" kernel verdict).
+
+**Dense is already at parity.** The matched dense pair (27B-VQ-4.8 vs
+27B-8bit, local, one harness): baselines 388.1 vs 394.7 tok/s = **98.3%**,
+and the quantized MLP path itself 14.84 vs 14.09 s = **1.05x**. At 4.8 bits
+vs 8. The 13% story was always MoE-only.
+
+**INVALID ARMS (two, recorded).** zeros_like-stub attention on the AFFINE
+builds constant-folds the whole graph (0.23-0.27 s "runs"); the VQ builds
+never folded because their host numpy ops pin the graph — an asymmetry that
+makes stub arms silently invalid on pure-lazy models. And an x*0 stub on a
+per-expert-shaped module broke against the router-scores reshape — stub the
+x-shaped BLOCK, not the expert GLU. Attention's affine share was therefore
+taken from F47's absolute (2.12 s, identical stock trunk modules), not from
+a folded arm.
+
+**Runner reliability finding (same night).** Both VQ serving runners (27B-4.8
+and Flash-4.4) crashed with `[metal::malloc] Resource limit (499000)
+exceeded` under sustained long-output decode (40k-token budget, 2 streams).
+Stock models ran the same harness for hours the previous day. 499000 smells
+like a Metal BUFFER-COUNT limit — hypothesis: the VQ decode path accumulates
+small allocations per step. Reproduce locally watching active buffers; if
+real, this is a shippable reliability fix and belongs ahead of any speed
+work.
