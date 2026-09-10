@@ -197,7 +197,8 @@ fork rather than in this artifact. No end-to-end cluster speedup is
 claimed yet — the number above is acceptance, not throughput.
 
 **Cluster speculative decoding is live** on the [`mtp-stage1`](https://github.com/noahzelezny/exo/tree/mtp-stage1)
-branch of our exo fork (`EXO_MTP=1` on every node; outputs exactly the
+branch of our exo fork (launch each node with `exo --mtp`, equivalently
+`EXO_MTP=1`; outputs exactly the
 base model's via rejection sampling). Measured on this family's 2.6bpw
 rung on a 2-node pipeline: acceptance **0.85**, throughput at **parity**
 with exo's stock decode — the head drafts well, but this family's stock

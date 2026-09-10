@@ -185,7 +185,8 @@ with plain decode out to ≈1000 generated tokens (20.0 vs 20.3 tok/s),
 drifting ≈15% behind by 2000. Where speculation pays is **pipelined
 multi-node decoding** (exo clusters, for the rungs of this family too
 large for one machine — see their cards): the [`mtp-stage1`](https://github.com/noahzelezny/exo/tree/mtp-stage1)
-branch of our exo fork drafts with `EXO_MTP=1` set on every node, with
+branch of our exo fork drafts when every node is launched with
+`exo --mtp` (equivalently `EXO_MTP=1`), with
 outputs exactly the base model's. Cluster throughput varies with shard
 placement on mixed-generation hardware, so benchmark your own topology.
 On one 128 GB box, run this model plain.
