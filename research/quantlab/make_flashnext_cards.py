@@ -1,8 +1,20 @@
-"""Generate the four Flash-Next VQ release cards from measured numbers.
+"""Regenerate the four Flash-Next VQ ladder records from measured numbers.
 
 Single source of truth for the card tables; regenerate after any rescore.
 PENDING placeholders are caught by check_card_placeholders.sh — a card
 with one must never be pushed.
+
+LADDER RECORD, NOT A PUBLISHABLE CARD. The card that ships is
+docs/model-cards/<repo>.md, and the file the Hub serves is
+<artifact>/README.md. Regenerating here changes neither.
+
+Do not copy this output forward as a card -- it would REGRESS it. These
+templates predate the 2026-09-09 house structure (Measured results / Run it
+/ Methodology / Verification / Limitations / Paper / Provenance), carry no
+licence or attribution block, and write "~" for "approximately", which
+renders as strikethrough on the Hub. The numbers below are still the source
+of truth for the tables; fold changed numbers into docs/model-cards/ by hand
+and re-run docs/model-cards/_tools/check_cards.py.
 """
 import pathlib
 

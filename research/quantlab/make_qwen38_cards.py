@@ -1,9 +1,21 @@
 #!/usr/bin/env python3
-"""Generate the three Qwen3.8-27B cards from one template.
+"""Regenerate the three Qwen3.8-27B ladder records from one template.
 
 Written as a generator rather than three hand-edited files because the 35B
 lineup drifted apart exactly that way: shared boilerplate that stopped being
 shared. Any change to the common text lands in all three by construction.
+
+LADDER RECORD, NOT A PUBLISHABLE CARD. The card that ships is
+docs/model-cards/<repo>.md, and the file the Hub serves is
+<artifact>/README.md. Regenerating here changes neither.
+
+Do not copy this output forward as a card -- it would REGRESS it. These
+templates predate the 2026-09-09 house structure (Measured results / Run it
+/ Methodology / Verification / Limitations / Paper / Provenance), carry no
+licence or attribution block, and write "~" for "approximately", which
+renders as strikethrough on the Hub. The numbers below are still the source
+of truth for the tables; fold changed numbers into docs/model-cards/ by hand
+and re-run docs/model-cards/_tools/check_cards.py.
 """
 import io
 
