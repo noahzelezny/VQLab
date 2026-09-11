@@ -1247,3 +1247,44 @@ CONSEQUENCE FOR THE DECODE PROGRAM. Flash-class decode improvement now has
 to come from the non-VQ trunk (F48: GDN 29%, attention 25%) or from serving
 (MTP), not from VQ kernels. The 397B d8 rungs inherit this conclusion —
 same geometry, same kernels.
+
+## F60 (2026-09-11) — the prefill "SIMD_SS unlock" was stale, and the phase-1 fetch front closes the same way d8 decode did: the residual is the CB_DEV gather, which is the occupancy win's price.
+
+Two findings, one sitting, both on 35B-3.4 (art_xtpad, M3, memo_check 9k
+prefill, interleaved passes):
+
+**1. The named front was already shipped.** F53/F57's "SIMD_SS d8 unlock"
+candidate — surfaced by a salvage worker reading the kernel comment — was
+composed into the shipping DEVX_SS default on 2026-09-02, gate already
+relaxed to 1-ULP by recorded decision. There is nothing to unlock; the
+worker read a pre-composition comment. ([[vq-swarm-yield]]: anchors good,
+conclusions bad — now with a concrete mechanism: a stale comment is a
+perfect anchor for a wrong conclusion.)
+
+**2. The real prefill front (0.36 s expert block) got the F58 treatment.**
+Deletion bound: pinning gemmseg phase-1's code fetch (scratch-bundle
+_PACK_FETCH patch) is **1.061x** prefill (2350 -> 2493 tok/s, both passes)
+— 0.22 s of the 0.36 s gap. A per-segment bit-walker (seeded at each lane's
+SPG/4-aligned segment, one load per word, GSWALK template arm) came back
+**bit-exact (4096-tok logits checksum identical) and NULL on speed** (2358
+vs 2354, 2381 vs 2392). Same elimination as F59: the bound is not the word
+re-reads, it is the RANDOM DEVICE CODEBOOK GATHER — cb[c] is device-resident
+here because CB_DEV at 16 KB is a 1.46-1.76x occupancy win (F32/F34), and
+the deletion arm's c=0 turns that gather into a cached broadcast.
+
+**The CB_DEV gather tax is now measured three independent ways** — ~8%
+(2026-09-02 residency probe, d8), ~7% (F59, Flash decode), ~6% (here, d4
+gemmseg prefill). It is the structural price of the occupancy win and no
+fetch-side rewrite touches it. The walker (F58) remains correct where it
+shipped: the d4 thread-per-row DECODE kernel keeps its codebook in
+THREADGROUP memory, so there the fetch was the cost and the fix landed.
+
+CONSEQUENCE. Prefill standing stays 90.5% with the honest decomposition:
+0.22 s of the 0.36 s gap is the CB_DEV gather (structural), ~0.14 s is
+unattributed phase-2/3/epilogue residue the campaign already mined with
+five arms. Beating the gather means beating the occupancy trade, not the
+fetch: the only named idea left is a smaller-footprint codebook encoding
+(fewer bytes per entry), which changes the artifact format and is out of
+runtime scope. The prefill kernel front is CLOSED at this ceiling for the
+current format. Probe scaffolding (bundle pin, GSWALK arm) deleted after
+recording.
