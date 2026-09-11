@@ -1031,3 +1031,25 @@ unbounded-client interaction.
 Extraction CLOSED: bank A's final 2 transcripts yielded 4 proposals through
 the crash (exo auto-recovered, client retried). Round total: 15 submitted +
 13 salvaged = 28.
+
+## F53 (2026-09-10) — the v2 runtime is complete and measured: prefill +3.0%, decode +3.3-3.8%, all in-repo behind kill switches.
+
+Decode bf16-I/O confirmed in the runtime proper: 52.1/52.2 -> 53.8/54.1
+tok/s interleaved (VQ_DECODE_BF16IO, default on) — F46's +3.6% reproduced.
+The v2 stack as committed: routing memo + vectorized tile build + gemmseg
+bf16-I/O (single-round, Noah's call, F51) + decode bf16-I/O. Release
+control: PPL retested at the v2 model release (the arc6 fleet is untouched
+until then).
+
+**v2 candidates surfaced by bank A's salvage** (extraction round closed at
+15 submitted + 13 salvaged = 28):
+* `_SRC_FUSED_PACKED_D8_SIMD_SS` — an already-written, already-measured
+  simd_sum arm recovering ~16% of d8 simd dispatch, parked behind a policy
+  gate whose unlock contract its own comment states (1-ULP + ppl/KL
+  re-referee + end-to-end A/B). Found by a worker READING the source.
+* Paired MTP-acceptance as a fleet no-harm gate: same prompts, cast vs
+  nocast arm, |Δacceptance| within published within-rung sd — zero new
+  instrumentation, runs on the 11 sidecar repos.
+* Per-geometry nocast flags (d8 float4-staged is the riskiest class — it
+  skips fp16 rounding of x entirely under nocast) — the refinement of
+  today's global flag if the gate flags any rung.
