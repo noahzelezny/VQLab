@@ -1053,3 +1053,24 @@ until then).
 * Per-geometry nocast flags (d8 float4-staged is the riskiest class — it
   skips fp16 rounding of x entirely under nocast) — the refinement of
   today's global flag if the gate flags any rung.
+
+## F54 (2026-09-10) — KERNEL-BODY arm 1 lands: output-block pairing, +5.1-6.6% prefill, bit-exact. The v2 stack reaches ~87-88% of affine.
+
+Swarm7's unrefuted staging-amortization proposal, built: each threadgroup now
+owns two 32-column output blocks — the gathered xt slab staged ONCE per group
+step (was once per out-tile: 24x affine's staging traffic at OUT=768), wtT
+decoded serially per block (threadgroup bytes unchanged), grid.x halved.
+Single code path: at OT2=0 the ob loop compiles to the prior kernel exactly.
+
+Interleaved on 35B-3.4: off 2146-2159, ON 2254-2302 tok/s = **+5.1-6.6%**,
+checksums identical. Largest single kernel win since CB_DEV, and the first
+ever sourced from reading the competitor (affine stages X once per BM tile —
+this closes that structural difference).
+
+**v2 stack cumulative vs shipped arc6 (2151-2157): ~2277-2302 = +6-7%
+prefill**, decode +3.3-3.8% — putting 35B-3.4 at **~87-88% of affine-8bit**
+from 82% shipped. Remaining campaign arms: 1.5 (barrier pipelining), 2
+(direct epilogue store), 3 (staging shape) — plus the SIMD_SS unlock for d8.
+Implementation note for arm 2: the per-block epilogue now runs twice; a
+direct store deletes ybuf AND both epilogue barriers, so the two arms
+compound.
