@@ -1007,3 +1007,27 @@ causality makes trimming safe). A shim lives at scratchpad/flash_teacher_shim;
 regenerating fleet teacher caches in the current format, with MORE than one
 2048-token sample, is a prerequisite for any future numerics gate that needs
 error bars.
+
+## F52 (2026-09-10 evening) — the runner crash SOLVED: per-request Metal buffer accrual, reached only by ~60k-step generations. F49-addendum's "byte-clean" probe was 30x too short.
+
+A third `[metal::malloc] Resource limit (499000) exceeded` crash, this time
+with the request in the log: an extraction call went out with
+max_output_tokens=65536 (the tools path sent num_ctx — the 09-05 clamp
+removal left it unbounded) and a non-verbatim rambler ran ~60k decode steps
+before the runner died. 499000 is a COUNT limit: at ~8 small Metal
+allocations per decode step, ~60k steps ≈ 500k buffers. This reconciles
+everything: the F49-addendum probe (2000 steps, bytes only) was clean because
+it was 30x too short and watching the wrong axis; both overnight VQ-runner
+crashes sat under raised/unbounded output budgets; stock models never
+crashed because nothing ever let them run that long.
+
+Fixes: the tools path is now bounded at 32k (SCOUT_TOOLS_OUTPUT_CAP;
+history-preserving comment carries both incidents). REMAINING UPSTREAM
+QUESTION for exo/mlx: whether per-step buffers within one request should
+accrue at all — a >50k-step single request is the reproduction recipe if
+anyone wants the real fix. Not artifact-implicated; serving-layer +
+unbounded-client interaction.
+
+Extraction CLOSED: bank A's final 2 transcripts yielded 4 proposals through
+the crash (exo auto-recovered, client retried). Round total: 15 submitted +
+13 salvaged = 28.
