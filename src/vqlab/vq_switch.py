@@ -3194,7 +3194,12 @@ _SRC_GEMMSEG2 = _PACK_FETCH + r"""
     // +8 halves = +16 B/row = 512 B total @RTILE=32. Bit-exact: same
     // logical elements, only the row stride changes.
     threadgroup half  xt[RTILE][GROUP + XPAD];  // 4/4.5 KB @32, 8/9 KB @64
+#if !DSTORE
+    // DSTORE=1 deletes this buffer entirely: the epilogue stores straight
+    // from the simdgroup accumulators via steel's lane mapping (mma.h:51-53
+    // in mlx -- fm/fn per lane, 2 elements each). -4 KB threadgroup.
     threadgroup float ybuf[RTILE][32];   // 4 KB @32, 8 KB @64
+#endif
 
 #if !CB_DEV
     for (uint i = tid; i < (uint)K; i += 128u)
@@ -3361,6 +3366,49 @@ _SRC_GEMMSEG2 = _PACK_FETCH + r"""
       }
     }
 
+#if DSTORE
+    // Direct epilogue (KERNEL-BODY-CAMPAIGN arm 2): accumulators -> device,
+    // no ybuf, no barrier, no scalar copy pass. Lane mapping is steel's
+    // (mlx mma.h): lane owns 2 elements at row fm, cols fn..fn+1 of its
+    // simdgroup's 8x8 fragment. (TIO)float is the same single rounding the
+    // ybuf path performed -- bit-exact by construction.
+    {
+        const short fm = ((lane / 4) & 4) + ((lane / 2) % 4);
+        const short fn = (((lane / 4) & 2) * 2) + ((lane % 2) * 2);
+        const int   col0 = (int)sg * 8 + fn;
+        for (int ob = 0; ob < 1 + OT2; ++ob) {
+            const int oo = o0 + ob * 32;
+            const int oc = oo + col0;
+            if (oc < OUT) {
+                const bool oc1 = (oc + 1) < OUT;
+#define VQ_DSTORE(CK, ROWB) { \
+                const int tt = ROWB + fm; \
+                if (tt < nrow) { \
+                    thread auto el = (CK).thread_elements(); \
+                    device TIO* yp = y + (size_t)(r0 + tt) * OUT + oc; \
+                    yp[0] = (TIO)el[0]; \
+                    if (oc1) yp[1] = (TIO)el[1]; \
+                } }
+                if (ob == 0) {
+                    VQ_DSTORE(C0, 0)  VQ_DSTORE(C1, 8)
+                    VQ_DSTORE(C2, 16) VQ_DSTORE(C3, 24)
+#if RTILE == 64
+                    VQ_DSTORE(C4, 32) VQ_DSTORE(C5, 40)
+                    VQ_DSTORE(C6, 48) VQ_DSTORE(C7, 56)
+#endif
+                }
+#if OT2
+                else {
+                    VQ_DSTORE(Db0, 0)  VQ_DSTORE(Db1, 8)
+                    VQ_DSTORE(Db2, 16) VQ_DSTORE(Db3, 24)
+                }
+#endif
+#undef VQ_DSTORE
+            }
+        }
+    }
+#else
+
     for (int ob = 0; ob < 1 + OT2; ++ob) {
         const int oo = o0 + ob * 32;
 #if OT2
@@ -3411,6 +3459,7 @@ _SRC_GEMMSEG2 = _PACK_FETCH + r"""
         // ybuf is reused by the next block's stores
         threadgroup_barrier(mem_flags::mem_threadgroup);
     }
+#endif
 """
 
 # PROMOTED 2026-09-07 (Noah): default ON at v2 after 1.43x (35B-4.6,
@@ -3483,6 +3532,14 @@ _GEMMSEG_BF16IO = os.environ.get("VQ_GEMMSEG_BF16IO", "1") == "1"
 # checksums, interleaved reps -- the largest single kernel win since CB_DEV.
 # Default ON for the v2 runtime; "0" is the kill switch.
 _GEMMSEG_OT2 = os.environ.get("VQ_GEMMSEG_OTILE64", "1") == "1"
+# Direct epilogue store (arm 2). "1" stores accumulators straight to y via
+# steel's lane mapping -- deletes ybuf (-4 KB threadgroup), the epilogue
+# barrier, and the scalar copy pass (priced at ~+4.9% alone). Default off
+# until benched.
+_GEMMSEG_DSTORE = os.environ.get("VQ_GEMMSEG_DSTORE", "0") == "1"
+# threadgroup tile bytes at RTILE=32, tracked so cb_dev/fits arithmetic
+# follows the flags (F51's rule: budget follows every byte change).
+_TILES_R32 = (2 if _GEMMSEG_DSTORE else 3) * 4096
 # Decode-side bf16 I/O (F46: +3.6% decode measured on 35B-3.4). The small-N
 # _fused kernels are templated on x.dtype, so bf16 flows straight through and
 # both per-call casts disappear -- ~144+ elementwise passes/token. Numerics
@@ -3504,7 +3561,7 @@ def gemmseg_cb_dev(D, K):
     how its arm label silently went stale when the 16 KB preference landed
     on 2026-09-08."""
     cb = K * 2 * D
-    return cb + 3 * 4096 + _XT_PAD_BYTES_R32 > _TG_CAP_BYTES or cb >= 16384
+    return cb + _TILES_R32 + _XT_PAD_BYTES_R32 > _TG_CAP_BYTES or cb >= 16384
 
 
 def gemmseg_fits(D, K, G, pack_bits, IN):
@@ -3543,7 +3600,7 @@ def gemmseg_fits(D, K, G, pack_bits, IN):
     # Over the cap the codebook moves to DEVICE memory (CB_DEV arm) —
     # the tiles alone are 12 KB, so the kernel always loads. Big-K is
     # therefore covered too, unless the operator pins it off.
-    if K * 2 * D + 3 * 4096 + _XT_PAD_BYTES_R32 <= _TG_CAP_BYTES:
+    if K * 2 * D + _TILES_R32 + _XT_PAD_BYTES_R32 <= _TG_CAP_BYTES:
         return True
     return _FUSED_GEMM_BIGK
 
@@ -3586,7 +3643,7 @@ def _gemmseg_prefill(xsrc, src_rows, idx_sorted_np, codes, codebook, scales,
     # before the kernel branch below.
     _rt = 64 if (_GEMMSEG_RTILE == 64 and _FUSED_GEMM_V2
                  and codebook.shape[0] * 2 * int(codebook.shape[1])
-                 + 3 * 4096 + _XT_PAD_BYTES_R32 > _TG_CAP_BYTES) else 32
+                 + _TILES_R32 + _XT_PAD_BYTES_R32 > _TG_CAP_BYTES) else 32
     _mk = ("tiles", idx_sorted_np.tobytes(), E, _rt)
     _hit = _memo_get(_mk)
     if _hit is not None:
@@ -3639,10 +3696,10 @@ def _gemmseg_prefill(xsrc, src_rows, idx_sorted_np, codes, codebook, scales,
         # MECHANISM UNMEASURED — occupancy pressure at the budget edge is a
         # hypothesis, not a finding.
         # ~447 fleet modules are d4-K2048 (397B-3.1, Flash-3.2, 35B-3.4/4.6).
-        cb_dev = _cb_bytes + 3 * 4096 + _XT_PAD_BYTES_R32 > _TG_CAP_BYTES or _cb_bytes >= 16384
+        cb_dev = _cb_bytes + _TILES_R32 + _XT_PAD_BYTES_R32 > _TG_CAP_BYTES or _cb_bytes >= 16384
         if _GEMMSEG_CBDEV == "1":
             cb_dev = True                      # force device codebook
-        elif _GEMMSEG_CBDEV == "0" and _cb_bytes + 3 * 4096 + _XT_PAD_BYTES_R32 <= _TG_CAP_BYTES:
+        elif _GEMMSEG_CBDEV == "0" and _cb_bytes + _TILES_R32 + _XT_PAD_BYTES_R32 <= _TG_CAP_BYTES:
             cb_dev = False                     # force threadgroup (if legal)
         if cb_dev:
             name += "_cbdev"
@@ -3658,6 +3715,8 @@ def _gemmseg_prefill(xsrc, src_rows, idx_sorted_np, codes, codebook, scales,
         ot2 = 1 if (_GEMMSEG_OT2 and rtile == 32) else 0
         if ot2:
             name += "_ot2"
+        if _GEMMSEG_DSTORE:
+            name += "_ds"
         # TIO follows xsrc's dtype so the kernel cache never mixes builds.
         if xsrc.dtype == mx.bfloat16:
             name += "_bf16io"
@@ -3665,7 +3724,7 @@ def _gemmseg_prefill(xsrc, src_rows, idx_sorted_np, codes, codebook, scales,
                     ("MAX_K", 1 if cb_dev else K), ("D_BAKE", D),
                     ("CB_DEV", 1 if cb_dev else 0), ("RTILE", rtile),
                     ("XPAD", _XT_PAD_HALVES), ("TIO", xsrc.dtype),
-                    ("OT2", ot2)]
+                    ("OT2", ot2), ("DSTORE", 1 if _GEMMSEG_DSTORE else 0)]
         if not pack_bits:
             # unpacked arm reads codes as CT (uchar/ushort), not uint words
             template.append(("CT", codes.dtype))
