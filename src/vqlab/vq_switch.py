@@ -3150,7 +3150,12 @@ _SRC_GEMMSEG2 = _PACK_FETCH + r"""
     const int e    = tmeta[rtile * 3 + 0];
     const int r0   = tmeta[rtile * 3 + 1];
     const int nrow = tmeta[rtile * 3 + 2];
-    const int o0   = (int)otile * 32;
+    // OT2 (0 or 1): output-block pairing (arm 1, KERNEL-BODY-CAMPAIGN).
+    // Each threadgroup owns 32*(1+OT2) output columns; the gathered xt slab
+    // is staged ONCE per threadgroup, so total xt staging traffic halves at
+    // OT2=1 (affine stages X once per BM tile; this closes half the gap).
+    // wtT is decoded serially per block -- threadgroup bytes UNCHANGED.
+    const int o0   = (int)otile * 32 * (1 + OT2);
 
 #if CB_DEV
     // BIG-K arm (2026-09-07): K*2*D exceeds the 32 KB threadgroup cap
@@ -3204,15 +3209,15 @@ _SRC_GEMMSEG2 = _PACK_FETCH + r"""
     const int wr = (int)tid / 4;
     const int q0 = ((int)tid % 4) * (SPG / 4);
 #if BITS == 0
-    const device CT* wrow_codes = codes
+    const device CT* wrow_base = codes
         + (size_t)e * OUT * WPR + (size_t)(o0 + wr) * WPR;
     #define VQ_FETCH(j) ((uint)wrow_codes[j])
 #else
-    const device uint* wrow_codes = codes
+    const device uint* wrow_base = codes
         + (size_t)e * OUT * WPR + (size_t)(o0 + wr) * WPR;
     #define VQ_FETCH(j) VQ_CODE(wrow_codes, j)
 #endif
-    const device half* srow_w = scales
+    const device half* srow_base = scales
         + (size_t)e * OUT * NGRP + (size_t)(o0 + wr) * NGRP;
     const int xr = (int)tid / 4;
 
@@ -3226,12 +3231,29 @@ _SRC_GEMMSEG2 = _PACK_FETCH + r"""
     simdgroup_float8x8 C6 = simdgroup_float8x8(0);
     simdgroup_float8x8 C7 = simdgroup_float8x8(0);
 #endif
+#if OT2
+    simdgroup_float8x8 Db0 = simdgroup_float8x8(0);
+    simdgroup_float8x8 Db1 = simdgroup_float8x8(0);
+    simdgroup_float8x8 Db2 = simdgroup_float8x8(0);
+    simdgroup_float8x8 Db3 = simdgroup_float8x8(0);
+#endif
 
     threadgroup_barrier(mem_flags::mem_threadgroup);
 
+#if OT2 && (RTILE == 64)
+#error "OT2 pairs output blocks at RTILE=32 only; combine is unimplemented"
+#endif
     for (int g = 0; g < NGRP; ++g) {
         const int j0 = g * SPG;
-        if (o0 + wr < OUT) {
+      for (int ob = 0; ob < 1 + OT2; ++ob) {
+        const int oo = o0 + ob * 32;
+#if BITS == 0
+        const device CT* wrow_codes = wrow_base + (size_t)ob * 32 * WPR;
+#else
+        const device uint* wrow_codes = wrow_base + (size_t)ob * 32 * WPR;
+#endif
+        const device half* srow_w = srow_base + (size_t)ob * 32 * NGRP;
+        if (oo + wr < OUT) {
             const float s = (float)srow_w[g];
             for (int q = q0; q < q0 + SPG / 4; ++q) {
                 const uint c = VQ_FETCH(j0 + q);
@@ -3264,10 +3286,12 @@ _SRC_GEMMSEG2 = _PACK_FETCH + r"""
                     wtT[q * D_BAKE + u][wr] = (half)0;
             }
         }
-        {
+        if (ob == 0) {
             // TIO = I/O element type (half or bfloat16_t). The (half)
             // convert at stage-in is round-to-nearest -- bit-identical to
             // the host astype it replaces; MACs stay half8x8 regardless.
+            // Staged ONCE per threadgroup-group even at OT2: the whole
+            // point of the pairing (KERNEL-BODY-CAMPAIGN arm 1).
             const device TIO* xrow = 0;
             if (xr < nrow)
                 xrow = xsrc + (size_t)srcrows[r0 + xr] * IN + (size_t)g * G;
@@ -3292,6 +3316,9 @@ _SRC_GEMMSEG2 = _PACK_FETCH + r"""
         threadgroup_barrier(mem_flags::mem_threadgroup);
         // phase 3: C[tokens 32 x outs 32] += X[32 x G] @ WtT[G x 32]
         // simdgroup sg owns out-block col sg*8; ti indexes token blocks.
+#if OT2
+        if (ob == 0)
+#endif
         for (int k8 = 0; k8 < G / 8; ++k8) {
             simdgroup_half8x8 B;
             simdgroup_load(B, &wtT[k8 * 8][(int)sg * 8], 32);
@@ -3315,42 +3342,74 @@ _SRC_GEMMSEG2 = _PACK_FETCH + r"""
             simdgroup_multiply_accumulate(C7, A, B, C7);
 #endif
         }
+#if OT2
+        else for (int k8 = 0; k8 < G / 8; ++k8) {
+            simdgroup_half8x8 B;
+            simdgroup_load(B, &wtT[k8 * 8][(int)sg * 8], 32);
+            simdgroup_half8x8 A;
+            simdgroup_load(A, &xt[0][k8 * 8], GROUP + XPAD);
+            simdgroup_multiply_accumulate(Db0, A, B, Db0);
+            simdgroup_load(A, &xt[8][k8 * 8], GROUP + XPAD);
+            simdgroup_multiply_accumulate(Db1, A, B, Db1);
+            simdgroup_load(A, &xt[16][k8 * 8], GROUP + XPAD);
+            simdgroup_multiply_accumulate(Db2, A, B, Db2);
+            simdgroup_load(A, &xt[24][k8 * 8], GROUP + XPAD);
+            simdgroup_multiply_accumulate(Db3, A, B, Db3);
+        }
+#endif
         threadgroup_barrier(mem_flags::mem_threadgroup);
+      }
     }
 
-    simdgroup_store(C0, &ybuf[0][(int)sg * 8], 32);
-    simdgroup_store(C1, &ybuf[8][(int)sg * 8], 32);
-    simdgroup_store(C2, &ybuf[16][(int)sg * 8], 32);
-    simdgroup_store(C3, &ybuf[24][(int)sg * 8], 32);
-#if RTILE == 64
-    simdgroup_store(C4, &ybuf[32][(int)sg * 8], 32);
-    simdgroup_store(C5, &ybuf[40][(int)sg * 8], 32);
-    simdgroup_store(C6, &ybuf[48][(int)sg * 8], 32);
-    simdgroup_store(C7, &ybuf[56][(int)sg * 8], 32);
+    for (int ob = 0; ob < 1 + OT2; ++ob) {
+        const int oo = o0 + ob * 32;
+#if OT2
+        if (ob == 0) {
 #endif
-    threadgroup_barrier(mem_flags::mem_threadgroup);
+        simdgroup_store(C0, &ybuf[0][(int)sg * 8], 32);
+        simdgroup_store(C1, &ybuf[8][(int)sg * 8], 32);
+        simdgroup_store(C2, &ybuf[16][(int)sg * 8], 32);
+        simdgroup_store(C3, &ybuf[24][(int)sg * 8], 32);
+#if RTILE == 64
+        simdgroup_store(C4, &ybuf[32][(int)sg * 8], 32);
+        simdgroup_store(C5, &ybuf[40][(int)sg * 8], 32);
+        simdgroup_store(C6, &ybuf[48][(int)sg * 8], 32);
+        simdgroup_store(C7, &ybuf[56][(int)sg * 8], 32);
+#endif
+#if OT2
+        } else {
+            simdgroup_store(Db0, &ybuf[0][(int)sg * 8], 32);
+            simdgroup_store(Db1, &ybuf[8][(int)sg * 8], 32);
+            simdgroup_store(Db2, &ybuf[16][(int)sg * 8], 32);
+            simdgroup_store(Db3, &ybuf[24][(int)sg * 8], 32);
+        }
+#endif
+        threadgroup_barrier(mem_flags::mem_threadgroup);
 
-    // guarded copy: thread tid -> token row tt=tid/4, out span lane%4*8..
-    {
-        const int tt = (int)tid / 4;
-        const int c0 = ((int)tid % 4) * 8;
-        if (tt < nrow) {
-            for (int c = c0; c < c0 + 8; ++c) {
-                const int oc = o0 + c;
-                if (oc < OUT)
-                    y[(size_t)(r0 + tt) * OUT + oc] = (TIO)ybuf[tt][c];
+        // guarded copy: thread tid -> token row tt=tid/4, out span lane%4*8..
+        {
+            const int tt = (int)tid / 4;
+            const int c0 = ((int)tid % 4) * 8;
+            if (tt < nrow) {
+                for (int c = c0; c < c0 + 8; ++c) {
+                    const int oc = oo + c;
+                    if (oc < OUT)
+                        y[(size_t)(r0 + tt) * OUT + oc] = (TIO)ybuf[tt][c];
+                }
             }
-        }
 #if RTILE == 64
-        const int tt2 = tt + 32;
-        if (tt2 < nrow) {
-            for (int c = c0; c < c0 + 8; ++c) {
-                const int oc = o0 + c;
-                if (oc < OUT)
-                    y[(size_t)(r0 + tt2) * OUT + oc] = (TIO)ybuf[tt2][c];
+            const int tt2 = tt + 32;
+            if (tt2 < nrow) {
+                for (int c = c0; c < c0 + 8; ++c) {
+                    const int oc = oo + c;
+                    if (oc < OUT)
+                        y[(size_t)(r0 + tt2) * OUT + oc] = (TIO)ybuf[tt2][c];
+                }
             }
-        }
 #endif
+        }
+        // ybuf is reused by the next block's stores
+        threadgroup_barrier(mem_flags::mem_threadgroup);
     }
 """
 
@@ -3415,6 +3474,15 @@ _GEMMSEG_XT_PAD = os.environ.get("VQ_GEMMSEG_XT_PAD", "0") == "1"
 # (the class d8/devx shipped under; gated by the comparator, not checksum).
 # "0" is the kill switch back to the cast pipeline.
 _GEMMSEG_BF16IO = os.environ.get("VQ_GEMMSEG_BF16IO", "1") == "1"
+# Output-block pairing (KERNEL-BODY-CAMPAIGN arm 1). "1" halves the gathered
+# xt staging traffic and the dispatch count by giving each threadgroup two
+# 32-column output blocks (decoded serially -- threadgroup bytes unchanged).
+# RTILE=32 only (the shipped default). Bit-exact per element. Default off
+# until benched.
+# MEASURED 2026-09-10 (F54): +5.1-6.6% prefill on 35B-3.4, bit-exact
+# checksums, interleaved reps -- the largest single kernel win since CB_DEV.
+# Default ON for the v2 runtime; "0" is the kill switch.
+_GEMMSEG_OT2 = os.environ.get("VQ_GEMMSEG_OTILE64", "1") == "1"
 # Decode-side bf16 I/O (F46: +3.6% decode measured on 35B-3.4). The small-N
 # _fused kernels are templated on x.dtype, so bf16 flows straight through and
 # both per-call casts disappear -- ~144+ elementwise passes/token. Numerics
@@ -3585,13 +3653,19 @@ def _gemmseg_prefill(xsrc, src_rows, idx_sorted_np, codes, codebook, scales,
             name += f"_r{rtile}"
         if _GEMMSEG_XT_PAD:
             name += "_xp8"
+        # OT2 needs RTILE=32 (compile-guarded in the source); silently keep
+        # the flag off at RTILE=64 so arming both can never E134.
+        ot2 = 1 if (_GEMMSEG_OT2 and rtile == 32) else 0
+        if ot2:
+            name += "_ot2"
         # TIO follows xsrc's dtype so the kernel cache never mixes builds.
         if xsrc.dtype == mx.bfloat16:
             name += "_bf16io"
         template = [("BITS", pack_bits), ("GROUP", 64),
                     ("MAX_K", 1 if cb_dev else K), ("D_BAKE", D),
                     ("CB_DEV", 1 if cb_dev else 0), ("RTILE", rtile),
-                    ("XPAD", _XT_PAD_HALVES), ("TIO", xsrc.dtype)]
+                    ("XPAD", _XT_PAD_HALVES), ("TIO", xsrc.dtype),
+                    ("OT2", ot2)]
         if not pack_bits:
             # unpacked arm reads codes as CT (uchar/ushort), not uint words
             template.append(("CT", codes.dtype))
@@ -3606,7 +3680,8 @@ def _gemmseg_prefill(xsrc, src_rows, idx_sorted_np, codes, codebook, scales,
         template = [("BITS", pack_bits), ("GROUP", 64), ("OTILE", 32),
                     ("RTILE", 32), ("MAX_K", K)]
     N = int(idx_sorted_np.shape[0])
-    grid = (32 * ((OUT + 31) // 32), 4 * ntiles, 1)
+    _ospan = 64 if locals().get("ot2") else 32   # EFFECTIVE ot2 (v2+RTILE32)
+    grid = (32 * ((OUT + _ospan - 1) // _ospan), 4 * ntiles, 1)
     tg = (32, 4, 1)
     common = dict(
         inputs=[codes, cbk, scales, xsrc, mx.array(src_rows), tmeta, dims],
