@@ -1204,3 +1204,46 @@ Prefill (gemmseg) has its own phase-1 fetch and was not touched; the
 gemmseg-style decode-tiles idea from F57 is superseded at d4 by this
 simpler, measured mechanism. Probe scaffolding (fixed-code modes, the null
 pipeline kernel) was measured, recorded here, and DELETED from the runtime.
+
+## F59 (2026-09-11) — the d8 decode fetch front is CLOSED: the walker disease is d4-tier-specific, and d8's remaining ~7% is the device codebook gather, not extraction.
+
+Porting F58's walker idea to the d8 tier, all on Flash-2.1 (mixed d8, M3,
+same 200-step harness as F58, interleaved passes):
+
+    arm                                        result
+    RB re-measured vs today's DEVX_SS default  0.90x  (09-02 negative REPRODUCES)
+    RB + DEVX + SS composition (funnel fetch
+      on the fair device-x/simd_sum body)      NULL   (18.95 vs 18.95, BIT-EXACT
+                                                       vs the shipping default)
+    fixed-code deletion bound (scratch-bundle
+      patch, chain+extraction+gather deleted)  1.074x (18.9 -> 20.3, both passes)
+
+The composition was pure text: RB shares staging/dot/reduction text verbatim
+with the base SIMD kernel, so the existing devx and ss rewrites apply on top
+(one dispatch gotcha: the SPG_C template constant was gated on an exact
+`endswith("_d8_simd_rb")` — a composed name silently compiled without its
+compile-time SPG and crashed; worth remembering for any future twin).
+
+ATTRIBUTION BY ELIMINATION. The deletion bound removes three things; the
+funnel graft removes one (redundant extraction) and captured NONE of the
+bound, so the ~7% lives in what deletion alone removed: the RANDOM DEVICE
+codebook gather (d8-K16384's 256 KB cb cannot be threadgroup; pinning c=0
+turns the gather into a cached broadcast). This independently re-lands the
+old profiling arc's number — shrinking the hot set to 4 KiB bought 8%, which
+was recorded then as refuting codebook residency as a lever. Two harnesses,
+two years of kernels, same 7-8%: the d8 VQ decode path is at its floor short
+of changing where the codebook lives, which K16384 forbids.
+
+WHY d4 AND d8 DIVERGE. The d4 thread-per-row kernel extracts every one of
+its ~512 codes alone, re-reading each device word ~3x -> extraction was 23%
+of the step and the walker recovered half (F58). The d8 SIMD kernel gives
+each lane 8 codes and reads x from device (arc 5); its extraction is already
+amortized and its codebook is device-resident. Same macro, different
+economics. The walker is a d4-TIER fix, correctly shipped there and only
+there; RB stays OFF and the RB+DEVX+SS composition is recorded here and NOT
+kept in the runtime.
+
+CONSEQUENCE FOR THE DECODE PROGRAM. Flash-class decode improvement now has
+to come from the non-VQ trunk (F48: GDN 29%, attention 25%) or from serving
+(MTP), not from VQ kernels. The 397B d8 rungs inherit this conclusion —
+same geometry, same kernels.
