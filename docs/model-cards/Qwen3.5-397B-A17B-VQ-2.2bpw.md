@@ -104,13 +104,9 @@ fits a 128 GB machine with very little room to spare. If your machine runs
 `VQ-2.4bpw` comfortably at the context you need, use that one.
 
 **Speed.** We have not measured v1 against v2 on the current bundled
-runtime, so this card makes no claim about which is faster. (An earlier
-revision said v2 runs ~20% slower because its 16,384-entry codebook reads
-from device memory; that was measured on an older runtime, and the current
-runtime's kernels were specifically optimized for this codebook geometry —
-see the changelog.) Both builds are A17B MoE and read the same active-expert
-bytes per token, so any difference is kernel-path, not size. Measure on your
-own hardware.
+runtime, so this card makes no claim about which is faster. Both builds are
+A17B MoE and read the same active-expert bytes per token, so any difference
+is kernel-path, not size. Measure on your own hardware.
 
 Note the size does **not** buy speed in any case — this is an A17B MoE, so
 decode reads the same active experts per token as the larger builds. It buys
