@@ -1288,3 +1288,10 @@ fetch: the only named idea left is a smaller-footprint codebook encoding
 runtime scope. The prefill kernel front is CLOSED at this ceiling for the
 current format. Probe scaffolding (bundle pin, GSWALK arm) deleted after
 recording.
+
+**F60 addendum — post-walker decode parity re-measured (same session,
+interleaved, F57 protocol):** VQ-3.4 59.6/60.1 vs affine-8bit 63.9/64.0
+tok/s = **93.6% of affine decode** (was 85% at F57; affine's lead cut from
+1.18x to 1.07x). The residual 1.07x is consistent with the CB_DEV gather
+tax on the modules the walker does not serve plus the irreducible code
+reads. Trunks were not re-decomposed — F57's equal-trunk result stands.
