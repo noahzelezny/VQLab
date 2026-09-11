@@ -599,6 +599,10 @@ _PACK_FETCH = r"""
         ) & VQ_MASK )
 """
 
+# F58 (2026-09-11): bit-walker code fetch for the packed d4 threadgroup
+# kernel, default ON. VQ_D4_WALK=0 restores the VQ_CODE macro path.
+_D4_WALK = os.environ.get("VQ_D4_WALK", "1") != "0"
+
 # d=4, LARGE K (>1024) — and every packed artifact.
 #
 # The original _SRC_FUSED caches the codebook as float4 (16 B/entry). At
@@ -697,6 +701,79 @@ _SRC_FUSED_PACKED = _PACK_FETCH + r"""
                   + dot(float4(cb[VQ_CODE(crow, j+1)]), float4(xs[j+1]))
                   + dot(float4(cb[VQ_CODE(crow, j+2)]), float4(xs[j+2]))
                   + dot(float4(cb[VQ_CODE(crow, j+3)]), float4(xs[j+3]));
+            j += 4;
+        }
+        acc = fma((float)srow[g], gacc, acc);
+    }
+    y[(size_t)t * OUT + r] = static_cast<T>(acc);
+"""
+
+
+# d=4 PACKED, threadgroup codebook, BIT-WALKER code fetch (2026-09-11, F58,
+# decode gather-chain front). The generic VQ_CODE macro re-reads its 32-bit
+# word for EVERY code it extracts (~3 codes/word at BITS=11) and redoes the
+# shift/or/mask each time; a 3-arm probe showed that work IS the whole 1.30x
+# decode deletion bound (threadgroup-gather bank conflicts and index-load
+# latency both measured null). This variant walks the row once: each code
+# word is loaded exactly once into a 64-bit bit-buffer and codes are shifted
+# out sequentially. The pack layout (32-code blocks x BITS words, LSB-first,
+# tail block padded) makes the walk seamless across block boundaries:
+# 32*BITS bits consumed per block == BITS words loaded, so the buffer is
+# word-aligned at every boundary and pad codes are never consumed (the loop
+# covers exactly NSUB codes). Code values, dot operands and the
+# ((d0+d1)+d2)+d3 summation shape are unchanged -> bit-identical (verified
+# 60-step greedy logits-checksum transcript vs the VQ_CODE kernel).
+# Measured (35B-3.4, d4-K2048, M3, 200-step decode, interleaved 2 passes):
+# 55.2 -> 61.8 tok/s = 1.12x. A 32-bit two-word variant tied it, so the
+# ulong is not a cost; the residual to the 1.30x bound is the mandatory
+# code-word reads the deletion arm also removed.
+_SRC_FUSED_PACKED_D4_WALK = _PACK_FETCH + r"""
+    const int OUT  = dims[0];
+    const int IN   = dims[1];
+    const int G    = dims[3];
+    const int N    = dims[4];
+    const int K    = dims[5];
+    const int NSUB = IN / 4;
+    const int NGRP = IN / G;
+    const int QPG  = G / 16;
+    const int WPR  = (NSUB + 31) / 32 * BITS;  // ceil: tail block padded, pad codes never read (n < NSUB)
+    uint r = thread_position_in_grid.x;
+    uint t = thread_position_in_grid.y;
+    uint lid = thread_position_in_threadgroup.x;
+    uint tgsize = threads_per_threadgroup.x;
+
+    threadgroup half4 cb[MAX_K];
+    threadgroup half4 xs[MAX_NSUB];
+    const device half4* cbg = (const device half4*)codebook;
+    for (uint i = lid; i < (uint)K; i += tgsize)
+        cb[i] = cbg[i];
+    const device T* xrow = x + (size_t)t * IN;
+    for (uint i = lid; i < (uint)NSUB; i += tgsize)
+        xs[i] = half4((half)xrow[i*4], (half)xrow[i*4+1],
+                      (half)xrow[i*4+2], (half)xrow[i*4+3]);
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+    if (r >= (uint)OUT || t >= (uint)N) return;
+    const uint e = eidx[t];
+    const device uint* crow = codes + (size_t)e * OUT * WPR + (size_t)r * WPR;
+    const device half* srow = scales + (size_t)e * OUT * NGRP + (size_t)r * NGRP;
+    float acc = 0.0f;
+    int j = 0;
+    int w = 0;
+    ulong buf = 0;
+    int nb = 0;
+    for (int g = 0; g < NGRP; ++g) {
+        float gacc = 0.0f;
+        for (int q = 0; q < QPG; ++q) {
+            uint cq[4];
+            for (int u = 0; u < 4; ++u) {
+                if (nb < BITS) { buf |= (ulong)crow[w++] << nb; nb += 32; }
+                cq[u] = (uint)(buf & (ulong)VQ_MASK);
+                buf >>= BITS; nb -= BITS;
+            }
+            gacc += dot(float4(cb[cq[0]]), float4(xs[j]))
+                  + dot(float4(cb[cq[1]]), float4(xs[j+1]))
+                  + dot(float4(cb[cq[2]]), float4(xs[j+2]))
+                  + dot(float4(cb[cq[3]]), float4(xs[j+3]));
             j += 4;
         }
         acc = fma((float)srow[g], gacc, acc);
@@ -2527,8 +2604,14 @@ def _fused_resolve(_plan_key, x, eidx, codes, codebook, scales, pack_bits=0,
             # threadgroup cache would exceed the cap. Bit-identical, and the
             # only thing that changes is where cb is read from.
             if _d4_tg_fits(K, NSUB):
-                name = f"vq_fused_packed{pack_bits}"
-                src = _SRC_FUSED_PACKED
+                # DEFAULT since 2026-09-11 (F58): bit-identical, 1.12x
+                # decode on 35B d4-K2048. VQ_D4_WALK=0 restores VQ_CODE.
+                if _D4_WALK:
+                    name = f"vq_fused_packed{pack_bits}_d4_walk"
+                    src = _SRC_FUSED_PACKED_D4_WALK
+                else:
+                    name = f"vq_fused_packed{pack_bits}"
+                    src = _SRC_FUSED_PACKED
             else:
                 name = f"vq_fused_packed{pack_bits}_d4_devcb"
                 src = _SRC_FUSED_PACKED_D4_DEVCB

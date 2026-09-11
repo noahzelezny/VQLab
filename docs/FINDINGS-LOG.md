@@ -1154,3 +1154,53 @@ next affine-grounded round); decode — break the dependent-gather chain
 gemmseg-style decode tiles). Both busted predictions are recorded here
 deliberately: the record should show what we believed and when the
 instruments corrected us.
+
+## F58 (2026-09-11) — decode gather chain SOLVED at the d4 tier: the cost was redundant code-word extraction, not the gather. Bit-walker fetch ships default, 1.12x decode, bit-exact.
+
+The fixed-code deletion arm (F57's named next step) ran first: pinning every
+packed-kernel code lookup to entry 0 — which lets the compiler delete the
+index load AND the extraction ALU AND turns the codebook gather into a
+broadcast — is **1.30x decode** (54.3 -> 70.5 tok/s, 35B-3.4, d4-K2048, M3,
+200-step manual loop, 2 interleaved passes, spreads <1%). The chain is real.
+Then three discriminating arms split the confound, all same harness:
+
+    arm                          index loads  extraction  random gather   result
+    1  full pin (0u & code)        deleted      deleted     deleted       1.30x
+    pipe (q-block-ahead fetch)     kept         kept        kept          NULL
+    2  gather pinned (& runtime-0) kept         kept        deleted       NULL
+    3  synthetic codes (hash)      deleted      deleted     KEPT          1.30x
+
+Mode 3 recovers the ENTIRE deletion win with the random threadgroup gather
+retained, and mode 2 recovers none of it with the chain retained. So: NOT
+bank conflicts, NOT load latency (the pipeline overlap would have hidden
+that), but the **work of VQ_CODE itself** — the macro re-reads its 32-bit
+device word for every code it extracts (~3 codes/word at BITS=11) and redoes
+the shift/or/mask each time, per output row. The d2 kernel's comment already
+knew this disease ("the generic VQ_CODE path re-reads a word per code");
+this is the first measurement of what it costs at decode: ~23% of the step.
+
+THE FIX — `_SRC_FUSED_PACKED_D4_WALK`, default ON (`VQ_D4_WALK=0` reverts):
+walk the code row once, each word loaded exactly once into a 64-bit
+bit-buffer, codes shifted out sequentially. The pack layout (32-code blocks
+x BITS words, LSB-first, padded tail) makes the walk word-aligned at every
+block boundary. Same code values, same dot operands, same ((d0+d1)+d2)+d3
+summation shape -> **bit-identical** (60-step greedy logits-checksum
+transcript matches the VQ_CODE kernel exactly; an earlier draft that summed
+per-code instead of per-quad produced identical TOKENS but drifted the
+checksum — association matters, transcripts catch it).
+
+**Measured: 55.0 -> 61.7 tok/s = 1.12x decode, both passes.** A 32-bit
+two-word walker variant TIED the ulong version (61.6 vs 61.9), so 64-bit
+emulation is not a cost. The ~8 tok/s between walker (61.7) and bound (69.9)
+is mostly the mandatory code-word reads the deletion arms also removed —
+deletion ceilings bound REMOVAL, not replacement — so 1.12x is close to the
+honest ceiling for this front at d4.
+
+OPEN: the same disease exists in every other VQ_CODE consumer — the packed
+d8 kernels (Flash/397B decode geometries; d8-K16384 rows are BITS=14,
+~2.3 codes/word) and the packed d2 path. Porting the walker there is the
+next decode arm; needs the cluster rungs, so it waits for the M4's return.
+Prefill (gemmseg) has its own phase-1 fetch and was not touched; the
+gemmseg-style decode-tiles idea from F57 is superseded at d4 by this
+simpler, measured mechanism. Probe scaffolding (fixed-code modes, the null
+pipeline kernel) was measured, recorded here, and DELETED from the runtime.
