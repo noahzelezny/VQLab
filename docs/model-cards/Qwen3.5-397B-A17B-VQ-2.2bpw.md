@@ -103,11 +103,6 @@ That is the reason this build exists. `VQ-2.4bpw` is the better model and it
 fits a 128 GB machine with very little room to spare. If your machine runs
 `VQ-2.4bpw` comfortably at the context you need, use that one.
 
-**Speed.** We have not measured v1 against v2 on the current bundled
-runtime, so this card makes no claim about which is faster. Both builds are
-A17B MoE and read the same active-expert bytes per token, so any difference
-is kernel-path, not size. Measure on your own hardware.
-
 Note the size does **not** buy speed in any case — this is an A17B MoE, so
 decode reads the same active experts per token as the larger builds. It buys
 *residency*, which is the table above.
