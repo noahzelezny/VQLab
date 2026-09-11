@@ -103,14 +103,14 @@ That is the reason this build exists. `VQ-2.4bpw` is the better model and it
 fits a 128 GB machine with very little room to spare. If your machine runs
 `VQ-2.4bpw` comfortably at the context you need, use that one.
 
-**Speed.** v2's 16,384-entry codebook (256 KB at fp16) cannot fit in Metal
-threadgroup memory, so the kernels read it from device memory. On the current
-bundled runtime that is not a penalty: the device-codebook path and the
-ragged-subvector relaxation in the runtime refresh (see the changelog) target
-exactly this geometry, with measured per-module gains up to 1.34x on its
-prefill path. We are not publishing an end-to-end v1-vs-v2 throughput figure
-because we have not measured one on this runtime; measure on your own
-hardware.
+**Speed.** We have not measured v1 against v2 on the current bundled
+runtime, so this card makes no claim about which is faster. (An earlier
+revision said v2 runs ~20% slower because its 16,384-entry codebook reads
+from device memory; that was measured on an older runtime, and the current
+runtime's kernels were specifically optimized for this codebook geometry —
+see the changelog.) Both builds are A17B MoE and read the same active-expert
+bytes per token, so any difference is kernel-path, not size. Measure on your
+own hardware.
 
 Note the size does **not** buy speed in any case — this is an A17B MoE, so
 decode reads the same active experts per token as the larger builds. It buys
