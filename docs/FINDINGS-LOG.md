@@ -1074,3 +1074,23 @@ from 82% shipped. Remaining campaign arms: 1.5 (barrier pipelining), 2
 Implementation note for arm 2: the per-block epilogue now runs twice; a
 direct store deletes ybuf AND both epilogue barriers, so the two arms
 compound.
+
+## F55 (2026-09-10 evening) — arm 2 (direct epilogue store): bit-exact, NULL on speed. And a pricing-methodology lesson with numbers.
+
+Built with steel's lane mapping (mlx mma.h fm/fn fragment coords — correct on
+first compile, checksums identical). Interleaved: off 2261/2280, ON 2261/2279
+— dead tie, despite the deletion arm pricing the scalar copy at ~+4.9%.
+
+**The lesson, quantified: a deletion ceiling bounds REMOVAL, not
+REPLACEMENT.** The direct store's predicated per-lane scatter costs about
+what the staged+coalesced ybuf copy did; what the deletion arm measured was
+the cost of writing y AT ALL, not the ybuf detour. (Also: the first pricing
+attempt anchored one accumulator and DCE deleted 7/8 of the MAC chains —
++14.6% of pure artifact, rule-4's third catch of the day.)
+
+Code kept default-off (VQ_GEMMSEG_DSTORE): bit-exact, -4 KB threadgroup,
+possibly useful for future large-K threadgroup-codebook geometries.
+
+**Campaign scoreboard: arm 1 +5.1-6.6% (landed, default on), arm 2 null
+(closed), arm 1.5 (barrier pipelining) next — now MORE interesting since
+OT2 serialized the per-group sequence — then arm 3 and the SIMD_SS unlock.**
