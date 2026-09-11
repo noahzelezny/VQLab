@@ -1094,3 +1094,26 @@ possibly useful for future large-K threadgroup-codebook geometries.
 **Campaign scoreboard: arm 1 +5.1-6.6% (landed, default on), arm 2 null
 (closed), arm 1.5 (barrier pipelining) next — now MORE interesting since
 OT2 serialized the per-group sequence — then arm 3 and the SIMD_SS unlock.**
+
+## F56 (2026-09-10 night) — campaign arms 1.5 and 3 settled; the v2 stack hits +11.9% over shipped, ~91.5% of affine.
+
+**Arm 1.5 (prefetch pipeline): NEGATIVE, −1.8-2%** (off 2308-2322, ON
+2271-2277, bit-exact). The salvaged design's own risk clause named it:
+register pressure, or the compiler already pipelines those loads and the
+explicit version broke its schedule. Flag kept as record, default off.
+
+**Arm 3 (staging shape): +3.7-3.9%, bit-exact, default ON.** Predicate
+hoisted to one outer branch, staging vectorized at D_BAKE width. The
+refutation was RIGHT about the wrong thing: it killed the traffic claim
+(bytes indeed unchanged) while the true mechanism — instruction count and
+hoisted predication — carried the win. A verdict of "flawed" attaches to a
+CLAIM, not an arm; the campaign ran it anyway because the mechanism was
+separable, and it paid.
+
+**Cumulative, one session, interleaved: SHIPPED 2142.5/2142.8 → V2
+2398.3/2395.3 = +11.9% prefill** (plus +3.3-3.8% decode). 35B-3.4 stands at
+**~91.5% of affine-8bit** from 82% shipped. Campaign ledger: arm 1 +5-6.6%,
+arm 3 +3.7-3.9%, arms 1.5 and 2 measured null/negative and closed. Remaining
+headroom to affine: ~8.5 points — candidates: the SIMD_SS d8 unlock (its win
+is d8-specific), a replacement-priced epilogue idea if one appears, and the
+decode remainder (launch census still unrun).
