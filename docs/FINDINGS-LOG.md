@@ -1117,3 +1117,40 @@ arm 3 +3.7-3.9%, arms 1.5 and 2 measured null/negative and closed. Remaining
 headroom to affine: ~8.5 points — candidates: the SIMD_SS d8 unlock (its win
 is d8-specific), a replacement-priced epilogue idea if one appears, and the
 decode remainder (launch census still unrun).
+
+## F57 (2026-09-10 late) — clean same-session parity map: 90.5% prefill, 85% decode; two of my predictions corrected by the instruments.
+
+Head-to-head, both 35B builds local, one session, interleaved.
+
+**Prefill ladder (MoE-block -> x*0 arm on BOTH builds):**
+| | VQ-3.4 (v2 runtime) | affine-8bit |
+|---|---|---|
+| baseline | 3.77 s (2386 tok/s) | 3.41 s (2637) |
+| expert block deleted | 2.16 s | 2.15 s |
+| **expert block cost** | **1.61 s** | **1.26 s** |
+
+Trunks are IDENTICAL (2.16 vs 2.15). Corrections this forces:
+* "Expert path already at parity" (my cross-day arithmetic) — WRONG. The
+  expert block is **1.28x** affine's; the entire end-to-end gap (0.36 s) is
+  expert-side. The kernel-body campaign is at ~90.5%, not done.
+* The 6-bit-trunk theory (F57-eve audit: our attention IS 6-bit vs their
+  8-bit) — measured IRRELEVANT: equal trunks. F49's 0.31 s "trunk gap" was
+  cross-day drift + arm-scope (F41's stub left shared_expert in the
+  remainder; the MoE-block stub does not). No quant-config change needed.
+
+**Decode head-to-head: affine WINS, 63.2-65.0 vs 54.0-54.5 tok/s (~1.18x).**
+My bytes-argument prediction inverted: at batch-1 the VQ decode expert
+kernels are dependent-gather LATENCY chains (F48's Flash mechanism, now
+confirmed to bind on d4-K2048 too) and latency beats bandwidth. The dense
+27B pair still favors VQ in serving (different decode path) — MoE decode is
+the front line.
+
+**Standing after the campaign:** prefill 82% -> 90.5% (+11.9% banked,
+bit-exact), decode ~85% of affine on this pair. BEATING parity remains
+physically available (fewer bytes moved in both phases) but the fronts are
+now: prefill — another ~0.35 s out of the expert block (SIMD_SS unlock,
+next affine-grounded round); decode — break the dependent-gather chain
+(fixed-code arm first to confirm mechanism, then prefetch-across-j /
+gemmseg-style decode tiles). Both busted predictions are recorded here
+deliberately: the record should show what we believed and when the
+instruments corrected us.
