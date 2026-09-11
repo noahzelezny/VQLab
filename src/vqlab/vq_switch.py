@@ -3248,6 +3248,14 @@ _SRC_GEMMSEG2 = _PACK_FETCH + r"""
 #if OT2 && (RTILE == 64)
 #error "OT2 pairs output blocks at RTILE=32 only; combine is unimplemented"
 #endif
+#if PIPE
+    // Prefetch pipeline (KERNEL-BODY-CAMPAIGN arm 1.5, salvaged design):
+    // g+1's code words + scale are INDEPENDENT device loads issued before
+    // the mma, so they fly during the matmul; after the barrier only the
+    // dependent codebook gather remains. SPG/4 <= 8 across d2/d4/d8.
+    uint  pfc[1 + OT2][8];
+    float pfs[1 + OT2];
+#endif
     for (int g = 0; g < NGRP; ++g) {
         const int j0 = g * SPG;
       for (int ob = 0; ob < 1 + OT2; ++ob) {
@@ -3259,9 +3267,27 @@ _SRC_GEMMSEG2 = _PACK_FETCH + r"""
 #endif
         const device half* srow_w = srow_base + (size_t)ob * 32 * NGRP;
         if (oo + wr < OUT) {
+#if PIPE
+            uint  cq[8];
+            float s;
+            if (g == 0) {
+                s = (float)srow_w[0];
+                for (int q = q0; q < q0 + SPG / 4; ++q)
+                    cq[q - q0] = VQ_FETCH(j0 + q);
+            } else {
+                s = pfs[ob];
+                for (int q = q0; q < q0 + SPG / 4; ++q)
+                    cq[q - q0] = pfc[ob][q - q0];
+            }
+#else
             const float s = (float)srow_w[g];
+#endif
             for (int q = q0; q < q0 + SPG / 4; ++q) {
+#if PIPE
+                const uint c = cq[q - q0];
+#else
                 const uint c = VQ_FETCH(j0 + q);
+#endif
 #if D_BAKE == 2
                 const half2 v = cb[c];
                 wtT[q * 2][wr]     = (half)(s * (float)v.x);
@@ -3291,12 +3317,53 @@ _SRC_GEMMSEG2 = _PACK_FETCH + r"""
                     wtT[q * D_BAKE + u][wr] = (half)0;
             }
         }
+#if PIPE
+        // issue g+1's independent loads NOW -- they overlap the mma below
+        if (g + 1 < NGRP && oo + wr < OUT) {
+            pfs[ob] = (float)srow_w[g + 1];
+            const int j1 = (g + 1) * SPG;
+            for (int q = q0; q < q0 + SPG / 4; ++q)
+                pfc[ob][q - q0] = VQ_FETCH(j1 + q);
+        }
+#endif
         if (ob == 0) {
             // TIO = I/O element type (half or bfloat16_t). The (half)
             // convert at stage-in is round-to-nearest -- bit-identical to
             // the host astype it replaces; MACs stay half8x8 regardless.
             // Staged ONCE per threadgroup-group even at OT2: the whole
             // point of the pairing (KERNEL-BODY-CAMPAIGN arm 1).
+#if PH2V
+            // Arm 3 (staging shape): predicate hoisted to one outer branch,
+            // loads/stores vectorized at D_BAKE width. Same elements, same
+            // rounding -- bit-exact. Alignment: row bases are >=8B-aligned
+            // for every XPAD in {0,8} (checked: (GROUP+XPAD)*2 % 8 == 0).
+            if (xr < nrow) {
+                const device TIO* xrow =
+                    xsrc + (size_t)srcrows[r0 + xr] * IN + (size_t)g * G;
+                for (int q = q0; q < q0 + SPG / 4; ++q) {
+  #if D_BAKE == 2
+                    const vec<TIO, 2> v = ((const device vec<TIO, 2>*)xrow)[q];
+                    *(threadgroup half2*)&xt[xr][q * 2] =
+                        half2((half)v.x, (half)v.y);
+  #elif D_BAKE == 4
+                    const vec<TIO, 4> v = ((const device vec<TIO, 4>*)xrow)[q];
+                    *(threadgroup half4*)&xt[xr][q * 4] =
+                        half4((half)v.x, (half)v.y, (half)v.z, (half)v.w);
+  #else
+                    const vec<TIO, 4> v0 = ((const device vec<TIO, 4>*)xrow)[q * 2];
+                    const vec<TIO, 4> v1 = ((const device vec<TIO, 4>*)xrow)[q * 2 + 1];
+                    *(threadgroup half4*)&xt[xr][q * 8] =
+                        half4((half)v0.x, (half)v0.y, (half)v0.z, (half)v0.w);
+                    *(threadgroup half4*)&xt[xr][q * 8 + 4] =
+                        half4((half)v1.x, (half)v1.y, (half)v1.z, (half)v1.w);
+  #endif
+                }
+            } else {
+                for (int q = q0; q < q0 + SPG / 4; ++q)
+                    for (int u = 0; u < D_BAKE; ++u)
+                        xt[xr][q * D_BAKE + u] = (half)0;
+            }
+#else
             const device TIO* xrow = 0;
             if (xr < nrow)
                 xrow = xsrc + (size_t)srcrows[r0 + xr] * IN + (size_t)g * G;
@@ -3305,6 +3372,7 @@ _SRC_GEMMSEG2 = _PACK_FETCH + r"""
                     xt[xr][q * D_BAKE + u] =
                         (xr < nrow) ? (half)xrow[q * D_BAKE + u] : (half)0;
             }
+#endif
 #if RTILE == 64
             // paired half: same thread stages row xr+32
             const int xr2 = xr + 32;
@@ -3537,6 +3605,16 @@ _GEMMSEG_OT2 = os.environ.get("VQ_GEMMSEG_OTILE64", "1") == "1"
 # barrier, and the scalar copy pass (priced at ~+4.9% alone). Default off
 # until benched.
 _GEMMSEG_DSTORE = os.environ.get("VQ_GEMMSEG_DSTORE", "0") == "1"
+# Prefetch pipeline (arm 1.5): g+1's code/scale loads issued before the mma
+# so they fly during the matmul. Register cost <= (8 uints + 1 float) per
+# ob strand per thread. Default off until benched.
+_GEMMSEG_PIPE = os.environ.get("VQ_GEMMSEG_PIPE", "0") == "1"
+# Phase-2 staging shape (arm 3): hoisted predicate + vector-width staging.
+# Default off until benched.
+# MEASURED 2026-09-10 (F56): +3.7-3.9% prefill, bit-exact, interleaved.
+# The refuter attacked this arm's traffic claim (correctly) but the real
+# mechanism is instruction count + hoisted predication. Default ON for v2.
+_GEMMSEG_PH2V = os.environ.get("VQ_GEMMSEG_PH2V", "1") == "1"
 # threadgroup tile bytes at RTILE=32, tracked so cb_dev/fits arithmetic
 # follows the flags (F51's rule: budget follows every byte change).
 _TILES_R32 = (2 if _GEMMSEG_DSTORE else 3) * 4096
@@ -3717,6 +3795,10 @@ def _gemmseg_prefill(xsrc, src_rows, idx_sorted_np, codes, codebook, scales,
             name += "_ot2"
         if _GEMMSEG_DSTORE:
             name += "_ds"
+        if _GEMMSEG_PIPE:
+            name += "_pf"
+        if _GEMMSEG_PH2V:
+            name += "_p2v"
         # TIO follows xsrc's dtype so the kernel cache never mixes builds.
         if xsrc.dtype == mx.bfloat16:
             name += "_bf16io"
@@ -3724,7 +3806,9 @@ def _gemmseg_prefill(xsrc, src_rows, idx_sorted_np, codes, codebook, scales,
                     ("MAX_K", 1 if cb_dev else K), ("D_BAKE", D),
                     ("CB_DEV", 1 if cb_dev else 0), ("RTILE", rtile),
                     ("XPAD", _XT_PAD_HALVES), ("TIO", xsrc.dtype),
-                    ("OT2", ot2), ("DSTORE", 1 if _GEMMSEG_DSTORE else 0)]
+                    ("OT2", ot2), ("DSTORE", 1 if _GEMMSEG_DSTORE else 0),
+                    ("PIPE", 1 if _GEMMSEG_PIPE else 0),
+                    ("PH2V", 1 if _GEMMSEG_PH2V else 0)]
         if not pack_bits:
             # unpacked arm reads codes as CT (uchar/ushort), not uint words
             template.append(("CT", codes.dtype))
