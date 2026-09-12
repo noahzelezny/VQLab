@@ -1783,6 +1783,12 @@ Candidate causes, separable, both arms launched tonight:
     FINDINGS.md, disjoint technical text) on all four artifacts. If
     re-selected WINS on B while losing on wikitext, it is
     redistribution — a policy question — not damage.
+    RESULT (same night): DEAD. Corpus-B ppl is ALSO worse re-selected —
+    35B 11.7484 -> 11.8009 (+0.45%), Flash 8.3372 -> 8.4064 (+0.83%).
+    The regression is not domain redistribution; it is damage. The
+    KL-to-affine-teacher improvement coexisting with worse real-text NLL
+    means matching the teacher's distribution better is NOT matching the
+    data better — cause (1) or the objective itself. bf16 arm decides.
 
 NOT shipped, nothing published; the recipe's ship/no-ship is BLOCKED on
 these two arms per the standing gate.
