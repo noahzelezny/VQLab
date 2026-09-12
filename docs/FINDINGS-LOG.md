@@ -1555,3 +1555,56 @@ than steering does. RECIPE FINAL: plain self-generation, ~8k tokens,
 temp 1.0. Data-free is not a compromise; on neutral domains it is the
 better calibration. (Everything above remains layer-10 single-module
 output-space; the whole-model KL referee is the running overnight job.)
+
+## F71 (2026-09-12 morning) — WHOLE-MODEL VALIDATION on the 35B: self-calibrated code re-selection improves end-to-end KL, tails most, benchmarks concur. The 397B activation-fitting scar does NOT repeat at model scale.
+
+The full recipe ran overnight on 35B-3.4: 8k self-generated tokens ->
+per-module activation Grams (all 120) -> G-aware code re-selection ->
+artifact assembled on disk (art_reselect, scratch) -> refereed against
+cached affine-8bit teacher top-256 logits on held-out text:
+
+    metric                     original     re-selected
+    KL vs teacher (mean)       0.101311     0.099082    (-2.2%)
+    KL worst position          4.449        3.755       (-15.6%)
+    top-1 agreement            83.69%       84.20%      (+0.51 pts)
+
+Task benchmarks, card protocol (1000 items, 0-shot, lm-eval 0.4.12
+rebuilt-pinned, same harness family as the published numbers):
+
+    task         original    re-selected
+    HellaSwag    0.741       0.735
+    PIQA         0.828       0.835
+    WinoGrande   0.736       0.747
+
+Net +1.2 points across three tasks; per-task swings are within ~1.4-pt
+sampling noise, but ensemble + KL + tail direction all agree: a SMALL REAL
+IMPROVEMENT, zero cost (same bits, same tables, same runtime, codes only).
+The worst-position KL improving MOST (-15.6%) is the shape you want —
+quantization damage lives in the tails.
+
+Caveats standing: teacher is the affine-8bit (also the fit target); the
+campaign-grade referee is the bf16 teacher via the streaming path. Referee
+text is one 4k slice; ppl sweep at v2 release per Noah's policy.
+
+OPS LESSONS (cost a night and a frozen Mac):
+* A background chain tied to the Claude session dies with it — overnight
+  jobs get nohup+disown and stage checkpoints, ALWAYS.
+* Flash-Next-8bit is 178 GB (a ~160B model) — residency is impossible on
+  ANY box; the layer-streaming scorer pattern computes teacher logits in
+  ~2 min at ~4 GB peak (arch-aware port needed for qwen4_exp: rope module,
+  ssm/attention masks, PLE prev_ctx, hyper_connection_mixer, NO final norm).
+* Two silent OOM kills + one machine freeze from re-selection beside a
+  resident student: stage R now runs STANDALONE (no model loaded) under
+  mx.set_memory_limit, per-module checkpointed. A Metal GPU-hang watchdog
+  trips if >~64 K16384 argmin steps queue lazily — eval every 8.
+* The bench venv died in the quantlab->vqlab merge; rebuilt pinned
+  (lm_eval 0.4.12 + mlx-lm 0.31.3) at scratchpad/bench_venv.
+* PIPELINE ORDER (Noah's question, settled): sensitivity/geometry mix ->
+  k-means fit -> G-aware re-selection -> referee. Re-selection is a cheap
+  polish INSIDE a fixed geometry; if Flash shows the gain is
+  geometry-lopsided, score mix candidates WITH re-selection applied.
+
+IN FLIGHT: Flash-2.1 generalization (d8-K16384, GDN+PLE arch, 4x scale) —
+teacher streamed, 144 Grams banked, baseline KL 0.4335 / top-1 71.46%,
+re-selection running checkpointed. Its verdict decides whether F67's
+recipe is lineup-wide or d4-specific.
