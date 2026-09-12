@@ -1421,3 +1421,29 @@ fit-proxy rule: this is weight-space recon, not KL — but at 1.17-1.66x
 error deficits the direction is not in doubt. Related live idea kept
 separate: per-PROJECTION-TYPE sensitivity-scaled K (gate/up/down), which
 shares nothing with this negative and still awaits its sensitivity map.
+
+## F66 (2026-09-11 late) — per-projection sensitivity map: compressibility is IDENTICAL across gate/up/down; sensitivity orders gate > down > up (1.55x spread). The allocation axis is real but THIN (~0.08 bpw).
+
+Two probes, layer-10 module trio + whole-model noise injection (35B):
+
+Compressibility (shared-codebook k-means ladder, identical treatment):
+    proj        K256      K1024     K2048
+    gate_proj   0.30989   0.22078   0.18634
+    up_proj     0.31034   0.22058   0.18630
+    down_proj   0.30935   0.22053   0.18605
+Statistically identical to the third decimal — the F65 homogeneity result
+extends across projection TYPES: nothing in the expert stack is easier to
+quantize than anything else.
+
+Damage per unit error (0.5% relative codebook noise, one type at a time,
+KL vs clean over 2048 positions): gate 0.0144 > down 0.0124 > up 0.0093 —
+gate most fragile (against the down-proj classic prior), 1.55x spread.
+
+ALLOCATION CONSEQUENCE. With equal compressibility, allocation = starve
+the insensitive: demote up_proj one K notch (K1024) for ~0.08 bpw at 1.18x
+error on the least-sensitive third. Real, small, and only worth bundling
+into a v2 fit campaign that is happening anyway — not worth its own. The
+strong version of the axis (differential compressibility) is measured
+absent. Caveats: single layer for compressibility (homogeneity so far
+suggests it generalizes), noise-KL is a perturbation proxy (directionally
+robust at 1.55x, per the F65 caveat discipline).
