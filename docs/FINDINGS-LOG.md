@@ -1508,3 +1508,25 @@ consequence 2) largely dissolves; a mixed external corpus remains the
 (self-generation at temp 1.0 has its own distribution bias toward the
 model's high-probability modes — the per-domain referee stays mandatory).
 Cost: generation dominates; the re-selection itself is still ~20 s/module.
+
+## F69 (2026-09-12 early) — self-calibration token-scaling: saturates at +9.4% by 8k tokens; the 1.3-point gap to corpus is DISTRIBUTIONAL, not statistical.
+
+Cumulative self-generation ladder (20 diverse seeds incl. code tokens,
+temp 1.0), G-aware re-selection per rung, all scored on the F67 real-text
+held-out Gram:
+
+    N tokens    held-out gain
+      2,048       +9.03%
+      8,192       +9.35%
+     32,768       +9.40%
+    131,072       +9.41%
+    corpus ref   +10.70%   (F67)
+
+Textbook second-moment convergence: 16x more tokens past 8k buys +0.06
+points. The residual 1.3 points vs corpus calibration cannot be bought
+with samples — it is the temp-1.0 generation distribution under-covering
+part of real-text activation geometry (mode bias). Levers if that last
+point ever matters: seed diversity/temperature schedules, or just use a
+corpus (F67). RECIPE SETTLED for the v2 campaign: ~8k self-generated
+tokens (~2 min GPU on the 35B), Gram, re-select, referee — data-free,
+held-out-validated, saturation-verified. F58-F69 close the arc.
