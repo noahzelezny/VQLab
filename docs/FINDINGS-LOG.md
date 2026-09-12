@@ -1398,3 +1398,26 @@ affine at practical batch sizes while resident at 2.4x smaller — the
 multi-agent case rests on residency (model + KV headroom), not on a
 throughput crossover, and no crossover should be claimed. Note the absolute
 aggregate: 297 tok/s at B=8 from a 15 GiB artifact.
+
+## F65 (2026-09-11 late) — per-expert codebooks measured and CLOSED: expert subvector distributions are homogeneous; the shared codebook is the right architecture by ~measurement, not just by default.
+
+PoC on real weights (layer-10 gate_proj of the 35B, E=256, dequantized
+affine-8bit as fit target; identical treatment both schemes: G=64 max-abs
+scales, d4 subvectors, same k-means, full-assignment reconstruction):
+
+    shared  d4-K2048   rel-F 0.1862   11 bits/subvec
+    per-exp d4-K256    rel-F 0.3087   8 bits   (1.66x worse)
+    per-exp d4-K1024   rel-F 0.2179   10 bits  (1.17x worse)
+    per-exp d4-K2048   rel-F 0.1822   11 bits  (0.978x -- 2.2% better)
+
+The specialization ceiling is ~2% error at EQUAL bits, for 256x the
+codebook storage (~4 MB/module, ~0.5 GB model-wide); at fewer bits
+per-expert always loses. The MoE intuition ("only the called-on vocabulary")
+does not transfer: experts differ in WHICH weights they hold, not in the
+statistics of their subvectors, and codebook fitting sees only the
+statistics. The byte-aligned-K256 speed synergy dies with it (that lever
+was already dead independently via F63). Caveat inherited from the
+fit-proxy rule: this is weight-space recon, not KL — but at 1.17-1.66x
+error deficits the direction is not in doubt. Related live idea kept
+separate: per-PROJECTION-TYPE sensitivity-scaled K (gate/up/down), which
+shares nothing with this negative and still awaits its sensitivity map.
