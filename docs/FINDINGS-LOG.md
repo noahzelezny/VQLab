@@ -1641,3 +1641,46 @@ call (ppl sweep, per Noah's policy), especially given the max-KL regression.
 Method note: the d2 layers-0-1 need format-matched re-selection (unpacked
 uint, not bit-packed) before they can be included; skipped here as
 out-of-geometry.
+
+## F73 (2026-09-12) — the F72 "tail regression" DISSOLVES under per-position instrumentation: the max-KL rise is ONE position; the tail as a distribution IMPROVED. Flash behaves exactly like the 35B.
+
+F72's alarming number (worst-position KL +8.7%) was a single order
+statistic. Per-position KL vectors for both arms (same student load, same
+cached teacher, 4096 positions; scratchpad/tail_probe.py ->
+tail_probe_kl.safetensors):
+
+    quantile   original    re-selected
+    P50        0.2715      0.2740     (+0.9%)
+    P90        1.0171      1.0093     (-0.8%)
+    P99        2.6095      2.6202     (+0.4%)
+    P99.5      3.5290      3.2541     (-7.8%)
+    P99.9      5.0250      4.6026     (-8.4%)
+    max        6.8717      7.4692     (+8.7% -- position 2358, ' defects',
+                                       5.52 -> 7.47, the ONLY point above P99.9
+                                       that regressed this much)
+
+Churn is real but favors improvement at every magnitude: |dKL|>0.5:
+158 worse / 176 better; >1.0: 31/48; >2.0: 5/10. Decomposed by
+baseline-KL decile, the mechanism is IDENTICAL to the 35B's (F71):
+
+    deciles 0-7 (easy bulk)    sum dKL  +99.7   (small broad tax)
+    decile 8                   sum dKL  -23.3
+    decile 9 (worst positions) sum dKL -107.4   (the prize)
+
+Re-selection repairs the positions the student was worst at, paying a
+small tax on easy ones — the tail-repair shape F71 called "the shape you
+want," present at d8-K16384/2.1bpw too. F72's hypotheses (a)
+cross-subvector Gram blindness and (b) teacher distance are NOT NEEDED to
+explain a tail regression, because there is no tail regression to explain.
+The max-KL line in F72 stands as written but its READ was wrong: quantiles,
+not the max, are the tail instrument (a max over 4k correlated positions
+moves ~this much under any code churn).
+
+CONSEQUENCE: the d8 blocker on scaling the recipe is LIFTED. Remaining
+before per-rung referee: (1) hypothesis (a) demoted to an upside question —
+does full-Gram ICM buy MORE than block-diagonal? (icm_probe.py running,
+banked Grams are full IN x IN so this needs no recapture); (2) d2/K256
+format-matched re-selection for layers 0-1; (3) bf16 teacher remains
+campaign-grade referee hygiene (affine-8bit is also the fit target) but is
+no longer suspected of causing a regression; no bf16 Flash exists on disk
+(~320 GB download — Noah's call if wanted).
