@@ -1370,3 +1370,31 @@ to reading packed VQ codes, the rest is campaign-mined residue. Decode
 93.6%. The VQ kernel program is closed at the honest floor for ANY codebook
 format — the remaining absolute wins are the non-VQ trunk (upstream mlx
 material, F47/F48 decompositions) and MTP serving.
+
+## F64 (2026-09-11 night) — batch-decode curve, VQ vs affine, B=1..8: the ratio improves to ~93% by B=2 and PLATEAUS. My amortization prediction graded: half right.
+
+Same manual loop, both builds interleaved at each B (35B pair, M3, 100
+steps, best of 2 warm reps):
+
+    B   VQ agg     affine agg   ratio
+    1    61.2        68.6       89.2%
+    2   111.7       119.9       93.2%
+    4   182.2       196.3       92.8%
+    8   297.2       324.4       91.6%
+
+Prediction on record was "ratio climbs with B toward prefill-like levels as
+the fetch tax amortizes across rows." Graded: the B=1 -> B=2 jump is real
+(+4 points), then FLAT — no climb toward 100%. The mechanism I missed is
+MoE routing: batched rows route to DIFFERENT experts, so weight tiles are
+shared only where rows happen to overlap — decode batching amortizes the
+per-weight fetch far less than prefill's 32-row tiles do. (Prefill re-uses
+every tile across all rows by construction; decode B=8 mostly adds expert
+work proportionally.) Both builds scale sublinearly for the same routing
+reason (affine/row drops 68.6 -> 40.5 too); VQ neither catches up nor falls
+behind.
+
+SERVING TAKEAWAY. For multi-agent workloads VQ holds a stable ~92-93% of
+affine at practical batch sizes while resident at 2.4x smaller — the
+multi-agent case rests on residency (model + KV headroom), not on a
+throughput crossover, and no crossover should be claimed. Note the absolute
+aggregate: 297 tok/s at B=8 from a 15 GiB artifact.
