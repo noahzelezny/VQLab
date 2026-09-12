@@ -1295,3 +1295,47 @@ tok/s = **93.6% of affine decode** (was 85% at F57; affine's lead cut from
 1.18x to 1.07x). The residual 1.07x is consistent with the CB_DEV gather
 tax on the modules the walker does not serve plus the irreducible code
 reads. Trunks were not re-decomposed — F57's equal-trunk result stands.
+
+## F61 (2026-09-11 evening) — the int8-codebook format lever is LIVE: quality marginal-but-refereeable, and the occupancy objection is measured DEAD.
+
+Two probes, both cheap, both on 35B-3.4 (M3):
+
+**Quality (in-memory, no repacking):** every codebook quantized to int8 in
+the loaded model, logits compared to the fp16-codebook baseline over 2048
+positions. Per-dim symmetric scales win clearly over per-codebook:
+rel-F codebook error ~0.52%, **top-1 agreement 99.95%, KL mean 0.012**
+(max 3.5 — real tail spikes), teacher-forced nll +0.002 nats absolute.
+Verdict: NOT free, plausibly acceptable — the v2-release ppl/KL referee is
+mandatory, per-rung, exactly as Noah's release policy already requires.
+
+**Occupancy (the objection that would have killed it):** the CB_DEV gather
+tax (F60) is the price of evicting the 16 KB codebook; a resident 8 KB int8
+table must not re-pay what eviction bought. Dead-threadgroup-pad probe
+(OCCPAD bytes allocated + guard-touched in gemmseg, cb still device):
+**8 KB costs 0.0%** (2413 vs 2414 tok/s), 16 KB costs 0.6%. Hardware
+occupancy at these sizes is a non-issue — which also reinterprets the old
+CB_DEV@16KB=1.76x win as a Python-side FITS-BUDGET routing cliff (over-
+budget tiles fell off the gemmseg path entirely), not smooth hardware
+occupancy. The int8 lever's upside is the ~6% gather bound (F60) minus the
+in-kernel dequant cost, for an artifact-format rev gated on the referee.
+NEXT (v2-release scale, Noah's call): int8-cb packer + kernel arm + full
+per-rung referee.
+
+## F62 (2026-09-11 evening) — launch census finally run: a decode step is 24% host graph-build and ~3 us/launch — and production serving ALREADY HIDES most of it.
+
+Census on the 35B decode step (manual loop, M3): host graph construction
+(forward built, not evaluated) is **4.0 of 16.5 ms/step = 24.4%**; injected
+dependent elementwise ops price a launch at **~3.0 us** (slope over k=0..400,
+1.19 ms per 400 ops). At ~1000+ ops/step that is the launch-bound decode
+signature F47's +7% super-additivity hinted at.
+
+BUT: the manual ladder loop SERIALIZES build and GPU. Production
+stream_generate (async_eval pipelining) measured **69.3 tok/s vs the
+ladder's 61.7** on the same model — mlx_lm already overlaps most of the
+host-build behind the GPU. Consequences: (1) ladder tok/s UNDERSTATES
+production absolute throughput ~12% (parity RATIOS stand — both builds were
+measured on the same loop); (2) the host-build lever is largely already
+pulled upstream; what remains for an mlx/mlx-lm PR is op-count reduction
+(fewer, fatter kernels per layer) and the GPU-side gap share, bounded by
+F47's ~7%. Capture note for next time: MTL_CAPTURE_ENABLED must be set
+BEFORE process start, not after import.
