@@ -66,3 +66,47 @@ same slots.
    point: KL delta vs referee noise.
 3. KV assignment-cost probe (cheap, parallel with 2).
 4. Scale winners across the lineup on the v2 train.
+
+---
+
+## RESULTS SO FAR (2026-09-12) — validated, with caveats
+
+Two whole-model runs done (F71/F72 in FINDINGS-LOG):
+
+| model | geometry | mean KL | top-1 | worst-pos KL | benchmarks |
+|---|---|---|---|---|---|
+| 35B-3.4 | d4-K2048 | −2.2% | +0.51 | **−15.6%** (better) | net +1.2 |
+| Flash-2.1 | d8-K16384 | −1.7% | +0.22 | **+8.7%** (worse) | not run |
+
+The mechanism transfers across scale/arch/geometry (not a d4 special), but
+the d8/2.1bpw win is smaller and NOT tail-clean. Recipe is real and free;
+per-rung quality referee is mandatory, not optional.
+
+## OPEN THREADS (priority order)
+
+1. **d8 tail regression — diagnose before scaling.** Flash worst-position KL
+   got worse. Hypotheses, unseparated: (a) block-diagonal Gram ignores
+   cross-subvector correlation the d8 SIMD kernel couples — try a
+   block-diagonal-over-2-subvectors Gram, or full-Gram re-selection on one
+   layer as an upper bound; (b) affine-8bit teacher sits far from the 2.1bpw
+   student — regenerate a bf16 teacher (streaming path already works,
+   scratchpad/flash_teacher_stream2.py) and re-referee. Cheap, decisive.
+2. **bf16 teacher for BOTH models** — current teacher is affine-8bit (also
+   the fit target). Campaign-grade referee needs the true bf16 teacher;
+   35B streaming teacher is quick, Flash streaming proven (~2 min).
+3. **Format-matched d2 re-selection** — layers 0-1 (d2/K256, UNPACKED codes)
+   were skipped. They need unpacked-uint output, not bit-packed. Small
+   module count; do it so whole-model claims are honest.
+4. **PPL sweep, per rung** — the release-gate number (Noah's policy). Only
+   after 1–3.
+5. **Then**: iterate re-selection (alternate re-select ↔ light table tune),
+   and the VQ-KV sidecar (Part 2, untouched).
+
+## REUSABLE ASSETS (scratchpad/, all working)
+- overnight_reselect.py — whole-model re-select + KL referee (MODEL_ART,
+  ON_PREFIX, AFF env-driven; standalone stage R is flash_reselect_offline.py,
+  per-module checkpointed, memory-capped)
+- flash_teacher_stream2.py — arch-aware layer-streaming teacher (qwen4_exp)
+- flash_referee.py — swap codes + KL, skips format-mismatched modules
+- bench_venv/ — pinned lm_eval 0.4.12 + mlx-lm 0.31.3 for card-protocol tasks
+- assemble_reselect.py — writes a re-selected artifact to disk
