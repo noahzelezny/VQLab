@@ -1530,3 +1530,28 @@ point ever matters: seed diversity/temperature schedules, or just use a
 corpus (F67). RECIPE SETTLED for the v2 campaign: ~8k self-generated
 tokens (~2 min GPU on the 35B), Gram, re-select, referee — data-free,
 held-out-validated, saturation-verified. F58-F69 close the arc.
+
+## F70 (2026-09-12 early) — calibration showdown on TWO test domains: the corpus's edge was HOME-FIELD; on neutral ground plain self-generation WINS. Steered seeds lose to plain sampling.
+
+Five calibration arms, each scored on T1 (findings-log held-out half — same
+DOCUMENT the corpus arms train on, disjoint slices) and T2 (code domain:
+mlx_lm source, disjoint from everything):
+
+    arm                     T1-prose   T2-code
+    corpus 2k               +9.68%     +6.48%
+    corpus 8k               +9.91%     +6.65%
+    corpus 32k              +9.95%     +6.61%
+    self-gen plain 8k       +8.85%     **+7.01%**
+    self-gen steered 8k     +8.39%     +6.77%
+
+Verdicts: (1) F67/F69's "corpus beats self-gen by 1.3" was largely
+home-field — the corpus and test Grams shared a document; on the neutral
+code domain self-generation WINS outright. (2) Corpus calibration
+saturates by 2k tokens — second-moment convergence is universal here.
+(3) Prompt-engineered seeds (code/table/multilingual starters, mixed
+temps) are WORSE than plain temp-1.0 sampling on BOTH domains — the
+model's natural distribution mirrors its own activation geometry better
+than steering does. RECIPE FINAL: plain self-generation, ~8k tokens,
+temp 1.0. Data-free is not a compromise; on neutral domains it is the
+better calibration. (Everything above remains layer-10 single-module
+output-space; the whole-model KL referee is the running overnight job.)
