@@ -1447,3 +1447,41 @@ strong version of the axis (differential compressibility) is measured
 absent. Caveats: single layer for compressibility (homogeneity so far
 suggests it generalizes), noise-KL is a perturbation proxy (directionally
 robust at 1.55x, per the F65 caveat discipline).
+
+## F67 (2026-09-11 night) — the MSE-VQ cap is real and the escape is measured: activation-aware code re-selection wins +10.7% output-space error HELD-OUT. Tables-only is nearly worthless; the prize is the codes.
+
+PoC on layer-10 gate_proj (E=256), real activations captured from the
+running 35B (4096 tokens of diverse technical text, split train/test;
+optimize on train Gram, score on test Gram):
+
+    arm                                   train G     test G (HELD-OUT)
+    k-means (Lloyd, weight-MSE)           baseline    baseline
+    + table tuning only (Adam, frozen     +0.51%      --
+      codes, output-space loss)
+    + G-aware code re-selection           +10.17%     **+10.70%**
+      (block-diagonal Gram metric)
+      then table retune
+
+    (weight rel-F WORSENS 0.1875 -> 0.1938 while output error drops --
+     proxy inversion in one row. An earlier repetitive-prompt run showed
+     +32%: subspace-inflated, discarded; diverse-text held-out is the
+     number.)
+
+Zero train/test gap (10.2 vs 10.7): the method learns the model's
+activation geometry, not a corpus. The decomposition matters: with a
+diverse Gram, tuning TABLES with frozen codes recovers ~nothing (Lloyd's
+tables are nearly fine) — the cap is in the ASSIGNMENTS, exactly the
+variable k-means assigns under the wrong (unweighted) metric. Cost of the
+whole pipeline on this module: ~20 s.
+
+CONSEQUENCES. (1) The KL-TUNED-CODEBOOKS-PLAN's phase priorities INVERT:
+code re-selection is phase 1, table tuning a garnish. (2) This spends the
+"data-free" claim: v2 becomes lightly-calibrated (AQLM-class); ship the
+data-free fit as base recipe + calibrated code-refinement as the
+documented upgrade, calibration set named on the card. (3) The 397B scar
+applies (activation-fitted quant FAILED there, DWQ/GPTQ arc): different
+mechanism (codes re-selected within fixed geometry, weights untouched),
+but graduation is end-to-end ppl/KL per rung ONLY — reconstruction
+proxies are the thing that inverted last time. Next: whole-model
+re-selection on 35B-3.4 + real KL referee; then the per-rung sweep on the
+v2 train.
