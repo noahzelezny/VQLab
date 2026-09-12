@@ -84,16 +84,18 @@ per-rung quality referee is mandatory, not optional.
 
 ## OPEN THREADS (priority order)
 
-1. **d8 tail regression — diagnose before scaling.** Flash worst-position KL
-   got worse. Hypotheses, unseparated: (a) block-diagonal Gram ignores
-   cross-subvector correlation the d8 SIMD kernel couples — try a
-   block-diagonal-over-2-subvectors Gram, or full-Gram re-selection on one
-   layer as an upper bound; (b) affine-8bit teacher sits far from the 2.1bpw
-   student — regenerate a bf16 teacher (streaming path already works,
-   scratchpad/flash_teacher_stream2.py) and re-referee. Cheap, decisive.
-2. **bf16 teacher for BOTH models** — current teacher is affine-8bit (also
-   the fit target). Campaign-grade referee needs the true bf16 teacher;
-   35B streaming teacher is quick, Flash streaming proven (~2 min).
+1. ~~d8 tail regression~~ **RESOLVED (F73): there is no tail regression.**
+   Per-position KL vectors show F72's +8.7% max-KL was ONE position; tail
+   quantiles improved (P99.5 −7.8%, P99.9 −8.4%) and the decile
+   decomposition matches the 35B exactly (worst-decile positions repaired,
+   small tax on the bulk). The d8 blocker on scaling is lifted. Residual
+   upside question: does full-Gram ICM beat block-diagonal? (icm_probe —
+   the banked Grams are full IN×IN, so no recapture needed.)
+2. **bf16 teacher for BOTH models** — hygiene now, not diagnosis (F73).
+   Current teacher is affine-8bit (also the fit target). NO bf16 exists on
+   disk for either model: 35B bf16 ≈ 70 GB HF download, Flash bf16 ≈
+   320 GB — Noah's call whether either is worth it before the ppl sweep
+   (which compares artifacts, not teachers, so it does not depend on this).
 3. **Format-matched d2 re-selection** — layers 0-1 (d2/K256, UNPACKED codes)
    were skipped. They need unpacked-uint output, not bit-packed. Small
    module count; do it so whole-model claims are honest.
@@ -101,6 +103,17 @@ per-rung quality referee is mandatory, not optional.
    after 1–3.
 5. **Then**: iterate re-selection (alternate re-select ↔ light table tune),
    and the VQ-KV sidecar (Part 2, untouched).
+
+## TEACHER RETENTION POLICY (Noah, 2026-09-12)
+
+bf16 teacher weights are ARCHIVED on the HDD, not deleted after use —
+supersedes the "rebuildable: redownload" delete-by-default posture in
+quantlab/ARTIFACTS.md for teacher-class artifacts. Home:
+`/Volumes/Thunderbay HDD/Teacher Models/`. They are read start-to-finish
+once per streaming-teacher run, so HDD bandwidth is fine; they are also
+the source for any future fit. In flight 2026-09-12: 35B bf16 (72 GB) and
+Flash-Next bf16 (360 GB) re-downloading there (scratchpad/
+teacher_downloads.log).
 
 ## REUSABLE ASSETS (scratchpad/, all working)
 - overnight_reselect.py — whole-model re-select + KL referee (MODEL_ART,
