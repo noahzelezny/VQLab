@@ -1339,3 +1339,34 @@ pulled upstream; what remains for an mlx/mlx-lm PR is op-count reduction
 (fewer, fatter kernels per layer) and the GPU-side gap share, bounded by
 F47's ~7%. Capture note for next time: MTL_CAPTURE_ENABLED must be set
 BEFORE process start, not after import.
+
+## F63 (2026-09-11 night) — CORRECTION to F60/F61: the prefill fetch bound is not the gather's LOCATION, it is the mandatory fetch work. The int8-codebook lever is DEAD for speed.
+
+The decisive arm existed all along: `VQ_GEMMSEG_CBDEV=0` forces the 16 KB
+d4-K2048 codebook back into THREADGROUP memory (legal at 29 KB total), i.e.
+full residency with zero format change. Measured (memo_check, interleaved,
+checksums identical = bit-exact): **2400 vs 2412 tok/s — +0.5%, noise.**
+Residency recovers nothing.
+
+Elimination now runs to the end. The F60 deletion bound (1.061x) removed
+three things; each has now been isolated:
+  - redundant word re-reads — walker arm, NULL (F60);
+  - gather location / randomness — residency arm, NULL (here);
+  - the MANDATORY index loads + extraction ALU + dependent chain — the
+    remainder, and therefore the whole 6%.
+Only deleting the codes deletes that work. **Deletion ceilings bound
+REMOVAL, not replacement** — third bite of that rule this arc (F55 pricing,
+F59 d8, now F60's attribution), and this one propagates: F61's int8-codebook
+speed case was "recover the gather tax by residency"; residency is now
+measured worthless, and the size savings are negligible (codebooks are
+~0.01-0.2% of artifact bytes). The int8 lever is CLOSED — do not spend the
+quality budget. (F61's occupancy measurement stands and remains useful: 8-16
+KB of threadgroup residency is nearly free in gemmseg2, unlike the fused
+kernels — the ≥16 KB CB_DEV rule was calibrated on the wrong kernel's
+sensitivity, it just happens not to matter either way.)
+
+STANDING. Prefill 90.5% of affine: ~6% is irreducible fetch work inherent
+to reading packed VQ codes, the rest is campaign-mined residue. Decode
+93.6%. The VQ kernel program is closed at the honest floor for ANY codebook
+format — the remaining absolute wins are the non-VQ trunk (upstream mlx
+material, F47/F48 decompositions) and MTP serving.
