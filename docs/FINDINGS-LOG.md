@@ -1485,3 +1485,26 @@ but graduation is end-to-end ppl/KL per rung ONLY — reconstruction
 proxies are the thing that inverted last time. Next: whole-model
 re-selection on 35B-3.4 + real KL referee; then the per-rung sweep on the
 v2 train.
+
+## F68 (2026-09-11 night) — SELF-CALIBRATION works: the model's own generations recover 88% of the corpus-calibrated win (+9.4% held-out vs +10.7%) from 1,395 self-generated tokens. The data-free claim is RESTORED.
+
+Same pipeline as F67 with one swap: the training Gram comes from text the
+35B free-generated itself (temp 1.0, four one-word seeds, ~1.4k tokens,
+re-forwarded for capture). Scored on F67's REAL-TEXT held-out Gram:
+
+    calibration source        held-out gain vs k-means
+    real diverse text (F67)   +10.70%
+    SELF-GENERATED            **+9.41%**   (88% of the corpus win)
+    (tables-only, either)     ~+0.5%
+
+Noah's insight verbatim: "the model will find its own activations." The
+activation second-moment geometry is a property of the MODEL, and the model
+samples its own distribution by construction — no corpus curation, no
+domain-skew exposure to an external dataset, no data shipped or named. The
+v2 recipe is therefore fully self-contained: pack -> self-generate ->
+capture -> re-select codes -> referee. The corpus question (F67
+consequence 2) largely dissolves; a mixed external corpus remains the
++1.3%-better option and the cross-domain-skew probe still applies to BOTH
+(self-generation at temp 1.0 has its own distribution bias toward the
+model's high-probability modes — the per-domain referee stays mandatory).
+Cost: generation dominates; the re-selection itself is still ~20 s/module.
