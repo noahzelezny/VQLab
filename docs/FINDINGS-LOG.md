@@ -1608,3 +1608,36 @@ IN FLIGHT: Flash-2.1 generalization (d8-K16384, GDN+PLE arch, 4x scale) —
 teacher streamed, 144 Grams banked, baseline KL 0.4335 / top-1 71.46%,
 re-selection running checkpointed. Its verdict decides whether F67's
 recipe is lineup-wide or d4-specific.
+
+## F72 (2026-09-12) — Flash-2.1 generalization: the recipe transfers to d8-K16384 (KL -1.7% mean, top-1 +0.22), but the MAX-KL rose. Mixed verdict; the win is smaller and less clean than the 35B's d4.
+
+Whole-model re-selection on Flash-Next-VQ-2.1bpw (138 d8-K16384 modules
+re-selected; the 6 d2/K256 modules in layers 0-1 kept original — different
+storage format, and NOT the geometry under test). Streamed bf16-adjacent
+affine-8bit teacher (178 GB model, layer-streamed at ~4 GB peak), held-out
+referee slice:
+
+    metric                  original     re-selected
+    KL vs teacher (mean)    0.433488     0.425984    (-1.7%)
+    KL worst position       6.872        7.469       (+8.7%  WORSE)
+    top-1 agreement         71.46%       71.68%      (+0.22 pts)
+
+READ: the mean and top-1 move the right way, so the mechanism DOES transfer
+across 4x scale, GDN+PLE arch, and the d8-K16384 geometry — it is not a
+d4/35B special. But the improvement is ~half the 35B's mean gain and the
+WORST-POSITION KL got WORSE (opposite of the 35B, where tails improved
+most). Two candidate causes, unseparated: (1) the teacher here is the same
+affine-8bit whose 2.1bpw student is far from it (baseline KL 0.43 vs 35B's
+0.10) — re-selection pulls the bulk toward the teacher but can trade a few
+tail positions; (2) block-diagonal Gram re-selection at d8 ignores
+cross-subvector correlation the d8 kernel's simd layout may couple. Not
+chased tonight.
+
+CONSEQUENCE FOR v2: the recipe is lineup-applicable but must be
+PER-RUNG-REFEREED on quality, not assumed — the 35B's clean tail win does
+not guarantee itself at lower bpw / larger scale. The mean+top-1 gains are
+real and free; whether they clear a v2 quality bar is the release referee's
+call (ppl sweep, per Noah's policy), especially given the max-KL regression.
+Method note: the d2 layers-0-1 need format-matched re-selection (unpacked
+uint, not bit-packed) before they can be included; skipped here as
+out-of-geometry.
