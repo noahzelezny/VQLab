@@ -1752,3 +1752,37 @@ before shipping in v2 is Noah's standing release gate: assemble re-selected
 artifacts on disk and run the per-rung ppl sweep (+ card-protocol task
 benchmarks for Flash, not yet run). bf16 teachers downloading to the HDD
 (Teacher Models/) for campaign-grade re-refereeing.
+
+## F76 (2026-09-12) — THE RELEASE GATE DISAGREES WITH THE KL REFEREE: re-selection worsens wikitext PPL on BOTH models (35B +0.5%, Flash +1.9% at 12k tokens) while KL-to-teacher and its tails improve. Ship decision now hinges on cause separation.
+
+First per-rung ppl runs (Noah's release-gate instrument,
+scripts/score_ppl_resident.py, referee_corpus = wikitext, one instrument
+for all arms; artifacts on disk: art_reselect from F71, art_flash_resel
+from F75):
+
+    corpus/len        35B base   35B resel      Flash base   Flash resel
+    wikitext 2k       4.8425     4.8818 (+0.8%) 5.9308       6.0842 (+2.6%)
+    wikitext 12k      5.4101     5.4360 (+0.5%) 5.8327       5.9429 (+1.9%)
+
+Direction holds at both lengths on both models: REAL, not sampling. Yet
+the same artifacts improve teacher-KL mean AND tail quantiles (F71/F75)
+and the 35B's task benchmarks (F71, net +1.2). The two instruments point
+opposite ways, which is the F67-consequence-3 scenario arriving on
+schedule: "graduation is end-to-end ppl/KL per rung ONLY."
+
+Candidate causes, separable, both arms launched tonight:
+(1) TEACHER NOISE: re-selection targets are dequantized affine-8bit
+    weights (cos 0.99997 to bf16 at layer 10 gate — the codes may be
+    chasing the last ~0.4% quantization noise instead of the model).
+    Arm: identical re-selection with BF16 targets (now on the HDD,
+    Teacher Models/) -> art_reselect_bf16 -> same ppl instrument.
+    If ppl regression disappears, cause found and the fix is free.
+(2) DOMAIN SHIFT: KL referee text is technical (findings log), wikitext
+    is encyclopedic prose; self-gen calibration may redistribute quality
+    toward the model's own modes. Arm: corpus-B ppl (quantlab
+    FINDINGS.md, disjoint technical text) on all four artifacts. If
+    re-selected WINS on B while losing on wikitext, it is
+    redistribution — a policy question — not damage.
+
+NOT shipped, nothing published; the recipe's ship/no-ship is BLOCKED on
+these two arms per the standing gate.
