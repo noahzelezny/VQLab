@@ -1684,3 +1684,41 @@ format-matched re-selection for layers 0-1; (3) bf16 teacher remains
 campaign-grade referee hygiene (affine-8bit is also the fit target) but is
 no longer suspected of causing a regression; no bf16 Flash exists on disk
 (~320 GB download — Noah's call if wanted).
+
+## F74 (2026-09-12) — full-Gram ICM re-selection is DEAD: it overfits the calibration Gram catastrophically (+56% train, −20% HELD-OUT). Block-diagonal is the right operating point, by measurement.
+
+Hypothesis (a) from F72, run as its upper bound (scratchpad/icm_probe.py):
+full-Gram coordinate-descent (ICM, 3 sweeps, converging flips) on the
+layer-20 probe modules, scored as output-space error J = mean(e^T G e) on
+the 8k-self-gen TRAIN Gram (optimized) and a held-out test Gram captured
+from disjoint text (40,960 token-rows). The banked Grams are full IN x IN
+— re-selection had only ever used the 8x8 diagonal blocks.
+
+    module (E=512, K=16384)     arm         J_train      J_test (HELD-OUT)
+    down_proj (IN=640)          blockdiag   +0.44%       -0.26%
+                                ICM full-G  +3.86%       -2.63%
+    gate_proj (IN=2560)         blockdiag   +13.26%      +2.18%
+                                ICM full-G  +56.21%      -19.80%
+    up_proj (IN=2560)           blockdiag   +12.10%      +1.08%
+                                ICM full-G  +55.46%      -21.66%
+    (gains vs k-means codes; positive = better)
+
+MECHANISM. An 8x8 Gram block is well-estimated from 8k tokens; a full
+2560x2560 second moment from the same tokens is rank-starved, and ICM
+drives the residual into its noisy/null directions — the textbook
+overfit signature (train and test move in OPPOSITE directions, huge
+spread). The cross-subvector correlation the d8 kernel couples is not
+exploitable at this calibration size; chasing it would need order
+100k+ tokens of calibration (and F69 showed block-diag saturates at 8k),
+so the data-free recipe stays block-diagonal BY MEASUREMENT.
+
+Also visible in the table: Flash's per-module held-out gains (+1-2% on
+gate/up, ~0 on down) are far below the 35B layer-10 module's +10.7%
+(F67) — consistent with F72's smaller whole-model mean gain at 2.1bpw.
+The d8/2.1bpw win is thinner per module, not tail-broken (F73).
+
+Verdict: F72's two hypotheses are both closed — (a) full-Gram is
+measured WORSE, (b) is moot because there is no tail regression (F73).
+The shipped recipe (block-diag, 8k self-gen) is the validated operating
+point. Remaining Flash work: d2 layers 0-1 format-matched re-selection +
+whole-model referee (chained, running), then the per-rung ppl sweep.
