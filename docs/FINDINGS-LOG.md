@@ -1722,3 +1722,33 @@ measured WORSE, (b) is moot because there is no tail regression (F73).
 The shipped recipe (block-diag, 8k self-gen) is the validated operating
 point. Remaining Flash work: d2 layers 0-1 format-matched re-selection +
 whole-model referee (chained, running), then the per-rung ppl sweep.
+
+## F75 (2026-09-12) — Flash whole-model re-selection COMPLETE (all 144 modules): d2 layers 0-1 done format-matched, KL improves to −1.9% mean / −10.3% P99.9. Top-1 wobble is within noise. Ready for the ppl gate.
+
+The 6 d2/K256 modules F72 skipped got format-matched G-aware re-selection
+(unpacked uint8 out, scratchpad/d2_reselect.py; 4-14% of codes changed
+per module — less churn than d8, as expected at K=256/d2). Full referee,
+one load, both arms (flash_referee2.py):
+
+    metric      base       d8-only(F72)   ALL 144 swapped
+    KL mean     0.433488   0.425984       0.425039  (−1.9%)
+    P99         2.6095     —              2.6121    (flat)
+    P99.5       3.5290     —              3.3190    (−6.0%)
+    P99.9       5.0250     —              4.5095    (−10.3%)
+    max         6.8717     7.4692         7.5745    (the F73 single-position
+                                                     order statistic again)
+    top-1       71.46%     71.68%         71.00%
+
+Top-1 moves −0.46/+0.22 pts across arms; 1σ on 4096 positions is ±0.7 pts
+— noise, not signal. Every KL quantile that matters moves the right way,
+and the d2 layers add on top of d8 (−1.7% → −1.9% mean). Whole-model
+claims are now honest: nothing skipped.
+
+STATE OF THE CAMPAIGN after F71-F75: recipe (8k self-gen, block-diag Gram,
+per-subvector argmin re-selection) is validated end-to-end on both models,
+both geometries, all module formats; both F72 objections closed by
+measurement (F73 no tail regression, F74 full-Gram worse). What remains
+before shipping in v2 is Noah's standing release gate: assemble re-selected
+artifacts on disk and run the per-rung ppl sweep (+ card-protocol task
+benchmarks for Flash, not yet run). bf16 teachers downloading to the HDD
+(Teacher Models/) for campaign-grade re-refereeing.
