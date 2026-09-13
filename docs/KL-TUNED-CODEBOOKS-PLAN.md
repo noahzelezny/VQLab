@@ -1,6 +1,10 @@
 # KL-Tuned Codebooks + VQ-KV Cache — v2 campaign plan (2026-09-11)
 
-One investment, two products, one paper. Status: SPEC — nothing started.
+One investment, two products, one paper.
+STATUS 2026-09-13: Part 1 code re-selection CLOSED — VERDICT NO-SHIP (F78:
+ppl damage invariant to teacher and calibration; the objective itself).
+Phase-1 KL table tuning (through-the-model loss) is the one unexplored
+road. Part 2 (VQ-KV) untouched. Paper gains a strong measured negative.
 Everything below rides the existing v2-release train and its PPL/KL
 referee; no new gates invented.
 
