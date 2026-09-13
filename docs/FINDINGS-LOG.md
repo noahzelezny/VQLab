@@ -2093,3 +2093,26 @@ promo, R1, P1, P2 + base refs). Ship candidate: art_flash_r1 — gate
 already complete (F85: ppl −1.08%/flat/−0.30%, benchmarks in noise,
 smoke clean). Awaiting Noah's ship call; remaining pre-ship nicety: the
 8bit reference bench row via the qwen4_exp streaming-scorer port.
+
+## F87 (2026-09-13) — qwen4_exp loglikelihoods are batch-composition-sensitive at the 0.1-0.7 nat level IN THE UPSTREAM FORWARD; the 4-decimal streamed-vs-direct bar is unachievable for this arch by any harness. Port validated to the achievable bar.
+
+Discrimination (scratchpad/q4exp_discrim.py, art_flash_rev2, 5 probe
+pairs, per-item sum logprob):
+
+    stream_b256  [-0.706, -0.348, -5.780, -14.909, -1.128]
+    stream_b2    [-0.767, -0.349, -5.844, -14.688, -1.073]
+    direct_b256  [-0.704, -0.348, -5.780, -14.908, -1.080]
+    direct_b1    [-0.709, -0.349, -5.595, -14.202, -1.037]
+
+The trusted upstream path disagrees with ITSELF by up to 0.71 nats when
+only padding/batch shape changes (direct_b256 vs direct_b1) — GDN scans
++ hyper-connections in bf16 are accumulation-order sensitive. The
+qwen4_exp streaming port (score_tasks_q4exp.py) agrees with direct at
+MATCHED batching within 0.05 — tighter than direct's self-agreement.
+Port is as faithful as the arch permits; the plain-arch 4-decimal
+selftest bar does not transfer to this family.
+
+CONSEQUENCE (one-harness law): Flash benchmark rows are comparable only
+within one path + one batching. The 8bit reference row therefore forces
+ALL Flash card rows through the streamed harness at b256 — 8bit, shipped
+2.1bpw, and R1 (running).
