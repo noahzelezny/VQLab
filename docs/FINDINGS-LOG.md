@@ -1827,3 +1827,47 @@ bf16 download (file-cache pressure; exo idle, GPU otherwise empty) — the
 retry-supervisor + per-module checkpoints pattern absorbed all of them at
 ~1 module lost per crash. That pattern is now the standing way to run
 Gram/argmin stages while the HDD is busy.
+
+## F78 (2026-09-13) — VERDICT: G-aware code re-selection does NOT ship in v2, per rung, with the mechanism understood. The ppl damage is invariant to teacher precision AND calibration distribution — it is the objective itself.
+
+The last separation ran overnight: corpus-calibrated Grams (real text,
+findings-log 0:8192, disjoint from teacher slice and both ppl corpora),
+affine targets, otherwise byte-for-byte the F71 recipe -> art_reselect_cg.
+The four-arm matrix on the 35B, one instrument:
+
+    arm                            wikitext-12k        corpus-B
+    base (art_xtpad)               5.4101              11.7484
+    self-gen Gram, affine tgt      5.4360 (+0.48%)     11.8009 (+0.45%)
+    self-gen Gram, bf16 tgt        5.4329 (+0.42%)     11.8370 (+0.75%)
+    corpus Gram, affine tgt        5.4344 (+0.45%)     11.8017 (+0.45%)
+
+Every knob in the recipe was swapped and the regression did not move:
++0.42-0.48% wikitext across all three re-selected arms (Flash-2.1: +1.9%,
+F76). Meanwhile the SAME artifacts improve teacher-KL mean, teacher-KL
+tail quantiles (P99.9 -8 to -10%), top-1 agreement, and (35B) the task
+benchmarks. Both instruments are right; they measure different things:
+
+THE MECHANISM, stated once for the paper: re-selecting codes to minimize
+E_x[((W - Ŵ)x)^2] under ANY activation Gram optimizes proximity to the
+teacher's FUNCTION on the calibration second moment. At 2-3.4 bpw the
+codebook cannot represent the teacher exactly, so the optimizer spends its
+budget matching the teacher on high-energy activation directions and pays
+in low-energy directions — and next-token NLL on real text lives partly in
+those low-energy directions. k-means' unweighted MSE is accidentally
+better-hedged for ppl. Weight-space proxies inverted against quality in
+the 397B arc (DWQ/GPTQ); output-space proxies now measurably invert
+against ppl at model scale. Two rungs, four arms, two corpora: this is
+the MSE-VQ-cap paper's strongest negative and the reason the v2 gate is
+ppl and nothing else.
+
+PER-RUNG ANSWER (the campaign question): 35B-3.4 NO (+0.45% ppl),
+Flash-2.1 NO (+1.9% ppl). Do not scale to the other rungs; the recipe
+family (block-diag or otherwise — F74 killed full-Gram separately) is
+closed unless a future objective optimizes NLL directly (phase-1 table
+tuning with a KL loss through the model remains the unexplored,
+more-expensive road; it was deprioritized when F67 made assignments look
+free — that reasoning is now void).
+
+Assets kept: bf16 teachers archived on HDD (Teacher Models/), full Gram
+banks, all four assembled artifacts (scratch), the retry-supervisor
+pattern, and per-position KL tooling (F73). Nothing was published.
