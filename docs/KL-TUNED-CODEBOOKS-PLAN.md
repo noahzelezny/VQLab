@@ -127,3 +127,25 @@ teacher_downloads.log).
 - flash_referee.py — swap codes + KL, skips format-mismatched modules
 - bench_venv/ — pinned lm_eval 0.4.12 + mlx-lm 0.31.3 for card-protocol tasks
 - assemble_reselect.py — writes a re-selected artifact to disk
+
+## FLASH v2 GEOMETRY CAMPAIGN (opened 2026-09-13, Noah's direction)
+
+Focus the v2 campaign on Flash-Next (the loved model). Basis: the shipped
+2.1bpw mix is HAND-SET (6 modules d2/K256 layers 0-1 + 138 uniform
+d8/K16384, confirmed from config) — never knee-measured. The proven
+GLM/397B process (E10 depth law, E12/E13b shape ladders, E24-E29 tail
+ladder) says expert bits belong in the TAIL and front protection is
+ballast — but E13b's law is family-dependent, so Flash must be measured.
+
+Process: iso-byte candidates as DIFFS against shipped bytes (unchanged
+modules keep their exact shipped tensors; only geometry-changed modules
+refit from the bf16 teacher with the F80/F81 alternation recipe). Gate
+per rung: four-corpus ppl + generation smoke; benchmarks on the winner.
+
+Rungs, in order:
+  R0 ballast test — front d2->d8-K16384 (6 modules, artifact SHRINKS
+     ~175 MB). Flat ppl => front protection is ballast, bytes available.
+  R1 tail ladder — promote tail-N layers' experts d8-K16384 -> d4-K4096
+     (+1.25 b/w), paid by early-mid K16384 -> K4096 (-0.25 b/w);
+     ladder N per E25 until the knee.
+  R2 combine R0+R1 winners.
