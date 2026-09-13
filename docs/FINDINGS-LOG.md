@@ -2041,3 +2041,25 @@ R1 (building): demote 12-19 to K4096 + promote 46-47 to d4-K4096,
 corpus-B is the risk arm (trough +1.19% vs ~−0.6% promo) and may net
 slightly worse — fallbacks measured next if so: the unprobed 20-31
 band, or shallower K8192 trough demotion.
+
+## F85 (2026-09-13) — R1 BEATS the shipped Flash-2.1 at iso-bytes: wikitext −1.08%, corpus-B flat, code −0.30%. The pre-registered prediction (−1.0%) hit within 0.08. First measured win of the geometry campaign.
+
+R1 = demote trough layers 12-19 (d8-K16384 -> K4096) + promote tail
+layers 46-47 (d8-K16384 -> d4-K4096), ~iso-byte (+0.02 bpw residual);
+30 modules refit from the bf16 teacher with the F80/F81 alternation
+recipe, everything else byte-identical to shipped:
+
+    corpus        base       R1         delta
+    wikitext-12k  5.8327     5.7698     −1.08%   (pre-reg: ~−1.0%)
+    corpus-B      8.3372     8.3394     +0.03%   (pre-reg risk: +0.6)
+    corpus-C code 1.4106     1.4063     −0.30%
+
+The U-curve arbitrage is real and composes roughly additively: trough
+bytes were ballast, tail bytes were starved, and moving them wins ~1%
+ppl at constant size. The whole rung was designed from four end-to-end
+probe measurements (F82-F84) — no proxies anywhere in the loop.
+
+OPEN LADDER (R2, unbuilt): more trough (20-31 unprobed), deeper trough
+demotion (K1024), more tail (44-45), d2 promotion of 47. Knee unknown —
+R1 is one rung, not the optimum. Ship path per policy: benchmarks +
+generation smoke on R1 (or the R2 winner), then Noah's call.
