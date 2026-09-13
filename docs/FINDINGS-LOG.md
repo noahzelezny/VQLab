@@ -1992,3 +1992,31 @@ end-to-end (no isolation proxies, per E10's own falsification).
 
 Ops: pack_bits must be set in vq_modules when changing geometry — the
 loader derives codes shape from it (unpacked when absent). Builder fixed.
+
+## F83 (2026-09-14 morning) — Flash's depth-cost curve is U-SHAPED: front demotion +3.2% (F82), early-mid nearly free (+0.13% wikitext), late expensive (+2.3%). The folklore U that GLM falsified is REAL on Flash.
+
+Band-cost probes, end-to-end (24 modules each demoted d8-K16384 ->
+d8-K4096, ~equal bytes saved, everything else shipped bytes):
+
+    arm                      wikitext-12k        corpus-B
+    base                     5.8327              8.3372
+    band A (layers 12-19)    5.8402  (+0.13%)    8.4364  (+1.19%)
+    band B (layers 32-39)    5.9682  (+2.32%)    8.5267  (+2.27%)
+    (R0: layers 0-1 front    +3.21%              +3.40%)
+
+Flash is depth-U: costly at both ends, cheap in the early-mid trough.
+Opposite of GLM's monotone-plus-tail-bump (E10/E12) — third family law
+shape measured (GLM anti-U-front, 397B tail-graded, Flash true-U).
+Per-family measurement is not optional; it flips sign across families.
+
+R1 design follows: fund tail/front promotion by demoting the trough.
+Byte arithmetic: K16384->K4096 saves 0.25 b/w; d8->d4-K4096 promotion
+costs +1.25 b/w; 5 trough layers fund 1 promoted layer. Band A's cost
+is not free on corpus-B (+1.19%), so promotion must buy more than that.
+NEXT (running): promote-only probe — tail layers 44-47 d8->d4-K4096
+(artifact grows; measures the promotion VALUE side of the ledger).
+
+Ops: builds crash ~8x per 24-module batch (GPU timeout in the K4096
+kmeans++ seeding loop, suspected — sequential small kernels); the retry
+supervisor absorbs all of them (~1 module redone per crash). Tolerable;
+fix the seeding loop's eval cadence if the campaign runs many more rungs.
