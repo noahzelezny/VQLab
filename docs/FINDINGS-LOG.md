@@ -2020,3 +2020,24 @@ Ops: builds crash ~8x per 24-module batch (GPU timeout in the K4096
 kmeans++ seeding loop, suspected — sequential small kernels); the retry
 supervisor absorbs all of them (~1 module redone per crash). Tolerable;
 fix the seeding loop's eval cadence if the campaign runs many more rungs.
+
+## F84 (2026-09-13) — tail promotion is worth −2.47% wikitext / −1.23% corpus-B: the largest quality gain of the campaign. Flash's tail was starved at uniform d8-K16384. R1 iso-byte rung launched.
+
+Promote-only probe: layers 44-47 experts d8-K16384 -> d4-K4096 (12
+modules, artifact grows ~1.25 b/w on those layers; pure value-side
+measurement):
+
+    corpus        base       tail-promoted
+    wikitext-12k  5.8327     5.6886   (−2.47%)
+    corpus-B      8.3372     8.2345   (−1.23%)
+
+Combined with F82/F83, the Flash U-curve now has magnitudes on both
+sides: front demotion +3.2%, trough demotion +0.13% (wiki), late
+demotion +2.3%, tail promotion −2.5%. The uniform d8 mass both wastes
+bits in the trough and starves the tail.
+
+R1 (building): demote 12-19 to K4096 + promote 46-47 to d4-K4096,
+~iso-byte (+0.02 bpw residual). PRE-REGISTERED: wikitext nets ~−1.0%;
+corpus-B is the risk arm (trough +1.19% vs ~−0.6% promo) and may net
+slightly worse — fallbacks measured next if so: the unprobed 20-31
+band, or shallower K8192 trough demotion.
