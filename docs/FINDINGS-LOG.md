@@ -2071,3 +2071,25 @@ piqa 0.819->0.825, winogrande 0.743->0.744 — net −0.2 pts, inside ±1.4
 noise. Generation smoke: coherent prose / correct code / correct facts.
 R1 is strict-or-equal on every gate instrument at iso-bytes. Ship vs
 climb-to-knee (R2) is Noah's open call; nothing published.
+
+## F86 (2026-09-13) — R2 ladder CLOSED: the trough is narrow (12-19 only) and shallow (K4096 only). Both funding probes are expensive; R1 is the knee. Ship candidate = R1.
+
+    probe (vs shipped base)          wikitext     corpus-B
+    P1: demote 20-31 -> K4096        +3.51%       +2.31%
+    P2: demote 12-19 -> K1024        +3.75%       +3.04%
+    (for reference: 12-19 -> K4096   +0.13%       +1.19%   F83)
+
+Band 20-31 costs like the late band, not like the trough — Flash's U has
+a floor only 8 layers wide. And the trough's cheapness is one step deep:
+K4096 (−0.25 b/w) is nearly free, K1024 (−0.5) costs 30x more. Strongly
+nonlinear in both axes. Total cheap funding available = 8 layers x 0.25
+b/w = 2.0 b/w-layers, which R1 already spends (2.5 on promoting 46-47).
+No remaining trade pays: every other byte source costs +2.3-3.8% to
+fund promotion worth ~−0.6%/layer.
+
+VERDICT: R1 is the measured knee of the iso-2.1bpw geometry ladder.
+Campaign search complete in 8 end-to-end probes (R0, bands A/B, tail
+promo, R1, P1, P2 + base refs). Ship candidate: art_flash_r1 — gate
+already complete (F85: ppl −1.08%/flat/−0.30%, benchmarks in noise,
+smoke clean). Awaiting Noah's ship call; remaining pre-ship nicety: the
+8bit reference bench row via the qwen4_exp streaming-scorer port.
