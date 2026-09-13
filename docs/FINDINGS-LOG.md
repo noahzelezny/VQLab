@@ -1926,3 +1926,22 @@ assembled as art_scalealt, four-corpus ppl vs art_xtpad. If it passes,
 this is a v2-train candidate for every rung; if it regresses, the
 distortion-to-ppl decoupling is deeper than the Gram family and that is
 its own finding.
+
+## F81 (2026-09-13 evening) — whole-model scale-alternation vs the ppl gate: MIXED and CONFOUNDED pending the control arm. Wikitext +0.27%, corpus-B −1.30% (the largest quality IMPROVEMENT of the campaign, but on one corpus).
+
+art_scalealt (all 120 modules refit: bf16 targets, 2M-subsample
+alternation fit, full-data LS scales; 0 crashes, ~51 s/module):
+
+    corpus            base (art_xtpad)   scalealt
+    wikitext-12k      5.4101             5.4248   (+0.27% worse)
+    corpus-B 10k      11.7484            11.5961  (−1.30% BETTER)
+
+CONFOUND, named before any conclusion: this arm changed BOTH the scale
+recipe AND the whole fit pipeline (fresh codebooks from bf16 targets,
+2M-subsample Lloyd — production's original fits differ in target and
+budget). The isolating control is running: art_lloydctl — identical
+pipeline with ALT=0 (max-abs scales, plain Lloyd, single assignment
+pass). Attribution table when it lands:
+  scalealt vs lloydctl  = the alternation's true whole-model effect
+  lloydctl vs art_xtpad = the refit-pipeline effect (incl. bf16 targets)
+No verdict until then; entry to be completed in place.
