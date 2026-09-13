@@ -1897,3 +1897,32 @@ Next unsupervised lever, running now: scale<->codebook alternation
 (scale_alt_probe.py) — per-group least-squares scale refit alternated
 with s^2-weighted Lloyd; the max-abs scale recipe is the one inherited,
 never-optimized component. Same modules, same bar.
+
+## F80 (2026-09-13) — scale<->codebook alternation CLEARS the pre-registered bar: +2.83% median held-out distortion, 10/10 modules, uniform 2.79-3.16%. The max-abs scale recipe was the never-optimized component.
+
+Same ten modules and harness as F79 (scale_alt_probe.py). Baseline =
+production recipe refit fresh (max-abs group scales + Lloyd, pipeline-
+fair). Alternation = codes argmin / per-group least-squares scale
+(s* = <w,c>/<c,c>) / s^2-weighted Lloyd step, 12 rounds; scored as
+ACTUAL-domain held-out MSE with one LS scale step on the eval groups:
+
+    gain vs baseline: +2.79 … +3.16%, median +2.83%  (bar: 2%). PASSES.
+
+Uniformity across layers and proj types says this is structural, not a
+per-module accident: max-abs scaling systematically over-scales groups
+whose max element is an outlier relative to the group's code-vector
+match. ~47x the annealing effect (F79) for the same probe cost.
+
+WHY THIS ONE MAY SURVIVE THE GATE WHERE RE-SELECTION DIED: it is
+direction-isotropic and unsupervised on weights — the same objective
+family the shipping fits already pass the gate with — just with the
+scale variable finally inside the optimization instead of fixed by
+heuristic. No activation Gram, no teacher, no importance weighting.
+Ships as data in the SAME vq_scales slots; bit-exact runtime.
+
+THE ONLY VERDICT THAT COUNTS is still ppl (F78 discipline). Whole-model
+35B arm launched: all 120 modules alternation-refit from bf16 targets,
+assembled as art_scalealt, four-corpus ppl vs art_xtpad. If it passes,
+this is a v2-train candidate for every rung; if it regresses, the
+distortion-to-ppl decoupling is deeper than the Gram family and that is
+its own finding.
