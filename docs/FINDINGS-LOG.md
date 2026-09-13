@@ -1792,3 +1792,38 @@ Candidate causes, separable, both arms launched tonight:
 
 NOT shipped, nothing published; the recipe's ship/no-ship is BLOCKED on
 these two arms per the standing gate.
+
+## F77 (2026-09-12 evening) — the bf16-target arm CLEARS the teacher: the ppl regression persists with true bf16 targets (+0.42% wikitext, +0.75% corpus-B). Both F76 causes eliminated; the damage is in the objective or its calibration distribution.
+
+Identical recipe to F71's arm with ONE change: re-selection targets from
+the true bf16 weights (Teacher Models/, HDD) instead of affine-8bit
+dequant. art_reselect_bf16 assembled and scored on the same instrument:
+
+    35B arm                  wikitext-12k          corpus-B (technical)
+    base (art_xtpad)         5.4101                11.7484
+    resel, affine targets    5.4360  (+0.48%)      11.8009  (+0.45%)
+    resel, BF16 targets      5.4329  (+0.42%)      11.8370  (+0.75%)
+
+Teacher noise is NOT the cause — chasing the 8bit dequant's last 0.4% was
+a red herring (cos 0.99997 said as much). Combined with F76's corpus-B
+result (not domain shift), what remains is: G-weighted weight-space
+re-selection toward ANY teacher, calibrated on self-generated tokens,
+improves teacher-KL and its tails while consistently degrading real-text
+NLL by ~0.5% (35B) to ~2% (Flash-2.1). The output-space error metric that
+graduated F67-F70 is ITSELF a proxy, and it inverts against ppl — the
+F65/F66 caveat discipline biting the finding that invoked it.
+
+LAST SEPARATION before the verdict (running overnight): corpus-calibrated
+Grams (real text, same 8k budget) instead of self-generated. F70 compared
+the two calibrations only on output-space error, never on ppl; the
+self-gen temp-1.0 mode bias is the one recipe component not yet cleared.
+If corpus Grams pass the gate, the recipe survives minus the data-free
+claim; if not, code re-selection as a family does not ship in v2 and the
+finding is "teacher-matching under an activation Gram does not track NLL
+at 2-3.4 bpw" — a real paper-grade negative.
+
+OPS: 4 GPU-timeout crashes during re-selection beside the 360 GB Flash
+bf16 download (file-cache pressure; exo idle, GPU otherwise empty) — the
+retry-supervisor + per-module checkpoints pattern absorbed all of them at
+~1 module lost per crash. That pattern is now the standing way to run
+Gram/argmin stages while the HDD is busy.
