@@ -1,27 +1,117 @@
-# Model-family ledger — what exists, per family
+# Model-family ledger — what exists, per family, WITH the numbers
 
-One reference table: families as rows; rungs, geometry, gates, bench
-rows, fit assets, and pending work as columns. Every geometry cell below
-was read from the artifact's config on 2026-09-13 (not from memory);
-bench cells name only rows that exist on disk in a known harness.
-Update this file when a rung ships or a fit lands — it goes stale the
-day someone doesn't.
+Families as rows; per family the released rungs, config-verified
+geometry, and every ppl / task-bench number that exists on disk, with
+its harness and WHICH VERSION of the artifact it measured. Geometry
+cells read from artifact configs 2026-09-13. Numbers copied from the
+named result files — nothing reconstructed from memory.
 
-Version vocabulary: **arc6 runtime** = the 2026-09-09 fleet republish
-(all 20 Hub repos, gate-smoked). **v2 mixed-geometry** = a rung whose
-expert geometry was set by the measured ladder process rather than
-uniform/hand-set. Per Noah: released-as-v2 so far = GLM (no v1 existed)
-and the 397B small rung.
+Version vocabulary: **v1** = pre-mixed-geometry builds (some carried
+the same repo names/bpw as their v2 replacements — bench rows must say
+which they scored). **v2 mixed** = expert geometry set by the measured
+ladder process. **arc6** = the 2026-09-09 runtime republish (all 20
+repos). Released as v2 so far: GLM (no v1 existed) + 397B small rung.
 
-| family | released rungs (bpw) | expert geometry (config-verified) | mixed-geo status | ppl rows on hand | task-bench rows on hand | fit assets on disk | pending |
-|---|---|---|---|---|---|---|---|
-| **GLM-5.3-Flash** | 2.7 / 3.1 / 3.6 | 2.7: K512×102+K2048×24 · 3.1: K512/K2048/K8192 three-tier · 3.6: K8192×111+K16384×15 (all d4) | **v2 mixed (ladder-derived)** | ladder-era ppl tables in quantlab/EXPERIMENTS.md (E8–E13b; affine-study artifacts — VQ-rung ppl lives on the HF cards, unaudited here) | none found on disk — HF cards unaudited | glm53_vq_fit d4 K512(+seedB)/K2048/K8192/K16384-partial, d8k16384 (SSD) | none open |
-| **Qwen3.5-397B** | 2.2 / 2.4 / 2.6 / 3.1 | 2.2: d8-K16384×151 + d4-K256×20 + d4-K2048×9 · 2.4/2.6/3.1: FLAT (d4 K256/K512/K2048) | **2.2 = v2 mixed**; larger rungs flat | championship-ladder ppl in quantlab/EXPERIMENTS.md (E24–E29, 60k-char wikitext, MlxRing harness) | hellaswag/piqa/winogrande JSONs: AgenicAI/quantlab/results_tasks/ (VQ-2.2/2.4/3.1 + spicyneuron comparators) | codebooks in-artifact; HDD demote_fit-d4/d8; bf16 on SSD | flagship VQ swap still Noah's call (older thread) |
-| **Qwen3.6-35B** | 3.4 / 3.8 / 4.6 / 5.4 | 3.4: flat d4-K2048 · 3.8: flat d4-K8192 · 4.6: d4-K2048×30 + d2-K512×90 · 5.4: flat d2-K1024 | 4.6 mixed (provenance unaudited); rest flat | base + reselect arms, wikitext/B/C (scratch) | hellaswag/piqa/winogrande ×2 arms (bench_venv, direct) | codebooks in-artifact ONLY; bf16 teacher on HDD | alternation+bf16 refit candidate (F81, gate-safe, minor); geometry ladder never run on this family |
-| **Qwen3.8-27B** (dense) | 3.9 / 4.5 / 4.8 | vq_linear schema: 4.5 = flat d2-K256×192 (others unaudited) | flat | none on disk | none on disk | unaudited | schema differs (vq_linear/vq_embed) — audit before touching |
-| **Qwen3.8-Flash-Next** | 2.1 / 3.2 / 4.4 / 5.5 | 2.1: d2-K256×6(front)+d8-K16384×138 · 3.2: d2×18+d4-K2048×126 · 4.4: d2-K1024×18+d2-K256×126 · 5.5: flat d2-K1024 | hand-set front-protection mixes; **NOT ladder-derived** | base/R0/R1/bands/promo ×3 corpora (scratch) | **one-harness table: 8bit ref + base + R1** (streamed, results_bench3) | qwen4exp_vq_fit d2k256/d2k1024/d8k16384/full + hot6/quiet + PLE fits (SSD); bf16 on HDD | **art_flash_r1 = ship candidate** (F85/F86, gate green, awaiting Noah); other rungs' knees unmeasured |
-| **gemma-4-26b** | 6.2 | flat d2-K2048×90 | flat | GEMMA4_PPL_ANOMALY.md (caveats apply) | struct-sweep rows: quantlab/results_crush/ | unaudited | none open |
-| **gemma-4-e4b PLE** | 1 repo | vq_ple (no expert vq_modules) | n/a | none on disk | none on disk | qwen4exp_ple_fit* family (SSD) | none open |
+## Summary matrix
+
+| family | rungs (bpw) | mixed-geo status | ppl data | task-bench data | fit assets | pending |
+|---|---|---|---|---|---|---|
+| GLM-5.3-Flash | 2.7/3.1/3.6 | **v2 mixed** (ladder) | **NONE — never benched** | **NONE — never benched** | full fit ladder on SSD | bench pass is the open gap |
+| Qwen3.5-397B | 2.2/2.4/2.6/3.1 (+3bpw card G) | 2.2 & G = v2 mixed; 2.4/2.6/3.1 flat | card-G one-harness table (below) | **V1 artifacts only** (below) | in-artifact + HDD demote fits + bf16 | re-bench v2 artifacts; flagship swap (Noah) |
+| Qwen3.6-35B | 3.4/3.8/4.6/5.4 | 4.6 mixed (unaudited); rest flat | 3.4 rung, this week (below) | 3.4 rung, this week (below) | in-artifact only + bf16 teacher | geometry ladder never run; alternation candidate (F81) |
+| Qwen3.8-27B (dense) | 3.9/4.5/4.8 | flat (vq_linear schema) | none | none | unaudited | audit before touching |
+| Qwen3.8-Flash-Next | 2.1/3.2/4.4/5.5 | hand-set front mixes, NOT ladder | 2.1 rung full grid (below) | **one-harness incl 8bit ref** (below) | full fit set on SSD + bf16 teacher | **art_flash_r1 ship candidate**; other rungs' knees unmeasured |
+| gemma-4-26b | 6.2 | flat | anomaly-caveated (GEMMA4_PPL_ANOMALY) | struct-experiment rows only (results_crush); shipped rung unbenched | unaudited | none open |
+| gemma-4-e4b PLE | 1 repo | n/a | none | none | PLE fit family on SSD | none open |
+
+---
+
+## GLM-5.3-Flash — geometry (v2 mixed, ladder-derived)
+
+2.7bpw: d4 K512×102 + K2048×24 · 3.1: d4 K512×51 + K2048×24 + K8192×51
+· 3.6: d4 K8192×111 + K16384×15.
+**No ppl or task benchmark has ever been run on any GLM VQ rung** (per
+Noah, confirmed: nothing on disk). Fits survive (glm53_vq_fit d4
+K512(+seedB)/K2048/K8192/K16384-partial, d8k16384 — SSD), and the
+resident ppl instrument + streaming bench harness both apply directly.
+This is the ledger's largest open gap.
+
+## Qwen3.5-397B
+
+Geometry: 2.2bpw = d8-K16384×151 + d4-K256×20 + d4-K2048×9 (**v2
+mixed**) · 2.4/2.6/3.1 = flat d4 K256/K512/K2048 (v1-era allocation).
+
+**ppl — card G one-harness table** (unmodified mlx-lm, prefix-8192;
+quantlab/MODEL_CARD_397B_G.md, artifact = the v2 3bpw "G"):
+
+| | G (143.7 GiB, v2) | spicyneuron 3.5bit (165.6) | prior VQ-3.1 (143.7) |
+|---|---|---|---|
+| wikitext | **2.3410** | 2.3614 | 2.3519 |
+| code | **2.5963** | 2.6005 | 2.5987 |
+
+(Championship-ladder era rows, same wikitext family: tail30 2.3982 —
+E24–E29 in EXPERIMENTS.md.)
+
+**Task benches — V1 ARTIFACTS ONLY** (lm-eval, 1000 items, 0-shot;
+AgenicAI/quantlab/results_tasks/; hs/piqa = acc_norm, wino = acc). The
+repo names match current rungs but these scored the PRE-mixed builds:
+
+| artifact (v1) | hellaswag | piqa | winogrande |
+|---|---|---|---|
+| VQ-2.2bpw | 0.861 | 0.841 | 0.787 |
+| VQ-2.4bpw | 0.883 | 0.844 | 0.784 |
+| VQ-3.1bpw | 0.903 | 0.840 | 0.780 |
+| spicyneuron 2.6bit | 0.880 | 0.841 | 0.771 |
+| spicyneuron 3.5bit | 0.904 | 0.846 | 0.767 |
+
+No task rows exist for any v2 397B artifact.
+
+## Qwen3.6-35B
+
+Geometry: 3.4 flat d4-K2048 · 3.8 flat d4-K8192 · 4.6 = d4-K2048×30 +
+d2-K512×90 (provenance unaudited) · 5.4 flat d2-K1024.
+
+**3.4 rung, current artifact, this week's instruments**
+(scripts/score_ppl_resident.py; benches F71 card protocol, 1000 items):
+
+| | shipped 3.4 | notes |
+|---|---|---|
+| wikitext-12k ppl | 5.4101 | refit-from-bf16 control 5.4153; alternation 5.4248 (F81) |
+| corpus-B ppl | 11.7484 | refit 11.6625; alternation 11.5961 |
+| hellaswag / piqa / winogrande | 0.741 / 0.828 / 0.736 | re-selected arm 0.735/0.835/0.747 (F71; both within noise) |
+
+3.8 / 4.6 / 5.4 rungs: no rows.
+
+## Qwen3.8-Flash-Next
+
+Geometry: 2.1 = d2-K256×6(front) + d8-K16384×138 · 3.2 = d2×18 +
+d4-K2048×126 · 4.4 = d2-K1024×18 + d2-K256×126 · 5.5 = flat d2-K1024.
+Hand-set front-protection mixes — R0 (F82) proved the front protection
+CORRECT, but no rung is ladder-derived.
+
+**2.1 rung ppl grid** (resident instrument, this campaign):
+
+| arm | wikitext-12k | corpus-B | code |
+|---|---|---|---|
+| shipped 2.1 | 5.8327 | 8.3372 | 1.4106 |
+| **R1 (measured knee, ship candidate)** | **5.7698 (−1.08%)** | 8.3394 | 1.4063 |
+| probes: R0 front-demote | +3.21% | +3.40% | +0.56% |
+| trough 12-19→K4096 / late 32-39→K4096 | +0.13% / +2.32% | +1.19% / +2.27% | — |
+| tail-promote 44-47 (non-iso) | −2.47% | −1.23% | — |
+
+**Task benches — ONE-HARNESS TABLE incl the 8bit reference** (streamed
+qwen4_exp harness b256, 1000 items; results_bench3/; F87 forbids mixing
+harnesses on this family):
+
+| | 8bit ref (178 GB) | shipped 2.1 | R1 |
+|---|---|---|---|
+| hellaswag (acc_norm) | 0.792 | 0.747 | 0.738 |
+| piqa (acc_norm) | 0.835 | 0.819 | 0.825 |
+| winogrande | 0.719 | 0.743 | 0.744 |
+
+3.2 / 4.4 / 5.5 rungs: no rows.
+
+---
 
 ## Depth-law card (why mixes can't be copied across families)
 
@@ -29,21 +119,20 @@ and the 397B small rung.
 |---|---|---|
 | GLM-5.3 | front lobe = ballast; value in tail; attention protected everywhere | E10/E12/E13b (affine ladders) |
 | 397B | tail-graded, knee ~tail30 | E24–E29 |
-| Flash-Next | **true U**: front (0-1) and late (32+) expensive, trough 12-19 cheap — and only one K-step deep | F82/F83/F84/F86 (end-to-end VQ probes) |
+| Flash-Next | **true U**: front (0-1) and late (32+) expensive; trough 12-19 cheap, one K-step deep | F82–F86 (end-to-end VQ probes) |
 | 35B / 27B / gemma | **unmeasured** | — |
 
 ## Codebook portability
 
 Codebooks are per-module tensors inside each artifact — mix-and-match
-within a family = copying module tensors (the diff-builder's whole
-mechanism, `scratchpad/flash_geo_build.py`, GEOMAP-driven, set
-pack_bits). Nothing is unrecoverable since the bf16 teachers were
-archived (`/Volumes/Thunderbay HDD/Teacher Models/`, 35B + Flash-Next;
-397B bf16 on the SSD): any missing geometry refits at ~1-5 min/module.
+within a family = copying module tensors (`scratchpad/flash_geo_build.py`,
+GEOMAP-driven; set pack_bits). Nothing is unrecoverable since the bf16
+teachers were archived (HDD `Teacher Models/`: 35B + Flash-Next; 397B
+bf16 on the SSD): missing geometries refit at ~1-5 min/module.
 
 ## Bench-row comparability (F87)
 
 qwen4_exp loglikelihoods shift 0.1-0.7 nats with batch composition IN
-THE UPSTREAM FORWARD. Flash rows are comparable only within one harness
-+ one batching; the streamed harness (score_tasks_q4exp.py, b256) is
-the canonical one and is the only way to score the 178 GB 8bit ref.
+THE UPSTREAM FORWARD. Flash rows compare only within one harness + one
+batching; the streamed harness (score_tasks_q4exp.py, b256) is
+canonical and the only way to score the 178 GB 8bit ref.
