@@ -1965,3 +1965,30 @@ SHIP QUESTION (Noah's call, per policy): alternation + bf16-target refit
 is a v2-train candidate — same bits, same runtime, pure data swap in
 existing slots — carried per-rung through the standard release gate
 (ppl + benchmarks + generation smoke). Not shipped from this session.
+
+## F82 (2026-09-13 night) — Flash geometry campaign R0: the front d2 protection is REAL, not ballast. Removing it costs +3.2-3.4% ppl. The GLM depth law does NOT transfer to Flash.
+
+R0 (ballast test): the 6 layers-0/1 d2-K256 modules refit as d8-K16384
+from the bf16 teacher (F80/F81 recipe), all other modules byte-identical
+to shipped; artifact shrinks ~175 MB. Three corpora, one instrument:
+
+    corpus        base (2.1bpw)   R0 front-demoted
+    wikitext-12k  5.8327          6.0202   (+3.21%)
+    corpus-B      8.3372          8.6206   (+3.40%)
+    corpus-C code 1.4106          1.4186   (+0.56%)
+
+Unambiguous on all three: Flash's early expert layers need their 4 b/w.
+The E12 GLM finding ("the front lobe is ballast, all depth value lives
+in the tail") does not transfer — exactly the family-dependence E13b
+recorded. Plausible mechanism: the GDN linear-attention stack does not
+launder early quantization noise the way GLM's attention stack does.
+The hand-set d2 protection in the shipped 2.1bpw mix is VALIDATED.
+
+Consequence for the tail ladder (R1): no free bytes from the front, and
+the demotion side of any iso-byte rung is now the risk to measure, not
+an assumption. Next rung queued: band-cost probe — demote two mid bands
+separately (K16384 -> K4096), read ppl-cost-per-byte-saved by depth,
+end-to-end (no isolation proxies, per E10's own falsification).
+
+Ops: pack_bits must be set in vq_modules when changing geometry — the
+loader derives codes shape from it (unpacked when absent). Builder fixed.
