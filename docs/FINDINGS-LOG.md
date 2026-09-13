@@ -1941,7 +1941,27 @@ recipe AND the whole fit pipeline (fresh codebooks from bf16 targets,
 2M-subsample Lloyd — production's original fits differ in target and
 budget). The isolating control is running: art_lloydctl — identical
 pipeline with ALT=0 (max-abs scales, plain Lloyd, single assignment
-pass). Attribution table when it lands:
-  scalealt vs lloydctl  = the alternation's true whole-model effect
-  lloydctl vs art_xtpad = the refit-pipeline effect (incl. bf16 targets)
-No verdict until then; entry to be completed in place.
+pass). COMPLETED same night — full attribution, three corpora, one instrument:
+
+    arm                        wikitext-12k   corpus-B      corpus-C(code)
+    base (production fits)     5.4101         11.7484       —
+    lloydctl (refit, max-abs)  5.4153         11.6625       1.3825
+    scalealt (refit + alt)     5.4248         11.5961       1.3811
+    ALTERNATION ISOLATED       +0.18%         −0.57%        −0.10%
+    refit-pipeline effect      +0.10%         −0.73%        —
+
+VERDICT: the alternation is GATE-SAFE and modestly positive — better on
+2 of 3 corpora, and its one negative (+0.18% wikitext) is half the
+smallest effect this campaign has treated as real (re-selection's
++0.42%, consistent across corpora; this one sign-flips). This is NOT the
+F78 failure shape. −2.83% held-out distortion (F80) bought roughly
+ppl-neutral prose and ~0.1−0.6% better technical/code text.
+
+Also real and unclaimed: the refit-pipeline effect itself (bf16 targets
++ fresh Lloyd) improved corpus-B by −0.73% at +0.10% wikitext — the
+production fits are NOT at today's pipeline floor.
+
+SHIP QUESTION (Noah's call, per policy): alternation + bf16-target refit
+is a v2-train candidate — same bits, same runtime, pure data swap in
+existing slots — carried per-rung through the standard release gate
+(ppl + benchmarks + generation smoke). Not shipped from this session.
