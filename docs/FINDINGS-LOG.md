@@ -1871,3 +1871,29 @@ free — that reasoning is now void).
 Assets kept: bf16 teachers archived on HDD (Teacher Models/), full Gram
 banks, all four assembled artifacts (scratch), the retry-supervisor
 pattern, and per-position KL tooling (F73). Nothing was published.
+
+## F79 (2026-09-13) — annealed k-means is a NULL: −0.06% median vs plain Lloyd (pre-registered bar was 2%). Lloyd is already at the distortion floor at these K/d; the local-minima story does not apply.
+
+Ten 35B modules (layers 3-39, gate/up/down cycled), one harness
+(scratchpad/anneal_probe.py): bf16 fit targets, production max-abs
+scaling, 2M fit / 2M held-out subvectors, assignments free per arm.
+Deterministic annealing (15 soft-EM iters, beta doubling, 10 hard
+finish) vs fresh Lloyd (k-means++ + 25 iters), identical init:
+
+    annealed vs lloyd, held-out MSE: −0.12 … −0.01% (10/10 slightly
+    WORSE), median −0.06%. Pre-registered bar: +2%. DEAD.
+
+At 2M points per 2048 centroids in 4-d the Lloyd landscape is
+effectively benign — nothing for annealing to escape. The "better
+optimizer, same objective" thread closes for the fleet geometries.
+
+Incidental, flagged with its confound: fresh Lloyd beat the SHIPPED
+codebooks by +0.74…+1.10% held-out on every module — but shipped books
+are being scored on THIS probe's data domain (bf16 targets + this scale
+recipe), which the fresh fits trained on exactly. Home-field; treat as
+an upper bound on any refit gain, not as a finding (the F70 lesson).
+
+Next unsupervised lever, running now: scale<->codebook alternation
+(scale_alt_probe.py) — per-group least-squares scale refit alternated
+with s^2-weighted Lloyd; the max-abs scale recipe is the one inherited,
+never-optimized component. Same modules, same bar.
