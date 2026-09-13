@@ -2116,3 +2116,18 @@ CONSEQUENCE (one-harness law): Flash benchmark rows are comparable only
 within one path + one batching. The 8bit reference row therefore forces
 ALL Flash card rows through the streamed harness at b256 — 8bit, shipped
 2.1bpw, and R1 (running).
+
+F87 ADDENDUM — the one-harness Flash card table landed (streamed b256,
+1000 items, 0-shot; results_bench3/):
+
+    task                8bit ref   shipped-2.1   R1
+    hellaswag acc_norm  0.792      0.747         0.738
+    piqa acc_norm       0.835      0.819         0.825
+    winogrande          0.719      0.743         0.744
+
+First-ever 8bit reference row (178 GB scored on one box via the
+qwen4_exp streaming port). Cross-check: both VQ rows reproduce their
+direct-path scores EXACTLY through the streamed path — the port is
+task-level equivalent at matched batching. 2.1bpw sits ~1-2 pts under
+8bit on average at 27% of the bytes (and above it on winogrande, within
+±1.4 noise). R1 vs shipped: within noise, consistent with F85.
