@@ -2063,3 +2063,11 @@ OPEN LADDER (R2, unbuilt): more trough (20-31 unprobed), deeper trough
 demotion (K1024), more tail (44-45), d2 promotion of 47. Knee unknown —
 R1 is one rung, not the optimum. Ship path per policy: benchmarks +
 generation smoke on R1 (or the R2 winner), then Noah's call.
+
+F85 ADDENDUM (same day) — R1's release-gate profile is COMPLETE and clean:
+benchmarks (card protocol, 1000 items, flashbench overlay venv: exo's
+patched mlx_vlm + pinned lm_eval 0.4.12): hellaswag 0.747->0.738,
+piqa 0.819->0.825, winogrande 0.743->0.744 — net −0.2 pts, inside ±1.4
+noise. Generation smoke: coherent prose / correct code / correct facts.
+R1 is strict-or-equal on every gate instrument at iso-bytes. Ship vs
+climb-to-knee (R2) is Noah's open call; nothing published.
