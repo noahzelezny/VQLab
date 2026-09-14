@@ -2391,3 +2391,57 @@ L31/L36/L39, mild on L29/L30/L32-L35/L37/L38, demotion taken from the
 measured bottom (L3/8/9/10/11/45/46) rather than a guessed trough. A pure
 SHAPE comparison at identical bytes: if the map-designed build beats
 F92's, the instrument is validated as the design tool and analogy retires.
+
+## F94 (2026-09-13) — the leverage map did NOT beat analogy at matched bytes: prose −1.37% vs −2.05%, literary −1.85% vs −1.28%. Two candidate causes, and one is E12's anti-correlation reproduced on Flash; the other is that I ranked by the wrong column.
+
+Matched-byte shape comparison (+4.0 b/w-layers both, house corpora, one
+instrument):
+
+    arm                       GiB      prose     code      literary
+    shipped 2.1 (v1)        45.78     --        --        --
+    iso-byte v2 (F85)       45.81    -1.08%    -0.44%     +0.22%
+    graded, BY ANALOGY      46.49    -2.05%    -0.53%     -1.28%
+    mapped, BY local_rel    46.53    -1.37%    -0.31%     -1.85%
+
+The map-designed allocation LOSES on the very corpus its map was measured
+on (prose), and wins on the one it never saw (literary). So the ranking is
+not simply "better" or "worse" — it is measuring something other than
+end-to-end prose damage.
+
+CANDIDATE 1 — E12's anti-correlation, reproduced. quantlab E12 (08-10,
+GLM): "isolation KL measured exactly backwards along depth (anti-signal,
+not noise) because probing one early layer against an intact network is
+the condition where downstream laundering hides the damage best... early
+quant noise is absorbed by the downstream stack; late noise lands raw on
+the logits." `layer-leverage`'s `local_rel` IS an isolation measure (both
+blocks fed the TEACHER's hidden state, no compounding). The analogy build
+put its heavy bits in the TAIL (45-47) and won prose; the map put them
+mid-band (31/36/39) where isolation damage peaks, and lost. Same shape as
+E12, now on a different family and a different quantizer.
+
+CANDIDATE 2 — I USED THE WRONG COLUMN. layer_leverage.py's own docstring
+says the leverage signal is the trajectory JUMP, not local damage:
+"traj_rel ... accumulated drift; **a JUMP between consecutive layers marks
+a high-leverage layer**". I ranked by `local_rel`. The measured jump
+ranking is L1 >> L30, L31, L32, L35, L29, L28, **L47**, L21, L33 — and
+L47 is one of the layers the winning analogy build promoted, while
+local_rel ranked it 24th. The two columns disagree exactly where the two
+builds disagree.
+
+These are not exclusive: the jump column is a compounding (end-to-end-ish)
+measure and the local column is an isolation measure, which is precisely
+the distinction E12 drew. If the jump-ranked build wins, both candidates
+resolve into one statement and the tool's documented reading is vindicated
+(the failure was mine, not the instrument's).
+
+RUNNING: third matched-byte build, +4.0 b/w-layers, allocated by
+trajectory JUMPS — heavy L30/L31/L32, mild L21/L28/L29/L33/L34/L35/L36/L47,
+demotion from the measured bottom. Three shapes, one byte budget, one
+instrument.
+
+STANDING CAUTION REINFORCED: `layer_leverage.py` says in its own header it
+is "a RANKING instrument for allocation decisions, not a quality score...
+the verdict on any mixed build is still the referee + KL scorer." Read the
+tool's caveats, then read them again — this is the third proxy this week
+(F78 output-space, F88 distortion, now isolation damage) whose ranking did
+not transfer to the gate metric.
