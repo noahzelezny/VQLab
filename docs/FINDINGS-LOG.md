@@ -2131,3 +2131,33 @@ direct-path scores EXACTLY through the streamed path — the port is
 task-level equivalent at matched batching. 2.1bpw sits ~1-2 pts under
 8bit on average at 27% of the bytes (and above it on winogrande, within
 ±1.4 noise). R1 vs shipped: within noise, consistent with F85.
+
+## F88 (2026-09-13) — the 3.2bpw rung has the SAME U-shape as 2.1, but the arbitrage is ~5x thinner. Quality headroom shrinks fast with bpw — the lowest rung is where the squeeze pays.
+
+Same probe protocol as F82-F84, applied to Flash-Next-VQ-3.2bpw (body
+d4-K2048, 18 d2 front modules). At this rung demote/promote are both
+±0.5 b/w, so funding is 1:1 (vs 5:1 at 2.1bpw).
+
+    arm                                wikitext-12k      corpus-B
+    base (shipped 3.2)                 4.9949            7.5285
+    demote 12-19 K2048->K512           5.0048 (+0.20%)   7.5579 (+0.39%)
+    demote 32-39 K2048->K512           5.0722 (+1.55%)   7.5019 (-0.35%)
+    promote 44-47 K2048->K8192         4.9810 (-0.28%)   7.5088 (-0.26%)
+
+The U repeats: trough 12-19 cheap, late band 32-39 expensive on
+wikitext (7.7x the trough's cost), tail promotion pays. But every
+magnitude is far smaller than the 2.1 rung's (trough +0.13 vs +0.20 is
+comparable; late +2.32 vs +1.55; tail promotion **-2.47% vs -0.28%**,
+a 9x collapse).
+
+READ: geometry arbitrage is a LOW-BPW phenomenon. At 3.2bpw the codebook
+already resolves the weight distribution well enough that adding bits to
+the tail buys little, so there is far less to move. Projected iso-byte
+R1-analog for this rung: ~-0.3% wikitext (8 trough demoted funds 8 tail
+promoted), vs -1.08% measured at 2.1bpw. Worth building and gating, but
+this is the shape of diminishing returns, and it predicts 4.4/5.5 are
+not worth probing at all.
+
+CONSEQUENCE FOR THE PRODUCT: the 64GB-tier rung (2.1bpw, 48 GiB) is
+exactly where the measured-geometry work pays most, which is also where
+Noah wants the quality. R1 stands as the campaign's headline artifact.
