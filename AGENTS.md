@@ -30,7 +30,7 @@ grep -rli "<the concept>" src/vqlab/ docs/ research/quantlab/
 
 | question | use this | NOT |
 |---|---|---|
-| which layers deserve more bits? | `vqlab layer-leverage` (per-layer damage vs a bf16 teacher; qwen4_exp supported) | hand-rolled band ablations |
+| which layers deserve more bits? | `vqlab layer-leverage` — **rank by the JUMP in `traj_rel`, NOT by `local_rel`** (F95: local_rel is isolation damage and is anti-signal; jump-ranked beat it by 0.7-1.0 pt on every corpus) | hand-rolled band ablations |
 | how much damage does this artifact carry? | `vqlab score` / `kl_damage.py` | ad-hoc KL scripts |
 | ppl on the house corpora | `scripts/score_ppl_resident.py` + the THREE corpora in `src/vqlab/referee/` (prose / code-public / literary) | your own corpus files |
 | task benchmarks | `research/quantlab/score_tasks_streaming.py` (layer-streamed; scores models larger than RAM) | a new eval harness |
@@ -59,6 +59,10 @@ good: every past agent who needed something added it here.
 * **Perplexity is deterministic.** Re-scoring an artifact returns the same
   number; it cannot estimate a noise floor. A fit-to-fit floor requires a
   SECOND INDEPENDENT FIT of the same recipe.
+* **Isolation probes are anti-signal for allocation.** Measuring one
+  layer's damage against an intact network is the condition where
+  downstream laundering hides it (quantlab E12 on GLM/affine; F93-F95 on
+  Flash/VQ). Use compounding/trajectory measures.
 * **Rank allocation by KL, not ppl.** Ppl aggregates and absorbs offsetting
   errors. Ppl is the RELEASE GATE; KL is the ranking instrument.
 * **One harness.** Never compare a number from one scoring path against
