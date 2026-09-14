@@ -2640,3 +2640,43 @@ METHOD NOTE: F96 reached "needs kernel work" by reasoning about the
 format in isolation. One query across the fleet's configs — 20 seconds —
 showed 18 artifacts already solving it and named the real cause. Audit
 the fleet before scoping an engineering change.
+
+## F98 (2026-09-14) — CORRECTS F96(1): "Flash has less iso-byte headroom than the 397B" was never established. Every Flash arm compared against the 397B's −3.5% used a DIFFERENT strategy. The first like-for-like build is only now running.
+
+F96 wrote: "Flash-2.1's iso-byte headroom is ~1%, against the 397B-2.2
+v2's −3.5% at iso-byte. Plausible cause: Flash ALREADY ships d8-K16384."
+That inference is invalid, and Noah named the reason: the two sides ran
+different recipes.
+
+    397B-2.2 v2 (the −3.5% reference)
+      three-tier GRADED per-layer allocation across the expert mass:
+      d8-K16384 baseline x151, d4-K256 x20 on eleven mid-late layers,
+      d4-K2048 x9 on the last three. Per-layer, both directions.
+
+    every Flash arm measured before today
+      F85  two-tier: demote 8 trough layers, promote 2 tail layers
+      F92  three-tier BY ANALOGY, promotion placed by guess (heavy tier
+           landed on two bottom-10 layers, F93)
+      F94  one tier, ranked by the WRONG column (local_rel)
+      F96  UNIFORM geometry correction on down_proj, no allocation at all
+
+None of those is the 397B's recipe. Comparing their deltas to −3.5% and
+concluding "Flash has less headroom" compares STRATEGIES, not models —
+the same class of error as F89 (comparing a flat refit to a mixed rung)
+and F96's own +0.75 GiB-vs-iso-byte mix-up. Three instances in two days
+of a comparison whose two sides were not the same kind of thing.
+
+WHAT IS ACTUALLY UNKNOWN: whether Flash-2.1 has less allocation headroom
+than the 397B did. RUNNING: the first honest test — full per-layer v2,
+both module families graded from the averaged prose+code leverage map
+(the two maps agree, r=0.931):
+
+    HOT  L30,31      gate/up d4-K4096   down d4-K512
+    WARM L27,28,29,32,35  gate/up d4-K256   down d4-K256
+    BASE 27 layers   gate/up d8-K16384  down d4-K256
+    COLD 12 layers   gate/up d8-K16384  down d4-K128
+    front L0,L1 d2-K256 untouched (load-bearing, F82)
+
+138 modules, every nsub%%32==0 (zero dead bytes, F97), projected 45.82 GiB
+vs shipped 45.78. Scored on the CARD's instrument (2048 tokens) so the
+number is comparable to a published row, not just to my own.
