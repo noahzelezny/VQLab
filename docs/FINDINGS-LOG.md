@@ -2555,7 +2555,37 @@ words' worth. gate/up (IN=2560, nsub=320) divide evenly and pad nothing.
   build above came out 0.47 GiB SMALLER than the base. **Budget from
   measured packed bytes, never from nominal bits/weight.**
 
-NEXT: swap all down_proj to d4-K256 (smaller artifact, exact packing) and
-gate it. If quality holds, the shipped rung gets ~0.5 GB smaller for free
-and the reclaimed budget funds promotion elsewhere. This is the first
-lever this week that improves size and quality independently.
+### (3) CAN THE SLACK HOLD MORE INFORMATION? No — not by raising K.
+### (Noah's question, worked out; it further retracts the framing above.)
+
+The format charges per 32-subvector BLOCK, so each extra bit of K costs one
+word in EVERY block. down_proj at d8 has nsub=80 = 2.5 blocks:
+
+    K       bits  words/row     MB    effective b/w
+    4096     12       36      188.7      1.800
+    8192     13       39      204.5      1.950
+    16384    14       42      220.2      2.100   <- SHIPPED
+    32768    15       45      235.9      2.250
+    65536    16       48      251.7      2.400
+
+**K16384 is the largest codebook that fits the 42 words already allocated.
+The shipped geometry is OPTIMAL for its block budget.** The padding is not
+a writable tail — it is 16 dead subvector SLOTS in the half-used third
+block, and there is no 81st subvector to occupy them.
+
+Two ways to get value from it, BOTH requiring kernel work:
+  (a) RECLAIM — a tight, non-block packer needs ceil(80*14/32) = 35 words
+      instead of 42: the full 1.69 GB, zero quality cost. This is already
+      an open item: KERNEL-COVERAGE "whether the kernel can take a ragged
+      tail segment is unexamined".
+  (b) SPEND — the 16 dead slots are 224 free bits/row that could carry
+      residual-refinement codes. Free in bytes; the kernel must apply them.
+
+And the same-rate alternatives are NOT obviously better: d4-K256 packs
+exactly at 2.000 effective b/w (vs the shipped 2.100), saving 10.5 MB per
+module (~0.48 GB, not 1.69), but drops d 8->4, which the standing
+higher-d-wins-at-matched-rate law says costs quality.
+
+NET VERDICT ON (2)+(3): this is not a defect and not free money. It is a
+known ragged-geometry cost, now priced in bytes for the first time, whose
+only real lever is the kernel item already on the board.
