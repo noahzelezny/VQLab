@@ -6,11 +6,23 @@ its harness and WHICH VERSION of the artifact it measured. Geometry
 cells read from artifact configs 2026-09-13. Numbers copied from the
 named result files — nothing reconstructed from memory.
 
-Version vocabulary: **v1** = pre-mixed-geometry builds (some carried
-the same repo names/bpw as their v2 replacements — bench rows must say
-which they scored). **v2 mixed** = expert geometry set by the measured
-ladder process. **arc6** = the 2026-09-09 runtime republish (all 20
-repos). Released as v2 so far: GLM (no v1 existed) + 397B small rung.
+## Version vocabulary (Noah, 2026-09-13 — one scheme, all families)
+
+* **v1** — first-generation codebooks: uniform or hand-set geometry,
+  weight-MSE k-means fits. What most shipped rungs still are.
+* **v2** — **mixed codebooks**: per-layer geometry chosen by the measured
+  sensitivity ladder (end-to-end probes, ppl-gated). GLM (no v1 existed)
+  and the 397B small rung shipped as v2; Flash-2.1's v2 is BUILT and
+  awaiting release.
+* **v3** — reserved for gradient-tuned codebooks (through-the-model NLL
+  loss; the one unexplored fit-side road after F78 killed proxy-objective
+  re-selection).
+* **arc6** — orthogonal: the 2026-09-09 runtime republish (all 20 repos).
+  A runtime version, not a codebook generation.
+
+Candidate artifacts carry no private letters — a rung's improved build is
+"<rung> v2", not "R1". (Probe arms inside a campaign may be lettered in
+the findings log; artifacts are not.)
 
 ## Summary matrix
 
@@ -20,7 +32,7 @@ repos). Released as v2 so far: GLM (no v1 existed) + 397B small rung.
 | Qwen3.5-397B | 2.2/2.4/2.6/3.1 (+3bpw card G) | 2.2 & G = v2 mixed; 2.4/2.6/3.1 flat | card-G one-harness table (below) | **V1 artifacts only** (below) | in-artifact + HDD demote fits + bf16 | re-bench v2 artifacts; flagship swap (Noah) |
 | Qwen3.6-35B | 3.4/3.8/4.6/5.4 | 4.6 mixed (unaudited); rest flat | 3.4 rung, this week (below) | 3.4 rung, this week (below) | in-artifact only + bf16 teacher | geometry ladder never run; alternation candidate (F81) |
 | Qwen3.8-27B (dense) | 3.9/4.5/4.8 | flat (vq_linear schema) | none | none | unaudited | audit before touching |
-| Qwen3.8-Flash-Next | 2.1/3.2/4.4/5.5 | hand-set front mixes, NOT ladder | 2.1 rung full grid (below) | **one-harness incl 8bit ref** (below) | full fit set on SSD + bf16 teacher | **art_flash_r1 ship candidate**; other rungs' knees unmeasured |
+| Qwen3.8-Flash-Next | 2.1/3.2/4.4/5.5 | hand-set front mixes, NOT ladder | 2.1 rung full grid (below) | **one-harness incl 8bit ref** (below) | full fit set on SSD + bf16 teacher | **Flash-2.1 v2 ship candidate**; other rungs' knees unmeasured |
 | gemma-4-26b | 6.2 | flat | anomaly-caveated (GEMMA4_PPL_ANOMALY) | struct-experiment rows only (results_crush); shipped rung unbenched | unaudited | none open |
 | gemma-4-e4b PLE | 1 repo | n/a | none | none | PLE fit family on SSD | none open |
 
@@ -94,8 +106,8 @@ CORRECT, but no rung is ladder-derived.
 | arm | wikitext-12k | corpus-B | code |
 |---|---|---|---|
 | shipped 2.1 | 5.8327 | 8.3372 | 1.4106 |
-| **R1 (measured knee, ship candidate)** | **5.7698 (−1.08%)** | 8.3394 | 1.4063 |
-| probes: R0 front-demote | +3.21% | +3.40% | +0.56% |
+| **v2 (measured knee, ship candidate)** | **5.7698 (−1.08%)** | 8.3394 | 1.4063 |
+| probes: front-demote | +3.21% | +3.40% | +0.56% |
 | trough 12-19→K4096 / late 32-39→K4096 | +0.13% / +2.32% | +1.19% / +2.27% | — |
 | tail-promote 44-47 (non-iso) | −2.47% | −1.23% | — |
 
@@ -103,7 +115,7 @@ CORRECT, but no rung is ladder-derived.
 qwen4_exp harness b256, 1000 items; results_bench3/; F87 forbids mixing
 harnesses on this family):
 
-| | 8bit ref (178 GB) | shipped 2.1 | R1 |
+| | 8bit ref (178 GB) | shipped 2.1 (v1) | **2.1 v2** |
 |---|---|---|---|
 | hellaswag (acc_norm) | 0.792 | 0.747 | 0.738 |
 | piqa (acc_norm) | 0.835 | 0.819 | 0.825 |
