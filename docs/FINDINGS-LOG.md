@@ -2492,3 +2492,59 @@ ALLOCATION (from the measured jump ranking):
 METHOD RULE: when a repo tool documents WHICH of its outputs is the
 decision signal, that sentence is load-bearing. Four builds and ~8 hours
 of GPU separated "used the tool" from "used the tool correctly".
+
+## F96 (2026-09-14) — TWO RESULTS, the second one much bigger than the campaign it came from. (1) The iso-byte drift-ranked build LOSES (+1.05% prose). (2) The shipped Flash-2.1 wastes 1.69 GB to PACKING PADDING: d8 on down_proj costs 2.100 effective b/w, not the 1.750 nominal.
+
+### (1) Iso-byte, drift-ranked: worse on every corpus
+
+    arm                     GiB      prose     code      literary
+    shipped 2.1 (v1)      45.78     --        --        --
+    iso v2, two-tier      45.81    -1.08%    -0.44%     +0.22%
+    ISO drift-ranked      45.31    +1.05%    +1.00%     +2.07%
+    +0.75 GiB graded      46.49    -2.05%    -0.53%     -1.28%
+    +0.75 GiB jump        46.53    -2.11%    -0.13%     -2.87%
+
+Promoting 10 layers by the drift ranking does NOT pay for demoting 22.
+The two-tier build, which demotes only 8, still holds the iso-byte crown
+at -1.08%. READ: on this rung the DEMOTION side is expensive — Flash's
+cheap-to-demote set is small (F86 already showed the trough is 8 layers
+wide and one K-step deep), so large-scale funding is not available and
+the real wins need bytes. Flash-2.1's iso-byte headroom is ~1%, against
+the 397B-2.2 v2's -3.5% at iso-byte. Plausible cause: Flash ALREADY ships
+d8-K16384, which is where the 397B's v2 gain came from (F91).
+
+### (2) The b/w arithmetic I have been budgeting with is WRONG, and the
+### error is a 1.69 GB hole in the shipped artifact
+
+The pack format stores `WPR = ceil(nsub/32) * bits` uint32 words per row.
+When `nsub` is not a multiple of 32 the row is PADDED. Measured on real
+module tensors:
+
+    geometry / module          actual     ideal     padding
+    d4-K256   any              209.7 MB   209.7 MB    0.0%
+    d4-K4096  any              314.6 MB   314.6 MB    0.0%
+    d8-K4096  gate/up          157.3 MB   157.3 MB    0.0%
+    d8-K4096  down_proj        188.7 MB   157.3 MB  +20.0%
+    d8-K16384 down_proj        220.2 MB   183.5 MB  +20.0%   <- SHIPPED
+
+down_proj has IN=640, so d8 gives nsub=80 and 80/32 = 2.5 -> padded to 3
+words' worth. gate/up (IN=2560, nsub=320) divide evenly and pad nothing.
+
+**Consequences.**
+* The shipped Flash-2.1 carries 46 down_proj modules at d8-K16384 and
+  therefore **1.69 GB of pure padding** — larger than every quality win
+  this campaign has produced.
+* d8-K16384 on down_proj costs **2.100 effective b/w**. d4-K256 on the
+  same module packs exactly at **2.000 b/w and is 10.5 MB SMALLER** —
+  a lower cost AND a higher nominal rate. Whether it is better QUALITY is
+  untested (d8>d4 at matched rate is a standing law; these rates are not
+  matched), but the byte side is strictly favourable.
+* Every "+4.0 b/w-layers" budget in F92-F95 was an ANALYTIC figure that
+  did not survive contact with the packer — which is why the "iso-byte"
+  build above came out 0.47 GiB SMALLER than the base. **Budget from
+  measured packed bytes, never from nominal bits/weight.**
+
+NEXT: swap all down_proj to d4-K256 (smaller artifact, exact packing) and
+gate it. If quality holds, the shipped rung gets ~0.5 GB smaller for free
+and the reclaimed budget funds promotion elsewhere. This is the first
+lever this week that improves size and quality independently.
