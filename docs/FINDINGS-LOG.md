@@ -2513,8 +2513,17 @@ the real wins need bytes. Flash-2.1's iso-byte headroom is ~1%, against
 the 397B-2.2 v2's -3.5% at iso-byte. Plausible cause: Flash ALREADY ships
 d8-K16384, which is where the 397B's v2 gain came from (F91).
 
-### (2) The b/w arithmetic I have been budgeting with is WRONG, and the
-### error is a 1.69 GB hole in the shipped artifact
+### (2) The b/w arithmetic I have been budgeting with is WRONG. The 1.69 GB
+### is a KNOWN geometry quirk whose BYTE cost had never been priced.
+
+FRAMING CORRECTED BEFORE PUBLICATION: the packer is NOT defective. It is a
+block-aligned format — 32 subvectors pack into exactly `bits` uint32 words —
+which is what the SIMD kernel wants. And the raggedness is well known:
+KERNEL-COVERAGE.md names "the NSUB=80 tail" (46 of Flash-2.1's 138 d8
+modules have in=640 -> NSUB=80, `gemmseg_fits` requires NSUB %% 32 == 0, so
+they stay legacy — the only artifact in the fleet below 100%% fused), and
+F31 measured the kernel-side relaxation at 1.34x. What is NEW here is only
+the STORAGE side: nobody had priced what the ragged tail costs in bytes.
 
 The pack format stores `WPR = ceil(nsub/32) * bits` uint32 words per row.
 When `nsub` is not a multiple of 32 the row is PADDED. Measured on real
@@ -2532,8 +2541,10 @@ words' worth. gate/up (IN=2560, nsub=320) divide evenly and pad nothing.
 
 **Consequences.**
 * The shipped Flash-2.1 carries 46 down_proj modules at d8-K16384 and
-  therefore **1.69 GB of pure padding** — larger than every quality win
-  this campaign has produced.
+  therefore **1.69 GB of alignment padding** — larger than every quality
+  win this campaign has produced. These are the SAME 46 modules
+  KERNEL-COVERAGE flags as stuck on the legacy kernel: they pay the
+  raggedness twice, once in bytes and once in speed.
 * d8-K16384 on down_proj costs **2.100 effective b/w**. d4-K256 on the
   same module packs exactly at **2.000 b/w and is 10.5 MB SMALLER** —
   a lower cost AND a higher nominal rate. Whether it is better QUALITY is
