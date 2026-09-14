@@ -2340,3 +2340,54 @@ Next allocation gets designed from the measured ranking, not analogy.
 CAVEAT ON THE SIZE COLUMN: `du` on these artifacts undercounts badly
 (unchanged shards are symlinks). Sizes above are summed from the index's
 real shard bytes. Always size an artifact from its index.
+
+## F93 (2026-09-13) — the layer-leverage map REPRODUCES the card's hot set exactly, and shows F92's graded build put its heavy bits on two of the model's ten CHEAPEST layers. The instrument works; my analogy did not.
+
+`vqlab layer-leverage` (fixed, 877d1a0) vs the archived bf16 teacher,
+Flash-VQ-2.1, 2048 tokens of house prose, 48 layers in ~25 s at 8.8 GB
+peak:
+
+    rank  layer  local_rel      rank  layer  local_rel
+      1    L1    0.29154          8    L33   0.11731
+      2    L36   0.14140          9    L37   0.11154
+      3    L31   0.12929         10    L34   0.10543
+      4    L39   0.12828         11    L30   0.10406
+      5    L35   0.12614         12    L29   0.10265
+      6    L32   0.11974         13    L42   0.09641
+      7    L38   0.11757         14    L6    0.09545
+
+    trajectory jumps: L1 +0.265 (10x the next), then L30/L31/L32/L35/L29.
+
+**This independently reproduces the 2.1 card's documented map** ("layer 1
+dominates, a late band (31-39) follows") on a fresh run with a re-archived
+teacher — the map is stable, and the card's rank-correlation claim holds.
+L1 is 2x the next layer and 10x on trajectory; the shipped front
+protection (d2-K256 on layers 0-1) is exactly right and R0/F82's
+"+3.2% to remove it" now has its mechanism.
+
+**WHERE F92's GRADED BUILD MISALLOCATED** (it still won — see F92 — which
+makes the misallocation the interesting part):
+
+    L45  rank 43 of 48  -> given HEAVY +1.25 b/w   (bottom-10 layer!)
+    L46  rank 45 of 48  -> given HEAVY +1.25 b/w   (bottom-10 layer!)
+    L47  rank 24        -> given HEAVY +1.25 b/w
+    L31  rank 3         -> left at baseline
+    L30  rank 11        -> left at baseline
+    L29  rank 12        -> left at baseline
+    L18  rank 18        -> DEMOTED
+
+Two of the three heavy-promoted layers are in the model's cheapest ten.
+The tail-promotion instinct came from the 397B (whose hot set really is
+its last layers) and from F84's tail probe; Flash's hot set is a MID-LATE
+BAND (29-42), not the tail. Family-local laws again (F83), now at
+per-layer resolution.
+
+Also surfaced, not in the card's stated band: **L6 (rank 14) and L21
+(rank 17)** are hot, and L42/L41 (ranks 13/15) extend the band past 39.
+
+NEXT (running): matched-byte rebuild, same +4.0 b/w-layers as F92's
+graded build, allocated from this map instead of by analogy — heavy on
+L31/L36/L39, mild on L29/L30/L32-L35/L37/L38, demotion taken from the
+measured bottom (L3/8/9/10/11/45/46) rather than a guessed trough. A pure
+SHAPE comparison at identical bytes: if the map-designed build beats
+F92's, the instrument is validated as the design tool and analogy retires.
