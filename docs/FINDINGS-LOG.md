@@ -2152,7 +2152,18 @@ a 9x collapse).
 
 READ: geometry arbitrage is a LOW-BPW phenomenon. At 3.2bpw the codebook
 already resolves the weight distribution well enough that adding bits to
-the tail buys little, so there is far less to move. Projected iso-byte
+the tail buys little, so there is far less to move.
+
+CORRECTED — THIS IS A REDISCOVERY, credit where due. quantlab E33 stated
+the same law for a different lever in 08-14: group size is "real at 35B,
+~nil past the knee at 397B; **payoff proportional to remaining 2-bit
+loss**". E13b's budget ladder shows the same shape for allocation priors
+(shape worth 0.021 PPL at t2.6, 0.18 at t2.4). F88 is that principle
+appearing in the VQ-geometry modality — the same-quantizer levers all
+scale with how much quantization damage is left to recover. It is a
+confirmation across a third lever type, not a new phenomenon; the useful
+NEW content here is the magnitude table and the resulting decision to
+stop the Flash ladder at 3.2. Projected iso-byte
 R1-analog for this rung: ~-0.3% wikitext (8 trough demoted funds 8 tail
 promoted), vs -1.08% measured at 2.1bpw. Worth building and gating, but
 this is the shape of diminishing returns, and it predicts 4.4/5.5 are
