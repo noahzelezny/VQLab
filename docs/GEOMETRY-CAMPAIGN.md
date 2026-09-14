@@ -1,8 +1,13 @@
 # The Flash geometry campaign — consolidated findings (2026-09-12 → 09-13)
 
-One narrative for the F67–F85 arc. The findings log holds the per-number
-record; this is the readable account and the paper's spine. Status: R1
-gate-complete, R2 ladder in flight, NOTHING SHIPPED (Noah's call).
+One narrative for the F67–F88 arc. The findings log holds the per-number
+record; this is the readable account and the paper's spine. Status:
+**Flash-2.1 v2 gate-complete and unshipped** (Noah's call); ladder closed
+at the 2.1 knee; 3.2 rung's v2 in build.
+
+Naming: artifacts are "<rung> v2" (v1 = first codebooks, v2 = mixed
+codebooks, v3 reserved for gradient-tuned). Letters like R0/R1 below are
+PROBE ARMS inside the campaign, never artifact names.
 
 ## The one-paragraph version
 
@@ -16,7 +21,7 @@ hiding elsewhere: the never-optimized max-abs **scale heuristic**
 above everything, **per-layer geometry allocation** — Flash's depth-cost
 curve is a true U (unlike GLM's and the 397B's), its shipped uniform d8
 mass wastes bits in an early-mid trough while starving the tail, and
-moving them (R1) beats the shipped 2.1bpw at identical size on every
+moving them (the 2.1 v2 build) beats the shipped 2.1bpw at identical size on every
 gate instrument.
 
 ## Part 1 — the re-selection negative (F67–F78)
@@ -63,7 +68,7 @@ d8-K16384) was hand-set. Probes, all iso-instrument vs shipped:
 
 | probe | wikitext | corpus-B | reading |
 |---|---|---|---|
-| R0: front d2→d8 (remove protection) | +3.21% | +3.40% | front protection REAL |
+| front d2→d8 (remove protection) | +3.21% | +3.40% | front protection REAL |
 | demote 12–19 →K4096 | +0.13% | +1.19% | trough — nearly free |
 | demote 32–39 →K4096 | +2.32% | +2.27% | late — expensive |
 | promote 44–47 →d4-K4096 | **−2.47%** | **−1.23%** | tail was starved |
@@ -73,10 +78,10 @@ measured (GLM: front is ballast/tail-monotone, E10–E13b; 397B:
 tail-graded, E24–E29; Flash: costly both ends, cheap trough). Depth laws
 flip sign across families; per-family measurement is not optional.
 
-**R1** (demote 12–19 + promote 46–47, ~iso-byte): wikitext **−1.08%**
+**Flash-2.1 v2** (demote 12–19 + promote 46–47, ~iso-byte; built as art_flash_v2): wikitext **−1.08%**
 (pre-registered −1.0), corpus-B flat, code −0.30%; benchmarks within
 noise; generation smoke clean. First artifact to beat the shipped
-2.1bpw at its own budget. **R2** (in flight): fund promotion of 44–47
+2.1bpw at its own budget. **Further rungs on the ladder** (R2 probes): fund promotion of 44–47
 with band 20–31 and/or deeper trough demotion (K1024); climb to the
 knee, then ship once.
 
@@ -87,8 +92,12 @@ knee, then ship once.
    generators, never gates.
 2. Pre-register the bar before the probe (the annealing null cost 5
    minutes; the alternation pass was believable because its bar was
-   named first). R1's −1.0% prediction hit within 0.08.
+   named first). The 2.1 v2 −1.0% prediction hit within 0.08.
 3. Depth/geometry laws are family-local. Three families, three shapes.
+   And their PAYOFF scales with remaining quantization damage — quantlab
+   E33's "payoff ∝ remaining 2-bit loss", re-confirmed in the geometry
+   modality by F88 (3.2bpw arbitrage is ~5x thinner than 2.1bpw's).
+   Corollary: probe the LOWEST rung first; stop when the rung is clean.
 4. Diff-style candidates (unchanged modules keep shipped bytes) make
    whole-artifact probes cheap enough to replace proxies entirely.
 5. Ops: geometry refits under HDD contention crash ~1/3 modules — the
@@ -103,5 +112,6 @@ bf16 teachers archived: `/Volumes/Thunderbay HDD/Teacher Models/`
 `scripts/score_ppl_resident.py` + corpora B/C, `flashbench_venv`
 (exo's patched mlx_vlm + lm_eval 0.4.12 overlay), per-position KL
 tooling (`tail_probe.py`). Artifacts (scratch, unshipped):
-art_reselect*, art_scalealt, art_lloydctl, art_flash_{r0,r1,banda,
-bandb,tailpromo,p1,p2}.
+art_reselect*, art_scalealt, art_lloydctl, **art_flash_v2** (the
+ship candidate), and probe arms art_flash_{r0,banda,bandb,tailpromo,
+p1,p2}, art_flash32_{banda,bandb,tailp,r1}.
