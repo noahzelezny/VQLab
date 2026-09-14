@@ -70,8 +70,17 @@ def load_for_family(family: str, path, lazy: bool = True):
     path = pathlib.Path(path)
     rt = runtime_for(family)
     if rt == "mlx_lm":
+        import inspect
         from mlx_lm.utils import load_model
-        return load_model(path, lazy=lazy, trust_remote_code=True)
+        # `trust_remote_code` was REMOVED from mlx-lm's load_model signature
+        # (present in older builds, absent in the grafted/exo runtime as of
+        # 2026-09-13, where it raised TypeError and broke layer-leverage).
+        # Pass it only when the installed build accepts it; arches the
+        # runtime implements natively (e.g. qwen4_exp) need no remote code.
+        kwargs = {"lazy": lazy}
+        if "trust_remote_code" in inspect.signature(load_model).parameters:
+            kwargs["trust_remote_code"] = True
+        return load_model(path, **kwargs)
     # mlx_vlm
     from mlx_vlm.utils import load_config, load_model
     config = load_config(path)
