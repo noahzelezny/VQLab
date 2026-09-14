@@ -2252,3 +2252,48 @@ tie with the delta shown, per the 397B card's own discipline.
 
 3.2 v2 (art_flash32_r1) assembled cleanly once the disk was fixed
 (0 retries). Both v2 artifacts now live on the Thunderbay SSD.
+
+## F91 (2026-09-13) — CORRECTS F89's reconciliation and REOPENS the Flash ladder. The 397B-2.2 v2's 3.5% came from a GRADED per-layer allocation, not from a codebook-class swap. Flash's v2 allocation is far more timid than the shape the 397B proved.
+
+Read from the shipped artifact's config (not the notebook), the 397B-2.2
+v2 expert allocation is:
+
+    d8-K16384  1.75 b/w  151 modules  layers 0-56      <- baseline
+    d4-K256    2.00 b/w   20 modules  11 layers, mid-late (29,37,38,40-42,..49)
+    d4-K2048   2.75 b/w    9 modules  layers 57,58,59  <- last three
+
+A THREE-TIER GRADED LADDER: a cheap baseline, mild promotion (+0.25 b/w)
+on eleven selected mid-late layers, heavy promotion (+1.0 b/w) on the
+final three. The card's methodology section says it plainly: "A tail of
+later layers is also promoted above the expert baseline; measured
+layer-wise error showed depth matters, and the last layers repay the
+bits."
+
+F89's void-entry claimed the 3.5% was "a geometry-CLASS change on the
+d-axis". WRONG — that is at most one component. The gain is selective
+per-layer allocation, the same process class as the Flash campaign, which
+makes the two DIRECTLY comparable after all (Noah's point).
+
+WHAT THIS EXPOSES ABOUT Flash-2.1 v2. Its allocation is:
+
+    demote 8 trough layers (12-19), promote 2 layers (46-47). Two tiers.
+
+versus the 397B's fourteen promoted layers across two promotion tiers.
+F86 declared "R1 is the knee" on the strength of two failed iso-byte
+probes (band 20-31 demotion, deeper K1024 trough) — but neither tested
+the 397B's actual winning shape: GRADED promotion spread over many
+mid-late layers rather than a heavy promotion of two. The ladder is
+REOPENED; the untested candidate is a Flash analogue of the three-tier
+structure.
+
+ALSO CORRECTED (Noah): perplexity is DETERMINISTIC (the 397B card states
+it outright), so re-scoring an artifact cannot estimate a noise floor —
+it returns the same number. The fit-to-fit floor requires a SECOND
+INDEPENDENT FIT of the same recipe (how the 397B's 0.0056 ppl floor was
+measured). F90's literary +0.22% therefore stays UNRESOLVED until either
+a second fit is run or it is reported as a delta without a noise claim.
+
+METHOD NOTE, second one today from the same root: I characterized a
+shipped artifact's design from a mid-arc experiment entry instead of from
+its config and card. Both errors (F89, and this one) would have been
+prevented by the same 30-second check.
