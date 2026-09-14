@@ -12,6 +12,9 @@ results that nobody can reproduce.
 ## Do these three things before writing any code
 
 ```bash
+# NOTE: the exo env (the one that loads qwen4_exp / Flash) does not have
+# vqlab installed — run its CLI with PYTHONPATH=src from the repo root:
+#   PYTHONPATH=src /opt/anaconda3/envs/exo/bin/python -m vqlab.cli <cmd>
 python -m vqlab.cli --help          # 41 commands. Read the list. Twice.
 sed -n 1,60p docs/INDEX.md          # what every doc is FOR + whether it still holds
 sed -n 1,40p docs/ONBOARDING.md     # the mechanical pass before fitting ANY new family
