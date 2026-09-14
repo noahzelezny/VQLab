@@ -2589,3 +2589,54 @@ higher-d-wins-at-matched-rate law says costs quality.
 NET VERDICT ON (2)+(3): this is not a defect and not free money. It is a
 known ragged-geometry cost, now priced in bytes for the first time, whose
 only real lever is the kernel item already on the board.
+
+## F97 (2026-09-14) — FLEET AUDIT: packing is EXACT on all 18 other shipped artifacts. Flash-2.1 is the only ragged one, and it needs NO kernel work — it needs a down_proj geometry that divides, which every other rung in its own family already uses. CORRECTS F96.
+
+Audited every shipped artifact's vq_modules for nsub %% 32:
+
+    GLM 2.7 / 3.1 / 3.6 .................. 0 ragged (exact)
+    397B 2.2 / 2.4 / 2.6 / 3.1 ........... 0 ragged (exact)
+    35B 3.4 / 3.8 / 4.6 / 5.4 ............ 0 ragged (exact)
+    27B 3.9 / 4.5 / 4.8 .................. 0 ragged (exact)
+    gemma-4-26b 6.2 ...................... 0 ragged (exact)
+    Flash-Next 3.2 / 4.4 / 5.5 ........... 0 ragged (exact)
+    **Flash-Next 2.1 ..................... 46 ragged, 1.69 GB dead**
+
+Verified empirically on a shipped tensor (not inferred): in
+layers.20.down_proj's [512, 2560, 42] codes, words 35-41 are **literally
+zero across all 1,310,720 rows**. Seven of forty-two words per row.
+
+**F96 SAID THIS NEEDED KERNEL WORK. IT DOES NOT.** The packer is fine and
+the format is fine; every other artifact in the fleet proves it. The
+defect is one GEOMETRY CHOICE in one rung: down_proj has IN=640, so d8
+yields nsub=80 = 2.5 blocks and the half block is billed in full. Every
+other Flash rung uses d4 or d2 on down_proj (nsub=160 / 320, both exact)
+and wastes nothing. Kernel work would only be needed to keep d8 AND pack
+tightly — which is the wrong question when the family already has three
+rungs demonstrating the right answer.
+
+Exact-packing options for down_proj (IN=640):
+
+    geometry     nsub  blocks  words     MB    eff b/w
+    d8-K16384      80   2.50     42   220.2    2.100   <- SHIPPED, ragged
+    d4-K256       160   5.00     40   209.7    2.000   <- smaller AND exact
+    d2-K16        320  10.00     40   209.7    2.000
+    d4-K512       160   5.00     45   235.9    2.250
+    d4-K1024      160   5.00     50   262.1    2.500
+
+d4-K256 is SMALLER than what ships (−10.5 MB/module, −0.48 GB total),
+packs exactly, and carries a higher NOMINAL rate (2.000 vs 1.750) though
+a lower effective one (2.000 vs 2.100). Quality is the open question:
+d8 > d4 at MATCHED rate is a standing law, and these rates are not
+matched. RUNNING: all 46 down_proj -> d4-K256, house-corpus gate.
+
+Second consequence, unmeasured: these same 46 modules are the fleet's
+only ones off the fused kernel path (KERNEL-COVERAGE: `gemmseg_fits`
+requires NSUB %% 32 == 0). At d4-K256 they would DIVIDE, so the geometry
+fix may also return Flash-2.1 to 100%% fused — the speed item and the
+byte item have the same one-line fix.
+
+METHOD NOTE: F96 reached "needs kernel work" by reasoning about the
+format in isolation. One query across the fleet's configs — 20 seconds —
+showed 18 artifacts already solving it and named the real cause. Audit
+the fleet before scoping an engineering change.
