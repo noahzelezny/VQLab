@@ -2214,3 +2214,41 @@ the same arc. Before making any claim about a released artifact, read its
 README/config, not the lab notebook. (Same family as "verify it landed in
 the running process".) Cost here: one wrong finding, caught by Noah in
 one screenshot.
+
+## F90 (2026-09-13) — Flash v2 on the HOUSE corpora, both rungs, card-format. 2.1: prose −1.08%, code −0.44%, literary +0.22%. 3.2: −0.40% / −0.04% / +0.01%. Iso-byte, and now protocol-comparable to the 397B card.
+
+Re-run on `src/vqlab/referee/`'s three shipped corpora (prose=wikitext,
+code=public mlx corpus, literary), replacing this week's ad-hoc
+substitutes (Noah's catch — the earlier "corpus-B/C" were my own files
+and not comparable to any card). Same resident instrument, 12288 tokens,
+all arms one harness:
+
+    rung        prose                     code                      literary
+    Flash-2.1   5.8327->5.7698 (-1.08%)   1.7248->1.7172 (-0.44%)   7.8018->7.8191 (+0.22%)
+    Flash-3.2   4.9949->4.9749 (-0.40%)   1.6401->1.6395 (-0.04%)   6.6693->6.6700 (+0.01%)
+
+Pre-registered prediction for the 3.2 rung was ~-0.3% prose (F88); it
+measured -0.40%. Held.
+
+THE REFERENCE LADDER, all iso-byte v1->v2, now on comparable protocols:
+
+    397B-2.2   prose -3.52%   code -0.96%     (d4-K128 -> d8-K16384: a
+                                               geometry-CLASS change)
+    Flash-2.1  prose -1.08%   code -0.44%     (depth K-reallocation
+                                               INSIDE d8-K16384)
+    Flash-3.2  prose -0.40%   code -0.04%     (same, at higher bpw)
+
+Two effects compound, both already in the record: the d-axis class change
+is worth ~3x the within-class depth allocation (F89 void-entry
+reconciliation), and within-class payoff falls with bpw (E33's "payoff
+proportional to remaining 2-bit loss", F88).
+
+LITERARY IS THE HONEST BLEMISH: +0.22% on 2.1, +0.01% on 3.2 — the only
+corpus that does not improve. Flash's fit-to-fit noise floor has never
+been measured (the 397B's was 0.0056 ppl ~ 0.24% at its geometry), so
++0.22% is plausibly inside noise but is NOT demonstrated to be. Either
+measure the floor (two fits of the same recipe) or report literary as a
+tie with the delta shown, per the 397B card's own discipline.
+
+3.2 v2 (art_flash32_r1) assembled cleanly once the disk was fixed
+(0 retries). Both v2 artifacts now live on the Thunderbay SSD.
