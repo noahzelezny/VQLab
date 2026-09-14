@@ -29,7 +29,7 @@ the findings log; artifacts are not.)
 | family | rungs (bpw) | mixed-geo status | ppl data | task-bench data | fit assets | pending |
 |---|---|---|---|---|---|---|
 | GLM-5.3-Flash | 2.7/3.1/3.6 | **v2 mixed** (ladder) | **NONE — never benched** | **NONE — never benched** | full fit ladder on SSD | bench pass is the open gap |
-| Qwen3.5-397B | 2.2/2.4/2.6/3.1 (+3bpw card G) | **ONLY 2.2 = v2 mixed**; 2.4/2.6/3.1 and card G are FLAT | card-G one-harness table (below) | **V1 artifacts only** (below) | in-artifact + HDD demote fits + bf16 | re-bench v2 artifacts; flagship swap (Noah) |
+| Qwen3.5-397B | 2.2/2.4/2.6/3.1 (+3bpw card G) | **2.2 = v2 (d8-K16384 mixed), v1->v2 measured -3.5% prose**; 2.4/2.6/3.1 and card G are FLAT | card-G one-harness table (below) | **V1 artifacts only** (below) | in-artifact + HDD demote fits + bf16 | re-bench v2 artifacts; flagship swap (Noah) |
 | Qwen3.6-35B | 3.4/3.8/4.6/5.4 | 4.6 mixed (unaudited); rest flat | 3.4 rung, this week (below) | 3.4 rung, this week (below) | in-artifact only + bf16 teacher | geometry ladder never run; alternation candidate (F81) |
 | Qwen3.8-27B (dense) | 3.9/4.5/4.8 | flat (vq_linear schema) | none | none | unaudited | audit before touching |
 | Qwen3.8-Flash-Next | 2.1/3.2/4.4/5.5 | hand-set front mixes, NOT ladder | 2.1 rung full grid (below) | **one-harness incl 8bit ref** (below) | full fit set on SSD + bf16 teacher | **Flash-2.1 v2 ship candidate**; other rungs' knees unmeasured |
@@ -70,6 +70,21 @@ FLAT-geometry 3bpw refit "G", not a mixed rung):
 
 (Championship-ladder era rows, same wikitext family: tail30 2.3982 —
 E24–E29 in EXPERIMENTS.md.)
+
+**ppl — the 2.2 rung's OWN CARD (the v1-vs-v2 record; unmodified mlx-lm,
+prefix-8192 prose + mixed-language code, reproduced bit-identically x2;
+artifact README.md):**
+
+| | **v2** (101.0 GiB) | v1 (100.9) | spicyneuron 2.6bit (120.6) | VQ-2.4bpw (111.6) |
+|---|---|---|---|---|
+| wikitext prose | **3.0591** | 3.1706 | 3.1843 | 2.7655 |
+| code | **2.6728** | 2.6988 | 2.6667 | 2.6383 |
+
+**v2 vs v1 at iso-byte: -3.5% prose, -1.0% code.** This is the project's
+reference mixed-geometry gain. v1 was flat d4-K128; v2 moved expert mass
+to d8-K16384 (a geometry-CLASS change on the d-axis). Flash-2.1 already
+ships d8-K16384, so its v2 (-1.08%) is the second-order depth-allocation
+layer on top of this win, not a weaker version of it.
 
 **Task benches — V1 ARTIFACTS ONLY** (lm-eval, 1000 items, 0-shot;
 AgenicAI/quantlab/results_tasks/; hs/piqa = acc_norm, wino = acc). The
