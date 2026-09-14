@@ -2172,3 +2172,46 @@ not worth probing at all.
 CONSEQUENCE FOR THE PRODUCT: the 64GB-tier rung (2.1bpw, 48 GiB) is
 exactly where the measured-geometry work pays most, which is also where
 Noah wants the quality. R1 stands as the campaign's headline artifact.
+
+## F89 (2026-09-13) — THE 397B MIXED-GEOMETRY RUNG WAS NEVER SHOWN TO BEAT FLAT. Noah's objection is correct and sharper than stated: there is no 397B v2-vs-v1 delta on record, and the one iso-byte test points the OTHER way. Also: E89's blocker has since been removed.
+
+Cross-model claims comparing "Flash's v2 gain" to "the 397B's v2 gain"
+(made earlier today) are INVALID. Audit of the record:
+
+1. **Card G is not a mixed rung** — its own card: "same size and same
+   geometry — 143.682 GiB, flat d4/K2048 experts". It is a better FIT of
+   flat geometry (-0.46% wikitext). Already corrected in the ledger.
+2. **397B-2.2 (the only mixed rung) has NO flat twin.** No iso-byte
+   flat-geometry build of 2.2 was ever made, so the benefit of its mixing
+   (d8-K16384x151 + d4-K256x20 + d4-K2048x9) was never measured as a
+   delta. It shipped on design reasoning, not an A/B.
+3. **The one iso-byte comparison that exists runs AGAINST the mix.** E89
+   built rotlab--397B-d8K16384, flat d8-K16384 on every expert tensor:
+
+       flat d8-K16384 (packed)   3.0591 prose / 2.6728 code @ 100.97 GiB
+       shipped 2.2 (MIXED)       3.1706 prose                @ 100.9  GiB
+
+   Flat beat the shipped mixed rung by **3.5% prose ppl at matched
+   bytes**. E89 shelved it for one reason, stated in its verdict: the
+   packed-d8 artifact "cannot generate a token" — no packed d=8 fused
+   kernel existed, and the servable (unpacked, 110.8 GiB) form lost to
+   cheap-shallow 2.3.
+
+**THE BLOCKER IS GONE.** The d8 fused arm is promoted and holding (~1.3x,
+READ-THIS-FIRST), and Flash-Next-VQ-2.1 ships 138 packed d8-K16384
+modules in production today. The kernel E89 said was "unwritten, unknown
+performance" is now the fleet's shipping path.
+
+CONSEQUENCES.
+* Flash-2.1 v2 (-1.08% prose iso-byte, F85) is the project's FIRST
+  measured iso-byte mixed-geometry WIN. Nothing to compare it against;
+  the 397B number people remember (-0.46%) is a flat refit.
+* A shelved 3.5% 397B improvement is sitting in the record whose only
+  stated obstacle no longer exists. That is ~3x the Flash gain, on the
+  flagship. The E89 artifact is gone from Exo Models, but
+  `vqlab-fits/qwen3.5-397b/demote_fit-d8` survives on the HDD.
+* CAVEATS before acting: the 3.0591-vs-3.1706 pair needs a same-instrument
+  re-score (E89's number came through the reference decode path, which is
+  exactly how the unservable artifact scored "perfectly" while unable to
+  generate — rule III.11); and the rebuild must pass the
+  generate-one-token gate that rule created.
