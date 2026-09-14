@@ -80,6 +80,74 @@ good: every past agent who needed something added it here.
   (measured per-layer allocation); v3 reserved for gradient-tuned. Artifacts
   never carry campaign letters.
 
+## The law book — `research/quantlab/FINDINGS.md`
+
+**Read it before proposing any quantization idea.** Five sections:
+I settled laws, II retracted leads (do NOT re-chase), III instrument rules,
+IV MLX/Metal rules, V open questions. Each law survived at least one attempt
+to kill it, and each Metal rule cost at least one run. The most load-bearing,
+distilled — the file itself is authoritative:
+
+**Quality / allocation laws**
+* **Position law (I.2)** — early layers tolerate cheap bits; enrichment pays
+  only in the BACK of the network; knee ≈ layer 30 of 60 (affine) / L10 (VQ
+  shallow-harvest). It TRANSFERS across quantization families. The file says
+  "do not rediscover it a third time"; it was rediscovered a fourth time on
+  2026-09-13 (F83/F93) by probing bands by hand. Read the law first.
+* **Escape the cheapest width broadly before enriching narrowly (I.3)** —
+  under a byte budget, maximize non-cheapest layers; never buy the expensive
+  width while any layer sits at the floor.
+* **Fit error != output damage (I.6)** — weight-space relerr does not rank
+  output quality across geometries. Only KL/ppl on the ASSEMBLED model counts.
+  (Re-confirmed the hard way in F78/F94: every proxy inverted.)
+* **Higher d wins at MATCHED rate (I.10)** — d4 > d2 by ~12% KL at 2.00 bpw,
+  confirmed on a second exact rate twin at 3.00 bpw. Modest, not a landslide,
+  and only meaningful at MATCHED rate.
+* **Quality tracks total bytes (I.1)** — packaging washes across K at d4;
+  whether it washes across d is UNSETTLED.
+* **Price a rung before fitting it (I.5)** — the size model predicts, and
+  every data point must be stamped pre- or post-vision-graft (the tower is a
+  fixed 0.849 GiB; mixing the two is a units mismatch that once looked like
+  a geometry effect).
+* **Operational sweet spot d4/K256 (I.8)** — and **healthy relerr ranges
+  SCALE WITH K** (K2048 ~0.19, K256 ~0.31, K128 ~0.46). Set
+  `--relerr-abort` PER GEOMETRY; a threshold tuned at one K wrongly aborts
+  healthy fits at another.
+* **Decode is a wash across geometries; PREFILL is where geometry shows
+  (I.9)** — non-byte-aligned code widths pay bit-extraction.
+
+**Instrument rules (III) — violations produced every false result in that file**
+* Pre-register predictions before fitting or scoring; a falsified prediction
+  is recorded as falsified, never reframed.
+* **A comparison row must name the ARTIFACT and the INSTRUMENT that produced
+  it.** A number older than the artifact it faces gets RE-MEASURED, not
+  cited. Never compare a real artifact against a proxy score.
+* Comparators must pass `check_comparator.py` before their row is believed —
+  a comparator that loads short scores worse and FLATTERS us.
+* Speed: n>=3 with scatter, prompt length stated, one process per arm, never
+  on a contended box. **Quote a RATIO between arms from the same session,
+  never an absolute** — at ~100 GiB the decode instrument is BIMODAL
+  (21.1 / 12.7 / 21.3 / 21.2 tok/s, same artifact, back to back; cause
+  unknown).
+
+**Metal rules (IV)**
+* **Fused d4/d2 kernels cache the codebook in threadgroup memory:
+  `K * dim * 2 < 32768` is a HARD architectural ceiling** (d4 safe to K2048,
+  d2 to K4096; K4096@d4 fails ON the cap). Compute `K*dim*2` FIRST.
+  `XPC_ERROR_CONNECTION_INTERRUPTED` is how Metal reports this
+  over-allocation — it is NOT a compiler-service fault.
+* **Dense and MoE are DIFFERENT RUNTIMES** — `vq_dense.py`'s fused path is
+  gated on `codebook.shape[1] == 2`. A smoke on one path says NOTHING about
+  the other.
+* Load under `with mx.stream(mx.cpu):` with `mx.eval` INSIDE the block — a
+  lazy read still pending when a save forces evaluation is paid inside a GPU
+  command buffer and gets watchdog-killed "at the write step".
+
+**Retracted (II) — do not re-chase without new evidence:** "cheap-shallow
+beats the rung above it" (proxy-score artifact), "VQ beats 8-bit affine on
+embeddings" (confounded by an fp32 path), the fused row-gather prefill lever
+(MLX already fuses it), byte-aligned packing (0 bytes saved, 37% decode cost).
+
 ## Before scoping ANY engineering change: audit the fleet
 
 One query over every shipped `config.json` costs 20 seconds and routinely
