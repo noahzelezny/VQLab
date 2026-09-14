@@ -29,7 +29,7 @@ the findings log; artifacts are not.)
 | family | rungs (bpw) | mixed-geo status | ppl data | task-bench data | fit assets | pending |
 |---|---|---|---|---|---|---|
 | GLM-5.3-Flash | 2.7/3.1/3.6 | **v2 mixed** (ladder) | **NONE — never benched** | **NONE — never benched** | full fit ladder on SSD | bench pass is the open gap |
-| Qwen3.5-397B | 2.2/2.4/2.6/3.1 (+3bpw card G) | 2.2 & G = v2 mixed; 2.4/2.6/3.1 flat | card-G one-harness table (below) | **V1 artifacts only** (below) | in-artifact + HDD demote fits + bf16 | re-bench v2 artifacts; flagship swap (Noah) |
+| Qwen3.5-397B | 2.2/2.4/2.6/3.1 (+3bpw card G) | **ONLY 2.2 = v2 mixed**; 2.4/2.6/3.1 and card G are FLAT | card-G one-harness table (below) | **V1 artifacts only** (below) | in-artifact + HDD demote fits + bf16 | re-bench v2 artifacts; flagship swap (Noah) |
 | Qwen3.6-35B | 3.4/3.8/4.6/5.4 | 4.6 mixed (unaudited); rest flat | 3.4 rung, this week (below) | 3.4 rung, this week (below) | in-artifact only + bf16 teacher | geometry ladder never run; alternation candidate (F81) |
 | Qwen3.8-27B (dense) | 3.9/4.5/4.8 | flat (vq_linear schema) | none | none | unaudited | audit before touching |
 | Qwen3.8-Flash-Next | 2.1/3.2/4.4/5.5 | hand-set front mixes, NOT ladder | 2.1 rung full grid (below) | **one-harness incl 8bit ref** (below) | full fit set on SSD + bf16 teacher | **Flash-2.1 v2 ship candidate**; other rungs' knees unmeasured |
@@ -50,13 +50,20 @@ This is the ledger's largest open gap.
 
 ## Qwen3.5-397B
 
-Geometry: 2.2bpw = d8-K16384×151 + d4-K256×20 + d4-K2048×9 (**v2
-mixed**) · 2.4/2.6/3.1 = flat d4 K256/K512/K2048 (v1-era allocation).
+Geometry: 2.2bpw = d8-K16384×151 + d4-K256×20 + d4-K2048×9 — **the only
+v2 mixed rung in this family** · 2.4/2.6/3.1 = flat d4 K256/K512/K2048.
 
-**ppl — card G one-harness table** (unmodified mlx-lm, prefix-8192;
-quantlab/MODEL_CARD_397B_G.md, artifact = the v2 3bpw "G"):
+**Card G is NOT a v2 mixed artifact** (corrected 2026-09-13, Noah). Its
+own card says it replaces VQ-3.1 at the "same size and same geometry —
+143.682 GiB, flat d4/K2048 experts". G is a better FIT of the same flat
+geometry (−0.46% wikitext), i.e. a v1-geometry refit, not mixed
+codebooks. Do not cite it as evidence for the mixed-geometry process.
 
-| | G (143.7 GiB, v2) | spicyneuron 3.5bit (165.6) | prior VQ-3.1 (143.7) |
+**ppl — card G one-harness table** (unmodified mlx-lm, prefix-8192 +
+mixed-language code corpus; quantlab/MODEL_CARD_397B_G.md; artifact = the
+FLAT-geometry 3bpw refit "G", not a mixed rung):
+
+| | G (143.7 GiB, flat refit) | spicyneuron 3.5bit (165.6) | prior VQ-3.1 (143.7) |
 |---|---|---|---|
 | wikitext | **2.3410** | 2.3614 | 2.3519 |
 | code | **2.5963** | 2.6005 | 2.5987 |
@@ -141,6 +148,21 @@ within a family = copying module tensors (`scratchpad/flash_geo_build.py`,
 GEOMAP-driven; set pack_bits). Nothing is unrecoverable since the bf16
 teachers were archived (HDD `Teacher Models/`: 35B + Flash-Next; 397B
 bf16 on the SSD): missing geometries refit at ~1-5 min/module.
+
+## PPL corpus protocol (house standard — use these, not ad-hoc corpora)
+
+`src/vqlab/referee/` ships THREE corpora and card numbers are quoted on
+them: **prose** (`referee_corpus.txt`, wikitext), **code**
+(`referee_corpus_code_public.txt`, mlx @ v0.30.0, public/Apache-2.0 so it
+is citable), **literary** (`referee_corpus_literary.txt`).
+
+CAVEAT ON THIS WEEK'S FLASH/35B NUMBERS: the prose column above IS the
+house corpus (the scorer's default), but "corpus-B" and "corpus-C" were
+ad-hoc substitutes I built (quantlab FINDINGS.md; an mlx_lm source dump)
+— NOT the house code/literary corpora. They are internally consistent
+(one instrument, all arms) so the DELTAS stand, but they are not
+protocol-comparable to any card number. Re-run on the house three before
+anything goes on a card.
 
 ## Bench-row comparability (F87)
 
