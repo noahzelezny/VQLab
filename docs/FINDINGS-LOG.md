@@ -2297,3 +2297,46 @@ METHOD NOTE, second one today from the same root: I characterized a
 shipped artifact's design from a mid-arc experiment entry instead of from
 its config and card. Both errors (F89, and this one) would have been
 prevented by the same 30-second check.
+
+## F92 (2026-09-13) — the GRADED ladder (the 397B's proven shape) nearly DOUBLES the Flash-2.1 gain and fixes the literary regression: prose −2.05%, code −0.53%, literary −1.28%, for +0.71 GiB. F86's "R1 is the knee" was wrong; it was the knee of a shape nobody should have been searching.
+
+Built the Flash analogue of the shipped 397B-2.2 v2 structure (F91):
+three tiers instead of two, promotion spread over twelve layers instead
+of two, mild tier borrowed from the 397B's own d4-K256.
+
+    tier            geometry      layers      d b/w
+    demote (fund)   d8-K4096      12-19        -0.25 x8
+    mild promote    d4-K256       32-40        +0.25 x9
+    heavy promote   d4-K4096      45-47        +1.25 x3
+    (front d2-K256 layers 0-1 untouched — R0/F82 showed it is load-bearing)
+
+House corpora, one instrument, vs the shipped 2.1:
+
+    arm                     size        prose      code       literary
+    shipped 2.1 (v1)        45.78 GiB   5.8327     1.7248     7.8018
+    iso-byte v2 (F85/F90)   45.81 GiB   -1.08%     -0.44%     +0.22%
+    GRADED                  46.49 GiB   -2.05%     -0.53%     -1.28%
+
+**+0.71 GiB (+1.6%) buys roughly double the prose gain and turns the one
+regressing corpus into a 1.28% win.** Literary flipping sign is the
+strongest evidence the graded shape is qualitatively better, not just
+bigger: the iso-byte build was robbing something the graded build feeds.
+
+WHY F86 CALLED THE KNEE EARLY. Its two closing probes (demote band 20-31,
+deeper K1024 trough) both asked "can I fund MORE two-tier promotion?" —
+never "is two tiers the right shape?". The 397B answered that in August
+with a three-tier graded ladder over fourteen layers, and its card says
+so. Searching harder inside the wrong shape is not a knee.
+
+STILL NOT THE OPTIMUM — the graded tiers here were chosen by analogy plus
+F83's band costs, NOT from the per-layer map. `vqlab layer-leverage` is
+running now against the bf16 teacher (the tool was broken on the current
+mlx-lm — `trust_remote_code` removed from load_model — fixed and
+committed, 877d1a0). The card's documented hot set for this family is
+"layer 1 dominates, a late band (31-39) follows"; the graded build's mild
+tier (32-40) brackets that band by luck, and layer 1 is already protected.
+Next allocation gets designed from the measured ranking, not analogy.
+
+CAVEAT ON THE SIZE COLUMN: `du` on these artifacts undercounts badly
+(unchanged shards are symlinks). Sizes above are summed from the index's
+real shard bytes. Always size an artifact from its index.
