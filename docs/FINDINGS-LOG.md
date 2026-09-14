@@ -2445,3 +2445,50 @@ the verdict on any mixed build is still the referee + KL scorer." Read the
 tool's caveats, then read them again — this is the third proxy this week
 (F78 output-space, F88 distortion, now isolation damage) whose ranking did
 not transfer to the gate metric.
+
+## F95 (2026-09-14) — RESOLVED: the trajectory-JUMP column is the right leverage signal. Jump-ranked allocation wins prose −2.11% and literary −2.87% at matched bytes, beating both analogy and local_rel. The instrument was right; I had read the wrong column.
+
+Three shapes, ONE byte budget (+4.0 b/w-layers), one instrument, house
+corpora:
+
+    arm                     GiB      prose     code      literary    mean
+    shipped 2.1 (v1)      45.78     --        --        --           --
+    iso-byte v2 (F85)     45.81    -1.08%    -0.44%     +0.22%      -0.43%
+    graded, BY ANALOGY    46.49    -2.05%    -0.53%     -1.28%      -1.29%
+    mapped, local_rel     46.53    -1.37%    -0.31%     -1.85%      -1.18%
+    JUMP-ranked           46.53   **-2.11%**  -0.13%   **-2.87%**   -1.70%
+
+F94's two candidates collapse into one statement, and it is the tool's
+own documented reading: **rank by the JUMP in `traj_rel` (compounding
+drift), never by `local_rel` (isolation damage).** The header said so
+("a JUMP between consecutive layers marks a high-leverage layer"); I
+ranked by local damage and got the worst of the three promoted builds.
+
+This is E12's anti-correlation, now measured on Flash with VQ: the
+isolation column ranked L47 24th while the compounding column ranked it
+8th, and L47 is exactly where the two winning builds put bits.
+Isolation-style sensitivity remains anti-signal for allocation; the
+compounding column is the one that tracks end-to-end damage — same
+conclusion quantlab reached on GLM in August with affine.
+
+CODE IS THE EXCEPTION and is left honest: the jump build is WORST on code
+(-0.13%) among the promoted builds while winning the other two corpora by
+a wide margin. All four builds move code less than either other corpus
+(-0.13 to -0.53%), so code appears less sensitive to expert-layer
+allocation on this family. Not explained; flagged.
+
+SHIP CANDIDATE UPDATED: **art_flash21_jump** replaces art_flash_v2 as the
+Flash-2.1 v2 candidate — prose -2.11%, literary -2.87%, code -0.13%, for
++0.75 GiB (45.78 -> 46.53, +1.6%), comfortably inside the 64 GB tier. Its
+release gate (benchmarks, generation smoke) has NOT been run yet; the
+earlier gate belongs to the superseded iso-byte build.
+
+ALLOCATION (from the measured jump ranking):
+    heavy  d4-K4096  L30, L31, L32              (+1.25 b/w)
+    mild   d4-K256   L21,L28,L29,L33,L34,L35,L36,L47  (+0.25)
+    demote d8-K4096  L3,L8,L9,L10,L11,L45,L46   (-0.25)
+    front  d2-K256   L0,L1 untouched (L1 is rank 1 by both columns)
+
+METHOD RULE: when a repo tool documents WHICH of its outputs is the
+decision signal, that sentence is load-bearing. Four builds and ~8 hours
+of GPU separated "used the tool" from "used the tool correctly".
