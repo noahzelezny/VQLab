@@ -80,6 +80,16 @@ good: every past agent who needed something added it here.
   (measured per-layer allocation); v3 reserved for gradient-tuned. Artifacts
   never carry campaign letters.
 
+## Before scoping ANY engineering change: audit the fleet
+
+One query over every shipped `config.json` costs 20 seconds and routinely
+shows the problem already solved elsewhere. F96 concluded "this needs a
+kernel change" by reasoning about a format in isolation; F97's fleet audit
+found 18 of 19 artifacts packing exactly and reduced it to one rung's
+geometry choice — a refit, not kernel work. Corollary: if one artifact is
+the only one with a problem, suspect that artifact's config, not the
+shared machinery.
+
 ## Long runs
 
 Overnight/multi-hour work needs `nohup ... & disown` plus per-module
