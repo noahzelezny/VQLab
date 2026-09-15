@@ -2680,3 +2680,202 @@ both module families graded from the averaged prose+code leverage map
 138 modules, every nsub%%32==0 (zero dead bytes, F97), projected 45.82 GiB
 vs shipped 45.78. Scored on the CARD's instrument (2048 tokens) so the
 number is comparable to a published row, not just to my own.
+
+## F99 (2026-09-15) — THE 2048-TOKEN INSTRUMENT INVERTED A SIGN. Every "literary regression" reported during the Flash-2.1 v2 arc was an artifact of scoring 0.17% of the literary corpus. At 12k tokens the regression is a GAIN, and the sign flips on the same artifact, same script, same corpus.
+
+The card instrument is `score_ppl_resident.py --max-tokens 2048`. The
+literary corpus is 1.2 MB; 2048 tokens is **one page**, landing mid-scene
+in *Pride and Prejudice*. Prose (60 KB) gets ~7% of one Wikipedia article.
+
+The exact-pack artifact, measured both ways:
+
+| instrument | exact-pack literary | shipped v1 literary | verdict |
+|---|---|---|---|
+| 2048 tok | 9.0968 | 8.9322 | **+0.165 — worst arm** |
+| 12288 tok | 7.6388 | 7.8018 | **−0.163 — best arm** |
+
+Same artifact. Same scorer. The sign reversed. Perplexity is deterministic,
+so this is NOT run-to-run noise (F-standing rule): it is that a 2048-token
+window is a single sample and the arms differ by less than the variation
+between windows.
+
+The tell was visible before the 12k run and I did not act on it: across the
+promotion sweep the literary column wandered non-monotonically (9.0968,
+9.0880, 9.0673, 9.0073, 9.0708, 9.0618) while prose descended cleanly over
+the same arms. **A column that wanders while its neighbour moves smoothly is
+behaving like a small sample, not a signal.**
+
+COST: I reported a prose-vs-literary trade-off to Noah twice as a measured
+fact, and designed an entire WARM restoration sweep (4 builds) to fix a
+literary deficit that did not exist.
+
+RULE: **2048 tokens is a liveness check, not a quality instrument.** Margins
+in this campaign are 0.01-0.15 ppl; the 2k literary column moved ±0.3 on
+nothing. Score release-gating ppl at >=12k. 12k also reproduces the ledger's
+historical rows (35B-3.4 prose 5.4109 vs recorded 5.4101; Flash-2.1 prose
+5.8327 vs recorded 5.8327), so it is the house instrument, not a third one.
+
+## F100 (2026-09-15) — Flash-2.1 v2 SHIPS THE LADDER: −0.162 prose / −0.018 code / −0.121 literary at 0.025 GiB SMALLER than v1. And the last promotion was decided by WHICH layer, not how many — rank order is not trustworthy at its own boundary.
+
+Final build (gate-complete, unpublished): front L0-1 d2-K256 untouched; 46
+down_proj d4-K256 (the F97 exact-pack correction); gate/up d4-K256 on
+**L27,28,29,30,31,32,33,35,47**; remaining gate/up d8-K16384.
+47.895 GiB vs v1's 47.920. All rows 12k, one harness:
+
+| | prose | code | literary |
+|---|---|---|---|
+| shipped v1 | 5.8327 | 1.7248 | 7.8018 |
+| **v2** | **5.6710** | **1.7071** | **7.6810** |
+
+THE ALLOCATION PROCESS, as measured (`vqlab alloc-sweep`, 11 + 4 + 3 builds):
+
+* **DEMOTION NEVER PAID.** Every cost-curve arm (D4..D24 -> d4-K128) lost on
+  all three corpora. Law I.3 holds: there is no free cold layer at this rung.
+  The full-v2 build's apparent literary regression came from its 12
+  demotions, not its promotions.
+* **PROMOTION PAID to P8, then the ORDER ran out, not the budget.** P9 (rank
+  9 = L21) was worse than P8 on all three. I called that a knee and told Noah
+  the headroom should go unspent. Noah asked whether it was simply the wrong
+  layer. It was: **P8+L47 (rank 10) beats P8 on all three** at the identical
+  +471.9 MB.
+
+  | +471.9 MB spent on | prose | code | literary |
+  |---|---|---|---|
+  | rank 9 (L21) | 5.6981 | 1.7107 | 7.6924 |
+  | **rank 10 (L47)** | **5.6710** | **1.7071** | **7.6810** |
+
+  Ranks 8 and 9 differ by **3%** (+0.017362 vs +0.016828) — inside the
+  ranking's own resolution. **RULE: rank order is trustworthy in bulk and
+  NOT at the boundary. Measure the last promotion against 2-3 candidates
+  instead of taking it on rank.** `--hot-layers` exists for this.
+* Pre-registered prediction for P9 was "code ~1.707, a thousandth or two
+  better than P8". Measured 1.7107 — **FALSIFIED**, recorded as falsified.
+* Restoring d8 on down_proj is REFUSED by geo-build (nsub=80, not a multiple
+  of 32 — the F97 padding). The exact-packing way to spend bytes on down_proj
+  is to raise **K at fixed d** (d4-K256 -> d4-K512), which the WARM curve
+  measured: best prose of any arm, but beaten by L47 on code and literary.
+
+## F101 (2026-09-15) — [numerics half SUPERSEDED by F103] The new mixed geometry LOADS ON THE PUBLISHED arc6 RUNTIME. Weights and runtime are separable; neither release needs the other.
+
+Context: the Hub serves the **arc6** runtime frozen 2026-09-09 (verified by
+downloading `model.py` from Qwen3.8-Flash-Next-VQ-2.1bpw: 4159 lines, and
+NONE of `VQ_D4_WALK`, `VQ_GEMMSEG_OTILE64`, `VQ_GEMMSEG_PH2V`,
+`VQ_GEMMSEG_BF16IO`, `VQ_DECODE_BF16IO` present). Fleet audit: **all 20
+published repos are arc6.** docs/V2-RUNTIME.md requires a ppl spot-check
+because a few v2 pieces are 1-ULP-equivalent, not bit-exact.
+
+Spot-check, same weights, arc6 `model.py` vs v2 `model.py`, 12k, 3 corpora:
+
+| artifact | Δprose | Δcode | Δliterary |
+|---|---|---|---|
+| Flash-2.1 v1 (d8-K16384 + d2) | +0.0197 | −0.0001 | −0.0183 |
+| Flash-2.1 v2 cand (d8+d4+d2) | −0.0039 | −0.0010 | +0.0052 |
+
+Deltas are **unsigned** — v2 is worse on one corpus and better on another
+within the same artifact, |Δ| <= 0.02. On this evidence alone I told Noah the
+1-ULP concern was retired. **That was premature: it held only for Flash's
+geometries.** See F103 — the first d4-K2048 artifact tested broke it, and the
+cause turned out to be a single flag.
+
+COVERAGE, stated honestly: this exercises d8-K16384 (256 KB codebook — the
+**device**-codebook branch, f35f04f's `cb >= 16 KB`), d4-K256 (2 KB —
+**threadgroup** branch) and d2-K256. Both branches, three d values, one
+family. `vq_dense.py` carries NONE of the v2 flags and has not changed since
+2026-09-05 (pre-freeze), so the 4 dense repos (27B x3, e4b-PLE) cannot move
+numerically by construction — their refresh is a text-only re-bundle.
+
+SEPARABILITY (the operationally important half): the **arc6 runtime loads
+and scores the new mixed geometry with zero errors**, `pack_bits` and
+exact-packed d4-K256 modules included. Candidate on arc6 = 5.6749 / 1.7081 /
+7.6758 — still far ahead of v1 on either runtime. So the v2 weights do NOT
+require the v2 runtime, and the two can ship in either order.
+
+## F102 (2026-09-15) — METHOD DEBT: three "not available" conclusions from incomplete searches in one session.
+
+Recorded because the pattern, not any one instance, is the finding.
+(1) Claimed no unshipped runtime, having compared against a local SCRATCH
+copy of Flash-2.1 instead of the Hub — the scratch copy had been re-bundled;
+the Hub had not. (2) Claimed no 35B artifact existed for the d4 spot-check,
+having searched `vqlab-scratch/` and the HDD but not
+`/Volumes/Thunderbay SSD/Exo Models/`, which holds local copies of **all 20
+published repos**. (3) Planned "GLM as a small single-box rung" without
+sizing it — GLM rungs are 108-141 GiB, cluster-tier.
+
+RULE (extends the fleet-audit rule that produced F97): **a negative result
+about what exists is a claim, and needs the same search discipline as a
+positive one.** `Exo Models/` is the local mirror of the published fleet —
+check it before concluding an artifact is unavailable.
+
+## F103 (2026-09-15) — `VQ_DECODE_BF16IO` IS THE ONLY NUMERICS-CHANGING FLAG IN THE v2 RUNTIME, and it is NOT 1-ULP: +0.97% code ppl on d4-K2048. The other four v2 flags are bit-exact. Turning it off reproduces arc6 to all 15 digits — so v2 can ship bit-exact.
+
+CORRECTS F101's "1-ULP retired" and supersedes docs/V2-RUNTIME.md's framing
+that v2 is "identical or 1-ULP-equivalent" as a whole.
+
+Trigger: the Flash spot-check (F101) scattered ±0.02 across corpora and I read
+that as noise. The first artifact tested at **d4-K2048** — 35B-3.4, the 16 KB
+codebook that sits exactly on f35f04f's `cb >= 16 KB` device/threadgroup
+branch boundary, and the rung docs/V2-RUNTIME.md itself names — disagreed:
+
+| 35B-3.4, same weights | prose | code | literary |
+|---|---|---|---|
+| arc6 | 5.4109 | 2.3110 | 1.2663 |
+| v2 (all flags on) | 5.4101 | 2.3334 | 1.2662 |
+| Δ | −0.0007 | **+0.0224** | −0.0001 |
+
+Prose and literary agree to ~1e-4 — the runtime demonstrably CAN reproduce.
+So +0.0224 on code is ~30x this artifact's own floor and is NOT noise.
+
+BISECT (code corpus, 12k, one flag off at a time):
+
+| arm | ppl |
+|---|---|
+| v2 all-on | 2.333397208267632 |
+| `VQ_GEMMSEG_BF16IO=0` | 2.333397208267632 |
+| `VQ_D4_WALK=0` | 2.333397208267632 |
+| `VQ_GEMMSEG_OTILE64=0` | 2.333397208267632 |
+| `VQ_GEMMSEG_PH2V=0` | 2.333397208267632 |
+| **`VQ_DECODE_BF16IO=0`** | **2.310952483346676** |
+| ALL-OFF | 2.310952483346676 |
+| arc6 `model.py` | 2.310952483346676 |
+
+`VQ_DECODE_BF16IO=0` reproduces arc6 to **all 15 digits**. The four gemmseg /
+walker flags are bit-exact exactly as their commits (F51/F54/F56/F58) claimed.
+The entire v2 numerics delta is the decode-side bf16 I/O item (ac2fa60, F53).
+
+CONSEQUENCE — a shipping option the doc did not consider: **ship v2 with
+`VQ_DECODE_BF16IO` defaulted OFF.** Keeps +11.9% prefill (all gemmseg, bit-
+exact) and the d4 walker's +12% decode (bit-exact); gives up only that one
+item's share of the +3.3-3.8% decode. Fleet-wide numerics then become
+bit-exact, which removes the per-geometry ppl spot-check from the refresh
+entirely — no judgment call about whether 0.02 is acceptable on 20 repos.
+
+METHOD: the flags are env-overridable, so bisecting cost 7 scores (~10 min)
+and turned "is 0.02 acceptable?" into "which component, and is it worth its
+speed?". **Bisect a numerics delta before accepting or rejecting it** — an
+aggregate verdict on a flag STACK hides that 4 of 5 members are free.
+
+## F104 (2026-09-15) — fleet refresh gating, first pass: 6/6 MoE rungs PASS; the 4 DENSE repos need `rebundle-dense`, and `bundle` REFUSED them rather than corrupting them.
+
+Staged from `/Volumes/Thunderbay SSD/Exo Models/` (local mirror of all 20
+published repos) into scratch copies with symlinked shards — a refresh
+rewrites only `model.py`, so staging costs no disk.
+
+PASS (bundle + check-bundle + strict smoke + large-N prefill smoke +
+check-release): 35B-3.4 / 3.8 / 4.6 / 5.4, Flash-Next-2.1, gemma-4-26b-a4b.
+
+REFUSED, correctly: Qwen3.8-27B x3 and gemma-4-e4b-PLE —
+
+    REFUSING: this is a DENSE artifact (config carries vq_linear/vq_embed).
+    Its bundle must contain vq_switch.py AND vq_dense.py plus the dense shim
+    — use build-dense, not bundle. Running this command would overwrite the
+    dense runtime with a MoE-only one.
+
+My script ran `bundle` on all ten. The guard caught it; the correct command is
+`rebundle-dense`. Third tool-refusal that caught an operator error in one
+session (geo-build refusing ragged d8, F100; bundle refusing dense, here).
+**The refusals are load-bearing — read what they say instead of routing
+around them.**
+
+Note these 4 dense repos cannot move numerically under v2 regardless:
+`vq_dense.py` carries none of the v2 flags and is unchanged since 2026-09-05
+(pre-freeze). Their refresh is a text-only re-bundle.
