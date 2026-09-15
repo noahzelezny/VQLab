@@ -32,7 +32,7 @@ the findings log; artifacts are not.)
 | Qwen3.5-397B | 2.2/2.4/2.6/3.1 (+3bpw card G) | **2.2 = v2 (d8-K16384 mixed), v1->v2 measured -3.5% prose**; 2.4/2.6/3.1 and card G are FLAT | card-G one-harness table (below) | **V1 artifacts only** (below) | in-artifact + HDD demote fits + bf16 | re-bench v2 artifacts; flagship swap (Noah) |
 | Qwen3.6-35B | 3.4/3.8/4.6/5.4 | 4.6 mixed (unaudited); rest flat | 3.4 rung, this week (below) | 3.4 rung, this week (below) | in-artifact only + bf16 teacher | geometry ladder never run; alternation candidate (F81) |
 | Qwen3.8-27B (dense) | 3.9/4.5/4.8 | flat (vq_linear schema) | none | none | unaudited | audit before touching |
-| Qwen3.8-Flash-Next | 2.1/3.2/4.4/5.5 | hand-set front mixes, NOT ladder | 2.1 rung full grid (below) | **one-harness incl 8bit ref** (below) | full fit set on SSD + bf16 teacher | **Flash-2.1 v2 ship candidate**; other rungs' knees unmeasured |
+| Qwen3.8-Flash-Next | 2.1/3.2/4.4/5.5 | **2.1 = v2 (sweep-derived, 9 promoted layers)**; 3.2/4.4/5.5 hand-set | 2.1 rung v1-vs-v2 at 12k (below) | **one-harness incl 8bit ref** (below) | full fit set on SSD + bf16 teacher | **Flash-2.1 v2 gate-complete, UNPUBLISHED**; other rungs' knees unmeasured |
 | gemma-4-26b | 6.2 | flat | anomaly-caveated (GEMMA4_PPL_ANOMALY) | struct-experiment rows only (results_crush); shipped rung unbenched | unaudited | none open |
 | gemma-4-e4b PLE | 1 repo | n/a | none | none | PLE fit family on SSD | none open |
 
@@ -123,12 +123,31 @@ d4-K2048×126 · 4.4 = d2-K1024×18 + d2-K256×126 · 5.5 = flat d2-K1024.
 Hand-set front-protection mixes — R0 (F82) proved the front protection
 CORRECT, but no rung is ladder-derived.
 
-**2.1 rung ppl grid** (resident instrument, this campaign):
+**2.1 rung — v1 vs v2 on the HOUSE THREE at 12k tokens** (2026-09-15,
+scripts/score_ppl_resident.py --max-tokens 12288, one harness, all rows
+re-measured same session; artifact = sweep_alt9/art_set_..._47, gate-complete,
+UNPUBLISHED):
+
+| | prose | code | literary | GiB |
+|---|---|---|---|---|
+| shipped 2.1 (v1) | 5.8327 | 1.7248 | 7.8018 | 47.920 |
+| **2.1 v2** | **5.6710** | **1.7071** | **7.6810** | **47.895** |
+| delta | −0.1617 | −0.0177 | −0.1208 | −0.025 |
+
+v2 geometry: front L0-1 d2-K256 (unchanged) + 46 down_proj d4-K256 (F97
+exact-pack) + gate/up d4-K256 on L27,28,29,30,31,32,33,35,47 + remaining
+gate/up d8-K16384. Chosen by `vqlab alloc-sweep` (18 builds), not by hand.
+
+Runs on the PUBLISHED arc6 runtime too (5.6749 / 1.7081 / 7.6758, F101) —
+the weights do not require the v2 runtime.
+
+SUPERSEDED 2048-token rows (F99 — that instrument inverted the literary sign;
+kept only so the older campaign numbers are traceable):
 
 | arm | wikitext-12k | corpus-B | code |
 |---|---|---|---|
 | shipped 2.1 | 5.8327 | 8.3372 | 1.4106 |
-| **v2 (measured knee, ship candidate)** | **5.7698 (−1.08%)** | 8.3394 | 1.4063 |
+| earlier v2 arm (2k instrument) | 5.7698 (−1.08%) | 8.3394 | 1.4063 |
 | probes: front-demote | +3.21% | +3.40% | +0.56% |
 | trough 12-19→K4096 / late 32-39→K4096 | +0.13% / +2.32% | +1.19% / +2.27% | — |
 | tail-promote 44-47 (non-iso) | −2.47% | −1.23% | — |
@@ -178,6 +197,26 @@ ad-hoc substitutes I built (quantlab FINDINGS.md; an mlx_lm source dump)
 (one instrument, all arms) so the DELTAS stand, but they are not
 protocol-comparable to any card number. Re-run on the house three before
 anything goes on a card.
+
+## Runtime column — what each repo SERVES (2026-09-15)
+
+All 20 published repos serve the **arc6** runtime frozen 2026-09-09 (verified
+by downloading model.py from the Hub, F101). The repo default is the **v2**
+runtime; nothing is published with it yet. v2 numerics are bit-exact EXCEPT
+`VQ_DECODE_BF16IO`, which costs +0.97% code ppl on d4-K2048 (F103) — with
+that one flag off, v2 reproduces arc6 to 15 digits.
+
+Refresh gating, first pass (F104): 35B x4, Flash-2.1, gemma-4-26b PASS.
+27B x3 + gemma-4-e4b-PLE are DENSE — they need `rebundle-dense`, and cannot
+move numerically (vq_dense.py carries no v2 flags, unchanged since 09-05).
+
+## PPL instrument (F99 — read before quoting any ppl row)
+
+**Score release-gating ppl at >= 12k tokens.** The 2048-token setting is a
+liveness check: it reads 0.17% of the literary corpus and INVERTED the sign
+of the literary column on the same artifact (exact-pack read +0.165 at 2k,
+−0.163 at 12k). 12k reproduces this ledger's historical rows (35B-3.4 prose
+5.4109 vs recorded 5.4101), so it is the house instrument.
 
 ## Bench-row comparability (F87)
 
