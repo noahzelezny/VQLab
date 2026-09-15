@@ -375,7 +375,7 @@ Still untested and now the most plausible remaining lever:
 | what | where |
 |------|-------|
 | qwen4_exp runtime venv | `~/.venvs/qwen4exp` on **both** M3 and M4 (mlx-lm 0.32.0 from the unmerged PR ml-explore/mlx-lm#1788; README inside explains why) |
-| repo copy on M4 | `~/vqlab-mtp` (rsync target; `PYTHONPATH=~/vqlab-mtp/src`) |
+| repo copy on M4 | `/Volumes/Thunderbay SSD/vqlab-repo` (one shared git clone since 2026-09-15; `~/vqlab-mtp` retired to `~/attic-2026-09-15/`) |
 | heads (M4) | `~/heads/mtp-head-e3q8.safetensors` (1.25 GiB), `mtp-head-e4q8.safetensors` (1.55) |
 | q6 head | `/Volumes/Thunderbay SSD/Exo Models/mtp-head-q6.safetensors` (2.14 GiB) |
 | **397B graft** | `~/heads/mtp-graft-397b-bf16.safetensors` on **both** M3 and M4 — 1553 tensors, 12.29 GiB, all-zero gated |
