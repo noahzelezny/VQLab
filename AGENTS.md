@@ -36,6 +36,8 @@ grep -rli "<the concept>" src/vqlab/ docs/ research/quantlab/
 | task benchmarks | `research/quantlab/score_tasks_streaming.py` (layer-streamed; scores models larger than RAM) | a new eval harness |
 | is this artifact releasable? | `vqlab check-release` / `check-bundle` / `selftest` | eyeballing |
 | fit a mixed-geometry rung | `vqlab fit-moe --vq-layers` (scatter fits) | bespoke build scripts |
+| rebuild an artifact at a new per-layer geometry | `vqlab geo-build` (diff-style: named modules refit from the bf16 teacher, everything else keeps shipped bytes; REFUSES ragged nsub, sets pack_bits, verifies fit reuse by codebook shape) | hand-rolled build scripts in scratch |
+| how many layers to promote / demote? | `vqlab alloc-sweep` — measures the COST and VALUE curves one variable at a time and prints the marginal-ppl-per-100MB frontier | picking a number, building it, and generalizing from n=1 |
 
 If an instrument genuinely does not exist, **add it to `src/vqlab/` with a CLI
 entry** rather than leaving a script in scratch. That is why the toolkit is
