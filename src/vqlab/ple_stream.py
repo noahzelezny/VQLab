@@ -15,21 +15,26 @@ are touched. The result is either MLX's memory-limit spin or, once the eval
 is deferred, a single command buffer big enough for the Metal watchdog to
 kill (F115 measured both).
 
-THE FIX. The gather itself is tiny -- a few thousand rows of 160 -- so the
-cost is entirely in holding the tables. After each shard is used, evaluate
-the accumulator to cut the graph and REPLACE THE SHARD'S WEIGHT WITH A FRESH
-LAZY HANDLE, which drops the materialised buffer. Peak falls from 96 GiB to
-roughly one shard.
+THE FIX. The gather is TINY -- a few thousand rows of 160 values, about a
+megabyte -- so nothing about the lookup needs 96 GiB; only holding the tables
+does. Rather than materialise a shard to read a few rows out of it, mmap the
+shard's bytes and index the rows directly, so the OS pages in the ~4 KB per
+row actually touched and nothing else. bf16 is widened to float32 with a
+uint16 -> uint32 << 16 view, which is exact (bf16 is the top half of a
+float32).
 
-THIS CHANGES NO ARITHMETIC. Same ops, same order, same values; only the
-evaluation boundary and the lifetime of the weights move. That matters
-because this is the runtime our artifacts BUNDLE (TWO-RUNTIMES.md, F31), so
-it is installed at RUNTIME on a loaded model, per process, and never edited
-into the venv or into a shipped model.py.
+A FIRST VERSION OF THIS FILE materialised each shard, used it, then replaced
+its weight with a fresh lazy handle to free the buffer. That bounded memory
+correctly and was catastrophic for time: the tables are re-read ON EVERY
+CALL, and the caller chunks the sequence, so a 12288-token pass at chunk 512
+re-read 96 GiB twenty-four times -- 2.3 TB of I/O to use 24 MB of rows.
+Bounding memory is not the same as not wasting work.
 
-THE COST is re-reading the tables once per call rather than once per load.
-Put the teacher on fast storage before using this: on the archive HDD a
-12k-token pass re-reads ~96 GiB per chunk.
+THIS CHANGES NO ARITHMETIC. The same rows are gathered into the same
+positions; only where the bytes come from changes. That matters because this
+is the runtime our artifacts BUNDLE (TWO-RUNTIMES.md, F31), so it is
+installed at RUNTIME on a loaded model, per process, and never edited into
+the venv or into a shipped model.py.
 
     from ple_stream import install
     n = install(model, model_path)     # -> number of shard modules bounded
@@ -37,7 +42,11 @@ Put the teacher on fast storage before using this: on the archive HDD a
 import json
 import os
 
+import time
+
 import mlx.core as mx
+
+STATS = {"calls": 0, "rows": 0, "secs": 0.0}
 
 
 def _index(model_path):
@@ -114,29 +123,76 @@ def install(model, model_path, verbose=True):
 
 
 def _bind(emb, keys, verbose, path):
+    """Install the row-wise gather ON THE CLASS, not the instance.
+
+    `emb.__call__ = f` DOES NOT WORK and fails silently: Python resolves
+    special methods on the TYPE, so `emb(gid)` still reaches the original
+    `type(emb).__call__`. The first version of this file did exactly that,
+    reported success, and never ran -- the teacher pass it was credited with
+    unblocking had actually been unblocked by the eager-eval budget alone.
+    Measured the only way it could be: a call counter that read zero.
+
+    The class is patched once and dispatches per instance, so an instance
+    without a key map keeps the original behaviour.
+    """
     import numpy as np
 
-    rows, dim = emb.rows, emb.dim
+    cls = type(emb)
+    emb._ps_keys = keys
+    emb._ps_readers = {}
 
-    def streamed(gid):
+    if getattr(cls, "_ps_patched", False):
+        if verbose:
+            print(f"[ple_stream] row-wise gather enabled on "
+                  f"{path or '<root>'} ({emb.n_shards} shards)", flush=True)
+        return
+
+    orig = cls.__call__
+
+    def reader(self, s_idx):
+        if s_idx not in self._ps_readers:
+            fpath, key = self._ps_keys[s_idx]
+            with open(fpath, "rb") as fh:
+                hlen = int.from_bytes(fh.read(8), "little")
+                hdr = json.loads(fh.read(hlen))
+            info = hdr[key]
+            if info["dtype"] not in ("BF16", "F16"):
+                raise SystemExit(f"FAIL: {key} is {info['dtype']}; "
+                                 f"ple_stream handles BF16/F16 only.")
+            start = 8 + hlen + info["data_offsets"][0]
+            mm = np.memmap(fpath, dtype=np.uint16, mode="r", offset=start,
+                           shape=tuple(info["shape"]))
+            self._ps_readers[s_idx] = (mm, info["dtype"])
+        return self._ps_readers[s_idx]
+
+    def patched(self, gid):
+        if not hasattr(self, "_ps_keys"):
+            return orig(self, gid)
+        t0 = time.time()
+        rows, dim = self.rows, self.dim
         flat = gid.reshape(-1)
         shard_of = np.array(flat // rows, copy=False)
-        row_of = flat % rows
-        out = mx.zeros((flat.size, dim), dtype=mx.float32)
-        for s in np.unique(shard_of).tolist():
-            sel = mx.array(np.nonzero(shard_of == s)[0])
-            mod = getattr(emb, f"shard_{s}")
-            e = mod(mx.take(row_of, sel))
-            out = mx.put_along_axis(out, sel[:, None],
-                                    e.astype(mx.float32), axis=0)
-            mx.eval(out)                       # cut the graph here
-            ent = keys.get(int(s))
-            if ent is not None:                # drop the materialised table
-                mod.weight = mx.load(ent[0])[ent[1]]
-            mx.clear_cache()
-        return out.reshape(*gid.shape, dim)
+        row_of = np.array(flat % rows, copy=False)
+        out = np.zeros((flat.size, dim), dtype=np.float32)
+        for s_idx in np.unique(shard_of).tolist():
+            sel = np.nonzero(shard_of == s_idx)[0]
+            s_idx = int(s_idx)
+            if s_idx not in self._ps_keys:
+                raise SystemExit(f"FAIL: shard {s_idx} missing from the "
+                                 f"index; refusing to skip rows silently.")
+            mm, dt = reader(self, s_idx)
+            raw = np.asarray(mm[row_of[sel]])   # pages in only these rows
+            if dt == "BF16":                    # exact: bf16 is the high half
+                out[sel] = (raw.astype(np.uint32) << 16).view(np.float32)
+            else:
+                out[sel] = raw.view(np.float16).astype(np.float32)
+        STATS["calls"] += 1
+        STATS["rows"] += int(flat.size)
+        STATS["secs"] += time.time() - t0
+        return mx.array(out).reshape(*gid.shape, dim)
 
-    emb.__call__ = streamed
+    cls.__call__ = patched
+    cls._ps_patched = True
     if verbose:
-        print(f"[ple_stream] streaming gather installed on {path or '<root>'} "
-              f"({emb.n_shards} shards)", flush=True)
+        print(f"[ple_stream] row-wise gather installed on {cls.__name__} "
+              f"for {path or '<root>'} ({emb.n_shards} shards)", flush=True)
