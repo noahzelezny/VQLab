@@ -90,7 +90,6 @@ def score_qwen4_exp(model, ids_list, args):
             mx.eval(blk.parameters())
         t0 = time.time()
         c = caches[i]
-        idx_c = c.indexer if (c is not None and hasattr(c, "indexer")) else None
         parts = []
         for k, s0 in enumerate(range(0, S, C)):
             e0 = min(s0 + C, S)
@@ -103,6 +102,12 @@ def score_qwen4_exp(model, ids_list, args):
             mask = None if is_lin else create_attention_mask(hc_, c)
             conv_mask = create_ssm_mask(hc_, c) if is_lin else None
             pc = prev_ctxs[k] if prev_ctxs is not None else None
+            # Re-read the indexer EVERY chunk: the reference reads it once per
+            # __call__, and one __call__ is one chunk. Hoisting it out of the
+            # loop holds a stale object if the cache replaces rather than
+            # mutates it.
+            idx_c = c.indexer if (c is not None and
+                                  hasattr(c, "indexer")) else None
             parts.append(blk(hc_, core.rope, mask, conv_mask, c, idx_c,
                              ids_c, pc))
         h = mx.concatenate(parts, axis=1) if len(parts) > 1 else parts[0]
@@ -121,14 +126,32 @@ def score_qwen4_exp(model, ids_list, args):
         mx.eval(mixer.parameters(),
                 head.parameters() if head is not None
                 else core.embed_tokens.parameters())
-    out = mixer(h)
-    logits = (head(out) if head is not None
-              else core.embed_tokens.as_linear(out)).astype(mx.float32)[0]
+    # Head in CHUNKS too. vocab is 248320 here, so a whole-sequence projection
+    # is 9.5 GiB of fp32 logits at 10240 tokens -- the largest length-scaling
+    # op in the pass, and the resident scorer never builds it (it accumulates
+    # NLL per chunk). Chunking keeps each matmul the size the model is
+    # normally run at.
+    lg = []
+    for s0 in range(0, S, C):
+        o = mixer(h[:, s0:min(s0 + C, S)])
+        lg.append((head(o) if head is not None
+                   else core.embed_tokens.as_linear(o)).astype(mx.float32)[0])
+        mx.eval(lg[-1])
+    logits = mx.concatenate(lg, axis=0) if len(lg) > 1 else lg[0]
     return logits
 
 
 def score_glm5_next(model, ids_list, args):
-    """GLM-5.3-Flash streamed scorer. VALIDATED per rule 5 (see below).
+    """GLM-5.3-Flash streamed scorer. RULE-5 RUN IS STALE — see F113.
+
+    The 2026-08-29 validation below was run on the UNCHUNKED version at 33
+    tokens, where chunking cannot matter. The qwen4_exp twin carried the same
+    structure and was wrong by 0.03 at 2048 and catastrophically above 8192
+    (F112); this function has now been given the same fix (per-layer cache
+    across --chunk blocks, chunked head projection) but has NOT been re-run
+    against a direct forward. Re-validate before any GLM number from it enters
+    a ladder or a card.
+
 
     Written 2026-08-29; LINE-VERIFIED the same day against the installed
     release (mlx-vlm 0.6.17, venv glm5vlm) — every step below mirrors
@@ -176,14 +199,14 @@ def score_glm5_next(model, ids_list, args):
                          f"{type(core).__module__} — the runtime's helper "
                          "names moved; update score_glm5_next against the "
                          "resolved module before scoring.")
-    # masks on the PRE-broadcast h, exactly as Glm5NextModel.__call__ does
-    attn_mask = make_attn(h, None, return_array=True)
-    ssm_mask = make_ssm(h, None) if make_ssm is not None else None
-
     h = mx.broadcast_to(h[:, :, None, :],
                         (*h.shape[:2], core.hc_mult, h.shape[-1]))
     h = mx.contiguous(h)
     mx.eval(h)
+
+    S = ids.shape[1]
+    C = max(1, int(getattr(args, "chunk", 512) or 512))
+    caches = lm.make_cache() if hasattr(lm, "make_cache") else [None] * len(core.layers)
 
     n = len(core.layers)
     for i in range(n):
@@ -191,11 +214,23 @@ def score_glm5_next(model, ids_list, args):
         with mx.stream(mx.cpu):
             mx.eval(blk.parameters())
         t0 = time.time()
-        mask = ssm_mask if blk.is_linear else attn_mask
-        h = blk(h, mask=mask, cache=None)
+        c = caches[i] if caches else None
+        parts = []
+        for s0 in range(0, S, C):
+            e0 = min(s0 + C, S)
+            hc_ = h[:, s0:e0]
+            # masks rebuilt per chunk against THIS layer's cache, mirroring the
+            # per-call construction in Glm5NextModel.__call__
+            hp = hc_[:, :, 0, :] if hc_.ndim == 4 else hc_
+            m = (make_ssm(hp, c) if (blk.is_linear and make_ssm is not None)
+                 else make_attn(hp, c, return_array=True))
+            parts.append(blk(hc_, mask=m, cache=c))
+        h = mx.concatenate(parts, axis=1) if len(parts) > 1 else parts[0]
         mx.eval(h)
         core.layers[i] = None
-        del blk
+        if caches:
+            caches[i] = None
+        del blk, parts
         gc.collect()
         mx.clear_cache()
         print(f"  layer {i}/{n-1} {time.time()-t0:.1f}s "
@@ -210,8 +245,15 @@ def score_glm5_next(model, ids_list, args):
     with mx.stream(mx.cpu):
         mx.eval(head.parameters() if (head is not None and not tied)
                 else core.embed_tokens.parameters())
-    logits = (head(out) if (head is not None and not tied)
-              else core.embed_tokens.as_linear(out)).astype(mx.float32)[0]
+    # Head in CHUNKS: a whole-sequence projection is the largest
+    # length-scaling op in the pass and is what broke qwen4_exp above 8192.
+    lg = []
+    for s0 in range(0, out.shape[1], C):
+        o = out[:, s0:min(s0 + C, out.shape[1])]
+        lg.append((head(o) if (head is not None and not tied)
+                   else core.embed_tokens.as_linear(o)).astype(mx.float32)[0])
+        mx.eval(lg[-1])
+    logits = mx.concatenate(lg, axis=0) if len(lg) > 1 else lg[0]
     return logits
 
 
@@ -222,8 +264,10 @@ def score_glm5_next(model, ids_list, args):
 SCORERS = {
     "qwen4_exp": {"fn": score_qwen4_exp, "family": "qwen4_exp",
                   "validated": True},
+    # F113: the 2026-08-29 rule-5 run predates the chunking fix and was done
+    # at 33 tokens, where chunking cannot matter. Re-validate before trusting.
     "glm5_next": {"fn": score_glm5_next, "family": "glm5_next",
-                  "validated": True},   # rule-5 run 2026-08-29, see docstring
+                  "validated": False},
 }
 
 
