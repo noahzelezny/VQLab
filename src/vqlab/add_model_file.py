@@ -17,6 +17,15 @@ ap.add_argument("--artifact", required=True)
 ap.add_argument("--k", type=int, default=256)
 ap.add_argument("--dim", type=int, default=4)
 ap.add_argument("--group", type=int, default=64)
+ap.add_argument("--runtime", choices=["v1.5", "v2"], default="v1.5",
+                help="runtime PROFILE to bake into the bundle. v1.5 (default) "
+                     "leaves both bf16-I/O flags OFF: bit-exact with the arc6 "
+                     "runtime every published artifact shipped, +8.1%% prefill "
+                     "/ +12.2%% decode from the bit-exact gemmseg+walker work. "
+                     "v2 turns them ON: +11.0%%/+19.2%%, at a small "
+                     "family-local accuracy cost (F103/F105). An artifact "
+                     "whose own quality gain pays for that cost may ship v2; "
+                     "see docs/RUNTIME-SHIP-PLAN.md.")
 args = ap.parse_args()
 
 ART = pathlib.Path(args.artifact)
@@ -81,6 +90,10 @@ cfg["vq_modules"] = vq_modules
 json.dump(cfg, open(ART / "config.json", "w"), indent=1)
 
 runtime = (pathlib.Path(__file__).parent / "vq_switch.py").read_text()
+if args.runtime == "v2":
+    import vqlab.runtime_profile as _ba
+    runtime = _ba.apply_profile(runtime, "v2")
+print(f"runtime profile: {args.runtime}")
 shim = '''
 
 # ---------------------------------------------------------------------------
