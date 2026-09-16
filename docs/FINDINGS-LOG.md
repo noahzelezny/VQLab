@@ -3045,3 +3045,69 @@ this session (F102), and the second one in that same directory. KL is pinned
 to 2048 by that cache: the scorer hard-fails if token ids differ
 (stream_score.py:255-258), so there is no 12k KL without re-caching, and
 re-caching needs the 335 GiB teacher.
+
+## F109 (2026-09-15) — `vqlab.stream_score` DEGRADES MONOTONICALLY WITH SEQUENCE LENGTH on qwen4_exp: wrong by +0.30 ppl at 3072 and +1.21 at 6144, diverging to 274 at 12288. It is correct ONLY at its validated 2048. The resident scorer moves the OPPOSITE way, which is the physically right direction.
+
+Measured on the shipped Flash-2.1 (art_flash_rev2), prose referee, one box,
+`--tokens` swept:
+
+| tokens | stream_score | resident scorer |
+|---|---|---|
+| 2048 | 5.885741 | 5.9308 |
+| 3072 | 6.181741 | — |
+| 4096 | 6.515538 | — |
+| 6144 | 7.099591 | — |
+| 12288 | **274.835** | **5.8327** |
+
+**The sign is the tell.** More context should LOWER perplexity, and the
+resident full-forward does exactly that (5.9308 -> 5.8327). stream_score
+RISES monotonically from the first step above 2048. So this is not the corpus
+getting harder deeper in — the two scorers disagree in DIRECTION on identical
+text.
+
+Smooth and progressive, not a cliff: it is not a sliding-window or mask
+boundary. Consistent with positional handling or accumulating state error
+inside the streamed per-layer forward (qwen4_exp carries recurrent state in
+its gated-deltanet linear-attention layers). NOT diagnosed further here.
+
+WHY IT MATTERS: the error at 3072 (+0.30) is roughly TWICE the size of the
+entire Flash-2.1 v1->v2 effect (0.16 prose). Any allocation or release
+decision taken on a streamed number above 2048 would be dominated by the bug.
+
+CONSEQUENCE FOR THE CARD: 178 GiB (8bit) and 335 GiB (bf16) exceed the
+resident scorer's RAM, so streaming is the only path to a ppl for them — and
+streaming is only correct at 2048. **Those rows can exist at 2048 and CANNOT
+exist at 12k.** Not a size limit: a correctness limit, and a fixable one.
+
+CORROBORATION that 2048 streaming is sound: the 8bit affine rung re-scored
+today reproduces TABLE.md's August row EXACTLY (prose 5.196815 vs 5.1968,
+code 1.913842 vs 1.9138, literary 7.669456 vs 7.6695).
+
+## F110 (2026-09-15) — CORRECTS F108: the card instrument is NOT "gone". It reproduces EXACTLY for affine rungs; only VQ rungs drift, because the VQ runtime itself changed. The drift is the thing we shipped, not measurement rot.
+
+F108 concluded from `--verify-instrument` (shipped VQ rung: KL 391.64 vs
+TABLE.md's 390.09, prose 5.8871 vs 5.9033) that the August instrument no
+longer existed. That was the wrong inference from a VQ-only sample.
+
+Re-scoring the **8bit affine** rung today reproduces August to every printed
+digit:
+
+| | today | TABLE.md (August) |
+|---|---|---|
+| prose | 5.196815 | 5.1968 |
+| code | 1.913842 | 1.9138 |
+| literary | 7.669456 | 7.6695 |
+
+MECHANISM: affine rungs run stock mlx paths, which did not change. VQ rungs
+run the kernels bundled in their own `model.py` — and those changed between
+August and now (F51/F53/F54/F56/F58, the v2 runtime work). So a VQ rung
+reading differently today is the RUNTIME CHANGE being measured, exactly as
+intended; it is not the measurement stack rotting.
+
+Both qwen4exp venvs agreeing to four decimals should have pointed at this
+immediately: two independent installs do not drift identically by accident.
+
+PRACTICAL: TABLE.md's affine and bf16 rows remain citable as-is. A VQ row
+must be re-measured on the runtime it actually ships with — which is the
+normal rule (a number older than the artifact it faces gets re-measured),
+not a special instrument problem.
