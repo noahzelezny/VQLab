@@ -62,28 +62,44 @@ ITERS_ALT = 12
 EXT = ".safetensors"
 
 
-def part_name(module, d, k):
-    """Fit filename: the MODULE and the GEOMETRY that produced it.
+def part_name(module, d, k, tag=None):
+    """Fit filename: MODULE, GEOMETRY, and optionally a content tag.
 
-    A fit is identified by (module, d, K) -- naming it after the module alone
-    made two rungs' different geometries collide on one filename with
-    different bytes (2026-09-15: `model.layers.28...gate_proj` existed twice,
-    same name, same size, different content). That makes an archive
-    un-deduplicable and a cross-rung reuse silently wrong. Put the identity
-    in the name.
+    Three levels of identity, each of which was learned the hard way on
+    2026-09-15:
+
+    * MODULE alone (the original scheme) collides across rungs -- two
+      geometries produced `model.layers.28...gate_proj` with identical names
+      and sizes and different bytes. The original scheme survived that only
+      because the enclosing *_parts dir named the fit run; flatten the two
+      levels into one and the run identity is lost.
+    * + GEOMETRY still collides, because fitting is STOCHASTIC (k-means++
+      seeding): 138 (module, d, K) slots in the 2026-09 Flash pool hold two
+      DIFFERENT valid codebooks from two different runs.
+    * + a short CONTENT TAG is unique. Pass `tag` when pooling fits from
+      several runs into one directory (an archive); omit it inside a single
+      build's parts dir, where the dir already names the run.
     """
-    return f"{module}.d{int(d)}-K{int(k)}{EXT}"
+    stem = f"{module}.d{int(d)}-K{int(k)}"
+    return f"{stem}.{tag}{EXT}" if tag else f"{stem}{EXT}"
 
 
 def parse_part(fname):
-    """(module, d, K) from a part filename; (module, None, None) if legacy."""
+    """(module, d, K) from a part filename; (module, None, None) if legacy.
+
+    Tolerates an optional trailing content tag written by `part_name(tag=...)`.
+    """
     base = fname[:-len(EXT)] if fname.endswith(EXT) else fname
-    head, _, tail = base.rpartition(".")
-    if head and tail.startswith("d") and "-K" in tail:
-        dpart, _, kpart = tail.partition("-K")
-        if dpart[1:].isdigit() and kpart.isdigit():
-            return head, int(dpart[1:]), int(kpart)
-    return base, None, None
+    for _ in range(2):                      # strip an optional content tag
+        head, _, tail = base.rpartition(".")
+        if head and tail.startswith("d") and "-K" in tail:
+            dpart, _, kpart = tail.partition("-K")
+            if dpart[1:].isdigit() and kpart.isdigit():
+                return head, int(dpart[1:]), int(kpart)
+        if not head:
+            break
+        base = head
+    return (fname[:-len(EXT)] if fname.endswith(EXT) else fname), None, None
 
 
 def _log(*a):

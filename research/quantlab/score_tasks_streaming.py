@@ -417,9 +417,56 @@ def _build_lm(model_path, batch_seqs, direct=False, allow_unmatched=False):
                 "referee/score_streaming.py for perplexity")
 
         def generate_until(self, requests):
-            raise NotImplementedError(
-                "this scorer is loglikelihood-only; the tasks it targets "
-                "(hellaswag/piqa/winogrande) never generate")
+            """Greedy generation for generative tasks (gsm8k, humaneval, ...).
+
+            DIRECT PATH ONLY, and that is not a shortcut -- it is the whole
+            argument. Layer streaming costs ONE PASS OVER THE MODEL'S BYTES
+            per forward. A loglikelihood task gets away with that because
+            every sequence is batched through a layer before the layer is
+            freed, so the task costs one pass total. Generation cannot: token
+            t+1 needs every layer again after token t, so an N-token answer
+            would re-read the model N times. For a 45 GiB artifact and a
+            256-token gsm8k answer that is ~11 TiB of reads per item.
+
+            So: if the model fits in RAM, generate with it resident. If it
+            does not, this refuses rather than pretending.
+            """
+            if not self.direct:
+                raise NotImplementedError(
+                    "generate_until requires --direct. Layer streaming costs "
+                    "one pass over the model per FORWARD, so generation would "
+                    "re-read the whole model once per token. Run generative "
+                    "tasks with --direct on a model that fits in RAM.")
+
+            from mlx_lm.generate import stream_generate
+            from mlx_lm.sample_utils import make_sampler
+
+            model, tokenizer = self._load_cached()
+            sampler = make_sampler(temp=0.0)          # greedy: reproducible
+            out = []
+            for i, req in enumerate(requests):
+                ctx, kwargs = req.args
+                until = kwargs.get("until") or []
+                if isinstance(until, str):
+                    until = [until]
+                max_new = int(kwargs.get("max_gen_toks", 256))
+                text = []
+                for resp in stream_generate(model, tokenizer, ctx,
+                                            max_tokens=max_new,
+                                            sampler=sampler):
+                    text.append(resp.text)
+                    joined = "".join(text)
+                    if any(u and u in joined for u in until):
+                        break
+                s_out = "".join(text)
+                # lm-eval expects the continuation TRUNCATED at the first stop
+                for u in until:
+                    if u and u in s_out:
+                        s_out = s_out.split(u)[0]
+                out.append(s_out)
+                if self.verbose and (i + 1) % 25 == 0:
+                    print(f"  generate_until {i+1}/{len(requests)}", flush=True)
+            return out
 
     return _LM()
 

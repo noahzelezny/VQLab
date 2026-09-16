@@ -272,6 +272,11 @@ SCORERS = {
 
 
 def main():
+    # A 335 GiB teacher streamed through a 96 GB box sits at the edge: MLX's
+    # buffer cache holding freed allocations is enough to push it into swap,
+    # where the GPU command buffer then times out waiting on paging. Cap the
+    # cache so freed layer weights go back to the OS promptly.
+    mx.set_cache_limit(2 << 30)
     ap = argparse.ArgumentParser()
     ap.add_argument("--model", required=True)
     ap.add_argument("--corpus", required=True)
