@@ -135,7 +135,18 @@ def main():
                 g[f"model.layers.{L}.mlp.switch_mlp.{p}"] = {"dim": hd, "k": hk}
         for L in order[:n_warm]:
             g[f"model.layers.{L}.mlp.switch_mlp.down_proj"] = {"dim": wd, "k": wk}
-        return g
+        # DROP NO-OPS. geo-build is diff-style: a module absent from the geomap
+        # keeps its shipped bytes, while a module PRESENT at its shipped
+        # geometry is refit from the bf16 teacher for an identical result.
+        # Emitting every layer therefore made the first sweep point refit all
+        # 144 expert modules to reproduce the artifact it started from -- hours
+        # of GPU for zero change. Only emit a module whose target geometry
+        # DIFFERS from what the artifact actually ships (read from the bytes'
+        # own config, never assumed: a baseline that bought its size from a
+        # down_proj demotion really is a change, and must survive this filter).
+        return {n: v for n, v in g.items()
+                if (vm.get(n, {}).get("dim"), vm.get(n, {}).get("k"))
+                != (v["dim"], v["k"])}
 
     def delta_mb(n_cold, n_hot, n_warm=0, hot_set=None):
         tot = 0
@@ -169,7 +180,9 @@ def main():
         dmb = delta_mb(nc, nh, nw, hs)
         npro = len(hs) if hs is not None else max(nh, a.hold_hot)
         print(f"{name:24} demote={nc:<3} promote={npro:<3} "
-              f"restore={nw:<3} {dmb:+8.1f} MB", flush=True)
+              f"restore={nw:<3} {dmb:+8.1f} MB  "
+              f"({len(json.load(open(gm)))} modules differ from shipped)",
+              flush=True)
         if a.dry_run:
             continue
         art = os.path.join(a.out, f"art_{name}")

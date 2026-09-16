@@ -54,6 +54,7 @@ COMMANDS = {
     "price": ("price.py", "price a size-targeted build before fitting it"),
     "layer-leverage": ("layer_leverage.py", "per-layer damage probe: which layers earn bigger K"),
     "geo-build": ("geo_build.py", "rebuild an artifact under a new per-layer geometry map (diff-style)"),
+    "harvest-parts": ("harvest_parts.py", "extract a shipped rung's VQ fits into a geo-build --reuse parts dir"),
     "alloc-sweep": ("alloc_sweep.py", "cost/value curves for per-layer allocation -> the iso-byte frontier"),
     "probe-init": ("probe_init_sweep.py", "per-family k-means++ vs random init sweep"),
     "mtp-probe": ("mtp_probe.py", "MTP head draft-acceptance probe (qwen4_exp)"),
