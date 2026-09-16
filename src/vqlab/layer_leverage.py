@@ -40,6 +40,7 @@ import sys
 import time
 
 import mlx.core as mx
+import mlx.utils
 
 sys.path.insert(0, str(pathlib.Path(__file__).parent))
 import runtime_load
@@ -52,6 +53,44 @@ def _rel(a, b):
     num = mx.sqrt(mx.sum(mx.square(a32 - b32)))
     den = mx.sqrt(mx.sum(mx.square(b32)))
     return float((num / den).item())
+
+
+def _eval_params(module, budget_gb):
+    """Materialise a block's weights, but CAP THE EAGER EVAL AT A BUDGET.
+
+    qwen4_exp puts its PLE n-gram tables in layer 1: on Flash-Next-bf16 that
+    one "layer" is 100.3 GiB (128 shards of [2500012, 160] = 96 GiB of
+    tables, over 4.7 GiB of actual expert weights), against 4.8 GiB for an
+    ordinary layer. `mx.eval(blk.parameters())` therefore tries to
+    materialise 100 GiB on a 96 GiB box, and MLX does not raise -- it SPINS
+    in eval_impl's memory-limit check (get_memory_limit / get_active_memory
+    under a mutex, plainly visible in a `sample`), so the probe looks alive
+    and makes no progress at all. No per-tensor guard catches this: every
+    individual shard is only 0.75 GiB. The budget has to be per BLOCK.
+
+    Skipping an eager eval costs nothing but peak-memory bookkeeping. The
+    tables are a LOOKUP -- a forward gathers only the rows its token ids
+    touch -- and the lazy read ops were created under the CPU stream inside
+    load_model (see the WATCHDOG note in main), which is what binds the
+    stream. Leaving them lazy does NOT move them onto the GPU stream.
+
+    Largest tensors are skipped first, so the cheap weights still get the
+    eager treatment. Returns (evaluated_bytes, skipped_bytes).
+    """
+    budget = int(budget_gb * 1024 ** 3)
+    flat = [(n, a) for n, a in mlx.utils.tree_flatten(module.parameters())
+            if isinstance(a, mx.array)]
+    flat.sort(key=lambda t: t[1].nbytes)          # cheapest first
+    keep, keep_bytes, skip_bytes = [], 0, 0
+    for _, arr in flat:
+        if keep_bytes + arr.nbytes > budget:
+            skip_bytes += arr.nbytes
+            continue
+        keep.append(arr)
+        keep_bytes += arr.nbytes
+    if keep:
+        mx.eval(keep)
+    return keep_bytes, skip_bytes
 
 
 def probe_qwen4_exp(teacher, student, ids_list, args):
@@ -97,9 +136,46 @@ def probe_qwen4_exp(teacher, student, ids_list, args):
                          f"student {len(s_core.layers)})")
     for i in range(n):
         t_blk, s_blk = t_core.layers[i], s_core.layers[i]
+        # SHARED PROLOGUE (--start-layer): run the front of the network on the
+        # STUDENT alone and hand both arms the same hidden state.
+        #
+        # qwen4_exp keeps its PLE n-gram tables in layer 1, and in bf16 they
+        # are 96 GiB in 128 shards. _ShardedEmbedding materialises every shard
+        # it touches -- with 1024 probe tokens that is all 128 -- and holds
+        # them live in one put_along_axis chain, so the TEACHER's layer 1
+        # alone exceeds a 96 GiB box no matter how the eval is batched. The
+        # student's tables are QUANTIZED (55 of 320 bytes per row on the 3.2
+        # rung, ~17 GiB) and fit comfortably.
+        #
+        # Sound for ALLOCATION, which is what the map is for: layers 0-1 are
+        # protected on every rung of this family (all four keep them at the
+        # top width, and alloc-sweep is passed --protect 0,1), so their damage
+        # is never reallocated. It DOES change what traj_rel means -- drift
+        # accumulated from --start-layer, not from the embedding -- so the
+        # record stamps it and maps with different start layers must not be
+        # averaged together.
+        if i < args.start_layer:
+            with mx.stream(mx.cpu):
+                _eval_params(s_blk, args.lazy_over_gb)
+            h_s = s_blk(h_s, s_core.rope, s_mask, s_conv, None, None,
+                        ids, s_prev)          # same signature as the ranked path
+            mx.eval(h_s)
+            h_t = h_s                           # both arms share the front
+            t_core.layers[i] = None
+            s_core.layers[i] = None
+            del t_blk, s_blk
+            gc.collect()
+            mx.clear_cache()
+            print(f"  layer {i}: shared prologue (student only), not ranked",
+                  flush=True)
+            continue
         with mx.stream(mx.cpu):
-            mx.eval(t_blk.parameters())
-            mx.eval(s_blk.parameters())
+            _, t_skip = _eval_params(t_blk, args.lazy_over_gb)
+            _, s_skip = _eval_params(s_blk, args.lazy_over_gb)
+        if t_skip or s_skip:
+            print(f"  layer {i}: left "
+                  f"{(t_skip + s_skip) / 1024 ** 3:.1f} GiB lazy "
+                  f"(over --lazy-over-gb)", flush=True)
         t0 = time.time()
         # MEMORY (fix 2026-08-29, see docstring known-issues): the original
         # built all three forwards and eval'd them as ONE batch — one command
@@ -179,8 +255,12 @@ def probe_glm5_next(teacher, student, ids_list, args):
     for i in range(n):
         t_blk, s_blk = t_core.layers[i], s_core.layers[i]
         with mx.stream(mx.cpu):
-            mx.eval(t_blk.parameters())
-            mx.eval(s_blk.parameters())
+            _, t_skip = _eval_params(t_blk, args.lazy_over_gb)
+            _, s_skip = _eval_params(s_blk, args.lazy_over_gb)
+        if t_skip or s_skip:
+            print(f"  layer {i}: left "
+                  f"{(t_skip + s_skip) / 1024 ** 3:.1f} GiB lazy "
+                  f"(over --lazy-over-gb)", flush=True)
         t0 = time.time()
         t_mask = t_ssm if t_blk.is_linear else t_attn
         s_mask = s_ssm if s_blk.is_linear else s_attn
@@ -223,6 +303,20 @@ def main():
     ap.add_argument("--corpus", required=True)
     ap.add_argument("--tokens", type=int, default=1024,
                     help="ranking needs fewer tokens than a ladder score")
+    ap.add_argument("--start-layer", type=int, default=0,
+                    help="run layers below this on the STUDENT only and hand "
+                         "both arms the same hidden state, instead of ranking "
+                         "them. Use --start-layer 2 on qwen4_exp: its layer 1 "
+                         "holds 96 GiB of bf16 PLE tables that no 96 GiB box "
+                         "can materialise, and layers 0-1 are protected on "
+                         "every rung anyway. Maps with different start layers "
+                         "are NOT comparable and must not be averaged.")
+    ap.add_argument("--lazy-over-gb", type=float, default=8.0,
+                    help="per-BLOCK budget for the eager parameter eval; "
+                         "anything over it is left lazy, largest first. "
+                         "qwen4_exp layer 1 holds 96 GiB of PLE n-gram "
+                         "tables in 0.75 GiB shards, which no eager eval "
+                         "fits and which a forward only GATHERS from.")
     ap.add_argument("--out", default=None, help="write per-layer JSON here")
     a = ap.parse_args()
 
@@ -271,7 +365,7 @@ def main():
     rows = entry["fn"](teacher, student, ids, a)
     ranked = sorted(rows, key=lambda r: -r["local_rel"])
     rec = {"teacher": a.teacher, "student": str(sp), "corpus": a.corpus,
-           "tokens": len(ids) - 1, "layers": rows,
+           "tokens": len(ids) - 1, "start_layer": a.start_layer, "layers": rows,
            "top_local": [r["layer"] for r in ranked[:8]]}
     print(json.dumps({"top_local": rec["top_local"],
                       "final_traj_rel": rows[-1]["traj_rel"]}), flush=True)
