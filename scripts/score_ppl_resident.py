@@ -42,7 +42,14 @@ ap.add_argument("--out")
 a = ap.parse_args()
 
 mx.set_cache_limit(8 << 30)
-model, tok = load(a.model, lazy=False)
+# mlx-lm >=0.32 refuses an in-checkpoint model.py unless trust_remote_code is
+# passed; older releases do not accept the kwarg at all. Same bit-rot that hit
+# runtime_load.py -- probe the signature instead of pinning a version.
+import inspect as _inspect
+_lk = {"lazy": False}
+if "trust_remote_code" in _inspect.signature(load).parameters:
+    _lk["trust_remote_code"] = True
+model, tok = load(a.model, **_lk)
 
 text = pathlib.Path(a.corpus).read_text(errors="replace")
 ids = tok.encode(text)[: a.max_tokens + 1]
