@@ -43,6 +43,21 @@ If an instrument genuinely does not exist, **add it to `src/vqlab/` with a CLI
 entry** rather than leaving a script in scratch. That is why the toolkit is
 good: every past agent who needed something added it here.
 
+## Agents: use the MCP, not the shell
+
+`vqlab mcp` serves this box's lab over MCP (stdio JSON-RPC, stdlib only; one
+server per box, like exo). Tools: `where_is` (deterministic lookup over the
+Thunderbay roots — use it before ever claiming something is missing),
+`list_artifacts`, `artifact_config`, `read_doc`, `run` (allowlisted
+subcommands, detached, under the GPU lease, refuses paths off the Thunderbay
+and refuses while an exo instance is placed), `status`, `stop`, `list_runs`,
+`gpu_state`, `next_f_number`, `findings_tail`, `findings_append` (the only
+tool-side writer of FINDINGS-LOG.md: every field required, prediction
+recorded verbatim). `publish` is not exposed; it is a human's action.
+
+    PYTHONPATH=src python -m vqlab.cli mcp --list
+    PYTHONPATH=src python -m vqlab.cli mcp --call where_is '{"name":"teacher_topk"}'
+
 ## Authority order when sources disagree
 
 1. **The shipped artifact's own `config.json` and `README.md`** — the record
