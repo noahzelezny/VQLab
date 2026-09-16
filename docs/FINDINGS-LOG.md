@@ -2806,7 +2806,13 @@ about what exists is a claim, and needs the same search discipline as a
 positive one.** `Exo Models/` is the local mirror of the published fleet —
 check it before concluding an artifact is unavailable.
 
-## F103 (2026-09-15) — `VQ_DECODE_BF16IO` IS THE ONLY NUMERICS-CHANGING FLAG IN THE v2 RUNTIME, and it is NOT 1-ULP: +0.97% code ppl on d4-K2048. The other four v2 flags are bit-exact. Turning it off reproduces arc6 to all 15 digits — so v2 can ship bit-exact.
+## F103 (2026-09-15) — [title CORRECTED by F105] THE v2 NUMERICS DELTA IS OWNED BY THE bf16-I/O FLAGS, not by the gemmseg/walker work, and it is not 1-ULP: +0.97% code ppl on d4-K2048. Turning the responsible flag off reproduces arc6 to all 15 digits — so v2 can ship bit-exact.
+
+**Read F105 before using this entry.** The bisect below is correct FOR
+35B-3.4. Its generalization — "VQ_DECODE_BF16IO is the only numerics-changing
+flag" — was falsified on Flash within the hour: there the owner is
+`VQ_GEMMSEG_BF16IO` instead. Both bf16-I/O flags are numerics-changing; which
+one bites is family-local.
 
 CORRECTS F101's "1-ULP retired" and supersedes docs/V2-RUNTIME.md's framing
 that v2 is "identical or 1-ULP-equivalent" as a whole.
@@ -2879,3 +2885,67 @@ around them.**
 Note these 4 dense repos cannot move numerically under v2 regardless:
 `vq_dense.py` carries none of the v2 flags and is unchanged since 2026-09-05
 (pre-freeze). Their refresh is a text-only re-bundle.
+
+## F105 (2026-09-15) — CORRECTS F103: BOTH bf16-I/O flags are numerics-changing, and WHICH ONE bites is family-local. The other three v2 flags are bit-exact on both families. Bit-exact v2 = turn off two flags, and it still keeps ~+9-11% prefill and the d4 walker's +12% decode.
+
+F103 bisected 35B-3.4 (d4-K2048), found `VQ_DECODE_BF16IO` owned the whole
+delta, and I generalized that to the runtime. Flash-2.1 falsified it the same
+hour: `VQ_DECODE_BF16IO=0` there leaves ppl at the v2 value, unchanged.
+
+Both bisects, arc6 reference in bold-equal rows:
+
+| flag forced off | Flash-2.1 prose (d8-K16384) | 35B-3.4 code (d4-K2048) |
+|---|---|---|
+| arc6 `model.py` | 5.813012500413179 | 2.310952483346676 |
+| ALL FIVE off | **5.813012500413179** | **2.310952483346676** |
+| `VQ_GEMMSEG_BF16IO=0` | **5.813012500413179** | 2.333397208267632 |
+| `VQ_DECODE_BF16IO=0` | 5.832707142374809 | **2.310952483346676** |
+| `VQ_GEMMSEG_OTILE64=0` | 5.832707142374809 | 2.333397208267632 |
+| `VQ_GEMMSEG_PH2V=0` | 5.832707142374809 | 2.333397208267632 |
+| `VQ_D4_WALK=0` | 5.832707142374809 | 2.333397208267632 |
+
+SETTLED:
+1. **The flag stack fully accounts for v2-vs-arc6.** ALL-OFF reproduces arc6
+   to 15 digits on BOTH families — nothing outside the stack drifted since the
+   2026-09-09 freeze. docs/V2-RUNTIME.md's "v2 = current vq_switch.py with the
+   perf flags ON" is accurate.
+2. **The two bf16-I/O items are the 1-ULP pieces** — exactly the ones the doc
+   named (a356500 single-round bf16 store; ac2fa60 decode bf16 I/O). The doc
+   was right about WHICH; F103 was wrong to name only one.
+3. **OTILE64, PH2V and D4_WALK are bit-exact on both families**, as F54/F56/
+   F58 claimed. They carry most of the speed: OT2 +5-6% prefill, PH2V
+   +3.7-3.9% prefill, D4_WALK +12% decode on d4.
+4. **Which bf16 flag bites is geometry/workload-local** — gemmseg (prefill
+   path) on Flash's d8-K16384; decode on 35B's d4-K2048. Do NOT predict the
+   owner for an untested family. This is the depth-law lesson in the runtime
+   modality: family-local, measure per family.
+
+SHIPPING OPTION (now properly supported): **default both bf16-I/O flags OFF.**
+v2 is then bit-exact against what every user already runs, the fleet refresh
+needs NO per-geometry ppl spot-check on any of the 20 repos, and the retained
+gains are OT2 + PH2V + routing memo (~+9-11% prefill) plus D4_WALK (+12%
+decode on d4 geometries). Given up: gemmseg bf16-I/O (+1.3-1.8% prefill,
+95c0dcd) and decode bf16-I/O's share of +3.3-3.8% decode.
+
+METHOD, twice in one session: a clean single-artifact mechanism was
+generalized to the fleet and falsified by the next artifact — first
+"1-ULP retired" (Flash -> broken by 35B), then "one flag owns it"
+(35B -> broken by Flash). **A mechanism found on one family is a hypothesis
+about the others.** The bisect is cheap (~6 scores, env-overridable flags);
+run it per family instead of predicting.
+
+## F106 (2026-09-15) — fleet refresh gating COMPLETE for all 10 single-box rungs.
+
+PASS (bundle/rebundle-dense + check-bundle + strict smoke + large-N prefill
+smoke + check-release): 35B-3.4/3.8/4.6/5.4, Flash-Next-2.1, gemma-4-26b-a4b
+(MoE, `bundle`); 27B-3.9/4.5/4.8, gemma-4-e4b-PLE (DENSE, `rebundle-dense`,
+"carries both runtimes verbatim", 4968-line bundles).
+
+Staged in `/Volumes/Thunderbay SSD/vqlab-scratch/refresh/<repo>` as scratch
+copies with symlinked shards — a refresh rewrites only model.py. NOTHING
+PUBLISHED; the Hub is untouched.
+
+REMAINING: the 10 cluster-tier rungs (GLM x3 108-141 GiB, 397B x4 106-149,
+Flash-Next 3.2/4.4/5.5 at 72/96/115). Per Noah 2026-09-15: with the models on
+the SSD it is faster to delete and COPY to the M4 than to load over a
+symlink/share — do not point a big-rung load at the SSD across the network.
