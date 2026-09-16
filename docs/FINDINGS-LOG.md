@@ -3111,3 +3111,57 @@ PRACTICAL: TABLE.md's affine and bf16 rows remain citable as-is. A VQ row
 must be re-measured on the runtime it actually ships with — which is the
 normal rule (a number older than the artifact it faces gets re-measured),
 not a special instrument problem.
+
+## F111 (2026-09-15) — THE qwen4_exp STREAMED SCORER FAILS RULE 5 AT ITS OWN VALIDATED LENGTH: 5.885741 streamed vs 5.905622 direct forward, same venv, same model, same 2048 tokens. Its `"validated": True` flag has NO recorded validation run. Every VQ row in TABLE.md came from it.
+
+`stream_score.py` gates on a per-family registry (line 182):
+
+    "qwen4_exp": {"fn": score_qwen4_exp, "family": "qwen4_exp",
+                  "validated": True},
+    "glm5_next": {"fn": score_glm5_next, "family": "glm5_next",
+                  "validated": True},   # rule-5 run 2026-08-29, see docstring
+
+`glm5_next` documents its rule-5 run in a 30-line docstring (tiny random-init
+model, 33 tokens, logits BITWISE IDENTICAL, max|diff| 0.0). **qwen4_exp has no
+such note anywhere in the file** — the flag asserts validation that was never
+recorded, and the gate at line 220 trusts the flag.
+
+RULE-5 TEST, run today (shipped Flash-2.1, prose referee, qwen4exp venv,
+2048 tokens, both scorers in the SAME process environment):
+
+| path | ppl |
+|---|---|
+| `vqlab.stream_score` (streamed, one layer at a time) | 5.885741 |
+| `scripts/score_ppl_resident.py` (direct full forward) | 5.905622 |
+| TABLE.md (August) | 5.9033 |
+
+**Delta 0.0199** — rule 5 demands agreement to all printed decimals. FAILED.
+
+Note the direct forward lands 0.0023 from TABLE.md's August row while today's
+streamed lands 0.0176 away. That PARTLY WALKS BACK F110: some of the VQ "drift"
+I attributed to the v2 runtime change is the streamed scorer disagreeing with
+a direct forward, not the kernels moving. How the two contributions split is
+NOT established here.
+
+Combined with F109 (streamed ppl rises monotonically above 2048 while the
+direct forward falls), the picture is one scorer that is wrong by ~0.02 at
+2048 and progressively wronger with length.
+
+WHAT IS UNAFFECTED: the Flash-2.1 v1->v2 result. Both sides (5.8327 / 5.6710)
+came from the RESIDENT direct-forward scorer at 12k — the path that behaves
+correctly — on one env, one harness.
+
+WHAT IS COMPROMISED: anything ranked on streamed numbers at the precision
+quoted, which includes TABLE.md's VQ ladder rows and any KL comparison built
+on that path.
+
+ALSO FIXED HERE: `scripts/score_ppl_resident.py` could not load an
+in-checkpoint `model.py` on mlx-lm >=0.32 (no `trust_remote_code`) — the same
+bit-rot fixed earlier in `runtime_load.py`. Now probes the signature instead
+of pinning a version, so the rule-5 comparison can be run at all. That it had
+to be fixed BEFORE this test could run is why the test had never been run.
+
+NEXT (not done): flip qwen4_exp's `validated` to False so the gate stops
+trusting it, then diagnose — the smooth length dependence (F109) points at
+positional handling or accumulating recurrent state in the per-layer loop,
+not a mask boundary.
