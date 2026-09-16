@@ -3344,3 +3344,148 @@ same model on the loglikelihood `gpqa_diamond_zeroshot`. Thinking mode roughly
 doubles the score, which is why the base model's published 91.7 was never
 comparable to our 44.9 — a ~46-point gap that is methodology, not
 quantization.
+
+## F115 (2026-09-16) — qwen4_exp's LAYER 1 IS 100.3 GiB, and `layer-leverage` does not fail on it, it SPINS. Plus four more instrument defects the Flash-3.2 sweep walked into.
+
+Flash-Next-bf16, per-layer teacher bytes:
+
+    layer 0       9.7 GiB
+    layer 1     100.3 GiB   <- 128 PLE shards of [2500012, 160] = 96 GiB
+    layers 2-47   4.8 GiB each
+
+`mx.eval(blk.parameters())` on layer 1 asks for 100 GiB on a 96 GiB box.
+MLX DOES NOT RAISE. It spins inside `eval_impl`'s memory-limit check
+(`get_memory_limit` / `get_active_memory` under a mutex, which is what a
+`sample` of the process shows), so the probe holds ~5% CPU, reads from disk
+at full speed, prints nothing, and is indistinguishable from a slow layer.
+
+TWO WRONG READINGS OF IT, both recorded because both cost time:
+
+1. `vm_stat` mid-run showed 1.4 GiB free, 20.5 of 21.5 GB swap used, 53 GiB
+   in the compressor. I concluded the BOX had pre-existing pressure from the
+   killed GPQA job. Killing the probe returned 63 GiB free and shrank swap to
+   6 GB total. The probe WAS the pressure; MLX's Metal allocations do not
+   appear in RSS, so `ps` reported 11.7 GiB while it held ~60.
+2. A per-TENSOR budget catches nothing here: every PLE shard is 0.75 GiB and
+   there are 128. The budget has to be per BLOCK.
+
+FIXES, all in `vqlab layer-leverage`:
+* `--lazy-over-gb` (default 8) caps the eager parameter eval per block,
+  largest tensors skipped first. Removes the spin -- but NOT the cost:
+  `_ShardedEmbedding` materialises every shard its ids touch (all 128 at
+  1024 tokens) and holds them live in one `put_along_axis` chain, so the
+  deferred 96 GiB lands in ONE command buffer and the Metal watchdog kills
+  it instead. MEASURED: GPU Timeout at 5 minutes. Laziness alone is not a fix.
+* `--start-layer N` runs the front of the network on the STUDENT alone and
+  hands both arms the same hidden state. The student's PLE is quantized
+  (55 of 320 bytes/row on the 3.2 rung, ~17 GiB) and fits. Layer 1 then
+  clears in ~10 s with 36 GiB free. Sound for allocation -- layers 0-1 are
+  protected on every rung of this family -- but it changes what `traj_rel`
+  measures, so the record stamps `start_layer` and maps with different start
+  layers must NOT be averaged.
+
+FOUR MORE DEFECTS, each found by walking into it:
+
+* `geo-build --reuse` verified only the CODEBOOK shape, which pins (K,d) and
+  nothing else. The 2026-09-15 Flash pool holds 240 `d4-K2048` parts from
+  ANOTHER model (codes [256,512,...] against Flash's [512,640,...]); only
+  their `language_model.` name prefix kept them out, which is luck. Now the
+  shipped artifact's own codes -- (experts, out), invariant under a change of
+  K or d -- are the identity check.
+* `alloc-sweep` emitted EVERY expert module into every point's geomap,
+  including modules already at the target geometry, and geo-build refits what
+  it is given. The first sweep point would have refit all 144 modules to
+  reproduce bytes the artifact already ships. Points now emit only what
+  differs: 144 -> 12 on the 3.2 baseline.
+* `geo-build` resume trusted that a part which EXISTS is FINISHED. A fit
+  killed mid-save leaves a truncated file with a valid name; resume skips it
+  and the failure surfaces much later in assemble as "invalid data offsets
+  ... exceeding the size of the file" -- a corrupt-download message for a
+  file nobody downloaded. Resume now loads each checkpoint before trusting it.
+* `alloc-sweep` recorded a FAILED SCORE AS A SILENT `None`, discarding the
+  scorer's stderr. A sweep whose every artifact failed to LOAD would look
+  exactly like a sweep that ran: every point built, every point `None`, hours
+  spent, reasons thrown away. This actually happened (cost_D0 scored
+  {prose: None, code: None, lit: None} against a truncated model-00016 shard,
+  2.287 GiB vs the shipped 6.387). Failures now print the scorer's error and
+  a point that scores nothing on ANY corpus halts the sweep.
+
+METHOD DEBT, mine, and the expensive one: I cleaned up between sweep launches
+with `pkill -f alloc_sweep`, but the process runs as `python -m vqlab.cli
+alloc-sweep` -- HYPHEN. The pattern never matched. Four sweeps accumulated,
+each in its own 60x retry loop, all driving geo-build against one GPU; that
+contention produced the watchdog timeout, the truncated part and the
+truncated shard. My verification was worthless for the same reason: `ps |
+grep '[a]lloc-sweep'` matched the shell wrapper carrying my own command text
+and always returned 2. The same self-match bug then hung the KL runner's wait
+loop forever. BRACKET THE PATTERN, AND VERIFY THE VERIFIER.
+
+## F116 (2026-09-16) — PRE-REGISTRATION FALSIFIED. The d4-K8192 promotion buys NOTHING on KL at the Flash-3.2 rung, and prose ppl ranked the worthless arm FIRST. The shipped d2-K256 allocation beats every arm by 15 mnats.
+
+PREDICTION (recorded in scratch/v2_flash32/PREREG.md BEFORE any point was
+scored): at iso-byte against the shipped 3.2, ~10 layers promoted to
+d4-K8192 (3.25 b/w) would beat the shipped 4 layers at d2-K256 (4.00 b/w) on
+prose and code, by -0.3% to -0.8% prose. Grounds cited: I.3 (escape the
+cheapest width broadly) and I.10 (higher d wins at matched rate).
+
+RESULT, 11 sweep points + the shipped rung, one harness throughout. KL is
+prose 2048/top-64 via the VALIDATED streamed scorer; ppl is 12288 resident.
+
+    arm          +MB       KL     dKL    top1   prose12k    code     lit
+    shipped     1050   122.15  -15.38  0.8623    5.0297  1.6407  6.6612
+    baseline       0   137.53   +0.00  0.8608    5.0411  1.6419  6.7147
+    P2           210   134.34   -3.19  0.8687    5.0088  1.6427  6.6945
+    P6           629   135.97   -1.56  0.8608    5.0120  1.6442  6.6705
+    P8           839   137.14   -0.39  0.8652    4.9840  1.6448  6.6790
+    set_10      1049   137.53   +0.00  0.8711    5.0207  1.6396  6.6857
+    set_8        839   138.79   +1.26  0.8652    5.0422  1.6416  6.6930
+
+EVERY d4-K8192 arm is within 3 mnats of doing nothing, and set_8 is WORSE
+than the baseline it spent 839 MB improving. There is no layer selection
+inside this geometry that rescues it: P2's small edge does not scale, and by
+8-10 layers the benefit is gone. The shipped d2-K256 design is 15.4 mnats
+better than all of them.
+
+THE ERROR IN THE PREDICTION WAS A MIS-CITED LAW. I.10 says higher d wins AT
+MATCHED RATE. d4-K8192 is 3.25 b/w and d2-K256 is 4.00 b/w -- NOT matched, so
+I.10 never applied. The governing law is I.1, quality tracks total bytes: the
+shipped design buys 4.00 b/w on 4 layers at 262 MB each, mine bought 3.25 b/w
+on 8-10 layers at 105 MB each, and concentrated-and-wider wins decisively.
+
+PPL RANKED THE WORTHLESS ARM FIRST, and this is the sharpest instance of the
+anti-correlation yet (E12 on GLM/affine, F93-F95 on Flash/VQ):
+* P8 is the BEST prose ppl of any arm (4.9840, -1.13% vs baseline) and the
+  WORST value arm on KL (-0.39 mnats, i.e. nothing). I reported P8 as a win
+  and had to withdraw it.
+* The three corpora DISAGREED: prose said P8, code said set_10, literary said
+  shipped. No arm won two of three. Aggregation over offsetting errors,
+  exactly as the house rule warns.
+* PPL ALSO FLIPS WITH LENGTH on the same two artifacts: at 2048 tokens
+  baseline (5.1033) beats shipped (5.1684); at 12288 shipped (5.0297) beats
+  baseline (5.0411). KL agrees with the 12k ordering and separates them by
+  11%, where ppl separates them by 0.2% and changes sign.
+  Noah's call, and it was right: ppl was never going to decide this.
+
+ALSO MEASURED, and these stand regardless of the negative result:
+* The leverage map is family-stable, reproduced from scratch on the 3.2
+  student: Spearman 0.935 prose-vs-code, 0.937 prose-vs-literary, 0.875
+  code-vs-literary; and the 2.1 v2's independently chosen set (L27-33,35,47)
+  ranks 2,3,4,5,6,8,10,13 in this map's back half.
+* L36 IS RANK 45 OF 46 with a NEGATIVE jump on all three corpora, and the
+  shipped 3.2 spends a quarter of its promotion budget on it. L39 is middling
+  (27/34/18). Only L31 and L35 belong.
+* COST CURVE KNEE AT D12: demoting the 12 coldest down_proj to d4-K256 costs
+  +0.0041 prose ppl per 100 MB; at D16 that more than doubles to +0.0093.
+  944 MB is available cheaply if something is worth buying with it.
+* d8 on down_proj is REFUSED on this family: nsub = 640/8 = 80, not a
+  multiple of 32 (F97). Demotions there must stay d4.
+* POSITION LAW I.2 DID NOT HOLD ON PROSE PPL HERE -- set_8 (back-half only,
+  839 MB) got nothing on prose while P8 (same bytes, including front layers
+  L2 and L4) got -1.13%. But KL says BOTH arms are worthless, so this is not
+  evidence against I.2; it is one more thing prose ppl said that KL denies.
+  Do not cite it as a counterexample to the law.
+
+NEXT EXPERIMENT, narrow: keep the shipped rung's wider-and-fewer shape and
+test only WHICH four layers get d2-K256 -- swap L36 (rank 45) for L30 or L29,
+hold the rest, score on KL. One build, not a sweep. A d2-K512 / d2-K1024
+promotion sweep is the other open direction; d4 at this rung is closed.
