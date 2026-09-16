@@ -42,10 +42,12 @@ def _kv(pairs, what):
 
 
 def score_one(python, model, cache_dir, corpus, tokens, chunk, stream_ple,
-              lazy_over_gb):
+              lazy_over_gb, per_pos=None):
     cmd = [python, "-m", "vqlab.stream_score", "--model", model,
            "--corpus", corpus, "--tokens", str(tokens), "--chunk", str(chunk),
            "--kl-cache", cache_dir, "--lazy-over-gb", str(lazy_over_gb)]
+    if per_pos:
+        cmd += ["--kl-per-position", per_pos]
     if stream_ple:
         cmd.append("--stream-ple")
     r = subprocess.run(cmd, capture_output=True, text=True)
@@ -70,6 +72,9 @@ def main():
     ap.add_argument("--stream-ple", action="store_true")
     ap.add_argument("--lazy-over-gb", type=float, default=8.0)
     ap.add_argument("--out", default=None)
+    ap.add_argument("--per-pos-dir", default=None,
+                    help="where per-position KL arrays are kept (they are what "
+                         "makes the PAIRED comparison possible)")
     a = ap.parse_args()
 
     caches, rungs = _kv(a.cache, "cache"), _kv(a.rung, "rung")
@@ -87,14 +92,19 @@ def main():
             raise SystemExit(f"FAIL: cache {name} names a corpus that is not "
                              f"here: {corpus}")
 
+    ppdir = a.per_pos_dir or os.path.join(
+        os.path.dirname(a.out) if a.out else ".", "kl_per_position")
+    os.makedirs(ppdir, exist_ok=True)
+
     table = {}
     for rname, rdir in rungs.items():
         table[rname] = {}
         for cname, cm in meta.items():
             print(f"[kl-ladder] {rname} x {cname}", flush=True)
+            pp = os.path.join(ppdir, f"{rname}__{cname}.safetensors")
             rec = score_one(a.python, rdir, cm["dir"], cm["corpus"],
                             cm["tokens"], cm["chunk"], a.stream_ple,
-                            a.lazy_over_gb)
+                            a.lazy_over_gb, per_pos=pp)
             table[rname][cname] = rec
             print(f"    KL {rec['mean_kl_millinats']:.3f} "
                   f"+/- {rec.get('kl_sem_millinats', float('nan')):.3f} "
@@ -102,29 +112,60 @@ def main():
 
     ref = next(iter(rungs))
     names = list(caches)
-    print(f"\nKL to teacher, millinats (reference: {ref})")
-    head = "rung".ljust(14) + "".join(f"{c:>26s}" for c in names)
-    print(head)
+
+    def paired(rname, cname):
+        """Paired difference vs the reference on identical positions.
+
+        Both rungs saw the SAME positions and the SAME teacher, so the
+        per-position differences remove the position-to-position variance
+        that dominates each rung's own SEM. Comparing two overlapping 95%
+        intervals is NOT this test and is far more conservative -- an
+        overlap there does not mean "no difference".
+        """
+        import numpy as np
+        from safetensors.numpy import load_file
+        fa = os.path.join(ppdir, f"{rname}__{cname}.safetensors")
+        fb = os.path.join(ppdir, f"{ref}__{cname}.safetensors")
+        if not (os.path.exists(fa) and os.path.exists(fb)):
+            return None
+        x = load_file(fa)["kl_millinats"].astype(np.float64)
+        y = load_file(fb)["kl_millinats"].astype(np.float64)
+        if x.shape != y.shape:
+            return None
+        d = x - y                                   # rung minus reference
+        n = d.size
+        sem = float(d.std(ddof=1) / np.sqrt(n))
+        m = float(d.mean())
+        return {"delta": m, "sem": sem, "t": (m / sem) if sem else 0.0, "n": n}
+
+    print(f"\nKL to teacher, millinats at 12288 tokens (reference: {ref})")
+    print("paired delta = this rung minus reference on identical positions; "
+          "|t|>2 is a difference")
+    print("rung".ljust(12) + "".join(f"{c:>34s}" for c in names))
     for rname in rungs:
         cells = []
         for c in names:
             r = table[rname][c]
             m, e = r["mean_kl_millinats"], r.get("kl_sem_millinats", 0.0)
-            v = ""
-            if rname != ref:
-                b = table[ref][c]
-                bm, be = b["mean_kl_millinats"], b.get("kl_sem_millinats", 0.0)
-                lo, hi = m - 1.96 * e, m + 1.96 * e
-                blo, bhi = bm - 1.96 * be, bm + 1.96 * be
-                v = "  SAME" if (lo <= bhi and blo <= hi) else \
-                    ("  BETTER" if m < bm else "  WORSE")
-            cells.append(f"{m:12.3f}+/-{e:6.3f}{v:>7s}")
-        print(rname.ljust(14) + "".join(cells))
+            if rname == ref:
+                cells.append(f"{m:14.2f}+/-{e:5.2f}{'':>13s}")
+                continue
+            pd = paired(rname, c)
+            if pd is None:
+                cells.append(f"{m:14.2f}+/-{e:5.2f}{'  (unpaired)':>13s}")
+                continue
+            tag = "SAME" if abs(pd["t"]) < 2 else (
+                "BETTER" if pd["delta"] < 0 else "WORSE")
+            cells.append(f"{m:14.2f}  d={pd['delta']:+7.2f} t={pd['t']:+6.1f} "
+                         f"{tag:6s}")
+        print(rname.ljust(12) + "".join(cells))
 
     if a.out:
         pathlib.Path(a.out).write_text(json.dumps(
             {"caches": meta, "rungs": rungs, "reference": ref,
-             "table": table}, indent=1))
+             "table": table, "per_position_dir": ppdir,
+             "paired": {r: {c: paired(r, c) for c in names}
+                        for r in rungs if r != ref}}, indent=1))
         print(f"\n-> {a.out}")
 
 
