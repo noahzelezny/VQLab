@@ -176,10 +176,17 @@ def _dists(X, C):
             + mx.sum(C * C, 1)[None, :])
 
 
+def _chunk(K):
+    # The distance matrix is chunk x K fp32; at K16384 the default CHUNK is a
+    # 17 GB intermediate per step (K2048: 2 GB). Cap it at ~4 GB so large
+    # codebooks fit under the memory limit without changing K<=4096 fits.
+    return min(CHUNK, max(1 << 12, (1 << 30) // K))
+
+
 def _assign(Xs, C):
-    out = []
-    for i in range(0, Xs.shape[0], CHUNK):
-        a = mx.argmin(_dists(mx.array(Xs[i:i + CHUNK]), C), axis=1)
+    out, ch = [], _chunk(C.shape[0])
+    for i in range(0, Xs.shape[0], ch):
+        a = mx.argmin(_dists(mx.array(Xs[i:i + ch]), C), axis=1)
         mx.eval(a)
         out.append(np.array(a))
     return np.concatenate(out)
@@ -190,8 +197,9 @@ def _lloyd(Xs, C, w, iters, K, rng):
     for _ in range(iters):
         num = np.zeros((K, D), dtype=np.float64)
         den = np.zeros(K, dtype=np.float64)
-        for i in range(0, Xs.shape[0], CHUNK):
-            xb, wb = Xs[i:i + CHUNK], w[i:i + CHUNK]
+        ch = _chunk(K)
+        for i in range(0, Xs.shape[0], ch):
+            xb, wb = Xs[i:i + ch], w[i:i + ch]
             a = mx.argmin(_dists(mx.array(xb), C), axis=1)
             mx.eval(a)
             a = np.array(a)
@@ -241,7 +249,7 @@ def fit_module(W, D, K, rng):
     C_np = np.array(C)
     codes = np.empty((Wg.shape[0], GSZ // D), dtype=np.uint16)
     scales = np.empty(Wg.shape[0], dtype=np.float32)
-    B = CHUNK // (GSZ // D)
+    B = _chunk(K) // (GSZ // D)
     for i in range(0, Wg.shape[0], B):
         wb = Wg[i:i + B].astype(np.float32)
         sb = np.abs(wb).max(axis=1) + 1e-8
