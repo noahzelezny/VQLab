@@ -153,14 +153,19 @@ def teacher_weight(teacher: str, index: dict, family: str, name: str) -> mx.arra
     if key not in index:                      # some families prefix differently
         alt = key.replace("model.language_model.", "model.model.")
         key = alt if alt in index else key
-    W = mx.load(os.path.join(teacher, index[key]))[key]
-    if half is not None:
-        h = W.shape[1] // 2
-        W = W[:, :h, :] if half == 0 else W[:, h:, :]
-    # Materialize on the CPU stream BEFORE any GPU op: a lazy read still
-    # pending when the GPU touches it is paid inside a command buffer and
-    # gets watchdog-killed (quantlab IV).
+    # A STREAM BINDS AT OP-CREATION, NOT AT EVAL (quantlab IV.1). The load and
+    # the gate_up half-slice have to be CREATED inside the CPU-stream block or
+    # they stay bound to the GPU stream, and the eval below -- however it is
+    # wrapped -- still pays the read inside a command buffer. That is a
+    # watchdog kill, and it only shows up once the teacher is slow enough to
+    # exceed the timeout: these same reads passed for months with the bf16
+    # teacher on the SSD and died the first time it was read off the archive
+    # HDD (GPU Timeout in teacher_weight, 2026-09-16).
     with mx.stream(mx.cpu):
+        W = mx.load(os.path.join(teacher, index[key]))[key]
+        if half is not None:
+            h = W.shape[1] // 2
+            W = W[:, :h, :] if half == 0 else W[:, h:, :]
         W = W.astype(mx.float32)
         mx.eval(W)
     return W
@@ -336,8 +341,21 @@ def main():
     for n in sorted(geo):
         part = os.path.join(parts, part_name(n, geo[n]["dim"], geo[n]["k"]))
         if os.path.exists(part):
-            done += 1
-            continue
+            # RESUME MUST VERIFY, NOT ASSUME. A part that exists is not a part
+            # that is finished: a fit killed mid-save leaves a truncated file
+            # with a valid name, resume skips it, and the failure surfaces
+            # much later in assemble as "invalid data offsets ... exceeding
+            # the size of the file" -- a corrupt-download message for a file
+            # nobody downloaded. Cheap to check, and checkpoints exist
+            # precisely because these runs get interrupted.
+            try:
+                mx.eval(list(mx.load(part).values()))
+                done += 1
+                continue
+            except Exception as e:
+                _log(f"  REFITTING {os.path.basename(part)}: unreadable "
+                     f"checkpoint ({str(e)[:60]})")
+                os.remove(part)
         D, K = int(geo[n]["dim"]), int(geo[n]["k"])
         t0 = time.time()
         W = teacher_weight(a.teacher, t_index, a.family, n)
