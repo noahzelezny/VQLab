@@ -397,7 +397,8 @@ class StreamingLM:
         return [(a, b) for a, b in out]
 
 
-def _build_lm(model_path, batch_seqs, direct=False, allow_unmatched=False):
+def _build_lm(model_path, batch_seqs, direct=False, allow_unmatched=False,
+              gen=None):
     """Subclass lm-eval's LM at runtime (keeps this module import-light)."""
     from lm_eval.api.model import LM
 
@@ -407,6 +408,7 @@ def _build_lm(model_path, batch_seqs, direct=False, allow_unmatched=False):
             StreamingLM.__init__(self, model_path, batch_seqs=batch_seqs,
                                  direct=direct,
                                  allow_unmatched=allow_unmatched)
+            self._gen = gen or {}
 
         def loglikelihood(self, requests):
             return self._loglikelihood_pairs([r.args for r in requests])
@@ -441,17 +443,31 @@ def _build_lm(model_path, batch_seqs, direct=False, allow_unmatched=False):
             from mlx_lm.generate import stream_generate
             from mlx_lm.sample_utils import make_sampler
 
+            g = self._gen
             model, tokenizer = self._load_cached()
-            sampler = make_sampler(temp=0.0)          # greedy: reproducible
+            sampler = make_sampler(temp=g.get("temp", 0.0),
+                                   top_p=g.get("top_p", 1.0),
+                                   top_k=g.get("top_k", 0))
+            chat = bool(g.get("chat"))
+            cap = int(g.get("max_gen_toks", 0) or 0)
             out = []
             for i, req in enumerate(requests):
                 ctx, kwargs = req.args
                 until = kwargs.get("until") or []
                 if isinstance(until, str):
                     until = [until]
-                max_new = int(kwargs.get("max_gen_toks", 256))
+                max_new = cap or int(kwargs.get("max_gen_toks", 256))
+                prompt = ctx
+                if chat:
+                    # The chat template defaults to enable_thinking=true at
+                    # reasoning_effort='xhigh'. Without applying it the model
+                    # never enters thinking mode, which is the mode every
+                    # published number for this family was produced in.
+                    prompt = tokenizer.apply_chat_template(
+                        [{"role": "user", "content": ctx}],
+                        add_generation_prompt=True)
                 text = []
-                for resp in stream_generate(model, tokenizer, ctx,
+                for resp in stream_generate(model, tokenizer, prompt,
                                             max_tokens=max_new,
                                             sampler=sampler):
                     text.append(resp.text)
@@ -459,13 +475,26 @@ def _build_lm(model_path, batch_seqs, direct=False, allow_unmatched=False):
                     if any(u and u in joined for u in until):
                         break
                 s_out = "".join(text)
-                # lm-eval expects the continuation TRUNCATED at the first stop
+                hit_stop = any(u and u in s_out for u in until)
                 for u in until:
                     if u and u in s_out:
                         s_out = s_out.split(u)[0]
+                # TRUNCATION IS NOT A WRONG ANSWER. If the budget runs out
+                # mid-reasoning the model never submits, lm-eval scores it
+                # wrong, and the limit becomes the score. Count it so the
+                # number can be interpreted -- and so a rung that merely
+                # reasons longer is not marked less capable.
+                if not hit_stop and len(text) >= max_new:
+                    self._gen_truncated = getattr(self, "_gen_truncated", 0) + 1
+                self._gen_total = getattr(self, "_gen_total", 0) + 1
                 out.append(s_out)
                 if self.verbose and (i + 1) % 25 == 0:
                     print(f"  generate_until {i+1}/{len(requests)}", flush=True)
+            t = getattr(self, "_gen_truncated", 0)
+            n = getattr(self, "_gen_total", 0) or 1
+            print(f"  generate_until: {t}/{n} items hit the {max_new}-token "
+                  f"budget without submitting an answer ({100*t/n:.1f}%). "
+                  f"Those score WRONG regardless of the model.", flush=True)
             return out
 
     return _LM()
