@@ -3673,7 +3673,7 @@ _GEMMSEG_XT_PAD = os.environ.get("VQ_GEMMSEG_XT_PAD", "0") == "1"
 # float->half->bf16 double round, differing from shipped by <=1 bf16 ULP
 # (the class d8/devx shipped under; gated by the comparator, not checksum).
 # "0" is the kill switch back to the cast pipeline.
-_GEMMSEG_BF16IO = os.environ.get("VQ_GEMMSEG_BF16IO", "1") == "1"
+_GEMMSEG_BF16IO = os.environ.get("VQ_GEMMSEG_BF16IO", "0") == "1"
 # Output-block pairing (KERNEL-BODY-CAMPAIGN arm 1). "1" halves the gathered
 # xt staging traffic and the dispatch count by giving each threadgroup two
 # 32-column output blocks (decoded serially -- threadgroup bytes unchanged).
@@ -3707,7 +3707,7 @@ _TILES_R32 = (2 if _GEMMSEG_DSTORE else 3) * 4096
 # CHANGE (halfN-staged kernels round in-kernel where the host astype did;
 # d8 float4-staged skip the fp16 rounding entirely) -- covered by the v2
 # release policy: PPL is retested before anything ships. Kill switch = "0".
-_DECODE_BF16IO = os.environ.get("VQ_DECODE_BF16IO", "1") == "1"
+_DECODE_BF16IO = os.environ.get("VQ_DECODE_BF16IO", "0") == "1"
 _XT_PAD_HALVES = 8 if _GEMMSEG_XT_PAD else 0
 # Extra threadgroup bytes the pad costs at each RTILE (halves * 2 B * rows).
 _XT_PAD_BYTES_R32 = _XT_PAD_HALVES * 2 * 32
