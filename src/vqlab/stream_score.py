@@ -40,36 +40,76 @@ import runtime_load
 
 
 def score_qwen4_exp(model, ids_list, args):
+    """Streamed qwen4_exp scorer — CHUNKED, with per-layer recurrent state.
+
+    Rule 5 (F111): the earlier version pushed the WHOLE sequence through each
+    layer in one call and no cache. On this architecture that is not the same
+    computation as the house standard: qwen4_exp's linear-attention layers
+    carry recurrent state, so the metric is chunk-DEPENDENT, and every
+    published number on this family was measured at chunk 512
+    (score_streaming.py's own note). The unchunked pass read 5.8857 against a
+    direct chunk-512 forward's 5.9056 at 2048 tokens, and degraded
+    monotonically with length -- 6.18 at 3072, 7.10 at 6144, 274 at 12288
+    (F109).
+
+    So: layers stay streamed (one materialised at a time, the whole point),
+    but each layer now walks the sequence in --chunk blocks carrying its OWN
+    cache, which is exactly the per-layer state the resident chunked forward
+    maintains. prev_ctx (the PLE n-gram history) depends only on `ids`, so it
+    is derived per chunk directly rather than threaded through a cache.
+    """
     from mlx_lm.models.qwen4_exp import create_attention_mask, create_ssm_mask
 
     core = model.model
     ids = mx.array([ids_list[:-1]])
+    S = ids.shape[1]
+    C = max(1, int(getattr(args, "chunk", 512) or 512))
     with mx.stream(mx.cpu):
         mx.eval(core.embed_tokens.parameters())
     h = core.embed_tokens(ids)
-    mask = create_attention_mask(h, None)
-    lin = [i for i, l in enumerate(core.layers)
-           if l.layer_type == "linear_attention"]
-    conv_mask = create_ssm_mask(h, None) if lin else None
-    prev_ctx = None
+
+    # PLE n-gram context per chunk: the ctx_len ids immediately before the
+    # chunk, EOS-padded at the start of the sequence.
+    prev_ctxs = None
     if core.ple_layers:
         ctx = core.args.ngram_size - 1
         eos = core.args.eos_token_id
         eos = eos[0] if isinstance(eos, list) else eos
-        prev_ctx = mx.full((ids.shape[0], ctx), eos, ids.dtype)
+        pad = mx.full((ids.shape[0], ctx), eos, ids.dtype)
+        hist = mx.concatenate([pad, ids], axis=1)
+        prev_ctxs = [hist[:, s:s + ctx] for s in range(0, S, C)]
+
     h = mx.tile(h, (1, 1, core.hc))
     mx.eval(h)
 
+    caches = model.make_cache()
     n = len(core.layers)
     for i in range(n):
         blk = core.layers[i]
         with mx.stream(mx.cpu):
             mx.eval(blk.parameters())
         t0 = time.time()
-        h = blk(h, core.rope, mask, conv_mask, None, None, ids, prev_ctx)
+        c = caches[i]
+        idx_c = c.indexer if (c is not None and hasattr(c, "indexer")) else None
+        parts = []
+        for k, s0 in enumerate(range(0, S, C)):
+            e0 = min(s0 + C, S)
+            hc_ = h[:, s0:e0]
+            ids_c = ids[:, s0:e0]
+            # Each layer consumes only the mask its own type needs, and each
+            # mask is built from THAT layer's cache (a linear-attention cache
+            # has no make_mask, so it must never reach create_attention_mask).
+            is_lin = blk.layer_type == "linear_attention"
+            mask = None if is_lin else create_attention_mask(hc_, c)
+            conv_mask = create_ssm_mask(hc_, c) if is_lin else None
+            pc = prev_ctxs[k] if prev_ctxs is not None else None
+            parts.append(blk(hc_, core.rope, mask, conv_mask, c, idx_c,
+                             ids_c, pc))
+        h = mx.concatenate(parts, axis=1) if len(parts) > 1 else parts[0]
         mx.eval(h)
         core.layers[i] = None
-        del blk
+        caches[i] = None
+        del blk, parts
         gc.collect()
         mx.clear_cache()
         print(f"  layer {i}/{n-1} {time.time()-t0:.1f}s "
@@ -192,6 +232,10 @@ def main():
     ap.add_argument("--model", required=True)
     ap.add_argument("--corpus", required=True)
     ap.add_argument("--tokens", type=int, default=2048)
+    ap.add_argument("--chunk", type=int, default=512,
+                    help="prefill chunk. qwen4_exp carries recurrent state, so "
+                         "the metric is NOT chunk-invariant; 512 is what every "
+                         "published number on this family used (F111).")
     ap.add_argument("--save-topk", type=int, default=None,
                     help="also dump top-k logprobs per position (teacher "
                          "cache for KL) to --out")
