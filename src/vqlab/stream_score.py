@@ -376,12 +376,34 @@ def main():
         top1 = mx.mean(
             (mx.argmax(s_lp_all, axis=-1) == t_idx[:, 0]).astype(mx.float32))
         mass = mx.mean(mx.sum(mx.exp(t_lp), axis=-1))
-        rec.update(mean_kl_millinats=round(float(mx.mean(kl).item()) * 1000, 4),
+        # ERROR BARS, because a KL mean without one cannot answer the only
+        # question anyone asks of it: is this rung DIFFERENT from that rung.
+        # The 2026-09-16 Flash-3.2 sweep had four arms inside 3 mnats of each
+        # other and no way to say whether that meant anything (F116); F51
+        # asked for this and it never got built. Positions are the sample:
+        # S of them, so the standard error of the mean is sd/sqrt(S). They are
+        # not independent -- adjacent tokens share context -- so this is a
+        # LOWER BOUND on the true uncertainty, and it is reported as such.
+        n_pos = int(kl.size)
+        kl_mn = kl * 1000.0
+        mean_mn = float(mx.mean(kl_mn).item())
+        sd_mn = float(mx.sqrt(mx.var(kl_mn, ddof=1)).item())
+        sem = sd_mn / math.sqrt(n_pos)
+        rec.update(mean_kl_millinats=round(mean_mn, 4),
+                   kl_sem_millinats=round(sem, 4),
+                   kl_ci95_millinats=[round(mean_mn - 1.96 * sem, 4),
+                                      round(mean_mn + 1.96 * sem, 4)],
+                   kl_sd_millinats=round(sd_mn, 4),
+                   kl_positions=n_pos,
+                   kl_sem_note="sd/sqrt(n) over positions; positions are "
+                               "correlated, so this UNDERSTATES the true "
+                               "uncertainty",
                    top1_agreement=round(float(top1.item()), 4),
                    captured_mass=round(float(mass.item()), 4))
     print(json.dumps(rec), flush=True)
 
     if a.save_topk:
+        C_ = max(1, int(getattr(a, "chunk", 512) or 512))
         outd = pathlib.Path(a.out or (mp.name + "_topk"))
         outd.mkdir(parents=True, exist_ok=True)
         lp = logits - lse[:, None]
@@ -393,9 +415,18 @@ def main():
                              "logprobs": top[None].astype(mx.float16)})
         mx.save_safetensors(str(outd / "tokens.safetensors"),
                             {"tokens": mx.array([ids])})
+        # CURRENT kl_damage SCHEMA, not the 2026-08 one. The pre-existing
+        # flashnext cache was written with {model, tokens} and kl_damage
+        # reads {teacher, seq_len, num_samples, batch_size}; it therefore
+        # could not be read at all without a shim, and the shim was deleted
+        # in a disk cleanup (F51, and it cost an hour on 2026-09-16). Write
+        # what the reader wants, and keep the old keys as aliases so nothing
+        # that consumed the old format breaks.
         (outd / "meta.json").write_text(json.dumps(
-            {"model": str(mp), "corpus": a.corpus, "top_k": a.save_topk,
-             "tokens": len(ids)}, indent=1))
+            {"teacher": str(mp), "corpus": a.corpus, "top_k": a.save_topk,
+             "num_samples": 1, "seq_len": len(ids) - 1, "batch_size": 1,
+             "chunk": C_, "streamed": True,
+             "model": str(mp), "tokens": len(ids)}, indent=1))
         print(f"top-{a.save_topk} cache -> {outd}", flush=True)
 
 
