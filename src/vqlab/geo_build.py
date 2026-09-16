@@ -24,7 +24,12 @@ THREE THINGS THIS ENFORCES, each of which cost a real run to learn:
 2. **pack_bits in config.** The loader derives the codes shape from
    `pack_bits`; omitting it on a changed module makes the artifact fail to
    load with a shape error that names the wrong cause.
-3. **Fit reuse is verified by CODEBOOK SHAPE, never by filename.** A part
+3. **A fit is named for its MODULE AND ITS GEOMETRY** (`<module>.d4-K256.
+   safetensors`). Naming it after the module alone let two rungs' different
+   geometries share one filename with different bytes, which makes an archive
+   un-deduplicable and a cross-rung reuse silently wrong. Legacy unstamped
+   parts are still accepted on the shape check below.
+4. **Fit reuse is verified by CODEBOOK SHAPE, never by filename.** A part
    named for the right module at the wrong geometry loads silently and
    poisons the build.
 
@@ -55,6 +60,30 @@ NFITG = 1 << 17
 ITERS_LLOYD = 20
 ITERS_ALT = 12
 EXT = ".safetensors"
+
+
+def part_name(module, d, k):
+    """Fit filename: the MODULE and the GEOMETRY that produced it.
+
+    A fit is identified by (module, d, K) -- naming it after the module alone
+    made two rungs' different geometries collide on one filename with
+    different bytes (2026-09-15: `model.layers.28...gate_proj` existed twice,
+    same name, same size, different content). That makes an archive
+    un-deduplicable and a cross-rung reuse silently wrong. Put the identity
+    in the name.
+    """
+    return f"{module}.d{int(d)}-K{int(k)}{EXT}"
+
+
+def parse_part(fname):
+    """(module, d, K) from a part filename; (module, None, None) if legacy."""
+    base = fname[:-len(EXT)] if fname.endswith(EXT) else fname
+    head, _, tail = base.rpartition(".")
+    if head and tail.startswith("d") and "-K" in tail:
+        dpart, _, kpart = tail.partition("-K")
+        if dpart[1:].isdigit() and kpart.isdigit():
+            return head, int(dpart[1:]), int(kpart)
+    return base, None, None
 
 
 def _log(*a):
@@ -238,12 +267,20 @@ def main():
     reused = 0
     for src in a.reuse:
         for f in glob.glob(os.path.join(src, "*" + EXT)):
-            n = os.path.basename(f)[:-len(EXT)]
-            if n not in geo or os.path.exists(os.path.join(parts, n + EXT)):
+            n, fd, fk = parse_part(os.path.basename(f))
+            if n not in geo:
+                continue
+            want = part_name(n, geo[n]["dim"], geo[n]["k"])
+            if os.path.exists(os.path.join(parts, want)):
+                continue
+            # A geometry-stamped name that disagrees is the wrong fit: skip it
+            # without paying the load. Legacy unstamped parts fall through to
+            # the shape check, which is why that check stays.
+            if fd is not None and (fd, fk) != (geo[n]["dim"], geo[n]["k"]):
                 continue
             cb = mx.load(f).get(n + ".codebook")
             if cb is not None and tuple(cb.shape) == (geo[n]["k"], geo[n]["dim"]):
-                shutil.copy(f, os.path.join(parts, n + EXT))
+                shutil.copy(f, os.path.join(parts, want))
                 reused += 1
     if a.reuse:
         _log(f"reused {reused}/{len(geo)} fits (codebook-shape verified)")
@@ -251,7 +288,7 @@ def main():
     # ---- fit what is missing ----
     done = 0
     for n in sorted(geo):
-        part = os.path.join(parts, n + EXT)
+        part = os.path.join(parts, part_name(n, geo[n]["dim"], geo[n]["k"]))
         if os.path.exists(part):
             done += 1
             continue
