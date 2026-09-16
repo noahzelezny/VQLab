@@ -2989,3 +2989,59 @@ New instrument: `scripts/bench_prefill_ab.py` — the prefill twin of
 bench_decode_ab.py (which times first-token-to-last and EXCLUDES prefill by
 construction). Same discipline: lazy=False, throwaway run first, n=3, one
 process per arm, ratios only.
+
+## F108 (2026-09-15) — THE FLASH CARD'S INSTRUMENT IS GONE. Neither available qwen4exp venv reproduces TABLE.md, and both agree with each other — so the published KL/ppl table cannot take a new row. Also: every ppl number I measured this session came from the exo env, which the sweep driver refuses BY DESIGN as off-instrument.
+
+`research/quantlab/research/flash-next/flash_v2_sweep.py --verify-instrument`
+re-scores the SHIPPED 2.1bpw rung and compares against TABLE.md:8 before it
+will trust any new number. Results:
+
+| interpreter | mlx_lm / mlx | KL | top-1 | prose |
+|---|---|---|---|---|
+| TABLE.md / the card | (unknown, 2026-08) | 390.09 | 78.8% | 5.9033 |
+| `~/.venvs/qwen4exp` | 0.32.0 / 0.32.2 | 391.6443 | 78.5% | 5.887087 |
+| `/Volumes/Thunderbay SSD/venvs/qwen4exp` | 0.32.0 / 0.32.2 | 391.6443 | 78.5% | 5.887087 |
+| exo env | 0.31.9 / 0.32.0.dev+4c8d2590 | — | — | REFUSED at preflight |
+
+1. **The two qwen4exp venvs agree to four decimals** — the current stack is
+   stable and reproducible. It simply is not what cut the card.
+2. **So no v2 row can join the card's table.** It would be off-instrument
+   against its own comparators — the exact error the card's own "one harness"
+   note warns about. The driver refuses to proceed with an offset because the
+   2026-09-03 GLM divergence was NOT uniform across corpora.
+3. **The exo env is refused by design**: "a grafted mlx-lm and a jaccl mlx
+   fork; a number from them is OFF-INSTRUMENT."
+
+WHAT THIS DOES NOT INVALIDATE. Every comparison this session used the SAME env
+on both sides, so the one-harness rule held WITHIN each: Flash-2.1 v2 > v1
+(F100), v1.5 bit-exactness (identical to 15 digits, F105/F107), the flag
+bisects, the speed A/Bs. The 9 repos pushed tonight are runtime-only refreshes
+whose claim is bit-identical output, verified same-env on both sides.
+
+WHAT IT DOES INVALIDATE. My absolute numbers are not comparable to card rows,
+and F99's claim that 12k "reproduces the ledger's historical rows" was too
+strong: 35B-3.4 prose 5.4109 vs recorded 5.4101 is CLOSE, not equal — the
+signature of a different interpreter, which I read as confirmation instead.
+
+DOC CONFLICT, unresolved: AGENTS.md instructs agents to run the CLI with the
+exo python because it is the env that loads qwen4_exp. This driver classifies
+that same env as off-instrument. **Both cannot be right.** Until resolved, a
+number destined for a CARD must come from a verified instrument; the exo env
+is fine for A/B work where both sides share it.
+
+CONSEQUENCE FOR THE RELEASE: Flash-2.1 v2 is gate-complete and measurably
+better, but its card's central table cannot be honestly extended. Either
+regenerate every row on the current instrument (KL works off the existing
+2048 cache; affine q3-q8 at 75-178 GiB stream fine; the 335 GiB bf16 teacher
+row is the open question — Noah 2026-09-15: it does not fit the cluster) or
+publish without that table. HELD pending Noah.
+
+NOTE ON THE KL CACHE (correcting my own claim earlier tonight): the Flash
+teacher cache was never deleted. It is at
+`/Volumes/Thunderbay SSD/Exo Models/flashnext_teacher_topk_prose` (top_k 64,
+2049 tokens, prose). I declared it missing after searching vqlab-scratch/ and
+vqlab-dogfood/ but not `Exo Models/` — the FOURTH incomplete-search negative
+this session (F102), and the second one in that same directory. KL is pinned
+to 2048 by that cache: the scorer hard-fails if token ids differ
+(stream_score.py:255-258), so there is no 12k KL without re-caching, and
+re-caching needs the 335 GiB teacher.
