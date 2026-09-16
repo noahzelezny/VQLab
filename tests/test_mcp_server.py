@@ -28,6 +28,8 @@ def lab(tmp_path, monkeypatch):
     monkeypatch.setenv("VQLAB_ROOTS", str(root))
     monkeypatch.setenv("VQLAB_RUNS_DIR", str(tmp_path / "runs"))
     monkeypatch.setenv("VQLAB_GPU_LEASE", str(tmp_path / "gpu.lease"))
+    monkeypatch.setenv("VQLAB_LAB_STATE", str(tmp_path / "lab-state.json"))
+    monkeypatch.setenv("VQLAB_HOSTNAME", "NoahsMacStudio")
     log = tmp_path / "FINDINGS-LOG.md"
     log.write_text("# log\n\n## F97 (2026-09-14) — packing is exact\n\nbody\n\n## F98 (2026-09-14) — corrects\n\nbody\n")
     monkeypatch.setattr(m, "FINDINGS_LOG", log)
@@ -163,3 +165,18 @@ def test_call_tool_never_raises():
     assert r["isError"] and _text(r)["error"] == "INVALID_ARG"
     r = m.call_tool("nope", {})
     assert _text(r)["error"] == "UNKNOWN_TOOL"
+
+
+def test_heavy_run_refused_on_the_manager_box(lab, tmp_path):
+    (tmp_path / "lab-state.json").write_text(json.dumps({
+        "fit_host": "m4", "manager_host": "m3", "manager_hostname": "NoahsMacStudio",
+        "manager_service": "qwen-moe-m3"}))
+    with pytest.raises(m.ToolError) as ei:
+        m.t_run("geo-build", ["--artifact", str(lab["art"])])
+    assert ei.value.code == "LAB_MANAGER_HERE"
+    assert "lab_residency --fit-on m3" in ei.value.extra["hint"]
+    # light commands and the other box are unaffected
+    assert m.t_run("price", ["--help"])["run_id"]
+    (tmp_path / "lab-state.json").write_text(json.dumps({"manager_hostname": "NozzleBook-Pro", "fit_host": "m3"}))
+    assert m.t_run("price", ["--help"])["run_id"]
+    assert m.t_gpu_state()["lab_state"]["fit_host"] == "m3"
