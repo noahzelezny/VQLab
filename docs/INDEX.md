@@ -30,6 +30,7 @@ This index says what each doc is FOR and whether it still holds.
 | AFFINE-BASELINE-397B-2026-09-08.md | CURRENT | VQ at 87% of affine on the flagship — the parity target. |
 | MOE-PREFILL-ATTRIB / PREFILL-OPT-BENCH / VQGEMM-BENCH / WDEC-BENCH | CURRENT | Earlier prefill work; not contradicted, not re-verified. |
 | MTP.md, MTP-VALIDATION, MTP-EXO-SPEC | CURRENT | Speculative decoding. Note MTP costs ~3.4x on multi-request workloads. |
+| MTP-USAGE.md | CURRENT | Setup, serving, and the measured speedups; moved out of README.md 2026-09-15. |
 | GEMMA-DIVERGENCE, DENSE-VQ-DECODE | CURRENT | Dense path; gemmseg is MoE-only, so MoE prefill numbers do NOT transfer. |
 
 ## Method / process

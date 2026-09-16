@@ -66,6 +66,8 @@ COMMANDS = {
     "serve": ("serve.py", "serve an artifact over an OpenAI-compatible API (mlx-lm server + MTP decode)"),
     "mtp-accept": ("mtp_accept.py", "paired draft-acceptance across prompts (the reliable instrument)"),
     "mtp-bench": ("mtp_bench.py", "measure the MTP speedup, acceptance and numerics control"),
+    # agents
+    "mcp": ("mcp_server.py", "serve the lab to agents over MCP (stdio); one server per box"),
 }
 
 
