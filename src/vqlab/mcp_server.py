@@ -109,6 +109,29 @@ RUN_ALLOWLIST = {
 RESUMABLE = {"fit-moe", "fit-dense", "geo-build", "alloc-sweep", "validate"}
 DEFAULT_RETRIES = 2
 
+# Commands that need the box's memory to themselves. On the box that hosts
+# the manager model (recorded by scout.ops.lab_residency in lab-state.json on
+# the shared SSD) these are refused: the manager lives on the box NOT fitting.
+HEAVY = {"fit-moe", "fit-dense", "geo-build", "alloc-sweep", "layer-leverage",
+         "score", "kl", "validate", "smoke", "verify"}
+
+
+def lab_state_path() -> Path:
+    env = os.environ.get("VQLAB_LAB_STATE")
+    return Path(env) if env else Path(DEFAULT_ROOTS[0]) / "lab-state.json"
+
+
+def _lab_state() -> Dict[str, Any]:
+    try:
+        return json.loads(lab_state_path().read_text())
+    except Exception:  # noqa: BLE001 — no record ⇒ no rule in force
+        return {}
+
+
+def _this_host() -> str:
+    return os.environ.get("VQLAB_HOSTNAME") or socket.gethostname().split(".")[0]
+
+
 DOC_ALLOW = ("docs", "AGENTS.md", "README.md", "METHODOLOGY.md",
              "REPRODUCING.md", "research/quantlab/FINDINGS.md",
              "research/quantlab/EXPERIMENTS.md")
@@ -336,13 +359,33 @@ def t_run(cmd: str, args: Optional[List[str]] = None, tag: str = "",
                             "it pins GPU memory on this box", instances=placed,
                             hint="DELETE /instance/<id> on the exo API, kill orphaned "
                                  "multiprocessing.spawn runners, then retry (or force=true)")
+    if cmd in HEAVY and not force:
+        st = _lab_state()
+        if st.get("manager_hostname") and st["manager_hostname"] == _this_host():
+            raise ToolError("LAB_MANAGER_HERE",
+                            f"this box ({_this_host()}) hosts the manager model "
+                            f"({st.get('manager_service')}); heavy jobs run on {st.get('fit_host')}",
+                            lab_state=st,
+                            hint="talk to the other box's vqlab server, or flip residency: "
+                                 f"python -m scout.ops.lab_residency --fit-on {st.get('manager_host')}")
     holder = _lease_holder()
     if holder:
         raise ToolError("GPU_BUSY", "the GPU lease on this box is held", holder=holder,
                         lease=str(lease_path()), hint="deferring is normal; poll and retry")
-    run_id = time.strftime("%Y%m%d-%H%M%S") + "-" + cmd + (("-" + re.sub(r"[^\w.-]", "_", tag)[:24]) if tag else "")
-    rd = runs_dir() / run_id
-    rd.mkdir(parents=True, exist_ok=False)
+    # Second-granularity ids collide when two launches land in the same second
+    # (two agents, or one retrying): make the id unique rather than crashing.
+    stem = time.strftime("%Y%m%d-%H%M%S") + "-" + cmd + (("-" + re.sub(r"[^\w.-]", "_", tag)[:24]) if tag else "")
+    base = runs_dir()
+    for suffix in ("", *(f"-{i}" for i in range(2, 100))):
+        run_id = stem + suffix
+        rd = base / run_id
+        try:
+            rd.mkdir(parents=True, exist_ok=False)
+            break
+        except FileExistsError:
+            continue
+    else:
+        raise ToolError("BUSY", "100 runs in one second on this box; something is looping")
     n_retries = DEFAULT_RETRIES if retries is None else int(retries)
     if cmd not in RESUMABLE:
         n_retries = 0
@@ -421,7 +464,8 @@ def t_list_runs(n: int = 20) -> Dict[str, Any]:
 
 def t_gpu_state() -> Dict[str, Any]:
     return {"host": socket.gethostname().split(".")[0], "lease": str(lease_path()),
-            "lease_holder": _lease_holder(), "exo_instances": _exo_instances()}
+            "lease_holder": _lease_holder(), "exo_instances": _exo_instances(),
+            "lab_state": _lab_state(), "this_host": _this_host()}
 
 
 _F_HEAD = re.compile(r"^## F(\d+)\b")
