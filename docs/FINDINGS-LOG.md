@@ -3165,3 +3165,68 @@ NEXT (not done): flip qwen4_exp's `validated` to False so the gate stops
 trusting it, then diagnose — the smooth length dependence (F109) points at
 positional handling or accumulating recurrent state in the per-layer loop,
 not a mask boundary.
+
+## F112 (2026-09-15) — CONSOLIDATES AND CORRECTS F109/F111. The qwen4_exp streamed scorer was UNCHUNKED; chunking it makes it match a direct forward to 4-5 decimals (2048-8192). The fix MOVES EVERY PUBLISHED LADDER NUMBER by ~0.03, including affine and bf16 rows. TABLE.md was cut with the unchunked path.
+
+WHAT WAS ACTUALLY WRONG. `score_qwen4_exp` pushed the whole sequence through
+each layer in ONE call with no cache. qwen4_exp's linear-attention layers carry
+recurrent state, so that is a different computation from the chunk-512 prefill
+every other number on this family uses. Fixed: each layer now walks the
+sequence in --chunk blocks carrying its OWN cache; masks are built per layer
+from that layer's cache and only for the type that consumes it; the PLE n-gram
+context is derived per chunk from `ids`.
+
+VERIFICATION vs `scripts/score_ppl_resident.py` (direct chunk-512 forward),
+shipped Flash-2.1, prose, same venv:
+
+| tokens | streamed FIXED | resident | delta |
+|---|---|---|---|
+| 2048 | 5.903631 | 5.905622 | 0.0020 |
+| 4096 | 6.526877 | 6.527522 | 0.0006 |
+| 6144 | 7.086978 | 7.087918 | 0.0009 |
+| 8192 | 6.996241 | 6.996406 | **0.00016** |
+
+(Before the fix: 5.8857 at 2048, i.e. 0.0199 off, and 274.8 at 12288.)
+
+**THE FIX CHANGES PUBLISHED NUMBERS.** 8bit prose at 2048:
+
+| | ppl |
+|---|---|
+| TABLE.md (August) | 5.1968 |
+| old unchunked scorer, re-run today | 5.196815 (reproduces August EXACTLY) |
+| fixed chunked scorer | **5.229035** |
+
++0.032. bf16 literary moves the other way, 7.6643 -> 7.63199, also 0.032.
+Both are AFFINE/bf16 with no VQ kernels, so this is the scorer alone.
+
+CONCLUSION: **TABLE.md's whole Flash ladder was measured with the unchunked
+path.** Its internal RANKINGS are likely intact (the error looks systematic in
+magnitude), but its absolute values disagree with a direct forward by
+~0.02-0.03. Any new row measured with the fixed scorer will NOT line up with
+the old rows; the ladder needs re-measuring before mixing.
+
+CORRECTIONS TO MY OWN EARLIER ENTRIES TONIGHT:
+* **F109 is WRONG in its reasoning.** It argued that ppl rising with --tokens
+  proved the scorer broken. It does not: the resident scorer on the same corpus
+  reads 5.91 (2048) -> 6.53 (4096) -> 5.83 (12288), non-monotonic, because
+  different token counts score DIFFERENT TEXT. That is normal. The real defect
+  was the missing chunking, which F109 did not identify.
+* **F111's headline number is a mismatched comparison.** Its "rule 5 failure,
+  5.8857 vs 5.9056" pitted an UNCHUNKED streamed pass against a CHUNKED direct
+  forward - two different computations. The honest residual after fixing the
+  chunking is 0.002, so TABLE.md's VQ rows are in better shape than F111 said.
+  What survives from F111: qwen4_exp's `"validated": True` flag still has no
+  recorded rule-5 run, and the test could not even be run until
+  score_ppl_resident.py's trust_remote_code bit-rot was fixed.
+* **F110 stands** (affine reproduces, VQ drifts) but is now only PART of the
+  story: some of the VQ drift is this scorer, not the v2 runtime.
+
+STILL OPEN: above ~8192 the streamed pass diverges (10240 -> 33.99 vs resident
+6.46; 12288 -> 258 vs 5.83). NOT chunk size (256/512/1024 fail alike), NOT
+memory (peak 13.1 GiB on a 96 GiB box), and nothing in the config marks 8192.
+Undiagnosed. Score at <=8192 until it is; 8192 is a KNOWN-GOOD RANGE, not a
+fix.
+
+ALSO: bf16 (335 GiB) streams right at the Metal watchdog limit - 1 success in
+11 attempts (literary 7.63199; prose and code failed 5 retries each). A full
+bf16 ppl row is not reliably obtainable on this box.
