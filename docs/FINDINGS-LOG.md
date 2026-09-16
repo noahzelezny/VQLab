@@ -2949,3 +2949,43 @@ REMAINING: the 10 cluster-tier rungs (GLM x3 108-141 GiB, 397B x4 106-149,
 Flash-Next 3.2/4.4/5.5 at 72/96/115). Per Noah 2026-09-15: with the models on
 the SSD it is faster to delete and COPY to the M4 than to load over a
 symlink/share — do not point a big-rung load at the SSD across the network.
+
+## F107 (2026-09-15) — MEASURED the v2 speed/accuracy trade instead of quoting it: bit-exact v2 keeps +8.1% prefill and +12.2% decode over the SHIPPED arc6 runtime. The two bf16-I/O flags are worth only 2.7% prefill / 6.2% decode on top of that. Ship bit-exact.
+
+F105 recommended defaulting both bf16-I/O flags off, but priced that
+recommendation from COMMIT MESSAGES (+1.3-1.8% prefill, +3.3-3.8% decode) —
+numbers nobody in this arc had re-measured. Quantlab III forbids exactly that
+(a number older than the artifact it faces gets RE-MEASURED, not cited).
+
+Three arms, 35B-3.4, one box, one session, ONE PROCESS PER ARM, n=3, medians
+(`scripts/bench_decode_ab.py` and the new `scripts/bench_prefill_ab.py`,
+8192-token prompts):
+
+| arm | numerics | prefill tok/s | decode tok/s |
+|---|---|---|---|
+| C — arc6 `model.py` (published) | reference | 2112.0 | 57.8 |
+| B — v2, both bf16-I/O flags OFF | **bit-exact vs arc6** | 2283.2 | 64.9 |
+| A — v2, all flags ON (repo default) | +0.97% code ppl (F103) | 2345.3 | 68.9 |
+
+RATIOS (same session, per quantlab III — never quote these absolutes):
+* **B vs C: +8.1% prefill, +12.2% decode, outputs BIT-IDENTICAL.**
+* A vs C: +11.0% prefill, +19.2% decode.
+* A vs B (what the bf16-I/O flags actually buy): +2.7% prefill, +6.2% decode.
+
+Decode arms did not overlap (A 68.10-71.24 vs B 61.20-65.02); peak memory
+identical to 0.01 GiB across arms, so this is not a memory-pressure artifact.
+
+CORROBORATES the doc: docs/V2-RUNTIME.md claims +11.9% prefill for full v2 on
+this exact rung (F56/F58); measured +11.0%. The published claim is sound.
+
+VERDICT: **ship the refresh with both bf16-I/O flags defaulted OFF.** Two
+thirds of the prefill gain and nearly two thirds of the decode gain, with a
+guarantee no user's output changes — which removes the per-geometry ppl
+spot-check from all 20 repos. Buying the last 2.7%/6.2% costs an accuracy
+regression that is family-local (F105) and would need a per-family bisect
+before every future release.
+
+New instrument: `scripts/bench_prefill_ab.py` — the prefill twin of
+bench_decode_ab.py (which times first-token-to-last and EXCLUDES prefill by
+construction). Same discipline: lazy=False, throwaway run first, n=3, one
+process per arm, ratios only.
