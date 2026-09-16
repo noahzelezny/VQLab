@@ -216,15 +216,32 @@ def main():
                "promote": len(hs) if hs is not None else max(nh, a.hold_hot),
                "restore": nw, "layers": hs}
         for tag, fn in CORPORA.items():
-            out = subprocess.run(
+            r = subprocess.run(
                 [sys.executable, os.path.join(REPO, "scripts", "score_ppl_resident.py"),
                  "--model", art, "--corpus", os.path.join(REF, fn),
                  "--max-tokens", str(a.score_tokens)],
-                capture_output=True, text=True).stdout
+                capture_output=True, text=True)
             try:
-                row[tag] = json.loads(out[out.index("{"):])["ppl"]
+                row[tag] = json.loads(r.stdout[r.stdout.index("{"):])["ppl"]
             except Exception:
+                # A SILENT None IS THE EXPENSIVE FAILURE. This used to swallow
+                # the scorer's stderr and record None, so a sweep whose every
+                # point failed to load looked exactly like a sweep that ran:
+                # ten hours of building, a results file of nulls, and the
+                # reason discarded. Say what happened, and say it loudly
+                # enough to kill the run early.
                 row[tag] = None
+                tail = (r.stderr or r.stdout or "").strip().splitlines()
+                print(f"  !! {name}/{tag} SCORE FAILED (rc={r.returncode}): "
+                      + (tail[-1] if tail else "no output"), flush=True)
+        if all(row.get(t) is None for t in CORPORA):
+            print(f"  !! {name} SCORED NOTHING on any corpus -- the artifact "
+                  f"does not load. Stopping rather than sweeping blind.",
+                  flush=True)
+            results[name] = row
+            json.dump(results, open(os.path.join(a.out, "sweep_results.json"),
+                                    "w"), indent=1)
+            raise SystemExit(f"FAIL: {name} produced no ppl on any corpus.")
         results[name] = row
         print(f"  -> {row}", flush=True)
         json.dump(results, open(os.path.join(a.out, "sweep_results.json"), "w"), indent=1)
