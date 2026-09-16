@@ -3230,3 +3230,59 @@ fix.
 ALSO: bf16 (335 GiB) streams right at the Metal watchdog limit - 1 success in
 11 attempts (literary 7.63199; prose and code failed 5 retries each). A full
 bf16 ppl row is not reliably obtainable on this box.
+
+## F113 (2026-09-15) — THERE WAS NO 8192 BOUNDARY. The streamed scorer's whole-sequence HEAD PROJECTION was the bug: 248320 vocab x sequence length, 9.5 GiB of fp32 logits at 10240. Chunking it makes streamed reproduce a direct forward EXACTLY at every length, 2048-12288. Rule 5 PASSED. Supersedes F109/F111/F112's "known-good range".
+
+Two unchunked operations, found one at a time:
+
+1. **The per-layer forward** ran the whole sequence with no cache (F112).
+   qwen4_exp's linear-attention layers carry recurrent state, so that is not
+   the chunk-512 prefill this family is measured with. Fixing it got agreement
+   to ~0.002 at 2048.
+2. **The head projection** still built logits for the ENTIRE sequence in one
+   matmul. That was BOTH the residual 0.002 AND the blow-up above 8192. The
+   resident scorer never does this — it accumulates NLL per chunk.
+
+I accepted (1)'s 0.002 as numerical noise and stopped. It was the second bug,
+visible in code I had already read: the comparison target never builds
+full-sequence logits. **"Agrees to four decimals" is not agreement — rule 5
+says ALL printed decimals, and the gap between those two standards was an
+entire second defect.**
+
+AFTER CHUNKING THE HEAD (shipped Flash-2.1, prose, same venv):
+
+| tokens | streamed | resident (direct) |
+|---|---|---|
+| 2048 | 5.905623 | 5.905621976976766 |
+| 4096 | 6.527522 | 6.5275216978781945 |
+| 6144 | 7.087920 | 7.087918437761749 |
+| 8192 | 6.996406 | 6.996405677569445 |
+| 10240 | 6.458037 | 6.458036779155016 |
+| 12288 | 5.826548 | 5.826547187584844 |
+
+**Rule 5 PASSED at every length.** 12k scoring now works, including for models
+too large to load resident — which was the thing blocking a complete ppl
+column for the 178 GiB 8bit and the 335 GiB bf16.
+
+RETRACTED FROM MY OWN ENTRIES TONIGHT:
+* "8192 is a KNOWN-GOOD RANGE, not a fix" (F112) — there was no boundary at
+  all. 8192 was simply where the head matmul stopped fitting whatever it was
+  exceeding.
+* "score at <=8192 until it is diagnosed" (F112) — unnecessary; score anywhere.
+* F109's length-dependence reasoning and F111's 0.0199 rule-5 figure were both
+  already corrected by F112; this entry closes the remaining open item.
+
+**`score_glm5_next` HAD THE IDENTICAL DEFECT** — whole sequence per layer with
+`cache=None`, plus a whole-sequence head — and has been given the same fix. Its
+2026-08-29 rule-5 run was done at 33 tokens on the unchunked version, where
+neither bug can show, so it does not validate the code that ships. Registry
+flag set to **validated=False**; re-run rule 5 before any GLM number from it
+enters a ladder or a card.
+
+STILL TRUE FROM F112: the fix MOVES published numbers (8bit prose 5.1968 ->
+5.229035; bf16 literary 7.6643 -> 7.63199). TABLE.md's whole Flash ladder was
+cut with the doubly-unchunked path and needs re-measuring before new rows join
+it.
+
+STILL TRUE: bf16 at 335 GiB hits the Metal watchdog (1 success in 11 attempts).
+That is a separate, unresolved operational limit, not a scorer bug.
