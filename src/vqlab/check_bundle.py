@@ -107,9 +107,21 @@ def main() -> int:
         return 0
 
     runtime = (here / "vq_switch.py").read_text()
-    if runtime in bundle:
+    # Two legitimate runtime PROFILES differ by exactly the two bf16-I/O flag
+    # defaults (docs/RUNTIME-SHIP-PLAN.md). Verify against either, and SAY
+    # WHICH -- otherwise the repo's current default silently decides which
+    # artifacts can pass their own gate, and flipping it to publish one
+    # artifact breaks every other.
+    import importlib.util as _ilu
+    _spec = _ilu.spec_from_file_location("runtime_profile",
+                                         here / "runtime_profile.py")
+    runtime_profile = _ilu.module_from_spec(_spec)
+    _spec.loader.exec_module(runtime_profile)
+    ok, profile = runtime_profile.matches_any_profile(bundle, runtime)
+    if ok:
         print(f"PASS: bundle carries the current runtime "
-              f"({len(runtime.splitlines())} lines) verbatim")
+              f"({len(runtime.splitlines())} lines) verbatim "
+              f"[profile: {profile}]")
         return 0
     print(f"FAIL: bundled model.py ({len(bundle.splitlines())} lines) does not "
           f"contain the current runtime ({len(runtime.splitlines())} lines). "
