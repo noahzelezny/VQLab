@@ -3286,3 +3286,61 @@ it.
 
 STILL TRUE: bf16 at 335 GiB hits the Metal watchdog (1 success in 11 attempts).
 That is a separate, unresolved operational limit, not a scorer bug.
+
+## F114 (2026-09-16) — GENERATIVE THINKING-MODE BENCHMARKS COST ~19 h PER RUNG on Flash-2.1 and cannot ladder. KL costs 2 MINUTES per rung and orders the family correctly. Use KL; treat generative benches as one-off sanity checks, never as a ladder instrument.
+
+Measured, not estimated: GPQA-Diamond CoT with the chat template's default
+`reasoning_effort=xhigh`, greedy, 8192-token budget, on the 45.8 GiB
+Flash-2.1 v2 (direct path, model resident):
+
+* **5.81 min/item** — 75 items in 7.27 h. 198 items projects to **19.2 h**.
+* Killed at ~88 items. **lm-eval writes nothing until the end**, so a killed
+  generative run yields ZERO partial credit. Budget the whole run or don't
+  start it.
+
+WHY IT IS SLOW, and why no config fixes it: generation is one forward pass per
+token through a RESIDENT model. It cannot batch across items the way the
+loglikelihood path does (which streams layers once for the whole task), and
+`xhigh` on graduate-level science produces traces that run to the 8192 cap.
+~23 tok/s decode x 8192 tokens = ~6 min. The cost is the token count, not the
+benchmark.
+
+CHEAPER SHAPES, if a generative number is ever needed:
+* **GSM8K** — arithmetic traces run 500-1500 tokens, not 8000. ~25-65 s/item,
+  so 200 items is ~2 h (+/-3.5 pts).
+* **`reasoning_effort=medium|low`** (the chat template accepts both) cuts the
+  trace length directly; it stops matching the base model's published
+  max-effort setting, which only matters if comparing to that.
+* **IFEval** — short outputs by construction, under an hour.
+
+THE COMPARISON THAT SETTLED IT:
+
+| | KL ladder | GPQA thinking-mode |
+|---|---|---|
+| cost per rung | ~2 min | 19 h |
+| separates the rungs | yes, monotonic (F113 ladder) | no — 3.6 pts vs +/-3.5 SE |
+| caveats to state | one (2048-token cache) | three (extraction mode, truncation rate, harness) |
+
+ALSO SETTLED EN ROUTE (all three are upstream lm-eval issues, not ours):
+1. **`gpqa_*_cot_zeroshot` strict-match is BROKEN.** Its regex
+   `(?<=The answer is )(.*)(?=.)` has a trailing lookahead that forces `.*` to
+   surrender its last character: "The answer is (D)" captures "(D" and FAILS;
+   only a trailing period makes it pass. No prompt instruction can fix this —
+   verified directly. flexible-extract is the only working filter in the task,
+   so it is not leniency, it is the metric.
+2. **The prompt never requests an answer format** yet strict-match demands the
+   literal phrase "The answer is". Affects every model identically.
+3. **`until: ["</s>"]`** is a Llama stop token this family never emits, so
+   generation always runs to the budget.
+
+A submit-instructed variant is checked in at
+`scratchpad/lm_tasks/gpqa_diamond_cot_submit.yaml` (one added sentence,
+identical for every model, header explains why). It does NOT rescue
+strict-match — see (1) — but it is the honest prompt if the task is ever run.
+
+CONTEXT FOR THE NUMBERS THAT DO EXIST: on 6 items, thinking-mode CoT scored
+83.3% flexible-extract (5 of 6; the sixth truncated) against **44.9%** for the
+same model on the loglikelihood `gpqa_diamond_zeroshot`. Thinking mode roughly
+doubles the score, which is why the base model's published 91.7 was never
+comparable to our 44.9 — a ~46-point gap that is methodology, not
+quantization.
