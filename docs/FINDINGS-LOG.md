@@ -3489,3 +3489,81 @@ NEXT EXPERIMENT, narrow: keep the shipped rung's wider-and-fewer shape and
 test only WHICH four layers get d2-K256 -- swap L36 (rank 45) for L30 or L29,
 hold the rest, score on KL. One build, not a sweep. A d2-K512 / d2-K1024
 promotion sweep is the other open direction; d4 at this rung is closed.
+
+## F117 (2026-09-16) — THREE-CORPUS KL AT 12288 TOKENS EXISTS NOW, and it CONFIRMS F116: no Flash-3.2 arm beats the shipped rung on any corpus. Also: the whole allocation search was chosen by PROXIES and only graded by KL.
+
+THE INSTRUMENT, built today because the old one could not answer the
+question. Teacher top-64 caches for ALL THREE house corpora at 12288 tokens
+(the ppl gate's own length, 6x the old prose-only 2049-token cache), built
+from the bf16 teacher ON THIS 96 GiB BOX -- which had never been done.
+
+    /Volumes/Thunderbay SSD/vqlab-scratch/teacher_caches_12k/
+      flashnext_teacher_topk_{prose,code,lit}_12k    ~4.6 MB each
+
+What it took, and the order matters because two of three were wrong turns:
+* `--lazy-over-gb 0.5` is THE unblock: cap the per-block eager eval so no
+  single command buffer trips the Metal watchdog. At 8 GiB it still died.
+* `--stream-ple` is a 1.85x speedup on top (teacher, 2048 tok: layer 1
+  526.4 s -> gather 114.0 s; total 703 s -> 381 s), ppl 5.17826 in BOTH.
+* The teacher was ALREADY on the SSD, in the HF hub cache, at the path the
+  old cache's own meta.json names. I was minutes from copying 335 GiB that
+  already existed (F102's failure mode, again).
+
+Cost, measured not projected: ~9 min/corpus, 25 min for all three. My
+estimate before measuring was 110 min/corpus. It was wrong three ways: the
+teacher was not on slow storage, per-layer cost does NOT scale with chunk
+count (only LAYER 1 does -- the other 46 are flat, 189 s at 512 tokens vs
+177 s at 2048, because stream_score reads each layer once and loops chunks
+inside), and the fast path I was projecting from had never run.
+
+PAIRED COMPARISON IS THE POINT. Two rungs on one cache see the SAME
+positions and the SAME teacher, so per-position differences cancel the
+position-to-position variance that dominates each rung's own SEM. Measured
+on prose, baseline vs shipped: paired sem 1.436 against unpaired 4.686, a
+3.3x tightening, taking a result from "overlapping intervals" to t=+7.5.
+An overlap-of-CIs verdict -- which is what kl-ladder shipped with for an
+hour -- would have called EVERY cell below SAME, including t=+12.
+
+THE GRID (KL millinats @ 12288, paired delta vs shipped, |t|>2 = real):
+
+    arm          prose                 code                 lit
+    shipped   154.88+/-3.25         34.12+/-1.07        115.69+/-1.54
+    baseline  165.66 +10.78 t= +7.5  35.88 +1.76 t=+4.8  122.86 +7.16 t=+12.0
+    P2        163.09  +8.21 t= +5.2  34.98 +0.85 t=+1.8  122.18 +6.49 t= +8.5
+    P6        163.32  +8.44 t= +5.0  34.63 +0.51 t=+1.0  119.74 +4.05 t= +5.1
+    P8        169.35 +14.48 t= +8.7  34.66 +0.53 t=+1.0  117.31 +1.62 t= +1.8
+    set_10    160.42  +5.55 t= +3.5  34.22 +0.09 t=+0.2  116.00 +0.30 t= +0.4
+    set_8     161.89  +7.01 t= +4.5  34.94 +0.82 t=+2.2  118.15 +2.46 t= +3.3
+
+NO ARM BEATS SHIPPED ON ANY CORPUS. Every significant cell is WORSE; every
+SAME cell is a tie. F116 was reached from prose-only KL at 2048 -- exactly
+the kind of narrow instrument that misled us elsewhere all day -- and it
+SURVIVES the better one.
+
+THREE THINGS ONLY THE NEW INSTRUMENT SHOWS:
+* P8 is the WORST arm on prose (+14.48, t=8.7), worse than promoting
+  nothing, while holding the BEST prose ppl of any arm (4.9840). A clean
+  gate/ranking inversion on a single artifact.
+* set_10 TIES shipped on code (t=0.2) and literary (t=0.4) and loses only on
+  prose (t=3.5). The 2048 prose-only cache had it 15.4 mnats behind
+  everything. Narrow instruments distorted magnitudes in BOTH directions.
+* Streamed and resident ppl agree to every printed digit at 12288 on all
+  three corpora (5.0297 / 1.6407 / 6.6612), so rule 5 now holds across two
+  independent scoring paths, not just within one.
+
+THE METHOD DEBT THIS EXPOSES, and it is the most useful thing here (Noah's
+question, and the answer is no): WE NEVER RAN A MECHANICAL LAYER SWEEP ON
+KL. The leverage map ranked layers by hidden-state drift (a PROXY, and I.6
+says proxies do not rank output damage); alloc-sweep scored its points by
+PPL (the instrument that ranks P8 first when KL ranks it last); KL only ever
+graded FINISHED artifacts, after every choice was already made. So "no arm
+beats shipped" means SIX ARMS FROM ONE GEOMETRY (d4-K8192) CHOSEN BY
+PROXIES do not beat it -- NOT that the shipped allocation is optimal. The
+L36 claim (rank 45/46, negative jump, a quarter of the shipped promotion
+budget) is still a PROXY claim and has never been tested on KL.
+
+NEXT, and it is cheap now that a KL cell is ~30 s: leave-one-out on the four
+shipped promotions (31, 35, 36, 39) -- demote each to the d4-K2048 floor and
+measure the KL it costs. Four builds, and it tests L36 head-on. Then
+add-one-in at d2-K256 on single candidate layers, KL-ranked. That is the
+mechanical per-layer sweep, ranked by the instrument that decides.
