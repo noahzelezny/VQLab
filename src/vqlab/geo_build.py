@@ -29,9 +29,13 @@ THREE THINGS THIS ENFORCES, each of which cost a real run to learn:
    geometries share one filename with different bytes, which makes an archive
    un-deduplicable and a cross-rung reuse silently wrong. Legacy unstamped
    parts are still accepted on the shape check below.
-4. **Fit reuse is verified by CODEBOOK SHAPE, never by filename.** A part
-   named for the right module at the wrong geometry loads silently and
-   poisons the build.
+4. **Fit reuse is verified by CODEBOOK SHAPE *and* MODULE SHAPE, never by
+   filename.** A part named for the right module at the wrong geometry loads
+   silently and poisons the build. The codebook shape alone only pins (K, d),
+   which a fit from ANOTHER MODEL at the same geometry also satisfies -- the
+   2026-09-15 Flash pool holds 240 such d4-K2048 parts. The shipped artifact
+   carries every module at its old geometry, and (experts, out) survive a
+   change of K or d, so its codes give a free exact identity check.
 
 Fit recipe: k-means++ init, Lloyd, then scale<->codebook alternation with
 per-group least-squares scales (F80/F81 — the max-abs scale heuristic was
@@ -279,8 +283,17 @@ def main():
         for k in mx.load(rp):
             a_index[k] = rp
 
-    # ---- reuse: verified by CODEBOOK SHAPE, never by filename ----
+    # ---- reuse: verified by CODEBOOK SHAPE *and* MODULE SHAPE ----
+    # The codebook shape only pins (K, d). It does NOT pin the module the fit
+    # came from, so a fit for a DIFFERENT model with the same geometry passes
+    # it: the 2026-09-15 Flash pool holds 240 d4-K2048 parts whose codes are
+    # [256, 512, ...] against Flash's [512, 640, ...] -- another family's
+    # experts entirely. Only the `language_model.` name prefix kept those out,
+    # which is luck, not verification. The shipped artifact already carries
+    # this module at its OLD geometry, and (experts, out) do not change with
+    # K or d -- so the shipped codes give a free, exact identity check.
     reused = 0
+    rejected = []
     for src in a.reuse:
         for f in glob.glob(os.path.join(src, "*" + EXT)):
             n, fd, fk = parse_part(os.path.basename(f))
@@ -294,10 +307,27 @@ def main():
             # the shape check, which is why that check stays.
             if fd is not None and (fd, fk) != (geo[n]["dim"], geo[n]["k"]):
                 continue
-            cb = mx.load(f).get(n + ".codebook")
-            if cb is not None and tuple(cb.shape) == (geo[n]["k"], geo[n]["dim"]):
-                shutil.copy(f, os.path.join(parts, want))
-                reused += 1
+            part = mx.load(f)
+            cb = part.get(n + ".codebook")
+            if cb is None or tuple(cb.shape) != (geo[n]["k"], geo[n]["dim"]):
+                continue
+            codes = part.get(n + ".codes")
+            shipped = a_index.get(n + ".codes")
+            if codes is None or shipped is None:
+                rejected.append((os.path.basename(f), "no codes to compare"))
+                continue
+            want_eo = tuple(mx.load(shipped)[n + ".codes"].shape[:2])
+            got_eo = tuple(codes.shape[:2])
+            if got_eo != want_eo:
+                rejected.append((os.path.basename(f),
+                                 f"codes {got_eo} != shipped {want_eo}"))
+                continue
+            shutil.copy(f, os.path.join(parts, want))
+            reused += 1
+    for fn, why in rejected[:10]:
+        _log(f"  REJECTED reuse {fn}: {why}")
+    if rejected:
+        _log(f"rejected {len(rejected)} reuse candidates on module shape")
     if a.reuse:
         _log(f"reused {reused}/{len(geo)} fits (codebook-shape verified)")
 
