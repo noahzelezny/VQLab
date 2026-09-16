@@ -384,7 +384,17 @@ def main():
     for n, g in geo.items():
         ent = vm[n]
         ent["dim"], ent["k"] = int(g["dim"]), int(g["k"])
-        ent["pack_bits"] = int(math.ceil(math.log2(int(g["k"]))))
+        # pack_bits must describe the BYTES, not the geometry: the loader
+        # derives the codes shape from it. Fits made here are packed uint32,
+        # but a part harvested from a shipped rung may carry that rung's raw
+        # uint8 codes (every shipped d2-K256 module does) -- stamping
+        # pack_bits on those makes the runtime expect (.., IN/d*bits/32)
+        # words and refuse the (.., IN/d) bytes it gets.
+        codes = new[n + ".codes"]
+        if codes.dtype == mx.uint32:
+            ent["pack_bits"] = int(math.ceil(math.log2(int(g["k"]))))
+        else:
+            ent.pop("pack_bits", None)
     json.dump(cfg, open(cfg_path, "w"), indent=1)
     swapped = 0
     for f in sorted(glob.glob(os.path.join(a.artifact, "*" + EXT))):
