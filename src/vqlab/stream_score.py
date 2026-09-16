@@ -303,6 +303,9 @@ def main():
     ap.add_argument("--lazy-over-gb", type=float, default=8.0,
                     help="per-BLOCK budget for the eager parameter eval; the "
                          "rest is left lazy, largest first (F115).")
+    ap.add_argument("--kl-per-position", default=None,
+                    help="write the per-position KL (millinats) here, so two "
+                         "rungs on the same cache can be compared PAIRED.")
     ap.add_argument("--stream-ple", action="store_true",
                     help="stream the PLE n-gram gather instead of holding the "
                          "tables resident. REQUIRED to run this family's bf16 "
@@ -389,6 +392,16 @@ def main():
         mean_mn = float(mx.mean(kl_mn).item())
         sd_mn = float(mx.sqrt(mx.var(kl_mn, ddof=1)).item())
         sem = sd_mn / math.sqrt(n_pos)
+        if getattr(a, "kl_per_position", None):
+            # EXPORT THE PER-POSITION KL. Two rungs scored against the same
+            # cache see the SAME positions and the SAME teacher, so their
+            # comparison is PAIRED -- and a paired test cancels the
+            # position-to-position variance that dominates this SEM. Without
+            # this array the only available test is the unpaired one, which
+            # on a 10 mnat difference between arms whose own spreads are
+            # ~3 mnat cannot resolve what a paired test resolves easily.
+            mx.eval(kl_mn)
+            mx.save_safetensors(a.kl_per_position, {"kl_millinats": kl_mn})
         rec.update(mean_kl_millinats=round(mean_mn, 4),
                    kl_sem_millinats=round(sem, 4),
                    kl_ci95_millinats=[round(mean_mn - 1.96 * sem, 4),
