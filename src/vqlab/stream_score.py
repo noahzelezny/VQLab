@@ -37,6 +37,7 @@ import mlx.core as mx
 
 sys.path.insert(0, str(pathlib.Path(__file__).parent))
 import runtime_load
+from mem_budget import eval_params_budgeted
 
 
 def score_qwen4_exp(model, ids_list, args):
@@ -87,7 +88,13 @@ def score_qwen4_exp(model, ids_list, args):
     for i in range(n):
         blk = core.layers[i]
         with mx.stream(mx.cpu):
-            mx.eval(blk.parameters())
+            # Budgeted: this family's layer 1 is 100.3 GiB of PLE tables in
+            # bf16 and no eager eval of it fits (F115). See mem_budget.
+            _, skipped = eval_params_budgeted(
+                blk, getattr(args, "lazy_over_gb", 8.0))
+        if skipped:
+            print(f"  layer {i}: {skipped / 1024 ** 3:.1f} GiB left lazy",
+                  flush=True)
         t0 = time.time()
         c = caches[i]
         parts = []
@@ -293,6 +300,16 @@ def main():
                          "report KL-to-teacher in millinats + top-1 "
                          "agreement. Token ids must match the cache exactly.")
     ap.add_argument("--out", default=None)
+    ap.add_argument("--lazy-over-gb", type=float, default=8.0,
+                    help="per-BLOCK budget for the eager parameter eval; the "
+                         "rest is left lazy, largest first (F115).")
+    ap.add_argument("--stream-ple", action="store_true",
+                    help="stream the PLE n-gram gather instead of holding the "
+                         "tables resident. REQUIRED to run this family's bf16 "
+                         "teacher: its tables are 96 GiB. Changes no "
+                         "arithmetic, only when buffers are freed; costs a "
+                         "re-read of the tables per call, so put the teacher "
+                         "on fast storage first.")
     ap.add_argument("--allow-unvalidated", action="store_true",
                     help="run a scorer that has NOT yet reproduced a direct "
                          "forward (rule 5). The output record is stamped "
@@ -321,6 +338,10 @@ def main():
     model, config = runtime_load.load_for_family(entry["family"], mp,
                                                  lazy=True)
     print(runtime_load.resolved_runtime_note(model), flush=True)
+    if a.stream_ple:
+        import ple_stream
+        if not ple_stream.install(model, str(mp)):
+            print("[ple_stream] no sharded n-gram tables found", flush=True)
     tok = load_tokenizer(mp)
     ids = tok.encode(open(a.corpus).read())[: a.tokens + 1]
     bos = getattr(tok, "bos_token_id", None)
