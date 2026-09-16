@@ -400,6 +400,11 @@ def main():
                                "uncertainty",
                    top1_agreement=round(float(top1.item()), 4),
                    captured_mass=round(float(mass.item()), 4))
+    if a.stream_ple:
+        import ple_stream as _ps
+        st = _ps.STATS
+        print(f"[ple_stream] {st['calls']} calls, {st['rows']} rows, "
+              f"{st['secs']:.1f}s in the gather", flush=True)
     print(json.dumps(rec), flush=True)
 
     if a.save_topk:
