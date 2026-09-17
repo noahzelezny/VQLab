@@ -264,6 +264,116 @@ def score_glm5_next(model, ids_list, args):
     return logits
 
 
+def score_qwen3_5_moe(model, ids_list, args):
+    """Streamed qwen3_5_moe scorer (Qwen3.5-397B-A17B, Qwen3.6-35B-A3B).
+
+    VALIDATED 2026-09-17 (rule 5), on a REAL shipped artifact rather than a
+    random-init toy: Qwen3.6-35B-A3B-VQ-3.4bpw (same qwen3_5_moe
+    architecture, 40 layers, 14 GB so it fits resident), prose referee,
+    chunk 512, this streamed pass vs a DIRECT full-model resident forward
+    with one shared cache list (scratch/direct_qwen35.py):
+
+        2048 tokens   direct 4.842402   streamed 4.842402
+        12288 tokens  direct 5.414175   streamed 5.414175
+
+    Both lengths matter and 12288 is the load-bearing one: F111/F112 showed
+    this class of error is length-GROWING (qwen4_exp's broken pass was off
+    by 0.02 at 2048 and read 274 at 12288), and 12288 is the length the KL
+    caches and every ladder cell use. Scope: 40 layers, VQ weights, one
+    corpus; the 60-layer 397B is the same module tree by config and the
+    same code path, but the first 397B number should still be sanity-checked
+    against another instrument if one appears.
+
+    LINE-MIRRORED against mlx_lm.models.qwen3_5 (Qwen3_5TextModel.__call__ /
+    TextModel.__call__), each step below in the reference's order:
+      - embed_tokens, then layers with `mask=` chosen by the layer's own
+        `is_linear` (GatedDeltaNet gets create_ssm_mask, full attention gets
+        create_attention_mask); layer signature is (x, mask=, cache=).
+      - A FINAL NORM EXISTS (`return self.norm(hidden_states)`) -- opposite
+        of qwen4_exp, same as glm5_next. RMSNorm is per-position, so applying
+        it per chunk is identical to applying it to the whole sequence.
+      - head: tied -> embed_tokens.as_linear, else lm_head.
+      - no PLE, no hyper-connection bookends: h is NOT tiled or averaged.
+
+    CHUNKED, and it must be. `is_linear = (layer_idx + 1) %
+    full_attention_interval != 0` puts GatedDeltaNet recurrent state on most
+    layers, so this metric is chunk-DEPENDENT exactly as qwen4_exp's is
+    (F111/F112: an unchunked pass on that family read 5.8857 against 5.9056
+    and degraded to 274 at 12288 tokens). Each layer walks the sequence in
+    --chunk blocks carrying its OWN cache.
+
+    MASK EQUIVALENCE, the one place this is not a literal transcription: the
+    reference builds fa_mask/ssm_mask ONCE per __call__ from a representative
+    layer of each type (`cache[self.fa_idx]`, `cache[self.ssm_idx]`) and
+    shares them across every layer of that type. Streaming runs one layer per
+    pass, so each mask is built from THAT layer's cache. Equivalent because
+    every layer walks the same chunks in the same order, so all caches of a
+    type sit at the same offset when their mask is built -- and it keeps a
+    linear-attention cache (ArraysCache, no make_mask) out of
+    create_attention_mask, which is what the qwen4_exp scorer does too.
+    """
+    from mlx_lm.models.qwen3_5 import create_attention_mask, create_ssm_mask
+
+    lm = getattr(model, "language_model", model)
+    core = lm.model
+    ids = mx.array([ids_list[:-1]])
+    S = ids.shape[1]
+    C = max(1, int(getattr(args, "chunk", 512) or 512))
+    with mx.stream(mx.cpu):
+        mx.eval(core.embed_tokens.parameters())
+    h = core.embed_tokens(ids)
+    mx.eval(h)
+
+    # Built BEFORE any layer is dropped: make_cache walks lm.layers, which is
+    # a property over core.layers.
+    caches = lm.make_cache()
+    n = len(core.layers)
+    for i in range(n):
+        blk = core.layers[i]
+        with mx.stream(mx.cpu):
+            _, skipped = eval_params_budgeted(
+                blk, getattr(args, "lazy_over_gb", 8.0))
+        if skipped:
+            print(f"  layer {i}: {skipped / 1024 ** 3:.1f} GiB left lazy",
+                  flush=True)
+        t0 = time.time()
+        c = caches[i]
+        parts = []
+        for s0 in range(0, S, C):
+            hc_ = h[:, s0:min(s0 + C, S)]
+            mask = (create_ssm_mask(hc_, c) if blk.is_linear
+                    else create_attention_mask(hc_, c))
+            parts.append(blk(hc_, mask=mask, cache=c))
+        h = mx.concatenate(parts, axis=1) if len(parts) > 1 else parts[0]
+        mx.eval(h)
+        # pipeline_layers is a property over this list, so dropping the entry
+        # here drops the only persistent reference to the block.
+        core.layers[i] = None
+        caches[i] = None
+        del blk, parts
+        gc.collect()
+        mx.clear_cache()
+        print(f"  layer {i}/{n-1} {time.time()-t0:.1f}s "
+              f"(peak {mx.get_peak_memory()/1024**3:.1f}G)", flush=True)
+
+    head = None if lm.args.tie_word_embeddings else lm.lm_head
+    with mx.stream(mx.cpu):
+        mx.eval(core.norm.parameters(),
+                head.parameters() if head is not None
+                else core.embed_tokens.parameters())
+    # Norm + head in CHUNKS: a whole-sequence fp32 projection over this
+    # family's vocab is the largest length-scaling allocation in the pass,
+    # and the resident scorer never builds one.
+    lg = []
+    for s0 in range(0, S, C):
+        o = core.norm(h[:, s0:min(s0 + C, S)])
+        lg.append((head(o) if head is not None
+                   else core.embed_tokens.as_linear(o)).astype(mx.float32)[0])
+        mx.eval(lg[-1])
+    logits = mx.concatenate(lg, axis=0) if len(lg) > 1 else lg[0]
+    return logits
+
+
 # family -> scorer entry. `runtime` names the loader (runtime_load), and
 # `validated` is house rule 5: a scorer is validated only once its streamed
 # pass has reproduced a direct forward to all printed decimals. Unvalidated
@@ -275,6 +385,11 @@ SCORERS = {
     # at 33 tokens, where chunking cannot matter. Re-validate before trusting.
     "glm5_next": {"fn": score_glm5_next, "family": "glm5_next",
                   "validated": False},
+    # Registry key is the checkpoint's model_type; "family" names the
+    # runtime_load loader (qwen3_5 -> mlx_lm). Rule-5 run 2026-09-17 on the
+    # 35B-A3B twin at 2048 AND 12288 tokens, exact to all printed decimals.
+    "qwen3_5_moe": {"fn": score_qwen3_5_moe, "family": "qwen3_5",
+                    "validated": True},
 }
 
 
