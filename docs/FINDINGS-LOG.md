@@ -3810,3 +3810,99 @@ WHAT TRANSFERS ACROSS RUNGS AND WHAT DOES NOT, now measured on two:
 Position law I.2 as stated ("enrichment pays only in the back") is FALSE
 on both Flash rungs on KL: the best layer is L5 on the 3.2 and L2 on the
 4.4. What survives is weaker: the tail repays bits uniformly but modestly.
+
+## F120 (2026-09-17) — KL reaches the 397B family: a rule-5-validated qwen3_5_moe scorer, and the loader fix it needed -- which turns out to CHANGE NUMBERS (Flash-3.2 prose 156.7034 -> 155.1233 KL) and so ships opt-in. A perf/memory fix is an instrument change until an A/B says otherwise.
+
+ARTIFACT:   src/vqlab/stream_score.py (score_qwen3_5_moe), src/vqlab/runtime_load.py (cpu_stream), scripts/direct_forward_qwen3_5.py; validated on TheDrainFlorist--Qwen3.6-35B-A3B-VQ-3.4bpw; teacher Exo Models/Qwen--Qwen3.5-397B-A17B-bf16 (751 GiB, 60 layers)
+INSTRUMENT: vqlab.stream_score streamed pass vs a direct full-model resident forward, chunk 512, prose referee; KL cells against the 12288-token teacher caches
+PREDICTION (pre-registered): Written in the fix's own code comment before measuring: 'Stream placement is not arithmetic, so no number moves -- re-verified on the qwen4_exp path after the change.' Also predicted earlier in the session, and corrected before use: that qwen3_5_moe has no recurrent state and is chunk-invariant.
+MEASURED:   Rule 5: 35B-3.4 direct vs streamed 4.842402/4.842402 at 2048 and 5.414175/5.414175 at 12288. Loader A/B on Flash-3.2 prose @12288, same artifact and cache: GPU-stream load ppl 5.000427 KL 156.7034; CPU-stream load ppl 5.025818 KL 155.1233; qwen3_5_moe 5.414175 both ways. After making it opt-in, qwen4_exp restored to 156.7034/5.000427 exactly. 397B teacher: 12.2 GiB/layer, ~9 s/layer cold (~1.4 GB/s), 14 layers clean.
+VERDICT:    FALSIFIED
+
+THE KL INSTRUMENT NOW REACHES THE 397B FAMILY, and getting there cost two
+instrument corrections, one of which changes numbers.
+
+1. THE SCORER. `stream_score` covered qwen4_exp and glm5_next and REFUSED
+   everything else, so no Qwen3.5-397B or Qwen3.6-35B rung had ever been
+   KL-scored -- the family whose graded three-tier allocation (F91) every
+   later campaign copied. `score_qwen3_5_moe` is line-mirrored against
+   mlx_lm.models.qwen3_5: mask picked per layer by `is_linear` (GatedDeltaNet
+   gets create_ssm_mask, full attention create_attention_mask), a FINAL NORM
+   (opposite of qwen4_exp), tied-or-lm_head. CHUNKED with a per-layer cache,
+   because `is_linear = (layer_idx + 1) % full_attention_interval != 0` puts
+   recurrent state on three layers in four -- this metric is chunk-dependent
+   exactly as qwen4_exp's is. I first wrote the opposite in this session
+   ("no recurrent state, chunk-invariant"); reading the reference corrected
+   it before any number was produced.
+
+   RULE 5, on a real shipped artifact rather than a random-init toy (which
+   is all glm5_next ever got): the 35B-A3B-VQ-3.4bpw twin -- same
+   architecture, 40 layers, 14 GB so it fits resident -- against a direct
+   full-model forward at chunk 512:
+       2048 tokens   direct 4.842402   streamed 4.842402
+       12288 tokens  direct 5.414175   streamed 5.414175
+   The 12288 leg is the load-bearing one: F111/F112 showed this error class
+   GROWS with length (qwen4_exp's broken pass was off 0.02 at 2048 and read
+   274 at 12288). scripts/direct_forward_qwen3_5.py keeps the check runnable.
+
+2. THE LOADER, and this is the part that bites. Every streamed pass over the
+   751 GiB 397B teacher died with a Metal GPU Timeout inside
+   `eval_params_budgeted` -- ONE LAYER FURTHER EACH RUN (L3, L4, L5) as the
+   OS page cache warmed, which is the signature of a disk read stalling a
+   command buffer, not of a bad layer. Two wrong readings on the way, both
+   recorded because both cost time:
+     * I blamed a 397B-3.1 exo instance placed across both nodes. It was a
+       real confound -- it did hold ~73 GiB -- but the failure reproduced
+       with the gate reporting instances 0 and 77 GiB free. A plausible
+       cause that is present is not the cause.
+     * I blamed `--lazy-over-gb 0.5`, copied from the Flash recipe. That was
+       half right and worth keeping: Flash needs it LOW because its layer 1
+       is a 100 GiB PLE block that cannot be eagerly evaluated at all (F115),
+       while every 397B block is 12.2 GiB and perfectly evaluable, so 0.5
+       left 12 GiB lazy and pushed the read into the forward. Raising it to
+       16 took layers from 8.4 s to 0.3 s -- and still timed out.
+
+   THE ACTUAL CAUSE: weight reads bind to whatever stream is current when
+   they are CREATED. A later `with mx.stream(mx.cpu): mx.eval(...)` does NOT
+   rebind them, so a lazily-loaded block "evaluated on the CPU stream" still
+   issues a METAL command buffer, and a block whose read outlasts the
+   watchdog dies inside it. `mem_budget` already documents this invariant
+   ("the read ops were created under the CPU stream at load time, which is
+   what binds the stream") -- the loader simply was not honouring it, and
+   nothing had a block big enough to expose it before. Loading under the CPU
+   stream runs 14 layers straight through at a steady 9 s/layer (12.2 GiB at
+   ~1.4 GB/s, the honest cold-disk rate).
+
+3. AND IT IS NOT ARITHMETIC-NEUTRAL, which is why it ships opt-in. I wrote
+   in the fix's own comment that "stream placement is not arithmetic, so no
+   number moves" and then measured it. Same artifact, same cache, Flash-3.2
+   prose at 12288, the only difference being where the load happens:
+
+       load stream    ppl         KL (mnats)
+       GPU (as-was)   5.000427    156.7034
+       CPU (fixed)    5.025818    155.1233
+
+   while qwen3_5_moe reads 5.414175 either way. CPU and GPU kernels round
+   differently and the difference survives to the fourth decimal of ppl and
+   1.6 mnats of KL -- larger than several allocation effects this campaign
+   called real. Every published qwen4_exp number used the GPU-stream path,
+   so under one-harness that family KEEPS it; only the qwen3_5_moe scorer
+   sets `cpu_stream_load`. Both paths re-verified after the change:
+   qwen4_exp back to 156.7034 / 5.000427 exactly, qwen3_5_moe unchanged.
+
+   RULE, and it generalises past this instance: A PERFORMANCE OR MEMORY FIX
+   IS AN INSTRUMENT CHANGE UNTIL AN A/B SAYS OTHERWISE. The A/B here was two
+   runs of one cell, about eight minutes, and it was the difference between
+   a fix and a silent re-baseline of F116-F119.
+
+COST, measured rather than projected (F117's estimate was wrong three ways):
+12.2 GiB/layer at ~1.4 GB/s cold, ~9 s/layer, 60 layers -> the teacher pass
+is read-bound at roughly 10 min/corpus cold, faster warm. The three caches
+and the four-rung ladder are running now; the shipped 397B rungs are
+111.7 / 122.5 / 133.1 / 154.5 GB and the 35B rungs 13.8-22.2 GB.
+
+WHAT THIS UNLOCKS: the 397B's allocation is the one shape in the fleet
+chosen entirely by analogy and a leverage proxy -- the proxy F118 measured
+at Spearman -0.24 against KL -- and F119 showed allocation does not transfer
+between rungs, so four shipped rungs are carrying an inherited set that has
+never faced the instrument that decides.
