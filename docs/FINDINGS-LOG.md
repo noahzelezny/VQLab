@@ -3567,3 +3567,138 @@ shipped promotions (31, 35, 36, 39) -- demote each to the d4-K2048 floor and
 measure the KL it costs. Four builds, and it tests L36 head-on. Then
 add-one-in at d2-K256 on single candidate layers, KL-ranked. That is the
 mechanical per-layer sweep, ranked by the instrument that decides.
+
+## F118 (2026-09-16) — THE KL-CHOSEN Flash-3.2 ALLOCATION: 60 zero-fit arms in 4 h, single-layer deltas PREDICT compositions to ~1 mnat, every proxy that chose the hand-set falsified, and a byte-exact swap (L35,L36 -> L5,L47) beats shipped -3.1/-3.3/-1.6% KL. Demotion, PLE bytes, the 3.5 width and per-projection splits all priced and closed. Noah moved the gate to KL.
+
+ARTIFACT:   v2_flash32/{loo,addone,geo35,ple,iso,swap,permod}/art_* on the SSD scratch; candidate = v2_flash32/swap/art_swap2 (73459 MB vs shipped 73432)
+INSTRUMENT: vqlab kl-ladder, three 12288-token teacher top-64 caches (teacher_caches_12k), paired delta vs shipped on identical positions, |t|>2; ppl from the same streamed cells; smoke through the shipped runtime
+PREDICTION (pre-registered): LOO (PREREG_LOO.md): L36 free (<2 prose, non-sig on 2/3), L31~L35 > L39 > L36. ADD-ONE (PREREG_ADDONE.md): P1 Spearman(drift,KL)>0.5; P2 2 of top-3 in drift top-8; P3 front layers gain less than L29/30/32; P4 best single <= ~-4 prose; P5 no promotion is a loss. GEO35: G1 k16k_3 beats d2_2 by 0.5-1.0 mean; G2 d2_3 within 25% of sum of singles; G3 K16384 fit >=3x K256; G4 loads. PLE: E1 ple21 costs >20 prose; E2 ple44 gains <5; E3 code moves least. ISO: I1 demo15 <+3 prose; I2 iso3 beats shipped. SWAP: swap1 -4.55/+0.40/-0.05, swap2 -3.74/-1.10/-1.02. PERMOD: M1 gate >=50% of L5's gain; M2 up least; M3 parts within 25% of whole.
+MEASURED:   LOO: L31 +4.47/+0.77/+1.84, L35 +2.21/+0.23/+1.59, L36 +1.52/+0.14/+2.41, L39 +5.22/+0.43/+1.34. ADD-ONE best: L5 -6.07/+0.26/-2.46, L47 -1.40/-1.73/-2.63, L3 -3.54/-0.04/-1.85; losses L12 +5.25, L16 +2.44, L19 +2.26, L2 +2.19, L7 +1.86 prose. d2_3 -11.12/-1.32/-7.08 (+1138 MB); k16k_3 -7.62/-0.61/-5.13 (+689 MB) vs d2_2 -7.41/-1.39/-5.32 (+763 MB). ple21 +23.99/+18.67/+15.34; ple44 +2.92/-0.48/-2.59. demo15 +13.45/+5.52/+18.89; iso3 +5.84/+4.78/+9.66. swap1 -4.56/+0.50/-0.20; swap2 -4.77/-1.12/-1.80 (+27 MB), smoke PASS; ppl swap2 5.0721/1.6354/6.6798 vs shipped 5.0297/1.6407/6.6612. PERMOD L5 gate/up/down +1.23/-2.54/-0.58 prose.
+VERDICT:    FALSIFIED
+
+THE INSTRUMENT DECIDED, FOR THE FIRST TIME. Every arm below was chosen or
+ranked by paired three-corpus KL at 12288 (kl-ladder, F117), not by the
+drift map and not by ppl. Every arm but one was built with ZERO new fits:
+the floor codebooks from geo-build's pool, the d2-K256 codebooks harvested
+from the shipped 4.4 (uniform d2-K256 floor) with the new `harvest-parts`
+-> `geo-build --reuse` path, and the PLE tables swapped in from sibling
+rungs with the new `ple-swap`. 60+ arms, one GPU, ~4 h. Bytes are measured
+from the built dirs (a 3-module d2-K256 promotion is 379 MB, not the 262
+the brief assumed: the shipped rung promotes down_proj too).
+
+1. LEAVE-ONE-OUT on the four hand-set promotions (demote each to the
+   d4-K2048 floor; cost in mnats, + = worse):
+       L31  +4.47 t=5.1   +0.77 t=3.1   +1.84 t=4.4
+       L35  +2.21 t=3.6   +0.23 SAME    +1.59 t=5.2
+       L36  +1.52 t=2.3   +0.14 SAME    +2.41 t=6.8   <- LARGEST lit cost
+       L39  +5.22 t=5.1   +0.43 t=2.2   +1.34 t=5.1   <- LARGEST prose cost
+   Pre-registered (from the drift map, L36 rank 45/46): L36 free, L31~L35
+   > L39 > L36. FALSIFIED. L36 is the most valuable of the four on
+   literary; L39 (drift rank 27) is the most expensive on prose; the map's
+   order of these four does not rank their KL value on any corpus. Every
+   shipped promotion pays. No free bytes in the hand-set.
+
+2. ADD-ONE-IN at d2-K256, one floor layer at a time, 21 of 42 layers
+   scored (stopped by Noah's call to spend the GPU on fits instead):
+       L5   -6.07 t=-5.8   +0.26        -2.46 t=-4.0   <- best; NOT in any hand-set
+       L47  -1.40 t=-3.7   -1.73 t=-10  -2.63 t=-11    <- only layer that moves code
+       L3   -3.54 t=-3.7   -0.04        -1.85 t=-2.9
+       L17  -3.29 t=-4.1   -0.14        -1.38 t=-2.7
+       L33  -2.26 t=-3.6   +0.19        -1.53 t=-4.1
+       L28  -1.44          -0.26        -1.52 t=-4.1
+       L32  -1.29          -0.08        -1.81 t=-4.7
+       L27  -0.33          -0.50        -1.94 t=-5.0
+       ... L18 L21 L29 L14 L26 L30 L4 L6 near zero ...
+       L2  +2.19 t=+2.3 WORSE  (the drift map's RANK 1 layer)
+       L7  +1.86 t=+2.1 WORSE;  L19 +2.26 t=+2.8 WORSE
+       L16 +2.44 t=+2.8 WORSE
+       L12 +5.25 t=+6.3 WORSE  (more bits, worse prose; lit -0.77)
+   Pre-registered P5 ("no promotion is a loss") FALSIFIED five times:
+   giving a layer MORE bits makes prose KL WORSE for L2, L7, L12, L16, L19,
+   by up to 5 mnats at t=6. The 4.4 ships exactly those bytes. Position law
+   I.2 holds only per-layer: L3/L5 pay heavily, L2/L4/L6 do not.
+   Spearman(drift rank, KL gain) is not computable honestly on a
+   half-sweep; on what was scored the map's #1 was a loser and its #15-21
+   batch held the second-best layer.
+
+3. COMPOSITIONS ARE ADDITIVE ON THIS RUNG. d2_3 (L5+L47+L3, +1138 MB):
+   -11.12 / -1.32 / -7.08 measured vs -11.01 / -1.51 / -6.94 from the sum
+   of singles. swap1 (L36->L5, +14 MB): -4.56/+0.50/-0.20 vs predicted
+   -4.55/+0.40/-0.05. The single-layer table PREDICTS compositions to ~1
+   mnat. That is the method result: one 42-arm sweep replaces the build-
+   and-see loop.
+
+4. THREE FUNDING SOURCES PRICED, two closed:
+   * Cold down_proj demotion (the ppl cost curve's "cheap" D12-D16 set,
+     15 layers, -1082 MB): +13.45 / +5.52 / +18.89. The ppl curve priced it
+     at +0.004 ppl/100 MB; on KL it costs more than the three best
+     promotions buy. iso3 (demo15 + L5/L47/L3, +43 MB) is WORSE than
+     shipped on all three. F100's "demotion never paid" reproduces on KL
+     at 3.2; the ppl cost curve is one more proxy that mis-priced it.
+   * PLE tables (19.4 GiB, 26% of the artifact, d4-K2048 55 B/row): the
+     2.1's 20 B/row tables (-10.5 GiB) cost +23.99 / +18.67 / +15.34; the
+     4.4's 80 B/row (+7.4 GiB) buy +2.92 WORSE / SAME / -2.59. PLE bytes
+     are ~0 mnat/GB at the margin in both directions; expert bytes are ~6.
+     The 3.2's PLE geometry stands. CODE takes the largest hit from cheap
+     tables (+55% of its KL) -- the n-gram tables carry disproportionate
+     code knowledge. Recorded, not explained.
+   * The hand-set's own weakest members: L35 and L36 (1.3-1.5 mean mnats
+     per 379 MB) vs L5/L47 (2.8 / 1.9). That is the only exchange that
+     pays at iso-byte.
+
+5. THE THIRD WIDTH IS CLOSED. d4-K16384 (3.50 b/w, the only rate-matched
+   d4 twin of a d2 tier; 9 fits at 464 s each, GPU-bound in Lloyd; loads
+   through the shipped runtime with a 128 KB codebook): k16k_3 (L5/L47/L3,
+   +689 MB) = -7.62 / -0.61 / -5.13 vs d2_2 (L5/L47, +763 MB) = -7.41 /
+   -1.39 / -5.32; direct paired k16k_3 - d2_2 = -0.21 / +0.78 / +0.19, a
+   tie at 10% fewer bytes (6.5 vs 6.2 mnat/GB). Pre-registered G1
+   ("k16k_3 beats d2_2 by 0.5-1.0") FALSIFIED. With F116's 3.25 this makes
+   two widths between the floor and d2-K256 that buy nothing over it: at
+   this rung quality tracks bytes (I.1) and d2-K256 stays the promotion
+   width.
+
+6. THE CANDIDATE. swap2 = shipped with L35,L36 demoted and L5,L47
+   promoted; L0,1,31,39,5,47 at d2-K256; +27 MB (0.04%):
+       prose -4.77 t=-3.7   code -1.12 t=-2.6   lit -1.80 t=-2.6
+   = -3.1% / -3.3% / -1.6% KL at iso-byte. Smoke PASS (STRICT OK, coherent
+   16 tokens through the shipped runtime). Modest, real, and the first
+   artifact of this arc to beat shipped on all three corpora on the
+   ranking instrument. d2_3 is the +1.5%-bytes option at -7.2 / -3.9 /
+   -6.1%.
+
+7. THE GATE INVERTED, AND NOAH MOVED IT. ppl at 12288, same harness:
+       shipped  5.0297  1.6407  6.6612
+       swap2    5.0721  1.6354  6.6798     (+0.84% prose, +0.28% lit)
+       d2_3     5.0855  1.6403  6.6550     (+1.11% prose)
+   Every KL-winning arm is WORSE on prose ppl -- the exact mirror of F116,
+   where ppl ranked KL's worst arm first. Noah's decision, recorded here:
+   KL IS THE GATE for this family from now on ("ppl as a score feels
+   closer to training to a corpus than KL"); ppl is printed on the card
+   with its sign, not gated.
+
+INSTRUMENT DEBT PAID, each one cost a run:
+* geo-build stamped pack_bits = ceil(log2 K) on every geomap module; a
+  part harvested from a shipped rung carries that rung's RAW uint8 codes
+  (every shipped d2-K256 module does), so the first harvest->geo-build
+  round trip failed at load. pack_bits now follows the part's dtype.
+* The distance matrix in the fit is chunk x K fp32: 17 GB per step at
+  K16384 under a 40 GB limit. Chunk is now capped by K.
+* Loaders glob model*.safetensors; a donor link named ple-donor-* was
+  silently never read. ple-swap keeps the model prefix.
+* Two wait-loop deadlocks of my own making (job A waits on B, B on A):
+  a serial queue of nohup scripts needs its wait patterns written once,
+  from the head of the queue, not edited per launch.
+
+8. THE PER-PROJECTION SPLIT IS CLOSED. L5 and L47 promoted gate-ONLY /
+   up-ONLY / down-ONLY (126 MB each). L5: gate +1.23 (a loss alone), up
+   -2.54, down -0.58 prose; the parts SUM to -1.89 against -6.07 for the
+   whole layer -- strongly super-additive, the value is in the three
+   together. L47's parts are additive (-1.59/-1.55/-2.94 vs
+   -1.40/-1.73/-2.63). Pre-registered M1-M3 (F66's gate > down > up)
+   FALSIFIED: on Flash at 3.2, gate carries the least and a split never
+   beats the whole layer per byte. The 3-module layer is the unit.
+
+REMAINING: 21 unscored floor layers (the L34-46 tail, 38, 8-11, 20 ...)
+scoring overnight, then swap1-3 from the complete table, then the 4.4
+rung (same method; parts for both directions exist in the 3.2 and 5.5),
+and a faster Lloyd schedule if any K16384 fitting is ever wanted again.
