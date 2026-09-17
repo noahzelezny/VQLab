@@ -3774,9 +3774,22 @@ Shipped 4.4 KL: 63.12 / 13.10 / 42.62 (2.5x / 2.6x / 2.7x lower than the
        prose -9.52 (-15.1%)   code flat   lit +0.81 (+1.9%, t=1.9)
    Five times the 3.2's iso-byte gain, from moving two promotions that
    were funding nothing. Bytes: 98633 MB vs shipped 98608.
-   NOT YET SMOKED: the 4.4 is 96.3 GiB resident and preflight refuses it
-   on this 96 GB box, as it did the shipped 4.4 -- it needs the exo
-   cluster gate (M3+M4) before anything is called releasable.
+   ADDENDUM 2026-09-17 10:30: Noah's bar is "no corpus worse", and swap2's
+   literary +0.81 is the L2 promotion itself (swap1 alone: +0.77; keeping
+   L36 in swap2c changed nothing: +0.80). Pairing L2 with the sweep's best
+   literary layer fixes it: swap2e = swap2 + L24 promoted (+326 MB, 0.33%)
+   = -10.39 / -0.16 / +0.29 t=0.7 (pred -9.75/-0.30/+0.01); the iso-byte
+   form swap2d (L39 -> L24) = -9.55 / -0.19 / +0.61 t=1.5. CANDIDATE IS
+   swap2e: L0,1,31,39,2,16,24 at d2-K1024, prose -16.5%, code flat, lit
+   inside noise. SMOKED: the four changed shards + config were pushed to
+   the M4's 4.4 dir in place (sizes and sha256 verified), placed on exo
+   M4-only (128 GiB box; the M3's shipped copy untouched), and generated
+   'Red, green, blue' at T=0 through the exo API. PASS.
+   Family ladder on the same instrument (2.1 and 5.5 scored 10:15):
+       2.1 (49.1 GB)  409.6 / 109.4 / 356.9
+       3.2 (73.4 GB)  154.9 /  34.1 / 115.7   -> swap2  150.1 / 33.0 / 113.9
+       4.4 (98.6 GB)   63.1 /  13.1 /  42.6   -> swap2e  52.7 / 12.9 /  42.9
+       5.5 (117 GB)    35.1 /   8.4 /  27.2
 
 WHAT TRANSFERS ACROSS RUNGS AND WHAT DOES NOT, now measured on two:
    transfers  -- the method (harvest, LOO, add-one, sum-of-singles swaps);
