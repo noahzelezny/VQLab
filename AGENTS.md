@@ -161,7 +161,15 @@ distilled — the file itself is authoritative:
   the other.
 * Load under `with mx.stream(mx.cpu):` with `mx.eval` INSIDE the block — a
   lazy read still pending when a save forces evaluation is paid inside a GPU
-  command buffer and gets watchdog-killed "at the write step".
+  command buffer and gets watchdog-killed "at the write step". **Binding is
+  set when the read op is CREATED, so this must happen at LOAD; wrapping a
+  later `mx.eval` does not rebind it** (F120: 12.2 GiB blocks on the 397B
+  teacher died in `eval_params_budgeted` one layer further each run as the
+  page cache warmed). **And the CPU-stream load is NOT arithmetic-neutral** —
+  it moved Flash-3.2 prose from 156.7034 to 155.1233 KL — so it is opt-in per
+  family (`cpu_stream_load`) and every published qwen4_exp number keeps the
+  GPU-stream path. **A performance or memory fix is an instrument change
+  until an A/B says otherwise**; the A/B costs one cell, twice.
 
 **Retracted (II) — do not re-chase without new evidence:** "cheap-shallow
 beats the rung above it" (proxy-score artifact), "VQ beats 8-bit affine on
