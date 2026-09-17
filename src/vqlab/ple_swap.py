@@ -10,7 +10,7 @@ donor's PLE shards and `vq_ple` config block.
 
 Pure IO, zero fitting, zero copying: every PLE-bearing shard in this family
 holds ONLY PLE tensors, so the output is symlinks (base shards + donor PLE
-shards under a `ple-donor-` prefix) plus a rewritten index and config.
+shards under their own names) plus a rewritten index and config.
 Refuses if a PLE-bearing shard on either side carries any other tensor.
 """
 import argparse
@@ -75,10 +75,16 @@ def main():
             dst.symlink_to((base / f).resolve())
             linked += 1
         wm[k] = f
+    # Loaders glob `model*.safetensors` (mlx-lm and the streamed scorer
+    # both), so the donor links MUST keep a `model` prefix or they are
+    # silently never read ("missing parameter" at load). The base's own PLE
+    # shards are not linked, so the donor's names are free unless they
+    # collide with a base non-PLE shard.
+    base_used = set(wm.values())
     dshards = {}
     for k in dkeys:
         f = dwm[k]
-        nf = "ple-donor-" + f
+        nf = f if f not in base_used else "model-donor-" + f
         if f not in dshards:
             dst = out / nf
             if dst.is_symlink() or dst.exists():
