@@ -3906,3 +3906,63 @@ chosen entirely by analogy and a leverage proxy -- the proxy F118 measured
 at Spearman -0.24 against KL -- and F119 showed allocation does not transfer
 between rungs, so four shipped rungs are carrying an inherited set that has
 never faced the instrument that decides.
+
+## F121 (2026-09-17) — The whole 397B and 35B fleet on the KL instrument in 70 minutes: both ladders monotonic, the 397B-2.2 carries the most headroom, and the 35B code column is a clean four-point proof that ppl is anti-monotonic in quality where KL is not.
+
+ARTIFACT:   shipped rungs TheDrainFlorist--Qwen3.5-397B-A17B-VQ-{2.2,2.4,2.6,3.1}bpw and --Qwen3.6-35B-A3B-VQ-{3.4,3.8,4.6,5.4}bpw; caches vqlab-scratch/teacher_caches_397b and teacher_caches_35b
+INSTRUMENT: vqlab kl-ladder on the qwen3_5_moe scorer (F120), 12288-token top-64 teacher caches per family, three house corpora, chunk 512, cpu_stream_load on
+PREDICTION (pre-registered): Pre-run, recorded in session: teacher caches ~20 min/corpus and ~2-2.5 h for both families end to end. Separately, on seeing the 35B code column I predicted it was an instrument defect (tokenizer or cache mismatch) rather than a real result.
+MEASURED:   Caches 13m33s/11m10s/11m5s (397B) and 52s/64s/81s (35B); ladders 23m and 7m; 70 min total. 397B mean KL 185.60/146.48/92.48/47.01 at 111.7/122.5/133.2/154.5 GB. 35B mean 267.01/189.84/167.07/133.38 at 13.8/15.7/18.7/22.2 GB. 35B code ppl 2.3399/2.5029/2.6297/2.9865 against a teacher ppl of 3.2428; tokenizers identical (vocab 248044, 15018 code tokens, same ids).
+VERDICT:    FALSIFIED
+
+EVERY SHIPPED 397B AND 35B RUNG IS NOW ON THE KL INSTRUMENT, the first
+numbers this family has ever had from it. 70 minutes end to end (14:20 ->
+15:29), zero fitting, on the scorer F120 added.
+
+KL to each family's OWN bf16 teacher, millinats/token, 12288 tokens, three
+house corpora, one harness:
+
+    family bpw     GB    prose     code      lit     mean   top1  mnat/GB
+    397B   2.2  111.7   275.98    97.68   183.14   185.60  0.848     1.66
+    397B   2.4  122.5   225.63    85.10   128.71   146.48  0.866     1.20
+    397B   2.6  133.2   161.59    56.08    59.77    92.48  0.886     0.69
+    397B   3.1  154.5    91.99    32.33    16.73    47.01  0.917     0.30
+    35B    3.4   13.8    73.34   520.18   207.50   267.01  0.894    19.34
+    35B    3.8   15.7    44.49   423.59   101.45   189.84  0.914    12.10
+    35B    4.6   18.7    33.72   409.15    58.33   167.07  0.927     8.92
+    35B    5.4   22.2    21.58   345.10    33.45   133.38  0.940     6.00
+
+Monotonic in KL and in top-1 on every corpus of both families, which is the
+basic sanity the instrument owed us on a family it had never run.
+
+Marginal value inside the 397B ladder is NOT flat -- the middle step is the
+buy: 2.2->2.4 is -3.6 mean mnats/GB, 2.4->2.6 is -5.0, 2.6->3.1 only -2.1.
+
+THE PPL INVERSION, AND WHY IT IS NOT A DEFECT. The 35B code column reads ppl
+2.3399 / 2.5029 / 2.6297 / 2.9865 going UP with bits while KL goes DOWN
+520 -> 424 -> 409 -> 345. I flagged that as a probable instrument fault and
+checked it before quoting it. The teacher's own code ppl is 3.2428: the
+students sit BELOW their teacher and climb toward it as bits increase,
+exactly as KL says they converge. Tokenizers are byte-identical across
+teacher and students (vocab 248044, same ids, 15018 tokens on the code
+corpus), so nothing is mismatched. A damaged model scoring BETTER than bf16
+on finite text is the same effect the Flash-3.2 card already documents, and
+this is the cleanest four-point demonstration of it the lab has: ppl is
+anti-monotonic in quality over a whole ladder while KL is monotonic. It is
+the measurement that justifies the gate Noah moved to KL, arrived at
+independently.
+
+COST, MEASURED (F117's projection was wrong three ways, so these are clocked
+not estimated): 397B teacher caches 13m33s / 11m10s / 11m5s per corpus off
+the 751 GiB teacher; the four-rung ladder 23m; the 65 GiB 35B teacher 52s /
+64s / 81s; its ladder 7m. My pre-run estimate was ~20 min/corpus and ~2-2.5 h
+total against 70 min actual -- wrong in the safe direction this time, and
+the reason is that the teacher pass is read-bound and the SSD delivers about
+1.4 GB/s cold, faster once the page cache holds part of the checkpoint.
+
+WHERE THE HEADROOM IS. The 397B-2.2 carries the most absolute divergence
+(276 prose mnats, mean 185.6) and per F88 headroom falls with bpw, so it is
+the rung to run the F118/F119 recipe on first. Its allocation -- the graded
+three-tier shape (F91) that every later campaign copied -- was chosen by
+analogy and a leverage proxy, and no rung of this family has ever had a
+layer ranked by KL.
