@@ -3790,6 +3790,16 @@ Shipped 4.4 KL: 63.12 / 13.10 / 42.62 (2.5x / 2.6x / 2.7x lower than the
        3.2 (73.4 GB)  154.9 /  34.1 / 115.7   -> swap2  150.1 / 33.0 / 113.9
        4.4 (98.6 GB)   63.1 /  13.1 /  42.6   -> swap2e  52.7 / 12.9 /  42.9
        5.5 (117 GB)    35.1 /   8.4 /  27.2
+       2.1 v2 (F100, 48.7 GB) 383.9 / 100.1 / 334.0  (-6.3 / -8.5 / -6.4 %, t 6-9)
+   LOCAL STATE 2026-09-17 10:30-11:00 (Noah): the Exo Models mirrors on the
+   M3 SSD now hold the v2 weights for 2.1, 3.2 and 4.4 (same dir names; the
+   v1 mirrors deleted, they are on the Hub); the M4 holds the 2.1 and 4.4
+   v2. All 20 local mirrors and all 12 M4 twins were re-bundled to the v2
+   RUNTIME PROFILE (`bundle --runtime v2`, check-bundle PASS on every one).
+   Cards carry a 2026-09-17 changelog with the v1->v2 KL table. NOT
+   PUBLISHED. The scratch arms under v2_flash32/ and v2_flash44/ symlinked
+   into the old shipped shards and are dangling now; every number from them
+   is recorded here and in their PREREG files.
 
 WHAT TRANSFERS ACROSS RUNGS AND WHAT DOES NOT, now measured on two:
    transfers  -- the method (harvest, LOO, add-one, sum-of-singles swaps);
