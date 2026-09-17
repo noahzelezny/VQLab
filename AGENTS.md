@@ -81,7 +81,10 @@ recorded verbatim). `publish` is not exposed; it is a human's action.
   downstream laundering hides it (quantlab E12 on GLM/affine; F93-F95 on
   Flash/VQ). Use compounding/trajectory measures.
 * **Rank allocation by KL, not ppl.** Ppl aggregates and absorbs offsetting
-  errors. Ppl is the RELEASE GATE; KL is the ranking instrument.
+  errors. KL is the ranking instrument, and since F118 (Noah, 2026-09-16)
+  it is also the RELEASE GATE on Flash-Next: `vqlab kl-ladder`, paired,
+  three corpora at 12288, |t|>2. Ppl is printed on the card with its sign,
+  not gated -- it inverted against KL on every winning arm of F116-F118.
 * **One harness.** Never compare a number from one scoring path against
   another. qwen4_exp loglikelihoods even shift 0.1-0.7 nats with batch
   composition (F87) — same path AND same batching.
