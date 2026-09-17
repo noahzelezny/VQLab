@@ -3617,9 +3617,15 @@ the brief assumed: the shipped rung promotes down_proj too).
    giving a layer MORE bits makes prose KL WORSE for L2, L7, L12, L16, L19,
    by up to 5 mnats at t=6. The 4.4 ships exactly those bytes. Position law
    I.2 holds only per-layer: L3/L5 pay heavily, L2/L4/L6 do not.
-   Spearman(drift rank, KL gain) is not computable honestly on a
-   half-sweep; on what was scored the map's #1 was a loser and its #15-21
-   batch held the second-best layer.
+   ADDENDUM 22:10, all 42 layers scored (addone/RANKING_42.txt):
+   Spearman(drift-map rank, KL gain) = -0.243. The proxy that chose every
+   previous allocation is ANTI-correlated with output value on this rung;
+   P1 (>0.5) FALSIFIED. Seven layers are significant prose LOSERS when
+   promoted (L2, L7, L12, L13, L15, L16, L19). The tail L40-47 is the
+   most uniformly valuable region (every layer significant on all three
+   corpora, means -1.3 to -1.9) -- the 397B's "last layers repay bits"
+   holds on Flash -- but none beats L3, so the top-3 (L5, L47, L3) and
+   the swap2 candidate stand on the full table.
 
 3. COMPOSITIONS ARE ADDITIVE ON THIS RUNG. d2_3 (L5+L47+L3, +1138 MB):
    -11.12 / -1.32 / -7.08 measured vs -11.01 / -1.51 / -6.94 from the sum
