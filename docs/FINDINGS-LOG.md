@@ -3708,3 +3708,82 @@ REMAINING: 21 unscored floor layers (the L34-46 tail, 38, 8-11, 20 ...)
 scoring overnight, then swap1-3 from the complete table, then the 4.4
 rung (same method; parts for both directions exist in the 3.2 and 5.5),
 and a faster Lloyd schedule if any K16384 fitting is ever wanted again.
+
+## F119 (2026-09-17) — Flash-4.4 by the F118 recipe overnight, 49 arms and 3 fits: the allocation INVERTS across rungs (the 3.2's best layer L5 is the 4.4's worst, its losers L2/L16/L13 are the 4.4's winners, top-5 overlap zero), two inherited promotions were free, and a byte-exact swap (L35,L36 -> L2,L16) is -15% prose KL. A seed-2 refit confirms losers are the layer's, not the fit's.
+
+ARTIFACT:   v2_flash44/{loo,addone,final,refit}/art_* on the SSD scratch; candidate = v2_flash44/final/art_swap2 (98633 MB vs shipped 98608) or art_swap2b (98659 MB); NOT smoked (96.3 GiB resident, needs the cluster gate)
+INSTRUMENT: vqlab kl-ladder, three 12288-token teacher caches, paired delta vs shipped 4.4, |t|>2; parts via harvest-parts from the shipped 3.2 (d2-K256) and 5.5 (d2-K1024); refit via geo-build --seed 2
+PREDICTION (pre-registered): PREREG_44.md: Q1 LOO rank order reproduces the 3.2's; Q2 >=3 of the 4.4's top-5 add-one layers are in the 3.2's top-5; Q3 best single gain < half the 3.2's; Q4 no promotion is a loss. Swaps: swap1 -7.63/-0.15/+0.53, swap2 -10.37/-0.26/+0.23, swap3 -12.35/-0.50/+0.80, swap2b -8.62/-0.13/+0.45. PREREG_REFIT.md R1: L5 seed-2 refit within +/-2 of +6.64 (still a loss).
+MEASURED:   LOO L31 +2.43/0/+0.66, L35 +0.55 SAME, L36 +0.41 SAME, L39 +1.26 SAME. Add-one best L2 -8.18 prose t=-8.9, L16 -3.15, L9 -3.25, L13 -3.19; losers L5 +6.64 t=8.9, L12 +2.66, L7 +2.33. swap1 -7.98/+0.01/+0.77; swap2 -9.52/+0.04/+0.81; swap3 -9.25/+0.71/+1.13; swap2b -9.50/-0.24/+0.64. Refit L5 seed2 +8.77 t=10.2.
+VERDICT:    FALSIFIED
+
+THE SAME RECIPE AS F118, ON THE NEXT RUNG, IN ONE NIGHT, WITH THREE FITS.
+Flash-4.4 ships uniform d2-K256 with L0,1,31,35,36,39 at d2-K1024 -- the
+3.2's hand-set, inherited. Codebooks for BOTH directions already existed:
+the 3.2's d2-K256 (for demotions) and the 5.5's d2-K1024 (for
+promotions), pulled by `harvest-parts`. 42 add-one arms + 4 LOO arms + 3
+swaps = 49 artifacts, zero fits; the only fits of the night were three
+modules for the refit control. The box was shared with a Scout
+transcription job from 00:38, which slowed KL cells ~3.5x and changed no
+number (KL is deterministic; the ladder pairs on positions).
+
+Shipped 4.4 KL: 63.12 / 13.10 / 42.62 (2.5x / 2.6x / 2.7x lower than the
+3.2's), so every delta below is a larger FRACTION than its 3.2 twin.
+
+1. LEAVE-ONE-OUT (demote d2-K1024 -> d2-K256):
+       L31  +2.43 t=5.5   0   +0.66 t=3.8
+       L35  +0.55 SAME    0   +0.14 SAME
+       L36  +0.41 SAME    0   +0.32 t=2.6
+       L39  +1.26 SAME    0   +0.12 SAME
+   Two of the four inherited promotions (L35, L36) buy NOTHING measurable
+   on this rung. On the 3.2 every one paid. Code is insensitive to all four.
+
+2. ADD-ONE (d2-K256 -> d2-K1024, all 42 floor layers; mean over corpora):
+       L2  -2.65 (prose -8.18 t=-8.9)   L16 -1.32   L9 -1.03   L13 -1.03
+       L11 -0.96   L6 -0.84   L17 -0.64   L47 -0.37 (the only all-three layer)
+       tail L40-46: prose ~0, lit -0.3 to -0.5 each
+       LOSERS: L5 +6.64 prose t=8.9, L12 +2.66, L7 +2.33, L4 code +1.29
+   THE ALLOCATION IS RUNG-LOCAL, AND IT INVERTS. The 3.2's best layer (L5,
+   -6.07) is the 4.4's WORST (+6.64). The 3.2's losers L2 (+2.19), L16
+   (+2.44), L13 (+1.78) are the 4.4's #1, #2 and #4. Top-5 overlap between
+   rungs: ZERO. Pre-registered Q2 (>=3 of 5 shared) FALSIFIED. The 3.2's
+   value sits in L5 and the L40-47 tail; the 4.4's sits in L2-L17 and the
+   tail is nearly flat on prose. Inheriting a promotion set across rungs
+   -- which is how both shipped sets were made -- is now measured to be
+   wrong in both directions, not merely suboptimal.
+
+3. THE REFIT CONTROL: is "more bits, worse" the LAYER or the FIT? L5's
+   three modules refit at d2-K1024 from the bf16 teacher with a second
+   seed (94 s/module): +8.77 t=10.2 -- still a loss, 2.1 mnats WORSE than
+   the shipped 5.5 fit. Pre-registered R1 HOLDS. The sign of a promotion
+   belongs to the layer at that rung; loser layers are not second-fit
+   candidates. Side measurement: fit-to-fit spread on one layer ~2 mnats
+   prose, the first independent-fit floor on this family at 12288.
+
+4. SWAPS (byte-exact, one-for-one; predicted = sum of singles):
+       swap1  L35->L2          -7.98 / +0.01 / +0.77 t=2.1   (pred -7.63/-0.15/+0.53)
+       swap2  L35,36->L2,16    -9.52 / +0.04 / +0.81 t=1.9   (pred -10.37/-0.26/+0.23)
+       swap3  +L39->L9         -9.25 / +0.71 t=2.6 / +1.13 t=2.9  (pred -12.35/-0.50/+0.80)
+   Additive at K=1 and K=2 to ~1 mnat; sub-additive at K=3 and worse on
+   two corpora -- F100's boundary rule, reproduced. swap2b (swap2 + L39 ->
+   L46, the literary-clean variant, +51 MB): -9.50 / -0.24 / +0.64 t=1.5
+   (pred -8.62/-0.13/+0.45). Prose unchanged, literary inside |t|<2, code
+   nudged. The marginally cleaner form of the same candidate.
+
+5. THE CANDIDATE: swap2 = L0,1,31,39,2,16 at d2-K1024, +25 MB (0.03%):
+       prose -9.52 (-15.1%)   code flat   lit +0.81 (+1.9%, t=1.9)
+   Five times the 3.2's iso-byte gain, from moving two promotions that
+   were funding nothing. Bytes: 98633 MB vs shipped 98608.
+   NOT YET SMOKED: the 4.4 is 96.3 GiB resident and preflight refuses it
+   on this 96 GB box, as it did the shipped 4.4 -- it needs the exo
+   cluster gate (M3+M4) before anything is called releasable.
+
+WHAT TRANSFERS ACROSS RUNGS AND WHAT DOES NOT, now measured on two:
+   transfers  -- the method (harvest, LOO, add-one, sum-of-singles swaps);
+                 additivity of single-layer deltas at K<=2; the boundary
+                 rule at K=3; the L47 "moves code" signature; the tail's
+                 literary value; code's insensitivity to expert allocation.
+   does not   -- the layer set. Not the ranking, not the sign.
+Position law I.2 as stated ("enrichment pays only in the back") is FALSE
+on both Flash rungs on KL: the best layer is L5 on the 3.2 and L2 on the
+4.4. What survives is weaker: the tail repays bits uniformly but modestly.
