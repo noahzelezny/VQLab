@@ -388,8 +388,11 @@ SCORERS = {
     # Registry key is the checkpoint's model_type; "family" names the
     # runtime_load loader (qwen3_5 -> mlx_lm). Rule-5 run 2026-09-17 on the
     # 35B-A3B twin at 2048 AND 12288 tokens, exact to all printed decimals.
+    # cpu_stream_load: 12.2 GiB blocks on the 397B teacher cannot be read
+    # inside a GPU command buffer without tripping the watchdog. Neutral on
+    # this family's numbers (35B-3.4 @12288 reads 5.414175 either way).
     "qwen3_5_moe": {"fn": score_qwen3_5_moe, "family": "qwen3_5",
-                    "validated": True},
+                    "validated": True, "cpu_stream_load": True},
 }
 
 
@@ -453,8 +456,13 @@ def main():
     # Load via the family's declared runtime (runtime_load; mlx_lm families
     # behave exactly as before, incl. the in-checkpoint model.py bundle —
     # both runtimes honour model_file). III.13: print what resolved.
-    model, config = runtime_load.load_for_family(entry["family"], mp,
-                                                 lazy=True)
+    # cpu_stream_load: only families whose blocks are too big for the read to
+    # finish inside a GPU command buffer (see runtime_load). It is NOT
+    # arithmetic-neutral, so it stays off for families whose published
+    # numbers were measured without it.
+    model, config = runtime_load.load_for_family(
+        entry["family"], mp, lazy=True,
+        cpu_stream=entry.get("cpu_stream_load", False))
     print(runtime_load.resolved_runtime_note(model), flush=True)
     if a.stream_ple:
         import ple_stream

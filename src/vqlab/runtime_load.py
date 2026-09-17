@@ -27,6 +27,7 @@ CPU-only selftest (dispatch logic only, loads nothing):
 from __future__ import annotations
 
 import pathlib
+import mlx.core as mx
 import sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).parent))
@@ -56,7 +57,8 @@ def family_for_model_type(model_type: str) -> str | None:
     return hits[0] if hits else None
 
 
-def load_for_family(family: str, path, lazy: bool = True):
+def load_for_family(family: str, path, lazy: bool = True,
+                    cpu_stream: bool = False):
     """Load (model, config) via the family's declared runtime.
 
     mlx_lm  : mlx_lm.utils.load_model — returns (model, config), honours
@@ -69,6 +71,31 @@ def load_for_family(family: str, path, lazy: bool = True):
     """
     path = pathlib.Path(path)
     rt = runtime_for(family)
+    # CPU-STREAM LOAD IS OPT-IN, AND IT IS NOT NEUTRAL (measured 2026-09-17).
+    # Weight reads bind to whatever stream is current when they are CREATED;
+    # a later `with mx.stream(mx.cpu): mx.eval(...)` does NOT rebind them, so
+    # a lazily-loaded block "evaluated on the CPU stream" still issues a METAL
+    # command buffer. A block big enough for that read to outlast the watchdog
+    # dies inside it: the 751 GiB 397B teacher (12.2 GiB blocks) killed every
+    # streamed pass in eval_params_budgeted with a GPU Timeout, one layer
+    # further each run as the page cache warmed. Loading under the CPU stream
+    # fixes it -- 14 layers straight through at a steady 9 s/layer.
+    #
+    # But it CHANGES NUMBERS on some families, so it cannot be a global
+    # default. Same artifact, same cache, Flash-3.2 prose at 12288:
+    #     without  ppl 5.000427  KL 156.7034
+    #     with     ppl 5.025818  KL 155.1233
+    # while qwen3_5_moe (35B-3.4 @12288) reads 5.414175 either way. CPU and
+    # GPU kernels round differently, and every published qwen4_exp number
+    # used the GPU-stream path -- one harness (house rule) means that family
+    # keeps it. Callers that need the CPU-stream load ask for it explicitly.
+    if cpu_stream:
+        with mx.stream(mx.cpu):
+            return _load_on_current_stream(family, path, rt, lazy)
+    return _load_on_current_stream(family, path, rt, lazy)
+
+
+def _load_on_current_stream(family, path, rt, lazy):
     if rt == "mlx_lm":
         import inspect
         from mlx_lm.utils import load_model
