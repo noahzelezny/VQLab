@@ -393,6 +393,19 @@ SCORERS = {
     # this family's numbers (35B-3.4 @12288 reads 5.414175 either way).
     "qwen3_5_moe": {"fn": score_qwen3_5_moe, "family": "qwen3_5",
                     "validated": True, "cpu_stream_load": True},
+    # The DENSE variant (Qwen3.8-27B) is the SAME mlx_lm module: qwen3_5's
+    # DecoderLayer picks SparseMoeBlock or MLP on `num_experts > 0`, and that
+    # choice lives inside `.mlp`, which this scorer never touches -- it walks
+    # embed_tokens, the layers with the is_linear mask dispatch, the final
+    # norm and the head. Same GatedDeltaNet on 3 layers in 4, so the same
+    # chunked cache is required. cpu_stream_load stays on so the whole
+    # qwen3_5 architecture is measured through one load path (its blocks are
+    # small enough not to need it; consistency is the reason).
+    # Rule-5 run 2026-09-17 on Qwen3.8-27B-VQ-4.5bpw (dense, 64 layers,
+    # 14.5 GB so it fits resident) vs a direct full-model forward, chunk 512:
+    # 5.227517/5.227517 at 2048 and 5.829932/5.829932 at 12288, exact.
+    "qwen3_5": {"fn": score_qwen3_5_moe, "family": "qwen3_5",
+                "validated": True, "cpu_stream_load": True},
 }
 
 
