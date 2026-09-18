@@ -4087,3 +4087,51 @@ Speed is NOT measured here. d8-K16384 cannot be forced onto threadgroup
 comparison needs a full d4-K128 floor built and a PREFILL bench (I.9: decode
 is a wash across geometries, prefill is where geometry shows, and gemmseg is
 the prefill kernel). Not run. This entry is a QUALITY result only.
+
+## F124 (2026-09-17) — THE 16 KB DEVICE-CODEBOOK PREFERENCE IS RIGHT, AND NOW MEASURED ON PREFILL: device beats threadgroup by 20.9% at d4-K2048. Its own comment said the mechanism was unmeasured; ~447 fleet modules ride on it.
+
+The selector at vq_switch.py:3860 sends a geometry to the DEVICE codebook arm
+when `cb + tiles + xtpad > 32768 OR cb >= 16384`. The second clause was
+chosen from single-box DECODE numbers and its comment says so outright:
+"MECHANISM UNMEASURED -- occupancy pressure at the budget edge is a
+hypothesis, not a finding." d4-K2048's codebook is exactly 16384 B and fits
+threadgroup (16384 + 12288 = 28672 <= 32768), so BOTH ARMS ARE LEGAL and
+`VQ_MOE_GEMMSEG_CBDEV=1/0` forces either -- same weights, same bytes, same
+numerics, only the arm differs.
+
+MEASURED, Flash-3.2, 2048-token prefill, 3 rounds alternating arm order, one
+process per arm, 4 reps each:
+
+    device       2.697 s   (warm medians 2.753, 2.641)
+    threadgroup  3.411 s   (3.411, 3.486, 3.331)
+    RATIO threadgroup/device = 1.265 -> DEVICE FASTER BY 20.9%
+
+The shipped default is already device, so nothing changes -- but the
+preference now has the prefill evidence its own comment said it lacked, and
+it covers ~447 modules (397B-3.1, Flash-3.2, 35B-3.4/4.6).
+
+THREE INSTRUMENT LESSONS, each paid for in a wasted run:
+
+1. THE FIRST CHILD PROCESS IS THE OUTLIER, not the first rep. The session's
+   first model load ran cold: median 6.722 s, spread 163.7%, against 2.7 s
+   warm in the same arm minutes later. A discarded warm-up REP does not cover
+   it. prefill-bench now discards the whole first child by default.
+2. ARM ORDER IS A CONFOUND. The first attempt ran device-then-threadgroup
+   once and the cold device run made threadgroup look 63% faster -- the exact
+   opposite of the truth. Alternating the order reversed the sign.
+3. A SPEED BENCH MUST PROVE THE ARM CHANGED. The FIRST attempt monkeypatched
+   `gemmseg_cb_dev`, which NOTHING ON THE PREFILL PATH CALLS -- it is a
+   reporting predicate for `coverage`. Both "arms" ran identical code and it
+   reported a 0.997 ratio that meant nothing. prefill-bench now records the
+   Metal kernel names each child compiles and prints them: the device child
+   builds `..._d4_cbdev_...`, the threadgroup child `..._d4_ot2_...`. If
+   they match, the bench says so instead of returning a ratio.
+
+METHOD DEBT, mine, and the worst of the day: I stated the 3.2's default arm
+THREE TIMES and got it wrong twice. Device (right), then "corrected" to
+threadgroup, then "corrected" again to threadgroup on the strength of the
+env-var's PROSE COMMENT, which omits the `>= 16384` clause that line 3860
+actually implements. The reporting predicate and the selector AGREE; I never
+read the selector. Read the code that runs, not the comment that describes
+it -- and when a fact has flipped twice, that is the signal to go read the
+line, not to argue from another docstring.
