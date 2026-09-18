@@ -4269,3 +4269,37 @@ re-referee and an end-to-end A/B" -- an instrument that did not exist on
 2026-09-02 and does now (paired three-corpus `kl-ladder`, the F118 gate). It
 is a DECODE lever on d8-K16384 gate/up with NGRP>=32, so it reaches only the
 2.1bpw's 92 modules and the 397B-2.2's d8 set; it says nothing about prefill.
+
+
+## F127 (2026-09-18) — CORRECTS the version claim in RUNTIME-SETTINGS: the two envs are NOT on the same mlx-lm, and most of the "architecture drift" is version skew. A probe run with bare `python3` answered for both arms.
+
+RUNTIME-SETTINGS.md §5 reported the architecture-file differences "across this
+lab's two envs (both mlx-lm 0.31.3)". The version check was run as
+`python3 -c "import mlx_lm; print(...)"` INSIDE a loop over env paths -- so the
+SYSTEM interpreter answered every iteration and neither env was measured.
+
+    qwen4exp venv   mlx_lm 0.32.0   mlx 0.32.2
+    exo env         mlx_lm 0.31.9   mlx 0.32.0.dev20260622
+    system python   mlx_lm 0.31.3   mlx 0.31.2   <- the number reported twice
+
+Same class as F33 (RTILE benchmarked at 32 twice and reported as "no
+difference") and E135's corollary (a bit-identity probe that compared a kernel
+against itself). **A probe that resolves the same arm twice is
+indistinguishable from a null.** The loop iterated over env paths, which made
+it LOOK arm-specific; only the interpreter was hard-coded.
+
+WHAT SURVIVES. The file differences are real -- they were diffed at real paths
+in each env -- and so is the F87 hazard: qwen3_5 differs between the envs
+(1.2e-02 max rel in bf16 on the QK-norm form, PipelineMixin present in only
+one), which reaches 11 artifacts through the qwen3_5_moe subclass, and
+glm5_next is absent from both.
+
+WHAT DOES NOT. The framing "nothing had been edited on purpose and they
+drifted anyway" is UNSUPPORTED and was used as the central argument for
+vendoring. Two different mlx-lm versions explain most of the difference
+without invoking drift. The corrected argument is narrower and still holds:
+an architecture file whose version is not pinned is not a known quantity, and
+the fix is to pin it -- which is what vendoring accomplishes.
+
+Corrected in place in RUNTIME-SETTINGS.md §5 and in the knurlogic sources that
+had repeated it.
