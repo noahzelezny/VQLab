@@ -99,7 +99,21 @@ exist so a finding stays reproducible.
 
 ## 5. The unsolved layer: architecture files drift between boxes
 
-Measured 2026-09-18 across this lab's two envs (both mlx-lm 0.31.3):
+Measured 2026-09-18 across this lab's two envs. **CORRECTED the same day:**
+the first pass reported "both mlx-lm 0.31.3" -- that check was run with bare
+`python3` inside the loop, so the SYSTEM interpreter answered for both envs.
+The same class of error as F33 (a probe that measured one arm twice). Real
+versions:
+
+    qwen4exp venv   mlx_lm 0.32.0   mlx 0.32.2
+    exo env         mlx_lm 0.31.9   mlx 0.32.0.dev20260622
+    system python   mlx_lm 0.31.3   mlx 0.31.2    (neither env; the false reading)
+
+This materially changes the DIAGNOSIS, not the hazard. The file differences
+below are real -- they were diffed at real paths in each env -- but they are
+now largely attributable to **two different mlx-lm versions**, not to
+unexplained drift. Pinning the version is therefore most of the fix, and any
+claim that these files diverge on their own is UNSUPPORTED.
 
     file              qwen4exp venv    exo env      artifacts affected
     qwen4_exp           1136 lines     1138 lines   4  (cosmetic shim only)
