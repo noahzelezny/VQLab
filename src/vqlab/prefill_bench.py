@@ -4,16 +4,21 @@ WHY PREFILL. I.9: decode is a wash across geometries; prefill is where
 geometry shows, and `gemmseg` -- the fused segmented VQ-GEMM -- is the
 prefill kernel whose codebook arm is in question.
 
-WHY ONE ARTIFACT. The arm is chosen by `vq_switch.gemmseg_cb_dev(D, K)`:
+WHY ONE ARTIFACT. d4-K2048's codebook is 16384 B against a 12288 B tile
+budget under a 32768 B cap, so 28672 <= 32768: BOTH ARMS ARE LEGAL for it.
+`VQ_MOE_GEMMSEG_CBDEV` forces either ("1" device, "0" threadgroup, "auto"
+by budget), so the same weights run both arms -- identical bytes, identical
+numerics (what e134_accept verifies), only the arm differs. vq_switch's own
+comment says nobody had measured which is faster.
 
-    cb + tiles + xtpad > _TG_CAP_BYTES  OR  cb >= 16384
+DO NOT USE `gemmseg_cb_dev` TO SELECT THE ARM. It is a REPORTING predicate
+for `coverage`, it carries an extra `or cb >= 16384` clause the real
+selection does not, and nothing on the prefill path calls it. A first
+version of this bench monkeypatched it after load and measured the same
+code path twice, reporting a 0.997 ratio that meant nothing.
 
-d4-K2048's codebook is 16384 B and tiles are 12288, so 28672 <= 32768 -- it
-PHYSICALLY FITS threadgroup and is sent to device purely by the second
-clause, a preference added 2026-09-08. So the same weights can run both
-arms, which makes this a clean A/B with no refit, no rebuild and no
-confound: identical bytes, identical numerics (that is what e134_accept
-verifies), only the arm differs.
+THE ENV VAR IS READ AT IMPORT, so each arm needs its OWN PROCESS -- which
+the speed rules require anyway (one process per arm).
 
 SPEED RULES (quantlab III), because this instrument has burned people:
   * n >= 3 per arm, alternating, ONE process, same session.
@@ -39,27 +44,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).parent))
 import runtime_load
 
 
-def _arm_of(vq, D, K):
-    return "device" if vq.gemmseg_cb_dev(D, K) else "threadgroup"
-
-
-def _force(vq, mode):
-    """Force every geometry onto one arm. Returns a restore callable."""
-    orig = vq.gemmseg_cb_dev
-    if mode == "device":
-        vq.gemmseg_cb_dev = lambda D, K: True
-    elif mode == "threadgroup":
-        # Only lift the PREFERENCE, never the hardware cap: a codebook that
-        # does not fit must still take the device arm or the kernel would
-        # over-allocate threadgroup memory, which Metal reports as
-        # XPC_ERROR_CONNECTION_INTERRUPTED rather than a clean error (IV).
-        def tg(D, K):
-            cb = K * 2 * D
-            return cb + vq._TILES_R32 + vq._XT_PAD_BYTES_R32 > vq._TG_CAP_BYTES
-        vq.gemmseg_cb_dev = tg
-    else:
-        raise SystemExit(f"FAIL: unknown arm {mode!r}")
-    return lambda: setattr(vq, "gemmseg_cb_dev", orig)
+ARM_ENV = {"device": "1", "threadgroup": "0", "auto": "auto"}
 
 
 def main():
@@ -69,6 +54,19 @@ def main():
     ap.add_argument("--tokens", type=int, default=2048)
     ap.add_argument("--reps", type=int, default=5)
     ap.add_argument("--arms", default="device,threadgroup")
+    ap.add_argument("--_child", default=None, help=argparse.SUPPRESS)
+    ap.add_argument("--drop-first-child", action="store_true", default=True,
+                    help="discard the FIRST child's timings entirely. The "
+                         "session's first model load runs on a cold machine "
+                         "and produced a 163%% spread with a 6.7s median "
+                         "against 2.7s warm (2026-09-17); a discarded rep is "
+                         "not enough, the whole first process is the outlier.")
+    ap.add_argument("--rounds", type=int, default=1,
+                    help="alternate the arms this many times (A,B,B,A...). "
+                         "ORDER IS A CONFOUND: whichever arm runs first pays "
+                         "a colder machine, and on 2026-09-17 the device arm "
+                         "went first and returned a 97.3%% spread whose "
+                         "median and min disagreed in DIRECTION.")
     ap.add_argument("--out", default=None)
     a = ap.parse_args()
 
@@ -81,9 +79,50 @@ def main():
     geos = sorted({(v.get("dim"), v.get("k"))
                    for v in (cfg.get("vq_modules") or {}).values()
                    if v.get("dim") and v.get("k")})
-    print(f"model_type {mt}; geometries and their DEFAULT arm:")
+    print(f"model_type {mt}; geometries (cb bytes vs the 32768 B cap, of "
+          f"which {vq._TILES_R32} B is tiles):")
     for D, K in geos:
-        print(f"  d{D}-K{K:<6d} cb {K*2*D:7d} B -> {_arm_of(vq, D, K)}")
+        cb = K * 2 * D
+        legal = cb + vq._TILES_R32 + vq._XT_PAD_BYTES_R32 <= vq._TG_CAP_BYTES
+        print(f"  d{D}-K{K:<6d} cb {cb:7d} B  threadgroup-legal={legal}"
+              f"{'  <- both arms legal, this is the A/B' if legal else ''}")
+
+    if a._child:
+        import os
+        import vq_switch as vq
+        # PROVE THE ARM CHANGED. Twice today a tool reported success while
+        # doing nothing (ple_stream's instance patch; this bench's first
+        # version patching a REPORTING predicate). The device arm builds
+        # kernels named *_devcb, so record what actually gets compiled and
+        # print it -- a bench that cannot show the two arms ran different
+        # kernels is not measuring an arm.
+        built = []
+        _mk = mx.fast.metal_kernel
+        def _rec(*args, **kw):
+            built.append(kw.get("name") or (args[0] if args else "?"))
+            return _mk(*args, **kw)
+        mx.fast.metal_kernel = _rec
+        model, _ = runtime_load.load_for_family(fam, mp, lazy=False)
+        from mlx_lm.utils import load_tokenizer as _lt
+        tok = _lt(mp)
+        text = (open(a.corpus).read() if a.corpus
+                else "The quick brown fox jumps over the lazy dog. " * 4000)
+        ids = mx.array([tok.encode(text)[: a.tokens]])
+        mx.eval(model(ids))                       # warm-up, discarded
+        ts = []
+        for _ in range(a.reps):
+            mx.clear_cache()
+            t0 = time.perf_counter(); mx.eval(model(ids))
+            ts.append(time.perf_counter() - t0)
+        devcb = sorted({n for n in built if "devcb" in str(n)})
+        tg = sorted({n for n in built if "gemmseg" in str(n)
+                     and "devcb" not in str(n)})
+        print(f"KERNELS {a._child} cbdev_env={vq._GEMMSEG_CBDEV} "
+              f"devcb={len(devcb)} other_gemmseg={len(tg)} "
+              f"sample={(devcb or tg)[:2]}", flush=True)
+        print("TIMES " + a._child + " " + " ".join(f"{t:.6f}" for t in ts),
+              flush=True)
+        return
 
     model, _ = runtime_load.load_for_family(fam, mp, lazy=False)
     from mlx_lm.utils import load_tokenizer
@@ -99,30 +138,53 @@ def main():
 
     res = {}
     arms = [x.strip() for x in a.arms.split(",") if x.strip()]
-    for arm in arms:
-        restore = _force(vq, arm)
-        try:
-            one_pass()                                   # warm-up, discarded
-            ts = []
-            for _ in range(a.reps):
-                mx.clear_cache()
-                t0 = time.perf_counter()
-                one_pass()
-                ts.append(time.perf_counter() - t0)
-            res[arm] = ts
-            print(f"  {arm:12s} median {statistics.median(ts):7.3f}s  "
-                  f"min {min(ts):7.3f}s  spread "
-                  f"{(max(ts)-min(ts))/statistics.median(ts)*100:4.1f}%",
-                  flush=True)
-        finally:
-            restore()
+    order = []
+    for r in range(a.rounds):
+        order += arms if r % 2 == 0 else arms[::-1]
+    import os, subprocess
+    for arm in order:
+        env = dict(os.environ, VQ_MOE_GEMMSEG_CBDEV=ARM_ENV[arm])
+        r = subprocess.run(
+            [sys.executable, os.path.abspath(__file__), "--model", a.model,
+             "--tokens", str(a.tokens), "--reps", str(a.reps),
+             "--_child", arm] + (["--corpus", a.corpus] if a.corpus else []),
+            capture_output=True, text=True, env=env)
+        for k in (l for l in r.stdout.splitlines() if l.startswith("KERNELS")):
+            print("   " + k, flush=True)
+        line = [l for l in r.stdout.splitlines() if l.startswith("TIMES ")]
+        if not line:
+            tail = (r.stderr or r.stdout).strip().splitlines()
+            raise SystemExit(f"FAIL: {arm} arm produced no timings "
+                             f"(rc={r.returncode}): "
+                             + (tail[-1] if tail else "no output"))
+        ts = [float(x) for x in line[-1].split()[2:]]
+        if a.drop_first_child and not res:
+            print(f"   (first child discarded: cold machine)", flush=True)
+            res.setdefault(arm, [])
+            continue
+        res.setdefault(arm, []).extend(ts)
+        print(f"  {arm:12s} (VQ_MOE_GEMMSEG_CBDEV={ARM_ENV[arm]}) "
+              f"median {statistics.median(ts):7.3f}s  min {min(ts):7.3f}s  "
+              f"spread {(max(ts)-min(ts))/statistics.median(ts)*100:4.1f}%",
+              flush=True)
 
     if len(res) == 2:
-        d, t = statistics.median(res["device"]), statistics.median(res["threadgroup"])
-        print(f"\nRATIO threadgroup/device = {t/d:.3f}  "
-              f"({'threadgroup faster' if t < d else 'device faster'} "
-              f"by {abs(1 - t/d)*100:.1f}%)")
-        print("Quote the RATIO, not the absolutes (quantlab III).")
+        d, t = res["device"], res["threadgroup"]
+        for lbl, f in (("median", statistics.median), ("min", min)):
+            rd, rt = f(d), f(t)
+            print(f"\nRATIO by {lbl}: threadgroup/device = {rt/rd:.3f}  "
+                  f"({'threadgroup' if rt < rd else 'device'} faster by "
+                  f"{abs(1 - rt/rd)*100:.1f}%)   [{lbl} {rd:.3f} vs {rt:.3f}]")
+        sd = (max(d) - min(d)) / statistics.median(d) * 100
+        st = (max(t) - min(t)) / statistics.median(t) * 100
+        if sd > 25 or st > 25 or (statistics.median(t) < statistics.median(d))\
+                != (min(t) < min(d)):
+            print("\n!! DO NOT QUOTE THIS RATIO. Spread "
+                  f"{sd:.0f}%/{st:.0f}%, or median and min disagree in "
+                  "DIRECTION -- the instrument is bimodal here (quantlab III) "
+                  "and neither statistic is describing the kernel.")
+        else:
+            print("Quote the RATIO, not the absolutes (quantlab III).")
     if a.out:
         pathlib.Path(a.out).write_text(json.dumps(
             {"model": str(mp), "tokens": int(ids.shape[1]), "reps": a.reps,
