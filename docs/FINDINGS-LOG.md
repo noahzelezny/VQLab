@@ -4201,3 +4201,71 @@ in the instrument's bookkeeping, not in the result.
 INSTRUMENT DEBT: `stream_score` prints the teacher's ppl when it builds a
 cache but does not store it in meta.json. It should, precisely so this test
 is available for free on every future ladder.
+
+## F126 (2026-09-18) — The AQLM-LUT refutation's VERDICT stands but its REOPENING CRITERION is false: 50.7% of published expert modules already meet `OUT >= K`. The cost that actually kills it is staging, not reuse.
+
+Kernel arc 4 (2026-09-02, `ed61db3`) refuted an AQLM-style LUT precompute on
+paper and closed with:
+
+> Break-even needs `OUT >= K` [...] The largest shipped OUT in the fleet is
+> the 397B's 4096 -- still 4x short. Reopen only for a geometry with
+> `OUT >= K`, **which no artifact in the fleet has.**
+
+The arithmetic (reuse = `OUT/K`) is correct and reproduces independently. The
+fleet claim is FALSE. It was reasoned from the geometry the arc was briefed on
+(d8-K16384, reuse 0.039) and generalized without an audit -- the exact failure
+mode AGENTS.md's "audit the fleet before scoping" rule exists for, and the
+third time a per-geometry result has been generalized to a fleet claim
+(F97 packing, F118's bitrate-to-precision transfer, now this).
+
+    published expert modules meeting OUT >= K
+      GLM-5.3-Flash-VQ-2.7bpw        126/126  100.0%
+      Qwen3.5-397B-A17B-VQ-2.4bpw    171/171  100.0%
+      Qwen3.5-397B-A17B-VQ-2.6bpw    171/171  100.0%
+      Qwen3.8-Flash-Next-VQ-4.4bpw   130/144   90.3%
+      GLM-5.3-Flash-VQ-3.1bpw         75/126   59.5%
+      Qwen3.8-Flash-Next-VQ-3.2bpw    60/144   41.7%
+      Qwen3.6-35B-A3B-VQ-4.6bpw      100/120   83.3%
+      (3.6bpw / 3.8bpw, all K8192+)    0/246    0.0%
+      ------------------------------------------------
+      TOTAL                         1123/2217  50.7%
+
+OUT is `hidden_size` for down_proj and `moe_intermediate_size` for gate/up;
+K from each artifact's own `config.json` `vq_modules` (authority order rule 1).
+
+**THE VERDICT IS UNCHANGED -- reason C, not reason A, is what kills it.**
+The LUT is PER TOKEN, and gemmseg's entire advantage is amortizing decode
+across `RTILE=32` token rows. Table bytes for one group are
+`RTILE * (G/d) * K * 2`; at d4-K256 that is 32*16*256*2 = **256 KB** against
+~24 KB of headroom after `wtT` (4 KB) and `xt` (4.5 KB). You get ~3 tokens per
+pass and re-read the code stream ~11x -- the arc's "tiles into strided
+column-wise re-reads" holds at small K too. Small K softens reason A to nothing
+and leaves reason C standing.
+
+CORRECTED REOPENING CRITERION (supersedes "OUT >= K"): `OUT >= K` **and** a
+phase-3 loop order that builds `T[RTILE][K]` for ONE input slice at a time
+(32*256 halves = 16 KB, fits) and consumes it across all OUT rows before
+eviction, trading the FMA win against code-stream re-reads. Unpriced.
+
+NOT RECOMMENDED ANYWAY, for reasons outside the kernel:
+* DILUTION. 50.7% eligibility; F25 measured a lever on ~51% of modules landing
+  at ~0.93x its headline. And eligibility is ANTI-CORRELATED with the quality
+  rungs -- the 100% artifacts are 2.4/2.6/2.7bpw, the 0% ones are 3.6/3.8bpw.
+* CEILING. F39 bounds gemmseg at 33% of prefill; beating affine needs ~27% of
+  kernel win, which is where the staging tax goes.
+* VALUE. VQ sits at 90.5% prefill / 93.6% decode at 2.4x smaller, and F64
+  showed the batch curve plateaus at 92-93%. Closing 9% is a headline, not a
+  capability -- nobody picks affine because prefill is 9% slower.
+
+Arc 4's reason D ("it optimises a cost that does not exist -- the gather is
+0-2%") does NOT transfer: that was measured on the fused DECODE kernel, where
+the LUT would replace the gather. In gemmseg the LUT would attack phase-3
+FMAs, which are the bulk. Recorded so the next reader does not over-apply it.
+
+STILL UNCLAIMED FROM THAT ARC: `VQ_D8_SIMDSUM=1` (`vq_switch.py:1165`) is
+built, tested and measured at 1.16-1.20x on gate/up through the real
+dispatcher, projected +1.4-1.8% end-to-end, and is off ONLY pending "a ppl/KL
+re-referee and an end-to-end A/B" -- an instrument that did not exist on
+2026-09-02 and does now (paired three-corpus `kl-ladder`, the F118 gate). It
+is a DECODE lever on d8-K16384 gate/up with NGRP>=32, so it reaches only the
+2.1bpw's 92 modules and the 397B-2.2's d8 set; it says nothing about prefill.

@@ -1640,10 +1640,16 @@ one gather instead of gather + 8-wide dot.
      reuse = OUT / K  =  640/16384 = 0.039 (gate/up)
                       = 2560/16384 = 0.156 (down)
      So 96.1% (gate/up) and 84.4% (down) of the table is computed and NEVER
-     READ. Break-even needs OUT >= K, i.e. OUT >= 16384. The largest shipped
-     OUT in the fleet is the 397B's 4096 -- still 4x short. AQLM's LUT works
-     because its K is small (256) against large OUT; at K=16384 the identical
-     structure runs backwards.
+     READ. Break-even needs OUT >= K, i.e. OUT >= 16384 AT THIS GEOMETRY.
+     AQLM's LUT works because its K is small (256) against large OUT; at
+     K=16384 the identical structure runs backwards.
+     [CORRECTED 2026-09-18, F126: the sentence that stood here -- "the largest
+     shipped OUT in the fleet is the 397B's 4096, still 4x short" -- was a
+     fleet claim reasoned from THIS geometry without an audit, and it is
+     FALSE. 1123 of 2217 published expert modules (50.7%) already meet
+     OUT >= K, including GLM-2.7bpw, 397B-2.4 and 397B-2.6 at 100%. Reason A
+     is geometry-local and dissolves at small K. The verdict survives on
+     reason C -- see the corrected reopening criterion below.]
 
   B. ARITHMETIC. Precompute costs K*NSUB*8 MACs against the matvec's own
      OUT*NSUB*8:
@@ -1663,8 +1669,25 @@ one gather instead of gather + 8-wide dot.
   D. AND IT OPTIMISES A COST THAT DOES NOT EXIST. The LUT's purpose is to
      replace the codebook gather. Section 2(b) measured that gather at 0-2%.
 
-  => NOT BUILT. Three independent reasons, any one sufficient. Reopen only
-     for a geometry with OUT >= K, which no artifact in the fleet has.
+  => NOT BUILT. At THIS geometry three independent reasons, any one
+     sufficient.
+
+     [CORRECTED REOPENING CRITERION, 2026-09-18, F126. "Reopen only for a
+     geometry with OUT >= K, which no artifact in the fleet has" was wrong on
+     its second clause (half the fleet qualifies) and incomplete on its first.
+     At small K reason A dissolves and reason B flips sign, but reason C does
+     NOT: the LUT is PER TOKEN and gemmseg's whole advantage is amortizing
+     decode across RTILE=32 token rows. Table bytes for one group are
+     RTILE*(G/d)*K*2 = 256 KB at d4-K256, against ~24 KB of headroom after
+     wtT and xt -- ~3 tokens per pass and ~11x code-stream re-reads.
+     Reopen only for OUT >= K AND a phase-3 loop order that builds
+     T[RTILE][K] for ONE slice at a time (16 KB at K256) and consumes it
+     across all OUT rows before eviction. Unpriced, and F126 recommends
+     against it on dilution (50.7% eligibility, anti-correlated with the
+     quality rungs), ceiling (F39) and value (F64) grounds.
+     Also: reason D does not transfer to gemmseg -- it was measured on the
+     fused DECODE kernel, where the LUT replaces the gather; in gemmseg it
+     would attack phase-3 FMAs, which are the bulk.]
 
 ### 4. THE REDUCTION IS THE UN-CHARGED COST CENTRE (~19%).
 
