@@ -1,0 +1,4 @@
+# Enables the "Sponsor" button on the VQLab repo page.
+# Takes effect once github.com/sponsors/noahzelezny is live; until then the
+# button simply does not render.
+github: noahzelezny
