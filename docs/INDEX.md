@@ -39,6 +39,7 @@ This index says what each doc is FOR and whether it still holds.
 | SWARM-ANCHOR-AUDIT-2026-09-08.md | CURRENT, READ IF PROPOSING | 15 of 16 proposals died to reading the source; anchors were accurate while conclusions were not. The failure modes are enumerated. |
 | SWARM-PREFILL-2026-09-08.md | CURRENT | Earlier swarm round. |
 | ONBOARDING.md, MEMORY-PLAYBOOK.md, PUSH-RUNBOOK.md, CORPORA.md | CURRENT | Operational. |
+| RUNTIME-SETTINGS.md | CURRENT | The settings that decide runnable-vs-not, consolidated; plus the architecture-file drift (F87 hazard on 11 artifacts). Seed of a per-artifact resolver. |
 
 ## History — snapshots, superseded by FINDINGS-LOG
 `STATE-2026-09-01/02/03-EOD/07/07-EVENING/08.md`, `MORNING-REPORT-2026-09-03/04.md`
