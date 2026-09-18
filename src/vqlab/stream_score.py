@@ -576,10 +576,17 @@ def main():
         # in a disk cleanup (F51, and it cost an hour on 2026-09-16). Write
         # what the reader wants, and keep the old keys as aliases so nothing
         # that consumed the old format breaks.
+        # teacher_ppl is the whole point of storing this: a ppl ladder is
+        # only ordered correctly while every rung sits on the SAME SIDE of
+        # the teacher, and quantization damage can push a student BELOW bf16
+        # on finite text -- at which point "lower ppl" and "closer to the
+        # teacher" point opposite ways and the ranking inverts (F125: 8 of 9
+        # cells predicted by this one comparison). The number was always
+        # printed here and never kept, so the test needed a build log.
         (outd / "meta.json").write_text(json.dumps(
             {"teacher": str(mp), "corpus": a.corpus, "top_k": a.save_topk,
              "num_samples": 1, "seq_len": len(ids) - 1, "batch_size": 1,
-             "chunk": C_, "streamed": True,
+             "chunk": C_, "streamed": True, "teacher_ppl": round(ppl, 6),
              "model": str(mp), "tokens": len(ids)}, indent=1))
         print(f"top-{a.save_topk} cache -> {outd}", flush=True)
 
