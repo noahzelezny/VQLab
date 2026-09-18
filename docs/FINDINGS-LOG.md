@@ -3966,3 +3966,68 @@ the rung to run the F118/F119 recipe on first. Its allocation -- the graded
 three-tier shape (F91) that every later campaign copied -- was chosen by
 analogy and a leverage proxy, and no rung of this family has ever had a
 layer ranked by KL.
+
+## F122 (2026-09-17) — ADDITIVE VQ DOES NOT BUY THE THREADGROUP FIT FOR FREE. 2 x K128 summed costs +38 / +13 / +69 mnats against the shipped d8-K16384 on Flash-2.1 — a 10-21% increase in damage, t = 6.9 to 20.3.
+
+THE QUESTION (Noah's). The fused Metal kernels cache the codebook in
+threadgroup memory. Apple Silicon's limit is a HARD 32768 bytes per
+threadgroup -- verified directly on the M3 Ultra, maxThreadgroupMemoryLength
+= 32768, Apple9 -- and the runtime's rule is `K * 2 * D + 3 * 4096 > 32768`
+-> fall onto the device-memory codebook arm. So:
+
+    d8-K16384  1.75 b/w  256 KB table  device-cb   <- the 2.1's floor
+    d4-K8192   3.25 b/w   64 KB table  device-cb
+    d4-K2048   2.75 b/w   16 KB table  threadgroup (28 KB with the kernel's
+                                       other 12 KB -- near the cap, so
+                                       occupancy already suffers)
+
+Additive/AQLM-style VQ promises the same rate from a fraction of the table:
+two 128-entry codebooks summed reach 128*128 = 16384 points at the same 14
+bits per 8-dim subvector, from 4 KB instead of 256 KB -- 64x smaller, and
+comfortably inside threadgroup. The question is what the constraint costs:
+those 16384 points are the Minkowski sum C1 + C2, not 16384 freely placed
+centroids.
+
+TESTED WITHOUT WRITING A KERNEL. The 16384 sums are materialised as an
+ORDINARY d8-K16384 codebook, so the artifact is a normal VQ file the existing
+kernel serves unchanged -- same geometry, same pack_bits 14, same bytes on
+disk. Only the codebook CONTENTS are constrained. geo-build reused 92/92
+additive parts (codebook-shape verified), and `vqlab smoke` PASSED, so this
+is a servable model, not a broken one.
+
+RESULT, both arms in ONE kl-ladder run at 12288 tokens, paired on identical
+positions (F120 shows scorer versions move KL, so the arms must share one):
+
+    arm            prose                  code                   lit
+    shipped21   383.93 +/-6.04         100.09 +/-2.76         333.99 +/-3.97
+    additive21  422.17 +38.24 t= +9.2  113.35 +13.26 t= +6.9  403.30 +69.31 t=+20.3
+
+WORSE on every corpus, by 10% / 13% / 21% of the shipped damage. For scale,
+the entire gap between the shipped 3.2 and a fully de-promoted floor was
+10.8 mnats; this is 38-69. The 256 KB table is BUYING something, and the
+device-codebook arm is the price of it.
+
+SCOPE, stated so this is not over-read:
+* M=2, K=128 at d8 is essentially the ONLY additive factorisation inside
+  1.75 b/w on this axis. 2 x K256 is 2.00 b/w -- a different rung, not a
+  free swap. So this closes 1.75 b/w, not additive VQ generally.
+* The fitter does 6 joint-refinement passes over greedy residual init with
+  no beam search over code assignment, which is where AQLM's published
+  quality largely comes from. This is therefore a FLOOR on additive
+  quality. But 38-69 mnats is a large gap to close by fitting alone, and I
+  would not expect it to close.
+* A first attempt fitted the additive pair to reproduce the SHIPPED
+  CODEBOOK's centroids rather than the weights (cb-relerr 0.357, far worse
+  than the 0.382-vs-0.350 the direct fit screens at). That is a harder and
+  IRRELEVANT problem -- freely-placed centroids have no additive structure --
+  and had it been scored it would have condemned additive VQ for a reason
+  that does not apply. Fit the DATA, never another fit's output.
+
+ONE PROXY NOTE: weight-space relerr screened this at +9.2% on one module and
+KL came in at +10 / +13 / +21%. Directionally right, which is UNUSUAL here
+(I.6, F78/F94, and F118's Spearman -0.243 for the drift map). One agreement
+does not rehabilitate relerr; it is recorded because the disagreements are.
+
+ALSO CORRECTED: the Flash-2.1 floor is 92 modules at d8-K16384, not 138. Its
+46 down_proj modules are d4-K256 (the F97 exact-packing refit; d8 on
+down_proj gives nsub=80, which the packer refuses). 92 + 46 + 6 = 144.
