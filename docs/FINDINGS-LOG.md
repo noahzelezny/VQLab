@@ -4031,3 +4031,59 @@ does not rehabilitate relerr; it is recorded because the disagreements are.
 ALSO CORRECTED: the Flash-2.1 floor is 92 modules at d8-K16384, not 138. Its
 46 down_proj modules are d4-K256 (the F97 exact-packing refit; d8 on
 down_proj gives nsub=80, which the packer refuses). 92 + 46 + 6 = 144.
+
+## F123 (2026-09-17) — CODEBOOK ENTRIES QUANTIZE TO int8 FOR FREE: table halves, KL moves 0.08-0.32 mnats, |t| <= 1.0 on all three corpora. q4 is nearly free but literary catches it at t=4.6. PRECISION IS NOT EXPRESSIVENESS.
+
+THE QUESTION. Apple Silicon's threadgroup memory is a hard 32768 B (verified
+on the M3 Ultra; Noah confirms the M4 Max is the same), and the runtime
+takes the DEVICE codebook arm when `cb + 12288 > 32768 OR cb >= 16384`
+(`vq_switch.gemmseg_cb_dev` -- ASK IT, do not restate the rule; coverage's
+own label went stale doing that, and I repeated the mistake today by
+computing the fit from raw bytes and telling Noah the 3.2 floor was on
+threadgroup when its 16384 B codebook puts it on DEVICE).
+
+FOUR WAYS TO SHRINK A CODEBOOK, THREE NOW CLOSED:
+
+    approach                        table    result
+    additive  2 x K128 summed        4 KB    +38/+13/+69 mnats   (F122, dead)
+    product   = d4-K128              1 KB    +5.01 prose t=+2.1  (d8 wins)
+    smaller meta-codebook              --    degenerate: 14 bits indexing
+                                             256 distinct values is strictly
+                                             worse than d8-K256 at 8 bits
+    entry precision q8/q4          128/64 KB THIS ENTRY
+
+RESULT, Flash-2.1, 92 d8-K16384 codebooks requantized per centroid row,
+CODES UNTOUCHED, no refit, same rate and file size, both arms smoke-PASS,
+all three 12k caches, paired on identical positions:
+
+    arm            prose                 code                  lit
+    shipped_fp16 383.93 +/-6.04        100.09 +/-2.76       333.99 +/-3.97
+    cb_q8        383.84 -0.08 t=-0.1   100.42 +0.32 t=+1.0  333.79 -0.20 t=-0.3
+    cb_q4        385.76 +1.83 t=+1.5   101.16 +1.07 t=+1.9  338.49 +4.49 t=+4.6
+
+q8 is FREE -- two cells negative, one positive, every |t| <= 1.0, entry
+relerr 0.00385. q4 (entry relerr 0.06994) ties on prose and code and is a
+real regression on LITERARY at t=4.6, which is the corpus that has detected
+every marginal effect on this family first.
+
+WHY THIS AXIS WORKS AND THE OTHERS DO NOT. q8 keeps all 16384 centroids
+FREELY PLACED and stores their coordinates coarsely. Additive and product
+both reduce WHERE the points may sit -- a Minkowski sum, or a concatenation
+of independent halves -- and the model notices immediately. Precision is not
+expressiveness; 0.4% coordinate noise on a freely-placed centroid costs
+nothing, while constraining the same 16384 points costs 38 mnats.
+
+WHAT IT BUYS, and it costs nothing under the "smarter for smaller" test:
+* d8-K16384: 256 -> 128 KB. Does NOT reach threadgroup and nothing can --
+  131072 values would need ~1 bit each. It halves the DEVICE-arm cache
+  footprint, which is where that arm's cost lives.
+* d4-K2048 (the 3.2's floor, the rung people actually run): 16 KB -> 8 KB,
+  under the 16 KB preference, onto THREADGROUP. A free arm switch on the
+  flagship rung -- pending the same test on that geometry, and a kernel that
+  reads int8 entries.
+
+Speed is NOT measured here. d8-K16384 cannot be forced onto threadgroup
+(256 KB > the hardware cap), so there is no same-artifact A/B; the arm
+comparison needs a full d4-K128 floor built and a PREFILL bench (I.9: decode
+is a wash across geometries, prefill is where geometry shows, and gemmseg is
+the prefill kernel). Not run. This entry is a QUALITY result only.
