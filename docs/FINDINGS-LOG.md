@@ -4135,3 +4135,69 @@ actually implements. The reporting predicate and the selector AGREE; I never
 read the selector. Read the code that runs, not the comment that describes
 it -- and when a fact has flipped twice, that is the signal to go read the
 line, not to argue from another docstring.
+
+## F125 (2026-09-18) — ppl is not junk -- it is CONDITIONALLY valid, and the condition is one number nobody reports. It ranks 9 of 12 ladders correctly and inverts exactly when the rungs undershoot the TEACHER's perplexity (8/9 predicted).
+
+ARTIFACT:   all shipped rungs of Qwen3.5-397B, Qwen3.6-35B-A3B, Qwen3.8-27B (+ its affine q4/q8 comparators) and Qwen3.8-Flash-Next, as measured in F121 and the 27B dense ladder
+INSTRUMENT: vqlab kl-ladder, 12288-token top-64 teacher caches per family, three house corpora; Spearman between KL rank and ppl rank over each family's rungs; teacher ppl taken from each cache build
+PREDICTION (pre-registered): Noah, and me agreeing in the two messages before measuring: perplexity measurements are junk and KL simply supersedes them; I had earlier written that ppl is 'anti-monotonic in quality' as a general property.
+MEASURED:   Spearman(KL,ppl): 397B +1.000/+1.000/+1.000; 35B +1.000/-1.000/+1.000; 27B -0.700/+0.900/+1.000; Flash +0.400/+1.000/+1.000 (prose/code/lit). 9 of 12 cells agree. Undershoot rule predicts inversion in 8 of 9 cells with a recorded teacher ppl; the miss is 27B code at 1/5 rungs below teacher. 35B code students 2.3399/2.5029/2.6297/2.9865 vs teacher 3.2428.
+VERDICT:    FALSIFIED
+
+THE STRONG CLAIM DID NOT SURVIVE, AND THE CONDITIONAL ONE IS BETTER.
+Noah's position entering this, and mine in the two messages before it, was
+that perplexity is "junk" as a quantization metric and that KL simply
+replaces it. Rank-correlating the two across every rung ladder measured on
+the 12288 three-corpus instrument says otherwise:
+
+    family          prose      code       lit
+    397B           +1.000    +1.000    +1.000
+    35B            +1.000    -1.000    +1.000
+    27B (VQ+aff)   -0.700    +0.900    +1.000
+    Flash-Next     +0.400    +1.000    +1.000
+
+Spearman between KL rank and ppl rank over each family's rungs. PPL RANKS
+THE LADDER CORRECTLY IN 9 OF 12 CELLS, perfectly (+1.000) in seven, and it
+gets all three corpora of the 397B -- the family carrying most of the
+published ladder -- exactly right. "Junk" is not what this data says.
+
+THE FAILURES ARE NOT RANDOM, AND THE MECHANISM IS ONE LINE. Comparing each
+rung's ppl against the TEACHER's ppl on the same corpus (which the cache
+build prints, and which almost nobody reports):
+
+    cell              rungs below teacher ppl   rho      predicted
+    397B x3                 0/4                +1.000    agrees   YES
+    35B prose, lit          0/4                +1.000    agrees   YES
+    35B code                4/4                -1.000    inverts  YES
+    27B prose               4/5                -0.700    inverts  YES
+    27B lit                 0/5                +1.000    agrees   YES
+    27B code                1/5                +0.900    inverts  NO
+
+EIGHT OF NINE. The rule: ppl orders quantized models correctly only while
+they all sit on the SAME SIDE of the teacher. Quantization damage can push
+perplexity BELOW bf16 on finite text -- the 35B reads 2.34/2.50/2.63/2.99 on
+code against a teacher's 3.2428, all four under it -- and once that happens
+"lower ppl" and "closer to the teacher" point in opposite directions, so the
+ranking inverts. The single miss refines rather than breaks it: one rung in
+five under the teacher (27B code) barely moves a rank correlation; it takes
+a substantial fraction to flip the ordering.
+
+WHY THIS MATTERS MORE THAN "USE KL". The failure condition is CHEAP TO TEST
+and INVISIBLE IF YOU DO NOT TEST IT. Standard practice reports student
+perplexity and never scores the teacher on the same corpus, so a ladder can
+be silently inverted with nothing on the page to show it. One extra number
+-- the teacher's own ppl -- turns an unfalsifiable metric into a checkable
+one. KL has no such mode: it is a distance, monotone by construction.
+
+SCOPE, and it is complete for the published ladder: 397B, 35B and 27B all
+have a teacher ppl recorded on all three corpora, which is 9 of the 9 cells
+that matter. Flash-Next is outside it -- not yet released when the paper was
+written, and 26% of its bytes are PLE n-gram tables, which F121's ple-swap
+measured at roughly zero mnats per GB at the margin, so its bytes do not
+behave like expert bytes under a matched-byte claim. Its teacher ppl was not
+recorded in the cache meta, so its three cells stay untested; that is a gap
+in the instrument's bookkeeping, not in the result.
+
+INSTRUMENT DEBT: `stream_score` prints the teacher's ppl when it builds a
+cache but does not store it in meta.json. It should, precisely so this test
+is available for free on every future ladder.
