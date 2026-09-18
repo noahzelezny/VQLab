@@ -39,6 +39,7 @@ COMMANDS = {
     "validate": ("validate_queue.py", "overnight validation queue: drain artifacts through the gates, never publish"),
     "check-release": ("check_release.py", "release gate: files exist and function"),
     "check-bundle": ("check_bundle.py", "bundle gate: shipped runtime matches repo runtime"),
+    "prefill-bench": ("prefill_bench.py", "time prefill on one artifact under BOTH codebook arms (ratio, n>=3)"),
     "coverage": ("coverage.py", "per-module report: which prefill kernel path each geometry takes"),
     "check-comparator": ("check_comparator.py", "comparator gate: tensor-set parity vs teacher"),
     "bundle-accept": ("bundle_accept.py", "kernel acceptance on the runtime lifted FROM the artifact"),
