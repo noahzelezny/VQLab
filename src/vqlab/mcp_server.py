@@ -47,7 +47,7 @@ import subprocess
 import sys
 import time
 import urllib.request
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
@@ -483,10 +483,88 @@ def _findings_entries(path: Optional[Path] = None) -> List[Dict[str, Any]]:
     return out
 
 
-def t_next_f_number() -> Dict[str, Any]:
+_FLOCK_DIR = FINDINGS_LOG.parent / ".f-locks"
+_FLOCK_TTL = 6 * 3600          # a crashed session must not burn a number forever
+
+
+def _live_reservations() -> Dict[int, float]:
+    """Claimed F-numbers that have not expired, as {number: claimed_at}."""
+    out: Dict[int, float] = {}
+    if not _FLOCK_DIR.is_dir():
+        return out
+    now = time.time()
+    for f in _FLOCK_DIR.glob("F*.lock"):
+        try:
+            n = int(f.stem[1:])
+            age = now - f.stat().st_mtime
+        except (ValueError, OSError):
+            continue
+        if age > _FLOCK_TTL:
+            try:
+                f.unlink()          # stale: the session that took it is gone
+            except OSError:
+                pass
+            continue
+        out[n] = f.stat().st_mtime
+    return out
+
+
+def t_next_f_number(reserve: bool = False, owner: str = "") -> Dict[str, Any]:
+    """The next free F-number; with reserve=True, CLAIM it atomically.
+
+    WHY RESERVE EXISTS (2026-09-19). This used to be `max(log) + 1`, a pure
+    read. Two sessions working the same repo both called it, both got 151,
+    and both wrote an F151 -- neither had committed when the other looked.
+    A read cannot prevent that no matter how careful either session is: the
+    log is only updated at commit time, so the window is the whole length of
+    the experiment. The fix has to be a WRITE, and it has to be atomic.
+
+    O_CREAT|O_EXCL on a per-number lock file is that write: exactly one
+    caller can create `F<n>.lock`, and the loser simply advances to n+1.
+    Locks carry a TTL so a session that dies mid-experiment releases its
+    number instead of holding it forever, and `findings_append` releases
+    the lock once the entry is actually in the log.
+
+    reserve=False stays the default so a plain "what number am I on?" costs
+    nothing and burns nothing.
+    """
     ents = _findings_entries()
     top = max((e["f"] for e in ents), default=0)
-    return {"next": top + 1, "highest": top, "log": str(FINDINGS_LOG)}
+    taken = set(e["f"] for e in ents) | set(_live_reservations())
+    n = top + 1
+    while n in taken:
+        n += 1
+    if not reserve:
+        held = sorted(_live_reservations())
+        return {"next": n, "highest": top, "log": str(FINDINGS_LOG),
+                "reserved": False, "reservations_held": held,
+                "note": ("call with reserve=true before a long experiment; a "
+                         "bare read races another session (F151/F152 vs "
+                         "F153/F154, 2026-09-19)")}
+    _FLOCK_DIR.mkdir(parents=True, exist_ok=True)
+    while True:
+        try:
+            fd = os.open(str(_FLOCK_DIR / f"F{n}.lock"),
+                         os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o644)
+        except FileExistsError:
+            n += 1                  # someone claimed it between the scan and now
+            continue
+        with os.fdopen(fd, "w") as fh:
+            fh.write(json.dumps({"owner": owner or "unknown",
+                                 "claimed": datetime.now().isoformat()}))
+        return {"next": n, "highest": top, "log": str(FINDINGS_LOG),
+                "reserved": True, "owner": owner or "unknown",
+                "expires_in_s": _FLOCK_TTL,
+                "note": "release happens automatically on findings_append"}
+
+
+def t_release_f_number(n: int) -> Dict[str, Any]:
+    """Give a reserved number back (abandoned experiment)."""
+    f = _FLOCK_DIR / f"F{int(n)}.lock"
+    existed = f.exists()
+    if existed:
+        f.unlink()
+    return {"released": int(n), "was_held": existed}
 
 
 def t_findings_tail(n: int = 10) -> Dict[str, Any]:
@@ -509,7 +587,7 @@ def t_findings_append(headline: str, artifact: str, instrument: str, prediction:
         raise ToolError("BAD_VERDICT", f"verdict must be one of {VERDICTS}")
     if verdict == "CORRECTS" and not corrects:
         raise ToolError("INCOMPLETE", "verdict CORRECTS needs corrects='F<n>'")
-    n = t_next_f_number()["next"]
+    n = t_next_f_number(reserve=True, owner="findings_append")["next"]
     today = date.today().isoformat()
     head = f"## F{n} ({today}) — {headline.strip()}"
     if verdict == "CORRECTS":
@@ -603,9 +681,19 @@ TOOLS: Dict[str, Dict[str, Any]] = {
         "schema": _schema({}, []),
     },
     "next_f_number": {
-        "fn": t_next_f_number, "readonly": True,
-        "description": "The next free F-number in docs/FINDINGS-LOG.md.",
-        "schema": _schema({}, []),
+        "fn": t_next_f_number, "readonly": False,
+        "description": "The next free F-number. Pass reserve=true to CLAIM it "
+                       "atomically before a long experiment -- a bare read "
+                       "races any concurrent session, because the log only "
+                       "changes at commit time (two sessions both took 151 on "
+                       "2026-09-19). Reservations expire after 6 h and are "
+                       "released by findings_append.",
+        "schema": _schema({"reserve": B(), "owner": S()}, []),
+    },
+    "release_f_number": {
+        "fn": t_release_f_number, "readonly": False,
+        "description": "Give back a reserved F-number whose experiment was abandoned.",
+        "schema": _schema({"n": I()}, ["n"]),
     },
     "findings_tail": {
         "fn": t_findings_tail, "readonly": True,

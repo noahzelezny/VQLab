@@ -51,6 +51,14 @@ good: every past agent who needed something added it here.
 
 ## Agents: use the MCP, not the shell
 
+**Reserve your F-number, do not just read it.** `next_f_number` used to be
+`max(log)+1`, a pure read; the log only changes at COMMIT time, so two
+sessions running experiments in parallel both got 151 on 2026-09-19 and both
+wrote an entry. Call it with `reserve=true` before a long experiment -- it
+claims the number atomically (O_EXCL lock, 6 h TTL, released by
+`findings_append`, or by hand with `release_f_number`). A bare read still
+works and still burns nothing, and now reports which numbers are held.
+
 `vqlab mcp` serves this box's lab over MCP (stdio JSON-RPC, stdlib only; one
 server per box, like exo). Tools: `where_is` (deterministic lookup over the
 storage array roots — use it before ever claiming something is missing),
