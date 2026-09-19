@@ -4416,3 +4416,84 @@ from the real result it later produced. F33 benchmarked RTILE=32 twice, F127
 read one interpreter for two envs, this ran one code path for two arms.
 **Every probe needs a channel that PROVES the arms differ, independent of the
 quantity being measured.**
+
+## F130 (2026-09-18) — CORRECTS F22: THE DECODE 2.3x IS NOT A FIXED COST -- IT IS THE DENOMINATOR. F22 counted only the expert stack, which is 12% of Flash's per-token traffic; with all active bytes counted, Flash-2.1 and 35B-3.4 achieve the SAME 97 GB/s effective bandwidth. And 2.1 -> 4.4 is +12.4% bytes, not +100%, which is why the rungs run at the same speed.
+
+ARTIFACT:   TheDrainFlorist--Qwen3.8-Flash-Next-VQ-2.1bpw and -4.4bpw (v2, 2026-09-17); TheDrainFlorist--Qwen3.6-35B-A3B-VQ-3.4bpw
+INSTRUMENT: vqlab active-bytes (new): safetensors header census, no tensors loaded, no GPU; paired against F48's decode ms/tok (stream_generate, M3, exo conda env, same script both models) -- see PROVISIONAL note, the timing half predates the v2 rebuild
+PREDICTION (pre-registered): Pre-registered in-session before the census, by me: 'Active weights per token = 48 layers x 10 experts x 3 matrices x (2560x640) ~ 2.36 G params. Flash-2.1: 0.62 GB/token -> 0.71 ms at 819 GB/s peak, against a 54.31 ms measured step. Weight reading is 1.3% of a 2.1 decode step. Going 2.1 -> 4.4 adds ~0.87 ms to a 54 ms step -- about 1.6%.' This reproduced F22's error exactly: it counted the expert stack and called it the model.
+MEASURED:   Flash-2.1 5.284 GB/token active (experts 0.641G = 12.1%; GatedDeltaNet 2.218G = 42.0%). Flash-4.4 5.939 GB/token (+12.4% vs 2.1, NOT +100%). 35B-3.4 1.796 GB/token. Effective bandwidth vs F48 decode: Flash-2.1 97.3 GB/s, 35B-3.4 96.4 GB/s -- within 1%. Bytes ratio 2.94x vs time ratio 2.91x. Bandwidth floor at 819 GB/s peak: Flash-2.1 6.452 ms/token (155 tok/s) vs 54.31 measured = 11.9% of peak, 8.4x headroom.
+VERDICT:    CORRECTS
+
+**THE CENSUS.** `vqlab active-bytes` (new instrument) walks the safetensors
+headers and bills every tensor by HOW A DECODE STEP READS IT -- dense every
+token, routed top-k of n_exp, or gathered a few rows. No tensor is loaded and
+no GPU is touched, so it runs on a contended box.
+
+Flash-2.1 (48.66 G resident), active bytes per decode token:
+
+| component | resident | per token | share |
+|---|---|---|---|
+| GatedDeltaNet (linear attn) | 2.22G | 2.218G | **42.0%** |
+| hyper-connections | 0.68G | 0.682G | 12.9% |
+| lm_head | 0.68G | 0.675G | 12.8% |
+| full attention | 0.66G | 0.656G | 12.4% |
+| **experts (MoE, routed)** | 32.84G | **0.641G** | **12.1%** |
+| shared expert (dense) | 0.25G | 0.251G | 4.7% |
+| router + shared gate | 0.13G | 0.126G | 2.4% |
+| PLE projections | 0.03G | 0.035G | 0.7% |
+| PLE ngram banks (gathered) | 9.60G | ~0 | 0.0% |
+| embedding (gathered) | 0.68G | ~0 | 0.0% |
+| vision tower (idle on text) | 0.90G | 0 | 0.0% |
+| **TOTAL** | 48.66G | **5.284G** | |
+
+**THE CORRECTION TO F22.** F22 put Flash-2.1 at 0.58 GB/token and 9.6 GB/s
+effective against the 35B's 22.5, and concluded "a large fixed cost inside
+the forward" -- the 2.3x that F23 then called UNEXPLAINED and F48 chased into
+the non-VQ trunk. The 0.58 figure is the EXPERT STACK ALONE. It omits the
+GatedDeltaNet projections, the hyper-connection trunk, lm_head, full
+attention and the shared expert: 88% of the traffic. With the corrected
+denominator:
+
+| model | active B/tok | decode ms/tok | effective GB/s |
+|---|---|---|---|
+| Flash-2.1 | 5.284G | 54.31 (F48) | **97.3** |
+| 35B-3.4 | 1.796G | 18.64 (F48) | **96.4** |
+
+**They are within 1%.** Bytes ratio 2.94x, time ratio 2.91x -- ratio of
+ratios 0.99. The two models do not differ by a fixed cost; they achieve the
+SAME effective bandwidth and Flash simply moves ~3x the bytes. F22's
+inversion (Flash "slower per byte") was an artifact of counting only the
+quantized tensors, which is precisely the slice Flash spends least of its
+traffic on.
+
+**WHY 2.1 AND 4.4 RUN AT THE SAME SPEED.** The rung label prices the expert
+stack, and the expert stack is 12.1% of Flash-2.1's per-token traffic. Going
+2.1 -> 4.4 moves 0.641G -> 1.296G on that slice and 5.284G -> 5.939G overall:
+**+12.4% bytes, not +100%.** Resident size doubles (48.7 -> 101.4 G) because
+resident is dominated by the 512-expert stack and the PLE banks, neither of
+which is read whole per token. A 4x decode speedup from halving bpw was never
+available at any efficiency.
+
+**WHAT IT OPENS.** GatedDeltaNet is the largest per-token byte consumer on
+BOTH models (42.0% Flash, 35.6% 35B) and is unquantized here. F47 already
+found it the largest non-VQ PREFILL consumer at 29% with no proposal round
+ever naming it. It is now the ranked decode suspect too, and the first place
+a real speed lever could exist. Pre-registered at docs/PREREG-DECODE-BYTES.md.
+
+**PROVISIONAL, and flagged as such.** The byte census is today's artifacts
+(v2, rebuilt 2026-09-17). The 54.31 / 18.64 ms are F48's, 2026-09-09, before
+the v1->v2 rebuild. Pairing them violates "a number older than the artifact
+it faces gets RE-MEASURED"; the effective-bandwidth rows stand as a strong
+provisional result and P3 of the prereg re-measures them in the next idle
+window. The census rows themselves are deterministic metadata and final.
+
+**TWO CLASSIFIER BUGS, both caught by totals that refused to make sense.**
+First cut billed the PLE ngram banks dense and reported 9.6 GB/token of PLE
+-- a table you INDEX is not a table you read. Second cut billed the vision
+tower dense because qwen4_exp spells it `model.visual.*` and the test was
+`startswith("visual")`; it showed up as a 0.90G "other" row, which is why
+unrecognised tensors are billed DENSE and bucketed loudly rather than
+dropped. Both were visible only because the tool prints components and a
+resident total that must reconcile with the artifact size (48.66G vs 47 GiB
+on disk).
