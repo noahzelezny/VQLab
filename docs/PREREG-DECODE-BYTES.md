@@ -97,7 +97,11 @@ RATIOS only (rule III).
 
 # OPEN, carried forward (2026-09-18, end of session)
 
-* **F135 — VQ vs affine at a known byte ratio, NOT RUN.** The 27B DENSE pair:
+* **F135 — RUN, see findings.** Result: VQ reaches 259-352 GB/s against
+  affine's 574 on the same runtime; the smaller rung is the slower one and
+  ships the geometry Metal rule IV names as failing on the cap. Original
+  registration kept below for the record.
+* ~~**F135 — VQ vs affine at a known byte ratio, NOT RUN.**~~ The 27B DENSE pair:
   VQ-3.9 moves 11.750 GB/tok against affine-8bit's 27.229 (2.32x), and the VQ
   arm carries the LIGHTER trunk (4-bit vs 8-bit), so the confound that
   inflates the Flash parity number runs the other way. If VQ is not ~2.3x
@@ -105,7 +109,11 @@ RATIOS only (rule III).
   `vqlab-scratch/f135_vq_vs_affine.sh`. NOTE: qwen3_5 is dense, a different
   runtime from the MoE fused path (Metal rule IV) -- it says nothing directly
   about Flash's kernels.
-* **F134b — prefill checksum re-verify, NOT RUN.** The prefill arms' timings
+* **F134b — RUN. All five prefill arms provably distinct under the widened
+  all-positions checksum (baseline 31529082, hc 2609625, gdn 116305447, vq
+  26766899, sharedexp 22897323). F134's vq prefill result is now proven by
+  the channel, not only by timing.**
+* ~~**F134b — prefill checksum re-verify, NOT RUN.**~~ The prefill arms' timings
   stand on the re-typing assert but were never proven by the checksum channel,
   because the single-token version collided. Staged at
   `vqlab-scratch/f134b_verify.sh`.
@@ -121,3 +129,25 @@ RATIOS only (rule III).
   refit treats it as a gap rather than a decision.
 * **A matched-BYTE, different-GEOMETRY twin** to settle law I.9 properly
   (F132 challenged it on confounded evidence -- bytes and geometry co-varied).
+
+
+## The I.9 twin — why it still needs a build (2026-09-18)
+
+The E87/E88 rate twins would have served directly: matched PACKED size 13.83
+GiB, same source, differing only in geometry (d4-K256 / d2-K16 / d8-K65536 at
+2.00 bpw). They are **NOT_FOUND on every Thunderbay root** -- not retained.
+
+The fit archive cannot assemble a substitute either. Computing bits/weight
+over every stored geometry finds exactly one exact rate match:
+
+    d8-K16384  14 bits / 8 dims = 1.75 b/w   92 modules   cb 262144 B  DEVICE
+    d4-K128     7 bits / 4 dims = 1.75 b/w   24 modules   cb   1024 B  threadgroup
+
+Matched rate, opposite kernel paths -- the ideal pair. **Module overlap: 0.**
+
+So the twin is a SUBSET BUILD: take N modules that already have d8-K16384
+fits, fit those same N at d4-K128 (K<=256 is the cheap fitting regime), then
+geo-build two artifacts byte-identical everywhere except those N. F135 gives
+this a sharper target than law hygiene: it would isolate whether the
+threadgroup cap is the cause of the 1.6-2.2x efficiency spread, or merely
+correlated with it.

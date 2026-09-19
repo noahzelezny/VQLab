@@ -4831,3 +4831,76 @@ move to one-process-per-arm and raised KeyError on every non-bf16 arm of
 pass 1; two edits at odds, the second one's regex silently not matching.
 (3) A file edit landed 18 s AFTER an arm had already started, so that arm ran
 the old code -- the F129 code-skew hazard, in a new form.
+
+## F135 (2026-09-18) — THE VQ-vs-AFFINE GAP IS NOT ~10%, IT IS A 1.6-2.2x BYTE-EFFICIENCY DEFICIT. The affine comparator reaches 574 GB/s (70% of peak) on the same runtime; VQ reaches 259-352. And the SMALLER rung is the slower one -- VQ-3.9 ships d4-K4096, the geometry Metal rule IV names as failing ON the 32768 B threadgroup cap.
+
+ARTIFACT:   TheDrainFlorist--Qwen3.8-27B-VQ-3.9bpw and -4.8bpw vs Qwen--Qwen3.8-27B-8bit (dense, qwen3_5)
+INSTRUMENT: vqlab decode-ladder --arm baseline, 200 tokens best-of-3, one process per arm, interleaved, affine repeated last as drift check (0.54%), idle M3 gated on gpu_power<12W; bytes from vqlab active-bytes
+PREDICTION (pre-registered): Pre-registered in docs/PREREG-DECODE-BYTES.md open items, verbatim: 'The 27B DENSE pair: VQ-3.9 moves 11.750 GB/tok against affine-8bit's 27.229 (2.32x), and the VQ arm carries the LIGHTER trunk (4-bit vs 8-bit), so the confound that inflates the Flash parity number runs the other way. If VQ is not ~2.3x faster at decode, effective bandwidth is the story.'
+MEASURED:   affine 8-bit 47.439 ms/tok at 27.229 GB = 574 GB/s (70% of peak). VQ-3.9 45.386 ms at 11.750 GB = 259 GB/s. VQ-4.8 42.533 ms at 14.953 GB = 352 GB/s. VQ is 2.32x smaller and only 1.05x faster; at affine's rate VQ-3.9 would take 20.5 ms, measured 45.4 = 2.21x its byte budget (VQ-4.8: 1.63x). The smaller rung is the SLOWER one. Drift 0.54%, spreads 0.5-0.8%.
+VERDICT:    CONFIRMED
+
+**THE COMPARISON.** 27B DENSE pair (qwen3_5), same model, same box, same
+session, interleaved, affine repeated last as the drift check (47.567 /
+47.311 = 0.54%). Bytes from `vqlab active-bytes`.
+
+| artifact | active GB/tok | ms/tok | **effective GB/s** | % of 819 peak | vs its byte budget |
+|---|---|---|---|---|---|
+| affine 8-bit | 27.229 | 47.439 | **574** | 70% | - |
+| VQ-4.8 (d2-K512) | 14.953 | 42.533 | 352 | 43% | **1.63x** |
+| VQ-3.9 (d4-K4096) | 11.750 | 45.386 | **259** | 32% | **2.21x** |
+
+**THE HEADLINE. The affine comparator proves the machine does 574 GB/s on this
+runtime -- 70% of peak.** Against that reference, VQ decode achieves 45-61% of
+affine's efficiency. VQ-3.9 moves 2.32x FEWER bytes and is only 1.05x faster;
+at affine's demonstrated rate it would decode in 20.5 ms, and it takes 45.4.
+
+**THIS RESTATES THE PARITY NUMBER.** "VQ is ~10% slower than affine" compares
+wall clock between artifacts of DIFFERENT SIZES and is not the quantity
+anyone cares about. The measurable statement is: **VQ decode leaves 1.6-2.2x
+on the table relative to what its own byte count buys at the efficiency the
+same hardware and runtime demonstrably reach.** This was invisible until
+`active-bytes` existed to supply the denominator -- the whole reason F22 stood
+uncorrected for weeks.
+
+**AND THE SMALLER RUNG IS THE LESS EFFICIENT ONE.** VQ-4.8 moves MORE bytes
+(14.953 vs 11.750) and decodes FASTER (42.5 vs 45.4 ms). Byte count does not
+order these rungs; geometry does. Note this is the OPPOSITE direction from
+F132's 35B rung curve, where higher rungs were monotonically slower -- so the
+effect is runtime/family-local, as the standing law about geometry being
+family-local would predict.
+
+**THE SUSPECT IS A DOCUMENTED CAP.** Geometries:
+
+| rung | geometry | b/w | codebook bytes | path |
+|---|---|---|---|---|
+| VQ-3.9 | d4-K4096 p12 x192 | 3.00 | **32768** | ON the cap |
+| VQ-4.8 | d2-K512 p9 x192 | 4.50 | 2048 | threadgroup |
+
+Metal rule IV.1 states the ceiling as `K * dim * 2 < 32768` and names this
+case verbatim: "K4096@d4 fails ON the cap." VQ-3.9 ships exactly that
+geometry. 32768 is not LESS THAN 32768, so it cannot cache the codebook in
+threadgroup memory and is forced to the device path; VQ-4.8 at 2048 B is not.
+
+**NOT ISOLATED, AND SAID SO.** The two rungs differ in d (4 vs 2), K (4096 vs
+512), pack_bits (12 vs 9) AND cap status simultaneously. The cap is a strong
+suspect with a rule behind it, NOT a demonstrated cause. Isolating it needs
+the same instrument F132 needed: a matched-byte, different-geometry twin. The
+E87/E88 rate twins that would have served (matched packed 13.83 GiB, d4-K256
+vs d2-K16 vs d8-K65536) are NOT_FOUND on every Thunderbay root -- not
+retained. And the fit archive cannot assemble one: d8-K16384 (1.75 b/w, 92
+modules) and d4-K128 (1.75 b/w, 24 modules) are an exact rate match with
+**zero module overlap**.
+
+**SCOPE, three limits.** (1) DENSE runtime only -- `vq_dense.py`'s fused path
+is gated on `codebook.shape[1] == 2`, and Metal rule IV says dense and MoE are
+different runtimes, so none of this transfers to Flash's fused MoE path
+without measuring. (2) Not matched quality: 3.9/4.8 bpw VQ against 8-bit
+affine. (3) The trunks differ (VQ 4-bit, affine 8-bit), which FLATTERS VQ's
+byte count -- and that only strengthens the conclusion, since VQ has an even
+larger byte advantage than the headline and still fails to convert it.
+
+**WHAT THIS OPENS.** A rung-selection lever that costs nothing to pull: if the
+cap is the cause, a d4-K2048 refit of the 3.9 rung (16384 B, safely under)
+should recover efficiency at nearly the same rate. That is a `geo-build`, and
+the fit archive already holds 240 d4-K2048 fits.
