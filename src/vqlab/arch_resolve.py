@@ -61,7 +61,27 @@ def _resolve_arch(_mt, _multimodal):
 
 
 _MULTIMODAL = bool(_cfg.get("vision_config") or _cfg.get("audio_config"))
-_arch = _resolve_arch(_cfg["model_type"], _MULTIMODAL)
+
+# Carrying a tower is necessary but NOT sufficient to serve it. The bundle can
+# only use the multimodal arch if that arch hosts the modules this artifact's
+# config names, and the two runtimes root the text model differently: mlx_lm
+# at `model.layers.N`, mlx_vlm at `language_model.model.layers.N`. The config
+# records which tree the artifact was BUILT against, so it -- not a guess --
+# decides. 16 of the 20 multimodal artifacts here are mlx_vlm-shaped; the four
+# Flash-Next rungs are mlx_lm-shaped AND carry PLE modules mlx_vlm's qwen4_exp
+# does not define at all, under either spelling. Forcing them onto the
+# multimodal arch does not reveal their tower, it stops them loading entirely
+# -- text included. Serving text is strictly better than serving nothing, so
+# they stay on mlx_lm and their vision stays unreachable until the artifact
+# itself is rebuilt against the VLM module tree. `vision-smoke` reports that
+# state as a FAIL rather than hiding it.
+_VQ_KEYS = (list(_cfg.get("vq_modules", {}))
+            + list(_cfg.get("vq_linear", {}))
+            + list(_cfg.get("vq_embed", {}))
+            + list((_cfg.get("vq_ple") or {}).get("keys", [])))
+_VLM_LAYOUT = any(_k.startswith("language_model.") for _k in _VQ_KEYS)
+_VISION_SERVABLE = bool(_MULTIMODAL and (_VLM_LAYOUT or not _VQ_KEYS))
+_arch = _resolve_arch(_cfg["model_type"], _VISION_SERVABLE)
 
 # Re-export the base module's WHOLE public surface, not a hand-listed few.
 # A VLM base is read for far more than Model: mlx_vlm's loader reaches for
@@ -95,6 +115,45 @@ def _coerce_module_configs(_args):
         _args, _arch, _cfg,
         ["text", "vision", "perceiver", "projector", "audio"])
     return apply_generation_config_defaults(_args, _cfg)
+'''
+
+PATHWALK = '''
+def _reach_vq(_root, _path):
+    """Walk `_path` to (owner, leaf name), tolerating the two module layouts.
+
+    config's vq_module paths are written in whatever layout the artifact was
+    BUILT against: the mlx_lm arch roots the text model at `model.layers.N`,
+    while the mlx_vlm arch nests it at `language_model.model.layers.N`. The
+    fleet contains both spellings -- gemma was built mlx_vlm-style, Flash-Next
+    mlx_lm-style -- so once arch resolution started following the artifact's
+    modalities (see above), Flash-Next's paths stopped resolving and the
+    bundle failed to load AT ALL, text included. Rebasing here keeps the
+    published config.json untouched, which matters: the config is the record
+    of what shipped and a path rewrite would silently invalidate it.
+
+    Tries the path as written, then with `language_model.` added, then with it
+    removed. Raises naming every candidate -- a VQ module that silently fails
+    to attach leaves a dense random-init layer in the graph, which loads
+    clean and generates plausible garbage."""
+    _cands = [_path]
+    if _path.startswith("language_model."):
+        _cands.append(_path[len("language_model."):])
+    else:
+        _cands.append("language_model." + _path)
+    for _cand in _cands:
+        _obj, _parts, _ok = _root, _cand.split("."), True
+        for _c in _parts[:-1]:
+            try:
+                _obj = _obj[int(_c)] if _c.isdigit() else getattr(_obj, _c)
+            except (AttributeError, IndexError, KeyError, TypeError):
+                _ok = False
+                break
+        if _ok and hasattr(_obj, _parts[-1]):
+            return _obj, _parts[-1]
+    raise AttributeError(
+        f"vq module {_path!r} does not resolve on this arch "
+        f"({type(_root).__name__}); tried {_cands}. The bundle's config and "
+        f"its base architecture disagree about the module tree.")
 '''
 
 ARRAYISH = '''

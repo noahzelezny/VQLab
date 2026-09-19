@@ -14,6 +14,7 @@ import mlx.core as mx
 
 from vqlab.arch_resolve import ARRAYISH as _ARCH_ARRAYISH
 from vqlab.arch_resolve import COERCE as _ARCH_COERCE
+from vqlab.arch_resolve import PATHWALK as _ARCH_PATHWALK
 from vqlab.arch_resolve import PRELUDE as _ARCH_PRELUDE
 
 ap = argparse.ArgumentParser()
@@ -134,7 +135,7 @@ import json as _json
 import pathlib as _pathlib
 
 _cfg = _json.load(open(_pathlib.Path(__file__).parent / "config.json"))
-''' + _ARCH_PRELUDE + _ARCH_COERCE + _ARCH_ARRAYISH + '''
+''' + _ARCH_PRELUDE + _ARCH_COERCE + _ARCH_PATHWALK + _ARCH_ARRAYISH + '''
 
 
 class Model(_arch.Model):
@@ -142,10 +143,8 @@ class Model(_arch.Model):
         args = _coerce_module_configs(args)
         super().__init__(args)
         for _path, _m in _cfg.get("vq_modules", {}).items():
-            _obj = self
-            _parts = _path.split(".")
-            for _c in _parts[:-1]:
-                _obj = _obj[int(_c)] if _c.isdigit() else getattr(_obj, _c)
+            _obj, _leaf = _reach_vq(self, _path)
+            _parts = [_leaf]
             _pb = _m.get("pack_bits", 0)
             if _pb:
                 # packed: uint32 words, 32 codes per BITS words, row-local
@@ -169,10 +168,8 @@ class Model(_arch.Model):
             _g = _ple["geometry"]
             for _key in _ple["keys"]:
                 _rows, _cols = _ple["shapes"][_key]
-                _parts = _key.split(".")
-                _obj = self
-                for _c in _parts[:-1]:
-                    _obj = _obj[int(_c)] if _c.isdigit() else getattr(_obj, _c)
+                _obj, _leaf = _reach_vq(self, _key)
+                _parts = [_leaf]
                 _rb = _g.get("row_bytes")
                 _codes0 = (mx.zeros((_rows, _rb), dtype=mx.uint8) if _rb else
                            mx.zeros((_rows, _cols // _g["dim"]), dtype=mx.uint16))
