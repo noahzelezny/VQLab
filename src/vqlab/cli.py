@@ -61,6 +61,7 @@ COMMANDS = {
     "geo-build": ("geo_build.py", "rebuild an artifact under a new per-layer geometry map (diff-style)"),
     "harvest-parts": ("harvest_parts.py", "extract a shipped rung's VQ fits into a geo-build --reuse parts dir"),
     "ple-swap": ("ple_swap.py", "swap an artifact's PLE tables for another rung's (symlinks; prices PLE bytes on KL)"),
+    "kl-pair": ("kl_pair.py", "paired KL between two arms scored in SEPARATE runs (env-var arms)"),
     "kl-ladder": ("kl_ladder.py", "rank rungs by KL against per-corpus teacher caches, with error bars"),
     "alloc-sweep": ("alloc_sweep.py", "cost/value curves for per-layer allocation -> the iso-byte frontier"),
     "probe-init": ("probe_init_sweep.py", "per-family k-means++ vs random init sweep"),

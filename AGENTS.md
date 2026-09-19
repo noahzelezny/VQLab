@@ -31,6 +31,7 @@ grep -rli "<the concept>" src/vqlab/ docs/ research/quantlab/
 | question | use this | NOT |
 |---|---|---|
 | which layers deserve more bits? | `vqlab layer-leverage` — **rank by the JUMP in `traj_rel`, NOT by `local_rel`** (F95: local_rel is isolation damage and is anti-signal; jump-ranked beat it by 0.7-1.0 pt on every corpus) | hand-rolled band ablations |
+| compare an arm that is an ENV VAR, not a directory? | `vqlab kl-pair` — kl-ladder pairs rungs WITHIN one invocation against its first `--rung`, so an env-var arm (VQ_DENSE_SS, VQ_D4_WALK, the DEVX twins) needs two invocations sharing one `--per-pos-dir`, paired after the fact | reading two overlapping SEMs as "no difference" — that is not the paired test and is far more conservative |
 | is this thing bandwidth-bound? how many bytes does a token cost? | `vqlab active-bytes` — bills every tensor by how a DECODE STEP reads it (dense / routed top-k / gathered rows). **Never quote an effective-bandwidth number without it**: F22 counted the expert stack alone, understated Flash's traffic ~9x, and its "large fixed cost" was the missing denominator (F130) | counting the quantized tensors and calling it the model |
 | which COMPONENT owns the decode time? | `vqlab decode-ladder` — per-component deletion arms with an output checksum beside every timing | a fresh deletion script that seeds `cache.keys` and crashes on Flash's ArraysCache/QSAKVCache |
 | how much damage does this artifact carry? | `vqlab score` / `kl_damage.py` | ad-hoc KL scripts |
@@ -92,6 +93,7 @@ recorded verbatim). `publish` is not exposed; it is a human's action.
   composition (F87) — same path AND same batching.
 * **Depth/geometry laws are family-local.** GLM, 397B and Flash each measured
   a different shape. Never inherit an allocation across families.
+* **A ULP figure is DISAGREEMENT, not error (F138).** `VQ_DENSE_SS`'s "up to 8.00 ULP" was read as a quality cost for weeks and shipped the switch OFF. Measured, the tree reduction is the BETTER-rounded one — no corpus worse, prose -0.605 mnats at |t|=4.31 — because a tree's error grows O(log n) against a serial chain's O(n). Before treating a ULP divergence as a cost, ask WHICH rounding is closer to the teacher. Nobody had.
 * **The KL gate does NOT exercise the DECODE kernels on dense artifacts
   (F137).** `kl-ladder` scores at the cache's chunk (512, correctly -- F111);
   the fused decode path is gated at `N <= 32` for packed d4, so scoring falls
