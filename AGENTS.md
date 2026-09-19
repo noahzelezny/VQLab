@@ -31,6 +31,8 @@ grep -rli "<the concept>" src/vqlab/ docs/ research/quantlab/
 | question | use this | NOT |
 |---|---|---|
 | which layers deserve more bits? | `vqlab layer-leverage` — **rank by the JUMP in `traj_rel`, NOT by `local_rel`** (F95: local_rel is isolation damage and is anti-signal; jump-ranked beat it by 0.7-1.0 pt on every corpus) | hand-rolled band ablations |
+| is this thing bandwidth-bound? how many bytes does a token cost? | `vqlab active-bytes` — bills every tensor by how a DECODE STEP reads it (dense / routed top-k / gathered rows). **Never quote an effective-bandwidth number without it**: F22 counted the expert stack alone, understated Flash's traffic ~9x, and its "large fixed cost" was the missing denominator (F130) | counting the quantized tensors and calling it the model |
+| which COMPONENT owns the decode time? | `vqlab decode-ladder` — per-component deletion arms with an output checksum beside every timing | a fresh deletion script that seeds `cache.keys` and crashes on Flash's ArraysCache/QSAKVCache |
 | how much damage does this artifact carry? | `vqlab score` / `kl_damage.py` | ad-hoc KL scripts |
 | ppl on the house corpora | `scripts/score_ppl_resident.py` + the THREE corpora in `src/vqlab/referee/` (prose / code-public / literary) | your own corpus files |
 | task benchmarks | `research/quantlab/score_tasks_streaming.py` (layer-streamed; scores models larger than RAM) | a new eval harness |
