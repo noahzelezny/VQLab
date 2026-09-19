@@ -5030,3 +5030,68 @@ arms used throughout this run, where the checksum must MATCH. It stated the
 wrong expectation on six of eight arms tonight. The message must be per-arm,
 not a single hardcoded rule -- and the fact that it was still informative is
 luck, not design.
+
+## F137 (2026-09-18) — THE KL GATE DOES NOT EXERCISE THE DECODE KERNELS ON DENSE ARTIFACTS. kl-ladder scores at chunk 512; the fused decode path is gated at N<=32 for packed d4, so scoring falls through to _decode_matmul and every decode-path numerics change -- including the 8-ULP VQ_DENSE_SS -- passes the release gate untested. Found because two arms of a toggled switch returned KL identical to three decimals.
+
+ARTIFACT:   TheDrainFlorist--Qwen3.8-27B-VQ-3.9bpw (dense, qwen3_5); the gate itself
+INSTRUMENT: vqlab kl-ladder, three corpora at 12288 (q27_teacher_topk_{prose,code,lit}_12k), paired per-position; the diagnostic is the VQ_DENSE_FUSED_MAX_N override in _fused_max_n
+PREDICTION (pre-registered): docs/PREREG-DENSE-SS.md registered predictions about the SIZE of the SS quality cost (P1 |delta| < 5 mnats, P2 < 1% of the rung's own KL, P3 the sign may favour SS since a tree reduction's error grows O(log n) vs a serial chain's O(n), P4 |t| may exceed 2 while the delta is negligible). It did NOT predict that the gate could not see the switch at all -- that possibility was not on the list.
+MEASURED:   Both arms identical to three decimals (prose 140.843 +/- 6.010, ppl 5.6544) with VQ_DENSE_SS toggled, proving the SS kernels were never reached. _DENSE_FUSED_MAX_N_BY_D[4] = 32 against a scoring chunk of 512. With VQ_DENSE_FUSED_MAX_N=1024 forcing the fused path, the SAME artifact scores prose 139.974 (vs 140.843) and code 39.991 (vs 39.848) -- the two paths disagree by 0.87 and 0.14 mnats in opposite directions.
+VERDICT:    CONFIRMED
+
+**HOW IT SURFACED.** Scoring `VQ_DENSE_SS=0` against `=1` on
+27B-VQ-3.9 returned KL **identical to three decimals** on prose: 140.843 +/-
+6.010, ppl 5.6544, on BOTH arms. That is not a small effect. It is the F129
+signature -- both arms running the same code -- and the only reason it was
+caught is that a zero-to-three-decimals tie is impossible for a switch that
+model.py documents at up to 8 ULP.
+
+**THE MECHANISM.** `kl_ladder` scores at the chunk the cache records, which is
+512, and rightly so: F111 established the metric is not chunk-invariant for
+recurrent-state families, so a cache built at 512 scores students at 512. But
+`VQLinear.__call__` only takes the FUSED path when `N <= _fused_max_n`, and
+for packed d4 that is `_DENSE_FUSED_MAX_N_BY_D[4] = 32`. At N=512 it falls
+through to `_decode_matmul` (wdec + GEMM).
+
+**So on dense artifacts the F118 referee scores through the PREFILL path.**
+The fused decode kernels are never reached.
+
+**WHAT THAT MEANS FOR RELEASES.** Every switch F136 measured on this artifact
+lives in those kernels -- `VQ_DENSE_SS` (up to 8 ULP, documented),
+`VQ_D4_WALK`, the DEVX twins. **A numerics change confined to the decode path
+passes the KL gate untested.** Not because the gate is lax: it never runs that
+code. The only gate that touches those kernels at all is `vqlab smoke`, which
+generates one token and checks that a token APPEARS, not what it is.
+
+Rule III.11 already says "generate one token through the shipping runtime
+before calling anything releasable" -- and this is the limit of that rule made
+explicit. One token proves servability, not numerics.
+
+**PROVEN, NOT INFERRED.** `_fused_max_n` selects
+`_DENSE_FUSED_MAX_N_PACKED` whenever `VQ_DENSE_FUSED_MAX_N` is present in the
+environment, so forcing it to 1024 puts scoring on the fused kernel at N=512.
+Re-scored with that forced, same artifact, same caches:
+
+| corpus | default path (`_decode_matmul`) | forced fused decode kernel |
+|---|---|---|
+| prose | 140.843 +/- 6.010 (ppl 5.6544) | **139.974** +/- 5.938 (ppl 5.6578) |
+| code | 39.848 +/- 1.480 (ppl 1.6156) | **39.991** +/- 1.477 (ppl 1.6155) |
+
+The paths DISAGREE -- 0.87 mnats on prose, 0.14 on code, in opposite
+directions. **One artifact ships two numerically distinct paths and the
+referee scores only one of them.** That difference is small here, but it is
+unmeasured for every other dense rung and unbounded a priori.
+
+**SCOPE, and what has NOT been checked.** This is the DENSE runtime. MoE
+artifacts have a different dispatcher and different max-N thresholds
+(`VQ_EXPERT_SIMD_MAX_N`, `VQ_DENSE_FUSED_MAX_N_PLAIN`, the gemmseg early
+return), and whether the MoE KL gate reaches ITS decode kernels has NOT been
+established. That deserves its own pass before anyone assumes the fleet is
+covered.
+
+**THE FIX IS NOT "SET THE ENV VAR IN THE GATE."** Forcing N>512 onto the fused
+kernel is how this was PROVEN, but it is not the shipped configuration and
+scoring there prices the reduction, not the path a user's prefill takes. A
+real decode-path referee wants either a teacher cache built at chunk <= 32
+(so the fused gate opens naturally) or a KL measured over GENERATED tokens.
+Neither exists today.
