@@ -4945,3 +4945,88 @@ larger byte advantage than the headline and still fails to convert it.
 cap is the cause, a d4-K2048 refit of the 3.9 rung (16384 B, safely under)
 should recover efficiency at nearly the same rate. That is a `geo-build`, and
 the fit archive already holds 240 d4-K2048 fits.
+
+## F136 (2026-09-18) — A 12.5% DECODE SPEEDUP IS SHIPPED OFF BY DEFAULT AND IS NOT BIT-EXACT: VQ_DENSE_SS=1 buys 1.146x on the 27B dense rung, at up to 8 ULP, and its author explicitly left the decision to Noah. Also: code fetch is NOT the dense d4 bottleneck (1.4%), the VQ linears are 54.5% of the step, and after EVERY switch this runtime exposes, ~1.9x of the affine gap remains unexplained.
+
+ARTIFACT:   TheDrainFlorist--Qwen3.8-27B-VQ-3.9bpw (certified) and -4.8bpw (UNCERTIFIED, drift check failed)
+INSTRUMENT: vqlab decode-ladder --arm baseline with the runtime's own env A/B switches (VQ_DENSE_SS, VQ_DENSE_DEVX, VQ_D4_WALK), 200 tokens best-of-3, one process per arm, interleaved, baselines bracketing, idle M3 gated on gpu_power<12W
+PREDICTION (pre-registered): docs/PREREG-DECODE-BYTES.md decomposition section, verbatim: 'Q1. A gather-deletion arm removes MORE time on the d4 rung than on the d2 rung... Q2. An unpack-deletion arm is worth MORE on the 12-bit d4 rung... Q3. Neither arm alone closes the gap to affine's 574 GB/s. Recorded so that a partial result is not read as the whole answer. Q4 (falsifier). If BOTH deletion arms are small and the gap persists, then the deficit is in the MAC/accumulate structure, not in fetching codes at all.'
+MEASURED:   3.9 rung, drift 0.50%: VQ_DENSE_SS=1 39.519 ms = 1.146x FASTER but checksum MOVED 1451306 -> 1817710 (not bit-exact, up to 8 ULP documented). VQ_DENSE_DEVX=0 61.194 = 1.351x slower, bit-exact. VQ_D4_WALK=0 45.914 = 1.4% slower, bit-exact. Derived: VQ linear kernels ~24.6 ms = 54.5% of the step. With SS on, 297 GB/s vs affine's 574 -- 52%, so ~1.9x remains. 4.8 rung UNCERTIFIED (closing drift baseline 211.5% spread, foreign GPU job at 142-151 W).
+VERDICT:    CONFIRMED
+
+**METHOD.** Rather than hand-edit Metal, this uses the runtime's OWN
+documented A/B switches, every one of which the artifact's model.py asserts is
+bit-exact (except DENSE_SS, which says the opposite in detail). One process per
+arm, interleaved, baselines bracketing, 27B dense pair, 200 tokens best-of-3.
+
+**CERTIFIED: the 3.9 rung (d4-K4096, packed 12-bit, DEVICE codebook).**
+Baselines 45.177 / 45.405, drift 0.50%, mean 45.291.
+
+| arm | switch | ms/tok | effect | checksum | bit-exact |
+|---|---|---|---|---|---|
+| baseline | - | 45.291 | - | 1451306 | - |
+| reduction | **VQ_DENSE_SS=1** | **39.519** | **1.146x FASTER** | **1817710** | **NO** |
+| x residency | VQ_DENSE_DEVX=0 | 61.194 | 1.351x slower | 1451306 | yes |
+| code fetch | VQ_D4_WALK=0 | 45.914 | 1.4% slower | 1451306 | yes |
+
+**THE FINDING: A 12.5% DECODE SPEEDUP IS SHIPPED OFF BY DEFAULT, AND IT IS NOT
+FREE.** `VQ_DENSE_SS=1` replaces a 32-step serial reduction with a tree
+`simd_sum`. My checksum MOVED (1451306 -> 1817710), independently detecting
+what model.py documents at length: max 1.00/4.00/2.00/7.00 ULP on gate at
+N=1/5/10/20 and **up to 8.00 ULP on down_proj**, because a dense row reduces
+over NGRP=80-272 groups across NBLK=3-9 blocks so tree/serial disagreement
+compounds per block, with no expert axis to average it away. The author
+measured it, wrote down what it buys and costs, declined to ship it, and said
+so verbatim: "IT IS NOT COVERED BY THE 1-ULP DECISION, AND IT IS NOT MINE TO
+TURN ON... That is Noah's call, not this arc's."
+
+**It has never had the referee pass it asks for.** That pass now exists:
+`kl-ladder`, paired, three corpora at 12288, |t|>2 (the F118 gate). That would
+turn "up to 8 ULP" into mnats and make this a decidable trade rather than an
+open flag. The instrument the note wanted did not exist when it was written.
+
+Cross-check: model.py measures SS at 1.19-1.22x PER DISPATCH on top of devx.
+With VQ linears at ~24.6 ms of a 45.3 ms step, 1.20x on that slice predicts
+~1.10x whole-model; measured 1.146x. Two methods agree.
+
+**A DECOMPOSITION FALLS OUT OF DEVX.** Its per-dispatch value is documented at
+1.65x at N=1 on THIS artifact (27B 3.9bpw L20, d4/K4096/packed-12). Solving
+V + O = 45.291 and 1.65V + O = 61.194 gives **V ~ 24.6 ms: the VQ linear
+kernels are 54.5% of the decode step**, everything else 45.5%. That also
+calibrates this harness against a number obtained by a different method.
+
+**CODE FETCH IS ELIMINATED.** VQ_D4_WALK=0 costs only 1.4% (2.8x drift,
+marginal). F58 measured the same bit-walker at 1.12x on the MoE decode path.
+So the scalar-byte-load mechanism E14x identified as THE bottleneck for d2
+(128 GB/s vs gather_qmm's 292) does NOT explain the dense d4 deficit. Q1 and
+Q2 of the prereg are effectively answered in the negative for this rung.
+
+**Q3 CONFIRMED: NO LEVER CLOSES THE GAP.** With SS on, the 3.9 rung reaches
+39.519 ms = 11.750 GB / 0.039519 s = **297 GB/s, still 52% of affine's 574**.
+After every switch this runtime exposes, **~1.9x remains unexplained**. The
+prereg registered this in advance so a partial result would not be read as the
+whole answer.
+
+**UNCERTIFIED: the 4.8 rung (d2-K512, THREADGROUP codebook).** Baseline 42.477
+(0.13% from F135's 42.533), DEVX=0 46.933 = 1.105x. The CLOSING DRIFT BASELINE
+FAILED: 47.160 ms at **211.5% spread**, its min 11% above the opening
+baseline. A foreign GPU job landed (measured 142-151 W at 100% util
+immediately after; the box's Scout stack resumed). Per F47, numbers taken
+while the box serves are garbage, so the d2 contrast does NOT count, even
+though its own arm spread was 0.3%. The drift check did exactly its job.
+
+What it WOULD have shown, if it survives a re-run: DEVX is worth 1.351x on d4
+against 1.105x on d2, and model.py predicts that asymmetry -- "the d4 kernels
+hold their codebook in DEVICE memory, so once x staging is gone they need no
+barrier at all. The d2 kernels stage the CODEBOOK into threadgroup memory...
+So the d2 twins keep exactly ONE barrier." Device residency is not a latency
+penalty here; it is what lets d4 drop its barriers entirely -- the OPPOSITE of
+the revised suspect in the F135 correction, which is therefore also now in
+doubt and needs the re-run.
+
+**METHOD NOTE.** The probe prints "arms MUST differ here" beside every
+checksum, which is correct for DELETION arms and BACKWARDS for the replacement
+arms used throughout this run, where the checksum must MATCH. It stated the
+wrong expectation on six of eight arms tonight. The message must be per-arm,
+not a single hardcoded rule -- and the fact that it was still informative is
+luck, not design.

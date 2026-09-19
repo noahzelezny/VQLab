@@ -142,6 +142,10 @@ def _patch(model, predicate, label):
     return n
 
 
+# Arms that preserve the model's arithmetic. Their checksum must MATCH the
+# baseline; deletion arms' must differ. See the print at the end of main().
+_REPLACEMENT_ARMS = {"hc-compile"}
+
 ARMS = {
     "baseline":   (lambda n, t: False, "untouched"),
     "gdn":        (lambda n, t: n.endswith("linear_attn"),
@@ -227,8 +231,11 @@ def main() -> int:
         spread = (max(times) - min(times)) / min(times) * 100
         print(f"  prefill {best:7.3f} s   {len(ids)/best:8.1f} tok/s   "
               f"best-of-{a.reps} spread {spread:4.1f}%", flush=True)
-        print(f"  output_checksum {checksum}  (arms MUST differ here; equal "
-              f"checksums across arms means the edit did not take)", flush=True)
+        _kind = ("REPLACEMENT: checksum must MATCH baseline"
+                 if a.arm in _REPLACEMENT_ARMS else
+                 "baseline" if a.arm == "baseline" else
+                 "DELETION: checksum must DIFFER from baseline")
+        print(f"  output_checksum {checksum}  ({_kind})", flush=True)
         return 0
 
     # Manual step loop: one forward per token, GPU drained each step. It
@@ -266,8 +273,17 @@ def main() -> int:
     print(f"  ms/tok {ms:8.3f}   tok/s {1e3/ms:7.2f}   "
           f"best-of-{a.reps} spread {spread:4.1f}%", flush=True)
     # The channel that PROVES the arms differ, independent of timing (F129).
-    print(f"  output_checksum {checksum}  (arms MUST differ here; equal "
-          f"checksums across arms means the edit did not take)", flush=True)
+    # The EXPECTED DIRECTION depends on the arm type, and stating one rule
+    # for both is how this line told six of eight F136 arms the wrong thing.
+    # A DELETION arm produces wrong output, so its checksum must MOVE. A
+    # REPLACEMENT arm (a bit-exact switch, a fusion) must leave it IDENTICAL;
+    # a moved checksum there means the arithmetic changed and the timing is
+    # an instrument change, not a free win (F120, and F136's VQ_DENSE_SS).
+    _kind = ("REPLACEMENT: checksum must MATCH baseline"
+             if a.arm in _REPLACEMENT_ARMS else
+             "baseline" if a.arm == "baseline" else
+             "DELETION: checksum must DIFFER from baseline")
+    print(f"  output_checksum {checksum}  ({_kind})", flush=True)
     return 0
 
 
