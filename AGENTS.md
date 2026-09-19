@@ -223,11 +223,16 @@ shared machinery.
 The storage array roots are SHARED. More than one session works this repo at a
 time, and a bundle rewrite is a write to another session's experiment.
 
-**Measuring? Pin a scratch copy.** Do not benchmark or score the live artifact
-directory. Build a pinned copy -- a dir of symlinks to the safetensors plus the
-ONE `model.py` you mean to measure -- and smoke it before use. Two symlink
-trees, and a concurrent rebundle becomes structurally unable to enter your
-experiment. On 2026-09-19 a fleet-wide rebundle landed mid-run and voided 3 of
+**Measuring? PIN, then SMOKE, then measure.** Do not benchmark or score the
+live artifact directory. Build a pinned copy -- a dir of symlinks to the
+safetensors plus the ONE `model.py` you mean to measure -- and two symlink
+trees later a concurrent rebundle is structurally unable to enter your
+experiment. The smoke step is not optional politeness: pinning freezes
+whatever you pinned, INCLUDING a bundle that was already broken when you
+copied it. That is not hypothetical -- the session that invented this
+technique pinned a twin whose rebundle had pulled in mid-flight arch code, and
+caught it only because `vqlab smoke` ran on the copy first. A pin without a
+smoke buys you a reproducible wrong number. On 2026-09-19 a fleet-wide rebundle landed mid-run and voided 3 of
 13 arms of a decode campaign (F151); the same session finished the rest of that
 campaign from a pinned copy while the repair pass was still running.
 
