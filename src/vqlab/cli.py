@@ -34,6 +34,7 @@ COMMANDS = {
     # gates
     "check": ("check_all.py", "run the release gates that need no source model"),
     "smoke": ("smoke.py", "generate one token through the runtime the artifact ships"),
+    "host-attrib": ("host_attrib.py", "profile the VQ module's HOST cost (F41's unattributed 12-13%)"),
     "verify": ("verify_artifact.py", "outlier gate: decode artifact bytes vs bf16 source"),
     "publish": ("publish.py", "upload to the Hub, gated on check-release passing"),
     "validate": ("validate_queue.py", "overnight validation queue: drain artifacts through the gates, never publish"),
