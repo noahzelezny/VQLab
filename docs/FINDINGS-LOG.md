@@ -5095,3 +5095,86 @@ scoring there prices the reduction, not the path a user's prefill takes. A
 real decode-path referee wants either a teacher cache built at chunk <= 32
 (so the fused gate opens naturally) or a KL measured over GENERATED tokens.
 Neither exists today.
+
+## F138 (2026-09-18) — VQ_DENSE_SS IS FASTER AND MORE ACCURATE: 1.146x decode (F136) with NO corpus worse and prose significantly BETTER (-0.605 mnats, |t|=4.31). The '8 ULP' in the runtime measured DISAGREEMENT between two roundings, not error -- the tree reduction is the better-rounded one, as pre-registered. Noah's 'serious cost' prior is falsified.
+
+ARTIFACT:   TheDrainFlorist--Qwen3.8-27B-VQ-3.9bpw (dense, d4-K4096, packed 12-bit)
+INSTRUMENT: vqlab kl-ladder, three corpora at 12288 (q27_teacher_topk_{prose,code,lit}_12k), both arms with VQ_DENSE_FUSED_MAX_N=1024 forcing the fused decode kernel; paired across invocations with vqlab kl-pair (new), kl_ladder's own paired() formula; vqlab smoke for rule III.11
+PREDICTION (pre-registered): docs/PREREG-DENSE-SS.md, verbatim: 'P1. |delta KL| < 5 mnats on all three corpora. P2. The shift is < 1% of the rung's own KL on every corpus. P3, the non-obvious one... The SIGN may favour SS. A tree reduction's rounding error grows as O(log n) against a serial chain's O(n)... ULP divergence measures DISAGREEMENT between two roundings; it does not say the new one is the worse one... If SS lowers KL, the switch is not a quality cost at all. P4. |t| may EXCEED 2 while the delta is negligible... For this decision the MAGNITUDE governs, not significance.' FALSIFIER: '|delta| > 20 mnats on any corpus'.
+MEASURED:   Paired, ss_on minus ss_off: prose -0.605 mnats (-0.43%, sem 0.1404, t=-4.31), code -0.110 (-0.28%, sem 0.1000, t=-1.10), literary -0.058 (-0.01%, sem 0.4277, t=-0.14). n=12288 per corpus. No corpus worse; prose significantly better. Prose ppl identical to four decimals (5.6578) on both arms. Generation smoke PASSES on both arms with identical 12-token output.
+VERDICT:    CONFIRMED
+
+**THE PAIRED RESULT.** 27B-VQ-3.9, three corpora at 12288, both arms on
+the fused decode kernel (VQ_DENSE_FUSED_MAX_N=1024 on BOTH, see CAVEAT), same
+teacher caches, paired per position via `vqlab kl-pair` (new).
+
+| corpus | ss_off | ss_on | delta | % of own KL | sem | t |
+|---|---|---|---|---|---|---|
+| prose | 139.974 | 139.369 | **-0.605** | -0.43% | 0.1404 | **-4.31** |
+| code | 39.991 | 39.881 | -0.110 | -0.28% | 0.1000 | -1.10 |
+| literary | 581.935 | 581.877 | -0.058 | -0.01% | 0.4277 | -0.14 |
+
+**NO CORPUS IS WORSE. Prose is significantly BETTER** (|t|=4.31, clearing the
+F118 gate in SS's favour); code and literary are statistical nulls. Combined
+with F136's certified 1.146x decode speedup, `VQ_DENSE_SS=1` is faster AND
+not a quality cost on this artifact.
+
+**WHY THE SIGN GOES THIS WAY, pre-registered before the run.** `_dense_ss`
+replaces a 32-step SERIAL `fma` chain with a TREE `simd_sum`. A tree
+reduction's rounding error grows as O(log n) against a serial chain's O(n), so
+summing 32 partials in tree order is typically MORE accurate. model.py's
+"up to 8.00 ULP on down_proj" measures DISAGREEMENT BETWEEN TWO ROUNDINGS; it
+never claimed the new one was the worse one, and nobody had asked which was
+closer to the teacher. The answer is the new one.
+
+**PREDICTIONS GRADED** (docs/PREREG-DENSE-SS.md): P1 (|delta| < 5 mnats)
+CONFIRMED, max 0.605. P2 (< 1% of own KL) CONFIRMED, max 0.43%. P3 (sign may
+favour SS) CONFIRMED on all three. P4 (|t| may exceed 2 on a trivial delta)
+PARTLY -- only prose cleared, and it was the largest delta, so the gate
+behaved sensibly rather than misfiring. The registered falsifier (|delta| > 20
+mnats) did not trigger. Noah's stated prior -- "the initial look showed a
+serious cost" -- is FALSIFIED.
+
+**ppl SAYS NOTHING HERE, AGAIN.** Prose ppl is 5.6578 on BOTH arms to four
+decimals while KL moves 0.605 mnats at |t|=4.31. A textbook case for F118's
+decision to gate on KL and print ppl.
+
+**GENERATION SMOKE (rule III.11).** Both arms PASS through the shipping
+runtime and emit IDENTICAL text at 12 tokens ('The capital of France is' ->
+'We need answer user: "The capital of France is".'). Note the smoke reports
+"through the fused path": unlike the KL gate (F137), `vqlab smoke` DOES reach
+the kernels SS modifies -- it simply checks that a token appears, not what it
+is. Identical text is not identical logits, but it is the coherence check at
+N=1, the real decode regime.
+
+**CAVEAT, AND IT IS LOAD-BEARING FOR ANY DEFAULT FLIP.** Scoring ran at N=512
+with the fused gate FORCED open. That is not the shipped regime: the
+dispatcher gates the fused path at N<=32 for packed d4 precisely because the
+kernel is one simdgroup per output row and does not belong at N=512 (forcing
+it cost ~16 min per arm against F114's ~2 min/rung -- corroborating that the
+gate is well placed). The SS change is a reduction over NGRP and is
+N-independent, so this SHOULD be representative of the decode path -- but
+"should be" is not measured. The clean version needs a teacher cache built at
+chunk <= 32, so the fused gate opens naturally. It does not exist.
+
+**SCOPE -- ONE ARTIFACT, and do NOT generalise.** 27B-VQ-3.9 only: dense
+runtime, d4, K4096, packed 12-bit, DEVICE-resident codebook. NOT measured:
+the 27B 4.5 and 4.8 rungs (4.8 is d2 with a THREADGROUP codebook and keeps a
+barrier the d4 kernels drop, so it may behave differently on both axes); any
+MoE artifact; any other family. F136's 4.8 decode contrast is itself
+UNCERTIFIED (its drift check failed).
+
+**WHAT A RUNTIME PUSH WOULD COST, recorded so it is planned not discovered.**
+Turning SS on changes numerics, so per F120 every published number for every
+dense artifact becomes an instrument change and needs re-measuring and
+re-issuing on the cards. That is scope, not a blocker, and it is much cheaper
+to plan than to find out afterwards.
+
+**NEW INSTRUMENT: `vqlab kl-pair`.** kl-ladder pairs rungs WITHIN one
+invocation against its first --rung. It cannot express an arm that is an
+ENVIRONMENT VARIABLE rather than a directory -- VQ_DENSE_SS, VQ_D4_WALK and
+the DEVX twins all modify the same artifact in place, and score_one inherits
+the parent environment, so those arms must be separate invocations. kl-pair
+applies kl_ladder's own `paired()` formula across invocations and prints the
+delta as a PERCENTAGE of the reference arm's own KL, because at n=12288 a
+deterministic difference makes |t|>2 uninformative on its own.
