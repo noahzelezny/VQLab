@@ -209,7 +209,13 @@ def main() -> int:
             mx.synchronize()
             if rep:
                 times.append(time.time() - t0)
-            checksum = int(mx.sum(mx.argmax(logits[:, -1, :], axis=-1)).item())
+            # ALL positions, not just the last. A single final-token argmax
+            # is far too weak a channel: the vq arm changed prefill time by
+            # 30% and still returned the baseline token, because one draw
+            # from a 248320-vocab argmax collides easily. The decode side
+            # sums 200 tokens; this must sum every position or it cannot do
+            # the job F129 requires of it.
+            checksum = int(mx.sum(mx.argmax(logits[0], axis=-1)).item())
         best = min(times)
         spread = (max(times) - min(times)) / min(times) * 100
         print(f"  prefill {best:7.3f} s   {len(ids)/best:8.1f} tok/s   "
