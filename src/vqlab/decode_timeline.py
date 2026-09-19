@@ -188,33 +188,73 @@ def main() -> int:
 
     tokid = mx.array([[ids[-1]]])
 
+    def timed_pair(k):
+        """Time prefix k-1 and prefix k INTERLEAVED in one window.
+
+        WHY PAIRED. Taking cum[k-1] and cum[k] as independent best-of-N and
+        subtracting compares two absolutes captured minutes apart, so any
+        drift between them lands entirely in the delta. Under load that
+        drift dwarfs a stage: the first contended run of this instrument
+        (155 W) produced 59 negative deltas, a noise floor of 72% of the
+        step, and an `attn` share of -261%. Interleaving k-1 and k inside
+        one window is the same paired principle the KL work uses -- both
+        halves see the same machine state, and slow drift cancels in the
+        difference instead of accumulating into it.
+        """
+        c = fresh_cache()
+        best_a = best_b = float("inf")
+        for _ in range(a.reps + 1):
+            for which in (0, 1):
+                kk = (k - 1) if which == 0 else k
+                mx.synchronize()
+                t0 = time.time()
+                out = forward_prefix(kk, c, tokid)
+                mx.eval(out)
+                mx.synchronize()
+                dt = time.time() - t0
+                if which == 0:
+                    best_a = min(best_a, dt)
+                else:
+                    best_b = min(best_b, dt)
+        del c
+        return (best_b - best_a) * 1e3, best_b * 1e3
+
     def timed(k):
+        # ONE cache rebuild per stage, reps inside it. Rebuilding per rep
+        # made the prefill dominate the run (4x the prefills for the same
+        # number of timings). The bias this accepts: each rep leaves one
+        # extra token in the cache, so rep n sees a context of
+        # `context + n - 1`. At the default 64 that is a <5% context drift
+        # across 4 reps, and only the full-attention layers notice it at
+        # all -- the GatedDeltaNet layers carry fixed-size recurrent state.
+        # `best-of` then takes the fastest, which is the SHORTEST context,
+        # so the bias does not accumulate into the reported number.
+        c = fresh_cache()
         best = float("inf")
         for _ in range(a.reps + 1):
-            c = fresh_cache()
             mx.synchronize()
             t0 = time.time()
             out = forward_prefix(k, c, tokid)
             mx.eval(out)
             mx.synchronize()
             best = min(best, time.time() - t0)
-            del c
+        del c
         return best * 1e3
 
     print(f"\ndecode-timeline  {pathlib.Path(a.art).name}")
     print(f"context {a.context} tokens, best-of-{a.reps}, {len(stages)} stages"
           f"   GPU {w0:.1f} W\n", flush=True)
 
-    cum, prev = [], 0.0
     rows = []
     for k, (name, _li, kind) in enumerate(stages):
-        t = timed(k)
-        cum.append(t)
-        rows.append((name, kind, t - prev))
-        prev = t
+        if k == 0:
+            d = t = timed(0)
+        else:
+            d, t = timed_pair(k)
+        rows.append((name, kind, d))
         if k % 16 == 0:
-            print(f"  [{k:3d}/{len(stages)}] {name:16s} cum {t:8.2f} ms",
-                  flush=True)
+            print(f"  [{k:3d}/{len(stages)}] {name:16s} "
+                  f"stage {d:7.3f} ms  (cum {t:8.2f})", flush=True)
 
     whole = timed(len(stages) - 1)
     total = sum(d for _, _, d in rows)
@@ -228,10 +268,19 @@ def main() -> int:
 
     print(f"\n  full step (independent)  {whole:8.2f} ms")
     print(f"  sum of stage deltas      {total:8.2f} ms   drift {drift:.2f}%")
+    floor_pre = -min((d for _n, _k, d in rows), default=0.0)
+    noise_frac = floor_pre / whole * 100
     signed = (total - whole) / whole * 100
     if abs(signed) <= a.additivity_tol:
         verdict = ("SERIAL: deltas are a clean partition; a stage's number "
                    "is its standalone cost")
+    elif noise_frac > 10.0:
+        verdict = (f"UNDETERMINED: the worst negative delta is "
+                   f"{noise_frac:.0f}% of the step, so run-to-run noise is "
+                   "larger than most stages and NOTHING can be concluded "
+                   "about serial-vs-overlap from this drift. Noise is "
+                   "checked FIRST on purpose: an earlier version reported "
+                   "'OVERLAP' for what was simply a contended box.")
     elif signed > 0:
         verdict = (f"SERIAL + per-measurement tax: the prefixes cost "
                    f"{signed:+.1f}% more than the whole, i.e. each prefix "
