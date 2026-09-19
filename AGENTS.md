@@ -108,6 +108,12 @@ recorded verbatim). `publish` is not exposed; it is a human's action.
   forces the fused path at scoring N -- but that is a DIAGNOSTIC, not the
   shipped config. NOT checked for MoE artifacts; do not assume the fleet is
   covered.
+* **An artifact can change under you.** Rule III protects against a busy
+  GPU; it does not protect against ANOTHER SESSION rebundling the artifact
+  you are measuring. F151 lost 3 of 13 runs that way, and no power gate can
+  see a filesystem write. Before a long campaign, record
+  `stat -f %m <artifact>/model.py` and re-check it at the end; timestamp
+  every run so the boundary is recoverable if it happens anyway.
 * **Generate one token through the shipping runtime** before calling anything
   releasable (rule III.11 — an unservable artifact once scored perfectly).
 * **Artifacts NEVER go on the internal disk.** Scratch:
