@@ -2087,10 +2087,36 @@ _DENSE_DEVX = os.environ.get("VQ_DENSE_DEVX", "1") != "0"
 # tree/serial disagreement compounds per block instead of once; and there is
 # no expert axis to average it away.
 #
-# So this is NOT a 1-ULP change and the existing decision does not reach it:
-# turning it on would need its own referee pass, on the dense line, at dense
-# ULP. That is Noah's call, not this arc's. Shipped OFF, behind
-# VQ_DENSE_SS=1, as the reproducible record of what it costs and buys.
+# So this is NOT a 1-ULP change and the 2026-09-02 d8 decision did not reach
+# it: turning it on needed its own referee pass on the dense line. That pass
+# now exists and the switch is ON by default since 2026-09-19 (Noah's call).
+#
+# WHAT THE REFEREE PASS FOUND -- read this before flipping it back:
+#   SPEED   1.1461x (3.9, d4 packed), 1.1535x (4.5, d2 unpacked), 1.1348x
+#           (4.8, d2 packed). Measured AT shipped decode width, 200 tokens
+#           best-of-3, one process per arm, idle box. F136 + F142.
+#   QUALITY NULL at shipped decode width on both rungs scored there: worst
+#           cell +1.101 mnats at t=+1.36. F144, scored at chunk 8 with NO
+#           gate overrides -- inside the fused gates, so the arms really
+#           ran these kernels.
+#   THE ULP READING WAS BACKWARDS. The "up to 8.00 ULP" above is
+#           DISAGREEMENT between two roundings, not error. A tree reduction's
+#           error grows O(log n) against a serial chain's O(n), so the tree
+#           is the better-rounded one; measured, no corpus is worse and
+#           prose improved at |t|=4.31 (F138). Nobody had asked which
+#           rounding was closer before treating the figure as a cost.
+#
+# CAVEAT, stated so it is not lost: F138/F139's favourable QUALITY numbers
+# were scored at N=512 with the fused gate FORCED OPEN, which is not the
+# shipped decode regime (F137). At shipped decode width the effect is null,
+# not favourable. The honest claim is FASTER AND NEUTRAL, not "more
+# accurate". The speed half is measured where it ships.
+#
+# SCOPE: the evidence covers the 27B dense rungs (d4 packed, d2 packed, d2
+# unpacked) -- which are, as of 2026-09-19, every dense VQ artifact in the
+# fleet. A NEW dense geometry inherits this default UNTESTED; re-run
+# decode-ladder + a chunk-inside-the-gate kl-ladder before trusting it there.
+# VQ_DENSE_SS=0 restores the serial reduction.
 def _dense_ss(src, name):
     old = """        const int gmax = min(32, NGRP - b * 32);
         for (int i = 0; i < gmax; ++i)
@@ -2118,8 +2144,9 @@ _SRC_DENSE_D2_DEVX_SS = _dense_ss(_SRC_DENSE_D2_DEVX, "dense_d2")
 _SRC_DENSE_PACKED_D2_DEVX_SS = _dense_ss(
     _SRC_DENSE_PACKED_D2_DEVX, "dense_packed_d2")
 
-# OFF by default, deliberately: see the block comment above.
-_DENSE_SS = os.environ.get("VQ_DENSE_SS", "0") == "1"
+# ON by default since 2026-09-19: see the block comment above (F136/F138/
+# F139/F142/F144). VQ_DENSE_SS=0 restores the serial reduction.
+_DENSE_SS = os.environ.get("VQ_DENSE_SS", "1") == "1"
 
 
 def _dense_src(base_name, base_src, devx, devx_ss):
