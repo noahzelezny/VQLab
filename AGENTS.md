@@ -210,6 +210,34 @@ geometry choice — a refit, not kernel work. Corollary: if one artifact is
 the only one with a problem, suspect that artifact's config, not the
 shared machinery.
 
+## Two agents, one artifact root
+
+The storage array roots are SHARED. More than one session works this repo at a
+time, and a bundle rewrite is a write to another session's experiment.
+
+**Measuring? Pin a scratch copy.** Do not benchmark or score the live artifact
+directory. Build a pinned copy -- a dir of symlinks to the safetensors plus the
+ONE `model.py` you mean to measure -- and smoke it before use. Two symlink
+trees, and a concurrent rebundle becomes structurally unable to enter your
+experiment. On 2026-09-19 a fleet-wide rebundle landed mid-run and voided 3 of
+13 arms of a decode campaign (F151); the same session finished the rest of that
+campaign from a pinned copy while the repair pass was still running.
+
+**Rewriting artifacts? Say so first, and gate ONE per family before the
+second.** Announce a fleet-wide write before starting it. Then run BOTH
+`vqlab smoke --max-tokens 8` (text, ~30 s) and `vqlab vision-smoke` on one
+artifact of each family before touching the next. F154 is what skipping this
+costs: a vision repair was verified on the family it was written for, applied
+to 18 artifacts, and silently broke text generation on 3 of them and loading
+outright on 4 more. A new gate does not excuse re-running the old one -- the
+gate you just wrote is aimed at the failure you already found.
+
+**Releasing? The baseline is the HF revision, not the local copy.**
+`Exo Models/` holds SERVING copies and they drift: 8 of 20 differed from
+published on 2026-09-19, mostly local v2 against published v1.5. Pull the real
+one first -- `hf download <repo> model.py --local-dir /tmp/hfcheck/<repo>` costs
+nothing -- and rebundle from it, or you publish a runtime nobody scored.
+
 ## Long runs
 
 Overnight/multi-hour work needs `nohup ... & disown` plus per-module
