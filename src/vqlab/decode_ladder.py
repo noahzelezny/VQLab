@@ -167,6 +167,12 @@ def main() -> int:
     ap.add_argument("--tokens", type=int, default=200)
     ap.add_argument("--reps", type=int, default=3)
     ap.add_argument("--prompt-tokens", type=int, default=64)
+    ap.add_argument("--mode", choices=("decode", "prefill"), default="decode",
+                    help="prefill times ONE forward over --prefill-tokens; the "
+                         "same arms then answer whether a component's decode "
+                         "share mirrors at batch, where GEMVs become GEMMs and "
+                         "per-row cost amortizes")
+    ap.add_argument("--prefill-tokens", type=int, default=4096)
     a = ap.parse_args()
 
     from mlx_lm import load
@@ -188,7 +194,29 @@ def main() -> int:
 
     word = ("the quick brown fox jumps over the lazy dog while considering "
             "distributed inference ")
-    ids = tok.encode(word * (a.prompt_tokens // 13 + 1))[: a.prompt_tokens]
+    n_prompt = a.prefill_tokens if a.mode == "prefill" else a.prompt_tokens
+    ids = tok.encode(word * (n_prompt // 13 + 2))[:n_prompt]
+
+    if a.mode == "prefill":
+        from mlx_lm.models.cache import make_prompt_cache
+        times, checksum = [], None
+        for rep in range(a.reps + 1):
+            cache = make_prompt_cache(model)
+            mx.synchronize()
+            t0 = time.time()
+            logits = model(mx.array([ids]), cache=cache)
+            mx.eval(logits)
+            mx.synchronize()
+            if rep:
+                times.append(time.time() - t0)
+            checksum = int(mx.sum(mx.argmax(logits[:, -1, :], axis=-1)).item())
+        best = min(times)
+        spread = (max(times) - min(times)) / min(times) * 100
+        print(f"  prefill {best:7.3f} s   {len(ids)/best:8.1f} tok/s   "
+              f"best-of-{a.reps} spread {spread:4.1f}%", flush=True)
+        print(f"  output_checksum {checksum}  (arms MUST differ here; equal "
+              f"checksums across arms means the edit did not take)", flush=True)
+        return 0
 
     # Manual step loop: one forward per token, GPU drained each step. It
     # UNDERSTATES absolute throughput ~12% vs stream_generate's async_eval

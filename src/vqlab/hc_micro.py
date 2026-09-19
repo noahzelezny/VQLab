@@ -1,46 +1,57 @@
 #!/usr/bin/env python
-"""Micro-bench ONE GatedResidual at decode shape: is mx.compile inert here?
+"""hc-micro — the hyper-connection chain in isolation: dtype x batch.
 
-WARNING, F133: the CHAIN-SPLIT section of this file is INVALID as written.
-Its parts sum to 1667 us against a 410 us whole, and a projection to four
-outputs measured slower than the entire chain -- it times per-mx.eval
-round-trip overhead, not the ops. Only the PAIRED compile ratio survives,
-because that overhead cancels across both arms. Fix before trusting the
-split: amortize many ops per eval instead of one eval per op.
+WHY THIS EXISTS. F131 measured the hyper-connections at 44.4% of Flash decode
+for 12.9% of the bytes. F133 killed the mx.compile lever and left one
+hypothesis: at batch 1 those 10240x320 skinny GEMVs may be SLOWER in affine
+8-bit than in bf16, because the dequant amortizes over no batch. And the
+mirror question -- prefill runs the same chain at thousands of rows, where
+dequant amortizes and 8-bit should WIN -- decides whether a dtype change is a
+win or a trade.
 
-F133's whole-model hc-compile arm measured +0.66% (a null), but a
-numerics-preserving arm's checksum is identical BY DESIGN, so it could not
-distinguish "fusion does not help" from "mx.compile silently no-op'd".
-This isolates the question: one module, 10k iterations, compiled vs not.
-No artifact, no 47 GB load, seconds to run.
-
-Also splits the chain, so the 22.87 ms F131 attributed to hyper-connections
-gets an internal breakdown instead of a guess.
+THE DEFECT THIS REPLACES (F133). The first version ran one `mx.eval` per op
+and reported parts summing to 1667 us against a 410 us whole, with a
+projection to FOUR outputs slower than the entire chain. It was timing
+per-eval round-trip latency, not the ops. The fix is to build a DEPENDENT
+CHAIN of k calls and eval once, which both amortizes the round trip and
+matches how the model actually runs these: 97 modules back to back, each
+waiting on the last.
 """
+
+from __future__ import annotations
+
+import argparse
 import time
+
+import json
+import subprocess
+
 import mlx.core as mx
 import mlx.nn as nn
 
+
+def gpu_watts() -> float:
+    """Instantaneous GPU package watts, or -1 if macmon is unavailable.
+
+    Utilization is NOT usable here: WindowServer and WebKit peg gpu_usage to
+    60-95% while drawing 2-4 W, so a utilization gate both never opens and
+    reads 'busy' on an idle box. Power separates compositing from compute.
+    """
+    try:
+        out = subprocess.run(
+            ["/opt/homebrew/bin/macmon", "pipe", "--interval", "700", "-s", "1"],
+            capture_output=True, text=True, timeout=6).stdout.splitlines()
+        return float(json.loads(out[0])["gpu_power"])
+    except Exception:
+        return -1.0
+
 HC, D, LOWRANK = 4, 2560, 320
 HCDIM = HC * D
-N = 2000
 
 
-def bench(label, fn, x, n=N):
-    for _ in range(50):                      # warm + (for compile) trace
-        mx.eval(fn(x))
-    mx.synchronize()
-    t0 = time.time()
-    for _ in range(n):
-        mx.eval(fn(x))
-    mx.synchronize()
-    us = (time.time() - t0) / n * 1e6
-    print(f"  {label:<34} {us:8.1f} us/call")
-    return us
+class HCChain(nn.Module):
+    """mlx_lm's GatedResidual, shapes taken from the shipped qwen4_exp config."""
 
-
-class HC_(nn.Module):
-    """The mlx_lm GatedResidual chain, 8-bit affine like the artifact."""
     def __init__(self):
         super().__init__()
         self.norm = nn.RMSNorm(HCDIM)
@@ -58,27 +69,107 @@ class HC_(nn.Module):
         return mixed, h, inj
 
 
-x = mx.random.normal((1, 1, HCDIM)).astype(mx.float16)
+def bench(fn, x, chain: int, reps: int) -> float:
+    """us per CALL, from a dependent chain of `chain` calls evaluated once.
 
-for bits in (None, 8):
-    m = HC_()
-    tag = "bf16/fp16" if bits is None else f"affine {bits}-bit"
-    if bits:
-        nn.quantize(m, group_size=64, bits=bits)
-    mx.eval(m.parameters())
-    print(f"\n=== full chain, {tag} ===")
-    plain = bench("plain", lambda h, _m=m: _m(h)[0], x)
-    comp_f = mx.compile(lambda h, _m=m: _m(h)[0])
-    comp = bench("mx.compile", comp_f, x)
-    print(f"  -> compile ratio {plain/comp:5.3f}x "
-          f"({'HELPS' if plain/comp > 1.05 else 'INERT'})")
+    The chain is dependent on purpose: each call consumes the previous call's
+    output (tiled back to hc width, the same op the model's trunk performs),
+    so the GPU cannot overlap them and the number means what the model pays.
+    """
+    def once(h):
+        mixed, _, _ = fn(h)
+        return mx.tile(mixed, (1, 1, HC))      # restore hc width for the next link
 
-# Which part of the chain costs? Same shapes, 8-bit, decode batch.
-m = HC_(); nn.quantize(m, group_size=64, bits=8); mx.eval(m.parameters())
-print("\n=== chain split (affine 8-bit) ===")
-bench("rmsnorm only", lambda h: m.norm(h), x)
-bench("down 10240->320", lambda h: m.down(h), x)
-bench("up 320->10240", lambda h: m.up(mx.zeros((1, 1, LOWRANK), mx.float16)), x)
-bench("inject 10240->4", lambda h: m.inject(h), x)
-bench("elementwise tail only",
-      lambda h: (h.reshape(1, 1, HC, D) * h.reshape(1, 1, HC, D)).mean(axis=-2), x)
+    for _ in range(3):                          # warm caches + any compile trace
+        h = x
+        for _ in range(chain):
+            h = once(h)
+        mx.eval(h)
+    mx.synchronize()
+
+    best = float("inf")
+    for _ in range(reps):
+        t0 = time.time()
+        h = x
+        for _ in range(chain):
+            h = once(h)
+        mx.eval(h)
+        mx.synchronize()
+        best = min(best, time.time() - t0)
+    return best / chain * 1e6
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
+    ap.add_argument("--batch", type=int, nargs="+", default=[1, 512, 4096],
+                    help="rows per call: 1 is decode, the rest are prefill")
+    ap.add_argument("--chain", type=int, default=48,
+                    help="dependent calls per eval (Flash runs 97 per token)")
+    ap.add_argument("--reps", type=int, default=5)
+    ap.add_argument("--max-watts", type=float, default=25.0,
+                    help="refuse to measure, and to REPORT, if GPU package "
+                         "power exceeds this before or after the run")
+    ap.add_argument("--dtype", choices=("bf16", "affine-8", "affine-4"),
+                    default=None,
+                    help="measure ONE arm and exit. RULE III: one process per "
+                         "arm. Running all three in one process made the FIRST "
+                         "arm absorb allocator/page-in warmup and produced a "
+                         "5.7x swing on bf16 at batch 1 between runs -- larger "
+                         "than every effect being measured.")
+    a = ap.parse_args()
+
+    # CONTENTION GATE. This bench times ~5 ms of work per rep, which makes it
+    # far more fragile than a 10 s model run: a foreign GPU job moved bf16 at
+    # batch 1 from 72 us to 1116 us, a 15x swing across identical invocations,
+    # and silently inverted every dtype verdict. Numbers taken while the box
+    # serves are garbage (F47), so refuse to produce them.
+    w0 = gpu_watts()
+    if w0 > a.max_watts:
+        raise SystemExit(
+            f"REFUSING: GPU at {w0:.1f} W (limit {a.max_watts:.0f} W). "
+            "Another job is on this GPU; any number taken now is void.")
+
+    print(f"\nGatedResidual chain  hc={HC} d={D} lowrank={LOWRANK} "
+          f"(hc_dim={HCDIM})   chain={a.chain}, best-of-{a.reps}")
+
+    arms = [("bf16", None), ("affine-8", 8), ("affine-4", 4)]
+    if a.dtype:
+        arms = [t for t in arms if t[0] == a.dtype]
+
+    for b in a.batch:
+        x = mx.random.normal((1, b, HCDIM)).astype(mx.float16)
+        row = {}
+        for tag, bits in arms:
+            m = HCChain()
+            if bits:
+                nn.quantize(m, group_size=64, bits=bits)
+            mx.eval(m.parameters())
+            row[tag] = bench(m, x, a.chain, a.reps)
+        regime = "DECODE" if b == 1 else "prefill"
+        print(f"\n  batch {b:<5} ({regime})")
+        for tag, us in row.items():
+            per_row = us / b
+            # SPEEDUP OF bf16 OVER THIS ARM: >1 means bf16 is faster.
+            # (The first cut printed bf16_time/arm_time and labelled <1 as
+            # "quant faster", which is exactly backwards.)
+            speedup = us / row["bf16"]
+            verdict = ("bf16 FASTER" if speedup > 1.02 else
+                       "quant faster" if speedup < 0.98 else "tie")
+            print(f"    {tag:<9} {us:9.1f} us/call  {per_row:8.3f} us/row"
+                  f"   bf16 is {speedup:5.3f}x  "
+                  f"{verdict if tag != 'bf16' else ''}")
+    # Re-check AFTER: a job that landed mid-run is exactly the case the
+    # pre-gate cannot catch, and it is what voided this bench's first results.
+    w1 = gpu_watts()
+    if w1 > a.max_watts:
+        raise SystemExit(
+            f"\nVOID: GPU ended at {w1:.1f} W (started {w0:.1f} W, limit "
+            f"{a.max_watts:.0f} W). A foreign job landed mid-run; discard "
+            "every number above.")
+    print(f"\n  contention gate PASSED: {w0:.1f} W before, {w1:.1f} W after"
+          f" (limit {a.max_watts:.0f} W)\n")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
