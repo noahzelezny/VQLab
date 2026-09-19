@@ -11,6 +11,10 @@ broke the moment that script was refactored, and a shim-less model.py
 fails at load with an opaque error.
 """
 
+from vqlab.arch_resolve import ARRAYISH as _ARCH_ARRAYISH
+from vqlab.arch_resolve import COERCE as _ARCH_COERCE
+from vqlab.arch_resolve import PRELUDE as _ARCH_PRELUDE
+
 SHIM = '''
 
 
@@ -25,8 +29,7 @@ import json as _json
 import pathlib as _pathlib
 
 _cfg = _json.load(open(_pathlib.Path(__file__).parent / "config.json"))
-_arch = _importlib.import_module(f"mlx_lm.models.{_cfg['model_type']}")
-ModelArgs = _arch.ModelArgs
+''' + _ARCH_PRELUDE + _ARCH_COERCE + _ARCH_ARRAYISH + '''
 
 # The dtype the REST of the stack computes in. VQEmbedding decodes in fp16;
 # handing fp16 back into a bf16 model promotes everything downstream to fp32
@@ -49,7 +52,7 @@ def _reach(root, path):
 
 class Model(_arch.Model):
     def __init__(self, args):
-        super().__init__(args)
+        super().__init__(_coerce_module_configs(args))
         for _p, _m in _cfg.get("vq_linear", {}).items():
             _obj, _leaf = _reach(self, _p)
             _pb = _m.get("pack_bits", 0)
@@ -75,4 +78,7 @@ class Model(_arch.Model):
                 group_size=_m["group"], pack_bits=_pb,
                 in_features=_m["in"] if _pb else None,
                 out_dtype=_DTYPE))
+
+    def __call__(self, *_a, **_kw):
+        return _arrayish(super().__call__(*_a, **_kw))
 '''

@@ -627,6 +627,7 @@ json.dump(new_cfg, open(OUT / "config.json", "w"), indent=1)
 
 # ---- model.py: vq_switch runtime + loader shim, one self-contained file ---
 runtime = (pathlib.Path(__file__).parent / "vq_switch.py").read_text()
+from vqlab.arch_resolve import PRELUDE as _ARCH_PRELUDE
 shim = '''
 
 # ---------------------------------------------------------------------------
@@ -639,8 +640,7 @@ import json as _json
 import pathlib as _pathlib
 
 _cfg = _json.load(open(_pathlib.Path(__file__).parent / "config.json"))
-_arch = _importlib.import_module(f"mlx_lm.models.{_cfg['model_type']}")
-ModelArgs = _arch.ModelArgs
+''' + _ARCH_PRELUDE + '''
 
 
 class Model(_arch.Model):
