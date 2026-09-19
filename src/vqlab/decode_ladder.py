@@ -49,25 +49,36 @@ def _stub(_self, x, *args, **kwargs):
     return x * 0
 
 
-def _hc_stub(self, hyper_input):
+def _hc_stub(self, hyper):
     """Delete the hyper-connection's LEARNED MACHINERY, keep its plumbing.
 
-    Qwen4ExpGatedResidual returns a 3-tuple and the decoder layer does
-        injection = branch[..., None, :] * injection_weights[..., None]
-        hidden    = hyper_input + injection.reshape(*hyper_input.shape)
+    GatedResidual returns a 3-tuple and the decoder layer does
+        injection = branch[..., None, :] * inject[..., None]
+        hidden    = hyper + injection.reshape(*hyper.shape)
     so the shapes are load-bearing and the generic `x * 0` stub cannot be
-    used. This drops hc_norm, both 10240x320 linears and block_inject (the
-    0.682 GB/token) while preserving the residual contract exactly: the mix
-    becomes a plain mean over the hc streams, the gate becomes ones.
+    used. This drops hc_norm, both hc_dim x hc_lowrank linears and
+    block_inject (the 0.682 GB/token) while preserving the residual contract:
+    the mix becomes a plain mean over the hc streams, the gate becomes ones
+    (the real gate is 2*sigmoid(.), centred on 1).
+
+    ATTRIBUTE NAMES DIFFER BY RUNTIME. The artifact's bundled model.py
+    resolves its arch from mlx_lm FIRST and mlx_vlm only as a fallback, and
+    the two spell this class differently: mlx_lm's `GatedResidual` carries
+    .hc/.d and a `block_inject_weight is None` sentinel, mlx_vlm's
+    `Qwen4ExpGatedResidual` carries .hc_count/.hidden_size and omits the
+    attribute entirely. Reading the wrong one cost this arm a run.
     """
-    streams = hyper_input.reshape(
-        *hyper_input.shape[:-1], self.hc_count, self.hidden_size)
-    mixed_input = mx.mean(streams, axis=-2)
-    if "block_inject_weight" not in self:
-        return mixed_input
-    injection_weights = mx.ones(
-        (*hyper_input.shape[:-1], self.hc_count), dtype=hyper_input.dtype)
-    return mixed_input, hyper_input, injection_weights
+    hc = getattr(self, "hc", None)
+    if hc is None:
+        hc = self.hc_count
+    d = getattr(self, "d", None)
+    if d is None:
+        d = self.hidden_size
+    mixed = hyper.reshape(*hyper.shape[:-1], hc, d).mean(axis=-2)
+    if getattr(self, "block_inject_weight", None) is None:
+        return mixed
+    inject = mx.ones((*hyper.shape[:-1], hc), dtype=hyper.dtype)
+    return mixed, hyper, inject
 
 
 def _patch(model, predicate, label):
@@ -123,6 +134,11 @@ def main() -> int:
 
     from mlx_lm import load
     model, tok = load(a.art)
+
+    arch = type(model).__mro__[1].__module__
+    import sys as _sys
+    print(f"arch={arch}  file={getattr(_sys.modules.get(arch), '__file__', '?')}",
+          flush=True)
 
     predicate, label = ARMS[a.arm]
     hits = 0 if a.arm == "baseline" else _patch(model, predicate, a.arm)
