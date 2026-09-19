@@ -58,6 +58,7 @@ COMMANDS = {
     "price": ("price.py", "price a size-targeted build before fitting it"),
     "kernel-truth": ("kernel_truth.py", "fused vs fallback: which is closer to an EXACT float64 reference? (F146)"),
     "hc-micro": ("hc_micro.py", "single GatedResidual micro-bench: is mx.compile inert on this chain? (split half invalid, see F133)"),
+    "decode-timeline": ("decode_timeline.py", "every stage of one decode token, in order, timed, summing to the whole"),
     "decode-ladder": ("decode_ladder.py", "per-component decode deletion arms (GDN / attn / VQ), Flash-aware"),
     "layer-leverage": ("layer_leverage.py", "per-layer damage probe: which layers earn bigger K"),
     "geo-build": ("geo_build.py", "rebuild an artifact under a new per-layer geometry map (diff-style)"),
