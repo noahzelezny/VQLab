@@ -41,6 +41,7 @@ COMMANDS = {
     "check-release": ("check_release.py", "release gate: files exist and function"),
     "check-bundle": ("check_bundle.py", "bundle gate: shipped runtime matches repo runtime"),
     "prefill-bench": ("prefill_bench.py", "time prefill on one artifact under BOTH codebook arms (ratio, n>=3)"),
+    "active-bytes": ("active_bytes.py", "weight bytes read per decode token, by component (the roofline denominator)"),
     "coverage": ("coverage.py", "per-module report: which prefill kernel path each geometry takes"),
     "check-comparator": ("check_comparator.py", "comparator gate: tensor-set parity vs teacher"),
     "bundle-accept": ("bundle_accept.py", "kernel acceptance on the runtime lifted FROM the artifact"),
@@ -54,6 +55,7 @@ COMMANDS = {
     "selftest": ("selftest.py", "run the real pipeline on a tiny synthetic model"),
     # planning / probes
     "price": ("price.py", "price a size-targeted build before fitting it"),
+    "decode-ladder": ("decode_ladder.py", "per-component decode deletion arms (GDN / attn / VQ), Flash-aware"),
     "layer-leverage": ("layer_leverage.py", "per-layer damage probe: which layers earn bigger K"),
     "geo-build": ("geo_build.py", "rebuild an artifact under a new per-layer geometry map (diff-style)"),
     "harvest-parts": ("harvest_parts.py", "extract a shipped rung's VQ fits into a geo-build --reuse parts dir"),
