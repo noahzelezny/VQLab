@@ -94,6 +94,29 @@ def main() -> int:
                   "to write a bundle carrying both runtimes.")
             return 1
         if drifted:
+            # Same code, different baked defaults is not drift -- see the
+            # dense-equivalent note on the MoE path below.
+            import importlib.util as _ilu0
+            _sp = _ilu0.spec_from_file_location(
+                "runtime_profile", here / "runtime_profile.py")
+            _rp = _ilu0.module_from_spec(_sp)
+            _sp.loader.exec_module(_rp)
+            oks, all_deltas = [], {}
+            for name, text in (("vq_dense.py", vd), ("vq_switch.py", vs)):
+                o, d = _rp.matches_modulo_flags(bundle, text)
+                oks.append(o)
+                all_deltas.update(d)
+            if all(oks):
+                print(f"PASS (dense artifact): bundle carries both runtimes "
+                      f"verbatim, with {len(all_deltas)} baked default(s) "
+                      f"differing from the repo:")
+                for flag, (have, repo) in sorted(all_deltas.items()):
+                    print(f"    {flag:26s} bundle={have!r}  repo={repo!r}")
+                print("  These are the values the artifact SHIPPED with and "
+                      "were preserved deliberately. Any runtime claim must "
+                      "name them. (Still instrument the resolved import "
+                      "before any runtime claim.)")
+                return 0
             names = ", ".join(n for n, _ in drifted)
             print(f"FAIL (dense artifact): bundled model.py "
                   f"({len(bundle.splitlines())} lines) carries every top-level "
@@ -122,6 +145,23 @@ def main() -> int:
         print(f"PASS: bundle carries the current runtime "
               f"({len(runtime.splitlines())} lines) verbatim "
               f"[profile: {profile}]")
+        return 0
+    # Same CODE, different baked DEFAULTS is not drift. A rebundle preserves
+    # the defaults the artifact shipped with (runtime_profile.resolve_runtime),
+    # so any tracked VQ_* flag can legitimately differ from the repo's current
+    # value -- not just the bf16 pair the profile check knows about. Report it
+    # in full rather than failing: "runs the current code with these defaults"
+    # is a different claim from "runs the current code", and a reader of this
+    # gate needs to see which flags, not just that it passed.
+    ok, deltas = runtime_profile.matches_modulo_flags(bundle, runtime)
+    if ok:
+        print(f"PASS: bundle carries the current runtime "
+              f"({len(runtime.splitlines())} lines) verbatim, with "
+              f"{len(deltas)} baked default(s) differing from the repo:")
+        for flag, (have, repo) in sorted(deltas.items()):
+            print(f"    {flag:26s} bundle={have!r}  repo={repo!r}")
+        print("  These are the values the artifact SHIPPED with and were "
+              "preserved deliberately. Any runtime claim must name them.")
         return 0
     print(f"FAIL: bundled model.py ({len(bundle.splitlines())} lines) does not "
           f"contain the current runtime ({len(runtime.splitlines())} lines). "

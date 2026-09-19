@@ -13,6 +13,7 @@ fails at load with an opaque error.
 
 from vqlab.arch_resolve import ARRAYISH as _ARCH_ARRAYISH
 from vqlab.arch_resolve import COERCE as _ARCH_COERCE
+from vqlab.arch_resolve import PATHWALK as _ARCH_PATHWALK
 from vqlab.arch_resolve import PRELUDE as _ARCH_PRELUDE
 
 SHIM = '''
@@ -29,7 +30,7 @@ import json as _json
 import pathlib as _pathlib
 
 _cfg = _json.load(open(_pathlib.Path(__file__).parent / "config.json"))
-''' + _ARCH_PRELUDE + _ARCH_COERCE + _ARCH_ARRAYISH + '''
+''' + _ARCH_PRELUDE + _ARCH_COERCE + _ARCH_PATHWALK + _ARCH_ARRAYISH + '''
 
 # The dtype the REST of the stack computes in. VQEmbedding decodes in fp16;
 # handing fp16 back into a bf16 model promotes everything downstream to fp32
@@ -43,11 +44,10 @@ _DTYPE = {"bfloat16": mx.bfloat16, "float16": mx.float16,
 
 
 def _reach(root, path):
-    obj = root
-    parts = path.split(".")
-    for c in parts[:-1]:
-        obj = obj[int(c)] if c.isdigit() else getattr(obj, c)
-    return obj, parts[-1]
+    # Layout-tolerant: see _reach_vq above. The literal walk this replaces
+    # broke every artifact whose config paths were written against the other
+    # runtime's module tree.
+    return _reach_vq(root, path)
 
 
 class Model(_arch.Model):
