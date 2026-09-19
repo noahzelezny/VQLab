@@ -178,7 +178,14 @@ def main() -> int:
     from mlx_lm import load
     model, tok = load(a.art)
 
-    arch = type(model).__mro__[1].__module__
+    # First non-mlx.nn class in the MRO. __mro__[1] alone is right for a VQ
+    # BUNDLE (whose Model subclasses the arch's Model) but reports
+    # mlx.nn.layers.base for a stock affine model, where the parent is just
+    # nn.Module -- i.e. it printed nothing useful on exactly the comparator
+    # arms you most need to identify.
+    arch = next((c.__module__ for c in type(model).__mro__
+                 if not c.__module__.startswith(("mlx.nn", "builtins"))),
+                type(model).__module__)
     import sys as _sys
     print(f"arch={arch}  file={getattr(_sys.modules.get(arch), '__file__', '?')}",
           flush=True)
