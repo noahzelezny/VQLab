@@ -21,6 +21,14 @@ HERE = pathlib.Path(__file__).parent
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--artifact", required=True)
+    ap.add_argument("--runtime", choices=["v1.5", "v2"], default=None,
+                    help="force a runtime profile. Default: keep the one the "
+                         "artifact shipped with.")
+    ap.add_argument("--adopt", default="", metavar="FLAG,FLAG|all",
+                    help="take the REPO's current default for these VQ_* "
+                         "flags instead of preserving the artifact's. See "
+                         "vqlab/runtime_profile.py for why preserving is the "
+                         "default.")
     ap.add_argument("--backup-suffix", default=".pre-resync",
                     help="suffix for the previous model.py (empty = none)")
     a = ap.parse_args()
@@ -37,8 +45,16 @@ def main() -> int:
     from vqlab.dense_shim import SHIM
     if "class Model" not in SHIM or "VQLinear" not in SHIM:
         raise SystemExit("FAIL: dense shim is missing class Model / VQLinear.")
-    model_py = ((HERE / "vq_switch.py").read_text()
-                + (HERE / "vq_dense.py").read_text() + SHIM)
+    import vqlab.runtime_profile as rp
+    runtime = ((HERE / "vq_switch.py").read_text()
+               + (HERE / "vq_dense.py").read_text())
+    dst0 = art / "model.py"
+    runtime, report = rp.resolve_runtime(
+        dst0.read_text() if dst0.exists() else None, runtime,
+        profile=a.runtime, adopt=tuple(f for f in a.adopt.split(",") if f))
+    for line in report:
+        print(line)
+    model_py = runtime + SHIM
     # never ship a model.py that cannot parse (build_dense_vq's own rule)
     compile(model_py, "model.py", "exec")
 
