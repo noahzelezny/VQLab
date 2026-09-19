@@ -81,7 +81,44 @@ _VQ_KEYS = (list(_cfg.get("vq_modules", {}))
             + list((_cfg.get("vq_ple") or {}).get("keys", [])))
 _VLM_LAYOUT = any(_k.startswith("language_model.") for _k in _VQ_KEYS)
 _VISION_SERVABLE = bool(_MULTIMODAL and (_VLM_LAYOUT or not _VQ_KEYS))
-_arch = _resolve_arch(_cfg["model_type"], _VISION_SERVABLE)
+
+
+def _loading_runtime():
+    """Which runtime is importing this file, by inspecting the import stack.
+
+    For several families ONE binding cannot serve both runtimes, so the
+    bundle must follow its caller rather than pick once. qwen3_5 / qwen3_5_moe
+    are the proof: mlx_vlm's arch builds its own cache types and its linear
+    attention indexes them (`cache[0]`), while mlx_lm's loader hands it a bare
+    KVCache -- so an mlx_vlm-bound bundle serves vision correctly and then
+    dies on mlx_lm's text generation with `'KVCache' object is not
+    subscriptable`. Binding once, either way, breaks one of the two.
+
+    The loader that imports us is on the stack at import time, and that is the
+    runtime whose conventions will be used for the rest of this model's life.
+    sys.modules is NOT a usable signal: a process that merely imported mlx_vlm
+    earlier would drag an mlx_lm load onto the wrong arch."""
+    import inspect as _inspect
+    import pathlib as _pl
+    for _f in _inspect.stack():
+        # PurePath.parts, not string surgery on separators -- the first cut of
+        # this did a backslash replace and shipped a SyntaxError into the
+        # bundle, which the MoE bundler wrote without compiling it.
+        _parts = _pl.PurePath(_f.filename).parts
+        if "mlx_vlm" in _parts:
+            return "mlx_vlm"
+        if "mlx_lm" in _parts:
+            return "mlx_lm"
+    return None
+
+
+_LOADER = _loading_runtime()
+if _VISION_SERVABLE and _LOADER == "mlx_lm":
+    # Loaded for TEXT by mlx_lm: take its arch. Vision is unreachable on this
+    # path and always was; text serving is what mlx_lm is being asked for.
+    _arch = _resolve_arch(_cfg["model_type"], False)
+else:
+    _arch = _resolve_arch(_cfg["model_type"], _VISION_SERVABLE)
 
 # Re-export the base module's WHOLE public surface, not a hand-listed few.
 # A VLM base is read for far more than Model: mlx_vlm's loader reaches for
