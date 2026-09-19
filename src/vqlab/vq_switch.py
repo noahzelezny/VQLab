@@ -3790,6 +3790,41 @@ def _memo_put(key, value):
     _ROUTING_MEMO[key] = value
 
 
+# F128: `np.array(idx_flat)` forces the whole pending lazy graph, and
+# __call__ pays it ONCE PER LINEAR PER LAYER -- n=120 on a 40-layer 35B, i.e.
+# 120 pipeline drains per forward. Host TIME there is ~0 (the numpy path is
+# 0.3% of a forward, measured), but a drain serializes CPU and GPU and
+# forbids overlap, which is a cost no Python profiler can see.
+#
+# mlx-lm's SwitchGLU routes ONCE and hands the SAME `indices` object to
+# up_proj, gate_proj and down_proj, so drains 2 and 3 of every three
+# recompute a byte-identical array. This memo keys on that object's identity
+# and holds a reference, which keeps the id valid (an id can be reused only
+# after the object dies). Values are identical by construction: the hit is
+# returned only when the SAME object is presented.
+#
+# Off by default until an A/B says otherwise -- a performance fix is an
+# instrument change until measured (F120).
+_IDX_MEMO = os.environ.get("VQ_IDX_MEMO", "0") == "1"
+_IDX_CACHE: "dict[int, tuple]" = {}
+_IDX_CACHE_MAX = 4
+
+
+def _idx_np(indices, idx_flat):
+    """Host copy of the routing indices, reused across the three linears."""
+    if not _IDX_MEMO:
+        return np.array(idx_flat, copy=False)
+    key = id(indices)
+    hit = _IDX_CACHE.get(key)
+    if hit is not None and hit[0] is indices:
+        return hit[1]
+    arr = np.array(idx_flat, copy=False)
+    if len(_IDX_CACHE) >= _IDX_CACHE_MAX:
+        _IDX_CACHE.pop(next(iter(_IDX_CACHE)))
+    _IDX_CACHE[key] = (indices, arr)     # the ref is what makes id() safe
+    return arr
+
+
 def _gemmseg_prefill(xsrc, src_rows, idx_sorted_np, codes, codebook, scales,
                      pack_bits, IN):
     """One fused dispatch per linear: y[sorted_row, OUT] with dequant
@@ -4253,7 +4288,7 @@ class VQSwitchLinear(nn.Module):
                        self["codes"], self["codebook"], self["vq_scales"],
                        pack_bits=pb)
         else:
-            idx_np = np.array(idx_flat, copy=False)
+            idx_np = _idx_np(indices, idx_flat)
             # Fused-gather form: xf above is broadcast_to(x).reshape — a
             # stride-0 axis forced into a FULL [N, IN] copy, and the
             # unsorted branch then copies it AGAIN via xf[order]. Both are
