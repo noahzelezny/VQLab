@@ -5,7 +5,7 @@ Rule III.11 says generate one token through the shipping runtime before
 calling anything releasable. `smoke` does that -- for TEXT. Nothing in the
 gate set had ever put an image through a multimodal artifact, and on
 2026-09-19 that let 17 of 20 shipped multimodal bundles carry a vision tower
-the runtime could not reach (F151): the shim resolved a TEXT-ONLY base arch
+the runtime could not reach (F153): the shim resolved a TEXT-ONLY base arch
 that happened to share its `model_type` with mlx_vlm's multimodal one. Every
 tensor was present, `check-release` and `check-bundle` passed, and `smoke`
 passed -- because a text-only arch serves text perfectly well.
@@ -14,7 +14,7 @@ Three checks, cheapest first, so a broken bundle fails before anything loads:
 
   1. SURFACE. Import the artifact's own model.py and demand the multimodal
      surface (TextConfig / VisionConfig / VisionModel). This alone catches
-     F151 in about a second and needs no weights, which is why it is also
+     F153 in about a second and needs no weights, which is why it is also
      what `--static` runs on models too large for this box.
 
   2. LOAD. Load through mlx_vlm and confirm the instantiated model really
@@ -107,7 +107,7 @@ def main() -> int:
             "FAIL: this artifact declares a vision tower but its bundle "
             f"exposes no {'/'.join(missing)}. The shim resolved a TEXT-ONLY "
             "base arch, so the tower on disk is unreachable and mlx_vlm's "
-            "loader will die in update_module_configs. This is F151 -- "
+            "loader will die in update_module_configs. This is F153 -- "
             "rebundle with a vqlab that resolves the arch by the artifact's "
             "modalities.")
     print("surface          : TextConfig + VisionConfig + VisionModel present")
@@ -122,7 +122,7 @@ def main() -> int:
         # model.visual (qwen HF layout) and embed_vision -- and the first cut
         # of this gate listed three of them and reported the GLM rungs as
         # having ZERO vision tensors. Hardcoding a name list is the same
-        # brittleness that produced F151; do not reintroduce it.
+        # brittleness that produced F153; do not reintroduce it.
         n_vis = sum(any("vis" in seg for seg in k.split("."))
                     for k in wm)
         print(f"vision tensors   : {n_vis}")
