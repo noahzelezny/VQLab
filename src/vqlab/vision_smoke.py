@@ -85,6 +85,19 @@ def _tower_only(art, mod, cfg, a):
     pref = pref[:pref.rfind(".") + 1] if "." in pref else ""
     flat = {(k[len(pref):] if pref and k.startswith(pref) else k): v
             for k, v in weights.items()}
+    # Run the tower's own sanitize() first, exactly as BOTH real loaders do
+    # (mlx_vlm.utils.load_model via sanitize_weights; exo's worker via
+    # VisionModel.sanitize for model.visual.* keys). The first cut of this
+    # instrument called load_weights directly, saw HF-layout patch-embed
+    # weights fail in conv3d, and reported a "transposed tower" defect on 8
+    # artifacts. Measured afterwards: sanitize() maps BOTH layouts to the
+    # same channels-last tensor, so no real loader ever saw that failure.
+    # The instrument had bypassed the step that made the artifact correct.
+    # A gate that does not run the loader's code path reports the gate's
+    # bugs as the artifact's (F137, F153, and now this).
+    _san = getattr(tower, "sanitize", None)
+    if _san is not None:
+        flat = _san(flat)
     try:
         tower.load_weights(list(flat.items()), strict=False)
     except Exception as exc:

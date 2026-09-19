@@ -1,30 +1,24 @@
-#!/usr/bin/env python3
-"""Check -- and repair -- the MEMORY LAYOUT of a grafted vision tower.
+"""Report -- and optionally rewrite -- the on-disk LAYOUT of a grafted tower's
+patch-embed conv. A DIAGNOSTIC, not a defect detector.
 
-mlx stores a vision patch-embed convolution CHANNELS-LAST: HF ships
-(out, C, T, H, W) and mlx wants (out, T, H, W, C). `graft_vision.py` has
-carried a `--permute-conv5` flag for this since the Qwen3.5-35B pair was
-measured, where exactly one tensor of 333 -- patch_embed.proj.weight --
-needs it. The flag is OPT-IN, and a graft that omits it writes a tower that
-is complete, correctly named, and silently transposed.
+mlx wants a 5-D patch-embed conv channels-last, (out, T, H, W, C); HF ships
+(out, C, T, H, W). Eight artifacts (397B x4, Flash-Next x4) carry the HF form
+on disk under `model.visual.*`; the 35B, 27B and GLM rungs carry channels-last.
 
-That is what happened. Measured 2026-09-19 across the fleet: the four 397B
-rungs and the four Flash-Next rungs carry (1152, 3, 2, 16, 16) -- HF layout.
-The 35B, 27B and GLM rungs carry the permuted form and are correct. Eight
-artifacts, all grafted without the flag.
+WHAT THIS IS NOT (F161): it is NOT a bug. Both real loaders -- mlx_vlm's
+`sanitize_weights` and exo's worker calling `VisionModel.sanitize` -- map BOTH
+layouts to the same channels-last tensor, measured to produce the identical
+embedding. The first cut of this tool called the HF form "transposed ...
+computes garbage" because `vision-smoke --tower-only` had bypassed sanitize()
+and failed in conv3d; the instrument's bypass was reported as the artifact's
+defect, eight shards were needlessly rewritten, and all eight were then
+restored to the published bytes. Do not "fix" a layout on this tool's say-so.
 
-Nothing caught it. check_vision.py counts tensors, check_release checks the
-index, and the new vision-smoke surface arm proves the tower is REACHABLE,
-not that it is right. A layout error is invisible to every byte-level gate by
-construction: the bytes are all present and the names are all correct.
-
-Repair is a permutation of one tensor. No refit, no re-quantization: the
-vision shard is rewritten with that tensor transposed and every other tensor
-copied through unchanged.
+Keep it for what it is good for: knowing which form an artifact carries before
+writing code that reads the tensor directly (anything that skips sanitize()).
 
     vqlab vision-layout <artifact>          # report
-    vqlab vision-layout <artifact> --fix    # rewrite the shard in place
-    vqlab vision-layout <artifact> --fix --out <dir>   # write elsewhere
+    vqlab vision-layout <artifact> --fix    # rewrite to channels-last (rarely wanted)
 """
 import argparse
 import json
@@ -86,11 +80,11 @@ def main() -> int:
         print("\nPASS: every 5-D vision conv weight is channels-last.")
         return 0
     if not a.fix:
-        print(f"\nFAIL: {len(bad)} tensor(s) in HF layout. The tower is "
-              "complete and correctly named but its patch embedding is "
-              "transposed, so it computes garbage (or raises a conv shape "
-              "error). Re-run with --fix, or re-graft with --permute-conv5.")
-        return 1
+        print(f"\nNOTE: {len(bad)} tensor(s) in HF layout. Both real loaders "
+              "sanitize this to channels-last on load (F161), so this is a "
+              "layout REPORT, not a defect. Only code that reads the tensor "
+              "without sanitize() needs to care. --fix rewrites it anyway.")
+        return 0
 
     dest = pathlib.Path(a.out) if a.out else art
     shards = sorted({f[1] for f in bad})
