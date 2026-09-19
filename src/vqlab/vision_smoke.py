@@ -34,6 +34,7 @@ are not a deterministic instrument and III.11 does not need them to be.
 import argparse
 import importlib.util
 import json
+import os
 import pathlib
 import sys
 
@@ -60,6 +61,73 @@ def _load_bundle_module(art):
     return mod
 
 
+def _tower_only(art, mod, cfg, a):
+    """Run the probe image through the artifact's OWN vision tower weights."""
+    import mlx.core as mx
+    from PIL import Image
+
+    vcfg = mod.VisionConfig.from_dict(cfg["vision_config"])
+    tower = mod.VisionModel(vcfg)
+
+    # Pull just the tower's tensors out of the shards they live in.
+    wm = json.loads((art / "model.safetensors.index.json").read_text())["weight_map"]
+    keys = [k for k in wm if any("vis" in seg for seg in k.split("."))]
+    shards = sorted({wm[k] for k in keys})
+    print(f"tower tensors    : {len(keys)} across {len(shards)} shard(s)")
+    weights = {}
+    for sh in shards:
+        data = mx.load(str(art / sh))
+        for k in keys:
+            if wm[k] == sh:
+                weights[k] = data[k]
+    # strip the leading prefix the tower module does not carry itself
+    pref = os.path.commonprefix([k for k in keys])
+    pref = pref[:pref.rfind(".") + 1] if "." in pref else ""
+    flat = {(k[len(pref):] if pref and k.startswith(pref) else k): v
+            for k, v in weights.items()}
+    try:
+        tower.load_weights(list(flat.items()), strict=False)
+    except Exception as exc:
+        raise SystemExit(f"FAIL: tower weights do not fit mlx_vlm's "
+                         f"VisionModel for this config: {exc}")
+    mx.eval(tower.parameters())
+
+    img = a.image or _probe_image(
+        pathlib.Path(__import__("tempfile").mkdtemp()) / "probe.png")
+
+    # Use the ARTIFACT'S OWN processor, not a hand-rolled tensor. Qwen towers
+    # take patch sequences plus a grid_thw describing them; inventing that
+    # shape by hand tests my arithmetic, not the artifact.
+    from transformers import AutoProcessor
+    proc = AutoProcessor.from_pretrained(str(art), trust_remote_code=True)
+    px = proc.image_processor(images=[Image.open(img).convert("RGB")],
+                              return_tensors="np")
+    pixel_values = mx.array(px["pixel_values"])
+    grid = px.get("image_grid_thw")
+    if grid is None:
+        raise SystemExit("FAIL: this processor produced no image_grid_thw; "
+                         "cannot drive a Qwen-style tower without it.")
+    grid = mx.array(grid)
+    print(f"processor        : pixel_values={tuple(pixel_values.shape)} "
+          f"grid_thw={grid.tolist()}")
+    out = tower(pixel_values, grid)
+    out = out[0] if isinstance(out, (tuple, list)) else out
+    mx.eval(out)
+    finite = bool(mx.all(mx.isfinite(out)))
+    spread = float(mx.std(out))
+    print(f"tower output     : shape={tuple(out.shape)} finite={finite} std={spread:.4f}")
+    if not finite or not (spread > 1e-6):
+        raise SystemExit("FAIL: tower produced a degenerate embedding "
+                         "(non-finite, or constant) -- the weights loaded but "
+                         "the tower is not computing.")
+    print("\nPASS (TOWER-ONLY): this artifact's own vision weights load into "
+          "mlx_vlm's VisionModel and produce a finite, non-constant embedding "
+          "from a real image.\nNOT III.11 EVIDENCE: the language model was "
+          "never loaded and the merge was never exercised. Run the full gate "
+          "on hardware that fits this artifact before calling it releasable.")
+    return 0
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("artifact")
@@ -72,6 +140,18 @@ def main() -> int:
                          "too large for this box. States in its own output "
                          "that the graph was NOT exercised, because a static "
                          "pass is not the III.11 evidence.")
+    ap.add_argument("--tower-only", action="store_true",
+                    help="load and run ONLY the vision tower (a few hundred "
+                         "MB), not the language model. For artifacts no box "
+                         "here fits: the 397B rungs are 112-155 GiB against "
+                         "96 GiB on both this Mac and the M3, and exo's "
+                         "2-node pipeline serves text through mlx_lm, so "
+                         "neither --cluster-smoke nor a local load can put an "
+                         "image through them. The tower runs BEFORE the LM "
+                         "and is independent of it, so this exercises the "
+                         "real weights that were unreachable -- but it does "
+                         "NOT test the merge into the LM, and it is not "
+                         "III.11 evidence. It says so in its own output.")
     ap.add_argument("--max-tokens", type=int, default=32)
     a = ap.parse_args()
 
@@ -136,6 +216,9 @@ def main() -> int:
               "loaded and no image reached the graph. Run without --static on "
               "a box that fits this artifact before calling it releasable.")
         return 0
+
+    if a.tower_only:
+        return _tower_only(art, mod, cfg, a)
 
     # ---- 2. LOAD ----------------------------------------------------------
     import mlx.core as mx
