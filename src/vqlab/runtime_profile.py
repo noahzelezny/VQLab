@@ -163,3 +163,31 @@ def resolve_runtime(shipped_text, new_text, profile=None, adopt=()):
         report.insert(0, f"runtime defaults unchanged from shipped "
                          f"({len(carried)} flags checked)")
     return text, report
+
+
+def matches_modulo_flags(bundle_text, runtime_text):
+    """(ok, flag_deltas) -- does `bundle_text` carry `runtime_text` verbatim
+    once both are normalised to the SAME VQ_* env defaults?
+
+    The two-profile check this replaces tolerated exactly the bf16-I/O pair,
+    which was the only knob a published artifact was expected to differ on.
+    That stopped being true when rebundling began PRESERVING an artifact's
+    shipped defaults (see resolve_runtime): a bundle can now legitimately
+    differ from the repo on any tracked flag, and the old gate read that as
+    the runtime having drifted -- the same FAIL text a genuinely stale bundle
+    gets. The distinction that matters is CODE vs DEFAULTS, so normalise the
+    defaults away and compare the code.
+
+    A flag delta is NOT waved through: it comes back so the caller can print
+    every one. "Runs the current code with these defaults" is a different
+    claim from "runs the current code", and the gate must say which.
+    """
+    want = flags_of(runtime_text)
+    norm_bundle = apply_flags(bundle_text, want)
+    norm_runtime = apply_flags(runtime_text, want)
+    if norm_runtime not in norm_bundle:
+        return False, {}
+    have = flags_of(bundle_text)
+    deltas = {k: (have[k], want[k]) for k in want
+              if k in have and have[k] != want[k]}
+    return True, deltas
