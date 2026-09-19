@@ -4361,3 +4361,58 @@ INSTRUMENT: `vqlab host-attrib`. Attribution BEFORE deletion on purpose --
 F41 carries an INVALID ARM from the other order (stubbing np.argsort to
 identity ran SLOWER; it changed the kernel's access pattern and attributed
 nothing). It marks sync rows and refuses to let their self-time read as work.
+
+## F129 (2026-09-18) — THE SYNC HYPOTHESIS IS DEAD: cutting 120 device drains per forward to 40 is bit-identical and measures NOTHING, at 2048 and 8192 tokens. Our Python layer is now exonerated end to end, and F41's 12-13% belongs to the GPU side.
+
+PREDICTION (F128, recorded as a hypothesis not a finding): `__call__` forces a
+device sync once per linear per layer -- 120 pipeline drains per forward --
+and while host time there is ~0, a drain serializes CPU and GPU and forbids
+overlap, which would appear exactly where F41 found its 12-13% and nowhere a
+profiler looks.
+
+FIX BUILT. mlx-lm's SwitchGLU routes ONCE and hands the SAME `indices` object
+to up_proj, gate_proj and down_proj, so drains 2 and 3 of every three
+recompute a byte-identical host array. `_idx_np` memoizes on that object's
+identity while holding a reference (which is what makes `id()` safe), behind
+`VQ_IDX_MEMO`.
+
+MEASURED. 35B-A3B-VQ-3.4bpw, alternating arms, one process per arm, scratch
+artifact with the patch lifted into its own bundle:
+
+    tokens  arm          syncs   median (2 runs)      min (2 runs)
+    2048    idx_memo=0    120    0.8236 / 0.8286    0.8142 / 0.8145
+    2048    idx_memo=1     40    0.8184 / 0.8256    0.8123 / 0.8145
+    8192    idx_memo=0    120    3.8589 / 3.9292    3.8403 / 3.8874
+    8192    idx_memo=1     40    3.8710 / 3.8778    3.7867 / 3.7965
+
+Checksums BIT-IDENTICAL across all eight runs. **The within-arm spread at 8192
+(3.8589 vs 3.9292, 1.8%) EXCEEDS the between-arm difference**, which is the
+whole verdict: this is noise, not a small win. Deleting two thirds of the
+forward's device syncs is free because it was already free.
+
+MECHANISM, in hindsight. The FIRST sync per layer drains the entire pending
+graph; syncs 2 and 3 then have nothing left to wait on. The hypothesis assumed
+every drain costs something. Only the first one does, and that one is
+structural -- the tile metadata needs per-expert counts on the host.
+
+**WHAT THIS SETTLES.** With F128 (the whole numpy path is 0.3%) and this, the
+VQ module's PYTHON layer is exonerated end to end: there is no meaningful host
+cost to reclaim. F41's "14 points of host/dispatch/gather/cast, addressable
+without touching Metal" is wrong on the second clause. The 12-13% is GPU-side
+gather/scatter/cast or mlx dispatch. Anyone hunting it in Python is hunting
+0.3%.
+
+DISPOSITION. `VQ_IDX_MEMO` stays OFF by default -- a change with no measured
+benefit does not ship as one -- and stays in the tree so the finding is
+reproducible, the same treatment F55 gave VQ_D8_SIMDSUM.
+
+METHOD NOTE, and it is the third instance in one lineage. The FIRST A/B of
+this arm reported syncs=120 on BOTH arms: the edit went into
+`src/vqlab/vq_switch.py`, but the artifact executes its OWN bundled `model.py`
+(rule: an artifact ships its runtime), so both arms ran identical code. It was
+caught only because the probe counted SYNCS as well as timing -- had it
+reported wall time alone, "no difference" would have been indistinguishable
+from the real result it later produced. F33 benchmarked RTILE=32 twice, F127
+read one interpreter for two envs, this ran one code path for two arms.
+**Every probe needs a channel that PROVES the arms differ, independent of the
+quantity being measured.**
