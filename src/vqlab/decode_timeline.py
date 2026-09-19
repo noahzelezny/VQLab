@@ -257,6 +257,39 @@ def main() -> int:
                   f"stage {d:7.3f} ms  (cum {t:8.2f})", flush=True)
 
     whole = timed(len(stages) - 1)
+
+    # PAIRED WHOLE -- the control that decides whether a negative drift is
+    # real OVERLAP or just an estimator mismatch. The per-stage deltas come
+    # from timed_pair (two prefixes interleaved in one window); `whole`
+    # above comes from timed (one prefix, best-of-N, its own window). With
+    # paired measurement the deltas do NOT telescope -- each pair has its
+    # own cache and window -- so comparing their sum against an UNPAIRED
+    # whole compares two different estimators, and any bias between them
+    # lands in the drift and looks exactly like overlap.
+    # Measuring (last prefix - first prefix) through timed_pair gives the
+    # whole step MINUS embed under the SAME estimator as the deltas:
+    #   whole_paired ~ sum(deltas)  -> the gap is ESTIMATOR BIAS, not overlap
+    #   whole_paired ~ whole        -> the gap is REAL: stages overlap
+    def timed_pair_span(lo, hi):
+        c = fresh_cache()
+        ba = bb = float("inf")
+        for _ in range(a.reps + 1):
+            for which, kk in ((0, lo), (1, hi)):
+                mx.synchronize()
+                t0 = time.time()
+                out = forward_prefix(kk, c, tokid)
+                mx.eval(out)
+                mx.synchronize()
+                dt = time.time() - t0
+                if which == 0:
+                    ba = min(ba, dt)
+                else:
+                    bb = min(bb, dt)
+        del c
+        return (bb - ba) * 1e3
+
+    span = timed_pair_span(0, len(stages) - 1)
+    whole_paired = span + rows[0][2]     # + embed, which rows[0] carries
     total = sum(d for _, _, d in rows)
     drift = abs(total - whole) / whole * 100
 
@@ -266,11 +299,15 @@ def main() -> int:
             f"\nVOID: GPU ended at {w1:.1f} W (started {w0:.1f}). A foreign "
             "job landed mid-run; discard every number above.")
 
-    print(f"\n  full step (independent)  {whole:8.2f} ms")
+    print(f"\n  full step (unpaired)     {whole:8.2f} ms")
+    print(f"  full step (PAIRED span)  {whole_paired:8.2f} ms"
+          f"   <- same estimator as the deltas")
     print(f"  sum of stage deltas      {total:8.2f} ms   drift {drift:.2f}%")
     floor_pre = -min((d for _n, _k, d in rows), default=0.0)
     noise_frac = floor_pre / whole * 100
     signed = (total - whole) / whole * 100
+    signed_p = (total - whole_paired) / whole_paired * 100
+    est_gap = (whole_paired - whole) / whole * 100
     if abs(signed) <= a.additivity_tol:
         verdict = ("SERIAL: deltas are a clean partition; a stage's number "
                    "is its standalone cost")
@@ -287,11 +324,19 @@ def main() -> int:
                    f"pays a flush the whole run pays once (~"
                    f"{(total-whole)/max(len(rows),1):.3f} ms/stage). Stage "
                    "costs are UPPER bounds; the RANKING is unaffected")
+    elif abs(signed_p) <= a.additivity_tol:
+        verdict = (f"ESTIMATOR GAP, NOT OVERLAP: against the UNPAIRED whole "
+                   f"the drift is {signed:+.1f}%, but against the PAIRED "
+                   f"whole (same estimator as the deltas) it is only "
+                   f"{signed_p:+.1f}%. The paired and unpaired estimators "
+                   f"differ by {est_gap:+.1f}%; that difference was "
+                   "masquerading as overlap. Deltas ARE a clean partition")
     else:
-        verdict = (f"OVERLAP: the whole step is {-signed:.1f}% SLOWER than "
-                   "the sum of its prefixes, so stages that the prefixes "
-                   "serialize run concurrently in the real step. Treat the "
-                   "deltas as SHARES, not standalone costs")
+        verdict = (f"OVERLAP: the sum of prefixes is {-signed:.1f}% under "
+                   f"the unpaired whole AND {-signed_p:.1f}% under the "
+                   "PAIRED whole, so it is not an estimator artefact -- "
+                   "stages the prefixes serialize run concurrently in the "
+                   "real step. Treat the deltas as SHARES, not costs")
     print(f"  serial-execution check: {verdict}")
     if a.require_clean and abs(signed) > a.additivity_tol:
         raise SystemExit("\nREFUSING (--require-clean): drift exceeds "
