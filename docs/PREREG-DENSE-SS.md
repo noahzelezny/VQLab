@@ -119,8 +119,9 @@ Flash-Next bf16 teachers; the 27B's was never archived, so AGENTS.md's
 
 So the existing q27 caches are SCOREABLE but UNREPRODUCIBLE: no new corpus, no
 new seq_len, no new chunk. Every 27B SS result therefore carries the N=512
-caveat until someone spends a ~54 GB re-download, and whoever does should
-archive the teacher on the way past.
+caveat until someone spends a ~54 GB re-download. Per Noah, that is simply the
+answer when it is needed -- re-download from HF -- and not a reason for
+archival guards.
 
 **If the caveat ever becomes load-bearing** — i.e. a decision turns on it —
 the cheaper alternative is to re-run this on a family whose teacher SURVIVES
