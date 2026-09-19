@@ -4640,3 +4640,72 @@ alloc-sweep` plus `geo-build` can construct the twin; the rate model in
 `price.py` can pick the pair.
 
 Registered in advance at docs/PREREG-DECODE-BYTES.md (addendum).
+
+## F133 (2026-09-18) — THE mx.compile FUSION LEVER IS DEAD ON THE HYPER-CONNECTIONS -- because they are 8-bit affine, and a quantized matmul is already one fused kernel. Measured +0.69% SLOWER against 0.06% drift. The same chain in bf16 compiles 1.12x faster, which is what makes the null informative.
+
+ARTIFACT:   TheDrainFlorist--Qwen3.8-Flash-Next-VQ-2.1bpw (v2, 2026-09-17)
+INSTRUMENT: vqlab decode-ladder --arm hc-compile, 200 tokens best-of-3, one process per arm, baselines bracketing, idle M3 gated on gpu_power<8W; plus a standalone single-module micro-bench whose chain-split half is INVALID (see body)
+PREDICTION (pre-registered): Pre-registered in-session before the run, verbatim: 'those ~1,200 dispatches are mostly small elementwise ops in fixed chains, which is precisely what mx.compile fuses... with the checksum channel INVERTED: a deletion arm must change the checksum, whereas a valid optimization arm must leave it bit-identical.' The implied prediction was a material speedup toward F131's 22.87 ms ceiling.
+MEASURED:   hc-compile 51.946 ms/tok vs baselines 51.606 / 51.576 (mean 51.591) = +0.69%, against 0.06% drift -- a small REAL regression, ~11x drift. Checksum 2747988 on all three arms, bit-identical. Isolated single module, paired: bf16 chain compiles 1.12x FASTER (413.2 -> 369.1 us), affine 8-bit chain compiles 0.95x SLOWER (409.6 -> 430.5 us).
+VERDICT:    FALSIFIED
+
+**THE ARM.** `decode-ladder --arm hc-compile` re-types each of the 97
+GatedResidual modules onto a subclass whose __call__ is an mx.compile of the
+original. Weights become trace constants, which is valid at inference.
+
+| arm | ms/tok | spread | vs mean baseline |
+|---|---|---|---|
+| baseline | 51.606 | 0.3% | - |
+| hc-compile | 51.946 | 0.2% | **+0.69%** |
+| baseline (drift) | 51.576 | 1.1% | drift **0.06%** |
+
+Checksum 2747988 on all three -- bit-identical, as a numerics-preserving arm
+must be. Drift is 0.06%, so the +0.69% is ~11x drift: a small REAL regression,
+not noise. That it regressed rather than doing nothing is the weak evidence
+that compilation happened at all.
+
+**WHY THE CHECKSUM CHANNEL DOES NOT CLOSE THIS ARM.** For a DELETION arm the
+checksum proves the edit took. For a REPLACEMENT arm it is identical BY
+DESIGN, so it cannot distinguish "fusion does not help" from "mx.compile
+silently no-op'd and I measured baseline twice". F129's rule needs a different
+channel for replacement arms, and I did not have one. This is the gap, stated
+rather than papered over.
+
+**THE ISOLATION BENCH, AND ITS OWN DEFECT.** One GatedResidual at decode shape,
+2000 iterations. The CHAIN SPLIT IS INVALID and is discarded: the parts sum to
+1667 us against a 410 us whole, and `inject 10240->4` (a projection to FOUR
+outputs) measured 475 us, slower than the entire chain. The harness measures
+per-mx.eval round-trip overhead, not the ops. Recorded because the
+parts-exceed-whole contradiction is what makes it obviously invalid, and a
+future micro-bench must amortize many ops per eval.
+
+What SURVIVES is the paired compile ratio, where that overhead cancels across
+both arms of the same harness:
+
+| chain dtype | plain | mx.compile | ratio |
+|---|---|---|---|
+| bf16/fp16 | 413.2 us | 369.1 us | **1.12x HELPS** |
+| affine 8-bit | 409.6 us | 430.5 us | **0.95x HURTS** |
+
+**THE MECHANISM, and it is E70's again.** The artifact's hyper-connection
+linears are affine 8-bit. A quantized matmul is already a single fused kernel,
+so there is nothing left for mx.compile to fuse and the wrapper is pure cost.
+mx.compile helps the SAME chain in bf16 by 1.12x, which is why the arm was
+worth running and why the null is informative rather than empty. Compare E70
+(the fused row-gather prefill lever does not exist -- MLX already fuses it) and
+F62 (stream_generate already overlaps host graph-building).
+
+**WHAT THIS CLOSES.** F131's 22.87 ms is NOT reclaimable dispatch overhead.
+The hyper-connections are the largest decode consumer, and the cheap lever on
+them is dead.
+
+**WHAT REMAINS OPEN.** The 22.87 ms is then real work: 97 modules x two
+10240x320 quantized GEMVs at batch 1, plus a grouped RMSNorm and an
+elementwise tail on a residual stream hc_count=4 makes 4x wider than hidden.
+The untested hypothesis, and it inverts the usual instinct: at B=1 with these
+skinny shapes the 8-BIT PATH MAY BE SLOWER THAN bf16, because the dequant is
+not amortized over any batch. The hc weights are only 0.682 GB/token, so
+de-quantizing them is affordable in bytes. That arm needs a fixed micro-bench
+first (many ops per eval), then a whole-model A/B with the checksum expected
+to MOVE (dtype change is not numerics-preserving, and per F120 a perf fix is
+an instrument change until an A/B says otherwise).
