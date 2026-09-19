@@ -26,6 +26,7 @@ COMMANDS = {
     "stream-convert": ("stream_convert.py", "streaming affine convert / struct base for models bigger than RAM"),
     "splice-ple": ("splice_ple.py", "splice VQ PLE codes into a packed artifact"),
     "pack-dense": ("pack_dense.py", "pack a dense VQ artifact"),
+    "unpack-dense": ("unpack_dense.py", "diagnostic twin with PLAIN codes: isolates PACKING from every other variable (F141)"),
     # assembly
     "build-dense": ("build_dense_vq.py", "splice dense VQ fits into a quantized base -> runnable artifact"),
     "graft": ("graft_vision.py", "graft the bf16 vision tower into an artifact"),
