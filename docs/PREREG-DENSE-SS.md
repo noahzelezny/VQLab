@@ -100,3 +100,30 @@ CAVEAT to carry into the finding: forcing the fused path at N=512 is NOT the
 shipped configuration. It is the only way to put the SS reduction under the
 referee without building a chunk<=32 teacher cache, and the numbers it
 produces price the REDUCTION, not the shipped scoring path.
+
+
+---
+
+## Why the clean (chunk<=32) version cannot be run — 2026-09-18
+
+The properly-gated measurement needs a teacher cache built at chunk <= 32, so
+the fused decode gate opens naturally instead of being forced. **That cache
+cannot be built: the bf16 27B teacher is gone.**
+
+`teacher_caches_27b/*/meta.json` names
+`Mlx_Models/hub/models--Qwen--Qwen3.8-27B/snapshots/1d4bf0f2...`, which still
+holds 19 `.safetensors` entries and **0 non-empty shards** — the blobs were
+reclaimed. `/Volumes/Thunderbay HDD/Teacher Models/` archives only the 35B and
+Flash-Next bf16 teachers; the 27B's was never archived, so AGENTS.md's
+"teachers are archived, not re-downloaded" policy silently did not cover it.
+
+So the existing q27 caches are SCOREABLE but UNREPRODUCIBLE: no new corpus, no
+new seq_len, no new chunk. Every 27B SS result therefore carries the N=512
+caveat until someone spends a ~54 GB re-download, and whoever does should
+archive the teacher on the way past.
+
+**If the caveat ever becomes load-bearing** — i.e. a decision turns on it —
+the cheaper alternative is to re-run this on a family whose teacher SURVIVES
+(35B or Flash-Next), where a chunk<=32 cache can simply be built. Those are
+MoE, so they would also answer the MoE question this work has left open. That
+is probably the better next experiment than reviving the 27B.
