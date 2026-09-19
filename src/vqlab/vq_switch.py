@@ -2066,7 +2066,7 @@ _SRC_DENSE_PACKED_D2_DEVX = _dense_devx(
 _DENSE_DEVX = os.environ.get("VQ_DENSE_DEVX", "1") != "0"
 
 
-# --- dense simd_sum twins: OFF BY DEFAULT, and they must stay that way -----
+# --- dense simd_sum twins: ON BY DEFAULT since 2026-09-19 (F148) ----------
 # The dense reduction text is character-identical to the packed-d8 one, so
 # arc 4's simd_sum rewrite applies verbatim: instead of a 32-step serial
 # `acc = fma(srow[i], simd_shuffle(gacc, i), acc)` chain, each lane scales its
