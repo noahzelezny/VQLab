@@ -151,3 +151,52 @@ geo-build two artifacts byte-identical everywhere except those N. F135 gives
 this a sharper target than law hygiene: it would isolate whether the
 threadgroup cap is the cause of the 1.6-2.2x efficiency spread, or merely
 correlated with it.
+
+
+---
+
+# PREREG — decomposing the VQ byte-efficiency deficit (registered 2026-09-18,
+# before any arm is built)
+
+F135 measured VQ decode at 259 (d4) and 352 (d2) GB/s against affine's 574 on
+the same dense runtime. Its cap explanation is CORRECTED and withdrawn. Two
+mechanisms are now on the table and they are NOT the same:
+
+* **E14x already measured the d2/threadgroup case** (model.py,
+  `_SRC_FUSED_D2_U32` comment): 128 GB/s vs stock `gather_qmm` at 292 GB/s on
+  the same shape -- a 2.3x kernel-level gap that matches F135's 2.2x at model
+  level, by an independent method. It ruled out latency AND occupancy by arm
+  (the simdgroup-per-row twin buys 1.01-1.09x while launching 32x the threads)
+  and named the cause: **scalar byte loads**. The fix shipped for d2.
+* **d4 is a different case.** Its codebook is DEVICE-resident by design, so
+  E14x's "no dependent device round-trip per code" does not apply.
+
+## Predictions
+
+* **Q1.** A gather-deletion arm (read the code, then use a CONSTANT centroid
+  instead of `codebook[code]`, keeping code reads and the MAC) removes MORE
+  time on the d4 rung than on the d2 rung, because only d4 pays the device
+  round-trip. If the two arms remove the SAME fraction, residency is not the
+  d4 story and the deficit is load width at both.
+* **Q2.** An unpack-deletion arm (read codes as byte-aligned, skip bit
+  extraction, keep the gather) is worth MORE on the 12-bit d4 rung than on the
+  9-bit d2 rung -- neither is byte-aligned, but 12-bit spans words more often.
+* **Q3.** Neither arm alone closes the gap to affine's 574 GB/s. Recorded so
+  that a partial result is not read as the whole answer.
+* **Q4 (falsifier for the whole framing).** If BOTH deletion arms are small
+  and the gap persists, then the deficit is in the MAC/accumulate structure,
+  not in fetching codes at all, and the F63 conclusion ("~6% irreducible
+  fetch") was measuring the wrong term for decode.
+
+## Method notes, paid for tonight
+
+* The arms are METAL SOURCE edits, not Python stubs -- the gather is a line of
+  kernel source. Every arm must print the kernel name it actually built, since
+  `dense_fits`/`_resolve_kernel` choose among many and a silently different
+  path is the F129 defect in a new costume.
+* All arms produce WRONG OUTPUT; the checksum must MOVE (deletion), unlike a
+  replacement arm where it must not.
+* One process per arm, interleaved, baselines bracketing, gpu_power gate
+  before AND after (a foreign job voided a whole bench tonight at 146 W).
+* Quote ratios from one session; batch-1 absolutes drift ~3.7% thermally
+  across a run while the same arm at 4096 is flat to 0.5%.

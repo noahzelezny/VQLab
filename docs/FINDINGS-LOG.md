@@ -4834,6 +4834,47 @@ the old code -- the F129 code-skew hazard, in a new form.
 
 ## F135 (2026-09-18) — THE VQ-vs-AFFINE GAP IS NOT ~10%, IT IS A 1.6-2.2x BYTE-EFFICIENCY DEFICIT. The affine comparator reaches 574 GB/s (70% of peak) on the same runtime; VQ reaches 259-352. And the SMALLER rung is the slower one -- VQ-3.9 ships d4-K4096, the geometry Metal rule IV names as failing ON the 32768 B threadgroup cap.
 
+> **CORRECTED 2026-09-18, same session — THE CAP MECHANISM IN THIS ENTRY IS
+> FALSE.** I attributed VQ-3.9's lower efficiency to `d4-K4096` landing on
+> Metal's 32768 B threadgroup cap. The shipped runtime contradicts it. From
+> the artifact's own `model.py`:
+>
+> ```python
+> def dense_fits(K, IN, G, d=2):
+>     if d == 4:
+>         # The d4 kernel keeps the codebook in DEVICE memory and stages only
+>         # a tile of x, so nothing about the shape can exceed the budget.
+>         return G % 16 == 0
+> ```
+>
+> **The d4 dense kernel never consults the cap** — it holds the codebook in
+> device memory by design, at any K. Evaluated: `dense_fits(4096, 5120, 64, 4)
+> = True` and `dense_fits(512, 5120, 64, 2) = True`, so BOTH rungs pass the
+> gate and BOTH get fused kernels. Neither falls back to `_decode_matmul`.
+> Rule IV's "K4096@d4 fails ON the cap" is about the MoE fused kernels, which
+> do cache the codebook in threadgroup memory; I applied a MoE rule to the
+> dense path. Dense and MoE are different runtimes — the rule I quoted as
+> support is the same rule that says not to do that.
+>
+> **The measurements stand; only the mechanism is withdrawn.** 574 / 352 / 259
+> GB/s, the 0.54% drift and the smaller-rung-is-slower inversion are unchanged.
+>
+> **REVISED SUSPECT, and it is a hypothesis with no arm behind it yet:**
+> codebook RESIDENCY, not the cap. d4 reads its codebook from device memory,
+> so each code costs a dependent device round-trip; d2-K512 holds its 13312 B
+> codebook in threadgroup memory and does not. This reconciles with E14x
+> (model.py, `_SRC_FUSED_D2_U32` comment), which ruled out latency
+> specifically because "the 1 KB K=256 codebook is in threadgroup memory, so
+> there is no dependent device round-trip per code" — an argument that does
+> NOT extend to d4. So d2 may be bound by scalar byte loads while d4 pays
+> latency on top. Two different bottlenecks at two residencies, which is why
+> one deletion arm will not price both.
+>
+> Consequently the "refit 3.9 at d4-K2048" lever this entry proposed is NOT
+> supported: at d4 the codebook is device-resident at K2048 too, so lowering K
+> changes the table size, not the residency.
+
+
 ARTIFACT:   TheDrainFlorist--Qwen3.8-27B-VQ-3.9bpw and -4.8bpw vs Qwen--Qwen3.8-27B-8bit (dense, qwen3_5)
 INSTRUMENT: vqlab decode-ladder --arm baseline, 200 tokens best-of-3, one process per arm, interleaved, affine repeated last as drift check (0.54%), idle M3 gated on gpu_power<12W; bytes from vqlab active-bytes
 PREDICTION (pre-registered): Pre-registered in docs/PREREG-DECODE-BYTES.md open items, verbatim: 'The 27B DENSE pair: VQ-3.9 moves 11.750 GB/tok against affine-8bit's 27.229 (2.32x), and the VQ arm carries the LIGHTER trunk (4-bit vs 8-bit), so the confound that inflates the Flash parity number runs the other way. If VQ is not ~2.3x faster at decode, effective bandwidth is the story.'
