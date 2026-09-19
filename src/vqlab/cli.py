@@ -55,6 +55,7 @@ COMMANDS = {
     "selftest": ("selftest.py", "run the real pipeline on a tiny synthetic model"),
     # planning / probes
     "price": ("price.py", "price a size-targeted build before fitting it"),
+    "hc-micro": ("hc_micro.py", "single GatedResidual micro-bench: is mx.compile inert on this chain? (split half invalid, see F133)"),
     "decode-ladder": ("decode_ladder.py", "per-component decode deletion arms (GDN / attn / VQ), Flash-aware"),
     "layer-leverage": ("layer_leverage.py", "per-layer damage probe: which layers earn bigger K"),
     "geo-build": ("geo_build.py", "rebuild an artifact under a new per-layer geometry map (diff-style)"),
