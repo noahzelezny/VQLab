@@ -148,16 +148,13 @@ def main() -> int:
         regime = "DECODE" if b == 1 else "prefill"
         print(f"\n  batch {b:<5} ({regime})")
         for tag, us in row.items():
-            per_row = us / b
-            # SPEEDUP OF bf16 OVER THIS ARM: >1 means bf16 is faster.
-            # (The first cut printed bf16_time/arm_time and labelled <1 as
-            # "quant faster", which is exactly backwards.)
-            speedup = us / row["bf16"]
-            verdict = ("bf16 FASTER" if speedup > 1.02 else
-                       "quant faster" if speedup < 0.98 else "tie")
-            print(f"    {tag:<9} {us:9.1f} us/call  {per_row:8.3f} us/row"
-                  f"   bf16 is {speedup:5.3f}x  "
-                  f"{verdict if tag != 'bf16' else ''}")
+            # No cross-arm verdict here ON PURPOSE. Arms run in SEPARATE
+            # PROCESSES (rule III, and --dtype exists for exactly that), so
+            # one process holds one arm and a ratio computed here would
+            # either KeyError or silently compare against a same-process
+            # arm that absorbed allocator warmup. Compare across the log.
+            print(f"    {tag:<9} {us:9.1f} us/call  {us/b:8.3f} us/row",
+                  flush=True)
     # Re-check AFTER: a job that landed mid-run is exactly the case the
     # pre-gate cannot catch, and it is what voided this bench's first results.
     w1 = gpu_watts()

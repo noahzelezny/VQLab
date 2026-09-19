@@ -91,3 +91,33 @@ per K, the first place to look.
 Instrument: `vqlab decode-ladder --arm baseline`, one process per rung,
 interleaved with a repeat of 3.4 last as the drift check, on the idle M3.
 RATIOS only (rule III).
+
+
+---
+
+# OPEN, carried forward (2026-09-18, end of session)
+
+* **F135 — VQ vs affine at a known byte ratio, NOT RUN.** The 27B DENSE pair:
+  VQ-3.9 moves 11.750 GB/tok against affine-8bit's 27.229 (2.32x), and the VQ
+  arm carries the LIGHTER trunk (4-bit vs 8-bit), so the confound that
+  inflates the Flash parity number runs the other way. If VQ is not ~2.3x
+  faster at decode, effective bandwidth is the story. Script staged at
+  `vqlab-scratch/f135_vq_vs_affine.sh`. NOTE: qwen3_5 is dense, a different
+  runtime from the MoE fused path (Metal rule IV) -- it says nothing directly
+  about Flash's kernels.
+* **F134b — prefill checksum re-verify, NOT RUN.** The prefill arms' timings
+  stand on the re-typing assert but were never proven by the checksum channel,
+  because the single-token version collided. Staged at
+  `vqlab-scratch/f134b_verify.sh`.
+* **The 4-bit trunk build.** F134 measured the SPEED case (4-bit ~10% faster
+  than 8-bit at batch 1, neutral at prefill, half the bytes). The QUALITY case
+  is unmeasured: geo-build a 4-bit-trunk Flash-2.1 and run `kl-ladder`,
+  paired, three corpora at 12288, |t|>2 (the F118 gate). Do NOT assume 6-bit
+  is the safe middle -- it is not byte-aligned and law I.9 measured -8% for
+  bit-extraction at that width.
+* **Is the flat 8-bit Flash/GLM trunk deliberate?** Undocumented in the card
+  and anomalous against `stream_convert.py`'s own `--bits 4 --protect-bits 8`
+  default and against the 397B/35B/27B configs. Noah to confirm before any
+  refit treats it as a gap rather than a decision.
+* **A matched-BYTE, different-GEOMETRY twin** to settle law I.9 properly
+  (F132 challenged it on confounded evidence -- bytes and geometry co-varied).

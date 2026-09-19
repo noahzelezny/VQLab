@@ -4709,3 +4709,125 @@ de-quantizing them is affordable in bytes. That arm needs a fixed micro-bench
 first (many ops per eval), then a whole-model A/B with the checksum expected
 to MOVE (dtype change is not numerics-preserving, and per F120 a perf fix is
 an instrument change until an A/B says otherwise).
+
+## F134 (2026-09-18) — THE TWO DOMINANT CONSUMERS TRADE PLACES BETWEEN REGIMES: hyper-connections own DECODE (44.4% -> 9.2%), the VQ experts and GatedDeltaNet own PREFILL (11.0% -> 30.0%, 14.9% -> 28.2%). That resolves the VQ-vs-affine parity gap -- the VQ path is byte-proportional at decode and 2.5x byte-INEFFICIENT at prefill, because the gather is per-element work bytes do not predict. Plus: Flash ships the SLOWEST trunk dtype at twice the bytes.
+
+ARTIFACT:   TheDrainFlorist--Qwen3.8-Flash-Next-VQ-2.1bpw (v2, 2026-09-17); fleet audit across all 20 VQ artifacts
+INSTRUMENT: vqlab decode-ladder --mode prefill (new), 4096 tokens, best-of-3, one process per arm, baselines bracketing, idle M3 gated on gpu_power<12W; vqlab hc-micro rebuilt on dependent chains with a before/after contention gate, one process per dtype, 4 interleaved passes
+PREDICTION (pre-registered): Pre-registered in-session before the run, verbatim: 'at prefill the batch is thousands of rows, so those GEMVs become GEMMs and the dequant cost amortizes. The mechanism should invert. If bf16 wins at decode and loses at prefill, it is a trade, not a win.' Also predicted hc's prefill share would be 'much smaller than 44%'.
+MEASURED:   PREFILL shares (mean baseline 4.490 s, drift 1.5%): VQ experts 30.0% (t/b 2.48), GatedDeltaNet 28.2% (0.67), hyper-connections 9.2% (0.71). Against DECODE (F131): 11.0% (0.91), 14.9% (0.36), 44.4% (3.44). hc prediction CONFIRMED (44.4% -> 9.2%). DTYPE, within-pass ratios at batch 1: affine-4 < bf16 < affine-8 in every pass; affine-4 1.086x / 1.111x vs affine-8 (n=2), bf16 1.083x / 1.035x / 1.051x (n=3). At 4096: bf16 4939 < affine-4 5130 ~ affine-8 5146, bf16 ahead 4.2%. The bf16 trade PARTIALLY FALSIFIED -- bf16 wins at BOTH regimes, it does not invert; but affine-4 beats it at batch 1, so the shippable arm is 4-bit, not bf16.
+VERDICT:    CONFIRMED
+
+**THE PREFILL LADDER.** Flash-2.1, one forward over 4096 tokens, best-of-3,
+one process per arm, baselines bracketing (4.524 / 4.455 s, drift 1.5%), idle
+M3 gated on gpu_power. Mean baseline 4.490 s.
+
+| arm | bytes/token | s | delta | share | t/b PREFILL | t/b DECODE (F131) |
+|---|---|---|---|---|---|---|
+| **VQ experts** | 12.1% | 3.142 | 1.348 | **30.0%** | **2.48** | 0.91 |
+| GatedDeltaNet | 42.0% | 3.224 | 1.266 | 28.2% | 0.67 | 0.36 |
+| hyper-connections | 12.9% | 4.079 | 0.411 | 9.2% | 0.71 | **3.44** |
+| summed | 67.0% | - | - | 67.4% | 1.01 | 0.49 |
+
+**THE HEADLINE: THE TWO DOMINANT CONSUMERS TRADE PLACES.** Hyper-connections
+own DECODE (44.4%) and are ordinary at prefill (9.2%). The VQ experts and
+GatedDeltaNet own PREFILL (30.0%, 28.2%) and are minor at decode (11.0%,
+14.9%). There is no single component to optimize; the answer depends on the
+regime, and anyone tuning one while measuring the other chases the wrong
+thing.
+
+**THE hc TAX IS A BATCH-1 PHENOMENON.** 3.44 -> 0.71 time/bytes, a 4.8x swing.
+97 sequential small GEMVs become GEMMs and the latency bound evaporates. This
+matters for how the cost is described: batching does not HIDE the
+hyper-connection cost, the cost ceases to exist. That is a mechanism, not a
+workaround.
+
+**AND IT EXPLAINS THE VQ-vs-AFFINE PARITY GAP.** The VQ expert path is
+byte-proportional at decode (0.91) and 2.5x byte-INEFFICIENT at prefill
+(2.48). So "VQ is smaller, it should be faster" is right at decode and wrong
+at prefill, because prefill pays PER-ELEMENT work bytes do not predict:
+unpack a non-byte-aligned code, dependent codebook gather, accumulate. Affine
+pays a multiply-add that folds into the GEMM. Shrinking the artifact does not
+shrink the gather. This is law I.9 measured directly ("decode is a wash across
+geometries; prefill is where geometry shows") and is why F63 found prefill
+parity 90.5% but decode 93.6% -- those were never the same phenomenon.
+
+**GDN REPRODUCES F47 ACROSS FAMILIES.** 28.2% here vs F47's 29.0% on the 35B
+-- different family, different runtime, independent measurement.
+
+**A BYTE-RATE THAT LOOKS HEALTHY CAN HIDE A 2.5x DEFECT.** The three arms sum
+to 67.4% of time for 67.0% of bytes -- near-perfect aggregate proportionality
+built from parts at 2.48 / 0.67 / 0.71. The VQ excess is almost exactly offset
+by the trunk's deficit. This is how F130's whole-model "97 GB/s" looked
+healthy while concealing the component structure, and it is the argument for
+always running active-bytes PER COMPONENT.
+
+---
+
+**THE DTYPE MATRIX** (hc_micro, one process per arm, interleaved passes, all
+gate-verified 1.0-2.9 W). RATIOS ARE WITHIN-PASS: batch-1 absolutes drift
+monotonically across a run (bf16 72.5 -> 72.6 -> 73.3 -> 75.2, +3.7%, thermal)
+while the SAME arm at 4096 is flat (4935/4954/4929/4940, 0.5%). Batch 1 is
+latency-dominated and tracks clock state; prefill rides a stable ceiling. The
+decode instrument is the fragile one, which is the bimodality rule III warns
+about, seen here in a second form.
+
+| pass | affine-4 | bf16 | affine-8 | a4 vs a8 | bf16 vs a8 |
+|---|---|---|---|---|---|
+| 2 | 72.3 | 72.5 | 78.5 | 1.086x | 1.083x |
+| 3 | 68.3 | 73.3 | 75.9 | 1.111x | 1.035x |
+| 4 | (stopped) | 75.2 | 79.0 | - | 1.051x |
+
+At batch 1 the RANK ORDER reproduces in every pass: **affine-4 < bf16 <
+affine-8**. affine-4 is ~9.9% faster than affine-8 (n=2) and bf16 ~5.6%
+(n=3). At 4096 the ordering changes: bf16 4939 < affine-4 5130 ~ affine-8 5146
+-- bf16 ahead 4.2%, the two quantized arms tied. So bit-width matters at batch
+1 and only the dequant-vs-not distinction matters at prefill.
+
+**FLASH SHIPS THE SLOWEST OPTION FOR ITS TRUNK.** affine-8, ~10% slower than
+affine-4 at decode, neutral at prefill, at TWICE the bytes. There is no regime
+in which 8-bit wins on speed.
+
+**AND THE TRUNK IS A BUDGET THE FLASH FAMILY NEVER SPENT.** Fleet audit of
+non-expert modules: 397B 4-bit x91 + 6-bit x286; 35B 4-bit x60 + 6-bit x192;
+27B global 4. Flash-Next all four rungs: **flat 8-bit x726**. GLM-5.3-Flash:
+flat 8-bit x416. `stream_convert.py` itself defaults to `--bits 4
+--protect-bits 8`, so the pipeline's own default trunk is 4-bit with 8 as
+PROTECTION -- and Flash reads as if every module were protected. The card
+documents the expert geometry in detail (d8-K16384 gate/up, d4-K256 down_proj,
+PLE d8-K256, the KL-chosen band) and never states a trunk bit-width, while
+discussing trunk SIZE ("the trunk alone is 45.8 GiB").
+
+Stated per the authority order: the config says the trunk IS 8-bit; the card
+does not say WHY. Anomalous against the tool's default and the rest of the
+fleet, which is suggestive, NOT proof of an oversight. Noah to confirm whether
+it was deliberate for this family.
+
+If a 4-bit trunk holds on quality, Flash-2.1 goes 4.643 -> ~2.4 GB/token trunk,
+**5.284 -> ~3.0 GB/token total (-43%)**, ~1.1 GB off resident, and frees budget
+for the codebooks the small rungs are actually constrained by. NOT MEASURED:
+the quality. That needs a geo-build at 4-bit trunk through `kl-ladder`, paired,
+three corpora, the F118 gate.
+
+**CAUTION ON 6-BIT.** 6 is NOT byte-aligned -- MLX packs affine weights into
+uint32 words, giving 8 per word at 4-bit and 4 at 8-bit, both clean, against
+5.33 at 6-bit. Law I.9 measured a -8% bit-extraction penalty at 6-bit. 4-bit
+is likely both SMALLER and FASTER than 6-bit here; do not assume 6 is the
+safe middle.
+
+**UNFINISHED, stopped deliberately:** F134b (re-verify the prefill arms under
+the widened all-positions checksum -- the single-token version could not prove
+the vq arm took, see below) and F135 (VQ vs affine on the 27B dense pair,
+where VQ moves 11.750 GB/tok against affine-8bit's 27.229 and carries the
+LIGHTER 4-bit trunk -- the confound runs the other way, so it isolates the
+kernel). F135 is the direct test of the parity gap and remains OPEN.
+
+**INSTRUMENT DEFECTS FOUND THIS RUN.** (1) The prefill checksum was a single
+final-token argmax; the vq arm moved prefill 30% and returned the BASELINE
+token, because one draw from a 248320-vocab argmax collides easily. Widened to
+all positions. The vq prefill timing stands on the verified re-typing assert,
+but stood UNPROVEN by the channel. (2) A cross-arm verdict line survived the
+move to one-process-per-arm and raised KeyError on every non-bf16 arm of
+pass 1; two edits at odds, the second one's regex silently not matching.
+(3) A file edit landed 18 s AFTER an arm had already started, so that arm ran
+the old code -- the F129 code-skew hazard, in a new form.
