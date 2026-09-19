@@ -184,5 +184,10 @@ class Model(_arch.Model):
     def __call__(self, *_a, **_kw):
         return _arrayish(super().__call__(*_a, **_kw))
 '''
-(ART / "model.py").write_text(runtime + shim)
+_model_py = runtime + shim
+# NEVER ship a model.py that cannot parse. The dense bundler has always done
+# this; this one did not, and wrote a bundle with a SyntaxError in it that was
+# only caught when a smoke run came back silent.
+compile(_model_py, "model.py", "exec")
+(ART / "model.py").write_text(_model_py)
 print(f"wrote model.py + config keys: {len(vq_modules)} vq modules -> {ART}")
