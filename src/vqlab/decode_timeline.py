@@ -28,13 +28,15 @@ host work from adjacent stages may overlap. So the sum of the deltas is
 compared against an independently measured full step and the drift is
 REPORTED, with its sign, as the serial-execution check:
 
-    sum > whole   each prefix pays its own flush/tail that the whole run
-                  pays once -- the expected direction for serial work, and
-                  the overhead is an upper bound on the per-measurement tax
+    sum > whole   either each prefix pays its own flush/tail that the whole
+                  run pays once, or the stages genuinely OVERLAP in the full
+                  step. Both push this way; the deltas are upper bounds
     sum ~ whole   serial, and the deltas are a clean partition
-    sum < whole   stages OVERLAP: the whole is doing something concurrently
-                  that the prefixes serialize. The deltas are then SHARES,
-                  not costs, and no stage's number is its standalone time
+    sum < whole   the parts UNDER-ACCOUNT. This is NOT overlap -- overlap
+                  makes the whole FASTER than its parts (sum > whole), not
+                  slower. Expect estimator bias: a paired delta cancels a
+                  noise bias common to both halves, a single absolute whole
+                  does not. More reps should shrink it
 
 None of these is a failure. Only the third invalidates "stage X costs Y ms",
 and it is still a valid ranking. The tool does NOT refuse on drift by
@@ -340,12 +342,23 @@ def main() -> int:
                    f"{signed_p:+.1f}%. The paired and unpaired estimators "
                    f"differ by {est_gap:+.1f}%; that difference was "
                    "masquerading as overlap. Deltas ARE a clean partition")
+    elif signed < 0:
+        verdict = (f"PARTS UNDER-ACCOUNT by {-signed:.1f}%: the sum of the "
+                   "deltas is LESS than the whole. NOTE THE SIGN -- this is "
+                   "NOT overlap. Concurrency would make the whole FASTER "
+                   "than the sum of its parts, i.e. sum > whole. sum < whole "
+                   "means the parts miss time the whole pays, and the "
+                   "expected cause is estimator bias, not physics: each "
+                   "PAIRED delta is a difference taken in ONE window, so a "
+                   "positive noise bias common to both halves CANCELS, while "
+                   "the whole is a single absolute measurement that KEEPS "
+                   "its bias. The deltas are then the more trustworthy "
+                   "number and the whole is the inflated one. Raise --reps "
+                   "and this gap should shrink toward zero; if it does not, "
+                   "look for real missing work (something the full forward "
+                   "does that forward_prefix does not)")
     else:
-        verdict = (f"OVERLAP: the sum of prefixes is {-signed:.1f}% under "
-                   f"the unpaired whole AND {-signed_p:.1f}% under the "
-                   "PAIRED whole, so it is not an estimator artefact -- "
-                   "stages the prefixes serialize run concurrently in the "
-                   "real step. Treat the deltas as SHARES, not costs")
+        verdict = (f"UNEXPLAINED at {signed:+.1f}%")
     print(f"  serial-execution check: {verdict}")
     if a.require_clean and abs(signed) > a.additivity_tol:
         raise SystemExit("\nREFUSING (--require-clean): drift exceeds "
