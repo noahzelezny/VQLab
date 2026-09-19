@@ -52,3 +52,51 @@ environment, so the two arms are TWO INVOCATIONS sharing one --per-pos-dir,
 with rung names ss_off and ss_on. The paired delta is then computed with
 kl_ladder's own `paired()` formula on the identical position arrays -- the
 same test, applied across invocations rather than within one.
+
+
+---
+
+## CORRECTION to the method, 2026-09-18, before any result was read
+
+**The first F137 run was VACUOUS and is discarded.** Both arms returned KL
+identical to three decimals (prose 140.843 +/- 6.010, ppl 5.6544 on BOTH),
+which is not a small effect -- it is the signature of both arms running the
+same code, the F129 defect.
+
+**Why.** kl_ladder scores at the chunk the cache records (512, and rightly so
+-- F111: the metric is not chunk-invariant for recurrent-state families). But
+`VQLinear.__call__` only takes the FUSED path when `N <= _fused_max_n`, and
+for packed d4 that is `_DENSE_FUSED_MAX_N_BY_D[4] = 32`. At N=512 it falls
+through to `_decode_matmul` (wdec + GEMM). **The SS kernels are never
+reached.**
+
+### The finding this exposes, which outranks the SS question
+
+**THE KL GATE DOES NOT EXERCISE THE DECODE KERNELS.** On dense artifacts the
+F118 referee scores through the PREFILL path. The fused decode kernels -- the
+ones that serve token generation, and the ones VQ_DENSE_SS, VQ_D4_WALK and
+the DEVX twins all modify -- are invisible to it. **Any numerics change
+confined to the decode path passes the release gate untested**, not because
+the gate is lax but because it never runs that code.
+
+This is not hypothetical: F136 measured three decode-path switches on this
+exact artifact, one of which (SS) is documented at up to 8 ULP. A release gate
+that cannot see them is the gap, and `vqlab smoke`'s one-token generation is
+the only thing that touches those kernels at all -- and it checks that a token
+appears, not what it is.
+
+Scope note: MoE artifacts may differ (different runtime, different max-N), and
+this has NOT been checked for them. Worth its own pass.
+
+### The corrected method
+
+`VQ_DENSE_FUSED_MAX_N=1024` on BOTH arms forces the fused path at scoring N
+(`_fused_max_n` selects `_DENSE_FUSED_MAX_N_PACKED` whenever that variable is
+present). The arms then differ ONLY in the reduction, and since the SS change
+is over NGRP and independent of N, this exercises the same arithmetic the
+decode path runs.
+
+CAVEAT to carry into the finding: forcing the fused path at N=512 is NOT the
+shipped configuration. It is the only way to put the SS reduction under the
+referee without building a chunk<=32 teacher cache, and the numbers it
+produces price the REDUCTION, not the shipped scoring path.
