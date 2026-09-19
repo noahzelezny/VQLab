@@ -92,6 +92,17 @@ recorded verbatim). `publish` is not exposed; it is a human's action.
   composition (F87) — same path AND same batching.
 * **Depth/geometry laws are family-local.** GLM, 397B and Flash each measured
   a different shape. Never inherit an allocation across families.
+* **The KL gate does NOT exercise the DECODE kernels on dense artifacts
+  (F137).** `kl-ladder` scores at the cache's chunk (512, correctly -- F111);
+  the fused decode path is gated at `N <= 32` for packed d4, so scoring falls
+  through to `_decode_matmul` (wdec + GEMM). Every decode-path numerics change
+  -- `VQ_DENSE_SS` (up to 8 ULP), `VQ_D4_WALK`, the DEVX twins -- passes the
+  referee UNTESTED, because the referee never runs that code. One artifact
+  ships two numerically distinct paths (measured 0.87 mnats apart on prose)
+  and the gate scores one. Diagnose with `VQ_DENSE_FUSED_MAX_N=1024`, which
+  forces the fused path at scoring N -- but that is a DIAGNOSTIC, not the
+  shipped config. NOT checked for MoE artifacts; do not assume the fleet is
+  covered.
 * **Generate one token through the shipping runtime** before calling anything
   releasable (rule III.11 — an unservable artifact once scored perfectly).
 * **Artifacts NEVER go on the internal disk.** Scratch:
