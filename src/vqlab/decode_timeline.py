@@ -93,6 +93,9 @@ def main() -> int:
                          "partition that does not add up is still a valid "
                          "RANKING, and overlap is physics, not a defect.")
     ap.add_argument("--top", type=int, default=12)
+    ap.add_argument("--json-out", default=None,
+                    help="write the shares and diagnostics as JSON, so a "
+                         "campaign can be compared without re-running it")
     a = ap.parse_args()
 
     w0 = gpu_watts()
@@ -146,8 +149,14 @@ def main() -> int:
     # them), and lumping them would hide exactly what this is for.
     stages = [("embed", None, None)]
     for i, lyr in enumerate(layers):
+        # gdn and full attention are SEPARATE stage types. Lumping them
+        # hides the thing most worth knowing: GatedDeltaNet carries
+        # fixed-size recurrent state while full attention grows with
+        # context, so their shares move in opposite directions as context
+        # grows and a combined "attn" number is a blend of the two at one
+        # context length.
         kind = "gdn" if getattr(lyr, "is_linear", False) else "attn"
-        stages.append((f"L{i:02d}.{kind}", i, "attn"))
+        stages.append((f"L{i:02d}.{kind}", i, kind))
         stages.append((f"L{i:02d}.mlp", i, "mlp"))
     stages.append(("final_norm", None, None))
     stages.append(("lm_head", None, None))
@@ -379,6 +388,20 @@ def main() -> int:
     for name, kind, d in sorted(rows, key=lambda r: -r[2])[: a.top]:
         print(f"    {name:16s} {d:8.3f} ms   {100*d/whole:5.2f}%")
     print(f"\n  contention gate PASSED: {w0:.1f} W -> {w1:.1f} W\n")
+    if a.json_out:
+        pathlib.Path(a.json_out).write_text(json.dumps({
+            "artifact": str(a.art), "context": a.context, "reps": a.reps,
+            "whole_ms": whole, "whole_paired_ms": whole_paired,
+            "sum_deltas_ms": total, "drift_pct": signed,
+            "drift_vs_paired_pct": signed_p,
+            "noise_floor_ms": floor, "noise_floor_pct": noise_frac,
+            "n_negative": len(negs), "verdict": verdict,
+            "watts": [w0, w1],
+            "shares": {k: {"ms": v, "pct": 100 * v / whole}
+                       for k, v in agg.items()},
+            "stages": [{"name": n, "kind": k, "ms": d} for n, k, d in rows],
+        }, indent=1))
+        print(f"  -> {a.json_out}\n")
     return 0
 
 
