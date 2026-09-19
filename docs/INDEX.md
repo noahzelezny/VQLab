@@ -17,6 +17,8 @@ This index says what each doc is FOR and whether it still holds.
 | **FINDINGS-LOG.md** | **AUTHORITATIVE** | Every measured result, F-numbered, newest first. Corrections edit entries in place and say CORRECTED. If a number is not here, treat it as unverified. |
 | **MORNING-REPORT-2026-09-09.md** | CURRENT | Latest state: what verified, what dissolved, what is open. |
 | **KERNEL-COVERAGE.md** | CURRENT | Which geometry each artifact uses and which kernel serves it. Start here for "what shape is this model". |
+| **`vqlab active-bytes`** | **INSTRUMENT** | Not a doc. Bytes an artifact reads PER DECODE TOKEN, by component -- the roofline denominator. Run it before quoting any effective-bandwidth or "is this bandwidth-bound" claim; F22 was wrong for four weeks because nobody had it. Metadata only, safe on a contended box. |
+| **`vqlab decode-ladder`** | **INSTRUMENT** | Not a doc. Per-component decode deletion arms (GDN / attention / VQ / shared expert / hyper-connections) on Flash. Prints an output checksum beside every timing: arms that do not differ there did not take. |
 | **TWO-RUNTIMES.md** | CURRENT, CRITICAL | The lab runtime (`vqlab/src/vqlab/vq_switch.py`) vs the artifact's BUNDLED `model.py` are different files. Measuring one while changing the other has produced two false results (see F31). Read before any benchmark. |
 
 ## Experiment docs
@@ -32,6 +34,8 @@ This index says what each doc is FOR and whether it still holds.
 | MTP.md, MTP-VALIDATION, MTP-EXO-SPEC | CURRENT | Speculative decoding. Note MTP costs ~3.4x on multi-request workloads. |
 | MTP-USAGE.md | CURRENT | Setup, serving, and the measured speedups; moved out of README.md 2026-09-15. |
 | GEMMA-DIVERGENCE, DENSE-VQ-DECODE | CURRENT | Dense path; gemmseg is MoE-only, so MoE prefill numbers do NOT transfer. |
+
+| **PREREG-DECODE-BYTES.md** | CURRENT | Pre-registration for the F130 timing arms: does decode time actually track ACTIVE BYTES, and does deleting GatedDeltaNet (42.0% of Flash's bytes/token) buy more than deleting the whole VQ expert module (12.1%)? |
 
 ## Method / process
 | doc | status | note |
