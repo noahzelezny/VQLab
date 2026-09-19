@@ -12,6 +12,10 @@ import pathlib
 
 import mlx.core as mx
 
+from vqlab.arch_resolve import ARRAYISH as _ARCH_ARRAYISH
+from vqlab.arch_resolve import COERCE as _ARCH_COERCE
+from vqlab.arch_resolve import PRELUDE as _ARCH_PRELUDE
+
 ap = argparse.ArgumentParser()
 ap.add_argument("--artifact", required=True)
 ap.add_argument("--k", type=int, default=256)
@@ -101,63 +105,25 @@ shim = '''
 # (it lives inside the checkpoint). We reuse the registry architecture and swap
 # each VQ'd expert module for VQSwitchLinear before weights load.
 #
-# The base class may live in EITHER runtime: mlx_lm has no glm5_next class, but
-# mlx_vlm ships one, and both honour this bundle mechanism. Hardcoding mlx_lm
+# The base class may live in EITHER runtime, and for most families it lives in
+# BOTH under the same name -- see _resolve_arch below and vqlab/arch_resolve.py
+# for why the order is decided by the artifact's modalities. Hardcoding mlx_lm
 # here shipped a glm5_next artifact that passed check-release AND check-bundle
-# and then died on import with ModuleNotFoundError (2026-08-30) -- neither gate
-# executes the bundle, which is what `smoke` is for.
+# and then died on import with ModuleNotFoundError (2026-08-30); resolving it
+# mlx_lm-FIRST then bound 17 multimodal bundles to a text-only arch until
+# 2026-09-19. Neither gate executes the bundle, which is what `smoke` is for.
 # ---------------------------------------------------------------------------
 import importlib as _importlib
 import json as _json
 import pathlib as _pathlib
 
 _cfg = _json.load(open(_pathlib.Path(__file__).parent / "config.json"))
-try:
-    _arch = _importlib.import_module(f"mlx_lm.models.{_cfg['model_type']}")
-except ModuleNotFoundError:
-    _arch = _importlib.import_module(f"mlx_vlm.models.{_cfg['model_type']}")
-
-# Re-export the base module's WHOLE public surface, not a hand-listed few.
-# A VLM base is read for far more than Model: mlx_vlm's loader reaches for
-# TextConfig, VisionConfig, VisionModel, LanguageModel... Enumerating them one
-# at a time is whack-a-mole against a surface we do not own, and each miss is
-# an AttributeError at load. Model is excluded: our subclass below replaces it.
-for _n in dir(_arch):
-    if not _n.startswith("_") and _n != "Model":
-        globals()[_n] = getattr(_arch, _n)
-
-# The two runtimes read DIFFERENT names for the args class: mlx_lm wants
-# ModelArgs, mlx_vlm calls model_class.ModelConfig.from_dict(config). Export
-# whichever the base defines under both names so one bundle serves either.
-ModelArgs = getattr(_arch, "ModelArgs", None) or _arch.ModelConfig
-ModelConfig = getattr(_arch, "ModelConfig", None) or _arch.ModelArgs
+''' + _ARCH_PRELUDE + _ARCH_COERCE + _ARCH_ARRAYISH + '''
 
 
 class Model(_arch.Model):
     def __init__(self, args):
-        # mlx_lm's loader passes nested module configs (text_config,
-        # vision_config, ...) through as plain dicts; mlx_vlm's own loader
-        # coerces them to config objects first (ModelConfig.from_dict +
-        # update_module_configs + apply_generation_config_defaults). A VLM
-        # arch then does `args.text_config.model_type` and dies on the dict.
-        # Coerce here so ONE bundle loads under either runtime -- exo serves
-        # VLM artifacts through mlx_lm.utils.load_model, which is exactly the
-        # dict path. No-op for text-only models and for mlx_vlm-loaded ones.
-        # The hasattr guard scopes the coercion to mlx_vlm-style arches:
-        # mlx_lm arches (qwen4_exp) carry a nested `text` config the loader
-        # already parses natively, and update_module_configs against them
-        # dies on the missing TextConfig class (caught 2026-09-02 when a
-        # re-bundled 2.1bpw stopped loading under mlx_lm 0.31.9).
-        if (isinstance(getattr(args, "text_config", None), dict)
-                and hasattr(_arch, "TextConfig")):
-            from mlx_vlm.utils import (
-                apply_generation_config_defaults,
-                update_module_configs,
-            )
-            args = update_module_configs(
-                args, _arch, _cfg,
-                ["text", "vision", "perceiver", "projector", "audio"])
-            args = apply_generation_config_defaults(args, _cfg)
+        args = _coerce_module_configs(args)
         super().__init__(args)
         for _path, _m in _cfg.get("vq_modules", {}).items():
             _obj = self
@@ -202,30 +168,8 @@ class Model(_arch.Model):
                     packed_nsub=(_cols // _g["dim"]) if _rb else 0,
                 ))
 
-    # mlx_lm's generate loop indexes the model's return value directly
-    # (`logits[:, -1, :]`); mlx_vlm callers read `.logits` and the other
-    # LanguageModelOutput dataclass fields. Text-only archs return a bare
-    # mx.array and pass straight through. For a VLM output, swap in a
-    # subclass (built once per output type) that delegates array behaviour
-    # to `.logits`, so ONE bundle serves both runtimes.
-    _ARRAYISH = {}
-
     def __call__(self, *_a, **_kw):
-        _out = super().__call__(*_a, **_kw)
-        if isinstance(_out, mx.array) or not hasattr(_out, "logits"):
-            return _out
-        _cls = type(_out)
-        _sub = Model._ARRAYISH.get(_cls)
-        if _sub is None:
-            _sub = type(_cls.__name__, (_cls,), {
-                "__getitem__": lambda _s, _k: _s.logits[_k],
-                "shape": property(lambda _s: _s.logits.shape),
-                "dtype": property(lambda _s: _s.logits.dtype),
-                "ndim": property(lambda _s: _s.logits.ndim),
-            })
-            Model._ARRAYISH[_cls] = _sub
-        _out.__class__ = _sub
-        return _out
+        return _arrayish(super().__call__(*_a, **_kw))
 '''
 (ART / "model.py").write_text(runtime + shim)
 print(f"wrote model.py + config keys: {len(vq_modules)} vq modules -> {ART}")
