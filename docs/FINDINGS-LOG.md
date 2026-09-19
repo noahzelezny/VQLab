@@ -4303,3 +4303,61 @@ the fix is to pin it -- which is what vendoring accomplishes.
 
 Corrected in place in RUNTIME-SETTINGS.md §5 and in the knurlogic sources that
 had repeated it.
+
+## F128 (2026-09-18) — F41's unattributed 12-13% is NOT host numpy work: the entire Python/numpy path is ~0.3% of a forward. My pre-registered headline prediction is FALSIFIED. What the profile does show is 120 forced device syncs per forward.
+
+PREDICTION (pre-registered, docs/PREREG-HOST-ATTRIB.md): P1 memo-key
+`.tobytes()` construction is the largest host component at >2% of prefill
+(reasoning: ~80 MB of byte copying and hashing per forward purely to look up
+a cache). P2 argsort path <1.5%. P3 `mx.array` uploads <2%. P4 casts <2%.
+P5 `np.array(idx_flat)` forces a sync and will appear CHEAP while actually
+waiting. P6 the four components will not sum to 12-13%.
+
+MEASURED (`vqlab host-attrib`, new; 35B-A3B-VQ-3.4bpw, 2048 tokens, warm,
+cProfile overhead 0.99x so shares are trustworthy):
+
+    84.45%  0.7229s  n=120  <built-in method numpy.array>      <- the sync
+     0.07%  0.0006s  n=40   numpy stack
+     0.05%  0.0004s  n=160  ndarray.astype
+     0.04%  0.0004s  n=80   ndarray.cumsum
+     0.04%  0.0004s  n=120  ndarray.tobytes                    <- P1's target
+     0.02%  0.0001s  n=80   ndarray.repeat
+     0.01%  0.0001s  n=40   ndarray.nonzero
+    ------------------------------------------------------------------
+    the WHOLE numpy host path                            ~0.3% of a forward
+
+**P1 FALSIFIED, and not narrowly.** `.tobytes()` is 0.04%, fifty times under
+the predicted floor. The volume reasoning was right -- it does copy and hash
+the routing array on every call -- and the conclusion drawn from it was
+simply wrong: memcpy of that size is free at this scale. Volume is not cost.
+P2/P3/P4 hold but trivially; every component is ~0.05%, so the bounds say
+nothing. **P6 CONFIRMED**: the named components do not sum to anything near
+12-13%.
+
+P5 is HALF RIGHT and the half it got wrong is the interesting half. The sync
+is mis-attributed, as predicted -- but it appears ENORMOUS (84%), not cheap.
+`np.array(idx_flat, copy=False)` forces the entire pending lazy graph, so
+that row is the model's GPU work billed to one host call. Reading it as
+compute would be the single worst mistake available here, which is why
+`host-attrib` marks sync rows.
+
+**WHAT THIS CLOSES.** F41 named "the per-call numpy tile build, the mx.array
+uploads, and the broadcast/cast in __call__" as the 12-13%. Measured, that
+whole list is ~0.3%. The 12-13% is NOT reachable from Python, contradicting
+F41's "addressable without touching Metal" framing. It must live in the
+gather/scatter and cast as GPU OPS, or in mlx dispatch a Python profiler
+cannot see. Anyone optimizing vqlab's numpy to chase it is chasing 0.3%.
+
+**WHAT IT OPENS, as a hypothesis and not a finding.** n=120 is 40 layers x 3
+linears: `__call__` forces a full device sync ONCE PER LINEAR PER LAYER, 120
+pipeline drains per forward. Host time spent there is ~0, but a drain
+serializes CPU and GPU and forbids overlap, and that cost would appear
+exactly where F41 found it and nowhere a profiler looks. UNMEASURED. The arm
+is to obtain the routing order without round-tripping through numpy (or to
+hoist one sync per layer instead of three) and A/B it unprofiled, one process
+per arm.
+
+INSTRUMENT: `vqlab host-attrib`. Attribution BEFORE deletion on purpose --
+F41 carries an INVALID ARM from the other order (stubbing np.argsort to
+identity ran SLOWER; it changed the kernel's access pattern and attributed
+nothing). It marks sync rows and refuses to let their self-time read as work.
