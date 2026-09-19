@@ -46,3 +46,48 @@ corrected denominator.
 3. The GDN-deletion arm needs a stub that does NOT assume KVCache: Flash's
    linear layers carry `ArraysCache(size=2 or 4)` and its full-attention
    layers `QSAKVCache`. This is the fix F48's crashing arm needed.
+
+---
+
+# Addendum — the 35B rung curve (registered 2026-09-18 21:22, before the run)
+
+Flash-4.4 (97 GB) does not fit the M3's 103 GB beside ~34 GB of resident apps,
+so the 2.1-vs-4.4 pair cannot be run here. The 35B family substitutes and is
+BETTER: four rungs, all resident-safe, giving a CURVE instead of a pair.
+
+`vqlab active-bytes`, measured:
+
+| rung | on disk | active GB/tok | expert GB/tok | expert share |
+|---|---|---|---|---|
+| 3.4 | 14G | 1.796 | 0.378 | 21.0% |
+| 3.8 | 16G | 1.859 | 0.441 | 23.7% |
+| 4.6 | 19G | 1.961 | 0.543 | 27.7% |
+| 5.4 | 22G | 2.079 | 0.661 | 31.8% |
+
+Resident spans +57%; ACTIVE bytes span only +15.8%. That gap is the whole
+thesis of F130 and this is its direct test.
+
+## Predictions
+
+Basis: tonight's Flash arms make the VQ expert path byte-proportional at
+time/bytes = 0.96 and 105.7 GB/s effective, while the dense trunk is not
+(GDN 0.37, attention 0.54). The trunk is IDENTICAL across these four rungs --
+only expert bytes move -- so the proportional component should dominate the
+differences.
+
+* **P5.** Decode ms/tok rises MONOTONICALLY 3.4 -> 3.8 -> 4.6 -> 5.4.
+* **P6.** 5.4 is **+10% to +20%** slower than 3.4 (centre +14.5%, from
+  +0.283 GB of expert bytes at 105.7 GB/s = +2.70 ms on a ~18.6 ms step).
+  Explicitly NOT ~0% ("bpw does not affect speed") and explicitly NOT faster
+  at the low rung by the ~37% that resident-size intuition suggests.
+* **P7.** Per adjacent pair, the measured delta matches
+  (delta expert bytes)/105.7 GB/s within +/-40%.
+
+P6 failing LOW (<5%) would mean even the expert path is not byte-bound on this
+family and F130's mechanism is family-local, not general. P6 failing HIGH
+(>25%) would mean something beyond bytes scales with rung -- kernel geometry
+per K, the first place to look.
+
+Instrument: `vqlab decode-ladder --arm baseline`, one process per rung,
+interleaved with a repeat of 3.4 last as the drift check, on the idle M3.
+RATIOS only (rule III).
