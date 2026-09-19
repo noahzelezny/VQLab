@@ -4497,3 +4497,146 @@ unrecognised tensors are billed DENSE and bucketed loudly rather than
 dropped. Both were visible only because the tool prints components and a
 resident total that must reconcile with the artifact size (48.66G vs 47 GiB
 on disk).
+
+## F131 (2026-09-18) — CORRECTS F130: HYPER-CONNECTIONS ARE 44% OF FLASH DECODE FOR 13% OF THE BYTES. The one component nobody has ever profiled is the largest, decode is dispatch-bound not bandwidth-bound, and F130's byte-proportionality mechanism is withdrawn: deleting 71% of the bytes removes 35% of the time.
+
+ARTIFACT:   TheDrainFlorist--Qwen3.8-Flash-Next-VQ-2.1bpw (v2, 2026-09-17)
+INSTRUMENT: vqlab decode-ladder (new): per-instance re-typed deletion stubs, manual step loop, 200 tokens, best-of-3, one process per arm, interleaved, baselines bracketing each session, idle M3 gated on gpu_power<8W; arch=mlx_lm.models.qwen4_exp printed per run
+PREDICTION (pre-registered): docs/PREREG-DECODE-BYTES.md P4, verbatim: 'Deleting GatedDeltaNet (42% of Flash-2.1's bytes) removes MORE decode time than deleting the whole VQ expert module (12.1%). F48 measured the VQ module at 6.54 ms of 54.31; P4 predicts the GDN arm exceeds that, and lands in 15-30 ms.' P3: 'Re-measuring Flash-2.1 decode on the CURRENT (v2) artifact reproduces F48's 54.31 ms/tok within 5%.'
+MEASURED:   P3 CONFIRMED: 51.4-52.3 ms/tok across four sessions vs F48's 54.31, -4.3%. P4 HALF RIGHT, magnitude FALSIFIED: GDN removes 7.76 ms (14.9%), which does exceed the VQ module's 5.73 ms, but is nowhere near the predicted 15-30 ms. UNPREDICTED AND LARGEST: hyper-connections 22.87 ms = 44.4% of the step for 12.9% of bytes (time/bytes 3.44). Full ladder: hc 44.4% / gdn 14.9% / vq 11.0% / fullattn 6.1% / sharedexp NULL. Summed, 71.2% of bytes deleted removes 35.1% of time. Drift 0.25-1.28%.
+VERDICT:    CORRECTS
+
+**THE LADDER.** Flash-2.1, manual step loop, 200 tokens, best-of-3, one
+process per arm, interleaved, idle M3 (gpu_power gate). Baselines bracket
+every session; drift 0.25-1.28%.
+
+| arm | instances | bytes/token | ms/tok | delta | share | time/bytes |
+|---|---|---|---|---|---|---|
+| baseline | - | 100% | 51.472 | - | - | - |
+| **hyper-connections** | 97 | **12.9%** | **28.600** | **22.87** | **44.4%** | **3.44** |
+| GatedDeltaNet | 36 | 42.0% | 44.198 | 7.76 | 14.9% | 0.36 |
+| VQ experts | 144 | 12.1% | 46.226 | 5.73 | 11.0% | 0.91 |
+| full attention | 12 | 12.4% | 48.794 | 3.16 | 6.1% | 0.49 |
+| shared expert | 48 | 4.7% | 51.608 | 0.35 | 0.7% | NULL |
+
+Every arm's output checksum differs from baseline's 2747988 (hc 401388, gdn
+9975241, fullattn 850441, vq 2650267, sharedexp 3171288). The shared-expert
+delta is the size of session drift and is recorded as a NULL, not a small win.
+
+**THE HEADLINE.** The hyper-connection machinery is 44.4% of Flash decode for
+12.9% of the bytes -- time/bytes 3.44, where every other component is BELOW
+1.0. It was on no suspect list, exactly as GatedDeltaNet was on none before
+F47. 97 GatedResidual modules, each a fixed chain of ~12 small ops (RMSNorm,
+two low-rank linears at hc_lowrank=320, silu, sigmoid, two reshapes, multiply,
+mean, gate linear, sigmoid) on a residual stream that hc_count=4 makes 4x
+wider than hidden. ~1,200 dispatches per token for 0.682 GB of weights.
+
+**WHAT IT SETTLES.** Flash decode is DISPATCH- AND ELEMENTWISE-BOUND, not
+weight-bandwidth-bound. It also explains why the 2.1 and 4.4 rungs feel alike:
+the rung label prices the expert stack, and the expert stack is the ONE
+component that is byte-proportional (0.91) -- and it is 11% of the step.
+
+**WHAT IT CORRECTS IN F130.** F130 inferred from two models at ~97 GB/s that
+decode time tracks active bytes. Measured causally, it does not: deleting
+71.2% of the per-token bytes (gdn+vq+fullattn+sharedexp) removes 35.1% of the
+time. The byte CENSUS in F130 stands -- it is deterministic metadata, and it
+still explains why bpw cannot buy 4x -- but its proportionality MECHANISM was
+a two-point coincidence and is withdrawn. Components convert bytes to time at
+rates spanning 0.28 to 3.44, a 12x range.
+
+**CEILING, NOT FORECAST.** F63's rule on its fifth bite: a deletion ceiling
+bounds REMOVAL, not replacement. 22.87 ms is the most any hyper-connection
+optimization could ever return; deleting them makes the model wrong. The
+stub is conservative besides -- it keeps a reshape and a mean for the residual
+plumbing -- so the machinery's true cost is at least this.
+
+**IT ALSO LARGELY EXPLAINS F48.** F48 measured Flash's non-VQ trunk at ~45 ms
+against the 35B's ~13 ms and called the 3.4x unexplained. Hyper-connections
+are 22.87 ms of that ~32 ms gap (~71%), in a component qwen3_5_moe does not
+structurally have.
+
+**TWO METHOD DEFECTS, both caught by the checksum channel.**
+
+1. THE FIRST RUN WAS VACUOUS. `mod.__call__ = stub` reported
+   patched_instances=36 and did nothing: Python resolves mod(x) through
+   type(mod).__call__ and never consults the instance dict for implicit
+   special-method lookup. The gdn arm returned a checksum byte-identical to
+   baseline and a 0.8% "effect" that was baseline running twice. Fixed by
+   re-typing each target onto its own throwaway subclass. **Fourth instance in
+   the F33 / F127 / F129 lineage**, and the only reason it was caught instead
+   of published is the rule F129 wrote: every probe needs a channel that
+   proves the arms differ, independent of the quantity being measured.
+
+2. THE hc ARM READ THE WRONG RUNTIME AND CRASHED. The bundle resolves its arch
+   from mlx_lm FIRST, mlx_vlm only as fallback, and BOTH now ship a
+   qwen4_exp. The executing class is mlx_lm's `GatedResidual` (.hc/.d,
+   `block_inject_weight is None`), not mlx_vlm's `Qwen4ExpGatedResidual`
+   (.hc_count/.hidden_size). **This dates F48's "Flash's bundle is a VLM and
+   imports mlx_vlm.models.qwen4_exp"** -- true when written, false since
+   mlx_lm grew its own copy. F127's version skew again. The probe now PRINTS
+   the arch module and file on every run.
+
+**NEXT, and it is a REPLACEMENT not a deletion:** `mx.compile` the
+GatedResidual chain. ~1,200 dispatches of fixed-shape elementwise work is what
+mx.compile fuses. Its gate INVERTS the checksum channel -- a numerics-
+preserving fusion must come back bit-identical to baseline, or it is an
+instrument change like the CPU-stream load of F120.
+
+## F132 (2026-09-18) — A FATTER RUNG IS ~40% SLOWER TO DECODE, AND ONLY 40% OF THAT IS BYTES. Four 35B rungs, monotonic, +40.6% time for +15.8% bytes -- P6 falsified HIGH exactly where the prereg said to look, and law I.9's 'decode is a wash across geometries' is challenged (not refuted: bytes and geometry co-vary, and the confound is mine).
+
+ARTIFACT:   TheDrainFlorist--Qwen3.6-35B-A3B-VQ-3.4 / 3.8 / 4.6 / 5.4bpw
+INSTRUMENT: vqlab decode-ladder --arm baseline, one process per rung, interleaved, 200 tokens best-of-3, 3.4 repeated last as drift check, idle M3 gated on gpu_power<8W; bytes from vqlab active-bytes; arch=mlx_lm.models.qwen3_5_moe printed per run
+PREDICTION (pre-registered): docs/PREREG-DECODE-BYTES.md addendum, verbatim: 'P5. Decode ms/tok rises MONOTONICALLY 3.4 -> 3.8 -> 4.6 -> 5.4. P6. 5.4 is +10% to +20% slower than 3.4 (centre +14.5%, from +0.283 GB of expert bytes at 105.7 GB/s = +2.70 ms on a ~18.6 ms step). Explicitly NOT ~0% and explicitly NOT faster at the low rung by the ~37% that resident-size intuition suggests. P7. Per adjacent pair, the measured delta matches (delta expert bytes)/105.7 GB/s within +/-40%.'
+MEASURED:   3.4 16.833 / 3.8 19.654 / 4.6 21.990 / 5.4 23.665 ms/tok. P5 CONFIRMED (monotonic, every step >10x drift). P6 FALSIFIED HIGH: +40.6% measured vs +10-20% predicted, on +15.8% bytes. P7 FALSIFIED: no adjacent pair within +/-40% of its byte prediction. Drift 1.3% (3.4 first 16.944, repeat 16.721). Spreads 0.8-1.6% except 3.4's cold first load at 13.6%.
+VERDICT:    FALSIFIED
+
+**THE CURVE.** Four 35B rungs, same trunk, same box, same session,
+interleaved, 3.4 run first and last as the drift check (16.944 / 16.721 =
+1.3%). Flash-4.4 could not serve as the pair: 97 GB does not fit the M3's
+103 GB beside resident apps, and a swapping arm measures swap.
+
+| rung | geometry | active GB/tok | ms/tok | vs 3.4 | bytes vs 3.4 |
+|---|---|---|---|---|---|
+| 3.4 | d4-K2048 p11 x120 | 1.796 | 16.833 | - | - |
+| 3.8 | d4-K8192 p13 x120 | 1.859 | 19.654 | +16.8% | +3.5% |
+| 4.6 | d2-K512 p9 x90 + d4-K2048 x30 | 1.961 | 21.990 | +30.6% | +9.2% |
+| 5.4 | d2-K1024 p10 x120 | 2.079 | 23.665 | **+40.6%** | +15.8% |
+
+Spreads 0.8-1.6% except 3.4's first load at 13.6% (cold page cache; its
+best-of-3 min reproduced to 1.3% on the repeat, which is the behaviour min is
+chosen for on a bimodal instrument).
+
+**P5 CONFIRMED.** Monotonic, every step clearing drift by 10x or more.
+
+**P6 FALSIFIED, HIGH.** Predicted +10-20% across the range on a byte basis;
+measured **+40.6%** for **+15.8%** more bytes. The prereg said in advance that
+a high failure means "something beyond bytes scales with rung -- kernel
+geometry per K, the first place to look." **P7 falsified** with it: no
+adjacent pair lands within +/-40% of its byte prediction.
+
+**THE ANSWER TO THE QUESTION THAT STARTED THIS.** A fatter rung IS meaningfully
+slower -- ~40% across this range -- so low-bpw does buy decode speed. But only
+~40% of that 40% is bytes, and the bpw LABEL prices only the expert stack,
+which F131 measured at 11% of a Flash step. Halving the label can never
+approach halving the time.
+
+**WHAT I CANNOT SEPARATE, and the design flaw that caused it.** These rungs
+differ in bytes AND geometry together. 3.8 is the only rung whose codebook
+(K8192 x d4 x 2 = 65536 B) blows past Metal's 32 KB threadgroup cap (rule
+IV.1), forcing the device path, and it carries the widest non-byte-aligned
+code at 13 bits. 4.6 and 5.4 are d2, which doubles subvectors per row against
+d4 and so does more extraction work per byte by construction. I selected these
+rungs on the byte census, which told me the bytes and never warned me the
+geometry co-varied. The confound is mine, not the data's.
+
+**THEREFORE: law I.9 IS CHALLENGED, NOT REFUTED.** I.9 says "decode speed is a
+wash across all measured geometries; prefill is where geometry shows" [E70,
+E71]. A 40.6% decode spread across four rungs of one model is not a wash. But
+this is not the clean test, because bytes moved too. **The clean test is a
+matched-BYTE, different-GEOMETRY twin** -- two rungs at the same active
+bytes/token with different (dim, K, pack_bits) -- and until someone builds
+that pair, I.9 stands as written with this entry attached to it. `vqlab
+alloc-sweep` plus `geo-build` can construct the twin; the rate model in
+`price.py` can pick the pair.
+
+Registered in advance at docs/PREREG-DECODE-BYTES.md (addendum).

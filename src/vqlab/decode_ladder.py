@@ -81,6 +81,40 @@ def _hc_stub(self, hyper):
     return mixed, hyper, inject
 
 
+def _compile_hc(model):
+    """REPLACEMENT arm, not a deletion: fuse each GatedResidual with mx.compile.
+
+    The hc deletion arm measured 44.4% of Flash decode for 12.9% of the bytes
+    -- ~1,200 dispatches per token across 97 modules, each a fixed chain of
+    small elementwise ops (norm, two low-rank linears, silu, sigmoid,
+    reshape, multiply, mean, gate, sigmoid) on a residual stream hc_count=4
+    makes 4x wider than hidden. That is exactly the shape mx.compile fuses.
+
+    Weights are captured as trace constants, which is valid for inference
+    (they do not change between steps). The shapes are static at decode.
+
+    THE CHECKSUM CHANNEL INVERTS HERE. A deletion arm MUST change the
+    checksum. A numerics-preserving optimization MUST NOT: if this arm's
+    checksum differs from baseline, the fusion changed the arithmetic and the
+    speedup is not free, exactly as the CPU-stream load turned out not to be
+    (F120). Equality is the gate, not a nicety.
+    """
+    n = 0
+    for _name, mod in model.named_modules():
+        if type(mod).__name__.endswith("GatedResidual"):
+            orig = type(mod).__call__
+            mod._vq_compiled = mx.compile(
+                lambda h, _m=mod, _f=orig: _f(_m, h))
+            cls = type(mod)
+            mod.__class__ = type(
+                f"Compiled{cls.__name__}", (cls,),
+                {"__call__": lambda self, h: self._vq_compiled(h)})
+            n += 1
+    if n == 0:
+        raise SystemExit("hc-compile matched nothing -- refusing to run.")
+    return n
+
+
 def _patch(model, predicate, label):
     """Re-type matching INSTANCES onto a stubbed subclass; return the count.
 
@@ -118,6 +152,9 @@ ARMS = {
                    "VQ expert module deleted (12.1% of bytes/token; F48 ref)"),
     "sharedexp":  (lambda n, t: n.endswith("shared_expert"),
                    "dense shared expert deleted (4.7% of bytes/token)"),
+    "hc-compile": (lambda n, t: False,
+                   "hyper-connections FUSED with mx.compile "
+                   "(replacement arm: checksum MUST match baseline)"),
     "hc":         (lambda n, t: t.endswith("GatedResidual"),
                    "hyper-connection machinery deleted (12.9% of bytes/token)"),
 }
@@ -141,7 +178,12 @@ def main() -> int:
           flush=True)
 
     predicate, label = ARMS[a.arm]
-    hits = 0 if a.arm == "baseline" else _patch(model, predicate, a.arm)
+    if a.arm == "baseline":
+        hits = 0
+    elif a.arm == "hc-compile":
+        hits = _compile_hc(model)
+    else:
+        hits = _patch(model, predicate, a.arm)
     print(f"arm={a.arm}  patched_instances={hits}  {label}", flush=True)
 
     word = ("the quick brown fox jumps over the lazy dog while considering "
