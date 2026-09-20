@@ -487,11 +487,22 @@ _FLOCK_DIR = FINDINGS_LOG.parent / ".f-locks"
 _FLOCK_TTL = 6 * 3600          # a crashed session must not burn a number forever
 
 
-def _live_reservations() -> Dict[int, float]:
-    """Claimed F-numbers that have not expired, as {number: claimed_at}."""
+def _live_reservations(published: Optional[set] = None) -> Dict[int, float]:
+    """Claimed F-numbers that have not expired, as {number: claimed_at}.
+
+    Self-healing on two conditions. A lock is dropped when it is STALE (past
+    the TTL, so the session holding it is gone) and when its number is
+    ALREADY IN THE LOG -- a published number cannot meaningfully be
+    reserved, and a lock left behind by an append that has since written its
+    entry is pure noise. The second case was real: before append released
+    its own lock, every tool-written entry left one behind, and a fresh
+    `next_f_number` reported a run of published numbers as "held".
+    """
     out: Dict[int, float] = {}
     if not _FLOCK_DIR.is_dir():
         return out
+    if published is None:
+        published = set(e["f"] for e in _findings_entries())
     now = time.time()
     for f in _FLOCK_DIR.glob("F*.lock"):
         try:
@@ -499,9 +510,9 @@ def _live_reservations() -> Dict[int, float]:
             age = now - f.stat().st_mtime
         except (ValueError, OSError):
             continue
-        if age > _FLOCK_TTL:
+        if age > _FLOCK_TTL or n in published:
             try:
-                f.unlink()          # stale: the session that took it is gone
+                f.unlink()          # stale, or already written to the log
             except OSError:
                 pass
             continue
@@ -530,7 +541,8 @@ def t_next_f_number(reserve: bool = False, owner: str = "") -> Dict[str, Any]:
     """
     ents = _findings_entries()
     top = max((e["f"] for e in ents), default=0)
-    taken = set(e["f"] for e in ents) | set(_live_reservations())
+    pub = set(e["f"] for e in ents)
+    taken = pub | set(_live_reservations(pub))
     n = top + 1
     while n in taken:
         n += 1
@@ -575,8 +587,23 @@ def t_findings_tail(n: int = 10) -> Dict[str, Any]:
 
 def t_findings_append(headline: str, artifact: str, instrument: str, prediction: str,
                       measured: str, verdict: str, body: str = "",
-                      corrects: str = "") -> Dict[str, Any]:
-    """Append the next F-entry. The prediction is required and is written as given."""
+                      corrects: str = "", use_reserved: int = 0) -> Dict[str, Any]:
+    """Append the next F-entry. The prediction is required and is written as given.
+
+    `use_reserved` CONSUMES a number this caller already claimed with
+    `next_f_number(reserve=true)`. Without it, append would reserve a FRESH
+    number -- because `_live_reservations()` cannot tell the caller's own
+    hold from another session's and skips both -- so a reserve-then-append
+    in one session silently burned a number (reported by vqlab-28, who
+    reserved 162 and got an entry at 163). Passing the reserved number back
+    is the fix; the lock is then released as part of writing the entry.
+
+    Append also RELEASES whatever lock it used. The first version left it
+    behind for the full 6 h TTL, so every tool-written entry leaked a
+    reservation that then had to age out -- harmless for correctness, since
+    both the log and the lock mark the number taken, but it meant the
+    held-reservations list filled with numbers that were already published.
+    """
     missing = [k for k, v in dict(headline=headline, artifact=artifact, instrument=instrument,
                                   prediction=prediction, measured=measured).items() if not str(v).strip()]
     if missing:
@@ -587,7 +614,19 @@ def t_findings_append(headline: str, artifact: str, instrument: str, prediction:
         raise ToolError("BAD_VERDICT", f"verdict must be one of {VERDICTS}")
     if verdict == "CORRECTS" and not corrects:
         raise ToolError("INCOMPLETE", "verdict CORRECTS needs corrects='F<n>'")
-    n = t_next_f_number(reserve=True, owner="findings_append")["next"]
+    if use_reserved:
+        n = int(use_reserved)
+        ents = _findings_entries()
+        if n in set(e["f"] for e in ents):
+            raise ValueError(f"F{n} is already in the log; it cannot be "
+                             "reserved or reused")
+        if not (_FLOCK_DIR / f"F{n}.lock").exists():
+            raise ValueError(
+                f"F{n} was not reserved (no lock held). Either call "
+                "next_f_number(reserve=true) first, or omit use_reserved "
+                "and let append allocate.")
+    else:
+        n = t_next_f_number(reserve=True, owner="findings_append")["next"]
     today = date.today().isoformat()
     head = f"## F{n} ({today}) — {headline.strip()}"
     if verdict == "CORRECTS":
@@ -603,6 +642,11 @@ def t_findings_append(headline: str, artifact: str, instrument: str, prediction:
     ])
     with open(FINDINGS_LOG, "a", encoding="utf-8") as fh:
         fh.write(entry)
+    # the number is now IN the log, so the lock has done its job
+    try:
+        (_FLOCK_DIR / f"F{n}.lock").unlink()
+    except OSError:
+        pass
     return {"f": n, "headline": head, "log": str(FINDINGS_LOG),
             "note": "Written by tool: the prediction was recorded as given. "
                     "Corrections edit an entry in place and say CORRECTED; never delete."}
@@ -705,7 +749,11 @@ TOOLS: Dict[str, Dict[str, Any]] = {
         "description": "Append the next F-entry to FINDINGS-LOG.md. Every field is required; the pre-registered "
                        "prediction is written verbatim and a falsified prediction stays falsified. "
                        "Verdict ∈ CONFIRMED | FALSIFIED | VOID | NULL | CORRECTS (needs corrects='F<n>').",
-        "schema": _schema({"headline": S(), "artifact": S("artifact name/path the number belongs to"),
+        "schema": _schema({"use_reserved": I("an F-number THIS session already claimed "
+                                            "with next_f_number(reserve=true); omit to "
+                                            "allocate fresh. Without it a reserve-then-"
+                                            "append burns a number"),
+                           "headline": S(), "artifact": S("artifact name/path the number belongs to"),
                            "instrument": S("scoring path + batching, e.g. 'vqlab score, prose corpus, resident'"),
                            "prediction": S("what was pre-registered before the run"),
                            "measured": S("the number(s)"),
