@@ -16,6 +16,7 @@ from vqlab.arch_resolve import ARRAYISH as _ARCH_ARRAYISH
 from vqlab.arch_resolve import COERCE as _ARCH_COERCE
 from vqlab.arch_resolve import PATHWALK as _ARCH_PATHWALK
 from vqlab.arch_resolve import PRELUDE as _ARCH_PRELUDE
+from vqlab.arch_resolve import VLM_SANITIZE as _ARCH_VLM_SANITIZE
 
 ap = argparse.ArgumentParser()
 ap.add_argument("--artifact", required=True)
@@ -135,7 +136,7 @@ import json as _json
 import pathlib as _pathlib
 
 _cfg = _json.load(open(_pathlib.Path(__file__).parent / "config.json"))
-''' + _ARCH_PRELUDE + _ARCH_COERCE + _ARCH_PATHWALK + _ARCH_ARRAYISH + '''
+''' + _ARCH_PRELUDE + _ARCH_COERCE + _ARCH_PATHWALK + _ARCH_VLM_SANITIZE + _ARCH_ARRAYISH + '''
 
 
 class Model(_arch.Model):
@@ -154,7 +155,7 @@ class Model(_arch.Model):
             else:
                 _ncol = _m["in"] // _m["dim"]
                 _ct = mx.uint8 if _m["k"] <= 256 else mx.uint16
-            setattr(_obj, _parts[-1], VQSwitchLinear(
+            _attach_vq(_obj, _parts[-1], VQSwitchLinear(
                 mx.zeros((_m["experts"], _m["out"], _ncol), dtype=_ct),
                 mx.zeros((_m["k"], _m["dim"]), dtype=mx.float16),
                 mx.zeros((_m["experts"], _m["out"], _m["in"] // _m["group"]),
@@ -173,7 +174,7 @@ class Model(_arch.Model):
                 _rb = _g.get("row_bytes")
                 _codes0 = (mx.zeros((_rows, _rb), dtype=mx.uint8) if _rb else
                            mx.zeros((_rows, _cols // _g["dim"]), dtype=mx.uint16))
-                setattr(_obj, _parts[-1], VQPLEEmbedding(
+                _attach_vq(_obj, _parts[-1], VQPLEEmbedding(
                     _codes0,
                     mx.zeros((_g["k"], _g["dim"]), dtype=mx.float16),
                     mx.zeros((_rows, _cols // _g["group"]), dtype=mx.float16),
@@ -183,6 +184,12 @@ class Model(_arch.Model):
 
     def __call__(self, *_a, **_kw):
         return _arrayish(super().__call__(*_a, **_kw))
+
+    def sanitize(self, _weights):
+        if _LOADER == "mlx_vlm" and _arch.__name__.startswith("mlx_vlm."):
+            return _sanitize_for_vlm(self, _weights)
+        _base = getattr(super(), "sanitize", None)
+        return _base(_weights) if _base is not None else _weights
 '''
 _model_py = runtime + shim
 # NEVER ship a model.py that cannot parse. The dense bundler has always done
