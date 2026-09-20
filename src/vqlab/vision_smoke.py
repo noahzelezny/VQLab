@@ -52,6 +52,75 @@ def _probe_image(path):
     return path
 
 
+
+def _cluster(art, a):
+    """Put the probe image through a PLACED exo instance over HTTP.
+
+    The real III.11 vision evidence for an artifact no single box fits. Exo
+    serves images (exo/worker/engines/mlx/vision.py; the chat_completions
+    adapter resolves `image_url` parts), so a 2-node pipeline instance will
+    run the tower, merge its patches into the LM and caption the image --
+    exactly the path a user exercises. An earlier version of this file's
+    --tower-only help asserted this was impossible; F176 did it on all three
+    397B flat rungs.
+
+    This arm is a CAPTION check and the caption is the evidence, so unlike
+    the local gate it cannot assert a logit delta. It asserts instead that
+    the request carried image tokens (prompt_tokens jumps by the tower's
+    patch count) and that a caption came back -- a model served WITHOUT the
+    image would answer the same question with a far shorter prompt.
+    """
+    import base64, json as _json, urllib.request
+    mid = a.cluster_model or ("TheDrainFlorist/" + art.name.split("--", 1)[-1])
+    img = a.image or _probe_image(
+        pathlib.Path(__import__("tempfile").mkdtemp()) / "probe.png")
+    b64 = base64.b64encode(open(img, "rb").read()).decode()
+
+    def _post(content, ntok):
+        req = urllib.request.Request(
+            a.cluster.rstrip("/") + "/v1/chat/completions",
+            data=_json.dumps({"model": mid, "max_tokens": ntok,
+                              "temperature": 0,
+                              "messages": [{"role": "user",
+                                            "content": content}]}).encode(),
+            headers={"Content-Type": "application/json"})
+        with urllib.request.urlopen(req, timeout=a.cluster_timeout) as r:
+            return _json.load(r)
+
+    q = "What shape and colors are in this image? Answer in one short sentence."
+    print(f"cluster         : {a.cluster}\nmodel_id        : {mid}")
+    try:
+        base = _post(q, 1)
+    except Exception as exc:
+        raise SystemExit(f"FAIL: no instance answering for {mid} at "
+                         f"{a.cluster} ({exc}). Place one first -- and note "
+                         f"a model CARD in /state is not a placed instance.")
+    n_text = base["usage"]["prompt_tokens"]
+
+    try:
+        out = _post([{"type": "image_url",
+                      "image_url": {"url": "data:image/png;base64," + b64}},
+                     {"type": "text", "text": q}], a.max_tokens)
+    except Exception as exc:
+        raise SystemExit(f"FAIL: the cluster refused the image request: {exc}")
+    msg = out["choices"][0]["message"]
+    cap = (msg.get("content") or "").strip()
+    n_img = out["usage"]["prompt_tokens"]
+
+    print(f"prompt_tokens   : text-only {n_text} -> with image {n_img} "
+          f"(+{n_img - n_text} image tokens)")
+    print(f"\nprobe is {PROBE_DESC}\nmodel says: {cap}")
+    if n_img <= n_text:
+        raise SystemExit("\nFAIL: the image added NO prompt tokens -- the "
+                         "request was served as text and the tower never ran.")
+    if not cap:
+        raise SystemExit("\nFAIL: image accepted but no caption came back.")
+    print("\nPASS (CLUSTER): the artifact's own vision tower ran inside the "
+          "served pipeline, its patches entered the language model, and the "
+          "model captioned the image. This IS III.11 vision evidence.\n"
+          "The caption is PRINTED, not asserted on -- read it.")
+    return 0
+
 def _load_bundle_module(art):
     """Import the artifact's own model.py exactly as a runtime would."""
     spec = importlib.util.spec_from_file_location("custom_model", art / "model.py")
@@ -155,16 +224,32 @@ def main() -> int:
                          "pass is not the III.11 evidence.")
     ap.add_argument("--tower-only", action="store_true",
                     help="load and run ONLY the vision tower (a few hundred "
-                         "MB), not the language model. For artifacts no box "
-                         "here fits: the 397B rungs are 112-155 GiB against "
-                         "96 GiB on both this Mac and the M3, and exo's "
-                         "2-node pipeline serves text through mlx_lm, so "
-                         "neither --cluster-smoke nor a local load can put an "
-                         "image through them. The tower runs BEFORE the LM "
-                         "and is independent of it, so this exercises the "
-                         "real weights that were unreachable -- but it does "
-                         "NOT test the merge into the LM, and it is not "
-                         "III.11 evidence. It says so in its own output.")
+                         "MB), not the language model. A FALLBACK, not the "
+                         "gate: it does NOT test the merge into the LM and "
+                         "is NOT III.11 evidence, and says so in its own "
+                         "output. For an artifact too large for this box "
+                         "(the 397B rungs are 112-155 GiB against 96 GiB "
+                         "here and on the M3), prefer the EXO CLUSTER: exo "
+                         "does serve images -- see "
+                         "exo/worker/engines/mlx/vision.py and the "
+                         "chat_completions adapter's image_url handling -- "
+                         "so POST a data:image/png;base64 image_url part to "
+                         "/v1/chat/completions on a placed 2-node instance "
+                         "and you get REAL image->text evidence. F176 did "
+                         "this on all three 397B flat rungs; an earlier "
+                         "version of this help text wrongly claimed it was "
+                         "impossible, and that claim was repeated as fact.")
+    ap.add_argument("--cluster", metavar="URL",
+                    help="put the image through a PLACED exo instance at "
+                         "this API root (e.g. http://localhost:52415) "
+                         "instead of loading locally. THE right arm for "
+                         "an artifact bigger than one box: exo serves "
+                         "images, so this is real III.11 evidence, unlike "
+                         "--tower-only. Place the instance first.")
+    ap.add_argument("--cluster-model", metavar="ID",
+                    help="exo model_id; default derives it from the "
+                         "artifact dir name (owner--name -> owner/name).")
+    ap.add_argument("--cluster-timeout", type=float, default=600.0)
     ap.add_argument("--max-tokens", type=int, default=32)
     a = ap.parse_args()
 
@@ -175,6 +260,11 @@ def main() -> int:
         print(f"SKIP: {art.name} is text-only (no vision_config/audio_config). "
               "`smoke` is the gate for it.")
         return 0
+    if a.cluster:
+        # The cluster serves the artifact from its OWN directory, so no
+        # local load and no bundle import -- the runtime under test is
+        # exo's, which is the point.
+        return _cluster(art, a)
     if not (art / "model.py").exists():
         raise SystemExit("FAIL: artifact has no model.py to exercise.")
 
