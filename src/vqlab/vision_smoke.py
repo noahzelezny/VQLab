@@ -181,17 +181,6 @@ def main() -> int:
     # ---- 1. SURFACE -------------------------------------------------------
     mod = _load_bundle_module(art)
     arch = getattr(mod, "_arch", None)
-    if getattr(mod, "_MULTIMODAL", False) and not getattr(
-            mod, "_VISION_SERVABLE", True):
-        raise SystemExit(
-            "FAIL: this artifact carries a vision tower that its own module "
-            "layout cannot serve. Its config names VQ modules in mlx_lm's "
-            "tree (model.layers.N...), but only mlx_vlm's arch has the vision "
-            "tower -- and that arch does not define this artifact's modules, "
-            "so binding to it stops the bundle loading at all, text included. "
-            "A rebundle CANNOT fix this: the artifact has to be rebuilt "
-            "against the VLM module tree. Text serving is unaffected "
-            "(`vqlab smoke`).")
     missing = [n for n in ("TextConfig", "VisionConfig", "VisionModel")
                if not hasattr(mod, n)]
     print(f"bundle base arch : {getattr(arch, '__name__', '?')}")

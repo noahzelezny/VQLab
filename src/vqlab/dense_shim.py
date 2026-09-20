@@ -58,7 +58,7 @@ class Model(_arch.Model):
             _pb = _m.get("pack_bits", 0)
             _ct = mx.uint32 if _pb else (mx.uint8 if _m["k"] <= 256 else mx.uint16)
             _cols = (_m["in"] // _m["dim"] // 32 * _pb) if _pb else _m["in"] // _m["dim"]
-            setattr(_obj, _leaf, VQLinear(
+            _attach_vq(_obj, _leaf, VQLinear(
                 mx.zeros((_m["out"], _cols), dtype=_ct),
                 mx.zeros((_m["k"], _m["dim"]), dtype=mx.float16),
                 mx.zeros((_m["out"], _m["in"] // _m["group"]),
@@ -70,7 +70,7 @@ class Model(_arch.Model):
             _pb = _m.get("pack_bits", 0)
             _ct = mx.uint32 if _pb else (mx.uint8 if _m["k"] <= 256 else mx.uint16)
             _cols = (_m["in"] // _m["dim"] // 32 * _pb) if _pb else _m["in"] // _m["dim"]
-            setattr(_obj, _leaf, VQEmbedding(
+            _attach_vq(_obj, _leaf, VQEmbedding(
                 mx.zeros((_m["rows"], _cols), dtype=_ct),
                 mx.zeros((_m["k"], _m["dim"]), dtype=mx.float16),
                 mx.zeros((_m["rows"], _m["in"] // _m["group"]),

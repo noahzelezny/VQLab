@@ -80,7 +80,11 @@ _VQ_KEYS = (list(_cfg.get("vq_modules", {}))
             + list(_cfg.get("vq_embed", {}))
             + list((_cfg.get("vq_ple") or {}).get("keys", [])))
 _VLM_LAYOUT = any(_k.startswith("language_model.") for _k in _VQ_KEYS)
-_VISION_SERVABLE = bool(_MULTIMODAL and (_VLM_LAYOUT or not _VQ_KEYS))
+# Layout no longer disqualifies an artifact: mlx_lm-layout module paths are
+# remapped by _reach_vq (PLE `shard_N` -> `shards.N`) and mlx_lm-layout weight
+# keys by the bundle's sanitize() on the mlx_vlm branch. F154's "cannot be
+# served" verdict for Flash-Next was a naming mismatch, not a missing module.
+_VISION_SERVABLE = bool(_MULTIMODAL)
 
 
 def _loading_runtime():
@@ -172,11 +176,21 @@ def _reach_vq(_root, _path):
     removed. Raises naming every candidate -- a VQ module that silently fails
     to attach leaves a dense random-init layer in the graph, which loads
     clean and generates plausible garbage."""
+    import re as _re
     _cands = [_path]
     if _path.startswith("language_model."):
         _cands.append(_path[len("language_model."):])
     else:
         _cands.append("language_model." + _path)
+    # PLE n-gram shards: mlx_lm registers them as attributes `shard_N`,
+    # mlx_vlm keeps them in a list, `shards.N`. Same tensors, same order.
+    # Flash-Next's config was written against mlx_lm and failed to attach
+    # under mlx_vlm on exactly this (F154 called it "modules mlx_vlm does
+    # not define"; it does define them, under the other spelling).
+    _shard = _re.compile(r"\\.ngram_embedding\\.shard_(\\d+)$")
+    for _c in list(_cands):
+        if _shard.search(_c):
+            _cands.append(_shard.sub(r".ngram_embedding.shards.\\1", _c))
     for _cand in _cands:
         _obj, _parts, _ok = _root, _cand.split("."), True
         for _c in _parts[:-1]:
@@ -185,12 +199,49 @@ def _reach_vq(_root, _path):
             except (AttributeError, IndexError, KeyError, TypeError):
                 _ok = False
                 break
-        if _ok and hasattr(_obj, _parts[-1]):
-            return _obj, _parts[-1]
+        _leaf = _parts[-1]
+        # The leaf may be a LIST INDEX, not an attribute: mlx_vlm keeps PLE
+        # n-gram shards in a Python list (`shards.0`), and hasattr(list, "0")
+        # is False. That single check is what kept Flash-Next's PLE modules
+        # "unresolvable" under mlx_vlm after the shard_N -> shards.N remap.
+        if _ok and _leaf.isdigit() and isinstance(_obj, (list, tuple)) \
+                and int(_leaf) < len(_obj):
+            return _obj, _leaf
+        if _ok and hasattr(_obj, _leaf):
+            return _obj, _leaf
     raise AttributeError(
         f"vq module {_path!r} does not resolve on this arch "
         f"({type(_root).__name__}); tried {_cands}. The bundle's config and "
         f"its base architecture disagree about the module tree.")
+
+
+def _attach_vq(_owner, _leaf, _module):
+    """Install `_module` at the leaf `_reach_vq` returned: index assignment
+    when the owner is a list (mlx_vlm's PLE shards), setattr otherwise."""
+    if _leaf.isdigit() and isinstance(_owner, list):
+        _owner[int(_leaf)] = _module
+    else:
+        setattr(_owner, _leaf, _module)
+'''
+
+VLM_SANITIZE = '''
+def _sanitize_for_vlm(_self, _weights):
+    """Under the mlx_vlm arch, weight keys written in mlx_lm's layout
+    (`model.layers.N...`, PLE `shard_N`) must be renamed onto mlx_vlm's tree
+    or a strict load rejects them as unexpected. mlx_vlm's own sanitize_key
+    only knows `model.language_model.*` and `model.visual.*`; it leaves bare
+    `model.layers.*` alone. A no-op for artifacts already in mlx_vlm layout
+    and never invoked on the mlx_lm branch."""
+    import re as _re
+    _shard = _re.compile(r"\\.ngram_embedding\\.shard_(\\d+)(?=\\.)")
+    _out = {}
+    for _k, _v in _weights.items():
+        if _k.startswith("model.") and not _k.startswith(("model.visual.", "model.language_model.")):
+            _k = "language_model." + _k
+        _k = _shard.sub(r".ngram_embedding.shards.\\1", _k)
+        _out[_k] = _v
+    _base = getattr(super(type(_self), _self), "sanitize", None)
+    return _base(_out) if _base is not None else _out
 '''
 
 ARRAYISH = '''
