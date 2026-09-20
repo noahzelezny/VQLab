@@ -105,6 +105,15 @@ recorded verbatim). `publish` is not exposed; it is a human's action.
 * **Depth/geometry laws are family-local.** GLM, 397B and Flash each measured
   a different shape. Never inherit an allocation across families.
 * **A ULP figure is DISAGREEMENT, not error (F138).** `VQ_DENSE_SS`'s "up to 8.00 ULP" was read as a quality cost for weeks and shipped the switch OFF. Measured, the tree reduction is the BETTER-rounded one — no corpus worse, prose -0.605 mnats at |t|=4.31 — because a tree's error grows O(log n) against a serial chain's O(n). Before treating a ULP divergence as a cost, ask WHICH rounding is closer to the teacher. Nobody had.
+* **...NOR ON MoE (F164).** The MoE gate is `VQ_FUSED_MAX_N = 4096` and N
+  counts (token, expert) PAIRS, not tokens: Flash-Next at top_k=10 and
+  chunk 512 is N=5120, just over. **chunk <= 409 reaches the fused expert
+  kernel.** So the blind spot is fleet-wide, and no published number on any
+  artifact describes the kernels that run at generation. For THIS family
+  the fix is available -- the bf16 teacher is on the HDD, so decode-path
+  ABSOLUTE KL is buildable; chunk-384 caches are ~25-30 min. Mind F111:
+  the metric is not chunk-invariant, so those numbers are a new harness and
+  do not slot into existing card tables.
 * **The KL gate does NOT exercise the DECODE kernels on dense artifacts
   (F137).** `kl-ladder` scores at the cache's chunk (512, correctly -- F111);
   the fused decode path is gated at `N <= 32` for packed d4, so scoring falls
