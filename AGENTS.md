@@ -245,6 +245,17 @@ to 18 artifacts, and silently broke text generation on 3 of them and loading
 outright on 4 more. A new gate does not excuse re-running the old one -- the
 gate you just wrote is aimed at the failure you already found.
 
+**An absence observed through one access path is not an absence.** Three
+times on 2026-09-19 an instrument's REACH was reported as a property of the
+artifact: an exact-zero KL read as "no difference" (an unexercised code path,
+F143); a conv3d failure read as "transposed tower" (the test had skipped the
+loader's sanitize(), F161); an AttributeError read as "module not defined"
+(different spelling and container type in the other runtime, F163). Before
+declaring something absent, wrong or unchanged, confirm the instrument
+actually traversed the path the runtime traverses -- read the arch's
+`__init__` for the module, call the loader's own entry point, force the
+code path open. A gate that never ran the code reports the gate.
+
 **Releasing? The baseline is the HF revision, not the local copy.**
 `Exo Models/` holds SERVING copies and they drift: 8 of 20 differed from
 published on 2026-09-19, mostly local v2 against published v1.5. Pull the real
