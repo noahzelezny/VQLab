@@ -114,6 +114,11 @@ recorded verbatim). `publish` is not exposed; it is a human's action.
   ABSOLUTE KL is buildable; chunk-384 caches are ~25-30 min. Mind F111:
   the metric is not chunk-invariant, so those numbers are a new harness and
   do not slot into existing card tables.
+  **Scope this claim carefully.** It is about the KL/ppl RELEASE GATE only.
+  `smoke`, `decode-ladder` and serving all run at N=1 and DO exercise the
+  fused kernels; F144 scored quality at chunk 8 inside the gates. Saying
+  "nothing has scored the shipped kernels" is wrong and was written into
+  F164 before being corrected.
 * **The KL gate does NOT exercise the DECODE kernels on dense artifacts
   (F137).** `kl-ladder` scores at the cache's chunk (512, correctly -- F111);
   the fused decode path is gated at `N <= 32` for packed d4, so scoring falls
