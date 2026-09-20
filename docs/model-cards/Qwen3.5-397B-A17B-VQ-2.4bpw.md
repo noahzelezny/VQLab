@@ -22,7 +22,24 @@ A vector-quantized build of [Qwen3.5-397B-A17B](https://huggingface.co/Qwen/Qwen
 that fits and **generates on one 128 GB Apple Silicon machine** — no cluster,
 no patches, stock `mlx-lm`.
 
+## Requirements — read this first
+
+This checkpoint ships its own runtime inside `model.py`; `config.json` points to it with `model_file`. **Your loader must honor that key or nothing works.**
+
+| what you want | what you need | verified on |
+|---|---|---|
+| Text, `mlx-lm` | stock `mlx-lm` with `model_file` support (no patches) | 0.31.9 |
+| Images, `mlx-vlm` | **`mlx-vlm >= 0.6.16`** (first release that loads `model_file`) | 0.6.17 |
+| exo | nothing extra — exo loads the vision tower itself | 2026-09-19 |
+
+If you see `Received N parameters not in model:` with keys like `language_model.model.model.…`, your `mlx-vlm` is too old and never read the bundle — it fails for text too. `pip install -U mlx-vlm`. This is not a bug in the checkpoint.
+
 ## Changelog
+
+### 2026-09-19 — vision fix
+
+Images did not work on any revision before this date: loading with an image failed with `AttributeError: module 'custom_model' has no attribute 'TextConfig'`, because the bundle bound a text-only architecture. **Text was never affected.** Only `model.py` changed — weights and `config.json` are unchanged, so no re-download. Verified: text via `mlx-lm` and an image through the model via `mlx-vlm` 0.6.17. On this rung the text path is byte-identical to the previous revision; the image path was verified on the same architecture (Qwen3.6-35B rungs) and on this repo's own tower weights.
+
 
 ### 2026-09-09 — runtime refresh
 

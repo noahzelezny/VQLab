@@ -41,6 +41,18 @@ Below 6 Bits*](https://doi.org/10.5281/zenodo.22119017) (CC BY 4.0).
 The affine builds compared against below are our own conversions of the same
 base, made with the same tooling and scored on the same instrument.
 
+## Requirements — read this first
+
+This checkpoint ships its own runtime inside `model.py`; `config.json` points to it with `model_file`. **Your loader must honor that key or nothing works.**
+
+| what you want | what you need | verified on |
+|---|---|---|
+| Text, `mlx-lm` | stock `mlx-lm` with `model_file` support (no patches) | 0.31.9 |
+| Images, `mlx-vlm` | **`mlx-vlm >= 0.6.16`** (first release that loads `model_file`) | 0.6.17 |
+| exo | nothing extra — exo loads the vision tower itself | 2026-09-19 |
+
+If you see `Received N parameters not in model:` with keys like `language_model.model.model.…`, your `mlx-vlm` is too old and never read the bundle — it fails for text too. `pip install -U mlx-vlm`. This is not a bug in the checkpoint.
+
 ## Requirements
 
 The `glm5_next` architecture ships in **released `mlx-vlm` 0.6.17** — a

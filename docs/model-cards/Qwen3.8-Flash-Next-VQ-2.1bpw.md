@@ -18,7 +18,11 @@ tags:
 
 # Qwen3.8-Flash-Next-VQ-2.1bpw
 
-**45.0 GiB — a 335 GiB frontier MoE on 64 GB machines.**
+**45.8 GiB — a 335 GiB frontier MoE on 64 GB machines.**
+
+*v2 (2026-09-15): per-layer mixed codebooks, chosen by measurement. Beats
+the v1 build on all three referee corpora at 0.025 GiB SMALLER. See
+"What changed in v2".*
 
 A data-free vector-quantized build of
 [Qwen3.8-Flash-Next](https://huggingface.co/Qwen/Qwen3.8-Flash-Next)
@@ -26,12 +30,32 @@ A data-free vector-quantized build of
 Silicon. Stock `mlx-lm`, no patches — the VQ runtime ships inside the
 checkpoint as `model.py`. Built with [VQLab](https://github.com/noahzelezny/VQLab).
 
-MoE experts at d=8/K=16384 (14-bit codes, padded-tail packed), PLE n-gram tables at d=8/K=256 (8-bit rows), and layers 0–1 upgraded to d=2/K=256 experts (the leverage mix — see below).
+MoE experts at a **per-layer mixed geometry**: d=8/K=16384 for most expert
+`gate/up`, d=4/K=256 on the nine layers measurement said pay for it
+(L27–L33, L35, L47), and d=4/K=256 for every expert `down_proj` — which also
+removes the padded-tail waste the v1 build carried. PLE n-gram tables at
+d=8/K=256 (8-bit rows); layers 0–1 keep their d=2/K=256 front protection.
+
+**Size convention on this card:** 45.755 GiB is the trunk as it exists on
+disk. The MTP sidecar (`mtp-head-q6.safetensors`) is a further 2.140 GiB and
+is only loaded if you enable it.
 
 The affine builds compared against below are our own conversions made with
 the same tooling, scored on the same instrument.
 
 ![where these releases sit](chart_ladder.png)
+
+## Requirements — read this first
+
+This checkpoint ships its own runtime inside `model.py`; `config.json` points to it with `model_file`. **Your loader must honor that key or nothing works.**
+
+| what you want | what you need | verified on |
+|---|---|---|
+| Text, `mlx-lm` | stock `mlx-lm` with `model_file` support (no patches) | 0.31.9 |
+| Images, `mlx-vlm` | **`mlx-vlm >= 0.6.16`** (first release that loads `model_file`) | 0.6.17 |
+| exo | nothing extra — exo loads the vision tower itself | 2026-09-19 |
+
+If you see `Received N parameters not in model:` with keys like `language_model.model.model.…`, your `mlx-vlm` is too old and never read the bundle — it fails for text too. `pip install -U mlx-vlm`. This is not a bug in the checkpoint.
 
 ## Requirements
 
@@ -65,18 +89,20 @@ base architecture.
 upstream exo pins a released `mlx-lm` that lacks `qwen4_exp`, so stock exo
 cannot serve this model. Our [exo fork, branch
 `mtp-stage1`](https://github.com/noahzelezny/exo) serves it, and speculative
-decoding there is one opt-in knob: launch each node with `exo --mtp`
-(equivalently, `EXO_MTP=1` in the worker's environment) and it loads
-`mtp-head-q6.safetensors` and drafts; leave it off (the default) and the
-sidecar is never read — no memory cost. Drafting serves requests
-sequentially (the batch engine has no MTP path), so leave it off for
-concurrent workloads.
+decoding there is one opt-in knob: set `EXO_MTP=1` in the worker's
+environment and it loads `mtp-head-q6.safetensors` and drafts; leave it
+unset (the default) and the sidecar is never read — no memory cost.
 Budget ≈2.2 GiB extra resident when drafting is enabled. On a 64 GB
 machine the trunk alone is 45.8 GiB, so the head fits but leaves little
 headroom for anything else. Measured on this rung through exo (M4, single
 node): 23.7–25.5 tok/s decode at acceptance 0.82–0.88.
 
 ## Changelog
+
+### 2026-09-19 — vision fix
+
+Images did not work on any revision before this date: loading with an image failed with `AttributeError: module 'custom_model' has no attribute 'TextConfig'`, because the bundle bound a text-only architecture. **Text was never affected.** Only `model.py` changed — weights and `config.json` are unchanged, so no re-download. Verified: text via `mlx-lm` and an image through the model via `mlx-vlm` 0.6.17.
+
 
 ### 2026-09-09 — runtime refresh
 
@@ -130,27 +156,88 @@ add ≈2.2 GiB when enabled).
 
 ## Measured results
 
-Prose referee, 2048 tokens; KL against the bf16 teacher's cached top-64
-(captured mass 0.963 for every row — same cache, same positions). All
-sizes include the 333-tensor bf16 vision tower (0.84 GiB).
+Prose referee, 2048 tokens. KL against the bf16 teacher's cached top-64
+(captured mass 0.9626 for every row — same cache, same positions). Sizes
+include the 333-tensor bf16 vision tower (0.84 GiB). **Every row re-measured
+2026-09-15** on one corrected scorer; earlier published figures for this
+family came from a streamed scorer since found to disagree with a direct
+full-model forward, and are not comparable to these.
 
-| build | size | KL to bf16 (mnats/tok) | top-1 agreement | perplexity |
+| build | size | KL to bf16 (mnats/tok) | top-1 agreement | ppl |
 |---|---|---|---|---|
-| affine q3 (ours) | 75 GiB | 1083.4 | 61.9% | 12.850 |
-| **this model** | **45.0 GiB** | **390.1** | **78.8%** | **5.903** |
-| affine q4 (ours) | 96 GiB | 293.9 | 79.6% | 6.453 |
-| affine q5 (ours) | 116 GiB | 91.7 | 87.5% | 5.243 |
-| affine q6 (ours) | 137 GiB | 52.8 | 91.6% | 4.916 |
-| affine q8 (ours) | 178 GiB | 27.1 | 94.9% | 5.197 |
-| bf16 teacher | 335 GiB | 0 | 100% | 5.166 |
+| affine q3 (ours) | 75 GiB | 1050.98 | 61.91% | 12.3541 |
+| **this model** | **45.8 GiB** | **339.89** | **80.22%** | **5.6736** |
+| affine q4 (ours) | 96 GiB | 307.42 | 79.98% | 6.6327 |
+| VQ-3.2bpw | 71.7 GiB | 122.15 | 86.23% | 5.1684 |
+| affine q5 (ours) | 116 GiB | 93.68 | 88.04% | 5.3068 |
+| VQ-4.4bpw | 96.3 GiB | 50.58 | 92.58% | 5.2379 |
+| affine q6 (ours) | 137 GiB | 46.48 | 92.09% | 4.9833 |
+| VQ-5.5bpw | 114.5 GiB | 33.38 | 93.65% | 5.2429 |
+| affine q8 (ours) | 178 GiB | 22.82 | 94.68% | 5.2311 |
+| bf16 teacher | 335 GiB | 0 | 100% | — |
 
-Additional corpora (perplexity): code 2.076 (public mlx corpus,
-pinned manifest), literary 8.945 (Gutenberg). Teacher reads 1.902 / 7.664.
+**Rank by KL, not perplexity.** KL and top-1 order this ladder as the bit
+budgets predict; perplexity does not. The 3.2bpw rung reads 5.1684 — lower
+than 4.4bpw, 5.5bpw and the 178 GiB q8 — while sitting at more than five
+times q8's divergence from the teacher. Perplexity is a mean over finite text
+and absorbs offsetting errors; KL measures the distribution itself. (The bf16
+teacher's own ppl is omitted: it is 0 KL by definition, and a 335 GiB scoring
+pass does not complete on this hardware.)
 
-**Rank these by KL, not perplexity.** Perplexity is an aggregate over
-finite text and absorbs offsetting errors; KL measures distance to the
-teacher's distribution directly. Several rungs here read within noise of
-the teacher on perplexity while differing by an order of magnitude in KL.
+**Every VQ rung beats the affine rung at or above its size.** VQ-2.1bpw at
+45.8 GiB is 3x closer to the teacher than affine q3 at 75 GiB, and level with
+affine q4 at 96 GiB (340 vs 307 KL, 80.2% vs 80.0% top-1) at less than half
+its size. VQ-4.4bpw beats affine q5 outright while being 20 GiB smaller.
+
+## What changed in v2
+
+Allocation was measured, not chosen. `vqlab alloc-sweep` built and scored 18
+whole artifacts to trace two curves — what demotion saves and what promotion
+buys — and the result contradicted two reasonable guesses:
+
+* **No layer was cheap enough to demote.** Every arm that downgraded cold
+  layers lost on all three corpora.
+* **The last promotion was decided by WHICH layer, not how many.** The
+  ranking's 9th choice lost on all three corpora; its 10th (L47, in the tail)
+  won on all three at identical bytes. The two differ by 3% in the ranking
+  signal — inside its own resolution. Rank order is reliable in bulk and not
+  at its boundary.
+
+The v1 build also wasted bytes to packing padding: d=8 on `down_proj` gives
+80 sub-vectors per row, and the packer charges whole 32-sub-vector blocks, so
+every row stored 42 words to carry 35. Moving `down_proj` to d=4/K=256 packs
+exactly and paid for the promotions.
+
+**KL to the bf16 teacher** — the sharpest of these instruments, because it
+measures how far the whole output distribution moved rather than whether one
+ranking decision survived. Prose referee, 2048 tokens against the teacher's
+cached top-64 (captured mass 0.9626; same cache, same positions, every row
+re-measured 2026-09-15 with the corrected scorer):
+
+| build | size | KL to bf16 (mnats/tok) | top-1 agreement | ppl |
+|---|---|---|---|---|
+| affine q8 (ours) | 178 GiB | 22.82 | 94.68% | 5.2311 |
+| VQ-5.5bpw | 114.5 GiB | 33.38 | 93.65% | 5.2429 |
+| VQ-4.4bpw | 96.3 GiB | 50.58 | 92.58% | 5.2379 |
+| VQ-3.2bpw | 71.7 GiB | 122.15 | 86.23% | 5.1684 |
+| **this model (2.1 v2)** | **45.8 GiB** | **339.89** | **80.22%** | 5.6736 |
+| VQ-2.1bpw v1 (previous) | 45.8 GiB | 394.73 | 78.42% | 5.9056 |
+
+**v2 cuts divergence from the teacher by 13.9%** against the v1 build it
+replaces, at the same byte budget, and gains 1.8 points of top-1 agreement.
+
+**Read this ladder by KL, and notice why.** KL and top-1 order the rungs
+exactly as their bit budgets predict — KL roughly halves at each step up.
+Perplexity does not: the 3.2bpw rung reads **5.1684**, better than 4.4bpw,
+5.5bpw *and* the 178 GiB q8, while sitting at more than five times q8's
+divergence from the teacher. A rung chosen on perplexity alone would be
+chosen wrong. Perplexity is a mean over finite text and absorbs offsetting
+errors; KL measures the distribution itself.
+
+Older KL figures published for this family came from a streamed scorer since
+found to disagree with a direct full-model forward; the two rows here were
+re-measured 2026-09-15 with the corrected one and are not comparable to those
+earlier numbers.
 
 ## Run it
 

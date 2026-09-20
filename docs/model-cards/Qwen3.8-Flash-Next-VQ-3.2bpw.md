@@ -33,6 +33,18 @@ the same tooling, scored on the same instrument.
 
 ![where these releases sit](chart_ladder.png)
 
+## Requirements — read this first
+
+This checkpoint ships its own runtime inside `model.py`; `config.json` points to it with `model_file`. **Your loader must honor that key or nothing works.**
+
+| what you want | what you need | verified on |
+|---|---|---|
+| Text, `mlx-lm` | stock `mlx-lm` with `model_file` support (no patches) | 0.31.9 |
+| Images, `mlx-vlm` | **`mlx-vlm >= 0.6.16`** (first release that loads `model_file`) | 0.6.17 |
+| exo | nothing extra — exo loads the vision tower itself | 2026-09-19 |
+
+If you see `Received N parameters not in model:` with keys like `language_model.model.model.…`, your `mlx-vlm` is too old and never read the bundle — it fails for text too. `pip install -U mlx-vlm`. This is not a bug in the checkpoint.
+
 ## Requirements
 
 **This model needs an `mlx-lm` that has the `qwen4_exp` architecture, which no
@@ -76,6 +88,11 @@ measured so far only on the 2.1bpw rung (23.7–25.5 tok/s, acceptance
 0.82–0.88); the sidecar head is the same file on every rung.
 
 ## Changelog
+
+### 2026-09-19 — vision fix
+
+Images did not work on any revision before this date: loading with an image failed with `AttributeError: module 'custom_model' has no attribute 'TextConfig'`, because the bundle bound a text-only architecture. **Text was never affected.** Only `model.py` changed — weights and `config.json` are unchanged, so no re-download. Verified: text via `mlx-lm` and an image through the model via `mlx-vlm` 0.6.17.
+
 
 ### 2026-09-09 — runtime refresh
 
@@ -129,27 +146,38 @@ add ≈2.2 GiB when enabled).
 
 ## Measured results
 
-Prose referee, 2048 tokens; KL against the bf16 teacher's cached top-64
-(captured mass 0.963 for every row — same cache, same positions). All
-sizes include the 333-tensor bf16 vision tower (0.84 GiB).
+Prose referee, 2048 tokens. KL against the bf16 teacher's cached top-64
+(captured mass 0.9626 for every row — same cache, same positions). Sizes
+include the 333-tensor bf16 vision tower (0.84 GiB). **Every row re-measured
+2026-09-15** on one corrected scorer; earlier published figures for this
+family came from a streamed scorer since found to disagree with a direct
+full-model forward, and are not comparable to these.
 
-| build | size | KL to bf16 (mnats/tok) | top-1 agreement | perplexity |
+| build | size | KL to bf16 (mnats/tok) | top-1 agreement | ppl |
 |---|---|---|---|---|
-| affine q3 (ours) | 75 GiB | 1083.4 | 61.9% | 12.850 |
-| **this model** | **69.4 GiB** | **123.5** | **87.0%** | **5.211** |
-| affine q4 (ours) | 96 GiB | 293.9 | 79.6% | 6.453 |
-| affine q5 (ours) | 116 GiB | 91.7 | 87.5% | 5.243 |
-| affine q6 (ours) | 137 GiB | 52.8 | 91.6% | 4.916 |
-| affine q8 (ours) | 178 GiB | 27.1 | 94.9% | 5.197 |
-| bf16 teacher | 335 GiB | 0 | 100% | 5.166 |
+| affine q3 (ours) | 75 GiB | 1050.98 | 61.91% | 12.3541 |
+| VQ-2.1bpw | 45.8 GiB | 339.89 | 80.22% | 5.6736 |
+| affine q4 (ours) | 96 GiB | 307.42 | 79.98% | 6.6327 |
+| **this model** | **71.7 GiB** | **122.15** | **86.23%** | **5.1684** |
+| affine q5 (ours) | 116 GiB | 93.68 | 88.04% | 5.3068 |
+| VQ-4.4bpw | 96.3 GiB | 50.58 | 92.58% | 5.2379 |
+| affine q6 (ours) | 137 GiB | 46.48 | 92.09% | 4.9833 |
+| VQ-5.5bpw | 114.5 GiB | 33.38 | 93.65% | 5.2429 |
+| affine q8 (ours) | 178 GiB | 22.82 | 94.68% | 5.2311 |
+| bf16 teacher | 335 GiB | 0 | 100% | — |
 
-Additional corpora (perplexity): code 1.939 (public mlx corpus,
-pinned manifest), literary 7.823 (Gutenberg). Teacher reads 1.902 / 7.664.
+**Rank by KL, not perplexity.** KL and top-1 order this ladder as the bit
+budgets predict; perplexity does not. The 3.2bpw rung reads 5.1684 — lower
+than 4.4bpw, 5.5bpw and the 178 GiB q8 — while sitting at more than five
+times q8's divergence from the teacher. Perplexity is a mean over finite text
+and absorbs offsetting errors; KL measures the distribution itself. (The bf16
+teacher's own ppl is omitted: it is 0 KL by definition, and a 335 GiB scoring
+pass does not complete on this hardware.)
 
-**Rank these by KL, not perplexity.** Perplexity is an aggregate over
-finite text and absorbs offsetting errors; KL measures distance to the
-teacher's distribution directly. Several rungs here read within noise of
-the teacher on perplexity while differing by an order of magnitude in KL.
+**Every VQ rung beats the affine rung at or above its size.** VQ-2.1bpw at
+45.8 GiB is 3x closer to the teacher than affine q3 at 75 GiB, and level with
+affine q4 at 96 GiB (340 vs 307 KL, 80.2% vs 80.0% top-1) at less than half
+its size. VQ-4.4bpw beats affine q5 outright while being 20 GiB smaller.
 
 ## Run it
 
