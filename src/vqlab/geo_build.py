@@ -390,6 +390,28 @@ def main():
     cfg = json.load(open(cfg_path))
     vm = cfg.get("vq_modules") or cfg.get("vq_linear") or {}
     for n, g in geo.items():
+        # A module ABSENT from vq_modules is the RESTORE case: it shipped
+        # unquantized (affine) and is being given a VQ fit for the first
+        # time. 397B rungs 2.4/2.6/3.1 shipped layers 57-59 that way -- 171
+        # of 180 modules quantized -- so `vm[n]` raised KeyError and the
+        # build died after doing all the work. Derive the entry from the
+        # tensors actually being written; every field is a shape, so there
+        # is nothing to guess.
+        if n not in vm:
+            c_ = new[n + ".codes"]
+            sc_ = new[n + ".vq_scales"]
+            E_, OUT_ = int(c_.shape[0]), int(c_.shape[1])
+            if c_.dtype == mx.uint32:
+                bits_ = int(math.ceil(math.log2(int(g["k"]))))
+                nsub_ = int(c_.shape[2]) // bits_ * 32
+            else:
+                nsub_ = int(c_.shape[2])
+            IN_ = nsub_ * int(g["dim"])
+            vm[n] = {"experts": E_, "out": OUT_, "in": IN_,
+                     "group": IN_ // int(sc_.shape[2])}
+            _log(f"  RESTORED {n}: was not in vq_modules "
+                 f"(experts={E_} out={OUT_} in={IN_} "
+                 f"group={vm[n]['group']})")
         ent = vm[n]
         ent["dim"], ent["k"] = int(g["dim"]), int(g["k"])
         # pack_bits must describe the BYTES, not the geometry: the loader
@@ -403,26 +425,84 @@ def main():
             ent["pack_bits"] = int(math.ceil(math.log2(int(g["k"]))))
         else:
             ent.pop("pack_bits", None)
+    # A RESTORED module must also leave the affine `quantization` map. The
+    # loader walks that map and calls mlx's quantizer on every entry, so a
+    # module that is now VQ but still listed affine dies at load with
+    # "Unable to quantize model of type VQSwitchLinear" -- measured, not
+    # theorised: the first restored 3.1 build assembled cleanly, passed its
+    # shape audit, and could not be loaded at all.
+    qmap = cfg.get("quantization")
+    if isinstance(qmap, dict):
+        gone = [n for n in geo if n in qmap]
+        for n in gone:
+            qmap.pop(n)
+        if gone:
+            _log(f"  removed {len(gone)} restored modules from the affine "
+                 f"quantization map")
     json.dump(cfg, open(cfg_path, "w"), indent=1)
+    # ---- RESTORE bookkeeping -------------------------------------------
+    # A module that shipped UNQUANTIZED has no `.codes` to swap, so the
+    # plain swap loop below would write nothing for it (measured: 9 modules
+    # "RESTORED" in config and "ASSEMBLE-DONE: 0 tensors"). Restoring one
+    # means three edits the swap path never needs: ADD its VQ tensors, DROP
+    # the affine tensors they supersede, and REWRITE the index, because the
+    # key set changes. The VQ tensors go into the shard that held the
+    # affine ones so the module's bytes stay co-located.
+    a_wm = json.load(open(os.path.join(
+        a.artifact, "model.safetensors.index.json")))["weight_map"]
+    restored = [n for n in geo if (n + ".codes") not in a_wm]
+    drop, add_to = set(), {}
+    for n in restored:
+        host = None
+        for suf in (".weight", ".scales", ".biases"):
+            if n + suf in a_wm:
+                drop.add(n + suf)
+                host = host or a_wm[n + suf]
+        if host is None:
+            raise SystemExit(
+                f"FAIL: {n} has neither codes nor affine tensors; there is "
+                "nothing to restore and nowhere to put it")
+        for suf in (".codes", ".codebook", ".vq_scales"):
+            add_to.setdefault(host, []).append(n + suf)
+    if restored:
+        _log(f"restoring {len(restored)} modules: +{sum(len(v) for v in add_to.values())} "
+             f"VQ tensors, -{len(drop)} affine tensors, index rewritten")
+
     swapped = 0
+    wm_out = {k: v for k, v in a_wm.items() if k not in drop}
     for f in sorted(glob.glob(os.path.join(a.artifact, "*" + EXT))):
         rp, b = os.path.realpath(f), os.path.basename(f)
         tens = mx.load(rp)
         hit = [k for k in tens if k in new]
+        adds = add_to.get(b, [])
+        dels = [k for k in tens if k in drop]
         dst = os.path.join(a.out, b)
         if os.path.lexists(dst):
             os.remove(dst)
-        if not hit:
+        if not hit and not adds and not dels:
             os.symlink(rp, dst)          # unchanged shard: shipped bytes, no copy
             continue
         out = {}
         for k, v in tens.items():
+            if k in drop:
+                continue
             out[k] = new[k] if k in new else v
             swapped += k in new
+        for k in adds:
+            out[k] = new[k]
+            wm_out[k] = b
         mx.save_safetensors(dst, out)
         del tens, out
         mx.clear_cache()
-    _log(f"ASSEMBLE-DONE: {swapped} tensors -> {a.out} (config pack_bits updated)")
+    if restored:
+        ip = os.path.join(a.out, "model.safetensors.index.json")
+        idx = json.load(open(ip))
+        idx["weight_map"] = wm_out
+        idx.pop("metadata", None) if False else None
+        json.dump(idx, open(ip, "w"), indent=1)
+    _log(f"ASSEMBLE-DONE: {swapped} swapped, "
+         f"{sum(len(v) for v in add_to.values())} added, {len(drop)} dropped "
+         f"-> {a.out} (config pack_bits updated)")
 
 
 if __name__ == "__main__":
