@@ -72,7 +72,16 @@ def _save(entries):
 def cmd_add(a):
     art = pathlib.Path(a.artifact).resolve()
     if not art.is_dir():
-        sys.exit(f"artifact not a directory: {art}")
+        # A BUILD entry names its own output, which does not exist yet: the
+        # queue drains fit -> build -> score in one entry and the artifact
+        # appears midway. Only explicit --cmd entries may do this; a --gates
+        # entry on a missing dir is still the typo it always was.
+        if not (a.cmd and a.produces):
+            sys.exit(f"artifact not a directory: {art}"
+                     + ("" if a.cmd else "")
+                     + ("\n(pass --produces if this entry BUILDS it)"
+                        if a.cmd else ""))
+        print(f"note: {art.name} does not exist yet — this entry builds it")
     if a.cmd:
         cmds = list(a.cmd)
     else:
@@ -187,6 +196,10 @@ def main():
                    help="explicit vqlab.cli command ({art} expands); "
                         "overrides --gates; repeatable")
     p.add_argument("--note", default="")
+    p.add_argument("--produces", action="store_true",
+                   help="this entry BUILDS --artifact rather than reading it, "
+                        "so the path is allowed not to exist yet. Requires "
+                        "--cmd.")
     p.set_defaults(fn=cmd_add)
     p = sub.add_parser("list", help="show the queue")
     p.set_defaults(fn=cmd_list)
