@@ -563,7 +563,14 @@ def main():
         lp = logits - lse[:, None]
         idx = mx.argpartition(-lp, kth=a.save_topk - 1, axis=-1)[:, : a.save_topk]
         top = mx.take_along_axis(lp, idx, axis=-1)
-        mx.eval(idx, top)
+        # Captured mass = the share of the teacher's probability the stored
+        # top-k holds. KL over top-k omits the rest, so this is the number
+        # that says how much the truncation matters. kl_damage.py records it
+        # on every cache; this streamed path did not, and on 2026-09-23 it
+        # had to be reconstructed from the stored logprobs for the paper.
+        cap = mx.exp(top.astype(mx.float32)).sum(-1)
+        mx.eval(idx, top, cap)
+        captured = float(cap.mean())
         mx.save_safetensors(str(outd / "teacher_topk.safetensors"),
                             {"indices": idx[None].astype(mx.int32),
                              "logprobs": top[None].astype(mx.float16)})
@@ -587,8 +594,10 @@ def main():
             {"teacher": str(mp), "corpus": a.corpus, "top_k": a.save_topk,
              "num_samples": 1, "seq_len": len(ids) - 1, "batch_size": 1,
              "chunk": C_, "streamed": True, "teacher_ppl": round(ppl, 6),
-             "model": str(mp), "tokens": len(ids)}, indent=1))
-        print(f"top-{a.save_topk} cache -> {outd}", flush=True)
+             "model": str(mp), "tokens": len(ids),
+             "captured_mass": round(captured, 6)}, indent=1))
+        print(f"top-{a.save_topk} cache -> {outd}  captured_mass "
+              f"{captured:.4f}", flush=True)
 
 
 if __name__ == "__main__":
