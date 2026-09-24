@@ -520,6 +520,14 @@ def main():
             # logprobs are never both resident whole. Also reports the
             # top-64 truncated KL on the SAME positions, so the new
             # instrument can be checked against the old one directly.
+            # CPU STREAM (Metal rule IV). The cache is 12 GB and loads lazily;
+            # evaluated on the GPU, its disk read lands inside a command buffer
+            # and the watchdog kills it (first overnight run, 2026-09-24 02:38).
+            # The model forward already ran on the GPU; this is only the
+            # per-position KL arithmetic, cheap on CPU.
+            mx.eval(logits, lse)
+            _cpu = mx.stream(mx.cpu)
+            _cpu.__enter__()
             t_full = mx.load(str(full_f))["logprobs"][0]    # [S, V] fp32
             S_ = t_full.shape[0]
             kls, kltops, agrees = [], [], []
@@ -542,6 +550,8 @@ def main():
             kl_top = mx.concatenate(kltops)
             top1 = mx.mean(mx.concatenate(agrees))
             mass = mx.array(1.0)
+            mx.eval(kl, kl_top, top1)
+            _cpu.__exit__(None, None, None)
         else:
             t = mx.load(str(cd / "teacher_topk.safetensors"))
             t_idx = t["indices"][0].astype(mx.int64)          # [S, k]
