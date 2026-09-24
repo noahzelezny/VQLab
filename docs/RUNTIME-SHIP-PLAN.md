@@ -53,3 +53,12 @@ Per-family flag tuning (turning off only the flag that is numerics-active for
 that family, F105) is NOT part of this plan. It buys back a few percent and
 costs a per-family bisect before every release; revisit only if the 2.7%/6.2%
 ever matters.
+
+## 2026-09-23 — decision: 35B-A3B 3.8 / 4.6 / 5.4 stay on v2
+
+These three were published with the v2 runtime (both bf16-I/O flags ON) by
+drift, not by this plan. Noah's decision: **keep them on v2** — rebundling to
+v1.5 would only slow them down, and v2's numerics sit closer to bf16. Their
+card numbers were measured on the older runtime, so they need **rescoring on
+the shipped v2 bundle**, not a rebundle. Expected to come out of the paper
+revision's scoring pass.
