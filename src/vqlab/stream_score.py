@@ -426,6 +426,12 @@ def main():
     ap.add_argument("--save-topk", type=int, default=None,
                     help="also dump top-k logprobs per position (teacher "
                          "cache for KL) to --out")
+    ap.add_argument("--save-full", action="store_true",
+                    help="with --save-topk: ALSO store the teacher's FULL "
+                         "log-distribution (fp32, [1,S,V]) as "
+                         "teacher_full.safetensors. A --kl-cache that holds "
+                         "one is scored over the whole vocabulary, not the "
+                         "top-k (2026-09-23, paper v5).")
     ap.add_argument("--kl-cache", default=None,
                     help="teacher top-k cache dir (from --save-topk): also "
                          "report KL-to-teacher in millinats + top-1 "
@@ -505,16 +511,48 @@ def main():
             raise SystemExit("FAIL: token ids differ from the cache — the "
                              "KL would compare different positions. Same "
                              "corpus, same --tokens, same tokenizer required.")
-        t = mx.load(str(cd / "teacher_topk.safetensors"))
-        t_idx = t["indices"][0].astype(mx.int64)          # [S, k]
-        t_lp = t["logprobs"][0].astype(mx.float32)        # [S, k]
-        s_lp_all = logits - lse[:, None]
-        s_lp = mx.take_along_axis(s_lp_all, t_idx, axis=-1)
-        # truncated KL(teacher || student) over the teacher's top-k
-        kl = mx.sum(mx.exp(t_lp) * (t_lp - s_lp), axis=-1)
-        top1 = mx.mean(
-            (mx.argmax(s_lp_all, axis=-1) == t_idx[:, 0]).astype(mx.float32))
-        mass = mx.mean(mx.sum(mx.exp(t_lp), axis=-1))
+        full_f = cd / "teacher_full.safetensors"
+        kl_top = None
+        if full_f.exists():
+            # FULL-VOCABULARY KL (paper v5). Exact KL(teacher || student)
+            # summed over all V tokens, fp32 end to end. Blocked over
+            # positions so the teacher [S,V] and the student's normalized
+            # logprobs are never both resident whole. Also reports the
+            # top-64 truncated KL on the SAME positions, so the new
+            # instrument can be checked against the old one directly.
+            t_full = mx.load(str(full_f))["logprobs"][0]    # [S, V] fp32
+            S_ = t_full.shape[0]
+            kls, kltops, agrees = [], [], []
+            BLK = 1024
+            for b0 in range(0, S_, BLK):
+                b1 = min(b0 + BLK, S_)
+                tl = t_full[b0:b1].astype(mx.float32)
+                sl = logits[b0:b1].astype(mx.float32) - lse[b0:b1, None]
+                pt = mx.exp(tl)
+                kls.append(mx.sum(pt * (tl - sl), axis=-1))
+                ti = mx.argpartition(-tl, kth=63, axis=-1)[:, :64]
+                tt = mx.take_along_axis(tl, ti, axis=-1)
+                st = mx.take_along_axis(sl, ti, axis=-1)
+                kltops.append(mx.sum(mx.exp(tt) * (tt - st), axis=-1))
+                # teacher argmax taken EXPLICITLY, never from index order
+                agrees.append((mx.argmax(sl, axis=-1) ==
+                               mx.argmax(tl, axis=-1)).astype(mx.float32))
+                mx.eval(kls[-1], kltops[-1], agrees[-1])
+            kl = mx.concatenate(kls)
+            kl_top = mx.concatenate(kltops)
+            top1 = mx.mean(mx.concatenate(agrees))
+            mass = mx.array(1.0)
+        else:
+            t = mx.load(str(cd / "teacher_topk.safetensors"))
+            t_idx = t["indices"][0].astype(mx.int64)          # [S, k]
+            t_lp = t["logprobs"][0].astype(mx.float32)        # [S, k]
+            s_lp_all = logits - lse[:, None]
+            s_lp = mx.take_along_axis(s_lp_all, t_idx, axis=-1)
+            # truncated KL(teacher || student) over the teacher's top-k
+            kl = mx.sum(mx.exp(t_lp) * (t_lp - s_lp), axis=-1)
+            top1 = mx.mean(
+                (mx.argmax(s_lp_all, axis=-1) == t_idx[:, 0]).astype(mx.float32))
+            mass = mx.mean(mx.sum(mx.exp(t_lp), axis=-1))
         # ERROR BARS, because a KL mean without one cannot answer the only
         # question anyone asks of it: is this rung DIFFERENT from that rung.
         # The 2026-09-16 Flash-3.2 sweep had four arms inside 3 mnats of each
@@ -537,7 +575,10 @@ def main():
             # on a 10 mnat difference between arms whose own spreads are
             # ~3 mnat cannot resolve what a paired test resolves easily.
             mx.eval(kl_mn)
-            mx.save_safetensors(a.kl_per_position, {"kl_millinats": kl_mn})
+            arrs = {"kl_millinats": kl_mn}
+            if kl_top is not None:
+                arrs["kl_top64_millinats"] = kl_top * 1000.0
+            mx.save_safetensors(a.kl_per_position, arrs)
         rec.update(mean_kl_millinats=round(mean_mn, 4),
                    kl_sem_millinats=round(sem, 4),
                    kl_ci95_millinats=[round(mean_mn - 1.96 * sem, 4),
@@ -548,7 +589,11 @@ def main():
                                "correlated, so this UNDERSTATES the true "
                                "uncertainty",
                    top1_agreement=round(float(top1.item()), 4),
-                   captured_mass=round(float(mass.item()), 4))
+                   captured_mass=round(float(mass.item()), 4),
+                   kl_support="full_vocab" if kl_top is not None else "topk")
+        if kl_top is not None:
+            rec["mean_kl_top64_millinats"] = round(
+                float(mx.mean(kl_top).item()) * 1000.0, 4)
     if a.stream_ple:
         import ple_stream as _ps
         st = _ps.STATS
@@ -574,6 +619,11 @@ def main():
         mx.save_safetensors(str(outd / "teacher_topk.safetensors"),
                             {"indices": idx[None].astype(mx.int32),
                              "logprobs": top[None].astype(mx.float16)})
+        if a.save_full:
+            full = (logits.astype(mx.float32) - lse[:, None])[None]
+            mx.save_safetensors(str(outd / "teacher_full.safetensors"),
+                                {"logprobs": full})
+            del full
         mx.save_safetensors(str(outd / "tokens.safetensors"),
                             {"tokens": mx.array([ids])})
         # CURRENT kl_damage SCHEMA, not the 2026-08 one. The pre-existing
@@ -595,7 +645,8 @@ def main():
              "num_samples": 1, "seq_len": len(ids) - 1, "batch_size": 1,
              "chunk": C_, "streamed": True, "teacher_ppl": round(ppl, 6),
              "model": str(mp), "tokens": len(ids),
-             "captured_mass": round(captured, 6)}, indent=1))
+             "captured_mass": round(captured, 6),
+             "full_vocab": bool(a.save_full)}, indent=1))
         print(f"top-{a.save_topk} cache -> {outd}  captured_mass "
               f"{captured:.4f}", flush=True)
 
