@@ -102,9 +102,26 @@ def main():
         for cname, cm in meta.items():
             print(f"[kl-ladder] {rname} x {cname}", flush=True)
             pp = os.path.join(ppdir, f"{rname}__{cname}.safetensors")
-            rec = score_one(a.python, rdir, cm["dir"], cm["corpus"],
-                            cm["tokens"], cm["chunk"], a.stream_ple,
-                            a.lazy_over_gb, per_pos=pp)
+            # RESUME. Each rung x corpus record is saved beside its per-position
+            # array the moment it finishes, and reused on a rerun if the cache,
+            # model and array still match -- a crash late in a ladder no longer
+            # throws away every rung scored before it (2026-09-24).
+            rj = pp + ".json"
+            rec = None
+            if os.path.exists(pp) and os.path.exists(rj):
+                old_rec = json.load(open(rj))
+                if (old_rec.get("model") == rdir
+                        and old_rec.get("_cache_dir") == cm["dir"]):
+                    rec = old_rec
+                    print("    (resumed from saved record)", flush=True)
+            if rec is None:
+                rec = score_one(a.python, rdir, cm["dir"], cm["corpus"],
+                                cm["tokens"], cm["chunk"], a.stream_ple,
+                                a.lazy_over_gb, per_pos=pp)
+                rec["_cache_dir"] = cm["dir"]
+                with open(rj + ".tmp", "w") as f:
+                    json.dump(rec, f)
+                os.replace(rj + ".tmp", rj)
             table[rname][cname] = rec
             print(f"    KL {rec['mean_kl_millinats']:.3f} "
                   f"+/- {rec.get('kl_sem_millinats', float('nan')):.3f} "
