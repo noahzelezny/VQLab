@@ -24,7 +24,5 @@ fix the `src/vqlab/` version instead. Some are frozen on purpose and cited:
 `fitter_0816_cdcdeab.py` is the fitter that produced the published 397B
 VQ-2.4 rung.
 
-**Hazard:** `quantlab/patch_mlx_lm.py` installs `quantlab/vq_switch.py` (the
-2026-08-22 runtime) into an mlx_lm tree. Re-running it today installs a stale
-runtime. The current runtime is `src/vqlab/runtime/vq_switch.py`
-(`vqlab._layout.runtime_file("vq_switch.py")`).
+`quantlab/patch_mlx_lm.py` installs the CURRENT runtime (`src/vqlab/runtime/vq_switch.py`) into an mlx_lm tree,
+not this folder's frozen copy (changed 2026-09-25).
