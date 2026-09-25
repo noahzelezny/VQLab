@@ -49,7 +49,8 @@ COMMANDS = {
     "coverage": ("coverage.py", "per-module report: which prefill kernel path each geometry takes"),
     "check-comparator": ("check_comparator.py", "comparator gate: tensor-set parity vs teacher"),
     "bundle-accept": ("bundle_accept.py", "kernel acceptance on the runtime lifted FROM the artifact"),
-    "manifest": ("artifact_manifest.py", "write/check provenance manifests"),
+    "manifest": ("artifact_manifest.py", "tamper stamp: were these shard bytes rewritten? (outside the artifact)"),
+    "provenance": ("provenance.py", "build record: how an artifact was made (tool, fitter, inputs, runtime, lineage)"),
     "preflight-ram": ("preflight_ram.py", "refuse resident-memory ops on models bigger than RAM"),
     "preflight-disk": ("preflight_disk.py", "refuse builds whose output volume lacks the space"),
     # scoring
