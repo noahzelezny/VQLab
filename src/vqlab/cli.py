@@ -46,7 +46,7 @@ COMMANDS = {
     "check-bundle": ("check_bundle.py", "bundle gate: shipped runtime matches repo runtime"),
     "prefill-bench": ("prefill_bench.py", "time prefill on one artifact under BOTH codebook arms (ratio, n>=3)"),
     "active-bytes": ("active_bytes.py", "weight bytes read per decode token, by component (the roofline denominator)"),
-    "coverage": ("coverage.py", "per-module report: which prefill kernel path each geometry takes"),
+    "coverage": ("kernel_coverage.py", "per-module report: which prefill kernel path each geometry takes"),
     "check-comparator": ("check_comparator.py", "comparator gate: tensor-set parity vs teacher"),
     "bundle-accept": ("bundle_accept.py", "kernel acceptance on the runtime lifted FROM the artifact"),
     "manifest": ("artifact_manifest.py", "tamper stamp: were these shard bytes rewritten? (outside the artifact)"),

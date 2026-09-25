@@ -365,6 +365,32 @@ def main(argv=None) -> int:
               "mlx_lm" not in rmod, f"resolved from {rmod}")
 
         # ---------------------------------------------------------------
+        print("[6b/7] layout")
+        # A stage module whose bare name is also a stdlib or installed
+        # package gets shadowed (or shadows it) on sys.path. bench/coverage.py
+        # was renamed kernel_coverage.py for exactly this (pytest-cov).
+        from vqlab import _layout as L
+        import importlib.util as _iu
+        stage = {str(d) for d in L.stage_dirs()}
+        saved = list(sys.path)
+        try:
+            sys.path[:] = [p for p in sys.path if p not in stage]
+            clash = sorted(f.stem for d in L.stage_dirs() for f in d.glob("*.py")
+                           if f.stem != "__init__" and (
+                               f.stem in sys.stdlib_module_names
+                               or (f.stem not in sys.modules
+                                   and _iu.find_spec(f.stem) is not None)))
+        finally:
+            sys.path[:] = saved
+        check("no stage module name collides with stdlib / site-packages",
+              not clash, ", ".join(clash))
+        p = subprocess.run([PY, "-m", "vqlab.price", "--help"], capture_output=True,
+                           text=True, env={**__import__("os").environ,
+                                           "PYTHONPATH": str(L.SRC)})
+        check("pre-split `python -m vqlab.<name>` still runs", p.returncode == 0,
+              p.stderr.strip().splitlines()[-1] if p.returncode else "")
+
+        # ---------------------------------------------------------------
         print("[7/7] pricer")
         p = run([str(_find("price.py")), "--family", "qwen397b",
                  "--budget-gib", "108"], verbose=v)
