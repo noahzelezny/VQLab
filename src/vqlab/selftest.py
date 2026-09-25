@@ -82,6 +82,39 @@ def make_source(d: pathlib.Path):
               open(d / "config.json", "w"), indent=1)
 
 
+def geo_fixture(tmp: pathlib.Path):
+    """A qwen3_5-shaped MoE teacher + a VQ base artifact for geo-build: one
+    module, E=2 experts, IN=128 so d4 gives nsub=32 (geo-build refuses
+    ragged packing). The base carries its OWN build record so the child's
+    lineage link can be checked."""
+    sys.path.insert(0, str(HERE))
+    import provenance
+    E, I, H = 2, 8, 128
+    teacher, base = tmp / "geo-teacher", tmp / "geo-base"
+    teacher.mkdir(); base.mkdir()
+    mx.random.seed(11)
+    tk = "model.language_model.layers.0.mlp.experts.gate_up_proj"
+    mx.save_safetensors(str(teacher / "t.safetensors"),
+                        {tk: (mx.random.normal((E, 2 * I, H)) * .05).astype(mx.bfloat16)})
+    json.dump({"weight_map": {tk: "t.safetensors"}},
+              open(teacher / "model.safetensors.index.json", "w"))
+    mod = "model.language_model.layers.0.mlp.switch_mlp.gate_proj"
+    w = {mod + ".codes": mx.zeros((E, I, H // 2), mx.uint8),
+         mod + ".codebook": mx.zeros((256, 2), mx.float16),
+         mod + ".vq_scales": mx.ones((E, I, H // G), mx.float16)}
+    mx.save_safetensors(str(base / "model-00001-of-00001.safetensors"), w)
+    json.dump({"weight_map": {k: "model-00001-of-00001.safetensors" for k in w}},
+              open(base / "model.safetensors.index.json", "w"))
+    json.dump({"model_type": "qwen3_5_moe", "vq_modules": {mod: {
+        "experts": E, "out": I, "in": H, "group": G, "dim": 2, "k": 256}}},
+        open(base / "config.json", "w"))
+    brec = provenance.write_build_record(base, tool="selftest-fixture")
+    gm = tmp / "geomap.json"
+    json.dump({mod: {"dim": 4, "k": 16}}, open(gm, "w"))
+    return {"teacher": teacher, "base": base, "map": gm, "module": mod,
+            "out": tmp / "geo-out", "base_id": brec["id"]}
+
+
 def decode_all(art: pathlib.Path):
     """Decode every VQ tensor in an artifact to dense weights."""
     sys.path.insert(0, str(HERE))
@@ -223,6 +256,61 @@ def main(argv=None) -> int:
         tgt.write_bytes(tgt.read_bytes() + b"\0")  # change size => identity breaks
         p = env_run([str(HERE / "artifact_manifest.py"), "check", str(packed)])
         check("manifest check FAILS altered bytes (known-bad)", p.returncode != 0)
+
+        # ---------------------------------------------------------------
+        print("[4b/7] build records (vqlab provenance)")
+        prov = HERE / "provenance.py"
+        rec = json.load(open(f1 / "vqlab_provenance.json"))
+        check("fit-dense writes a build record",
+              rec["tool"]["name"] == "fit-dense" and rec["method"]["seed"] == 1234
+              and rec["inputs"][0]["role"] == "source")
+        check("record names every module with its origin",
+              len(rec["modules"]) == LAYERS * len(PROJS)
+              and all(m["origin"] == "fit" for m in rec["modules"].values()))
+        check("record lists args left at default", "init_cap" in
+              rec["tool"]["args"]["at_default"] and "k" not in
+              rec["tool"]["args"]["at_default"])
+        check("unseeded fit is recorded as unseeded",
+              json.load(open(f3 / "vqlab_provenance.json"))["method"]["seed"]
+              == "unseeded")
+        p = run([str(prov), str(f1), "--verify"], verbose=v)
+        check("provenance --verify PASSES untouched build", p.returncode == 0)
+        g = geo_fixture(tmp)
+        p = run([str(HERE / "geo_build.py"), "--artifact", str(g["base"]),
+                 "--teacher", str(g["teacher"]), "--family", "qwen3_5",
+                 "--geomap", str(g["map"]), "--out", str(g["out"]),
+                 "--memory-limit-gb", "4"], verbose=v)
+        if check("geo-build runs on the fixture", p.returncode == 0):
+            grec = json.load(open(g["out"] / "vqlab_provenance.json"))
+            mod = grec["modules"][g["module"]]
+            check("geo-build record: origin fit, alternation ON by default",
+                  mod["origin"] == "fit" and grec["method"]["alternation"] is True
+                  and "plain_lloyd" in grec["tool"]["args"]["at_default"])
+            check("geo-build record links its base's record (lineage)",
+                  grec["inputs"][0]["role"] == "base"
+                  and grec["inputs"][0]["provenance_id"] == g["base_id"])
+            # resume: rerun into a fresh out with the same parts dir -- the
+            # module is not refit, and the ledger must still say "fit"
+            out2 = tmp / "geo-out2"
+            run([str(HERE / "geo_build.py"), "--artifact", str(g["base"]),
+                 "--teacher", str(g["teacher"]), "--family", "qwen3_5",
+                 "--geomap", str(g["map"]), "--out", str(out2),
+                 "--parts", str(g["out"]) + "_parts",
+                 "--memory-limit-gb", "4"], verbose=v)
+            r2 = json.load(open(out2 / "vqlab_provenance.json"))
+            check("origin survives a resume (ledger, not guesswork)",
+                  r2["modules"][g["module"]]["origin"] == "fit")
+            p = run([str(prov), str(g["out"]), "--lineage"], verbose=v)
+            check("provenance --lineage walks to the base",
+                  p.returncode == 0 and "fit-dense" not in p.stdout
+                  and str(g["base"]) in p.stdout)
+            shard = next(f for f in g["out"].glob("*.safetensors")
+                         if not f.is_symlink())
+            shard.write_bytes(shard.read_bytes() + b"\0")
+            p = run([str(prov), str(g["out"]), "--verify"], expect_rc=2,
+                    verbose=v)
+            check("provenance --verify FAILS a rewritten shard (known-bad)",
+                  p.returncode == 2)
 
         # ---------------------------------------------------------------
         print("[5/7] bundle gate")

@@ -57,6 +57,7 @@ import mlx.core as mx
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from families import FAMILY
+import provenance
 
 GSZ = 64
 CHUNK = 1 << 18
@@ -288,6 +289,20 @@ def fit_module(W, D, K, rng, tail_pow=0.0, plain=False):
             mx.array(scales.reshape(E_, OUT_, NGRP).astype(np.float16)))
 
 
+def _method(a):
+    """The fitter settings a refit here actually used -- including the ones
+    that are module constants, not flags, so no record depends on reading
+    this file at the right commit to know them."""
+    return {"init": "kmeans++ (pool 2^18)", "lloyd_iters": ITERS_LLOYD,
+            "sample_groups": NFITG, "group": GSZ,
+            "alternation": not a.plain_lloyd,
+            "alternation_rounds": 0 if a.plain_lloyd else ITERS_ALT,
+            "scales": "max-abs" if a.plain_lloyd else "least-squares (F80/F81)",
+            "tail_weight_pow": a.tail_weight_pow,
+            "tail_weight_from": a.tail_weight_from,
+            "seed": a.seed, "rng": "numpy default_rng"}
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--artifact", required=True, help="shipped artifact to diff from")
@@ -335,6 +350,17 @@ def main():
     # which is luck, not verification. The shipped artifact already carries
     # this module at its OLD geometry, and (experts, out) do not change with
     # K or d -- so the shipped codes give a free, exact identity check.
+    # Per-part ORIGIN ledger, kept in the parts dir so it survives a resume:
+    # a checkpoint that exists says nothing about whether it was fit here, by
+    # which recipe, or harvested from another rung (docs/PROVENANCE.md).
+    origins_path = os.path.join(parts, "origins.json")
+    origins = (json.load(open(origins_path))
+               if os.path.exists(origins_path) else {})
+
+    def _note(fname, rec):
+        origins[fname] = rec
+        json.dump(origins, open(origins_path, "w"), indent=1)
+
     reused = 0
     rejected = []
     for src in a.reuse:
@@ -366,6 +392,14 @@ def main():
                                  f"codes {got_eo} != shipped {want_eo}"))
                 continue
             shutil.copy(f, os.path.join(parts, want))
+            # The reused part's OWN recipe is whatever its source dir recorded;
+            # carry that forward rather than letting it pass as a fit here.
+            src_orig = {}
+            op = os.path.join(src, "origins.json")
+            if os.path.exists(op):
+                src_orig = json.load(open(op)).get(os.path.basename(f), {})
+            _note(want, {"origin": "reuse", "from": os.path.realpath(f),
+                         "sha256": provenance._sha(f), "source_origin": src_orig})
             reused += 1
     for fn, why in rejected[:10]:
         _log(f"  REJECTED reuse {fn}: {why}")
@@ -404,6 +438,11 @@ def main():
         del W
         mx.save_safetensors(part, {n + ".codebook": cb, n + ".codes": codes,
                                    n + ".vq_scales": scales})
+        _note(os.path.basename(part), {
+            "origin": "fit", "tool": "geo-build",
+            "commit": provenance.code_state()["commit"],
+            "fitter": _method(a), "tail_pow": P,
+            "sha256": provenance._sha(part)})
         mx.clear_cache()
         done += 1
         _log(f"  {done}/{len(geo)} {n} d{D}-K{K}"
@@ -416,7 +455,8 @@ def main():
     os.makedirs(a.out, exist_ok=True)
     for f in glob.glob(os.path.join(a.artifact, "*")):
         b = os.path.basename(f)
-        if b.endswith(EXT) or b == "__pycache__":
+        # never inherit the PARENT's build record: it describes other bytes
+        if b.endswith(EXT) or b == "__pycache__" or b == provenance.RECORD:
             continue
         shutil.copy(os.path.realpath(f), os.path.join(a.out, b))
     cfg_path = os.path.join(a.out, "config.json")
@@ -533,6 +573,21 @@ def main():
         idx["weight_map"] = wm_out
         idx.pop("metadata", None) if False else None
         json.dump(idx, open(ip, "w"), indent=1)
+    modules = {}
+    for n in sorted(geo):
+        fn = part_name(n, geo[n]["dim"], geo[n]["k"])
+        modules[n] = {"dim": int(geo[n]["dim"]), "k": int(geo[n]["k"]),
+                      "restored": n in restored,
+                      **origins.get(fn, {"origin": "resume",
+                                         "note": "checkpoint predates origin ledger"})}
+    provenance.write_build_record(
+        a.out, tool="geo-build", script=__file__, ap=ap, args=a,
+        method=_method(a),
+        inputs=[("base", a.artifact), ("teacher", a.teacher),
+                *[("reuse", r) for r in a.reuse]],
+        modules=modules,
+        full_hash={os.path.basename(p) for p in glob.glob(os.path.join(a.out, "*"))
+                   if not os.path.islink(p)})
     _log(f"ASSEMBLE-DONE: {swapped} swapped, "
          f"{sum(len(v) for v in add_to.values())} added, {len(drop)} dropped "
          f"-> {a.out} (config pack_bits updated)")
