@@ -13,6 +13,8 @@ See README.md and METHODOLOGY.md.
 
 __version__ = "0.1.0"
 
+from . import _layout  # noqa: E402,F401  stage folders + pre-split import names
+
 from .mtp import (  # noqa: E402
     FAMILIES,
     FamilySpec,

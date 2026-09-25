@@ -21,8 +21,8 @@ from pathlib import Path
 
 import pytest
 
-GATE = Path(__file__).resolve().parents[1] / "src" / "vqlab" / "check_bundle.py"
-RUNTIME_DIR = GATE.parent
+GATE = Path(__file__).resolve().parents[1] / "src" / "vqlab" / "gate" / "check_bundle.py"
+RUNTIME_DIR = GATE.parents[1] / "runtime"
 
 
 def _artifact(tmp_path: Path, model_py: str) -> Path:
