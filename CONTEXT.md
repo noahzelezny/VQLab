@@ -47,6 +47,7 @@ Design: `docs/PROVENANCE.md`.
 
 ## Working record (changes every run: process it as input, don't cite it as law)
 
+- `research/CONTEXT.md`: what each research folder is. The quantlab `*.py` files there are FROZEN older versions, not copies of `src/`.
 - `research/quantlab/EXPERIMENTS.md`: the lab notebook. **Never describe a released artifact from it**; read the artifact's `config.json` first.
 - dated docs in `docs/` (`*-2026-MM-DD.md`, `MORNING-REPORT-*`)
 

@@ -179,12 +179,13 @@ def test_devx_is_on_by_default_and_flag_reverts():
         importlib.reload(V)
 
 
-def test_dense_simd_sum_is_off_by_default():
-    """The dense simd_sum twin exists, is measured, and must NOT be default.
+def test_dense_simd_sum_is_on_by_default():
+    """The dense simd_sum reduction is the DEFAULT, with an escape hatch.
 
-    The 2026-09-02 1-ULP gate relaxation (f6aa628) is scoped to the packed-d8
-    EXPERT reduction. The dense reduction diverges by up to 8 ULP, not one,
-    so it is not covered and stays opt-in until it has its own referee pass.
+    It was opt-in while its up-to-8-ULP divergence was read as a cost. F138
+    measured the tree reduction as the BETTER-rounded one (prose -0.605
+    mnats, |t|=4.31), and F148 flipped the runtime default ON and rebundled
+    the dense artifacts. VQ_DENSE_SS=0 must still turn it off.
     """
     import importlib
     import os
@@ -192,10 +193,10 @@ def test_dense_simd_sum_is_off_by_default():
     try:
         os.environ.pop("VQ_DENSE_SS", None)
         m = importlib.reload(V)
-        assert m._DENSE_SS is False
+        assert m._DENSE_SS is True
         assert hasattr(m, "_SRC_DENSE_PACKED_D4_TILED_DEVX_SS")
-        os.environ["VQ_DENSE_SS"] = "1"
-        assert importlib.reload(V)._DENSE_SS is True
+        os.environ["VQ_DENSE_SS"] = "0"
+        assert importlib.reload(V)._DENSE_SS is False
     finally:
         if prev is None:
             os.environ.pop("VQ_DENSE_SS", None)
