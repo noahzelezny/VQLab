@@ -28,6 +28,7 @@ import sys
 import time
 
 import mlx.core as mx
+mx.random.seed(1234)  # lab default: nothing random unless asked
 
 sys.path.insert(0, str(pathlib.Path(__file__).parent))
 from vqlab.mtp import registry

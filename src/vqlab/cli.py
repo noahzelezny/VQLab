@@ -103,7 +103,19 @@ def main() -> int:
     script = PKG / COMMANDS[cmd][0]
     sys.argv = [str(script), *rest]
     sys.path.insert(0, str(PKG))  # sibling imports (vq_pack, vq_switch)
-    runpy.run_path(str(script), run_name="__main__")
+    import runlog
+    run = runlog.start(cmd, rest)
+    rc = 0
+    try:
+        runpy.run_path(str(script), run_name="__main__")
+    except SystemExit as e:
+        rc = e.code if isinstance(e.code, int) else (0 if e.code is None else 1)
+        raise
+    except BaseException as e:
+        rc = f"{type(e).__name__}: {str(e)[:200]}"
+        raise
+    finally:
+        runlog.end(run, rc)
     return 0
 
 
