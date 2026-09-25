@@ -131,7 +131,7 @@ def resolve(model, family: str | None = None) -> FamilySpec:
 # ------------------------------------------------------------------ builtins
 register(FamilySpec(
     name="qwen4_exp",
-    head="vqlab.mtp_head:MTPHead",
+    head="vqlab.mtp.mtp_head:MTPHead",
     # The head drafts from the trunk activation that goes INTO the hyper-
     # connection mixer, i.e. the last thing before the final norm + lm_head.
     capture="hyper_connection_mixer",
@@ -174,7 +174,7 @@ register(FamilySpec(
 for _qwen35_name in ("qwen3_5", "qwen3_5_moe"):
     register(FamilySpec(
         name=_qwen35_name,
-        head="vqlab.mtp_head_qwen35:MTPHeadQwen35",
+        head="vqlab.mtp.mtp_head_qwen35:MTPHeadQwen35",
         capture="norm",
         draft_cache="KVCache",
         sidecar_name="mtp-head-q6.safetensors",
@@ -205,7 +205,7 @@ for _qwen35_name in ("qwen3_5", "qwen3_5_moe"):
 for _glm_name in ("glm5_next", "glm5_next_text"):
     register(FamilySpec(
         name=_glm_name,
-        head="vqlab.mtp_head_glm5:MTPHeadGlm5",
+        head="vqlab.mtp.mtp_head_glm5:MTPHeadGlm5",
         capture="norm",
         draft_cache="KVCache",
         sidecar_name="mtp-head-q6.safetensors",

@@ -6,12 +6,12 @@ frozen 2026-09-09. Shipping v2 = re-bundle + re-publish the 20 artifacts.
 Publish is gated on Noah.**
 
 This doc exists because "the v2 runtime" was only ever recorded as scattered
-findings (F50–F58) and flag defaults inside `src/vqlab/vq_switch.py`; a fresh
+findings (F50–F58) and flag defaults inside `src/vqlab/runtime/vq_switch.py`; a fresh
 agent asked to "ship v2" had nothing named to find. This is that named thing.
 
 ## What "v2" is
 
-The v2 runtime is **`src/vqlab/vq_switch.py` at its current committed state**,
+The v2 runtime is **`src/vqlab/runtime/vq_switch.py` at its current committed state**,
 with the performance flags defaulting ON. It is a **speed** upgrade over the
 published arc6 runtime, at **identical or 1-ULP-equivalent** numerics. It does
 NOT change weights, codes, bpw, or file layout — only the bundled `model.py`
@@ -55,7 +55,7 @@ There is no separately-installed package. So:
 
 - **What's published** = each repo's `model.py`, frozen at bundle time
   (2026-09-09 for all 20 = arc6).
-- **`bundle` re-splices the CURRENT `src/vqlab/vq_switch.py`** into an
+- **`bundle` re-splices the CURRENT `src/vqlab/runtime/vq_switch.py`** into an
   artifact's `model.py` (`add_model_file.py:83` reads vq_switch.py verbatim).
 - Therefore **shipping v2 = re-bundle each artifact, then re-upload.** No
   weights move; only `model.py` changes.

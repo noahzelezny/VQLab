@@ -12,7 +12,7 @@ merely discouraged.
 import pathlib
 
 SRC = (pathlib.Path(__file__).resolve().parents[1] / "src" / "vqlab"
-       / "publish.py").read_text()
+       / "ship" / "publish.py").read_text()
 
 
 def test_gate_runs_before_any_upload():

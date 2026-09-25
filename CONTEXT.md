@@ -52,8 +52,24 @@ Design: `docs/PROVENANCE.md`.
 
 ## Code layout (`src/vqlab/`)
 
-Flat today; the move into stage subpackages is in progress (see
-`docs/PROVENANCE.md` §6 and the commit log). **`vq_switch.py`, `vq_dense.py`
-and `vq_pack.py` are the SHIPPED runtime**: they are spliced verbatim into every
-artifact's `model.py`, so editing them changes what `check-bundle` compares
-every published artifact against.
+One folder per stage, each with a `CONTEXT.md` contract (Inputs / Process /
+Outputs / Rules that bite). Read the one for your stage and skip the rest.
+
+```
+src/vqlab/
+  cli.py        every command -> its script (python -m vqlab.cli <cmd>)
+  _layout.py    stage folders on sys.path, runtime_file()/find(), pre-split import aliases
+  runtime/      SHIPPED code, spliced verbatim into every model.py
+  core/         shared libraries (families registry, source loaders)
+  plan/  fit/  assemble/  bundle/  gate/  score/  bench/    the pipeline, in order
+  records/      run log + build records + tamper stamp
+  ship/         publish (a human action) + serve
+  agents/       MCP server
+  mtp/          MTP speculative decoding (library + its tools)
+```
+
+Tools are standalone scripts that import siblings by bare name (`import
+vq_pack`); `_layout` makes that work across folders. Old dotted names
+(`vqlab.vq_switch`, `vqlab.geo_build`, ...) still import, because published
+runtime text uses them. **`runtime/` is the one hard boundary**: editing it
+changes what `check-bundle` compares every published artifact against.

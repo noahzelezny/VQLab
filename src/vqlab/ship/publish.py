@@ -1,0 +1,200 @@
+#!/usr/bin/env python3
+"""Upload an artifact to the Hub, and refuse to if the release gate fails.
+
+    python -m vqlab.cli publish --artifact <dir> --repo <owner/name>
+                                [--files model.py README.md | --all]
+                                [--message TEXT] [--dry-run]
+
+WHY THIS EXISTS. `check-release` was a gate anyone could forget, and on
+2026-09-01 three dense 27B rungs went out with a bundled model.py importing a
+module that exists only in our development venvs. Two of them could not
+generate a single token for anyone who downloaded them. The gate would have
+caught it; nothing made the gate run.
+
+So the upload path itself now runs it. There is no --force and no --skip-gate:
+a bypass that exists is a bypass that gets used at 2am, and the whole point is
+that the promise not to forget is not something a person or an agent should
+have to keep.
+
+WHAT IT CHECKS BEYOND THE GATE. The gate certifies the bytes on disk at the
+moment it runs. This hashes every file it is about to upload BEFORE and AFTER
+the gate, and aborts if any of them moved in between -- because a bundled
+model.py is generated from a working tree, and a working tree can have another
+session editing it. That is not hypothetical: it nearly happened while this
+was being written.
+"""
+from __future__ import annotations
+
+import argparse
+import hashlib
+import pathlib
+import subprocess
+import sys
+
+HERE = pathlib.Path(__file__).resolve().parent
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))  # src/
+from vqlab._layout import find as _find  # noqa: E402
+
+
+def _digest(p: pathlib.Path) -> str:
+    h = hashlib.sha256()
+    with open(p, "rb") as fh:
+        for blk in iter(lambda: fh.read(1 << 20), b""):
+            h.update(blk)
+    return h.hexdigest()
+
+
+def main(argv=None) -> int:
+    ap = argparse.ArgumentParser(prog="vqlab publish",
+                                 description=__doc__.split("\n")[0])
+    ap.add_argument("--artifact", required=True)
+    ap.add_argument("--repo", required=True, help="owner/name on the Hub")
+    ap.add_argument("--files", nargs="+", default=None,
+                    help="paths RELATIVE to the artifact dir. Default: the "
+                         "runtime and card, which is what a fix usually "
+                         "touches.")
+    ap.add_argument("--all", action="store_true",
+                    help="upload the whole directory (a first publish)")
+    ap.add_argument("--message", default=None)
+    ap.add_argument("--max-tokens", type=int, default=4)
+    ap.add_argument("--cluster-smoke", metavar="URL", default=None,
+                    help="passed to the gate: run the generation smoke "
+                         "through an exo cluster for artifacts too large "
+                         "for any single gate box. Requires --cluster-peer.")
+    ap.add_argument("--cluster-peer", metavar="USER@HOST", default=None,
+                    help="passed to the gate: peer holding the other "
+                         "pipeline rank's copy, identity-checked over ssh.")
+    ap.add_argument("--dry-run", action="store_true",
+                    help="run the gate and print the plan, upload nothing")
+    a = ap.parse_args(argv)
+
+    art = pathlib.Path(a.artifact).resolve()
+    if not art.is_dir():
+        print(f"FAIL: {art} is not a directory")
+        return 1
+
+    def _publishable(p: pathlib.Path) -> bool:
+        # Working files accumulate in artifact dirs and MUST NOT ship: a
+        # stale model.py.pre-* next to the live model.py is exactly the
+        # runtime ambiguity check-bundle exists to kill, and 2026-09-02 an
+        # --all upload would have swept two of them plus OS litter. Deny by
+        # name pattern, not by allowlist, so new legitimate files still ship.
+        if "__pycache__" in p.parts:
+            return False
+        n = p.name
+        if n in (".DS_Store", ".gitignore") or n.endswith((".pyc", ".tmp")):
+            return False
+        if ".pre-" in n or n.endswith((".bak", ".orig")):  # local backups
+            return False
+        return True
+
+    if a.all:
+        targets = sorted(p for p in art.rglob("*")
+                         if p.is_file() and _publishable(p))
+        skipped = sorted(p.name for p in art.rglob("*")
+                         if p.is_file() and not _publishable(p))
+        if skipped:
+            print(f"excluded {len(skipped)} working files: "
+                  f"{skipped[:6]}{'...' if len(skipped) > 6 else ''}")
+    else:
+        rels = a.files or ["model.py", "README.md"]
+        targets = []
+        import os
+        for r in rels:
+            # Containment is checked LEXICALLY, not via resolve(): resolve()
+            # follows symlinks, so a legitimately symlinked artifact file
+            # looks like an escape. The check exists to stop "../.." in the
+            # argument, which normpath already settles.
+            joined = os.path.normpath(os.path.join(str(art), r))
+            if not (joined == str(art) or joined.startswith(str(art) + os.sep)):
+                print(f"FAIL: {r} points outside the artifact directory")
+                return 1
+            p = pathlib.Path(joined)
+            if not p.is_file():
+                print(f"FAIL: {r} does not exist in {art}")
+                return 1
+            targets.append(p)
+
+    print(f"artifact : {art}")
+    print(f"repo     : {a.repo}")
+    print(f"files    : {len(targets)}")
+    for p in targets[:12]:
+        print(f"   {p.relative_to(art)}  ({p.stat().st_size} bytes)")
+    if len(targets) > 12:
+        print(f"   ... and {len(targets) - 12} more")
+
+    before = {p: _digest(p) for p in targets}
+
+    # DOCUMENTATION-ONLY uploads skip the generation smoke, and this is a
+    # distinction rather than an escape hatch. The smoke certifies that the
+    # RUNTIME loads and generates; a README cannot affect that. Meanwhile the
+    # smoke needs the whole model resident, so demanding it for a doc fix
+    # means a 112 GiB load to correct a sentence -- and a gate that expensive
+    # for a trivial change is one people route around entirely, which is the
+    # failure it exists to prevent.
+    #
+    # The static scan still runs either way: bundle imports, and the bundle
+    # compiling. Anything that touches the runtime or the config takes the
+    # full gate, no exceptions.
+    DOC_SUFFIXES = {".md", ".txt", ".jinja"}
+    # ADDITIVE SIDECARS ship like docs: the smoke certifies that the bundled
+    # RUNTIME loads and generates, and a sidecar is defined by the runtime
+    # never touching it unless a user opts in by name -- stock loaders ignore
+    # it entirely, so it cannot affect what the smoke certifies, exactly the
+    # docs argument. This exists because rungs too large for any single box
+    # (397B 2.4/2.6/3.1) cannot re-run the smoke here, and 2026-09-03 the
+    # decision was to ship their MTP sidecars with an explicit
+    # untested-on-this-rung caveat on the card rather than strand them.
+    # The allowlist is by exact NAME, not suffix -- a weights shard is never
+    # additive.
+    ADDITIVE_SIDECARS = {"mtp-head-q6.safetensors"}
+    docs_only = all(pathlib.Path(t).suffix.lower() in DOC_SUFFIXES
+                    or pathlib.Path(t).name in ADDITIVE_SIDECARS
+                    for t in targets)
+    gate = [sys.executable, str(_find("check_release.py")),
+            "--artifact", str(art), "--max-tokens", str(a.max_tokens)]
+    if a.cluster_smoke:
+        gate += ["--cluster-smoke", a.cluster_smoke]
+        if a.cluster_peer:
+            gate += ["--cluster-peer", a.cluster_peer]
+    if docs_only:
+        gate.append("--no-smoke")
+        print("\n--- release gate (documentation-only upload: static checks "
+              "run, generation NOT re-verified) ---", flush=True)
+    else:
+        print("\n--- release gate ---", flush=True)
+    r = subprocess.run(gate)
+    if r.returncode != 0:
+        print("\nREFUSING TO UPLOAD: the release gate failed. Fix the "
+              "artifact and run again. There is deliberately no override.")
+        return 1
+
+    moved = [p for p in targets if _digest(p) != before[p]]
+    if moved:
+        print("\nREFUSING TO UPLOAD: these files changed while the gate was "
+              "running, so the gate did not certify what would be uploaded:")
+        for p in moved:
+            print(f"   {p.relative_to(art)}")
+        return 1
+
+    if a.dry_run:
+        print("\n--dry-run: gate passed, nothing uploaded.")
+        return 0
+
+    from huggingface_hub import HfApi
+    api = HfApi()
+    msg = a.message or "Update artifact runtime/card (gated by vqlab publish)"
+    print("\n--- uploading ---", flush=True)
+    for p in targets:
+        rel = str(p.relative_to(art))
+        info = api.upload_file(path_or_fileobj=str(p), path_in_repo=rel,
+                               repo_id=a.repo, commit_message=msg)
+        print(f"   {rel} -> {getattr(info, 'commit_url', info)}")
+    how = ("static checks only (documentation-only upload)" if docs_only
+           else "a clean release gate including a generation smoke")
+    print(f"\nPASS: {len(targets)} file(s) uploaded to {a.repo} after {how}.")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

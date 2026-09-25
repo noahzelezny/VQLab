@@ -20,7 +20,7 @@ This index says what each doc is FOR and whether it still holds.
 | **`vqlab active-bytes`** | **INSTRUMENT** | Not a doc. Bytes an artifact reads PER DECODE TOKEN, by component -- the roofline denominator. Run it before quoting any effective-bandwidth or "is this bandwidth-bound" claim; F22 was wrong for four weeks because nobody had it. Metadata only, safe on a contended box. |
 | **`vqlab decode-ladder`** | **INSTRUMENT** | Not a doc. Per-component decode deletion arms (GDN / attention / VQ / shared expert / hyper-connections) on Flash. Prints an output checksum beside every timing: arms that do not differ there did not take. |
 | **PROVENANCE.md** | PROPOSAL, first slice built | Build records (`vqlab_provenance.json`) written by build tools into each new artifact: tool+argv+commit, fitter settings, inputs/lineage, per-module origin, runtime profile, output hashes. Read with `vqlab provenance <artifact>`. Distinct from `vqlab manifest`, which is only a tamper stamp. |
-| **TWO-RUNTIMES.md** | CURRENT, CRITICAL | The lab runtime (`vqlab/src/vqlab/vq_switch.py`) vs the artifact's BUNDLED `model.py` are different files. Measuring one while changing the other has produced two false results (see F31). Read before any benchmark. |
+| **TWO-RUNTIMES.md** | CURRENT, CRITICAL | The lab runtime (`vqlab/src/vqlab/runtime/vq_switch.py`) vs the artifact's BUNDLED `model.py` are different files. Measuring one while changing the other has produced two false results (see F31). Read before any benchmark. |
 
 ## Experiment docs
 | doc | status | note |
