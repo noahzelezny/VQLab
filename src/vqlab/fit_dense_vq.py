@@ -238,6 +238,20 @@ json.dump(idx, open(OUT / "model.safetensors.index.json", "w"), indent=1)
 cfg = json.load(open(SRC / "config.json"))
 cfg["vq_modules"] = vq_modules
 json.dump(cfg, open(OUT / "config.json", "w"), indent=1)
+# BUILD RECORD (docs/PROVENANCE.md). Last write, so it hashes the final bytes.
+from provenance import write_build_record
+write_build_record(
+    OUT, tool="fit-dense", script=__file__, ap=ap, args=args,
+    method={"init": "kmeans++", "init_cap": args.init_cap,
+            "lloyd_iters": args.iters, "sample": "all rows",
+            "scales": "max-abs per group", "alternation": False,
+            "tail_weight_pow": 0.0,
+            "seed": args.seed if args.seed >= 0 else "unseeded",
+            "k": K, "dim": D, "group": G,
+            "mean_relerr": round(sum(report) / len(report), 6),
+            "worst_relerr": round(max(report), 6)},
+    inputs=[("source", SRC)],
+    modules={m: {**v, "origin": "fit"} for m, v in vq_modules.items()})
 print(f"\nfit {len(report)} tensors, mean relerr "
       f"{sum(report)/len(report):.4f}, worst {max(report):.4f}, "
       f"{time.time()-t0:.0f}s total -> {OUT}")
