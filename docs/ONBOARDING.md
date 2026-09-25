@@ -23,7 +23,7 @@ matter for THIS family before any codebook is fit.
   `{e}` in the family's `src_key` for the last, as glm5_next does; expert
   count is discovered from the index, never the config). After adding an
   entry, run the CPU-only loader gate — safe on a busy box:
-  `python src/vqlab/expert_src.py --selftest`, then a header-level check of
+  `python src/vqlab/core/expert_src.py --selftest`, then a header-level check of
   `expert_src.count_experts` / `probe_key` against the real index.
 
 ## 1. Profile the weight geometry (no fitting)

@@ -94,7 +94,7 @@ def test_vision_surface_is_wired_into_the_composite_gate():
     Asserted against the source rather than a live run so it holds on a box
     with no artifacts: the point is that the gate list contains it.
     """
-    src = (SRC / "vqlab" / "check_all.py").read_text(encoding="utf-8")
+    src = (SRC / "vqlab" / "gate" / "check_all.py").read_text(encoding="utf-8")
     assert "vision_smoke.py" in src, (
         "vqlab check must invoke vision_smoke.py — F153 shipped for three "
         "weeks because the vision question was never asked by the gate "

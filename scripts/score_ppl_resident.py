@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Referee perplexity through the runtime the artifact SHIPS, resident.
 
-WHY NOT `vqlab score`. src/vqlab/referee/score_streaming.py streams one
+WHY NOT `vqlab score`. src/vqlab/score/referee/score_streaming.py streams one
 decoder block at a time and calls `blk(h, mask=mask, cache=None)` against a
 `blk.is_linear` flag. The qwen4_exp arch installed in the exo env (the
 ml-explore PR #1788 graft) renamed that to `layer_type` and changed the

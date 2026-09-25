@@ -12,7 +12,7 @@ import pathlib
 import re
 import sys
 
-SMOKE = pathlib.Path(__file__).resolve().parents[1] / "src" / "vqlab" / "smoke.py"
+SMOKE = pathlib.Path(__file__).resolve().parents[1] / "src" / "vqlab" / "gate" / "smoke.py"
 SRC = SMOKE.read_text()
 
 
@@ -78,7 +78,7 @@ def test_bundled_module_is_found_without_sys_modules():
 
 
 # ------------------------------------------------------- the release gate
-CHECK = pathlib.Path(__file__).resolve().parents[1] / "src" / "vqlab" / "check_release.py"
+CHECK = pathlib.Path(__file__).resolve().parents[1] / "src" / "vqlab" / "gate" / "check_release.py"
 CSRC = CHECK.read_text()
 
 

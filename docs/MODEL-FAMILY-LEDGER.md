@@ -185,7 +185,7 @@ bf16 on the SSD): missing geometries refit at ~1-5 min/module.
 
 ## PPL corpus protocol (house standard — use these, not ad-hoc corpora)
 
-`src/vqlab/referee/` ships THREE corpora and card numbers are quoted on
+`src/vqlab/score/referee/` ships THREE corpora and card numbers are quoted on
 them: **prose** (`referee_corpus.txt`, wikitext), **code**
 (`referee_corpus_code_public.txt`, mlx @ v0.30.0, public/Apache-2.0 so it
 is citable), **literary** (`referee_corpus_literary.txt`).

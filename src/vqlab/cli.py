@@ -101,9 +101,9 @@ def main() -> int:
     if cmd not in COMMANDS:
         print(f"unknown command: {cmd}", file=sys.stderr)
         return 2
-    script = PKG / COMMANDS[cmd][0]
+    from vqlab import _layout   # stage dirs on sys.path; old dotted names aliased
+    script = _layout.find(COMMANDS[cmd][0])
     sys.argv = [str(script), *rest]
-    sys.path.insert(0, str(PKG))  # sibling imports (vq_pack, vq_switch)
     import runlog
     run = runlog.start(cmd, rest)
     rc = 0
