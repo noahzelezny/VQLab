@@ -27,6 +27,7 @@ import json
 import subprocess
 
 import mlx.core as mx
+mx.random.seed(1234)  # lab default: nothing random unless asked
 import mlx.nn as nn
 
 

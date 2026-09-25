@@ -300,7 +300,8 @@ def _method(a):
             "scales": "max-abs" if a.plain_lloyd else "least-squares (F80/F81)",
             "tail_weight_pow": a.tail_weight_pow,
             "tail_weight_from": a.tail_weight_from,
-            "seed": a.seed, "rng": "numpy default_rng"}
+            "seed": a.seed if a.seed >= 0 else "unseeded",
+            "rng": "numpy default_rng, one stream across modules"}
 
 
 def main():
@@ -314,7 +315,12 @@ def main():
     ap.add_argument("--reuse", action="append", default=[],
                     help="parts dir to reuse fits from; repeatable")
     ap.add_argument("--memory-limit-gb", type=int, default=40)
-    ap.add_argument("--seed", type=int, default=13)
+    ap.add_argument("--seed", type=int, default=1234,
+                    help="RNG seed. Default 1234, the lab-wide default, so an "
+                         "unflagged build is reproducible. -1 = unseeded (an "
+                         "explicit choice to draw fresh). Builds before "
+                         "2026-09-25 defaulted to 13: pass --seed 13 to "
+                         "reproduce one; its build record or log names it.")
     ap.add_argument("--tail-weight-pow", type=float, default=0.0,
                     help="E112 magnitude-weighted k-means (see fit_module). "
                          "0 = the unweighted objective, bit-identical.")
@@ -328,7 +334,7 @@ def main():
 
     mx.set_wired_limit(0)
     mx.set_memory_limit(a.memory_limit_gb * 1024 ** 3)
-    rng = np.random.default_rng(a.seed)
+    rng = np.random.default_rng(None if a.seed < 0 else a.seed)
     geo = json.load(open(a.geomap))
     parts = a.parts or (a.out.rstrip("/") + "_parts")
     os.makedirs(parts, exist_ok=True)
