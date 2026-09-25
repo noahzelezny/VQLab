@@ -228,8 +228,23 @@ def _kmeanspp(Xf, k, rng):
     return np.stack(out)
 
 
-def fit_module(W, D, K, rng):
-    """Returns (codebook fp16, packed codes uint32, scales fp16)."""
+def fit_module(W, D, K, rng, tail_pow=0.0, plain=False):
+    """Returns (codebook fp16, packed codes uint32, scales fp16).
+
+    tail_pow > 0 is E112's magnitude-weighted k-means: each subvector's
+    weight in every Lloyd update is its norm in ORIGINAL weight units raised
+    to tail_pow, normalized to mean 1 (vq_397b_codes.py --tail-weight-pow).
+    That norm is independent of the per-group scale, so the same weights
+    apply in the alternation rounds, where they multiply the s**2 term --
+    applying them only to the first Lloyd pass would let alternation undo
+    them. tail_pow = 0 takes the original unweighted path bit-for-bit.
+
+    plain=True is E112's fitter (vq_397b_codes.py): Lloyd on max-abs-scaled
+    subvectors, NO scale alternation, max-abs scales at encode. Needed to
+    replicate E112 faithfully: with alternation on, least-squares scales
+    drift against a tail-weighted codebook and the tail error gets WORSE,
+    not better (measured 2026-09-25: top-0.1% relerr 0.224 -> 0.292).
+    """
     E_, OUT_, IN_ = W.shape
     NGRP, nsub, bits = IN_ // GSZ, IN_ // D, math.ceil(math.log2(K))
     Wg = np.array(W.reshape(-1, GSZ))
@@ -237,15 +252,19 @@ def fit_module(W, D, K, rng):
     Gf = Wg[fidx].astype(np.float32)
     s = np.abs(Gf).max(axis=1) + 1e-8
     Xs = (Gf / s[:, None]).reshape(-1, D)
-    C = _lloyd(Xs, mx.array(_kmeanspp(Xs, K, rng)),
-               np.ones(Xs.shape[0], np.float32), ITERS_LLOYD, K, rng)
-    for _ in range(ITERS_ALT):                       # F80/F81 alternation
+    if tail_pow:
+        wt = np.linalg.norm(Gf.reshape(-1, D), axis=1).astype(np.float64) ** tail_pow
+        wt = (wt / max(wt.mean(), 1e-20)).astype(np.float32)
+    else:
+        wt = np.ones(Xs.shape[0], np.float32)
+    C = _lloyd(Xs, mx.array(_kmeanspp(Xs, K, rng)), wt, ITERS_LLOYD, K, rng)
+    for _ in range(0 if plain else ITERS_ALT):       # F80/F81 alternation
         Xs = (Gf / s[:, None]).reshape(-1, D)
         rec = np.array(C)[_assign(Xs, C)].reshape(-1, GSZ)
         s = np.clip((Gf * rec).sum(1) / ((rec * rec).sum(1) + 1e-12),
                     1e-8, None).astype(np.float32)
         C = _lloyd((Gf / s[:, None]).reshape(-1, D), C,
-                   np.repeat(s ** 2, GSZ // D).astype(np.float32), 2, K, rng)
+                   (np.repeat(s ** 2, GSZ // D) * wt).astype(np.float32), 2, K, rng)
     C_np = np.array(C)
     codes = np.empty((Wg.shape[0], GSZ // D), dtype=np.uint16)
     scales = np.empty(Wg.shape[0], dtype=np.float32)
@@ -253,11 +272,13 @@ def fit_module(W, D, K, rng):
     for i in range(0, Wg.shape[0], B):
         wb = Wg[i:i + B].astype(np.float32)
         sb = np.abs(wb).max(axis=1) + 1e-8
-        for _ in range(2):
+        for it in range(1 if plain else 2):
             a = mx.argmin(_dists(mx.array((wb / sb[:, None]).reshape(-1, D)), C), axis=1)
             mx.eval(a)
             a = np.array(a)
             rec = C_np[a].reshape(wb.shape[0], GSZ)
+            if plain:
+                break                                # keep the max-abs scale
             sb = np.clip((wb * rec).sum(1) / ((rec * rec).sum(1) + 1e-12),
                          1e-8, None).astype(np.float32)
         codes[i:i + B] = a.reshape(wb.shape[0], GSZ // D).astype(np.uint16)
@@ -279,6 +300,15 @@ def main():
                     help="parts dir to reuse fits from; repeatable")
     ap.add_argument("--memory-limit-gb", type=int, default=40)
     ap.add_argument("--seed", type=int, default=13)
+    ap.add_argument("--tail-weight-pow", type=float, default=0.0,
+                    help="E112 magnitude-weighted k-means (see fit_module). "
+                         "0 = the unweighted objective, bit-identical.")
+    ap.add_argument("--tail-weight-from", type=int, default=0,
+                    help="apply --tail-weight-pow only to layers >= this "
+                         "index (shallow layers are heavy-tailed, E110)")
+    ap.add_argument("--plain-lloyd", action="store_true",
+                    help="E112's fitter: no scale alternation, max-abs scales. "
+                         "Use for BOTH arms of a tail-weighting pair.")
     a = ap.parse_args()
 
     mx.set_wired_limit(0)
@@ -368,13 +398,16 @@ def main():
         t0 = time.time()
         W = teacher_weight(a.teacher, t_index, a.family, n)
         check_exact(n, W.shape[2], D, K)
-        cb, codes, scales = fit_module(W, D, K, rng)
+        li = int(n.split("layers.")[1].split(".")[0])
+        P = a.tail_weight_pow if li >= a.tail_weight_from else 0.0
+        cb, codes, scales = fit_module(W, D, K, rng, tail_pow=P, plain=a.plain_lloyd)
         del W
         mx.save_safetensors(part, {n + ".codebook": cb, n + ".codes": codes,
                                    n + ".vq_scales": scales})
         mx.clear_cache()
         done += 1
-        _log(f"  {done}/{len(geo)} {n} d{D}-K{K} [{time.time()-t0:.0f}s]")
+        _log(f"  {done}/{len(geo)} {n} d{D}-K{K}"
+             f"{f' tailw{P:g}' if P else ''} [{time.time()-t0:.0f}s]")
 
     # ---- assemble: shipped bytes + refit parts + config ----
     new = {}
