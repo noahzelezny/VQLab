@@ -107,8 +107,9 @@ class _Alias(importlib.abc.MetaPathFinder, importlib.abc.Loader):
         new = self.map.get(fullname)
         if new is None or new == fullname:
             return None
-        return importlib.util.spec_from_loader(fullname, self,
-                                               origin=f"alias of {new}")
+        t = importlib.util.find_spec(new)
+        return importlib.util.spec_from_loader(
+            fullname, self, origin=t.origin if t else f"alias of {new}")
 
     def create_module(self, spec):
         mod = importlib.import_module(self.map[spec.name])
@@ -117,6 +118,24 @@ class _Alias(importlib.abc.MetaPathFinder, importlib.abc.Loader):
 
     def exec_module(self, module):
         pass                                        # already executed
+
+    # `python -m vqlab.<old name>` goes through runpy, which asks the loader
+    # for code rather than a module. Hand it the real module's code.
+    def _target(self, fullname):
+        if self.map is None:
+            self.map = _old_names()
+        return importlib.util.find_spec(self.map[fullname])
+
+    def get_code(self, fullname):
+        t = self._target(fullname)
+        return t.loader.get_code(t.name)
+
+    def get_source(self, fullname):
+        t = self._target(fullname)
+        return t.loader.get_source(t.name)
+
+    def is_package(self, fullname):
+        return False
 
 
 def install():

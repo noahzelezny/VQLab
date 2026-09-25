@@ -31,7 +31,7 @@ import mlx.nn as nn
 from mlx_lm.utils import load
 from mlx_lm.models.cache import make_prompt_cache
 
-REF = pathlib.Path(__file__).resolve().parents[1] / "src" / "vqlab" / "referee"
+REF = pathlib.Path(__file__).resolve().parents[1] / "src" / "vqlab" / "score" / "referee"
 
 ap = argparse.ArgumentParser()
 ap.add_argument("--model", required=True)
