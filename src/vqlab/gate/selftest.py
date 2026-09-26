@@ -529,6 +529,22 @@ def main(argv=None) -> int:
               step_verdict(0, so, se, {"stdout_regex": "^{"})["ok"])
         check("step_verdict: nonzero exit fails", not step_verdict(3, so, se)["ok"])
 
+        print("[6a35/7] teacher naming by content (VL4.11)")
+        from vqlab.core import fitstore as FS
+        tfam = tmp / "fam_ident"
+        tprof = tfam / "fx" / "teachers" / "Org--Real-Teacher"
+        tprof.mkdir(parents=True)
+        csha, sfp = FS.teacher_identity(psrc)
+        (tprof / "profile.json").write_text(json.dumps(
+            {"identity": {"config_sha256": csha, "shard_fingerprint": sfp}}))
+        tcopy = tmp / "scratch_copy_of_teacher"
+        shutil.copytree(psrc, tcopy)
+        check("a byte-identical teacher COPY files under the profiled teacher's name",
+              FS.teacher_slug(tcopy, tfam) == "Org--Real-Teacher")
+        (tcopy / "config.json").write_text((tcopy / "config.json").read_text() + " ")
+        check("a teacher that differs keeps its own directory name",
+              FS.teacher_slug(tcopy, tfam) == "scratch_copy_of_teacher")
+
         print("[6a4/7] queue: pinned tree, loud failure, preflight")
         import os as _os
         from vqlab.agents import run_queue as Q
