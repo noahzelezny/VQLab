@@ -69,6 +69,8 @@ DEFAULT_ROOTS = [
     "<models>",
     "<fits>",
     "<teachers>",
+    # HF hub cache: some teachers live here as snapshots (the 27B, 2026-09-21)
+    "<ssd>/Mlx_Models",
 ]
 
 
@@ -108,13 +110,13 @@ RUN_ALLOWLIST = {
     # the onboarding + reuse loop, so a new family needs no human at the CLI:
     # profile (headers only) -> init sweep -> leverage -> fits from the store
     # -> KL gate -> task benchmarks; plus the records that make it auditable
-    "family-profile", "probe-init", "fits", "kl-ladder", "kl-pair", "tasks",
+    "onboard", "family-profile", "probe-init", "fits", "kl-ladder", "kl-pair", "tasks",
     "provenance", "runs", "active-bytes", "decode-timeline",
 }
 # Commands that never touch the GPU (header reads, index queries, records).
 # They are not gated on an exo placement or the GPU lease, and do not take
 # the lease: profiling a teacher must not wait on, or block, a fit.
-GPU_FREE = {"family-profile", "fits", "provenance", "runs", "price",
+GPU_FREE = {"onboard", "family-profile", "fits", "provenance", "runs", "price",
             "manifest", "check-bundle", "active-bytes"}
 # Commands that checkpoint and resume: a GPU-timeout crash is retried.
 RESUMABLE = {"fit-moe", "fit-dense", "geo-build", "alloc-sweep", "validate"}

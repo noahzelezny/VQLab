@@ -17,6 +17,7 @@ PKG = Path(__file__).parent
 
 COMMANDS = {
     # plan/
+    "onboard": ("onboard.py", "sequence a new teacher through ONBOARDING.md: profile, loader, cache determinism, init sweep (resumable; --launch runs GPU steps under the lease)"),
     "family-profile": ("family_profile.py", "size up a teacher from headers only: arch, bytes per bit, legal (d,K), module signatures"),
     "preflight-ram": ("preflight_ram.py", "refuse resident-memory ops on models bigger than RAM"),
     "preflight-disk": ("preflight_disk.py", "refuse builds whose output volume lacks the space"),

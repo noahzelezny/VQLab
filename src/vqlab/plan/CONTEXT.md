@@ -4,6 +4,7 @@
 Byte budget, a shipped rung, and a teacher (for leverage probes).
 
 ## Process
+New teacher? `vqlab onboard --teacher <dir>` sequences the whole characterisation pass and resumes. Otherwise:
 `vqlab family-profile --teacher <dir>` FIRST for any teacher: headers only, seconds, writes `families/<family>/teachers/<teacher>/profile.json` (legal geometries, exact bytes, GiB per bit). Then:
 `vqlab price`, `layer-leverage`, `alloc-sweep`, `probe-init`; hard guards `preflight-ram` / `preflight-disk`.
 
