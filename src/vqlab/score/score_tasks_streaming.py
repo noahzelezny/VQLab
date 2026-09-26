@@ -508,9 +508,9 @@ def selftest(model_path, batch_seqs, max_tokens=8192, corpus=None):
     number this file produces. Known answers: VQ-2.2bpw 3.1706,
     VQ-2.4bpw 2.7655, VQ-3.1bpw 2.3519.
     """
+    from vqlab import _layout
     lm = StreamingLM(model_path, batch_seqs=batch_seqs)
-    path = pathlib.Path(corpus or (pathlib.Path(__file__).parent / "referee"
-                                   / "referee_corpus.txt"))
+    path = pathlib.Path(corpus) if corpus else _layout.corpus("prose")
     text = path.read_text(errors="replace")
     ids = lm.tokenizer.encode(text)[: max_tokens + 1]
     # One sequence, scored as "predict everything after token 0" — identical
