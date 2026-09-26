@@ -60,6 +60,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))  # src/
 from vqlab import _layout  # noqa: E402,F401  one module object per name
 from families import FAMILY
 import provenance
+import fitstore
 
 GSZ = 64
 CHUNK = 1 << 18
@@ -291,6 +292,43 @@ def fit_module(W, D, K, rng, tail_pow=0.0, plain=False):
             mx.array(scales.reshape(E_, OUT_, NGRP).astype(np.float16)))
 
 
+def _pool_dir(geo, family, teacher, parts):
+    """Stage matching store fits as a --reuse dir: symlinks named the way the
+    reuse loop expects, plus an origins.json carrying each fit's recipe.
+    Among several fits of one (module, d, K) -- stochastic twins -- prefer
+    one with a known recipe, then the earliest filed: deterministic, so
+    rerunning a build picks the same fit."""
+    pool = os.path.join(parts, "_pool")
+    os.makedirs(pool, exist_ok=True)
+    origins, picked = {}, 0
+    for root in fitstore.roots():
+        recs = fitstore.read_index(root)
+        for n, g in geo.items():
+            want = part_name(n, g["dim"], g["k"])
+            if want in origins:
+                continue
+            cands = [r for r in recs.values()
+                     if r["module"] == n and r["teacher"] == teacher
+                     and r["family"] == family and r["d"] == int(g["dim"])
+                     and r["K"] == int(g["k"])]
+            if not cands:
+                continue
+            best = sorted(cands, key=lambda r: (not r.get("recipe"),
+                                                r.get("filed") or "~", r["fit_id"]))[0]
+            src = best["location"].split("#", 1)[0]
+            dst = os.path.join(pool, want)
+            if os.path.lexists(dst):
+                os.remove(dst)
+            os.symlink(src, dst)
+            origins[want] = {"origin": "store", "fit_id": best["fit_id"],
+                             "store": str(root), "recipe": best.get("recipe"),
+                             "twins": len(cands)}
+            picked += 1
+    json.dump(origins, open(os.path.join(pool, "origins.json"), "w"), indent=1)
+    _log(f"pool: {picked}/{len(geo)} modules have a stored fit for {teacher}")
+    return pool
+
+
 def _method(a):
     """The fitter settings a refit here actually used -- including the ones
     that are module constants, not flags, so no record depends on reading
@@ -316,6 +354,11 @@ def main():
     ap.add_argument("--parts", default=None, help="checkpoint dir (default <out>_parts)")
     ap.add_argument("--reuse", action="append", default=[],
                     help="parts dir to reuse fits from; repeatable")
+    ap.add_argument("--pool", action="store_true",
+                    help="also reuse matching fits from the FIT STORE (vqlab fits): "
+                         "same teacher, module and (d, K). Verified by the same "
+                         "shape checks as --reuse; the chosen fit's recipe is "
+                         "carried into the build record")
     ap.add_argument("--memory-limit-gb", type=int, default=40)
     ap.add_argument("--seed", type=int, default=1234,
                     help="RNG seed. Default 1234, the lab-wide default, so an "
@@ -368,6 +411,10 @@ def main():
     def _note(fname, rec):
         origins[fname] = rec
         json.dump(origins, open(origins_path, "w"), indent=1)
+
+    teacher = fitstore.teacher_slug(a.teacher)
+    if a.pool:
+        a.reuse.append(_pool_dir(geo, a.family, teacher, parts))
 
     reused = 0
     rejected = []
@@ -446,11 +493,16 @@ def main():
         del W
         mx.save_safetensors(part, {n + ".codebook": cb, n + ".codes": codes,
                                    n + ".vq_scales": scales})
-        _note(os.path.basename(part), {
-            "origin": "fit", "tool": "geo-build",
-            "commit": provenance.code_state()["commit"],
-            "fitter": _method(a), "tail_pow": P,
-            "sha256": provenance._sha(part)})
+        rec = {"origin": "fit", "tool": "geo-build",
+               "commit": provenance.code_state()["commit"],
+               "fitter": _method(a), "tail_pow": P,
+               "run_id": os.environ.get("VQLAB_RUN_ID"),
+               "sha256": provenance._sha(part)}
+        _note(os.path.basename(part), rec)
+        # File it in the fit store the moment it exists: a fit is the
+        # expensive thing, and the store is what makes it findable later.
+        stored = fitstore.put(part, n, a.family, teacher, recipe=rec)
+        _log(f"    stored {stored['fit_id']} -> {stored['location']}")
         mx.clear_cache()
         done += 1
         _log(f"  {done}/{len(geo)} {n} d{D}-K{K}"

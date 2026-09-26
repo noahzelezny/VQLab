@@ -157,6 +157,9 @@ def main(argv=None) -> int:
     ap.add_argument("--verbose", action="store_true")
     a = ap.parse_args(argv)
     tmp = pathlib.Path(tempfile.mkdtemp(prefix="vqlab_selftest_"))
+    # Every fitter files into the fit store; point it (and the family data
+    # dir) at the workspace so a selftest never writes to a real store.
+    __import__("os").environ["VQLAB_FIT_STORE"] = str(tmp / "fitstore")
     v = a.verbose
     try:
         print("NOTE: this runs REAL Metal kernels and real k-means fits. It is "
@@ -300,6 +303,25 @@ def main(argv=None) -> int:
             r2 = json.load(open(out2 / "vqlab_provenance.json"))
             check("origin survives a resume (ledger, not guesswork)",
                   r2["modules"][g["module"]]["origin"] == "fit")
+            import importlib as _il
+            fs_ = _il.import_module("fitstore")
+            stored = fs_.read_index(tmp / "fitstore")
+            geo_fits = [r for r in stored.values() if r["module"] == g["module"]]
+            check("geo-build files its fit in the store, recipe attached",
+                  len(geo_fits) == 1 and geo_fits[0]["recipe"]["origin"] == "fit"
+                  and geo_fits[0]["recipe"]["fitter"]["alternation"] is True,
+                  f"{len(geo_fits)} stored")
+            out3 = tmp / "geo-out3"
+            run([str(_find("geo_build.py")), "--artifact", str(g["base"]),
+                 "--teacher", str(g["teacher"]), "--family", "qwen3_5",
+                 "--geomap", str(g["map"]), "--out", str(out3), "--pool",
+                 "--memory-limit-gb", "4"], verbose=v)
+            r3 = json.load(open(out3 / "vqlab_provenance.json"))["modules"][g["module"]]
+            same = all((out3 / f.name).read_bytes() == f.read_bytes()
+                       for f in g["out"].glob("*.safetensors") if not f.is_symlink())
+            check("--pool reuses the stored fit (no refit) and rebuilds byte-identical",
+                  r3["origin"] == "reuse" and r3["source_origin"]["origin"] == "store"
+                  and same, f"origin={r3['origin']}")
             p = run([str(prov), str(g["out"]), "--lineage"], verbose=v)
             check("provenance --lineage walks to the base",
                   p.returncode == 0 and "fit-dense" not in p.stdout

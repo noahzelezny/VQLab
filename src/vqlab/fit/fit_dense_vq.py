@@ -20,6 +20,7 @@ fit quality first, runtime integration only if the numbers earn it.
 import argparse
 import sys
 import json
+import os
 import pathlib
 import time
 
@@ -253,6 +254,20 @@ write_build_record(
             "worst_relerr": round(max(report), 6)},
     inputs=[("source", SRC)],
     modules={m: {**v, "origin": "fit"} for m, v in vq_modules.items()})
+# File every module's fit in the fit store (core/fitstore.py): findable by
+# family / teacher / layer / geometry, and never paid for twice.
+import fitstore  # noqa: E402
+_teacher = fitstore.teacher_slug(SRC)
+_recipe = {"origin": "fit", "tool": "fit-dense", "run_id": os.environ.get("VQLAB_RUN_ID"),
+           "commit": __import__("provenance").code_state()["commit"],
+           "fitter": {"init": "kmeans++", "init_cap": args.init_cap,
+                      "lloyd_iters": args.iters, "alternation": False,
+                      "scales": "max-abs per group",
+                      "seed": args.seed if args.seed >= 0 else "unseeded"}}
+for _m in vq_modules:
+    fitstore.put(OUT / "model-00001-of-00001.safetensors", _m, args.family,
+                 _teacher, recipe=_recipe)
+print(f"stored {len(vq_modules)} fits in {fitstore.roots()[0]}")
 print(f"\nfit {len(report)} tensors, mean relerr "
       f"{sum(report)/len(report):.4f}, worst {max(report):.4f}, "
       f"{time.time()-t0:.0f}s total -> {OUT}")
