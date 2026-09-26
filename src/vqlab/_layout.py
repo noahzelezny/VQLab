@@ -6,8 +6,8 @@ SCRIPTS by design -- `vqlab <cmd>` runs each one as a file -- and they import
 their siblings by bare name (`import vq_pack`, `from families import FAMILY`).
 Importing this module makes both conventions work from anywhere:
 
-  * every stage folder goes on sys.path, so bare sibling imports resolve
-    across folders exactly as they did when the package was flat;
+  * bare sibling imports (`import vq_pack`) resolve across folders, to the
+    SAME module object as the dotted name -- one module, one copy;
   * every pre-split dotted name (`vqlab.vq_switch`, `vqlab.geo_build`,
     `vqlab.mtp_head`, ...) is aliased to its new home. This is not only for
     old callers: the SHIPPED runtime text (vq_dense.py's _resolve_kernel,
@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import importlib
 import importlib.abc
+import importlib.machinery
 import importlib.util
 import pathlib
 import sys
@@ -84,27 +85,52 @@ def legacy_path(p):
     return p
 
 
-def _old_names():
-    """{old dotted name: new dotted name} for every module a stage folder
-    holds, plus the MTP scripts that moved into vqlab.mtp."""
+def _names():
+    """{importable name: canonical dotted name} for every stage module.
+
+    Two spellings map onto each canonical module:
+      * the BARE name the standalone scripts use (`import vq_pack`), and
+      * the pre-split dotted name (`vqlab.vq_switch`), which the SHIPPED
+        runtime text itself uses and therefore can never be edited away.
+    """
     out = {}
-    for s in STAGES + ("mtp",):
+    for s in STAGES:
         for f in (PKG / s).glob("*.py"):
             if f.stem != "__init__":
-                out[f"vqlab.{f.stem}"] = f"vqlab.{s}.{f.stem}"
+                canon = f"vqlab.{s}.{f.stem}"
+                out[f.stem] = canon
+                out[f"vqlab.{f.stem}"] = canon
+    # MTP heads lived at vqlab.mtp_head* before the split. Dotted alias only:
+    # the vqlab.mtp library's own module names (runtime, loop, ...) are too
+    # generic to answer for as bare names.
+    for f in (PKG / "mtp").glob("mtp_*.py"):
+        out[f"vqlab.{f.stem}"] = f"vqlab.mtp.{f.stem}"
     return out
 
 
 class _Alias(importlib.abc.MetaPathFinder, importlib.abc.Loader):
+    """ONE module object per module, whatever name it is imported by.
+
+    Without this, `import vq_switch` and `vqlab.runtime.vq_switch` load the
+    file twice: two kernel caches, two sets of env-flag globals, and a test
+    that reloads one name silently leaves the other untouched. Sits FIRST on
+    sys.meta_path so it wins over the ordinary path search -- including a
+    script's own directory, which Python puts on sys.path[0]. It only
+    answers for names in _names(), so nothing else is affected, and no stage
+    folder has to go on sys.path (which is what made `coverage` shadowable).
+    """
+
     def __init__(self):
         self.map = None
+        self._fresh = set()     # ids of modules create_module just imported
+
+    def _canon(self, fullname):
+        if self.map is None:
+            self.map = _names()
+        return self.map.get(fullname)
 
     def find_spec(self, fullname, path=None, target=None):
-        if not fullname.startswith("vqlab."):
-            return None
-        if self.map is None:
-            self.map = _old_names()
-        new = self.map.get(fullname)
+        new = self._canon(fullname)
         if new is None or new == fullname:
             return None
         t = importlib.util.find_spec(new)
@@ -112,19 +138,36 @@ class _Alias(importlib.abc.MetaPathFinder, importlib.abc.Loader):
             fullname, self, origin=t.origin if t else f"alias of {new}")
 
     def create_module(self, spec):
-        mod = importlib.import_module(self.map[spec.name])
+        mod = importlib.import_module(self._canon(spec.name))
         sys.modules[spec.name] = mod
+        self._fresh.add(id(mod))
         return mod
 
     def exec_module(self, module):
-        pass                                        # already executed
+        """First import: the canonical import already executed it. RELOAD
+        (importlib.reload by the alias name, which is how the flag tests
+        re-read env defaults) must genuinely re-execute. Either way the
+        module keeps its CANONICAL identity; the import system just stamped
+        the alias spec on it."""
+        name = module.__spec__.name
+        canon = self._canon(name) or name
+        # Ask the path finder for the FILE's spec. importlib.util.find_spec
+        # would return the module's current __spec__ -- the alias spec the
+        # import system just stamped on it -- and recurse back into us.
+        parent, _, _ = canon.rpartition(".")
+        spec = importlib.machinery.PathFinder.find_spec(
+            canon, importlib.import_module(parent).__path__)
+        if id(module) in self._fresh:
+            self._fresh.discard(id(module))
+        else:
+            spec.loader.exec_module(module)
+        module.__spec__, module.__name__, module.__loader__ = (
+            spec, spec.name, spec.loader)
 
     # `python -m vqlab.<old name>` goes through runpy, which asks the loader
     # for code rather than a module. Hand it the real module's code.
     def _target(self, fullname):
-        if self.map is None:
-            self.map = _old_names()
-        return importlib.util.find_spec(self.map[fullname])
+        return importlib.util.find_spec(self._canon(fullname))
 
     def get_code(self, fullname):
         t = self._target(fullname)
@@ -139,14 +182,10 @@ class _Alias(importlib.abc.MetaPathFinder, importlib.abc.Loader):
 
 
 def install():
-    for d in reversed(stage_dirs()):
-        s = str(d)
-        if s not in sys.path:
-            sys.path.insert(0, s)
     if str(SRC) not in sys.path:
         sys.path.append(str(SRC))
     if not any(isinstance(f, _Alias) for f in sys.meta_path):
-        sys.meta_path.append(_Alias())
+        sys.meta_path.insert(0, _Alias())
 
 
 install()

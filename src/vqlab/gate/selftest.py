@@ -370,18 +370,23 @@ def main(argv=None) -> int:
         # package gets shadowed (or shadows it) on sys.path. bench/coverage.py
         # was renamed kernel_coverage.py for exactly this (pytest-cov).
         from vqlab import _layout as L
-        import importlib.util as _iu
-        stage = {str(d) for d in L.stage_dirs()}
-        saved = list(sys.path)
-        try:
-            sys.path[:] = [p for p in sys.path if p not in stage]
-            clash = sorted(f.stem for d in L.stage_dirs() for f in d.glob("*.py")
-                           if f.stem != "__init__" and (
-                               f.stem in sys.stdlib_module_names
-                               or (f.stem not in sys.modules
-                                   and _iu.find_spec(f.stem) is not None)))
-        finally:
-            sys.path[:] = saved
+        import importlib.machinery as _im
+        # Search only OUTSIDE this repo (site-packages, stdlib); find_spec
+        # would also report modules we have already imported ourselves.
+        repo = str(L.SRC.parent)
+        outside = [p for p in sys.path if p and not p.startswith(repo)]
+        clash = sorted(f.stem for d in L.stage_dirs() for f in d.glob("*.py")
+                       if f.stem != "__init__" and (
+                           f.stem in sys.stdlib_module_names
+                           or _im.PathFinder.find_spec(f.stem, outside) is not None))
+        import importlib as _il
+        import vq_switch as _bare
+        import vqlab.runtime.vq_switch as _canon
+        import vqlab.vq_switch as _old
+        check("bare, dotted and pre-split names give ONE module object",
+              _bare is _canon is _old and _canon.__name__ == "vqlab.runtime.vq_switch")
+        check("reload by the bare name re-executes the module",
+              _il.reload(_bare) is _canon and _canon.__name__ == "vqlab.runtime.vq_switch")
         check("no stage module name collides with stdlib / site-packages",
               not clash, ", ".join(clash))
         p = subprocess.run([PY, "-m", "vqlab.price", "--help"], capture_output=True,

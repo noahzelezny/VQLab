@@ -36,7 +36,7 @@ import numpy as np
 import mlx.core as mx
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))  # src/
-from vqlab import _layout  # noqa: E402,F401  stage dirs -> sys.path
+from vqlab import _layout  # noqa: E402,F401  one module object per name
 from vqlab import runtime_load  # noqa: E402
 
 
