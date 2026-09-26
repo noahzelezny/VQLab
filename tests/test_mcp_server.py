@@ -158,6 +158,10 @@ def test_read_doc_is_confined():
     assert m.t_read_doc("AGENTS.md", 1, 3)["end"] == 3
     with pytest.raises(m.ToolError):
         m.t_read_doc("src/vqlab/cli.py")
+    assert m.t_read_doc("src/vqlab/fit/CONTEXT.md", 1, 2)["end"] == 2
+    assert m.t_read_doc("CONTEXT.md", 1, 2)["end"] == 2
+    with pytest.raises(m.ToolError):
+        m.t_read_doc("src/vqlab/../../AGENTS.md/CONTEXT.md")
 
 
 def test_call_tool_never_raises():

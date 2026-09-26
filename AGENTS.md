@@ -24,7 +24,7 @@ sed -n 1,40p docs/ONBOARDING.md     # the mechanical pass before fitting ANY new
 Then grep for the thing you were about to build:
 
 ```bash
-grep -rli "<the concept>" src/vqlab/ docs/ research/quantlab/
+grep -rli "<the concept>" src/vqlab/ docs/ research/archive/quantlab/
 ```
 
 ## The instruments that get rebuilt by accident
@@ -40,7 +40,7 @@ grep -rli "<the concept>" src/vqlab/ docs/ research/quantlab/
 | which COMPONENT owns the decode time? | `vqlab decode-ladder` — per-component deletion arms with an output checksum beside every timing | a fresh deletion script that seeds `cache.keys` and crashes on Flash's ArraysCache/QSAKVCache |
 | how much damage does this artifact carry? | `vqlab score` / `kl_damage.py` | ad-hoc KL scripts |
 | ppl on the house corpora | `scripts/score_ppl_resident.py` + the THREE corpora in `src/vqlab/score/referee/` (prose / code-public / literary) | your own corpus files |
-| task benchmarks | `research/quantlab/score_tasks_streaming.py` (layer-streamed; scores models larger than RAM) | a new eval harness |
+| task benchmarks | `vqlab tasks` (src/vqlab/score/score_tasks_streaming.py; layer-streamed, scores models larger than RAM) | a new eval harness |
 | is this artifact releasable? | `vqlab check-release` / `check-bundle` / `selftest` | eyeballing |
 | fit a mixed-geometry rung | `vqlab fit-moe --vq-layers` (scatter fits) | bespoke build scripts |
 | rebuild an artifact at a new per-layer geometry | `vqlab geo-build` (diff-style: named modules refit from the bf16 teacher, everything else keeps shipped bytes; REFUSES ragged nsub, sets pack_bits, verifies fit reuse by codebook shape) | hand-rolled build scripts in scratch |
@@ -80,7 +80,7 @@ recorded verbatim). `publish` is not exposed; it is a human's action.
    was chosen; the config says what the mix IS.
 2. `docs/FINDINGS-LOG.md` — the measured record (F-numbers, corrections
    applied in place).
-3. `research/quantlab/EXPERIMENTS.md` — a LAB NOTEBOOK. It narrates attempts,
+3. `research/log/EXPERIMENTS.md` — a LAB NOTEBOOK. It narrates attempts,
    including ones whose verdicts the same arc later overturned. **Never
    characterize a released artifact from an experiment entry** (this error
    was made twice in one hour on 2026-09-13; both times a 30-second config
@@ -147,7 +147,7 @@ recorded verbatim). `publish` is not exposed; it is a human's action.
   (measured per-layer allocation); v3 reserved for gradient-tuned. Artifacts
   never carry campaign letters.
 
-## The law book — `research/quantlab/FINDINGS.md`
+## The law book — `docs/FINDINGS.md`
 
 **Read it before proposing any quantization idea.** Five sections:
 I settled laws, II retracted leads (do NOT re-chase), III instrument rules,

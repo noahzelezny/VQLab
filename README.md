@@ -185,8 +185,8 @@ as SKIPPED with the reason.
 - `src/vqlab/` — the toolkit. Every command is a standalone script.
 - `docs/` — start at [docs/INDEX.md](docs/INDEX.md), which says what each
   doc is for and whether it still holds.
-- `research/quantlab/` — the frozen research tree (experiments E60 to E147,
-  the ladders, the paper drafts). [FINDINGS.md](research/quantlab/FINDINGS.md)
+- `research/archive/quantlab/` — the frozen research tree (experiments E60 to E147,
+  the ladders, the paper drafts). [FINDINGS.md](docs/FINDINGS.md)
   there is the law book: settled laws, retracted leads, instrument rules.
 - `AGENTS.md` — instructions for coding agents working in this repo.
 
