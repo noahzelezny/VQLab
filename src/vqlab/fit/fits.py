@@ -26,7 +26,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))  # src/
 from vqlab import _layout  # noqa: E402,F401  one module object per name
 import fitstore as fs  # noqa: E402
 
-FAMILIES = _layout.SRC.parent / "families"
+FAMILIES = fs._families_dir()   # honours VQLAB_FAMILIES_DIR
 
 
 def _layers(s):
@@ -54,11 +54,33 @@ def main(argv=None) -> int:
     pf = sub.add_parser("file")
     pf.add_argument("--limit", type=int, default=0)
     pf.add_argument("--family")
+    pr = sub.add_parser("retag", help="re-file fits named after a teacher COPY under the "
+                        "profiled teacher it is byte-identical to (dry run unless --apply)")
+    pr.add_argument("--from", dest="old", required=True, help="teacher name the fits are filed under")
+    pr.add_argument("--teacher", required=True,
+                    help="that teacher's directory: its config + shard fingerprint must "
+                         "match a family profile, which supplies the new name")
+    pr.add_argument("--family")
+    pr.add_argument("--apply", action="store_true")
     a = ap.parse_args(argv)
 
     root = pathlib.Path(a.root) if a.root else fs.roots()[0]
     root.mkdir(parents=True, exist_ok=True)
     recs = fs.read_index(root)
+
+    if a.cmd == "retag":
+        new = fs.teacher_slug(a.teacher, FAMILIES)
+        if new == a.old:
+            print(f"REFUSE: {a.teacher} matches no profiled teacher by content "
+                  f"(config + shard fingerprint); nothing proves {a.old!r} is another teacher")
+            return 2
+        moves = fs.retag(root, a.old, new, a.family, apply=a.apply)
+        print(f"{a.teacher}\n  is byte-identical (config + shard fingerprint) to profiled teacher {new}")
+        print(f"{'moved' if a.apply else 'would move'} {len(moves)} fits: {a.old} -> {new}"
+              + ("" if a.apply else "   (dry run; --apply to move)"))
+        for src, dst in moves[:3]:
+            print(f"  {src.relative_to(root)}\n    -> {dst.relative_to(root)}")
+        return 0
 
     if a.cmd == "index":
         sig = fs.load_signatures(FAMILIES)
