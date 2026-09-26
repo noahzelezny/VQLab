@@ -94,6 +94,7 @@ COMMANDS = {
     # agents/
     "mcp": ("mcp_server.py", "serve the lab to agents over MCP (stdio); one server per box"),
     "gui": ("gui.py", "a local, read-only window onto the lab (127.0.0.1:8781)"),
+    "queue": ("run_queue.py", "run a list of steps from PINNED code (git worktree), under the GPU lease, failing loudly; --preflight"),
 }
 
 

@@ -871,33 +871,53 @@ def serve(inp=None, out=None) -> int:
 # Supervisor (the detached process that owns the lease and runs the job)
 # --------------------------------------------------------------------------- #
 
-def supervise(run_dir: Path) -> int:
-    meta = _read_meta(run_dir)
-    # A GPU-free job locks a private file: same supervisor code path, no
-    # contention with the shared GPU lease.
-    lp = run_dir / "no-gpu.lock" if meta.get("cmd") in GPU_FREE else lease_path()
+def acquire_lease(lp: Path, holder: str, run_id: Optional[str], wait_s: float = 1800,
+                  poll_s: float = 15) -> Optional[int]:
+    """Take an exclusive flock on `lp`, waiting up to wait_s; stamp the holder.
+    Returns the fd (keep it open to hold the lease; release_lease to drop it)
+    or None if it stayed held. Shared by the MCP supervisor and `vqlab queue`,
+    so there is one lease protocol, not a pgrep script per campaign."""
     lp.parent.mkdir(parents=True, exist_ok=True)
     fd = os.open(lp, os.O_RDWR | os.O_CREAT, 0o644)
-    deadline = time.time() + 1800
+    deadline = time.time() + wait_s
     while True:
         try:
             fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
             break
         except OSError as exc:
             if exc.errno not in (errno.EAGAIN, errno.EACCES, errno.EWOULDBLOCK):
+                os.close(fd)
                 raise
             if time.time() > deadline:
-                meta.update(status="deferred", finished=time.strftime("%Y-%m-%dT%H:%M:%S"),
-                            note="GPU lease held for 30 min; deferred, not failed")
-                (run_dir / "meta.json").write_text(json.dumps(meta, indent=1))
-                return 0
-            time.sleep(15)
+                os.close(fd)
+                return None
+            time.sleep(poll_s)
     os.ftruncate(fd, 0)
     os.lseek(fd, 0, os.SEEK_SET)
-    os.write(fd, json.dumps({"holder": f"vqlab:{meta.get('cmd')}", "pid": os.getpid(),
-                             "run_id": meta.get("run_id"),
+    os.write(fd, json.dumps({"holder": holder, "pid": os.getpid(), "run_id": run_id,
                              "since": time.strftime("%Y-%m-%dT%H:%M:%S")}).encode())
     os.fsync(fd)
+    return fd
+
+
+def release_lease(fd: int) -> None:
+    try:
+        fcntl.flock(fd, fcntl.LOCK_UN)
+    finally:
+        os.close(fd)
+
+
+def supervise(run_dir: Path) -> int:
+    meta = _read_meta(run_dir)
+    # A GPU-free job locks a private file: same supervisor code path, no
+    # contention with the shared GPU lease.
+    lp = run_dir / "no-gpu.lock" if meta.get("cmd") in GPU_FREE else lease_path()
+    fd = acquire_lease(lp, f"vqlab:{meta.get('cmd')}", meta.get("run_id"), wait_s=1800)
+    if fd is None:
+        meta.update(status="deferred", finished=time.strftime("%Y-%m-%dT%H:%M:%S"),
+                    note="GPU lease held for 30 min; deferred, not failed")
+        (run_dir / "meta.json").write_text(json.dumps(meta, indent=1))
+        return 0
 
     argv = [sys.executable, "-m", "vqlab.cli", meta["cmd"], *meta.get("args", [])]
     attempts, rc = 0, 1
@@ -941,8 +961,7 @@ def supervise(run_dir: Path) -> int:
         meta.update(status=status, exit_code=rc, attempts=attempts,
                     finished=time.strftime("%Y-%m-%dT%H:%M:%S"))
         (run_dir / "meta.json").write_text(json.dumps(meta, indent=1))
-        fcntl.flock(fd, fcntl.LOCK_UN)
-        os.close(fd)
+        release_lease(fd)
     return 0 if rc == 0 else 1
 
 
