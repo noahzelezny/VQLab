@@ -147,8 +147,18 @@ def step_determinism(ctx):
 def gpu_command(step, ctx):
     T, sc = ctx["teacher"], ctx["scratch"]
     if step in ("cache_a", "cache_b"):
+        if streamed_scorer(ctx):
+            # The KL GATE's own instrument (kl-ladder scores through it), not
+            # kl_damage: it streams layers, so the teacher need not fit
+            # resident, and it loads on the family's validated path
+            # (cpu_stream_load where F120 needs it). kl_damage's resident
+            # load of the 35B teacher off the HDD tripped the GPU watchdog
+            # in 12 s on 2026-09-26.
+            return ["stream-score", "--model", str(T), "--corpus", str(_layout.corpus("prose")),
+                    "--tokens", "2048", "--chunk", "512", "--save-topk", "64",
+                    "--out", str(sc / step)], {"out_dir": str(sc / step), "instrument": "stream-score"}
         return ["kl", "cache", "--model", str(T), "--out-dir", str(sc / step),
-                "--seed", "1234"], {"out_dir": str(sc / step)}
+                "--seed", "1234"], {"out_dir": str(sc / step), "instrument": "kl cache"}
     if step == "init_sweep":
         L = ctx["profile"]["arch"]["vq_layers"]
         pick = sorted({L[0], L[len(L) // 3], L[2 * len(L) // 3], L[-1]})
@@ -156,6 +166,15 @@ def gpu_command(step, ctx):
                 "--layers", ",".join(map(str, pick)), "--k", "256", "--dim", "4",
                 "--reps", "2"], {}
     raise KeyError(step)
+
+
+def streamed_scorer(ctx) -> bool:
+    """Does stream_score have a VALIDATED scorer for this teacher's model_type?"""
+    arch = (ctx.get("profile") or {}).get("arch") or {}
+    from vqlab.score import stream_score
+    e = stream_score.SCORERS.get(arch.get("model_type")) or \
+        stream_score.SCORERS.get(arch.get("text_model_type"))
+    return bool(e and e.get("validated"))
 
 
 def fits_resident(ctx):
@@ -251,7 +270,7 @@ def main(argv=None) -> int:
             if s["status"] != "done":
                 break
             continue
-        if step in ("cache_a", "cache_b"):
+        if step in ("cache_a", "cache_b") and not streamed_scorer(ctx):
             ok, why = fits_resident(ctx)
             if not ok:
                 s["status"] = "blocked"
