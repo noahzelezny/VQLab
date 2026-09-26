@@ -74,7 +74,7 @@ else:
 SRC, OUT = pathlib.Path(args.src), pathlib.Path(args.out)
 K, D, G = args.k, args.dim, args.group
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))  # src/
-from vqlab import _layout  # noqa: E402,F401  stage dirs -> sys.path
+from vqlab import _layout  # noqa: E402,F401  one module object per name
 from families import DENSE_FAMILIES
 KEY_TMPL, _default_layers = DENSE_FAMILIES[args.family]
 LO, HI = (int(x) for x in (args.layers or _default_layers).split("-"))
