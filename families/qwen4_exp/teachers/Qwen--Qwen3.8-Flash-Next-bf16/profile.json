@@ -1,0 +1,1342 @@
+{
+ "schema": "vqlab.family-profile/1",
+ "created": "2026-09-26T01:18:01+00:00",
+ "family": "qwen4_exp",
+ "teacher": "Qwen--Qwen3.8-Flash-Next-bf16",
+ "identity": {
+  "path": "<teachers>/Qwen--Qwen3.8-Flash-Next-bf16",
+  "hf_repo": null,
+  "hf_revision": null,
+  "config_sha256": "889658f2508e8c61d409b02e70e0d78d8d4452ec65aaafbe129805d213d2e74b",
+  "shards": 131,
+  "shard_fingerprint": "e607c6fddb09e99a4200c1e68c3e4350c48d78a7446feff6ba1e119efe47f38f"
+ },
+ "arch": {
+  "model_type": "qwen4_exp",
+  "text_model_type": "qwen4_exp_text",
+  "layers": 48,
+  "experts": 512,
+  "experts_per_token": 10,
+  "hidden": 2560,
+  "expert_intermediate": 640,
+  "dense_intermediate": null,
+  "kind": "moe",
+  "vq_layers": [
+   0,
+   1,
+   2,
+   3,
+   4,
+   5,
+   6,
+   7,
+   8,
+   9,
+   10,
+   11,
+   12,
+   13,
+   14,
+   15,
+   16,
+   17,
+   18,
+   19,
+   20,
+   21,
+   22,
+   23,
+   24,
+   25,
+   26,
+   27,
+   28,
+   29,
+   30,
+   31,
+   32,
+   33,
+   34,
+   35,
+   36,
+   37,
+   38,
+   39,
+   40,
+   41,
+   42,
+   43,
+   44,
+   45,
+   46,
+   47
+  ],
+  "vision_tower": true,
+  "mtp_head": true
+ },
+ "bytes": {
+  "by_class_gib": {
+   "carry": 102.216,
+   "embed": 2.368,
+   "mtp": 4.856,
+   "vision": 0.836,
+   "vq_target": 225.0
+  },
+  "vq_target_gib_per_layer": {
+   "0": 4.6875,
+   "1": 4.6875,
+   "2": 4.6875,
+   "3": 4.6875,
+   "4": 4.6875,
+   "5": 4.6875,
+   "6": 4.6875,
+   "7": 4.6875,
+   "8": 4.6875,
+   "9": 4.6875,
+   "10": 4.6875,
+   "11": 4.6875,
+   "12": 4.6875,
+   "13": 4.6875,
+   "14": 4.6875,
+   "15": 4.6875,
+   "16": 4.6875,
+   "17": 4.6875,
+   "18": 4.6875,
+   "19": 4.6875,
+   "20": 4.6875,
+   "21": 4.6875,
+   "22": 4.6875,
+   "23": 4.6875,
+   "24": 4.6875,
+   "25": 4.6875,
+   "26": 4.6875,
+   "27": 4.6875,
+   "28": 4.6875,
+   "29": 4.6875,
+   "30": 4.6875,
+   "31": 4.6875,
+   "32": 4.6875,
+   "33": 4.6875,
+   "34": 4.6875,
+   "35": 4.6875,
+   "36": 4.6875,
+   "37": 4.6875,
+   "38": 4.6875,
+   "39": 4.6875,
+   "40": 4.6875,
+   "41": 4.6875,
+   "42": 4.6875,
+   "43": 4.6875,
+   "44": 4.6875,
+   "45": 4.6875,
+   "46": 4.6875,
+   "47": 4.6875
+  },
+  "vq_target_params": 120795955200,
+  "vq_target_gib_per_bit": 14.0625
+ },
+ "modules": {
+  "signatures": {
+   "gate_proj": [
+    [
+     512,
+     640,
+     2560
+    ]
+   ],
+   "up_proj": [
+    [
+     512,
+     640,
+     2560
+    ]
+   ],
+   "down_proj": [
+    [
+     512,
+     2560,
+     640
+    ]
+   ]
+  },
+  "count": 144
+ },
+ "geometries": {
+  "gate_proj": [
+   {
+    "d": 2,
+    "K": 16,
+    "bits_per_weight": 2.25,
+    "exact_packing": true,
+    "fused_kernel_ok": true,
+    "legal": true,
+    "bytes": 235929664,
+    "stack_gib": 10.547
+   },
+   {
+    "d": 2,
+    "K": 32,
+    "bits_per_weight": 2.75,
+    "exact_packing": true,
+    "fused_kernel_ok": true,
+    "legal": true,
+    "bytes": 288358528,
+    "stack_gib": 12.891
+   },
+   {
+    "d": 2,
+    "K": 64,
+    "bits_per_weight": 3.25,
+    "exact_packing": true,
+    "fused_kernel_ok": true,
+    "legal": true,
+    "bytes": 340787456,
+    "stack_gib": 15.234
+   },
+   {
+    "d": 2,
+    "K": 128,
+    "bits_per_weight": 3.75,
+    "exact_packing": true,
+    "fused_kernel_ok": true,
+    "legal": true,
+    "bytes": 393216512,
+    "stack_gib": 17.578
+   },
+   {
+    "d": 2,
+    "K": 256,
+    "bits_per_weight": 4.25,
+    "exact_packing": true,
+    "fused_kernel_ok": true,
+    "legal": true,
+    "bytes": 445645824,
+    "stack_gib": 19.922
+   },
+   {
+    "d": 2,
+    "K": 512,
+    "bits_per_weight": 4.75,
+    "exact_packing": true,
+    "fused_kernel_ok": true,
+    "legal": true,
+    "bytes": 498075648,
+    "stack_gib": 22.266
+   },
+   {
+    "d": 2,
+    "K": 1024,
+    "bits_per_weight": 5.25,
+    "exact_packing": true,
+    "fused_kernel_ok": true,
+    "legal": true,
+    "bytes": 550506496,
+    "stack_gib": 24.61
+   },
+   {
+    "d": 2,
+    "K": 2048,
+    "bits_per_weight": 5.75,
+    "exact_packing": true,
+    "fused_kernel_ok": true,
+    "legal": true,
+    "bytes": 602939392,
+    "stack_gib": 26.953
+   },
+   {
+    "d": 2,
+    "K": 4096,
+    "bits_per_weight": 6.25,
+    "exact_packing": true,
+    "fused_kernel_ok": true,
+    "legal": true,
+    "bytes": 655376384,
+    "stack_gib": 29.298
+   },
+   {
+    "d": 2,
+    "K": 8192,
+    "bits_per_weight": 6.75,
+    "exact_packing": true,
+    "fused_kernel_ok": false,
+    "legal": false,
+    "bytes": 707821568,
+    "stack_gib": 31.642
+   },
+   {
+    "d": 2,
+    "K": 16384,
+    "bits_per_weight": 7.25,
+    "exact_packing": true,
+    "fused_kernel_ok": false,
+    "legal": false,
+    "bytes": 760283136,
+    "stack_gib": 33.987
+   },
+   {
+    "d": 2,
+    "K": 32768,
+    "bits_per_weight": 7.75,
+    "exact_packing": true,
+    "fused_kernel_ok": false,
+    "legal": false,
+    "bytes": 812777472,
+    "stack_gib": 36.334
+   },
+   {
+    "d": 2,
+    "K": 65536,
+    "bits_per_weight": 8.25,
+    "exact_packing": true,
+    "fused_kernel_ok": false,
+    "legal": false,
+    "bytes": 865337344,
+    "stack_gib": 38.684
+   },
+   {
+    "d": 4,
+    "K": 16,
+    "bits_per_weight": 1.25,
+    "exact_packing": true,
+    "fused_kernel_ok": true,
+    "legal": true,
+    "bytes": 131072128,
+    "stack_gib": 5.859
+   },
+   {
+    "d": 4,
+    "K": 32,
+    "bits_per_weight": 1.5,
+    "exact_packing": true,
+    "fused_kernel_ok": true,
+    "legal": true,
+    "bytes": 157286656,
+    "stack_gib": 7.031
+   },
+   {
+    "d": 4,
+    "K": 64,
+    "bits_per_weight": 1.75,
+    "exact_packing": true,
+    "fused_kernel_ok": true,
+    "legal": true,
+    "bytes": 183501312,
+    "stack_gib": 8.203
+   },
+   {
+    "d": 4,
+    "K": 128,
+    "bits_per_weight": 2.0,
+    "exact_packing": true,
+    "fused_kernel_ok": true,
+    "legal": true,
+    "bytes": 209716224,
+    "stack_gib": 9.375
+   },
+   {
+    "d": 4,
+    "K": 256,
+    "bits_per_weight": 2.25,
+    "exact_packing": true,
+    "fused_kernel_ok": true,
+    "legal": true,
+    "bytes": 235931648,
+    "stack_gib": 10.547
+   },
+   {
+    "d": 4,
+    "K": 512,
+    "bits_per_weight": 2.5,
+    "exact_packing": true,
+    "fused_kernel_ok": true,
+    "legal": true,
+    "bytes": 262148096,
+    "stack_gib": 11.719
+   },
+   {
+    "d": 4,
+    "K": 1024,
+    "bits_per_weight": 2.75,
+    "exact_packing": true,
+    "fused_kernel_ok": true,
+    "legal": true,
+    "bytes": 288366592,
+    "stack_gib": 12.891
+   },
+   {
+    "d": 4,
+    "K": 2048,
+    "bits_per_weight": 3.0,
+    "exact_packing": true,
+    "fused_kernel_ok": true,
+    "legal": true,
+    "bytes": 314589184,
+    "stack_gib": 14.063
+   },
+   {
+    "d": 4,
+    "K": 4096,
+    "bits_per_weight": 3.25,
+    "exact_packing": true,
+    "fused_kernel_ok": false,
+    "legal": false,
+    "bytes": 340819968,
+    "stack_gib": 15.236
+   },
+   {
+    "d": 4,
+    "K": 8192,
+    "bits_per_weight": 3.5,
+    "exact_packing": true,
+    "fused_kernel_ok": false,
+    "legal": false,
+    "bytes": 367067136,
+    "stack_gib": 16.409
+   },
+   {
+    "d": 4,
+    "K": 16384,
+    "bits_per_weight": 3.75,
+    "exact_packing": true,
+    "fused_kernel_ok": false,
+    "legal": false,
+    "bytes": 393347072,
+    "stack_gib": 17.584
+   },
+   {
+    "d": 4,
+    "K": 32768,
+    "bits_per_weight": 4.0,
+    "exact_packing": true,
+    "fused_kernel_ok": false,
+    "legal": false,
+    "bytes": 419692544,
+    "stack_gib": 18.762
+   },
+   {
+    "d": 4,
+    "K": 65536,
+    "bits_per_weight": 4.25,
+    "exact_packing": true,
+    "fused_kernel_ok": false,
+    "legal": false,
+    "bytes": 446169088,
+    "stack_gib": 19.945
+   },
+   {
+    "d": 8,
+    "K": 16,
+    "bits_per_weight": 0.75,
+    "exact_packing": true,
+    "fused_kernel_ok": true,
+    "legal": true,
+    "bytes": 78643456,
+    "stack_gib": 3.516
+   },
+   {
+    "d": 8,
+    "K": 32,
+    "bits_per_weight": 0.875,
+    "exact_packing": true,
+    "fused_kernel_ok": true,
+    "legal": true,
+    "bytes": 91750912,
+    "stack_gib": 4.102
+   },
+   {
+    "d": 8,
+    "K": 64,
+    "bits_per_weight": 1.0,
+    "exact_packing": true,
+    "fused_kernel_ok": true,
+    "legal": true,
+    "bytes": 104858624,
+    "stack_gib": 4.688
+   },
+   {
+    "d": 8,
+    "K": 128,
+    "bits_per_weight": 1.125,
+    "exact_packing": true,
+    "fused_kernel_ok": true,
+    "legal": true,
+    "bytes": 117966848,
+    "stack_gib": 5.274
+   },
+   {
+    "d": 8,
+    "K": 256,
+    "bits_per_weight": 1.25,
+    "exact_packing": true,
+    "fused_kernel_ok": true,
+    "legal": true,
+    "bytes": 131076096,
+    "stack_gib": 5.86
+   },
+   {
+    "d": 8,
+    "K": 512,
+    "bits_per_weight": 1.375,
+    "exact_packing": true,
+    "fused_kernel_ok": true,
+    "legal": true,
+    "bytes": 144187392,
+    "stack_gib": 6.446
+   },
+   {
+    "d": 8,
+    "K": 1024,
+    "bits_per_weight": 1.5,
+    "exact_packing": true,
+    "fused_kernel_ok": true,
+    "legal": true,
+    "bytes": 157302784,
+    "stack_gib": 7.032
+   },
+   {
+    "d": 8,
+    "K": 2048,
+    "bits_per_weight": 1.625,
+    "exact_packing": true,
+    "fused_kernel_ok": false,
+    "legal": false,
+    "bytes": 170426368,
+    "stack_gib": 7.619
+   },
+   {
+    "d": 8,
+    "K": 4096,
+    "bits_per_weight": 1.75,
+    "exact_packing": true,
+    "fused_kernel_ok": false,
+    "legal": false,
+    "bytes": 183566336,
+    "stack_gib": 8.206
+   },
+   {
+    "d": 8,
+    "K": 8192,
+    "bits_per_weight": 1.875,
+    "exact_packing": true,
+    "fused_kernel_ok": false,
+    "legal": false,
+    "bytes": 196739072,
+    "stack_gib": 8.795
+   },
+   {
+    "d": 8,
+    "K": 16384,
+    "bits_per_weight": 2.0,
+    "exact_packing": true,
+    "fused_kernel_ok": false,
+    "legal": false,
+    "bytes": 209977344,
+    "stack_gib": 9.387
+   },
+   {
+    "d": 8,
+    "K": 32768,
+    "bits_per_weight": 2.125,
+    "exact_packing": true,
+    "fused_kernel_ok": false,
+    "legal": false,
+    "bytes": 223346688,
+    "stack_gib": 9.984
+   },
+   {
+    "d": 8,
+    "K": 65536,
+    "bits_per_weight": 2.25,
+    "exact_packing": true,
+    "fused_kernel_ok": false,
+    "legal": false,
+    "bytes": 236978176,
+    "stack_gib": 10.594
+   }
+  ],
+  "up_proj": [
+   {
+    "d": 2,
+    "K": 16,
+    "bits_per_weight": 2.25,
+    "exact_packing": true,
+    "fused_kernel_ok": true,
+    "legal": true,
+    "bytes": 235929664,
+    "stack_gib": 10.547
+   },
+   {
+    "d": 2,
+    "K": 32,
+    "bits_per_weight": 2.75,
+    "exact_packing": true,
+    "fused_kernel_ok": true,
+    "legal": true,
+    "bytes": 288358528,
+    "stack_gib": 12.891
+   },
+   {
+    "d": 2,
+    "K": 64,
+    "bits_per_weight": 3.25,
+    "exact_packing": true,
+    "fused_kernel_ok": true,
+    "legal": true,
+    "bytes": 340787456,
+    "stack_gib": 15.234
+   },
+   {
+    "d": 2,
+    "K": 128,
+    "bits_per_weight": 3.75,
+    "exact_packing": true,
+    "fused_kernel_ok": true,
+    "legal": true,
+    "bytes": 393216512,
+    "stack_gib": 17.578
+   },
+   {
+    "d": 2,
+    "K": 256,
+    "bits_per_weight": 4.25,
+    "exact_packing": true,
+    "fused_kernel_ok": true,
+    "legal": true,
+    "bytes": 445645824,
+    "stack_gib": 19.922
+   },
+   {
+    "d": 2,
+    "K": 512,
+    "bits_per_weight": 4.75,
+    "exact_packing": true,
+    "fused_kernel_ok": true,
+    "legal": true,
+    "bytes": 498075648,
+    "stack_gib": 22.266
+   },
+   {
+    "d": 2,
+    "K": 1024,
+    "bits_per_weight": 5.25,
+    "exact_packing": true,
+    "fused_kernel_ok": true,
+    "legal": true,
+    "bytes": 550506496,
+    "stack_gib": 24.61
+   },
+   {
+    "d": 2,
+    "K": 2048,
+    "bits_per_weight": 5.75,
+    "exact_packing": true,
+    "fused_kernel_ok": true,
+    "legal": true,
+    "bytes": 602939392,
+    "stack_gib": 26.953
+   },
+   {
+    "d": 2,
+    "K": 4096,
+    "bits_per_weight": 6.25,
+    "exact_packing": true,
+    "fused_kernel_ok": true,
+    "legal": true,
+    "bytes": 655376384,
+    "stack_gib": 29.298
+   },
+   {
+    "d": 2,
+    "K": 8192,
+    "bits_per_weight": 6.75,
+    "exact_packing": true,
+    "fused_kernel_ok": false,
+    "legal": false,
+    "bytes": 707821568,
+    "stack_gib": 31.642
+   },
+   {
+    "d": 2,
+    "K": 16384,
+    "bits_per_weight": 7.25,
+    "exact_packing": true,
+    "fused_kernel_ok": false,
+    "legal": false,
+    "bytes": 760283136,
+    "stack_gib": 33.987
+   },
+   {
+    "d": 2,
+    "K": 32768,
+    "bits_per_weight": 7.75,
+    "exact_packing": true,
+    "fused_kernel_ok": false,
+    "legal": false,
+    "bytes": 812777472,
+    "stack_gib": 36.334
+   },
+   {
+    "d": 2,
+    "K": 65536,
+    "bits_per_weight": 8.25,
+    "exact_packing": true,
+    "fused_kernel_ok": false,
+    "legal": false,
+    "bytes": 865337344,
+    "stack_gib": 38.684
+   },
+   {
+    "d": 4,
+    "K": 16,
+    "bits_per_weight": 1.25,
+    "exact_packing": true,
+    "fused_kernel_ok": true,
+    "legal": true,
+    "bytes": 131072128,
+    "stack_gib": 5.859
+   },
+   {
+    "d": 4,
+    "K": 32,
+    "bits_per_weight": 1.5,
+    "exact_packing": true,
+    "fused_kernel_ok": true,
+    "legal": true,
+    "bytes": 157286656,
+    "stack_gib": 7.031
+   },
+   {
+    "d": 4,
+    "K": 64,
+    "bits_per_weight": 1.75,
+    "exact_packing": true,
+    "fused_kernel_ok": true,
+    "legal": true,
+    "bytes": 183501312,
+    "stack_gib": 8.203
+   },
+   {
+    "d": 4,
+    "K": 128,
+    "bits_per_weight": 2.0,
+    "exact_packing": true,
+    "fused_kernel_ok": true,
+    "legal": true,
+    "bytes": 209716224,
+    "stack_gib": 9.375
+   },
+   {
+    "d": 4,
+    "K": 256,
+    "bits_per_weight": 2.25,
+    "exact_packing": true,
+    "fused_kernel_ok": true,
+    "legal": true,
+    "bytes": 235931648,
+    "stack_gib": 10.547
+   },
+   {
+    "d": 4,
+    "K": 512,
+    "bits_per_weight": 2.5,
+    "exact_packing": true,
+    "fused_kernel_ok": true,
+    "legal": true,
+    "bytes": 262148096,
+    "stack_gib": 11.719
+   },
+   {
+    "d": 4,
+    "K": 1024,
+    "bits_per_weight": 2.75,
+    "exact_packing": true,
+    "fused_kernel_ok": true,
+    "legal": true,
+    "bytes": 288366592,
+    "stack_gib": 12.891
+   },
+   {
+    "d": 4,
+    "K": 2048,
+    "bits_per_weight": 3.0,
+    "exact_packing": true,
+    "fused_kernel_ok": true,
+    "legal": true,
+    "bytes": 314589184,
+    "stack_gib": 14.063
+   },
+   {
+    "d": 4,
+    "K": 4096,
+    "bits_per_weight": 3.25,
+    "exact_packing": true,
+    "fused_kernel_ok": false,
+    "legal": false,
+    "bytes": 340819968,
+    "stack_gib": 15.236
+   },
+   {
+    "d": 4,
+    "K": 8192,
+    "bits_per_weight": 3.5,
+    "exact_packing": true,
+    "fused_kernel_ok": false,
+    "legal": false,
+    "bytes": 367067136,
+    "stack_gib": 16.409
+   },
+   {
+    "d": 4,
+    "K": 16384,
+    "bits_per_weight": 3.75,
+    "exact_packing": true,
+    "fused_kernel_ok": false,
+    "legal": false,
+    "bytes": 393347072,
+    "stack_gib": 17.584
+   },
+   {
+    "d": 4,
+    "K": 32768,
+    "bits_per_weight": 4.0,
+    "exact_packing": true,
+    "fused_kernel_ok": false,
+    "legal": false,
+    "bytes": 419692544,
+    "stack_gib": 18.762
+   },
+   {
+    "d": 4,
+    "K": 65536,
+    "bits_per_weight": 4.25,
+    "exact_packing": true,
+    "fused_kernel_ok": false,
+    "legal": false,
+    "bytes": 446169088,
+    "stack_gib": 19.945
+   },
+   {
+    "d": 8,
+    "K": 16,
+    "bits_per_weight": 0.75,
+    "exact_packing": true,
+    "fused_kernel_ok": true,
+    "legal": true,
+    "bytes": 78643456,
+    "stack_gib": 3.516
+   },
+   {
+    "d": 8,
+    "K": 32,
+    "bits_per_weight": 0.875,
+    "exact_packing": true,
+    "fused_kernel_ok": true,
+    "legal": true,
+    "bytes": 91750912,
+    "stack_gib": 4.102
+   },
+   {
+    "d": 8,
+    "K": 64,
+    "bits_per_weight": 1.0,
+    "exact_packing": true,
+    "fused_kernel_ok": true,
+    "legal": true,
+    "bytes": 104858624,
+    "stack_gib": 4.688
+   },
+   {
+    "d": 8,
+    "K": 128,
+    "bits_per_weight": 1.125,
+    "exact_packing": true,
+    "fused_kernel_ok": true,
+    "legal": true,
+    "bytes": 117966848,
+    "stack_gib": 5.274
+   },
+   {
+    "d": 8,
+    "K": 256,
+    "bits_per_weight": 1.25,
+    "exact_packing": true,
+    "fused_kernel_ok": true,
+    "legal": true,
+    "bytes": 131076096,
+    "stack_gib": 5.86
+   },
+   {
+    "d": 8,
+    "K": 512,
+    "bits_per_weight": 1.375,
+    "exact_packing": true,
+    "fused_kernel_ok": true,
+    "legal": true,
+    "bytes": 144187392,
+    "stack_gib": 6.446
+   },
+   {
+    "d": 8,
+    "K": 1024,
+    "bits_per_weight": 1.5,
+    "exact_packing": true,
+    "fused_kernel_ok": true,
+    "legal": true,
+    "bytes": 157302784,
+    "stack_gib": 7.032
+   },
+   {
+    "d": 8,
+    "K": 2048,
+    "bits_per_weight": 1.625,
+    "exact_packing": true,
+    "fused_kernel_ok": false,
+    "legal": false,
+    "bytes": 170426368,
+    "stack_gib": 7.619
+   },
+   {
+    "d": 8,
+    "K": 4096,
+    "bits_per_weight": 1.75,
+    "exact_packing": true,
+    "fused_kernel_ok": false,
+    "legal": false,
+    "bytes": 183566336,
+    "stack_gib": 8.206
+   },
+   {
+    "d": 8,
+    "K": 8192,
+    "bits_per_weight": 1.875,
+    "exact_packing": true,
+    "fused_kernel_ok": false,
+    "legal": false,
+    "bytes": 196739072,
+    "stack_gib": 8.795
+   },
+   {
+    "d": 8,
+    "K": 16384,
+    "bits_per_weight": 2.0,
+    "exact_packing": true,
+    "fused_kernel_ok": false,
+    "legal": false,
+    "bytes": 209977344,
+    "stack_gib": 9.387
+   },
+   {
+    "d": 8,
+    "K": 32768,
+    "bits_per_weight": 2.125,
+    "exact_packing": true,
+    "fused_kernel_ok": false,
+    "legal": false,
+    "bytes": 223346688,
+    "stack_gib": 9.984
+   },
+   {
+    "d": 8,
+    "K": 65536,
+    "bits_per_weight": 2.25,
+    "exact_packing": true,
+    "fused_kernel_ok": false,
+    "legal": false,
+    "bytes": 236978176,
+    "stack_gib": 10.594
+   }
+  ],
+  "down_proj": [
+   {
+    "d": 2,
+    "K": 16,
+    "bits_per_weight": 2.25,
+    "exact_packing": true,
+    "fused_kernel_ok": true,
+    "legal": true,
+    "bytes": 235929664,
+    "stack_gib": 10.547
+   },
+   {
+    "d": 2,
+    "K": 32,
+    "bits_per_weight": 2.75,
+    "exact_packing": true,
+    "fused_kernel_ok": true,
+    "legal": true,
+    "bytes": 288358528,
+    "stack_gib": 12.891
+   },
+   {
+    "d": 2,
+    "K": 64,
+    "bits_per_weight": 3.25,
+    "exact_packing": true,
+    "fused_kernel_ok": true,
+    "legal": true,
+    "bytes": 340787456,
+    "stack_gib": 15.234
+   },
+   {
+    "d": 2,
+    "K": 128,
+    "bits_per_weight": 3.75,
+    "exact_packing": true,
+    "fused_kernel_ok": true,
+    "legal": true,
+    "bytes": 393216512,
+    "stack_gib": 17.578
+   },
+   {
+    "d": 2,
+    "K": 256,
+    "bits_per_weight": 4.25,
+    "exact_packing": true,
+    "fused_kernel_ok": true,
+    "legal": true,
+    "bytes": 445645824,
+    "stack_gib": 19.922
+   },
+   {
+    "d": 2,
+    "K": 512,
+    "bits_per_weight": 4.75,
+    "exact_packing": true,
+    "fused_kernel_ok": true,
+    "legal": true,
+    "bytes": 498075648,
+    "stack_gib": 22.266
+   },
+   {
+    "d": 2,
+    "K": 1024,
+    "bits_per_weight": 5.25,
+    "exact_packing": true,
+    "fused_kernel_ok": true,
+    "legal": true,
+    "bytes": 550506496,
+    "stack_gib": 24.61
+   },
+   {
+    "d": 2,
+    "K": 2048,
+    "bits_per_weight": 5.75,
+    "exact_packing": true,
+    "fused_kernel_ok": true,
+    "legal": true,
+    "bytes": 602939392,
+    "stack_gib": 26.953
+   },
+   {
+    "d": 2,
+    "K": 4096,
+    "bits_per_weight": 6.25,
+    "exact_packing": true,
+    "fused_kernel_ok": true,
+    "legal": true,
+    "bytes": 655376384,
+    "stack_gib": 29.298
+   },
+   {
+    "d": 2,
+    "K": 8192,
+    "bits_per_weight": 6.75,
+    "exact_packing": true,
+    "fused_kernel_ok": false,
+    "legal": false,
+    "bytes": 707821568,
+    "stack_gib": 31.642
+   },
+   {
+    "d": 2,
+    "K": 16384,
+    "bits_per_weight": 7.25,
+    "exact_packing": true,
+    "fused_kernel_ok": false,
+    "legal": false,
+    "bytes": 760283136,
+    "stack_gib": 33.987
+   },
+   {
+    "d": 2,
+    "K": 32768,
+    "bits_per_weight": 7.75,
+    "exact_packing": true,
+    "fused_kernel_ok": false,
+    "legal": false,
+    "bytes": 812777472,
+    "stack_gib": 36.334
+   },
+   {
+    "d": 2,
+    "K": 65536,
+    "bits_per_weight": 8.25,
+    "exact_packing": true,
+    "fused_kernel_ok": false,
+    "legal": false,
+    "bytes": 865337344,
+    "stack_gib": 38.684
+   },
+   {
+    "d": 4,
+    "K": 16,
+    "bits_per_weight": 1.25,
+    "exact_packing": true,
+    "fused_kernel_ok": true,
+    "legal": true,
+    "bytes": 131072128,
+    "stack_gib": 5.859
+   },
+   {
+    "d": 4,
+    "K": 32,
+    "bits_per_weight": 1.5,
+    "exact_packing": true,
+    "fused_kernel_ok": true,
+    "legal": true,
+    "bytes": 157286656,
+    "stack_gib": 7.031
+   },
+   {
+    "d": 4,
+    "K": 64,
+    "bits_per_weight": 1.75,
+    "exact_packing": true,
+    "fused_kernel_ok": true,
+    "legal": true,
+    "bytes": 183501312,
+    "stack_gib": 8.203
+   },
+   {
+    "d": 4,
+    "K": 128,
+    "bits_per_weight": 2.0,
+    "exact_packing": true,
+    "fused_kernel_ok": true,
+    "legal": true,
+    "bytes": 209716224,
+    "stack_gib": 9.375
+   },
+   {
+    "d": 4,
+    "K": 256,
+    "bits_per_weight": 2.25,
+    "exact_packing": true,
+    "fused_kernel_ok": true,
+    "legal": true,
+    "bytes": 235931648,
+    "stack_gib": 10.547
+   },
+   {
+    "d": 4,
+    "K": 512,
+    "bits_per_weight": 2.5,
+    "exact_packing": true,
+    "fused_kernel_ok": true,
+    "legal": true,
+    "bytes": 262148096,
+    "stack_gib": 11.719
+   },
+   {
+    "d": 4,
+    "K": 1024,
+    "bits_per_weight": 2.75,
+    "exact_packing": true,
+    "fused_kernel_ok": true,
+    "legal": true,
+    "bytes": 288366592,
+    "stack_gib": 12.891
+   },
+   {
+    "d": 4,
+    "K": 2048,
+    "bits_per_weight": 3.0,
+    "exact_packing": true,
+    "fused_kernel_ok": true,
+    "legal": true,
+    "bytes": 314589184,
+    "stack_gib": 14.063
+   },
+   {
+    "d": 4,
+    "K": 4096,
+    "bits_per_weight": 3.25,
+    "exact_packing": true,
+    "fused_kernel_ok": false,
+    "legal": false,
+    "bytes": 340819968,
+    "stack_gib": 15.236
+   },
+   {
+    "d": 4,
+    "K": 8192,
+    "bits_per_weight": 3.5,
+    "exact_packing": true,
+    "fused_kernel_ok": false,
+    "legal": false,
+    "bytes": 367067136,
+    "stack_gib": 16.409
+   },
+   {
+    "d": 4,
+    "K": 16384,
+    "bits_per_weight": 3.75,
+    "exact_packing": true,
+    "fused_kernel_ok": false,
+    "legal": false,
+    "bytes": 393347072,
+    "stack_gib": 17.584
+   },
+   {
+    "d": 4,
+    "K": 32768,
+    "bits_per_weight": 4.0,
+    "exact_packing": true,
+    "fused_kernel_ok": false,
+    "legal": false,
+    "bytes": 419692544,
+    "stack_gib": 18.762
+   },
+   {
+    "d": 4,
+    "K": 65536,
+    "bits_per_weight": 4.25,
+    "exact_packing": true,
+    "fused_kernel_ok": false,
+    "legal": false,
+    "bytes": 446169088,
+    "stack_gib": 19.945
+   },
+   {
+    "d": 8,
+    "K": 16,
+    "bits_per_weight": 0.75,
+    "exact_packing": false,
+    "fused_kernel_ok": true,
+    "legal": false,
+    "bytes": 89129216,
+    "stack_gib": 3.984
+   },
+   {
+    "d": 8,
+    "K": 32,
+    "bits_per_weight": 0.875,
+    "exact_packing": false,
+    "fused_kernel_ok": true,
+    "legal": false,
+    "bytes": 104858112,
+    "stack_gib": 4.688
+   },
+   {
+    "d": 8,
+    "K": 64,
+    "bits_per_weight": 1.0,
+    "exact_packing": false,
+    "fused_kernel_ok": true,
+    "legal": false,
+    "bytes": 120587264,
+    "stack_gib": 5.391
+   },
+   {
+    "d": 8,
+    "K": 128,
+    "bits_per_weight": 1.125,
+    "exact_packing": false,
+    "fused_kernel_ok": true,
+    "legal": false,
+    "bytes": 136316928,
+    "stack_gib": 6.094
+   },
+   {
+    "d": 8,
+    "K": 256,
+    "bits_per_weight": 1.25,
+    "exact_packing": false,
+    "fused_kernel_ok": true,
+    "legal": false,
+    "bytes": 152047616,
+    "stack_gib": 6.797
+   },
+   {
+    "d": 8,
+    "K": 512,
+    "bits_per_weight": 1.375,
+    "exact_packing": false,
+    "fused_kernel_ok": true,
+    "legal": false,
+    "bytes": 167780352,
+    "stack_gib": 7.5
+   },
+   {
+    "d": 8,
+    "K": 1024,
+    "bits_per_weight": 1.5,
+    "exact_packing": false,
+    "fused_kernel_ok": true,
+    "legal": false,
+    "bytes": 183517184,
+    "stack_gib": 8.204
+   },
+   {
+    "d": 8,
+    "K": 2048,
+    "bits_per_weight": 1.625,
+    "exact_packing": false,
+    "fused_kernel_ok": false,
+    "legal": false,
+    "bytes": 199262208,
+    "stack_gib": 8.908
+   },
+   {
+    "d": 8,
+    "K": 4096,
+    "bits_per_weight": 1.75,
+    "exact_packing": false,
+    "fused_kernel_ok": false,
+    "legal": false,
+    "bytes": 215023616,
+    "stack_gib": 9.612
+   },
+   {
+    "d": 8,
+    "K": 8192,
+    "bits_per_weight": 1.875,
+    "exact_packing": false,
+    "fused_kernel_ok": false,
+    "legal": false,
+    "bytes": 230817792,
+    "stack_gib": 10.318
+   },
+   {
+    "d": 8,
+    "K": 16384,
+    "bits_per_weight": 2.0,
+    "exact_packing": false,
+    "fused_kernel_ok": false,
+    "legal": false,
+    "bytes": 246677504,
+    "stack_gib": 11.027
+   },
+   {
+    "d": 8,
+    "K": 32768,
+    "bits_per_weight": 2.125,
+    "exact_packing": false,
+    "fused_kernel_ok": false,
+    "legal": false,
+    "bytes": 262668288,
+    "stack_gib": 11.742
+   },
+   {
+    "d": 8,
+    "K": 65536,
+    "bits_per_weight": 2.25,
+    "exact_packing": false,
+    "fused_kernel_ok": false,
+    "legal": false,
+    "bytes": 278921216,
+    "stack_gib": 12.469
+   }
+  ]
+ }
+}
