@@ -17,6 +17,7 @@ PKG = Path(__file__).parent
 
 COMMANDS = {
     # plan/
+    "family-profile": ("family_profile.py", "size up a teacher from headers only: arch, bytes per bit, legal (d,K), module signatures"),
     "preflight-ram": ("preflight_ram.py", "refuse resident-memory ops on models bigger than RAM"),
     "preflight-disk": ("preflight_disk.py", "refuse builds whose output volume lacks the space"),
     "price": ("price.py", "price a size-targeted build before fitting it"),

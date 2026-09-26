@@ -139,3 +139,52 @@ DENSE_REMAP = {
     "gemma4_e4b": ("language_model.model.layers.{li}.mlp.{key}",
                    "language_model.model.layers.{li}.mlp.{key}"),
 }
+
+
+# ---------------------------------------------------------------- data entries
+# A new family is DATA, not a code change: drop an entry.json into a
+# families folder and every tool that reads this registry sees it. That is
+# what lets a family be onboarded through `vqlab family-profile
+# --write-entry` (or MCP `run`) without editing VQLab or waiting on a PR.
+#
+#   <repo>/families/<name>/entry.json      checked-in families
+#   ~/.vqlab/families/<name>/entry.json    a user's own families
+#   $VQLAB_FAMILIES_DIR/<name>/entry.json  anywhere else
+#
+# entry.json: {"kind": "moe", "target_substr", "src_key", "proj":
+# {proj: [src, half|null]}, ...} or {"kind": "dense", "src_key", "layers":
+# "LO-HI", "remap": [fit_tmpl, base_tmpl]}. A code entry above always wins
+# over a data entry of the same name, so a data file cannot silently
+# redefine a published family.
+def _family_dirs():
+    import os
+    import pathlib
+    dirs = [pathlib.Path(__file__).resolve().parents[3] / "families",
+            pathlib.Path.home() / ".vqlab" / "families"]
+    if os.environ.get("VQLAB_FAMILIES_DIR"):
+        dirs.append(pathlib.Path(os.environ["VQLAB_FAMILIES_DIR"]))
+    return dirs
+
+
+def _load_data_entries():
+    import json
+    loaded = {}
+    for d in _family_dirs():
+        for f in sorted(d.glob("*/entry.json")) if d.is_dir() else ():
+            name = f.parent.name
+            if name in FAMILY or name in DENSE_FAMILIES or name in loaded:
+                continue
+            e = json.loads(f.read_text())
+            if e.get("kind", "moe") == "dense":
+                DENSE_FAMILIES[name] = (e["src_key"], e.get("layers", "0-0"))
+                if e.get("remap"):
+                    DENSE_REMAP[name] = tuple(e["remap"])
+            else:
+                FAMILY[name] = {k: v for k, v in e.items()
+                                if k not in ("kind", "_note", "_source")}
+                FAMILY[name]["proj"] = {p: tuple(v) for p, v in e["proj"].items()}
+            loaded[name] = str(f)
+    return loaded
+
+
+DATA_ENTRIES = _load_data_entries()
