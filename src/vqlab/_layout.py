@@ -68,6 +68,27 @@ def runtime_file(name: str) -> pathlib.Path:
     return p
 
 
+CORPORA = {"prose": "referee_corpus.txt",
+           "code": "referee_corpus_code_public.txt",
+           "lit": "referee_corpus_literary.txt"}
+_CORPUS_ALIAS = {"wikitext": "prose", "code-public": "code", "literary": "lit"}
+
+
+def corpus(name: str = "prose") -> pathlib.Path:
+    """A house referee corpus by NAME (prose / code / lit), never by a path
+    built from __file__: a scratch script that hardcodes the repo layout
+    breaks silently when the layout moves (night 4, 2026-09-26). A path
+    argument is passed through legacy_path, so old spellings still resolve."""
+    key = _CORPUS_ALIAS.get(name, name)
+    if key in CORPORA:
+        p = PKG / "score" / "referee" / CORPORA[key]
+    else:
+        p = pathlib.Path(legacy_path(str(name)))
+    if not p.is_file():
+        raise FileNotFoundError(f"vqlab: no corpus {name!r} (have {sorted(CORPORA)})")
+    return p
+
+
 def legacy_path(p):
     """Map a path recorded BEFORE the stage split onto its new home.
 

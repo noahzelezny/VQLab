@@ -529,6 +529,54 @@ def main(argv=None) -> int:
               step_verdict(0, so, se, {"stdout_regex": "^{"})["ok"])
         check("step_verdict: nonzero exit fails", not step_verdict(3, so, se)["ok"])
 
+        print("[6a4/7] queue: pinned tree, loud failure, preflight")
+        import os as _os
+        from vqlab.agents import run_queue as Q
+        from vqlab import _layout as L
+        _saved = {k: _os.environ.get(k) for k in ("VQLAB_QUEUE_DIR", "VQLAB_GPU_LEASE")}
+        _os.environ["VQLAB_QUEUE_DIR"] = str(tmp / "queues")
+        _os.environ["VQLAB_GPU_LEASE"] = str(tmp / "gpu.lease")
+        qf = tmp / "q.json"
+        qf.write_text(json.dumps({"name": "st", "steps": [
+            {"name": "ok", "cmd": "runs", "args": ["-n", "1"], "preflight": {"append": []}},
+            {"name": "gone", "cmd": "fits", "args": ["list", "--root", str(tmp / "no" / "such")]},
+            {"name": "after", "cmd": "runs", "args": ["-n", "1"]}]}))
+        qdirs = []
+        try:
+            with contextlib.redirect_stdout(io.StringIO()):
+                qd = Q.create(qf, allow_dirty=True)
+                qdirs.append(qd)
+                qrc = Q.run(qd)
+            qs = json.load(open(qd / "state.json"))
+            check("queue: steps run from a worktree pinned at the queue's commit",
+                  Q._git("rev-parse", "HEAD", cwd=qd / "tree") == qs["commit"]
+                  and str(qd / "tree") in (qd / "steps" / "00-ok" / "cmd").read_text() + qs["tree"])
+            check("queue: a missing input path FAILS the step and stops the queue",
+                  qrc == 4 and [r["status"] for r in qs["steps"]] == ["pass", "fail", "pending"]
+                  and "does not exist" in qs["steps"][1]["reasons"][0])
+            with contextlib.redirect_stdout(io.StringIO()):
+                pd = Q.create(qf, allow_dirty=True, preflight=True)
+                qdirs.append(pd)
+                Q.run(pd)
+            ps_ = json.load(open(pd / "state.json"))
+            check("queue --preflight: reports every step; no preflight block is a FAIL",
+                  [r["status"] for r in ps_["steps"]] == ["pass", "fail", "fail"]
+                  and "no preflight defined" in ps_["steps"][2]["reasons"][0])
+            check("queue: publish can never be queued",
+                  any("publish" in e for e in Q.validate({"steps": [{"name": "p", "cmd": "publish"}]})))
+        finally:
+            for qd in qdirs:
+                subprocess.run(["git", "worktree", "remove", "--force", str(qd / "tree")],
+                               cwd=str(L.SRC.parent), capture_output=True)
+            for k, v in _saved.items():
+                if v is None:
+                    _os.environ.pop(k, None)
+                else:
+                    _os.environ[k] = v
+        check("corpus locator: prose / code / lit by name, old spellings too",
+              all(L.corpus(n).is_file() for n in ("prose", "code", "lit", "wikitext"))
+              and L.corpus(str(L.SRC / "vqlab" / "referee" / "referee_corpus.txt")).is_file())
+
         print("[6b/7] layout")
         # A stage module whose bare name is also a stdlib or installed
         # package gets shadowed (or shadows it) on sys.path. bench/coverage.py

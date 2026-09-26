@@ -291,6 +291,7 @@ def cmd_score(args):
 
 # --------------------------------------------------------------------------
 def main():
+    from vqlab import _layout
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
 
@@ -298,7 +299,7 @@ def main():
     c.add_argument("--model", required=True, help="bf16 teacher dir")
     c.add_argument("--out-dir", required=True)
     c.add_argument("--corpus", nargs="+",
-                   default=[str(Path(__file__).parent / "referee" / "referee_corpus_literary.txt")])
+                   default=[str(_layout.corpus("lit"))])
     c.add_argument("--num-samples", type=int, default=128)
     c.add_argument("--seq-len", type=int, default=512)
     c.add_argument("--batch-size", type=int, default=4)

@@ -51,10 +51,10 @@ import subprocess
 import sys
 
 REPO = str(pathlib.Path(__file__).resolve().parents[3])
-REF = os.path.join(REPO, "src", "vqlab", "score", "referee")
-CORPORA = {"prose": "referee_corpus.txt",
-           "code": "referee_corpus_code_public.txt",
-           "lit": "referee_corpus_literary.txt"}
+sys.path.insert(0, os.path.join(REPO, "src"))
+from vqlab import _layout  # noqa: E402
+REF = str(_layout.PKG / "score" / "referee")
+CORPORA = dict(_layout.CORPORA)
 GSZ = 64
 
 

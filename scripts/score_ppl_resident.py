@@ -31,15 +31,19 @@ import mlx.nn as nn
 from mlx_lm.utils import load
 from mlx_lm.models.cache import make_prompt_cache
 
-REF = pathlib.Path(__file__).resolve().parents[1] / "src" / "vqlab" / "score" / "referee"
+import sys  # noqa: E402
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1] / "src"))
+from vqlab import _layout  # noqa: E402
 
 ap = argparse.ArgumentParser()
 ap.add_argument("--model", required=True)
-ap.add_argument("--corpus", default=str(REF / "referee_corpus.txt"))
+ap.add_argument("--corpus", default="prose",
+                help="prose | code | lit, or a path (resolved by _layout.corpus)")
 ap.add_argument("--max-tokens", type=int, default=2048)
 ap.add_argument("--chunk", type=int, default=512)
 ap.add_argument("--out")
 a = ap.parse_args()
+a.corpus = str(_layout.corpus(a.corpus))
 
 mx.set_cache_limit(8 << 30)
 # mlx-lm >=0.32 refuses an in-checkpoint model.py unless trust_remote_code is
