@@ -1,28 +1,26 @@
-# research/: working record, not the toolkit
+# research/: the working record, not the toolkit
 
-Nothing here is imported by `vqlab`, and nothing here is maintained as a tool.
-For an instrument, go to the root `CONTEXT.md` and run `vqlab <cmd>`.
+Nothing here is imported by `vqlab`. For an instrument, go to the root
+`CONTEXT.md`; for what is known about a model family, go to `families/`.
 
 | path | what it is | how to treat it |
 |---|---|---|
-| `quantlab/FINDINGS.md` | the law book: settled laws, retracted leads, instrument and Metal rules | **reference**: read it before proposing any quantization idea |
-| `quantlab/EXPERIMENTS.md`, `STATE.md`, `TIMELINE.md`, `HANDOFF.md` | lab notebook | **working record**: narrates attempts, including overturned ones. Never describe a released artifact from it |
-| `quantlab/MODEL_CARD_*.md` | card drafts from the quantlab era | superseded by `docs/model-cards/` |
-| `quantlab/paper/` | the paper | owned by the paper session |
-| `quantlab/*.py`, `*.sh` | **frozen quantlab-era tools and the chains that ran them** (last synced 2026-08-22) | see below |
-| `quantlab/research/<family>/` | per-family ledgers and sweep plans | reference for that family |
-| `flash-next-recipe/`, `peel/` | family recipe / kernel-peel notes | reference |
+| `log/EXPERIMENTS.md`, `STATE.md`, `TIMELINE.md`, `HANDOFF.md`, `PROCESS.md`, `handoff/` | the lab notebook | **working record**: narrates attempts, including overturned ones. Never describe a released artifact from it; read its `config.json` |
+| `paper/` | the paper | owned by the paper session |
+| `archive/quantlab/` | the frozen quantlab-era tree (merged 2026-09-01): its scripts, shell chains, results, old model-card drafts | **history**. Scripts keep their relative paths so past chains still run; never edit them to "sync" with `src/` |
+| `archive/peel/` | kernel-peel experiment notes and patches | history |
 
-## The quantlab `*.py` files are NOT copies of `src/vqlab/`
+Moved out on 2026-09-25:
+- the law book, to `docs/FINDINGS.md` (same section numbers);
+- per-family ledgers, sweep plans and result tables, to `families/<family>/teachers/<teacher>/research/` (their sweep SCRIPTS stay in `archive/quantlab/research/<arc>/`);
+- `allocation/METHOD.md`, to `docs/ALLOCATION-METHOD.md`.
 
-Twenty of them share a filename with a `src/vqlab/` module, and 19 of those
-20 have diverged from it: `vq_switch.py` by ~4,100 lines, `check_release.py`
-by ~440. They are the quantlab-era versions the `*.sh` chains in this folder
-ran (17 chains call them by relative path). Past results that cite them were
-produced by THESE bytes. Keep them frozen and never edit them to "sync";
-fix the `src/vqlab/` version instead. Some are frozen on purpose and cited:
-`fitter_0816_cdcdeab.py` is the fitter that produced the published 397B
-VQ-2.4 rung.
+## The archived quantlab `*.py` files are NOT copies of `src/vqlab/`
 
-`quantlab/patch_mlx_lm.py` installs the CURRENT runtime (`src/vqlab/runtime/vq_switch.py`) into an mlx_lm tree,
-not this folder's frozen copy (changed 2026-09-25).
+Twenty share a filename with a `src/vqlab/` module, and 19 of those have
+diverged from it (`vq_switch.py` by about 4,100 lines). They are the versions
+the archived chains ran, and past results cite their bytes. Some are frozen
+on purpose and cited: `archive/quantlab/fitter_0816_cdcdeab.py` is the fitter
+that produced the published 397B VQ-2.4 rung. `archive/quantlab/patch_mlx_lm.py`
+installs the CURRENT runtime (`src/vqlab/runtime/vq_switch.py`), not the
+archived copy.

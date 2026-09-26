@@ -42,7 +42,7 @@ Design: `docs/PROVENANCE.md`.
 ## Reference (stable across runs: read it, treat it as constraints)
 
 - `AGENTS.md`: the lab's rules and the authority order when sources disagree
-- `research/quantlab/FINDINGS.md`: the law book (settled laws, retracted leads, instrument rules, Metal rules)
+- `docs/FINDINGS.md`: the law book (settled laws, retracted leads, instrument rules, Metal rules)
 - `docs/INDEX.md`: what every doc is for, and whether it still holds
 - `docs/ONBOARDING.md`: the mechanical pass to run before fitting a new family
 - `METHODOLOGY.md`: read it before publishing any number
@@ -50,7 +50,7 @@ Design: `docs/PROVENANCE.md`.
 ## Working record (changes every run: process it as input, don't cite it as law)
 
 - `research/CONTEXT.md`: what each research folder is. The quantlab `*.py` files there are FROZEN older versions, not copies of `src/`.
-- `research/quantlab/EXPERIMENTS.md`: the lab notebook. **Never describe a released artifact from it**; read the artifact's `config.json` first.
+- `research/log/EXPERIMENTS.md`: the lab notebook. **Never describe a released artifact from it**; read the artifact's `config.json` first.
 - dated docs in `docs/` (`*-2026-MM-DD.md`, `MORNING-REPORT-*`)
 
 ## Code layout (`src/vqlab/`)

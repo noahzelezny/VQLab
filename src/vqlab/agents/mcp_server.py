@@ -133,9 +133,12 @@ def _this_host() -> str:
     return os.environ.get("VQLAB_HOSTNAME") or socket.gethostname().split(".")[0]
 
 
-DOC_ALLOW = ("docs", "AGENTS.md", "README.md", "METHODOLOGY.md",
-             "REPRODUCING.md", "research/quantlab/FINDINGS.md",
-             "research/quantlab/EXPERIMENTS.md")
+# Read-only doc access: the routing layer (CONTEXT.md at the root and in
+# every stage folder), family data (entries, profiles, ledgers), the docs,
+# the law book and the lab notebook.
+DOC_ALLOW = ("docs", "families", "CONTEXT.md", "AGENTS.md",
+             "README.md", "METHODOLOGY.md", "REPRODUCING.md", "research/log",
+             "research/CONTEXT.md")
 FINDINGS_LOG = REPO / "docs" / "FINDINGS-LOG.md"
 VERDICTS = ("CONFIRMED", "FALSIFIED", "VOID", "CORRECTS", "NULL")
 
@@ -326,7 +329,12 @@ def t_artifact_config(path: str, keys: Optional[List[str]] = None) -> Dict[str, 
 def t_read_doc(path: str, start: int = 1, lines: int = 200) -> Dict[str, Any]:
     """Read a slice of a lab doc (docs/, AGENTS.md, the law book, …)."""
     rel = path.lstrip("/")
-    if not any(rel == a or rel.startswith(a.rstrip("/") + "/") for a in DOC_ALLOW):
+    # Stage contracts (src/vqlab/<stage>/CONTEXT.md) are docs; the source
+    # beside them is not -- read_doc never serves code.
+    is_contract = (rel.startswith("src/vqlab/") and rel.endswith("/CONTEXT.md")
+                   and ".." not in rel)
+    if not is_contract and not any(rel == a or rel.startswith(a.rstrip("/") + "/")
+                                   for a in DOC_ALLOW):
         raise ToolError("NOT_ALLOWED", f"{path} is not a readable lab doc",
                         allowed=list(DOC_ALLOW))
     p = REPO / rel
@@ -690,7 +698,7 @@ TOOLS: Dict[str, Dict[str, Any]] = {
     "read_doc": {
         "fn": t_read_doc, "readonly": True,
         "description": "Read a slice of a lab document: docs/*, AGENTS.md, METHODOLOGY.md, REPRODUCING.md, "
-                       "research/quantlab/FINDINGS.md (the law book) or EXPERIMENTS.md.",
+                       "docs/FINDINGS.md (the law book) or EXPERIMENTS.md.",
         "schema": _schema({"path": S("repo-relative path"), "start": I("1-based first line"), "lines": I("max 1000")}, ["path"]),
     },
     "run": {
@@ -803,7 +811,7 @@ def handle(msg: Dict[str, Any]) -> Optional[Dict[str, Any]]:
                                         "host": socket.gethostname().split(".")[0]},
                          "instructions": ("vqlab lab server for THIS box. Use where_is before claiming "
                                           "anything is missing. Read the law book (read_doc "
-                                          "research/quantlab/FINDINGS.md) before proposing an experiment. "
+                                          "docs/FINDINGS.md) before proposing an experiment. "
                                           "Pre-register a prediction before you run; record it with "
                                           "findings_append. publish is a human action.")})
     if method in ("notifications/initialized", "notifications/cancelled"):

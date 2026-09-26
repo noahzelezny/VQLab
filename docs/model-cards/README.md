@@ -24,7 +24,7 @@ python3 _tools/add_changelog_entry.py \
 ## Then publish
 
 The publish source is the artifact's own `README.md` — not this folder, and
-not `research/quantlab/MODEL_CARD_*.md`. Copy, then push:
+not `research/archive/quantlab/MODEL_CARD_*.md`. Copy, then push:
 
 ```bash
 A="<models>/TheDrainFlorist--<name>"
@@ -54,7 +54,7 @@ Conditional sections keep a fixed slot: `Requirements`, `Changelog`,
 - Provenance is mandatory: base model, its licence, the derivative
   statement, the quantization attribution.
 - Paper links use the concept DOI `10.5281/zenodo.22119017`, never a version
-  DOI (see `research/quantlab/handoff/SESSION_PAPER.md`).
+  DOI (see `research/log/handoff/SESSION_PAPER.md`).
 - No `TODO` / `TO MEASURE` / `[PENDING]` markers.
 
 ## Before you publish
@@ -79,5 +79,5 @@ this in bulk.
 
 ## Note
 
-`research/quantlab/make_flashnext_cards.py` and `make_qwen38_cards.py` still
+`research/archive/quantlab/make_flashnext_cards.py` and `make_qwen38_cards.py` still
 emit the old structure. Fold these rules in before using them again.
