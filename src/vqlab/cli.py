@@ -56,6 +56,7 @@ COMMANDS = {
     "vision-smoke": ("vision_smoke.py", "vision arm of III.11: put an IMAGE through the shipping runtime"),
     "check": ("check_all.py", "run the release gates that need no source model"),
     "smoke": ("smoke.py", "generate one token through the runtime the artifact ships"),
+    "pin": ("pin.py", "freeze an artifact for measurement (symlinked weights, optional --runtime re-bake), smoke it, write vqlab_pin.json"),
     "verify": ("verify_artifact.py", "outlier gate: decode artifact bytes vs bf16 source"),
     "validate": ("validate_queue.py", "overnight validation queue: drain artifacts through the gates, never publish"),
     "check-release": ("check_release.py", "release gate: files exist and function"),
