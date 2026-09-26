@@ -449,6 +449,24 @@ def main(argv=None) -> int:
               prof["family"] == "novelmoe" and prof["modules"]["count"] == 6,
               f"family={prof['family']} modules={prof['modules']['count']}")
 
+        print("[6a2/7] onboard: sequences the steps, resumes, never fakes a GPU step")
+        ob = [PY, str(_find("onboard.py")), "--teacher", str(U)]
+        oenv = {**fenv, "VQLAB_SCRATCH": str(tmp / "scratch")}
+        p = subprocess.run(ob, capture_output=True, text=True, env=oenv)
+        stf = tmp / "fams" / "novelmoe" / "teachers" / "novel-teacher" / "onboard.json"
+        ost = json.load(open(stf))["steps"] if stf.exists() else {}
+        check("onboard runs the CPU steps and stops at the first GPU step",
+              ost.get("profile", {}).get("status") == "done"
+              and ost.get("loader", {}).get("status") == "done"
+              and ost.get("cache_a", {}).get("status") == "pending"
+              and "kl cache" in ost.get("cache_a", {}).get("result", {}).get("command", ""),
+              (p.stdout or p.stderr)[-200:])
+        p = subprocess.run(ob, capture_output=True, text=True, env=oenv)
+        ost2 = json.load(open(stf))["steps"]
+        check("rerunning onboard resumes (profile/loader stay done, nothing launched)",
+              ost2["loader"]["status"] == "done" and ost2["cache_a"]["status"] == "pending"
+              and "run_id" not in ost2["cache_a"]["result"])
+
         print("[6b/7] layout")
         # A stage module whose bare name is also a stdlib or installed
         # package gets shadowed (or shadows it) on sys.path. bench/coverage.py
