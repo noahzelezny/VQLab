@@ -32,6 +32,7 @@ Designed to run on the M4 while the M3 grinds its own queue:
 import argparse
 import gc
 import json
+import os
 import math
 import pathlib
 import shutil
@@ -153,6 +154,22 @@ else:
     print("UNSEEDED (--seed -1) — this fit is a fresh draw", flush=True)
 
 BASE, SRC, OUT = pathlib.Path(args.base), pathlib.Path(args.src), pathlib.Path(args.out)
+
+# Records (docs/PROVENANCE.md): every fit is filed in the fit store with this
+# recipe, and the artifact gets a build record at the end.
+import fitstore  # noqa: E402
+import provenance  # noqa: E402
+TEACHER = fitstore.teacher_slug(SRC)
+METHOD = {"init": args.init, "lloyd_iters": args.iters, "sample_rows": args.sample,
+          "scales": "max-abs per group", "alternation": False, "group": args.group,
+          "tail_weight_pow": args.tail_weight_pow,
+          "tail_weight_from": args.tail_weight_from,
+          "tail_from": args.tail_from, "tail_geom": args.tail_geom,
+          "geom": args.geom, "dim": args.dim, "k": args.k,
+          "relerr_abort": args.relerr_abort, "max_refit": args.max_refit,
+          "seed": args.seed if args.seed >= 0 else "unseeded", "rng": "mx.random"}
+RECIPE = {"origin": "fit", "tool": "fit-moe", "run_id": os.environ.get("VQLAB_RUN_ID"),
+          "commit": provenance.code_state()["commit"], "fitter": METHOD}
 SHIP = pathlib.Path(args.ship_to) if args.ship_to else None
 # "LO-HI" range, or a comma list ("3,8,11") for leverage-guided scatter
 # fits. LAYER_SET is the membership test; LO/HI remain for range prints
@@ -161,7 +178,8 @@ if "," in args.vq_layers:
     LAYER_SET = frozenset(int(x) for x in args.vq_layers.split(","))
     LO, HI = min(LAYER_SET), max(LAYER_SET)
 else:
-    LO, HI = (int(x) for x in args.vq_layers.split("-"))
+    _lo, _, _hi = args.vq_layers.partition("-")   # "30" or "0-56"
+    LO, HI = int(_lo), int(_hi or _lo)
     LAYER_SET = frozenset(range(LO, HI + 1))
 G = args.group
 
@@ -593,6 +611,12 @@ for si, sh in enumerate(shards):
     tmp = OUT / sh.replace(".safetensors", ".tmp.safetensors")
     mx.save_safetensors(str(tmp), new)
     tmp.rename(dst)
+    # File this shard's fits in the fit store BEFORE ship() can move the
+    # shard: the fits are the expensive part and must outlive the candidate.
+    for _m in sorted(done):
+        _pd, _pk = geom_for(layer_of(_m), _m.rsplit(".", 1)[1])
+        fitstore.put(dst, _m, args.family, TEACHER,
+                     recipe={**RECIPE, "fitter": {**RECIPE["fitter"], "dim": _pd, "k": _pk}})
     shard_sizes[sh] = dst.stat().st_size
     for k in new:
         out_map[k] = sh
@@ -669,6 +693,11 @@ for extra in BASE.iterdir():
     if extra.is_file() and extra.suffix != ".safetensors" \
             and extra.name not in ("config.json", "model.safetensors.index.json"):
         shutil.copy2(extra, OUT / extra.name)
+
+provenance.write_build_record(
+    OUT, tool="fit-moe", script=__file__, ap=ap, args=args, method=METHOD,
+    inputs=[("base", BASE), ("teacher", SRC)],
+    modules={m: {**v, "origin": "fit"} for m, v in vq_modules.items()})
 
 if SHIP is not None:
     for f in OUT.iterdir():
