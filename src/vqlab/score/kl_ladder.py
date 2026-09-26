@@ -95,6 +95,19 @@ def main():
             raise SystemExit(f"FAIL: cache {name} names a corpus that is not "
                              f"here: {corpus}")
 
+    # A pinned rung (vqlab pin) must have passed its smoke; checked for EVERY
+    # rung before the first GPU minute is spent. Unpinned dirs pass unchanged.
+    from vqlab.gate.pin import check_pin
+    refused = []
+    for rname, rdir in rungs.items():
+        ok, msg = check_pin(rdir)
+        if msg:
+            print(f"[kl-ladder] {rname}: {msg}", flush=True)
+        if not ok:
+            refused.append(rname)
+    if refused:
+        raise SystemExit(f"FAIL: refusing to score unsmoked or changed pins: {', '.join(refused)}")
+
     ppdir = a.per_pos_dir or os.path.join(
         os.path.dirname(a.out) if a.out else ".", "kl_per_position")
     os.makedirs(ppdir, exist_ok=True)
