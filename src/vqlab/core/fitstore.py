@@ -62,15 +62,100 @@ def roots():
     return mounted or [pathlib.Path.home() / ".vqlab" / "fits"]
 
 
-def teacher_slug(teacher_dir) -> str:
-    """The teacher's name in the store and in families/*/teachers/: its HF
-    repo when it is a hub snapshot, else its directory name."""
+def _families_dir():
+    return pathlib.Path(os.environ.get("VQLAB_FAMILIES_DIR")
+                        or pathlib.Path(__file__).resolve().parents[3] / "families")
+
+
+def teacher_identity(teacher_dir):
+    """(config_sha256, shard_fingerprint) -- the same two hashes a family
+    profile records under `identity` (per-shard bytes + first-MiB sha256)."""
+    from vqlab.records import provenance
     rp = pathlib.Path(os.path.realpath(teacher_dir))
+    fp = provenance.fingerprint(rp)
+    return (hashlib.sha256((rp / "config.json").read_bytes()).hexdigest(),
+            hashlib.sha256(json.dumps(fp.get("shards", {}), sort_keys=True).encode()).hexdigest())
+
+
+_SLUGS = {}
+
+
+def teacher_slug(teacher_dir, families_dir=None) -> str:
+    """The teacher's name in the store and in families/*/teachers/.
+
+    By CONTENT first: a teacher whose config + shard fingerprint match a
+    profiled teacher gets that teacher's name, whatever directory it sits in
+    (a scratch copy `paper_rev/teacher_35b_bf16`, byte-identical to the 35B
+    teacher, filed 602 fits under its dir name on 2026-09-26 -- VL4.11).
+    Else its HF repo when it is a hub snapshot, else its directory name."""
+    rp = pathlib.Path(os.path.realpath(teacher_dir))
+    fam = pathlib.Path(families_dir) if families_dir else _families_dir()
+    cst = (rp / "config.json").stat() if (rp / "config.json").is_file() else None
+    key = (str(rp), str(fam), cst and (cst.st_mtime_ns, cst.st_size))
+    if key in _SLUGS:
+        return _SLUGS[key]
     parts = rp.parts
     if "snapshots" in parts:
-        i = parts.index("snapshots")
-        return parts[i - 1].removeprefix("models--")
-    return re.sub(r"[^A-Za-z0-9._-]+", "-", rp.name)
+        name = parts[parts.index("snapshots") - 1].removeprefix("models--")
+    else:
+        name = re.sub(r"[^A-Za-z0-9._-]+", "-", rp.name)
+    cfg = rp / "config.json"
+    if cfg.is_file():
+        csha = hashlib.sha256(cfg.read_bytes()).hexdigest()
+        cands = []
+        for prof in sorted(fam.glob("*/teachers/*/profile.json")):
+            ident = json.loads(prof.read_text()).get("identity") or {}
+            if ident.get("config_sha256") == csha and ident.get("shard_fingerprint"):
+                cands.append((prof.parent.name, ident["shard_fingerprint"]))
+        if cands:                                   # config matches: prove the weights
+            shard_fp = teacher_identity(rp)[1]
+            hits = sorted({t for t, f in cands if f == shard_fp})
+            if len(hits) == 1:
+                name = hits[0]
+    _SLUGS[key] = name
+    return name
+
+
+def retag(root, old, new, family=None, apply=False):
+    """Move every fit filed under teacher `old` to teacher `new` (files,
+    sidecars, index). Dry run unless apply. Returns [(src, dst)]."""
+    root = pathlib.Path(root)
+    recs = read_index(root)
+    todo = [r for r in recs.values()
+            if r["teacher"] == old and (not family or r["family"] == family)]
+    clash = [root / rel_path(dict(r, teacher=new)) for r in todo
+             if (root / rel_path(dict(r, teacher=new))).with_suffix(".safetensors").exists()]
+    if clash:                                     # checked BEFORE the first move
+        raise SystemExit(f"refusing: {len(clash)} destinations already exist, e.g. {clash[0]}")
+    moves = []
+    for r in todo:
+        src = root / rel_path(r)
+        r2 = dict(r, teacher=new)
+        dst = root / rel_path(r2)
+        moves.append((src, dst))
+        if not apply:
+            continue
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        for ext in (".safetensors", ".json"):
+            s_, d_ = src.with_suffix(ext), dst.with_suffix(ext)
+            if d_.exists():
+                raise SystemExit(f"refusing to overwrite {d_}")
+            if s_.exists():
+                os.replace(s_, d_)
+        if r.get("location") == str(src.with_suffix(".safetensors")):
+            r2["location"] = str(dst.with_suffix(".safetensors"))
+        r2.setdefault("retagged", []).append(
+            {"from": old, "at": datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds")})
+        dst.with_suffix(".json").write_text(json.dumps(r2, indent=1, sort_keys=True))
+        recs[r["fit_id"]] = r2
+    if apply and moves:
+        write_index(root, recs)
+        for src, _ in moves:                          # prune emptied dirs
+            d = src.parent
+            while d != root and d.is_dir() and not any(d.iterdir()):
+                d.rmdir()
+                d = d.parent
+    return moves
 
 
 # ------------------------------------------------------------ safetensors I/O
