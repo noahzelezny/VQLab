@@ -51,6 +51,11 @@ import subprocess
 import sys
 
 RECORD = "vqlab_provenance.json"
+# Records this one REPLACED, oldest first: an in-place tool (bundle,
+# rebundle, graft, patch) amends the artifact, and the chain of what it was
+# before travels with it instead of being overwritten.
+HISTORY = "vqlab_provenance.history.jsonl"
+NOT_OUTPUTS = (RECORD, HISTORY)
 SCHEMA = "vqlab.provenance/1"
 HEAD = 1 << 20
 # Full-hash files up to this size; above it, head hash + size (the scheme
@@ -183,7 +188,8 @@ def _canon(rec):
 
 
 def write_build_record(out, *, tool, script=None, ap=None, args=None,
-                       method=None, inputs=(), modules=None, full_hash=None):
+                       method=None, inputs=(), modules=None, full_hash=None,
+                       argv=None):
     """Write <out>/vqlab_provenance.json and return the record.
 
     inputs:  [(role, path), ...]  role in teacher|base|reuse|source|...
@@ -196,7 +202,8 @@ def write_build_record(out, *, tool, script=None, ap=None, args=None,
         "schema": SCHEMA,
         "created": datetime.datetime.now(datetime.timezone.utc)
                    .isoformat(timespec="seconds"),
-        "tool": {"name": tool, "argv": list(sys.argv), "cwd": os.getcwd(),
+        "tool": {"name": tool, "argv": list(argv if argv is not None else sys.argv),
+                 "cwd": os.getcwd(),
                  "run_id": os.environ.get("VQLAB_RUN_ID")},
         "code": code_state(script),
         "env": env_state(),
@@ -208,9 +215,16 @@ def write_build_record(out, *, tool, script=None, ap=None, args=None,
     if modules is not None:
         rec["modules"] = modules
     rec["runtime"] = runtime_state(out)
+    prior = out / RECORD
+    if prior.exists():
+        # AMENDMENT: keep what this artifact was, and link to it by id
+        old = json.loads(prior.read_text())
+        rec["previous"] = old.get("id")
+        with open(out / HISTORY, "a") as h:
+            h.write(json.dumps(old, sort_keys=True) + "\n")
     outs = {}
     for f in sorted(out.iterdir()):
-        if f.name == RECORD or f.is_dir():
+        if f.name in NOT_OUTPUTS or f.is_dir():
             continue
         full = (f.name in full_hash) if full_hash is not None else True
         outs[f.name] = file_record(f, full=full)
@@ -235,7 +249,7 @@ def verify(art, rec) -> list:
     bad = []
     if hashlib.sha256(_canon(rec).encode()).hexdigest() != rec.get("id"):
         bad.append((RECORD, "record edited after it was written (id mismatch)"))
-    now = {f.name for f in art.iterdir() if f.is_file() and f.name != RECORD}
+    now = {f.name for f in art.iterdir() if f.is_file() and f.name not in NOT_OUTPUTS}
     for name in sorted(now - set(rec["outputs"])):
         bad.append((name, "added after build"))
     for name, want in rec["outputs"].items():
@@ -280,6 +294,8 @@ def summary(art, rec) -> str:
             by[key] = by.get(key, 0) + 1
         L.append("  modules   " + ", ".join(f"{n} {o} {g}" for (o, g), n in sorted(by.items())))
     r = rec.get("runtime")
+    if rec.get("previous"):
+        L.append(f"  amends    {rec['previous'][:16]}  (full chain: --lineage)")
     L.append(f"  runtime   " + (f"{r['profile']}  md5 {r['model_py_md5'][:8]}"
                                if r else "no model.py bundled"))
     o = rec["outputs"]
@@ -299,7 +315,26 @@ def lineage(art, depth=0, seen=None):
     if rec["id"] in seen:
         return
     seen.add(rec["id"])
-    for i in rec.get("inputs", []):
+    hist = {}
+    hp = pathlib.Path(art) / HISTORY
+    if hp.exists():
+        for line in hp.read_text().splitlines():
+            h = json.loads(line)
+            hist[h["id"]] = h
+    prev, d = rec.get("previous"), depth + 1
+    chain = [rec]
+    while prev:                            # in-place amendments, newest first
+        h = hist.get(prev)
+        if not h:
+            print("  " * d + f"amends {prev[:12]}  [record not in history]")
+            break
+        print("  " * d + f"amends {h['tool']['name']} {h['id'][:12]} ({h['created']})")
+        chain.append(h)
+        prev = h.get("previous")
+    # every record in the chain contributes its inputs (an amendment made in
+    # place usually has none of its own; the build it amends does)
+    ins = [i for r in chain for i in r.get("inputs", [])]
+    for i in ins:
         if i["role"] == "teacher":
             print("  " * (depth + 1) + f"teacher {i['path']}")
             continue

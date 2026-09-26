@@ -424,6 +424,27 @@ def main(argv=None) -> int:
                   len(got) == 1 and got[0]["d"] == 4 and got[0]["K"] == 16
                   and got[0]["teacher"] == "moe-teacher", f"{len(got)} stored")
 
+        print("[5c/7] CLI build records: fresh output + in-place amendment")
+        cenv = {**__import__("os").environ, "PYTHONPATH": str(HERE.parents[1])}
+        cli = lambda *a_: subprocess.run([PY, "-m", "vqlab.cli", *a_],
+                                         capture_output=True, text=True, env=cenv)
+        p2 = tmp / "packed-cli"
+        cli("pack-dense", "--src", str(f1), "--out", str(p2))
+        r2 = json.load(open(p2 / "vqlab_provenance.json")) if (p2 / "vqlab_provenance.json").exists() else {}
+        check("pack-dense via the CLI gets a build record linked to its fit",
+              r2.get("tool", {}).get("name") == "pack-dense"
+              and any(i.get("provenance_id") for i in r2.get("inputs", [])))
+        if (g["out"] / "vqlab_provenance.json").exists():
+            before = json.load(open(g["out"] / "vqlab_provenance.json"))["id"]
+            # geo-out was corrupted by the known-bad --verify check above; the
+            # amendment must still record what it was and what it is now
+            cli("bundle", "--artifact", str(g["out"]), "--group", "64")
+            ra = json.load(open(g["out"] / "vqlab_provenance.json"))
+            hist = (g["out"] / "vqlab_provenance.history.jsonl").read_text().splitlines()
+            check("in-place bundle AMENDS: new record links the old, history kept",
+                  ra["tool"]["name"] == "bundle" and ra.get("previous") == before
+                  and json.loads(hist[-1])["id"] == before)
+
         print("[6a/7] family-profile: unknown family -> data entry, no code change")
         U = tmp / "novel-teacher"
         U.mkdir()
