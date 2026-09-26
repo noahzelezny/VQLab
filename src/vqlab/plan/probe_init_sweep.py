@@ -166,10 +166,14 @@ for p in args.projs.split(","):
         k = sum(1 for r in sub if r[5] == "PENALTY")
         print(f"  {p:>10}: {k}/{len(sub)} penalty")
 print("\nby depth:")
-for lo, hi in ((0, 14), (15, 34), (35, 56)):
+# thirds of THIS teacher's depth (the old buckets were Flash's 57 layers)
+top = max(r[0] for r in results) + 1 if results else 1
+edges = [0, round(top / 3), round(2 * top / 3), top]
+for lo, hi in ((edges[i], edges[i + 1] - 1) for i in range(3)):
     sub = [r for r in results if lo <= r[0] <= hi]
     if sub:
         k = sum(1 for r in sub if r[5] == "PENALTY")
         print(f"  L{lo:02d}-L{hi:02d}: {k}/{len(sub)} penalty")
-print("\nA majority PENALTY supports 'ple++ seeding causes the K256 regression'.")
-print("A minority means the artifact-level effect needs another explanation.")
+print("\nA majority PENALTY: k-means++ seeding sells the tail on this family at "
+      f"K{args.k}; fit with random init.\nA minority: ++ is safe here; the choice "
+      "does not explain an artifact-level regression.")
