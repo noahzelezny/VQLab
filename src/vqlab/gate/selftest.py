@@ -365,6 +365,31 @@ def main(argv=None) -> int:
               "mlx_lm" not in rmod, f"resolved from {rmod}")
 
         # ---------------------------------------------------------------
+        print("[6a/7] family-profile: unknown family -> data entry, no code change")
+        U = tmp / "novel-teacher"
+        U.mkdir()
+        wn = {f"transformer.blocks.{li}.moe.experts.{p_}.weight":
+              mx.zeros((4, 64, 128), mx.bfloat16)
+              for li in range(2) for p_ in ("w1", "w2", "w3")}
+        mx.save_safetensors(str(U / "model.safetensors"), wn)
+        json.dump({"model_type": "novelmoe", "num_hidden_layers": 2,
+                   "num_experts": 4, "hidden_size": 128}, open(U / "config.json", "w"))
+        fenv = {**__import__("os").environ, "VQLAB_FAMILIES_DIR": str(tmp / "fams")}
+        fp_ = [PY, str(_find("family_profile.py")), "--teacher", str(U),
+               "--out", str(tmp / "novel-prof")]
+        p = subprocess.run(fp_, capture_output=True, text=True, env=fenv)
+        check("unknown family is reported UNKNOWN, not mis-matched (known-bad)",
+              "UNKNOWN" in p.stdout and json.load(open(
+                  tmp / "novel-prof" / "profile.json")).get("unknown_family") is True,
+              p.stdout.splitlines()[0] if p.stdout else p.stderr[-200:])
+        p = subprocess.run(fp_ + ["--write-entry", "novelmoe"], capture_output=True,
+                           text=True, env=fenv)
+        p = subprocess.run(fp_, capture_output=True, text=True, env=fenv)
+        prof = json.load(open(tmp / "novel-prof" / "profile.json"))
+        check("drafted data entry makes the family profile: 6 modules found",
+              prof["family"] == "novelmoe" and prof["modules"]["count"] == 6,
+              f"family={prof['family']} modules={prof['modules']['count']}")
+
         print("[6b/7] layout")
         # A stage module whose bare name is also a stdlib or installed
         # package gets shadowed (or shadows it) on sys.path. bench/coverage.py
