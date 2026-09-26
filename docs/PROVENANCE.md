@@ -126,8 +126,8 @@ should record the resulting HF commit sha back into the registry.
 | 3 | build records for every other build tool (`pack*`, `build-dense`, `bundle`, `rebundle-dense`, `stream-convert`, `graft`, `splice-ple`, `ple-swap`, `patch-arch`, `vision-layout --fix`, `mtp-*`), written by the CLI on a clean exit; in-place tools AMEND (prior record kept in `vqlab_provenance.history.jsonl`, linked by id) | **done** |
 | 4 | publish ships `vqlab_provenance.json`; paper DRAFT softens "external manifests" | needs Noah (VL4.10) |
 | 5 | `check-release` FAILS a record that no longer verifies; WARNS on no record (the published fleet predates records, VL4.8) | **done** |
-| 6 | registry + backfill for the published fleet (§4) | open (VL4.8) |
-| 7 | Hub drift check (§5) | open (VL4.8) |
+| 6 | registry of every artifact from PROVABLE facts: runtime md5/profile, geometry mix, size, shard fingerprint, build-record id (`src/vqlab/records/registry.py`, `registry/artifacts.jsonl`, 37 artifacts) | **done**; reconstructed recipes for pre-record artifacts: open |
+| 7 | Hub drift check: metadata only, LFS by size (`--deep` = sha256), small files by git blob sha1; backups classified | **done**; first run 2026-09-26 in the registry README |
 | 8 | defaults: seed 1234 everywhere, `-1` = explicit random | **done** (per-module geo-build seeding: VL4.9) |
 
 ## 7. Known gaps this record does NOT close
