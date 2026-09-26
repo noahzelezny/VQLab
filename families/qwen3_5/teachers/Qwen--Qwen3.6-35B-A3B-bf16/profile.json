@@ -1,6 +1,6 @@
 {
  "schema": "vqlab.family-profile/1",
- "created": "2026-09-26T01:17:53+00:00",
+ "created": "2026-09-26T01:43:11+00:00",
  "family": "qwen3_5",
  "teacher": "Qwen--Qwen3.6-35B-A3B-bf16",
  "identity": {
