@@ -46,12 +46,18 @@ def _now():
 
 
 def start(cmd, argv):
-    run_id = os.environ.get("VQLAB_RUN_ID") or uuid.uuid4().hex[:16]
+    # Every invocation gets its OWN id. A nested vqlab call (a tool running
+    # another tool, or selftest driving the CLI) inherits the caller's id in
+    # the environment; reusing it made the child's records look like the
+    # parent's. The caller's id is kept as parent_run_id instead.
+    parent = os.environ.get("VQLAB_RUN_ID")
+    run_id = uuid.uuid4().hex[:16]
     os.environ["VQLAB_RUN_ID"] = run_id          # children + build records
     _T0[run_id] = time.time()
     try:
         import provenance
-        rec = {"event": "start", "run_id": run_id, "time": _now(), "cmd": cmd,
+        rec = {"event": "start", "run_id": run_id, "parent_run_id": parent,
+               "time": _now(), "cmd": cmd,
                "argv": list(argv), "cwd": os.getcwd(), "pid": os.getpid(),
                "code": provenance.code_state(), "env": provenance.env_state()}
         rec["code"].pop("repo", None)

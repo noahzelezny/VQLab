@@ -94,6 +94,83 @@ COMMANDS = {
 }
 
 
+# Build tools whose output is an ARTIFACT: after a clean exit the CLI writes
+# its build record (records/provenance.py) unless the tool already wrote a
+# richer one in this run (the fitters do). Candidates are tried in order; a
+# FILE output is recorded in the artifact dir that holds it, and only a dir
+# with a config.json counts, so a sidecar written to a scratch dir never
+# stamps that dir. In-place tools produce an AMENDMENT: the prior record is
+# kept in vqlab_provenance.history.jsonl and linked by id.
+BUILD_OUTPUTS = {
+    "pack": ("--out",), "pack-dense": ("--out",), "build-dense": ("--out",),
+    "stream-convert": ("--out",), "ple-swap": ("--out",), "unpack-dense": ("--out",),
+    "pack-ple": ("--artifact",), "graft": ("--artifact",), "splice-ple": ("--artifact",),
+    "bundle": ("--artifact",), "rebundle-dense": ("--artifact",),
+    "patch-arch": ("--out",), "vision-layout": ("--out", 0),
+    "mtp-pack": ("--out", "--model"), "mtp-extract": ("--out",),
+    "mtp-graft": ("--out", "--model"),
+}
+
+
+def _parse(argv):
+    named, pos, i = {}, [], 0
+    while i < len(argv):
+        a = argv[i]
+        if a.startswith("--"):
+            if "=" in a:
+                k, v = a.split("=", 1)
+                named[k] = v
+            elif i + 1 < len(argv) and not argv[i + 1].startswith("--"):
+                named[a] = argv[i + 1]
+                i += 1
+            else:
+                named[a] = True
+        else:
+            pos.append(a)
+        i += 1
+    return named, pos
+
+
+def _record_build(cmd, rest, script):
+    """Write the build record for a build command's artifact. Never raises:
+    a record failure is reported, and must not turn a finished build red."""
+    import os
+    try:
+        named, pos = _parse(rest)
+        if cmd == "vision-layout" and "--fix" not in named:
+            return                                    # report-only mode
+        target = None
+        for c in BUILD_OUTPUTS[cmd]:
+            v = pos[c] if isinstance(c, int) and len(pos) > c else named.get(c)
+            if not isinstance(v, str):
+                continue
+            d = Path(v)
+            d = d.parent if d.is_file() else d
+            if d.is_dir() and (d / "config.json").exists():
+                target = d
+                break
+        if target is None:
+            return
+        import provenance
+        old = target / provenance.RECORD
+        if old.exists():
+            import json
+            if json.loads(old.read_text())["tool"].get("run_id") == os.environ.get("VQLAB_RUN_ID"):
+                return                                # the tool wrote its own
+        inputs = []
+        for k, v in list(named.items()) + [(f"arg{i}", v) for i, v in enumerate(pos)]:
+            if isinstance(v, str) and v.startswith(("/", ".", "~")) and Path(v).exists() \
+                    and Path(v).resolve() != target.resolve() \
+                    and Path(v).resolve().parent != target.resolve():
+                inputs.append((k.lstrip("-"), Path(v) if Path(v).is_dir() else Path(v).parent))
+        provenance.write_build_record(
+            target, tool=cmd, script=str(script), argv=[cmd, *rest], inputs=inputs,
+            method={"recorded_by": "cli", "note": "this tool's settings are its argv"})
+    except Exception as e:                           # noqa: BLE001
+        print(f"vqlab: build record NOT written for {cmd}: {type(e).__name__}: {e}",
+              file=sys.stderr)
+
+
 def main() -> int:
     argv = sys.argv[1:]
     if not argv or argv[0] in ("-h", "--help"):
@@ -123,6 +200,8 @@ def main() -> int:
         raise
     finally:
         runlog.end(run, rc)
+        if rc == 0 and cmd in BUILD_OUTPUTS:
+            _record_build(cmd, rest, script)
     return 0
 
 
