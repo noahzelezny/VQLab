@@ -66,7 +66,7 @@ src/vqlab/
   records/      run log + build records + tamper stamp
   ship/         publish (a human action) + serve
   agents/       MCP server
-  mtp/          MTP speculative decoding (library + its tools)
+  mtp/          MTP speculative-decoding LIBRARY (vqlab.mtp); its tools live in the stages
 ```
 
 Tools are standalone scripts that import siblings by bare name (`import

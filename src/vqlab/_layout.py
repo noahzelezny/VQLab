@@ -32,10 +32,10 @@ import sys
 PKG = pathlib.Path(__file__).resolve().parent
 SRC = PKG.parent
 
-# Stage folders, in pipeline order. Their contents are importable by bare
-# name. `mtp` is a real package (vqlab.mtp) whose internal module names
-# (runtime, sampling, ...) are too generic to expose bare, so it is searched
-# by find() but NOT put on sys.path.
+# Stage folders, in pipeline order. Each holds that stage's tools, importable
+# by bare name. `mtp` is NOT a stage: it is the MTP speculative-decoding
+# LIBRARY (vqlab.mtp: loop, registry, heads), imported by the MTP tools that
+# live in the stage folders like every other tool.
 STAGES = ("runtime", "core", "plan", "fit", "assemble", "bundle", "gate",
           "score", "bench", "records", "ship", "agents")
 SEARCH = STAGES + ("mtp", "score/referee")
