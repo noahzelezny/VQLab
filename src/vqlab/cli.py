@@ -68,6 +68,7 @@ COMMANDS = {
     # score/
     "tasks": ("score_tasks_streaming.py", "task benchmarks (HellaSwag/PIQA/WinoGrande via lm-eval), layer-streamed: scores models larger than RAM"),
     "score": ("referee/score_streaming.py", "streaming referee perplexity (models may exceed RAM)"),
+    "stream-score": ("stream_score.py", "layer-streamed ppl / teacher top-k cache / KL-to-teacher: the KL gate's instrument (kl-ladder runs it per rung)"),
     "kl": ("kl_damage.py", "KL-to-bf16 damage vs a cached teacher (cache/score)"),
     "kernel-truth": ("kernel_truth.py", "fused vs fallback: which is closer to an EXACT float64 reference? (F146)"),
     "kl-pair": ("kl_pair.py", "paired KL between two arms scored in SEPARATE runs (env-var arms)"),
