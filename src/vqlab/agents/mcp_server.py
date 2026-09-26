@@ -112,6 +112,7 @@ RUN_ALLOWLIST = {
     # -> KL gate -> task benchmarks; plus the records that make it auditable
     "onboard", "family-profile", "probe-init", "fits", "kl-ladder", "kl-pair", "tasks",
     "provenance", "runs", "registry", "active-bytes", "decode-timeline",
+    "stream-score",
 }
 # Commands that never touch the GPU (header reads, index queries, records).
 # They are not gated on an exo placement or the GPU lease, and do not take
