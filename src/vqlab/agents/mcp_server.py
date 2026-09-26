@@ -105,7 +105,17 @@ RUN_ALLOWLIST = {
     "fit-moe", "fit-dense", "geo-build", "alloc-sweep", "score", "kl",
     "layer-leverage", "validate", "check-release", "check-bundle", "check",
     "smoke", "selftest", "price", "verify", "coverage", "manifest",
+    # the onboarding + reuse loop, so a new family needs no human at the CLI:
+    # profile (headers only) -> init sweep -> leverage -> fits from the store
+    # -> KL gate -> task benchmarks; plus the records that make it auditable
+    "family-profile", "probe-init", "fits", "kl-ladder", "kl-pair", "tasks",
+    "provenance", "runs", "active-bytes", "decode-timeline",
 }
+# Commands that never touch the GPU (header reads, index queries, records).
+# They are not gated on an exo placement or the GPU lease, and do not take
+# the lease: profiling a teacher must not wait on, or block, a fit.
+GPU_FREE = {"family-profile", "fits", "provenance", "runs", "price",
+            "manifest", "check-bundle", "active-bytes"}
 # Commands that checkpoint and resume: a GPU-timeout crash is retried.
 RESUMABLE = {"fit-moe", "fit-dense", "geo-build", "alloc-sweep", "validate"}
 DEFAULT_RETRIES = 2
@@ -114,7 +124,8 @@ DEFAULT_RETRIES = 2
 # the manager model (recorded by scout.ops.lab_residency in lab-state.json on
 # the shared SSD) these are refused: the manager lives on the box NOT fitting.
 HEAVY = {"fit-moe", "fit-dense", "geo-build", "alloc-sweep", "layer-leverage",
-         "score", "kl", "validate", "smoke", "verify"}
+         "score", "kl", "validate", "smoke", "verify",
+         "probe-init", "kl-ladder", "tasks", "decode-timeline"}
 
 
 def lab_state_path() -> Path:
@@ -361,7 +372,7 @@ def t_run(cmd: str, args: Optional[List[str]] = None, tag: str = "",
             raise ToolError("OUTSIDE_ROOTS", f"path argument {a} is outside the lab roots",
                             roots=[str(r) for r in roots],
                             hint="artifacts never go on the internal disk")
-    if cmd != "selftest" and not force:
+    if cmd not in ("selftest", *GPU_FREE) and not force:
         placed = _exo_instances()
         if placed:
             raise ToolError("EXO_PLACED", "an exo instance is placed on this cluster; "
@@ -377,7 +388,7 @@ def t_run(cmd: str, args: Optional[List[str]] = None, tag: str = "",
                             lab_state=st,
                             hint="talk to the other box's vqlab server, or flip residency: "
                                  f"python -m scout.ops.lab_residency --fit-on {st.get('manager_host')}")
-    holder = _lease_holder()
+    holder = None if cmd in GPU_FREE else _lease_holder()
     if holder:
         raise ToolError("GPU_BUSY", "the GPU lease on this box is held", holder=holder,
                         lease=str(lease_path()), hint="deferring is normal; poll and retry")
@@ -860,7 +871,9 @@ def serve(inp=None, out=None) -> int:
 
 def supervise(run_dir: Path) -> int:
     meta = _read_meta(run_dir)
-    lp = lease_path()
+    # A GPU-free job locks a private file: same supervisor code path, no
+    # contention with the shared GPU lease.
+    lp = run_dir / "no-gpu.lock" if meta.get("cmd") in GPU_FREE else lease_path()
     lp.parent.mkdir(parents=True, exist_ok=True)
     fd = os.open(lp, os.O_RDWR | os.O_CREAT, 0o644)
     deadline = time.time() + 1800
