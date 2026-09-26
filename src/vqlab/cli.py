@@ -85,12 +85,14 @@ COMMANDS = {
     "manifest": ("artifact_manifest.py", "tamper stamp: were these shard bytes rewritten? (outside the artifact)"),
     "runs": ("runlog.py", "the run log: every vqlab invocation, argv, commit, exit code"),
     "provenance": ("provenance.py", "build record: how an artifact was made (tool, fitter, inputs, runtime, lineage)"),
+    "registry": ("registry.py", "index of every artifact from provable facts; Hub drift check (metadata only)"),
     # ship/
     "publish": ("publish.py", "upload to the Hub, gated on check-release passing"),
     "mtp-generate": ("mtp_run.py", "generate with MTP speculative drafting"),
     "serve": ("serve.py", "serve an artifact over an OpenAI-compatible API (mlx-lm server + MTP decode)"),
     # agents/
     "mcp": ("mcp_server.py", "serve the lab to agents over MCP (stdio); one server per box"),
+    "gui": ("gui.py", "a local, read-only window onto the lab (127.0.0.1:8781)"),
 }
 
 
