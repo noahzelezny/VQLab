@@ -488,6 +488,47 @@ def main(argv=None) -> int:
               ost2["loader"]["status"] == "done" and ost2["cache_a"]["status"] == "pending"
               and "run_id" not in ost2["cache_a"]["result"])
 
+        print("[6a3/7] pin + step verdict: scorers refuse what was not smoked")
+        from vqlab.gate import pin as P
+        from vqlab.records.step_verdict import step_verdict
+        psrc = tmp / "pin_src"
+        make_source(psrc)
+        (psrc / "model.py").write_text("# fixture runtime\n")
+        pout = tmp / "pin_out"
+        import contextlib, io
+        with contextlib.redirect_stdout(io.StringIO()):
+            prc = P.pin(psrc, pout, headroom=1e-12)   # forces the RAM refusal
+        prec = json.load(open(pout / P.MARKER))
+        check("pin: weights symlinked to the resolved source, metadata copied",
+              (pout / "model-00001-of-00001.safetensors").is_symlink()
+              and not (pout / "config.json").is_symlink())
+        check("pin: too big for the box -> deferred-ram, allowed with a WARNING",
+              prc == 0 and prec["state"] == "deferred-ram"
+              and P.check_pin(pout)[0] and "WARNING" in P.check_pin(pout)[1])
+        try:
+            P.pin(psrc, pout)
+            refused_overwrite = False
+        except SystemExit:
+            refused_overwrite = True
+        check("pin: never overwrites an existing directory", refused_overwrite)
+        (pout / "model.py").write_text("# rebundled after the smoke\n")
+        check("pin: model.py changed after pinning -> refused", not P.check_pin(pout)[0])
+        prec["state"], prec["model_py_sha256"] = "failed", P._sha(pout / "model.py")
+        (pout / P.MARKER).write_text(json.dumps(prec))
+        check("pin: failed smoke -> refused", not P.check_pin(pout)[0])
+        check("pin: an unpinned directory is allowed unchanged", P.check_pin(psrc) == (True, ""))
+        so, se = tmp / "step.out", tmp / "step.err"
+        so.write_text("")
+        se.write_text("Traceback (most recent call last):\n  File x\nFileNotFoundError: corpus\n")
+        v = step_verdict(0, so, se, {"stdout_regex": "^{", "min_lines": 1})
+        check("step_verdict: rc 0 + traceback + no output is a FAIL (the night-4 speed bug)",
+              not v["ok"] and "FileNotFoundError" in v["stderr_tail"][-1])
+        so.write_text('{"arm": "a"}\n')
+        se.write_text("")
+        check("step_verdict: rc 0 + expected output passes",
+              step_verdict(0, so, se, {"stdout_regex": "^{"})["ok"])
+        check("step_verdict: nonzero exit fails", not step_verdict(3, so, se)["ok"])
+
         print("[6b/7] layout")
         # A stage module whose bare name is also a stdlib or installed
         # package gets shadowed (or shadows it) on sys.path. bench/coverage.py
