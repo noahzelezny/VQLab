@@ -48,6 +48,7 @@ import sys
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))  # src/
 from vqlab import _layout  # noqa: E402,F401  one module object per name
 from families import DENSE_FAMILIES, FAMILY  # noqa: E402
+import fitstore  # noqa: E402
 import provenance  # noqa: E402
 
 REPO = _layout.SRC.parent
@@ -68,9 +69,7 @@ def header(p):
 
 
 def slug(teacher: pathlib.Path, fp: dict) -> str:
-    if fp.get("hf_repo"):
-        return fp["hf_repo"].replace("/", "--")
-    return re.sub(r"[^A-Za-z0-9._-]+", "-", teacher.name)
+    return fitstore.teacher_slug(teacher)      # one naming rule, store + profiles
 
 
 def resolve_family(cfg: dict, want: str | None):
