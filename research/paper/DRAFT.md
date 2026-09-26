@@ -154,12 +154,16 @@ continuous: a two-coefficient size model prices any target before the
 fit runs, and harvesting bits from the shallow layers, which tolerate
 them, reaches the sizes between rungs (§3.4).
 
-**Claim 3 (measurement).** Weight-space reconstruction error does not
-rank output quality here, and cannot steer design. We show this by
-construction: a pre-registered intervention improved precisely the
-weight-space statistic our mechanism analysis identified as the one
-that mattered, and the model got worse by 4.7x the effect it was built
-to fix (§4.3).
+**Claim 3 (measurement).** Weight-space reconstruction error is not a
+reliable ranking of output quality, and cannot steer design. We show
+this by construction, on two models: a pre-registered intervention
+improved precisely the weight-space statistic our mechanism analysis
+identified as the one that mattered, and on the 35B the same change
+moved output KL in opposite directions by corpus (code −10%, prose
++15%, literary +60%, all |t| > 8) at identical bytes (§4.3).
+<!-- TODO(v5): 397B E112 figure ("4.7x the effect it was built to fix") to be
+re-stated on the full-vocab instrument in §4.3 before it returns here. -->
+
 
 ## 2. Method
 
