@@ -115,18 +115,20 @@ profiles. This mechanizes AGENTS.md "the baseline is the HF revision, not the
 local copy" and turns the 8/20 drift audit into one command. Publishing
 should record the resulting HF commit sha back into the registry.
 
-## 6. Rollout plan (for review)
+## 6. Rollout plan (status 2026-09-25)
 
 | step | scope | status |
 |---|---|---|
 | 1 | `provenance.py` writer + `vqlab provenance` (summary / --json / --verify / --lineage) | **done** |
-| 2 | writers in `fit-dense` and `geo-build` (+ origins ledger) ; selftest stage 4b, both directions | **done** — 33/33 selftest |
-| 3 | writers in `fit-moe`, `build-dense`, `pack*`, `rebundle*`, `stream-convert`, `mtp-pack`, `graft-vision`, `splice-ple`, mlx_lm convert wrappers | proposed |
-| 4 | publish: add `vqlab_provenance.json` to the publish allowlist; paper DRAFT: soften "carry external manifests" until then | needs Noah (publish is a human action) |
-| 5 | `check-release` FAILS an artifact with no record, or whose `--verify` drifts | after step 3 |
-| 6 | registry + backfill for the published fleet (§4) | proposed |
-| 7 | Hub drift check (§5) | proposed |
-| 8 | **defaults normalization**: geo-build `--seed -1` parity with fit-dense; any future default flip must bump a `method_version` in the tool | proposed; changes tool behaviour, so wants a decision |
+| 2 | build records in `fit-dense`, `geo-build`, `fit-moe`; geo-build origins ledger | **done** |
+| 2b | per-user run log (`~/.vqlab/runs.jsonl`, `vqlab runs`); run id stamped into records | **done** |
+| 2c | fit store: every fit filed with its recipe (`vqlab fits`, `geo-build --pool`); HDD archive migrated | **done** |
+| 3 | build records in `pack*`, `build-dense`, `bundle`, `rebundle-dense`, `stream-convert`, `graft`, `mtp-pack`, `splice-ple` | open (tracker VL4.7) |
+| 4 | publish ships `vqlab_provenance.json`; paper DRAFT softens "external manifests" | needs Noah (VL4.10) |
+| 5 | `check-release` fails an artifact with no record or a drifting `--verify` | after 3 (VL4.7) |
+| 6 | registry + backfill for the published fleet (§4) | open (VL4.8) |
+| 7 | Hub drift check (§5) | open (VL4.8) |
+| 8 | defaults: seed 1234 everywhere, `-1` = explicit random | **done** (per-module geo-build seeding: VL4.9) |
 
 ## 7. Known gaps this record does NOT close
 
