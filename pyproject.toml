@@ -28,7 +28,7 @@ vqlab = "vqlab.cli:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
-vqlab = ["score/referee/*.txt", "score/referee/*.json", "score/referee/*.py", "*/CONTEXT.md"]
+vqlab = ["score/referee/*.txt", "score/referee/*.json", "score/referee/*.py", "*/CONTEXT.md", "agents/gui_static/*.html"]
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]

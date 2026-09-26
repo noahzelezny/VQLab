@@ -1,0 +1,321 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>VQLab</title>
+<style>
+:root {
+  --bg: #f6f5f2; --panel: #ffffff; --ink: #1d1d1b; --mute: #6b6a66; --line: #e3e1dc;
+  --accent: #2f5d8a; --accent-soft: #e4ecf5;
+  --ok: #2e7d4f; --ok-soft: #e3f2e8; --warn: #9a6a00; --warn-soft: #fbf1d6;
+  --bad: #b3372c; --bad-soft: #f9e3e0; --v2: #6a3fa0; --v2-soft: #efe7f8;
+  --mono: ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #161615; --panel: #1f1f1d; --ink: #ecebe7; --mute: #9b9a95; --line: #33322f;
+    --accent: #7fb0e0; --accent-soft: #22303e; --ok: #6cc592; --ok-soft: #1c2e23;
+    --warn: #e0b54e; --warn-soft: #33291a; --bad: #ef8a7f; --bad-soft: #3a211e;
+    --v2: #bb9be6; --v2-soft: #2c2338;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink);
+  font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+header { display: flex; align-items: center; gap: 24px; padding: 14px 24px;
+  border-bottom: 1px solid var(--line); background: var(--panel); position: sticky; top: 0; z-index: 5; }
+header h1 { font-size: 16px; margin: 0; letter-spacing: .02em; }
+header h1 span { color: var(--mute); font-weight: 400; }
+nav { display: flex; gap: 4px; }
+nav button { border: 0; background: none; color: var(--mute); padding: 6px 12px;
+  border-radius: 6px; font: inherit; cursor: pointer; }
+nav button.on { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+#gpu { margin-left: auto; font-size: 12px; color: var(--mute); }
+main { padding: 20px 24px 48px; max-width: 1400px; margin: 0 auto; }
+.lede { color: var(--mute); margin: 0 0 16px; max-width: 70ch; }
+.stats { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 18px; }
+.stat { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 10px 14px; min-width: 130px; }
+.stat b { display: block; font-size: 20px; }
+.stat small { color: var(--mute); }
+table { width: 100%; border-collapse: collapse; background: var(--panel);
+  border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-size: 12px; color: var(--mute); font-weight: 600; background: var(--bg); }
+tr.click { cursor: pointer; } tr.click:hover td { background: var(--accent-soft); }
+.num { text-align: right; font-variant-numeric: tabular-nums; }
+.mono { font-family: var(--mono); font-size: 12px; }
+.tag { display: inline-block; padding: 1px 7px; border-radius: 10px; font-size: 11px; font-weight: 600; white-space: nowrap; }
+.t-ok { background: var(--ok-soft); color: var(--ok); } .t-warn { background: var(--warn-soft); color: var(--warn); }
+.t-bad { background: var(--bad-soft); color: var(--bad); } .t-v2 { background: var(--v2-soft); color: var(--v2); }
+.t-mute { background: var(--bg); color: var(--mute); border: 1px solid var(--line); }
+.geo { font-family: var(--mono); font-size: 11px; color: var(--mute); }
+.controls { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 14px; }
+select, input { font: inherit; padding: 5px 8px; border: 1px solid var(--line); border-radius: 6px;
+  background: var(--panel); color: var(--ink); }
+label { color: var(--mute); font-size: 12px; }
+.grid { display: grid; gap: 2px; background: var(--line); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.cell { background: var(--panel); padding: 4px 6px; min-height: 30px; font-size: 11px; cursor: pointer; }
+.cell.head { background: var(--bg); color: var(--mute); font-weight: 600; cursor: default; }
+.cell.lit { background: var(--ok-soft); }
+.cell.dim { opacity: .35; }
+.chip { display: inline-block; font-family: var(--mono); font-size: 10px; padding: 0 4px; margin: 1px;
+  border-radius: 4px; background: var(--accent-soft); color: var(--accent); }
+.chip.hit { background: var(--ok); color: var(--panel); }
+.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(420px, 1fr)); gap: 14px; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 14px; }
+.card h3 { margin: 0 0 4px; font-size: 14px; } .card .sub { color: var(--mute); font-size: 12px; margin-bottom: 10px; }
+.steps { display: flex; gap: 4px; flex-wrap: wrap; margin: 8px 0; }
+.bar { display: flex; height: 10px; border-radius: 5px; overflow: hidden; margin: 6px 0 2px; background: var(--bg); }
+.bar span { display: block; }
+.legend { font-size: 11px; color: var(--mute); }
+.legend i { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin: 0 3px 0 8px; }
+.gtab { border-collapse: collapse; font-size: 11px; margin-top: 6px; }
+.gtab td, .gtab th { border: 1px solid var(--line); padding: 2px 5px; text-align: center; position: static; }
+.gtab td.legal { background: var(--ok-soft); } .gtab td.illegal { color: var(--mute); }
+#drawer { position: fixed; top: 0; right: 0; bottom: 0; width: min(640px, 92vw); background: var(--panel);
+  border-left: 1px solid var(--line); box-shadow: -8px 0 24px rgba(0,0,0,.12); padding: 18px 20px;
+  overflow: auto; transform: translateX(105%); transition: transform .18s ease; z-index: 10; }
+#drawer.open { transform: none; }
+#drawer pre { background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 10px;
+  overflow: auto; font-size: 12px; white-space: pre-wrap; }
+#drawer .x { float: right; border: 0; background: none; font-size: 20px; color: var(--mute); cursor: pointer; }
+.empty { color: var(--mute); padding: 24px; text-align: center; }
+.err { color: var(--bad); }
+</style>
+</head>
+<body>
+<header>
+  <h1>VQLab <span>· read-only lab view</span></h1>
+  <nav id="nav"></nav>
+  <div id="gpu">…</div>
+</header>
+<main id="main"><div class="empty">loading…</div></main>
+<aside id="drawer"><button class="x" onclick="closeDrawer()">×</button><div id="dbody"></div></aside>
+<script>
+const TABS = ["Fleet", "Fit store", "Families", "Runs"];
+let tab = localStorageGet("tab") || "Fleet";
+const $ = (s) => document.querySelector(s);
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+function localStorageGet(k) { try { return localStorage.getItem(k); } catch { return null; } }
+function localStorageSet(k, v) { try { localStorage.setItem(k, v); } catch {} }
+async function api(path) { const r = await fetch(path); return r.json(); }
+function tag(text, kind) { return `<span class="tag t-${kind}">${esc(text)}</span>`; }
+function profileTag(rt) {
+  if (!rt) return tag("no model.py", "mute");
+  const k = rt.profile === "v2" ? "v2" : rt.profile === "v1.5" ? "ok" : "warn";
+  return tag(rt.profile, k) + ` <span class="mono">${esc(rt.md5)}</span>`;
+}
+function closeDrawer() { $("#drawer").classList.remove("open"); }
+function openDrawer(html) { $("#dbody").innerHTML = html; $("#drawer").classList.add("open"); }
+document.addEventListener("keydown", e => { if (e.key === "Escape") closeDrawer(); });
+
+function renderNav() {
+  $("#nav").innerHTML = TABS.map(t => `<button class="${t === tab ? "on" : ""}" data-t="${t}">${t}</button>`).join("");
+  $("#nav").querySelectorAll("button").forEach(b => b.onclick = () => { tab = b.dataset.t; localStorageSet("tab", tab); show(); });
+}
+
+// ------------------------------------------------------------------ Fleet
+async function fleet() {
+  const d = await api("/api/fleet");
+  const A = d.artifacts;
+  const pub = A.filter(a => a.hf_repo);
+  const drift = pub.filter(a => a.hub && a.hub.drift.length);
+  const weights = pub.filter(a => a.hub && a.hub.drift.some(x => /\.safetensors$/.test(x.file)));
+  const rec = A.filter(a => a.build_record);
+  let rows = A.slice().sort((a, b) => (b.hf_repo ? 1 : 0) - (a.hf_repo ? 1 : 0) || a.name.localeCompare(b.name));
+  const hubCell = a => {
+    if (!a.hf_repo) return tag("local", "mute");
+    if (!a.hub) return tag("not checked", "mute");
+    const w = a.hub.drift.filter(x => /\.safetensors$/.test(x.file)).length;
+    if (w) return tag(`${w} shards differ`, "bad");
+    const n = a.hub.drift.length;
+    return n ? tag(`${n} files differ`, "warn") : tag("matches Hub", "ok");
+  };
+  $("#main").innerHTML = `
+    <p class="lede">Every artifact the registry has scanned, built only from facts its bytes prove. Hub status is the latest
+      <span class="mono">registry.py hub</span> run (LFS shards compared by size). Click a row for its build record and lineage.</p>
+    <div class="stats">
+      <div class="stat"><b>${A.length}</b><small>artifacts registered</small></div>
+      <div class="stat"><b>${pub.length}</b><small>published (HF repo)</small></div>
+      <div class="stat"><b>${weights.length}</b><small>serving copies ≠ published weights</small></div>
+      <div class="stat"><b>${drift.length}</b><small>repos with any drift</small></div>
+      <div class="stat"><b>${rec.length}</b><small>carry a build record</small></div>
+    </div>
+    <div class="controls"><label>filter</label><input id="q" placeholder="name, model type, geometry…" size="32"></div>
+    <table><thead><tr><th>artifact</th><th>type</th><th class="num">GiB</th><th>runtime</th><th>geometry</th><th>Hub</th><th>record</th></tr></thead>
+    <tbody id="fb"></tbody></table>`;
+  const draw = () => {
+    const q = ($("#q").value || "").toLowerCase();
+    $("#fb").innerHTML = rows.filter(a => !q || JSON.stringify([a.name, a.model_type, a.geometry]).toLowerCase().includes(q)).map((a, i) => `
+      <tr class="click" data-i="${A.indexOf(a)}">
+        <td>${esc(a.name)}${a.same_bytes_as.length ? `<div class="geo">same bytes as ${esc(a.same_bytes_as.join(", "))}</div>` : ""}</td>
+        <td class="mono">${esc(a.model_type)}</td><td class="num">${a.text_gib.toFixed(1)}</td>
+        <td>${profileTag(a.runtime)}</td>
+        <td class="geo">${Object.entries(a.geometry).map(([g, c]) => `${g}×${c}`).join(" ")}</td>
+        <td>${hubCell(a)}</td><td>${a.build_record ? tag(a.build_record.slice(0, 8), "ok") : tag("none", "mute")}</td></tr>`).join("");
+    document.querySelectorAll("#fb tr").forEach(tr => tr.onclick = () => artifactDrawer(A[+tr.dataset.i]));
+  };
+  $("#q").oninput = draw; draw();
+}
+async function artifactDrawer(a) {
+  openDrawer(`<h3>${esc(a.name)}</h3><div class="empty">loading record…</div>`);
+  const p = await api("/api/provenance?path=" + encodeURIComponent(a.path));
+  const hub = a.hub ? `<h4>Hub: ${esc(a.hub.repo)} @ <span class="mono">${esc(a.hub.revision.slice(0, 10))}</span>
+      <span class="geo">checked ${esc(a.hub.checked)}</span></h4>
+      ${a.hub.drift.length ? `<table>${a.hub.drift.map(x => `<tr><td>${tag(x.state, x.state === "DIFFERS" ? "bad" : "warn")}</td><td class="mono">${esc(x.file)}</td><td class="geo">${esc(x.note)}</td></tr>`).join("")}</table>`
+        : `<p>${tag("matches Hub", "ok")} (${a.hub.backups} local backup files ignored)</p>`}` : "";
+  const rt = a.runtime ? `<h4>Runtime flags</h4><pre>${esc(Object.entries(a.runtime.flags).map(([k, v]) => `${k} = ${v}`).join("\n"))}</pre>` : "";
+  const record = p.record ? `<h4>Build record</h4><pre>${esc(p.summary)}</pre><h4>Lineage</h4><pre>${esc(p.lineage)}</pre>`
+    : `<h4>Build record</h4><p>${tag("none", "mute")} This artifact predates build records, or was built outside the vqlab CLI.
+       It cannot say how it was made; its bytes-level facts are in the registry.</p>`;
+  $("#dbody").innerHTML = `<h3>${esc(a.name)}</h3><div class="geo">${esc(a.path)}</div>
+    <p>${profileTag(a.runtime)} · ${a.vq_modules} VQ modules · ${a.text_gib.toFixed(2)} GiB · ${a.shards} shards ·
+    fingerprint <span class="mono">${esc(a.fingerprint)}</span></p>${hub}${record}${rt}`;
+}
+
+// ---------------------------------------------------------------- Fit store
+let fitSel = JSON.parse(localStorageGet("fitSel") || "null");
+async function fitstore() {
+  const d = await api("/api/fits");
+  const teachers = [];
+  for (const [fam, ts] of Object.entries(d.tree)) for (const [t, v] of Object.entries(ts)) teachers.push({ fam, t, ...v });
+  if (!teachers.length) { $("#main").innerHTML = `<div class="empty">no fits indexed in ${esc(d.roots.join(", "))}</div>`; return; }
+  if (!fitSel || !teachers.some(x => x.fam === fitSel.fam && x.t === fitSel.t)) fitSel = { fam: teachers[0].fam, t: teachers[0].t };
+  $("#main").innerHTML = `
+    <p class="lede">Every fitted module in the store (${d.total} fits, ${esc(d.roots.join(", "))}). Pick a teacher; each cell is one
+      layer × projection and lists the geometries already fitted. Choose a target geometry to see what a mixed-codebook build could
+      reuse without paying for a k-means. <span class="mono">geo-build --pool</span> reuses exactly these.</p>
+    <div class="controls">
+      <label>teacher</label><select id="ts">${teachers.map(x => `<option value="${esc(x.fam)}|${esc(x.t)}" ${x.fam === fitSel.fam && x.t === fitSel.t ? "selected" : ""}>${esc(x.fam)} / ${esc(x.t)} (${x.fits})</option>`).join("")}</select>
+      <label>highlight</label><select id="gs"><option value="">all geometries</option></select>
+      <span id="cov" class="geo"></span>
+    </div><div id="fg"></div>`;
+  $("#ts").onchange = () => { const [fam, t] = $("#ts").value.split("|"); fitSel = { fam, t }; localStorageSet("fitSel", JSON.stringify(fitSel)); fitstore(); };
+  const g = await api(`/api/fits?family=${encodeURIComponent(fitSel.fam)}&teacher=${encodeURIComponent(fitSel.t)}`);
+  const F = g.fits;
+  const geos = [...new Set(F.map(f => `d${f.d}-K${f.K}`))].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+  $("#gs").innerHTML += geos.map(x => `<option>${x}</option>`).join("");
+  const projs = [...new Set(F.map(f => f.proj))].sort();
+  const layers = g.layers || [...new Set(F.map(f => f.layer))].sort((a, b) => a - b);
+  const at = {};
+  for (const f of F) (at[`${f.layer}|${f.proj}`] ??= []).push(f);
+  const draw = () => {
+    const hl = $("#gs").value;
+    let lit = 0;
+    const cells = [`<div class="cell head">layer</div>`, ...projs.map(p => `<div class="cell head">${esc(p)}</div>`)];
+    for (const L of layers) {
+      cells.push(`<div class="cell head">L${L}</div>`);
+      for (const p of projs) {
+        const fs = at[`${L}|${p}`] || [];
+        const byG = {};
+        for (const f of fs) byG[`d${f.d}-K${f.K}`] = (byG[`d${f.d}-K${f.K}`] || 0) + 1;
+        const has = hl && byG[hl];
+        if (has) lit++;
+        cells.push(`<div class="cell ${hl ? (has ? "lit" : "dim") : ""}" data-k="${L}|${p}">${Object.entries(byG).map(([k, c]) =>
+          `<span class="chip ${k === hl ? "hit" : ""}">${k}${c > 1 ? "×" + c : ""}</span>`).join("") || "<span class='geo'>—</span>"}</div>`);
+      }
+    }
+    $("#fg").innerHTML = `<div class="grid" style="grid-template-columns: 64px repeat(${projs.length}, 1fr)">${cells.join("")}</div>`;
+    const total = layers.length * projs.length;
+    $("#cov").textContent = hl ? `${hl}: ${lit}/${total} modules already fitted (${Math.round(100 * lit / total)}%)` : `${F.length} fits across ${total} modules`;
+    document.querySelectorAll("#fg .cell[data-k]").forEach(c => c.onclick = () => fitDrawer(c.dataset.k, at[c.dataset.k] || []));
+  };
+  $("#gs").onchange = draw; draw();
+}
+function fitDrawer(k, fs) {
+  const [L, p] = k.split("|");
+  openDrawer(`<h3>L${esc(L)} ${esc(p)}</h3><p class="geo">${esc(fs[0]?.module || "")}</p>` + (fs.length ? fs.map(f => {
+    const r = f.recipe; const fit = r && r.fitter;
+    return `<div class="card" style="margin-bottom:10px"><b class="mono">d${f.d}-K${f.K}</b> · <span class="mono">${esc(f.fit_id)}</span> · ${(f.bytes / 2 ** 20).toFixed(1)} MiB
+      <div class="sub">${r ? `${esc(r.tool || r.origin)} · commit <span class="mono">${esc((r.commit || "").slice(0, 10))}</span>` : "recipe not recorded (fit predates the store)"} · from <span class="mono">${esc(f.run_dir)}</span></div>
+      ${fit ? `<pre>${esc(Object.entries(fit).filter(([, v]) => v !== null && v !== undefined).map(([k, v]) => `${k}: ${typeof v === "object" ? JSON.stringify(v) : v}`).join("\n"))}</pre>` : ""}
+      <div class="geo">${esc(f.location)}</div></div>`;
+  }).join("") : `<div class="empty">no fits for this module yet</div>`));
+}
+
+// ---------------------------------------------------------------- Families
+async function families() {
+  const d = await api("/api/families");
+  const cards = [];
+  const COLORS = { vq_target: "var(--accent)", carry: "var(--warn)", embed: "var(--v2)", mtp: "var(--ok)", vision: "var(--bad)" };
+  for (const f of d.families) {
+    if (!f.teachers.length) {
+      cards.push(`<div class="card"><h3>${esc(f.family)}</h3><div class="sub">no teacher profiled yet${f.docs.length ? " · " + esc(f.docs.join(", ")) : ""}</div></div>`);
+      continue;
+    }
+    for (const t of f.teachers) {
+      const P = t.profile, O = t.onboard;
+      if (!P) { cards.push(`<div class="card"><h3>${esc(t.teacher)}</h3><div class="sub">${esc(f.family)} · no profile</div></div>`); continue; }
+      const by = P.bytes.by_class_gib, tot = Object.values(by).reduce((a, b) => a + b, 0);
+      const bar = Object.entries(by).map(([k, v]) => `<span title="${k} ${v} GiB" style="width:${100 * v / tot}%;background:${COLORS[k] || "var(--mute)"}"></span>`).join("");
+      const steps = O ? Object.entries(O.steps).map(([s, v]) => tag(s, { done: "ok", running: "v2", blocked: "warn", failed: "bad" }[v.status] || "mute")).join("") : tag("not onboarded", "mute");
+      const proj = Object.keys(P.geometries)[0];
+      let gt = "";
+      if (proj) {
+        const G = P.geometries[proj], ds = [...new Set(G.map(g => g.d))], ks = [...new Set(G.map(g => g.K))];
+        gt = `<div style="overflow-x:auto"><table class="gtab"><tr><th>${esc(proj)}</th>${ks.map(k => `<th>K${k}</th>`).join("")}</tr>${ds.map(dd => `<tr><th>d${dd}</th>${ks.map(k => {
+          const g = G.find(x => x.d === dd && x.K === k);
+          return g ? `<td class="${g.legal ? "legal" : "illegal"}" title="${g.bits_per_weight} bpw · ${g.stack_gib} GiB for all ${esc(proj)} modules${g.legal ? "" : " · " + (!g.exact_packing ? "ragged packing" : "over threadgroup ceiling")}">${g.legal ? g.stack_gib : "·"}</td>` : "<td></td>";
+        }).join("")}</tr>`).join("")}</table></div><div class="legend">cells: GiB for every ${esc(proj)} module at that geometry · green = legal (exact packing, fits the fused kernel)</div>`;
+      }
+      cards.push(`<div class="card"><h3>${esc(t.teacher)}</h3>
+        <div class="sub">${esc(f.family)} ${f.data_entry ? tag("data entry", "v2") : ""} · ${esc(P.arch.kind)} · ${P.arch.layers} layers
+          ${P.arch.experts ? `· ${P.arch.experts} experts` : ""} · ${P.modules.count} VQ modules · <b>${P.bytes.vq_target_gib_per_bit}</b> GiB per bit per weight</div>
+        <div class="bar">${bar}</div>
+        <div class="legend">${Object.entries(by).map(([k, v]) => `<i style="background:${COLORS[k] || "var(--mute)"}"></i>${k} ${v}`).join("")} GiB (source)</div>
+        <div class="steps">${steps}</div>${gt}
+        ${t.research.length ? `<div class="geo" style="margin-top:8px">research: ${esc(t.research.join(", "))}</div>` : ""}</div>`);
+    }
+  }
+  $("#main").innerHTML = `<p class="lede">What VQLab knows about each teacher, from <span class="mono">families/</span>: the header-only
+    profile (<span class="mono">vqlab family-profile</span>) and onboarding progress (<span class="mono">vqlab onboard</span>). Hover a
+    geometry cell for its bits per weight and why an illegal one is illegal.</p><div class="cards">${cards.join("")}</div>`;
+}
+
+// ---------------------------------------------------------------- Runs
+async function runs() {
+  const d = await api("/api/runs?n=300");
+  const rc = r => !r.ended ? tag("no end", "warn") : r.rc === 0 ? tag("ok", "ok") : tag(`rc ${r.rc}`, "bad");
+  $("#main").innerHTML = `
+    <p class="lede">Every <span class="mono">vqlab</span> invocation on this machine (<span class="mono">~/.vqlab/runs.jsonl</span>), newest first,
+      and the detached jobs the MCP runner launched. A start with no end is a run that was killed or is still going.</p>
+    <h3>MCP jobs</h3>
+    ${d.mcp.length ? `<table><thead><tr><th>run</th><th>cmd</th><th>status</th><th>started</th></tr></thead><tbody>${d.mcp.map(m =>
+      `<tr><td class="mono">${esc(m.run_id)}</td><td>${esc(m.cmd)}</td><td>${tag(m.status, { completed: "ok", running: "v2", failed: "bad", deferred: "warn" }[m.status] || "mute")}</td><td class="geo">${esc(m.created)}</td></tr>`).join("")}</tbody></table>` : `<div class="empty">none</div>`}
+    <h3 style="margin-top:22px">Run log</h3>
+    <div class="controls"><label>filter</label><input id="rq" placeholder="command or argument…" size="32"></div>
+    <table><thead><tr><th>time (UTC)</th><th>cmd</th><th>result</th><th class="num">s</th><th>commit</th><th>argv</th></tr></thead><tbody id="rb"></tbody></table>`;
+  const draw = () => {
+    const q = ($("#rq").value || "").toLowerCase();
+    $("#rb").innerHTML = d.runs.filter(r => !q || (r.cmd + " " + r.argv.join(" ")).toLowerCase().includes(q)).map(r => `
+      <tr><td class="geo">${esc(r.time.replace("T", " ").replace("+00:00", ""))}</td><td>${esc(r.cmd)}${r.parent ? ` <span class="geo" title="launched by run ${esc(r.parent)}">↳</span>` : ""}</td>
+      <td>${rc(r)}</td><td class="num">${r.seconds ?? ""}</td>
+      <td class="mono">${esc((r.commit || "").slice(0, 8))}${r.dirty ? "<span class='geo'>+dirty</span>" : ""}</td>
+      <td class="mono" style="max-width:520px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(r.argv.join(" "))}">${esc(r.argv.join(" "))}</td></tr>`).join("");
+  };
+  $("#rq").oninput = draw; draw();
+}
+
+async function gpuState() {
+  try {
+    const d = await api("/api/runs?n=1");
+    const g = d.gpu || {};
+    const parts = [];
+    if (g.lease_holder) parts.push(tag("GPU lease: " + (g.lease_holder.holder || "held"), "v2"));
+    else parts.push(tag("GPU lease free", "ok"));
+    if (g.exo_instances && g.exo_instances.length) parts.push(tag(`exo placed (${g.exo_instances.length})`, "warn"));
+    $("#gpu").innerHTML = `${esc(g.host || "")} ${parts.join(" ")}`;
+  } catch { $("#gpu").textContent = ""; }
+}
+
+async function show() {
+  renderNav(); closeDrawer();
+  $("#main").innerHTML = `<div class="empty">loading…</div>`;
+  try { await ({ "Fleet": fleet, "Fit store": fitstore, "Families": families, "Runs": runs })[tab](); }
+  catch (e) { $("#main").innerHTML = `<div class="empty err">${esc(e)}</div>`; }
+}
+show(); gpuState(); setInterval(gpuState, 30000);
+</script>
+</body>
+</html>
