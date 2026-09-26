@@ -27,6 +27,7 @@ COMMANDS = {
     "mtp-probe": ("mtp_probe.py", "MTP head draft-acceptance probe (qwen4_exp)"),
     "mtp-probe35": ("mtp_probe35.py", "MTP wiring sweep + acceptance probe (qwen3_5 / qwen3_5_moe)"),
     # fit/
+    "fits": ("fits.py", "the fit store: index / list / file fitted modules by family, teacher, layer, geometry"),
     "fit-moe": ("vq_397b_codes.py", "fit VQ codebooks for MoE expert tensors (per --family)"),
     "fit-dense": ("fit_dense_vq.py", "fit VQ codebooks for a dense MLP trio"),
     "fit-ple": ("fit_ple.py", "fit per-tensor VQ codebooks for PLE ngram banks"),
