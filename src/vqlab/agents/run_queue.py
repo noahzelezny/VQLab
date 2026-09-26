@@ -45,7 +45,7 @@ Queue file (JSON):
      "steps": [
        {"name": "kl-27b", "cmd": "kl-ladder", "args": ["--teacher-cache", "...", "--rung", "..."],
         "expect": {"stdout_regex": "paired", "files": ["/Volumes/.../out.json"]},
-        "preflight": {"append": ["--max-chunks", "1"]}},
+        "preflight": {"append": ["--preflight"]}},
        {"name": "speed", "script": "scripts/speed_pair.py", "args": ["--n", "3"],
         "preflight": {"args": ["--n", "1"]}, "retries": 0, "on_fail": "continue",
         "timeout_s": 3600}
@@ -54,7 +54,13 @@ Queue file (JSON):
 `cmd` is a vqlab subcommand; `script` is a path relative to the repo (run
 from the pinned tree). `python` (queue or step) picks the interpreter, e.g.
 the exo env. `preflight` is {"args": [...]} (replace), {"append": [...]} or
-{"skip": "reason"}.
+{"skip": "reason"}. geo-build and kl-ladder take `--preflight` (first
+module / first cache x rung), so {"append": ["--preflight"]} is their block. In preflight, every OUTPUT flag's value (--out,
+--out-dir, ...) is redirected to <scratch SSD>/queue-preflight/<queue>/<step>/<name>, so a
+preflight never writes into a real step's output; and a later step that names
+an earlier step's real output is pointed at that step's PREFLIGHT output, so
+chained steps (pin <- build) preflight end to end. A `name=path` argument
+(kl-ladder --cache prose=/..., --rung r39=/...) is checked as its path.
 """
 from __future__ import annotations
 
@@ -82,13 +88,25 @@ SCHEMA = "vqlab.queue/1"
 SCORING = {"score", "kl", "kl-ladder", "kl-pair", "tasks", "decode-timeline",
            "decode-ladder", "active-bytes"}
 # Flags whose value is an OUTPUT path: it need not exist yet, its parent must.
-OUT_FLAGS = {"--out", "--out-dir", "--output", "-o", "--per-pos-dir", "--pool",
-             "--parts-dir", "--save", "--log", "--json-out", "--cache-out"}
+OUT_FLAGS = {"--out", "--out-dir", "--output", "-o", "--per-pos-dir",
+             "--parts", "--parts-dir", "--save", "--log", "--json-out", "--cache-out"}
 _PATHLIKE = re.compile(r"""["'](/(?:Volumes|Users|opt|tmp|private)/[^"'\n]+|(?:src|scripts|research|families)/[^"'\s\n]+)["']""")
 
 
 def _now():
     return datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds")
+
+
+def preflight_root() -> pathlib.Path:
+    """Preflight OUTPUTS are artifacts (a 1-module build, a pin): scratch SSD,
+    never the internal disk (AGENTS.md)."""
+    env = os.environ.get("VQLAB_PREFLIGHT_DIR")
+    if env:
+        return pathlib.Path(env)
+    ssd = pathlib.Path("<scratch>")
+    if not ssd.is_dir():
+        raise SystemExit(f"{ssd} is not mounted; set VQLAB_PREFLIGHT_DIR to a scratch volume")
+    return ssd / "queue-preflight"
 
 
 def queues_dir() -> pathlib.Path:
@@ -149,7 +167,11 @@ def create(qfile, commit=None, allow_dirty=False, preflight=False):
         raise SystemExit("queue file invalid:\n  " + "\n  ".join(errs))
     rev = commit or q.get("commit") or "HEAD"
     if rev == "HEAD" and not allow_dirty:
-        dirty = _git("status", "--porcelain", "--", "src", "scripts")
+        dirty = "\n".join(
+            ln for ln in _git("status", "--porcelain", "--", "src", "scripts").splitlines()
+            # untracked junk (.DS_Store, __pycache__, notes) is not code the
+            # queue would miss; untracked CODE is, and still blocks
+            if not (ln.startswith("??") and not re.search(r"\.(py|sh|json|metal)/?$", ln)))
         if dirty:
             raise SystemExit(
                 "uncommitted changes in src/ or scripts/ would NOT be in the pinned tree:\n"
@@ -170,11 +192,21 @@ def create(qfile, commit=None, allow_dirty=False, preflight=False):
 
 
 # ------------------------------------------------------------------ checks
+_NAMED = re.compile(r"^[\w.+-]+=(?=[/.~]|src/|scripts/)")
+
+
+def _strip_name(v):
+    """`prose=/path` -> `/path` (kl-ladder --cache, --rung; kl-pair)."""
+    return _NAMED.sub("", v, count=1)
+
+
 def _path_args(args):
     """(inputs, outputs) among a step's args: values that look like paths."""
     ins, outs = [], []
     prev = None
     for a in args:
+        if not a.startswith("-"):
+            a = _strip_name(a)
         if a.startswith("-"):
             prev = a.split("=", 1)[0]
             if "=" in a:
@@ -267,7 +299,38 @@ def _env(state):
     return env
 
 
-def _run_step(q, st, rec, sdir, state, preflight, force):
+def _redirect_outs(args, pfdir: pathlib.Path, outmap: dict):
+    """Preflight: send every output-flag value under pfdir (recording
+    real -> preflight in outmap), and point any arg naming an EARLIER step's
+    real output at that step's preflight output."""
+    res, prev = [], None
+    for a in args:
+        if a.startswith("-"):
+            flag, eq, val = a.partition("=")
+            if eq and flag in OUT_FLAGS:
+                new = str(pfdir / pathlib.Path(val).name)
+                outmap[val.rstrip("/")] = new
+                a = f"{flag}={new}"
+            prev = flag if not eq else None
+            res.append(a)
+            continue
+        if prev in OUT_FLAGS:
+            new = str(pfdir / pathlib.Path(a).name)
+            outmap[a.rstrip("/")] = new
+            a = new
+        else:
+            name = a[: len(a) - len(_strip_name(a))]
+            path = a[len(name):]
+            for real in sorted(outmap, key=len, reverse=True):
+                if path == real or path.startswith(real + "/"):
+                    a = name + outmap[real] + path[len(real):]
+                    break
+        res.append(a)
+        prev = None
+    return res
+
+
+def _run_step(q, st, rec, sdir, state, preflight, force, outmap=None):
     tree = pathlib.Path(state["tree"])
     args = [str(a) for a in st.get("args", [])]
     if preflight:
@@ -279,6 +342,9 @@ def _run_step(q, st, rec, sdir, state, preflight, force):
         if "skip" in pf:
             return {"verdict": "skipped", "reasons": [f"preflight skipped: {pf['skip']}"]}
         args = [str(a) for a in pf["args"]] if "args" in pf else args + [str(a) for a in pf["append"]]
+        pfdir = preflight_root() / pathlib.Path(state["qdir"]).name / _slug(st["name"])
+        pfdir.mkdir(parents=True, exist_ok=True)
+        args = _redirect_outs(args, pfdir, outmap if outmap is not None else {})
     probs = static_check(st, tree, args)
     refuse, warns = pin_check(st, args)
     if probs or refuse:
@@ -366,12 +432,13 @@ def run(qdir: pathlib.Path, force=False, lease_wait=1800) -> int:
     print(f"queue {state['name']} @ {state['commit'][:10]}  ({qdir})"
           + ("  PREFLIGHT" if preflight else ""), flush=True)
     failed = False
+    outmap = {}                 # preflight: real output path -> preflight output path
     try:
         for i in todo:
             st, rec = q["steps"][i], state["steps"][i]
             sdir = qdir / "steps" / f"{i:02d}-{_slug(st['name'])}"
             sdir.mkdir(parents=True, exist_ok=True)
-            v = _run_step(q, st, rec, sdir, state, preflight, force)
+            v = _run_step(q, st, rec, sdir, state, preflight, force, outmap)
             (sdir / "verdict.json").write_text(json.dumps(v, indent=1))
             status = {"pass": "pass"}.get(v["verdict"], v["verdict"])
             rec.update(status=status, finished=_now(), rc=v.get("rc"),

@@ -77,7 +77,13 @@ def main():
     ap.add_argument("--per-pos-dir", default=None,
                     help="where per-position KL arrays are kept (they are what "
                          "makes the PAIRED comparison possible)")
+    ap.add_argument("--preflight", action="store_true",
+                    help="first --cache x first --rung only (a small real run for "
+                         "`vqlab queue --preflight`); not a result")
     a = ap.parse_args()
+    if a.preflight:
+        a.cache, a.rung = a.cache[:1], a.rung[:1]
+        print(f"PREFLIGHT: {a.cache[0]} x {a.rung[0]} only", flush=True)
 
     caches, rungs = _kv(a.cache, "cache"), _kv(a.rung, "rung")
     meta = {}

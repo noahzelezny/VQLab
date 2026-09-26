@@ -73,6 +73,7 @@ COMMANDS = {
     "kl-pair": ("kl_pair.py", "paired KL between two arms scored in SEPARATE runs (env-var arms)"),
     "kl-ladder": ("kl_ladder.py", "rank rungs by KL against per-corpus teacher caches, with error bars"),
     # bench/
+    "speed-pair": ("speed_pair.py", "decode/prefill speed of TWO artifacts as a per-pair ratio (fresh process per arm, alternating, n>=3)"),
     "host-attrib": ("host_attrib.py", "profile the VQ module's HOST cost (F41's unattributed 12-13%)"),
     "prefill-bench": ("prefill_bench.py", "time prefill on one artifact under BOTH codebook arms (ratio, n>=3)"),
     "active-bytes": ("active_bytes.py", "weight bytes read per decode token, by component (the roofline denominator)"),
