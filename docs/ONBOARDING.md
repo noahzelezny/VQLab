@@ -28,6 +28,13 @@ matter for THIS family before any codebook is fit.
 
 ## 1. Profile the weight geometry (no fitting)
 
+**Start with `vqlab family-profile --teacher <dir>`** (headers only, seconds,
+safe on a busy box). It writes the byte census, GiB per bit per layer, every
+legal (d, K) and the module shape signatures to
+`families/<family>/teachers/<teacher>/profile.json`. An UNKNOWN family gets
+a drafted entry; `--write-entry <name>` saves it as data (no code change).
+The distribution-shape stats below still need a sampled read.
+
 For a sample of layers spanning depth x every projection:
 
 - **Distribution shape per layer** — fraction of weight energy in the top 1%

@@ -17,8 +17,8 @@ teacher, writes a new directory (never in place), and leaves a record.
 
 | # | stage | question it answers | commands |
 |---|---|---|---|
-| 1 | **plan** | What will it cost? Where should the bits go? | `price`, `layer-leverage` (rank by the traj_rel JUMP), `alloc-sweep`, `probe-init`, `preflight-ram`, `preflight-disk` |
-| 2 | **fit** | teacher weights -> codebooks + codes | `fit-moe`, `fit-dense`, `fit-ple`, `geo-build` (refit named modules, keep the rest), `harvest-parts` |
+| 1 | **plan** | What will it cost? Where should the bits go? What IS this model? | `family-profile` (headers only: legal (d,K), GiB per bit, module signatures), `price`, `layer-leverage` (rank by the traj_rel JUMP), `alloc-sweep`, `probe-init`, `preflight-ram`, `preflight-disk` |
+| 2 | **fit** | teacher weights -> codebooks + codes | `fits` (find / reuse stored fits FIRST), `fit-moe`, `fit-dense`, `fit-ple`, `geo-build` (refit named modules, keep the rest), `harvest-parts` |
 | 3 | **build** | codes -> an artifact that loads | `pack`, `pack-dense`, `pack-ple`, `splice-ple`, `stream-convert`, `build-dense`, `graft`, `mtp-extract` / `mtp-pack` / `mtp-graft` |
 | 4 | **bundle** | Ship the runtime inside the artifact | `bundle` (MoE), `rebundle-dense`, `patch-arch`, `vision-layout` |
 | 5 | **gate** | Is it loadable, correct, and releasable? | `check`, `check-release`, `check-bundle`, `bundle-accept`, `verify`, `smoke`, `vision-smoke`, `check-comparator`, `selftest`, `validate` (overnight queue) |
@@ -33,6 +33,8 @@ teacher, writes a new directory (never in place), and leaves a record.
 | **run log** | `~/.vqlab/runs.jsonl` (per user, every `vqlab` call) | argv, commit, dirty files, library versions, exit code, duration | `vqlab runs` |
 | **build record** | `<artifact>/vqlab_provenance.json` | how these bytes were made: fitter settings, inputs + lineage, per-module origin, runtime profile, hashes | `vqlab provenance <artifact>` |
 | **tamper stamp** | `manifests/` (outside the artifact) | were the shard bytes rewritten? (for artifacts built before build records existed) | `vqlab manifest check` |
+| **fit store** | `<store>/fits/<family>/<teacher>/L<layer>/<proj>/d<D>-K<K>/<fit_id>` + `index.jsonl` (HDD archive; `$VQLAB_FIT_STORE`) | every fitted module with its recipe; fitters file into it, `geo-build --pool` reuses from it | `vqlab fits list / stats` |
+| **family data** | `families/<family>/` | `entry.json` (how to read the tensors, no code change) and `teachers/<teacher>/profile.json` | `vqlab family-profile` |
 | **findings** | `docs/FINDINGS-LOG.md` | every measured result, F-numbered | MCP `findings_tail`; reserve a number with `next_f_number reserve=true` |
 
 Design: `docs/PROVENANCE.md`.
