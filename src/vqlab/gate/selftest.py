@@ -387,6 +387,43 @@ def main(argv=None) -> int:
               "mlx_lm" not in rmod, f"resolved from {rmod}")
 
         # ---------------------------------------------------------------
+        print("[5b/7] fit-moe: files its fits, writes a build record")
+        mt, mb, mo = tmp / "moe-teacher", tmp / "moe-base", tmp / "moe-out"
+        mt.mkdir(); mb.mkdir()
+        E_, I_, H_ = 2, 8, 128
+        tk = "model.language_model.layers.0.mlp.experts.gate_up_proj"
+        mx.save_safetensors(str(mt / "t.safetensors"),
+                            {tk: (mx.random.normal((E_, 2 * I_, H_)) * .05).astype(mx.bfloat16)})
+        json.dump({"weight_map": {tk: "t.safetensors"}},
+                  open(mt / "model.safetensors.index.json", "w"))
+        bm = "model.language_model.layers.0.mlp.switch_mlp.gate_proj"
+        bw = {bm + ".weight": mx.zeros((E_, I_, H_ * 2 // 32), mx.uint32),
+              bm + ".scales": mx.ones((E_, I_, H_ // G), mx.float16),
+              bm + ".biases": mx.zeros((E_, I_, H_ // G), mx.float16)}
+        mx.save_safetensors(str(mb / "model-00001-of-00001.safetensors"), bw)
+        json.dump({"weight_map": {k: "model-00001-of-00001.safetensors" for k in bw}},
+                  open(mb / "model.safetensors.index.json", "w"))
+        json.dump({"model_type": "qwen3_5_moe",
+                   "quantization": {"group_size": G, "bits": 4,
+                                    bm: {"group_size": G, "bits": 2}}},
+                  open(mb / "config.json", "w"))
+        p = run([str(_find("vq_397b_codes.py")), "--base", str(mb), "--src", str(mt),
+                 "--out", str(mo), "--vq-layers", "0", "--k", "16", "--dim", "4",
+                 "--iters", "2", "--sample", "1000", "--family", "qwen3_5",
+                 "--relerr-abort", "1.0"], verbose=v)
+        if check("fit-moe runs on the fixture", p.returncode == 0,
+                 (p.stderr or p.stdout)[-200:] if p.returncode else ""):
+            mrec = json.load(open(mo / "vqlab_provenance.json"))
+            check("fit-moe build record: method + module origin",
+                  mrec["tool"]["name"] == "fit-moe" and mrec["method"]["seed"] == 1234
+                  and mrec["modules"][bm]["origin"] == "fit")
+            fs_ = __import__("importlib").import_module("fitstore")
+            got = [r for r in fs_.read_index(tmp / "fitstore").values()
+                   if r["module"] == bm and r["recipe"]["tool"] == "fit-moe"]
+            check("fit-moe files its fit in the store with its recipe",
+                  len(got) == 1 and got[0]["d"] == 4 and got[0]["K"] == 16
+                  and got[0]["teacher"] == "moe-teacher", f"{len(got)} stored")
+
         print("[6a/7] family-profile: unknown family -> data entry, no code change")
         U = tmp / "novel-teacher"
         U.mkdir()
