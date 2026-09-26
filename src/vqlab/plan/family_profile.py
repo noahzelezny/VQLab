@@ -180,7 +180,7 @@ def geometry_table(IN: int, E: int, OUT: int):
 
 def suggest_entry(idx_keys):
     """Draft a FAMILY entry by pattern-matching expert-looking keys."""
-    cands = {}
+    cands, suffixed = {}, {}
     for k in idx_keys:
         if "expert" not in k or "shared" in k:
             continue
@@ -189,9 +189,14 @@ def suggest_entry(idx_keys):
         t = re.sub(r"\.weight$", "", t)
         head, _, proj = t.rpartition(".")
         cands.setdefault(head + ".{key}", set()).add(proj)
+        # keep the key's real spelling: a template without ".weight" on a
+        # checkpoint that has it matches nothing a loader can open
+        suffixed[head + ".{key}"] = k.endswith(".weight")
     if not cands:
         return None
     tmpl, projs = max(cands.items(), key=lambda kv: len(kv[1]))
+    if suffixed.get(tmpl):
+        tmpl += ".weight"
     proj_map = {}
     if "gate_up_proj" in projs:
         proj_map = {"gate_proj": ("gate_up_proj", 0), "up_proj": ("gate_up_proj", 1)}
@@ -299,7 +304,8 @@ def main(argv=None) -> int:
         prof["unknown_family"] = True
         prof["suggested_entry"] = suggest_entry(shapes)
     out = pathlib.Path(a.out) if a.out else (
-        REPO / "families" / (fam or "_unknown") / "teachers" / sl)
+        pathlib.Path(os.environ.get("VQLAB_FAMILIES_DIR") or REPO / "families")
+        / (fam or "_unknown") / "teachers" / sl)
     out.mkdir(parents=True, exist_ok=True)
     (out / "profile.json").write_text(json.dumps(prof, indent=1))
 
