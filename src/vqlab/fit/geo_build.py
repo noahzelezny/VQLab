@@ -375,12 +375,18 @@ def main():
     ap.add_argument("--plain-lloyd", action="store_true",
                     help="E112's fitter: no scale alternation, max-abs scales. "
                          "Use for BOTH arms of a tail-weighting pair.")
+    ap.add_argument("--preflight", action="store_true",
+                    help="build only the FIRST module of --geomap (a small real run "
+                         "for `vqlab queue --preflight`); the artifact is partial")
     a = ap.parse_args()
 
     mx.set_wired_limit(0)
     mx.set_memory_limit(a.memory_limit_gb * 1024 ** 3)
     rng = np.random.default_rng(None if a.seed < 0 else a.seed)
     geo = json.load(open(a.geomap))
+    if a.preflight:
+        geo = dict(list(geo.items())[:1])
+        _log(f"PREFLIGHT: first module only ({next(iter(geo), None)})")
     parts = a.parts or (a.out.rstrip("/") + "_parts")
     os.makedirs(parts, exist_ok=True)
 
@@ -648,8 +654,8 @@ def main():
         modules=modules,
         full_hash={os.path.basename(p) for p in glob.glob(os.path.join(a.out, "*"))
                    if not os.path.islink(p)})
-    _log(f"ASSEMBLE-DONE: {swapped} swapped, "
-         f"{sum(len(v) for v in add_to.values())} added, {len(drop)} dropped "
+    _log(f"ASSEMBLE-DONE: {swapped} tensors swapped, "
+         f"{sum(len(v) for v in add_to.values())} tensors added, {len(drop)} dropped "
          f"-> {a.out} (config pack_bits updated)")
 
 

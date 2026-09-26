@@ -533,8 +533,10 @@ def main(argv=None) -> int:
         import os as _os
         from vqlab.agents import run_queue as Q
         from vqlab import _layout as L
-        _saved = {k: _os.environ.get(k) for k in ("VQLAB_QUEUE_DIR", "VQLAB_GPU_LEASE")}
+        _saved = {k: _os.environ.get(k) for k in ("VQLAB_QUEUE_DIR", "VQLAB_GPU_LEASE",
+                                                   "VQLAB_PREFLIGHT_DIR")}
         _os.environ["VQLAB_QUEUE_DIR"] = str(tmp / "queues")
+        _os.environ["VQLAB_PREFLIGHT_DIR"] = str(tmp / "pf")
         _os.environ["VQLAB_GPU_LEASE"] = str(tmp / "gpu.lease")
         qf = tmp / "q.json"
         qf.write_text(json.dumps({"name": "st", "steps": [
@@ -562,6 +564,16 @@ def main(argv=None) -> int:
             check("queue --preflight: reports every step; no preflight block is a FAIL",
                   [r["status"] for r in ps_["steps"]] == ["pass", "fail", "fail"]
                   and "no preflight defined" in ps_["steps"][2]["reasons"][0])
+            om = {}
+            r1 = Q._redirect_outs(["--teacher", "/T", "--out", "/V/fit"], tmp / "pf" / "a", om)
+            r2 = Q._redirect_outs(["--rung", "r1=/V/fit", "/V/fit/x", "--out=/V/pin"],
+                                  tmp / "pf" / "b", om)
+            check("queue --preflight: outputs redirected off the real paths; chained inputs follow",
+                  r1[3] == str(tmp / "pf" / "a" / "fit")
+                  and r2[:3] == ["--rung", f"r1={tmp}/pf/a/fit", f"{tmp}/pf/a/fit/x"]
+                  and r2[3] == f"--out={tmp}/pf/b/pin")
+            check("queue: name=path args are checked as paths",
+                  Q._path_args(["--cache", "prose=/V/c", "--out", "/o"]) == (["/V/c"], ["/o"]))
             check("queue: publish can never be queued",
                   any("publish" in e for e in Q.validate({"steps": [{"name": "p", "cmd": "publish"}]})))
         finally:
