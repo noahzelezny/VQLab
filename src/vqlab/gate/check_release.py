@@ -467,6 +467,36 @@ elif not args.no_smoke and not fails:
 elif args.no_smoke:
     print("NOTE: --no-smoke; static checks only, generation NOT verified.")
 
+# BUILD RECORD (docs/PROVENANCE.md). A record whose bytes no longer verify
+# means the artifact changed after it was recorded -- a rebundle or rewrite
+# by a tool that left no amendment -- so what is being released is not what
+# the record describes: FAIL. No record at all is a WARNING, not a FAIL:
+# every artifact published before 2026-09-25 predates records (backfill is
+# tracker VL4.8), and failing them would block the fleet on bookkeeping.
+_prov_note = ""
+try:
+    sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))
+    from vqlab import _layout as _pl  # noqa: F401
+    import provenance as _prov
+    try:
+        _rec = _prov.load(A)
+    except FileNotFoundError:
+        print("WARNING: no build record (vqlab_provenance.json). This artifact "
+              "cannot say how it was made; it predates records or was built "
+              "outside the vqlab CLI. Release allowed; backfill is VL4.8.")
+    else:
+        _bad = _prov.verify(A, _rec)
+        if _bad:
+            fails.append("build record does NOT verify: " + "; ".join(
+                f"{n}: {w}" for n, w in _bad[:5]) + " -- the artifact changed "
+                "after it was recorded. Rebuild, or amend through the vqlab "
+                "tool that changed it, before releasing.")
+        else:
+            _prov_note = (f", build record {_rec['id'][:12]} verifies "
+                          f"({_rec['tool']['name']})")
+except Exception as _e:  # the gate must report, not crash
+    fails.append(f"build record check crashed: {type(_e).__name__}: {_e}")
+
 # Resolve the deferred processor-config finding now that the smoke has (or
 # has not) demonstrated that this artifact can actually serve.
 if _proc_gap:
@@ -489,4 +519,4 @@ _smoked = ("" if args.no_smoke else
            ", strict smoke generated a token")
 print(f"PASS: {len(REQUIRED)} required files present, index complete, "
       f"tokenizer round-trips, bundle imports nothing a downloader "
-      f"lacks{_smoked}")
+      f"lacks{_smoked}{_prov_note}")
