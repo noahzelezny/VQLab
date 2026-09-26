@@ -42,6 +42,7 @@ import runtime_profile  # noqa: E402
 
 REPO = _layout.SRC.parent
 REG = REPO / "registry" / "artifacts.jsonl"
+HUB = REPO / "registry" / "hub.jsonl"          # latest Hub comparison per repo
 HF_OWNER_SEP = "--"
 
 
@@ -155,6 +156,23 @@ def hub_diff(art: pathlib.Path, repo: str, deep=False):
     return info.sha, rows
 
 
+def _save_hub(repo, rev, art, rows, deep):
+    """Keep the LATEST comparison per repo (the GUI and `list` read it)."""
+    hub = {}
+    if HUB.exists():
+        for line in HUB.read_text().splitlines():
+            if line.strip():
+                h = json.loads(line)
+                hub[h["repo"]] = h
+    hub[repo] = {"repo": repo, "revision": rev, "local": art, "deep": deep,
+                 "checked": datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds"),
+                 "drift": [{"file": n, "state": s_, "note": nt} for n, s_, nt in rows
+                           if s_ not in ("same", "backup")],
+                 "backups": sum(1 for r in rows if r[1] == "backup")}
+    HUB.write_text("".join(json.dumps(h, sort_keys=True) + "\n" for h in sorted(
+        hub.values(), key=lambda h: h["repo"])))
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(prog="vqlab registry", description=__doc__.split("\n")[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -228,6 +246,7 @@ def main(argv=None) -> int:
                 rc = max(rc, 1)
                 continue
             bad = [r for r in rows if r[1] not in ("same", "backup")]
+            _save_hub(repo, rev, str(art), rows, a.deep)
             nb = sum(1 for r in rows if r[1] == "backup")
             if not a.deep:
                 print(f"         (LFS shards compared by size; --deep proves bytes)")
