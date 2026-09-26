@@ -64,6 +64,7 @@ COMMANDS = {
     "selftest": ("selftest.py", "run the real pipeline on a tiny synthetic model"),
     "mtp-smoke-head": ("mtp_smoke_head.py", "head-alone load + T=1/T=2 forward timing (no trunk)"),
     # score/
+    "tasks": ("score_tasks_streaming.py", "task benchmarks (HellaSwag/PIQA/WinoGrande via lm-eval), layer-streamed: scores models larger than RAM"),
     "score": ("referee/score_streaming.py", "streaming referee perplexity (models may exceed RAM)"),
     "kl": ("kl_damage.py", "KL-to-bf16 damage vs a cached teacher (cache/score)"),
     "kernel-truth": ("kernel_truth.py", "fused vs fallback: which is closer to an EXACT float64 reference? (F146)"),
