@@ -63,11 +63,12 @@ a GiB before it is fit — validated on all three models against builds
 whose sizes were predicted before the builds existed — and
 a bit-harvesting technique reaches sizes between codebook steps. **Third, weight-space
 reconstruction error — the statistic most quantization pipelines
-optimize and gate on — does not rank output quality in this regime.** In
-a pre-registered experiment, a fitter modification engineered to improve
-precisely the reconstruction statistic identified as decisive produced a
-model 4.7 times worse than the one it was designed to improve. Only
-evaluation of the assembled model ranks artifacts.
+optimize and gate on — does not rank output quality in this regime.** A
+fitter change that improves precisely the reconstruction statistic
+identified as decisive moves output KL in opposite directions by corpus at
+identical bytes (code −10%, literary +60%). Only evaluation of the assembled
+model ranks artifacts.
+<!-- TODO(v5): 397B "4.7x" returns here only if restated on the full-vocab instrument. -->
 
 Comparable behavior was observed on the gemma-4 model family, which is
 nonetheless excluded from all claims: raw likelihood is not a valid
@@ -618,36 +619,45 @@ diminishing returns: on the 35B, flat d4 at K2048, K8192 and K16384
 scores 76.1, 46.1 and 38.4 mnats of prose KL — quadrupling K removes 39%
 of the divergence, and doubling it again removes a further 17% for 0.9 GiB.
 
-### 4.3 Reconstruction error cannot steer design
+### 4.3 Reconstruction error does not rank output quality
 
-The central negative, shown by construction. A refit of one published
-geometry scored worse than the original at byte-identical size while
-having *lower* reconstruction error on every projection. Percentile
-analysis located the trade: the refit was better where most weights
-live and worse precisely in the top 0.1% by magnitude — and mean
-reconstruction error, a bulk statistic, reported the trade as an
-improvement. The mechanism replicated across 36 tensors and has a
-clean cause: body-layer weights are sub-Gaussian, so a
-better-average-distortion codebook is bought from the tail, and the
-tail is what output quality responds to.
+A refit of one published 397B geometry scored worse than the original at
+byte-identical size while having *lower* mean reconstruction error on every
+projection. Percentile analysis locates the trade: the refit is better where
+most weights live and worse in the top 0.1% by magnitude, and mean
+reconstruction error, a bulk statistic, reports the trade as an improvement.
+The pattern holds across 36 tensors and has a direct cause: body-layer
+weights are sub-Gaussian, so a codebook with lower average distortion buys it
+from the tail.
+<!-- TODO(v5): restate the 397B refit comparison on the full-vocab instrument. -->
 
-So we engineered the converse as a designed test, pre-registering the
-reading before any number existed: reweight the k-means objective to
-recover exactly that tail band. It worked in weight space — the tail
-error bands improved as designed — **and the resulting model was 4.7 times worse than
-the regression the change was designed to repair.** At fine-grained fits the two
-metrics track (improving the objective at a 0.08-relative-error
-geometry improved the model, 2.8x the floor); where centroids are
-scarce they invert; and no weight-space statistic we measured predicts
-which side of that line a fit lands on. Only the assembled model knows.
+Reweighting the k-means objective toward that tail band (weights ∝ |w|^4,
+body layers only) does what it is built to do in weight space. On one 35B
+module it cuts relative error on the top 0.1% of weights from 0.192 to 0.110
+and on the top 1% from 0.202 to 0.130, at a mean-error cost of 0.313 → 0.374.
+Its effect on the model depends on the text. Below, the 35B is built at
+d4/K256 twice, with the same fitter, seed and byte-identical size, differing
+only in this weighting:
 
-Two scope notes. These comparisons are between arms sharing the same
-base weights and differing only in the fitter, so they are unaffected
-by any difference in when, or on what software stack, a build was fit. And the same phenomenon sets the fit-to-fit noise
-floors of §2.6: across stochastic draws, mean reconstruction error is
-essentially constant while output quality moves by more than several
-margins we had been prepared to report. Any comparison at that scale is
-a comparison of draws.
+| corpus | unweighted | tail-weighted | Δ | t |
+|---|---|---|---|---|
+| prose | 198.1 | 227.7 | +14.9% | +8.1 |
+| code | 1070.1 | 961.5 | −10.1% | −11.8 |
+| literary | 953.8 | 1521.8 | +59.6% | +29.1 |
+
+*Full-vocabulary KL (mnats, 12,288 paired positions per corpus),
+Qwen3.6-35B-A3B, all 120 expert modules at d4/K256.*
+
+One weight-space change improves code by 10% and degrades literary text by
+60%, both far outside noise. No single weight-space statistic can order these
+two models, because their order depends on the corpus.
+<!-- TODO(v5): 397B tail-weighting result ("4.7x") and the fine-grained-fit
+result ("2.8x the floor") to be restated on the full-vocab instrument. -->
+
+These comparisons share base weights and differ only in the fitter, so they
+are unaffected by when, or on what software stack, a build was fit. They are
+also large against fit-to-fit variation: an independent second fit of the same
+geometry lands within 0.1–5.8% of the first on every corpus (|t| ≤ 2.5; §2.6).
 
 ## 5. Measurement discipline
 
