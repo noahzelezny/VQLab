@@ -322,6 +322,14 @@ def main(argv=None) -> int:
             check("--pool reuses the stored fit (no refit) and rebuilds byte-identical",
                   r3["origin"] == "reuse" and r3["source_origin"]["origin"] == "store"
                   and same, f"origin={r3['origin']}")
+            out4 = tmp / "geo-out4"
+            run([str(_find("geo_build.py")), "--artifact", str(g["base"]),
+                 "--teacher", str(g["teacher"]), "--family", "qwen3_5",
+                 "--geomap", str(g["map"]), "--out", str(out4), "--pool",
+                 "--tail-weight-pow", "1.0", "--memory-limit-gb", "4"], verbose=v)
+            r4 = json.load(open(out4 / "vqlab_provenance.json"))["modules"][g["module"]]
+            check("--pool never reuses a fit of ANOTHER recipe (plain fit, tail-weighted build)",
+                  r4["origin"] == "fit", f"origin={r4['origin']}")
             p = run([str(prov), str(g["out"]), "--lineage"], verbose=v)
             check("provenance --lineage walks to the base",
                   p.returncode == 0 and "fit-dense" not in p.stdout

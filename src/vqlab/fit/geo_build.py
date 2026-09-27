@@ -292,12 +292,27 @@ def fit_module(W, D, K, rng, tail_pow=0.0, plain=False):
             mx.array(scales.reshape(E_, OUT_, NGRP).astype(np.float16)))
 
 
-def _pool_dir(geo, family, teacher, parts):
+# Fitter settings that change WHAT a fit is. A pooled fit must match the
+# build on every one; seed and rng only pick a stochastic twin.
+RECIPE_KEYS = ("init", "lloyd_iters", "sample_groups", "group", "alternation",
+               "alternation_rounds", "scales", "tail_weight_pow", "tail_weight_from")
+
+
+def recipe_matches(fit_recipe, method):
+    f = (fit_recipe or {}).get("fitter") or {}
+    return bool(f) and all(f.get(k) == method.get(k) for k in RECIPE_KEYS)
+
+
+def _pool_dir(geo, family, teacher, parts, method=None, allow_unknown=False):
     """Stage matching store fits as a --reuse dir: symlinks named the way the
     reuse loop expects, plus an origins.json carrying each fit's recipe.
-    Among several fits of one (module, d, K) -- stochastic twins -- prefer
-    one with a known recipe, then the earliest filed: deterministic, so
-    rerunning a build picks the same fit."""
+
+    A fit matches on teacher, module and (d, K) AND on the fitter recipe
+    (RECIPE_KEYS): a tail-weighted or plain-Lloyd fit filed under the same
+    d4-K256 key must never be pooled into a build of the other recipe
+    (2026-09-26, the 397B E112 arms). Fits with no recorded recipe are
+    skipped unless allow_unknown. Among twins, prefer the build's own seed,
+    then the earliest filed: deterministic, so a rerun picks the same fit."""
     pool = os.path.join(parts, "_pool")
     os.makedirs(pool, exist_ok=True)
     origins, picked = {}, 0
@@ -311,10 +326,16 @@ def _pool_dir(geo, family, teacher, parts):
                      if r["module"] == n and r["teacher"] == teacher
                      and r["family"] == family and r["d"] == int(g["dim"])
                      and r["K"] == int(g["k"])]
+            if method is not None:
+                cands = [r for r in cands if recipe_matches(r.get("recipe"), method)
+                         or (allow_unknown and not r.get("recipe"))]
             if not cands:
                 continue
-            best = sorted(cands, key=lambda r: (not r.get("recipe"),
-                                                r.get("filed") or "~", r["fit_id"]))[0]
+            seed = (method or {}).get("seed")
+            best = sorted(cands, key=lambda r: (
+                not r.get("recipe"),
+                ((r.get("recipe") or {}).get("fitter") or {}).get("seed") != seed,
+                r.get("filed") or "~", r["fit_id"]))[0]
             src = best["location"].split("#", 1)[0]
             dst = os.path.join(pool, want)
             if os.path.lexists(dst):
@@ -356,9 +377,14 @@ def main():
                     help="parts dir to reuse fits from; repeatable")
     ap.add_argument("--pool", action="store_true",
                     help="also reuse matching fits from the FIT STORE (vqlab fits): "
-                         "same teacher, module and (d, K). Verified by the same "
+                         "same teacher, module, (d, K) AND fitter recipe (init, "
+                         "alternation, scales, tail weighting, ...). Verified by the same "
                          "shape checks as --reuse; the chosen fit's recipe is "
                          "carried into the build record")
+    ap.add_argument("--pool-unknown-recipe", action="store_true",
+                    help="with --pool: also reuse store fits whose recipe was never "
+                         "recorded (pre-record fits). Off by default: an unknown "
+                         "recipe may not be this build's")
     ap.add_argument("--memory-limit-gb", type=int, default=40)
     ap.add_argument("--seed", type=int, default=1234,
                     help="RNG seed. Default 1234, the lab-wide default, so an "
@@ -376,16 +402,30 @@ def main():
                     help="E112's fitter: no scale alternation, max-abs scales. "
                          "Use for BOTH arms of a tail-weighting pair.")
     ap.add_argument("--preflight", action="store_true",
-                    help="build only the FIRST module of --geomap (a small real run "
-                         "for `vqlab queue --preflight`); the artifact is partial")
+                    help="build ONE module of --geomap (a small real run for "
+                         "`vqlab queue --preflight`); the artifact is partial. The "
+                         "module is the first one this build's flags actually "
+                         "change (with tail weighting: the first layer >= "
+                         "--tail-weight-from), else the first; --preflight-module "
+                         "names it")
+    ap.add_argument("--preflight-module", help="with --preflight: this geomap module")
     a = ap.parse_args()
 
     mx.set_wired_limit(0)
     mx.set_memory_limit(a.memory_limit_gb * 1024 ** 3)
     rng = np.random.default_rng(None if a.seed < 0 else a.seed)
     geo = json.load(open(a.geomap))
-    if a.preflight:
-        geo = dict(list(geo.items())[:1])
+    if a.preflight or a.preflight_module:
+        names = list(geo)
+        pick = a.preflight_module
+        if pick is None and a.tail_weight_pow:
+            import re as _re
+            pick = next((n for n in names if (m := _re.search(r"layers\.(\d+)\.", n))
+                         and int(m.group(1)) >= a.tail_weight_from), None)
+        pick = pick or names[0]
+        if pick not in geo:
+            raise SystemExit(f"--preflight-module {pick!r} is not in the geomap")
+        geo = {pick: geo[pick]}
         _log(f"PREFLIGHT: first module only ({next(iter(geo), None)})")
     parts = a.parts or (a.out.rstrip("/") + "_parts")
     os.makedirs(parts, exist_ok=True)
@@ -420,7 +460,8 @@ def main():
 
     teacher = fitstore.teacher_slug(a.teacher)
     if a.pool:
-        a.reuse.append(_pool_dir(geo, a.family, teacher, parts))
+        a.reuse.append(_pool_dir(geo, a.family, teacher, parts, method=_method(a),
+                                 allow_unknown=a.pool_unknown_recipe))
 
     reused = 0
     rejected = []
