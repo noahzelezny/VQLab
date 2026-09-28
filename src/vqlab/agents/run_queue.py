@@ -232,7 +232,7 @@ def _path_args(args):
     return ins, outs
 
 
-PREFLIGHT_MARGIN = 50 << 30        # never take scratch below this
+PREFLIGHT_MARGIN = 10 << 30        # never take scratch below this (the step itself is sized separately)
 
 
 def _input_bytes(args, tree):
