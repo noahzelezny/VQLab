@@ -311,6 +311,12 @@ def main(argv=None) -> int:
                   len(geo_fits) == 1 and geo_fits[0]["recipe"]["origin"] == "fit"
                   and geo_fits[0]["recipe"]["fitter"]["alternation"] is True,
                   f"{len(geo_fits)} stored")
+            cu = fs_.code_usage(geo_fits[0])
+            gf = geo_fits[0]
+            check("fits census counts every code exactly (unpacked from the bit-packed codes)",
+                  cu["exact"] and cu["lookups"] == gf["E"] * gf["OUT"] * (gf["IN"] // gf["d"])
+                  and 0 <= cu["dead"] <= gf["K"] and 0 <= cu["zero_scale_frac"] <= 1,
+                  f"lookups={cu['lookups']}")
             out3 = tmp / "geo-out3"
             run([str(_find("geo_build.py")), "--artifact", str(g["base"]),
                  "--teacher", str(g["teacher"]), "--family", "qwen3_5",

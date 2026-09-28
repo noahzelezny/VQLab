@@ -10,6 +10,7 @@ A bf16 teacher (on the HDD, never re-downloaded), a family, a geometry (d, K) or
 A new directory (never in place) carrying `vqlab_provenance.json`: the fitter settings, seed, inputs and per-module origin. `geo-build` also keeps `origins.json` in its parts dir.
 
 ## Rules that bite
+- **How a fit uses its codebook**: `vqlab fits census` (exact per-entry counts from the codes, cached in `<store>/census.jsonl`): dead entries, entropy, zero-scale groups (the teacher's near-zero rows).
 - **Look in the fit store first**: `vqlab fits list --family F --teacher T --layers A-B --geom dD-KK`. `geo-build --pool` reuses matches automatically. Every fitter files what it fits (`core/fitstore.put`).
 - Seeded by default (1234). `--seed -1` is the only way to get a random draw, and the build record says so.
 - `--relerr-abort` scales with K (K2048 ~0.19, K256 ~0.31, K128 ~0.46). Set it per geometry.

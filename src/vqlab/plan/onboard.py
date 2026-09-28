@@ -230,9 +230,19 @@ def main(argv=None) -> int:
     ctx["state"] = state
     if a.redo:
         state["steps"][a.redo] = {"status": "pending", "result": {}}
-    state["steps"]["profile"] = {"status": st, "result": res, "at": now()}
+    old_p = state["steps"].get("profile") or {}
+    state["steps"]["profile"] = {"status": st, "result": res,
+                                 "at": old_p["at"] if (old_p.get("status"), old_p.get("result"))
+                                 == (st, res) and old_p.get("at") else now()}
+
+    def _strip(x):
+        return {k: v for k, v in x.items() if k != "updated"}
 
     def save():
+        # a status look must not rewrite the file (git churn on families/)
+        old = json.loads(sp.read_text()) if sp.exists() else None
+        if old is not None and _strip(old) == _strip(json.loads(json.dumps(state, default=str))):
+            return
         state["updated"] = now()
         sp.write_text(json.dumps(state, indent=1, default=str))
 
@@ -309,6 +319,13 @@ def main(argv=None) -> int:
         note = (r.get("verdict") or r.get("why") or r.get("run_id")
                 or r.get("launch_refused") or r.get("command") or "")
         print(f"  {s['status']:8s} {step:12s} {str(note)[:100]}")
+    from vqlab.core.families import teacher_caches
+    gate = [c for c in teacher_caches() if c["teacher"] == slug]
+    if gate:
+        print("  KL gate caches registered for this teacher (families/.../caches.json):")
+        for c in gate:
+            print(f"    {c.get('corpus', '?'):6s} {c.get('tokens')} tok "
+                  f"{'full-vocab' if c.get('full_vocab') else 'top-' + str(c.get('top_k'))}  {c['path']}")
     if all(state["steps"][x]["status"] in ("done", "blocked") for x in STEPS) and \
             state["steps"]["profile"]["status"] == "done":
         prof = ctx["profile"]

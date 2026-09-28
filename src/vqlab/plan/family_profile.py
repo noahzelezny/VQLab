@@ -307,7 +307,13 @@ def main(argv=None) -> int:
         pathlib.Path(os.environ.get("VQLAB_FAMILIES_DIR") or REPO / "families")
         / (fam or "_unknown") / "teachers" / sl)
     out.mkdir(parents=True, exist_ok=True)
-    (out / "profile.json").write_text(json.dumps(prof, indent=1))
+    pf = out / "profile.json"
+    old = json.loads(pf.read_text()) if pf.exists() else None
+    if old and {k: v for k, v in old.items() if k != "created"} == \
+            {k: v for k, v in prof.items() if k != "created"}:
+        prof["created"] = old["created"]            # unchanged: no git churn
+    else:
+        pf.write_text(json.dumps(prof, indent=1))
 
     bc = prof["bytes"]["by_class_gib"]
     print(f"{sl}  family={fam or 'UNKNOWN'}  model_type={cfg.get('model_type')}")
