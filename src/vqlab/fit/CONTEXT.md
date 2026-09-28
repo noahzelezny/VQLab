@@ -14,5 +14,5 @@ A new directory (never in place) carrying `vqlab_provenance.json`: the fitter se
 - **Look in the fit store first**: `vqlab fits list --family F --teacher T --layers A-B --geom dD-KK`. `geo-build --pool` reuses matches automatically. Every fitter files what it fits (`core/fitstore.put`).
 - Seeded by default (1234). `--seed -1` is the only way to get a random draw, and the build record says so.
 - `--relerr-abort` scales with K (K2048 ~0.19, K256 ~0.31, K128 ~0.46). Set it per geometry.
-- Fitted parts go to `<fits>/`. Never refit what was already paid for.
+- Fitted parts go to `the fit store (`$VQLAB_FIT_STORE`; the lab's default is the HDD archive, else `~/.vqlab/fits`)`. Never refit what was already paid for.
 - Load source tensors on the CPU stream with `mx.eval` INSIDE the block (FINDINGS IV.1).

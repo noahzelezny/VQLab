@@ -322,7 +322,7 @@ def main(argv=None) -> int:
     from vqlab.core.families import teacher_caches
     gate = [c for c in teacher_caches() if c["teacher"] == slug]
     if gate:
-        print("  KL gate caches registered for this teacher (families/.../caches.json):")
+        print("  KL gate caches registered for this teacher (families/.../teacher_caches.json):")
         for c in gate:
             print(f"    {c.get('corpus', '?'):6s} {c.get('tokens')} tok "
                   f"{'full-vocab' if c.get('full_vocab') else 'top-' + str(c.get('top_k'))}  {c['path']}")
