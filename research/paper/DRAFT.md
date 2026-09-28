@@ -68,7 +68,6 @@ fitter change that improves precisely the reconstruction statistic
 identified as decisive moves output KL in opposite directions by corpus at
 identical bytes (code −10%, literary +60%). Only evaluation of the assembled
 model ranks artifacts.
-<!-- TODO(v5): 397B "4.7x" returns here only if restated on the full-vocab instrument. -->
 
 Comparable behavior was observed on the gemma-4 model family, which is
 nonetheless excluded from all claims: raw likelihood is not a valid
@@ -157,13 +156,11 @@ them, reaches the sizes between rungs (§3.4).
 
 **Claim 3 (measurement).** Weight-space reconstruction error is not a
 reliable ranking of output quality, and cannot steer design. We show
-this by construction, on two models: a pre-registered intervention
+this by construction, on two models: an intervention
 improved precisely the weight-space statistic our mechanism analysis
-identified as the one that mattered, and on the 35B the same change
-moved output KL in opposite directions by corpus (code −10%, prose
-+15%, literary +60%, all |t| > 8) at identical bytes (§4.3).
-<!-- TODO(v5): 397B E112 figure ("4.7x the effect it was built to fix") to be
-re-stated on the full-vocab instrument in §4.3 before it returns here. -->
+identified as the one that mattered, and at identical bytes the model
+got worse on prose and literary text on both models (+15%, +35–60%) while
+code was unchanged on one and 10% better on the other (§4.3).
 
 
 ## 2. Method
@@ -621,38 +618,40 @@ of the divergence, and doubling it again removes a further 17% for 0.9 GiB.
 
 ### 4.3 Reconstruction error does not rank output quality
 
-A refit of one published 397B geometry scored worse than the original at
-byte-identical size while having *lower* mean reconstruction error on every
-projection. Percentile analysis locates the trade: the refit is better where
-most weights live and worse in the top 0.1% by magnitude, and mean
-reconstruction error, a bulk statistic, reports the trade as an improvement.
-The pattern holds across 36 tensors and has a direct cause: body-layer
-weights are sub-Gaussian, so a codebook with lower average distortion buys it
-from the tail.
-<!-- TODO(v5): restate the 397B refit comparison on the full-vocab instrument. -->
+A refit of the published 397B VQ-2.4bpw at its own geometry (d4/K256,
+byte-identical size) has *lower* mean reconstruction error on every
+projection, yet it is no better as a model: +3.9% KL on prose (t = +2.0),
+−4.7% on code (t = −1.9), −4.8% on literary (t = −1.1). Percentile analysis
+of the weights locates the trade: the refit is better where most weights live
+and worse in the top 0.1% by magnitude, and mean reconstruction error, a bulk
+statistic, reports the trade as an improvement. The pattern holds across 36
+tensors and has a direct cause: body-layer weights are sub-Gaussian, so a
+codebook with lower average distortion buys it from the tail.
 
 Reweighting the k-means objective toward that tail band (weights ∝ |w|^4,
 body layers only) does what it is built to do in weight space. On one 35B
 module it cuts relative error on the top 0.1% of weights from 0.192 to 0.110
 and on the top 1% from 0.202 to 0.130, at a mean-error cost of 0.313 → 0.374.
-Its effect on the model depends on the text. Below, the 35B is built at
-d4/K256 twice, with the same fitter, seed and byte-identical size, differing
+Its effect on the model depends on the model and on the text. Each pair below
+is built twice with the same fitter, seed and byte-identical size, differing
 only in this weighting:
 
-| corpus | unweighted | tail-weighted | Δ | t |
-|---|---|---|---|---|
-| prose | 198.1 | 227.7 | +14.9% | +8.1 |
-| code | 1070.1 | 961.5 | −10.1% | −11.8 |
-| literary | 953.8 | 1521.8 | +59.6% | +29.1 |
+| model | corpus | unweighted | tail-weighted | Δ | t |
+|---|---|---|---|---|---|
+| 397B, d4/K256 | prose | 241.8 | 279.1 | +15.5% | +7.0 |
+| | code | 84.7 | 84.3 | −0.5% | −0.1 |
+| | literary | 127.6 | 171.8 | +34.7% | +6.6 |
+| 35B, d4/K256 | prose | 198.1 | 227.7 | +14.9% | +8.1 |
+| | code | 1070.1 | 961.5 | −10.1% | −11.8 |
+| | literary | 953.8 | 1521.8 | +59.6% | +29.1 |
 
-*Full-vocabulary KL (mnats, 12,288 paired positions per corpus),
-Qwen3.6-35B-A3B, all 120 expert modules at d4/K256.*
+*Full-vocabulary KL (mnats, 12,288 paired positions per corpus), all expert
+modules refit. Weighting on layers ≥ 20 of 60 (397B) and ≥ 13 of 40 (35B).*
 
-One weight-space change improves code by 10% and degrades literary text by
-60%, both far outside noise. No single weight-space statistic can order these
-two models, because their order depends on the corpus.
-<!-- TODO(v5): 397B tail-weighting result ("4.7x") and the fine-grained-fit
-result ("2.8x the floor") to be restated on the full-vocab instrument. -->
+The same weight-space change leaves 397B code unchanged, improves 35B code by
+10%, and degrades literary text by 35–60% on both, all far outside noise. No
+single weight-space statistic can order these models, because their order
+depends on the model and the corpus.
 
 These comparisons share base weights and differ only in the fitter, so they
 are unaffected by when, or on what software stack, a build was fit. They are
