@@ -35,6 +35,8 @@ ROWS = {
   ("r24", V2, V / "q397_2.4", "VQ-2.4bpw"),
   ("r26", V2, V / "q397_2.6", "VQ-2.6bpw"),
   ("spicy26", OLD, PIN / "spicyneuron--Qwen3.5-397B-A17B-MLX-2.6bit", "spicyneuron 2.6-bit"),
+  ("e112_A", V2, PR / "e112_397b" / "pin_A", "VQ d4/K256 refit (unweighted)"),
+  ("e112_B", V2, PR / "e112_397b" / "pin_B", "VQ d4/K256 refit (tail-weighted)"),
   ("r31", V2, V / "q397_3.1", "VQ-3.1bpw"),
   ("spicy35", OLD, None, "spicyneuron 3.5-bit"),
  ],
@@ -81,7 +83,8 @@ PAIRS = [
 ]
 FLOORS = [("27b", "r45", "floor_d2k256", "d2/K256"), ("35b", "r54", "floor_d2k1024", "d2/K1024"),
           ("397b", "r22flat", "floor_d4k128", "d4/K128")]
-E112 = [("35b", "e112_B", "e112_A")]
+E112 = [("397b", "e112_B", "e112_A"), ("35b", "e112_B", "e112_A"),
+        ("397b", "e112_A", "r24")]
 
 # text-weight sizes for rows whose artifact is not on hand, from the prior table
 KNOWN_GIB = {("397b", "spicy35"): 165.57, ("35b", "q3"): 14.14, ("35b", "q4"): 18.17,
@@ -174,9 +177,10 @@ def main():
                "the originals keep the fitter version they shipped with, so a floor bounds draw "
                "and fitter-version spread together.\n\n")
     pair_table("Paired comparisons the paper makes (arm − reference; negative = arm better)", PAIRS)
-    pair_table("Tail weighting at fixed bytes (35B, d4/K256, plain fitter, seed 1234)", E112,
-               "Arm = magnitude weighting p=4 on layers ≥13; reference = unweighted. "
-               "Byte-identical sizes.\n\n")
+    pair_table("Tail weighting at fixed bytes (d4/K256, plain fitter, seed 1234)", E112,
+               "Arm = magnitude weighting p=4 on body layers (397B: layers ≥20 of 60; "
+               "35B: ≥13 of 40); reference = unweighted, byte-identical. Last row: the "
+               "unweighted 397B refit against the published VQ-2.4 (same geometry).\n\n")
 
 
 if __name__ == "__main__":
