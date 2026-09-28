@@ -191,7 +191,7 @@ DATA_ENTRIES = _load_data_entries()
 
 
 def teacher_caches(teacher=None):
-    """Registered KL teacher caches: families/<f>/teachers/<t>/caches.json.
+    """Registered KL teacher caches: families/<f>/teachers/<t>/teacher_caches.json.
 
     [{family, teacher, corpus, path, tokens, top_k, full_vocab, ...}], for
     one teacher (its profile name, or a substring of it) or all. A cache
@@ -201,7 +201,7 @@ def teacher_caches(teacher=None):
     import json
     out = []
     for d in _family_dirs():
-        for f in sorted(d.glob("*/teachers/*/caches.json")) if d.is_dir() else ():
+        for f in sorted(d.glob("*/teachers/*/teacher_caches.json")) if d.is_dir() else ():
             t = f.parent.name
             if teacher and teacher.lower() not in t.lower():
                 continue
