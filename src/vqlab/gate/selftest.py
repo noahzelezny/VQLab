@@ -580,7 +580,7 @@ def main(argv=None) -> int:
         _os.environ["VQLAB_GPU_LEASE"] = str(tmp / "gpu.lease")
         qf = tmp / "q.json"
         qf.write_text(json.dumps({"name": "st", "steps": [
-            {"name": "ok", "cmd": "runs", "args": ["-n", "1"], "preflight": {"append": []}},
+            {"name": "ok", "cmd": "runs", "args": ["-n", "1"], "preflight": {"args": ["-n", "2"]}},
             {"name": "gone", "cmd": "fits", "args": ["list", "--root", str(tmp / "no" / "such")]},
             {"name": "after", "cmd": "runs", "args": ["-n", "1"]}]}))
         qdirs = []
@@ -614,6 +614,21 @@ def main(argv=None) -> int:
                   and r2[3] == f"--out={tmp}/pf/b/pin")
             check("queue: name=path args are checked as paths",
                   Q._path_args(["--cache", "prose=/V/c", "--out", "/o"]) == (["/V/c"], ["/o"]))
+            check("queue: a preflight identical to the real step is refused (full-size in scratch)",
+                  any("identical" in e for e in Q.validate({"steps": [
+                      {"name": "c", "cmd": "stream-convert", "args": ["x"],
+                       "preflight": {"append": []}}]})))
+            qf2 = tmp / "q2.json"
+            qf2.write_text(json.dumps({"name": "st2", "steps": [
+                {"name": "ok", "cmd": "runs", "args": ["-n", "1"],
+                 "preflight": {"args": ["-n", "2"]}}]}))
+            with contextlib.redirect_stdout(io.StringIO()):
+                pd2 = Q.create(qf2, allow_dirty=True, preflight=True)
+                qdirs.append(pd2)
+                Q.run(pd2)
+            check("queue: a PASSED preflight leaves nothing on scratch",
+                  not (tmp / "pf" / pd2.name).exists()
+                  and json.load(open(pd2 / "state.json"))["preflight_outputs"] == "removed after pass")
             check("queue: publish can never be queued",
                   any("publish" in e for e in Q.validate({"steps": [{"name": "p", "cmd": "publish"}]})))
         finally:
