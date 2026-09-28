@@ -497,6 +497,21 @@ try:
 except Exception as _e:  # the gate must report, not crash
     fails.append(f"build record check crashed: {type(_e).__name__}: {_e}")
 
+# CARD SPELLING. Released text is US English (Noah, 2026-09-28): a British
+# spelling on a card is fixed before release, not in a later revision.
+# `vqlab spelling --fix <artifact>/README.md` rewrites it.
+try:
+    import us_spelling as _sp
+    _card = A / "README.md"
+    if _card.exists():
+        _hits = _sp.scan(_card.read_text())
+        if _hits:
+            fails.append(f"card has {len(_hits)} British spelling(s) ("
+                         + ", ".join(f"{w}->{u}" for _, w, u in _hits[:6])
+                         + f"); run `vqlab spelling --fix {_card}`")
+except Exception as _e:  # the gate must report, not crash
+    fails.append(f"spelling check crashed: {type(_e).__name__}: {_e}")
+
 # Resolve the deferred processor-config finding now that the smoke has (or
 # has not) demonstrated that this artifact can actually serve.
 if _proc_gap:
