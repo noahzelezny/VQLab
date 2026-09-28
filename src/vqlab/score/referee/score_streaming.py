@@ -328,7 +328,9 @@ def main():
             mx.clear_cache()
         nll_per_token = total_nll / scored
         results.append(nll_per_token)
+        from vqlab.records.provenance import measured
         print(json.dumps({
+            "measured": measured(args.model),
             "run": r + 1,
             "model": args.model.rstrip("/").split("/")[-1],
             "mode": "streaming-1box",

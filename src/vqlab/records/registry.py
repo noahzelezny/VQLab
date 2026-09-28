@@ -69,10 +69,7 @@ def entry(d: pathlib.Path) -> dict:
     geo, n = geometry_mix(cfg)
     shards = sorted(d.glob("*.safetensors"))
     text_bytes = sum(os.path.getsize(os.path.realpath(f)) for f in shards)
-    fp = hashlib.sha256(json.dumps(
-        {f.name: [os.path.getsize(os.path.realpath(f)),
-                  provenance._sha(os.path.realpath(f), provenance.HEAD)] for f in shards},
-        sort_keys=True).encode()).hexdigest()[:16]
+    fp = provenance.shard_fingerprint(d)
     rt = provenance.runtime_state(d)
     rec = None
     if (d / provenance.RECORD).exists():

@@ -114,6 +114,12 @@ def main():
     if refused:
         raise SystemExit(f"FAIL: refusing to score unsmoked or changed pins: {', '.join(refused)}")
 
+    # What each rung IS, stamped before the first GPU minute and re-checked
+    # after the last: another session rebundling a rung mid-campaign (F151)
+    # is a filesystem write no power gate can see.
+    from vqlab.records.provenance import measured
+    before = {r: measured(d) for r, d in rungs.items()}
+
     ppdir = a.per_pos_dir or os.path.join(
         os.path.dirname(a.out) if a.out else ".", "kl_per_position")
     os.makedirs(ppdir, exist_ok=True)
@@ -199,9 +205,17 @@ def main():
                          f"{tag:6s}")
         print(rname.ljust(12) + "".join(cells))
 
+    after = {r: measured(d) for r, d in rungs.items()}
+    changed = [r for r in rungs if (before[r].get("runtime"), before[r].get("fingerprint"))
+               != (after[r].get("runtime"), after[r].get("fingerprint"))]
+    if changed:
+        print(f"\nWARNING: rung(s) CHANGED during this run (runtime or bytes): "
+              f"{', '.join(changed)} -- their numbers describe no single artifact (F151)",
+              flush=True)
     if a.out:
         pathlib.Path(a.out).write_text(json.dumps(
-            {"caches": meta, "rungs": rungs, "reference": ref,
+            {"measured": before, "changed_during_run": changed,
+             "caches": meta, "rungs": rungs, "reference": ref,
              "table": table, "per_position_dir": ppdir,
              "paired": {r: {c: paired(r, c) for c in names}
                         for r in rungs if r != ref}}, indent=1))

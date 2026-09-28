@@ -610,6 +610,8 @@ def main():
         st = _ps.STATS
         print(f"[ple_stream] {st['calls']} calls, {st['rows']} rows, "
               f"{st['secs']:.1f}s in the gather", flush=True)
+    from vqlab.records.provenance import measured as _measured
+    rec["measured"] = _measured(mp)          # what this number is a number OF
     print(json.dumps(rec), flush=True)
 
     if a.save_topk:
@@ -657,7 +659,8 @@ def main():
              "chunk": C_, "streamed": True, "teacher_ppl": round(ppl, 6),
              "model": str(mp), "tokens": len(ids),
              "captured_mass": round(captured, 6),
-             "full_vocab": bool(a.save_full)}, indent=1))
+             "full_vocab": bool(a.save_full),
+             "teacher_measured": rec["measured"]}, indent=1))
         print(f"top-{a.save_topk} cache -> {outd}  captured_mass "
               f"{captured:.4f}", flush=True)
 
