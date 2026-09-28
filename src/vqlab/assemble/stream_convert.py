@@ -77,15 +77,25 @@ print(runtime_load.resolved_runtime_note(model), flush=True)   # III.13
 
 SKEL = None
 if a.skeleton_from:
-    _c = json.load(open(pathlib.Path(a.skeleton_from) / "config.json"))
-    _q = _c.get("quantization") or _c.get("text_config", {}).get("quantization")
+    _ref = pathlib.Path(a.skeleton_from)
+    _c = json.load(open(_ref / "config.json"))
+    _q = _c.get("quantization") or _c.get("text_config", {}).get("quantization") or {}
+    # A module is quantized in the reference iff its .scales tensor exists
+    # there; its width is the per-module entry, else the config default. (A
+    # uniform base -- the dense 27B's -- has NO per-module entries, so the
+    # config map alone would read every skeleton module as bf16.)
+    _default = {"bits": _q.get("bits", 4), "group_size": _q.get("group_size", 64),
+                "mode": _q.get("mode", "affine")}
+    _idx = json.load(open(_ref / "model.safetensors.index.json"))["weight_map"]
     # language_model.* in a VL checkpoint; the lazily loaded text model's
     # paths may or may not carry the prefix, so key both spellings.
     SKEL = {}
-    for k, v in _q.items():
-        if isinstance(v, dict):
-            SKEL[k] = v
-            SKEL[k.removeprefix("language_model.")] = v
+    for k in _idx:
+        if k.endswith(".scales"):
+            m = k[: -len(".scales")]
+            v = _q.get(m) if isinstance(_q.get(m), dict) else _default
+            SKEL[m] = v
+            SKEL[m.removeprefix("language_model.")] = v
     SKEL_HITS = {"skeleton": 0, "expert": 0, "bf16": 0}
 
 
