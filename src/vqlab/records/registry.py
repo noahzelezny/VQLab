@@ -54,14 +54,32 @@ def is_artifact(d: pathlib.Path) -> bool:
         cfg = json.loads(c.read_text())
     except ValueError:
         return False
-    return bool(cfg.get("vq_modules") or cfg.get("vq_linear") or cfg.get("vq_embed"))
+    return bool(cfg.get("vq_modules") or cfg.get("vq_linear") or cfg.get("vq_embed")
+                or cfg.get("vq_ple"))
+
+
+def vq_specs(cfg):
+    """{module: {dim, k, group?, pack_bits?, kind}} for EVERY VQ tensor a
+    config declares. Four config blocks hold them: vq_modules (MoE experts),
+    vq_linear (dense), vq_embed, and vq_ple -- ONE geometry block for all the
+    PLE n-gram shards (Flash: 128 keys, d4-K2048, group 32). Reading only
+    the first three left Flash's PLE out of every registry line (2026-09-28)."""
+    out = {}
+    for blk, kind in (("vq_modules", "expert"), ("vq_linear", "linear"), ("vq_embed", "embed")):
+        for m, c in (cfg.get(blk) or {}).items():
+            out[m] = {**c, "kind": kind}
+    ple = cfg.get("vq_ple") or {}
+    g = ple.get("geometry") or {}
+    for m in ple.get("keys") or ():
+        out[m] = {"dim": g.get("dim"), "k": g.get("k"), "group": g.get("group"), "kind": "ple"}
+    return out
 
 
 def geometry_mix(cfg):
-    mods = {**(cfg.get("vq_modules") or {}), **(cfg.get("vq_linear") or {}),
-            **(cfg.get("vq_embed") or {})}
-    c = collections.Counter(f"d{m.get('dim')}-K{m.get('k')}" for m in mods.values())
-    return dict(sorted(c.items())), len(mods)
+    specs = vq_specs(cfg)
+    c = collections.Counter(("ple:" if s["kind"] == "ple" else "")
+                            + f"d{s.get('dim')}-K{s.get('k')}" for s in specs.values())
+    return dict(sorted(c.items())), len(specs)
 
 
 def entry(d: pathlib.Path) -> dict:

@@ -78,8 +78,7 @@ def _add(acc, r):
 def scan_artifact(d):
     d = pathlib.Path(d)
     cfg = json.loads((d / "config.json").read_text())
-    mods = {**(cfg.get("vq_modules") or {}), **(cfg.get("vq_linear") or {}),
-            **(cfg.get("vq_embed") or {})}
+    mods = registry.vq_specs(cfg)          # incl. vq_ple (its own group size)
     geo, _ = registry.geometry_mix(cfg)
     shards = sorted(glob.glob(str(d / "*.safetensors")))
     text = sum(os.path.getsize(os.path.realpath(f)) for f in shards)
