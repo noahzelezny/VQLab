@@ -335,11 +335,10 @@ Dimension pays at matched rate on every corpus of both models, by 3–17%. It al
 rate ceiling of 4.0 bpw (16-bit indices over 4 weights, even at a
 65,536-entry codebook), so the high bands belong to d2. And large
 codebooks outgrow the GPU's fast on-chip memory: Apple's threadgroup
-limit is 32 KB, a d8/K16384 codebook is 256 KB, and serving it from
-device memory costs ~19% decode throughput (§3.5). The operational
-sweet spots this induces: d4 with the largest codebook that fits the
-band, d2 above 4 bpw, d8 where quality-per-byte justifies the decode
-tax.
+limit is 32 KB, which a d4 codebook exceeds above K = 2048 and a d2
+codebook above K = 4096, and larger codebooks are served from device
+memory instead. The operational sweet spots this induces: d4 with the
+largest codebook that fits the band, d2 above 4 bpw.
 
 ### 3.2 The 397B ladder
 
@@ -569,36 +568,29 @@ packed kernel (+25–33% prefill, bit-exact). All kernel variants are
 accepted only on bit-identity with a reference path where both load,
 and on relative error against a float32 reference where only one does.
 
-Decode throughput is equivalent across the d4 geometries, whose
-codebooks fit in threadgroup memory. It is not equivalent where they do
-not: d8/K16384's 256 KB codebook streams from device
-memory and costs approximately 19% of decode throughput against its
-same-size d4 sibling — the measured price of the quality its geometry
-buys, and one that may differ on hardware with a different memory
-hierarchy. Against affine,
-VQ prefill remains ~0.5x at 35B scale even after the zero-copy dispatch
-described above (the +25–33% prefill recovery); decode is within
-10–20%. The asymmetry is the signature of where each
-phase's time goes. Decode generates one token at a time and is bound by
-memory bandwidth — the cost of reading the weights — and a VQ artifact
-has fewer bytes to read, so the extra arithmetic of in-kernel codebook
-lookups hides behind the memory traffic and decode stays near parity on
-this hardware — the balance is set by the machine's bandwidth-to-compute
-ratio, and a machine with less memory bandwidth will sit elsewhere on it.
-Prefill processes the whole prompt as large matrix multiplies and is
-bound by arithmetic throughput; there the same per-weight decode work is
-added to a compute-saturated path with no bandwidth saving to pay for
-it, and it surfaces as the 2x gap. This is an interpretation consistent
-with the measured split rather than a profiled attribution; what is
-measured is the pair of ratios. Speed numbers here are same-session ratios
-between arms: we found decode throughput at ~100 GiB residency to be
-bimodal on our hardware (the same artifact varying 40% run to run, with
-swap, thermals and storage path each ruled out by measurement), we have
-not characterized other sizes, and we therefore publish no absolute
-throughput figures. Three further speed levers were tested and closed
-(fused row-gather, byte-aligned packing, native-bf16 kernels), each
-with a measured null or negative effect in the lab record;
-distillation-based refinement at 397B/2-bit was falsified outright.
+Speed against affine, measured on the 35B: the d2/K256 build (17.64 GiB)
+against q4 (18.17 GiB), a 2,048-token prompt from the prose corpus and 128
+generated tokens, one fresh process per arm per run, arms alternating, three
+runs each, in one session on an otherwise idle machine:
+
+| | run 1 | run 2 | run 3 | median |
+|---|---|---|---|---|
+| decode, VQ / affine | 0.73 | 0.78 | 0.77 | 0.77 |
+| prefill, VQ / affine | 0.78 | 0.86 | 0.88 | 0.86 |
+
+*Peak memory 20.6 GB (VQ) and 21.4 GB (affine). Apple M3 Ultra.*
+
+VQ costs about a quarter of decode throughput and a seventh of prefill
+throughput at this prompt length, against a build with 55% more divergence on
+prose (§3.3). Shorter prompts were not measured at n ≥ 3 and are not
+characterized here. Speed numbers are same-session ratios between arms: we
+found decode throughput at ~100 GiB residency to be bimodal on our hardware
+(the same artifact varying 40% run to run, with swap, thermals and storage
+path each ruled out by measurement), and we therefore publish no absolute
+throughput figures. Three further speed levers were tested and closed (fused
+row-gather, byte-aligned packing, native-bf16 kernels), each with a measured
+null or negative effect in the lab record; distillation-based refinement at
+397B/2-bit was falsified outright.
 
 ## 4. Negative results
 
@@ -625,8 +617,8 @@ VQ alike.
 
 ### 4.2 Where the geometry axes stop paying
 
-Dimension pays at matched rate (§3.1) but the margin shrinks as rate
-rises — 12.2% at 2.0 bpw, 8.6% at 3.0 <!-- TODO(v5): re-measured §3.1 twins -->.
+Dimension pays at matched rate (§3.1): d4 over d2 by 13–17% at 2.0 bpw and
+4–14% at 3.0, depending on the corpus.
 Whether it still pays at d4's 4.0 bpw ceiling is untested. The only d4
 geometry that reaches that rate uses a 65,536-entry codebook: a single fit
 of it on the 27B takes about 37 hours, its 512 KB codebook is sixteen
@@ -635,8 +627,8 @@ path, and codebook size is already in steep diminishing returns well below
 it (next). We judged the measurement not worth its cost, and the dimension
 advantage is not established above 3 bpw. Codebook size pays with steep
 diminishing returns: on the 35B, flat d4 at K2048, K8192 and K16384
-scores 76.1, 46.1 and 38.4 mnats of prose KL — quadrupling K removes 39%
-of the divergence, and doubling it again removes a further 17% for 0.9 GiB.
+scores 76.6, 46.1 and 39.8 mnats of prose KL — quadrupling K removes 40%
+of the divergence, and doubling it again removes a further 14% for 0.9 GiB.
 
 ### 4.3 Reconstruction error does not rank output quality
 
@@ -705,10 +697,10 @@ trusted only after the gate has failed on a known-bad input and passed
 on a known-good one. No artifact is treated as releasable until it has
 generated tokens through the exact runtime it ships with.
 
-Each artifact's shards are fingerprinted — byte count, modification
-time, and a hash of the shard's head, stored outside the artifact —
-enough to identify a shard and to catch a silent rewrite, though not to
-certify every byte. Stored metadata is treated as a record of intent
+A published artifact is identified by its pinned Hugging Face revision.
+Builds made since September 2026 also carry a build record naming the code
+commit, inputs, fitter recipe, seed and a hash of every output file; the
+artifacts in this paper predate it. Stored metadata is treated as a record of intent
 rather than of content. A checkpoint's `model_type` field, for
 example, names the loader code path rather than the model: Qwen 3.6
 and 3.8 share the 3.5 architecture, so their checkpoints all declare a
@@ -752,11 +744,10 @@ decode.
 ## 7. Reproducibility
 
 All artifacts are published under `TheDrainFlorist` on Hugging Face
-with their VQ runtimes bundled in-checkpoint (stock mlx-lm, no
-patches). Where a repository's weights were upgraded in place, the
+with their VQ runtimes bundled in-checkpoint: they load in stock mlx-lm,
+unpatched, with `trust_remote_code=True`. Where a repository's weights were upgraded in place, the
 previous build remains fetchable at its pinned revision and the card
-labels which weights produced which benchmark rows. Published
-artifacts carry external manifests. Most of the fits behind them are
+labels which weights produced which benchmark rows. Most of the fits behind them are
 unseeded single draws (§2.6), so a published build
 is reproducible in recipe and geometry but not bit-for-bit; that is precisely why every margin in this
 paper is quoted against a measured fit-to-fit floor rather than against
