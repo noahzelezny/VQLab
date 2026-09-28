@@ -122,10 +122,21 @@ def rec(fam, row, where):
     return out
 
 
+CHUNK = 512   # teacher caches score in chunks of 512 positions
+
+
 def pair(a, b):
+    """mean diff, per-position t, per-chunk t, share of positions arm better.
+
+    Per-position t treats 12,288 positions as independent; positions inside a
+    512-token chunk are not, so it overstates confidence. The per-chunk t is
+    computed over the 24 chunk-mean differences (cluster-robust, 23 df;
+    |t| > 2.07 is p < 0.05 two-sided) and is the one the paper reads."""
     d = a - b
     sem = d.std(ddof=1) / math.sqrt(len(d))
-    return d.mean(), d.mean() / sem, (d < 0).mean()
+    cm = d[: len(d) // CHUNK * CHUNK].reshape(-1, CHUNK).mean(axis=1)
+    t_chunk = cm.mean() / (cm.std(ddof=1) / math.sqrt(len(cm)))
+    return d.mean(), d.mean() / sem, t_chunk, (d < 0).mean()
 
 
 def main():
@@ -160,16 +171,17 @@ def main():
 
     def pair_table(title, items, note=""):
         w(f"\n## {title}\n\n{note}| family | arm (GiB) | reference (GiB) | corpus | ref | arm "
-          "| diff % | t | positions arm better |\n|---|---|---|---|---|---|---|---|---|\n")
+          "| diff % | t (position) | t (chunk) | positions arm better |\n"
+          "|---|---|---|---|---|---|---|---|---|---|\n")
         for fam, arm, ref, *_ in items:
             A, R = data[fam, arm], data[fam, ref]
             for c in CORPORA:
                 if A[c]["cache"] != R[c]["cache"]:
                     raise SystemExit(f"{fam} {arm} vs {ref} {c}: different caches, cannot pair")
-                dm, t, better = pair(A[c]["kl"], R[c]["kl"])
+                dm, t, tc, better = pair(A[c]["kl"], R[c]["kl"])
                 rm = R[c]["kl"].mean()
                 w(f"| {fam.upper()} | {arm} ({size[fam, arm]:.1f}) | {ref} ({size[fam, ref]:.1f}) | "
-                  f"{c} | {rm:.1f} | {A[c]['kl'].mean():.1f} | {dm / rm * 100:+.1f}% | {t:+.1f} | "
+                  f"{c} | {rm:.1f} | {A[c]['kl'].mean():.1f} | {dm / rm * 100:+.1f}% | {t:+.1f} | {tc:+.1f} | "
                   f"{better * 100:.0f}% |\n")
 
     pair_table("Noise floors (independent second fit of the same geometry, paired)", FLOORS,
