@@ -55,7 +55,8 @@ Queue file (JSON):
 from the pinned tree). `python` (queue or step) picks the interpreter, e.g.
 the exo env. `preflight` is {"args": [...]} (replace), {"append": [...]} or
 {"skip": "reason"}, or {"full": "reason"} to run the real step full-size on
-purpose (checked against free scratch first; an identical {"append": []} is
+purpose (checked against free scratch first -- its input size, or the
+"writes_gib" it declares, e.g. 0 for a pin; an identical {"append": []} is
 refused). A passing preflight deletes its outputs unless --keep-preflight. geo-build and kl-ladder take `--preflight` (first
 module / first cache x rung), so {"append": ["--preflight"]} is their block. In preflight, every OUTPUT flag's value (--out,
 --out-dir, ...) is redirected to <scratch SSD>/queue-preflight/<queue>/<step>/<name>, so a
@@ -152,8 +153,10 @@ def validate(q) -> list[str]:
         if st.get("on_fail", "stop") not in ("stop", "continue"):
             errs.append(f"{tag}: on_fail must be stop or continue")
         pf = st.get("preflight")
-        if pf is not None and not (isinstance(pf, dict) and len(pf) == 1
-                                   and next(iter(pf)) in ("args", "append", "skip", "full")):
+        pfk = [k for k in (pf or {}) if k != "writes_gib"]
+        if pf is not None and not (isinstance(pf, dict) and len(pfk) == 1
+                                   and pfk[0] in ("args", "append", "skip", "full")
+                                   and ("writes_gib" not in pf or "full" in pf)):
             errs.append(f"{tag}: preflight must be one of {{args}}, {{append}}, {{skip}}, {{full}}")
         elif pf and (pf.get("append") == [] or pf.get("args") == st.get("args")):
             # a "preflight" identical to the real step is a full-size run
@@ -372,7 +375,10 @@ def _run_step(q, st, rec, sdir, state, preflight, force, outmap=None):
         pfdir = preflight_root() / pathlib.Path(state["qdir"]).name / _slug(st["name"])
         pfdir.mkdir(parents=True, exist_ok=True)
         args = _redirect_outs(args, pfdir, outmap if outmap is not None else {})
-        need = _input_bytes(args, pathlib.Path(state["tree"])) if "full" in pf else 0
+        need = 0
+        if "full" in pf:                   # what it writes: stated, else its input size
+            need = (float(pf["writes_gib"]) * 2**30 if "writes_gib" in pf
+                    else _input_bytes(args, pathlib.Path(state["tree"])))
         free = shutil.disk_usage(pfdir).free
         if free - need < PREFLIGHT_MARGIN:
             return {"verdict": "fail", "reasons": [
