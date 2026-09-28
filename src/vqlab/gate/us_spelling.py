@@ -77,6 +77,7 @@ ALLOW = {
     "compromised", "disguised", "improvised", "premised", "risen", "arisen",
     "precisely", "concisely", "noises", "denoise", "denoised", "denoising",
     "analyses", "paralyses", "catalyses", "dialyses",  # also the US plural noun
+    "trellis", "trellises", "chassis", "premises", "crises", "bases",
 }
 SUFFIX = [  # (british suffix, us suffix), longest first
     ("isations", "izations"), ("isation", "ization"), ("ising", "izing"), ("ised", "ized"),
