@@ -39,6 +39,9 @@ ROWS = {
   ("e112_B", V2, PR / "e112_397b" / "pin_B", "VQ d4/K256 refit (tail-weighted)"),
   ("r31", V2, V / "q397_3.1", "VQ-3.1bpw"),
   ("spicy35", OLD, None, "spicyneuron 3.5-bit"),
+  ("r24_sk8", V2, PR / "rsk397" / "pin_r24_sk8", "VQ-2.4 experts, spicyneuron skeleton"),
+  ("r26_sk8", V2, PR / "rsk397" / "pin_r26_sk8", "VQ-2.6 experts, spicyneuron skeleton"),
+  ("r31_sk8", V2, PR / "rsk397" / "pin_r31_sk8", "VQ-3.1 experts, spicyneuron skeleton"),
  ],
  "35b": [
   ("d2k16", V2, V / "r35p_d2k16", "VQ d2/K16"),
@@ -55,6 +58,12 @@ ROWS = {
   ("d2k4096", V2, V / "r35p_d2k4096", "VQ d2/K4096"),
   ("q6", OLD, None, "affine q6"),
   ("q8", OLD, None, "affine q8"),
+  ("s2", V2, None, "affine 2-bit experts, VQ skeleton"),
+  ("s3", V2, None, "affine 3-bit experts, VQ skeleton"),
+  ("s4", V2, None, "affine 4-bit experts, VQ skeleton"),
+  ("s5", V2, None, "affine 5-bit experts, VQ skeleton"),
+  ("s6", V2, None, "affine 6-bit experts, VQ skeleton"),
+  ("s8", V2, None, "affine 8-bit experts, VQ skeleton"),
  ],
  "27b": [
   ("q2", OLD, None, "affine q2"),
@@ -70,9 +79,24 @@ ROWS = {
   ("d2k4096", V2, V / "r27_d2k4096", "VQ d2/K4096"),
   ("q6", OLD, None, "affine q6"),
   ("q8", OLD, None, "affine q8"),
+  ("s2", V2, None, "affine 2-bit MLPs, VQ skeleton"),
+  ("s3", V2, None, "affine 3-bit MLPs, VQ skeleton"),
+  ("s4", V2, None, "affine 4-bit MLPs, VQ skeleton"),
+  ("s5", V2, None, "affine 5-bit MLPs, VQ skeleton"),
+  ("s6", V2, None, "affine 6-bit MLPs, VQ skeleton"),
+  ("s8", V2, None, "affine 8-bit MLPs, VQ skeleton"),
  ],
 }
-# (family, arm, reference)  -- arm minus reference, negative = arm better
+# Matched skeleton: arm and reference share every non-expert tensor byte for byte
+# (stream-convert --skeleton-from / vqlab reskeleton); only the expert quantizer differs.
+MATCHED = [
+ ("397b", "r24_sk8", "spicy26"), ("397b", "r26_sk8", "spicy26"), ("397b", "r31_sk8", "spicy35"),
+ ("35b", "r34", "s3"), ("35b", "r38", "s3"), ("35b", "d2k256", "s4"),
+ ("35b", "r54", "s5"), ("35b", "d2k4096", "s6"),
+ ("27b", "d4k1024", "s3"), ("27b", "r39", "s3"), ("27b", "r45", "s4"), ("27b", "r48", "s4"),
+ ("27b", "d2k4096", "s6"),
+]
+# Against published builds (different skeletons -- quantizer and skeleton both differ)
 PAIRS = [
  ("397b", "r24", "spicy26"), ("397b", "r26", "spicy26"), ("397b", "r22flat", "spicy26"),
  ("397b", "r22v2", "spicy26"), ("397b", "r31", "spicy35"),
@@ -89,7 +113,14 @@ E112 = [("397b", "e112_B", "e112_A"), ("35b", "e112_B", "e112_A"),
 # text-weight sizes for rows whose artifact is not on hand, from the prior table
 KNOWN_GIB = {("397b", "spicy35"): 165.57, ("35b", "q3"): 14.14, ("35b", "q4"): 18.17,
              ("35b", "q6"): 26.23, ("35b", "q8"): 34.30, ("27b", "q2"): 7.83,
-             ("27b", "q3"): 10.96, ("27b", "q4"): 14.09, ("27b", "q6"): 20.36, ("27b", "q8"): 26.62}
+             ("27b", "q3"): 10.96, ("27b", "q4"): 14.09, ("27b", "q6"): 20.36, ("27b", "q8"): 26.62,
+             # matched-skeleton affine builds (conversions deleted after scoring): VQ build's
+             # non-expert text bytes + teacher expert elements x (bits + 0.5)/8 (group-64,
+             # bf16 scale+bias). Reproduces s4 = uniform q4 = 14.09 on the 27B exactly.
+             ("35b", "s2"): 11.08, ("35b", "s3"): 14.83, ("35b", "s4"): 18.58,
+             ("35b", "s5"): 22.33, ("35b", "s6"): 26.08, ("35b", "s8"): 33.58,
+             ("27b", "s2"): 10.11, ("27b", "s3"): 12.10, ("27b", "s4"): 14.09,
+             ("27b", "s5"): 16.09, ("27b", "s6"): 18.08, ("27b", "s8"): 22.06}
 # Text weights = tensors under language_model.* -- the MTP sidecar (block.*, fc.*,
 # norm_* in mtp-head-*.safetensors) and vision towers (vision_tower.*, model.*)
 # are outside it. A name filter on "mtp" missed the sidecar by 5.41 GiB.
@@ -188,7 +219,12 @@ def main():
                "Second fits use the current plain fitter (k-means++, plain Lloyd, max-abs scales); "
                "the originals keep the fitter version they shipped with, so a floor bounds draw "
                "and fitter-version spread together.\n\n")
-    pair_table("Paired comparisons the paper makes (arm − reference; negative = arm better)", PAIRS)
+    pair_table("Matched skeleton: VQ vs affine experts, identical non-expert tensors "
+               "(arm − reference; negative = arm better)", MATCHED,
+               "35B/27B references: the VQ build's skeleton with round-to-nearest group-64 affine "
+               "experts/MLPs. 397B: the VQ build's experts on spicyneuron's skeleton "
+               "(attention/shared/linear-attention 8-bit where the VQ release used 6-bit).\n\n")
+    pair_table("Against published builds (skeletons differ; arm − reference)", PAIRS)
     pair_table("Tail weighting at fixed bytes (d4/K256, plain fitter, seed 1234)", E112,
                "Arm = magnitude weighting p=4 on body layers (397B: layers ≥20 of 60; "
                "35B: ≥13 of 40); reference = unweighted, byte-identical. Last row: the "
