@@ -2,10 +2,9 @@
 
 **Noah Zelezny**
 
-*<!-- TODO(v5): release month --> 2026 · doi:[10.5281/zenodo.22119017](https://doi.org/10.5281/zenodo.22119017).
-Every number traces to a committed entry in the laboratory record; every
-margin is stated against a measured fit-to-fit noise floor for its
-geometry.*
+*2026 · doi:[10.5281/zenodo.22119017](https://doi.org/10.5281/zenodo.22119017).
+Every quality comparison is paired on identical token positions and read
+against a measured fit-to-fit noise floor.*
 
 ## Abstract
 
@@ -30,7 +29,8 @@ data-free: no calibration corpus, no activations, no teacher model.
 We construct VQ quantizations of three models — Qwen3.5-397B-A17B and
 Qwen3.6-35B-A3B (mixture-of-experts), and Qwen3.8-27B (dense) — and
 compare them against both uniform and mixed-precision affine
-builds of the same models, at matched or smaller file sizes. Every model
+builds of the same models at comparable file sizes, each size difference
+stated. Every model
 is scored on one deterministic instrument: KL divergence — how far the
 quantized model's next-token probabilities drift from the full-precision
 original's, reported in millinats (defined in §2.6; zero means identical
@@ -38,16 +38,16 @@ behavior) — paired over the same 12,288 token positions on each of three
 corpora: prose, code and literary text.
 Three findings. **First,
 below approximately 5 bits per weight, the data-free VQ builds
-outperform the affine builds.** On the 397B model, a 2.4-bit-per-weight
+outperform the affine builds.** On the 397B model, a 2.34-bit-per-weight
 VQ build is 12.6 GiB smaller than the leading community build — a
 mixed-precision artifact at 2.6 bits per weight — and diverges
 less from the full-precision model on all three corpora (prose −30%, code
-−11%, literary −44%); a 2.6-bit VQ build, 1.4 GiB smaller than the same
+−10%, literary −44%); a 2.58-bit VQ build, 1.4 GiB smaller than the same
 comparator, halves its prose divergence.
-On the 35B model, a 3.8-bit VQ build is 3.3 GiB smaller than
+On the 35B model, a 3.68-bit VQ build is 3.3 GiB smaller than
 the 4-bit affine build and diverges less on prose (−30%) and code (−34%),
-with literary text a tie; a 4.4-bit VQ build, 0.5 GiB smaller than the same
-comparator, halves its divergence on all three corpora. On the dense 27B, two
+with literary text a tie; a 4.37-bit VQ build, 0.5 GiB smaller than the same
+comparator, halves its prose and literary divergence and cuts code by 44%. On the dense 27B, two
 VQ builds straddle the 4-bit affine build's size: the one 0.5 GiB smaller
 beats it on every corpus (prose −18%, code −9%, literary −8%), and the one
 0.5 GiB larger by 10–34%. The advantage has a measured boundary: the affine
@@ -59,7 +59,8 @@ range in which large models fit on the hardware most people have.
 size model predicts an artifact's packed size to within a few tenths of
 a GiB before it is fit — validated on all three models against builds
 whose sizes were predicted before the builds existed — and
-a bit-harvesting technique reaches sizes between codebook steps. **Third, weight-space
+reducing the codebook size in the first layers alone reaches the sizes between
+uniform geometries. **Third, weight-space
 reconstruction error — the statistic most quantization pipelines
 optimize and gate on — does not rank output quality in this regime.** A
 fitter change that improves precisely the reconstruction statistic
@@ -68,15 +69,8 @@ identified as decisive, at identical bytes, degrades literary text by
 10% on the other. Only evaluation of the assembled
 model ranks artifacts.
 
-Comparable behavior was observed on the gemma-4 model family, which is
-nonetheless excluded from all claims: raw likelihood is not a valid
-property of those instruction-tuned models, so no deterministic scoring
-scheme was available. The effect is likely broader than the three models
-studied; three models are what is claimed.
-
-Thirteen artifacts spanning the three ladders are published with pinned
-revisions, and every comparison names the artifact and instrument that
-produced it.
+Eleven VQ builds of the three models are published with pinned revisions,
+and every comparison names the build and instrument that produced it.
 
 ## 1. Introduction
 
@@ -86,8 +80,8 @@ parameters — Qwen3.5-397B-A17B, the largest model studied here,
 activates 17 of its 397 billion parameters per token — but the weights
 must reside in RAM regardless of how many are active, and RAM is the
 commodity in shortest supply outside the datacenter. At 16-bit
-precision, a machine that holds such a model is unreachable without
-deliberate effort and a liberal budget. Quantization decides how low on the memory ladder a given model stays usable, and for the machines in
+precision the 397B model needs about 740 GiB, beyond any consumer or
+workstation machine. Quantization decides how low on the memory ladder a given model stays usable, and for the machines in
 question the decisive band is often 2 to 6 bits per weight.
 
 The available quantizations in this band are primarily affine: uniform
@@ -108,15 +102,21 @@ QuIP# combines incoherence processing with E8 lattice codebooks [5].
 All three are calibration-dependent, and none publishes runnable
 artifacts for the Apple-Silicon MLX stack [8]; calibrated VQ builds for MLX,
 with codebooks fit under GPTQ-style error compensation, have since been
-published independently [9]. The lineage of the method
-itself is older: a codebook fit by k-means [6] over fixed-length
-subvectors is the building block of product quantization [7]; here one
-codebook is shared by every subvector of a tensor, and the data it is fit
-to is the weights themselves.
+published independently [9]. VPTQ [12] and QTIP [13] extend vector and
+trellis-coded quantization in the same calibration-based setting.
+Non-uniform scalar codebooks predate all of these: Deep Compression shares
+k-means centroids within each layer and then retrains them [10], and
+SqueezeLLM fits sensitivity-weighted k-means per channel on calibration
+data [11]. HQQ is a data-free affine quantizer that optimizes each group's
+scale and zero-point against the weights alone [14]. The lineage of the
+method itself is older still: a codebook fit by k-means [6] over
+fixed-length subvectors is the building block of product quantization [7].
+Here one codebook is shared by every subvector of a tensor, it is fit to the
+weights alone, and nothing is retrained.
 
 **Notation.** A VQ geometry is written dN/KM, where N is the subvector
 dimension and M the codebook size; builds in this paper range from
-d2/K16 to d8/K16384. For example, d4/K2048 groups weights into
+d2/K16 to d4/K16384. For example, d4/K2048 groups weights into
 subvectors of 4 consecutive values and replaces each with an index into
 a 2048-entry codebook, storing log2(2048)/4 = 2.75 bits per weight.
 Every size in this paper is the measured size of the packed text weights
@@ -129,43 +129,41 @@ calibration-fitted quantizer's quality is partly a property of its
 calibration set, so any evaluation resembling that set flatters it and
 any deployment unlike it is off-distribution. A weight-space fit has
 nothing to inherit: it cannot be tuned toward an evaluation even by
-accident, so its scores mean the same thing on any text. It also forces
-an honest measurement posture:
-when the quantizer never sees data, a quality number can only come from
-scoring the assembled artifact, and §4 shows that is the only
-trustworthy score anyway.
+accident, so its scores mean the same thing on any text. And because the
+quantizer never sees data, every quality number comes from scoring the
+assembled model, which §4 shows is the only reliable ranking.
 
-**Claim 1 (method).** At matched-or-smaller packed bytes, the data-free
+**Claim 1 (method).** At equal or smaller packed size, the data-free
 VQ builds beat the affine builds — mixed-precision and uniform — on all
-three models (§3). The claim is fenced on both ends: the wins are
-measured from 1.75 to 5 bits per weight, and the crossover where the
-affine frontier passes above ours is bracketed at 4.5–6.0 bits on the
-dense model and 5.0–6.0 on the 35B MoE, measured from both sides in
+three models (§3). The claim is bounded on both ends: the wins are
+measured from 2.3 to 5.3 bits per weight, and the crossover where the
+affine frontier passes above ours is bracketed at 4.7–5.6 bits on the
+dense model and 5.3–6.2 on the 35B MoE, measured from both sides in
 each case. At 8 bits affine is essentially lossless and there is
-nothing to beat. The quality advantage also carries a cost: VQ prefill
-throughput is roughly half that of the affine builds at 35B scale
-(§3.5).
+nothing to beat. The quality advantage also carries a cost: on the 35B,
+VQ decode throughput is 0.77× and prefill 0.86× that of a same-size affine
+build (§3.5).
 
 **Claim 2 (size targeting).** A quantization can be tuned to a byte
 budget. Codebook widths land where log2(K)/d puts them — on the 397B
-the gap between adjacent widths is 31 GiB — and we make the axis
+each doubling of K at d4 adds about 11 GiB — and we make the axis
 continuous: a two-coefficient size model prices any target before the
 fit runs, and harvesting bits from the shallow layers, which tolerate
-them, reaches the sizes between rungs (§3.4).
+them, reaches the sizes between uniform geometries (§3.4).
 
 **Claim 3 (measurement).** Weight-space reconstruction error is not a
 reliable ranking of output quality, and cannot steer design. We show
-this by construction, on two models: an intervention
-improved precisely the weight-space statistic our mechanism analysis
-identified as the one that mattered, and at identical bytes the model
-got worse on prose and literary text on both models (+15%, +35–60%) while
-code was unchanged on one and 10% better on the other (§4.3).
+this by construction, on two models: a fitter change that reduces
+reconstruction error on the largest-magnitude weights, at identical bytes,
+leaves the model
+worse on prose and literary text on both models (+15%, +35–60%) while
+code is unchanged on one and 10% better on the other (§4.3).
 
 
 ## 2. Method
 
 The recipe has one moving part. In the mixture-of-experts models the
-routed experts hold most of the parameters — 97% in the 397B and 92% in
+routed experts hold most of the parameters — 97% in the 397B and 93% in
 the 35B; in the dense
 model the same role is played by the MLP trio — the three feed-forward
 projection matrices in each transformer layer (gate, up, and down),
@@ -179,10 +177,9 @@ every such tensor. A build is named by its geometry.
 
 All 397B and 35B builds share one base, chosen by measurement before any
 VQ build and then held fixed: 6-bit structure, the linear-attention input
-projections at 4-bit, and the routers at bf16. The routers are 20 MiB, too
-small to be worth quantizing, and a router feeds an argmax over experts,
-where reduced precision costs heavily (at 2 bits it was catastrophic in our
-early measurements). Because the skeleton never varies, every VQ build of a
+projections at 4-bit, and the routers at bf16. The routers are small (40 MiB
+on the 35B, 240 MiB on the 397B), and a router feeds an argmax over experts,
+where reduced precision changes which expert runs. Because the skeleton never varies, every VQ build of a
 model differs from its siblings only in the expert tensors. The dense 27B builds splice VQ MLPs into a 4-bit
 affine conversion, carrying every other tensor through unchanged, which
 makes each build a controlled ablation of the MLP treatment against its
@@ -203,16 +200,15 @@ subsamples the weights stochastically, so two fits of the same tensor
 differ; §2.6 measures the consequences and every comparison in this paper is
 read against them.
 
-Every build made for this revision (the ladder points, twins and floors of
-§2–4) uses exactly this fitter. The published artifacts were fit over several
-weeks while the fitter changed, and each keeps the codebooks it shipped with:
+Every build made for this paper uses exactly this fitter. The published
+artifacts were fit with earlier versions of it and keep their original
+codebooks:
 
 | artifact | initialization | notes |
 |---|---|---|
 | 397B VQ-2.4bpw | random | first-generation fitter (frozen as `research/archive/quantlab/fitter_0816_cdcdeab.py`) |
 | 397B VQ-2.6bpw, VQ-3.1bpw | k-means++ (the default from 2026-08-18) | |
-| 397B, all published rungs, layers 57–59 | k-means++ | 9 of 180 expert modules refit in 2026-09 with scale–codebook alternation (§3.2) |
-| 397B VQ-2.2bpw | not recorded | mixed-geometry build |
+| 397B, all three artifacts, layers 57–59 | k-means++ | 9 of 180 expert modules refit in 2026-09 with scale–codebook alternation (§3.2) |
 | 35B VQ-3.8bpw | k-means++ | |
 | 35B VQ-3.4bpw, VQ-4.6bpw, VQ-5.4bpw | not recorded | |
 | 27B VQ-3.9bpw, VQ-4.5bpw | k-means++ | unseeded |
@@ -232,9 +228,10 @@ quality always come from the same artifact.
 
 ### 2.4 Size targeting
 
-Flat geometries leave gaps between rungs. To reach a size inside a gap
-we harvest: hold the body geometry fixed and reduce K in the shallow
-layers (the first ten, at 397B scale), which tolerate cheap bits. The
+Uniform geometries leave gaps between adjacent codebook sizes. To reach a
+size inside a gap we *harvest bits*: hold the geometry of the deeper layers
+fixed and reduce K in the shallow layers only (the first ten, at 397B scale),
+which tolerate cheap bits. The
 resulting size is predicted before the fit by a two-coefficient model —
 at 397B, `new = base − 1.87 GiB × shallow_bits`; on the dense 27B and
 the 35B, `total = code_bytes + scales + carry` with the carry measured
@@ -242,17 +239,12 @@ once per model. Out-of-sample records for both forms are in §3.4.
 
 ### 2.5 The pipeline
 
-Every artifact passed, in order: fit → reconstruction-error gate, run
-on a machine other than the one that fit it → pack → graft → structural
-verification → a smoke generation through the exact runtime the
-artifact ships with → scoring, both metrics, one instrument per model.
-The smoke generation is load-bearing: scoring exercises a
-prefill-shaped code path, serving exercises the fused decode kernels,
-and an artifact can score normally while being unable to serve — so
-nothing is fully validated until it has generated a token through the code
-path it ships with. Predictions are registered before numbers exist,
-with reading grids fixed in advance, so a wash cannot be reread
-afterward as a win.
+Every build passes, in order: fit → reconstruction-error check → pack →
+merge into the base checkpoint → structural verification → generation of a
+test output through the exact runtime the artifact ships with → scoring. The
+generation step is necessary: scoring exercises a prefill-shaped code path
+while serving exercises the fused decode kernels, and an artifact can score
+normally while being unable to serve.
 
 ### 2.6 Instruments and noise floors
 
@@ -266,20 +258,23 @@ agreement** is the fraction of positions at which the quantized model's
 most probable token matches the full-precision model's. **Relative
 reconstruction error (relerr)** is a weight-space quantity — the norm of
 the difference between a tensor and its quantized reconstruction, relative
-to the tensor's norm — used only as a corruption gate, because §4.3 shows
+to the tensor's norm — used only as a corruption check, because §4.3 shows
 it does not rank output quality.
 
-**One instrument for every model.** Each teacher — the bf16 original — is
-run once over three fixed corpora (prose, public code and literary text),
-12,288 tokens each in chunks of 512, and its top-64 log-probabilities at
-every position are cached. The 397B teacher does not fit in memory on any
-machine we have, so it is streamed layer by layer from disk for this one
-pass. Every quantized build is then scored against those caches: KL summed
-over the teacher's top-64 tokens, and top-1 agreement, at each of the same
-36,864 positions. The top 64 tokens hold 96.7–99.95% of the teacher's
-probability mass, depending on model and corpus. Because every build of a model sees the same positions against the
-same cached teacher, two builds are compared *paired*: a per-position
-difference, reported with its paired t statistic. Scoring is deterministic
+**One instrument for every model.** Each unquantized bf16 model — the
+*teacher* — is run once over three fixed corpora (prose, public code and
+literary text), 12,288 tokens each in chunks of 512, and its full
+log-probability distribution over the 248,320-token vocabulary is cached at
+every position. The 397B teacher does not fit in memory on any machine we
+have, so it is streamed layer by layer from disk for this one pass. Every
+quantized build is then scored against those caches: exact KL over the full
+vocabulary, and top-1 agreement, at each of the same 36,864 positions.
+Because every build of a model sees the same positions against the same
+cached teacher, two builds are compared *paired*: a per-position difference,
+reported with its paired t statistic. We call a difference significant at
+|t| > 2. Positions within a chunk are correlated, so this t overstates
+confidence; the noise floors below are the stricter reference, and a margin
+is claimed only where it also clearly exceeds the floor for its model. Scoring is deterministic
 — an artifact reproduces its KL to every printed digit — and one scoring
 path and batching is used throughout, because some architectures shift
 log-likelihoods measurably with batch composition.
@@ -301,19 +296,14 @@ paired on identical positions.
 
 We do not rank by perplexity. It measures a model against the text rather
 than against the model it approximates, and it aggregates away offsetting
-errors: on several builds in our own work it moved in the opposite
-direction to KL. The gemma-4 family, where we observed similar size-quality
-behavior, is excluded throughout: raw likelihood is invalid on those
-instruction-tuned models as a property of the model itself, and no claim
-here rests on an instrument that cannot reproduce its own numbers.
+errors: on the 27B it ranks the affine builds in the wrong order (§3.3).
 
 **Noise floors.** Two fits of identical geometry differ, because k-means
-initialization draws a random subsample. We measure that spread with an
-unseeded twin: a second, independent fit of a published geometry, scored
-paired against the original. Three twins, one per model, each a fresh fit
-at a published geometry with the current fitter and a different seed, land
-within 0.1–5.8% of the original on every corpus, and no difference exceeds
-|t| = 2.5:
+initialization draws a random subsample. We measure that spread with a
+second, independent fit of the same geometry, made with the current fitter
+and a different random initialization and scored paired against the
+original. One such pair per model lands within 0.1–5.8% on every corpus,
+and no difference exceeds |t| = 2.5:
 
 | model | geometry | prose | code | literary |
 |---|---|---|---|---|
@@ -321,16 +311,16 @@ within 0.1–5.8% of the original on every corpus, and no difference exceeds
 | 35B | d2/K1024 | +0.7% (+0.4) | +0.2% (+0.1) | −5.8% (−1.0) |
 | 397B | d4/K128 | +1.4% (+0.9) | +5.2% (+2.4) | −2.7% (−1.0) |
 
-*Original minus twin, full-vocabulary KL, 12,288 paired positions per
+*Original minus second fit, full-vocabulary KL, 12,288 paired positions per
 corpus. The originals keep the fitter version they were built with (§2.2),
 so each floor bounds draw-to-draw and fitter-version spread together.*
 
-Every margin in §3 is read against the floor for its
-geometry. Where a neighboring geometry's floor stands in, the text says so
-and the multiple is read as a lower bound on confidence, not a
-measurement.
+Each floor is a single pair of fits at one geometry per model; §3 reads every
+margin against the floor for its model. Two consequences: a |t| near the
+floors' own maximum of 2.5 is not treated as a difference, and a margin is
+claimed only where it is well outside the few-percent spread above.
 
-The fitters are seeded by default (seed 1234): a fit is reproducible
+The fitter is seeded by default (seed 1234): a fit is reproducible
 bit-for-bit from its recipe and seed. Most artifacts in this paper predate
 that default and are single unseeded draws. Seeding makes an artifact
 reproducible; it does not remove the draw-to-draw spread, which is why the
@@ -379,8 +369,8 @@ positions per corpus against the bf16 teacher (§2.6).
 | **flat d4/K2048** | **VQ-3.1bpw** | 141.7 | 3.07 | 93.0 | 33.3 | 16.6 | 91.7% |
 
 Bold rows are published artifacts, under
-`TheDrainFlorist/Qwen3.5-397B-A17B-<release>`. The d4/K128 rung is a ladder
-point only. The bpw column is measured: text bytes over the model's
+`TheDrainFlorist/Qwen3.5-397B-A17B-<release>`. The d4/K128 build is a ladder
+point only, not a published artifact. The bpw column is measured: text bytes over the model's
 396.35 billion text parameters. Release names identify artifacts and were
 set at release; VQ-2.4bpw measures 2.34 because the correction below
 removed 2.8 GiB from it after it was named. Every bpw figure in the text is
@@ -413,7 +403,7 @@ KL on every corpus; there is no inversion.
 At the top of the ladder the result is parity rather than dominance.
 **d4/K2048 against the 3.5-bit build:** 23.9 GiB smaller; indistinguishable
 on code (+7.3%, t = +0.9) and literary text (−2.2%, t = −0.2), and 6.1% worse
-on prose (t = +2.1, just past the gate), with top-1 agreement 91.7% against
+on prose (t = +2.1, within the range the noise floors reach), with top-1 agreement 91.7% against
 91.8%. The claim there is near-parity at 14% fewer bytes.
 
 The ladder also locates the crossover against the 2.6-bit build. d4/K128,
@@ -423,22 +413,15 @@ second fit of d4/K128 lies within 1.4%, 5.2% and 2.7% of the first on the
 three corpora (§2.6), so each deficit exceeds the draw-to-draw spread. Uniform VQ overtakes this
 affine build between 96.7 and 108.0 GiB, just under 2.4 bits per weight.
 
-These rungs are a demonstration of the method at one geometry per rate,
-not the limit of what vector quantization reaches at these sizes.
-
 **Correction to v4.** The v4 rows for d4/K128, d4/K256, d4/K512 and
-d4/K2048 were measured on artifacts whose expert modules in layers 57–59
-(9 of 180) were affine 3-bit rather than VQ, the result of a layer range
-that stopped three short of the model's 60. Those layers carried more bits
-than the stated geometry, so the v4 numbers were mildly optimistic. All
-rungs above are uniform across layers 0–59; the replacement fits for those 9
-modules were made with the scale-alternating fitter variant (§2.2), the rest
-of each rung with the fitter it shipped with. Removing the stray affine
-layers cost +0.28 (null), +2.32, +4.94 and +12.96 mnats of prose KL at
-d4/K2048, K512, K256 and K128, measured paired on the top-64 instrument in
-use at the time: monotone in the bytes removed and largest
-where headroom is smallest. The v4 row labeled flat d8/K16384 (VQ-2.2bpw)
-was a mixed-geometry build and is withdrawn from this uniform ladder.
+d4/K2048 were measured on builds whose expert modules in layers 57–59 (9 of
+180) were affine 3-bit rather than VQ. All builds above are uniform across
+layers 0–59; the replacement fits for those 9 modules were made with the
+scale-alternating fitter variant (§2.2). The correction changed prose KL by
++0.28 (not significant), +2.32, +4.94 and +12.96 mnats at d4/K2048, K512,
+K256 and K128 on the top-64 KL instrument used in v4. The v4 row labeled
+flat d8/K16384 (VQ-2.2bpw) was a mixed-geometry build and is withdrawn from
+this uniform ladder.
 
 ### 3.3 The 35B MoE and the dense 27B
 
@@ -481,7 +464,7 @@ One asymmetry in these 35B comparisons runs in our favor, and it is not
 visible in the sizes. Every affine comparator here quantizes the MoE
 router — the community 4-bit and 8-bit and our own 6-bit all carry
 quantized gate projections — while our VQ builds leave the routers at
-bf16. The bytes are trivial, 20 MiB or 0.14% of the artifact. But a
+bf16. The bytes are trivial, 40 MiB or 0.26% of the build. But a
 router's output feeds an argmax over experts, so quantizing it can change
 *which* expert runs rather than perturbing an output proportionally, and
 the effect is therefore not bounded by the byte share the way an ordinary
@@ -508,7 +491,7 @@ VQ-5.4bpw lands between q4 and q6 in size. Against the affine frontier
 log-interpolated to its 21.39 GiB it is below the line on all three corpora
 (22.6 against 30.3 prose, 349.6 against 438.6 code, 33.7 against 49.7
 literary), and its independent second fit scores within 0.7%, 0.2% and 5.8%
-of it (§2.6). One rung higher the sign flips: d2/K4096 is 1.1 GiB smaller
+of it (§2.6). One geometry higher the sign flips: d2/K4096 is 1.1 GiB smaller
 than q6 and worse on every corpus — prose 2.2× (t = +28.6), code +38%
 (t = +7.3), literary 2.0× (t = +7.2). (That two "6-bit" artifacts differ by
 1.1 GiB is expected: a nominal rate names the code width on the quantized
@@ -531,7 +514,7 @@ model sits between 5.3 and 6.2 bits per weight.**
 Bold rows are published artifacts, under
 `TheDrainFlorist/Qwen3.8-27B-<release>`.
 
-**27B — affine.** Unlike the 397B and 35B comparators, these rungs are our
+**27B — affine.** Unlike the 397B and 35B comparators, these builds are our
 own conversions.
 
 | build | GiB | bpw | prose | code | literary | prose top-1 |
@@ -549,31 +532,31 @@ literary (−9%, t = −9.1) and is 6% worse on prose (t = +2.8). VQ-4.5bpw
 against q4, 0.5 GiB smaller: prose −18% (t = −6.5), code −9% (t = −3.3),
 literary −8% (t = −6.3); VQ-4.8bpw, 0.5 GiB larger: prose −10% (t = −3.4),
 code −29% (t = −10.0), literary −34% (t = −28.8). Above, the picture
-inverts: q6, 2.8 GiB larger than d2/K4096, has 3.5× less prose KL, 6.1× less
+inverts: q6, 2.8 GiB larger than d2/K4096, has 3.5× less prose KL, 6.0× less
 code and 5.9× less literary; and d2/K4096 lies above the affine line
 log-interpolated to its size on all three corpora. **The dense crossover is
 bracketed at 4.7–5.6 bpw.**
 
 One instrument note: on this instruction-tuned model, prose perplexity ranks
-the affine rungs wrongly. q4 scores 5.683, *below* q6 (5.965) and q8 (5.947),
-while its KL is six times theirs and its top-1 agreement 6–8 points lower.
+the affine builds wrongly. q4 scores 5.683, *below* q6 (5.965) and q8 (5.947),
+while its KL is 6× that of q6 and 20× that of q8, and its top-1 agreement
+6–8 points lower.
 Perplexity cannot rank quantizations here; divergence and agreement can.
 
 ### 3.4 Size targeting
 
-The size models' out-of-sample record: at 397B, six hits and one
-in-band across seven predictions (worst miss 0.4 GiB, best +0.02); on
-the 35B, three consecutive geometry predictions at −0.03%, −0.30% and
-−0.37%; on the dense 27B, three builds across two geometries within
-0.003 GiB. Pricing a build before fitting it works on every model we
-tried it on.
+The size models' out-of-sample record, each prediction made before the build
+existed: at 397B, six of seven predictions within 0.4 GiB (best 0.02 GiB)
+and the seventh within its stated band; on the 35B, three geometry
+predictions at −0.03%, −0.30% and −0.37%; on the dense 27B, three builds
+across two geometries within 0.003 GiB.
 
-Harvest makes size continuously variable between flat rungs: holding the
+Bit harvesting (§2.4) makes size continuously variable between uniform geometries: holding the
 body geometry fixed and reducing K in the shallow layers sheds a predictable
 number of bytes. It is a sizing mechanism. Its effect on quality depends on
 which layers keep the larger codebooks, a question of mixed-geometry
 allocation that is outside the scope of this paper; no quality claim here
-rests on a harvest build. Together with the size model, the capability is:
+rests on a bit-harvested build. Together with the size model, the capability is:
 name a byte budget, price the build, fit it once.
 
 ### 3.5 Runtime performance and kernel support
@@ -583,7 +566,7 @@ decode-and-matmul path that reads codes and codebook directly (per-K
 bit-width extraction in-kernel), a device-memory codebook variant for
 the codebooks that exceed Apple's 32 KB threadgroup memory, and a
 zero-copy view that dispatches byte-aligned unpacked codes through the
-packed kernel (+25–33% prefill, bit-exact). All kernel variants are
+packed kernel (+33% prefill, bit-exact). All kernel variants are
 accepted only on bit-identity with a reference path where both load,
 and on relative error against a float32 reference where only one does.
 
@@ -600,51 +583,42 @@ runs each, in one session on an otherwise idle machine:
 *Peak memory 20.6 GB (VQ) and 21.4 GB (affine). Apple M3 Ultra.*
 
 VQ costs about a quarter of decode throughput and a seventh of prefill
-throughput at this prompt length, against a build with 55% more divergence on
+throughput at this prompt length, against a build with more than twice the divergence on
 prose (§3.3). Shorter prompts were not measured at n ≥ 3 and are not
 characterized here. Speed numbers are same-session ratios between arms: we
 found decode throughput at ~100 GiB residency to be bimodal on our hardware
-(the same artifact varying 40% run to run, with swap, thermals and storage
-path each ruled out by measurement), and we therefore publish no absolute
-throughput figures. Three further speed levers were tested and closed (fused
-row-gather, byte-aligned packing, native-bf16 kernels), each with a measured
-null or negative effect in the lab record; distillation-based refinement at
-397B/2-bit was falsified outright.
+(the same build varying 40% run to run), and we therefore publish no
+absolute throughput figures. Three further kernel changes — fused
+row-gather, byte-aligned packing and native-bf16 kernels — each gave no
+speedup or a slowdown.
 
 ## 4. Negative results
 
-This section reports what did not work, what cannot be reached, and
-what those boundaries imply. They are results, not caveats: each was
-measured, and several bound the claims of §3.
+This section reports what did not work and what cannot be reached. Each
+boundary was measured, and several bound the claims of §3.
 
 ### 4.1 The 8-bit ceiling
 
-At 8 bits affine is essentially lossless: 7.4 mnats on the 35B, and
-1.25 on the 27B — measured on a uniform 8-bit conversion with no
-per-module overrides (27.48 GiB), built the same way as every other
-rung on its ladder. Extrapolating the 27B's measured slope to that
-target puts 8-bit-class quality at roughly 27 bits per weight.
+At 8 bits affine is essentially lossless: prose KL 5.7 mnats on the 35B
+(34.30 GiB) and 3.5 on the 27B (26.62 GiB), both uniform 8-bit conversions
+with no per-module overrides (§3.3).
 
-Nothing we measured approaches that ceiling under the byte budgets where
-VQ wins. On the 27B, the ladder's own slope says why: divergence falls
-by x0.673 per added bit near 4.5 bpw but only x0.868 per bit by 6.0, so
-the measured slope has to be carried a very long way to reach a
-near-lossless target. The 35B agrees from the other side: a 6-bit affine
-build inside a 28 GiB budget misses 8-bit quality by 1.8x, and our
-5-bit build misses it by 3.8x. On both models, 8-bit quality costs 8-bit bytes, for affine and for
-VQ alike.
+Nothing below 8 bits approaches that, for either method. On the 35B, q6
+(26.23 GiB) has 1.7× the prose KL of q8 and VQ-5.4bpw (21.39 GiB) 4.0×; on
+the 27B, q6 (20.36 GiB) has 3.1× and d2/K4096 (17.58 GiB) 11×. On both
+models, 8-bit quality costs 8-bit bytes, for affine and for VQ alike.
 
 ### 4.2 Where the geometry axes stop paying
 
 Dimension pays at matched rate (§3.1): d4 over d2 by 13–17% at 2.0 bpw and
-4–14% at 3.0, depending on the corpus.
+3–14% at 3.0, depending on the corpus.
 Whether it still pays at d4's 4.0 bpw ceiling is untested. The only d4
 geometry that reaches that rate uses a 65,536-entry codebook: a single fit
 of it on the 27B takes about 37 hours, its 512 KB codebook is sixteen
 times the 32 KB threadgroup limit and so could never use the fast decode
 path, and codebook size is already in steep diminishing returns well below
-it (next). We judged the measurement not worth its cost, and the dimension
-advantage is not established above 3 bpw. Codebook size pays with steep
+it (next). It was not run, and the dimension advantage is not established
+above 3 bpw. Codebook size pays with steep
 diminishing returns: on the 35B, flat d4 at K2048, K8192 and K16384
 scores 76.6, 46.1 and 39.8 mnats of prose KL — quadrupling K removes 40%
 of the divergence, and doubling it again removes a further 14% for 0.9 GiB.
@@ -693,28 +667,21 @@ geometry lands within 0.1–5.8% of the first on every corpus (|t| ≤ 2.5; §2.
 
 ## 5. Measurement discipline
 
-The results above were produced under recording rules adopted early in
-the project, after mechanical checks — not inspection — caught each of
-the first wrong numbers. They are stated because the tables cannot be
-interpreted without them, and because several candidate claims from
-earlier drafts did not survive them.
+The tables follow four recording rules.
 
-Predictions and their reading grids are written before fitting or
-scoring, and falsified predictions are recorded as falsified. A margin
-is quoted as a multiple of the measured fit-to-fit floor for its own
-geometry (§2.6); where a neighboring geometry's floor stands in, that
-is disclosed and the multiple is read as a lower bound; a margin inside
-its floor is noise regardless of direction. Applying this rule
-retrospectively retired three of this paper's own candidate claims.
+A margin is read against the measured fit-to-fit floor for its model
+(§2.6); a margin inside the floor is noise regardless of direction.
 
-A comparison row names the artifact and instrument that produced it. A
-number older than the artifact it faces is re-measured rather than
-cited; a row's size and quality come from the same artifact, with size
-as packed bytes on disk. Artifacts are gated before scoring, on a
-machine other than the one that fit them, and a gate's verdict is
-trusted only after the gate has failed on a known-bad input and passed
-on a known-good one. No artifact is treated as releasable until it has
-generated tokens through the exact runtime it ships with.
+A comparison row names the build and the instrument that produced it. Every
+number in §3–4 comes from one instrument (full-vocabulary KL on the same
+cached teacher), and a row's size and quality come from the same build, with
+size as text bytes on disk.
+
+Each automated check was validated on a known-bad and a known-good input
+before its verdicts were used.
+
+No build is treated as releasable until it has generated tokens through the
+exact runtime it ships with.
 
 A published artifact is identified by its pinned Hugging Face revision.
 Builds made since September 2026 also carry a build record naming the code
@@ -728,17 +695,15 @@ like that cannot identify what a file contains, so any stored property
 that carries a claim is verified against the bytes themselves — a tensor compared with its claimed base, a hash
 recomputed, a flag traced to the code that reads it.
 
-None of this is novel; it is ordinary verification discipline, applied
-in a setting where the wrong numbers are the plausible ones.
-
 ## 6. Limitations
 
 **Coverage.** Three models from one vendor family, only one of them
 dense; a second dense model would test whether the 27B generalizes.
 (The gemma-4 family showed similar behavior but cannot be scored
-deterministically and is excluded.) Single software stack (MLX/Metal);
-the kernel conclusions — threadgroup capacity, the d8 decode tax — are
-specific to Apple Silicon.
+deterministically and is excluded.) Single software stack (MLX/Metal)
+and one hardware platform; the kernel conclusions, including threadgroup
+capacity, are specific to Apple Silicon. Quality is measured by KL to the
+teacher on three corpora, not by downstream task benchmarks.
 
 **Unmeasured regions.** The VQ/affine crossover is bracketed on the
 35B and the 27B, but not on the 397B: affine builds above 3.5 bits
@@ -746,19 +711,20 @@ exist or could be produced for that model, but at ~225 GB for a 4-bit
 build and ~320 GB for 6-bit they exceed the memory of any machine
 available to this project, so whether the same crossover band holds at
 that scale is untested. Whether dimension still pays at d4's 4.0 bpw
-ceiling is also untested, for the cost reasons given in §4.2. Harvest has been built only on the MoE models.
+ceiling is also untested, for the cost reasons given in §4.2. Bit harvesting
+has been built only on the MoE models.
 
-**Instrument limits.** The 397B noise floors rest on two draws per
-geometry (0.0256 prose and ~0.0178 code at d4/K256; 0.0056 prose and 0.0104 code at
-d4/K2048 — the floor narrows substantially as the codebook grows). The 35B floor bounds initialization variance only
-(same box, same geometry). Perplexity cannot rank quantizations on the
-instruction-tuned 27B (§3.3). Decode throughput was bimodal at ~100
-GiB residency on our 128 GB machine and is uncharacterized at other
-sizes; we publish ratios within a session, never absolutes.
+**Instrument limits.** Each model's noise floor is a single pair of fits at
+one geometry (§2.6), so the floor itself has no variance estimate, and the
+paired t statistic overstates confidence because positions within a chunk
+are correlated. Perplexity cannot rank quantizations on the
+instruction-tuned 27B (§3.3). Decode throughput was bimodal at ~100 GiB
+residency on our hardware and is uncharacterized at other sizes; we publish
+ratios within a session, never absolutes. Speed was measured on one pair of
+builds at one prompt length (§3.5).
 
-**Costs we pay.** Prefill remains ~0.5x affine at 35B scale even after
-the shipped lever. Codebooks beyond threadgroup capacity pay ~19%
-decode.
+**Costs.** On the 35B, VQ decode runs at 0.77× and prefill at 0.86× the
+throughput of a same-size affine build (§3.5).
 
 ## 7. Reproducibility
 
@@ -766,26 +732,22 @@ All artifacts are published under `TheDrainFlorist` on Hugging Face
 with their VQ runtimes bundled in-checkpoint: they load in stock mlx-lm,
 unpatched, with `trust_remote_code=True`. Where a repository's weights were upgraded in place, the
 previous build remains fetchable at its pinned revision and the card
-labels which weights produced which benchmark rows. Most of the fits behind them are
-unseeded single draws (§2.6), so a published build
-is reproducible in recipe and geometry but not bit-for-bit; that is precisely why every margin in this
-paper is quoted against a measured fit-to-fit floor rather than against
-a repeated build. Both fitters now seed by default.
+labels which weights produced which benchmark rows. Most published fits are
+unseeded single draws (§2.2): reproducible in recipe and geometry, not
+bit-for-bit. Every build made for this paper is seeded.
 
-Which copy of a runtime executes is environment-dependent, so
-runtime-dependent claims name the resolved, executing copy rather than
-a file believed to be loaded. The bundled runtimes here are verified
-three ways: hash-compared against the runtime that produced the
-published scores, exercised as the executing copy in a stock
-environment by generating through the shipping kernel, and passed
-kernel acceptance as the unit under test lifted from the artifact
-itself. Fit, pack, verify, gate and scoring scripts are published in the
+Every VQ score in this paper was produced with the v2 runtime profile, in
+which the VQ kernels take and return bf16. Published artifacts carry either
+this profile or the earlier v1.5 profile, which differs only in those two
+input/output settings; on the rows rescored both ways, the two profiles
+agree within 2% KL. Each scored copy generated tokens through its bundled
+runtime before scoring. Fit, pack, verification and scoring tools are published in the
 project repository, **VQLab**
 ([github.com/noahzelezny/VQLab](https://github.com/noahzelezny/VQLab),
-Apache-2.0). All three referee corpora ship with it: a WikiText-2 prose excerpt,
+Apache-2.0). All three evaluation corpora ship with it: a WikiText-2 prose excerpt,
 a public code corpus of six MLX source files, and a literary corpus of
 excerpts from ten public-domain works (of which the scored span is the
-first), each with a manifest recording its source, license and exact
+first), each with a record of its source, license and exact
 contents. Nothing was fit on
 data, so there is no train/eval overlap to disclose.
 
@@ -793,26 +755,26 @@ data, so there is no train/eval overlap to disclose.
 
 [1] E. Frantar, S. Ashkboos, T. Hoefler, D. Alistarh. *GPTQ: Accurate
 Post-Training Quantization for Generative Pre-trained Transformers.*
-[arXiv:2210.17323](https://arxiv.org/abs/2210.17323), 2022.
+ICLR 2023. [arXiv:2210.17323](https://arxiv.org/abs/2210.17323).
 
 [2] J. Lin, J. Tang, H. Tang, S. Yang, W.-M. Chen, W.-C. Wang, G. Xiao,
 X. Dang, C. Gan, S. Han. *AWQ: Activation-aware Weight Quantization for
-On-Device LLM Compression and Acceleration.*
-[arXiv:2306.00978](https://arxiv.org/abs/2306.00978), 2023.
+On-Device LLM Compression and Acceleration.* MLSys 2024.
+[arXiv:2306.00978](https://arxiv.org/abs/2306.00978).
 
 [3] M. van Baalen, A. Kuzmin, I. Koryakovskiy, M. Nagel, P. Couperus,
 C. Bastoul, E. Mahurin, T. Blankevoort, P. Whatmough. *GPTVQ: The
-Blessing of Dimensionality for LLM Quantization.*
-[arXiv:2402.15319](https://arxiv.org/abs/2402.15319), 2024.
+Blessing of Dimensionality for LLM Quantization.* 2024.
+[arXiv:2402.15319](https://arxiv.org/abs/2402.15319).
 
 [4] V. Egiazarian, A. Panferov, D. Kuznedelev, E. Frantar, A. Babenko,
 D. Alistarh. *Extreme Compression of Large Language Models via Additive
-Quantization.* ICML 2024;
+Quantization.* ICML 2024.
 [arXiv:2401.06118](https://arxiv.org/abs/2401.06118).
 
 [5] A. Tseng, J. Chee, Q. Sun, V. Kuleshov, C. De Sa. *QuIP#: Even
 Better LLM Quantization with Hadamard Incoherence and Lattice
-Codebooks.* [arXiv:2402.04396](https://arxiv.org/abs/2402.04396), 2024.
+Codebooks.* ICML 2024. [arXiv:2402.04396](https://arxiv.org/abs/2402.04396).
 
 [6] S. Lloyd. *Least Squares Quantization in PCM.* IEEE Transactions on
 Information Theory 28(2):129–137, 1982.
@@ -822,12 +784,32 @@ Neighbor Search.* IEEE Transactions on Pattern Analysis and Machine
 Intelligence 33(1):117–128, 2011.
 
 [8] A. Hannun, J. Digani, A. Katharopoulos, R. Collobert. *MLX:
-Efficient and Flexible Machine Learning on Apple Silicon.*
-[github.com/ml-explore/mlx](https://github.com/ml-explore/mlx), 2023.
+Efficient and Flexible Machine Learning on Apple Silicon.* Software, 2023.
+[github.com/ml-explore/mlx](https://github.com/ml-explore/mlx).
 
 [9] aquaman164. *Qwen3.6-35B-A3B-MLX-VQ* (2.4, 2.6 and 3.4 bpw builds).
-Hugging Face, 2026-07-12;
+Software, Hugging Face, 2026.
 [huggingface.co/aquaman164](https://huggingface.co/aquaman164).
+
+[10] S. Han, H. Mao, W. J. Dally. *Deep Compression: Compressing Deep
+Neural Networks with Pruning, Trained Quantization and Huffman Coding.*
+ICLR 2016. [arXiv:1510.00149](https://arxiv.org/abs/1510.00149).
+
+[11] S. Kim, C. Hooper, A. Gholami, Z. Dong, X. Li, S. Shen, M. W. Mahoney,
+K. Keutzer. *SqueezeLLM: Dense-and-Sparse Quantization.* ICML 2024.
+[arXiv:2306.07629](https://arxiv.org/abs/2306.07629).
+
+[12] Y. Liu, J. Wen, Y. Wang, S. Ye, L. L. Zhang, T. Cao, C. Li, M. Yang.
+*VPTQ: Extreme Low-bit Vector Post-Training Quantization for Large Language
+Models.* EMNLP 2024. [arXiv:2409.17066](https://arxiv.org/abs/2409.17066).
+
+[13] A. Tseng, Q. Sun, D. Hou, C. De Sa. *QTIP: Quantization with Trellises
+and Incoherence Processing.* NeurIPS 2024.
+[arXiv:2406.11235](https://arxiv.org/abs/2406.11235).
+
+[14] H. Badri, A. Shaji. *Half-Quadratic Quantization of Large Machine
+Learning Models.* Technical report, 2023.
+[mobiusml.github.io/hqq_blog](https://mobiusml.github.io/hqq_blog/).
 
 ## Acknowledgments
 
