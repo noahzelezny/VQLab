@@ -10,6 +10,7 @@ A bf16 teacher (on the HDD, never re-downloaded), a family, a geometry (d, K) or
 A new directory (never in place) carrying `vqlab_provenance.json`: the fitter settings, seed, inputs and per-module origin. `geo-build` also keeps `origins.json` in its parts dir.
 
 ## Rules that bite
+- `vqlab reselect calibrate|apply`: G-aware code re-selection (F67-F75) on a fixed codebook, block-diagonal Gram from self-generated text. F78 rejected it under the old ppl gate; it is re-tested under the F118 KL gate, ppl printed with its sign. Never filed in the fit store (its codes are not a k-means fit).
 - **How a fit uses its codebook**: `vqlab fits census` (exact per-entry counts from the codes, cached in `<store>/census.jsonl`): dead entries, entropy, zero-scale groups (the teacher's near-zero rows).
 - **Look in the fit store first**: `vqlab fits list --family F --teacher T --layers A-B --geom dD-KK`. `geo-build --pool` reuses matches automatically. Every fitter files what it fits (`core/fitstore.put`).
 - Seeded by default (1234). `--seed -1` is the only way to get a random draw, and the build record says so.
