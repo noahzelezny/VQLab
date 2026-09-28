@@ -41,21 +41,19 @@ below approximately 5 bits per weight, the data-free VQ builds
 outperform the affine builds.** On the 397B model, a 2.4-bit-per-weight
 VQ build is 12.6 GiB smaller than the leading community build — a
 mixed-precision artifact at 2.6 bits per weight — and diverges
-less from the full-precision model on all three corpora (prose −31%, code
+less from the full-precision model on all three corpora (prose −30%, code
 −11%, literary −44%); a 2.6-bit VQ build, 1.4 GiB smaller than the same
 comparator, halves its prose divergence.
-<!-- TODO(v5): 35B and 27B sentences below still quote the v4 single-corpus
-KL. Rewrite from the 3-corpus 12288 rescore before release. -->
-On the 35B model, a 3.5-bit VQ build
-reaches 47.5 millinats at 16.6 GiB, where the community 4-bit affine
-build measures 78.6 millinats — about 31 millinats more — at 19.0 GiB. On the dense 27B, two VQ builds straddle the 4-bit
-affine conversion's size: the smaller (14.5 GiB) beats it by 12% KL
-divergence while being 0.5 GiB smaller, and the larger (15.5 GiB, 3.3%
-larger) beats it by 28%. The advantage has a measured boundary: on both architectures the
-affine frontier overtakes VQ in the 4.5-to-6 bit range — bracketed at
-4.5–6.0 bpw on the dense model and 5.0–6.0 on the MoE — and at 8
-bits affine quantization is essentially lossless, leaving nothing to
-improve upon. VQ's regime is the low-bit range — which is precisely the
+On the 35B model, a 3.8-bit VQ build is 3.3 GiB smaller than
+the 4-bit affine build and diverges less on prose (−30%) and code (−34%),
+with literary text a tie; a 4.4-bit VQ build, 0.5 GiB smaller than the same
+comparator, halves its divergence on all three corpora. On the dense 27B, two
+VQ builds straddle the 4-bit affine build's size: the one 0.5 GiB smaller
+beats it on every corpus (prose −18%, code −9%, literary −8%), and the one
+0.5 GiB larger by 10–34%. The advantage has a measured boundary: the affine
+frontier overtakes VQ between about 4.5 and 6 bits per weight — bracketed at
+4.7–5.6 on the dense model and 5.3–6.2 on the MoE — and at 8 bits affine
+quantization is essentially lossless, leaving nothing to improve upon. VQ's regime is the low-bit range — which is precisely the
 range in which large models fit on the hardware most people have.
 **Second, model size becomes continuously tunable**: a two-coefficient
 size model predicts an artifact's packed size to within a few tenths of
@@ -65,8 +63,9 @@ a bit-harvesting technique reaches sizes between codebook steps. **Third, weight
 reconstruction error — the statistic most quantization pipelines
 optimize and gate on — does not rank output quality in this regime.** A
 fitter change that improves precisely the reconstruction statistic
-identified as decisive moves output KL in opposite directions by corpus at
-identical bytes (code −10%, literary +60%). Only evaluation of the assembled
+identified as decisive, at identical bytes, degrades literary text by
+35–60% on both MoE models while leaving code unchanged on one and improving it
+10% on the other. Only evaluation of the assembled
 model ranks artifacts.
 
 Comparable behavior was observed on the gemma-4 model family, which is
@@ -292,9 +291,22 @@ here rests on an instrument that cannot reproduce its own numbers.
 **Noise floors.** Two fits of identical geometry differ, because k-means
 initialization draws a random subsample. We measure that spread with an
 unseeded twin: a second, independent fit of a published geometry, scored
-paired against the original. <!-- TODO(v5): floor values from the unseeded
-twins — 27B d2/K256 and 35B d2/K1024 (running now), 397B at a cheap
-geometry. --> Every margin in §3 is read against the floor for its
+paired against the original. Three twins, one per model, each a fresh fit
+at a published geometry with the current fitter and a different seed, land
+within 0.1–5.8% of the original on every corpus, and no difference exceeds
+|t| = 2.5:
+
+| model | geometry | prose | code | literary |
+|---|---|---|---|---|
+| 27B | d2/K256 | +0.1% (t +0.0) | +2.3% (+0.8) | +3.4% (+2.5) |
+| 35B | d2/K1024 | +0.7% (+0.4) | +0.2% (+0.1) | −5.8% (−1.0) |
+| 397B | d4/K128 | +1.4% (+0.9) | +5.2% (+2.4) | −2.7% (−1.0) |
+
+*Original minus twin, full-vocabulary KL, 12,288 paired positions per
+corpus. The originals keep the fitter version they were built with (§2.2),
+so each floor bounds draw-to-draw and fitter-version spread together.*
+
+Every margin in §3 is read against the floor for its
 geometry. Where a neighbouring geometry's floor stands in, the text says so
 and the multiple is read as a lower bound on confidence, not a
 measurement.
@@ -311,16 +323,15 @@ floors exist and why no margin is read without one.
 
 Rate is log2(K)/d, so the same bit rate is reachable with small vectors
 and small codebooks or large vectors and large codebooks. Measured at
-matched rate, exact twins within megabytes of each other:
+matched code rate, builds of byte-identical size (d4 minus d2, negative =
+d4 better):
 
-| rate | pair | result |
-|---|---|---|
-| 2.00 bpw (35B) | d4/K256 vs d2/K16 | d4 wins by 12.2% KL |
-| 3.00 bpw (27B) | d4/K4096 vs d2/K64 | d4 wins by 8.6% KL |
-| 1.75 bpw (397B) | d8/K16384 vs d4/K128 | d8 wins prose, 4.4x floor; code +0.0260 is 1.5x and does not clear the bar |
+| code rate | pair | prose | code | literary |
+|---|---|---|---|---|
+| 2.00 bpw (35B) | d4/K256 vs d2/K16 | −14.6% (t −10.2) | −16.7% (−19.7) | −13.0% (−8.1) |
+| 3.00 bpw (27B) | d4/K4096 vs d2/K64 | −3.5% (−2.2) | −14.2% (−5.1) | −10.7% (−9.5) |
 
-Dimension pays at matched rate — consistently, and modestly, with the
-margin shrinking as the rate rises. It also has costs. d4 has a hard
+Dimension pays at matched rate on every corpus of both models, by 3–17%. It also has costs. d4 has a hard
 rate ceiling of 4.0 bpw (16-bit indices over 4 weights, even at a
 65,536-entry codebook), so the high bands belong to d2. And large
 codebooks outgrow the GPU's fast on-chip memory: Apple's threadgroup
@@ -344,10 +355,10 @@ positions per corpus against the bf16 teacher (§2.6).
 
 | build | release | GiB | bpw | prose | code | literary | prose top-1 |
 |---|---|---|---|---|---|---|---|
-| flat d4/K128 | — | 96.7 | 2.10 | 353.6 | 127.1 | 277.0 | 82.2% |
-| **flat d4/K256** | **VQ-2.4bpw** | 108.0 | 2.34 | 232.8 | 89.0 | 134.1 | 86.2% |
-| **flat d4/K512** | **VQ-2.6bpw** | 119.2 | 2.58 | 166.3 | 58.9 | 60.5 | 88.5% |
-| **flat d4/K2048** | **VQ-3.1bpw** | 141.7 | 3.07 | 92.7 | 32.9 | 16.3 | 91.7% |
+| flat d4/K128 | — | 96.7 | 2.10 | 354.4 | 127.8 | 275.0 | 82.2% |
+| **flat d4/K256** | **VQ-2.4bpw** | 108.0 | 2.34 | 232.7 | 89.0 | 134.1 | 86.4% |
+| **flat d4/K512** | **VQ-2.6bpw** | 119.2 | 2.58 | 166.1 | 57.8 | 60.4 | 88.5% |
+| **flat d4/K2048** | **VQ-3.1bpw** | 141.7 | 3.07 | 93.0 | 33.3 | 16.6 | 91.7% |
 
 Bold rows are published artifacts, under
 `TheDrainFlorist/Qwen3.5-397B-A17B-<release>`. The d4/K128 rung is a ladder
@@ -377,22 +388,21 @@ because the VQ build is smaller and better at once. **d4/K256 against the
 2.6-bit build:** 12.6 GiB smaller, with less divergence on every corpus —
 prose −30% (paired t = −17.1), code −10% (t = −3.8), literary −44%
 (t = −14.2). **d4/K512 against the same build:** 1.4 GiB smaller, prose
-−50% (t = −28.2), code −41% (t = −14.7), literary −75% (t = −25.4). Each t
+−50% (t = −28.2), code −42% (t = −14.0), literary −75% (t = −25.5). Each t
 is paired over the same 12,288 positions (§2.6). Top-1 agreement moves with
 KL on every corpus; there is no inversion.
 
 At the top of the ladder the result is parity rather than dominance.
-**d4/K2048 against the 3.5-bit build:** 23.9 GiB smaller, and within 6% on
-every corpus — prose +5.8% (t = +2.0, at the edge of the gate), code +5.8%
-(t = +0.8) and literary −3.7% (t = −0.3), with top-1 agreement 91.7%
-against 91.8%. The claim there is matching quality at 14% fewer bytes.
+**d4/K2048 against the 3.5-bit build:** 23.9 GiB smaller; indistinguishable
+on code (+7.3%, t = +0.9) and literary text (−2.2%, t = −0.2), and 6.1% worse
+on prose (t = +2.1, just past the gate), with top-1 agreement 91.7% against
+91.8%. The claim there is near-parity at 14% fewer bytes.
 
 The ladder also locates the crossover against the 2.6-bit build. d4/K128,
 23.9 GiB smaller than it, is worse on all three corpora: prose +6%
-(t = +3.2), code +28% (t = +9.0), literary +15% (t = +4.1). A second,
-independent draw of d4/K128 lands 3–7% better than the first (§2.6), so
-its prose deficit is within about twice the draw-to-draw spread; the code
-and literary deficits hold for both draws. Uniform VQ overtakes this
+(t = +3.3), code +29% (t = +9.2), literary +14% (t = +4.0). An independent
+second fit of d4/K128 lies within 1.4%, 5.2% and 2.7% of the first on the
+three corpora (§2.6), so each deficit exceeds the draw-to-draw spread. Uniform VQ overtakes this
 affine build between 96.7 and 108.0 GiB, just under 2.4 bits per weight.
 
 These rungs are a demonstration of the method at one geometry per rate,
@@ -403,7 +413,9 @@ d4/K2048 were measured on artifacts whose expert modules in layers 57–59
 (9 of 180) were affine 3-bit rather than VQ, the result of a layer range
 that stopped three short of the model's 60. Those layers carried more bits
 than the stated geometry, so the v4 numbers were mildly optimistic. All
-rungs above are uniform across layers 0–59. Removing the stray affine
+rungs above are uniform across layers 0–59; the replacement fits for those 9
+modules were made with the scale-alternating fitter variant (§2.2), the rest
+of each rung with the fitter it shipped with. Removing the stray affine
 layers cost +0.28 (null), +2.32, +4.94 and +12.96 mnats of prose KL at
 d4/K2048, K512, K256 and K128, measured paired on the top-64 instrument in
 use at the time: monotone in the bytes removed and largest
@@ -414,29 +426,38 @@ was a mixed-geometry build and is withdrawn from this uniform ladder.
 
 ![35B and 27B ladders](fig_35b_27b.png)
 
-**35B — ours (VQ):**
+Sizes, bpw and KL are on the same basis as §3.2: text weights, measured bits
+per weight over 34.66B (35B) and 26.90B (27B) text parameters, and
+full-vocabulary KL in mnats over 12,288 paired positions per corpus.
 
-| build | release | GiB | KL mnats | top-1 |
-|---|---|---|---|---|
-| **d4/K8192** | **VQ-3.8bpw** | 15.67 | 53.02 | 89.55% |
-| d4/K16384 | — | 16.61 | 47.54 | 89.81% |
-| d2/K256 | — | 18.48 | 36.86 | 90.92% |
-| **d2/K1024** | **VQ-5.4bpw** | 22.23 | 28.14 | 92.22% |
-| d2/K4096 | — | 25.98 | 25.50 | 92.52% |
+**35B — ours (VQ, uniform geometry across all 40 layers):**
+
+| build | release | GiB | bpw | prose | code | literary | prose top-1 |
+|---|---|---|---|---|---|---|---|
+| d2/K16 | — | 10.14 | 2.51 | 231.9 | 1283.8 | 1095.8 | 81.0% |
+| **d4/K2048** | **VQ-3.4bpw** | 12.96 | 3.21 | 76.6 | 529.1 | 208.0 | 89.4% |
+| **d4/K8192** | **VQ-3.8bpw** | 14.84 | 3.68 | 46.1 | 430.8 | 101.9 | 91.4% |
+| d4/K16384 | — | 15.78 | 3.91 | 39.8 | 393.1 | 80.5 | 92.2% |
+| d2/K256 | — | 17.64 | 4.37 | 31.0 | 361.8 | 52.6 | 93.2% |
+| **d2/K1024** | **VQ-5.4bpw** | 21.39 | 5.30 | 22.6 | 349.6 | 33.7 | 94.0% |
+| d2/K4096 | — | 25.15 | 6.23 | 20.8 | 336.4 | 31.7 | 94.2% |
 
 Bold rows are published artifacts, under
-`TheDrainFlorist/Qwen3.6-35B-A3B-<release>`. Two further 35B builds are published but
-do not appear on this flat ladder — a 13.79 GiB d4/K2048 rung below it, and
-an 18.71 GiB tail-weighted build that is not a flat geometry and so is not a
-point on this curve.
+`TheDrainFlorist/Qwen3.6-35B-A3B-<release>`. One further published 35B build,
+VQ-4.6bpw, mixes two geometries (d4/K2048 in the first 10 layers, d2/K512
+after) and is not a point on this uniform ladder.
 
 **35B — affine:**
 
-| build | GiB | KL mnats | top-1 |
-|---|---|---|---|
-| 4-bit (community) | 19.00 | 78.56 | 85.61% |
-| 6-bit (ours) | 27.07 | 13.36 | 94.65% |
-| 8-bit (community) | 35.13 | 7.45 | 96.18% |
+| build | GiB | bpw | prose | code | literary | prose top-1 |
+|---|---|---|---|---|---|---|
+| q3 | 14.14 | 3.50 | 259.8 | 1018.3 | 868.4 | 77.6% |
+| q4 | 18.17 | 4.50 | 65.4 | 647.8 | 105.6 | 88.9% |
+| q6 | 26.23 | 6.50 | 9.5 | 244.4 | 16.0 | 96.1% |
+| q8 | 34.30 | 8.50 | 5.7 | 175.5 | 10.8 | 97.0% |
+
+The q4 and q8 rows are configuration-identical to the mlx-community
+conversions of this model; q3 and q6 are ours, by the same converter.
 
 One asymmetry in these 35B comparisons runs in our favor, and it is not
 visible in the sizes. Every affine comparator here quantizes the MoE
@@ -451,43 +472,43 @@ VQ build with routers forced to 8 bits, re-scored, and we did not run one.
 The 397B comparisons in §3.2 are unaffected — there our builds and both
 comparators keep routers at bf16.
 
-Every 35B size above includes the 333-tensor bf16 vision tower, which the
-community comparators ship and our builds now carry: 0.832 GiB,
-byte-identical across builds, unquantized in all of them. Every row is a
-measured artifact; comparisons here are like-for-like at face value.
-(The 397B in §3.2 sits the other way round: our builds carry a tower its
-comparators lack, which is why that section states an offset rather than
-applying one.)
+Code KL is an order of magnitude higher on the 35B than on the other two
+models, for every quantization including q8. The teacher cache reproduces a
+direct forward pass exactly, and the mean is dominated by a heavy tail of
+positions at which every quantized build routes to different experts than the
+teacher. The orderings reported here hold for the mean, a trimmed mean and
+the median alike.
 
-At the small end VQ dominates: 47.5 mnats at 16.6 GiB against affine's
-78.6 at 19.0 — 39% less divergence in 2.4 GiB fewer bytes. At 5 bits
-per weight the comparison becomes a placement rather than a dominance:
-d2/K1024 lands between two affine rungs, and two independent fits of it
-score 28.14 and 27.93 against 38.7 for the affine frontier
-log-interpolated to the same size — both draws a factor of ~1.4 below
-the line, roughly 50x the draw floor. One rung higher the sign flips: at 6 bpw,
-d2/K4096 is 1.1 GiB smaller than the 6-bit affine build and scores
-1.91x worse — 57x the floor (the d2/K1024 floor, borrowed: no d2/K4096
-floor was measured; in the one case where we measured floors at two K
-on one family, 397B d4, the larger K's floor was 4.6x narrower, so the
-borrow likely understates the multiple), conclusive. (That two "6-bit" artifacts
-differ by 1.1 GiB is expected: a nominal rate names the code width on
-the quantized surface, while total bytes include each method's scale
-overhead and its treatment of the non-expert remainder — which is why
-every comparison in this paper is by measured size, never by nominal
-rate.) **The crossover on this family
-sits between 5.0 and 6.0 bits per weight.**
+At the small end VQ dominates. VQ-3.4bpw against q3: 1.2 GiB smaller, and
+prose −70% (t = −53.6), code −48% (t = −26.7), literary −76% (t = −43.1).
+VQ-3.8bpw against q4: 3.3 GiB smaller, with prose −30% (t = −17.0) and code
+−34% (t = −16.0), and a tie on literary text (−3.5%, t = −0.6). d2/K256
+against q4: 0.5 GiB smaller, and prose −53% (t = −32.5), code −44%
+(t = −18.1), literary −50% (t = −10.8).
+
+VQ-5.4bpw lands between q4 and q6 in size. Against the affine frontier
+log-interpolated to its 21.39 GiB it is below the line on all three corpora
+(22.6 against 30.3 prose, 349.6 against 438.6 code, 33.7 against 49.7
+literary), and its independent second fit scores within 0.7%, 0.2% and 5.8%
+of it (§2.6). One rung higher the sign flips: d2/K4096 is 1.1 GiB smaller
+than q6 and worse on every corpus — prose 2.2× (t = +28.6), code +38%
+(t = +7.3), literary 2.0× (t = +7.2). (That two "6-bit" artifacts differ by
+1.1 GiB is expected: a nominal rate names the code width on the quantized
+surface, while total bytes include each method's scale overhead and its
+treatment of the non-expert remainder — which is why every comparison in this
+paper is by measured size, never by nominal rate.) **The crossover on this
+model sits between 5.3 and 6.2 bits per weight.**
 
 **27B — ours (VQ):**
 
-| build | release | GiB | KL mnats | top-1 | ppl |
-|---|---|---|---|---|---|
-| d4/K256 | — | 10.47 | 325.6 | 76.5% | 6.403 |
-| d4/K1024 | — | 11.47 | 148.5 | 82.5% | 5.525 |
-| **d4/K4096** | **VQ-3.9bpw** | 12.47 | 85.8 | 86.1% | 5.229 |
-| **d2/K256** | **VQ-4.5bpw** | 14.45 | 40.3 | 90.1% | 5.233 |
-| **d2/K512** | **VQ-4.8bpw** | 15.45 | 32.8 | 90.8% | 5.162 |
-| d2/K4096 | — | 18.44 | 26.7 | 91.7% | 5.242 |
+| build | release | GiB | bpw | prose | code | literary | prose top-1 |
+|---|---|---|---|---|---|---|---|
+| d4/K256 | — | 9.61 | 3.07 | 372.8 | 135.4 | 1301.9 | 77.3% |
+| d4/K1024 | — | 10.61 | 3.39 | 204.2 | 68.8 | 879.5 | 83.0% |
+| **d4/K4096** | **VQ-3.9bpw** | 11.61 | 3.71 | 146.6 | 41.2 | 584.3 | 86.0% |
+| **d2/K256** | **VQ-4.5bpw** | 13.60 | 4.34 | 56.3 | 21.5 | 289.2 | 90.9% |
+| **d2/K512** | **VQ-4.8bpw** | 14.59 | 4.66 | 61.8 | 16.9 | 208.1 | 91.1% |
+| d2/K4096 | — | 17.58 | 5.61 | 38.6 | 13.5 | 145.9 | 92.6% |
 
 Bold rows are published artifacts, under
 `TheDrainFlorist/Qwen3.8-27B-<release>`.
@@ -495,29 +516,30 @@ Bold rows are published artifacts, under
 **27B — affine.** Unlike the 397B and 35B comparators, these rungs are our
 own conversions.
 
-| build | GiB | KL mnats | top-1 | ppl |
-|---|---|---|---|---|
-| q2 | 8.69 | 1426.9 | 46.1% | 16.435 |
-| q3 | 11.82 | 187.8 | 79.5% | 5.832 |
-| q4 | 14.95 | 45.8 | 89.8% | 5.206 |
-| q6 | 21.21 | 3.71 | 96.8% | 5.260 |
-| q8 | 27.48 | 1.25 | 98.5% | 5.241 |
+| build | GiB | bpw | prose | code | literary | prose top-1 |
+|---|---|---|---|---|---|---|
+| q2 | 7.83 | 2.50 | 1341.6 | 995.6 | 2649.0 | 51.2% |
+| q3 | 10.96 | 3.50 | 192.4 | 86.3 | 965.1 | 82.3% |
+| q4 | 14.09 | 4.50 | 68.5 | 23.7 | 315.6 | 90.5% |
+| q6 | 20.36 | 6.50 | 10.9 | 2.2 | 24.7 | 96.9% |
+| q8 | 26.62 | 8.50 | 3.5 | 0.6 | 5.0 | 98.5% |
 
-Every 27B size above includes the 333-tensor bf16 vision tower (0.858 GiB),
-grafted onto rungs and comparators alike. The offset is uniform, so
-differences carry over unchanged; ratios do not.
+The recipe is not an MoE phenomenon. VQ-3.9bpw against q3, 0.65 GiB larger:
+prose −24% (t = −12.7), code −52% (t = −22.2), literary −39% (t = −41.9).
+d4/K1024, 0.35 GiB smaller than q3, beats it on code (−20%, t = −8.4) and
+literary (−9%, t = −9.1) and is 6% worse on prose (t = +2.8). VQ-4.5bpw
+against q4, 0.5 GiB smaller: prose −18% (t = −6.5), code −9% (t = −3.3),
+literary −8% (t = −6.3); VQ-4.8bpw, 0.5 GiB larger: prose −10% (t = −3.4),
+code −29% (t = −10.0), literary −34% (t = −28.8). Above, the picture
+inverts: q6, 2.8 GiB larger than d2/K4096, has 3.5× less prose KL, 6.1× less
+code and 5.9× less literary; and d2/K4096 lies above the affine line
+log-interpolated to its size on all three corpora. **The dense crossover is
+bracketed at 4.7–5.6 bpw.**
 
-The recipe is not an MoE phenomenon. Below 4.5 bpw every VQ point sits
-above the affine line at its size: d4/K1024 beats q3 on both metrics at
-0.35 GiB less, and d2/K512 beats q4 by 28.4% KL (6.2x floor) and +1.02
-points top-1 at q4-class size. Above, the picture inverts: q6 beats our
-best 6-bpw rung by 7.2x KL at 2.8 GiB more. **The dense crossover is
-bracketed at 4.5–6.0 bpw — nearly the same band as the MoE.** One
-instrument note: the perplexity column barely moves from q3 upward
-(5.21–5.26 across the affine rungs above q3, a span of 0.054 against a
-0.0447 floor) while KL moves 37x. On this
-instruction-tuned family, perplexity cannot rank quantizations;
-divergence and agreement can.
+One instrument note: on this instruction-tuned model, prose perplexity ranks
+the affine rungs wrongly. q4 scores 5.683, *below* q6 (5.965) and q8 (5.947),
+while its KL is six times theirs and its top-1 agreement 6–8 points lower.
+Perplexity cannot rank quantizations here; divergence and agreement can.
 
 ### 3.4 Size targeting
 
