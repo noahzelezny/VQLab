@@ -295,6 +295,20 @@ def t_where_is(name: str, kind: str = "any", max_depth: int = 3) -> Dict[str, An
         if len(hits) >= 50:
             break
     hits.sort(key=lambda h: h["path"])
+    # Registered teacher caches match on their TEACHER or corpus too, not
+    # only their directory name: "397B" finds q397_prose_12k.
+    try:
+        from vqlab.core.families import teacher_caches
+        known = {h["path"] for h in hits}
+        for c in teacher_caches():
+            if needle in (c["teacher"] + " " + c.get("corpus", "") + " " + c["path"]).lower() \
+                    and c["path"] not in known and kind in ("any", "dir"):
+                hits.append({"path": c["path"], "kind": "teacher_cache",
+                             "teacher": c["teacher"], "corpus": c.get("corpus"),
+                             "tokens": c.get("tokens"), "full_vocab": c.get("full_vocab"),
+                             "exists": Path(c["path"]).is_dir()})
+    except Exception:  # noqa: BLE001  the registry is a bonus, never a failure
+        pass
     if not hits:
         return {"found": False, "status": "NOT_FOUND", "name": name,
                 "roots_searched": [str(r) for r in roots],

@@ -188,3 +188,23 @@ def _load_data_entries():
 
 
 DATA_ENTRIES = _load_data_entries()
+
+
+def teacher_caches(teacher=None):
+    """Registered KL teacher caches: families/<f>/teachers/<t>/caches.json.
+
+    [{family, teacher, corpus, path, tokens, top_k, full_vocab, ...}], for
+    one teacher (its profile name, or a substring of it) or all. A cache
+    built outside the onboard/ layout is findable only if it is registered
+    here -- the 397B's three full-vocab gate caches were reported missing
+    on 2026-09-26 for exactly that reason."""
+    import json
+    out = []
+    for d in _family_dirs():
+        for f in sorted(d.glob("*/teachers/*/caches.json")) if d.is_dir() else ():
+            t = f.parent.name
+            if teacher and teacher.lower() not in t.lower():
+                continue
+            for c in json.loads(f.read_text()).get("caches", []):
+                out.append({"family": f.parents[2].name, "teacher": t, **c})
+    return out
