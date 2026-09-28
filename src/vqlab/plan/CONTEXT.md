@@ -8,6 +8,8 @@ New teacher? `vqlab onboard --teacher <dir>` sequences the whole characterisatio
 `vqlab family-profile --teacher <dir>` FIRST for any teacher: headers only, seconds, writes `families/<family>/teachers/<teacher>/profile.json` (legal geometries, exact bytes, GiB per bit). Then:
 `vqlab price`, `layer-leverage`, `alloc-sweep`, `probe-init`; hard guards `preflight-ram` / `preflight-disk`.
 
+- `vqlab zero-groups <artifact|--fits>` prices a skip-zero-groups format: counts vq_scales==0 and |s|<6.2e-5 groups and the code GiB they hold (397B rungs ~10% of text bytes, concentrated in L0-L4).
+
 ## Outputs
 A recipe or geomap for `fit/`, and printed cost/value curves.
 

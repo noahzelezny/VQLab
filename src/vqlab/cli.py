@@ -22,6 +22,7 @@ COMMANDS = {
     "preflight-ram": ("preflight_ram.py", "refuse resident-memory ops on models bigger than RAM"),
     "preflight-disk": ("preflight_disk.py", "refuse builds whose output volume lacks the space"),
     "price": ("price.py", "price a size-targeted build before fitting it"),
+    "zero-groups": ("zero_groups.py", "headers + vq_scales only, no GPU: code GiB a skip-zero-groups format would save, per layer / per fit"),
     "layer-leverage": ("layer_leverage.py", "per-layer damage probe: which layers earn bigger K"),
     "alloc-sweep": ("alloc_sweep.py", "cost/value curves for per-layer allocation -> the iso-byte frontier"),
     "probe-init": ("probe_init_sweep.py", "per-family k-means++ vs random init sweep"),
@@ -33,6 +34,7 @@ COMMANDS = {
     "fit-dense": ("fit_dense_vq.py", "fit VQ codebooks for a dense MLP trio"),
     "fit-ple": ("fit_ple.py", "fit per-tensor VQ codebooks for PLE ngram banks"),
     "geo-build": ("geo_build.py", "rebuild an artifact under a new per-layer geometry map (diff-style)"),
+    "reselect": ("reselect.py", "activation-aware code re-selection: calibrate (self-gen Gram bank) / apply (new artifact, codes only)"),
     "harvest-parts": ("harvest_parts.py", "extract a shipped rung's VQ fits into a geo-build --reuse parts dir"),
     # assemble/
     "pack": ("pack_artifact.py", "pack MoE codes to true bit-width; recompute sizes"),

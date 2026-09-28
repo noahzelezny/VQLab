@@ -553,6 +553,44 @@ def main(argv=None) -> int:
               step_verdict(0, so, se, {"stdout_regex": "^{"})["ok"])
         check("step_verdict: nonzero exit fails", not step_verdict(3, so, se)["ok"])
 
+        print("[6a36/7] reselect (CPU, synthetic Gram)")
+        import contextlib as _cl, io as _io
+        # reselect refuses the internal disk (AGENTS.md), so its fixture
+        # runs under SSD scratch and is removed after
+        _ssd = pathlib.Path("<scratch>")
+        if _ssd.is_dir():
+            _rroot = _ssd / "selftest" / tmp.name
+            try:
+                with _cl.redirect_stdout(_io.StringIO()):
+                    from vqlab.fit import reselect as _rs
+                    _rout = _rs.selftest(root=_rroot)
+                check("reselect lowers the Gram-weighted error and writes a NEW dir with a build record",
+                      (pathlib.Path(_rout) / "vqlab_provenance.json").exists())
+            finally:
+                shutil.rmtree(_rroot, ignore_errors=True)
+        else:
+            print("  SKIP  reselect fixture -- needs the scratch SSD (never the internal disk)")
+
+        print("[6a37/7] zero-groups (headers + scales only)")
+        import numpy as _np
+        from safetensors.numpy import save_file as _sf
+        from vqlab.plan import zero_groups as _zg
+        _zd = tmp / "zg"
+        _zd.mkdir()
+        _m = "model.layers.0.mlp.switch_mlp.up_proj"
+        _sc = _np.ones((2, 4, 8), _np.float16)
+        _sc[0, :2, :] = 0
+        _sc[1, 0, :3] = _np.float16(1e-6)
+        _sf({_m + ".codebook": _np.zeros((256, 4), _np.float16),
+             _m + ".codes": _np.zeros((2, 4, 8 * 16), _np.uint8), _m + ".vq_scales": _sc},
+            str(_zd / "model.safetensors"))
+        (_zd / "config.json").write_text(json.dumps({"vq_modules": {_m: {
+            "experts": 2, "out": 4, "in": 512, "k": 256, "dim": 4, "group": 64, "pack_bits": 8}}}))
+        _zr = _zg.scan_artifact(_zd)["total"]
+        check("zero-groups counts exact-zero and sub-normal scales and the code bytes they hold",
+              (_zr["groups"], _zr["zero"], _zr["tiny"]) == (64, 16, 19)
+              and _zr["zero_bytes"] == 16 * 16 and _zr["tiny_bytes"] == 19 * 16, str(_zr))
+
         print("[6a35/7] teacher naming by content (VL4.11)")
         from vqlab.core import fitstore as FS
         tfam = tmp / "fam_ident"
