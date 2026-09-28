@@ -673,6 +673,15 @@ def main(argv=None) -> int:
               _bare is _canon is _old and _canon.__name__ == "vqlab.runtime.vq_switch")
         check("reload by the bare name re-executes the module",
               _il.reload(_bare) is _canon and _canon.__name__ == "vqlab.runtime.vq_switch")
+        import re as _re
+        from vqlab import cli as _cli
+        _ctx = (L.SRC.parent / "CONTEXT.md").read_text()
+        _named = set(_re.findall(r"`(?:vqlab )?([a-z][a-z0-9-]*)(?: [^`]*)?`", _ctx))
+        _unrouted = sorted(k for k in _cli.COMMANDS if k not in _named)
+        check("every CLI command is routed in the root CONTEXT.md (agents navigate by it)",
+              not _unrouted, ", ".join(_unrouted))
+        _nodoc = sorted(s_ for s_ in L.STAGES if not (L.PKG / s_ / "CONTEXT.md").exists())
+        check("every stage folder has its CONTEXT.md contract", not _nodoc, ", ".join(_nodoc))
         check("no stage module name collides with stdlib / site-packages",
               not clash, ", ".join(clash))
         p = subprocess.run([PY, "-m", "vqlab.price", "--help"], capture_output=True,

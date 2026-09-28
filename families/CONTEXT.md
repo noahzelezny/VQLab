@@ -6,7 +6,9 @@ Broad to specific: `families/<family>/` for what holds across the family,
 | file | written by | what |
 |---|---|---|
 | `<family>/entry.json` | `vqlab family-profile --write-entry` or by hand | how to READ the family's tensors (src key template, projections). A data entry: no code change. Code entries in `src/vqlab/core/families.py` win on a name clash. |
-| `<family>/teachers/<teacher>/research/` | the lab, by hand | that teacher's ledgers, sweep plans, defect notes and result tables (moved from research/quantlab on 2026-09-25) |
+| `<family>/teachers/<teacher>/research/` | the lab, by hand | WORKING RECORD, not law: that teacher's ledgers, sweep plans, defect notes and raw result tables (moved from research/quantlab on 2026-09-25). Cite FINDINGS, not these. |
+| `<family>/teachers/<teacher>/onboard.json` | `vqlab onboard` | onboarding state: each step's status and result |
+| `<family>/teachers/<teacher>/teacher_caches.json` | by hand when a KL cache is built | registered KL teacher caches (path, corpus, tokens, top-k/full-vocab); read by `where_is` and `onboard` |
 | `<family>/teachers/<teacher>/profile.json` | `vqlab family-profile --teacher <dir>` | header-only census: arch, bytes by class and per layer, GiB per bit, module shape signatures, every legal (d, K) and its exact packed size |
 
 Onboarding a new family: `vqlab family-profile --teacher <dir>`. If it says

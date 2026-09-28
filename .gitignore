@@ -13,3 +13,4 @@ caches/
 
 # agent tooling state — never publish
 .claude/
+.DS_Store

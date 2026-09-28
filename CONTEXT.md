@@ -17,24 +17,29 @@ teacher, writes a new directory (never in place), and leaves a record.
 
 | # | stage | question it answers | commands |
 |---|---|---|---|
-| 1 | **plan** | What will it cost? Where should the bits go? What IS this model? | `family-profile` (headers only: legal (d,K), GiB per bit, module signatures), `price`, `layer-leverage` (rank by the traj_rel JUMP), `alloc-sweep`, `probe-init`, `preflight-ram`, `preflight-disk` |
+| 1 | **plan** | What will it cost? Where should the bits go? What IS this model? | `onboard` (sequence a new teacher: profile -> caches -> determinism -> init sweep), `family-profile` (headers only: legal (d,K), GiB per bit, module signatures), `price`, `layer-leverage` (rank by the traj_rel JUMP), `alloc-sweep`, `probe-init`, `preflight-ram`, `preflight-disk`, `mtp-probe` / `mtp-probe35` |
 | 2 | **fit** | teacher weights -> codebooks + codes | `fits` (find / reuse stored fits FIRST), `fit-moe`, `fit-dense`, `fit-ple`, `geo-build` (refit named modules, keep the rest), `harvest-parts` |
-| 3 | **build** | codes -> an artifact that loads | `pack`, `pack-dense`, `pack-ple`, `splice-ple`, `stream-convert`, `build-dense`, `graft`, `mtp-extract` / `mtp-pack` / `mtp-graft` |
+| 3 | **assemble** | codes -> an artifact that loads | `pack`, `pack-dense`, `pack-ple`, `splice-ple`, `ple-swap`, `unpack-dense`, `reskeleton`, `stream-convert`, `build-dense`, `graft`, `mtp-extract` / `mtp-pack` / `mtp-graft` |
 | 4 | **bundle** | Ship the runtime inside the artifact | `bundle` (MoE), `rebundle-dense`, `patch-arch`, `vision-layout` |
-| 5 | **gate** | Is it loadable, correct, and releasable? | `check`, `check-release`, `check-bundle`, `bundle-accept`, `verify`, `smoke`, `vision-smoke`, `check-comparator`, `selftest`, `validate` (overnight queue) |
-| 6 | **score** | How much damage does it carry? | `kl-ladder` (the release gate), `kl-pair` (pair two runs after the fact, zero GPU), `kl`, `score` (ppl, printed, not gated), `kernel-truth` |
-| 7 | **bench** | How fast is it, and where does the time go? | `decode-timeline`, `decode-ladder`, `active-bytes`, `prefill-bench`, `coverage`, `host-attrib`, `hc-micro`, `mtp-bench`, `mtp-accept` |
+| 5 | **gate** | Is it loadable, correct, and releasable? | `check`, `check-release`, `check-bundle`, `bundle-accept`, `verify`, `smoke`, `vision-smoke`, `check-comparator`, `selftest`, `validate` (overnight queue), `pin` (freeze + smoke a copy before measuring), `mtp-smoke-head`, `spelling` (US spelling in released text) |
+| 6 | **score** | How much damage does it carry? | `kl-ladder` (the release gate), `kl-pair` (pair two runs after the fact, zero GPU), `kl`, `score` (ppl, printed, not gated), `stream-score` (the layer-streamed scorer kl-ladder runs; also builds teacher caches), `tasks` (task benchmarks), `kernel-truth` |
+| 7 | **bench** | How fast is it, and where does the time go? | `decode-timeline`, `decode-ladder`, `active-bytes`, `prefill-bench`, `coverage`, `host-attrib`, `hc-micro`, `mtp-bench`, `mtp-accept`, `speed-pair` (two arms, fresh process each, ratio) |
 | 8 | **ship / serve** | Publish or serve it | `publish` (a human action), `serve`, `mtp-generate` |
+
+Around the pipeline: `queue` (run a list of steps from pinned code under the GPU lease; `--preflight` first), `mcp` (the lab over MCP for agents), `gui` (read-only local window).
 
 ## Records: nothing happens without one
 
 | record | where | what | read with |
 |---|---|---|---|
 | **run log** | `~/.vqlab/runs.jsonl` (per user, every `vqlab` call) | argv, commit, dirty files, library versions, exit code, duration | `vqlab runs` |
+| **score stamp** | the `measured` block in every scorer's output | which artifact a number is OF: build-record id, pin, runtime md5/mtime, byte fingerprint, run id | read the score's JSON |
 | **build record** | `<artifact>/vqlab_provenance.json` | how these bytes were made: fitter settings, inputs + lineage, per-module origin, runtime profile, hashes | `vqlab provenance <artifact>` |
 | **tamper stamp** | `manifests/` (outside the artifact) | were the shard bytes rewritten? (for artifacts built before build records existed) | `vqlab manifest check` |
-| **fit store** | `<store>/fits/<family>/<teacher>/L<layer>/<proj>/d<D>-K<K>/<fit_id>` + `index.jsonl` (HDD archive; `$VQLAB_FIT_STORE`) | every fitted module with its recipe; fitters file into it, `geo-build --pool` reuses from it | `vqlab fits list / stats` |
-| **family data** | `families/<family>/` | `entry.json` (how to read the tensors, no code change) and `teachers/<teacher>/profile.json` | `vqlab family-profile` |
+| **fit store** | `<store>/fits/<family>/<teacher>/L<layer>/<proj>/d<D>-K<K>/<fit_id>` + `index.jsonl` (HDD archive; `$VQLAB_FIT_STORE`) | every fitted module with its recipe; fitters file into it, `geo-build --pool` reuses from it (recipe must match) | `vqlab fits list / stats / census / retag` |
+| **artifact registry** | `registry/artifacts.jsonl`, `registry/hub.jsonl` (in git) | every artifact from provable facts (runtime, geometry, size, fingerprint, record id); latest Hub comparison | `vqlab registry list / hub` |
+| **queues** | `~/.vqlab/queues/<stamp>-<name>/` | each step's cmd, stdout, stderr, verdict; the pinned commit | `vqlab queue status / list` |
+| **family data** | `families/<family>/` | `entry.json` (how to read the tensors, no code change) and `teachers/<teacher>/{profile,onboard,teacher_caches}.json` | `vqlab family-profile`, `vqlab onboard`, MCP `where_is` |
 | **findings** | `docs/FINDINGS-LOG.md` | every measured result, F-numbered | MCP `findings_tail`; reserve a number with `next_f_number reserve=true` |
 
 Design: `docs/PROVENANCE.md`.
@@ -65,9 +70,9 @@ src/vqlab/
   runtime/      SHIPPED code, spliced verbatim into every model.py
   core/         shared libraries (families registry, source loaders)
   plan/  fit/  assemble/  bundle/  gate/  score/  bench/    the pipeline, in order
-  records/      run log + build records + tamper stamp
+  records/      run log + build records + score stamps + artifact registry + tamper stamp
   ship/         publish (a human action) + serve
-  agents/       MCP server
+  agents/       MCP server, queue runner, read-only GUI
   mtp/          MTP speculative-decoding LIBRARY (vqlab.mtp); its tools live in the stages
 ```
 
