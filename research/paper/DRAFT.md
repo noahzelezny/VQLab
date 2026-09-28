@@ -252,7 +252,7 @@ and an artifact can score normally while being unable to serve — so
 nothing is fully validated until it has generated a token through the code
 path it ships with. Predictions are registered before numbers exist,
 with reading grids fixed in advance, so a wash cannot be reread
-afterwards as a win.
+afterward as a win.
 
 ### 2.6 Instruments and noise floors
 
@@ -326,7 +326,7 @@ corpus. The originals keep the fitter version they were built with (§2.2),
 so each floor bounds draw-to-draw and fitter-version spread together.*
 
 Every margin in §3 is read against the floor for its
-geometry. Where a neighbouring geometry's floor stands in, the text says so
+geometry. Where a neighboring geometry's floor stands in, the text says so
 and the multiple is read as a lower bound on confidence, not a
 measurement.
 
@@ -437,7 +437,7 @@ of each rung with the fitter it shipped with. Removing the stray affine
 layers cost +0.28 (null), +2.32, +4.94 and +12.96 mnats of prose KL at
 d4/K2048, K512, K256 and K128, measured paired on the top-64 instrument in
 use at the time: monotone in the bytes removed and largest
-where headroom is smallest. The v4 row labelled flat d8/K16384 (VQ-2.2bpw)
+where headroom is smallest. The v4 row labeled flat d8/K16384 (VQ-2.2bpw)
 was a mixed-geometry build and is withdrawn from this uniform ladder.
 
 ### 3.3 The 35B MoE and the dense 27B
@@ -702,7 +702,7 @@ earlier drafts did not survive them.
 Predictions and their reading grids are written before fitting or
 scoring, and falsified predictions are recorded as falsified. A margin
 is quoted as a multiple of the measured fit-to-fit floor for its own
-geometry (§2.6); where a neighbouring geometry's floor stands in, that
+geometry (§2.6); where a neighboring geometry's floor stands in, that
 is disclosed and the multiple is read as a lower bound; a margin inside
 its floor is noise regardless of direction. Applying this rule
 retrospectively retired three of this paper's own candidate claims.
