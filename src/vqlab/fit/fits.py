@@ -39,6 +39,50 @@ def _layers(s):
     return out
 
 
+def _census(root, recs, a):
+    """Results are cached in <root>/census.jsonl by fit_id: a fit's codes never
+    change, so a count is computed once."""
+    rows = [r for r in recs.values() if (not a.family or r["family"] == a.family)
+            and (not a.teacher or a.teacher in r["teacher"])]
+    groups = collections.defaultdict(list)
+    for r in rows:
+        groups[(r["family"], r["teacher"], r["d"], r["K"], r["proj"])].append(r)
+    done = fs.read_census(root)
+    picked = []
+    for g, rs in sorted(groups.items()):
+        rs.sort(key=lambda r: (r.get("layer") or 0, r["fit_id"]))
+        n = len(rs) if a.per_group == 0 else min(a.per_group, len(rs))
+        # evenly spaced across depth; one fit per group is the MIDDLE one,
+        # not the shallowest (layers 0-1 are atypical: 397B's are ~80% one entry)
+        picked += ([rs[len(rs) // 2]] if n == 1 else
+                   [rs[int(round(i * (len(rs) - 1) / (n - 1)))] for i in range(n)])
+    for i, r in enumerate(picked):
+        c = done.get(r["fit_id"])
+        if not c or "zero_scale_frac" not in c or (a.max_experts == 0 and not c["exact"]):
+            c = fs.code_usage(r, a.max_experts or None)
+            c.update(family=r["family"], teacher=r["teacher"], proj=r["proj"],
+                     layer=r.get("layer"))
+            fs.append_line(fs.census_path(root), c)
+            done[r["fit_id"]] = c
+        print(f"  [{i + 1}/{len(picked)}] {r['family']:13s} L{r.get('layer')!s:>3} "
+              f"{r['proj']:10s} d{r['d']}-K{r['K']:<6d} dead {c['dead_frac']:7.2%}  "
+              f"H/Hmax {c['entropy_norm']:.3f}  top1% {c['top1pct_share']:.1%}  "
+              f"zero-scale {c['zero_scale_frac']:.1%}"
+              + ("" if c["exact"] else f"  (sample {c['experts_read']}/{c['experts']})"),
+              flush=True)
+    agg = collections.defaultdict(list)
+    for r in picked:
+        c = done[r["fit_id"]]
+        agg[(r["family"], f"d{r['d']}-K{r['K']}")].append(c)
+    print("\nby family x geometry (mean over fits read):")
+    for (fam, geo), cs in sorted(agg.items()):
+        m = lambda k: sum(c[k] for c in cs) / len(cs)  # noqa: E731
+        print(f"  {fam:14s} {geo:10s} n={len(cs):3d}  dead {m('dead_frac'):7.2%}  "
+              f"H/Hmax {m('entropy_norm'):.3f}  top1% {m('top1pct_share'):.1%}  "
+              f"zero-scale {m('zero_scale_frac'):.1%}")
+    return 0
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(prog="vqlab fits", description=__doc__.split("\n")[0])
     ap.add_argument("--root", help="fit store root (default: first configured)")
@@ -54,6 +98,15 @@ def main(argv=None) -> int:
     pf = sub.add_parser("file")
     pf.add_argument("--limit", type=int, default=0)
     pf.add_argument("--family")
+    pc = sub.add_parser("census", help="codebook USAGE of stored fits: dead entries, "
+                        "entropy, top-1%% share (exact counts from the codes)")
+    pc.add_argument("--family")
+    pc.add_argument("--teacher")
+    pc.add_argument("--per-group", type=int, default=1,
+                    help="fits read per (family, teacher, geometry, proj) group, "
+                         "spread across depth (default 1; 0 = every fit)")
+    pc.add_argument("--max-experts", type=int, default=0,
+                    help="read an evenly spaced subset of experts (0 = all: exact)")
     pr = sub.add_parser("retag", help="re-file fits named after a teacher COPY under the "
                         "profiled teacher it is byte-identical to (dry run unless --apply)")
     pr.add_argument("--from", dest="old", required=True, help="teacher name the fits are filed under")
@@ -67,6 +120,9 @@ def main(argv=None) -> int:
     root = pathlib.Path(a.root) if a.root else fs.roots()[0]
     root.mkdir(parents=True, exist_ok=True)
     recs = fs.read_index(root)
+
+    if a.cmd == "census":
+        return _census(root, recs, a)
 
     if a.cmd == "retag":
         new = fs.teacher_slug(a.teacher, FAMILIES)

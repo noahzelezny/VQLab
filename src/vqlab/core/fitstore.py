@@ -203,6 +203,72 @@ def describe(p, h, base, module):
                          for s in _SUFFIXES)}
 
 
+# ------------------------------------------------------------- code usage
+def code_usage(rec, max_experts=None):
+    """How a fit USES its codebook, read exactly from its codes: per-entry
+    counts -> dead entries (never referenced), normalised entropy, and the
+    share of lookups taken by the top 1% of entries. A dead entry is codebook
+    bytes that buy nothing -- the census that decides whether re-seeding
+    dead centroids (data-free, like F80's alternation) is worth a fitter
+    change. max_experts reads an evenly spaced subset (then `dead` is an
+    UPPER bound: an entry unused in the sample may be used elsewhere)."""
+    import numpy as np
+    p = rec["location"].split("#", 1)[0]
+    h, base = read_header(p)
+    t = h[rec["module"] + ".codes"]
+    E, OUT, W = t["shape"]
+    dt = {"U8": np.uint8, "U16": np.uint16, "U32": np.uint32}[t["dtype"]]
+    per = OUT * W * np.dtype(dt).itemsize
+    pick = range(E) if not max_experts or max_experts >= E else \
+        sorted({int(round(i * (E - 1) / (max_experts - 1))) for i in range(max_experts)})
+    K = rec["K"]
+    counts = np.zeros(K, dtype=np.int64)
+    a0 = t["data_offsets"][0]
+    ts = h[rec["module"] + ".vq_scales"]
+    sper = int(np.prod(ts["shape"][1:])) * 2
+    zero = groups = 0
+    with open(p, "rb") as f:
+        for e in pick:
+            f.seek(base + ts["data_offsets"][0] + e * sper)
+            sc = np.frombuffer(f.read(sper), dtype=np.float16)
+            zero += int((sc == 0).sum())
+            groups += sc.size
+            f.seek(base + a0 + e * per)
+            blk = np.frombuffer(f.read(per), dtype=dt).reshape(1, OUT, W)
+            if rec.get("pack_bits"):
+                from vqlab.runtime import vq_pack
+                blk = vq_pack.unpack(blk, rec["IN"] // rec["d"], rec["pack_bits"])
+            counts += np.bincount(blk.ravel(), minlength=K)[:K]
+    n = int(counts.sum())
+    pr = counts[counts > 0] / n
+    ent = float(-(pr * np.log2(pr)).sum())
+    top = np.sort(counts)[::-1][:max(1, K // 100)].sum() / n
+    return {"fit_id": rec["fit_id"], "K": K, "d": rec["d"], "experts_read": len(pick),
+            "experts": E, "exact": len(pick) == E, "lookups": n,
+            "dead": int((counts == 0).sum()), "dead_frac": round(float((counts == 0).mean()), 5),
+            # groups whose scale is 0: the TEACHER's near-zero rows (397B L0:
+            # 86% of groups have max|w| ~1e-29). Their codes are bytes that
+            # encode nothing; they also skew the usage stats toward one entry.
+            "zero_scale_frac": round(zero / max(groups, 1), 5),
+            "entropy_bits": round(ent, 4), "entropy_norm": round(ent / np.log2(K), 5),
+            "top1pct_share": round(float(top), 5)}
+
+
+def census_path(root):
+    return pathlib.Path(root) / "census.jsonl"
+
+
+def read_census(root):
+    p = census_path(root)
+    out = {}
+    if p.exists():
+        for line in p.read_text().splitlines():
+            if line.strip():
+                r = json.loads(line)
+                out[r["fit_id"]] = r
+    return out
+
+
 # ------------------------------------------------------------- attribution
 def load_signatures(families_dir):
     """{(proj, E, OUT, IN): [(family, teacher), ...]} from every profile."""
@@ -237,8 +303,12 @@ def index_path(root):
 def append_index(root, rec):
     """One O_APPEND write: concurrent writers never interleave a line. Later
     lines win in read_index, so an append is also an update."""
+    append_line(index_path(root), rec)
+
+
+def append_line(path, rec):
     line = (json.dumps(rec, sort_keys=True) + "\n").encode()
-    fd = os.open(index_path(root), os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o644)
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o644)
     try:
         os.write(fd, line)
     finally:
