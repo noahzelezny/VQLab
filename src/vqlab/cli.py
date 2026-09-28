@@ -35,6 +35,7 @@ COMMANDS = {
     "fit-ple": ("fit_ple.py", "fit per-tensor VQ codebooks for PLE ngram banks"),
     "geo-build": ("geo_build.py", "rebuild an artifact under a new per-layer geometry map (diff-style)"),
     "reselect": ("reselect.py", "activation-aware code re-selection: calibrate (self-gen Gram bank) / apply (new artifact, codes only)"),
+    "fit-additive": ("additive_vq.py", "additive VQ: two small codebooks per module, expanded to one d4-K(K1*K2) fit for zero-kernel KL tests"),
     "harvest-parts": ("harvest_parts.py", "extract a shipped rung's VQ fits into a geo-build --reuse parts dir"),
     # assemble/
     "pack": ("pack_artifact.py", "pack MoE codes to true bit-width; recompute sizes"),
