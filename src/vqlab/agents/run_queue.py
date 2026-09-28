@@ -54,7 +54,9 @@ Queue file (JSON):
 `cmd` is a vqlab subcommand; `script` is a path relative to the repo (run
 from the pinned tree). `python` (queue or step) picks the interpreter, e.g.
 the exo env. `preflight` is {"args": [...]} (replace), {"append": [...]} or
-{"skip": "reason"}. geo-build and kl-ladder take `--preflight` (first
+{"skip": "reason"}, or {"full": "reason"} to run the real step full-size on
+purpose (checked against free scratch first; an identical {"append": []} is
+refused). A passing preflight deletes its outputs unless --keep-preflight. geo-build and kl-ladder take `--preflight` (first
 module / first cache x rung), so {"append": ["--preflight"]} is their block. In preflight, every OUTPUT flag's value (--out,
 --out-dir, ...) is redirected to <scratch SSD>/queue-preflight/<queue>/<step>/<name>, so a
 preflight never writes into a real step's output; and a later step that names
@@ -71,6 +73,7 @@ import os
 import pathlib
 import re
 import shlex
+import shutil
 import signal
 import socket
 import subprocess
@@ -150,8 +153,15 @@ def validate(q) -> list[str]:
             errs.append(f"{tag}: on_fail must be stop or continue")
         pf = st.get("preflight")
         if pf is not None and not (isinstance(pf, dict) and len(pf) == 1
-                                   and next(iter(pf)) in ("args", "append", "skip")):
-            errs.append(f"{tag}: preflight must be one of {{args}}, {{append}}, {{skip}}")
+                                   and next(iter(pf)) in ("args", "append", "skip", "full")):
+            errs.append(f"{tag}: preflight must be one of {{args}}, {{append}}, {{skip}}, {{full}}")
+        elif pf and (pf.get("append") == [] or pf.get("args") == st.get("args")):
+            # a "preflight" identical to the real step is a full-size run
+            # into scratch (2026-09-27: two stream-converts left 201 GiB in
+            # queue-preflight/ and filled the SSD). Say so explicitly.
+            errs.append(f"{tag}: preflight is identical to the real step; give a small "
+                        f"real version, or {{\"full\": \"why\"}} to run it full-size "
+                        f"on purpose, or {{\"skip\": \"why\"}}")
     return errs
 
 
@@ -217,6 +227,20 @@ def _path_args(args):
             (outs if prev in OUT_FLAGS else ins).append(a)
         prev = None
     return ins, outs
+
+
+PREFLIGHT_MARGIN = 50 << 30        # never take scratch below this
+
+
+def _input_bytes(args, tree):
+    """Rough size a full-size step writes: the safetensors of the input dirs
+    it names (a convert / build writes about what it reads)."""
+    n = 0
+    for p in _path_args(args)[0]:
+        pp = pathlib.Path(p) if pathlib.Path(p).is_absolute() else tree / p
+        if pp.is_dir():
+            n += sum(os.path.getsize(os.path.realpath(f)) for f in pp.glob("*.safetensors"))
+    return n
 
 
 def static_check(st, tree: pathlib.Path, args) -> list[str]:
@@ -341,10 +365,20 @@ def _run_step(q, st, rec, sdir, state, preflight, force, outmap=None):
                 "run: first cell, one module, a few tokens) or preflight.skip with a reason"]}
         if "skip" in pf:
             return {"verdict": "skipped", "reasons": [f"preflight skipped: {pf['skip']}"]}
-        args = [str(a) for a in pf["args"]] if "args" in pf else args + [str(a) for a in pf["append"]]
+        if "args" in pf:
+            args = [str(a) for a in pf["args"]]
+        elif "append" in pf:
+            args = args + [str(a) for a in pf["append"]]
         pfdir = preflight_root() / pathlib.Path(state["qdir"]).name / _slug(st["name"])
         pfdir.mkdir(parents=True, exist_ok=True)
         args = _redirect_outs(args, pfdir, outmap if outmap is not None else {})
+        need = _input_bytes(args, pathlib.Path(state["tree"])) if "full" in pf else 0
+        free = shutil.disk_usage(pfdir).free
+        if free - need < PREFLIGHT_MARGIN:
+            return {"verdict": "fail", "reasons": [
+                f"not enough scratch for this preflight on {pfdir}: {free / 2**30:.0f} GiB "
+                f"free, full-size step may write ~{need / 2**30:.0f} GiB, margin "
+                f"{PREFLIGHT_MARGIN / 2**30:.0f} GiB"]}
     probs = static_check(st, tree, args)
     refuse, warns = pin_check(st, args)
     if probs or refuse:
@@ -403,7 +437,7 @@ def _run_step(q, st, rec, sdir, state, preflight, force, outmap=None):
     return verdict
 
 
-def run(qdir: pathlib.Path, force=False, lease_wait=1800) -> int:
+def run(qdir: pathlib.Path, force=False, lease_wait=1800, keep_preflight=False) -> int:
     state = json.loads((qdir / "state.json").read_text())
     q = json.loads((qdir / "queue.json").read_text())
     state["qdir"] = str(qdir)
@@ -465,6 +499,22 @@ def run(qdir: pathlib.Path, force=False, lease_wait=1800) -> int:
                  finished=_now())
     state.pop("pid", None)
     _save(qdir, state)
+    pfroot = None
+    if preflight:
+        try:
+            pfroot = preflight_root() / qdir.name
+        except SystemExit:
+            pass
+    if preflight and done and pfroot and pfroot.is_dir() and not keep_preflight:
+        # preflight outputs are proof the steps RUN, not artifacts: a passed
+        # preflight leaves nothing on scratch (a failed one keeps its outputs
+        # for inspection)
+        shutil.rmtree(pfroot, ignore_errors=True)
+        state["preflight_outputs"] = "removed after pass"
+        _save(qdir, state)
+    elif preflight and pfroot and pfroot.is_dir():
+        state["preflight_outputs"] = str(pfroot)
+        _save(qdir, state)
     if done and not preflight:
         subprocess.run(["git", "worktree", "remove", "--force", str(tree)], cwd=REPO,
                        capture_output=True)
@@ -513,6 +563,8 @@ def main(argv=None) -> int:
     pr.add_argument("--detach", action="store_true", help="run in its own session; survives the shell")
     pr.add_argument("--force", action="store_true", help="ignore a placed exo instance")
     pr.add_argument("--lease-wait", type=int, default=1800)
+    pr.add_argument("--keep-preflight", action="store_true",
+                    help="keep preflight outputs after a passing preflight (default: removed)")
     ps = sub.add_parser("status")
     ps.add_argument("qdir", nargs="?")
     sub.add_parser("list")
@@ -533,7 +585,8 @@ def main(argv=None) -> int:
     qdir = pathlib.Path(a.resume) if a.resume else create(a.file, a.commit, a.allow_dirty, a.preflight)
     if a.detach:
         cmd = [sys.executable, "-m", "vqlab.cli", "queue", "run", "--resume", str(qdir),
-               "--lease-wait", str(a.lease_wait)] + (["--force"] if a.force else [])
+               "--lease-wait", str(a.lease_wait)] + (["--force"] if a.force else []) \
+            + (["--keep-preflight"] if a.keep_preflight else [])
         env = dict(os.environ)
         env["PYTHONPATH"] = str(REPO / "src") + (os.pathsep + env["PYTHONPATH"] if env.get("PYTHONPATH") else "")
         p = subprocess.Popen(cmd, cwd=str(REPO), env=env, stdin=subprocess.DEVNULL,
@@ -541,7 +594,7 @@ def main(argv=None) -> int:
                              start_new_session=True)
         print(f"detached (pid {p.pid}); vqlab queue status {qdir}")
         return 0
-    return run(qdir, force=a.force, lease_wait=a.lease_wait)
+    return run(qdir, force=a.force, lease_wait=a.lease_wait, keep_preflight=a.keep_preflight)
 
 
 if __name__ == "__main__":
