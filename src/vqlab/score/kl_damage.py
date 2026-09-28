@@ -278,6 +278,8 @@ def cmd_score(args):
         "captured_mass": meta.get("captured_mass"),
         "chat_wrapped": meta.get("chat_wrapped"),
     }
+    from vqlab.records.provenance import measured
+    result["measured"] = measured(args.model)
     print("\n" + json.dumps(result, indent=1))
     print(f"\nmean KL {mean_kl * 1000:.3f} millinats/token   "
           f"top-1 agreement {agree / n_tok:.2%}")

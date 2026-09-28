@@ -599,6 +599,8 @@ def main():
                    "(layer-streamed loglikelihood)",
         "results": res["results"],
     }
+    from vqlab.records.provenance import measured
+    summary["measured"] = measured(args.model)
     print(json.dumps(summary, indent=1), flush=True)
 
     if args.output_dir:

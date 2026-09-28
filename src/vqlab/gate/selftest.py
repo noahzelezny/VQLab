@@ -336,6 +336,11 @@ def main(argv=None) -> int:
             r4 = json.load(open(out4 / "vqlab_provenance.json"))["modules"][g["module"]]
             check("--pool never reuses a fit of ANOTHER recipe (plain fit, tail-weighted build)",
                   r4["origin"] == "fit", f"origin={r4['origin']}")
+            from vqlab.records.provenance import measured as _meas
+            mo = _meas(g["out"])
+            check("scores stamp what they measured: build record id + byte fingerprint",
+                  mo["build_record"] == json.load(open(g["out"] / "vqlab_provenance.json"))["id"]
+                  and len(mo["fingerprint"]) == 16)
             p = run([str(prov), str(g["out"]), "--lineage"], verbose=v)
             check("provenance --lineage walks to the base",
                   p.returncode == 0 and "fit-dense" not in p.stdout
@@ -531,6 +536,11 @@ def main(argv=None) -> int:
         (pout / P.MARKER).write_text(json.dumps(prec))
         check("pin: failed smoke -> refused", not P.check_pin(pout)[0])
         check("pin: an unpinned directory is allowed unchanged", P.check_pin(psrc) == (True, ""))
+        from vqlab.records.provenance import measured as _meas2
+        mp_ = _meas2(pout)
+        check("a pin's stamp names its source and state, and shares its source's bytes",
+              __import__("os").path.realpath(mp_["pin"]["source"]) == __import__("os").path.realpath(psrc) and mp_["pin"]["state"] == "failed"
+              and mp_["fingerprint"] == _meas2(psrc)["fingerprint"])
         so, se = tmp / "step.out", tmp / "step.err"
         so.write_text("")
         se.write_text("Traceback (most recent call last):\n  File x\nFileNotFoundError: corpus\n")

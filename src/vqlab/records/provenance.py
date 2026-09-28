@@ -165,6 +165,53 @@ def args_state(ap: argparse.ArgumentParser, args: argparse.Namespace) -> dict:
     return {"resolved": vals, "at_default": at_default}
 
 
+def shard_fingerprint(d) -> str:
+    """16-hex identity of an artifact's weight bytes: per shard (resolved
+    through symlinks, so a pin and its source agree) size + first-MiB
+    sha256. The registry and every scorer use this ONE definition."""
+    d = pathlib.Path(d)
+    shards = sorted(d.glob("*.safetensors"))
+    return hashlib.sha256(json.dumps(
+        {f.name: [os.path.getsize(os.path.realpath(f)), _sha(os.path.realpath(f), HEAD)]
+         for f in shards}, sort_keys=True).encode()).hexdigest()[:16]
+
+
+def measured(d) -> dict:
+    """What a SCORE is a score OF. Every scorer stamps this into its output,
+    so a comparison row names its artifact mechanically (AGENTS.md rule III:
+    "a comparison row must name the ARTIFACT and the INSTRUMENT").
+
+    build_record  the artifact's own record id (None for pre-record artifacts)
+    pin           a pinned copy's state + source, and the SOURCE's record id
+    runtime       model.py md5 + profile, and its mtime: re-check it after a
+                  long campaign ("an artifact can change under you", F151)
+    fingerprint   shard_fingerprint(): same bytes <=> same value
+    run_id        the vqlab run that produced the score (the run log line)"""
+    d = pathlib.Path(d)
+    out = {"path": str(d), "realpath": os.path.realpath(d),
+           "run_id": os.environ.get("VQLAB_RUN_ID")}
+    if not d.is_dir():
+        return out
+    rec = d / RECORD
+    out["build_record"] = json.loads(rec.read_text()).get("id") if rec.exists() else None
+    pm = d / "vqlab_pin.json"
+    if pm.exists():
+        pin = json.loads(pm.read_text())
+        src = pathlib.Path(pin.get("source", ""))
+        out["pin"] = {"state": pin.get("state"), "source": str(src), "runtime": pin.get("runtime"),
+                      "source_build_record": (json.loads((src / RECORD).read_text()).get("id")
+                                              if (src / RECORD).exists() else None)}
+    rt = runtime_state(d)
+    if rt:
+        out["runtime"] = {"model_py_md5": rt["model_py_md5"], "profile": rt["profile"],
+                          "model_py_mtime": os.stat(d / "model.py").st_mtime}
+    try:
+        out["fingerprint"] = shard_fingerprint(d)
+    except OSError as e:
+        out["fingerprint"] = f"unreadable: {e}"
+    return out
+
+
 def runtime_state(art: pathlib.Path):
     mp = art / "model.py"
     if not mp.exists():

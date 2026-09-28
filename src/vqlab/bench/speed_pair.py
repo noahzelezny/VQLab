@@ -54,7 +54,8 @@ def child(path, prompt_tokens, gen_tokens, corpus):
         last = r
     if last is None or last.generation_tokens == 0:
         raise SystemExit("FAIL: generation returned nothing")
-    print(json.dumps({"arm": str(path), "prompt_tokens": last.prompt_tokens,
+    from vqlab.records.provenance import measured
+    print(json.dumps({"arm": str(path), "measured": measured(path), "prompt_tokens": last.prompt_tokens,
                       "prompt_tps": round(last.prompt_tps, 2), "gen_tokens": last.generation_tokens,
                       "gen_tps": round(last.generation_tps, 2), "peak_gb": round(last.peak_memory, 2)}),
           flush=True)
