@@ -398,6 +398,11 @@ def _run_step(q, st, rec, sdir, state, preflight, force, outmap=None):
     if retries is None:
         retries = ms.DEFAULT_RETRIES if st.get("cmd") in ms.RESUMABLE and not preflight else 0
     expect = dict(st.get("expect") or {"stdout_nonempty": True})
+    if preflight:
+        # a preflight is a SMALL run: it proves the step runs and says
+        # something, not that it produced the full run's lines/files
+        expect = {"stdout_nonempty": True,
+                  **({"allow_traceback": True} if expect.get("allow_traceback") else {})}
     expect["files"] = [str(f if pathlib.Path(f).is_absolute() else tree / f)
                        for f in expect.get("files", ())] if not preflight else []
     argv = _argv(q, st, args, tree)
