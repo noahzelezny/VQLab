@@ -571,6 +571,26 @@ def main(argv=None) -> int:
         else:
             print("  SKIP  reselect fixture -- needs the scratch SSD (never the internal disk)")
 
+        print("[6a38/7] fit-additive (CPU fixture)")
+        import numpy as _np2
+        _dev = mx.default_device()
+        mx.set_default_device(mx.cpu)
+        try:
+            from vqlab.fit import additive_vq as _av
+            from vqlab.fit import geo_build as _gb
+            _W = mx.array(_np2.random.default_rng(0).standard_normal((2, 32, 256)).astype(_np2.float32))
+            with contextlib.redirect_stdout(io.StringIO()):
+                _cb, _codes, _sc, (_C1, _C2, _I, _J) = _av.fit_module_additive(
+                    _W, 4, 8, 8, _np2.random.default_rng(1234), rounds=2, return_parts=True)
+            check("fit-additive expands C1+C2 into one ordinary codebook, bit-exact in fp16",
+                  _cb.shape == (64, 4) and _np2.array_equal(
+                      _np2.array(_cb)[_I * 8 + _J].view(_np2.uint16),
+                      (_C1[_I] + _C2[_J]).astype(_np2.float16).view(_np2.uint16)))
+            check("fit-additive's recipe says additive and carries every RECIPE_KEY (never pooled as k-means)",
+                  _av.method()["init"].startswith("additive") and set(_gb.RECIPE_KEYS) <= set(_av.method()))
+        finally:
+            mx.set_default_device(_dev)
+
         print("[6a37/7] zero-groups (headers + scales only)")
         import numpy as _np
         from safetensors.numpy import save_file as _sf
