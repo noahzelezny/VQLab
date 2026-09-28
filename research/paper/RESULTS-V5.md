@@ -12,6 +12,8 @@ All KL: exact KL(teacher‖student) over the full 248,320-token vocabulary, mnat
 | floor_d4k128 | VQ flat d4/K128, second fit | 96.70 | 2.10 | 349.4 | 121.5 | 282.6 | 82.3% | 58.21 | 1.79 | 6.64 |
 | r22v2 | VQ-2.2bpw (v2 mix) | 100.00 | 2.17 | 278.4 | 98.9 | 182.2 | 84.8% | 42.33 | 1.48 | 2.70 |
 | r24 | VQ-2.4bpw | 107.96 | 2.34 | 232.7 | 89.0 | 134.1 | 86.4% | 34.18 | 1.33 | 1.03 |
+| e112_A | VQ d4/K256 refit (unweighted) | 107.96 | 2.34 | 241.8 | 84.7 | 127.6 | 85.6% | 34.14 | 1.22 | 1.07 |
+| e112_B | VQ d4/K256 refit (tail-weighted) | 107.96 | 2.34 | 279.1 | 84.3 | 171.8 | 84.9% | 40.29 | 1.46 | 2.58 |
 | r26 | VQ-2.6bpw | 119.21 | 2.58 | 166.1 | 57.8 | 60.4 | 88.5% | 22.20 | 0.86 | 0.27 |
 | spicy26 | spicyneuron 2.6-bit | 120.57 | 2.61 | 333.9 | 99.2 | 241.1 | 83.5% | 50.57 | 1.68 | 5.17 |
 | r31 | VQ-3.1bpw | 141.71 | 3.07 | 93.0 | 33.3 | 16.6 | 91.7% | 10.97 | 0.50 | 0.05 |
@@ -120,12 +122,18 @@ Second fits use the current plain fitter (k-means++, plain Lloyd, max-abs scales
 | 27B | d2k4096 (17.6) | q6 (20.4) | code | 2.2 | 13.5 | +500.2% | +26.4 | 9% |
 | 27B | d2k4096 (17.6) | q6 (20.4) | lit | 24.7 | 145.9 | +491.2% | +56.1 | 9% |
 
-## Tail weighting at fixed bytes (35B, d4/K256, plain fitter, seed 1234)
+## Tail weighting at fixed bytes (d4/K256, plain fitter, seed 1234)
 
-Arm = magnitude weighting p=4 on layers ≥13; reference = unweighted. Byte-identical sizes.
+Arm = magnitude weighting p=4 on body layers (397B: layers ≥20 of 60; 35B: ≥13 of 40); reference = unweighted, byte-identical. Last row: the unweighted 397B refit against the published VQ-2.4 (same geometry).
 
 | family | arm (GiB) | reference (GiB) | corpus | ref | arm | diff % | t | positions arm better |
 |---|---|---|---|---|---|---|---|---|
+| 397B | e112_B (108.0) | e112_A (108.0) | prose | 241.8 | 279.1 | +15.5% | +7.0 | 45% |
+| 397B | e112_B (108.0) | e112_A (108.0) | code | 84.7 | 84.3 | -0.5% | -0.1 | 56% |
+| 397B | e112_B (108.0) | e112_A (108.0) | lit | 127.6 | 171.8 | +34.7% | +6.6 | 38% |
 | 35B | e112_B (10.1) | e112_A (10.1) | prose | 198.1 | 227.7 | +14.9% | +8.1 | 43% |
 | 35B | e112_B (10.1) | e112_A (10.1) | code | 1070.1 | 961.5 | -10.1% | -11.8 | 55% |
 | 35B | e112_B (10.1) | e112_A (10.1) | lit | 953.8 | 1521.8 | +59.6% | +29.1 | 28% |
+| 397B | e112_A (108.0) | r24 (108.0) | prose | 232.7 | 241.8 | +3.9% | +2.0 | 51% |
+| 397B | e112_A (108.0) | r24 (108.0) | code | 89.0 | 84.7 | -4.7% | -1.9 | 56% |
+| 397B | e112_A (108.0) | r24 (108.0) | lit | 134.1 | 127.6 | -4.8% | -1.1 | 49% |
