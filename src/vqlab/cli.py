@@ -42,6 +42,7 @@ COMMANDS = {
     "pack-dense": ("pack_dense.py", "pack a dense VQ artifact"),
     "unpack-dense": ("unpack_dense.py", "diagnostic twin with PLAIN codes: isolates PACKING from every other variable (F141)"),
     "build-dense": ("build_dense_vq.py", "splice dense VQ fits into a quantized base -> runnable artifact"),
+    "reskeleton": ("reskeleton.py", "put a VQ build's expert tensors on another build's skeleton (matched-skeleton comparisons)"),
     "graft": ("graft_vision.py", "graft the bf16 vision tower into an artifact"),
     "ple-swap": ("ple_swap.py", "swap an artifact's PLE tables for another rung's (symlinks; prices PLE bytes on KL)"),
     "mtp-extract": ("mtp_extract.py", "pull a model's MTP head out of its source checkpoint into a graft"),
