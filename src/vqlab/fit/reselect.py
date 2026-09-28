@@ -338,7 +338,9 @@ class _Index:
         """Load on the CPU stream with eval INSIDE the block (FINDINGS IV.1)."""
         import mlx.core as mx
         with mx.stream(mx.cpu):
-            v = mx.load(os.path.realpath(self.map[k]))[k]
+            # load by the LINK path: a hub snapshot's realpath is an extension-
+            # less blobs/<sha>, whose format mx.load cannot infer
+            v = mx.load(self.map[k])[k]
             mx.eval(v)
         return v
 
@@ -473,7 +475,7 @@ def cmd_apply(a):
         dst = os.path.join(a.out, b)
         if b.endswith(".safetensors"):
             if f in touched:
-                tens = mx.load(os.path.realpath(f))
+                tens = mx.load(f)                  # link path keeps the extension
                 out = {}
                 for k, v in tens.items():
                     if k in new:

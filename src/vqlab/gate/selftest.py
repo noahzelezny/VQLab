@@ -591,6 +591,13 @@ def main(argv=None) -> int:
         finally:
             mx.set_default_device(_dev)
 
+        print("[6a39/7] vq-skipzero experiment (pack -> expand, CPU)")
+        from vqlab.experimental.skipzero import sz_check as _szc
+        with contextlib.redirect_stdout(io.StringIO()):
+            _szok = _szc.selftest(root=tmp / "skipzero")
+        check("vq-skipzero: live rows byte-identical after expansion, dead rows exactly zero",
+              _szok is not False)
+
         print("[6a37/7] zero-groups (headers + scales only)")
         import numpy as _np
         from safetensors.numpy import save_file as _sf
