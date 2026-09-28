@@ -55,6 +55,13 @@ ap.add_argument("--struct", action="store_true",
 ap.add_argument("--family", default="qwen4_exp", choices=sorted(FAMILY))
 ap.add_argument("--protect-bits", type=int, default=8)
 ap.add_argument("--shard-gib", type=float, default=5.0)
+ap.add_argument("--skeleton-from", metavar="ARTIFACT",
+                help="MATCHED-SKELETON comparator: copy every non-expert "
+                     "module's quantization (bits/group, or bf16 when the "
+                     "artifact leaves it unquantized) from ARTIFACT's config, "
+                     "and quantize the expert modules affine at --bits. The "
+                     "result differs from ARTIFACT only in how the experts are "
+                     "stored -- the like-for-like comparison for a VQ build")
 a = ap.parse_args()
 
 SRC, DST = pathlib.Path(a.src), pathlib.Path(a.out)
@@ -68,7 +75,34 @@ target = FAMILY[a.family]["target_substr"]
 model, config = runtime_load.load_for_family(a.family, SRC, lazy=True)
 print(runtime_load.resolved_runtime_note(model), flush=True)   # III.13
 
+SKEL = None
+if a.skeleton_from:
+    _c = json.load(open(pathlib.Path(a.skeleton_from) / "config.json"))
+    _q = _c.get("quantization") or _c.get("text_config", {}).get("quantization")
+    # language_model.* in a VL checkpoint; the lazily loaded text model's
+    # paths may or may not carry the prefix, so key both spellings.
+    SKEL = {}
+    for k, v in _q.items():
+        if isinstance(v, dict):
+            SKEL[k] = v
+            SKEL[k.removeprefix("language_model.")] = v
+    SKEL_HITS = {"skeleton": 0, "expert": 0, "bf16": 0}
+
+
 def predicate(path, module):
+    if SKEL is not None:
+        if "vision" in path or "visual" in path:
+            return False
+        if target in path:
+            SKEL_HITS["expert"] += 1
+            return {"group_size": 64, "bits": a.bits, "mode": "affine"}
+        if path in SKEL:
+            SKEL_HITS["skeleton"] += 1
+            v = SKEL[path]
+            return {"group_size": v.get("group_size", 64), "bits": v["bits"],
+                    "mode": v.get("mode", "affine")}
+        SKEL_HITS["bf16"] += 1
+        return False                     # unquantized in the reference too
     if path.endswith("mlp.gate"):
         return False                                     # router bf16 (E7)
     if "vision" in path or "visual" in path:
@@ -90,6 +124,12 @@ def predicate(path, module):
 gbits = a.protect_bits if a.struct else a.bits
 model, config = quantize_model(model, config, 32, gbits, mode="affine",
                                quant_predicate=predicate)
+if SKEL is not None:
+    print(f"skeleton-from {a.skeleton_from}: {SKEL_HITS}", flush=True)
+    if SKEL_HITS["expert"] == 0 or SKEL_HITS["skeleton"] == 0:
+        sys.exit("FAIL: --skeleton-from matched no expert or no skeleton "
+                 "module; path spellings differ between the artifact and the "
+                 "loaded model")
 
 DST.mkdir(parents=True, exist_ok=True)
 leaves = tree_flatten(model.parameters())
