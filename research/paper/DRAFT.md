@@ -193,15 +193,34 @@ are text weights, the bytes mlx-lm loads.
 ### 2.2 The fit
 
 For each target tensor independently: reshape the weights into
-d-dimensional subvectors, fit a K-entry codebook by k-means (k-means++
-initialization, Lloyd iterations, per-group max-abs scales), store
-codes and codebook. Two properties matter downstream. Healthy
-reconstruction error scales with K — a fit at K=128 sits near 0.46
-relative error and a healthy K=2048 fit near 0.19 — so acceptance
-thresholds are set per geometry. And the initialization subsamples the
-weights stochastically, so two fits of the same tensor differ; §2.6
-measures the consequences and every comparison in this paper is read
-against them.
+d-dimensional subvectors, scale each group of 64 by its maximum absolute
+value, fit a K-entry codebook by k-means (k-means++ initialization, plain
+Lloyd iterations), and store codes, scales and codebook. Two properties
+matter downstream. Healthy reconstruction error scales with K — a fit at
+K=128 sits near 0.46 relative error and a healthy K=2048 fit near 0.19 — so
+acceptance thresholds are set per geometry. And the initialization
+subsamples the weights stochastically, so two fits of the same tensor
+differ; §2.6 measures the consequences and every comparison in this paper is
+read against them.
+
+Every build made for this revision (the ladder points, twins and floors of
+§2–4) uses exactly this fitter. The published artifacts were fit over several
+weeks while the fitter changed, and each keeps the codebooks it shipped with:
+
+| artifact | initialization | notes |
+|---|---|---|
+| 397B VQ-2.4bpw | random | first-generation fitter (frozen as `research/archive/quantlab/fitter_0816_cdcdeab.py`) |
+| 397B VQ-2.6bpw, VQ-3.1bpw | k-means++ (the default from 2026-08-18) | |
+| 397B, all published rungs, layers 57–59 | k-means++ | 9 of 180 expert modules refit in 2026-09 with scale–codebook alternation (§3.2) |
+| 397B VQ-2.2bpw | not recorded | mixed-geometry build |
+| 35B VQ-3.8bpw | k-means++ | |
+| 35B VQ-3.4bpw, VQ-4.6bpw, VQ-5.4bpw | not recorded | |
+| 27B VQ-3.9bpw, VQ-4.5bpw | k-means++ | unseeded |
+| 27B VQ-4.8bpw | k-means++ | seeded |
+
+All use max-abs scales per group of 64. Differences between fitter versions
+are bounded, together with draw-to-draw spread, by the floors of §2.6, which
+compare a fresh fit with the current fitter against a published original.
 
 ### 2.3 Packing
 
