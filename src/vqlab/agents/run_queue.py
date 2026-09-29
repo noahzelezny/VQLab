@@ -385,6 +385,14 @@ def _run_step(q, st, rec, sdir, state, preflight, force, outmap=None):
                 f"not enough scratch for this preflight on {pfdir}: {free / 2**30:.0f} GiB "
                 f"free, full-size step may write ~{need / 2**30:.0f} GiB, margin "
                 f"{PREFLIGHT_MARGIN / 2**30:.0f} GiB"]}
+    if not preflight:
+        # a declared output's parent is created, not demanded: preflight
+        # redirects outputs into dirs it makes itself, so it can never catch
+        # a missing parent (2026-09-28: reselect_kl/ did not exist, and the
+        # queue failed after 72 min of applies)
+        for o_ in _path_args(args)[1]:
+            op = pathlib.Path(o_) if pathlib.Path(o_).is_absolute() else tree / o_
+            op.parent.mkdir(parents=True, exist_ok=True)
     probs = static_check(st, tree, args)
     refuse, warns = pin_check(st, args)
     if probs or refuse:
