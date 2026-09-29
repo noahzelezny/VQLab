@@ -1219,7 +1219,7 @@ _SRC_FUSED_PACKED_D8 = _PACK_FETCH + r"""
 # nb + 32 <= 64. The simd arm (devx_ss) is NOT walked: a lane there starts at
 # a runtime bit offset inside a shared block, which is the regbuf twin below,
 # already built and measured slower (2026-09-02 ledger).
-_D8_WALK = os.environ.get("VQ_D8_WALK", "0") == "1"
+_D8_WALK = os.environ.get("VQ_D8_WALK", "1") == "1"
 
 _SRC_FUSED_PACKED_D8_WALK = _SRC_FUSED_PACKED_D8.replace(
     """    int j = 0;
@@ -2749,8 +2749,7 @@ def _fused(x, eidx, codes, codebook, scales, pack_bits=0, simd=None,
         view_u32, kern, name, src, template, grid, threadgroup, dims, N, OUT \
             = plan
         if view_u32:
-            codes = _codes_u32(codes) if _VIEW_MEMO else \
-                mx.view(codes, dtype=mx.uint32)
+            codes = mx.view(codes, dtype=mx.uint32)
         _sz = [] if rowtbl is None else [rowtbl]
         if kern is not None:
             (y,) = kern(inputs=[x, eidx, codes, codebook, scales, dims] + _sz,
@@ -4019,24 +4018,6 @@ _DECODE_BF16IO = os.environ.get("VQ_DECODE_BF16IO", "0") == "1"
 # and the cast shrinks by top_k. Same idea as the prefill fused-gather
 # (_FUSE_GATHER), which never reached the decode branch.
 _DECODE_XKREP = os.environ.get("VQ_DECODE_XKREP", "1") == "1"
-# VQ_VIEW_MEMO (kswarm hostpath, default OFF): the u8->u32 codes reinterpret
-# (U8-VIEW dispatch, d4 unpacked + d2 u32) was re-issued as a fresh mx.view
-# graph node on EVERY decode call -- one per expert projection per layer per
-# token. The view is zero-copy and the codes are resident weights, so it is
-# memoized per codes array (strong ref kept, id stable) and fed back as an
-# already-evaluated array: same buffer, same bytes, one fewer graph node.
-_VIEW_MEMO = os.environ.get("VQ_VIEW_MEMO", "0") == "1"
-_VIEW_CACHE = {}
-
-
-def _codes_u32(codes):
-    ent = _VIEW_CACHE.get(id(codes))
-    if ent is not None and ent[0] is codes:
-        return ent[1]
-    v = mx.view(codes, dtype=mx.uint32)
-    mx.eval(v)
-    _VIEW_CACHE[id(codes)] = (codes, v)
-    return v
 _XROW_LINE = "const device T* xrow = x + (size_t)t * IN;"
 
 
