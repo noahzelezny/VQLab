@@ -125,6 +125,40 @@ KNOWN_GIB = {("397b", "spicy35"): 165.57, ("35b", "q3"): 14.14, ("35b", "q4"): 1
 # norm_* in mtp-head-*.safetensors) and vision towers (vision_tower.*, model.*)
 # are outside it. A name filter on "mtp" missed the sidecar by 5.41 GiB.
 TEXT_PREFIX = "language_model."
+# text-weight bytes of every row, measured from the artifacts on 2026-09-29 and frozen
+# here so the tables regenerate after the builds are deleted.
+TEXT_BYTES = {
+ ('27b', 'd2k4096'): 18879364096,
+ ('27b', 'd2k64'): 12458982400,
+ ('27b', 'd4k1024'): 11390958592,
+ ('27b', 'd4k256'): 10320231424,
+ ('27b', 'floor_d2k256'): 14598224896,
+ ('27b', 'r39'): 12465224704,
+ ('27b', 'r45'): 14598224896,
+ ('27b', 'r48'): 15667969024,
+ ('35b', 'd2k16'): 10891297536,
+ ('35b', 'd2k256'): 18944476416,
+ ('35b', 'd2k4096'): 26999383296,
+ ('35b', 'd4k16384'): 16946816256,
+ ('35b', 'e112_A'): 10891535616,
+ ('35b', 'e112_B'): 10891535616,
+ ('35b', 'floor_d2k1024'): 22971376896,
+ ('35b', 'r34'): 13913154816,
+ ('35b', 'r38'): 15932318976,
+ ('35b', 'r54'): 22971376896,
+ ('397b', 'e112_A'): 115915910272,
+ ('397b', 'e112_B'): 115915910272,
+ ('397b', 'floor_d4k128'): 103836130432,
+ ('397b', 'r22flat'): 103836130432,
+ ('397b', 'r22v2'): 107379534976,
+ ('397b', 'r24'): 115915910272,
+ ('397b', 'r24_sk8'): 117383916672,
+ ('397b', 'r26'): 127995874432,
+ ('397b', 'r26_sk8'): 129463880832,
+ ('397b', 'r31'): 152157277312,
+ ('397b', 'r31_sk8'): 153625283712,
+ ('397b', 'spicy26'): 129463143552,
+}
 
 
 def text_bytes(art: pathlib.Path) -> int:
@@ -175,7 +209,7 @@ def main():
     for fam, rows in ROWS.items():
         for row, where, art, _ in rows:
             data[fam, row] = rec(fam, row, where)
-            size[fam, row] = (text_bytes(art) / 2**30) if art is not None and art.exists() \
+            size[fam, row] = TEXT_BYTES[fam, row] / 2**30 if (fam, row) in TEXT_BYTES \
                 else KNOWN_GIB[fam, row]
     w = sys.stdout.write
     w("# Paper v5 results — full-vocabulary KL, v2 runtime\n\n"
