@@ -1195,6 +1195,43 @@ _SRC_FUSED_PACKED_D8 = _PACK_FETCH + r"""
 """
 
 
+# kswarm d8-walk (2026-09-29): BIT-WALKER twin of _SRC_FUSED_PACKED_D8 (the
+# thread-per-row packed d8 kernel: 397B down_proj where IN/G < 32 declines the
+# simd layout, and every d8 dispatch at N > _EXPERT_SIMD_MAX_N). Opt-in via
+# VQ_D8_WALK=1, default OFF. The default re-reads a 32-bit word per code
+# through VQ_CODE (BITS=14: ~2.3 codes/word, 14 of every 32 codes straddle and
+# pay a second load); here each word is loaded ONCE into a 64-bit buffer and
+# codes are shifted out in order -- the F58/F181 walker, which ports exactly
+# because one thread walks its row's codes strictly sequentially (j = 0..NSUB-1).
+# Code values, the two half4 codebook loads per code, dot operands, the
+# (dot0+dot1) then gacc+= shape and the ascending per-group fma are unchanged
+# -> bit-identical (uint16, tests/test_kswarm_d8_walk.py). BITS <= 32 keeps
+# nb + 32 <= 64. The simd arm (devx_ss) is NOT walked: a lane there starts at
+# a runtime bit offset inside a shared block, which is the regbuf twin below,
+# already built and measured slower (2026-09-02 ledger).
+_D8_WALK = os.environ.get("VQ_D8_WALK", "0") == "1"
+
+_SRC_FUSED_PACKED_D8_WALK = _SRC_FUSED_PACKED_D8.replace(
+    """    int j = 0;
+    for (int g = 0; g < NGRP; ++g) {
+        float gacc = 0.0f;
+        for (int q = 0; q < SPG; ++q, ++j) {
+            const uint c = VQ_CODE(crow, j);
+""",
+    """    int j = 0;
+    int w = 0;
+    ulong buf = 0;
+    int nb = 0;
+    for (int g = 0; g < NGRP; ++g) {
+        float gacc = 0.0f;
+        for (int q = 0; q < SPG; ++q, ++j) {
+            if (nb < BITS) { buf |= (ulong)crow[w++] << nb; nb += 32; }
+            const uint c = (uint)(buf & (ulong)VQ_MASK);
+            buf >>= BITS; nb -= BITS;
+""")
+assert "= VQ_CODE(crow, j)" not in _SRC_FUSED_PACKED_D8_WALK, (
+    "packed d8 inner-loop text drifted; the walk twin did not apply")
+
 # Packed twin of _SRC_FUSED_D8_SIMD: same simdgroup-per-row layout, with the
 # code fetch swapped for the VQ_CODE bit-field read. THIS is the kernel the
 # shipped 397B rungs actually dispatch (their codes are packed uint32:
@@ -2689,7 +2726,8 @@ def _fused(x, eidx, codes, codebook, scales, pack_bits=0, simd=None,
                                       pack_bits)
     key = ("plan", x.shape, x.dtype, codes.shape, codes.dtype, codebook.shape,
            scales.shape, pack_bits, simd, d2_u32,
-           _D8_SIMDSUM, _D8_REGBUF, _D8_DEVX, _D8_SS, _SPEC_KERNELS, xkrep)
+           _D8_SIMDSUM, _D8_REGBUF, _D8_DEVX, _D8_SS, _SPEC_KERNELS,
+           _D4_WALK, _D4_DEVCB_WALK, _D2_WALK, _D8_WALK, xkrep)
     plan = _KERNELS.get(key)
     if plan is not None:
         view_u32, kern, name, src, template, grid, threadgroup, dims, N, OUT \
@@ -2837,6 +2875,9 @@ def _fused_resolve(_plan_key, x, eidx, codes, codebook, scales, pack_bits=0,
                     name = f"vq_fused_packed{pack_bits}_d8_simd"
                     src = _SRC_FUSED_PACKED_D8_SIMD
                 simd_rows = _EXPERT_ROWS_TG_D8_PACKED
+            elif _D8_WALK:
+                name = f"vq_fused_packed{pack_bits}_d8_walk"
+                src = _SRC_FUSED_PACKED_D8_WALK
             else:
                 name = f"vq_fused_packed{pack_bits}_d8"
                 src = _SRC_FUSED_PACKED_D8
