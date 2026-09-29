@@ -85,7 +85,7 @@ def _child_run_id(parent: str | None, cmd: str) -> str | None:
     return found
 
 
-def pin(src, out, runtime=None, kind="auto", headroom=0.90, max_tokens=8):
+def pin(src, out, runtime=None, kind="auto", headroom=0.90, max_tokens=8, flags=None):
     src, out = pathlib.Path(src).resolve(), pathlib.Path(out)
     if not (src / "config.json").exists():
         raise SystemExit(f"FAIL: {src} has no config.json")
@@ -105,6 +105,7 @@ def pin(src, out, runtime=None, kind="auto", headroom=0.90, max_tokens=8):
             shutil.copy2(f, out / f.name)
 
     rec = {"schema": SCHEMA, "source": str(src), "runtime": runtime,
+           "flags": dict(flags or {}),
            "kind": _kind(src) if kind == "auto" else kind,
            "created": datetime.datetime.now().isoformat(timespec="seconds"),
            "pin_run_id": os.environ.get("VQLAB_RUN_ID"),
@@ -122,6 +123,24 @@ def pin(src, out, runtime=None, kind="auto", headroom=0.90, max_tokens=8):
         p = _cli(tool, "--artifact", out, "--runtime", runtime, log=log)
         if p.returncode != 0:
             return finish("failed", f"{tool} --runtime {runtime} rc={p.returncode}; see {SMOKE_LOG}")
+
+    if flags:
+        # Bake env-var ARMS into the pinned runtime's defaults, so an env-var
+        # comparison becomes two ARTIFACTS (speed-pair, kl-ladder) that each
+        # carry their own switch -- and are smoked with it on.
+        from vqlab.runtime import runtime_profile as _rp
+        mp = out / "model.py"
+        txt = mp.read_text()
+        have = _rp.flags_of(txt)
+        missing = [f for f in flags if f not in have]
+        if missing:
+            return finish("failed", f"--flag {missing}: not a VQ_* default in this model.py")
+        mp.write_text(_rp.apply_flags(txt, flags))
+        got = _rp.flags_of(mp.read_text())
+        if any(got[f] != v for f, v in flags.items()):
+            return finish("failed", f"--flag did not take: {got}")
+        with open(log, "a") as f:
+            f.write(f"baked flags: {flags}\n")
 
     from vqlab._layout import find as _find
     p = subprocess.run([sys.executable, str(_find("preflight_ram.py")), str(out),
@@ -169,6 +188,9 @@ def main(argv=None) -> int:
     ap.add_argument("--runtime", choices=("v1.5", "v2"),
                     help="re-bake the runtime profile into the pin before smoking")
     ap.add_argument("--kind", choices=("auto", "dense", "moe"), default="auto")
+    ap.add_argument("--flag", action="append", default=[], metavar="VQ_X=V",
+                    help="bake this VQ_* env default into the pinned model.py "
+                         "before the smoke (repeatable): an env-var arm as an artifact")
     ap.add_argument("--headroom", type=float, default=0.90)
     ap.add_argument("--max-tokens", type=int, default=8)
     ap.add_argument("--check", action="store_true",
@@ -180,7 +202,13 @@ def main(argv=None) -> int:
         return 0 if ok else 1
     if not a.out:
         ap.error("--out is required")
-    return pin(a.artifact, a.out, a.runtime, a.kind, a.headroom, a.max_tokens)
+    flags = {}
+    for kv in a.flag:
+        k, _, v = kv.partition("=")
+        if not k.startswith("VQ_") or not _:
+            ap.error(f"--flag {kv!r}: want VQ_NAME=VALUE")
+        flags[k] = v
+    return pin(a.artifact, a.out, a.runtime, a.kind, a.headroom, a.max_tokens, flags)
 
 
 if __name__ == "__main__":
