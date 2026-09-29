@@ -2,7 +2,8 @@
 
     vqlab sz-bitexact <resident> <reference> [--ref2 <stage1_pack>]
                       [--mem-ref <stage1_pack>] --out <dir under vqlab-scratch>
-    vqlab sz-bitexact --synthetic --out <dir>    # GPU kernel stress, no model
+    vqlab sz-bitexact --synthetic --out <dir> [--vintage walk|u8|both]
+                      [--u8-model-py <397B bundle model.py>]   # GPU kernel stress, no model
     vqlab sz-bitexact --selftest                 # CPU only, no GPU
 
 Model mode runs ONE subprocess per artifact (a clean process each: separate
@@ -19,11 +20,16 @@ printed only to locate a failure -- any unequal byte is a FAIL):
     bytes); a 32-token greedy generation (token ids + every step's logits).
 --mem-ref additionally loads a stage-1 pack only to report its memory.
 Reference = the ORIGINAL rung on the 35B (F176); --ref2 adds a second one.
+
+Two runtime vintages (sz_resident.vintage): "walk" (repo runtime, 35B; packed
+uint32) and "u8" (the 397B bundle; unpacked uint8 d4 K256). --synthetic
+compares each vintage's SZ kernels against THAT vintage's own kernels on the
+expanded tensors: walk against runtime/vq_switch.py, u8 against the runtime
+part of the 397B bundle's model.py (exec'd from its text, read-only).
 """
 from __future__ import annotations
 
 import argparse
-import ast
 import hashlib
 import json
 import os
@@ -38,6 +44,8 @@ HERE = pathlib.Path(__file__).resolve().parent
 SRC = HERE.parents[2]
 SCRATCH = "<scratch>/"
 SEED = 1234
+U8_MODEL_PY = ("<models>/"
+               "TheDrainFlorist--Qwen3.5-397B-A17B-VQ-2.4bpw/model.py")
 NCASES = {1: (1, 1), 8: (1, 8), 4096: (512, 8), 4097: (4097, 1)}   # N: (T, k)
 CORPUS = SRC / "vqlab" / "score" / "referee" / "referee_corpus.txt"
 
@@ -123,7 +131,9 @@ def worker(art, role, outdir, experts_json, mem_only):
         json.dump(rep, open(out / "report.json", "w"), indent=1)
         return 0
     order = json.load(open(experts_json))
-    reach = modns["_reach_vq"]
+    sys.path.insert(0, str(HERE))
+    import sz_resident
+    reach = modns.get("_reach_vq") or sz_resident.reach   # the 397B bundle has no _reach_vq
     mods = list(order)
     cfg = json.loads((pathlib.Path(art) / "config.json").read_text())
 
@@ -258,83 +268,213 @@ def mem_table(outdir, roles):
 
 
 # --------------------------------------------------------- synthetic (GPU)
-def synthetic(outdir):
-    """Many-dead-rows stress: compact SZ kernels vs the repo runtime's own
-    kernels on the expanded tensors, byte for byte, both paths."""
+def load_u8_runtime(path=U8_MODEL_PY):
+    """The 397B bundle's vq_switch runtime, exec'd from the FILE TEXT up to its
+    arch shim (which needs config.json next to it). Read-only; never imported
+    as the bundle, never written."""
+    text = pathlib.Path(path).read_text()
+    marker = "\nimport importlib as _importlib\n"
+    if text.count(marker) != 1:
+        raise RuntimeError(f"{path}: arch-shim marker found {text.count(marker)}x (need 1)")
+    ns = {"__name__": "vq_switch_u8_ro", "__file__": str(path)}
+    exec(compile(text[: text.index(marker)], str(path), "exec"), ns)
+    return ns
+
+
+def _live_pattern(rng, E, OUT):
+    live = rng.random((E, OUT)) > 0.6                  # ~60% dead scattered
+    live[1] = False                                    # a fully dead expert
+    live[2, :64] = False                               # a whole OT2 pair of tiles
+    live[3, 32:64] = False                             # the second block of a pair
+    live[4, OUT - 5:] = False                          # ragged tail
+    live[5] = True                                     # a fully live expert
+    return live
+
+
+def _synthetic_cases(name, ref, cmp_, rng, live, E, IN, maxn, lines):
+    import mlx.core as mx
+    fails = 0
+    for N, (T, k) in {1: (1, 1), 8: (1, 8), 64: (8, 8), 4096: (512, 8),
+                      4097: (4097, 1), 9000: (1125, 8)}.items():
+        x = mx.array((rng.standard_normal((T, k, 1, IN)) * 0.5).astype(np.float32)).astype(mx.bfloat16)
+        idx = mx.array(rng.integers(0, E, (T, k)).astype(np.uint32))
+        a, b = _to_np(ref(x, idx)), _to_np(cmp_(x, idx))
+        eq = a.tobytes() == b.tobytes()
+        dead_out = int((~live[np.array(idx)]).sum())
+        md = 0.0 if eq else float(np.max(np.abs(_as_f32(a, "bfloat16") - _as_f32(b, "bfloat16"))))
+        path = "decode" if N <= maxn else "prefill"
+        lines.append(f"{name:<14} N={N:<5} {path:<8} dead outputs {dead_out:>8}  "
+                     f"{'EQUAL' if eq else 'DIFF'}  max|diff| {md:.3e}")
+        fails += int(not eq)
+    return fails
+
+
+def synthetic(outdir, which="both", u8_model_py=U8_MODEL_PY):
+    """Many-dead-rows stress: compact SZ kernels vs each vintage's OWN kernels
+    on the expanded tensors, byte for byte, decode and prefill paths."""
     import importlib.util
     import mlx.core as mx
-    spec = importlib.util.spec_from_file_location("vq_switch_ro", SRC / "vqlab/runtime/vq_switch.py")
-    vs = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(vs)
     sys.path.insert(0, str(HERE))
     import sz_resident
-    SZ = sz_resident.install(vars(vs))
     rng = np.random.default_rng(SEED)
-    K, BITS, fails, lines = 2048, 11, 0, []
-    for name, E, OUT, IN in (("gate-like", 16, 512, 2048), ("down-like", 16, 2048, 512)):
-        W = (IN // 4 + 31) // 32 * BITS
-        G = IN // 64
-        codes = rng.integers(0, 2**32, (E, OUT, W), dtype=np.uint64).astype(np.uint32)
-        scales = (rng.standard_normal((E, OUT, G)) * 0.02).astype(np.float16)
-        cb = (rng.standard_normal((K, 4))).astype(np.float16)
-        live = rng.random((E, OUT)) > 0.6                  # ~60% dead scattered
-        live[1] = False                                    # a fully dead expert
-        live[2, :64] = False                               # a whole OT2 pair of tiles
-        live[3, 32:64] = False                             # the second block of a pair
-        live[4, OUT - 5:] = False                          # ragged tail
-        live[5] = True                                     # a fully live expert
-        full_c, full_s = codes.copy(), scales.copy()
-        full_c[~live] = 0
-        full_s[~live] = 0
-        tbl = np.full(E * OUT, -1, np.int32)
-        tbl[live.reshape(-1)] = np.arange(int(live.sum()), dtype=np.int32)
-        ref = vs.VQSwitchLinear(mx.array(full_c), mx.array(cb), mx.array(full_s),
-                                pack_bits=BITS, in_features=IN)
-        cmp_ = SZ(mx.array(codes.reshape(E * OUT, W)[live.reshape(-1)]), mx.array(cb),
-                  mx.array(scales.reshape(E * OUT, G)[live.reshape(-1)]),
-                  mx.array(tbl.reshape(E, OUT)), pack_bits=BITS, in_features=IN)
-        for N, (T, k) in {1: (1, 1), 8: (1, 8), 64: (8, 8), 4096: (512, 8),
-                          4097: (4097, 1), 9000: (1125, 8)}.items():
-            x = mx.array((rng.standard_normal((T, k, 1, IN)) * 0.5).astype(np.float32)).astype(mx.bfloat16)
-            idx = mx.array(rng.integers(0, E, (T, k)).astype(np.uint32))
-            a, b = _to_np(ref(x, idx)), _to_np(cmp_(x, idx))
-            eq = a.tobytes() == b.tobytes()
-            dead_out = int((~live[np.array(idx)]).sum())
-            md = 0.0 if eq else float(np.max(np.abs(_as_f32(a, "bfloat16") - _as_f32(b, "bfloat16"))))
-            path = "decode" if N <= vs.VQ_FUSED_MAX_N else "prefill"
-            lines.append(f"{name:<10} N={N:<5} {path:<8} dead outputs {dead_out:>8}  "
-                         f"{'EQUAL' if eq else 'DIFF'}  max|diff| {md:.3e}")
-            fails += int(not eq)
+    fails, lines = 0, []
+    if which in ("walk", "both"):
+        spec = importlib.util.spec_from_file_location("vq_switch_ro", SRC / "vqlab/runtime/vq_switch.py")
+        vs = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(vs)
+        SZ = sz_resident.install(vars(vs))
+        assert SZ.vintage == "walk", SZ.vintage
+        K, BITS = 2048, 11
+        for name, E, OUT, IN in (("walk gate", 16, 512, 2048), ("walk down", 16, 2048, 512)):
+            W = (IN // 4 + 31) // 32 * BITS
+            G = IN // 64
+            codes = rng.integers(0, 2**32, (E, OUT, W), dtype=np.uint64).astype(np.uint32)
+            scales = (rng.standard_normal((E, OUT, G)) * 0.02).astype(np.float16)
+            cb = (rng.standard_normal((K, 4))).astype(np.float16)
+            live = _live_pattern(rng, E, OUT)
+            full_c, full_s = codes.copy(), scales.copy()
+            full_c[~live] = 0
+            full_s[~live] = 0
+            tbl = sz_resident.row_table_np(np.packbits(live, axis=-1, bitorder="little"), E, OUT)
+            ref = vs.VQSwitchLinear(mx.array(full_c), mx.array(cb), mx.array(full_s),
+                                    pack_bits=BITS, in_features=IN)
+            cmp_ = SZ(mx.array(codes.reshape(E * OUT, W)[live.reshape(-1)]), mx.array(cb),
+                      mx.array(scales.reshape(E * OUT, G)[live.reshape(-1)]),
+                      mx.array(tbl), pack_bits=BITS, in_features=IN)
+            fails += _synthetic_cases(name, ref, cmp_, rng, live, E, IN, vs.VQ_FUSED_MAX_N, lines)
+    if which in ("u8", "both"):
+        ns = load_u8_runtime(u8_model_py)
+        SZ = sz_resident.install(ns)
+        assert SZ.vintage == "u8", SZ.vintage
+        K = 256
+        # 397B shapes (gate/up 4096->1024, down 1024->4096) at small E
+        for name, E, OUT, IN in (("u8 gate(397B)", 16, 1024, 4096), ("u8 down(397B)", 16, 4096, 1024)):
+            NSUB, G = IN // 4, IN // 64
+            codes = rng.integers(0, 256, (E, OUT, NSUB)).astype(np.uint8)
+            scales = (rng.standard_normal((E, OUT, G)) * 0.02).astype(np.float16)
+            cb = (rng.standard_normal((K, 4))).astype(np.float16)
+            live = _live_pattern(rng, E, OUT)
+            full_c, full_s = codes.copy(), scales.copy()
+            full_c[~live] = 0
+            full_s[~live] = 0
+            tbl = sz_resident.row_table_np(np.packbits(live, axis=-1, bitorder="little"), E, OUT)
+            ref = ns["VQSwitchLinear"](mx.array(full_c), mx.array(cb), mx.array(full_s),
+                                       group_size=64)
+            cmp_ = SZ(mx.array(codes.reshape(E * OUT, NSUB)[live.reshape(-1)]), mx.array(cb),
+                      mx.array(scales.reshape(E * OUT, G)[live.reshape(-1)]),
+                      mx.array(tbl), group_size=64)
+            fails += _synthetic_cases(name, ref, cmp_, rng, live, E, IN, ns["VQ_FUSED_MAX_N"], lines)
     txt = "\n".join(lines)
     print(txt)
     if outdir:
         pathlib.Path(outdir).mkdir(parents=True, exist_ok=True)
-        (pathlib.Path(outdir) / "synthetic.txt").write_text(txt + f"\nfails={fails}\n")
+        (pathlib.Path(outdir) / f"synthetic_{which}.txt").write_text(txt + f"\nfails={fails}\n")
+    return 1 if fails else 0
+
+
+# ------------------------------------------------- partial real weights (GPU)
+def partial(resident, stage1, layers, outdir, original=None):
+    """A few REAL switch modules, no full model (for boxes that cannot hold it
+    resident): per module, the resident path (resident_weights + SZSwitchLinear
+    over the compact shard tensors) vs the stage-1 path (skipzero_load
+    expansion + the bundle's OWN VQSwitchLinear), at N = 1, 8, 4096, 4097,
+    compared as bytes. The runtime is the resident artifact's model.py text
+    (exec'd up to its arch shim); sz_resident.py is the artifact's own copy.
+    --original adds the ORIGINAL rung's modules as information only."""
+    import importlib.util
+    import mlx.core as mx
+    sys.path.insert(0, str(SRC))
+    from vqlab import _layout  # noqa: F401
+    import fitstore
+    res, st1 = pathlib.Path(resident), pathlib.Path(stage1)
+    cfg = json.loads((res / "config.json").read_text())
+    sz = cfg["vq_skipzero"]
+    if not sz.get("resident"):
+        raise SystemExit(f"{res} is not a resident artifact")
+    ns = load_u8_runtime(res / "model.py") if sz.get("runtime_vintage") == "u8" else None
+    if ns is None:
+        raise SystemExit("--partial: only the u8 vintage bundle is wired (walk: use model mode)")
+    spec = importlib.util.spec_from_file_location("sz_resident_art", res / "sz_resident.py")
+    szr = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(szr)
+    SZ = szr.install(ns)
+    sys.path.insert(0, str(HERE))
+    import skipzero_load
+    lo, hi = (int(v) for v in layers.split("-"))
+    mods = [p for p in sz["modules"]
+            if lo <= int(p.split(".layers.")[1].split(".")[0]) <= hi]
+
+    def tensors(art, keys):
+        idx = json.loads((pathlib.Path(art) / "model.safetensors.index.json").read_text())["weight_map"]
+        out = {}
+        for k in keys:
+            f = pathlib.Path(art) / idx[k]
+            h, base = fitstore.read_header(f)
+            dt = {"U8": np.uint8, "U32": np.uint32, "F16": np.float16, "I32": np.int32}[h[k]["dtype"]]
+            out[k] = np.frombuffer(fitstore.read_tensor_bytes(f, h, base, k), dt).reshape(h[k]["shape"])
+        return out
+
+    lines, fails = [], 0
+    for i, p in enumerate(mods):
+        g = cfg["vq_modules"][p]
+        E, OUT, IN = g["experts"], g["out"], g["in"]
+        keys = [p + s for s in (".sz_shape", ".sz_rowmask", ".sz_codes", ".sz_scales", ".codebook")]
+        t = tensors(res, keys)
+        t1 = tensors(st1, keys)
+        same_disk = all(t[k].tobytes() == t1[k].tobytes() for k in keys)
+        # resident: the artifact's own resident_weights on the shard tensors
+        w = szr.resident_weights({k: mx.array(v) for k, v in t.items()})
+        m_res = SZ(w[p + ".codes"], w[p + ".codebook"], w[p + ".vq_scales"],
+                   w[p + ".row_table"], group_size=g["group"])
+        # stage 1: the stage-1 expansion (mlx, as its loader does) + bundle VQSwitchLinear
+        full_c = skipzero_load.expand_mx(t1[p + ".sz_shape"], mx.array(t1[p + ".sz_rowmask"]),
+                                         mx.array(t1[p + ".sz_codes"]))
+        full_s = skipzero_load.expand_mx(t1[p + ".sz_shape"], mx.array(t1[p + ".sz_rowmask"]),
+                                         mx.array(t1[p + ".sz_scales"]))
+        m_st1 = ns["VQSwitchLinear"](full_c, mx.array(t1[p + ".codebook"]), full_s,
+                                     group_size=g["group"])
+        m_org = None
+        if original:
+            to = tensors(original, [p + ".codes", p + ".vq_scales", p + ".codebook"])
+            m_org = ns["VQSwitchLinear"](mx.array(to[p + ".codes"]), mx.array(to[p + ".codebook"]),
+                                         mx.array(to[p + ".vq_scales"]), group_size=g["group"])
+        live = skipzero_load.live_mask_np(t[p + ".sz_rowmask"], E, OUT)
+        order = [int(e) for e in np.argsort(-(~live).sum(1), kind="stable")]
+        for n in NCASES:
+            x, idx = module_inputs(p, i, n, IN, E, order, p.endswith("down_proj"))
+            xm, im = mx.array(x).astype(mx.bfloat16), mx.array(idx)
+            a, b = _to_np(m_res(xm, im)), _to_np(m_st1(xm, im))
+            eq = a.tobytes() == b.tobytes()
+            md = 0.0 if eq else float(np.max(np.abs(_as_f32(a, "bfloat16") - _as_f32(b, "bfloat16"))))
+            dead_out = int((~live[idx.reshape(-1)]).sum())
+            info = ""
+            if m_org is not None:
+                c = _to_np(m_org(xm, im))
+                info = "  vs original: " + ("EQUAL" if c.tobytes() == a.tobytes() else
+                        f"diff {np.max(np.abs(_as_f32(a, 'bfloat16') - _as_f32(c, 'bfloat16'))):.2e}")
+            lines.append(f"{p.split('model.')[-1]:<38} N={n:<5} dead outputs {dead_out:>8}/"
+                         f"{idx.size * OUT:<8} {'EQUAL' if eq else 'DIFF'} max|diff| {md:.2e}"
+                         f"{'' if same_disk else '  (DISK TENSORS DIFFER)'}{info}")
+            fails += int(not eq) + int(not same_disk)
+            mx.clear_cache()
+        del m_res, m_st1, m_org, full_c, full_s, w
+        mx.clear_cache()
+    kn = sorted({k.split("|")[0] for k in ns["_KERNELS"] if isinstance(k, str)})
+    lines.append(f"reference kernels exercised: {kn}")
+    txt = "\n".join(lines)
+    print(txt)
+    if outdir:
+        pathlib.Path(outdir).mkdir(parents=True, exist_ok=True)
+        (pathlib.Path(outdir) / f"partial_L{layers}.txt").write_text(txt + f"\nfails={fails}\n")
     return 1 if fails else 0
 
 
 # ------------------------------------------------------------ selftest (CPU)
 def _src_strings(path, names):
-    """Evaluate `NAME = "..." + NAME2 + r'''...'''` assignments by AST (no import)."""
-    tree = ast.parse(pathlib.Path(path).read_text())
-    env = {}
-
-    def ev(n):
-        if isinstance(n, ast.Constant) and isinstance(n.value, str):
-            return n.value
-        if isinstance(n, ast.Name):
-            return env[n.id]
-        if isinstance(n, ast.BinOp) and isinstance(n.op, ast.Add):
-            return ev(n.left) + ev(n.right)
-        raise ValueError
-    for node in tree.body:
-        if isinstance(node, ast.Assign) and len(node.targets) == 1 \
-                and isinstance(node.targets[0], ast.Name):
-            try:
-                env[node.targets[0].id] = ev(node.value)
-            except (ValueError, KeyError):
-                pass
-    return {n: env.get(n) for n in names}
+    """Kernel source strings of a runtime/model.py FILE, by AST (no import)."""
+    sys.path.insert(0, str(HERE))
+    import sz_resident
+    return sz_resident.kernel_srcs_from_text(pathlib.Path(path).read_text(), tuple(names))
 
 
 def selftest():
@@ -375,18 +515,47 @@ def selftest():
         ok &= bool(t2)
     except ImportError:
         print("[selftest] mlx not importable: SKIPPED the mlx-CPU row-table check")
-    # (3) kernel forks apply to the repo runtime text (no import, no GPU)
-    s = _src_strings(SRC / "vqlab/runtime/vq_switch.py",
-                     ["_SRC_FUSED_PACKED_D4_WALK", "_SRC_GEMMSEG2"])
-    try:
-        d = sz_resident.patch_decode_src(s["_SRC_FUSED_PACKED_D4_WALK"])
-        p = sz_resident.patch_gemmseg_src(s["_SRC_GEMMSEG2"])
-        t3 = "rowtbl" in d and p.count("rowtbl") == 1
-    except RuntimeError as e:
-        print(e)
-        t3 = False
-    print(f"[selftest] kernel forks apply to runtime/vq_switch.py: {'OK' if t3 else 'FAIL'}")
-    ok &= t3
+    # (3)/(4) kernel forks apply to each vintage's text (no import, no GPU);
+    # the vintage is detected from the text and the OTHER vintage's patch set
+    # must refuse it.
+    names = ["_SRC_FUSED_PACKED", "_SRC_FUSED_PACKED_D4_WALK", "_SRC_GEMMSEG2"]
+    for label, path, want in (("runtime/vq_switch.py", SRC / "vqlab/runtime/vq_switch.py", "walk"),
+                              ("397B bundle model.py", pathlib.Path(U8_MODEL_PY), "u8")):
+        if not path.exists():
+            print(f"[selftest] {label}: {path} not found: FAIL")
+            ok = False
+            continue
+        s = _src_strings(path, names)
+        try:
+            v, d, p = sz_resident.patch_vintage(s)
+            t = (v == want and d.count("rowtbl") == 1 and p.count("rowtbl") == 1
+                 and "sz_lr < 0" in d)
+            if want == "u8":
+                t &= "#if BITS != 0 || D_BAKE != 4" in p and "(size_t)e * OUT * WPR" not in p
+                t &= "srow_w = scales\n" not in p
+                try:           # the walk gemmseg patch must REFUSE this text
+                    sz_resident.patch_gemmseg_src(s["_SRC_GEMMSEG2"])
+                    t = False
+                except RuntimeError:
+                    pass
+            else:
+                try:
+                    sz_resident.patch_gemmseg_u8_src(s["_SRC_GEMMSEG2"])
+                    t = False
+                except RuntimeError:
+                    pass
+        except (RuntimeError, NotImplementedError) as e:
+            print(e)
+            t, v = False, None
+        print(f"[selftest] vintage '{v}' detected + forks apply to {label}: {'OK' if t else 'FAIL'}")
+        ok &= bool(t)
+    # (5) u8 compact rows through the row table == stage-1 expansion (numpy)
+    comp8 = rng.integers(0, 256, (int(live.sum()), 8)).astype(np.uint8)
+    full8 = skipzero_load.expand_np([E, OUT, 8, G], rowmask, comp8)
+    g8 = np.where(tbl[..., None] >= 0, comp8[np.maximum(tbl, 0)], 0).astype(np.uint8)
+    t5 = g8.tobytes() == full8.tobytes() and (comp8.view(np.uint32).view(np.uint8) == comp8).all()
+    print(f"[selftest] u8 compact rows via row table vs stage-1 expansion: {'OK' if t5 else 'FAIL'}")
+    ok &= bool(t5)
     print("[selftest] SKIPPED (need the GPU): kernel execution -- run "
           "`vqlab sz-bitexact --synthetic` and the model-mode gate")
     return 0 if ok else 1
@@ -402,6 +571,14 @@ def main(argv=None):
     ap.add_argument("--out")
     ap.add_argument("--synthetic", action="store_true")
     ap.add_argument("--selftest", action="store_true")
+    ap.add_argument("--partial", metavar="LAYERS",
+                    help="real-weights module test for layers A-B: <resident> <stage1_pack> "
+                         "[--original <rung>] (no full model load)")
+    ap.add_argument("--original")
+    ap.add_argument("--vintage", choices=("walk", "u8", "both"), default="both",
+                    help="--synthetic: which runtime vintage(s) to stress")
+    ap.add_argument("--u8-model-py", default=U8_MODEL_PY,
+                    help="--synthetic: the u8-vintage bundle model.py (read only)")
     ap.add_argument("--worker", nargs=3, metavar=("ART", "ROLE", "EXPERTS_JSON"),
                     help=argparse.SUPPRESS)
     ap.add_argument("--mem-only", action="store_true", help=argparse.SUPPRESS)
@@ -412,8 +589,12 @@ def main(argv=None):
         ap.error(f"--out must be under {SCRATCH}")
     if a.worker:
         return worker(a.worker[0], a.worker[1], a.out, a.worker[2], a.mem_only)
+    if a.partial:
+        if not (a.resident and a.reference):
+            ap.error("--partial needs <resident> <stage1_pack>")
+        return partial(a.resident, a.reference, a.partial, a.out, a.original)
     if a.synthetic:
-        return synthetic(a.out)
+        return synthetic(a.out, a.vintage, a.u8_model_py)
     if not (a.resident and a.reference and a.out):
         ap.error("need <resident> <reference> --out")
     out = pathlib.Path(a.out)

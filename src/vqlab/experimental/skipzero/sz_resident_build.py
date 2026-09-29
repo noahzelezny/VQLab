@@ -11,8 +11,11 @@ format is unchanged), and writes:
   * model.py     -- the SOURCE bundle's model.py bytes (stage-1 hook stripped,
                     verified) + sz_resident.MODEL_HOOK;
   * sz_resident.py (the runtime fork) and skipzero_load.py.
-Refuses modules that are not packed d4 (the only geometry forked).
-Numpy/stdlib only; no GPU.
+Two geometries are forked, one per runtime vintage (sz_resident.vintage):
+packed uint32 d4 (repo runtime / 35B) and UNPACKED uint8 d4 K<=256 (the
+397B bundle). The source model.py's kernel text must be one of those vintages
+(checked by AST + exact-text patch here, before anything is written) and must
+match the codes dtype. Numpy/stdlib only; no GPU.
 """
 from __future__ import annotations
 
@@ -58,22 +61,50 @@ def plan(src):
                 p = k[: -len(".sz_shape")]
                 shp = np.frombuffer(fitstore.read_tensor_bytes(f, h, base, k), np.int32)
                 nl = h[p + ".sz_codes"]["shape"][0]
-                if h[p + ".sz_codes"]["dtype"] != "U32" or h[p + ".sz_scales"]["dtype"] != "F16":
-                    raise SystemExit(f"{p}: codes {h[p + '.sz_codes']['dtype']} / scales "
-                                     f"{h[p + '.sz_scales']['dtype']}; only packed U32 + F16 forked")
-                shapes[p] = (int(shp[0]), int(shp[1]), int(shp[2]), int(shp[3]), int(nl))
+                cdt = h[p + ".sz_codes"]["dtype"]
+                if cdt not in ("U32", "U8") or h[p + ".sz_scales"]["dtype"] != "F16":
+                    raise SystemExit(f"{p}: codes {cdt} / scales "
+                                     f"{h[p + '.sz_scales']['dtype']}; only U32/U8 + F16 forked")
+                shapes[p] = (int(shp[0]), int(shp[1]), int(shp[2]), int(shp[3]), int(nl), cdt)
     mods = sz["modules"]
     if set(shapes) != set(mods):
         raise SystemExit(f"shard sz_ modules {len(shapes)} != config modules {len(mods)}")
-    for p, (E, OUT, W, G, NL) in shapes.items():
+    for p, (E, OUT, W, G, NL, cdt) in shapes.items():
         g, m = cfg["vq_modules"][p], mods[p]
-        if g.get("dim") != 4 or not g.get("pack_bits"):
-            raise SystemExit(f"{p}: d{g.get('dim')} pack_bits {g.get('pack_bits')}; only packed d4 forked")
+        pb = g.get("pack_bits", 0)
+        if g.get("dim") != 4:
+            raise SystemExit(f"{p}: d{g.get('dim')}; only d4 forked")
+        if cdt == "U32":
+            if not pb:
+                raise SystemExit(f"{p}: U32 codes but pack_bits 0")
+            wexp = (g["in"] // 4 + 31) // 32 * pb
+        else:
+            if pb or g["k"] > 256:
+                raise SystemExit(f"{p}: U8 codes need pack_bits 0 and K<=256 "
+                                 f"(pack_bits {pb}, K {g['k']})")
+            wexp = g["in"] // 4
+            if wexp % 4:
+                raise SystemExit(f"{p}: NSUB {wexp} % 4 != 0; the u8 decode views rows as uint32")
         if (E, OUT, NL) != (m["experts"], m["out"], m["live_rows"]):
             raise SystemExit(f"{p}: shard shape {(E, OUT, NL)} != config {m}")
-        if W != (g["in"] // 4 + 31) // 32 * g["pack_bits"] or G != g["in"] // g["group"]:
+        if W != wexp or G != g["in"] // g["group"]:
             raise SystemExit(f"{p}: W={W} G={G} inconsistent with vq_modules")
     return cfg, shapes
+
+
+def check_vintage(model_py_text, shapes):
+    """The source bundle's kernels must be a forked vintage whose codes dtype
+    matches every module's (patches asserted to apply exactly once)."""
+    try:
+        v, _, _ = sz_resident.patch_vintage(sz_resident.kernel_srcs_from_text(model_py_text))
+    except (NotImplementedError, RuntimeError) as e:
+        raise SystemExit(f"source model.py: {e}")
+    want = {"walk": "U32", "u8": "U8"}[v]
+    bad = [p for p, t in shapes.items() if t[5] != want]
+    if bad:
+        raise SystemExit(f"runtime vintage '{v}' serves {want} codes; {len(bad)} modules are not "
+                         f"(e.g. {bad[0]})")
+    return v
 
 
 def main(argv=None):
@@ -95,6 +126,8 @@ def main(argv=None):
     if stage1[nsrc:] != skipzero_load.MODEL_HOOK.encode():
         raise SystemExit("stage-1 model.py tail is not this repo's skipzero_load.MODEL_HOOK; "
                          "refusing to guess where the source bundle ends")
+    vint = check_vintage(stage1[:nsrc].decode(), shapes)
+    _log(f"source runtime vintage: {vint}")
     out.mkdir(parents=False)
     for f in sorted(src.iterdir()):
         if f.is_dir() or f.name in OWN or f.name == mf or f.name.startswith("vqlab_provenance"):
@@ -109,13 +142,18 @@ def main(argv=None):
     sz["resident_format"] = sz_resident.FORMAT
     sz["resident_version"] = sz_resident.VERSION
     sz["stage1_source"] = str(src)
+    sz["runtime_vintage"] = vint
     sz["note"] = ("EXPERIMENTAL, not a shipped format. STAGE 2: compact live rows + "
                   "[E, OUT] int32 row table stay RESIDENT (sz_resident.py); dead rows "
                   "read no code bytes and produce exact zeros.")
-    for p, (E, OUT, W, G, NL) in shapes.items():
-        sz["modules"][p].update({"code_words": W, "scale_groups": G})
-    row_tbl = sum(E * OUT * 4 for E, OUT, _, _, _ in shapes.values())
-    saved = sum((E * OUT - NL) * (W * 4 + G * 2) for E, OUT, W, G, NL in shapes.values())
+    wbytes = {"U32": 4, "U8": 1}
+    for p, (E, OUT, W, G, NL, cdt) in shapes.items():
+        sz["modules"][p].update({"code_words": W, "code_dtype": cdt, "scale_groups": G})
+    row_tbl = sum(E * OUT * 4 for E, OUT, *_ in shapes.values())
+    saved = sum((E * OUT - NL) * (W * wbytes[cdt] + G * 2)
+                for E, OUT, W, G, NL, cdt in shapes.values())
+    live = sum(v[4] for v in shapes.values())
+    rows = sum(v[0] * v[1] for v in shapes.values())
     sz["resident_saved_bytes"] = saved - row_tbl
     with open(out / "config.json", "x") as fo:
         json.dump(cfg, fo, indent=2)
@@ -126,6 +164,7 @@ def main(argv=None):
         inputs=[("stage1", str(src))],
         modules={p: {"origin": "skipzero-resident", "live_rows": v[4]} for p, v in shapes.items()},
         full_hash={"config.json", mf, "sz_resident.py", "skipzero_load.py"})
+    _log(f"{len(shapes)} modules; rows {rows} live {live} dead {rows - live}")
     _log(f"{len(shapes)} modules; resident saving {saved / 2**30:.4f} GiB rows - "
          f"{row_tbl / 2**30:.4f} GiB row tables = {(saved - row_tbl) / 2**30:.4f} GiB net")
     _log(f"DONE -> {out}")

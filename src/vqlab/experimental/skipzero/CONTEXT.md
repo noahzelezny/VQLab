@@ -45,23 +45,36 @@ A vq-skipzero artifact under vqlab-scratch/ and a printed size report.
 ## Stage 2: compact RESIDENT (EXPERIMENTAL, not gated yet)
 Keeps live rows' codes/scales + an int32 [E, OUT] row table (-1 = dead)
 resident; dead rows read no code bytes and output exact zeros.
-- `sz_resident.py` -- copied into the artifact; `install(ns)` forks exactly two
-  kernels of the artifact's own runtime by EXACT-TEXT patch (asserted to match
-  once): `_SRC_FUSED_PACKED_D4_WALK` -> `sz_fused_packed{B}_d4_walk` (decode) and
-  `_SRC_GEMMSEG2` -> `sz_gemmseg2_packed{B}_d4...` (prefill), with a `rowtbl`
-  input. Packed d4 only; anything else raises. The shipped runtime is untouched.
-  Dead-row arithmetic mirrors the expanded path (decode +0; prefill stages
-  `(half)(0.0f * cb[0])`), so the target is BYTE equality with stage 1.
+- `sz_resident.py` -- copied into the artifact; `install(ns)` detects the
+  runtime VINTAGE from its kernel text and forks exactly two kernels by
+  EXACT-TEXT patch (each asserted to match once); anything else refuses:
+  * `walk` (repo runtime, 35B): `_SRC_FUSED_PACKED_D4_WALK` ->
+    `sz_fused_packed{B}_d4_walk`, `_SRC_GEMMSEG2` -> `sz_gemmseg2_packed{B}_d4...`.
+    Packed uint32 d4 only.
+  * `u8` (397B bundle, profile v1.5): `_SRC_FUSED_PACKED` -> `sz_fused_packed8`
+    (compact uint8 [NLIVE, NSUB] rows viewed as uint32, the bundle's U8-VIEW),
+    `_SRC_GEMMSEG2` (BITS=0, CT=uchar) -> `sz_gemmseg2_u8_d4...`. Unpacked
+    uint8 d4 K<=256, NSUB % 4 == 0 only.
+  The shipped runtime is untouched. Dead-row arithmetic mirrors the expanded
+  path in both (decode +0; prefill stages `(half)(0.0f * cb[0])`), so the
+  target is BYTE equality with stage 1.
 - `vqlab sz-resident <stage1> --out <scratch>` -- new dir: symlinked shards,
-  config `vq_skipzero.resident=true` + per-module code_words/scale_groups,
-  model.py = source bytes + `sz_resident.MODEL_HOOK`. Stage-1 artifacts are
-  unaffected (the flag is opt-in).
+  config `vq_skipzero.resident=true` + `runtime_vintage` + per-module
+  code_words/code_dtype/scale_groups, model.py = source bytes +
+  `sz_resident.MODEL_HOOK`. Refuses a source model.py whose kernel text is
+  not a forked vintage or whose vintage does not match the codes dtype.
+  Stage-1 artifacts are unaffected (the flag is opt-in).
 - `vqlab sz-bitexact <resident> <reference> [--ref2 <stage1>] [--mem-ref <stage1>] --out <scratch>`
   -- one process per artifact, compares module outputs (N=1/8/4096/4097),
   in-model module outputs, logits, a 9k chunked prefill and a 32-token greedy
-  run AS BYTES. `--synthetic` = GPU many-dead-rows stress vs the runtime's own
-  kernels; `--selftest` = CPU only (row table, resident_weights, patches apply).
-- Rules: the row table costs 4 B/row, so on the 35B the net resident saving is
-  only ~0.05 GiB (0.085 rows - 0.033 table). The 397B's older runtime vintage
-  (unpacked uint8 d4 K256, `vq_fused_packed8` / `vq_gemmseg2_u8_d4`) does NOT
-  match the patches and is refused; it needs its own fork.
+  run AS BYTES. `--synthetic [--vintage walk|u8|both]` = GPU many-dead-rows
+  stress vs EACH vintage's own kernels (u8: the 397B bundle's model.py text,
+  exec'd read-only up to its arch shim). `--partial A-B <resident> <stage1>
+  [--original <rung>]` = real switch modules of layers A-B, no full model
+  (for the M3, which cannot hold the 397B). `--selftest` = CPU only.
+- Rules: the row table costs 4 B/row. On the 35B the net resident saving is
+  only ~0.05 GiB. On the 397B-2.4 it is 12.31 GiB of rows - 0.375 GiB of
+  tables = 11.94 GiB net. The 18 down_proj modules save 0.021 GiB of rows but
+  cost 0.14 GiB of tables, so they are a net LOSS.
+- The 397B bundle has no `_reach_vq`; the hook passes `globals().get("_reach_vq")`
+  and swap_modules falls back to `sz_resident.reach` (the same walk).
