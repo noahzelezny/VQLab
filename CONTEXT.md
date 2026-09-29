@@ -26,7 +26,7 @@ teacher, writes a new directory (never in place), and leaves a record.
 | 7 | **bench** | How fast is it, and where does the time go? | `decode-timeline`, `decode-ladder`, `active-bytes`, `prefill-bench`, `coverage`, `host-attrib`, `hc-micro`, `mtp-bench`, `mtp-accept`, `speed-pair` (two arms, fresh process each, ratio) |
 | 8 | **ship / serve** | Publish or serve it | `publish` (a human action), `serve`, `mtp-generate` |
 
-Experiments (NOT shipped formats), `src/vqlab/experimental/`: `sz-pack` / `sz-check` (vq-skipzero: fully-dead VQ rows dropped on disk, expanded at load by a shim; 397B -10.8% priced, disk only, KL-untested).
+Experiments (NOT shipped formats), `src/vqlab/experimental/`: `sz-pack` / `sz-check` / `sz-resident` / `sz-bitexact` (vq-skipzero: fully-dead VQ rows dropped on disk, expanded at load by a shim; 397B -10.8% priced, disk only, KL-untested).
 
 Around the pipeline: `queue` (run a list of steps from pinned code under the GPU lease; `--preflight` first), `mcp` (the lab over MCP for agents), `gui` (read-only local window).
 
