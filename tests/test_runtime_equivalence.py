@@ -43,7 +43,34 @@ def _bits(a):
     return np.array(a.astype(mx.float16)).view(np.uint16)
 
 
-@pytest.mark.parametrize("rev", REG["revisions"], ids=lambda r: r["commit"])
+SWITCH = [r for r in REG["revisions"] if r["path"].endswith("vq_switch.py")]
+OTHER = [r for r in REG["revisions"] if not r["path"].endswith("vq_switch.py")]
+
+
+def _code_tokens(text):
+    """Python tokens with comments and blank-line tokens dropped: two texts
+    with equal token streams run identically."""
+    import io
+    import tokenize
+    skip = {tokenize.COMMENT, tokenize.NL}
+    return [(t.type, t.string) for t in tokenize.generate_tokens(io.StringIO(text).readline)
+            if t.type not in skip]
+
+
+@pytest.mark.parametrize("rev", OTHER, ids=lambda r: r["commit"] + ":" + r["path"].rsplit("/", 1)[-1])
+def test_other_runtime_files_differ_only_in_comments(rev):
+    """Non-kernel runtime files are certified only when the change is
+    comment-only: the token stream (docstrings included) must be identical."""
+    try:
+        old = subprocess.run(["git", "show", f"{rev['commit']}:{rev['path']}"], cwd=ROOT,
+                             capture_output=True, text=True, check=True).stdout
+    except Exception:
+        pytest.skip(f"git text for {rev['commit']} unavailable")
+    new = (ROOT / rev["path"]).read_text()
+    assert _code_tokens(old) == _code_tokens(new)
+
+
+@pytest.mark.parametrize("rev", SWITCH, ids=lambda r: r["commit"])
 def test_current_runtime_byte_equal_to_certified_revision(rev):
     old = _old(rev)
     r = np.random.default_rng(11)
