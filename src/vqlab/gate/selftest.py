@@ -598,6 +598,15 @@ def main(argv=None) -> int:
         check("vq-skipzero: live rows byte-identical after expansion, dead rows exactly zero",
               _szok is not False)
 
+        from vqlab import _layout as _Lz
+        _szr = subprocess.run([sys.executable, str(_Lz.PKG / "experimental" / "skipzero" / "sz_bitexact.py"),
+                               "--selftest"], capture_output=True, text=True,
+                              env={**__import__("os").environ, "PYTHONPATH": str(_Lz.SRC)})
+        check("vq-skipzero stage 2: row table + resident weights (CPU), and its kernel forks still "
+              "apply to runtime/vq_switch.py (a runtime edit breaks the fork loudly)",
+              _szr.returncode == 0 and "kernel forks apply" in _szr.stdout,
+              (_szr.stdout + _szr.stderr).strip().splitlines()[-1] if _szr.returncode else "")
+
         print("[6a37/7] zero-groups (headers + scales only)")
         import numpy as _np
         from safetensors.numpy import save_file as _sf

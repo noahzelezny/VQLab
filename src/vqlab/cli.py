@@ -104,6 +104,8 @@ COMMANDS = {
     # experimental/ -- NOT shipped formats
     "sz-pack": ("experimental/skipzero/sz_pack.py", "EXPERIMENTAL vq-skipzero: drop fully-dead VQ rows on disk (live rows + row mask), expanded at load; --dry-run prices it"),
     "sz-check": ("experimental/skipzero/sz_check.py", "EXPERIMENTAL: numpy check that a vq-skipzero artifact expands to the original (live rows byte-identical, dead rows zero); --selftest"),
+    "sz-resident": ("experimental/skipzero/sz_resident_build.py", "EXPERIMENTAL stage 2: stage-1 pack -> compact-RESIDENT artifact (row table, new dir)"),
+    "sz-bitexact": ("experimental/skipzero/sz_bitexact.py", "EXPERIMENTAL: byte-equality gate, resident vs reference (modules N=1/8/4096/4097, logits, 9k prefill, greedy); --synthetic, --selftest"),
     "queue": ("run_queue.py", "run a list of steps from PINNED code (git worktree), under the GPU lease, failing loudly; --preflight"),
 }
 
