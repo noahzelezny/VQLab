@@ -1,85 +1,90 @@
 #!/usr/bin/env python3
-"""Paper figures. Values are the LEDGER's current truth (paper/LEDGER.md).
+"""Paper v5 figures, one panel per corpus, from the same per-position arrays
+and sizes as RESULTS-V5.md (make_results.py). No hand-typed values.
 
-Supersedes the repo-root chart_397b_ladder.py, whose spicyneuron point sat at
-121.0 GiB (the record says 120.6) and which predates the K512, d8 and refit
-rungs. Writes into paper/ only.
+    python research/paper/make_charts.py
+
+Writes fig_397b_ladder.png and fig_35b_27b.png beside this file.
 """
+import pathlib
+
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
-OURS, AFFINE = "#2563eb", "#9ca3af"
+import make_results as mr
 
-# ---- 397B: prose ppl vs packed post-graft GiB -------------------------------
-flat = [(100.93, 3.1706, "flat K128"),
-        (111.62, 2.7655, "flat K256"),
-        (122.31, 2.5634, "flat K512"),
-        (143.68, 2.3410, "flat K2048 (refit)")]
-d8 = [(100.97, 3.0591, "d8/K16384")]
-harvest = [(97.20, 3.2730, None), (99.05, 3.2289, None),
-           (107.90, 2.7790, None), (139.93, 2.3452, None)]
-spicy = [(120.57, 3.1843, "spicyneuron 2.6bit"), (165.57, 2.3614, "spicyneuron 3.5bit")]
+HERE = pathlib.Path(__file__).resolve().parent
+VQ, AFF, PUB = "#1d4ed8", "#b45309", "#9ca3af"
+CORPUS_NAME = {"prose": "prose", "code": "code", "lit": "literary"}
 
-fig, ax = plt.subplots(figsize=(8.4, 5.2))
-ax.plot([p[0] for p in flat], [p[1] for p in flat], "o-", color=OURS, ms=7,
-        lw=1.8, label="ours — flat VQ ladder", zorder=4)
-ax.plot([p[0] for p in d8], [p[1] for p in d8], "s", color=OURS, ms=8,
-        mfc="white", mew=2, label="ours — d8/K16384 (published)", zorder=5)
-ax.plot([p[0] for p in harvest], [p[1] for p in harvest], "^", color=OURS,
-        ms=6, alpha=.55, ls="none", label="ours — harvest rungs", zorder=3)
-ax.plot([p[0] for p in spicy], [p[1] for p in spicy], "D", color=AFFINE, ms=8,
-        ls="none", label="spicyneuron (hand-tuned mixed affine, text-only)", zorder=3)
-OFFS = {"d8/K16384": (10, -12), "flat K128": (8, 4),
-        "spicyneuron 3.5bit": (-118, 10)}
-for x, y, t in flat + d8 + spicy:
-    if t:
-        ax.annotate(t, (x, y), textcoords="offset points",
-                    xytext=OFFS.get(t, (7, 6)), fontsize=8.5, color="#374151")
-ax.set_xlabel("packed size, post-graft (GiB)")
-ax.set_ylabel("wikitext perplexity (lower is better)")
-ax.set_title("Qwen3.5-397B-A17B — size vs quality, one instrument\n"
-             "(ours keep the vision tower; spicyneuron rungs are text-only)",
-             fontsize=11)
-ax.grid(alpha=.25); ax.legend(fontsize=8.5, loc="upper right")
-fig.tight_layout(); fig.savefig("paper/fig_397b_ladder.png", dpi=200)
+# (family, rows, style, label) -- rows in size order are joined by a line
+SERIES = {
+ "397b": [
+  (["r24_sk8", "r26_sk8", "r31_sk8"], "o-", VQ, "VQ experts, spicyneuron skeleton"),
+  (["spicy26", "spicy35"], "D", AFF, "spicyneuron affine (same skeleton)"),
+  (["r22flat", "r24", "r26", "r31"], "o--", PUB, "VQ as published (6-bit skeleton)"),
+ ],
+ "35b": [
+  (["d2k16", "r34", "r38", "d4k16384", "d2k256", "r54", "d2k4096"], "o-", VQ,
+   "VQ experts"),
+  (["s2", "s3", "s4", "s5", "s6", "s8"], "D-", AFF, "affine experts (same skeleton)"),
+  (["q3", "q4", "q6", "q8"], "s--", PUB, "uniform affine as published"),
+ ],
+ "27b": [
+  (["d4k256", "d4k1024", "r39", "r45", "r48", "d2k4096"], "o-", VQ, "VQ MLPs"),
+  (["s2", "s3", "s4", "s5", "s6", "s8"], "D-", AFF, "affine MLPs (same skeleton)"),
+  (["q2", "q3", "q6", "q8"], "s--", PUB, "uniform affine as published"),
+ ],
+}
+TITLE = {"397b": "Qwen3.5-397B-A17B", "35b": "Qwen3.6-35B-A3B (MoE)",
+         "27b": "Qwen3.8-27B (dense)"}
 
-# ---- 35B and dense 27B: KL vs packed GiB, log y -----------------------------
-fig, axes = plt.subplots(1, 2, figsize=(11.2, 4.6))
 
-# 35B sizes are MEASURED POST-GRAFT: every rung carries the 0.832 GiB bf16
-# vision tower, as the community comparators always did. Our q6 was grafted
-# 08-24; q4 and q8 are community builds that already had it.
-vq35 = [(15.670, 53.022, "d4/K8192"), (16.615, 47.535, "d4/K16384"),
-        (18.475, 36.862, None), (22.226, 28.141, "d2/K1024"),
-        (25.977, 25.502, "d2/K4096")]
-aff35 = [(19.000, 78.557, "4-bit"), (27.066, 13.358, "6-bit"),
-         (35.131, 7.449, "8-bit")]
-# 27B sizes are MEASURED POST-GRAFT (+0.858 GiB vision tower on rungs AND
-# comparators alike, 08-24). d2/K512 is E142 arm 2, the published artifact.
-vq27 = [(10.47, 325.6, None), (11.47, 148.5, "d4/K1024"), (12.47, 85.8, None),
-        (14.45, 40.3, "d2/K256"), (15.45, 32.8, "d2/K512"), (18.44, 26.7, None)]
-aff27 = [(8.69, 1426.9, None), (11.82, 187.8, "q3"), (14.95, 45.8, "q4"),
-         (21.21, 3.71, "q6"), (27.48, 1.254, "q8")]  # q8 REBUILT (E144)
+def load(fam):
+    where = {row: (w, art) for row, w, art, _ in mr.ROWS[fam]}
+    out = {}
+    for rows, *_ in SERIES[fam]:
+        for row in rows:
+            w, art = where[row]
+            r = mr.rec(fam, row, w)
+            g = (mr.text_bytes(art) / 2**30) if art is not None and art.exists() \
+                else mr.KNOWN_GIB[fam, row]
+            out[row] = (g, {c: r[c]["kl"].mean() for c in mr.CORPORA})
+    return out
 
-for ax, vq, aff, title in [
-        (axes[0], vq35, aff35, "Qwen3.6-35B-A3B (MoE)"),
-        (axes[1], vq27, aff27, "Qwen3.8-27B (dense)")]:
-    ax.plot([p[0] for p in vq], [p[1] for p in vq], "o-", color=OURS, ms=6,
-            lw=1.8, label="ours (data-free VQ)")
-    ax.plot([p[0] for p in aff], [p[1] for p in aff], "D--", color=AFFINE,
-            ms=6, lw=1.4, label="affine")
-    OFF2 = {"q3": (6, 7), "d4/K1024": (-58, -3), "q4": (7, 6),
-            "d2/K256": (-52, -10), "d2/K512": (6, -12),
-            "d4/K16384": (8, -11), "8-bit": (-30, 8), "4-bit": (6, 4)}
-    for x, y, t in vq + aff:
-        if t:
-            ax.annotate(t, (x, y), textcoords="offset points",
-                        xytext=OFF2.get(t, (6, 5)), fontsize=8,
-                        color="#374151")
-    ax.set_yscale("log"); ax.set_xlabel("packed size (GiB)")
-    ax.set_title(title, fontsize=11); ax.grid(alpha=.25, which="both")
-axes[0].set_ylabel("KL to bf16 (mnats, log scale — lower is better)")
-axes[0].legend(fontsize=8.5)
-fig.tight_layout(); fig.savefig("paper/fig_35b_27b.png", dpi=200)
-print("wrote paper/fig_397b_ladder.png and paper/fig_35b_27b.png")
+
+def panel_row(axes, fam, legend):
+    d = load(fam)
+    for ax, c in zip(axes, mr.CORPORA):
+        for rows, style, color, label in SERIES[fam]:
+            pts = sorted((d[r][0], d[r][1][c]) for r in rows)
+            ax.plot([p[0] for p in pts], [p[1] for p in pts], style, color=color,
+                    ms=5, lw=1.5, mfc="white" if color == PUB else color,
+                    label=label, zorder=2 if color == PUB else 3)
+        ax.set_yscale("log")
+        ax.set_title(f"{TITLE[fam]} — {CORPUS_NAME[c]}", fontsize=9.5)
+        ax.grid(alpha=.25, which="both")
+        ax.set_xlabel("text weights (GiB)", fontsize=8.5)
+        ax.tick_params(labelsize=8)
+    axes[0].set_ylabel("KL to bf16 (mnats, log)", fontsize=8.5)
+    if legend:
+        axes[0].legend(fontsize=7.5, loc="lower left")
+
+
+def main():
+    fig, axes = plt.subplots(1, 3, figsize=(12, 3.8))
+    panel_row(axes, "397b", True)
+    fig.tight_layout()
+    fig.savefig(HERE / "fig_397b_ladder.png", dpi=200)
+
+    fig, axes = plt.subplots(2, 3, figsize=(12, 7.4))
+    panel_row(axes[0], "35b", True)
+    panel_row(axes[1], "27b", True)
+    fig.tight_layout()
+    fig.savefig(HERE / "fig_35b_27b.png", dpi=200)
+    print(f"wrote {HERE / 'fig_397b_ladder.png'} and {HERE / 'fig_35b_27b.png'}")
+
+
+if __name__ == "__main__":
+    main()
