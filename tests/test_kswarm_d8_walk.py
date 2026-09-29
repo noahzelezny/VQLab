@@ -96,4 +96,4 @@ def test_simd_arm_untouched(monkeypatch):
 def test_default_off():
     import os
     if os.environ.get("VQ_D8_WALK") is None:
-        assert V._D8_WALK is False
+        assert V._D8_WALK is True  # default ON since the 397B-2.2 pair (x1.020)
