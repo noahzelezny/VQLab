@@ -896,6 +896,71 @@ _SRC_FUSED_PACKED_D4_DEVCB = _PACK_FETCH + r"""
 """
 
 
+# kswarm devcb-walk (2026-09-29): F58's bit-walker applied to the packed d4
+# DEVICE-codebook kernel (K8192 p13 / K16384 p14: 35B-3.8, GLM-3.1, GLM-3.6).
+# Opt-in via VQ_D4_DEVCB_WALK=1, default OFF. _SRC_FUSED_PACKED_D4_DEVCB
+# re-reads a 32-bit word per code through VQ_CODE (at BITS=13/14 ~2.3 codes
+# per word, plus a two-word straddle read on ~40% of codes); the walk loads
+# each word once into a 64-bit buffer. Extra work vs devcb: none -- the walk
+# replaces per-code (word index, bit offset, 1-2 loads, shift/or/mask) with
+# one shift/mask per code and one conditional load per ~2.3 codes, no
+# shuffles and no change to the fma chain. Code values, device-cb half4
+# loads, dot operands, the ((d0+d1)+d2)+d3 shape and the per-group fma are
+# unchanged -> bit-identical (uint16, tests/test_kswarm_devcb_walk.py).
+# BITS <= 32 keeps nb + 32 <= 64 so the ulong never overflows.
+_D4_DEVCB_WALK = os.environ.get("VQ_D4_DEVCB_WALK", "0") == "1"
+
+_SRC_FUSED_PACKED_D4_DEVCB_WALK = _PACK_FETCH + r"""
+    const int OUT  = dims[0];
+    const int IN   = dims[1];
+    const int G    = dims[3];
+    const int N    = dims[4];
+    const int NSUB = IN / 4;
+    const int NGRP = IN / G;
+    const int QPG  = G / 16;
+    const int WPR  = (NSUB + 31) / 32 * BITS;  // ceil: tail block padded, pad codes never read (n < NSUB)
+    uint r = thread_position_in_grid.x;
+    uint t = thread_position_in_grid.y;
+    uint lid = thread_position_in_threadgroup.x;
+    uint tgsize = threads_per_threadgroup.x;
+
+    threadgroup half4 xs[MAX_NSUB];
+    const device T* xrow = x + (size_t)t * IN;
+    for (uint i = lid; i < (uint)NSUB; i += tgsize)
+        xs[i] = half4((half)xrow[i*4], (half)xrow[i*4+1],
+                      (half)xrow[i*4+2], (half)xrow[i*4+3]);
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+    if (r >= (uint)OUT || t >= (uint)N) return;
+    const uint e = eidx[t];
+    const device uint* crow = codes + (size_t)e * OUT * WPR + (size_t)r * WPR;
+    const device half* srow = scales + (size_t)e * OUT * NGRP + (size_t)r * NGRP;
+    const device half4* cb = (const device half4*)codebook;
+    float acc = 0.0f;
+    int j = 0;
+    int w = 0;
+    ulong buf = 0;
+    int nb = 0;
+    for (int g = 0; g < NGRP; ++g) {
+        float gacc = 0.0f;
+        for (int q = 0; q < QPG; ++q) {
+            uint cq[4];
+            for (int u = 0; u < 4; ++u) {
+                if (nb < BITS) { buf |= (ulong)crow[w++] << nb; nb += 32; }
+                cq[u] = (uint)(buf & (ulong)VQ_MASK);
+                buf >>= BITS; nb -= BITS;
+            }
+            gacc += dot(float4(cb[cq[0]]), float4(xs[j]))
+                  + dot(float4(cb[cq[1]]), float4(xs[j+1]))
+                  + dot(float4(cb[cq[2]]), float4(xs[j+2]))
+                  + dot(float4(cb[cq[3]]), float4(xs[j+3]));
+            j += 4;
+        }
+        acc = fma((float)srow[g], gacc, acc);
+    }
+    y[(size_t)t * OUT + r] = static_cast<T>(acc);
+"""
+
+
 # d=4, DEVICE codebook, one simdgroup per output row. The d4 counterpart of
 # _SRC_FUSED_D8_SIMD, and the expert-axis counterpart of _SRC_DENSE_D4_TILED
 # (identical body once the expert stride is folded into crow/srow). x is
@@ -2649,6 +2714,10 @@ def _fused_resolve(_plan_key, x, eidx, codes, codebook, scales, pack_bits=0,
                 else:
                     name = f"vq_fused_packed{pack_bits}"
                     src = _SRC_FUSED_PACKED
+            elif _D4_DEVCB_WALK:
+                # kswarm opt-in, default OFF; bit-identical to _d4_devcb.
+                name = f"vq_fused_packed{pack_bits}_d4_devcb_walk"
+                src = _SRC_FUSED_PACKED_D4_DEVCB_WALK
             else:
                 name = f"vq_fused_packed{pack_bits}_d4_devcb"
                 src = _SRC_FUSED_PACKED_D4_DEVCB
