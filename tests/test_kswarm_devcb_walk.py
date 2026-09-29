@@ -75,7 +75,7 @@ def test_devcb_walk_dispatches(monkeypatch):
     assert "vq_fused_packed13_d4_devcb_walk" in names
 
 
-def test_default_off():
+def test_default_on():
     import os
     if os.environ.get("VQ_D4_DEVCB_WALK") is None:
-        assert V._D4_DEVCB_WALK is False
+        assert V._D4_DEVCB_WALK is True  # default ON since F181

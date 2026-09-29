@@ -918,7 +918,7 @@ _SRC_FUSED_PACKED_D4_DEVCB = _PACK_FETCH + r"""
 # loads, dot operands, the ((d0+d1)+d2)+d3 shape and the per-group fma are
 # unchanged -> bit-identical (uint16, tests/test_kswarm_devcb_walk.py).
 # BITS <= 32 keeps nb + 32 <= 64 so the ulong never overflows.
-_D4_DEVCB_WALK = os.environ.get("VQ_D4_DEVCB_WALK", "0") == "1"
+_D4_DEVCB_WALK = os.environ.get("VQ_D4_DEVCB_WALK", "1") == "1"
 
 _SRC_FUSED_PACKED_D4_DEVCB_WALK = _PACK_FETCH + r"""
     const int OUT  = dims[0];
@@ -1108,7 +1108,7 @@ _SRC_FUSED_PACKED_D2 = _PACK_FETCH + r"""
 # the ((d0+d1)+d2)+d3 shape and the per-group fma are unchanged ->
 # bit-identical (uint16, tests/test_kswarm_d2_walk.py). Codes are consumed
 # strictly sequentially from j=0 (QPG*4*NGRP = NSUB), as the walk requires.
-_D2_WALK = os.environ.get("VQ_D2_WALK", "0") == "1"
+_D2_WALK = os.environ.get("VQ_D2_WALK", "1") == "1"
 
 _SRC_FUSED_PACKED_D2_WALK = _PACK_FETCH + r"""
     const int OUT  = dims[0];
@@ -4018,7 +4018,7 @@ _DECODE_BF16IO = os.environ.get("VQ_DECODE_BF16IO", "0") == "1"
 # the output is BIT-IDENTICAL; what goes away is one [N, IN] copy per call
 # and the cast shrinks by top_k. Same idea as the prefill fused-gather
 # (_FUSE_GATHER), which never reached the decode branch.
-_DECODE_XKREP = os.environ.get("VQ_DECODE_XKREP", "0") == "1"
+_DECODE_XKREP = os.environ.get("VQ_DECODE_XKREP", "1") == "1"
 # VQ_VIEW_MEMO (kswarm hostpath, default OFF): the u8->u32 codes reinterpret
 # (U8-VIEW dispatch, d4 unpacked + d2 u32) was re-issued as a fresh mx.view
 # graph node on EVERY decode call -- one per expert projection per layer per
