@@ -48,7 +48,7 @@ def load(fam):
         for row in rows:
             w, art = where[row]
             r = mr.rec(fam, row, w)
-            g = (mr.text_bytes(art) / 2**30) if art is not None and art.exists() \
+            g = mr.TEXT_BYTES[fam, row] / 2**30 if (fam, row) in mr.TEXT_BYTES \
                 else mr.KNOWN_GIB[fam, row]
             out[row] = (g, {c: r[c]["kl"].mean() for c in mr.CORPORA})
     return out
