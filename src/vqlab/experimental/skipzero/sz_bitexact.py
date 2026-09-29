@@ -44,6 +44,7 @@ HERE = pathlib.Path(__file__).resolve().parent
 SRC = HERE.parents[2]
 SCRATCH = "<scratch>/"
 SEED = 1234
+WALK_FROZEN = "1dc8d82"   # last runtime/vq_switch.py without the native SZ switch
 U8_MODEL_PY = ("<models>/"
                "TheDrainFlorist--Qwen3.5-397B-A17B-VQ-2.4bpw/model.py")
 NCASES = {1: (1, 1), 8: (1, 8), 4096: (512, 8), 4097: (4097, 1)}   # N: (T, k)
@@ -518,8 +519,25 @@ def selftest():
     # (3)/(4) kernel forks apply to each vintage's text (no import, no GPU);
     # the vintage is detected from the text and the OTHER vintage's patch set
     # must refuse it.
+    # Since 2026-09-29 runtime/vq_switch.py carries the SZ switch NATIVELY
+    # (`#if SZ` in the walk decode kernel and gemmseg2), so the walk fork now
+    # targets the last runtime WITHOUT it -- the text every walk-vintage
+    # bundle built before then carries -- read from git at WALK_FROZEN.
     names = ["_SRC_FUSED_PACKED", "_SRC_FUSED_PACKED_D4_WALK", "_SRC_GEMMSEG2"]
-    for label, path, want in (("runtime/vq_switch.py", SRC / "vqlab/runtime/vq_switch.py", "walk"),
+    import subprocess, tempfile
+    walk_txt = subprocess.run(
+        ["git", "show", f"{WALK_FROZEN}:src/vqlab/runtime/vq_switch.py"],
+        cwd=SRC.parent, capture_output=True, text=True)
+    walk_path = pathlib.Path(tempfile.mkdtemp()) / "vq_switch_walk.py"
+    if walk_txt.returncode == 0:
+        walk_path.write_text(walk_txt.stdout)
+    rt_txt = (SRC / "vqlab/runtime/vq_switch.py").read_text()
+    native = (rt_txt.count("#if SZ") >= 2 and "def skipzero_weights" in rt_txt
+              and "row_table=None" in rt_txt)
+    print(f"[selftest] runtime/vq_switch.py carries the SZ switch natively: "
+          f"{'OK' if native else 'FAIL'}")
+    ok &= native
+    for label, path, want in ((f"walk runtime @{WALK_FROZEN}", walk_path, "walk"),
                               ("397B bundle model.py", pathlib.Path(U8_MODEL_PY), "u8")):
         if not path.exists():
             print(f"[selftest] {label}: {path} not found: FAIL")

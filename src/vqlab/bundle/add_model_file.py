@@ -72,6 +72,22 @@ for k, sh in idx.items():
     if k.endswith(".codes"):
         by_shard.setdefault(sh, []).append(k[:-6])
 prev = json.load(open(ART / "config.json")).get("vq_modules", {})
+
+# SKIPZERO (docs/SKIPZERO.md). Modules `vqlab sz-pack` compacted carry
+# {p}.sz_codes / sz_scales / sz_rowmask / sz_shape instead of {p}.codes, so
+# the .codes scan above cannot see them; their geometry is the SOURCE rung's,
+# which sz-pack left in vq_modules untouched. Carry those entries over, and
+# refuse if one is missing -- a module dropped from vq_modules loads as a
+# dense random-init layer and generates garbage without an error.
+SZ = cfg.get("vq_skipzero") or {}
+sz_mods = SZ.get("modules", {})
+for m in sz_mods:
+    if m + ".sz_rowmask" not in idx:
+        raise SystemExit(f"{m}: listed in vq_skipzero.modules but the index "
+                         "has no sz_rowmask for it")
+    if m not in prev:
+        raise SystemExit(f"{m}: skipzero module has no vq_modules geometry")
+    vq_modules[m] = dict(prev[m])
 for sh, mods in sorted(by_shard.items()):
     data = mx.load(str(ART / sh))
     for m in mods:
@@ -106,6 +122,19 @@ for sh, mods in sorted(by_shard.items()):
 
 cfg["model_file"] = "model.py"
 cfg["vq_modules"] = vq_modules
+if sz_mods:
+    # The runtime now serves the compact rows RESIDENT; the stage-1 expansion
+    # shim (skipzero_load.py) is not used by this bundle.
+    SZ = {k: v for k, v in SZ.items()
+          if k not in ("note", "experimental", "resident", "runtime_vintage")}
+    SZ["loader"] = "runtime"
+    cfg["vq_skipzero"] = SZ
+# A pin's small files are COPIES, but never write THROUGH a symlink: that
+# would rewrite the source artifact's model.py from inside a new directory.
+for _f in (ART / "model.py", ART / "config.json"):
+    if _f.is_symlink():
+        raise SystemExit(f"REFUSING: {_f} is a symlink; bundling would write "
+                         "through it into another artifact")
 json.dump(cfg, open(ART / "config.json", "w"), indent=1)
 
 from vqlab import _layout  # noqa: E402
@@ -140,6 +169,9 @@ _cfg = _json.load(open(_pathlib.Path(__file__).parent / "config.json"))
 ''' + _ARCH_PRELUDE + _ARCH_COERCE + _ARCH_PATHWALK + _ARCH_VLM_SANITIZE + _ARCH_ARRAYISH + '''
 
 
+_SZ_MODS = (_cfg.get("vq_skipzero") or {}).get("modules", {})
+
+
 class Model(_arch.Model):
     def __init__(self, args):
         args = _coerce_module_configs(args)
@@ -148,6 +180,24 @@ class Model(_arch.Model):
             _obj, _leaf = _reach_vq(self, _path)
             _parts = [_leaf]
             _pb = _m.get("pack_bits", 0)
+            _sz = _SZ_MODS.get(_path)
+            if _sz is not None:
+                # SKIPZERO: compact live rows + [E, OUT] row table resident.
+                _nsub = _m["in"] // _m["dim"]
+                if _pb:
+                    _w, _ct = (_nsub + 31) // 32 * _pb, mx.uint32
+                else:
+                    _w, _ct = _nsub, (mx.uint8 if _m["k"] <= 256 else mx.uint16)
+                _attach_vq(_obj, _leaf, VQSwitchLinear(
+                    mx.zeros((_sz["live_rows"], _w), dtype=_ct),
+                    mx.zeros((_m["k"], _m["dim"]), dtype=mx.float16),
+                    mx.zeros((_sz["live_rows"], _m["in"] // _m["group"]),
+                             dtype=mx.float16),
+                    group_size=_m["group"], pack_bits=_pb,
+                    in_features=_m["in"] if _pb else None,
+                    row_table=mx.zeros((_m["experts"], _m["out"]),
+                                       dtype=mx.int32)))
+                continue
             if _pb:
                 # packed: uint32 words, 32 codes per BITS words, row-local
                 _nsub = _m["in"] // _m["dim"]
@@ -187,10 +237,19 @@ class Model(_arch.Model):
         return _arrayish(super().__call__(*_a, **_kw))
 
     def sanitize(self, _weights):
+        if _SZ_MODS:
+            _weights = skipzero_weights(_weights, _SZ_MODS)
         if _LOADER == "mlx_vlm" and _arch.__name__.startswith("mlx_vlm."):
             return _sanitize_for_vlm(self, _weights)
         _base = getattr(super(), "sanitize", None)
         return _base(_weights) if _base is not None else _weights
+
+    def load_weights(self, file_or_weights, strict=True):
+        # mlx_vlm SKIPS sanitize for format=mlx shards and goes straight here,
+        # so the skipzero conversion must also run on this path (idempotent).
+        if _SZ_MODS and not isinstance(file_or_weights, (str, _pathlib.Path)):
+            file_or_weights = skipzero_weights(file_or_weights, _SZ_MODS)
+        return super().load_weights(file_or_weights, strict=strict)
 '''
 _model_py = runtime + shim
 # NEVER ship a model.py that cannot parse. The dense bundler has always done

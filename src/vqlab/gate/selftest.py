@@ -602,9 +602,11 @@ def main(argv=None) -> int:
         _szr = subprocess.run([sys.executable, str(_Lz.PKG / "experimental" / "skipzero" / "sz_bitexact.py"),
                                "--selftest"], capture_output=True, text=True,
                               env={**__import__("os").environ, "PYTHONPATH": str(_Lz.SRC)})
-        check("vq-skipzero stage 2: row table + resident weights (CPU), and its kernel forks still "
-              "apply to runtime/vq_switch.py (a runtime edit breaks the fork loudly)",
-              _szr.returncode == 0 and "forks apply to runtime/vq_switch.py: OK" in _szr.stdout,
+        check("vq-skipzero: runtime carries the SZ switch natively; the experimental forks still "
+              "apply to the frozen walk/u8 vintages; row table + resident weights (CPU)",
+              _szr.returncode == 0
+              and "carries the SZ switch natively: OK" in _szr.stdout
+              and "forks apply to walk runtime" in _szr.stdout,
               (_szr.stdout + _szr.stderr).strip().splitlines()[-1] if _szr.returncode else "")
 
         print("[6a37/7] zero-groups (headers + scales only)")
