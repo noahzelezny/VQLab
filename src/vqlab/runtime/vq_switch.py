@@ -1090,6 +1090,69 @@ _SRC_FUSED_PACKED_D2 = _PACK_FETCH + r"""
     y[(size_t)t * OUT + r] = static_cast<T>(acc);
 """
 
+# kswarm d2-walk (2026-09-29): F58's bit-walker on the packed d2 threadgroup
+# kernel (35B-4.6 K512 p9, 35B-5.4/Flash-4.4/Flash-5.5 K1024 p10, gemma-26b
+# K2048 p11). Opt-in via VQ_D2_WALK=1, default OFF. Only the code fetch
+# changes (each word loaded once into a 64-bit buffer instead of VQ_CODE's
+# per-code 1-2 word re-read); code values, tg-cb half2 loads, dot operands,
+# the ((d0+d1)+d2)+d3 shape and the per-group fma are unchanged ->
+# bit-identical (uint16, tests/test_kswarm_d2_walk.py). Codes are consumed
+# strictly sequentially from j=0 (QPG*4*NGRP = NSUB), as the walk requires.
+_D2_WALK = os.environ.get("VQ_D2_WALK", "0") == "1"
+
+_SRC_FUSED_PACKED_D2_WALK = _PACK_FETCH + r"""
+    const int OUT  = dims[0];
+    const int IN   = dims[1];
+    const int G    = dims[3];
+    const int N    = dims[4];
+    const int K    = dims[5];
+    const int NSUB = IN / 2;
+    const int NGRP = IN / G;
+    const int QPG  = G / 8;
+    const int WPR  = (NSUB + 31) / 32 * BITS;  // ceil: tail block padded, pad codes never read (n < NSUB)
+    uint r = thread_position_in_grid.x;
+    uint t = thread_position_in_grid.y;
+    uint lid = thread_position_in_threadgroup.x;
+    uint tgsize = threads_per_threadgroup.x;
+
+    threadgroup half2 cb[MAX_K];
+    threadgroup half2 xs[MAX_NSUB];
+    const device half2* cbg = (const device half2*)codebook;
+    for (uint i = lid; i < (uint)K; i += tgsize)
+        cb[i] = cbg[i];
+    const device T* xrow = x + (size_t)t * IN;
+    for (uint i = lid; i < (uint)NSUB; i += tgsize)
+        xs[i] = half2((half)xrow[i*2], (half)xrow[i*2+1]);
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+    if (r >= (uint)OUT || t >= (uint)N) return;
+    const uint e = eidx[t];
+    const device uint* crow = codes + (size_t)e * OUT * WPR + (size_t)r * WPR;
+    const device half* srow = scales + (size_t)e * OUT * NGRP + (size_t)r * NGRP;
+    float acc = 0.0f;
+    int j = 0;
+    int w = 0;
+    ulong buf = 0;
+    int nb = 0;
+    for (int g = 0; g < NGRP; ++g) {
+        float gacc = 0.0f;
+        for (int q = 0; q < QPG; ++q) {
+            uint cq[4];
+            for (int u = 0; u < 4; ++u) {
+                if (nb < BITS) { buf |= (ulong)crow[w++] << nb; nb += 32; }
+                cq[u] = (uint)(buf & (ulong)VQ_MASK);
+                buf >>= BITS; nb -= BITS;
+            }
+            gacc += dot(float2(cb[cq[0]]), float2(xs[j]))
+                  + dot(float2(cb[cq[1]]), float2(xs[j+1]))
+                  + dot(float2(cb[cq[2]]), float2(xs[j+2]))
+                  + dot(float2(cb[cq[3]]), float2(xs[j+3]));
+            j += 4;
+        }
+        acc = fma((float)srow[g], gacc, acc);
+    }
+    y[(size_t)t * OUT + r] = static_cast<T>(acc);
+"""
+
 
 _SRC_FUSED_PACKED_D8 = _PACK_FETCH + r"""
     const int OUT  = dims[0];
@@ -2725,8 +2788,13 @@ def _fused_resolve(_plan_key, x, eidx, codes, codebook, scales, pack_bits=0,
             # NSUB (= IN/2) doubles vs d4 for the same IN; MAX_NSUB below is
             # computed from the actual IN, so the threadgroup x cache is
             # sized for the doubled subvector count automatically.
-            name = f"vq_fused_packed{pack_bits}_d2"
-            src = _SRC_FUSED_PACKED_D2
+            if _D2_WALK:
+                # kswarm opt-in, default OFF; bit-identical to packed d2.
+                name = f"vq_fused_packed{pack_bits}_d2_walk"
+                src = _SRC_FUSED_PACKED_D2_WALK
+            else:
+                name = f"vq_fused_packed{pack_bits}_d2"
+                src = _SRC_FUSED_PACKED_D2
         elif D == 8:
             # d=8 packed (E100, 2026-08-21). NSUB = IN/8 -- a QUARTER of the
             # d4 value for the same IN -- so the codes row is WPR = NSUB/32
