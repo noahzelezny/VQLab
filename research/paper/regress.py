@@ -21,6 +21,10 @@ ARTIFACT = PR / "paper_rev" / "pinv2" / "q27_3.9"
 CACHE = PR / "teacher_caches_full" / "q27_prose_12k"
 EXPECT = 146.5634
 SRC = pathlib.Path(__file__).resolve().parents[2] / "src"
+# The paper's 27B/35B harness (run_night4.sh): qwen4exp venv, --lazy-over-gb 16.
+# One harness: the exo env at the default lazy threshold gives 147.0229 on the
+# same pin and cache (2026-09-28) -- an instrument difference, not drift.
+PY = "<ssd>/venvs/qwen4exp/bin/python"
 
 
 def main() -> int:
@@ -30,8 +34,9 @@ def main() -> int:
             return 1
     with tempfile.TemporaryDirectory(dir=PR) as tmp:
         out = pathlib.Path(tmp) / "ladder.json"
-        r = subprocess.run([sys.executable, "-m", "vqlab.cli", "kl-ladder",
+        r = subprocess.run([PY, "-m", "vqlab.cli", "kl-ladder",
                             "--cache", f"prose={CACHE}", "--rung", f"r39={ARTIFACT}",
+                            "--python", PY, "--lazy-over-gb", "16",
                             "--per-pos-dir", tmp, "--out", str(out)],
                            env={"PYTHONPATH": str(SRC), "PATH": "/usr/bin:/bin"})
         if r.returncode != 0 or not out.exists():
