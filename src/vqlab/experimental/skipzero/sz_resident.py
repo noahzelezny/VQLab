@@ -10,10 +10,18 @@ stage 2 keeps, per packed VQ switch module:
 and dead rows produce EXACTLY 0 without reading a code byte.
 
 It does NOT edit the shipped runtime. `install(ns)` takes the namespace of the
-artifact's model.py (the repo-vintage vq_switch runtime + arch shim) and
-builds NEW kernels by patching the source text of exactly two kernels:
+artifact's model.py and builds NEW kernels by patching the source text of
+exactly two kernels. TWO runtime vintages are forked; which one is decided by
+which kernel text is present (`vintage()`), and anything else refuses:
+  vintage "walk" (repo runtime / 35B bundles; packed uint32 codes, d4):
     decode : _SRC_FUSED_PACKED_D4_WALK  -> sz_fused_packed{B}_d4_walk
     prefill: _SRC_GEMMSEG2 (d4, packed) -> sz_gemmseg2_packed{B}_d4...
+  vintage "u8" (397B bundle, profile v1.5; UNPACKED uint8 codes, d4, K<=256):
+    decode : _SRC_FUSED_PACKED (u8 rows viewed as u32, BITS=8) -> sz_fused_packed8
+    prefill: _SRC_GEMMSEG2 (BITS=0, CT=uchar)                  -> sz_gemmseg2_u8_d4...
+  In the u8 vintage the compact codes stay uint8 [NLIVE, NSUB] (what is on
+  disk); decode views them as uint32 [NLIVE, NSUB/4] exactly like the
+  vintage's own _fused_resolve U8-VIEW dispatch.
 Every patch is an exact-text replacement asserted to match once, so a runtime
 vintage whose kernel text differs REFUSES instead of guessing. Every other
 geometry / flag combination raises NotImplementedError.
@@ -25,6 +33,7 @@ Dead-row arithmetic is chosen to be byte-identical with the expanded
   * prefill: the dead row's wtT column is filled with (half)(0.0f * cb[0].c),
              i.e. the exact values the expanded path stages (code 0, scale
              0, signed zeros included); only the code/scale READS are gone.
+Both hold in both vintages (same arithmetic, different addressing).
 """
 from __future__ import annotations
 
@@ -159,6 +168,121 @@ def patch_gemmseg_src(src):
     return s
 
 
+# ---- vintage "u8": the 397B bundle's _SRC_GEMMSEG2 (no OT2 loop, BITS==0 arm)
+_GSU8_BASE_OLD = """#if BITS == 0
+    const device CT* wrow_codes = codes
+        + (size_t)e * OUT * WPR + (size_t)(o0 + wr) * WPR;
+    #define VQ_FETCH(j) ((uint)wrow_codes[j])
+#else
+    const device uint* wrow_codes = codes
+        + (size_t)e * OUT * WPR + (size_t)(o0 + wr) * WPR;
+    #define VQ_FETCH(j) VQ_CODE(wrow_codes, j)
+#endif
+    const device half* srow_w = scales
+        + (size_t)e * OUT * NGRP + (size_t)(o0 + wr) * NGRP;
+"""
+_GSU8_BASE_NEW = """#if BITS != 0 || D_BAKE != 4
+#error "sz-resident gemmseg (u8 vintage): unpacked d4 only"
+#endif
+    // compact row of the output row this thread decodes (-1 = dead / OOB)
+    const int sz_l = (o0 + wr < OUT) ? rowtbl[(size_t)e * OUT + (o0 + wr)] : -1;
+    const device CT* wrow_codes = codes + (size_t)max(sz_l, 0) * WPR;
+    #define VQ_FETCH(j) ((uint)wrow_codes[j])
+    const device half* srow_w = scales + (size_t)max(sz_l, 0) * NGRP;
+"""
+_GSU8_IF_OLD = """        if (o0 + wr < OUT) {
+            const float s = (float)srow_w[g];
+"""
+_GSU8_IF_NEW = """        if (sz_l >= 0) {
+            const float s = (float)srow_w[g];
+"""
+_GSU8_ELSE_NEW = """        } else if (o0 + wr < OUT) {
+            // DEAD row: stage exactly what the expanded path stages for
+            // code 0 / scale +0 (signed zeros included); no code/scale reads.
+            const float s = 0.0f;
+            for (int q = q0; q < q0 + SPG / 4; ++q) {
+                const half4 v = cb[0];
+                wtT[q * 4][wr]     = (half)(s * (float)v.x);
+                wtT[q * 4 + 1][wr] = (half)(s * (float)v.y);
+                wtT[q * 4 + 2][wr] = (half)(s * (float)v.z);
+                wtT[q * 4 + 3][wr] = (half)(s * (float)v.w);
+            }
+""" + _GS_ELSE_OLD
+
+
+def patch_gemmseg_u8_src(src):
+    s = _sub1(src, _GSU8_BASE_OLD, _GSU8_BASE_NEW, "gemmseg(u8) row pointers")
+    s = _sub1(s, _GSU8_IF_OLD, _GSU8_IF_NEW, "gemmseg(u8) live-row guard")
+    s = _sub1(s, _GS_ELSE_OLD, _GSU8_ELSE_NEW, "gemmseg(u8) zero-tile branch")
+    if s.count("rowtbl") != 1:
+        raise RuntimeError("sz-resident: gemmseg(u8) patch left rowtbl reads != 1")
+    return s
+
+
+# kernel-source names each vintage forks (decode, prefill)
+VINTAGES = {"walk": ("_SRC_FUSED_PACKED_D4_WALK", "_SRC_GEMMSEG2"),
+            "u8": ("_SRC_FUSED_PACKED", "_SRC_GEMMSEG2")}
+
+
+def vintage(srcs):
+    """Which vintage a runtime is, from its kernel TEXT ({name: source}).
+    'walk' if the D4_WALK kernel exists and gemmseg carries the OT2 row-base
+    block; 'u8' if there is no WALK kernel and gemmseg carries the direct
+    BITS==0 row-pointer block; otherwise refuse."""
+    gs = srcs.get("_SRC_GEMMSEG2") or ""
+    if srcs.get("_SRC_FUSED_PACKED_D4_WALK") and gs.count(_GS_BASE_OLD) == 1:
+        return "walk"
+    if (not srcs.get("_SRC_FUSED_PACKED_D4_WALK") and srcs.get("_SRC_FUSED_PACKED")
+            and gs.count(_GSU8_BASE_OLD) == 1):
+        return "u8"
+    raise NotImplementedError("sz-resident: unrecognised runtime vintage (neither the "
+                              "D4_WALK/OT2 kernels nor the 397B u8 kernels); refusing")
+
+
+def patch_vintage(srcs):
+    """-> (vintage, patched decode src, patched gemmseg src); each patch asserted once."""
+    v = vintage(srcs)
+    dec, gs = VINTAGES[v]
+    d = patch_decode_src(srcs[dec])
+    g = patch_gemmseg_src(srcs[gs]) if v == "walk" else patch_gemmseg_u8_src(srcs[gs])
+    return v, d, g
+
+
+def kernel_srcs_from_text(text, names=("_SRC_FUSED_PACKED", "_SRC_FUSED_PACKED_D4_WALK",
+                                       "_SRC_GEMMSEG2", "_PACK_FETCH")):
+    """Evaluate `NAME = "..." + NAME2 + r'''...'''` module-level assignments of a
+    model.py / runtime TEXT by AST (no import, no exec). Missing names -> None."""
+    import ast
+    env = {}
+
+    def ev(n):
+        if isinstance(n, ast.Constant) and isinstance(n.value, str):
+            return n.value
+        if isinstance(n, ast.Name):
+            return env[n.id]
+        if isinstance(n, ast.BinOp) and isinstance(n.op, ast.Add):
+            return ev(n.left) + ev(n.right)
+        raise ValueError
+    for node in ast.parse(text).body:
+        if isinstance(node, ast.Assign) and len(node.targets) == 1 \
+                and isinstance(node.targets[0], ast.Name):
+            try:
+                env[node.targets[0].id] = ev(node.value)
+            except (ValueError, KeyError):
+                pass
+    return {n: env.get(n) for n in names}
+
+
+def reach(model, path):
+    """(parent, leaf) of a dotted module path; digits index lists (the same walk
+    every bundle's Model.__init__ does). Used when the bundle has no _reach_vq."""
+    parts = path.split(".")
+    obj = model
+    for c in parts[:-1]:
+        obj = obj[int(c)] if c.isdigit() else getattr(obj, c)
+    return obj, parts[-1]
+
+
 DECODE_SIG = (["x", "eidx", "codes", "codebook", "scales", "dims", "rowtbl"], ["y"])
 GEMMSEG_SIG = (["codes", "codebook", "scales", "xsrc", "srcrows", "tmeta", "dims",
                 "rowtbl"], ["y"])
@@ -171,18 +295,25 @@ def install(ns):
     Returns the class; also stores it as ns['SZSwitchLinear']."""
     if "SZSwitchLinear" in ns:
         return ns["SZSwitchLinear"]
-    mx, np = ns["mx"], ns["np"]
-    VQSwitchLinear = ns["VQSwitchLinear"]
-    need = ("_SRC_FUSED_PACKED_D4_WALK", "_SRC_GEMMSEG2", "_PACK_FETCH", "_dims_array",
-            "_d4_tg_fits", "_memo_get", "_memo_put", "_idx_np", "gemmseg_fits",
-            "_metal_type_name", "VQ_FUSED_MAX_N")
+    v, dec_src, gs_src = patch_vintage(
+        {n: ns.get(n) for n in ("_SRC_FUSED_PACKED", "_SRC_FUSED_PACKED_D4_WALK",
+                                "_SRC_GEMMSEG2")})
+    need = {"walk": ("_PACK_FETCH", "_dims_array", "_d4_tg_fits", "_memo_get", "_memo_put",
+                     "_idx_np", "gemmseg_fits", "_metal_type_name", "VQ_FUSED_MAX_N"),
+            "u8": ("_PACK_FETCH", "_dims_array", "_d4_tg_fits", "_memo_get", "_memo_put",
+                   "gemmseg_fits", "_metal_type_name", "VQ_FUSED_MAX_N", "_FUSED_GEMM_V2",
+                   "_GEMMSEG_CBDEV", "_GEMMSEG_RTILE", "_TG_CAP_BYTES", "_FUSE_GATHER")}[v]
     miss = [n for n in need if n not in ns]
     if miss:
-        raise NotImplementedError(
-            f"sz-resident: this runtime vintage lacks {miss} (older vintages, e.g. "
-            "the 397B's vq_fused_packed8 / vq_gemmseg2_u8_d4, need their own fork)")
-    dec_src = patch_decode_src(ns["_SRC_FUSED_PACKED_D4_WALK"])
-    gs_src = patch_gemmseg_src(ns["_SRC_GEMMSEG2"])
+        raise NotImplementedError(f"sz-resident: runtime vintage '{v}' lacks {miss}")
+    cls = (_install_walk if v == "walk" else _install_u8)(ns, dec_src, gs_src)
+    cls.vintage = v
+    ns["SZSwitchLinear"] = cls
+    return cls
+
+
+def _kernel_factory(ns):
+    mx = ns["mx"]
     cache = {}
 
     def kernel(name, src, sig, template):
@@ -206,6 +337,13 @@ def install(ns):
                 input_names=sig[0], output_names=sig[1], source=src, header=hdr)
             cache[key] = k
         return k
+    return kernel
+
+
+def _install_walk(ns, dec_src, gs_src):
+    mx, np = ns["mx"], ns["np"]
+    VQSwitchLinear = ns["VQSwitchLinear"]
+    kernel = _kernel_factory(ns)
 
     def sz_fused(x, eidx, codes, codebook, scales, rowtbl, pack_bits, OUT, IN):
         # mirrors _fused_resolve's packed-d4 WALK branch only
@@ -381,32 +519,199 @@ def install(ns):
 
     SZSwitchLinear.sz_fused = staticmethod(sz_fused)
     SZSwitchLinear.sz_gemmseg = staticmethod(sz_gemmseg)
-    ns["SZSwitchLinear"] = SZSwitchLinear
     return SZSwitchLinear
 
 
-def swap_modules(model, cfg, reach, ns):
+def _install_u8(ns, dec_src, gs_src):
+    """The 397B vintage (unpacked uint8 d4 codes). Every branch mirrors that
+    bundle's own _fused_resolve / _gemmseg_prefill / VQSwitchLinear.__call__
+    for the geometry it serves; anything else raises."""
+    mx, np = ns["mx"], ns["np"]
+    VQSwitchLinear = ns["VQSwitchLinear"]
+    kernel = _kernel_factory(ns)
+
+    def sz_fused(x, eidx, codes, codebook, scales, rowtbl, OUT, IN):
+        # mirrors _fused_resolve: U8-VIEW -> vq_fused_packed8 (_SRC_FUSED_PACKED)
+        K, D = codebook.shape
+        if not (codes.dtype == mx.uint8 and D == 4 and codes.shape[1] % 4 == 0):
+            raise NotImplementedError("sz-resident decode (u8): uint8 d4, NSUB % 4 == 0 only")
+        codes = mx.view(codes, dtype=mx.uint32)
+        bits = 8
+        N = x.shape[0]
+        NSUB = IN // D
+        G = IN // scales.shape[1]
+        if not ns["_d4_tg_fits"](K, NSUB):
+            raise NotImplementedError("sz-resident decode (u8): threadgroup codebook only")
+        if codes.shape[1] != (NSUB + 31) // 32 * bits:
+            raise ValueError(f"sz-resident: {codes.shape[1]} words/row, expected "
+                             f"{(NSUB + 31) // 32 * bits}")
+        dims = ns["_dims_array"](OUT, IN, D, G, N, K)
+        tgx = 256 if OUT >= 256 else OUT
+        template = [("T", x.dtype), ("MAX_K", K), ("MAX_NSUB", NSUB), ("BITS", bits)]
+        k = kernel(f"sz_fused_packed{bits}", dec_src, DECODE_SIG, template)
+        (y,) = k(inputs=[x, eidx, codes, codebook, scales, dims, rowtbl],
+                 grid=(((OUT + tgx - 1) // tgx) * tgx, N, 1), threadgroup=(tgx, 1, 1),
+                 output_shapes=[(N, OUT)], output_dtypes=[x.dtype])
+        return y
+
+    def sz_gemmseg(xsrc, src_rows, idx_sorted_np, codes, codebook, scales, rowtbl, IN, E, OUT):
+        # mirrors _gemmseg_prefill's v2 branch with pack_bits = 0 (uint8 codes)
+        if not ns["_FUSED_GEMM_V2"]:
+            raise NotImplementedError("sz-resident prefill (u8): needs VQ_MOE_FUSED_GEMM=2")
+        K = codebook.shape[0]
+        D = int(codebook.shape[1])
+        if D != 4 or codes.dtype != mx.uint8:
+            raise NotImplementedError("sz-resident prefill (u8): uint8 d4 only")
+        TGC, RT = ns["_TG_CAP_BYTES"], ns["_GEMMSEG_RTILE"]
+        _rt = 64 if (RT == 64 and K * 2 * D + 3 * 4096 > TGC) else 32
+        _mk = ("tiles", idx_sorted_np.tobytes(), E, _rt)
+        _hit = ns["_memo_get"](_mk)
+        if _hit is not None:
+            tmeta, ntiles = _hit
+        else:
+            counts = np.bincount(idx_sorted_np, minlength=E)
+            touched = np.nonzero(counts)[0]
+            starts = np.zeros(E + 1, np.int64)
+            starts[1:] = np.cumsum(counts)
+            metas = []
+            for e in touched:
+                c0 = int(starts[e])
+                for r in range(0, int(counts[e]), _rt):
+                    metas.append((int(e), c0 + r, min(_rt, int(counts[e]) - r)))
+            tmeta = mx.array(np.array(metas, np.int32).reshape(-1))
+            ntiles = len(metas)
+            ns["_memo_put"](_mk, (tmeta, ntiles))
+        cbk = codebook.astype(mx.float16) if codebook.dtype != mx.float16 else codebook
+        dims = ns["_dims_array"](OUT, IN, IN // 64, K, ntiles)
+        name = f"sz_gemmseg2_u8_d{D}"
+        cb_bytes = K * 2 * D
+        cb_dev = cb_bytes + 3 * 4096 > TGC or cb_bytes >= 16384
+        mode = ns["_GEMMSEG_CBDEV"]
+        if mode == "1":
+            cb_dev = True
+        elif mode == "0" and cb_bytes + 3 * 4096 <= TGC:
+            cb_dev = False
+        if cb_dev:
+            name += "_cbdev"
+        rtile = 64 if (RT == 64 and cb_dev) else 32
+        if rtile != 32:
+            name += f"_r{rtile}"
+        template = [("BITS", 0), ("GROUP", 64), ("MAX_K", 1 if cb_dev else K),
+                    ("D_BAKE", D), ("CB_DEV", 1 if cb_dev else 0), ("RTILE", rtile),
+                    ("CT", codes.dtype)]
+        N = int(idx_sorted_np.shape[0])
+        k = kernel(name, gs_src, GEMMSEG_SIG, template)
+        (y,) = k(inputs=[codes, cbk, scales, xsrc, mx.array(src_rows), tmeta, dims, rowtbl],
+                 grid=(32 * ((OUT + 31) // 32), 4 * ntiles, 1), threadgroup=(32, 4, 1),
+                 output_shapes=[(N, OUT)], output_dtypes=[mx.float16])
+        return y
+
+    class SZSwitchLinear(VQSwitchLinear):
+        """VQSwitchLinear (u8 vintage) over COMPACT live rows + an [E, OUT] row table."""
+
+        def __init__(self, codes, codebook, vq_scales, row_table, group_size=64,
+                     pack_bits=0, in_features=None):
+            if pack_bits or codebook.shape[1] != 4 or codes.dtype != mx.uint8:
+                raise NotImplementedError("SZSwitchLinear (u8 vintage): unpacked uint8 d4 only")
+            super().__init__(codes, codebook, vq_scales, group_size=group_size,
+                             pack_bits=0, in_features=in_features)
+            self.unfreeze()
+            self.row_table = row_table
+            self.freeze()
+
+        @property
+        def input_dims(self):
+            return self.vq_scales.shape[1] * self.group_size
+
+        @property
+        def output_dims(self):
+            return self.row_table.shape[1]
+
+        @property
+        def num_experts(self):
+            return self.row_table.shape[0]
+
+        def __call__(self, x, indices, sorted_indices=False):
+            if self.codebook.shape[0] != self._k_expect:
+                raise RuntimeError("VQ codebook was sharded; sz-resident is single-box only")
+            IN, OUT, E = self.input_dims, self.output_dims, self.num_experts
+            idx_flat = indices.flatten()
+            N = idx_flat.size
+            xf = mx.broadcast_to(x, (*indices.shape, 1, IN)).reshape(N, IN)
+            in_dtype = xf.dtype
+            if in_dtype not in (mx.float16,):
+                xf = xf.astype(mx.float16)
+            if N <= ns["VQ_FUSED_MAX_N"]:
+                y = sz_fused(xf, idx_flat.astype(mx.uint32), self["codes"], self["codebook"],
+                             self["vq_scales"], self["row_table"], OUT, IN)
+            else:
+                idx_np = np.array(idx_flat, copy=False)
+                T = x.size // IN
+                if not (ns["_FUSE_GATHER"] and N % max(T, 1) == 0):
+                    raise NotImplementedError("sz-resident prefill (u8): fused-gather form only")
+                if not ns["gemmseg_fits"](4, int(self.codebook.shape[0]),
+                                          IN // self.vq_scales.shape[1], 0, IN):
+                    raise NotImplementedError("sz-resident prefill (u8): gemmseg path only")
+                x2 = x.reshape(T, IN)
+                if x2.dtype not in (mx.float16,):
+                    x2 = x2.astype(mx.float16)
+                k_rep = N // T
+                if not sorted_indices:
+                    _sk = ("sort", idx_np.tobytes(), int(k_rep))
+                    _sh = ns["_memo_get"](_sk)
+                    if _sh is not None:
+                        idx_sorted, src, inv_mx = _sh
+                    else:
+                        order = np.argsort(idx_np, kind="stable")
+                        inv = np.argsort(order, kind="stable")
+                        src = (order // k_rep).astype(np.uint32)
+                        idx_sorted = idx_np[order]
+                        inv_mx = mx.array(inv.astype(np.uint32))
+                        ns["_memo_put"](_sk, (idx_sorted, src, inv_mx))
+                    y = sz_gemmseg(x2, src, idx_sorted, self["codes"], self["codebook"],
+                                   self["vq_scales"], self["row_table"], IN, E, OUT)
+                    y = y[inv_mx]
+                else:
+                    src = (np.arange(N, dtype=np.uint32) // k_rep).astype(np.uint32)
+                    y = sz_gemmseg(x2, src, idx_np, self["codes"], self["codebook"],
+                                   self["vq_scales"], self["row_table"], IN, E, OUT)
+            return y.astype(in_dtype).reshape(*indices.shape, 1, OUT)
+
+    SZSwitchLinear.sz_fused = staticmethod(sz_fused)
+    SZSwitchLinear.sz_gemmseg = staticmethod(sz_gemmseg)
+    return SZSwitchLinear
+
+
+def swap_modules(model, cfg, reach_fn, ns):
     """Replace every module named in cfg['vq_skipzero']['modules'] with an
     SZSwitchLinear shaped for its compact tensors (shapes from the config)."""
     mx = ns["mx"]
     SZ = install(ns)
+    reach_fn = reach_fn or reach
     vqm, sz = cfg["vq_modules"], cfg["vq_skipzero"]
     for p, m in sz["modules"].items():
         g = vqm[p]
         pb = g.get("pack_bits", 0)
-        if not pb or g["dim"] != 4:
-            raise NotImplementedError(f"sz-resident: {p} is not packed d4")
         nsub = g["in"] // g["dim"]
-        W = (nsub + 31) // 32 * pb
+        if SZ.vintage == "walk":
+            if not pb or g["dim"] != 4:
+                raise NotImplementedError(f"sz-resident: {p} is not packed d4")
+            W, ct = (nsub + 31) // 32 * pb, mx.uint32
+        else:
+            # u8 vintage: compact uint8 [NLIVE, NSUB] rows; decode views them as
+            # uint32 [NLIVE, NSUB/4] (the bundle's U8-VIEW), so NSUB % 4 == 0.
+            if pb or g["dim"] != 4 or g["k"] > 256 or nsub % 4:
+                raise NotImplementedError(f"sz-resident (u8): {p} is not unpacked uint8 d4")
+            W, ct = nsub, mx.uint8
         if m.get("code_words", W) != W:
             raise ValueError(f"sz-resident: {p} code_words {m['code_words']} != {W}")
-        obj, leaf = reach(model, p)
+        obj, leaf = reach_fn(model, p)
         setattr(obj, leaf, SZ(
-            mx.zeros((m["live_rows"], W), dtype=mx.uint32),
+            mx.zeros((m["live_rows"], W), dtype=ct),
             mx.zeros((g["k"], g["dim"]), dtype=mx.float16),
             mx.zeros((m["live_rows"], g["in"] // g["group"]), dtype=mx.float16),
             mx.zeros((m["experts"], m["out"]), dtype=mx.int32),
-            group_size=g["group"], pack_bits=pb, in_features=g["in"]))
+            group_size=g["group"], pack_bits=pb, in_features=g["in"] if pb else None))
 
 
 # appended to the source bundle's model.py by `vqlab sz-resident`
@@ -415,7 +720,7 @@ MODEL_HOOK = '''
 # ===========================================================================
 # vq-skipzero STAGE 2 / RESIDENT (EXPERIMENTAL, not a shipped format) --
 # appended by `vqlab sz-resident`. Everything ABOVE this line is the source
-# bundle's model.py, byte-for-byte. Packed modules listed in
+# bundle's model.py, byte-for-byte. VQ modules listed in
 # config.vq_skipzero.modules become SZSwitchLinear (sz_resident.py): compact
 # live rows + an [E, OUT] row table stay resident; dead rows read no code
 # bytes and produce exact zeros. Both loaders are hooked (sanitize and
@@ -435,7 +740,7 @@ _SZRBaseModel = Model
 class Model(_SZRBaseModel):
     def __init__(self, args):
         super().__init__(args)
-        _szr.swap_modules(self, _cfg, _reach_vq, globals())
+        _szr.swap_modules(self, _cfg, globals().get("_reach_vq"), globals())
 
     def sanitize(self, weights):
         weights = _szr.resident_weights(weights)
