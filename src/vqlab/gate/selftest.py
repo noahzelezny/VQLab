@@ -762,6 +762,18 @@ def main(argv=None) -> int:
         check("price emits a recipe for a byte budget",
               p.returncode == 0 and "harvest recipe" in p.stdout)
 
+        # Paper v5: every table regenerates from the saved per-position arrays.
+        # The GPU half (the scorer still reproduces them) is research/paper/regress.py.
+        paper = L.SRC.parent / "research" / "paper"
+        if not pathlib.Path("<scratch>/paper_rev").exists():
+            skip("paper v5 tables regenerate", "per-position arrays not mounted")
+        else:
+            p = subprocess.run([PY, "make_results.py"], cwd=paper, capture_output=True,
+                               text=True)
+            check("paper v5 tables regenerate byte-identical from the saved arrays",
+                  p.returncode == 0 and p.stdout == (paper / "RESULTS-V5.md").read_text(),
+                  p.stderr.strip().splitlines()[-1] if p.returncode else "")
+
         skip("end-to-end generation smoke",
              "needs a real checkpoint + mlx-lm architecture; run "
              "`vqlab smoke` on a real artifact")
