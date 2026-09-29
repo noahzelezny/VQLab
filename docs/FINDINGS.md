@@ -191,6 +191,27 @@ are finished; this file is now a closed record, not a working one.
   decode. Packers now skip it. [E70]
 - **The published e4b prefill −21% — instrument artifact** (21-token prompt,
   n=1). Real: −11% prefill, −17% decode. [E76]
+- **Additive VQ (2×K128 expanded to K16384) — FALSIFIED.** Worse than a true
+  K16384 rung (code +2% KL) and it would need a new kernel. [F172]
+- **G-aware code re-selection under the KL gate — FALSIFIED.** Looked like a
+  win on a lab rung (F171); the pre-registered repeat on the published 35B-3.4
+  made code worse. F78 stands. [F174, corrects F171]
+- **Kernel arms measured dead (2026-09-29, all bit-exact, all removed):**
+  subgroup-per-row walk decode (−16%: the shuffles that keep the fma chain
+  exact cost more than coalescing buys), gemmseg2 phase-1 walker, wtT bank
+  padding, 2×2 simdgroup tiling, double-buffered tiles (prefill 0.978).
+  Fused dequant-in-GEMM prefill is not a lead: gemmseg2 already is one.
+  [F179, F181, F182]
+- **Hot-prefix threadgroup codebook for big K — DEAD.** Code usage is near
+  flat (top entries that fit cover 56–68% at d4 K8192, 32–37% at K16384,
+  7–33% at d8 K16384), so most reads stay in device memory. The big-K lever
+  was code extraction (the bit-walker), not codebook placement. [F182]
+- **simd_shuffle-resident codebook — ceiling ~0.** F58 arm 2 already deleted
+  the gather at no gain. [F58, F179]
+
+Scratch for the falsified experiments above was deleted on 2026-09-29; the
+code (`fit-additive`, `reselect`) and the F-entries are the record. Rerunning
+them needs new evidence first, not disk.
 
 ## III. Instrument rules (violations produced every false result this week)
 
