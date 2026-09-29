@@ -57,7 +57,7 @@ it, so this env var is the operator's only handle, and in `serve.py` it
 deliberately WINS over the caller's value. Token-identical at every width
 (`tests/test_mtp_prefill.py` gates this) -- it is purely a memory knob.
 
-### `VQLAB_CACHE_LIMIT_GB` -- buffer cache cap (default 4.0)
+### `VQ_CACHE_LIMIT_GB` -- buffer cache cap (default 4.0; old name `VQLAB_CACHE_LIMIT_GB` still read)
 
 Freed MLX buffers pile up invisibly; they do not appear in "active memory."
 Biggest single win in MEMORY-PLAYBOOK, zero measured speed cost at 26k-token

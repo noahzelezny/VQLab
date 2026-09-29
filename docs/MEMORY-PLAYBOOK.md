@@ -27,7 +27,7 @@ Peak too high? Try these, in order. Each one is measured to cost ~nothing.
    the forward to fp32 (2x memory, some kernels won't launch). Print
    activation dtypes per layer.
 
-VQLab bundles ship 1-3 as defaults (`VQLAB_CACHE_LIMIT_GB` /
+VQLab bundles ship 1-3 as defaults (`VQ_CACHE_LIMIT_GB` /
 `VQLAB_PREFILL_CHUNK` to override). Numbers and methodology: model cards.
 Unexplained peak? Open a discussion — the last several were bugs, and we
 fixed them.
