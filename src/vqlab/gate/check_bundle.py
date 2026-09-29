@@ -130,6 +130,27 @@ def main() -> int:
               "instrument the resolved import before any runtime claim)")
         return 0
 
+    # SKIPZERO (docs/SKIPZERO.md): the compact rows are only safe under a
+    # bundle whose loader builds row-table modules. The experimental stage-1/2
+    # hooks append their own loaders and are never a shipped runtime.
+    sz = cfg.get("vq_skipzero")
+    if sz:
+        bad = [h for h in ("skipzero_load", "sz_resident") if h in bundle]
+        if bad or sz.get("loader") != "runtime" or "_SZ_MODS" not in bundle:
+            print(f"FAIL: config declares vq_skipzero but the bundle does not "
+                  f"serve it through the runtime (loader={sz.get('loader')!r}, "
+                  f"experimental hooks present: {bad or 'none'}). Re-run "
+                  f"`vqlab bundle` on it.")
+            return 1
+        missing = [m for m in sz.get("modules", {})
+                   if m not in cfg.get("vq_modules", {})]
+        if missing:
+            print(f"FAIL: {len(missing)} skipzero module(s) missing from "
+                  f"vq_modules, e.g. {missing[0]}")
+            return 1
+        print(f"skipzero: {len(sz.get('modules', {}))} module(s) served "
+              f"resident through the runtime row-table switch")
+
     runtime = (runtime_file("vq_switch.py")).read_text()
     # Two legitimate runtime PROFILES differ by exactly the two bf16-I/O flag
     # defaults (docs/RUNTIME-SHIP-PLAN.md). Verify against either, and SAY

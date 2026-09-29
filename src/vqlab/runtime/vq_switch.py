@@ -755,8 +755,18 @@ _SRC_FUSED_PACKED_D4_WALK = _PACK_FETCH + r"""
     threadgroup_barrier(mem_flags::mem_threadgroup);
     if (r >= (uint)OUT || t >= (uint)N) return;
     const uint e = eidx[t];
+#if SZ
+    // SKIPZERO: codes/scales hold LIVE rows only; rowtbl[e, r] is the compact
+    // row (-1 = dead). A dead row reads no code or scale bytes and writes the
+    // +0 the expanded path produces (fma(+0 scale, gacc, +0) stays +0).
+    const int sz_lr = rowtbl[(size_t)e * OUT + r];
+    if (sz_lr < 0) { y[(size_t)t * OUT + r] = static_cast<T>(0.0f); return; }
+    const device uint* crow = codes + (size_t)sz_lr * WPR;
+    const device half* srow = scales + (size_t)sz_lr * NGRP;
+#else
     const device uint* crow = codes + (size_t)e * OUT * WPR + (size_t)r * WPR;
     const device half* srow = scales + (size_t)e * OUT * NGRP + (size_t)r * NGRP;
+#endif
     float acc = 0.0f;
     int j = 0;
     int w = 0;
@@ -2541,11 +2551,14 @@ def _kernel_sig(name):
     spec path, and silently kept paying ~5-7 us of template processing per
     dispatch (2026-09-03, dense-kernel arc).
     """
+    # SKIPZERO kernels ("_sz" in the name) take the [E, OUT] row table as a
+    # TRAILING input; every other buffer binds exactly as its base kernel.
+    _sz = ["rowtbl"] if "_sz" in name else []
     if name.startswith("vq_gemmseg"):
         # Fused segmented-tile VQ-GEMM (2026-09-07). MUST precede the
         # fallthrough or it binds the expert signature — arc-5 class.
         return (["codes", "codebook", "scales", "xsrc", "srcrows",
-                 "tmeta", "dims"], ["y"])
+                 "tmeta", "dims"] + _sz, ["y"])
     if name.startswith("vq_wdec"):
         # Weight-decode kernel: no x, no eidx. MUST precede the fallthrough
         # or it binds the expert signature's eidx — the arc-5 defect class.
@@ -2553,7 +2566,7 @@ def _kernel_sig(name):
     if name.startswith("vq_dense"):
         return ["x", "codes", "codebook", "scales", "dims"], ["y"]
     if name.startswith("vq_fused"):
-        return ["x", "eidx", "codes", "codebook", "scales", "dims"], ["y"]
+        return ["x", "eidx", "codes", "codebook", "scales", "dims"] + _sz, ["y"]
     return ["codes", "codebook", "scales", "eidx", "dims"], ["w"]
 
 
@@ -2705,7 +2718,7 @@ def _fused_decode_fallback(x, eidx, codes, codebook, scales, pack_bits):
 
 
 def _fused(x, eidx, codes, codebook, scales, pack_bits=0, simd=None,
-           d2_u32=None, xkrep=None):
+           d2_u32=None, xkrep=None, rowtbl=None):
     # xkrep (VQ_DECODE_XKREP arm): x is the [T, IN] TOKEN matrix, not the
     # [N, IN] pair matrix, and pair row t reads token row t // xkrep. See
     # _xkrep_src. None = historical contract (x already has N rows).
@@ -2722,12 +2735,15 @@ def _fused(x, eidx, codes, codebook, scales, pack_bits=0, simd=None,
     # into a useful answer. Latent today: max shipped d2 K is 2048.
     if codebook.shape[1] == 2 and not _d2_tg_fits(codebook.shape[0],
                                                   x.shape[1] // 2):
+        if rowtbl is not None:
+            raise NotImplementedError("SKIPZERO: d2 has no fused kernel")
         return _fused_decode_fallback(x, eidx, codes, codebook, scales,
                                       pack_bits)
     key = ("plan", x.shape, x.dtype, codes.shape, codes.dtype, codebook.shape,
            scales.shape, pack_bits, simd, d2_u32,
            _D8_SIMDSUM, _D8_REGBUF, _D8_DEVX, _D8_SS, _SPEC_KERNELS,
-           _D4_WALK, _D4_DEVCB_WALK, _D2_WALK, _D8_WALK, xkrep)
+           _D4_WALK, _D4_DEVCB_WALK, _D2_WALK, _D8_WALK,
+           None if rowtbl is None else rowtbl.shape, xkrep)
     plan = _KERNELS.get(key)
     if plan is not None:
         view_u32, kern, name, src, template, grid, threadgroup, dims, N, OUT \
@@ -2735,22 +2751,23 @@ def _fused(x, eidx, codes, codebook, scales, pack_bits=0, simd=None,
         if view_u32:
             codes = _codes_u32(codes) if _VIEW_MEMO else \
                 mx.view(codes, dtype=mx.uint32)
+        _sz = [] if rowtbl is None else [rowtbl]
         if kern is not None:
-            (y,) = kern(inputs=[x, eidx, codes, codebook, scales, dims],
+            (y,) = kern(inputs=[x, eidx, codes, codebook, scales, dims] + _sz,
                         grid=grid, threadgroup=threadgroup,
                         output_shapes=[(N, OUT)], output_dtypes=[x.dtype])
         else:
             (y,) = _get_kernel(name, src)(
-                inputs=[x, eidx, codes, codebook, scales, dims],
+                inputs=[x, eidx, codes, codebook, scales, dims] + _sz,
                 template=list(template), grid=grid, threadgroup=threadgroup,
                 output_shapes=[(N, OUT)], output_dtypes=[x.dtype])
         return y
     return _fused_resolve(key, x, eidx, codes, codebook, scales, pack_bits,
-                          simd, d2_u32, xkrep)
+                          simd, d2_u32, xkrep, rowtbl)
 
 
 def _fused_resolve(_plan_key, x, eidx, codes, codebook, scales, pack_bits=0,
-                   simd=None, d2_u32=None, xkrep=None):
+                   simd=None, d2_u32=None, xkrep=None, rowtbl=None):
     _view_u32 = False
     # U8-VIEW DISPATCH (E77/E90, 2026-08-20). Unpacked uint8 d4 rows are
     # byte-for-byte the pack_bits=8 word layout (little-endian; verified
@@ -2762,7 +2779,7 @@ def _fused_resolve(_plan_key, x, eidx, codes, codebook, scales, pack_bits=0,
     # on real tensors, greedy 200-token generation byte-identical, KL gate
     # reproduced to every printed digit).
     if (pack_bits == 0 and codes.dtype == mx.uint8
-            and codebook.shape[1] == 4 and codes.shape[2] % 4 == 0):
+            and codebook.shape[1] == 4 and codes.shape[-1] % 4 == 0):
         codes = mx.view(codes, dtype=mx.uint32)
         pack_bits = 8
         _view_u32 = True
@@ -2774,18 +2791,30 @@ def _fused_resolve(_plan_key, x, eidx, codes, codebook, scales, pack_bits=0,
     if d2_u32 is None:
         d2_u32 = _D2_U32
     _d2_view = (d2_u32 and pack_bits == 0 and codes.dtype == mx.uint8
-                and codebook.shape[1] == 2 and codes.shape[2] % 4 == 0)
+                and codebook.shape[1] == 2 and codes.shape[-1] % 4 == 0)
     if _d2_view:
         codes = mx.view(codes, dtype=mx.uint32)
         _view_u32 = True
     N, IN = x.shape
     if xkrep is not None:
         N = N * xkrep
-    E, OUT, _ = codes.shape
+    # SKIPZERO: codes/scales are COMPACT [NLIVE, W] / [NLIVE, NGRP]; the
+    # module shape lives in the row table.
+    OUT = codes.shape[1] if rowtbl is None else rowtbl.shape[1]
     K, D = codebook.shape
     NSUB = IN // D
-    G = IN // scales.shape[2]
+    G = IN // scales.shape[-1]
     dims = _dims_array(OUT, IN, D, G, N, K)
+    if rowtbl is not None:
+        # Exactly one kernel carries the switch: packed/U8-VIEW d4 WALK with a
+        # threadgroup codebook. Everything else REFUSES -- a kernel that
+        # ignored the row table would read compact rows at full offsets.
+        if not (pack_bits and D == 4 and _D4_WALK and _d4_tg_fits(K, NSUB)
+                and _SPEC_KERNELS):
+            raise NotImplementedError(
+                f"SKIPZERO decode: only the d4 WALK kernel (threadgroup "
+                f"codebook, VQ_D4_WALK=1, VQ_SPEC_KERNELS=1) carries the row "
+                f"table switch; got d={D} pack_bits={pack_bits} K={K}")
     tgx = 256 if OUT >= 256 else OUT
     # set by the simdgroup-per-row branches; None keeps the thread-per-row grid
     simd_rows = None
@@ -2813,6 +2842,8 @@ def _fused_resolve(_plan_key, x, eidx, codes, codebook, scales, pack_bits=0,
                 if _D4_WALK:
                     name = f"vq_fused_packed{pack_bits}_d4_walk"
                     src = _SRC_FUSED_PACKED_D4_WALK
+                    if rowtbl is not None:
+                        name += "_sz"
                 else:
                     name = f"vq_fused_packed{pack_bits}"
                     src = _SRC_FUSED_PACKED
@@ -2886,9 +2917,9 @@ def _fused_resolve(_plan_key, x, eidx, codes, codebook, scales, pack_bits=0,
             raise NotImplementedError(
                 f"no FUSED packed kernel for d={D}; only d=4, d=2 and d=8 "
                 f"are implemented and each is dispatched explicitly.")
-        if codes.shape[2] != (NSUB + 31) // 32 * pack_bits:
+        if codes.shape[-1] != (NSUB + 31) // 32 * pack_bits:
             raise ValueError(
-                f"packed codes are {codes.shape[2]} words/row, expected "
+                f"packed codes are {codes.shape[-1]} words/row, expected "
                 f"{(NSUB + 31) // 32 * pack_bits} for IN={IN}, d={D}, "
                 f"bits={pack_bits}")
         if simd_rows is not None:
@@ -2911,6 +2942,8 @@ def _fused_resolve(_plan_key, x, eidx, codes, codebook, scales, pack_bits=0,
         else:
             template = [("T", x.dtype), ("MAX_K", K), ("MAX_NSUB", NSUB),
                         ("BITS", pack_bits)]
+        if rowtbl is not None:
+            template.append(("SZ", 1))
     elif _d2_view:
         # four uint8 codes per uint32 load; see _SRC_FUSED_D2_U32.
         name, src = "vq_fused_d2_u32", _SRC_FUSED_D2_U32
@@ -2969,9 +3002,10 @@ def _fused_resolve(_plan_key, x, eidx, codes, codebook, scales, pack_bits=0,
     kern = _get_kernel_spec(name, src, template) if _SPEC_KERNELS else None
     _KERNELS[_plan_key] = (_view_u32, kern, name, src, tuple(template),
                            grid, threadgroup, dims, N, OUT)
+    _sz = [] if rowtbl is None else [rowtbl]
     if kern is not None:
         (y,) = kern(
-            inputs=[x, eidx, codes, codebook, scales, dims],
+            inputs=[x, eidx, codes, codebook, scales, dims] + _sz,
             grid=grid,
             threadgroup=threadgroup,
             output_shapes=[(N, OUT)],
@@ -2979,7 +3013,7 @@ def _fused_resolve(_plan_key, x, eidx, codes, codebook, scales, pack_bits=0,
         )
         return y
     (y,) = _get_kernel(name, src)(
-        inputs=[x, eidx, codes, codebook, scales, dims],
+        inputs=[x, eidx, codes, codebook, scales, dims] + _sz,
         template=template,
         grid=grid,
         threadgroup=threadgroup,
@@ -3516,6 +3550,23 @@ _SRC_GEMMSEG2 = _PACK_FETCH + r"""
     // decode assignment: thread -> w row wr=tid/4, code span q0..q0+SPG/4
     const int wr = (int)tid / 4;
     const int q0 = ((int)tid % 4) * (SPG / 4);
+#if SZ
+  #if D_BAKE != 4
+    #error "SKIPZERO gemmseg: d4 only"
+  #endif
+    // SKIPZERO: compact row of each output row this thread decodes
+    // (-1 = dead or past OUT). Live rows are addressed by compact row only.
+    int sz_lr[1 + OT2];
+    for (int ob = 0; ob < 1 + OT2; ++ob) {
+        const int orow = o0 + ob * 32 + wr;
+        sz_lr[ob] = (orow < OUT) ? rowtbl[(size_t)e * OUT + orow] : -1;
+    }
+  #if BITS == 0
+    #define VQ_FETCH(j) ((uint)wrow_codes[j])
+  #else
+    #define VQ_FETCH(j) VQ_CODE(wrow_codes, j)
+  #endif
+#else
 #if BITS == 0
     const device CT* wrow_base = codes
         + (size_t)e * OUT * WPR + (size_t)(o0 + wr) * WPR;
@@ -3527,6 +3578,7 @@ _SRC_GEMMSEG2 = _PACK_FETCH + r"""
 #endif
     const device half* srow_base = scales
         + (size_t)e * OUT * NGRP + (size_t)(o0 + wr) * NGRP;
+#endif
     const int xr = (int)tid / 4;
 
     simdgroup_float8x8 C0 = simdgroup_float8x8(0);
@@ -3563,13 +3615,25 @@ _SRC_GEMMSEG2 = _PACK_FETCH + r"""
         const int j0 = g * SPG;
       for (int ob = 0; ob < 1 + OT2; ++ob) {
         const int oo = o0 + ob * 32;
+#if SZ
+        const int sz_l = sz_lr[ob];
+  #if BITS == 0
+        const device CT* wrow_codes = codes + (size_t)max(sz_l, 0) * WPR;
+  #else
+        const device uint* wrow_codes = codes + (size_t)max(sz_l, 0) * WPR;
+  #endif
+        const device half* srow_w = scales + (size_t)max(sz_l, 0) * NGRP;
+        #define SZ_LIVE (sz_l >= 0)
+#else
 #if BITS == 0
         const device CT* wrow_codes = wrow_base + (size_t)ob * 32 * WPR;
 #else
         const device uint* wrow_codes = wrow_base + (size_t)ob * 32 * WPR;
 #endif
         const device half* srow_w = srow_base + (size_t)ob * 32 * NGRP;
-        if (oo + wr < OUT) {
+        #define SZ_LIVE (oo + wr < OUT)
+#endif
+        if (SZ_LIVE) {
 #if PIPE
             uint  cq[8];
             float s;
@@ -3614,6 +3678,20 @@ _SRC_GEMMSEG2 = _PACK_FETCH + r"""
                 wtT[q * 8 + 7][wr] = (half)(s * (float)v1.w);
 #endif
             }
+#if SZ
+        } else if (oo + wr < OUT) {
+            // SKIPZERO dead row: stage exactly what the expanded path stages
+            // for code 0 / scale +0 (signed zeros included), with no code or
+            // scale reads.
+            const float s = 0.0f;
+            for (int q = q0; q < q0 + SPG / 4; ++q) {
+                const half4 v = cb[0];
+                wtT[q * 4][wr]     = (half)(s * (float)v.x);
+                wtT[q * 4 + 1][wr] = (half)(s * (float)v.y);
+                wtT[q * 4 + 2][wr] = (half)(s * (float)v.z);
+                wtT[q * 4 + 3][wr] = (half)(s * (float)v.w);
+            }
+#endif
         } else {
             for (int q = q0; q < q0 + SPG / 4; ++q) {
                 for (int u = 0; u < D_BAKE; ++u)
@@ -3622,7 +3700,7 @@ _SRC_GEMMSEG2 = _PACK_FETCH + r"""
         }
 #if PIPE
         // issue g+1's independent loads NOW -- they overlap the mma below
-        if (g + 1 < NGRP && oo + wr < OUT) {
+        if (g + 1 < NGRP && SZ_LIVE) {
             pfs[ob] = (float)srow_w[g + 1];
             const int j1 = (g + 1) * SPG;
             for (int q = q0; q < q0 + SPG / 4; ++q)
@@ -4094,11 +4172,12 @@ def _idx_np(indices, idx_flat):
 
 
 def _gemmseg_prefill(xsrc, src_rows, idx_sorted_np, codes, codebook, scales,
-                     pack_bits, IN):
+                     pack_bits, IN, rowtbl=None):
     """One fused dispatch per linear: y[sorted_row, OUT] with dequant
     inside the tile loop. Rows must be count-sorted by expert (they are:
-    __call__ sorts, _prefill's contract)."""
-    E, OUT, _ = codes.shape
+    __call__ sorts, _prefill's contract). `rowtbl` = SKIPZERO row table."""
+    E, OUT = (codes.shape[0], codes.shape[1]) if rowtbl is None \
+        else (rowtbl.shape[0], rowtbl.shape[1])
     K = codebook.shape[0]
     # Tile granularity MUST equal the kernel's RTILE: tmeta rows are
     # (expert, row_start, nrows) and the kernel guards on nrow, so a
@@ -4188,6 +4267,11 @@ def _gemmseg_prefill(xsrc, src_rows, idx_sorted_np, codes, codebook, scales,
         # TIO follows xsrc's dtype so the kernel cache never mixes builds.
         if xsrc.dtype == mx.bfloat16:
             name += "_bf16io"
+        if rowtbl is not None:
+            if D != 4 or not _SPEC_KERNELS:
+                raise NotImplementedError(
+                    "SKIPZERO prefill: gemmseg2 d4 with VQ_SPEC_KERNELS=1 only")
+            name += "_sz"
         template = [("BITS", pack_bits), ("GROUP", 64),
                     ("MAX_K", 1 if cb_dev else K), ("D_BAKE", D),
                     ("CB_DEV", 1 if cb_dev else 0), ("RTILE", rtile),
@@ -4198,7 +4282,11 @@ def _gemmseg_prefill(xsrc, src_rows, idx_sorted_np, codes, codebook, scales,
         if not pack_bits:
             # unpacked arm reads codes as CT (uchar/ushort), not uint words
             template.append(("CT", codes.dtype))
+        if rowtbl is not None:
+            template.append(("SZ", 1))
     else:
+        if rowtbl is not None:
+            raise NotImplementedError("SKIPZERO prefill: gemmseg v1 has no switch")
         # v1 (scalar MAC, measured 0.74x) was only ever written for d2.
         if D != 2:
             raise NotImplementedError(
@@ -4213,7 +4301,8 @@ def _gemmseg_prefill(xsrc, src_rows, idx_sorted_np, codes, codebook, scales,
     grid = (32 * ((OUT + _ospan - 1) // _ospan), 4 * ntiles, 1)
     tg = (32, 4, 1)
     common = dict(
-        inputs=[codes, cbk, scales, xsrc, mx.array(src_rows), tmeta, dims],
+        inputs=[codes, cbk, scales, xsrc, mx.array(src_rows), tmeta, dims]
+        + ([] if rowtbl is None else [rowtbl]),
         grid=grid, threadgroup=tg,
         output_shapes=[(N, OUT)], output_dtypes=[xsrc.dtype],
     )
@@ -4311,7 +4400,7 @@ _EXACT_GEMM = os.environ.get("VQ_MOE_EXACT_GEMM", "0") != "0"
 
 
 def _prefill(xf, idx_sorted_np, codes, codebook, scales, pack_bits=0,
-             in_features=None, xsrc=None, src_rows=None):
+             in_features=None, xsrc=None, src_rows=None, rowtbl=None):
     """xf [N, IN] rows sorted by expert; idx_sorted_np = matching np expert
     ids. Decode touched experts in chunks; one padded batched GEMM each.
 
@@ -4328,10 +4417,15 @@ def _prefill(xf, idx_sorted_np, codes, codebook, scales, pack_bits=0,
     # otherwise. Output is already in this function's input row order.
     if xsrc is not None and gemmseg_fits(
             int(codebook.shape[1]), int(codebook.shape[0]),
-            in_features // (scales.shape[2]) if in_features else 64,
+            in_features // (scales.shape[-1]) if in_features else 64,
             pack_bits, in_features or 0):
         return _gemmseg_prefill(xsrc, src_rows, idx_sorted_np, codes,
-                                codebook, scales, pack_bits, in_features)
+                                codebook, scales, pack_bits, in_features,
+                                rowtbl=rowtbl)
+    if rowtbl is not None:
+        raise NotImplementedError(
+            "SKIPZERO prefill: only the fused gemmseg2 path carries the row "
+            "table switch (needs the fused-gather form and gemmseg_fits)")
     E, OUT, _ = codes.shape
     counts = np.bincount(idx_sorted_np, minlength=E)
     touched = np.nonzero(counts)[0]
@@ -4450,16 +4544,70 @@ def _apply_default_cache_limit() -> None:
 _apply_default_cache_limit()
 
 
+def skipzero_row_table(rowmask, E, OUT):
+    """bit-packed live mask uint8 [E, ceil(OUT/8)] (little bit order) ->
+    int32 [E, OUT] compact row of each (expert, out row), -1 = dead. LAZY:
+    no eval, so a pipeline rank that never touches a layer never reads it."""
+    rm = rowmask.astype(mx.uint32)
+    bits = (rm[..., None] >> mx.arange(8, dtype=mx.uint32)) & 1
+    live = bits.reshape(E, -1)[:, :OUT].reshape(-1).astype(mx.int32)
+    pos = mx.cumsum(live) - 1
+    return mx.where(live > 0, pos, mx.array(-1, mx.int32)) \
+        .astype(mx.int32).reshape(E, OUT)
+
+
+def skipzero_weights(weights, modules):
+    """SKIPZERO on-disk tensors -> what VQSwitchLinear(row_table=...) loads.
+
+    On disk (vqlab sz-pack) each module in config `vq_skipzero.modules`
+    carries {p}.sz_codes [NLIVE, W], {p}.sz_scales [NLIVE, NGRP] (live rows,
+    bytes identical to the source rung), {p}.sz_rowmask and {p}.sz_shape.
+    They become {p}.codes / {p}.vq_scales (compact) + {p}.row_table.
+    Idempotent (no sz_ keys -> unchanged). Accepts a dict or a list of
+    pairs and returns the same kind. `modules` supplies (experts, out)."""
+    as_list = not isinstance(weights, dict)
+    d = dict(weights) if as_list else weights
+    pre = [k[: -len(".sz_rowmask")] for k in d if k.endswith(".sz_rowmask")]
+    if not pre:
+        return weights
+    out = {k: v for k, v in d.items() if ".sz_" not in k}
+    for p in pre:
+        # the config's module key may be in the other layout spelling
+        m = modules.get(p)
+        if m is None:
+            m = next((v for k, v in modules.items()
+                      if k.endswith(p.split("layers.", 1)[-1])), None)
+        if m is None:
+            raise KeyError(f"skipzero tensors for {p!r} but no "
+                           f"vq_skipzero.modules entry")
+        out[p + ".codes"] = d[p + ".sz_codes"]
+        out[p + ".vq_scales"] = d[p + ".sz_scales"]
+        out[p + ".row_table"] = skipzero_row_table(
+            d[p + ".sz_rowmask"], int(m["experts"]), int(m["out"]))
+    return list(out.items()) if as_list else out
+
+
 class VQSwitchLinear(nn.Module):
     """Drop-in for QuantizedSwitchLinear over VQ codes. No bias support
     (Qwen3.5 experts are bias-free)."""
 
     def __init__(self, codes, codebook, vq_scales, group_size: int = 64,
-                 pack_bits: int = 0, in_features: int | None = None):
+                 pack_bits: int = 0, in_features: int | None = None,
+                 row_table=None):
         super().__init__()
         self.codes = codes
         self.codebook = codebook
         self.vq_scales = vq_scales
+        # SKIPZERO (config `vq_skipzero`, docs/SKIPZERO.md): codes/vq_scales
+        # hold LIVE rows only ([NLIVE, W] / [NLIVE, NGRP]) and row_table
+        # [E, OUT] int32 maps (expert, out row) -> compact row, -1 = dead.
+        # Dead rows read no bytes and produce exact zeros. Absent (the
+        # default) the module is byte-for-byte what it always was; the
+        # attribute is not even created, so parameters() is unchanged.
+        if row_table is not None:
+            if codes.ndim != 2 or vq_scales.ndim != 2:
+                raise ValueError("skipzero codes/vq_scales must be compact 2-D")
+            self.row_table = row_table
         self.group_size = group_size
         # pack_bits = 0 -> legacy unpacked codes (uint8/uint16), the format
         # every shipped artifact before 08-16 uses. Non-zero -> uint32 words
@@ -4492,8 +4640,12 @@ class VQSwitchLinear(nn.Module):
             # WPR -> NSUB is lossy for padded-tail packs; the scales axis
             # (IN/group, default group 64) carries the true input width.
             return cls(codes, codebook, vq_scales,
-                       pack_bits=bits, in_features=vq_scales.shape[2] * 64)
+                       pack_bits=bits, in_features=vq_scales.shape[-1] * 64)
         return cls(codes, codebook, vq_scales)
+
+    @property
+    def skipzero(self):
+        return "row_table" in self
 
     @property
     def input_dims(self):
@@ -4510,15 +4662,19 @@ class VQSwitchLinear(nn.Module):
             # The scales tensor's last axis is IN/group and shards on the
             # same axis as codes, so it carries the true IN through both
             # the unaligned format and exo's in-place sharding.
-            return self.vq_scales.shape[2] * self.group_size
-        return self.codes.shape[2] * self.codebook.shape[1]
+            return self.vq_scales.shape[-1] * self.group_size
+        return self.codes.shape[-1] * self.codebook.shape[1]
 
     @property
     def output_dims(self):
+        if self.skipzero:
+            return self.row_table.shape[1]
         return self.codes.shape[1]
 
     @property
     def num_experts(self):
+        if self.skipzero:
+            return self.row_table.shape[0]
         return self.codes.shape[0]
 
     def __call__(self, x, indices, sorted_indices=False):
@@ -4547,6 +4703,7 @@ class VQSwitchLinear(nn.Module):
         if in_dtype not in (mx.float16,) and not _keep_bf16:
             xf = xf.astype(mx.float16)
         pb = self.pack_bits
+        rt = self["row_table"] if self.skipzero else None
         # Packed d=2 now has its own fused kernel (vq_fused_packed{bits}_d2,
         # 2026-08-19, verified against vq_pack.unpack numpy reference); the
         # old force-to-_prefill workaround is gone. _fused still raises
@@ -4559,11 +4716,11 @@ class VQSwitchLinear(nn.Module):
                 x2 = x2.astype(mx.float16)
             y = _fused(x2, idx_flat.astype(mx.uint32),
                        self["codes"], self["codebook"], self["vq_scales"],
-                       pack_bits=pb, xkrep=N // T_tok)
+                       pack_bits=pb, xkrep=N // T_tok, rowtbl=rt)
         elif N <= VQ_FUSED_MAX_N:
             y = _fused(xf, idx_flat.astype(mx.uint32),
                        self["codes"], self["codebook"], self["vq_scales"],
-                       pack_bits=pb)
+                       pack_bits=pb, rowtbl=rt)
         else:
             idx_np = _idx_np(indices, idx_flat)
             # Fused-gather form: xf above is broadcast_to(x).reshape — a
@@ -4603,7 +4760,8 @@ class VQSwitchLinear(nn.Module):
                     y = _prefill(None, idx_sorted,
                                  self["codes"], self["codebook"],
                                  self["vq_scales"], pack_bits=pb,
-                                 in_features=IN, xsrc=x2, src_rows=src)
+                                 in_features=IN, xsrc=x2, src_rows=src,
+                                 rowtbl=rt)
                     y = y[inv_mx]
                 else:
                     src = (np.arange(N, dtype=np.uint32) // k_rep) \
@@ -4611,7 +4769,12 @@ class VQSwitchLinear(nn.Module):
                     y = _prefill(None, idx_np,
                                  self["codes"], self["codebook"],
                                  self["vq_scales"], pack_bits=pb,
-                                 in_features=IN, xsrc=x2, src_rows=src)
+                                 in_features=IN, xsrc=x2, src_rows=src,
+                                 rowtbl=rt)
+            elif rt is not None:
+                raise NotImplementedError(
+                    "SKIPZERO prefill needs the fused-gather form "
+                    "(VQ_MOE_FUSE_GATHER=1)")
             elif not sorted_indices:
                 if xf.dtype != mx.float16:      # legacy path is fp16-only
                     xf = xf.astype(mx.float16)

@@ -74,10 +74,16 @@ full-model gate needs a box that holds it resident (the M4:
 
 ## Open
 
-1. **Make it a real format.** VQLab bundles each artifact with its runtime; a
-   `+sz` runtime profile (forks generated from `runtime/`, not hand-kept), and
-   `bundle` / `check-bundle` / `publish` that recognise `vq_skipzero`. That
-   moves code into the runtime boundary: Noah's decision.
+1. **Make it a real format.** DECIDED 2026-09-29: a runtime FEATURE, not a
+   profile ("option A": rebundle onto the current runtime). Built on branch
+   `feat/skipzero-runtime`: `#if SZ` switch in the walk decode + gemmseg2
+   kernels, `VQSwitchLinear(row_table=)`, `skipzero_weights()` loader,
+   `bundle`/`check-bundle` aware. Gated: 576/576 synthetic arms byte-equal to
+   the expanded form; real 35B 3.4 BYTE-EQUAL to its stage-1 pack in every
+   `sz-bitexact` check. BLOCKER before merge: any runtime text change makes
+   `check-bundle` report drift on every MoE artifact (24/45 pass -> 0) --
+   a fleet decision. 397B: needs the KL gate + speed-pair vs the published
+   2.4 (the rebundle moves it off its u8-vintage kernels).
 2. **Speed.** Dead rows are never read, so decode may be a little faster:
    one `speed-pair`, resident vs stage 1.
 3. **The other 397B rungs** (2.2 / 2.6 / 3.1): same pack, same gates.
