@@ -35,6 +35,7 @@
 # router histogram or it will reproduce the same blind spot.
 
 import os
+import re
 
 import mlx.core as mx
 import mlx.nn as nn
@@ -2539,7 +2540,14 @@ def _fused_decode_fallback(x, eidx, codes, codebook, scales, pack_bits):
 
 
 def _fused(x, eidx, codes, codebook, scales, pack_bits=0, simd=None,
-           d2_u32=None):
+           d2_u32=None, xkrep=None):
+    # xkrep (VQ_DECODE_XKREP arm): x is the [T, IN] TOKEN matrix, not the
+    # [N, IN] pair matrix, and pair row t reads token row t // xkrep. See
+    # _xkrep_src. None = historical contract (x already has N rows).
+    if xkrep is not None and codebook.shape[1] == 2 and not _d2_tg_fits(
+            codebook.shape[0], x.shape[1] // 2):
+        x = mx.repeat(x, xkrep, axis=0)
+        xkrep = None
     # d2 threadgroup-capacity fallback. Mirrors the d4 _d4_tg_fits routing,
     # except d4 has a device-codebook kernel to fall back TO and d2 does not,
     # so the graceful path is the decode path -- _prefill decodes weights
@@ -2553,7 +2561,7 @@ def _fused(x, eidx, codes, codebook, scales, pack_bits=0, simd=None,
                                       pack_bits)
     key = ("plan", x.shape, x.dtype, codes.shape, codes.dtype, codebook.shape,
            scales.shape, pack_bits, simd, d2_u32,
-           _D8_SIMDSUM, _D8_REGBUF, _D8_DEVX, _D8_SS, _SPEC_KERNELS)
+           _D8_SIMDSUM, _D8_REGBUF, _D8_DEVX, _D8_SS, _SPEC_KERNELS, xkrep)
     plan = _KERNELS.get(key)
     if plan is not None:
         view_u32, kern, name, src, template, grid, threadgroup, dims, N, OUT \
@@ -2571,11 +2579,11 @@ def _fused(x, eidx, codes, codebook, scales, pack_bits=0, simd=None,
                 output_shapes=[(N, OUT)], output_dtypes=[x.dtype])
         return y
     return _fused_resolve(key, x, eidx, codes, codebook, scales, pack_bits,
-                          simd, d2_u32)
+                          simd, d2_u32, xkrep)
 
 
 def _fused_resolve(_plan_key, x, eidx, codes, codebook, scales, pack_bits=0,
-                   simd=None, d2_u32=None):
+                   simd=None, d2_u32=None, xkrep=None):
     _view_u32 = False
     # U8-VIEW DISPATCH (E77/E90, 2026-08-20). Unpacked uint8 d4 rows are
     # byte-for-byte the pack_bits=8 word layout (little-endian; verified
@@ -2604,6 +2612,8 @@ def _fused_resolve(_plan_key, x, eidx, codes, codebook, scales, pack_bits=0,
         codes = mx.view(codes, dtype=mx.uint32)
         _view_u32 = True
     N, IN = x.shape
+    if xkrep is not None:
+        N = N * xkrep
     E, OUT, _ = codes.shape
     K, D = codebook.shape
     NSUB = IN // D
@@ -2767,6 +2777,10 @@ def _fused_resolve(_plan_key, x, eidx, codes, codebook, scales, pack_bits=0,
                     ("MAX_NX4", IN // 4)]
     else:
         raise NotImplementedError(f"no fused kernel for subvector dim d={D}")
+    if xkrep is not None:
+        src = _xkrep_src(src)
+        name = name + "_xk"
+        template = list(template) + [("XKREP", int(xkrep))]
     if simd_rows is not None:
         grid = (32, ((OUT + simd_rows - 1) // simd_rows) * simd_rows, N)
         threadgroup = (32, simd_rows, 1)
@@ -3735,6 +3749,36 @@ _TILES_R32 = (2 if _GEMMSEG_DSTORE else 3) * 4096
 # d8 float4-staged skip the fp16 rounding entirely) -- covered by the v2
 # release policy: PPL is retested before anything ships. Kill switch = "0".
 _DECODE_BF16IO = os.environ.get("VQ_DECODE_BF16IO", "0") == "1"
+# DECODE X-ROW DIVIDE (kernel-swarm wildcard, 2026-09-29). OFF by default.
+# The decode branch of __call__ builds the [N, IN] pair matrix with
+# broadcast_to(x).reshape -- a stride-0 axis, so a REAL copy of top_k
+# duplicate rows -- then casts that N-row copy to fp16. gate_proj and up_proj
+# each do it again on the same x (no CSE across modules). Every fused expert
+# kernel reads x through exactly one line, `xrow = x + t * IN`, so the
+# duplication can live in the kernel's address arithmetic instead: pass the
+# [T, IN] token matrix, cast only T rows, and read row t / XKREP. Same fp16
+# values reach the same threadgroup/register staging in the same order, so
+# the output is BIT-IDENTICAL; what goes away is one [N, IN] copy per call
+# and the cast shrinks by top_k. Same idea as the prefill fused-gather
+# (_FUSE_GATHER), which never reached the decode branch.
+_DECODE_XKREP = os.environ.get("VQ_DECODE_XKREP", "0") == "1"
+_XROW_LINE = "const device T* xrow = x + (size_t)t * IN;"
+
+
+def _xkrep_src(src):
+    """The kernel source with its single x-row address divided by XKREP.
+
+    Raises (never silently falls back) if the line is missing or repeated:
+    a source that reads x any other way would index the token matrix with a
+    pair index and read wrong memory."""
+    if (src.count(_XROW_LINE) != 1
+            or re.search(r"(?<![A-Za-z0-9_])x\s*\[", src)):
+        raise NotImplementedError(
+            "VQ_DECODE_XKREP: kernel does not read x through exactly one "
+            "xrow line; refusing to rewrite it")
+    return src.replace(
+        _XROW_LINE,
+        "const device T* xrow = x + (size_t)(t / (uint)XKREP) * IN;")
 _XT_PAD_HALVES = 8 if _GEMMSEG_XT_PAD else 0
 # Extra threadgroup bytes the pad costs at each RTILE (halves * 2 B * rows).
 _XT_PAD_BYTES_R32 = _XT_PAD_HALVES * 2 * 32
@@ -4310,7 +4354,16 @@ class VQSwitchLinear(nn.Module):
         # 2026-08-19, verified against vq_pack.unpack numpy reference); the
         # old force-to-_prefill workaround is gone. _fused still raises
         # explicitly for any (D, pack_bits) without a dedicated kernel.
-        if N <= VQ_FUSED_MAX_N:
+        T_tok = x.size // IN
+        if (N <= VQ_FUSED_MAX_N and _DECODE_XKREP and T_tok > 0
+                and N % T_tok == 0):
+            x2 = x.reshape(T_tok, IN)
+            if x2.dtype not in (mx.float16,) and not _keep_bf16:
+                x2 = x2.astype(mx.float16)
+            y = _fused(x2, idx_flat.astype(mx.uint32),
+                       self["codes"], self["codebook"], self["vq_scales"],
+                       pack_bits=pb, xkrep=N // T_tok)
+        elif N <= VQ_FUSED_MAX_N:
             y = _fused(xf, idx_flat.astype(mx.uint32),
                        self["codes"], self["codebook"], self["vq_scales"],
                        pack_bits=pb)
