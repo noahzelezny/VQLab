@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
 """Gate: an artifact's bundled model.py must carry the CURRENT repo runtime.
 
+Three verdicts: PASS (current runtime), STALE (an earlier runtime certified
+byte-identical in output -- runtime/equivalent_revisions.json -- so the bundle
+is only missing speedups; exit 0, or 2 with --strict), FAIL (anything else).
+
 External users run the bundle; benches run the venv runtime. Any drift means
 published speed/quality claims describe code downloaders don't have.
 
@@ -56,9 +60,34 @@ def _undefined_anchors(name: str, bundle: str) -> list:
             if not re.search(rf"^(?:def|class)\s+{re.escape(a)}\b", bundle, re.M)]
 
 
+def _stale_as(bundle: str, name: str, rp):
+    """The certified-equivalent revision `bundle` carries for runtime file
+    `name` (runtime/equivalent_revisions.json), or None. Certified = its
+    OUTPUT is byte-identical to the current runtime's for every artifact
+    without vq_skipzero (tests/test_runtime_equivalence.py), so a bundle on
+    it is STALE -- slower, same numbers -- not broken."""
+    import subprocess
+    from vqlab._layout import runtime_file
+    reg = json.loads(runtime_file("equivalent_revisions.json").read_text())
+    root = pathlib.Path(__file__).resolve().parents[3]
+    for rev in reg.get("revisions", []):
+        if pathlib.PurePath(rev["path"]).name != name:
+            continue
+        p = subprocess.run(["git", "show", f"{rev['commit']}:{rev['path']}"],
+                           cwd=root, capture_output=True, text=True)
+        if p.returncode != 0:
+            continue
+        old = p.stdout
+        if rp.matches_any_profile(bundle, old)[0] or rp.matches_modulo_flags(bundle, old)[0]:
+            return rev
+    return None
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--artifact", required=True)
+    ap.add_argument("--strict", action="store_true",
+                    help="exit 2 on STALE (default: STALE exits 0; it is a to-do, not a defect)")
     a = ap.parse_args()
     sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))  # src/
     from vqlab._layout import runtime_file
@@ -118,6 +147,19 @@ def main() -> int:
                       "name them. (Still instrument the resolved import "
                       "before any runtime claim.)")
                 return 0
+            stale = {}
+            for name, _u in drifted:
+                rev = _stale_as(bundle, name, _rp)
+                if rev is None:
+                    break
+                stale[name] = rev
+            else:
+                print("STALE (dense artifact): the bundle carries an earlier runtime "
+                      "whose output is byte-identical to the current one; rebundle "
+                      "to pick up:")
+                for name, rev in stale.items():
+                    print(f"    {name} @ {rev['commit']}: {rev['gains']}")
+                return 2 if a.strict else 0
             names = ", ".join(n for n, _ in drifted)
             print(f"FAIL (dense artifact): bundled model.py "
                   f"({len(bundle.splitlines())} lines) carries every top-level "
@@ -185,6 +227,12 @@ def main() -> int:
         print("  These are the values the artifact SHIPPED with and were "
               "preserved deliberately. Any runtime claim must name them.")
         return 0
+    rev = None if cfg.get("vq_skipzero") else _stale_as(bundle, "vq_switch.py", runtime_profile)
+    if rev is not None:
+        print(f"STALE: bundle carries runtime @ {rev['commit']}, whose output is "
+              f"byte-identical to the current runtime (tests/test_runtime_equivalence.py). "
+              f"Rebundle to pick up: {rev['gains']}")
+        return 2 if a.strict else 0
     print(f"FAIL: bundled model.py ({len(bundle.splitlines())} lines) does not "
           f"contain the current runtime ({len(runtime.splitlines())} lines). "
           "Downloaders run different code than the benches. Re-splice before "
