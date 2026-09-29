@@ -4547,13 +4547,19 @@ _apply_default_cache_limit()
 def skipzero_row_table(rowmask, E, OUT):
     """bit-packed live mask uint8 [E, ceil(OUT/8)] (little bit order) ->
     int32 [E, OUT] compact row of each (expert, out row), -1 = dead. LAZY:
-    no eval, so a pipeline rank that never touches a layer never reads it."""
-    rm = rowmask.astype(mx.uint32)
-    bits = (rm[..., None] >> mx.arange(8, dtype=mx.uint32)) & 1
-    live = bits.reshape(E, -1)[:, :OUT].reshape(-1).astype(mx.int32)
-    pos = mx.cumsum(live) - 1
-    return mx.where(live > 0, pos, mx.array(-1, mx.int32)) \
-        .astype(mx.int32).reshape(E, OUT)
+    no eval, so a pipeline rank that never touches a layer never reads it.
+    Built on the CPU STREAM: a stream is bound when the op is CREATED, and a
+    derived tensor left on the GPU stream pulls its pending disk read into
+    the first forward's command buffer -- over SMB that is a Metal watchdog
+    timeout (F120; hit on the M4 by the 397B 2.4, 2026-09-29). Integer ops
+    only, so the stream changes no value."""
+    with mx.stream(mx.cpu):
+        rm = rowmask.astype(mx.uint32)
+        bits = (rm[..., None] >> mx.arange(8, dtype=mx.uint32)) & 1
+        live = bits.reshape(E, -1)[:, :OUT].reshape(-1).astype(mx.int32)
+        pos = mx.cumsum(live) - 1
+        return mx.where(live > 0, pos, mx.array(-1, mx.int32)) \
+            .astype(mx.int32).reshape(E, OUT)
 
 
 def skipzero_weights(weights, modules):
