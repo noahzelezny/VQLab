@@ -93,35 +93,5 @@ def test_sz_refuses_unswitched_kernel():
         VS._D4_WALK = old
 
 
-def test_non_sz_unchanged_vs_head():
-    """The switch must not move a single byte of the non-sz paths."""
-    import subprocess, types, pathlib
-    root = pathlib.Path(__file__).resolve().parents[1]
-    try:
-        src = subprocess.run(["git", "show", "HEAD:src/vqlab/runtime/vq_switch.py"],
-                             cwd=root, capture_output=True, text=True, check=True).stdout
-    except Exception:
-        pytest.skip("no git HEAD to compare against")
-    if "#if SZ" in src:
-        pytest.skip("HEAD already carries the switch")
-    head = types.ModuleType("vq_switch_head")
-    exec(compile(src, "vq_switch_head", "exec"), head.__dict__)
-    r = np.random.default_rng(5)
-    for K, packed in ((2048, True), (256, True), (256, False)):
-        E, OUT, IN = 8, 96, 512
-        codes = r.integers(0, K, (E, OUT, IN // 4)).astype(np.uint16 if K > 256 else np.uint8)
-        cb = (r.standard_normal((K, 4)) * 0.05).astype(np.float16)
-        sc = (r.standard_normal((E, OUT, IN // 64)) * 0.1 + 1).astype(np.float16)
-        kw = {}
-        if packed:
-            bits = VP.bits_for_k(K)
-            codes = VP.pack(codes.astype(np.uint32), bits)
-            kw = dict(pack_bits=bits, in_features=IN)
-        for T in (1, 700):
-            x = mx.array(r.standard_normal((T, 1, 1, IN)).astype(np.float16))
-            idx = _idx(T, 8, E, seed=T)
-            ys = [M.VQSwitchLinear(mx.array(codes), mx.array(cb), mx.array(sc),
-                                   group_size=64, **kw)(x, idx)
-                  for M in (VS, head)]
-            mx.eval(ys)
-            assert np.array_equal(_bits(ys[0]), _bits(ys[1])), (K, packed, T)
+# The non-sz equivalence to the pre-switch runtime lives in
+# tests/test_runtime_equivalence.py (every fleet geometry, every certified revision).
