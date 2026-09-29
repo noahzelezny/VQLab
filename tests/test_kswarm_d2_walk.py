@@ -75,7 +75,7 @@ def test_d2_walk_dispatches(monkeypatch):
     assert "vq_fused_packed10_d2_walk" in names
 
 
-def test_default_off():
+def test_default_on():
     import os
     if os.environ.get("VQ_D2_WALK") is None:
-        assert V._D2_WALK is False
+        assert V._D2_WALK is True  # default ON since F182
