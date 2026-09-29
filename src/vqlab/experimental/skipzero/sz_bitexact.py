@@ -116,7 +116,7 @@ def worker(art, role, outdir, experts_json, mem_only):
     rep["load_s"] = time.time() - t0
     rep["active_gib"] = mx.get_active_memory() / 2**30
     rep["peak_gib"] = mx.get_peak_memory() / 2**30
-    modns = sys.modules[type(model).__module__].__dict__
+    modns = type(model).__init__.__globals__   # mlx_lm loads model.py without registering it in sys.modules
     rep["resident_classes"] = sorted({type(m).__name__ for _, m in model.named_modules()
                                       if "Switch" in type(m).__name__})
     if mem_only:
@@ -435,11 +435,18 @@ def main(argv=None):
         if r.returncode:
             _log(f"worker {role} FAILED rc={r.returncode}")
             return 2
-    fails = compare(out, "resident", "reference")
-    if a.ref2:
-        fails += compare(out, "resident", "ref2")
+    # The GATE is resident vs the STAGE-1 pack (--ref2): same live rows, dead
+    # rows exact zero in both, so stage 2 must match it byte for byte. Against
+    # the ORIGINAL, intermediate module outputs legitimately differ where the
+    # original's dead rows held tiny non-zero values (stage 1 zeroed them) --
+    # reported, not gated (35B, 2026-09-28: logits/prefill/greedy still equal).
+    info = compare(out, "resident", "reference")
+    fails = compare(out, "resident", "ref2") if a.ref2 else info
     mem_table(out, [j[0] for j in jobs])
-    print("\nVERDICT:", "BYTE-EQUAL" if fails == 0 else f"{fails} UNEQUAL -- a bug to find")
+    if a.ref2:
+        print(f"\nvs original (information): {info} unequal checks -- stage 1's zeroed dead rows")
+    print("\nVERDICT (vs " + ("stage-1 pack" if a.ref2 else "reference") + "):",
+          "BYTE-EQUAL" if fails == 0 else f"{fails} UNEQUAL -- a bug to find")
     return 1 if fails else 0
 
 
