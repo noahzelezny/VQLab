@@ -40,7 +40,9 @@ import pytest
 
 REPO = pathlib.Path(__file__).resolve().parent.parent
 SRC = REPO / "src"
-MODELS = pathlib.Path("<models>")
+from vqlab import config  # noqa: E402
+
+MODELS = config.models()
 
 # The exact line the fix introduced; the mutant restores the pre-fix ordering.
 FIXED_ORDER = '_order = ("mlx_vlm", "mlx_lm") if _multimodal else ("mlx_lm", "mlx_vlm")'

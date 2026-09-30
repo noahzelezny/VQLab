@@ -31,6 +31,7 @@ import numpy as np
 HERE = pathlib.Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parents[2]))  # src/
 from vqlab import _layout  # noqa: E402,F401
+from vqlab import config  # noqa: E402
 import fitstore  # noqa: E402
 import registry  # noqa: E402
 import provenance  # noqa: E402
@@ -39,7 +40,6 @@ sys.path.insert(0, str(HERE))
 import skipzero_load  # noqa: E402
 
 TINY = 6.2e-5                       # same threshold as plan/zero_groups.py
-SCRATCH = "<scratch>/"
 GIB = 2 ** 30
 ESIZE = {"U8": 1, "I8": 1, "U16": 2, "I16": 2, "F16": 2, "BF16": 2,
          "U32": 4, "I32": 4, "F32": 4, "U64": 8, "I64": 8, "F64": 8, "BOOL": 1}
@@ -239,8 +239,8 @@ def main(argv=None):
     out = pathlib.Path(os.path.abspath(a.out))
     if out.exists():
         ap.error(f"{out} exists; sz-pack never overwrites")
-    if not a.allow_any_out and not str(out).startswith(SCRATCH):
-        ap.error(f"--out must be under {SCRATCH}")
+    if not a.allow_any_out:
+        config.require_storage(out.parent)
     if str(out).startswith(str(src) + os.sep):
         ap.error("--out may not be inside the source artifact")
     free = shutil.disk_usage(out.parent).free

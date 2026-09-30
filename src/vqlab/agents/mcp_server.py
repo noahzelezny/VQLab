@@ -17,8 +17,8 @@ Design rules (each one paid for):
   cannot editorialize.
 * ``run`` launches ALLOWLISTED ``vqlab`` subcommands only, detached (nohup +
   its own process group, so it survives the client), under the box's GPU
-  lease (an advisory flock that dies with its holder — see Scout's
-  ``gpu_lease``; we lock the SAME file when Scout's cache dir exists), with a
+  lease (an advisory flock that dies with its holder; the file is
+  ``vqlab.config.gpu_lease``, shareable with other GPU tenants), with a
   retry supervisor for the commands that resume from checkpoints. It refuses
   any absolute path outside the lab's roots (artifacts never go on the
   internal disk) and refuses to start while an exo instance is placed.
@@ -51,6 +51,9 @@ from datetime import date, datetime
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))  # src/
+from vqlab import config  # noqa: E402
+
 PROTOCOL_VERSION = "2024-11-05"
 SERVER_NAME = "vqlab"
 SERVER_VERSION = "0.1.0"
@@ -63,39 +66,21 @@ REPO = PKG.parents[1]
 # Lab layout
 # --------------------------------------------------------------------------- #
 
-DEFAULT_ROOTS = [
-    "<scratch>",
-    "<ssd>/vqlab-dogfood",
-    "<models>",
-    "<fits>",
-    "<teachers>",
-    # HF hub cache: some teachers live here as snapshots (the 27B, 2026-09-21)
-    "<ssd>/Mlx_Models",
-]
-
-
 def lab_roots() -> List[Path]:
-    env = os.environ.get("VQLAB_ROOTS")
-    raw = env.split(os.pathsep) if env else DEFAULT_ROOTS
-    return [Path(r) for r in raw if r]
+    return config.roots()
 
 
 def runs_dir() -> Path:
     env = os.environ.get("VQLAB_RUNS_DIR")
     if env:
         return Path(env)
-    return Path(DEFAULT_ROOTS[0]) / "mcp-runs" / socket.gethostname().split(".")[0]
+    return config.scratch() / "mcp-runs" / socket.gethostname().split(".")[0]
 
 
 def lease_path() -> Path:
-    """Lock the SAME file Scout's gpu_lease uses when Scout is on this box."""
-    env = os.environ.get("VQLAB_GPU_LEASE") or os.environ.get("SCOUT_GPU_LEASE")
-    if env:
-        return Path(env)
-    scout_cache = REPO.parent / "cache"
-    if scout_cache.is_dir():
-        return scout_cache / "gpu.lease"
-    return Path.home() / ".vqlab" / "gpu.lease"
+    """The GPU lease file (`vqlab.config.gpu_lease`). Point every GPU tenant
+    on the machine at the same file and they take turns."""
+    return config.gpu_lease()
 
 
 def exo_api() -> str:
@@ -123,9 +108,9 @@ GPU_FREE = {"onboard", "family-profile", "fits", "provenance", "runs", "price",
 RESUMABLE = {"fit-moe", "fit-dense", "geo-build", "alloc-sweep", "validate"}
 DEFAULT_RETRIES = 2
 
-# Commands that need the box's memory to themselves. On the box that hosts
-# the manager model (recorded by scout.ops.lab_residency in lab-state.json on
-# the shared SSD) these are refused: the manager lives on the box NOT fitting.
+# Commands that need the box's memory to themselves. When an external
+# scheduler records in lab-state.json (scratch) that this box hosts a
+# long-lived manager model, these are refused here and belong on `fit_host`.
 HEAVY = {"fit-moe", "fit-dense", "geo-build", "alloc-sweep", "layer-leverage",
          "score", "kl", "validate", "smoke", "verify",
          "probe-init", "kl-ladder", "tasks", "decode-timeline"}
@@ -133,7 +118,7 @@ HEAVY = {"fit-moe", "fit-dense", "geo-build", "alloc-sweep", "layer-leverage",
 
 def lab_state_path() -> Path:
     env = os.environ.get("VQLAB_LAB_STATE")
-    return Path(env) if env else Path(DEFAULT_ROOTS[0]) / "lab-state.json"
+    return Path(env) if env else config.scratch() / "lab-state.json"
 
 
 def _lab_state() -> Dict[str, Any]:
@@ -403,8 +388,8 @@ def t_run(cmd: str, args: Optional[List[str]] = None, tag: str = "",
                             f"this box ({_this_host()}) hosts the manager model "
                             f"({st.get('manager_service')}); heavy jobs run on {st.get('fit_host')}",
                             lab_state=st,
-                            hint="talk to the other box's vqlab server, or flip residency: "
-                                 f"python -m scout.ops.lab_residency --fit-on {st.get('manager_host')}")
+                            hint=f"run it through {st.get('fit_host')}'s vqlab server, "
+                                 "or move the manager model off this box")
     holder = None if cmd in GPU_FREE else _lease_holder()
     if holder:
         raise ToolError("GPU_BUSY", "the GPU lease on this box is held", holder=holder,

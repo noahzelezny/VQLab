@@ -1,15 +1,17 @@
 {
- "_doc": "Earlier runtime/vq_switch.py revisions whose OUTPUT is byte-identical to the current runtime for every artifact WITHOUT vq_skipzero, at their own baked defaults. check-bundle reports a bundle carrying one of these as STALE (rebundle to pick up the listed gains), not FAIL. An entry is added only with tests/test_runtime_equivalence.py passing against it; that test reads this file.",
+ "_doc": "Earlier runtime/vq_switch.py revisions whose OUTPUT is byte-identical to the current runtime for every artifact WITHOUT vq_skipzero, at their own baked defaults. check-bundle reports a bundle carrying one of these as STALE (rebundle to pick up the listed gains), not FAIL. An entry is added only with tests/test_runtime_equivalence.py passing against it; that test reads this file. Each revision's text ships as `equivalent/<file>` so the check needs no git checkout.",
  "revisions": [
   {
    "commit": "3f57b9e",
    "path": "src/vqlab/runtime/vq_switch.py",
-   "gains": "decode: VQ_D4_DEVCB_WALK +9.1% (d4 K8192/16384, F181), VQ_D2_WALK +11.7% (packed d2, F182), VQ_DECODE_XKREP +5.1% (35B, F179), stacked +13.7% on 35B-3.8; skipzero row-table support"
+   "gains": "decode: VQ_D4_DEVCB_WALK +9.1% (d4 K8192/16384, F181), VQ_D2_WALK +11.7% (packed d2, F182), VQ_DECODE_XKREP +5.1% (35B, F179), stacked +13.7% on 35B-3.8; skipzero row-table support",
+   "file": "equivalent/vq_switch.3f57b9e.py.txt"
   },
   {
    "commit": "3f57b9e",
    "path": "src/vqlab/runtime/vq_dense.py",
-   "gains": "none in vq_dense itself (comment-only change); the bundled vq_switch half carries the decode gains"
+   "gains": "none in vq_dense itself (comment-only change); the bundled vq_switch half carries the decode gains",
+   "file": "equivalent/vq_dense.3f57b9e.py.txt"
   }
  ]
 }

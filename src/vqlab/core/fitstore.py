@@ -8,9 +8,8 @@ geometries per module. So fits are organized broad -> specific:
                                                              <fit_id>.json   recipe + identity
     <root>/index.jsonl                                       one line per fit
 
-The same layout on every root (SSD = hot, HDD = cold archive). Roots come
-from $VQLAB_FIT_STORE (colon-separated, first = write target), defaulting to
-the HDD archive (else ~/.vqlab/fits). One fit = ONE module's codebook + codes +
+The same layout on every root (e.g. a fast hot copy and a cold archive).
+Roots come from `vqlab.config.fit_store` (first = write target). One fit = ONE module's codebook + codes +
 vq_scales; files that held several modules are split when filed.
 
 Identity. `fit_id` hashes the codebook tensor bytes plus every tensor's
@@ -43,23 +42,16 @@ import shutil
 import struct
 
 GSZ = 64
-# HDD first: fits are the archive of record (Noah, 2026-09-05: fitted
-# tensors go to the HDD so no k-means is paid twice). An SSD root with the
-# same layout can be listed in $VQLAB_FIT_STORE as a hot mirror.
-_DEFAULT_ROOTS = ("<fits>",)
 _MOD_RX = re.compile(r"layers\.(\d+)\..*?([A-Za-z0-9_]+)$")
 _SUFFIXES = (".codebook", ".codes", ".vq_scales")
 
 
 def roots():
-    """Configured store roots; the first is where new fits are written.
-    Without $VQLAB_FIT_STORE: the lab's storage array stores if mounted, else
-    ~/.vqlab/fits -- so a user without the lab's disks still gets a store."""
-    env = os.environ.get("VQLAB_FIT_STORE")
-    if env:
-        return [pathlib.Path(p) for p in env.split(":") if p]
-    mounted = [pathlib.Path(p) for p in _DEFAULT_ROOTS if pathlib.Path(p).parent.is_dir()]
-    return mounted or [pathlib.Path.home() / ".vqlab" / "fits"]
+    """Configured store roots (`vqlab.config.fit_store`); the first is where
+    new fits are written. Fits are the archive of record, so no k-means is
+    paid twice: point the first root at durable storage."""
+    from vqlab import config
+    return config.fit_store()
 
 
 def _families_dir():

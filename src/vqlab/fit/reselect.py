@@ -94,10 +94,10 @@ import numpy as np
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))  # src/
 from vqlab import _layout  # noqa: E402,F401  one module object per name
+from vqlab import config  # noqa: E402
 import vq_pack  # noqa: E402
 import provenance  # noqa: E402
 
-SCRATCH = "<scratch>"
 SCHEMA = "vqlab.reselect.grams/1"
 MANIFEST = "manifest.json"
 
@@ -117,11 +117,8 @@ def _log(*a):
     print(time.strftime("[%H:%M:%S]"), *a, flush=True)
 
 
-def _require_scratch(p):
-    rp = os.path.realpath(p)
-    if not rp.startswith("/Volumes/"):
-        sys.exit(f"REFUSED: {p} is on the internal disk; outputs go under "
-                 f"{SCRATCH}/ (AGENTS.md)")
+def _require_storage(p):
+    config.require_storage(p)
 
 
 def _sha256(path):
@@ -249,7 +246,7 @@ def cmd_calibrate(a):
         est = sum(int(v["in"]) ** 2 * 4 for v in vqm.values())
         print(f"bank size ~{est / 2**30:.2f} GiB ({len(vqm)} Grams)")
         return 0
-    _require_scratch(a.out)
+    _require_storage(a.out)
     os.makedirs(a.out, exist_ok=False)
 
     import mlx.core as mx
@@ -393,7 +390,7 @@ def cmd_apply(a):
     if os.path.realpath(a.out) == os.path.realpath(a.artifact):
         sys.exit("REFUSED: never in place")
     if not a.allow_any_out:
-        _require_scratch(a.out)
+        _require_storage(a.out)
     man_path = os.path.join(a.grams, MANIFEST)
     man = json.load(open(man_path))
     assert man.get("schema") == SCHEMA, man.get("schema")
@@ -515,7 +512,7 @@ def selftest(root=None):
     import mlx.core as mx
     mx.set_default_device(mx.cpu)
     rng = np.random.default_rng(1234)
-    root = root or os.path.join(SCRATCH, "reselect_selftest",
+    root = root or os.path.join(config.scratch(), "reselect_selftest",
                                 time.strftime("%Y%m%d-%H%M%S"))
     E, OUT, IN, D, K, group = 2, 16, 64, 4, 16, 32
     nsub = IN // D

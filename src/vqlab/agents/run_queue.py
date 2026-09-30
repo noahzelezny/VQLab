@@ -41,10 +41,10 @@ retry. This runner fixes each:
 
 Queue file (JSON):
 
-    {"name": "night5", "commit": "HEAD", "python": "<exo-env>/bin/python",
+    {"name": "night5", "commit": "HEAD", "python": "/path/to/env/bin/python",
      "steps": [
        {"name": "kl-27b", "cmd": "kl-ladder", "args": ["--teacher-cache", "...", "--rung", "..."],
-        "expect": {"stdout_regex": "paired", "files": ["/Volumes/.../out.json"]},
+        "expect": {"stdout_regex": "paired", "files": ["<scratch>/out.json"]},
         "preflight": {"append": ["--preflight"]}},
        {"name": "speed", "script": "scripts/speed_pair.py", "args": ["--n", "3"],
         "preflight": {"args": ["--n", "1"]}, "retries": 0, "on_fail": "continue",
@@ -102,15 +102,13 @@ def _now():
 
 
 def preflight_root() -> pathlib.Path:
-    """Preflight OUTPUTS are artifacts (a 1-module build, a pin): scratch SSD,
-    never the internal disk (AGENTS.md)."""
+    """Preflight OUTPUTS are artifacts (a 1-module build, a pin), so they go
+    to scratch storage (`vqlab.config.scratch`)."""
     env = os.environ.get("VQLAB_PREFLIGHT_DIR")
     if env:
         return pathlib.Path(env)
-    ssd = pathlib.Path("<scratch>")
-    if not ssd.is_dir():
-        raise SystemExit(f"{ssd} is not mounted; set VQLAB_PREFLIGHT_DIR to a scratch volume")
-    return ssd / "queue-preflight"
+    from vqlab import config
+    return config.scratch() / "queue-preflight"
 
 
 def queues_dir() -> pathlib.Path:

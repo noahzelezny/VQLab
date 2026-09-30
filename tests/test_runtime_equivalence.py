@@ -7,7 +7,6 @@ own baked defaults.
 """
 import json
 import pathlib
-import subprocess
 import types
 
 import numpy as np
@@ -28,12 +27,12 @@ GEOMS = [(4, 2048, True, 512, 96), (4, 512, True, 512, 96), (4, 256, False, 512,
          (2, 256, False, 512, 96)]
 
 
+def _text(rev):
+    return (ROOT / "src/vqlab/runtime" / rev["file"]).read_text()
+
+
 def _old(rev):
-    try:
-        src = subprocess.run(["git", "show", f"{rev['commit']}:{rev['path']}"], cwd=ROOT,
-                             capture_output=True, text=True, check=True).stdout
-    except Exception:
-        pytest.skip(f"git text for {rev['commit']} unavailable")
+    src = _text(rev)
     m = types.ModuleType("vq_switch_" + rev["commit"])
     exec(compile(src, m.__name__, "exec"), m.__dict__)
     return m
@@ -61,11 +60,7 @@ def _code_tokens(text):
 def test_other_runtime_files_differ_only_in_comments(rev):
     """Non-kernel runtime files are certified only when the change is
     comment-only: the token stream (docstrings included) must be identical."""
-    try:
-        old = subprocess.run(["git", "show", f"{rev['commit']}:{rev['path']}"], cwd=ROOT,
-                             capture_output=True, text=True, check=True).stdout
-    except Exception:
-        pytest.skip(f"git text for {rev['commit']} unavailable")
+    old = _text(rev)
     new = (ROOT / rev["path"]).read_text()
     assert _code_tokens(old) == _code_tokens(new)
 

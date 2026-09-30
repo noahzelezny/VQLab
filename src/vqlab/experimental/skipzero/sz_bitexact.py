@@ -42,11 +42,14 @@ import numpy as np
 
 HERE = pathlib.Path(__file__).resolve().parent
 SRC = HERE.parents[2]
-SCRATCH = "<scratch>/"
+sys.path.insert(0, str(SRC))
+from vqlab import config  # noqa: E402
+
 SEED = 1234
-WALK_FROZEN = "3f57b9e"   # last runtime/vq_switch.py without the native SZ switch
-U8_MODEL_PY = ("<models>/"
-               "TheDrainFlorist--Qwen3.5-397B-A17B-VQ-2.4bpw/model.py")
+# The last runtime/vq_switch.py without the native SZ switch, shipped as package data
+WALK_FROZEN = SRC / "vqlab" / "runtime" / "equivalent" / "vq_switch.3f57b9e.py.txt"
+# A u8-vintage bundle (the published 397B 2.4bpw runtime), under config.models()
+U8_MODEL_PY = config.models() / "TheDrainFlorist--Qwen3.5-397B-A17B-VQ-2.4bpw" / "model.py"
 NCASES = {1: (1, 1), 8: (1, 8), 4096: (512, 8), 4097: (4097, 1)}   # N: (T, k)
 CORPUS = SRC / "vqlab" / "score" / "referee" / "referee_corpus.txt"
 
@@ -522,24 +525,20 @@ def selftest():
     # Since 2026-09-29 runtime/vq_switch.py carries the SZ switch NATIVELY
     # (`#if SZ` in the walk decode kernel and gemmseg2), so the walk fork now
     # targets the last runtime WITHOUT it -- the text every walk-vintage
-    # bundle built before then carries -- read from git at WALK_FROZEN.
+    # bundle built before then carries (WALK_FROZEN).
     names = ["_SRC_FUSED_PACKED", "_SRC_FUSED_PACKED_D4_WALK", "_SRC_GEMMSEG2"]
-    import subprocess, tempfile
-    walk_txt = subprocess.run(
-        ["git", "show", f"{WALK_FROZEN}:src/vqlab/runtime/vq_switch.py"],
-        cwd=SRC.parent, capture_output=True, text=True)
-    walk_path = pathlib.Path(tempfile.mkdtemp()) / "vq_switch_walk.py"
-    if walk_txt.returncode == 0:
-        walk_path.write_text(walk_txt.stdout)
     rt_txt = (SRC / "vqlab/runtime/vq_switch.py").read_text()
     native = (rt_txt.count("#if SZ") >= 2 and "def skipzero_weights" in rt_txt
               and "row_table=None" in rt_txt)
     print(f"[selftest] runtime/vq_switch.py carries the SZ switch natively: "
           f"{'OK' if native else 'FAIL'}")
     ok &= native
-    for label, path, want in ((f"walk runtime @{WALK_FROZEN}", walk_path, "walk"),
+    for label, path, want in (("walk runtime (frozen)", WALK_FROZEN, "walk"),
                               ("397B bundle model.py", pathlib.Path(U8_MODEL_PY), "u8")):
         if not path.exists():
+            if want == "u8":   # a local artifact, not package data
+                print(f"[selftest] {label}: {path} not on this machine: SKIPPED")
+                continue
             print(f"[selftest] {label}: {path} not found: FAIL")
             ok = False
             continue
@@ -603,8 +602,8 @@ def main(argv=None):
     a = ap.parse_args(argv)
     if a.selftest:
         return selftest()
-    if a.out and not os.path.abspath(a.out).startswith(SCRATCH):
-        ap.error(f"--out must be under {SCRATCH}")
+    if a.out:
+        config.require_storage(a.out)
     if a.worker:
         return worker(a.worker[0], a.worker[1], a.out, a.worker[2], a.mem_only)
     if a.partial:

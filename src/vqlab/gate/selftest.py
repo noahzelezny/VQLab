@@ -555,9 +555,10 @@ def main(argv=None) -> int:
 
         print("[6a36/7] reselect (CPU, synthetic Gram)")
         import contextlib as _cl, io as _io
-        # reselect refuses the internal disk (AGENTS.md), so its fixture
-        # runs under SSD scratch and is removed after
-        _ssd = pathlib.Path("<scratch>")
+        # reselect writes only under configured storage, so its fixture runs
+        # under scratch and is removed after
+        from vqlab import config as _cfg
+        _ssd = _cfg.scratch()
         if _ssd.is_dir():
             _rroot = _ssd / "selftest" / tmp.name
             try:
@@ -569,7 +570,7 @@ def main(argv=None) -> int:
             finally:
                 shutil.rmtree(_rroot, ignore_errors=True)
         else:
-            print("  SKIP  reselect fixture -- needs the scratch SSD (never the internal disk)")
+            print(f"  SKIP  reselect fixture -- scratch {_ssd} does not exist (vqlab.config)")
 
         print("[6a38/7] fit-additive (CPU fixture)")
         import numpy as _np2
@@ -776,8 +777,9 @@ def main(argv=None) -> int:
         # Paper v5: every table regenerates from the saved per-position arrays.
         # The GPU half (the scorer still reproduces them) is research/paper/regress.py.
         paper = L.SRC.parent / "research" / "paper"
-        if not pathlib.Path("<scratch>/paper_rev").exists():
-            skip("paper v5 tables regenerate", "per-position arrays not mounted")
+        from vqlab import config as _cfg
+        if not (_cfg.scratch() / "paper_rev").exists():
+            skip("paper v5 tables regenerate", "per-position arrays not on this machine")
         else:
             p = subprocess.run([PY, "make_results.py"], cwd=paper, capture_output=True,
                                text=True)
