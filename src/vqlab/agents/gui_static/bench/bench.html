@@ -281,6 +281,7 @@ details.adv .kv{margin-top:8px}
 .prow .n{color:var(--fg)}.prow .m{color:var(--faint);font-size:.82em;white-space:nowrap}.prow .d{grid-column:1/-1;color:var(--dim);font-size:.82em}
 .prow.no{opacity:.5}
 
+.cart .big{font-size:1.5em;font-weight:700;color:var(--acc)}
 .hpick{font-size:1.25em;letter-spacing:.02em;text-transform:none;color:var(--fg);font-weight:700;padding:0 4px;border-bottom:1px dashed var(--line)}
 .hpick:hover{color:var(--acc);border-bottom-color:var(--acc)}.hpick span{color:var(--faint);font-size:.8em}
 /* one screen: tighter vertical budget on the recipe page */
@@ -461,12 +462,37 @@ function chartFrame(xr,H=420,W=1000,L=52,Rm=16,Tp=14,B=34,ymin=3,ymax=1500){
 const curve=(c,fn,cls)=>{let d='';for(let g=c.xmin;g<=c.xmax;g+=(c.xmax-c.xmin)/100){const v=fn(g);if(v>1400)continue;d+=(d?'L':'M')+c.X(g)+' '+c.Y(v)}return `<path class="cu ${cls}" d="${d}"/>`};
 
 // ================================================================ Library
+let libBox=128;
+function libAnswer(t){
+  const vis=t.bytes.vision||0,fits=r=>r.gib+vis<=usable(libBox);
+  const vq=t.rows.filter(r=>r.kind==='vq'&&r.kl),af=t.rows.filter(r=>r.kind==='affine'&&r.kl);
+  const bestOf=a=>a.filter(fits).sort((x,y)=>mean(x.kl)-mean(y.kl))[0];
+  const bv=bestOf(vq),ba=bestOf(af);
+  const boxes=[32,64,96,128,192,256,512];
+  let ans;
+  if(!vq.length)ans=`<div class="seghelp">nothing shipped for this model yet</div>`;
+  else if(!bv)ans=`<div class="big">none fit</div><div class="seghelp">the smallest shipped build needs ${f1(Math.min(...vq.map(r=>r.gib))+vis)} GiB</div>`;
+  else{const top=ba&&mean(ba.kl)<mean(bv.kl)?ba:bv,other=top===bv?ba:bv;const d=other?Math.abs(100*(1-mean(top.kl)/mean(other.kl))).toFixed(0):null;
+    const link=top.hf?`https://huggingface.co/${esc(top.hf)}`:top.kind==='affine'?`https://huggingface.co/mlx-community?search_models=${encodeURIComponent(t.short)}`:null;
+    ans=`<div class="big">${esc(top.id)}</div><div class="seghelp">${top.kind==='affine'?'affine':'VQ'} · ${f1(top.gib)} GiB · ${f1(mean(top.kl))} mnats${other?` · ${d}% less damage than ${esc(other.id)}, the best ${other.kind==='affine'?'affine':'VQ'} that fits`:''}</div>
+    ${link?`<a class="btn" style="margin-top:8px" href="${link}" target="_blank" rel="noopener">Download ↗</a>`:'<div class="seghelp">lab build, not on the Hub</div>'}`}
+  // biggest gap in the shipped ladder, and where it lands
+  const lad=vq.map(r=>r.gib).sort((a,b)=>a-b);let gap=null;
+  for(let k=1;k<lad.length;k++){const w=lad[k]-lad[k-1];if(!gap||w>gap.w)gap={w,a:lad[k-1],b:lad[k]}}
+  const boxIn=gap&&MACHINES.map(([gb])=>usable(gb)-vis).find(u=>u>gap.a+0.5&&u<gap.b-0.5);
+  const at=gap?(boxIn||(gap.a+gap.b)/2):null;
+  const gapCard=gap&&!t.ppl&&t.scored.length?`<div class="cart" style="margin-top:10px"><div class="ro">worth building next</div>
+    <div class="seghelp" style="color:var(--fg)">no shipped build between ${f1(gap.a)} and ${f1(gap.b)} GiB${boxIn?`; a ${MACHINES.find(([gb])=>usable(gb)-vis===boxIn)[1]} GB Mac tops out in that gap`:''}</div>
+    <div class="seghelp">a mixed build at ${f1(at)} GiB lands near ~${klVQ(t,{...newRecipe(),teacher:t.id,strat:'mixed'},at).toFixed(0)} mnats</div>
+    <div class="foot" style="margin-top:8px"><button class="btn go" data-recipe="${t.id}" data-at="${at}">Recipe at ${f1(at)} GiB →</button></div></div>`:'';
+  return `<div class="cart"><div class="ro">best for your Mac</div>
+    <div class="kseg small" style="margin:6px 0 10px">${boxes.map(b=>`<button aria-pressed="${libBox===b}" data-box="${b}">${b}</button>`).join('')}</div>${ans}</div>${gapCard}`;
+}
 function pgLibrary(){
   const t=TE(libFam);const vis=r=>show[r.type]&&(r.kind.startsWith('affine')||show[r.kind]);const rows=t.rows.filter(vis);
   const best=[0,1,2].map(c=>Math.min(...t.rows.filter(r=>r.kind==='vq'&&r.kl).map(r=>r.kl[c])));
   const geoCell=r=>r.geo?`<span class="mix" style="width:60px"><span style="width:100%;background:${GEOCOL[r.geo]||'var(--dim)'}"></span></span> ${r.geo}`:r.mixed?'mixed':r.kind.startsWith('affine')?'affine g64':'';
-  return `<section class="panel"><h2>Library <small>every build the lab has measured, on one instrument</small></h2>
-  <div class="tsel">${TEACHERS.map(x=>`<button aria-pressed="${x.id===libFam}" data-f="${x.id}">${esc(x.short)}<small>${x.rows.length}</small></button>`).join('')}</div>
+  return `<section class="panel"><h2><span style="display:flex;align-items:baseline;gap:14px">Library <button class="hpick" id="pick">${esc(t.short)} <span>▾</span></button></span><small>click the chart to start a recipe at that size</small></h2>
   <div class="lib2">
     <div>
       <svg class="chart" id="libchart" viewBox="0 0 1000 210" role="img" aria-label="measured rows, size against mean KL"></svg>
@@ -479,17 +505,14 @@ function pgLibrary(){
       </tbody></table></div>
     </div>
     <div>
-      <div class="cart"><div class="ro">teacher</div><div style="font-weight:700">${esc(t.short)}</div><div class="seghelp">${esc(t.kind)} · onboarded ${t.onb||'—'}${t.note?' · '+t.note:''}</div>
-        <dl class="kv" style="margin-top:8px"><dt>measured</dt><dd>${t.scored.length} builds · ${t.rows.filter(r=>r.kind==='vq').length} shipped</dd><dt>bytes</dt><dd>${f1(t.g1)} GiB per bpw${t.g0?', '+f1(t.g0)+' carried':''}</dd><dt>mixed</dt><dd>${t.flatFitted?(t.rows.some(r=>r.mixed)?((1-t.mixedF)*100).toFixed(0)+'% under flat at equal bytes':'no mixed row yet'):'—'}</dd><dt>fit store</dt><dd>${Object.values(t.fitStore).reduce((a,b)=>a+b,0)||'none'} modules</dd></dl>
-        <div class="foot" style="margin-top:10px"><button class="btn go" data-recipe="${t.id}">New recipe →</button></div></div>
+      ${libAnswer(t)}
       ${(()=>{const vq=t.rows.filter(r=>r.kind==='vq'&&r.kl),af=t.rows.filter(r=>r.kind==='affine'&&r.kl);if(!vq.length||!af.length)return '';
         const rows=vq.map(v=>{const a=af.reduce((p,c)=>Math.abs(c.gib-v.gib)<Math.abs(p.gib-v.gib)?c:p);const d=100*(1-mean(v.kl)/mean(a.kl));return `<tr><td>${esc(v.id)}</td><td class="num">${f1(v.gib)}</td><td>${esc(a.id)}</td><td class="num">${f1(a.gib)}</td><td class="num ${d>0?'best':''}" style="${d<0?'color:var(--bad)':''}">${d>0?'−':'+'}${Math.abs(d).toFixed(0)}%</td></tr>`}).join('');
         return `<div class="cart" style="margin-top:10px"><div class="ro">VQ against the nearest affine ${'<i class="info" tabindex="0">i<span>Each shipped VQ rung beside the published affine build closest to it in bytes, and how much less damage it carries. Same teacher, same positions, same corpora.</span></i>'}</div>
         <table class="rungtab" style="margin-top:6px;font-size:.8em"><thead><tr><th>VQ</th><th class="num">GiB</th><th>affine</th><th class="num">GiB</th><th class="num">damage</th></tr></thead><tbody>${rows}</tbody></table></div>`})()}
-      <div class="cart" style="margin-top:10px"><div class="ro">on the Hub</div>
-        <ul class="rows" style="margin-top:6px">${t.rows.filter(r=>r.hf).map(r=>`<li class="row" style="padding:5px 8px"><a href="https://huggingface.co/${esc(r.hf)}" target="_blank" rel="noopener"><span class="n" style="font-weight:400;color:var(--teal)">${esc(r.hf.split('/')[1])}</span></a><span class="meta">${f1(r.gib)} GiB</span></li>`).join('')||'<li class="empty">nothing published yet</li>'}</ul></div>
+
     </div>
-  </div></section>`;
+  </div>${PICKER()}</section>`;
 }
 function drawLib(){
   const t=TE(libFam),c=chartFrame(t.xr,210);let s=c.s;
@@ -498,8 +521,11 @@ function drawLib(){
   t.rows.filter(r=>vis(r)&&r.kl).forEach(r=>{const x=c.X(r.gib),y=c.Y(mean(r.kl)),col=TCOL(r);
     if(r.kind.startsWith('affine'))s+=`<g><path d="M${x-4} ${y-4}L${x+4} ${y+4}M${x+4} ${y-4}L${x-4} ${y+4}" style="fill:none;stroke:${col};stroke-width:1.5"/><text x="${x+7}" y="${y+4}" style="fill:${col};font-size:11px">${esc(r.id)}</text></g>`;
     else s+=`<g><circle cx="${x}" cy="${y}" r="${r.kind==='vq'?5:3.5}" style="fill:${r.kind==='vq'?col:'var(--bg)'};stroke:${col};stroke-width:1.5"/>${r.kind==='vq'?`<text x="${x+8}" y="${y-6}" style="fill:var(--dim);font-size:11px">${esc(r.id.replace(/^r(\d)(\d)/,'$1.$2'))}</text>`:''}</g>`});
-  $('#libchart').innerHTML=s;
+  {const u=usable(libBox)-(t.bytes.vision||0);if(u>c.xmin&&u<c.xmax)s+=`<g class="box near"><line x1="${c.X(u)}" x2="${c.X(u)}" y1="${c.Tp}" y2="${c.H-c.B}"/><text x="${c.X(u)+4}" y="${c.Tp+14}">${libBox} GB</text></g>`}
+  const svg=$('#libchart');svg.innerHTML=s;svg.style.cursor='crosshair';
+  svg.onclick=e=>{const b=svg.getBoundingClientRect();const gx=c.xmin+((e.clientX-b.left)/b.width*c.W-c.L)/(c.W-c.L-c.Rm)*(c.xmax-c.xmin);if(gx<c.xmin||gx>c.xmax)return;openRecipe(t.id,gx)};
 }
+function openRecipe(id,at){draft=newRecipe();draft.teacher=id;const t=TE(id);resolveAt(t,draft,at??(t.xr[0]+t.xr[1])/2);page=1;render()}
 
 // ================================================================ Recipe
 const STRAT={
@@ -540,12 +566,13 @@ function pgRecipe(){
   </div>
   </div>
   <div class="foot"><span class="hint">nothing is built until you queue it. Preflight runs every step on one module first.</span><button class="btn">Save recipe.json</button><button class="btn go" id="queue">Queue build →</button></div>
-  <div class="modal hidden" id="picker"><div class="box">
-    <div class="pickhd"><input id="psearch" placeholder="model or Hub repo" aria-label="search teachers"><span class="ro">${TEACHERS.length} local teachers</span><button class="x" id="pclose" aria-label="close">×</button></div>
-    <div class="pickbody"><div class="pfams" id="pfams"></div><div class="prows" id="prows"></div></div>
-  </div></div>
+  ${PICKER()}
   </section>`;
 }
+const PICKER=()=>`<div class="modal hidden" id="picker"><div class="box">
+    <div class="pickhd"><input id="psearch" placeholder="model or Hub repo" aria-label="search teachers"><span class="ro">${TEACHERS.length} local teachers</span><button class="x" id="pclose" aria-label="close">×</button></div>
+    <div class="pickbody"><div class="pfams" id="pfams"></div><div class="prows" id="prows"></div></div>
+  </div></div>`;
 let pickFam='all',pickKind='all';
 function renderPicker(){
   const q=($('#psearch').value||'').toLowerCase();
@@ -554,11 +581,11 @@ function renderPicker(){
   $('#pfams').innerHTML=[['all','All'],...creators.map(c=>[c,c])].map(([k,l])=>`<button class="pfam" aria-current="${pickFam===k}" data-pf="${k}">${esc(l)}<i>${k==='all'?all.length:all.filter(t=>creator(t)===k).length}</i></button>`).join('');
   const list=all.filter(t=>(pickFam==='all'||creator(t)===pickFam)&&(pickKind==='all'||t.kind.toLowerCase().startsWith(pickKind))&&(!q||(t.n+t.short).toLowerCase().includes(q)));
   const row=t=>t.draft?`<button class="prow no"><span class="n">${esc(t.short)}</span><span class="m">${esc(t.kind)} · not onboarded</span><span class="d">onboard runs profile, loader, cache determinism and the init sweep · about two hours</span></button>`
-    :`<button class="prow" aria-current="${t.id===draft.teacher}" data-pt="${t.id}"><span class="n">${esc(t.short)}</span><span class="m">${esc(t.kind)}</span><span class="d">${t.rows.filter(r=>r.kind==='vq').length} shipped · ${t.scored.length} builds measured · ${t.fits} fits in store${t.note?' · '+t.note:''}${t.ppl?' · <span style="color:var(--warn)">scored by perplexity, not KL</span>':''}</span></button>`;
+    :`<button class="prow" aria-current="${t.id===(page===0?libFam:draft.teacher)}" data-pt="${t.id}"><span class="n">${esc(t.short)}</span><span class="m">${esc(t.kind)}</span><span class="d">${t.rows.filter(r=>r.kind==='vq').length} shipped · ${t.scored.length} builds measured · ${t.fits} fits in store${t.note?' · '+t.note:''}${t.ppl?' · <span style="color:var(--warn)">scored by perplexity, not KL</span>':''}</span></button>`;
   $('#prows').innerHTML=`<div class="pkind"><div class="seg small" style="width:14em">${[['all','all'],['dense','dense'],['moe','MoE']].map(([v,n])=>`<button aria-pressed="${pickKind===v}" data-pk="${v}">${n}</button>`).join('')}</div></div>`+(list.map(row).join('')||'<div class="psect no">nothing matches</div>');
   $('#pfams').querySelectorAll('[data-pf]').forEach(b=>b.onclick=()=>{pickFam=b.dataset.pf;renderPicker()});
   $('#prows').querySelectorAll('[data-pk]').forEach(b=>b.onclick=()=>{pickKind=b.dataset.pk;renderPicker()});
-  $('#prows').querySelectorAll('[data-pt]').forEach(b=>b.onclick=()=>{draft=newRecipe();draft.teacher=b.dataset.pt;const t=TE(b.dataset.pt);resolveAt(t,draft,(t.xr[0]+t.xr[1])/2);render()});
+  $('#prows').querySelectorAll('[data-pt]').forEach(b=>b.onclick=()=>{if(page===0){libFam=b.dataset.pt;render();return}draft=newRecipe();draft.teacher=b.dataset.pt;const t=TE(b.dataset.pt);resolveAt(t,draft,(t.xr[0]+t.xr[1])/2);render()});
 }
 function drawReadouts(){
   const r=draft,t=TE(r.teacher),P=plan(t,r),tot=P.reduce((a,p)=>a+p[1],0),g=sizeOf(t,r),k=klOf(t,r,g),disk=g+(r.tower?t.bytes.vision:0)+(r.mtp?t.bytes.mtp:0);
@@ -633,19 +660,20 @@ function pgJobs(){
 }
 
 // ================================================================ wiring
+function wirePicker(){$('#pick').onclick=()=>{$('#picker').classList.remove('hidden');renderPicker();$('#psearch').focus()};
+  $('#pclose').onclick=()=>$('#picker').classList.add('hidden');$('#picker').onclick=e=>{if(e.target.id==='picker')$('#picker').classList.add('hidden')};
+  $('#psearch').oninput=renderPicker;document.onkeydown=e=>{if(e.key==='Escape')$('#picker').classList.add('hidden')}}
 const PG=[pgLibrary,pgRecipe,pgJobs];
 function render(){
   renderFlow();$('#page').innerHTML=PG[page]();save();
-  if(page===0){drawLib();document.querySelectorAll('.tsel button').forEach(b=>b.onclick=()=>{libFam=b.dataset.f;render()});
+  if(page===0){drawLib();wirePicker();document.querySelectorAll('[data-box]').forEach(b=>b.onclick=()=>{libBox=+b.dataset.box;render()});
     document.querySelectorAll('.chips button').forEach(b=>b.onclick=()=>{show[b.dataset.k]=!show[b.dataset.k];render()});
-    document.querySelectorAll('[data-recipe]').forEach(b=>b.onclick=()=>{draft=newRecipe();draft.teacher=b.dataset.recipe;const t=TE(draft.teacher);resolveAt(t,draft,(t.xr[0]+t.xr[1])/2);page=1;render()})}
+    document.querySelectorAll('[data-recipe]').forEach(b=>b.onclick=()=>openRecipe(b.dataset.recipe,b.dataset.at?+b.dataset.at:undefined))}
   if(page===1){const t=TE(draft.teacher);if(draft.auto)resolveAt(t,draft,sizeOf(t,draft));drawRecipe();drawStrip();drawReadouts();
     document.querySelectorAll('.seg button,.kseg button').forEach(b=>b.onclick=()=>{const g=b.dataset.g,v=b.dataset.v;const t=TE(draft.teacher);
       if(g==='mode'){draft.mode=v}else if(g==='bits'){draft.bits=+v}else if(g==='group'){draft.group=+v}else if(g==='strat'){draft.strat=v}else if(g==='widthPick'){draft.widthPick=v}
       resolveAt(t,draft,sizeOf(t,draft));render()});
-    $('#pick').onclick=()=>{$('#picker').classList.remove('hidden');renderPicker();$('#psearch').focus()};
-    $('#pclose').onclick=()=>$('#picker').classList.add('hidden');$('#picker').onclick=e=>{if(e.target.id==='picker')$('#picker').classList.add('hidden')};
-    $('#psearch').oninput=renderPicker;document.onkeydown=e=>{if(e.key==='Escape')$('#picker').classList.add('hidden')};
+    wirePicker();
     document.querySelectorAll('.addon').forEach(b=>b.onclick=()=>{draft[b.dataset.g]=!draft[b.dataset.g];if(b.dataset.g==='skel'&&draft.skel){draft.pAttn=6;draft.pEmb=8;draft.pRouter=16}render()});
     document.querySelectorAll('[data-bits]').forEach(b=>b.onclick=()=>{draft[b.dataset.bits]=+b.dataset.v;render()});
     $('#queue').onclick=()=>{const t=TE(draft.teacher);JOBS.unshift({id:'j'+Date.now(),name:t.short.toLowerCase().replace(/[^a-z0-9]+/g,'-')+'-'+(draft.mode==='affine'?'q'+draft.bits:f1(sizeOf(t,draft))),state:'queued',stepIx:-1,recipe:{...draft},started:'queued',eta:'~20:30'});jobSel=JOBS[0].id;draft=newRecipe();resolveAt(t,draft,(t.xr[0]+t.xr[1])/2);page=2;render()}}
