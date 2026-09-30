@@ -8,8 +8,7 @@ JSONL queue of artifacts, drained sequentially (single GPU, single
 writer), each entry running its gate commands via `python -m vqlab.cli`
 in a subprocess with output captured to a per-entry log. The morning
 summary is one file. Publishing stays a human command — for every entry
-that passes, the summary prints the `vqlab publish` line to review, per
-docs/PUSH-RUNBOOK.md.
+that passes, the summary prints the `vqlab publish` line to review.
 
 State lives in caches/validate/ (gitignored):
     queue.jsonl          one entry per line: artifact, gates, status
@@ -171,8 +170,7 @@ def cmd_run(a):
         lines.append(f"- log: `{log_path}`")
         if ok:
             lines.append(
-                "- ready to review for publish (gated, manual — see "
-                "docs/PUSH-RUNBOOK.md):")
+                "- ready to review for publish (gated, manual):")
             repo = e["name"].replace("--", "/", 1) if "--" in e["name"] \
                 else f"TheDrainFlorist/{e['name']}"
             lines.append(

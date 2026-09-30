@@ -4,7 +4,7 @@
  "family": "qwen3_8_dense",
  "teacher": "Qwen--Qwen3.8-27B",
  "identity": {
-  "path": "<ssd>/Mlx_Models/hub/models--Qwen--Qwen3.8-27B/snapshots/1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0",
+  "path": "hf://Qwen/Qwen3.8-27B@1d4bf0f2ff60",
   "hf_repo": "Qwen/Qwen3.8-27B",
   "hf_revision": "1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0",
   "config_sha256": "191e0af232104ed8b65258cf3fb2b842e288008baca7633c11b82a1ac7203aab",

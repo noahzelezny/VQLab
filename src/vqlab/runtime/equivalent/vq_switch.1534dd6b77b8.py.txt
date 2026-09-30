@@ -1,6 +1,7 @@
-# VQ expert runtime for mlx_lm: VQSwitchLinear and its Metal kernels.
-# This file is the source of truth; bundlers splice it verbatim into each
-# artifact's model.py (vqlab/bundle). Never edit a bundled copy.
+# quantlab M1d — VQ expert runtime for mlx_lm.
+# Canonical copy lives in quantlab/vq_switch.py; patch_mlx_lm.py installs it
+# as mlx_lm/models/vq_switch.py and hooks load_model. Keep both in sync by
+# re-running the patcher, never by editing the installed copy.
 #
 # Format (per VQ'd expert tensor, produced by vq_*_codes fitters):
 #   {p}.codes      uint8 (K<=256) / uint16   [E, out, in/d]
@@ -3485,7 +3486,7 @@ _SRC_GEMMSEG2 = _PACK_FETCH + r"""
     const int e    = tmeta[rtile * 3 + 0];
     const int r0   = tmeta[rtile * 3 + 1];
     const int nrow = tmeta[rtile * 3 + 2];
-    // OT2 (0 or 1): output-block pairing (arm 1, kernel-body campaign).
+    // OT2 (0 or 1): output-block pairing (arm 1, KERNEL-BODY-CAMPAIGN).
     // Each threadgroup owns 32*(1+OT2) output columns; the gathered xt slab
     // is staged ONCE per threadgroup, so total xt staging traffic halves at
     // OT2=1 (affine stages X once per BM tile; this closes half the gap).
@@ -3500,7 +3501,7 @@ _SRC_GEMMSEG2 = _PACK_FETCH + r"""
     // rows: the random-gather cost is paid once per tile, not per token,
     // and 128 threads issue their lookups independently (the E141 fix —
     // no dependent-load chain). Whether that amortization actually holds
-    // is a MEASUREMENT, not a claim: it was benched on real artifacts.
+    // is a MEASUREMENT, not a claim; see VQGEMM-BENCH.
   #if D_BAKE == 2
     const device half2* cb = (const device half2*)codebook;
   #else
@@ -3602,7 +3603,7 @@ _SRC_GEMMSEG2 = _PACK_FETCH + r"""
 #error "OT2 pairs output blocks at RTILE=32 only; combine is unimplemented"
 #endif
 #if PIPE
-    // Prefetch pipeline (kernel-body campaign arm 1.5, salvaged design):
+    // Prefetch pipeline (KERNEL-BODY-CAMPAIGN arm 1.5, salvaged design):
     // g+1's code words + scale are INDEPENDENT device loads issued before
     // the mma, so they fly during the matmul; after the barrier only the
     // dependent codebook gather remains. SPG/4 <= 8 across d2/d4/d8.
@@ -3710,7 +3711,7 @@ _SRC_GEMMSEG2 = _PACK_FETCH + r"""
             // convert at stage-in is round-to-nearest -- bit-identical to
             // the host astype it replaces; MACs stay half8x8 regardless.
             // Staged ONCE per threadgroup-group even at OT2: the whole
-            // point of the pairing (kernel-body campaign arm 1).
+            // point of the pairing (KERNEL-BODY-CAMPAIGN arm 1).
 #if PH2V
             // Arm 3 (staging shape): predicate hoisted to one outer branch,
             // loads/stores vectorized at D_BAKE width. Same elements, same
@@ -3814,7 +3815,7 @@ _SRC_GEMMSEG2 = _PACK_FETCH + r"""
     }
 
 #if DSTORE
-    // Direct epilogue (kernel-body campaign arm 2): accumulators -> device,
+    // Direct epilogue (KERNEL-BODY-CAMPAIGN arm 2): accumulators -> device,
     // no ybuf, no barrier, no scalar copy pass. Lane mapping is steel's
     // (mlx mma.h): lane owns 2 elements at row fm, cols fn..fn+1 of its
     // simdgroup's 8x8 fragment. (TIO)float is the same single rounding the
@@ -3970,7 +3971,7 @@ _GEMMSEG_XT_PAD = os.environ.get("VQ_GEMMSEG_XT_PAD", "0") == "1"
 # (the class d8/devx shipped under; gated by the comparator, not checksum).
 # "0" is the kill switch back to the cast pipeline.
 _GEMMSEG_BF16IO = os.environ.get("VQ_GEMMSEG_BF16IO", "0") == "1"
-# Output-block pairing (kernel-body campaign arm 1). "1" halves the gathered
+# Output-block pairing (KERNEL-BODY-CAMPAIGN arm 1). "1" halves the gathered
 # xt staging traffic and the dispatch count by giving each threadgroup two
 # 32-column output blocks (decoded serially -- threadgroup bytes unchanged).
 # RTILE=32 only (the shipped default). Bit-exact per element. Default off

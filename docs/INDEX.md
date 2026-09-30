@@ -1,70 +1,55 @@
-# INDEX — read this before any other doc in vqlab/docs/
+# docs/ — what each document is for
 
-37 docs, ~4,600 lines, written across an arc in which several headline numbers
-were later found WRONG. A doc is not automatically true because it is committed.
-This index says what each doc is FOR and whether it still holds.
+Several headline numbers in this project were later found wrong. A document is
+not true because it is committed; this index says what each one is FOR.
 
-**Order of authority when two docs disagree:**
-1. `FINDINGS-LOG.md` — the measured record, corrections applied in place.
-2. The dated doc for that specific experiment, *if* this index marks it CURRENT.
-3. Everything else is history.
+**When two sources disagree:** a shipped artifact's own `config.json` wins,
+then `FINDINGS-LOG.md` (the measured record, corrections applied in place),
+then everything else.
 
----
+## Start here
 
-## START HERE
-| doc | status | what it is |
-|---|---|---|
-| **FINDINGS-LOG.md** | **AUTHORITATIVE** | Every measured result, F-numbered, newest first. Corrections edit entries in place and say CORRECTED. If a number is not here, treat it as unverified. |
-| **MORNING-REPORT-2026-09-09.md** | CURRENT | Latest state: what verified, what dissolved, what is open. |
-| **KERNEL-COVERAGE.md** | CURRENT | Which geometry each artifact uses and which kernel serves it. Start here for "what shape is this model". |
-| **`vqlab active-bytes`** | **INSTRUMENT** | Not a doc. Bytes an artifact reads PER DECODE TOKEN, by component -- the roofline denominator. Run it before quoting any effective-bandwidth or "is this bandwidth-bound" claim; F22 was wrong for four weeks because nobody had it. Metadata only, safe on a contended box. |
-| **`vqlab decode-ladder`** | **INSTRUMENT** | Not a doc. Per-component decode deletion arms (GDN / attention / VQ / shared expert / hyper-connections) on Flash. Prints an output checksum beside every timing: arms that do not differ there did not take. |
-| **PROVENANCE.md** | PROPOSAL, first slice built | Build records (`vqlab_provenance.json`) written by build tools into each new artifact: tool+argv+commit, fitter settings, inputs/lineage, per-module origin, runtime profile, output hashes. Read with `vqlab provenance <artifact>`. Distinct from `vqlab manifest`, which is only a tamper stamp. |
-| **SKIPZERO.md** | EXPERIMENT, measured (F173, F175-F178) | vq-skipzero: the 397B teacher's dead rows (12.43% of groups) dropped on disk (-10.8%) and kept compact in memory (-11.1% resident), KL unchanged, byte-equal to stage 1 through single-box and Knurlogic cluster runs. Only the 397B has them. Not a shipped format; making it one is an open runtime decision. |
-| **TWO-RUNTIMES.md** | CURRENT, CRITICAL | The lab runtime (`vqlab/src/vqlab/runtime/vq_switch.py`) vs the artifact's BUNDLED `model.py` are different files. Measuring one while changing the other has produced two false results (see F31). Read before any benchmark. |
+| doc | what it is |
+|---|---|
+| [FINDINGS.md](FINDINGS.md) | The law book: settled laws, retracted leads (do not re-chase), instrument rules, MLX/Metal rules, open questions. Read before proposing any experiment. |
+| [FINDINGS-LOG.md](FINDINGS-LOG.md) | Every measured result, F-numbered, newest first. If a number is not here, treat it as unverified. |
+| [ONBOARDING.md](ONBOARDING.md) | The mechanical pass before fitting a new model family (`vqlab onboard`). |
+| [CORPORA.md](CORPORA.md) | The three referee corpora: provenance, licensing, why they are frozen. |
 
-## Experiment docs
-| doc | status | note |
-|---|---|---|
-| CBDEV-ARM-2026-09-08.md | CURRENT, one row corrected | The 1.76x / 1.43x CB_DEV win is **independently verified at 1.46x** (F32). Its `d4-K512 = 0.997x tie` row is WRONG — controlled re-run says **0.83x regression** (F26). |
-| D8-BENCH-2026-09-07.md | **PARTLY WRONG** | The d8 promotion numbers stand. Its "NSUB=80 relaxation is a NULL" section is **wrong — it is 1.34x** (F31); that section was measured against a bundle rewritten 7 minutes after the doc. A correction banner sits above it. Every inference drawn from that null is void. |
-| RTILE-2026-09-08.md | **CORRECTED** | Its "1.23x single-box / 0.82x ring, the sign flips on topology" framing did not survive. Matched-harness re-runs say RTILE=64 is **uniformly slower** (0.75x on d4-K2048, 0.93-0.97x on Flash-2.1). See F25-corrected. |
-| DECODE-DIAGNOSTIC-2026-09-08.md | CURRENT | 99.83% of decode step time is inside mlx-lm's forward. Kills the per-token-collective hypothesis. |
-| DECODE-SWARM-2026-09-08.md | CURRENT (method) | Four workers converged on one measurement; that measurement then falsified their shared hypothesis. |
-| AFFINE-BASELINE-397B-2026-09-08.md | CURRENT | VQ at 87% of affine on the flagship — the parity target. |
-| MOE-PREFILL-ATTRIB / PREFILL-OPT-BENCH / VQGEMM-BENCH / WDEC-BENCH | CURRENT | Earlier prefill work; not contradicted, not re-verified. |
-| MTP.md, MTP-VALIDATION, MTP-EXO-SPEC | CURRENT | Speculative decoding. Note MTP costs ~3.4x on multi-request workloads. |
-| MTP-USAGE.md | CURRENT | Setup, serving, and the measured speedups; moved out of README.md 2026-09-15. |
-| GEMMA-DIVERGENCE, DENSE-VQ-DECODE | CURRENT | Dense path; gemmseg is MoE-only, so MoE prefill numbers do NOT transfer. |
+## Methods
 
-| **PREREG-DECODE-BYTES.md** | CURRENT | Pre-registration for the F130 timing arms: does decode time actually track ACTIVE BYTES, and does deleting GatedDeltaNet (42.0% of Flash's bytes/token) buy more than deleting the whole VQ expert module (12.1%)? |
+| doc | what it is |
+|---|---|
+| [ALLOCATION-METHOD.md](ALLOCATION-METHOD.md) | Direct codebook sensitivity allocation: how per-layer geometry is chosen. |
+| [GEOMETRY-CAMPAIGN.md](GEOMETRY-CAMPAIGN.md) | The Flash geometry campaign (F67–F88) as one readable account. |
+| [KL-TUNED-CODEBOOKS-PLAN.md](KL-TUNED-CODEBOOKS-PLAN.md) | KL-tuned code re-selection and the additive-codebook work, with verdicts. |
+| [PROVENANCE.md](PROVENANCE.md) | Build records (`vqlab_provenance.json`): what every artifact records about how it was made. |
 
-## Method / process
-| doc | status | note |
-|---|---|---|
-| SWARM-ANCHOR-AUDIT-2026-09-08.md | CURRENT, READ IF PROPOSING | 15 of 16 proposals died to reading the source; anchors were accurate while conclusions were not. The failure modes are enumerated. |
-| SWARM-PREFILL-2026-09-08.md | CURRENT | Earlier swarm round. |
-| ONBOARDING.md, MEMORY-PLAYBOOK.md, PUSH-RUNBOOK.md, CORPORA.md | CURRENT | Operational. |
-| RUNTIME-SETTINGS.md | CURRENT | The settings that decide runnable-vs-not, consolidated; plus the architecture-file drift (F87 hazard on 11 artifacts). Seed of a per-artifact resolver. |
+## Runtime
 
-## History — snapshots, superseded by FINDINGS-LOG
-`STATE-2026-09-01/02/03-EOD/07/07-EVENING/08.md`, `MORNING-REPORT-2026-09-03/04.md`
-Useful for "what did we believe on date X". Do not cite as current.
+| doc | what it is |
+|---|---|
+| [TWO-RUNTIMES.md](TWO-RUNTIMES.md) | The repo runtime vs an artifact's bundled `model.py`: which copy actually runs. Read before any benchmark. |
+| [RUNTIME-SETTINGS.md](RUNTIME-SETTINGS.md) | Every runtime setting that makes these artifacts runnable, in one place. |
+| [RUNTIME-SHIP-PLAN.md](RUNTIME-SHIP-PLAN.md) | Which runtime profile (v1.5 / v2) ships with which weights. |
+| [V2-RUNTIME.md](V2-RUNTIME.md) | The v2 runtime: what it is and how it ships. |
+| [KERNEL-COVERAGE.md](KERNEL-COVERAGE.md) | Which Metal kernel serves each module geometry. |
+| [SKIPZERO.md](SKIPZERO.md) | Dead-row skipping: the 397B's all-zero rows stored and served compactly. |
+| [MEMORY-PLAYBOOK.md](MEMORY-PLAYBOOK.md) | Peak memory too high? Measured fixes, in order. |
+| [DENSE-VQ-DECODE.md](DENSE-VQ-DECODE.md) | Root causes of the dense 27B decode problems. |
+| [GEMMA-DIVERGENCE-2026-09-07.md](GEMMA-DIVERGENCE-2026-09-07.md) | Forensics of a two-path perplexity divergence on gemma-26b. |
 
-## Drafts — unpublished, may contain stale numbers
-`CARD-UPDATE-DRAFT.md`, `GLM-27-CARD-DRAFT.md`, `LINKEDIN-DRAFT.md`,
-`COMMUNITY-NOTE-27B.md`, `REVIEW_BRIEF.md`, `card-section-prefill-memory.md`
+## Speculative decoding
 
----
+| doc | what it is |
+|---|---|
+| [MTP-USAGE.md](MTP-USAGE.md) | Using the multi-token-prediction heads, with measurements. |
+| [MTP.md](MTP.md) | Per-family MTP findings and open questions. |
 
-## The three errors that cost the most, so they are not repeated
-1. **Cross-harness comparison.** Comparing an exo number to a local-probe
-   number and attributing the difference to hardware/geometry. Cost: the
-   phantom "RTILE geometry flip", plus three wrong causes for a decode
-   collapse. **Re-run BOTH arms in ONE harness before concluding.**
-2. **Measuring an unapplied change.** A benchmark run against a runtime that
-   did not yet contain the change, reported as a confident null. Cost: the
-   ragged-NSUB "null" that was really 1.34x. **Verify the change is in the
-   file you are loading** (see TWO-RUNTIMES.md).
-3. **Trusting an excerpt.** Proposals citing a correct line number and
-   inventing its contents. **Read the file.**
+## Models
+
+| doc | what it is |
+|---|---|
+| [model-cards/](model-cards/README.md) | The published model cards and the rules they follow. |
+| [MODEL-FAMILY-LEDGER.md](MODEL-FAMILY-LEDGER.md) | Released rungs per family, with config-verified geometry and every score on record. |
+| [CANONICAL-397B-NUMBERS.md](CANONICAL-397B-NUMBERS.md) | The single source for 397B figures quoted on cards and in the paper. |

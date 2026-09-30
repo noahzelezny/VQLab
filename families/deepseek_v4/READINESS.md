@@ -55,5 +55,4 @@ per-expert 2D, the glm5_next pattern. Family entry needed:
    determines the model.py bundle story. [TO VERIFY]
 4. Everything else (fit math, packing, referee, release gates) is stock.
 
-Disk: chat release already local (M4 nightly) + fits well under
-storage array free. No TB-class anything.
+Disk: the chat release and its fits need well under a terabyte.

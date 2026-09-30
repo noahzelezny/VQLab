@@ -12,9 +12,8 @@ results that nobody can reproduce.
 ## Do these three things before writing any code
 
 ```bash
-# NOTE: the exo env (the one that loads qwen4_exp / Flash) does not have
-# vqlab installed — run its CLI with PYTHONPATH=src from the repo root:
-#   PYTHONPATH=src <exo-env>/bin/python -m vqlab.cli <cmd>
+# If vqlab is not installed in the interpreter that loads your model,
+# run the CLI from the repo root with PYTHONPATH=src.
 sed -n 1,40p CONTEXT.md             # question -> stage -> command; each src/vqlab/<stage>/CONTEXT.md is that stage's contract
 python -m vqlab.cli --help          # 41 commands. Read the list. Twice.
 sed -n 1,60p docs/INDEX.md          # what every doc is FOR + whether it still holds
@@ -24,7 +23,7 @@ sed -n 1,40p docs/ONBOARDING.md     # the mechanical pass before fitting ANY new
 Then grep for the thing you were about to build:
 
 ```bash
-grep -rli "<the concept>" src/vqlab/ docs/ research/archive/quantlab/
+grep -rli "<the concept>" src/vqlab/ docs/
 ```
 
 ## The instruments that get rebuilt by accident
@@ -62,10 +61,11 @@ works and still burns nothing, and now reports which numbers are held.
 
 `vqlab mcp` serves this box's lab over MCP (stdio JSON-RPC, stdlib only; one
 server per box, like exo). Tools: `where_is` (deterministic lookup over the
-storage array roots — use it before ever claiming something is missing),
+configured storage roots, `vqlab.config` — use it before ever claiming
+something is missing),
 `list_artifacts`, `artifact_config`, `read_doc`, `run` (allowlisted
-subcommands, detached, under the GPU lease, refuses paths off the storage array
-and refuses while an exo instance is placed), `status`, `stop`, `list_runs`,
+subcommands, detached, under the GPU lease, refuses paths outside the
+configured storage and refuses while an exo instance is placed), `status`, `stop`, `list_runs`,
 `gpu_state`, `next_f_number`, `findings_tail`, `findings_append` (the only
 tool-side writer of FINDINGS-LOG.md: every field required, prediction
 recorded verbatim). `publish` is not exposed; it is a human's action.
@@ -80,11 +80,11 @@ recorded verbatim). `publish` is not exposed; it is a human's action.
    was chosen; the config says what the mix IS.
 2. `docs/FINDINGS-LOG.md` — the measured record (F-numbers, corrections
    applied in place).
-3. `research/log/EXPERIMENTS.md` — a LAB NOTEBOOK. It narrates attempts,
-   including ones whose verdicts the same arc later overturned. **Never
-   characterize a released artifact from an experiment entry** (this error
-   was made twice in one hour on 2026-09-13; both times a 30-second config
-   read would have prevented it).
+3. Anything narrative (plans, notebooks, session notes) — it records
+   attempts, including ones later overturned. **Never characterize a
+   released artifact from a narrative source** (this error was made twice in
+   one hour on 2026-09-13; both times a 30-second config read would have
+   prevented it).
 
 ## Standing rules that have each been paid for
 
@@ -139,10 +139,10 @@ recorded verbatim). `publish` is not exposed; it is a human's action.
   every run so the boundary is recoverable if it happens anyway.
 * **Generate one token through the shipping runtime** before calling anything
   releasable (rule III.11 — an unservable artifact once scored perfectly).
-* **Artifacts NEVER go on the internal disk.** Scratch:
-  `<scratch>/`; fits:
-  `<fits>/`; teachers:
-  `<teachers>/` (archived, not re-downloaded).
+* **Artifacts go to configured storage, never the system disk or the repo.**
+  `vqlab.config` resolves scratch, models, teachers and the fit store (env
+  var, then `~/.config/vqlab/config.toml`); teachers are archived there, not
+  re-downloaded.
 * **Version vocabulary:** v1 = first codebooks; v2 = mixed codebooks
   (measured per-layer allocation); v3 reserved for gradient-tuned. Artifacts
   never carry campaign letters.
@@ -235,7 +235,7 @@ shared machinery.
 
 ## Two agents, one artifact root
 
-The storage array roots are SHARED. More than one session works this repo at a
+Storage roots are SHARED. More than one session works this repo at a
 time, and a bundle rewrite is a write to another session's experiment.
 
 **Measuring? PIN, then SMOKE, then measure.** Do not benchmark or score the
@@ -272,7 +272,7 @@ actually traversed the path the runtime traverses -- read the arch's
 code path open. A gate that never ran the code reports the gate.
 
 **Releasing? The baseline is the HF revision, not the local copy.**
-`Exo Models/` holds SERVING copies and they drift: 8 of 20 differed from
+Local serving copies drift: 8 of 20 differed from
 published on 2026-09-19, mostly local v2 against published v1.5. Pull the real
 one first -- `hf download <repo> model.py --local-dir /tmp/hfcheck/<repo>` costs
 nothing -- and rebundle from it, or you publish a runtime nobody scored.
