@@ -44,7 +44,7 @@ HERE = pathlib.Path(__file__).resolve().parent
 SRC = HERE.parents[2]
 SCRATCH = "<scratch>/"
 SEED = 1234
-WALK_FROZEN = "1dc8d82"   # last runtime/vq_switch.py without the native SZ switch
+WALK_FROZEN = "3f57b9e"   # last runtime/vq_switch.py without the native SZ switch
 U8_MODEL_PY = ("<models>/"
                "TheDrainFlorist--Qwen3.5-397B-A17B-VQ-2.4bpw/model.py")
 NCASES = {1: (1, 1), 8: (1, 8), 4096: (512, 8), 4097: (4097, 1)}   # N: (T, k)
