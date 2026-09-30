@@ -448,6 +448,12 @@ const klVQ=(t,r,g)=>t.klFlat(g)*(r.strat==='flat'?1:r.strat==='mixed'?t.mixedF:t
 // bits + 32/group (bf16 scale and bias per group) through the family's byte line.
 // Protected classes at 8-bit add back a share of the carried bytes; the KL
 // factors are placeholders until such rows are scored.
+// bf16 GiB by tensor class, from families/*/teachers/*/profile.json (bytes.by_class_gib):
+// per = expert GiB per bit of width, carry = attention/shared/routers/norms, embed = embeddings+head
+const PROF={glm:{per:36.2812,carry:14.598,embed:2.363},q397:{per:45.0,carry:14.464,embed:3.789},q35:{per:3.75,carry:2.666,embed:1.895},q27:{per:1.9922,carry:13.486,embed:4.736},fn:{per:14.0625,carry:102.216,embed:2.368}};
+// affine bytes: each class at its own width, group scale+bias adds 32/group bits per weight (none at bf16)
+const affClass=(bf,bits,g)=>bf*(bits>=16?16:bits+32/g)/16;
+const affSize=(t,r)=>{const P=PROF[t.id];if(!P)return affBase(t,r)+affExtra(t,r);return P.per*(r.bits+32/r.group)+affClass(P.carry,r.pAttn,r.group)+affClass(P.embed,r.pEmb,r.group)};
 const affBase=(t,r)=>{const q=t.affNotches.find(n=>n.bits===r.bits);return (q&&r.group===64)?q.gib:t.g0+t.g1*(r.bits+32/r.group)};
 // the published q rows keep non-expert tensors at their default (8-bit attention and
 // embeddings, bf16 routers); byte and damage deltas are taken from that baseline
@@ -456,7 +462,7 @@ const affFactor=r=>Math.pow(0.93,(r.pAttn-8)/2)*Math.pow(0.97,(r.pEmb-8)/2)*Math
 const klOf=(t,r,g)=>r.mode==='affine'?(r.skel&&t.klSk?t.klSk(g):(t.klAff?t.klAff(g):t.klFlat(g)*1.6))*affFactor(r):klVQ(t,r,g);
 const newRecipe=()=>({teacher:'q35',mode:'vq',widthPick:'auto',strat:'mixed',width:'d4',size:0,geo:null,bits:4,group:64,pAttn:8,pEmb:8,pRouter:16,skel:false,resel:false,tower:true,mtp:true,auto:true});
 const widthOf=geo=>geo?geo.split('-')[0]:'d4';
-const sizeOf=(t,r)=>r.mode==='affine'?(affBase(t,r)+affExtra(t,r)):r.strat==='flat'?(t.notches.find(n=>n.geo===r.geo)||t.notches[0]).gib:r.size;
+const sizeOf=(t,r)=>r.mode==='affine'?affSize(t,r):r.strat==='flat'?(t.notches.find(n=>n.geo===r.geo)||t.notches[0]).gib:r.size;
 function resolveAt(t,r,g){
   if(r.mode==='affine')return;
   const pool=r.widthPick&&r.widthPick!=='auto'?t.notches.filter(n=>widthOf(n.geo)===r.widthPick):t.notches;
@@ -785,7 +791,9 @@ function drawReadouts(){
 function drawRecipe(){
   const r=draft,t=TE(r.teacher),svg=$('#chart');
   const pv=t.rows.filter(q=>q.kl&&(q.kind==='vq'||q.kind==='lab'||q.kind==='affine')).map(q=>mean(q.kl));[0,.5,1].forEach(f=>{const g0=t.xr[0]+f*(t.xr[1]-t.xr[0]);pv.push(t.klFlat(g0));if(t.klAff)pv.push(t.klAff(g0))});
-  const c=chartFrame(svg,t.xr,330,yRange(pv));let s=c.s;const {X,Y,L,W,Rm,Tp,H,B,xmin,xmax}=c;
+  // the chart always includes the recipe's own point
+  const g0=sizeOf(t,r),xr=[Math.min(t.xr[0],g0*0.93),Math.max(t.xr[1],g0*1.07)];const k0=klOf(t,r,g0);if(isFinite(k0))pv.push(k0);
+  const c=chartFrame(svg,xr,330,yRange(pv));let s=c.s;const {X,Y,L,W,Rm,Tp,H,B,xmin,xmax}=c;
   const g=sizeOf(t,r),extra=(r.tower?t.bytes.vision:0)+(r.mtp?t.bytes.mtp:0);
   MACHINES.forEach(([gb,l])=>{const u=usable(gb)-extra;if(u>xmin&&u<xmax){const near=Math.abs(u-g)<(xmax-xmin)*0.01;s+=`<g class="box ${near?'near':''}"><line x1="${X(u)}" x2="${X(u)}" y1="${Tp}" y2="${H-B}"/><text x="${X(u)+4}" y="${Tp+14}">${l} GB</text></g>`}});
   if(t.scored.length)s+=curve(c,t.klFlat,'flat '+(r.mode==='vq'&&r.strat==='flat'?'':'dimmed'));
