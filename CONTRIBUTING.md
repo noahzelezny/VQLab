@@ -27,8 +27,9 @@ version of what this project asks of contributed results and code:
   mx.stream(mx.cpu):` + `mx.eval` inside the block + all-zero assertion.
 - Every new gate must FAIL on a known-bad input and PASS on a known-good
   before its verdict is trusted.
-- Run `vqlab selftest` before sending a change and after pulling one; it
-  exercises every gate in both directions in under a minute.
+- Run `scripts/ci.sh` before sending a change. It is exactly what CI runs:
+  lint, a clean wheel install, the tests and `vqlab selftest` (every gate in
+  both directions), isolated from your local storage config.
 - Run long chains through `vqlab queue run`: it pins the code in a
   worktree, so a second box or a later edit cannot change what runs.
 

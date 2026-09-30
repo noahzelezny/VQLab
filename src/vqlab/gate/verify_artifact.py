@@ -37,7 +37,6 @@ import vq_pack
 
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))  # src/
-from vqlab import _layout  # noqa: E402,F401  one module object per name
 from families import FAMILY  # shared registry (families.py)
 import expert_src            # shared source-layout loader (incl. unfused)
 

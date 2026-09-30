@@ -15,7 +15,6 @@ Test plan mapping (logs/reviews/dense-fusion-design.md):
   T6 straddle sweep bits 2..16 on a tail-padded NSUB
   T10 gate fallthrough
 """
-import os
 import pathlib
 import sys
 

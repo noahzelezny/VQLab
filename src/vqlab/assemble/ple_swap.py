@@ -15,7 +15,6 @@ Refuses if a PLE-bearing shard on either side carries any other tensor.
 """
 import argparse
 import json
-import os
 import pathlib
 import shutil
 import sys

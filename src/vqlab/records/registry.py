@@ -264,7 +264,7 @@ def main(argv=None) -> int:
             _save_hub(repo, rev, str(art), rows, a.deep)
             nb = sum(1 for r in rows if r[1] == "backup")
             if not a.deep:
-                print(f"         (LFS shards compared by size; --deep proves bytes)")
+                print("         (LFS shards compared by size; --deep proves bytes)")
             print(f"{'DRIFT' if bad else 'same '}  {repo}@{rev[:10]}  <- {art}"
                   + (f"  ({nb} local backup files ignored)" if nb else ""))
             for name, st, note in bad:

@@ -343,7 +343,7 @@ def summary(art, rec) -> str:
     r = rec.get("runtime")
     if rec.get("previous"):
         L.append(f"  amends    {rec['previous'][:16]}  (full chain: --lineage)")
-    L.append(f"  runtime   " + (f"{r['profile']}  md5 {r['model_py_md5'][:8]}"
+    L.append("  runtime   " + (f"{r['profile']}  md5 {r['model_py_md5'][:8]}"
                                if r else "no model.py bundled"))
     o = rec["outputs"]
     L.append(f"  outputs   {len(o)} files, {sum(v['bytes'] for v in o.values())/2**30:.2f} GiB, "

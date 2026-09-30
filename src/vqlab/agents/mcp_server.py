@@ -49,7 +49,7 @@ import time
 import urllib.request
 from datetime import date, datetime
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))  # src/
 from vqlab import config  # noqa: E402
@@ -138,7 +138,9 @@ def _this_host() -> str:
 DOC_ALLOW = ("docs", "families", "CONTEXT.md", "AGENTS.md",
              "README.md", "METHODOLOGY.md", "REPRODUCING.md", "lab",
              "research/CONTEXT.md")
-FINDINGS_LOG = REPO / "docs" / "FINDINGS-LOG.md"
+# The F-numbered findings log is the lab's own record: private (lab/ is
+# gitignored) unless VQLAB_FINDINGS_LOG points elsewhere.
+FINDINGS_LOG = Path(os.environ.get("VQLAB_FINDINGS_LOG") or REPO / "lab" / "FINDINGS-LOG.md")
 VERDICTS = ("CONFIRMED", "FALSIFIED", "VOID", "CORRECTS", "NULL")
 
 

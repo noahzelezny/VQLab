@@ -110,7 +110,7 @@ def main():
             mx.clear_cache()
         VD._DENSE_FUSED_MAX_N_PACKED = 96
         VD._DENSE_FUSED_MAX_N_PLAIN = 12
-        del t, m
+        t = m = None  # free before the next module
         mx.clear_cache()
     print("\nfused/decode < 1 means the FUSED kernel is still winning.")
 

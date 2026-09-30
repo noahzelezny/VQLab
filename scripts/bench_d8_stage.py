@@ -167,7 +167,7 @@ def run(art, arms, prefix, reps, M, ns, assert_identity):
             print("         vs base min/med: " + "  ".join(
                 f"{n}={r[n][0]/r['base'][0]:.3f}/{r[n][1]/r['base'][1]:.3f}"
                 for n in arms if n != "base"))
-        del t
+        t = None  # free before the next module
         mx.clear_cache()
 
 

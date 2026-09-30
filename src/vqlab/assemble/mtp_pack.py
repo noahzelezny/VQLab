@@ -45,7 +45,7 @@ def main():
     ap.add_argument("--group-size", type=int, default=32)
     ap.add_argument("--family", default=None,
                     help="override the family resolved from the model's "
-                         f"model_type (registered: see registry.py)")
+                         "model_type (registered: see registry.py)")
     ap.add_argument("--norm-shift", type=float, default=None,
                     help="qwen3_5 only: delta added to the head's RMSNorm "
                          "gains at load. This family stores norms as deltas "

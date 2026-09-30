@@ -199,7 +199,6 @@ _here = pathlib.Path(__file__).parent
 SHIM = __import__("dense_shim").SHIM
 if "class Model" not in SHIM or "VQLinear" not in SHIM:
     raise SystemExit("FAIL: shim is missing class Model / VQLinear.")
-from vqlab import _layout  # noqa: E402
 model_py = (_layout.runtime_file("vq_switch.py").read_text()
             + _layout.runtime_file("vq_dense.py").read_text() + SHIM)
 compile(model_py, "model.py", "exec")   # never ship a model.py that cannot parse

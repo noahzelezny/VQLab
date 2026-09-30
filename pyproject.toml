@@ -19,7 +19,7 @@ dependencies = [
 
 [project.optional-dependencies]
 score = ["transformers"]
-test = ["pytest"]
+test = ["pytest", "ruff"]
 
 [project.scripts]
 vqlab = "vqlab.cli:main"
@@ -29,9 +29,19 @@ where = ["src"]
 
 [tool.setuptools.package-data]
 vqlab = ["score/referee/*.txt", "score/referee/*.json", "score/referee/*.py", "*/CONTEXT.md", "agents/gui_static/*.html",
-         "runtime/*.json", "runtime/equivalent/*.txt"]
+         "agents/gui_static/bench/*", "runtime/*.json", "runtime/equivalent/*.txt"]
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]
 testpaths = ["tests"]
 markers = ["integration: needs a real artifact; set VQLAB_MTP_MODEL"]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+# Pyflakes (undefined names, unused imports, dead f-strings) and syntax
+# errors. Style is not gated: the runtime files are spliced verbatim into
+# published bundles, so reformatting them is a runtime change.
+select = ["F", "E9"]

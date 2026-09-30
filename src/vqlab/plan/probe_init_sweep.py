@@ -150,7 +150,7 @@ for layer in [int(x) for x in args.layers.split(",")]:
         results.append((layer, proj, m[3], m[4], m[5], v))
         print(f"{layer:5d} {proj:>10} {m[3]:>+12.5f} {m[4]:>+13.5f} {m[5]:>+10.5f}  {v}",
               flush=True)
-        del T, Xn, Xtr, Wg, scale
+        T = Xn = Xtr = Wg = scale = None  # free before the next projection
         mx.clear_cache()
 
 n = len(results)

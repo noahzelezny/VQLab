@@ -250,7 +250,7 @@ def fit_module(W, D, K, rng, tail_pow=0.0, plain=False):
     not better (measured 2026-09-25: top-0.1% relerr 0.224 -> 0.292).
     """
     E_, OUT_, IN_ = W.shape
-    NGRP, nsub, bits = IN_ // GSZ, IN_ // D, math.ceil(math.log2(K))
+    NGRP, bits = IN_ // GSZ, math.ceil(math.log2(K))
     Wg = np.array(W.reshape(-1, GSZ))
     fidx = rng.choice(Wg.shape[0], min(NFITG, Wg.shape[0]), replace=False)
     Gf = Wg[fidx].astype(np.float32)

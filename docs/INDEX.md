@@ -4,15 +4,15 @@ Several headline numbers in this project were later found wrong. A document is
 not true because it is committed; this index says what each one is FOR.
 
 **When two sources disagree:** a shipped artifact's own `config.json` wins,
-then `FINDINGS-LOG.md` (the measured record, corrections applied in place),
-then everything else.
+then `FINDINGS.md`, then everything else. F-numbers (F31, F118, ...) cite
+entries in the lab's own findings log, which is not published; FINDINGS.md
+carries the conclusions.
 
 ## Start here
 
 | doc | what it is |
 |---|---|
 | [FINDINGS.md](FINDINGS.md) | The law book: settled laws, retracted leads (do not re-chase), instrument rules, MLX/Metal rules, open questions. Read before proposing any experiment. |
-| [FINDINGS-LOG.md](FINDINGS-LOG.md) | Every measured result, F-numbered, newest first. If a number is not here, treat it as unverified. |
 | [ONBOARDING.md](ONBOARDING.md) | The mechanical pass before fitting a new model family (`vqlab onboard`). |
 | [CORPORA.md](CORPORA.md) | The three referee corpora: provenance, licensing, why they are frozen. |
 

@@ -67,7 +67,7 @@ something is missing),
 subcommands, detached, under the GPU lease, refuses paths outside the
 configured storage and refuses while an exo instance is placed), `status`, `stop`, `list_runs`,
 `gpu_state`, `next_f_number`, `findings_tail`, `findings_append` (the only
-tool-side writer of FINDINGS-LOG.md: every field required, prediction
+tool-side writer of the findings log: every field required, prediction
 recorded verbatim). `publish` is not exposed; it is a human's action.
 
     PYTHONPATH=src python -m vqlab.cli mcp --list
@@ -78,8 +78,10 @@ recorded verbatim). `publish` is not exposed; it is a human's action.
 1. **The shipped artifact's own `config.json` and `README.md`** — the record
    of what actually shipped. A card's methodology section says how the mix
    was chosen; the config says what the mix IS.
-2. `docs/FINDINGS-LOG.md` — the measured record (F-numbers, corrections
-   applied in place).
+2. The findings log — the measured record (F-numbers, corrections applied
+   in place). It is the lab's own record, kept outside the public repo:
+   `vqlab mcp` reads and appends `lab/FINDINGS-LOG.md` (or
+   `$VQLAB_FINDINGS_LOG`). `docs/FINDINGS.md` carries its conclusions.
 3. Anything narrative (plans, notebooks, session notes) — it records
    attempts, including ones later overturned. **Never characterize a
    released artifact from a narrative source** (this error was made twice in

@@ -1,7 +1,7 @@
 # Runtime settings — what makes these artifacts runnable, in one place
 
 *2026-09-18. Consolidates the settings knowledge that was scattered across
-vq_switch.py comments, FINDINGS-LOG, RUNTIME-SHIP-PLAN, MEMORY-PLAYBOOK and
+vq_switch.py comments, the findings log, RUNTIME-SHIP-PLAN, MEMORY-PLAYBOOK and
 several env files. Written as the seed of a per-artifact RESOLVER: everything
 below should be decided from an artifact's own config.json and the box's
 memory, not remembered by an operator.*

@@ -130,7 +130,7 @@ def decode_all(art: pathlib.Path):
             mx.eval(list(data.values()))
         codes, cb = data[m + ".codes"], data[m + ".codebook"]
         sc = data[m + ".vq_scales"]
-        D, K = int(cb.shape[1]), int(cb.shape[0])
+        D = int(cb.shape[1])
         nsub = meta["in"] // D
         c = codes.reshape(-1, codes.shape[-1])
         if meta.get("pack_bits"):

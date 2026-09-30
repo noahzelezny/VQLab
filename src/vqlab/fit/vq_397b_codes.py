@@ -230,10 +230,10 @@ if not any(k.startswith(_fam_probe.rsplit(".", 1)[0]) or k == _fam_probe
         f"FAIL: this source does not match --family {args.family!r}.\n"
         f"  expected key like: {_fam_probe}\n"
         f"  source has e.g.:   " + ("\n                     ".join(_near) or "(no mlp/expert keys)") + "\n"
-        f"To onboard a new model family: add its key template to FAMILY "
-        f"(src/vqlab/families.py) AND run docs/ONBOARDING.md's "
-        f"characterisation pass first. If the family is right, check the "
-        f"source dir (HF vs mlx layout differ; see families.py comments).")
+        "To onboard a new model family: add its key template to FAMILY "
+        "(src/vqlab/families.py) AND run docs/ONBOARDING.md's "
+        "characterisation pass first. If the family is right, check the "
+        "source dir (HF vs mlx layout differ; see families.py comments).")
 PROJ = FAM["proj"]
 
 
@@ -651,7 +651,6 @@ json.dump({"metadata": {"total_size": tsz}, "weight_map": out_map},
 json.dump(new_cfg, open(OUT / "config.json", "w"), indent=1)
 
 # ---- model.py: vq_switch runtime + loader shim, one self-contained file ---
-from vqlab import _layout  # noqa: E402
 runtime = _layout.runtime_file("vq_switch.py").read_text()
 from vqlab.arch_resolve import PRELUDE as _ARCH_PRELUDE
 shim = '''

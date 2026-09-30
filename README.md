@@ -1,5 +1,7 @@
 # VQLab
 
+[![CI](https://github.com/noahzelezny/VQLab/actions/workflows/ci.yml/badge.svg)](https://github.com/noahzelezny/VQLab/actions/workflows/ci.yml)
+
 **Size-targeted vector-quantized (VQ) builds of large models on Apple Silicon,
 with MLX.** Name a byte budget, price the recipe before fitting, fit it
 data-free, pack to true bit-width, verify, and serve through stock `mlx-lm`.
@@ -75,8 +77,8 @@ and by 8 bits affine is lossless. Prefill is ~0.5x affine at 35B.
 
 Every margin is quoted against a measured seed-noise floor; the code corpus
 is private and the vision-tower size offset is disclosed rather than
-restated. The full record, with corrections applied in place, is
-[docs/FINDINGS-LOG.md](docs/FINDINGS-LOG.md). The rules are
+restated. The settled results are
+[docs/FINDINGS.md](docs/FINDINGS.md); the rules are
 [METHODOLOGY.md](METHODOLOGY.md).
 
 ## The differentiating feature: size targeting

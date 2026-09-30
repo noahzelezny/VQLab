@@ -75,14 +75,14 @@ import logging
 import os
 import time
 from dataclasses import dataclass
-from typing import Any, Callable, Iterator, List, Optional, Union
+from typing import Callable, Iterator, List, Optional
 
 import mlx.core as mx
 
 from . import registry
 from .capture import capture_input
 from .caches import restore, snapshot
-from .sampling import Distribution, make_distribution, rejection_correct
+from .sampling import make_distribution, rejection_correct
 
 __all__ = ["MTPResponse", "load_mtp_head", "mtp_generate", "mtp_stream_generate",
            "prefill_chunk_size", "DEFAULT_PREFILL_CHUNK"]

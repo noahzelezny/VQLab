@@ -42,7 +42,7 @@ Around the pipeline: `queue` (run a list of steps from pinned code under the GPU
 | **artifact registry** | `registry/artifacts.jsonl`, `registry/hub.jsonl` (in git) | every artifact from provable facts (runtime, geometry, size, fingerprint, record id); latest Hub comparison | `vqlab registry list / hub` |
 | **queues** | `~/.vqlab/queues/<stamp>-<name>/` | each step's cmd, stdout, stderr, verdict; the pinned commit | `vqlab queue status / list` |
 | **family data** | `families/<family>/` | `entry.json` (how to read the tensors, no code change) and `teachers/<teacher>/{profile,onboard,teacher_caches}.json` | `vqlab family-profile`, `vqlab onboard`, MCP `where_is` |
-| **findings** | `docs/FINDINGS-LOG.md` | every measured result, F-numbered | MCP `findings_tail`; reserve a number with `next_f_number reserve=true` |
+| **findings** | `lab/FINDINGS-LOG.md` (private; `$VQLAB_FINDINGS_LOG`) | every measured result, F-numbered | MCP `findings_tail`; reserve a number with `next_f_number reserve=true` |
 
 Design: `docs/PROVENANCE.md`.
 
