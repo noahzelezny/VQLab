@@ -111,8 +111,8 @@ button.row{cursor:pointer}button.row:hover{border-color:color-mix(in srgb,var(--
 .recipe{display:grid;grid-template-columns:minmax(0,1fr) 30em;gap:1.4em;align-items:start}
 .recipe .cart{font-size:.95em}
 @media(max-width:900px){.recipe{grid-template-columns:minmax(0,1fr)}}
-svg.chart{width:100%;height:auto;display:block;background:var(--bg);border:1px solid var(--line);border-radius:var(--r);user-select:none;-webkit-user-select:none;touch-action:none}
-.chart text{font-family:inherit;fill:var(--faint);font-size:12px}
+svg.chart{width:100%;display:block;background:var(--bg);border:1px solid var(--line);border-radius:var(--r);user-select:none;-webkit-user-select:none;touch-action:none}
+.chart text{font-family:inherit;fill:var(--faint);font-size:11px}.chart text.atitle{font-size:10px;letter-spacing:.06em;text-transform:uppercase}
 .chart .axis{stroke:var(--line)}.chart .gridl{stroke:var(--line);stroke-dasharray:2 4}
 .chart .cu{fill:none;stroke-width:1.5}
 .chart .cu.flat{stroke:var(--dim)}.chart .cu.mixed{stroke:var(--acc)}.chart .cu.measured{stroke:var(--teal);stroke-dasharray:5 4}
@@ -328,10 +328,10 @@ const TEACHERS=[
  {id:'q27',res:'27B',n:'Qwen/Qwen3.8-27B',short:'Qwen3.8-27B',fam:'qwen3_8_dense',kind:'dense · 64 layers',onb:'2026-09-21',fits:969,layers:64,topk:1,modules:192,bytes:{mtp:0,vision:0},fitStore:{'d2-K64':201,'d2-K256':192,'d2-K4096':192,'d4-K256':192,'d4-K1024':192}},
  {id:'fn',n:'Qwen/Qwen3.8-Flash-Next-bf16',short:'Qwen3.8-Flash-Next',fam:'qwen4_exp',kind:'MoE · 48 layers · GDN',onb:'2026-09-14',fits:453,layers:48,topk:10,modules:144,bytes:{mtp:1.2,vision:0.849},fitStore:{'d8-K16384':99,'d8-K4096':125,'d4-K256':99,'d4-K4096':31,'d4-K512':27,'d4-K128':24,'d4-K8192':24,'d8-K1024':24},
   rows:[{id:'r21',what:'VQ-2.1bpw (mixed)',kind:'vq',mixed:true,gib:47.5,bpw:2.1,kl:[210,71,150],top1:85.1,hf:'TheDrainFlorist/Qwen3.8-Flash-Next-VQ-2.1bpw'},{id:'r32',what:'VQ-3.2bpw',kind:'vq',geo:'d4-K2048',gib:71.7,bpw:3.2,kl:[112,38,61],top1:89.6,hf:'TheDrainFlorist/Qwen3.8-Flash-Next-VQ-3.2bpw'},{id:'r44',what:'VQ-4.4bpw',kind:'vq',geo:'d2-K256',gib:96.6,bpw:4.4,kl:[52,17,22],top1:93.0,hf:'TheDrainFlorist/Qwen3.8-Flash-Next-VQ-4.4bpw'},{id:'r55',what:'VQ-5.5bpw',kind:'vq',geo:'d2-K1024',gib:114.5,bpw:5.5,kl:[24,8,9],top1:95.4,hf:'TheDrainFlorist/Qwen3.8-Flash-Next-VQ-5.5bpw'},{id:'q4',what:'affine q4 (mlx-community recipe)',kind:'affine',gib:112,bpw:4.5,kl:[70,24,30],top1:92.5}]},
- {id:'g26',n:'google/gemma-4-26b-a4b-it',short:'Gemma-4-26B-A4B',fam:'gemma4',kind:'MoE · 30 layers',onb:null,fits:0,layers:30,topk:4,modules:90,bytes:{mtp:0,vision:0.4},fitStore:{},ppl:'KL cannot rank this family (its teacher cache is not deterministic); builds are scored by perplexity on the three house corpora instead',
-  rows:[{id:'r62',what:'VQ-6.2bpw',kind:'vq',geo:'d2-K2048',gib:18.7,bpw:6.2,kl:null,top1:null,hf:'TheDrainFlorist/gemma-4-26b-a4b-it-VQ-6.2bpw'}]},
- {id:'g4b',n:'google/gemma-4-e4b-it',short:'Gemma-4-E4B',fam:'gemma4_e4b',kind:'dense · PLE',onb:null,fits:0,layers:35,topk:1,modules:1,bytes:{mtp:0,vision:0.3},fitStore:{},ppl:'KL cannot rank this family (its teacher cache is not deterministic); builds are scored by perplexity on the three house corpora instead',
-  rows:[{id:'ple',what:'VQ PLE tables',kind:'vq',geo:'d2-K2048',gib:7.4,bpw:8.0,kl:null,top1:null,hf:'TheDrainFlorist/gemma-4-e4b-it-VQ-PLE'}]},
+ {id:'g26',n:'google/gemma-4-26b-a4b-it',short:'Gemma-4-26B-A4B',fam:'gemma4',kind:'MoE · 30 layers',onb:null,fits:0,layers:30,topk:4,modules:90,bytes:{mtp:0,vision:0.4},fitStore:{},judge:'blind judging against bf16 is the gate for this family: raw loglikelihood collapses on gemma-4-it, so perplexity is noise and KL is quoted from the card (one corpus, older harness)',
+  rows:[{id:'d4',what:'4-bit-class d4 build',kind:'lab',geo:'d4-K256',gib:12.5,bpw:4.1,kl:[1856,1856,1856],one:true,top1:56.56},{id:'r62',what:'VQ-6.2bpw',kind:'vq',geo:'d2-K2048',gib:18.7,bpw:6.2,kl:[537,537,537],one:true,top1:77.89,hf:'TheDrainFlorist/gemma-4-26b-a4b-it-VQ-6.2bpw'},{id:'q8',what:'affine q8 reference',kind:'affine',gib:25,bpw:8.5,kl:[441,441,441],one:true,top1:79.95}]},
+ {id:'g4b',n:'google/gemma-4-e4b-it',short:'Gemma-4-E4B',fam:'gemma4_e4b',kind:'dense · PLE',onb:null,fits:0,layers:35,topk:1,modules:1,bytes:{mtp:0,vision:0.3},fitStore:{},judge:'blind judging against bf16 is the gate for this family: raw loglikelihood collapses on gemma-4-it, so perplexity is noise and KL is quoted from the card (one corpus, older harness)',
+  rows:[{id:'ple',what:'VQ PLE tables',kind:'vq',geo:'d2-K2048',gib:7.39,bpw:7.5,kl:[null,null,7.451],lit:true,top1:95.7,hf:'TheDrainFlorist/gemma-4-e4b-it-VQ-PLE'},{id:'q8',what:'affine q8 · mlx-community',kind:'affine',gib:8.38,bpw:8.5,kl:[null,null,8.149],lit:true,top1:95.7,hf:'mlx-community/gemma-4-e4b-it-8bit'}]},
  {id:'glm',n:'zai-org/GLM-5.3-Flash-BF16',short:'GLM-5.3-Flash',fam:'glm5_next',kind:'MoE · 42 layers',onb:'2026-09-12',fits:0,layers:42,topk:8,modules:126,bytes:{mtp:0,vision:0},fitStore:{},
   rows:[{id:'r27',what:'VQ-2.7bpw',kind:'vq',geo:'d4-K512',gib:108.0,bpw:2.7,kl:[190,66,120],top1:86.0,hf:'TheDrainFlorist/GLM-5.3-Flash-VQ-2.7bpw'},{id:'r31',what:'VQ-3.1bpw (mixed)',kind:'vq',mixed:true,gib:122.4,bpw:3.1,kl:[120,41,62],top1:89.2,hf:'TheDrainFlorist/GLM-5.3-Flash-VQ-3.1bpw'},{id:'r36',what:'VQ-3.6bpw (mixed)',kind:'vq',mixed:true,gib:141.1,bpw:3.6,kl:[70,24,30],top1:92.0,hf:'TheDrainFlorist/GLM-5.3-Flash-VQ-3.6bpw'}]},
 ];
@@ -342,7 +342,7 @@ const GEOCOL={'d4-K128':'var(--g1)','d4-K256':'var(--g1)','d4-K512':'var(--g1)',
 const MACHINES=[[16,'16'],[24,'24'],[32,'32'],[36,'36'],[48,'48'],[64,'64'],[96,'96'],[128,'128'],[192,'192'],[256,'256'],[512,'512']];
 const ctxReserve=gb=>Math.max(2,Math.round(gb*0.12));
 const usable=gb=>gb*0.93-3-ctxReserve(gb);
-const mean=k=>k?(k[0]+k[1]+k[2])/3:NaN;
+const mean=k=>{const v=k.filter(x=>x!=null);return v.reduce((a,b)=>a+b,0)/v.length};
 const $=q=>document.querySelector(q);
 const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const f1=x=>x.toFixed(1);
@@ -418,7 +418,7 @@ function plan(t,r){
   if(r.tower&&t.bytes.vision)out.push(['graft tower',3,'bf16 vision tower']);
   if(r.mtp&&t.bytes.mtp)out.push(['mtp-pack',6,'quantized drafting sidecar']);
   out.push(['smoke · vision · check-release',12,'one token and one image through the shipped runtime; files exist and function']);
-  out.push(t.ppl?['score (ppl)',30*sc,'referee perplexity on the three house corpora; KL is unavailable for this family']:['kl-ladder',40*sc,'paired against the teacher, three corpora at 12288']);
+  out.push(t.judge?['blind judge',30*sc,'60 literary continuations judged blind against bf16; exact sign test']:['kl-ladder',40*sc,'paired against the teacher, three corpora at 12288']);
   return out;
 }
 function allocation(t,r){
@@ -440,9 +440,9 @@ const JOBS=[
 ];
 const PAGES=[{k:'library',n:'Library'},{k:'recipe',n:'Recipe'},{k:'jobs',n:'Jobs'}];
 const ICON={library:'<svg viewBox="0 0 24 24"><path d="M4 19V5M10 19V9M16 19v-6M22 19H2"/></svg>',recipe:'<svg viewBox="0 0 24 24"><path d="M3 18C8 18 8 6 13 6s5 12 8 12"/><circle cx="13" cy="6" r="2"/></svg>',jobs:'<svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h10M4 18h13"/><circle cx="19" cy="12" r="2"/></svg>'};
-let page=0, draft=newRecipe(), libFam='q35', jobSel='j1', show={d4:true,d2:true,d8:true,mixed:true,affine:true,'affine-sk':false,vq:true,lab:true};
-try{const st=JSON.parse(localStorage.getItem('vq.v17')||'{}');if(st.draft)draft=st.draft;if(st.page!=null)page=st.page;if(st.libFam)libFam=st.libFam;if(st.jobSel)jobSel=st.jobSel;if(st.show)show=st.show}catch{}
-function save(){try{localStorage.setItem('vq.v17',JSON.stringify({draft,page,libFam,jobSel,show}))}catch{}}
+let page=0, draft=newRecipe(), libFam='q35', jobSel='j1', show={d4:true,d2:true,d8:true,mixed:true,affine:true,'affine-sk':false,vq:true,lab:false};
+try{const st=JSON.parse(localStorage.getItem('vq.v18')||'{}');if(st.draft)draft=st.draft;if(st.page!=null)page=st.page;if(st.libFam)libFam=st.libFam;if(st.jobSel)jobSel=st.jobSel;if(st.show)show=st.show}catch{}
+function save(){try{localStorage.setItem('vq.v18',JSON.stringify({draft,page,libFam,jobSel,show}))}catch{}}
 if(!draft.size){const t=TE(draft.teacher);resolveAt(t,draft,(t.xr[0]+t.xr[1])/2)}
 
 // ================================================================ header
@@ -450,16 +450,25 @@ function renderFlow(){
   $('#flow').innerHTML=PAGES.map((p,i)=>`<button class="st" aria-current="${i===page}" data-i="${i}">${ICON[p.k]}<span class="n">${p.n}</span>${p.k==='jobs'?'<i style="background:var(--warn)"></i>':''}</button>`).join('');
   $('#flow').querySelectorAll('.st').forEach(b=>b.onclick=()=>{page=+b.dataset.i;render()});
 }
-function chartFrame(xr,H=420,W=1000,L=52,Rm=16,Tp=14,B=34,ymin=3,ymax=1500){
-  const [xmin,xmax]=xr;const X=v=>L+(v-xmin)/(xmax-xmin)*(W-L-Rm),Y=v=>Tp+(Math.log(ymax)-Math.log(Math.max(ymin,Math.min(ymax,v))))/(Math.log(ymax)-Math.log(ymin))*(H-Tp-B);
-  let s='';[5,10,20,50,100,200,500,1000].forEach(v=>s+=`<line class="gridl" x1="${L}" x2="${W-Rm}" y1="${Y(v)}" y2="${Y(v)}"/><text x="${L-6}" y="${Y(v)+4}" text-anchor="end">${v}</text>`);
-  const step=(xmax-xmin)>60?20:(xmax-xmin)>25?5:2;
+// Charts draw at true pixel size (viewBox = rendered box), so labels are
+// the same size as the rest of the UI however wide the chart gets. The y axis
+// is fitted to what is plotted: bottom just under the best point, top just
+// over the worst, ticks at 1-2-5 steps (more when the span is short).
+function yRange(vals){vals=vals.filter(v=>v>0&&isFinite(v));if(!vals.length)return [5,1500];return [Math.min(...vals)/1.35,Math.max(...vals)*1.35]}
+function yTicks(lo,hi){const out=[];const steps=Math.log10(hi/lo)<1.2?[1,1.5,2,3,5,7]:[1,2,5];
+  for(let e=Math.floor(Math.log10(lo));e<=Math.ceil(Math.log10(hi));e++)steps.forEach(m=>{const v=m*10**e;if(v>=lo&&v<=hi)out.push(+v.toPrecision(3))});return out}
+function chartFrame(svg,xr,H,yr){
+  const W=Math.max(320,Math.round(svg.getBoundingClientRect().width||1000));svg.setAttribute('viewBox',`0 0 ${W} ${H}`);svg.style.height=H+'px';
+  const L=44,Rm=12,Tp=10,B=26;const [xmin,xmax]=xr,[ymin,ymax]=yr;
+  const X=v=>L+(v-xmin)/(xmax-xmin)*(W-L-Rm),Y=v=>Tp+(Math.log(ymax)-Math.log(Math.max(ymin,Math.min(ymax,v))))/(Math.log(ymax)-Math.log(ymin))*(H-Tp-B);
+  let s='';yTicks(ymin,ymax).forEach(v=>s+=`<line class="gridl" x1="${L}" x2="${W-Rm}" y1="${Y(v)}" y2="${Y(v)}"/><text x="${L-6}" y="${Y(v)+4}" text-anchor="end">${v}</text>`);
+  const span=xmax-xmin,step=span>120?40:span>60?20:span>25?5:span>8?2:1;
   for(let v=Math.ceil(xmin/step)*step;v<=xmax;v+=step)s+=`<line class="gridl" x1="${X(v)}" x2="${X(v)}" y1="${Tp}" y2="${H-B}"/><text x="${X(v)}" y="${H-B+14}" text-anchor="middle">${v}</text>`;
   s+=`<line class="axis" x1="${L}" x2="${W-Rm}" y1="${H-B}" y2="${H-B}"/><line class="axis" x1="${L}" x2="${L}" y1="${Tp}" y2="${H-B}"/>`;
-  s+=`<text x="${W-Rm}" y="${H-4}" text-anchor="end">text weights, GiB</text><text transform="rotate(-90)" x="${-(H-B)}" y="12">mean KL, mnats (log)</text>`;
-  return {s,X,Y,W,H,L,Rm,Tp,B,xmin,xmax};
+  s+=`<text class="atitle" x="${W-Rm}" y="${H-B-6}" text-anchor="end">GiB →</text><text class="atitle" x="${L+6}" y="${Tp+10}">KL, mnats ↓ better</text>`;
+  return {s,X,Y,W,H,L,Rm,Tp,B,xmin,xmax,ymin,ymax};
 }
-const curve=(c,fn,cls)=>{let d='';for(let g=c.xmin;g<=c.xmax;g+=(c.xmax-c.xmin)/100){const v=fn(g);if(v>1400)continue;d+=(d?'L':'M')+c.X(g)+' '+c.Y(v)}return `<path class="cu ${cls}" d="${d}"/>`};
+const curve=(c,fn,cls)=>{let d='';for(let g=c.xmin;g<=c.xmax;g+=(c.xmax-c.xmin)/100){const v=fn(g);if(!(v>=c.ymin&&v<=c.ymax)){if(d&&!d.endsWith('|'))d+='|';continue}d+=(d&&!d.endsWith('|')?'L':'M')+c.X(g)+' '+c.Y(v)}return `<path class="cu ${cls}" d="${d.replace(/\|/g,'')}"/>`};
 
 // ================================================================ Library
 let libBox=128;
@@ -481,7 +490,7 @@ function libAnswer(t){
   for(let k=1;k<lad.length;k++){const w=lad[k]-lad[k-1];if(!gap||w>gap.w)gap={w,a:lad[k-1],b:lad[k]}}
   const boxIn=gap&&MACHINES.map(([gb])=>usable(gb)-vis).find(u=>u>gap.a+0.5&&u<gap.b-0.5);
   const at=gap?(boxIn||(gap.a+gap.b)/2):null;
-  const gapCard=gap&&!t.ppl&&t.scored.length?`<div class="cart" style="margin-top:10px"><div class="ro">worth building next</div>
+  const gapCard=gap&&!t.judge&&t.scored.length?`<div class="cart" style="margin-top:10px"><div class="ro">worth building next</div>
     <div class="seghelp" style="color:var(--fg)">no shipped build between ${f1(gap.a)} and ${f1(gap.b)} GiB${boxIn?`; a ${MACHINES.find(([gb])=>usable(gb)-vis===boxIn)[1]} GB Mac tops out in that gap`:''}</div>
     <div class="seghelp">a mixed build at ${f1(at)} GiB lands near ~${klVQ(t,{...newRecipe(),teacher:t.id,strat:'mixed'},at).toFixed(0)} mnats</div>
     <div class="foot" style="margin-top:8px"><button class="btn go" data-recipe="${t.id}" data-at="${at}">Recipe at ${f1(at)} GiB →</button></div></div>`:'';
@@ -495,13 +504,13 @@ function pgLibrary(){
   return `<section class="panel"><h2><span style="display:flex;align-items:baseline;gap:14px">Library <button class="hpick" id="pick">${esc(t.short)} <span>▾</span></button></span><small>click the chart to start a recipe at that size</small></h2>
   <div class="lib2">
     <div>
-      <svg class="chart" id="libchart" viewBox="0 0 1000 210" role="img" aria-label="measured rows, size against mean KL"></svg>
+      <svg class="chart" id="libchart" role="img" aria-label="measured rows, size against mean KL"></svg>
       <div class="chips"><span class="lab">type</span>${Object.entries(TYPE).filter(([k])=>t.rows.some(r=>r.type===k)).map(([k,[l,c]])=>`<button aria-pressed="${!!show[k]}" data-k="${k}"><em style="background:${c}"></em>${l} · ${t.rows.filter(r=>r.type===k).length}</button>`).join('')}
         <span class="lab" style="margin-left:10px">VQ status</span><button aria-pressed="${!!show.vq}" data-k="vq"><em style="background:var(--fg)"></em>shipped</button><button aria-pressed="${!!show.lab}" data-k="lab"><em style="border:1.5px solid var(--fg)"></em>lab build</button>
-        ${t.ppl?`<span style="color:var(--warn)">${esc(t.ppl)}</span>`:t.real?'':'<span style="color:var(--warn)">not yet re-measured; card figures</span>'}</div>
+        ${t.judge?`<span style="color:var(--warn)">${esc(t.judge)}</span>`:t.real?'':'<span style="color:var(--warn)">not yet re-measured; card figures</span>'}</div>
       ${show['affine-sk']&&t.rows.some(r=>r.type==='affine-sk')?'<div class="note">affine on the VQ skeleton keeps the VQ build\'s non-expert tensors and quantizes only the experts affine: the like-for-like comparison. Its KL floors once the experts pass ~5 bits because the skeleton\'s own quantization dominates, which is why s6 and s8 sit level.</div>':''}
       <div class="tblscroll"><table class="rungtab"><thead><tr><th>row</th><th>what</th><th class="num">GiB</th><th class="num">bpw</th><th>geometry</th><th class="num">prose</th><th class="num">code</th><th class="num">lit</th><th class="num">mean</th><th class="num">top-1</th><th>hub</th></tr></thead><tbody>
-      ${rows.map(r=>`<tr class="${r.kind}" style="color:${r.kind==='lab'?'var(--dim)':TCOL(r)}"><td>${esc(r.id)}</td><td class="what">${esc(r.what)}</td><td class="num">${f1(r.gib)}</td><td class="num">${r.bpw.toFixed(2)}</td><td>${geoCell(r)}</td>${[0,1,2].map(c=>`<td class="num ${r.kl&&r.kind==='vq'&&r.kl[c]===best[c]?'best':''}">${r.kl?f1(r.kl[c]):'—'}</td>`).join('')}<td class="num">${r.kl?f1(mean(r.kl)):'—'}</td><td class="num">${r.top1!=null?r.top1+'%':'—'}</td><td>${r.hf?`<a href="https://huggingface.co/${esc(r.hf)}" target="_blank" rel="noopener">${esc(r.hf.split('/')[0])} ↗</a>`:''}</td></tr>`).join('')}
+      ${rows.map(r=>`<tr class="${r.kind}" style="color:${r.kind==='lab'?'var(--dim)':TCOL(r)}"><td>${esc(r.id)}</td><td class="what">${esc(r.what)}</td><td class="num">${f1(r.gib)}</td><td class="num">${r.bpw.toFixed(2)}</td><td>${geoCell(r)}</td>${[0,1,2].map(c=>`<td class="num ${r.kl&&r.kind==='vq'&&r.kl[c]===best[c]?'best':''}">${r.kl&&!r.one&&r.kl[c]!=null?f1(r.kl[c]):'—'}</td>`).join('')}<td class="num">${r.kl?f1(mean(r.kl)):'—'}</td><td class="num">${r.top1!=null?r.top1+'%':'—'}</td><td>${r.hf?`<a href="https://huggingface.co/${esc(r.hf)}" target="_blank" rel="noopener">${esc(r.hf.split('/')[0])} ↗</a>`:''}</td></tr>`).join('')}
       </tbody></table></div>
     </div>
     <div>
@@ -515,14 +524,14 @@ function pgLibrary(){
   </div>${PICKER()}</section>`;
 }
 function drawLib(){
-  const t=TE(libFam),c=chartFrame(t.xr,210);let s=c.s;
-  const vis=r=>show[r.type]&&(r.kind.startsWith('affine')||show[r.kind]);
-  if(t.scored.length)s+=curve(c,t.klFlat,'flat');if(t.klAff&&show.affine)s+=curve(c,t.klAff,'aff');if(t.klSk&&show['affine-sk'])s+=curve(c,t.klSk,'sk');
+  const t=TE(libFam),svg=$('#libchart');const vis=r=>show[r.type]&&(r.kind.startsWith('affine')||show[r.kind]);
+  const pv=t.rows.filter(r=>vis(r)&&r.kl).map(r=>mean(r.kl));const c=chartFrame(svg,t.xr,200,yRange(pv));let s=c.s;
+  if(t.real&&t.scored.length)s+=curve(c,t.klFlat,'flat');if(t.real&&t.klAff&&show.affine)s+=curve(c,t.klAff,'aff');if(t.klSk&&show['affine-sk'])s+=curve(c,t.klSk,'sk');
   t.rows.filter(r=>vis(r)&&r.kl).forEach(r=>{const x=c.X(r.gib),y=c.Y(mean(r.kl)),col=TCOL(r);
     if(r.kind.startsWith('affine'))s+=`<g><path d="M${x-4} ${y-4}L${x+4} ${y+4}M${x+4} ${y-4}L${x-4} ${y+4}" style="fill:none;stroke:${col};stroke-width:1.5"/><text x="${x+7}" y="${y+4}" style="fill:${col};font-size:11px">${esc(r.id)}</text></g>`;
     else s+=`<g><circle cx="${x}" cy="${y}" r="${r.kind==='vq'?5:3.5}" style="fill:${r.kind==='vq'?col:'var(--bg)'};stroke:${col};stroke-width:1.5"/>${r.kind==='vq'?`<text x="${x+8}" y="${y-6}" style="fill:var(--dim);font-size:11px">${esc(r.id.replace(/^r(\d)(\d)/,'$1.$2'))}</text>`:''}</g>`});
   {const u=usable(libBox)-(t.bytes.vision||0);if(u>c.xmin&&u<c.xmax)s+=`<g class="box near"><line x1="${c.X(u)}" x2="${c.X(u)}" y1="${c.Tp}" y2="${c.H-c.B}"/><text x="${c.X(u)+4}" y="${c.Tp+14}">${libBox} GB</text></g>`}
-  const svg=$('#libchart');svg.innerHTML=s;svg.style.cursor='crosshair';
+  svg.innerHTML=s;svg.style.cursor='crosshair';
   svg.onclick=e=>{const b=svg.getBoundingClientRect();const gx=c.xmin+((e.clientX-b.left)/b.width*c.W-c.L)/(c.W-c.L-c.Rm)*(c.xmax-c.xmin);if(gx<c.xmin||gx>c.xmax)return;openRecipe(t.id,gx)};
 }
 function openRecipe(id,at){draft=newRecipe();draft.teacher=id;const t=TE(id);resolveAt(t,draft,at??(t.xr[0]+t.xr[1])/2);page=1;render()}
@@ -553,7 +562,7 @@ function pgRecipe(){
   <div class="readouts" id="readouts"></div>
   <div class="recipe">
   <div>
-    <svg class="chart" id="chart" viewBox="0 0 1000 360" role="img" aria-label="estimated quality against size; drag to set"></svg>
+    <svg class="chart" id="chart" role="img" aria-label="estimated quality against size; drag to set"></svg>
     <div class="legend"><span><i style="border-color:var(--acc)"></i>this recipe</span><span><i style="border-color:var(--dim)"></i>flat VQ, fitted</span><span><i style="border-color:var(--bad);border-top-style:dashed"></i>affine, fitted</span><span>● measured build</span><span><i style="border-color:var(--teal)"></i>boxes, after OS and context</span></div>
     <div id="strip"></div>
   </div>
@@ -581,7 +590,7 @@ function renderPicker(){
   $('#pfams').innerHTML=[['all','All'],...creators.map(c=>[c,c])].map(([k,l])=>`<button class="pfam" aria-current="${pickFam===k}" data-pf="${k}">${esc(l)}<i>${k==='all'?all.length:all.filter(t=>creator(t)===k).length}</i></button>`).join('');
   const list=all.filter(t=>(pickFam==='all'||creator(t)===pickFam)&&(pickKind==='all'||t.kind.toLowerCase().startsWith(pickKind))&&(!q||(t.n+t.short).toLowerCase().includes(q)));
   const row=t=>t.draft?`<button class="prow no"><span class="n">${esc(t.short)}</span><span class="m">${esc(t.kind)} · not onboarded</span><span class="d">onboard runs profile, loader, cache determinism and the init sweep · about two hours</span></button>`
-    :`<button class="prow" aria-current="${t.id===(page===0?libFam:draft.teacher)}" data-pt="${t.id}"><span class="n">${esc(t.short)}</span><span class="m">${esc(t.kind)}</span><span class="d">${t.rows.filter(r=>r.kind==='vq').length} shipped · ${t.scored.length} builds measured · ${t.fits} fits in store${t.note?' · '+t.note:''}${t.ppl?' · <span style="color:var(--warn)">scored by perplexity, not KL</span>':''}</span></button>`;
+    :`<button class="prow" aria-current="${t.id===(page===0?libFam:draft.teacher)}" data-pt="${t.id}"><span class="n">${esc(t.short)}</span><span class="m">${esc(t.kind)}</span><span class="d">${t.rows.filter(r=>r.kind==='vq').length} shipped · ${t.scored.length} builds measured · ${t.fits} fits in store${t.note?' · '+t.note:''}${t.judge?' · <span style="color:var(--warn)">judged blind against bf16</span>':''}</span></button>`;
   $('#prows').innerHTML=`<div class="pkind"><div class="seg small" style="width:14em">${[['all','all'],['dense','dense'],['moe','MoE']].map(([v,n])=>`<button aria-pressed="${pickKind===v}" data-pk="${v}">${n}</button>`).join('')}</div></div>`+(list.map(row).join('')||'<div class="psect no">nothing matches</div>');
   $('#pfams').querySelectorAll('[data-pf]').forEach(b=>b.onclick=()=>{pickFam=b.dataset.pf;renderPicker()});
   $('#prows').querySelectorAll('[data-pk]').forEach(b=>b.onclick=()=>{pickKind=b.dataset.pk;renderPicker()});
@@ -595,14 +604,16 @@ function drawReadouts(){
   $('#readouts').innerHTML=`
     <div class="readout acc"><small>size</small><b>${f1(g)} GiB</b><span class="sub">${f1(disk)} on disk · ${t.bpw(g).toFixed(2)} bpw</span></div>
     <div class="readout ${box?'ok':'bad'}"><small>runs on</small><b>${box?box[1]+' GB':'no box'}</b><span class="sub">${box?ctxReserve(box[0])+' GB kept for context':'over every listed box'}</span></div>
-    ${t.ppl?`<div class="readout warn"><small>quality</small><b>ppl gate</b><span class="sub">no KL curve for this family; scored after build</span></div>`:`<div class="readout acc"><small>est. KL</small><b>~${k.toFixed(0)}</b><span class="sub">mnats, mean of three corpora</span></div>`}
-    ${t.ppl?`<div class="readout"><small>vs shipped ${esc(near.id)}</small><b>—</b><span class="sub">${g>near.gib?'+':''}${f1(g-near.gib)} GiB; ppl compared after gates</span></div>`:`<div class="readout ${vs>3?'ok':vs<-3?'warn':''}"><small>vs shipped ${esc(near.id)}</small><b>${Math.abs(vs)<3?'same':(vs>0?'−':'+')+Math.abs(vs).toFixed(0)+'%'}</b><span class="sub">damage at ${g>near.gib?'+':''}${f1(g-near.gib)} GiB</span></div>`}
+    ${t.judge?`<div class="readout warn"><small>quality</small><b>judge gate</b><span class="sub">blind vs bf16 after the build</span></div>`:`<div class="readout acc"><small>est. KL</small><b>~${k.toFixed(0)}</b><span class="sub">mnats, mean of three corpora</span></div>`}
+    ${t.judge?`<div class="readout"><small>vs shipped ${esc(near.id)}</small><b>—</b><span class="sub">${g>near.gib?'+':''}${f1(g-near.gib)} GiB; judged after gates</span></div>`:`<div class="readout ${vs>3?'ok':vs<-3?'warn':''}"><small>vs shipped ${esc(near.id)}</small><b>${Math.abs(vs)<3?'same':(vs>0?'−':'+')+Math.abs(vs).toFixed(0)+'%'}</b><span class="sub">damage at ${g>near.gib?'+':''}${f1(g-near.gib)} GiB</span></div>`}
     ${aff&&!isNaN(k)?`<div class="readout ${k<aff.kl?'ok':'warn'}"><small>vs affine q${aff.bits}</small><b>${(k<aff.kl?'−':'+')+(100*Math.abs(1-k/aff.kl)).toFixed(0)}%</b><span class="sub">damage at ${g>aff.gib?'+':''}${f1(g-aff.gib)} GiB</span></div>`:`<div class="readout"><small>vs affine</small><b>—</b><span class="sub">no affine row yet</span></div>`}
     <div class="readout acc"><small>time</small><b>${fmtT(tot)}</b><span class="sub">${r.reuse?`${r.reuse[0]}/${r.reuse[1]} fits from the store · `:''}starts ~19:05</span></div>`;
   const ap=$('#approach');if(ap)ap.textContent={flat:`${r.geo} on all ${t.modules} modules, the measured notch nearest the point.`,mixed:`${r.geo.split('-')[0]} from the nearest notch; ${r.geo} in front, the biggest ${r.geo.split('-')[0]} books in the back.`,measured:'after leverage and alloc-sweep run on this teacher; the strip is a placeholder until then.'}[r.strat];
 }
 function drawRecipe(){
-  const r=draft,t=TE(r.teacher),c=chartFrame(t.xr,360);let s=c.s;const {X,Y,L,W,Rm,Tp,H,B,xmin,xmax}=c;
+  const r=draft,t=TE(r.teacher),svg=$('#chart');
+  const pv=t.rows.filter(q=>q.kl&&(q.kind==='vq'||q.kind==='lab'||q.kind==='affine')).map(q=>mean(q.kl));[0,.5,1].forEach(f=>{const g0=t.xr[0]+f*(t.xr[1]-t.xr[0]);pv.push(t.klFlat(g0));if(t.klAff)pv.push(t.klAff(g0))});
+  const c=chartFrame(svg,t.xr,330,yRange(pv));let s=c.s;const {X,Y,L,W,Rm,Tp,H,B,xmin,xmax}=c;
   const g=sizeOf(t,r),extra=(r.tower?t.bytes.vision:0)+(r.mtp?t.bytes.mtp:0);
   MACHINES.forEach(([gb,l])=>{const u=usable(gb)-extra;if(u>xmin&&u<xmax){const near=Math.abs(u-g)<(xmax-xmin)*0.01;s+=`<g class="box ${near?'near':''}"><line x1="${X(u)}" x2="${X(u)}" y1="${Tp}" y2="${H-B}"/><text x="${X(u)+4}" y="${Tp+14}">${l} GB</text></g>`}});
   if(t.scored.length)s+=curve(c,t.klFlat,'flat '+(r.mode==='vq'&&r.strat==='flat'?'':'dimmed'));
@@ -613,9 +624,9 @@ function drawRecipe(){
   else [2,3,4,5,6,8].forEach(b=>{const rr={...r,bits:b};const gx=sizeOf(t,rr);if(gx<xmin||gx>xmax)return;const kk=klOf(t,rr,gx),y=isNaN(kk)?Y(100):Y(kk);s+=`<g class="notch ${b===r.bits?'':'dimmed'}"><line x1="${X(gx)}" x2="${X(gx)}" y1="${y-7}" y2="${y+7}"/><text x="${X(gx)}" y="${y+20}" text-anchor="middle">q${b}</text></g>`});
   if(false)t.affNotches.forEach(n=>{const y=Y(n.kl);s+=`<g class="notch"><line x1="${X(n.gib)}" x2="${X(n.gib)}" y1="${y-7}" y2="${y+7}"/><text x="${X(n.gib)}" y="${y+20}" text-anchor="middle">q${n.bits}</text></g>`});
   const k=klOf(t,r,g),ky=isNaN(k)?Y(100):Y(k);
-  if(t.ppl)s+=`<text x="${L+8}" y="${Tp+30}" style="fill:var(--warn)">no KL curve for this family: sizes are exact, quality comes from the ppl referee after the build</text>`;
+  if(t.judge)s+=`<text x="${L+8}" y="${Tp+30}" style="fill:var(--warn)">sizes are exact; KL points are card figures, the gate is a blind judge against bf16</text>`;
   s+=`<g class="pick"><line x1="${X(g)}" x2="${X(g)}" y1="${ky}" y2="${H-B}"/><circle cx="${X(g)}" cy="${ky}" r="6.5"/><text x="${X(g)+11}" y="${ky-8}">${f1(g)} GiB${isNaN(k)?'':' · ~'+k.toFixed(0)}</text></g>`;
-  const svg=$('#chart');svg.innerHTML=s;svg.style.cursor=r.mode==='affine'?'default':'';
+  svg.innerHTML=s;svg.style.cursor=r.mode==='affine'?'default':'';
   if(r.mode==='affine'){svg.onpointerdown=svg.onpointermove=svg.onpointerup=null;return}
   svg.onpointerdown=e=>{e.preventDefault();svg.classList.add('drag');svg.setPointerCapture(e.pointerId);move(e)};
   svg.onpointermove=e=>{if(svg.classList.contains('drag'))move(e)};
