@@ -71,7 +71,7 @@ boundary**, so the default arm is `_fused`. (Chunk 513 would flip it.)
   returns **True** here (`K*4 + 2*32*64*2 = 16,384 ≤ 30 KB`; `NSUB%32==0`;
   `IN%64==0`), so the arm actually runs `_gemmseg_prefill` →
   `vq_gemmseg2_packed11_d2` (`VQ_MOE_FUSED_GEMM` defaults to `"2"`, promoted in
-  db8ed90). The `__call__` fused-gather form supplies `xsrc`/`src_rows`, which
+  438f38f). The `__call__` fused-gather form supplies `xsrc`/`src_rows`, which
   is the precondition.
 - This does **not** matter for the finding: measured below, on this geometry
   gemmseg-v2 output is **bit-identical** to the legacy `_decode_chunk` + padded
