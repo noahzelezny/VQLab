@@ -10,7 +10,7 @@ reconstruction: each 2-bit expert tensor in --vq-layers becomes
 
 and the artifact is born SELF-CONTAINED: config.json gains
   "model_file": "model.py"   +   "vq_modules": {path: geometry}
-and model.py (generated here from quantlab/vq_switch.py + a shim) gives any
+and model.py (generated here from runtime/vq_switch.py + a shim) gives any
 stock `pip install mlx-lm` user a working model with zero patching —
 mlx_lm.utils.load_model imports the model class from inside the checkpoint.
 
