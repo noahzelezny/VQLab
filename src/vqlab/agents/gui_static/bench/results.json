@@ -1,0 +1,758 @@
+{
+"397B": [
+{
+"id": "r22flat",
+"what": "VQ flat d4/K128 (2.2 v1)",
+"kind": "lab",
+"geo": "d4-K128",
+"gib": 96.7,
+"bpw": 2.1,
+"kl": [
+354.4,
+127.8,
+275.0
+],
+"top1": 82.2
+},
+{
+"id": "floor_d4k128",
+"what": "VQ flat d4/K128, second fit",
+"kind": "lab",
+"geo": "d4-K128",
+"gib": 96.7,
+"bpw": 2.1,
+"kl": [
+349.4,
+121.5,
+282.6
+],
+"top1": 82.3
+},
+{
+"id": "r22v2",
+"what": "VQ-2.2bpw (v2 mix)",
+"kind": "vq",
+"geo": null,
+"gib": 100.0,
+"bpw": 2.17,
+"kl": [
+278.4,
+98.9,
+182.2
+],
+"top1": 84.8,
+"hf": "TheDrainFlorist/Qwen3.5-397B-A17B-VQ-2.2bpw",
+"mixed": true
+},
+{
+"id": "r24",
+"what": "VQ-2.4bpw",
+"kind": "vq",
+"geo": "d4-K256",
+"gib": 107.96,
+"bpw": 2.34,
+"kl": [
+232.7,
+89.0,
+134.1
+],
+"top1": 86.4,
+"hf": "TheDrainFlorist/Qwen3.5-397B-A17B-VQ-2.4bpw"
+},
+{
+"id": "e112_A",
+"what": "VQ d4/K256 refit (unweighted)",
+"kind": "lab",
+"geo": "d4-K256",
+"gib": 107.96,
+"bpw": 2.34,
+"kl": [
+241.8,
+84.7,
+127.6
+],
+"top1": 85.6
+},
+{
+"id": "e112_B",
+"what": "VQ d4/K256 refit (tail-weighted)",
+"kind": "lab",
+"geo": "d4-K256",
+"gib": 107.96,
+"bpw": 2.34,
+"kl": [
+279.1,
+84.3,
+171.8
+],
+"top1": 84.9
+},
+{
+"id": "r24_sk8",
+"what": "VQ-2.4 experts, spicyneuron skeleton",
+"kind": "lab",
+"geo": null,
+"gib": 109.32,
+"bpw": 2.37,
+"kl": [
+229.8,
+88.4,
+134.3
+],
+"top1": 86.4
+},
+{
+"id": "r26",
+"what": "VQ-2.6bpw",
+"kind": "vq",
+"geo": "d4-K512",
+"gib": 119.21,
+"bpw": 2.58,
+"kl": [
+166.1,
+57.8,
+60.4
+],
+"top1": 88.5,
+"hf": "TheDrainFlorist/Qwen3.5-397B-A17B-VQ-2.6bpw"
+},
+{
+"id": "spicy26",
+"what": "spicyneuron 2.6-bit",
+"kind": "affine",
+"geo": null,
+"gib": 120.57,
+"bpw": 2.61,
+"kl": [
+333.9,
+99.2,
+241.1
+],
+"top1": 83.5,
+"hf": "spicyneuron/Qwen3.5-397B-A17B-MLX-2.6bit"
+},
+{
+"id": "r26_sk8",
+"what": "VQ-2.6 experts, spicyneuron skeleton",
+"kind": "lab",
+"geo": null,
+"gib": 120.57,
+"bpw": 2.61,
+"kl": [
+162.4,
+57.3,
+62.2
+],
+"top1": 88.8
+},
+{
+"id": "r31",
+"what": "VQ-3.1bpw",
+"kind": "vq",
+"geo": "d4-K2048",
+"gib": 141.71,
+"bpw": 3.07,
+"kl": [
+93.0,
+33.3,
+16.6
+],
+"top1": 91.7,
+"hf": "TheDrainFlorist/Qwen3.5-397B-A17B-VQ-3.1bpw"
+},
+{
+"id": "r31_sk8",
+"what": "VQ-3.1 experts, spicyneuron skeleton",
+"kind": "lab",
+"geo": null,
+"gib": 143.07,
+"bpw": 3.1,
+"kl": [
+89.8,
+32.4,
+16.7
+],
+"top1": 92.1
+},
+{
+"id": "spicy35",
+"what": "spicyneuron 3.5-bit",
+"kind": "affine",
+"geo": null,
+"gib": 165.57,
+"bpw": 3.59,
+"kl": [
+87.7,
+31.0,
+17.0
+],
+"top1": 91.8,
+"hf": "spicyneuron/Qwen3.5-397B-A17B-MLX-3.5bit"
+}
+],
+"35B": [
+{
+"id": "d2k16",
+"what": "VQ d2/K16",
+"kind": "lab",
+"geo": "d2-K16",
+"gib": 10.14,
+"bpw": 2.51,
+"kl": [
+231.9,
+1283.8,
+1095.8
+],
+"top1": 81.0
+},
+{
+"id": "e112_A",
+"what": "VQ d4/K256 (unweighted)",
+"kind": "lab",
+"geo": "d4-K256",
+"gib": 10.14,
+"bpw": 2.51,
+"kl": [
+198.1,
+1070.1,
+953.8
+],
+"top1": 83.2
+},
+{
+"id": "e112_B",
+"what": "VQ d4/K256 (tail-weighted)",
+"kind": "lab",
+"geo": "d4-K256",
+"gib": 10.14,
+"bpw": 2.51,
+"kl": [
+227.7,
+961.5,
+1521.8
+],
+"top1": 81.7
+},
+{
+"id": "s2",
+"what": "affine 2-bit experts, VQ skeleton",
+"kind": "affine-sk",
+"geo": null,
+"gib": 11.08,
+"bpw": 2.75,
+"kl": [
+255.6,
+1159.8,
+1621.0
+],
+"top1": 80.5
+},
+{
+"id": "r34",
+"what": "VQ-3.4bpw",
+"kind": "vq",
+"geo": "d4-K2048",
+"gib": 12.96,
+"bpw": 3.21,
+"kl": [
+76.6,
+529.1,
+208.0
+],
+"top1": 89.4,
+"hf": "TheDrainFlorist/Qwen3.6-35B-A3B-VQ-3.4bpw"
+},
+{
+"id": "q3",
+"what": "affine q3 (mlx-community recipe, RTN g64)",
+"kind": "affine",
+"geo": null,
+"gib": 14.14,
+"bpw": 3.5,
+"kl": [
+259.8,
+1018.3,
+868.4
+],
+"top1": 77.6,
+"hf": null
+},
+{
+"id": "s3",
+"what": "affine 3-bit experts, VQ skeleton",
+"kind": "affine-sk",
+"geo": null,
+"gib": 14.83,
+"bpw": 3.68,
+"kl": [
+74.5,
+498.5,
+254.3
+],
+"top1": 89.2
+},
+{
+"id": "r38",
+"what": "VQ-3.8bpw",
+"kind": "vq",
+"geo": "d4-K8192",
+"gib": 14.84,
+"bpw": 3.68,
+"kl": [
+46.1,
+430.8,
+101.9
+],
+"top1": 91.4,
+"hf": "TheDrainFlorist/Qwen3.6-35B-A3B-VQ-3.8bpw"
+},
+{
+"id": "d4k16384",
+"what": "VQ d4/K16384",
+"kind": "lab",
+"geo": "d4-K16384",
+"gib": 15.78,
+"bpw": 3.91,
+"kl": [
+39.8,
+393.1,
+80.5
+],
+"top1": 92.2
+},
+{
+"id": "d2k256",
+"what": "VQ d2/K256",
+"kind": "lab",
+"geo": "d2-K256",
+"gib": 17.64,
+"bpw": 4.37,
+"kl": [
+31.0,
+361.8,
+52.6
+],
+"top1": 93.2
+},
+{
+"id": "q4",
+"what": "affine q4 (mlx-community recipe, RTN g64)",
+"kind": "affine",
+"geo": null,
+"gib": 18.17,
+"bpw": 4.5,
+"kl": [
+65.4,
+647.8,
+105.6
+],
+"top1": 88.9,
+"hf": null
+},
+{
+"id": "s4",
+"what": "affine 4-bit experts, VQ skeleton",
+"kind": "affine-sk",
+"geo": null,
+"gib": 18.58,
+"bpw": 4.6,
+"kl": [
+33.2,
+372.1,
+61.2
+],
+"top1": 92.8
+},
+{
+"id": "r54",
+"what": "VQ-5.4bpw (d2/K1024)",
+"kind": "vq",
+"geo": "d2-K1024",
+"gib": 21.39,
+"bpw": 5.3,
+"kl": [
+22.6,
+349.6,
+33.7
+],
+"top1": 94.0,
+"hf": "TheDrainFlorist/Qwen3.6-35B-A3B-VQ-5.4bpw"
+},
+{
+"id": "floor_d2k1024",
+"what": "VQ d2/K1024, second fit",
+"kind": "lab",
+"geo": "d2-K1024",
+"gib": 21.39,
+"bpw": 5.3,
+"kl": [
+22.5,
+348.9,
+35.7
+],
+"top1": 93.9
+},
+{
+"id": "s5",
+"what": "affine 5-bit experts, VQ skeleton",
+"kind": "affine-sk",
+"geo": null,
+"gib": 22.33,
+"bpw": 5.53,
+"kl": [
+22.7,
+357.5,
+35.4
+],
+"top1": 93.8
+},
+{
+"id": "d2k4096",
+"what": "VQ d2/K4096",
+"kind": "lab",
+"geo": "d2-K4096",
+"gib": 25.15,
+"bpw": 6.23,
+"kl": [
+20.8,
+336.4,
+31.7
+],
+"top1": 94.2
+},
+{
+"id": "s6",
+"what": "affine 6-bit experts, VQ skeleton",
+"kind": "affine-sk",
+"geo": null,
+"gib": 26.08,
+"bpw": 6.46,
+"kl": [
+20.5,
+334.1,
+27.2
+],
+"top1": 94.2
+},
+{
+"id": "q6",
+"what": "affine q6 (mlx-community recipe, RTN g64)",
+"kind": "affine",
+"geo": null,
+"gib": 26.23,
+"bpw": 6.5,
+"kl": [
+9.5,
+244.4,
+16.0
+],
+"top1": 96.1,
+"hf": null
+},
+{
+"id": "s8",
+"what": "affine 8-bit experts, VQ skeleton",
+"kind": "affine-sk",
+"geo": null,
+"gib": 33.58,
+"bpw": 8.32,
+"kl": [
+20.1,
+327.1,
+28.6
+],
+"top1": 94.2
+},
+{
+"id": "q8",
+"what": "affine q8 (mlx-community recipe, RTN g64)",
+"kind": "affine",
+"geo": null,
+"gib": 34.3,
+"bpw": 8.5,
+"kl": [
+5.7,
+175.5,
+10.8
+],
+"top1": 97.0,
+"hf": null
+}
+],
+"27B": [
+{
+"id": "q2",
+"what": "affine q2 (mlx-community recipe, RTN g64)",
+"kind": "affine",
+"geo": null,
+"gib": 7.83,
+"bpw": 2.5,
+"kl": [
+1341.6,
+995.6,
+2649.0
+],
+"top1": 51.2,
+"hf": null
+},
+{
+"id": "d4k256",
+"what": "VQ d4/K256",
+"kind": "lab",
+"geo": "d4-K256",
+"gib": 9.61,
+"bpw": 3.07,
+"kl": [
+372.8,
+135.4,
+1301.9
+],
+"top1": 77.3
+},
+{
+"id": "s2",
+"what": "affine 2-bit MLPs, VQ skeleton",
+"kind": "affine-sk",
+"geo": null,
+"gib": 10.11,
+"bpw": 3.23,
+"kl": [
+485.1,
+217.1,
+1629.2
+],
+"top1": 72.5
+},
+{
+"id": "d4k1024",
+"what": "VQ d4/K1024",
+"kind": "lab",
+"geo": "d4-K1024",
+"gib": 10.61,
+"bpw": 3.39,
+"kl": [
+204.2,
+68.8,
+879.5
+],
+"top1": 83.0
+},
+{
+"id": "q3",
+"what": "affine q3 (mlx-community recipe, RTN g64)",
+"kind": "affine",
+"geo": null,
+"gib": 10.96,
+"bpw": 3.5,
+"kl": [
+192.4,
+86.3,
+965.1
+],
+"top1": 82.3,
+"hf": null
+},
+{
+"id": "d2k64",
+"what": "VQ d2/K64",
+"kind": "lab",
+"geo": "d2-K64",
+"gib": 11.6,
+"bpw": 3.71,
+"kl": [
+151.9,
+48.1,
+654.1
+],
+"top1": 85.6
+},
+{
+"id": "r39",
+"what": "VQ-3.9bpw (d4/K4096)",
+"kind": "vq",
+"geo": "d4-K4096",
+"gib": 11.61,
+"bpw": 3.71,
+"kl": [
+146.6,
+41.2,
+584.3
+],
+"top1": 86.0,
+"hf": "TheDrainFlorist/Qwen3.8-27B-VQ-3.9bpw"
+},
+{
+"id": "s3",
+"what": "affine 3-bit MLPs, VQ skeleton",
+"kind": "affine-sk",
+"geo": null,
+"gib": 12.1,
+"bpw": 3.86,
+"kl": [
+148.2,
+52.7,
+736.0
+],
+"top1": 85.4
+},
+{
+"id": "r45",
+"what": "VQ-4.5bpw (d2/K256)",
+"kind": "vq",
+"geo": "d2-K256",
+"gib": 13.6,
+"bpw": 4.34,
+"kl": [
+56.3,
+21.5,
+289.2
+],
+"top1": 90.9,
+"hf": "TheDrainFlorist/Qwen3.8-27B-VQ-4.5bpw"
+},
+{
+"id": "floor_d2k256",
+"what": "VQ d2/K256, second fit",
+"kind": "lab",
+"geo": "d2-K256",
+"gib": 13.6,
+"bpw": 4.34,
+"kl": [
+56.2,
+21.0,
+279.7
+],
+"top1": 91.0
+},
+{
+"id": "q4",
+"what": "affine q4 (mlx-community recipe, RTN g64)",
+"kind": "affine",
+"geo": null,
+"gib": 14.09,
+"bpw": 4.5,
+"kl": [
+68.5,
+23.7,
+315.6
+],
+"top1": 90.5,
+"hf": null
+},
+{
+"id": "s4",
+"what": "affine 4-bit MLPs, VQ skeleton",
+"kind": "affine-sk",
+"geo": null,
+"gib": 14.09,
+"bpw": 4.5,
+"kl": [
+68.5,
+23.7,
+315.6
+],
+"top1": 90.5
+},
+{
+"id": "r48",
+"what": "VQ-4.8bpw",
+"kind": "vq",
+"geo": "d2-K512",
+"gib": 14.59,
+"bpw": 4.66,
+"kl": [
+61.8,
+16.9,
+208.1
+],
+"top1": 91.1,
+"hf": "TheDrainFlorist/Qwen3.8-27B-VQ-4.8bpw"
+},
+{
+"id": "s5",
+"what": "affine 5-bit MLPs, VQ skeleton",
+"kind": "affine-sk",
+"geo": null,
+"gib": 16.09,
+"bpw": 5.14,
+"kl": [
+42.3,
+16.1,
+179.0
+],
+"top1": 92.1
+},
+{
+"id": "d2k4096",
+"what": "VQ d2/K4096",
+"kind": "lab",
+"geo": "d2-K4096",
+"gib": 17.58,
+"bpw": 5.61,
+"kl": [
+38.6,
+13.5,
+145.9
+],
+"top1": 92.6
+},
+{
+"id": "s6",
+"what": "affine 6-bit MLPs, VQ skeleton",
+"kind": "affine-sk",
+"geo": null,
+"gib": 18.08,
+"bpw": 5.77,
+"kl": [
+39.7,
+13.3,
+146.3
+],
+"top1": 92.7
+},
+{
+"id": "q6",
+"what": "affine q6 (mlx-community recipe, RTN g64)",
+"kind": "affine",
+"geo": null,
+"gib": 20.36,
+"bpw": 6.5,
+"kl": [
+10.9,
+2.2,
+24.7
+],
+"top1": 96.9,
+"hf": null
+},
+{
+"id": "s8",
+"what": "affine 8-bit MLPs, VQ skeleton",
+"kind": "affine-sk",
+"geo": null,
+"gib": 22.06,
+"bpw": 7.04,
+"kl": [
+37.4,
+12.7,
+137.2
+],
+"top1": 92.7
+},
+{
+"id": "q8",
+"what": "affine q8 (mlx-community recipe, RTN g64)",
+"kind": "affine",
+"geo": null,
+"gib": 26.62,
+"bpw": 8.5,
+"kl": [
+3.5,
+0.6,
+5.0
+],
+"top1": 98.5,
+"hf": null
+}
+]
+}
