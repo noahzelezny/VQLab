@@ -373,7 +373,7 @@ const RESULTS={"397B":[{"id":"r22flat","what":"VQ flat d4/K128 (2.2 v1)","kind":
 // a build is MIXED when its geometry varies by layer (card says mixed, or the
 // registry lists more than one codebook geometry)
 const isMixed=r=>!!(r.mixed||(r.hf&&REG[r.hf]&&Object.keys(REG[r.hf].geo).filter(k=>!k.startsWith('ple:')).length>1));
-const vqCol=r=>r.kind==='affine'?'var(--bad)':isMixed(r)?'var(--mix)':'var(--acc)';
+const vqCol=r=>r.kind==='affine'?'var(--bad)':isMixed(r)?'var(--teal)':'var(--acc)';
 const SHIPS={"TheDrainFlorist/Qwen3.5-397B-A17B-VQ-2.2bpw": "tower+mtp", "TheDrainFlorist/Qwen3.5-397B-A17B-VQ-2.4bpw": "tower+mtp", "TheDrainFlorist/Qwen3.5-397B-A17B-VQ-2.6bpw": "tower+mtp", "TheDrainFlorist/Qwen3.5-397B-A17B-VQ-3.1bpw": "tower+mtp", "TheDrainFlorist/Qwen3.8-Flash-Next-VQ-2.1bpw": "tower+mtp", "TheDrainFlorist/Qwen3.8-Flash-Next-VQ-3.2bpw": "tower+mtp", "TheDrainFlorist/Qwen3.8-Flash-Next-VQ-4.4bpw": "tower+mtp", "TheDrainFlorist/Qwen3.8-Flash-Next-VQ-5.5bpw": "tower+mtp", "TheDrainFlorist/Qwen3.6-35B-A3B-VQ-3.4bpw": "tower", "TheDrainFlorist/Qwen3.6-35B-A3B-VQ-3.8bpw": "tower", "TheDrainFlorist/Qwen3.6-35B-A3B-VQ-4.6bpw": "tower", "TheDrainFlorist/Qwen3.6-35B-A3B-VQ-5.4bpw": "tower", "TheDrainFlorist/Qwen3.8-27B-VQ-3.9bpw": "tower", "TheDrainFlorist/Qwen3.8-27B-VQ-4.5bpw": "tower", "TheDrainFlorist/Qwen3.8-27B-VQ-4.8bpw": "tower", "TheDrainFlorist/gemma-4-26b-a4b-it-VQ-6.2bpw": "tower", "TheDrainFlorist/GLM-5.3-Flash-VQ-2.7bpw": "mtp", "TheDrainFlorist/GLM-5.3-Flash-VQ-3.1bpw": "mtp", "TheDrainFlorist/GLM-5.3-Flash-VQ-3.6bpw": "mtp"};
 for(const h of ['spicyneuron/Qwen3.5-397B-A17B-MLX-2.6bit','spicyneuron/Qwen3.5-397B-A17B-MLX-3.5bit','mlx-community/gemma-4-e4b-it-8bit','TheDrainFlorist/gemma-4-e4b-it-VQ-PLE'])SHIPS[h]='';
 const shipTower=r=>/tower/.test(SHIPS[r.hf]||''),shipMtp=r=>/mtp/.test(SHIPS[r.hf]||'');
@@ -605,7 +605,7 @@ function pgLibrary(){
   <div class="lib3">
     <div class="libmain">
       <svg class="chart" id="libchart" role="img" aria-label="shipped builds, size against mean KL"></svg>
-      <div class="legend"><span><span class="dot" style="background:var(--acc)"></span>VQ flat</span><span><span class="dot" style="background:var(--mix)"></span>VQ mixed</span><span><span class="dot" style="background:var(--bad)"></span>affine</span></div>
+      <div class="legend"><span><span class="dot" style="background:var(--acc)"></span>VQ flat</span><span><span class="dot" style="background:var(--teal)"></span>VQ mixed</span><span><span class="dot" style="background:var(--bad)"></span>affine</span></div>
       ${ladder(t,ship,minMac,link)}
     </div>
     ${inspector(t,sel)}
