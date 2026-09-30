@@ -249,6 +249,7 @@ details.adv .kv{margin-top:8px}
 .kseg button[aria-pressed=true]{background:var(--acc);color:var(--accfg)}.kseg button[aria-pressed=true] small{color:var(--accfg);opacity:.8}
 .kseg button:hover:not([aria-pressed=true]){color:var(--fg)}
 .kbox{border:1px solid var(--acc);border-radius:var(--r);padding:8px 10px;margin:6px 0 12px;font-size:.82em;display:grid;grid-template-columns:auto 1fr;gap:4px 10px}
+.kline{color:var(--dim);font-size:.85em;margin:6px 0 12px;min-height:2.6em}
 .kbox .k{color:var(--faint)}.kbox .v{color:var(--dim)}
 .kseg.small button{padding:5px 4px;font-size:.76em}
 /* readouts above the chart */
@@ -281,7 +282,7 @@ details.adv .kv{margin-top:8px}
 .prow .n{color:var(--fg)}.prow .m{color:var(--faint);font-size:.82em;white-space:nowrap}.prow .d{grid-column:1/-1;color:var(--dim);font-size:.82em}
 .prow.no{opacity:.5}
 
-.cart .big{font-size:1.5em;font-weight:700;color:var(--acc)}
+.cart .big{font-size:1.05em;font-weight:700;color:var(--fg);margin-top:2px}
 .hpick{font-size:1.25em;letter-spacing:.02em;text-transform:none;color:var(--fg);font-weight:700;padding:0 4px;border-bottom:1px dashed var(--line)}
 .hpick:hover{color:var(--acc);border-bottom-color:var(--acc)}.hpick span{color:var(--faint);font-size:.8em}
 /* one screen: tighter vertical budget on the recipe page */
@@ -306,6 +307,14 @@ details.adv .kv{margin-top:8px}
 .bitrow.off{opacity:.45}
 .cmpmode{border:1px solid var(--line);border-radius:var(--r);padding:8px 10px;margin-top:10px}
 .cmpmode .addon{border-top:0;padding:2px 0}
+
+.libtog{font-size:.8em;letter-spacing:0;text-transform:none}
+.addon.mini{padding:3px 10px;margin:0;display:inline-flex;gap:8px;align-items:center}
+.libside .cart{font-size:.85em}.libside .cart+.cart{margin-top:10px}
+.libside .seghelp{font-size:1em;color:var(--dim);margin-top:4px}
+.ladder{margin-top:10px;font-size:.88em}.ladder td{padding:6px 8px}.ladder .dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:8px}
+.ladder tr.affine td{color:var(--dim)}.ladder tr.vq td:first-child{color:var(--fg)}.faint{color:var(--faint)}
+.note.warn{color:var(--warn);font-size:.82em;margin-top:6px}
 </style>
 
 <header>
@@ -498,54 +507,52 @@ function libAnswer(t){
     <div class="kseg small" style="margin:6px 0 10px">${boxes.map(b=>`<button aria-pressed="${libBox===b}" data-box="${b}">${b}</button>`).join('')}</div>${ans}</div>${gapCard}`;
 }
 function pgLibrary(){
-  const t=TE(libFam);const vis=r=>show[r.type]&&(r.kind.startsWith('affine')||show[r.kind]);const rows=t.rows.filter(vis);
-  const best=[0,1,2].map(c=>Math.min(...t.rows.filter(r=>r.kind==='vq'&&r.kl).map(r=>r.kl[c])));
-  const geoCell=r=>r.geo?`<span class="mix" style="width:60px"><span style="width:100%;background:${GEOCOL[r.geo]||'var(--dim)'}"></span></span> ${r.geo}`:r.mixed?'mixed':r.kind.startsWith('affine')?'affine g64':'';
-  return `<section class="panel"><h2><span style="display:flex;align-items:baseline;gap:14px">Library <button class="hpick" id="pick">${esc(t.short)} <span>▾</span></button></span><small>click the chart to start a recipe at that size</small></h2>
+  const t=TE(libFam),vis=t.bytes.vision||0;
+  const ship=t.rows.filter(r=>(r.kind==='vq'||r.kind==='affine')&&r.kl&&(r.kind==='affine'||r.hf)).sort((a,b)=>a.gib-b.gib);
+  const minMac=g=>{const m=MACHINES.find(([gb])=>usable(gb)>=g+vis);return m?m[1]+' GB':'cluster'};
+  const af=t.rows.filter(r=>r.kind==='affine'&&r.kl);
+  const vsAff=r=>{if(r.kind==='affine'||!af.length)return '';const a=af.reduce((p,c)=>Math.abs(c.gib-r.gib)<Math.abs(p.gib-r.gib)?c:p);const d=100*(1-mean(r.kl)/mean(a.kl));
+    return `<span style="color:${d>0?'var(--ok)':'var(--bad)'}">${d>0?'−':'+'}${Math.abs(d).toFixed(0)}%</span> <span class="faint">vs ${esc(a.id)}</span>`};
+  const tip=r=>r.one||r.lit?'':` title="prose ${f1(r.kl[0])} · code ${f1(r.kl[1])} · literary ${f1(r.kl[2])}"`;
+  const link=r=>r.hf?`https://huggingface.co/${esc(r.hf)}`:null;
+  return `<section class="panel libpage"><h2><span style="display:flex;align-items:baseline;gap:14px">Library <button class="hpick" id="pick">${esc(t.short)} <span>▾</span></button></span>
+    <span class="libtog"><button class="addon mini" aria-pressed="${!!show.lab}" data-k="lab"><i></i><span class="n">lab builds</span></button></span></h2>
   <div class="lib2">
-    <div>
-      <svg class="chart" id="libchart" role="img" aria-label="measured rows, size against mean KL"></svg>
-      <div class="chips"><span class="lab">type</span>${Object.entries(TYPE).filter(([k])=>t.rows.some(r=>r.type===k)).map(([k,[l,c]])=>`<button aria-pressed="${!!show[k]}" data-k="${k}"><em style="background:${c}"></em>${l} · ${t.rows.filter(r=>r.type===k).length}</button>`).join('')}
-        <span class="lab" style="margin-left:10px">VQ status</span><button aria-pressed="${!!show.vq}" data-k="vq"><em style="background:var(--fg)"></em>shipped</button><button aria-pressed="${!!show.lab}" data-k="lab"><em style="border:1.5px solid var(--fg)"></em>lab build</button>
-        ${t.judge?`<span style="color:var(--warn)">${esc(t.judge)}</span>`:t.real?'':'<span style="color:var(--warn)">not yet re-measured; card figures</span>'}</div>
-      ${show['affine-sk']&&t.rows.some(r=>r.type==='affine-sk')?'<div class="note">affine on the VQ skeleton keeps the VQ build\'s non-expert tensors and quantizes only the experts affine: the like-for-like comparison. Its KL floors once the experts pass ~5 bits because the skeleton\'s own quantization dominates, which is why s6 and s8 sit level.</div>':''}
-      <div class="tblscroll"><table class="rungtab"><thead><tr><th>row</th><th>what</th><th class="num">GiB</th><th class="num">bpw</th><th>geometry</th><th class="num">prose</th><th class="num">code</th><th class="num">lit</th><th class="num">mean</th><th class="num">top-1</th><th>hub</th></tr></thead><tbody>
-      ${rows.map(r=>`<tr class="${r.kind}" style="color:${r.kind==='lab'?'var(--dim)':TCOL(r)}"><td>${esc(r.id)}</td><td class="what">${esc(r.what)}</td><td class="num">${f1(r.gib)}</td><td class="num">${r.bpw.toFixed(2)}</td><td>${geoCell(r)}</td>${[0,1,2].map(c=>`<td class="num ${r.kl&&r.kind==='vq'&&r.kl[c]===best[c]?'best':''}">${r.kl&&!r.one&&r.kl[c]!=null?f1(r.kl[c]):'—'}</td>`).join('')}<td class="num">${r.kl?f1(mean(r.kl)):'—'}</td><td class="num">${r.top1!=null?r.top1+'%':'—'}</td><td>${r.hf?`<a href="https://huggingface.co/${esc(r.hf)}" target="_blank" rel="noopener">${esc(r.hf.split('/')[0])} ↗</a>`:''}</td></tr>`).join('')}
-      </tbody></table></div>
+    <div class="libmain">
+      <svg class="chart" id="libchart" role="img" aria-label="shipped builds, size against mean KL"></svg>
+      ${t.judge?`<div class="note warn">${esc(t.judge)}</div>`:t.real?'':'<div class="note warn">card figures; not yet re-measured on the shared instrument</div>'}
+      <table class="rungtab ladder"><thead><tr><th>build</th><th class="num">GiB</th><th>runs on</th><th class="num">KL</th><th class="num">top-1</th><th>against affine</th><th></th></tr></thead><tbody>
+      ${ship.map(r=>`<tr class="${r.kind}"${tip(r)}><td><span class="dot" style="background:${r.kind==='affine'?'var(--bad)':'var(--acc)'}"></span>${esc(r.kind==='affine'?r.what.replace(/ ·.*| \(.*\)/,''):r.what.replace(/ \(.*\)/,''))}</td><td class="num">${f1(r.gib)}</td><td>${minMac(r.gib)}</td><td class="num">${f1(mean(r.kl))}</td><td class="num">${r.top1!=null?r.top1+'%':'—'}</td><td>${vsAff(r)}</td><td>${link(r)?`<a href="${link(r)}" target="_blank" rel="noopener">${esc(r.hf.split('/')[0])} ↗</a>`:''}</td></tr>`).join('')||'<tr><td colspan="7" class="faint">nothing shipped yet</td></tr>'}
+      </tbody></table>
     </div>
-    <div>
-      ${libAnswer(t)}
-      ${(()=>{const vq=t.rows.filter(r=>r.kind==='vq'&&r.kl),af=t.rows.filter(r=>r.kind==='affine'&&r.kl);if(!vq.length||!af.length)return '';
-        const rows=vq.map(v=>{const a=af.reduce((p,c)=>Math.abs(c.gib-v.gib)<Math.abs(p.gib-v.gib)?c:p);const d=100*(1-mean(v.kl)/mean(a.kl));return `<tr><td>${esc(v.id)}</td><td class="num">${f1(v.gib)}</td><td>${esc(a.id)}</td><td class="num">${f1(a.gib)}</td><td class="num ${d>0?'best':''}" style="${d<0?'color:var(--bad)':''}">${d>0?'−':'+'}${Math.abs(d).toFixed(0)}%</td></tr>`}).join('');
-        return `<div class="cart" style="margin-top:10px"><div class="ro">VQ against the nearest affine ${'<i class="info" tabindex="0">i<span>Each shipped VQ rung beside the published affine build closest to it in bytes, and how much less damage it carries. Same teacher, same positions, same corpora.</span></i>'}</div>
-        <table class="rungtab" style="margin-top:6px;font-size:.8em"><thead><tr><th>VQ</th><th class="num">GiB</th><th>affine</th><th class="num">GiB</th><th class="num">damage</th></tr></thead><tbody>${rows}</tbody></table></div>`})()}
-
-    </div>
+    <div class="libside">${libAnswer(t)}</div>
   </div>${PICKER()}</section>`;
 }
 function drawLib(){
-  const t=TE(libFam),svg=$('#libchart');const vis=r=>show[r.type]&&(r.kind.startsWith('affine')||show[r.kind]);
-  const pv=t.rows.filter(r=>vis(r)&&r.kl).map(r=>mean(r.kl));const c=chartFrame(svg,t.xr,200,yRange(pv));let s=c.s;
-  if(t.real&&t.scored.length)s+=curve(c,t.klFlat,'flat');if(t.real&&t.klAff&&show.affine)s+=curve(c,t.klAff,'aff');if(t.klSk&&show['affine-sk'])s+=curve(c,t.klSk,'sk');
-  t.rows.filter(r=>vis(r)&&r.kl).forEach(r=>{const x=c.X(r.gib),y=c.Y(mean(r.kl)),col=TCOL(r);
-    if(r.kind.startsWith('affine'))s+=`<g><path d="M${x-4} ${y-4}L${x+4} ${y+4}M${x+4} ${y-4}L${x-4} ${y+4}" style="fill:none;stroke:${col};stroke-width:1.5"/><text x="${x+7}" y="${y+4}" style="fill:${col};font-size:11px">${esc(r.id)}</text></g>`;
-    else s+=`<g><circle cx="${x}" cy="${y}" r="${r.kind==='vq'?5:3.5}" style="fill:${r.kind==='vq'?col:'var(--bg)'};stroke:${col};stroke-width:1.5"/>${r.kind==='vq'?`<text x="${x+8}" y="${y-6}" style="fill:var(--dim);font-size:11px">${esc(r.id.replace(/^r(\d)(\d)/,'$1.$2'))}</text>`:''}</g>`});
-  {const u=usable(libBox)-(t.bytes.vision||0);if(u>c.xmin&&u<c.xmax)s+=`<g class="box near"><line x1="${c.X(u)}" x2="${c.X(u)}" y1="${c.Tp}" y2="${c.H-c.B}"/><text x="${c.X(u)+4}" y="${c.Tp+14}">${libBox} GB</text></g>`}
-  svg.innerHTML=s;svg.style.cursor='crosshair';
-  svg.onclick=e=>{const b=svg.getBoundingClientRect();const gx=c.xmin+((e.clientX-b.left)/b.width*c.W-c.L)/(c.W-c.L-c.Rm)*(c.xmax-c.xmin);if(gx<c.xmin||gx>c.xmax)return;openRecipe(t.id,gx)};
+  const t=TE(libFam),svg=$('#libchart');
+  const pts=t.rows.filter(r=>r.kl&&(r.kind==='vq'||r.kind==='affine'||(show.lab&&r.kind!=='affine-sk')));
+  const fit=H=>{const c=chartFrame(svg,t.xr,H,yRange(pts.map(r=>mean(r.kl))));let s=c.s;
+    if(t.real&&t.scored.length)s+=curve(c,t.klFlat,'flat');if(t.real&&t.klAff)s+=curve(c,t.klAff,'aff');
+    {const u=usable(libBox)-(t.bytes.vision||0);if(u>c.xmin&&u<c.xmax)s+=`<g class="box near"><line x1="${c.X(u)}" x2="${c.X(u)}" y1="${c.Tp}" y2="${c.H-c.B}"/><text x="${c.X(u)+4}" y="${c.Tp+12}">${libBox} GB Mac</text></g>`}
+    pts.forEach(r=>{const x=c.X(r.gib),y=c.Y(mean(r.kl));
+      if(r.kind==='affine')s+=`<g><path d="M${x-4} ${y-4}L${x+4} ${y+4}M${x+4} ${y-4}L${x-4} ${y+4}" style="fill:none;stroke:var(--bad);stroke-width:1.5"/><text x="${x+7}" y="${y+4}" style="fill:var(--bad)">${esc(r.id)}</text></g>`;
+      else if(r.kind==='vq')s+=`<g><circle cx="${x}" cy="${y}" r="5" style="fill:var(--acc)"/><text x="${x+8}" y="${y-7}" style="fill:var(--fg)">${esc(r.id.replace(/^r(\d)(\d)(v2)?$/,'$1.$2$3'))}</text></g>`;
+      else s+=`<circle cx="${x}" cy="${y}" r="3" style="fill:none;stroke:var(--faint)"><title>${esc(r.what)}</title></circle>`});
+    svg.innerHTML=s};
+  fit(240);
+  // grow the chart into whatever height the page leaves
+  const spare=innerHeight-$('.libpage').getBoundingClientRect().bottom-24;fit(Math.max(200,240+spare));
 }
-function openRecipe(id,at){draft=newRecipe();draft.teacher=id;const t=TE(id);resolveAt(t,draft,at??(t.xr[0]+t.xr[1])/2);page=1;render()}
-
 // ================================================================ Recipe
 const STRAT={
- flat:{n:'Flat',s:'fastest',trades:'Build time for quality: one geometry everywhere, from fits already in the store. Size steps between notches.',changes:'No allocation pass; the nearest notch sets d and K for every layer.',pick:'A quick rung, a comparator, or a notch already on the budget.'},
- mixed:{n:'Mixed',s:'default',trades:'A few more codebooks for the position law: cheap width in front, big books in the back. Size is continuous.',changes:'Front layers take the floor, the back the richest geometry; the split follows the size.',pick:'Every release build; the lab\'s standard practice.'},
- measured:{n:'Measured',s:'+ leverage',trades:'About three GPU hours before fitting, for an allocation this teacher earned rather than the law\'s guess.',changes:'layer-leverage ranks layers, alloc-sweep prices cost and value, codes are re-picked activation-aware.',pick:'A new family, or a rung headed for a paper.'}};
+ flat:{n:'Flat',s:'fastest',one:'One geometry on every layer, from fits already in the store.',trades:'Build time for quality: one geometry everywhere, from fits already in the store. Size steps between notches.',changes:'No allocation pass; the nearest notch sets d and K for every layer.',pick:'A quick rung, a comparator, or a notch already on the budget.'},
+ mixed:{n:'Mixed',s:'default',one:'Cheap codebooks in front, rich ones in the back. The standard build.',trades:'A few more codebooks for the position law: cheap width in front, big books in the back. Size is continuous.',changes:'Front layers take the floor, the back the richest geometry; the split follows the size.',pick:'Every release build; the lab\'s standard practice.'},
+ measured:{n:'Measured',s:'+ leverage',one:'Measures this model first (~3 GPU h), then allocates from that.',trades:'About three GPU hours before fitting, for an allocation this teacher earned rather than the law\'s guess.',changes:'layer-leverage ranks layers, alloc-sweep prices cost and value, codes are re-picked activation-aware.',pick:'A new family, or a rung headed for a paper.'}};
 function pgRecipe(){
   const r=draft,t=TE(r.teacher),S=STRAT[r.strat];
   const vqSide=`<div class="ro" style="margin-bottom:6px">strategy</div>
     <div class="kseg">${['flat','mixed','measured'].map(k=>`<button aria-pressed="${r.strat===k}" data-g="strat" data-v="${k}">${STRAT[k].n}<small>${STRAT[k].s}</small></button>`).join('')}</div>
-    <div class="kbox"><span class="k">trades</span><span class="v">${S.trades}</span><span class="k">changes</span><span class="v">${S.changes}</span><span class="k">pick it</span><span class="v">${S.pick}</span><span class="k">resolved</span><span class="v" id="approach"></span></div>
+    <div class="kline">${S.one}</div>
     <div class="ro" style="margin-bottom:6px">width</div>
     <div class="kseg small">${[['auto','auto'],['d2','d2'],['d4','d4'],['d8','d8']].map(([v,n])=>`<button aria-pressed="${(r.widthPick||'auto')===v}" data-g="widthPick" data-v="${v}" ${v!=='auto'&&!t.notches.some(n=>widthOf(n.geo)===v)?'disabled title="no measured notch at this width for this teacher"':''}>${n}</button>`).join('')}</div>
     <div class="seghelp">auto follows the notch nearest the point; a fixed width keeps the point on that ladder.</div>`;
@@ -678,7 +685,7 @@ const PG=[pgLibrary,pgRecipe,pgJobs];
 function render(){
   renderFlow();$('#page').innerHTML=PG[page]();save();
   if(page===0){drawLib();wirePicker();document.querySelectorAll('[data-box]').forEach(b=>b.onclick=()=>{libBox=+b.dataset.box;render()});
-    document.querySelectorAll('.chips button').forEach(b=>b.onclick=()=>{show[b.dataset.k]=!show[b.dataset.k];render()});
+    document.querySelectorAll('[data-k]').forEach(b=>b.onclick=()=>{show[b.dataset.k]=!show[b.dataset.k];render()});
     document.querySelectorAll('[data-recipe]').forEach(b=>b.onclick=()=>openRecipe(b.dataset.recipe,b.dataset.at?+b.dataset.at:undefined))}
   if(page===1){const t=TE(draft.teacher);if(draft.auto)resolveAt(t,draft,sizeOf(t,draft));drawRecipe();drawStrip();drawReadouts();
     document.querySelectorAll('.seg button,.kseg button').forEach(b=>b.onclick=()=>{const g=b.dataset.g,v=b.dataset.v;const t=TE(draft.teacher);
@@ -690,6 +697,7 @@ function render(){
     $('#queue').onclick=()=>{const t=TE(draft.teacher);JOBS.unshift({id:'j'+Date.now(),name:t.short.toLowerCase().replace(/[^a-z0-9]+/g,'-')+'-'+(draft.mode==='affine'?'q'+draft.bits:f1(sizeOf(t,draft))),state:'queued',stepIx:-1,recipe:{...draft},started:'queued',eta:'~20:30'});jobSel=JOBS[0].id;draft=newRecipe();resolveAt(t,draft,(t.xr[0]+t.xr[1])/2);page=2;render()}}
   if(page===2)document.querySelectorAll('[data-job]').forEach(b=>b.onclick=()=>{jobSel=b.dataset.job;render()});
 }
+let rz;addEventListener('resize',()=>{clearTimeout(rz);rz=setTimeout(render,120)});
 $('#homebtn').onclick=()=>{page=0;render()};
 render();
 </script>
