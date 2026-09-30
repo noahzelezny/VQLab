@@ -181,6 +181,6 @@ def test_heavy_run_refused_on_the_manager_box(lab, tmp_path):
     assert "lab_residency --fit-on m3" in ei.value.extra["hint"]
     # light commands and the other box are unaffected
     assert m.t_run("price", ["--help"])["run_id"]
-    (tmp_path / "lab-state.json").write_text(json.dumps({"manager_hostname": "M4", "fit_host": "m3"}))
+    (tmp_path / "lab-state.json").write_text(json.dumps({"manager_hostname": "m4", "fit_host": "m3"}))
     assert m.t_run("price", ["--help"])["run_id"]
     assert m.t_gpu_state()["lab_state"]["fit_host"] == "m3"
