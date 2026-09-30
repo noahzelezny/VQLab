@@ -119,6 +119,19 @@ def _component(name: str) -> tuple[str, str]:
     return "other", DENSE
 
 
+def _routing(cfg: dict) -> tuple[int | None, int | None]:
+    """(routed expert count, experts per token) from config.json.
+
+    Families spell the count three ways: `num_experts` (Qwen),
+    `num_local_experts` (Mixtral-style), `n_routed_experts` (GLM/DeepSeek).
+    Missing the last one billed every GLM expert dense (108-254 GB/token).
+    """
+    text = cfg.get("text_config", cfg)
+    n_exp = (text.get("num_experts") or text.get("num_local_experts")
+             or text.get("n_routed_experts"))
+    return n_exp, text.get("num_experts_per_tok")
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(
         description="weight bytes read per decode token, by component")
@@ -138,9 +151,7 @@ def main() -> int:
 
     art = Path(a.artifact)
     cfg = json.loads((art / "config.json").read_text())
-    text = cfg.get("text_config", cfg)
-    n_exp = text.get("num_experts") or text.get("num_local_experts")
-    top_k = text.get("num_experts_per_tok")
+    n_exp, top_k = _routing(cfg)
     if not n_exp or not top_k:
         print("note: no MoE routing in config; treating every tensor as dense",
               file=sys.stderr)
