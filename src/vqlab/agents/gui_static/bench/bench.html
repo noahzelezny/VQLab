@@ -573,13 +573,13 @@ function inspector(t,r){
   return `<div class="cart insp">
     <div class="pickrow"><button class="hpick" id="pick">${esc(t.short)} <span>▾</span></button></div>
     <div class="ihead"><div><div class="iname">${esc(r.hf?r.hf.split('/')[1]:r.what)}</div><div class="faint">${r.kind==='affine'?'affine · published comparator':(r.mixed||(comp&&comp.length>1)?'VQ · mixed':'VQ · flat')}${r.hf?' · '+esc(r.hf.split('/')[0]):''}</div></div>${r.hf?`<a class="btn" href="https://huggingface.co/${esc(r.hf)}" target="_blank" rel="noopener">Hub ↗</a>`:''}</div>
-    ${g?`<div class="pills"><span class="pill ${drift?'warn':'ok'}">${drift?'local differs: '+esc(g.drift.slice(0,2).join(', '))+(g.drift.length>2?' +'+(g.drift.length-2):''):'in sync with Hub'}</span><span class="pill ${behind?'warn':'ok'}">runtime ${esc(g.profile)}${behind?' · '+RUNTIME_NOW+' available':''}</span><span class="pill">rev ${esc(g.rev)}</span></div>`:''}
     <div class="ro">fidelity to teacher <span class="faint">log scale · mnats${t.real?'':' · card figures'}</span> <i class="info" tabindex="0">i<span>Log scale between two fixed anchors: 1 mnat of KL is 100%, 1000 mnats (one nat per token) is 0%. Each tenfold cut in damage adds a third of the bar. The faint number is the KL itself.</span></i></div>${kl}
     <div class="ro">size</div>
     <div class="kv2"><span>text weights</span><b>${f1(r.gib)} GiB</b></div>
     ${vis?`<div class="kv2"><span>+ vision tower</span><b>${f1(r.gib+vis)} GiB</b></div>`:''}${mtp&&r.kind==='vq'?`<div class="kv2"><span>+ MTP drafting</span><b>${f1(r.gib+vis+mtp)} GiB</b></div>`:''}
     <div class="kv2"><span>smallest Mac</span><b>${mac?mac[1]+' GB':'cluster'}</b></div>
     ${comp?`<div class="ro">codebooks <span class="faint">${tot} modules</span></div><div class="compbar">${comp.map(([k,n])=>`<i style="flex:${n};background:${col(k)}" title="${k} × ${n}"></i>`).join('')}</div><div class="key">${comp.map(([k,n])=>`<span><em style="background:${col(k)}"></em>${esc(k)} × ${n}</span>`).join('')}</div>`:''}
+    ${g?`<div class="pills" style="margin-top:14px"><span class="pill ${drift?'warn':'ok'}">${drift?'local differs: '+esc(g.drift.slice(0,2).join(', '))+(g.drift.length>2?' +'+(g.drift.length-2):''):'in sync with Hub'}</span><span class="pill ${behind?'warn':'ok'}">runtime ${esc(g.profile)}${behind?' · '+RUNTIME_NOW+' available':''}</span><span class="pill">rev ${esc(g.rev)}</span></div>`:''}
     <div class="iacts">${acts.join('')}</div>
   </div>`;
 }
