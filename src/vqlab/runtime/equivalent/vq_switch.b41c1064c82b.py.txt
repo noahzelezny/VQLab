@@ -3025,12 +3025,7 @@ def _fused_resolve(_plan_key, x, eidx, codes, codebook, scales, pack_bits=0,
 # row). Swept 2/4/8/16/32 on the dependent e4b-shaped chain (M3 Ultra,
 # 2026-08-19): 211.9 / 118.8 / 79.6 / 73.0 / 68.1 us per matmul — bigger
 # threadgroups amortise the codebook+x threadgroup loads over more rows.
-# 16, not 32: the register-heavy DEVX / tiled kernels compile to a pipeline
-# limit BELOW 1024 threads on some Apple GPUs (832 on the GitHub macOS arm64
-# runner), where a 32x32 threadgroup fails at dispatch. Output is byte-identical
-# at any row count (504 configurations checked); on the current kernels 16 vs
-# 32 measured 0.97-1.03x per matmul at 27B / e4b shapes (M3 Ultra, 2026-09-30).
-_DENSE_ROWS_TG = int(os.environ.get("VQ_DENSE_ROWS_TG", "16"))
+_DENSE_ROWS_TG = 32
 
 
 # Threadgroup budget, in bytes, for the dense d2 kernels. Both stage a half2
