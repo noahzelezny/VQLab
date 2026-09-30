@@ -220,7 +220,7 @@ details.adv .kv{margin-top:8px}
 .stepbar i.ok{background:var(--ok)}.stepbar i.run{background:var(--warn)}.stepbar i.bad{background:var(--bad)}
 .seg.small button{padding:4px}
 
-.lib2{grid-template-columns:minmax(0,1fr) 17em}
+.lib2{grid-template-columns:minmax(0,1fr) 30em}
 .lib2 .cart{font-size:.82em;padding:10px 12px}
 .lib2 .rows .row{padding:4px 8px;margin-bottom:3px;font-size:.9em}
 .tblscroll{max-height:calc(100vh - 540px);min-height:120px;overflow:auto;margin-top:8px}
@@ -315,6 +315,10 @@ details.adv .kv{margin-top:8px}
 .ladder{margin-top:10px;font-size:.88em}.ladder td{padding:6px 8px}.ladder .dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:8px}
 .ladder tr.affine td{color:var(--dim)}.ladder tr.vq td:first-child{color:var(--fg)}.faint{color:var(--faint)}
 .note.warn{color:var(--warn);font-size:.82em;margin-top:6px}
+.libfoot{display:flex;justify-content:flex-end;margin-top:8px}
+.chip{border:1px solid var(--line);border-radius:var(--r);padding:5px 12px;font-size:.85em;color:var(--dim);background:var(--bg)}.chip[aria-pressed=true]{border-color:var(--acc);color:var(--acc)}
+.ladder th.sort{cursor:pointer;user-select:none}.ladder th.sort:hover{color:var(--fg)}
+.libside .cart{font-size:.95em;padding:14px 16px}.libside .big{font-size:1.2em}
 </style>
 
 <header>
@@ -349,8 +353,9 @@ const TYPE={d4:['VQ d4','var(--acc)'],d2:['VQ d2','var(--g4)'],d8:['VQ d8','var(
 const TCOL=r=>TYPE[r.type]?TYPE[r.type][1]:'var(--dim)';
 const GEOCOL={'d4-K128':'var(--g1)','d4-K256':'var(--g1)','d4-K512':'var(--g1)','d4-K1024':'var(--g2)','d4-K2048':'var(--g2)','d4-K4096':'var(--g3)','d4-K8192':'var(--g3)','d4-K16384':'var(--g4)','d2-K16':'var(--g1)','d2-K64':'var(--g1)','d2-K256':'var(--g2)','d2-K512':'var(--g3)','d2-K1024':'var(--g4)','d2-K4096':'var(--g4)','d8-K16384':'var(--g1)'};
 const MACHINES=[[16,'16'],[24,'24'],[32,'32'],[36,'36'],[48,'48'],[64,'64'],[96,'96'],[128,'128'],[192,'192'],[256,'256'],[512,'512']];
-const ctxReserve=gb=>Math.max(2,Math.round(gb*0.12));
-const usable=gb=>gb*0.93-3-ctxReserve(gb);
+const osReserve=gb=>gb<=36?5:8;
+const ctxReserve=gb=>Math.round(Math.max(2,Math.min(8,gb*0.05)));
+const usable=gb=>gb-osReserve(gb)-ctxReserve(gb);
 const mean=k=>{const v=k.filter(x=>x!=null);return v.reduce((a,b)=>a+b,0)/v.length};
 const $=q=>document.querySelector(q);
 const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -494,17 +499,20 @@ function libAnswer(t){
     const link=top.hf?`https://huggingface.co/${esc(top.hf)}`:top.kind==='affine'?`https://huggingface.co/mlx-community?search_models=${encodeURIComponent(t.short)}`:null;
     ans=`<div class="big">${esc(top.id)}</div><div class="seghelp">${top.kind==='affine'?'affine':'VQ'} · ${f1(top.gib)} GiB · ${f1(mean(top.kl))} mnats${other?` · ${d}% less damage than ${esc(other.id)}, the best ${other.kind==='affine'?'affine':'VQ'} that fits`:''}</div>
     ${link?`<a class="btn" style="margin-top:8px" href="${link}" target="_blank" rel="noopener">Download ↗</a>`:'<div class="seghelp">lab build, not on the Hub</div>'}`}
-  // biggest gap in the shipped ladder, and where it lands
-  const lad=vq.map(r=>r.gib).sort((a,b)=>a-b);let gap=null;
-  for(let k=1;k<lad.length;k++){const w=lad[k]-lad[k-1];if(!gap||w>gap.w)gap={w,a:lad[k-1],b:lad[k]}}
-  const boxIn=gap&&MACHINES.map(([gb])=>usable(gb)-vis).find(u=>u>gap.a+0.5&&u<gap.b-0.5);
-  const at=gap?(boxIn||(gap.a+gap.b)/2):null;
-  const gapCard=gap&&!t.judge&&t.scored.length?`<div class="cart" style="margin-top:10px"><div class="ro">worth building next</div>
-    <div class="seghelp" style="color:var(--fg)">no shipped build between ${f1(gap.a)} and ${f1(gap.b)} GiB${boxIn?`; a ${MACHINES.find(([gb])=>usable(gb)-vis===boxIn)[1]} GB Mac tops out in that gap`:''}</div>
-    <div class="seghelp">a mixed build at ${f1(at)} GiB lands near ~${klVQ(t,{...newRecipe(),teacher:t.id,strat:'mixed'},at).toFixed(0)} mnats</div>
-    <div class="foot" style="margin-top:8px"><button class="btn go" data-recipe="${t.id}" data-at="${at}">Recipe at ${f1(at)} GiB →</button></div></div>`:'';
   return `<div class="cart"><div class="ro">best for your Mac</div>
-    <div class="kseg small" style="margin:6px 0 10px">${boxes.map(b=>`<button aria-pressed="${libBox===b}" data-box="${b}">${b}</button>`).join('')}</div>${ans}</div>${gapCard}`;
+    <div class="kseg small" style="margin:6px 0 10px">${boxes.map(b=>`<button aria-pressed="${libBox===b}" data-box="${b}">${b}</button>`).join('')}</div>${ans}<div class="seghelp" style="margin-top:10px">${libBox} GB less ${osReserve(libBox)} for macOS and ${ctxReserve(libBox)} for context leaves ${f1(usable(libBox))} GB for weights</div></div>`;
+}
+let libSort={k:'gib',d:1};
+function ladder(t,ship,minMac,link){
+  const cols=[['build','build',r=>r.what],['gib','GiB',r=>r.gib],['mac','runs on',r=>r.gib],['p','prose',r=>r.one||r.lit?null:r.kl[0]],['c','code',r=>r.one||r.lit?null:r.kl[1]],['l','literary',r=>r.one?null:r.kl[2]],['m','mean',r=>mean(r.kl)],['t','top-1',r=>r.top1]];
+  const col=cols.find(c=>c[0]===libSort.k)||cols[1];
+  const rows=[...ship].sort((a,b)=>{const x=col[2](a),y=col[2](b);if(x==null)return 1;if(y==null)return -1;return (x>y?1:x<y?-1:0)*libSort.d});
+  const best=[3,4,5,6].map(i=>Math.min(...ship.map(cols[i][2]).filter(v=>v!=null)));
+  const cell=(r,i)=>{const v=cols[i][2](r);return `<td class="num ${v!=null&&v===best[i-3]?'best':''}">${v==null?'—':f1(v)}</td>`};
+  const th=(c,i)=>`<th class="${i===0||i===2?'':'num'} sort" data-sort="${c[0]}">${c[1]}${libSort.k===c[0]?(libSort.d>0?' ▲':' ▼'):''}</th>`;
+  return `<table class="rungtab ladder"><thead><tr>${cols.map(th).join('')}<th></th></tr></thead><tbody>
+  ${rows.map(r=>`<tr class="${r.kind}"><td><span class="dot" style="background:${r.kind==='affine'?'var(--bad)':'var(--acc)'}"></span>${esc(r.kind==='affine'?r.what.replace(/ ·.*| \(.*\)/,''):r.what.replace(/ \(.*\)/,''))}</td><td class="num">${f1(r.gib)}</td><td>${minMac(r.gib)}</td>${[3,4,5,6].map(i=>cell(r,i)).join('')}<td class="num">${r.top1!=null?r.top1+'%':'—'}</td><td>${link(r)?`<a href="${link(r)}" target="_blank" rel="noopener">${esc(r.hf.split('/')[0])} ↗</a>`:''}</td></tr>`).join('')||'<tr><td colspan="9" class="faint">nothing shipped yet</td></tr>'}
+  </tbody></table>`;
 }
 function pgLibrary(){
   const t=TE(libFam),vis=t.bytes.vision||0;
@@ -516,14 +524,13 @@ function pgLibrary(){
   const tip=r=>r.one||r.lit?'':` title="prose ${f1(r.kl[0])} · code ${f1(r.kl[1])} · literary ${f1(r.kl[2])}"`;
   const link=r=>r.hf?`https://huggingface.co/${esc(r.hf)}`:null;
   return `<section class="panel libpage"><h2><span style="display:flex;align-items:baseline;gap:14px">Library <button class="hpick" id="pick">${esc(t.short)} <span>▾</span></button></span>
-    <span class="libtog"><button class="addon mini" aria-pressed="${!!show.lab}" data-k="lab"><i></i><span class="n">lab builds</span></button></span></h2>
+    </h2>
   <div class="lib2">
     <div class="libmain">
       <svg class="chart" id="libchart" role="img" aria-label="shipped builds, size against mean KL"></svg>
       ${t.judge?`<div class="note warn">${esc(t.judge)}</div>`:t.real?'':'<div class="note warn">card figures; not yet re-measured on the shared instrument</div>'}
-      <table class="rungtab ladder"><thead><tr><th>build</th><th class="num">GiB</th><th>runs on</th><th class="num">KL</th><th class="num">top-1</th><th>against affine</th><th></th></tr></thead><tbody>
-      ${ship.map(r=>`<tr class="${r.kind}"${tip(r)}><td><span class="dot" style="background:${r.kind==='affine'?'var(--bad)':'var(--acc)'}"></span>${esc(r.kind==='affine'?r.what.replace(/ ·.*| \(.*\)/,''):r.what.replace(/ \(.*\)/,''))}</td><td class="num">${f1(r.gib)}</td><td>${minMac(r.gib)}</td><td class="num">${f1(mean(r.kl))}</td><td class="num">${r.top1!=null?r.top1+'%':'—'}</td><td>${vsAff(r)}</td><td>${link(r)?`<a href="${link(r)}" target="_blank" rel="noopener">${esc(r.hf.split('/')[0])} ↗</a>`:''}</td></tr>`).join('')||'<tr><td colspan="7" class="faint">nothing shipped yet</td></tr>'}
-      </tbody></table>
+      <div class="libfoot"><button class="chip" aria-pressed="${!!show.lab}" data-k="lab">lab builds on chart</button></div>
+      ${ladder(t,ship,minMac,link)}
     </div>
     <div class="libside">${libAnswer(t)}</div>
   </div>${PICKER()}</section>`;
@@ -685,7 +692,7 @@ const PG=[pgLibrary,pgRecipe,pgJobs];
 function render(){
   renderFlow();$('#page').innerHTML=PG[page]();save();
   if(page===0){drawLib();wirePicker();document.querySelectorAll('[data-box]').forEach(b=>b.onclick=()=>{libBox=+b.dataset.box;render()});
-    document.querySelectorAll('[data-k]').forEach(b=>b.onclick=()=>{show[b.dataset.k]=!show[b.dataset.k];render()});
+    document.querySelectorAll('[data-k]').forEach(b=>b.onclick=()=>{show[b.dataset.k]=!show[b.dataset.k];render()});document.querySelectorAll('[data-sort]').forEach(h=>h.onclick=()=>{const k=h.dataset.sort;libSort=libSort.k===k?{k,d:-libSort.d}:{k,d:1};render()});
     document.querySelectorAll('[data-recipe]').forEach(b=>b.onclick=()=>openRecipe(b.dataset.recipe,b.dataset.at?+b.dataset.at:undefined))}
   if(page===1){const t=TE(draft.teacher);if(draft.auto)resolveAt(t,draft,sizeOf(t,draft));drawRecipe();drawStrip();drawReadouts();
     document.querySelectorAll('.seg button,.kseg button').forEach(b=>b.onclick=()=>{const g=b.dataset.g,v=b.dataset.v;const t=TE(draft.teacher);
