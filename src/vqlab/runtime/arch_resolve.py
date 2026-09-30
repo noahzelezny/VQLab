@@ -148,13 +148,21 @@ def _coerce_module_configs(_args):
     if not (isinstance(getattr(_args, "text_config", None), dict)
             and hasattr(_arch, "TextConfig")):
         return _args
-    from mlx_vlm.utils import (
-        apply_generation_config_defaults,
-        update_module_configs,
-    )
+    from mlx_vlm.utils import update_module_configs
+    # apply_generation_config_defaults only copies sampling defaults
+    # (temperature, top_p, ...) from config.json onto the args; it is absent
+    # from older mlx_vlm (0.5.0), where importing it made EVERY multimodal
+    # bundle fail to load (2026-09-29, Knurlogic's M3 rank). No weight or
+    # logit depends on it, so it is applied when present and skipped when not.
+    try:
+        from mlx_vlm.utils import apply_generation_config_defaults
+    except ImportError:
+        apply_generation_config_defaults = None
     _args = update_module_configs(
         _args, _arch, _cfg,
         ["text", "vision", "perceiver", "projector", "audio"])
+    if apply_generation_config_defaults is None:
+        return _args
     return apply_generation_config_defaults(_args, _cfg)
 '''
 
