@@ -558,7 +558,9 @@ function inspector(t,r){
   const g=r.hf&&REG[r.hf],vis=t.bytes.vision||0,mtp=t.bytes.mtp||0,ship=libShip(t);
   const hi=Math.max(...ship.flatMap(q=>q.kl.filter(v=>v!=null))),lo=Math.min(...ship.flatMap(q=>q.kl.filter(v=>v!=null)));
   const fill=`background:${r.kind==='affine'?'var(--bad)':'var(--acc)'}`;
-  const bar=(lab,v)=>{if(v==null)return '';const f=Math.max(0,Math.min(100,(1-Math.log(Math.max(v,5)/5)/Math.log(200))*100));return `<div class="kbar"><span>${lab}</span><i><b style="width:${f}%;${fill}"></b></i><em>${f.toFixed(1)}% <span class="faint">${f1(v)}</span></em></div>`};
+  const q8=t.rows.find(q=>q.kind==='affine'&&/^q8$/i.test(q.id)&&q.kl);
+  const top=lab=>{if(!q8)return 5;const i={prose:0,code:1,literary:2}[lab];const v=i==null||q8.one?mean(q8.kl):q8.kl[i];return v!=null&&v>0?v:mean(q8.kl)};
+  const bar=(lab,v)=>{if(v==null)return '';const T=Math.min(top(lab),999),f=Math.max(0,Math.min(100,(1-Math.log(Math.max(v,T)/T)/Math.log(1000/T))*100));return `<div class="kbar"><span>${lab}</span><i><b style="width:${f}%;${fill}"></b></i><em>${f.toFixed(1)}% <span class="faint">${f1(v)}</span></em></div>`};
   const tbar=p=>p==null?'':`<div class="kbar"><span>top-1</span><i><b style="width:${p}%;${fill}"></b></i><em>${(+p).toFixed(1)}%</em></div>`;
   const kl=r.one?bar('mean',mean(r.kl))+tbar(r.top1):r.lit?bar('literary',r.kl[2]):['prose','code','literary'].map((c,i)=>bar(c,r.kl[i])).join('')+bar('mean',mean(r.kl))+tbar(r.top1);
   const comp=g?Object.entries(g.geo).sort((a,b)=>b[1]-a[1]):null,tot=comp?comp.reduce((a,c)=>a+c[1],0):0;
@@ -573,7 +575,7 @@ function inspector(t,r){
   return `<div class="cart insp">
     <div class="pickrow"><button class="hpick" id="pick">${esc(t.short)} <span>▾</span></button></div>
     <div class="ihead"><div><div class="iname">${esc(r.hf?r.hf.split('/')[1]:r.what)}</div><div class="faint">${r.kind==='affine'?'affine · published comparator':(r.mixed||(comp&&comp.length>1)?'VQ · mixed':'VQ · flat')}${r.hf?' · '+esc(r.hf.split('/')[0]):''}</div></div>${r.hf?`<a class="btn" href="https://huggingface.co/${esc(r.hf)}" target="_blank" rel="noopener">Hub ↗</a>`:''}</div>
-    <div class="ro">fidelity to teacher <span class="faint">log scale · mnats${t.real?'':' · card figures'}</span> <i class="info" tabindex="0">i<span>Log scale between two fixed anchors: 5 mnats of KL, where affine q8 lands (nearly lossless), is 100%; 1000 mnats (one nat per token) is 0%. The faint number is the KL itself.</span></i></div>${kl}
+    <div class="ro">fidelity to teacher <span class="faint">${q8?'100% = q8':'100% = 5 mnats'} · log · mnats${t.real?'':' · card figures'}</span> <i class="info" tabindex="0">i<span>Log scale. 100% is this family's affine q8 (nearly lossless), per corpus; 5 mnats where no q8 has been scored. 0% is 1000 mnats, one nat per token. The faint number is the KL itself.</span></i></div>${kl}
     <div class="ro">size</div>
     <div class="kv2"><span>text weights</span><b>${f1(r.gib)} GiB</b></div>
     ${vis?`<div class="kv2"><span>+ vision tower</span><b>${f1(r.gib+vis)} GiB</b></div>`:''}${mtp&&r.kind==='vq'?`<div class="kv2"><span>+ MTP drafting</span><b>${f1(r.gib+vis+mtp)} GiB</b></div>`:''}
