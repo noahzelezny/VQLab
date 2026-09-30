@@ -1,0 +1,657 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>VQ Lab Bench</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap">
+<style>
+:root{color-scheme:dark;
+  --bg:oklch(.12 0 0);--panel:oklch(.16 0 0);--med:oklch(.22 0 0);
+  --fg:oklch(.9 0 0);--dim:oklch(.6 0 0);--faint:oklch(.45 0 0);
+  --line:oklch(.25 0 0);--grid:oklch(.2 0 0/.3);
+  --ok:oklch(.78 .15 150);--warn:oklch(.78 .15 70);--bad:oklch(.68 .19 25);
+  --acc:oklch(.80 .14 320);--accfg:oklch(.14 .02 320);--teal:oklch(.82 .14 185);--pink:oklch(.72 .19 340);
+  --glow:0 0 20px oklch(.80 .14 320/.3);
+  --g1:oklch(.50 .10 320);--g2:oklch(.66 .13 320);--g3:oklch(.82 .12 320);--g4:oklch(.92 .06 320);
+  --r:.375rem}
+:root[data-theme="light"]{color-scheme:light;
+  --bg:oklch(.97 0 0);--panel:oklch(1 0 0);--med:oklch(.93 0 0);
+  --fg:oklch(.2 0 0);--dim:oklch(.45 0 0);--faint:oklch(.6 0 0);
+  --line:oklch(.89 0 0);--grid:oklch(.8 0 0/.35);
+  --ok:oklch(.5 .14 150);--warn:oklch(.55 .13 70);--bad:oklch(.55 .19 25);
+  --acc:oklch(.55 .15 320);--accfg:oklch(1 0 0);--teal:oklch(.5 .11 185);--pink:oklch(.6 .19 340);--glow:none;
+  --g1:oklch(.42 .12 320);--g2:oklch(.58 .14 320);--g3:oklch(.74 .12 320);--g4:oklch(.88 .06 320)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);letter-spacing:.02em;
+  font:clamp(13px,calc(.7vw + 4px),15px)/1.5 'JetBrains Mono','SF Mono',ui-monospace,Menlo,monospace;
+  background-image:linear-gradient(var(--grid) 1px,transparent 1px),linear-gradient(90deg,var(--grid) 1px,transparent 1px);
+  background-size:40px 40px;background-attachment:fixed}
+body:before{content:'';position:fixed;inset:0;pointer-events:none;z-index:100;
+  background:repeating-linear-gradient(0deg,transparent,transparent 2px,oklch(0 0 0/.03) 2px,oklch(0 0 0/.03) 4px)}
+::-webkit-scrollbar{width:6px;height:6px}::-webkit-scrollbar-thumb{background:oklch(.3 0 0);border-radius:3px}
+a{color:inherit;text-decoration:none}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+button:focus-visible,input:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+button[disabled]{opacity:.45;cursor:not-allowed}
+.ro{font-size:.74em;letter-spacing:.12em;text-transform:uppercase;color:var(--faint)}
+.hidden{display:none!important}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+@media(prefers-reduced-motion:reduce){*{animation:none!important}}
+
+/* ---------- header: logo | pages | box status + library ---------- */
+header{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;border-bottom:1px solid var(--line);
+  padding:6px 18px;display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:16px;
+  background:color-mix(in oklch,var(--panel) 94%,transparent);backdrop-filter:blur(6px)}
+.mark{display:flex;align-items:center;gap:9px;font-weight:700;letter-spacing:.24em;text-transform:uppercase;text-shadow:var(--glow);font-size:1.05em;justify-self:center;cursor:pointer}
+.mark span{color:var(--acc)}
+.mark svg{width:24px;height:24px;overflow:visible;margin-left:2px}
+.flow{display:flex;gap:2px}
+.st{display:flex;flex-direction:column;align-items:center;gap:1px;padding:3px 16px;border-radius:var(--r);color:var(--dim);min-width:6.5em;border:1px solid transparent;position:relative}
+.st svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
+.st .n{font-size:.68em;letter-spacing:.14em;text-transform:uppercase}
+.st:hover{color:var(--fg);background:var(--med)}
+.st[aria-current=true]{color:var(--acc);border-color:color-mix(in srgb,var(--acc) 40%,transparent);background:color-mix(in srgb,var(--acc) 8%,transparent);text-shadow:var(--glow)}
+.st i{position:absolute;top:5px;right:8px;width:6px;height:6px;border-radius:50%;background:transparent}
+.st.done i{background:var(--ok)}.st.now i{background:var(--warn);animation:pulse 1.6s infinite}.st.blocked{opacity:.45}
+.status{justify-self:start;display:flex;align-items:center;gap:14px;color:var(--dim);font-size:.8em}.flow{justify-self:end}
+.status .dot{width:7px;height:7px;border-radius:50%;background:var(--warn);box-shadow:0 0 8px currentColor;display:inline-block;margin-right:7px;animation:pulse 2s infinite}
+.status b{color:var(--fg)}
+.lib{font-size:.95em;letter-spacing:.16em;text-transform:uppercase;padding:4px 10px;border-radius:var(--r);border:1px solid transparent;color:var(--dim)}
+.lib:hover{color:var(--acc)}.lib[aria-current=true]{color:var(--acc);border-color:color-mix(in srgb,var(--acc) 45%,transparent)}
+
+/* ---------- page frame ---------- */
+.wrap{max-width:1700px;margin:0 auto;padding-block:18px 32px;padding-inline:clamp(16px,2vw,28px)}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:14px 16px;margin-bottom:1.2em;min-width:0}
+.panel h2{margin:0 0 12px;font-size:.78em;letter-spacing:.16em;text-transform:uppercase;color:var(--acc);display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.panel h2 small{color:var(--faint);letter-spacing:.06em;font-weight:400;text-transform:none}
+.jobline{display:flex;align-items:baseline;gap:14px;margin:0 0 14px;flex-wrap:wrap}
+.jobline .j{font-weight:700;font-size:1.05em}
+.jobline .m{color:var(--faint);font-size:.85em}
+.jobline .state{font-size:.72em;letter-spacing:.12em;text-transform:uppercase;padding:1px 7px;border:1px solid;border-radius:2px}
+.state.draft,.state.queued{color:var(--dim);border-color:var(--line)}.state.failed{color:var(--bad);border-color:var(--bad)}.state.building,.state.gating{color:var(--warn);border-color:var(--warn)}.state.ready{color:var(--ok);border-color:var(--ok)}.state.shipped{color:var(--teal);border-color:var(--teal)}.state.blocked{color:var(--bad);border-color:var(--bad)}
+.foot{display:flex;justify-content:flex-end;align-items:center;gap:14px;margin-top:14px;padding-top:12px;border-top:1px solid var(--line)}
+.foot .hint{color:var(--faint);font-size:.82em;margin-right:auto}
+.btn{white-space:nowrap;border:1px solid var(--line);border-radius:var(--r);padding:8px 14px;font-size:.82em;letter-spacing:.1em;text-transform:uppercase;color:var(--dim)}
+.btn:hover:not([disabled]){border-color:var(--acc);color:var(--acc)}
+.btn.go{background:var(--acc);color:var(--accfg);border-color:var(--acc);font-weight:700}
+.btn.go:hover:not([disabled]){filter:brightness(1.1);color:var(--accfg)}
+.agent{font-size:.78em;color:var(--faint);margin-top:10px}
+.agent b{color:var(--teal);font-weight:400}
+
+/* ---------- lists (jobs, teachers, steps) ---------- */
+.rows{list-style:none;margin:0;padding:0}
+.row{display:grid;grid-template-columns:1fr auto;gap:2px 14px;align-items:baseline;padding:9px 12px;border:1px solid var(--line);border-radius:var(--r);margin-bottom:6px;background:var(--bg);width:100%;text-align:left}
+button.row{cursor:pointer}button.row:hover{border-color:color-mix(in srgb,var(--acc) 50%,transparent)}
+.row[aria-selected=true]{border-color:var(--acc);box-shadow:var(--glow)}
+.row .n{color:var(--fg);font-weight:700}
+.row .meta{color:var(--faint);font-size:.82em;text-align:right;white-space:nowrap}
+.row .d{grid-column:1/-1;color:var(--dim);font-size:.84em}
+.row .d b{font-weight:400;color:var(--ok)}.row .d i{font-style:normal;color:var(--warn)}
+.row .p{grid-column:1/-1;height:3px;background:var(--med);border-radius:2px;overflow:hidden;margin-top:5px}.row .p i{display:block;height:100%;background:var(--acc)}
+.row .act{color:var(--acc);font-size:.8em;letter-spacing:.1em;text-transform:uppercase;white-space:nowrap}
+.steps{list-style:none;margin:0;padding:0;font-size:.9em}
+.steps li{display:grid;grid-template-columns:12px 11em 1fr auto;gap:10px;align-items:baseline;padding:7px 0;border-top:1px solid var(--line)}
+.steps li:first-child{border-top:0}
+.steps i{width:8px;height:8px;border-radius:50%;background:var(--med);border:1px solid var(--line);justify-self:center;align-self:center}
+.steps .ok i{background:var(--ok);border-color:var(--ok)}.steps .run i{background:var(--warn);border-color:var(--warn);box-shadow:0 0 8px var(--warn);animation:pulse 1.6s infinite}.steps .bad i{background:var(--bad);border-color:var(--bad)}
+.steps .c{color:var(--fg)}.steps .d{color:var(--dim);font-size:.9em}.steps .t{color:var(--faint);font-size:.85em;white-space:nowrap;text-align:right}
+.steps .bad .t{color:var(--bad)}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:3px 14px;font-size:.88em;margin:0}
+.kv dt{color:var(--faint)}.kv dd{margin:0}
+.facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin:0 0 14px}
+.fact{background:var(--bg);border:1px solid var(--line);border-radius:var(--r);padding:8px 10px}
+.fact b{display:block;font-size:1.15em}.fact small{color:var(--faint);font-size:.74em;letter-spacing:.08em;text-transform:uppercase}
+.bytes{display:flex;height:12px;border-radius:2px;overflow:hidden;border:1px solid var(--line);margin:6px 0 4px}
+.bytes span{display:block;height:100%}
+.key{display:flex;gap:12px;flex-wrap:wrap;font-size:.78em;color:var(--dim);margin:6px 0 0}
+.key em{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:5px;vertical-align:-1px;font-style:normal}
+.idrow{display:flex;gap:8px;margin-bottom:12px}
+.idrow input{flex:1;min-width:0;font:inherit;background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:var(--r);padding:8px 10px}
+.home{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);gap:1.4em;align-items:start}
+@media(max-width:900px){.home{grid-template-columns:minmax(0,1fr)}}
+.empty{color:var(--faint);font-size:.88em;padding:10px 0}
+
+/* ---------- recipe ---------- */
+.recipe{display:grid;grid-template-columns:minmax(0,1fr) 30em;gap:1.4em;align-items:start}
+.recipe .cart{font-size:.95em}
+@media(max-width:900px){.recipe{grid-template-columns:minmax(0,1fr)}}
+svg.chart{width:100%;height:auto;display:block;background:var(--bg);border:1px solid var(--line);border-radius:var(--r);user-select:none;-webkit-user-select:none;touch-action:none}
+.chart text{font-family:inherit;fill:var(--faint);font-size:12px}
+.chart .axis{stroke:var(--line)}.chart .gridl{stroke:var(--line);stroke-dasharray:2 4}
+.chart .cu{fill:none;stroke-width:1.5}
+.chart .cu.flat{stroke:var(--dim)}.chart .cu.mixed{stroke:var(--acc)}.chart .cu.measured{stroke:var(--teal);stroke-dasharray:5 4}
+.chart .cu.dimmed{opacity:.3}
+.chart .lab.flat{fill:var(--dim)}.chart .lab.mixed{fill:var(--acc)}.chart .lab.measured{fill:var(--teal)}
+.chart .rung circle{fill:var(--dim);stroke:var(--bg);stroke-width:1.5}.chart .rung text{fill:var(--faint)}
+.chart .notch line{stroke:var(--dim)}.chart .notch text{fill:var(--faint);font-size:11px}
+.chart .notch.dimmed{opacity:.35}
+.chart .pick{cursor:grab}.chart.drag .pick{cursor:grabbing}
+.chart .pick circle{fill:var(--bg);stroke:var(--acc);stroke-width:2.5}.chart .pick text{fill:var(--fg);font-weight:700}.chart .pick line{stroke:var(--acc);stroke-dasharray:2 3}
+.chart .cliff{fill:var(--bad);opacity:.06}
+.chart .bound{fill:var(--fg);opacity:.05}.chart .boundl{stroke:var(--dim);stroke-dasharray:6 4}.chart .boundt{fill:var(--dim);font-size:11px}
+.chart .fits line{stroke:var(--teal);stroke-dasharray:3 3;opacity:.7}.chart .fits text{fill:var(--teal)}
+.legend{display:flex;gap:16px;flex-wrap:wrap;font-size:.78em;color:var(--faint);margin:8px 2px 0}
+.legend i{display:inline-block;width:14px;border-top:2px solid;vertical-align:3px;margin-right:5px}
+.strip{display:grid;gap:1px;height:26px;margin:6px 0 2px}
+.strip i{display:block;border-radius:1px}
+.striplab{display:flex;justify-content:space-between;font-size:.72em;color:var(--faint)}
+.cart{background:var(--bg);border:1px solid var(--line);border-radius:var(--r);padding:12px 14px;font-size:.88em}
+.cart .ro{margin:10px 0 6px}.cart .ro:first-child{margin-top:0}
+.seg{display:flex;border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
+.seg button{flex:1;padding:6px 4px;font-size:.82em;letter-spacing:.06em;text-transform:uppercase;color:var(--dim)}
+.seg button[aria-pressed=true]{background:color-mix(in srgb,var(--acc) 14%,transparent);color:var(--acc)}
+.seg button:hover{color:var(--fg)}
+.seghelp{font-size:.8em;color:var(--faint);margin-top:5px}
+.addon{display:grid;grid-template-columns:16px 1fr auto;gap:1px 8px;align-items:center;width:100%;text-align:left;padding:7px 0;border-top:1px solid var(--line);font-size:.9em}
+.addon:first-of-type{border-top:0}
+.addon i{width:12px;height:12px;border:1px solid var(--line);border-radius:2px;display:inline-block}
+.addon[aria-pressed=true] i{background:var(--acc);border-color:var(--acc);box-shadow:var(--glow)}
+.addon .n{color:var(--fg)}.addon .t{color:var(--faint);font-size:.85em;white-space:nowrap}.addon .d{grid-column:2/-1;color:var(--faint);font-size:.82em}
+.tot{border-top:2px solid var(--line);margin-top:12px;padding-top:10px;display:grid;grid-template-columns:auto 1fr;gap:5px 10px}
+.tot .k{color:var(--faint)}.tot .v{text-align:right;font-variant-numeric:tabular-nums}
+.tot .big{font-size:1.45em;font-weight:700;color:var(--acc);text-shadow:var(--glow)}
+.tbar{display:flex;height:6px;border-radius:2px;overflow:hidden;border:1px solid var(--line);margin:10px 0 4px}
+.tbar span{display:block;height:100%}
+.tkey{display:flex;gap:10px;flex-wrap:wrap;font-size:.75em;color:var(--dim)}
+.tkey em{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:4px;font-style:normal;vertical-align:-1px}
+.resolved{background:var(--bg);border:1px solid color-mix(in srgb,var(--teal) 35%,transparent);border-radius:var(--r);padding:10px 12px;margin-top:12px;font-size:.85em}
+.resolved .t{color:var(--teal);font-size:.85em;letter-spacing:.12em;text-transform:uppercase;margin-bottom:6px}
+.cmd{background:var(--bg);border:1px solid var(--line);border-radius:var(--r);padding:8px 10px;margin-top:10px;font-size:.8em;white-space:pre-wrap;word-break:break-all;color:var(--dim)}
+.lib table{width:100%;border-collapse:collapse;font-size:.86em;font-variant-numeric:tabular-nums}
+.lib th{text-align:left;font-weight:400;font-size:.85em;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);padding:4px 8px;border-bottom:1px solid var(--line)}
+.lib td{padding:5px 8px;border-bottom:1px solid var(--line);white-space:nowrap}.lib .num{text-align:right}
+.tblwrap{overflow-x:auto}
+.mix{display:inline-flex;height:10px;width:100px;border-radius:2px;overflow:hidden;vertical-align:middle;border:1px solid var(--line)}.mix span{display:block;height:100%}
+
+.target{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:6px}
+.target button{border:1px solid var(--line);border-radius:var(--r);padding:7px 6px;text-align:center;color:var(--dim);background:var(--bg)}
+.target button b{display:block;color:var(--fg);font-size:1.05em}
+.target button small{font-size:.75em;color:var(--faint)}
+.target button[aria-pressed=true]{border-color:var(--acc);color:var(--acc)}.target button[aria-pressed=true] b{color:var(--acc)}
+.target button:hover{border-color:color-mix(in srgb,var(--acc) 50%,transparent)}
+.ctx{display:flex;align-items:center;gap:10px;font-size:.85em;color:var(--dim);margin:6px 0 4px}
+.ctx input[type=range]{flex:1;accent-color:var(--acc)}
+.effort button{display:grid;grid-template-columns:1fr auto;gap:0 10px;width:100%;text-align:left;border:1px solid var(--line);border-radius:var(--r);padding:7px 10px;margin-bottom:4px;background:var(--bg);font-size:.88em}
+.effort button .n{color:var(--fg)}.effort button .t{color:var(--faint);white-space:nowrap}.effort button .d{grid-column:1/-1;color:var(--faint);font-size:.85em}
+.effort button[aria-pressed=true]{border-color:var(--acc)}.effort button[aria-pressed=true] .n{color:var(--acc)}
+.get{border-top:2px solid var(--line);margin-top:12px;padding-top:10px}
+.get .r{display:grid;grid-template-columns:auto 1fr;gap:4px 10px;font-size:.88em}
+.get .k{color:var(--faint)}.get .v{text-align:right;font-variant-numeric:tabular-nums}
+.get .v.ok{color:var(--ok)}.get .v.warn{color:var(--warn)}.get .v.bad{color:var(--bad)}
+.get .big{font-size:1.4em;font-weight:700;color:var(--acc);text-shadow:var(--glow)}
+details.adv{margin-top:12px;font-size:.85em}
+details.adv summary{color:var(--faint);cursor:pointer;letter-spacing:.1em;text-transform:uppercase;font-size:.85em}
+details.adv .kv{margin-top:8px}
+.timeline{list-style:none;margin:0;padding:0}
+.timeline li{display:grid;grid-template-columns:20px 12em 1fr auto;gap:0 12px;align-items:baseline;padding:9px 0;border-top:1px solid var(--line)}
+.timeline li:first-child{border-top:0}
+.timeline .m{width:10px;height:10px;border-radius:50%;background:var(--med);border:1px solid var(--line);align-self:center;justify-self:center}
+.timeline .ok .m{background:var(--ok);border-color:var(--ok)}.timeline .run .m{background:var(--warn);border-color:var(--warn);box-shadow:0 0 8px var(--warn);animation:pulse 1.6s infinite}.timeline .bad .m{background:var(--bad);border-color:var(--bad)}.timeline .wait .m{background:transparent}
+.timeline .c{color:var(--fg)}.timeline .wait .c{color:var(--dim)}.timeline .d{color:var(--dim);font-size:.9em}.timeline .t{color:var(--faint);font-size:.85em;text-align:right;white-space:nowrap}
+.timeline .bad .t{color:var(--bad)}
+.timeline .sub{grid-column:2/-1;margin:6px 0 0;padding:8px 10px;background:var(--bg);border:1px solid var(--line);border-radius:var(--r);font-size:.85em;color:var(--dim)}
+.timeline .sub b{color:var(--fg);font-weight:400}
+.rework{border:1px solid color-mix(in srgb,var(--bad) 40%,transparent);border-radius:var(--r);padding:10px 12px;margin-top:12px;font-size:.88em;background:var(--bg)}
+.rework .t{color:var(--bad);font-size:.8em;letter-spacing:.12em;text-transform:uppercase;margin-bottom:6px}
+.rework .opts{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+.eta{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px}
+.eta div{background:var(--bg);border:1px solid var(--line);border-radius:var(--r);padding:8px 10px}
+.eta b{display:block;font-size:1.15em}.eta small{color:var(--faint);font-size:.74em;letter-spacing:.08em;text-transform:uppercase}
+
+.tsel{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
+.tsel button{border:1px solid var(--line);border-radius:var(--r);padding:5px 10px;font-size:.85em;color:var(--dim);background:var(--bg)}
+.tsel button[aria-pressed=true]{border-color:var(--acc);color:var(--acc)}.tsel button:hover{color:var(--fg)}
+.tsel button small{color:var(--faint);margin-left:6px}
+.chart .box line{stroke:var(--teal);opacity:.5}.chart .box text{fill:var(--teal);font-size:11px}
+.chart .box.near line{opacity:1;stroke-width:2}.chart .box.near text{font-weight:700}
+.chart .cmp path{fill:none;stroke:var(--bad);stroke-width:1.5}.chart .cmp text{fill:var(--bad)}
+.chart .fam circle{stroke:var(--bg);stroke-width:1.5}.chart .fam text{fill:var(--dim);font-size:11px}
+.chart .fam.dim{opacity:.25}
+.chart .fam path{fill:none;stroke-width:1.2;opacity:.6}
+.lib2{display:grid;grid-template-columns:minmax(0,1fr) 22em;gap:1.4em;align-items:start}
+.jobs2{display:grid;grid-template-columns:24em minmax(0,1fr);gap:1.4em;align-items:start}
+@media(max-width:900px){.jobs2{grid-template-columns:minmax(0,1fr)}}
+@media(max-width:900px){.lib2{grid-template-columns:minmax(0,1fr)}}
+.rungtab{width:100%;border-collapse:collapse;font-size:.86em;font-variant-numeric:tabular-nums;margin-top:12px}
+.rungtab th{text-align:left;font-weight:400;font-size:.85em;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);padding:4px 8px;border-bottom:1px solid var(--line)}
+.rungtab td{padding:6px 8px;border-bottom:1px solid var(--line);white-space:nowrap}.rungtab .num{text-align:right}
+.rungtab a{color:var(--teal)}.rungtab a:hover{text-decoration:underline}
+.rungtab tr.cmp td{color:var(--bad)}
+.rungtab .best{color:var(--ok)}
+.jobsel .row{margin-bottom:6px}
+.stepbar{display:flex;gap:2px;grid-column:1/-1;margin-top:6px}
+.stepbar i{flex:1;height:4px;background:var(--med);border-radius:1px}
+.stepbar i.ok{background:var(--ok)}.stepbar i.run{background:var(--warn)}.stepbar i.bad{background:var(--bad)}
+.seg.small button{padding:4px}
+
+.lib2{grid-template-columns:minmax(0,1fr) 17em}
+.lib2 .cart{font-size:.82em;padding:10px 12px}
+.lib2 .rows .row{padding:4px 8px;margin-bottom:3px;font-size:.9em}
+.tblscroll{max-height:calc(100vh - 540px);min-height:120px;overflow:auto;margin-top:8px}
+.rungtab td{padding:4px 8px}
+.wrap{padding-block:14px 12px}
+.panel{margin-bottom:0}
+.rungtab{margin-top:0}.rungtab thead th{position:sticky;top:0;background:var(--panel)}
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0 0;font-size:.78em;align-items:center}.chips .lab{color:var(--faint);margin-right:2px}
+.note{font-size:.78em;color:var(--warn);margin-top:6px}
+.chips button{border:1px solid var(--line);border-radius:2px;padding:2px 8px;color:var(--faint)}
+.chips button[aria-pressed=true]{color:var(--fg);border-color:var(--dim)}
+.chips em{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:5px;font-style:normal;vertical-align:-1px}
+.chart .p-vq circle{fill:var(--acc)}.chart .p-lab circle{fill:var(--bg);stroke:var(--acc)!important;stroke-width:1.5}
+.chart .p-affine path{stroke:var(--bad)}.chart .p-affine-sk path{stroke:var(--warn)}
+.chart .p-vq text,.chart .p-lab text{fill:var(--dim)}.chart .p-affine text{fill:var(--bad)}.chart .p-affine-sk text{fill:var(--warn)}
+.chart .cu.aff{stroke:var(--bad);stroke-dasharray:5 4}
+.chart .cu.sk{stroke:var(--warn);stroke-dasharray:2 4}
+
+.rungtab td.what{white-space:nowrap;max-width:24em;overflow:hidden;text-overflow:ellipsis}
+.modeseg{margin-bottom:10px}.modeseg button{font-weight:700}
+
+/* knurlogic-style strategy switch: a strip, and a bordered box that says what the choice trades */
+.kseg{display:flex;border:1px solid var(--line);border-radius:var(--r);overflow:hidden;background:var(--bg)}
+.kseg button{flex:1;padding:8px 6px;font-size:.82em;letter-spacing:.1em;text-transform:uppercase;color:var(--dim)}
+.kseg button small{display:block;font-size:.7em;letter-spacing:.06em;color:var(--faint);text-transform:none}
+.kseg button[aria-pressed=true]{background:var(--acc);color:var(--accfg)}.kseg button[aria-pressed=true] small{color:var(--accfg);opacity:.8}
+.kseg button:hover:not([aria-pressed=true]){color:var(--fg)}
+.kbox{border:1px solid var(--acc);border-radius:var(--r);padding:8px 10px;margin:6px 0 12px;font-size:.82em;display:grid;grid-template-columns:auto 1fr;gap:4px 10px}
+.kbox .k{color:var(--faint)}.kbox .v{color:var(--dim)}
+.kseg.small button{padding:5px 4px;font-size:.76em}
+/* readouts above the chart */
+.readouts{display:grid;grid-template-columns:repeat(6,1fr);gap:8px;margin-bottom:10px}
+.readout{background:var(--bg);border:1px solid var(--line);border-radius:var(--r);padding:8px 12px;min-width:0}
+.readout b{display:block;font-size:1.45em;line-height:1.15;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.readout.acc b{color:var(--acc);text-shadow:var(--glow)}.readout.ok b{color:var(--ok)}.readout.bad b{color:var(--bad)}.readout.warn b{color:var(--warn)}
+.readout small{color:var(--faint);font-size:.72em;letter-spacing:.1em;text-transform:uppercase;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.readout .sub{color:var(--dim);font-size:.78em;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+@media(max-width:1100px){.readouts{grid-template-columns:repeat(3,1fr)}}
+/* teacher button + picker overlay, after knurlogic's model picker */
+.tbtn{display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;background:var(--bg);border:1px solid var(--line);border-radius:var(--r);padding:8px 10px;text-align:left;margin-bottom:12px}
+.tbtn:hover{border-color:var(--acc)}
+.tbtn .n{font-weight:700}.tbtn .s{color:var(--faint);font-size:.8em;white-space:nowrap}
+.modal{position:fixed;inset:0;z-index:50;background:oklch(0 0 0/.6);display:flex;align-items:center;justify-content:center;padding:40px 24px}
+.modal .box{width:min(960px,100%);height:min(640px,82vh);display:flex;flex-direction:column;border:1px solid var(--line);border-radius:var(--r);background:var(--panel);box-shadow:0 20px 60px oklch(0 0 0/.6);overflow:hidden}
+.pickhd{display:flex;align-items:center;gap:14px;padding:12px 14px;border-bottom:1px solid var(--line)}
+.pickhd input{flex:1;background:transparent;border:0;font:inherit;color:var(--fg);font-size:1em}.pickhd input:focus{outline:none}
+.pickhd .x{color:var(--faint);font-size:1.2em;padding:0 6px}.pickhd .x:hover{color:var(--warn)}
+.pickbody{display:grid;grid-template-columns:150px 1fr;min-height:0;flex:1}
+.pfams{border-right:1px solid var(--line);overflow:auto;padding:6px 0}
+.pfam{display:block;width:100%;text-align:left;padding:8px 12px;font-size:.82em;letter-spacing:.06em;text-transform:uppercase;color:var(--dim);border-left:2px solid transparent}
+.pfam:hover{color:var(--fg)}.pfam[aria-current=true]{color:var(--acc);border-left-color:var(--acc);background:color-mix(in srgb,var(--acc) 7%,transparent)}
+.pfam i{font-style:normal;color:var(--faint);float:right}
+.prows{overflow-y:scroll}
+.psect{padding:8px 14px;font-size:.76em;letter-spacing:.1em;text-transform:uppercase;color:var(--ok);background:color-mix(in srgb,var(--ok) 8%,transparent);border-bottom:1px solid var(--line)}
+.psect.no{color:var(--faint);background:transparent}
+.prow{display:grid;grid-template-columns:1fr auto;gap:2px 12px;width:100%;text-align:left;padding:10px 14px;border-bottom:1px solid var(--line)}
+.prow:hover{background:var(--med)}.prow[aria-current=true] .n{color:var(--acc)}
+.prow .n{color:var(--fg)}.prow .m{color:var(--faint);font-size:.82em;white-space:nowrap}.prow .d{grid-column:1/-1;color:var(--dim);font-size:.82em}
+.prow.no{opacity:.5}
+
+.hpick{font-size:1.25em;letter-spacing:.02em;text-transform:none;color:var(--fg);font-weight:700;padding:0 4px;border-bottom:1px dashed var(--line)}
+.hpick:hover{color:var(--acc);border-bottom-color:var(--acc)}.hpick span{color:var(--faint);font-size:.8em}
+/* one screen: tighter vertical budget on the recipe page */
+.readouts{margin-bottom:8px}.readout{padding:6px 10px}.readout b{font-size:1.3em}
+.kbox{font-size:.84em;gap:3px 10px;margin:6px 0 8px;padding:8px 10px}
+.kseg button{padding:6px 4px}
+.strip{height:18px}
+.recipe .legend{margin-top:6px}
+.cart .ro{margin:8px 0 4px}
+.addon{padding:5px 0}
+.foot{margin-top:10px;padding-top:8px}
+.pkind{padding:8px 14px;border-bottom:1px solid var(--line)}
+
+.cart .ro{color:var(--fg);letter-spacing:.1em;display:flex;align-items:center;gap:6px}
+.info{display:inline-flex;align-items:center;justify-content:center;width:14px;height:14px;border-radius:50%;border:1px solid var(--faint);color:var(--faint);font-size:.7em;font-style:normal;text-transform:none;letter-spacing:0;cursor:help;position:relative}
+.info:hover{border-color:var(--acc);color:var(--acc)}
+.info span{display:none;position:absolute;left:18px;top:-6px;z-index:30;width:22em;background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:8px 10px;font-size:1.1em;color:var(--dim);letter-spacing:.02em;text-transform:none;line-height:1.45;box-shadow:0 8px 24px oklch(0 0 0/.5)}
+.info:hover span,.info:focus span{display:block}
+.bitrow{display:grid;grid-template-columns:9em 1fr;gap:10px;align-items:center;font-size:.88em;padding:3px 0}.bitrow span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bitrow input[type=range]{width:100%;accent-color:var(--acc)}
+.bitrow .v{text-align:right;font-variant-numeric:tabular-nums;color:var(--fg)}
+.bitrow.off{opacity:.45}
+.cmpmode{border:1px solid var(--line);border-radius:var(--r);padding:8px 10px;margin-top:10px}
+.cmpmode .addon{border-top:0;padding:2px 0}
+</style>
+
+<header>
+  <div class="status"><span><span class="dot"></span>GPU <b>leased</b> · additive-vs-k16384-35b · next slot ~19:05</span></div>
+  <div class="mark" id="homebtn">VQ<span>·</span>LAB<svg viewBox="0 0 24 24" aria-hidden="true"><defs><clipPath id="fl"><path d="M9 2h6v7l6 11a1 1 0 0 1-1 2H4a1 1 0 0 1-1-2l6-11z"/></clipPath></defs><rect x="0" y="14" width="24" height="10" fill="var(--pink)" clip-path="url(#fl)"/><path d="M9 2h6v7l6 11a1 1 0 0 1-1 2H4a1 1 0 0 1-1-2l6-11z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M8 2h8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><circle cx="14" cy="17" r="1" fill="oklch(.95 .05 340)"/></svg></div>
+  <div class="flow" id="flow"></div>
+</header>
+
+<div class="wrap"><main id="page"></main></div>
+
+<script>
+// ================================================================ data
+// 397B, 35B and 27B rows are research/paper/RESULTS-V5.md verbatim: exact
+// full-vocabulary KL to the bf16 teacher, 12288 positions per corpus, paired.
+// Flash-Next and GLM have no rows on that instrument yet and are flagged.
+const RESULTS={"397B":[{"id":"r22flat","what":"VQ flat d4/K128 (2.2 v1)","kind":"lab","geo":"d4-K128","gib":96.7,"bpw":2.1,"kl":[354.4,127.8,275.0],"top1":82.2},{"id":"floor_d4k128","what":"VQ flat d4/K128, second fit","kind":"lab","geo":"d4-K128","gib":96.7,"bpw":2.1,"kl":[349.4,121.5,282.6],"top1":82.3},{"id":"r22v2","what":"VQ-2.2bpw (v2 mix)","kind":"vq","geo":null,"gib":100.0,"bpw":2.17,"kl":[278.4,98.9,182.2],"top1":84.8,"hf":"TheDrainFlorist/Qwen3.5-397B-A17B-VQ-2.2bpw","mixed":true},{"id":"r24","what":"VQ-2.4bpw","kind":"vq","geo":"d4-K256","gib":107.96,"bpw":2.34,"kl":[232.7,89.0,134.1],"top1":86.4,"hf":"TheDrainFlorist/Qwen3.5-397B-A17B-VQ-2.4bpw"},{"id":"e112_A","what":"VQ d4/K256 refit (unweighted)","kind":"lab","geo":"d4-K256","gib":107.96,"bpw":2.34,"kl":[241.8,84.7,127.6],"top1":85.6},{"id":"e112_B","what":"VQ d4/K256 refit (tail-weighted)","kind":"lab","geo":"d4-K256","gib":107.96,"bpw":2.34,"kl":[279.1,84.3,171.8],"top1":84.9},{"id":"r24_sk8","what":"VQ-2.4 experts, spicyneuron skeleton","kind":"lab","geo":null,"gib":109.32,"bpw":2.37,"kl":[229.8,88.4,134.3],"top1":86.4},{"id":"r26","what":"VQ-2.6bpw","kind":"vq","geo":"d4-K512","gib":119.21,"bpw":2.58,"kl":[166.1,57.8,60.4],"top1":88.5,"hf":"TheDrainFlorist/Qwen3.5-397B-A17B-VQ-2.6bpw"},{"id":"spicy26","what":"spicyneuron 2.6-bit","kind":"affine","geo":null,"gib":120.57,"bpw":2.61,"kl":[333.9,99.2,241.1],"top1":83.5,"hf":"spicyneuron/Qwen3.5-397B-A17B-MLX-2.6bit"},{"id":"r26_sk8","what":"VQ-2.6 experts, spicyneuron skeleton","kind":"lab","geo":null,"gib":120.57,"bpw":2.61,"kl":[162.4,57.3,62.2],"top1":88.8},{"id":"r31","what":"VQ-3.1bpw","kind":"vq","geo":"d4-K2048","gib":141.71,"bpw":3.07,"kl":[93.0,33.3,16.6],"top1":91.7,"hf":"TheDrainFlorist/Qwen3.5-397B-A17B-VQ-3.1bpw"},{"id":"r31_sk8","what":"VQ-3.1 experts, spicyneuron skeleton","kind":"lab","geo":null,"gib":143.07,"bpw":3.1,"kl":[89.8,32.4,16.7],"top1":92.1},{"id":"spicy35","what":"spicyneuron 3.5-bit","kind":"affine","geo":null,"gib":165.57,"bpw":3.59,"kl":[87.7,31.0,17.0],"top1":91.8,"hf":"spicyneuron/Qwen3.5-397B-A17B-MLX-3.5bit"}],"35B":[{"id":"d2k16","what":"VQ d2/K16","kind":"lab","geo":"d2-K16","gib":10.14,"bpw":2.51,"kl":[231.9,1283.8,1095.8],"top1":81.0},{"id":"e112_A","what":"VQ d4/K256 (unweighted)","kind":"lab","geo":"d4-K256","gib":10.14,"bpw":2.51,"kl":[198.1,1070.1,953.8],"top1":83.2},{"id":"e112_B","what":"VQ d4/K256 (tail-weighted)","kind":"lab","geo":"d4-K256","gib":10.14,"bpw":2.51,"kl":[227.7,961.5,1521.8],"top1":81.7},{"id":"s2","what":"affine 2-bit experts, VQ skeleton","kind":"affine-sk","geo":null,"gib":11.08,"bpw":2.75,"kl":[255.6,1159.8,1621.0],"top1":80.5},{"id":"r34","what":"VQ-3.4bpw","kind":"vq","geo":"d4-K2048","gib":12.96,"bpw":3.21,"kl":[76.6,529.1,208.0],"top1":89.4,"hf":"TheDrainFlorist/Qwen3.6-35B-A3B-VQ-3.4bpw"},{"id":"q3","what":"affine q3 · mlx-community recipe","kind":"affine","geo":null,"gib":14.14,"bpw":3.5,"kl":[259.8,1018.3,868.4],"top1":77.6,"hf":null},{"id":"s3","what":"affine 3-bit experts, VQ skeleton","kind":"affine-sk","geo":null,"gib":14.83,"bpw":3.68,"kl":[74.5,498.5,254.3],"top1":89.2},{"id":"r38","what":"VQ-3.8bpw","kind":"vq","geo":"d4-K8192","gib":14.84,"bpw":3.68,"kl":[46.1,430.8,101.9],"top1":91.4,"hf":"TheDrainFlorist/Qwen3.6-35B-A3B-VQ-3.8bpw"},{"id":"d4k16384","what":"VQ d4/K16384","kind":"lab","geo":"d4-K16384","gib":15.78,"bpw":3.91,"kl":[39.8,393.1,80.5],"top1":92.2},{"id":"d2k256","what":"VQ d2/K256","kind":"lab","geo":"d2-K256","gib":17.64,"bpw":4.37,"kl":[31.0,361.8,52.6],"top1":93.2},{"id":"q4","what":"affine q4 · mlx-community recipe","kind":"affine","geo":null,"gib":18.17,"bpw":4.5,"kl":[65.4,647.8,105.6],"top1":88.9,"hf":null},{"id":"s4","what":"affine 4-bit experts, VQ skeleton","kind":"affine-sk","geo":null,"gib":18.58,"bpw":4.6,"kl":[33.2,372.1,61.2],"top1":92.8},{"id":"r54","what":"VQ-5.4bpw (d2/K1024)","kind":"vq","geo":"d2-K1024","gib":21.39,"bpw":5.3,"kl":[22.6,349.6,33.7],"top1":94.0,"hf":"TheDrainFlorist/Qwen3.6-35B-A3B-VQ-5.4bpw"},{"id":"floor_d2k1024","what":"VQ d2/K1024, second fit","kind":"lab","geo":"d2-K1024","gib":21.39,"bpw":5.3,"kl":[22.5,348.9,35.7],"top1":93.9},{"id":"s5","what":"affine 5-bit experts, VQ skeleton","kind":"affine-sk","geo":null,"gib":22.33,"bpw":5.53,"kl":[22.7,357.5,35.4],"top1":93.8},{"id":"d2k4096","what":"VQ d2/K4096","kind":"lab","geo":"d2-K4096","gib":25.15,"bpw":6.23,"kl":[20.8,336.4,31.7],"top1":94.2},{"id":"s6","what":"affine 6-bit experts, VQ skeleton","kind":"affine-sk","geo":null,"gib":26.08,"bpw":6.46,"kl":[20.5,334.1,27.2],"top1":94.2},{"id":"q6","what":"affine q6 · mlx-community recipe","kind":"affine","geo":null,"gib":26.23,"bpw":6.5,"kl":[9.5,244.4,16.0],"top1":96.1,"hf":null},{"id":"s8","what":"affine 8-bit experts, VQ skeleton","kind":"affine-sk","geo":null,"gib":33.58,"bpw":8.32,"kl":[20.1,327.1,28.6],"top1":94.2},{"id":"q8","what":"affine q8 · mlx-community recipe","kind":"affine","geo":null,"gib":34.3,"bpw":8.5,"kl":[5.7,175.5,10.8],"top1":97.0,"hf":null}],"27B":[{"id":"q2","what":"affine q2 · mlx-community recipe","kind":"affine","geo":null,"gib":7.83,"bpw":2.5,"kl":[1341.6,995.6,2649.0],"top1":51.2,"hf":null},{"id":"d4k256","what":"VQ d4/K256","kind":"lab","geo":"d4-K256","gib":9.61,"bpw":3.07,"kl":[372.8,135.4,1301.9],"top1":77.3},{"id":"s2","what":"affine 2-bit MLPs, VQ skeleton","kind":"affine-sk","geo":null,"gib":10.11,"bpw":3.23,"kl":[485.1,217.1,1629.2],"top1":72.5},{"id":"d4k1024","what":"VQ d4/K1024","kind":"lab","geo":"d4-K1024","gib":10.61,"bpw":3.39,"kl":[204.2,68.8,879.5],"top1":83.0},{"id":"q3","what":"affine q3 · mlx-community recipe","kind":"affine","geo":null,"gib":10.96,"bpw":3.5,"kl":[192.4,86.3,965.1],"top1":82.3,"hf":null},{"id":"d2k64","what":"VQ d2/K64","kind":"lab","geo":"d2-K64","gib":11.6,"bpw":3.71,"kl":[151.9,48.1,654.1],"top1":85.6},{"id":"r39","what":"VQ-3.9bpw (d4/K4096)","kind":"vq","geo":"d4-K4096","gib":11.61,"bpw":3.71,"kl":[146.6,41.2,584.3],"top1":86.0,"hf":"TheDrainFlorist/Qwen3.8-27B-VQ-3.9bpw"},{"id":"s3","what":"affine 3-bit MLPs, VQ skeleton","kind":"affine-sk","geo":null,"gib":12.1,"bpw":3.86,"kl":[148.2,52.7,736.0],"top1":85.4},{"id":"r45","what":"VQ-4.5bpw (d2/K256)","kind":"vq","geo":"d2-K256","gib":13.6,"bpw":4.34,"kl":[56.3,21.5,289.2],"top1":90.9,"hf":"TheDrainFlorist/Qwen3.8-27B-VQ-4.5bpw"},{"id":"floor_d2k256","what":"VQ d2/K256, second fit","kind":"lab","geo":"d2-K256","gib":13.6,"bpw":4.34,"kl":[56.2,21.0,279.7],"top1":91.0},{"id":"q4","what":"affine q4 · mlx-community recipe","kind":"affine","geo":null,"gib":14.09,"bpw":4.5,"kl":[68.5,23.7,315.6],"top1":90.5,"hf":null},{"id":"s4","what":"affine 4-bit MLPs, VQ skeleton","kind":"affine-sk","geo":null,"gib":14.09,"bpw":4.5,"kl":[68.5,23.7,315.6],"top1":90.5},{"id":"r48","what":"VQ-4.8bpw","kind":"vq","geo":"d2-K512","gib":14.59,"bpw":4.66,"kl":[61.8,16.9,208.1],"top1":91.1,"hf":"TheDrainFlorist/Qwen3.8-27B-VQ-4.8bpw"},{"id":"s5","what":"affine 5-bit MLPs, VQ skeleton","kind":"affine-sk","geo":null,"gib":16.09,"bpw":5.14,"kl":[42.3,16.1,179.0],"top1":92.1},{"id":"d2k4096","what":"VQ d2/K4096","kind":"lab","geo":"d2-K4096","gib":17.58,"bpw":5.61,"kl":[38.6,13.5,145.9],"top1":92.6},{"id":"s6","what":"affine 6-bit MLPs, VQ skeleton","kind":"affine-sk","geo":null,"gib":18.08,"bpw":5.77,"kl":[39.7,13.3,146.3],"top1":92.7},{"id":"q6","what":"affine q6 · mlx-community recipe","kind":"affine","geo":null,"gib":20.36,"bpw":6.5,"kl":[10.9,2.2,24.7],"top1":96.9,"hf":null},{"id":"s8","what":"affine 8-bit MLPs, VQ skeleton","kind":"affine-sk","geo":null,"gib":22.06,"bpw":7.04,"kl":[37.4,12.7,137.2],"top1":92.7},{"id":"q8","what":"affine q8 · mlx-community recipe","kind":"affine","geo":null,"gib":26.62,"bpw":8.5,"kl":[3.5,0.6,5.0],"top1":98.5,"hf":null}]};
+const TEACHERS=[
+ {id:'q35',res:'35B',n:'Qwen/Qwen3.6-35B-A3B-bf16',short:'Qwen3.6-35B-A3B',fam:'qwen3_5',kind:'MoE · 40 layers · 256 experts',onb:'2026-09-26',fits:1099,layers:40,topk:8,modules:120,bytes:{mtp:1.573,vision:0.832},fitStore:{'d2-K16':121,'d2-K256':240,'d2-K1024':120,'d2-K4096':240,'d4-K2048':240,'d4-K16384':138}},
+ {id:'q397',res:'397B',n:'Qwen/Qwen3.5-397B-A17B-bf16',short:'Qwen3.5-397B-A17B',fam:'qwen3_5',kind:'MoE · 60 layers · 512 experts',onb:'2026-09-10',fits:0,layers:60,topk:10,modules:180,bytes:{mtp:2.1,vision:0.849},fitStore:{},note:'751 GB · Exo Models'},
+ {id:'q27',res:'27B',n:'Qwen/Qwen3.8-27B',short:'Qwen3.8-27B',fam:'qwen3_8_dense',kind:'dense · 64 layers',onb:'2026-09-21',fits:969,layers:64,topk:1,modules:192,bytes:{mtp:0,vision:0},fitStore:{'d2-K64':201,'d2-K256':192,'d2-K4096':192,'d4-K256':192,'d4-K1024':192}},
+ {id:'fn',n:'Qwen/Qwen3.8-Flash-Next-bf16',short:'Qwen3.8-Flash-Next',fam:'qwen4_exp',kind:'MoE · 48 layers · GDN',onb:'2026-09-14',fits:453,layers:48,topk:10,modules:144,bytes:{mtp:1.2,vision:0.849},fitStore:{'d8-K16384':99,'d8-K4096':125,'d4-K256':99,'d4-K4096':31,'d4-K512':27,'d4-K128':24,'d4-K8192':24,'d8-K1024':24},
+  rows:[{id:'r21',what:'VQ-2.1bpw (mixed)',kind:'vq',mixed:true,gib:47.5,bpw:2.1,kl:[210,71,150],top1:85.1,hf:'TheDrainFlorist/Qwen3.8-Flash-Next-VQ-2.1bpw'},{id:'r32',what:'VQ-3.2bpw',kind:'vq',geo:'d4-K2048',gib:71.7,bpw:3.2,kl:[112,38,61],top1:89.6,hf:'TheDrainFlorist/Qwen3.8-Flash-Next-VQ-3.2bpw'},{id:'r44',what:'VQ-4.4bpw',kind:'vq',geo:'d2-K256',gib:96.6,bpw:4.4,kl:[52,17,22],top1:93.0,hf:'TheDrainFlorist/Qwen3.8-Flash-Next-VQ-4.4bpw'},{id:'r55',what:'VQ-5.5bpw',kind:'vq',geo:'d2-K1024',gib:114.5,bpw:5.5,kl:[24,8,9],top1:95.4,hf:'TheDrainFlorist/Qwen3.8-Flash-Next-VQ-5.5bpw'},{id:'q4',what:'affine q4 (mlx-community recipe)',kind:'affine',gib:112,bpw:4.5,kl:[70,24,30],top1:92.5}]},
+ {id:'g26',n:'google/gemma-4-26b-a4b-it',short:'Gemma-4-26B-A4B',fam:'gemma4',kind:'MoE · 30 layers',onb:null,fits:0,layers:30,topk:4,modules:90,bytes:{mtp:0,vision:0.4},fitStore:{},ppl:'KL cannot rank this family (its teacher cache is not deterministic); builds are scored by perplexity on the three house corpora instead',
+  rows:[{id:'r62',what:'VQ-6.2bpw',kind:'vq',geo:'d2-K2048',gib:18.7,bpw:6.2,kl:null,top1:null,hf:'TheDrainFlorist/gemma-4-26b-a4b-it-VQ-6.2bpw'}]},
+ {id:'g4b',n:'google/gemma-4-e4b-it',short:'Gemma-4-E4B',fam:'gemma4_e4b',kind:'dense · PLE',onb:null,fits:0,layers:35,topk:1,modules:1,bytes:{mtp:0,vision:0.3},fitStore:{},ppl:'KL cannot rank this family (its teacher cache is not deterministic); builds are scored by perplexity on the three house corpora instead',
+  rows:[{id:'ple',what:'VQ PLE tables',kind:'vq',geo:'d2-K2048',gib:7.4,bpw:8.0,kl:null,top1:null,hf:'TheDrainFlorist/gemma-4-e4b-it-VQ-PLE'}]},
+ {id:'glm',n:'zai-org/GLM-5.3-Flash-BF16',short:'GLM-5.3-Flash',fam:'glm5_next',kind:'MoE · 42 layers',onb:'2026-09-12',fits:0,layers:42,topk:8,modules:126,bytes:{mtp:0,vision:0},fitStore:{},
+  rows:[{id:'r27',what:'VQ-2.7bpw',kind:'vq',geo:'d4-K512',gib:108.0,bpw:2.7,kl:[190,66,120],top1:86.0,hf:'TheDrainFlorist/GLM-5.3-Flash-VQ-2.7bpw'},{id:'r31',what:'VQ-3.1bpw (mixed)',kind:'vq',mixed:true,gib:122.4,bpw:3.1,kl:[120,41,62],top1:89.2,hf:'TheDrainFlorist/GLM-5.3-Flash-VQ-3.1bpw'},{id:'r36',what:'VQ-3.6bpw (mixed)',kind:'vq',mixed:true,gib:141.1,bpw:3.6,kl:[70,24,30],top1:92.0,hf:'TheDrainFlorist/GLM-5.3-Flash-VQ-3.6bpw'}]},
+];
+TEACHERS.forEach(t=>{if(t.res){t.rows=RESULTS[t.res];t.real=true}else t.real=false});
+const TYPE={d4:['VQ d4','var(--acc)'],d2:['VQ d2','var(--g4)'],d8:['VQ d8','var(--g1)'],mixed:['VQ mixed','var(--teal)'],affine:['affine, published','var(--bad)'],['affine-sk']:['affine on VQ skeleton','var(--warn)']};
+const TCOL=r=>TYPE[r.type]?TYPE[r.type][1]:'var(--dim)';
+const GEOCOL={'d4-K128':'var(--g1)','d4-K256':'var(--g1)','d4-K512':'var(--g1)','d4-K1024':'var(--g2)','d4-K2048':'var(--g2)','d4-K4096':'var(--g3)','d4-K8192':'var(--g3)','d4-K16384':'var(--g4)','d2-K16':'var(--g1)','d2-K64':'var(--g1)','d2-K256':'var(--g2)','d2-K512':'var(--g3)','d2-K1024':'var(--g4)','d2-K4096':'var(--g4)','d8-K16384':'var(--g1)'};
+const MACHINES=[[16,'16'],[24,'24'],[32,'32'],[36,'36'],[48,'48'],[64,'64'],[96,'96'],[128,'128'],[192,'192'],[256,'256'],[512,'512']];
+const ctxReserve=gb=>Math.max(2,Math.round(gb*0.12));
+const usable=gb=>gb*0.93-3-ctxReserve(gb);
+const mean=k=>k?(k[0]+k[1]+k[2])/3:NaN;
+const $=q=>document.querySelector(q);
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const f1=x=>x.toFixed(1);
+const fmtT=m=>m<60?m.toFixed(0)+' min':(m/60).toFixed(1)+' h';
+const TE=id=>TEACHERS.find(t=>t.id===id);
+const creator=t=>({'Qwen':'Qwen','zai-org':'Z.ai','deepseek-ai':'DeepSeek','google':'Gemma'}[t.n.split('/')[0]]||t.n.split('/')[0]);
+const DRAFTS=[{n:'deepseek-ai/DeepSeek-V4',short:'DeepSeek-V4',fam:'deepseek_v4',kind:'MoE',draft:true}];
+
+// ---- per-teacher models, all derived from the measured rows at load
+function lsq(pts){const n=pts.length,mx=pts.reduce((a,p)=>a+p[0],0)/n,my=pts.reduce((a,p)=>a+p[1],0)/n;const b=pts.reduce((a,p)=>a+(p[0]-mx)*(p[1]-my),0)/(pts.reduce((a,p)=>a+(p[0]-mx)**2,0)||1);return [my-b*mx,b]}
+function derive(t){
+  const R=t.rows.filter(r=>r.kl);t.scored=R;
+  if(!R.length){t.g0=0;t.g1=t.rows[0].gib/t.rows[0].bpw;t.bpw=g=>g/t.g1;t.klFlat=g=>NaN;t.klAff=null;t.klSk=null;t.mixedF=1;t.flatFitted=false;t.notches=t.rows.map(r=>({geo:r.geo,gib:r.gib,shipped:true}));t.affNotches=[];t.xr=[t.rows[0].gib*0.6,t.rows[t.rows.length-1].gib*1.5];t.rows.forEach(r=>r.type=r.geo?r.geo.split('-')[0]:'vq');return}
+  // bytes <-> bpw is linear per family; the intercept is the non-quantized carry
+  [t.g0,t.g1]=lsq(R.map(r=>[r.bpw,r.gib]));
+  t.bpw=g=>(g-t.g0)/t.g1;
+  // curves: KL = A·e^(-b·bpw) + floor. The floor is chosen by grid search on
+  // residuals, A and b by least squares in log space; shipped rows count
+  // double. No cliff term: nothing in the measured range shows one.
+  function fitExp(rows){if(rows.length<2)return null;let best=null;const kmin=Math.min(...rows.map(r=>mean(r.kl)));
+    for(let f=0;f<kmin*0.95;f+=Math.max(0.25,kmin*0.02)){const pts=[];rows.forEach(r=>{const w=r.kind==='vq'?2:1;for(let i=0;i<w;i++)pts.push([r.bpw,Math.log(mean(r.kl)-f)])});
+      const [a,b]=lsq(pts);const res=rows.reduce((acc,r)=>acc+(r.kind==='vq'?2:1)*(Math.log(Math.exp(a+b*r.bpw)+f)-Math.log(mean(r.kl)))**2,0);if(!best||res<best.res)best={res,a,b,f}}
+    return g=>Math.exp(best.a+best.b*t.bpw(g))+best.f}
+  const flat=R.filter(r=>(r.kind==='vq'||r.kind==='lab')&&!r.mixed),allvq=R.filter(r=>r.kind==='vq'||r.kind==='lab');
+  t.flatFitted=flat.length>=3;
+  t.klFlat=(t.flatFitted?fitExp(flat):fitExp(allvq))||(g=>{const r=allvq[0];return mean(r.kl)*Math.exp(-0.9*(t.bpw(g)-r.bpw))});
+  const mixedRows=R.filter(r=>r.mixed);
+  t.mixedF=t.flatFitted?(mixedRows.length?Math.min(...mixedRows.map(r=>mean(r.kl)/t.klFlat(r.gib))):0.8):1;
+  t.klAff=fitExp(R.filter(r=>r.kind==='affine'));
+  t.klSk=fitExp(R.filter(r=>r.kind==='affine-sk'));
+  // row TYPE for slicing: the geometry family, not just who built it
+  R.forEach(r=>{r.type=r.kind==='affine'?'affine':r.kind==='affine-sk'?'affine-sk':r.mixed?'mixed':r.geo?r.geo.split('-')[0]:'vq'});
+  t.notches=[];const seen=new Set();for(const r of R)if((r.kind==='vq'||r.kind==='lab')&&r.geo&&!seen.has(r.geo)){seen.add(r.geo);t.notches.push({geo:r.geo,gib:r.gib,shipped:r.kind==='vq'})}
+  t.notches.sort((a,b)=>a.gib-b.gib);
+  t.affNotches=R.filter(r=>r.kind==='affine'&&/^q\d$/.test(r.id)).map(r=>({bits:+r.id[1],gib:r.gib,kl:mean(r.kl)})).sort((a,b)=>a.gib-b.gib);
+  const gs=R.map(r=>r.gib);t.xr=[Math.min(...gs)*0.85,Math.max(...gs)*1.12];
+}
+TEACHERS.forEach(derive);
+const KLF={flat:1,mixed:null,measured:null};
+const klVQ=(t,r,g)=>t.klFlat(g)*(r.strat==='flat'?1:r.strat==='mixed'?t.mixedF:t.mixedF*0.93)*(r.resel?0.95:1);
+// affine estimate: the published-recipe curve at the expert size; protected
+// modules at 8-bit take ~15% off (F168/F169 direction); the VQ skeleton
+// variant follows its own fitted curve, which floors early.
+// affine size: measured q row when one exists at this bits and group 64, else
+// bits + 32/group (bf16 scale and bias per group) through the family's byte line.
+// Protected classes at 8-bit add back a share of the carried bytes; the KL
+// factors are placeholders until such rows are scored.
+const affBase=(t,r)=>{const q=t.affNotches.find(n=>n.bits===r.bits);return (q&&r.group===64)?q.gib:t.g0+t.g1*(r.bits+32/r.group)};
+// the published q rows keep non-expert tensors at their default (8-bit attention and
+// embeddings, bf16 routers); byte and damage deltas are taken from that baseline
+const affExtra=(t,r)=>t.g0*0.35*(0.55*(r.pAttn-8)/8+0.35*(r.pEmb-8)/8+0.02*(r.pRouter-16)/16);
+const affFactor=r=>Math.pow(0.93,(r.pAttn-8)/2)*Math.pow(0.97,(r.pEmb-8)/2)*Math.pow(0.985,(r.pRouter-16)/2)*(r.group===32?0.92:r.group===128?1.08:1);
+const klOf=(t,r,g)=>r.mode==='affine'?(r.skel&&t.klSk?t.klSk(g):(t.klAff?t.klAff(g):t.klFlat(g)*1.6))*affFactor(r):klVQ(t,r,g);
+const newRecipe=()=>({teacher:'q35',mode:'vq',widthPick:'auto',strat:'mixed',width:'d4',size:0,geo:null,bits:4,group:64,pAttn:8,pEmb:8,pRouter:16,skel:false,resel:false,tower:true,mtp:true,auto:true});
+const widthOf=geo=>geo?geo.split('-')[0]:'d4';
+const sizeOf=(t,r)=>r.mode==='affine'?(affBase(t,r)+affExtra(t,r)):r.strat==='flat'?(t.notches.find(n=>n.geo===r.geo)||t.notches[0]).gib:r.size;
+function resolveAt(t,r,g){
+  if(r.mode==='affine')return;
+  const pool=r.widthPick&&r.widthPick!=='auto'?t.notches.filter(n=>widthOf(n.geo)===r.widthPick):t.notches;
+  const near=pool.reduce((a,c)=>Math.abs(c.gib-g)<Math.abs(a.gib-g)?c:a);
+  if(r.strat==='flat'){r.geo=near.geo;r.width=widthOf(near.geo)}
+  else{r.size=Math.round(g*10)/10;r.geo=near.geo;r.width=widthOf(near.geo)}
+  r.resel=r.strat==='measured';
+}
+function plan(t,r){
+  const out=[],sc=Math.sqrt(t.modules/120);r.reuse=null;
+  if(r.mode==='affine'){out.push(['stream-convert',12*sc,`round-to-nearest ${r.bits}-bit experts, group ${r.group}; attention ${r.pAttn===16?'bf16':r.pAttn+'-bit'}, embeddings ${r.pEmb===16?'bf16':r.pEmb+'-bit'}, routers ${r.pRouter===16?'bf16':r.pRouter+'-bit'}${r.skel?' (from the VQ release)':''}`])}
+  else if(r.strat==='flat'){const have=t.fitStore[r.geo]||0;const need=Math.max(0,t.modules-Math.min(have,t.modules));const per={'K128':.3,'K256':.3,'K512':.5,'K1024':.8,'K2048':1.2,'K4096':2.5,'K8192':4.5,'K16384':9}[r.geo.split('-')[1]]||1;r.reuse=[t.modules-need,t.modules];out.push(['fit',need*per,`${need} of ${t.modules} modules at ${r.geo}; ${t.modules-need} reused from the fit store`])}
+  else{const hot=Math.round(t.layers*0.3);const rich=r.width==='d4'?'d4-K16384':'d2-K4096';const have=t.fitStore[rich]||0;const need=Math.max(0,hot*3-Math.min(have,hot*3));r.reuse=[hot*3-need,hot*3];out.push(['fit',need*(r.width==='d4'?9:3.5)*sc+6,`${need} enriched modules at ${rich} across ${hot} back layers; the front reuses floor fits`])}
+  if(r.mode==='vq'&&r.strat==='measured')out.push(['leverage + alloc-sweep',175*sc,'per-layer damage trajectory, then cost and value curves on this teacher']);
+  if(r.mode==='vq'&&r.resel)out.push(['reselect',95,'self-generated Gram bank, codes re-picked activation-aware']);
+  if(r.mode==='vq'){const K=+(r.geo||'d4-K2048').split('K')[1];const rich=r.strat==='flat'?K:(r.width==='d4'?16384:4096);out.push(['geo-build · pack · bundle',(14+Math.log2(rich)*1.1)*sc,`diff-style rebuild, true bit-width; packing and bundling scale with K (${rich})`])}
+  if(r.tower&&t.bytes.vision)out.push(['graft tower',3,'bf16 vision tower']);
+  if(r.mtp&&t.bytes.mtp)out.push(['mtp-pack',6,'quantized drafting sidecar']);
+  out.push(['smoke · vision · check-release',12,'one token and one image through the shipped runtime; files exist and function']);
+  out.push(t.ppl?['score (ppl)',30*sc,'referee perplexity on the three house corpora; KL is unavailable for this family']:['kl-ladder',40*sc,'paired against the teacher, three corpora at 12288']);
+  return out;
+}
+function allocation(t,r){
+  const L=t.layers;if(r.mode==='affine')return Array(L).fill('q'+r.bits+' g'+r.group);
+  if(r.strat==='flat')return Array(L).fill(r.geo);
+  const lad=t.notches.filter(n=>widthOf(n.geo)===r.width).map(n=>n.geo);const floor=lad[Math.min(1,lad.length-1)],rich=lad[lad.length-1],top=lad[lad.length-1];
+  const lo=t.notches[0].gib,hi=t.notches[t.notches.length-1].gib,frac=(sizeOf(t,r)-lo)/(hi-lo);const hot=Math.round(L*Math.min(.85,Math.max(.1,frac*1.2)));const out=[];
+  for(let l=0;l<L;l++)out.push(l<L-hot?floor:rich);
+  if(r.strat==='measured'){[5,Math.round(L*.4),Math.round(L*.55)].forEach(l=>{if(l<L-hot)out[l]=rich});[L-hot+1,L-hot+3].forEach(l=>{if(l>=0&&l<L)out[l]=floor})}
+  return out;
+}
+
+// ================================================================ state
+const JOBS=[
+ {id:'j1',name:'additive-vs-k16384-35b',state:'building',stepIx:2,recipe:{teacher:'q35',mode:'vq',effort:'standard',strat:'mixed',width:'d4',size:14.4,geo:'d4-K2048',resel:false,tower:true,mtp:true},started:'17:13',eta:'18:41'},
+ {id:'j2',name:'reselect-35b-kl',state:'gating',stepIx:8,recipe:{teacher:'q35',mode:'vq',effort:'thorough',strat:'flat',width:'d4',size:12.96,geo:'d4-K2048',resel:true,tower:true,mtp:true},started:'15:52',eta:'18:05'},
+ {id:'j4',name:'35b-6.2-d2-k4096',state:'failed',stepIx:8,recipe:{teacher:'q35',mode:'vq',effort:'fast',strat:'flat',width:'d2',size:25.15,geo:'d2-K4096',resel:false,tower:true,mtp:true},started:'09-27',eta:''},
+ {id:'j3',name:'35b-3.8',state:'shipped',stepIx:99,recipe:{teacher:'q35',mode:'vq',effort:'fast',strat:'flat',width:'d4',size:14.84,geo:'d4-K8192',resel:false,tower:true,mtp:true},started:'09-26',eta:''},
+];
+const PAGES=[{k:'library',n:'Library'},{k:'recipe',n:'Recipe'},{k:'jobs',n:'Jobs'}];
+const ICON={library:'<svg viewBox="0 0 24 24"><path d="M4 19V5M10 19V9M16 19v-6M22 19H2"/></svg>',recipe:'<svg viewBox="0 0 24 24"><path d="M3 18C8 18 8 6 13 6s5 12 8 12"/><circle cx="13" cy="6" r="2"/></svg>',jobs:'<svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h10M4 18h13"/><circle cx="19" cy="12" r="2"/></svg>'};
+let page=0, draft=newRecipe(), libFam='q35', jobSel='j1', show={d4:true,d2:true,d8:true,mixed:true,affine:true,'affine-sk':false,vq:true,lab:true};
+try{const st=JSON.parse(localStorage.getItem('vq.v17')||'{}');if(st.draft)draft=st.draft;if(st.page!=null)page=st.page;if(st.libFam)libFam=st.libFam;if(st.jobSel)jobSel=st.jobSel;if(st.show)show=st.show}catch{}
+function save(){try{localStorage.setItem('vq.v17',JSON.stringify({draft,page,libFam,jobSel,show}))}catch{}}
+if(!draft.size){const t=TE(draft.teacher);resolveAt(t,draft,(t.xr[0]+t.xr[1])/2)}
+
+// ================================================================ header
+function renderFlow(){
+  $('#flow').innerHTML=PAGES.map((p,i)=>`<button class="st" aria-current="${i===page}" data-i="${i}">${ICON[p.k]}<span class="n">${p.n}</span>${p.k==='jobs'?'<i style="background:var(--warn)"></i>':''}</button>`).join('');
+  $('#flow').querySelectorAll('.st').forEach(b=>b.onclick=()=>{page=+b.dataset.i;render()});
+}
+function chartFrame(xr,H=420,W=1000,L=52,Rm=16,Tp=14,B=34,ymin=3,ymax=1500){
+  const [xmin,xmax]=xr;const X=v=>L+(v-xmin)/(xmax-xmin)*(W-L-Rm),Y=v=>Tp+(Math.log(ymax)-Math.log(Math.max(ymin,Math.min(ymax,v))))/(Math.log(ymax)-Math.log(ymin))*(H-Tp-B);
+  let s='';[5,10,20,50,100,200,500,1000].forEach(v=>s+=`<line class="gridl" x1="${L}" x2="${W-Rm}" y1="${Y(v)}" y2="${Y(v)}"/><text x="${L-6}" y="${Y(v)+4}" text-anchor="end">${v}</text>`);
+  const step=(xmax-xmin)>60?20:(xmax-xmin)>25?5:2;
+  for(let v=Math.ceil(xmin/step)*step;v<=xmax;v+=step)s+=`<line class="gridl" x1="${X(v)}" x2="${X(v)}" y1="${Tp}" y2="${H-B}"/><text x="${X(v)}" y="${H-B+14}" text-anchor="middle">${v}</text>`;
+  s+=`<line class="axis" x1="${L}" x2="${W-Rm}" y1="${H-B}" y2="${H-B}"/><line class="axis" x1="${L}" x2="${L}" y1="${Tp}" y2="${H-B}"/>`;
+  s+=`<text x="${W-Rm}" y="${H-4}" text-anchor="end">text weights, GiB</text><text transform="rotate(-90)" x="${-(H-B)}" y="12">mean KL, mnats (log)</text>`;
+  return {s,X,Y,W,H,L,Rm,Tp,B,xmin,xmax};
+}
+const curve=(c,fn,cls)=>{let d='';for(let g=c.xmin;g<=c.xmax;g+=(c.xmax-c.xmin)/100){const v=fn(g);if(v>1400)continue;d+=(d?'L':'M')+c.X(g)+' '+c.Y(v)}return `<path class="cu ${cls}" d="${d}"/>`};
+
+// ================================================================ Library
+function pgLibrary(){
+  const t=TE(libFam);const vis=r=>show[r.type]&&(r.kind.startsWith('affine')||show[r.kind]);const rows=t.rows.filter(vis);
+  const best=[0,1,2].map(c=>Math.min(...t.rows.filter(r=>r.kind==='vq'&&r.kl).map(r=>r.kl[c])));
+  const geoCell=r=>r.geo?`<span class="mix" style="width:60px"><span style="width:100%;background:${GEOCOL[r.geo]||'var(--dim)'}"></span></span> ${r.geo}`:r.mixed?'mixed':r.kind.startsWith('affine')?'affine g64':'';
+  return `<section class="panel"><h2>Library <small>every build the lab has measured, on one instrument</small></h2>
+  <div class="tsel">${TEACHERS.map(x=>`<button aria-pressed="${x.id===libFam}" data-f="${x.id}">${esc(x.short)}<small>${x.rows.length}</small></button>`).join('')}</div>
+  <div class="lib2">
+    <div>
+      <svg class="chart" id="libchart" viewBox="0 0 1000 210" role="img" aria-label="measured rows, size against mean KL"></svg>
+      <div class="chips"><span class="lab">type</span>${Object.entries(TYPE).filter(([k])=>t.rows.some(r=>r.type===k)).map(([k,[l,c]])=>`<button aria-pressed="${!!show[k]}" data-k="${k}"><em style="background:${c}"></em>${l} · ${t.rows.filter(r=>r.type===k).length}</button>`).join('')}
+        <span class="lab" style="margin-left:10px">VQ status</span><button aria-pressed="${!!show.vq}" data-k="vq"><em style="background:var(--fg)"></em>shipped</button><button aria-pressed="${!!show.lab}" data-k="lab"><em style="border:1.5px solid var(--fg)"></em>lab build</button>
+        ${t.ppl?`<span style="color:var(--warn)">${esc(t.ppl)}</span>`:t.real?'':'<span style="color:var(--warn)">not yet re-measured; card figures</span>'}</div>
+      ${show['affine-sk']&&t.rows.some(r=>r.type==='affine-sk')?'<div class="note">affine on the VQ skeleton keeps the VQ build\'s non-expert tensors and quantizes only the experts affine: the like-for-like comparison. Its KL floors once the experts pass ~5 bits because the skeleton\'s own quantization dominates, which is why s6 and s8 sit level.</div>':''}
+      <div class="tblscroll"><table class="rungtab"><thead><tr><th>row</th><th>what</th><th class="num">GiB</th><th class="num">bpw</th><th>geometry</th><th class="num">prose</th><th class="num">code</th><th class="num">lit</th><th class="num">mean</th><th class="num">top-1</th><th>hub</th></tr></thead><tbody>
+      ${rows.map(r=>`<tr class="${r.kind}" style="color:${r.kind==='lab'?'var(--dim)':TCOL(r)}"><td>${esc(r.id)}</td><td class="what">${esc(r.what)}</td><td class="num">${f1(r.gib)}</td><td class="num">${r.bpw.toFixed(2)}</td><td>${geoCell(r)}</td>${[0,1,2].map(c=>`<td class="num ${r.kl&&r.kind==='vq'&&r.kl[c]===best[c]?'best':''}">${r.kl?f1(r.kl[c]):'—'}</td>`).join('')}<td class="num">${r.kl?f1(mean(r.kl)):'—'}</td><td class="num">${r.top1!=null?r.top1+'%':'—'}</td><td>${r.hf?`<a href="https://huggingface.co/${esc(r.hf)}" target="_blank" rel="noopener">${esc(r.hf.split('/')[0])} ↗</a>`:''}</td></tr>`).join('')}
+      </tbody></table></div>
+    </div>
+    <div>
+      <div class="cart"><div class="ro">teacher</div><div style="font-weight:700">${esc(t.short)}</div><div class="seghelp">${esc(t.kind)} · onboarded ${t.onb||'—'}${t.note?' · '+t.note:''}</div>
+        <dl class="kv" style="margin-top:8px"><dt>measured</dt><dd>${t.scored.length} builds · ${t.rows.filter(r=>r.kind==='vq').length} shipped</dd><dt>bytes</dt><dd>${f1(t.g1)} GiB per bpw${t.g0?', '+f1(t.g0)+' carried':''}</dd><dt>mixed</dt><dd>${t.flatFitted?(t.rows.some(r=>r.mixed)?((1-t.mixedF)*100).toFixed(0)+'% under flat at equal bytes':'no mixed row yet'):'—'}</dd><dt>fit store</dt><dd>${Object.values(t.fitStore).reduce((a,b)=>a+b,0)||'none'} modules</dd></dl>
+        <div class="foot" style="margin-top:10px"><button class="btn go" data-recipe="${t.id}">New recipe →</button></div></div>
+      ${(()=>{const vq=t.rows.filter(r=>r.kind==='vq'&&r.kl),af=t.rows.filter(r=>r.kind==='affine'&&r.kl);if(!vq.length||!af.length)return '';
+        const rows=vq.map(v=>{const a=af.reduce((p,c)=>Math.abs(c.gib-v.gib)<Math.abs(p.gib-v.gib)?c:p);const d=100*(1-mean(v.kl)/mean(a.kl));return `<tr><td>${esc(v.id)}</td><td class="num">${f1(v.gib)}</td><td>${esc(a.id)}</td><td class="num">${f1(a.gib)}</td><td class="num ${d>0?'best':''}" style="${d<0?'color:var(--bad)':''}">${d>0?'−':'+'}${Math.abs(d).toFixed(0)}%</td></tr>`}).join('');
+        return `<div class="cart" style="margin-top:10px"><div class="ro">VQ against the nearest affine ${'<i class="info" tabindex="0">i<span>Each shipped VQ rung beside the published affine build closest to it in bytes, and how much less damage it carries. Same teacher, same positions, same corpora.</span></i>'}</div>
+        <table class="rungtab" style="margin-top:6px;font-size:.8em"><thead><tr><th>VQ</th><th class="num">GiB</th><th>affine</th><th class="num">GiB</th><th class="num">damage</th></tr></thead><tbody>${rows}</tbody></table></div>`})()}
+      <div class="cart" style="margin-top:10px"><div class="ro">on the Hub</div>
+        <ul class="rows" style="margin-top:6px">${t.rows.filter(r=>r.hf).map(r=>`<li class="row" style="padding:5px 8px"><a href="https://huggingface.co/${esc(r.hf)}" target="_blank" rel="noopener"><span class="n" style="font-weight:400;color:var(--teal)">${esc(r.hf.split('/')[1])}</span></a><span class="meta">${f1(r.gib)} GiB</span></li>`).join('')||'<li class="empty">nothing published yet</li>'}</ul></div>
+    </div>
+  </div></section>`;
+}
+function drawLib(){
+  const t=TE(libFam),c=chartFrame(t.xr,210);let s=c.s;
+  const vis=r=>show[r.type]&&(r.kind.startsWith('affine')||show[r.kind]);
+  if(t.scored.length)s+=curve(c,t.klFlat,'flat');if(t.klAff&&show.affine)s+=curve(c,t.klAff,'aff');if(t.klSk&&show['affine-sk'])s+=curve(c,t.klSk,'sk');
+  t.rows.filter(r=>vis(r)&&r.kl).forEach(r=>{const x=c.X(r.gib),y=c.Y(mean(r.kl)),col=TCOL(r);
+    if(r.kind.startsWith('affine'))s+=`<g><path d="M${x-4} ${y-4}L${x+4} ${y+4}M${x+4} ${y-4}L${x-4} ${y+4}" style="fill:none;stroke:${col};stroke-width:1.5"/><text x="${x+7}" y="${y+4}" style="fill:${col};font-size:11px">${esc(r.id)}</text></g>`;
+    else s+=`<g><circle cx="${x}" cy="${y}" r="${r.kind==='vq'?5:3.5}" style="fill:${r.kind==='vq'?col:'var(--bg)'};stroke:${col};stroke-width:1.5"/>${r.kind==='vq'?`<text x="${x+8}" y="${y-6}" style="fill:var(--dim);font-size:11px">${esc(r.id.replace(/^r(\d)(\d)/,'$1.$2'))}</text>`:''}</g>`});
+  $('#libchart').innerHTML=s;
+}
+
+// ================================================================ Recipe
+const STRAT={
+ flat:{n:'Flat',s:'fastest',trades:'Build time for quality: one geometry everywhere, from fits already in the store. Size steps between notches.',changes:'No allocation pass; the nearest notch sets d and K for every layer.',pick:'A quick rung, a comparator, or a notch already on the budget.'},
+ mixed:{n:'Mixed',s:'default',trades:'A few more codebooks for the position law: cheap width in front, big books in the back. Size is continuous.',changes:'Front layers take the floor, the back the richest geometry; the split follows the size.',pick:'Every release build; the lab\'s standard practice.'},
+ measured:{n:'Measured',s:'+ leverage',trades:'About three GPU hours before fitting, for an allocation this teacher earned rather than the law\'s guess.',changes:'layer-leverage ranks layers, alloc-sweep prices cost and value, codes are re-picked activation-aware.',pick:'A new family, or a rung headed for a paper.'}};
+function pgRecipe(){
+  const r=draft,t=TE(r.teacher),S=STRAT[r.strat];
+  const vqSide=`<div class="ro" style="margin-bottom:6px">strategy</div>
+    <div class="kseg">${['flat','mixed','measured'].map(k=>`<button aria-pressed="${r.strat===k}" data-g="strat" data-v="${k}">${STRAT[k].n}<small>${STRAT[k].s}</small></button>`).join('')}</div>
+    <div class="kbox"><span class="k">trades</span><span class="v">${S.trades}</span><span class="k">changes</span><span class="v">${S.changes}</span><span class="k">pick it</span><span class="v">${S.pick}</span><span class="k">resolved</span><span class="v" id="approach"></span></div>
+    <div class="ro" style="margin-bottom:6px">width</div>
+    <div class="kseg small">${[['auto','auto'],['d2','d2'],['d4','d4'],['d8','d8']].map(([v,n])=>`<button aria-pressed="${(r.widthPick||'auto')===v}" data-g="widthPick" data-v="${v}" ${v!=='auto'&&!t.notches.some(n=>widthOf(n.geo)===v)?'disabled title="no measured notch at this width for this teacher"':''}>${n}</button>`).join('')}</div>
+    <div class="seghelp">auto follows the notch nearest the point; a fixed width keeps the point on that ladder.</div>`;
+  const I=(txt)=>`<i class="info" tabindex="0">i<span>${txt}</span></i>`;
+  const bitrow=(k,label,off)=>`<div class="bitrow ${off||r.skel?'off':''}"><span>${label}</span><div class="kseg small">${[4,6,8,16].map(b=>`<button aria-pressed="${r[k]===b}" data-bits="${k}" data-v="${b}" ${off||r.skel?'disabled':''}>${b===16?'bf16':'q'+b}</button>`).join('')}</div></div>`;
+  const affSide=`<div class="ro">experts ${I('Round-to-nearest affine quantization of the expert (or MLP) weights. Bits and group size fix the size exactly, so the point does not drag.')}</div>
+    <div class="kseg small">${[2,3,4,5,6,8].map(b=>`<button aria-pressed="${r.bits===b}" data-g="bits" data-v="${b}">q${b}</button>`).join('')}</div>
+    <div class="ro" style="margin-top:8px">group size ${I('Weights per scale-and-bias group. Smaller groups cost bytes (bf16 scale and bias per group: +32/group bits per weight) and take damage off. 64 is the published mlx-community recipe and lands on a measured row where one exists.')}</div>
+    <div class="kseg small">${[32,64,128].map(gs=>`<button aria-pressed="${r.group===gs}" data-g="group" data-v="${gs}">${gs}</button>`).join('')}</div>
+    <div class="ro" style="margin-top:8px">non-expert tensors ${I('stream-convert --protect-bits. Attention, embeddings and routers are a small share of the bytes and a large share of the damage; keeping them wider is cheap. Factors are estimates until such a row is scored.')}</div>
+    ${bitrow('pAttn','attention')}${bitrow('pEmb','embeddings · head')}${bitrow('pRouter','routers',t.topk<=1)}
+    <div class="cmpmode"><button class="addon" aria-pressed="${!!r.skel}" data-g="skel"><i></i><span class="n">comparison build ${I('For a like-for-like test of affine experts against VQ experts. The non-expert tensors are copied bit-for-bit from the nearest VQ rung (stream-convert --skeleton-from), which sets the three widths above; only the experts differ.')}</span><span class="t">${r.skel?'widths from '+esc((t.rows.find(q=>q.kind==='vq')||{id:'the VQ rung'}).id):'off'}</span></button></div>`;
+  return `<section class="panel"><h2><span style="display:flex;align-items:baseline;gap:14px">Recipe <button class="hpick" id="pick">${esc(t.short)} <span>▾</span></button></span><small>drag the point along the curve; notches are measured builds and Apple silicon boxes</small></h2>
+  <div class="readouts" id="readouts"></div>
+  <div class="recipe">
+  <div>
+    <svg class="chart" id="chart" viewBox="0 0 1000 360" role="img" aria-label="estimated quality against size; drag to set"></svg>
+    <div class="legend"><span><i style="border-color:var(--acc)"></i>this recipe</span><span><i style="border-color:var(--dim)"></i>flat VQ, fitted</span><span><i style="border-color:var(--bad);border-top-style:dashed"></i>affine, fitted</span><span>● measured build</span><span><i style="border-color:var(--teal)"></i>boxes, after OS and context</span></div>
+    <div id="strip"></div>
+  </div>
+  <div class="cart">
+    <div class="seg modeseg">${[['vq','VQ'],['affine','Affine']].map(([v,n])=>`<button aria-pressed="${r.mode===v}" data-g="mode" data-v="${v}">${n}</button>`).join('')}</div>
+    ${r.mode==='vq'?vqSide:affSide}
+    <div class="ro">include</div>
+    ${t.bytes.vision?`<button class="addon" aria-pressed="${!!r.tower}" data-g="tower"><i></i><span class="n">vision tower</span><span class="t">+${f1(t.bytes.vision)} GiB</span></button>`:''}
+    ${t.bytes.mtp?`<button class="addon" aria-pressed="${!!r.mtp}" data-g="mtp"><i></i><span class="n">MTP drafting</span><span class="t">+${f1(t.bytes.mtp)} GiB · faster decode</span></button>`:''}
+  </div>
+  </div>
+  <div class="foot"><span class="hint">nothing is built until you queue it. Preflight runs every step on one module first.</span><button class="btn">Save recipe.json</button><button class="btn go" id="queue">Queue build →</button></div>
+  <div class="modal hidden" id="picker"><div class="box">
+    <div class="pickhd"><input id="psearch" placeholder="model or Hub repo" aria-label="search teachers"><span class="ro">${TEACHERS.length} local teachers</span><button class="x" id="pclose" aria-label="close">×</button></div>
+    <div class="pickbody"><div class="pfams" id="pfams"></div><div class="prows" id="prows"></div></div>
+  </div></div>
+  </section>`;
+}
+let pickFam='all',pickKind='all';
+function renderPicker(){
+  const q=($('#psearch').value||'').toLowerCase();
+  const all=[...TEACHERS,...DRAFTS];
+  const creators=[...new Set(all.map(creator))];
+  $('#pfams').innerHTML=[['all','All'],...creators.map(c=>[c,c])].map(([k,l])=>`<button class="pfam" aria-current="${pickFam===k}" data-pf="${k}">${esc(l)}<i>${k==='all'?all.length:all.filter(t=>creator(t)===k).length}</i></button>`).join('');
+  const list=all.filter(t=>(pickFam==='all'||creator(t)===pickFam)&&(pickKind==='all'||t.kind.toLowerCase().startsWith(pickKind))&&(!q||(t.n+t.short).toLowerCase().includes(q)));
+  const row=t=>t.draft?`<button class="prow no"><span class="n">${esc(t.short)}</span><span class="m">${esc(t.kind)} · not onboarded</span><span class="d">onboard runs profile, loader, cache determinism and the init sweep · about two hours</span></button>`
+    :`<button class="prow" aria-current="${t.id===draft.teacher}" data-pt="${t.id}"><span class="n">${esc(t.short)}</span><span class="m">${esc(t.kind)}</span><span class="d">${t.rows.filter(r=>r.kind==='vq').length} shipped · ${t.scored.length} builds measured · ${t.fits} fits in store${t.note?' · '+t.note:''}${t.ppl?' · <span style="color:var(--warn)">scored by perplexity, not KL</span>':''}</span></button>`;
+  $('#prows').innerHTML=`<div class="pkind"><div class="seg small" style="width:14em">${[['all','all'],['dense','dense'],['moe','MoE']].map(([v,n])=>`<button aria-pressed="${pickKind===v}" data-pk="${v}">${n}</button>`).join('')}</div></div>`+(list.map(row).join('')||'<div class="psect no">nothing matches</div>');
+  $('#pfams').querySelectorAll('[data-pf]').forEach(b=>b.onclick=()=>{pickFam=b.dataset.pf;renderPicker()});
+  $('#prows').querySelectorAll('[data-pk]').forEach(b=>b.onclick=()=>{pickKind=b.dataset.pk;renderPicker()});
+  $('#prows').querySelectorAll('[data-pt]').forEach(b=>b.onclick=()=>{draft=newRecipe();draft.teacher=b.dataset.pt;const t=TE(b.dataset.pt);resolveAt(t,draft,(t.xr[0]+t.xr[1])/2);render()});
+}
+function drawReadouts(){
+  const r=draft,t=TE(r.teacher),P=plan(t,r),tot=P.reduce((a,p)=>a+p[1],0),g=sizeOf(t,r),k=klOf(t,r,g),disk=g+(r.tower?t.bytes.vision:0)+(r.mtp?t.bytes.mtp:0);
+  const box=MACHINES.find(([gb])=>usable(gb)>=disk);
+  const ship=t.rows.filter(q=>q.kind==='vq');const near=ship.reduce((a,q)=>Math.abs(q.gib-g)<Math.abs(a.gib-g)?q:a);const vs=100*(1-k/mean(near.kl));
+  const aff=t.affNotches.length?t.affNotches.reduce((a,q)=>Math.abs(q.gib-g)<Math.abs(a.gib-g)?q:a):null;
+  $('#readouts').innerHTML=`
+    <div class="readout acc"><small>size</small><b>${f1(g)} GiB</b><span class="sub">${f1(disk)} on disk · ${t.bpw(g).toFixed(2)} bpw</span></div>
+    <div class="readout ${box?'ok':'bad'}"><small>runs on</small><b>${box?box[1]+' GB':'no box'}</b><span class="sub">${box?ctxReserve(box[0])+' GB kept for context':'over every listed box'}</span></div>
+    ${t.ppl?`<div class="readout warn"><small>quality</small><b>ppl gate</b><span class="sub">no KL curve for this family; scored after build</span></div>`:`<div class="readout acc"><small>est. KL</small><b>~${k.toFixed(0)}</b><span class="sub">mnats, mean of three corpora</span></div>`}
+    ${t.ppl?`<div class="readout"><small>vs shipped ${esc(near.id)}</small><b>—</b><span class="sub">${g>near.gib?'+':''}${f1(g-near.gib)} GiB; ppl compared after gates</span></div>`:`<div class="readout ${vs>3?'ok':vs<-3?'warn':''}"><small>vs shipped ${esc(near.id)}</small><b>${Math.abs(vs)<3?'same':(vs>0?'−':'+')+Math.abs(vs).toFixed(0)+'%'}</b><span class="sub">damage at ${g>near.gib?'+':''}${f1(g-near.gib)} GiB</span></div>`}
+    ${aff&&!isNaN(k)?`<div class="readout ${k<aff.kl?'ok':'warn'}"><small>vs affine q${aff.bits}</small><b>${(k<aff.kl?'−':'+')+(100*Math.abs(1-k/aff.kl)).toFixed(0)}%</b><span class="sub">damage at ${g>aff.gib?'+':''}${f1(g-aff.gib)} GiB</span></div>`:`<div class="readout"><small>vs affine</small><b>—</b><span class="sub">no affine row yet</span></div>`}
+    <div class="readout acc"><small>time</small><b>${fmtT(tot)}</b><span class="sub">${r.reuse?`${r.reuse[0]}/${r.reuse[1]} fits from the store · `:''}starts ~19:05</span></div>`;
+  const ap=$('#approach');if(ap)ap.textContent={flat:`${r.geo} on all ${t.modules} modules, the measured notch nearest the point.`,mixed:`${r.geo.split('-')[0]} from the nearest notch; ${r.geo} in front, the biggest ${r.geo.split('-')[0]} books in the back.`,measured:'after leverage and alloc-sweep run on this teacher; the strip is a placeholder until then.'}[r.strat];
+}
+function drawRecipe(){
+  const r=draft,t=TE(r.teacher),c=chartFrame(t.xr,360);let s=c.s;const {X,Y,L,W,Rm,Tp,H,B,xmin,xmax}=c;
+  const g=sizeOf(t,r),extra=(r.tower?t.bytes.vision:0)+(r.mtp?t.bytes.mtp:0);
+  MACHINES.forEach(([gb,l])=>{const u=usable(gb)-extra;if(u>xmin&&u<xmax){const near=Math.abs(u-g)<(xmax-xmin)*0.01;s+=`<g class="box ${near?'near':''}"><line x1="${X(u)}" x2="${X(u)}" y1="${Tp}" y2="${H-B}"/><text x="${X(u)+4}" y="${Tp+14}">${l} GB</text></g>`}});
+  if(t.scored.length)s+=curve(c,t.klFlat,'flat '+(r.mode==='vq'&&r.strat==='flat'?'':'dimmed'));
+  if(t.klAff)s+=curve(c,t.klAff,'aff '+(r.mode==='affine'?'':'dimmed'));
+  if(r.mode==='vq'&&r.strat!=='flat'&&t.scored.length)s+=curve(c,x=>klVQ(t,r,x),'mixed');
+  t.rows.filter(q=>q.kl&&(q.kind==='vq'||(q.kind==='affine'&&r.mode==='affine'))).forEach(q=>s+=`<g class="rung"><circle cx="${X(q.gib)}" cy="${Y(mean(q.kl))}" r="4"/><text x="${X(q.gib)+7}" y="${Y(mean(q.kl))+14}">${esc(q.id)}</text></g>`);
+  if(r.mode==='vq')t.notches.forEach(n=>{const y=isNaN(t.klFlat(n.gib))?Y(100):Y(t.klFlat(n.gib));s+=`<g class="notch ${(r.widthPick&&r.widthPick!=='auto'&&widthOf(n.geo)!==r.widthPick)?'dimmed':''}"><line x1="${X(n.gib)}" x2="${X(n.gib)}" y1="${y-7}" y2="${y+7}"/><text x="${X(n.gib)}" y="${y+20}" text-anchor="middle">${n.geo}</text></g>`});
+  else [2,3,4,5,6,8].forEach(b=>{const rr={...r,bits:b};const gx=sizeOf(t,rr);if(gx<xmin||gx>xmax)return;const kk=klOf(t,rr,gx),y=isNaN(kk)?Y(100):Y(kk);s+=`<g class="notch ${b===r.bits?'':'dimmed'}"><line x1="${X(gx)}" x2="${X(gx)}" y1="${y-7}" y2="${y+7}"/><text x="${X(gx)}" y="${y+20}" text-anchor="middle">q${b}</text></g>`});
+  if(false)t.affNotches.forEach(n=>{const y=Y(n.kl);s+=`<g class="notch"><line x1="${X(n.gib)}" x2="${X(n.gib)}" y1="${y-7}" y2="${y+7}"/><text x="${X(n.gib)}" y="${y+20}" text-anchor="middle">q${n.bits}</text></g>`});
+  const k=klOf(t,r,g),ky=isNaN(k)?Y(100):Y(k);
+  if(t.ppl)s+=`<text x="${L+8}" y="${Tp+30}" style="fill:var(--warn)">no KL curve for this family: sizes are exact, quality comes from the ppl referee after the build</text>`;
+  s+=`<g class="pick"><line x1="${X(g)}" x2="${X(g)}" y1="${ky}" y2="${H-B}"/><circle cx="${X(g)}" cy="${ky}" r="6.5"/><text x="${X(g)+11}" y="${ky-8}">${f1(g)} GiB${isNaN(k)?'':' · ~'+k.toFixed(0)}</text></g>`;
+  const svg=$('#chart');svg.innerHTML=s;svg.style.cursor=r.mode==='affine'?'default':'';
+  if(r.mode==='affine'){svg.onpointerdown=svg.onpointermove=svg.onpointerup=null;return}
+  svg.onpointerdown=e=>{e.preventDefault();svg.classList.add('drag');svg.setPointerCapture(e.pointerId);move(e)};
+  svg.onpointermove=e=>{if(svg.classList.contains('drag'))move(e)};
+  svg.onpointerup=svg.onpointercancel=()=>{svg.classList.remove('drag');save();render()};
+  function move(e){const b=svg.getBoundingClientRect();let gx=xmin+((e.clientX-b.left)/b.width*W-L)/(W-L-Rm)*(xmax-xmin);
+    const snaps=[];MACHINES.forEach(([gb])=>{const u=usable(gb)-extra;if(u>xmin&&u<xmax)snaps.push(u)});(r.mode==='affine'?t.affNotches:t.notches).forEach(n=>snaps.push(n.gib));
+    const px=(xmax-xmin)/(W-L-Rm)*8;const sn=snaps.find(v=>Math.abs(v-gx)<px);if(sn!=null)gx=sn;
+    gx=Math.max(xmin+0.2,Math.min(xmax-0.2,gx));
+    resolveAt(t,r,gx);
+    drawRecipe();drawStrip();drawReadouts()}
+}
+function drawStrip(){
+  const r=draft,t=TE(r.teacher),a=allocation(t,r),geos=[...new Set(a)],col=g=>GEOCOL[g]||(g.startsWith('q')?'var(--bad)':'var(--dim)');
+  $('#strip').innerHTML=`<div class="ro" style="margin:12px 0 2px;display:flex;justify-content:space-between"><span>allocation by layer · ${t.layers} layers · ${t.modules} modules</span><span>${r.mode==='affine'?'uniform affine':{measured:'from leverage and alloc-sweep',mixed:'position law: enrich the back',flat:'flat'}[r.strat]}</span></div>
+   <div class="strip" style="grid-template-columns:repeat(${t.layers},1fr)">${a.map((g,l)=>`<i style="background:${col(g)}" title="L${l} ${g}"></i>`).join('')}</div>
+   <div class="striplab"><span>L0</span><span>L${t.layers-1}</span></div>
+   <div class="key">${geos.map(g=>`<span><em style="background:${col(g)}"></em>${g} × ${a.filter(x=>x===g).length*3}</span>`).join('')}</div>`;
+}
+// ================================================================ Jobs
+const STEPS=['fit','geo-build','pack','bundle','graft','mtp-pack','smoke','check-release','kl-ladder','verdict','publish'];
+function pgJobs(){
+  const j=JOBS.find(x=>x.id===jobSel)||JOBS[0],t=TE(j.recipe.teacher),r=j.recipe,g=sizeOf(t,r),k=klOf(t,r,g);
+  const stepCls=(jb,i)=>i<jb.stepIx?'ok':i===jb.stepIx?(jb.state==='failed'?'bad':'run'):'';
+  const rows=JOBS.map(jb=>`<button class="row" aria-selected="${jb.id===j.id}" data-job="${jb.id}"><span class="n">${esc(jb.name)}</span><span class="act"><span class="state ${jb.state}">${jb.state}</span></span>
+    <span class="d">${esc(TE(jb.recipe.teacher).short)} · ${jb.recipe.mode==='affine'?'affine q'+jb.recipe.bits:jb.recipe.strat} · ${f1(sizeOf(TE(jb.recipe.teacher),jb.recipe))} GiB · ${jb.state==='building'||jb.state==='gating'?STEPS[jb.stepIx]+', done ~'+jb.eta:jb.state==='failed'?'KL gate falsified, needs a decision':jb.state==='shipped'?'published '+jb.started:'queued'}</span>
+    <span class="stepbar">${STEPS.map((_,i)=>`<i class="${stepCls(jb,i)}"></i>`).join('')}</span></button>`).join('');
+  const desc={fit:'codebooks for the modules not already in the store',['geo-build']:'diff-style rebuild from the teacher',pack:'true bit-width; sizes recomputed',bundle:'self-contained model.py with resolved kernels',graft:'bf16 vision tower',['mtp-pack']:'quantized drafting sidecar',smoke:'one token, one image through the shipped runtime',['check-release']:'files exist and function; bundle matches the repo',['kl-ladder']:'paired vs teacher, three corpora at 12288',verdict:`predicted ~${k.toFixed(0)} mnats`+(j.state==='failed'?' · measured 130 (mean); d2-K4096 at 25.2 GiB against r54 at 21.4 GiB scoring 135':j.state==='shipped'?' · measured 193 · confirmed':''),publish:'card, findings entry, Hub upload · a human action'};
+  const st=j.state;
+  return `<section class="panel"><h2>Jobs <small>one teacher, one recipe, one state each; the bar is where it is in the eleven steps</small></h2>
+  <div class="jobs2">
+    <div class="jobsel">${rows}</div>
+    <div>
+      <div class="jobline" style="margin:0 0 10px"><span class="j">${esc(j.name)}</span><span class="state ${st}">${st}</span></div>
+      <div class="eta">${st==='building'||st==='gating'?`<div><b>${j.eta}</b><small>${st==='building'?'build done':'gates done'}</small></div><div><b>${j.stepIx+1} / ${STEPS.length}</b><small>step</small></div><div><b>${esc(STEPS[j.stepIx])}</b><small>now</small></div>`:
+        st==='failed'?`<div><b>stopped</b><small>${esc(j.started)}</small></div><div><b>8 / 11</b><small>steps passed</small></div><div><b>decide</b><small>next</small></div>`:st==='queued'?`<div><b>${j.eta}</b><small>starts</small></div><div><b>0 / 11</b><small>step</small></div><div><b>2</b><small>jobs ahead</small></div>`:`<div><b>live</b><small>on the Hub</small></div><div><b>11 / 11</b><small>steps</small></div><div><b>${esc(j.started)}</b><small>published</small></div>`}</div>
+      <ul class="timeline">${STEPS.map((sname,i)=>`<li class="${stepCls(j,i)||'wait'}"><span class="m"></span><span class="c">${sname}</span><span class="d">${desc[sname]}</span><span class="t">${i<j.stepIx?'done':i===j.stepIx?(st==='failed'?'FALSIFIED':'running'):''}</span></li>`).join('')}</ul>
+      ${st==='failed'?`<div class="rework"><div class="t">the KL gate falsified the prediction · pick what happens next</div>d2-K4096 at 25.2 GiB scores a mean 130 mnats; the shipped 5.4 rung (d2-K1024, 21.4 GiB) scores 135. Four more GiB bought 4%: this family's d2 ladder is flat above K1024 (I.9), so the bytes should go to a mixed build instead.
+        <div class="opts"><button class="btn go">Rebuild as mixed d2 at 25 GiB (~1.5 h)</button><button class="btn">Keep as a lab candidate</button><button class="btn">Discard</button></div></div>`:''}
+      <div class="foot">${st==='building'||st==='gating'?`<span class="hint">resumable: a GPU timeout restarts from the last module checkpoint.</span><button class="btn">Stop</button>`:st==='shipped'?`<span class="hint">the Hub revision is the baseline from here.</span><a class="btn" href="https://huggingface.co/TheDrainFlorist" target="_blank" rel="noopener">Open on the Hub ↗</a>`:st==='ready'?`<button class="btn go">Publish</button>`:st==='queued'?`<span class="hint">preflight will run every step on one module before the real run.</span><button class="btn">Remove from queue</button>`:''}</div>
+    </div>
+  </div></section>`;
+}
+
+// ================================================================ wiring
+const PG=[pgLibrary,pgRecipe,pgJobs];
+function render(){
+  renderFlow();$('#page').innerHTML=PG[page]();save();
+  if(page===0){drawLib();document.querySelectorAll('.tsel button').forEach(b=>b.onclick=()=>{libFam=b.dataset.f;render()});
+    document.querySelectorAll('.chips button').forEach(b=>b.onclick=()=>{show[b.dataset.k]=!show[b.dataset.k];render()});
+    document.querySelectorAll('[data-recipe]').forEach(b=>b.onclick=()=>{draft=newRecipe();draft.teacher=b.dataset.recipe;const t=TE(draft.teacher);resolveAt(t,draft,(t.xr[0]+t.xr[1])/2);page=1;render()})}
+  if(page===1){const t=TE(draft.teacher);if(draft.auto)resolveAt(t,draft,sizeOf(t,draft));drawRecipe();drawStrip();drawReadouts();
+    document.querySelectorAll('.seg button,.kseg button').forEach(b=>b.onclick=()=>{const g=b.dataset.g,v=b.dataset.v;const t=TE(draft.teacher);
+      if(g==='mode'){draft.mode=v}else if(g==='bits'){draft.bits=+v}else if(g==='group'){draft.group=+v}else if(g==='strat'){draft.strat=v}else if(g==='widthPick'){draft.widthPick=v}
+      resolveAt(t,draft,sizeOf(t,draft));render()});
+    $('#pick').onclick=()=>{$('#picker').classList.remove('hidden');renderPicker();$('#psearch').focus()};
+    $('#pclose').onclick=()=>$('#picker').classList.add('hidden');$('#picker').onclick=e=>{if(e.target.id==='picker')$('#picker').classList.add('hidden')};
+    $('#psearch').oninput=renderPicker;document.onkeydown=e=>{if(e.key==='Escape')$('#picker').classList.add('hidden')};
+    document.querySelectorAll('.addon').forEach(b=>b.onclick=()=>{draft[b.dataset.g]=!draft[b.dataset.g];if(b.dataset.g==='skel'&&draft.skel){draft.pAttn=6;draft.pEmb=8;draft.pRouter=16}render()});
+    document.querySelectorAll('[data-bits]').forEach(b=>b.onclick=()=>{draft[b.dataset.bits]=+b.dataset.v;render()});
+    $('#queue').onclick=()=>{const t=TE(draft.teacher);JOBS.unshift({id:'j'+Date.now(),name:t.short.toLowerCase().replace(/[^a-z0-9]+/g,'-')+'-'+(draft.mode==='affine'?'q'+draft.bits:f1(sizeOf(t,draft))),state:'queued',stepIx:-1,recipe:{...draft},started:'queued',eta:'~20:30'});jobSel=JOBS[0].id;draft=newRecipe();resolveAt(t,draft,(t.xr[0]+t.xr[1])/2);page=2;render()}}
+  if(page===2)document.querySelectorAll('[data-job]').forEach(b=>b.onclick=()=>{jobSel=b.dataset.job;render()});
+}
+$('#homebtn').onclick=()=>{page=0;render()};
+render();
+</script>
+</head></html>
