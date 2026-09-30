@@ -558,7 +558,7 @@ function inspector(t,r){
   const g=r.hf&&REG[r.hf],vis=t.bytes.vision||0,mtp=t.bytes.mtp||0,ship=libShip(t);
   const hi=Math.max(...ship.flatMap(q=>q.kl.filter(v=>v!=null))),lo=Math.min(...ship.flatMap(q=>q.kl.filter(v=>v!=null)));
   const fill=`background:${r.kind==='affine'?'var(--bad)':'var(--acc)'}`;
-  const bar=(lab,v)=>{if(v==null)return '';const f=Math.exp(-v/1000)*100;return `<div class="kbar"><span>${lab}</span><i><b style="width:${f}%;${fill}"></b></i><em>${f.toFixed(1)}% <span class="faint">${f1(v)}</span></em></div>`};
+  const bar=(lab,v)=>{if(v==null)return '';const f=Math.max(0,Math.min(100,(1-Math.log10(Math.max(v,1))/3)*100));return `<div class="kbar"><span>${lab}</span><i><b style="width:${f}%;${fill}"></b></i><em>${f.toFixed(1)}% <span class="faint">${f1(v)}</span></em></div>`};
   const tbar=p=>p==null?'':`<div class="kbar"><span>top-1</span><i><b style="width:${p}%;${fill}"></b></i><em>${(+p).toFixed(1)}%</em></div>`;
   const kl=r.one?bar('mean',mean(r.kl))+tbar(r.top1):r.lit?bar('literary',r.kl[2]):['prose','code','literary'].map((c,i)=>bar(c,r.kl[i])).join('')+bar('mean',mean(r.kl))+tbar(r.top1);
   const comp=g?Object.entries(g.geo).sort((a,b)=>b[1]-a[1]):null,tot=comp?comp.reduce((a,c)=>a+c[1],0):0;
@@ -574,7 +574,7 @@ function inspector(t,r){
     <div class="pickrow"><button class="hpick" id="pick">${esc(t.short)} <span>▾</span></button></div>
     <div class="ihead"><div><div class="iname">${esc(r.hf?r.hf.split('/')[1]:r.what)}</div><div class="faint">${r.kind==='affine'?'affine · published comparator':(r.mixed||(comp&&comp.length>1)?'VQ · mixed':'VQ · flat')}${r.hf?' · '+esc(r.hf.split('/')[0]):''}</div></div>${r.hf?`<a class="btn" href="https://huggingface.co/${esc(r.hf)}" target="_blank" rel="noopener">Hub ↗</a>`:''}</div>
     ${g?`<div class="pills"><span class="pill ${drift?'warn':'ok'}">${drift?'local differs: '+esc(g.drift.slice(0,2).join(', '))+(g.drift.length>2?' +'+(g.drift.length-2):''):'in sync with Hub'}</span><span class="pill ${behind?'warn':'ok'}">runtime ${esc(g.profile)}${behind?' · '+RUNTIME_NOW+' available':''}</span><span class="pill">rev ${esc(g.rev)}</span></div>`:''}
-    <div class="ro">fidelity to teacher <span class="faint">exp(−KL) · mnats${t.real?'':' · card figures'}</span> <i class="info" tabindex="0">i<span>exp(−KL): the share of the teacher's probability the build keeps, per token on average. 100% is identical to the teacher. The faint number is the KL itself, in millinats.</span></i></div>${kl}
+    <div class="ro">fidelity to teacher <span class="faint">log scale · mnats${t.real?'':' · card figures'}</span> <i class="info" tabindex="0">i<span>Log scale between two fixed anchors: 1 mnat of KL is 100%, 1000 mnats (one nat per token) is 0%. Each tenfold cut in damage adds a third of the bar. The faint number is the KL itself.</span></i></div>${kl}
     <div class="ro">size</div>
     <div class="kv2"><span>text weights</span><b>${f1(r.gib)} GiB</b></div>
     ${vis?`<div class="kv2"><span>+ vision tower</span><b>${f1(r.gib+vis)} GiB</b></div>`:''}${mtp&&r.kind==='vq'?`<div class="kv2"><span>+ MTP drafting</span><b>${f1(r.gib+vis+mtp)} GiB</b></div>`:''}
