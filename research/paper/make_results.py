@@ -19,7 +19,10 @@ import sys
 import numpy as np
 from safetensors.numpy import load_file
 
-PR = pathlib.Path("<scratch>/paper_rev")
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2] / "src"))
+from vqlab import config  # noqa: E402
+
+PR = config.scratch() / "paper_rev"
 CORPORA = ("prose", "code", "lit")
 PARAMS = {"397b": 396.35e9, "35b": 34.66e9, "27b": 26.90e9}
 

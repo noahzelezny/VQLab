@@ -11,20 +11,25 @@ cheap half -- that RESULTS-V5.md still regenerates from the saved arrays --
 is in `vqlab selftest`.
 """
 import json
+import os
 import pathlib
 import subprocess
 import sys
 import tempfile
 
-PR = pathlib.Path("<scratch>")
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2] / "src"))
+from vqlab import config  # noqa: E402
+
+PR = config.scratch()
 ARTIFACT = PR / "paper_rev" / "pinv2" / "q27_3.9"
 CACHE = PR / "teacher_caches_full" / "q27_prose_12k"
 EXPECT = 146.5634
 SRC = pathlib.Path(__file__).resolve().parents[2] / "src"
-# The paper's 27B/35B harness (run_night4.sh): qwen4exp venv, --lazy-over-gb 16.
-# One harness: the exo env at the default lazy threshold gives 147.0229 on the
-# same pin and cache (2026-09-28) -- an instrument difference, not drift.
-PY = "<ssd>/venvs/qwen4exp/bin/python"
+# The paper's 27B/35B harness: the qwen4exp environment (mlx-lm 0.32.0),
+# --lazy-over-gb 16. One harness: a different environment at the default lazy
+# threshold gives 147.0229 on the same pin and cache -- an instrument
+# difference, not drift. Set VQLAB_PAPER_PYTHON to that environment's python.
+PY = os.environ.get("VQLAB_PAPER_PYTHON", sys.executable)
 
 
 def main() -> int:
