@@ -18,6 +18,12 @@
    "path": "src/vqlab/runtime/vq_switch.py",
    "file": "equivalent/vq_switch.1534dd6b77b8.py.txt",
    "gains": "none (header comment only); rebundle to carry the current text"
+  },
+  {
+   "sha256": "b41c1064c82b5d65809f0d62304aaa7b59f3a5fc4457d14f118e62123614554d",
+   "path": "src/vqlab/runtime/vq_switch.py",
+   "file": "equivalent/vq_switch.b41c1064c82b.py.txt",
+   "gains": "runs on GPUs whose pipeline limit is below 1024 threads: dense kernels launch 16-row threadgroups (VQ_DENSE_ROWS_TG)"
   }
  ]
 }
