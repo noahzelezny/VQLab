@@ -348,7 +348,7 @@ details.adv .kv{margin-top:8px}
 .insp{font-size:.92em;padding:16px 18px}.insp .ro{margin:14px 0 6px}
 .ihead{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}.iname{font-weight:700;font-size:1.1em;color:var(--fg);word-break:break-all}
 .pills{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}.pill{border:1px solid var(--line);border-radius:999px;padding:2px 10px;font-size:.85em;color:var(--dim)}.pill.ok{color:var(--ok);border-color:color-mix(in oklch,var(--ok) 40%,transparent)}.pill.warn{color:var(--warn);border-color:color-mix(in oklch,var(--warn) 40%,transparent)}
-.kbar{display:grid;grid-template-columns:6.5em 1fr 4.5em;align-items:center;gap:10px;margin:4px 0}.kbar span{color:var(--dim)}.kbar i{height:8px;background:var(--line);border-radius:4px;overflow:hidden;display:block}.kbar i b{display:block;height:100%}.kbar em{font-style:normal;text-align:right;color:var(--fg)}
+.kbar{display:grid;grid-template-columns:6.5em 1fr 8.5em;align-items:center;gap:10px;margin:4px 0}.kbar span{color:var(--dim)}.kbar i{height:8px;background:var(--line);border-radius:4px;overflow:hidden;display:block}.kbar i b{display:block;height:100%}.kbar em{font-style:normal;text-align:right;color:var(--fg)}
 .kv2{display:flex;justify-content:space-between;padding:3px 0;color:var(--dim)}.kv2 b{color:var(--fg);font-weight:400}
 .compbar{display:flex;height:12px;border-radius:3px;overflow:hidden;gap:1px}.insp .key{margin-top:6px}
 .iacts{display:flex;flex-wrap:wrap;gap:8px;margin-top:16px;padding-top:12px;border-top:1px solid var(--line)}
@@ -557,8 +557,10 @@ function inspector(t,r){
   if(!r)return `<div class="cart insp"><div class="pickrow"><button class="hpick" id="pick">${esc(t.short)} <span>▾</span></button></div><div class="faint">nothing shipped for this model yet</div></div>`;
   const g=r.hf&&REG[r.hf],vis=t.bytes.vision||0,mtp=t.bytes.mtp||0,ship=libShip(t);
   const hi=Math.max(...ship.flatMap(q=>q.kl.filter(v=>v!=null))),lo=Math.min(...ship.flatMap(q=>q.kl.filter(v=>v!=null)));
-  const bar=(lab,v)=>{if(v==null)return '';const w=8+92*(Math.log(v/lo*1.05)/Math.log(hi/lo*1.05));return `<div class="kbar"><span>${lab}</span><i><b style="width:${w}%;background:${r.kind==='affine'?'var(--bad)':'var(--acc)'}"></b></i><em>${f1(v)}</em></div>`};
-  const kl=r.one?bar('mean',mean(r.kl)):r.lit?bar('literary',r.kl[2]):['prose','code','literary'].map((c,i)=>bar(c,r.kl[i])).join('')+bar('mean',mean(r.kl));
+  const fill=`background:${r.kind==='affine'?'var(--bad)':'var(--acc)'}`;
+  const bar=(lab,v)=>{if(v==null)return '';const f=Math.exp(-v/1000)*100;return `<div class="kbar"><span>${lab}</span><i><b style="width:${f}%;${fill}"></b></i><em>${f.toFixed(1)}% <span class="faint">${f1(v)}</span></em></div>`};
+  const tbar=p=>p==null?'':`<div class="kbar"><span>top-1</span><i><b style="width:${p}%;${fill}"></b></i><em>${(+p).toFixed(1)}%</em></div>`;
+  const kl=r.one?bar('mean',mean(r.kl))+tbar(r.top1):r.lit?bar('literary',r.kl[2]):['prose','code','literary'].map((c,i)=>bar(c,r.kl[i])).join('')+bar('mean',mean(r.kl))+tbar(r.top1);
   const comp=g?Object.entries(g.geo).sort((a,b)=>b[1]-a[1]):null,tot=comp?comp.reduce((a,c)=>a+c[1],0):0;
   const PAL=['var(--acc)','var(--teal)','var(--warn)','var(--g1)','var(--dim)'];const col=k=>PAL[comp.findIndex(c=>c[0]===k)%PAL.length];
   const drift=g&&g.drift.length,behind=g&&g.profile&&g.profile!==RUNTIME_NOW;
@@ -572,8 +574,7 @@ function inspector(t,r){
     <div class="pickrow"><button class="hpick" id="pick">${esc(t.short)} <span>▾</span></button></div>
     <div class="ihead"><div><div class="iname">${esc(r.hf?r.hf.split('/')[1]:r.what)}</div><div class="faint">${r.kind==='affine'?'affine · published comparator':(r.mixed||(comp&&comp.length>1)?'VQ · mixed':'VQ · flat')}${r.hf?' · '+esc(r.hf.split('/')[0]):''}</div></div>${r.hf?`<a class="btn" href="https://huggingface.co/${esc(r.hf)}" target="_blank" rel="noopener">Hub ↗</a>`:''}</div>
     ${g?`<div class="pills"><span class="pill ${drift?'warn':'ok'}">${drift?'local differs: '+esc(g.drift.slice(0,2).join(', '))+(g.drift.length>2?' +'+(g.drift.length-2):''):'in sync with Hub'}</span><span class="pill ${behind?'warn':'ok'}">runtime ${esc(g.profile)}${behind?' · '+RUNTIME_NOW+' available':''}</span><span class="pill">rev ${esc(g.rev)}</span></div>`:''}
-    <div class="ro">damage vs teacher <span class="faint">KL, mnats${t.real?'':' · card figures'}</span></div>${kl}
-    ${r.top1!=null?`<div class="kv2"><span>top-1 agreement</span><b>${r.top1}%</b></div>`:''}
+    <div class="ro">fidelity to teacher <span class="faint">exp(−KL) · mnats${t.real?'':' · card figures'}</span> <i class="info" tabindex="0">i<span>exp(−KL): the share of the teacher's probability the build keeps, per token on average. 100% is identical to the teacher. The faint number is the KL itself, in millinats.</span></i></div>${kl}
     <div class="ro">size</div>
     <div class="kv2"><span>text weights</span><b>${f1(r.gib)} GiB</b></div>
     ${vis?`<div class="kv2"><span>+ vision tower</span><b>${f1(r.gib+vis)} GiB</b></div>`:''}${mtp&&r.kind==='vq'?`<div class="kv2"><span>+ MTP drafting</span><b>${f1(r.gib+vis+mtp)} GiB</b></div>`:''}
