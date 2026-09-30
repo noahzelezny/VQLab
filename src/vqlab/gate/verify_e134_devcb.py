@@ -9,11 +9,10 @@ here is what licenses it there.
 
 III.10 corollary: instrument the REAL code. We do not reimplement the call.
 """
-import json, os, sys, struct
+import json, os, sys
 import mlx.core as mx
 import mlx_lm.models.vq_switch as vs
 
-import os
 E = os.environ.get("VQLAB_MODELS_DIR") or (sys.argv[1] if len(sys.argv) > 1 else ".")
 
 def load_layer(art):

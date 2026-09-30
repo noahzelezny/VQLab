@@ -75,7 +75,7 @@ same slots.
 
 ## RESULTS SO FAR (2026-09-12) — validated, with caveats
 
-Two whole-model runs done (F71/F72 in FINDINGS-LOG):
+Two whole-model runs done (F71/F72):
 
 | model | geometry | mean KL | top-1 | worst-pos KL | benchmarks |
 |---|---|---|---|---|---|

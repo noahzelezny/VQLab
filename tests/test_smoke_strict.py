@@ -9,8 +9,6 @@ These tests pin the classifier that decides "would a downloader resolve it
 this way", since that judgement is the whole gate.
 """
 import pathlib
-import re
-import sys
 
 SMOKE = pathlib.Path(__file__).resolve().parents[1] / "src" / "vqlab" / "gate" / "smoke.py"
 SRC = SMOKE.read_text()

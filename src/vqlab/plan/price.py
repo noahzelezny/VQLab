@@ -21,7 +21,6 @@ listed need one profiling pass (docs/ONBOARDING.md §1) to fill them in.
 from __future__ import annotations
 
 import argparse
-import math
 import sys
 from dataclasses import dataclass
 

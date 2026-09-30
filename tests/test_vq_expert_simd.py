@@ -221,7 +221,6 @@ def test_d2_simd_bit_exact(shape, N):
     base = np.array(V._fused(*args, d2_u32=False, simd=False))
     _, eidx, codes, cb, sc = args
     x = args[0]
-    NSUB = IN // d
     y, = V._get_kernel("vq_fused_d2_simd_t", V._SRC_FUSED_D2_SIMD)(
         inputs=[x, eidx, codes, cb, sc,
                 mx.array([OUT, IN, d, G, N, K], dtype=mx.int32)],

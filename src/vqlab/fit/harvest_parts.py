@@ -30,7 +30,6 @@ The geometry of each module is READ FROM THE BYTES (codebook shape), never
 from the config: a config records intent, the tensors record what shipped.
 """
 import argparse
-import glob
 import hashlib
 import json
 import os
@@ -39,7 +38,7 @@ import sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))  # src/
 from vqlab import _layout  # noqa: E402,F401  one module object per name
-from geo_build import EXT, part_name  # noqa: E402
+from geo_build import part_name  # noqa: E402
 
 TRIPLE = ("codebook", "codes", "vq_scales")
 

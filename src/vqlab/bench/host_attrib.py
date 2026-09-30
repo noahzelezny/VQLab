@@ -28,7 +28,6 @@ import argparse
 import cProfile
 import io
 import pstats
-import sys
 import time
 
 
