@@ -87,7 +87,6 @@ is what the methodology rule wants.
 import argparse
 import gc
 import json
-import math
 import time
 from pathlib import Path
 

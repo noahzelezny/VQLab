@@ -31,7 +31,6 @@ SPEED RULES (quantlab III), because this instrument has burned people:
     vqlab prefill-bench --model <dir> --tokens 2048 --reps 5
 """
 import argparse
-import importlib
 import json
 import pathlib
 import statistics
@@ -160,7 +159,7 @@ def main():
                              + (tail[-1] if tail else "no output"))
         ts = [float(x) for x in line[-1].split()[2:]]
         if a.drop_first_child and not res:
-            print(f"   (first child discarded: cold machine)", flush=True)
+            print("   (first child discarded: cold machine)", flush=True)
             res.setdefault(arm, [])
             continue
         res.setdefault(arm, []).extend(ts)

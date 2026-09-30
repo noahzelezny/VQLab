@@ -104,7 +104,7 @@ def fit_module_additive(W, D, K1, K2, rng, rounds=ROUNDS, return_parts=False):
     (C1, C2, i, j) in fp32/int for exactness checks."""
     E_, OUT_, IN_ = W.shape
     K = K1 * K2
-    NGRP, nsub, bits = IN_ // GSZ, IN_ // D, math.ceil(math.log2(K))
+    NGRP, bits = IN_ // GSZ, math.ceil(math.log2(K))
     Wg = np.array(W.reshape(-1, GSZ))
     fidx = rng.choice(Wg.shape[0], min(NFITG, Wg.shape[0]), replace=False)
     Gf = Wg[fidx].astype(np.float32)

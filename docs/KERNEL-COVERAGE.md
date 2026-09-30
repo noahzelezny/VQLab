@@ -41,7 +41,7 @@ NO-SHIP (pre-existing Metal threadgroup defect).
 ## What remains
 
 1. ~~**d8 bench**~~ — DONE 2026-09-07: 1.29x (397B) / 1.31x (Flash-2.1),
-   promoted to default (FINDINGS-LOG F31).
+   promoted to default (F31).
    **Successor item: the NSUB=80 tail.** 46 of Flash-2.1's 138 d8 modules
    have in=640 -> NSUB=80, and `gemmseg_fits` requires NSUB % 32 == 0, so
    they stay legacy. This is now the ONLY artifact in the fleet below 100%

@@ -8,7 +8,7 @@ QuantizedEmbedding for weights that no longer exist) and a "vq_ple" block
 records geometry + keys for the runtime patch to consume.
 """
 import argparse
-import json, pathlib, shutil, sys
+import json, pathlib, shutil
 import mlx.core as mx
 
 # Splicing is pure IO: lazy loads must never evaluate on the GPU stream —
