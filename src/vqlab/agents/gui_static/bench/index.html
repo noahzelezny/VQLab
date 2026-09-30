@@ -1,6 +1,6 @@
 <!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>VQ Lab Bench</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap">
-<style>
+<style>[hidden]{display:none!important}
 :root{color-scheme:dark;
   --bg:oklch(.12 0 0);--panel:oklch(.16 0 0);--med:oklch(.22 0 0);
   --fg:oklch(.9 0 0);--dim:oklch(.6 0 0);--faint:oklch(.45 0 0);
@@ -64,7 +64,7 @@ header{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;border-bottom
 .jobline .j{font-weight:700;font-size:1.05em}
 .jobline .m{color:var(--faint);font-size:.85em}
 .jobline .state{font-size:.72em;letter-spacing:.12em;text-transform:uppercase;padding:1px 7px;border:1px solid;border-radius:2px}
-.state.draft,.state.queued{color:var(--dim);border-color:var(--line)}.state.failed{color:var(--bad);border-color:var(--bad)}.state.building,.state.gating{color:var(--warn);border-color:var(--warn)}.state.ready{color:var(--ok);border-color:var(--ok)}.state.shipped{color:var(--teal);border-color:var(--teal)}.state.blocked{color:var(--bad);border-color:var(--bad)}
+.state.draft{color:var(--acc);border-color:var(--acc)}.state.stopped,.state.queued{color:var(--dim);border-color:var(--line)}.state.failed{color:var(--bad);border-color:var(--bad)}.state.building,.state.gating{color:var(--warn);border-color:var(--warn)}.state.ready{color:var(--ok);border-color:var(--ok)}.state.shipped{color:var(--teal);border-color:var(--teal)}.state.blocked{color:var(--bad);border-color:var(--bad)}
 .foot{display:flex;justify-content:flex-end;align-items:center;gap:14px;margin-top:14px;padding-top:12px;border-top:1px solid var(--line)}
 .foot .hint{color:var(--faint);font-size:.82em;margin-right:auto}
 .btn{white-space:nowrap;border:1px solid var(--line);border-radius:var(--r);padding:8px 14px;font-size:.82em;letter-spacing:.1em;text-transform:uppercase;color:var(--dim)}
@@ -548,7 +548,7 @@ function ladder(t,ship,minMac,link){
   const cell=(r,i)=>{const v=cols[i][2](r);return `<td class="num ${v!=null&&v===best[i-3]?'best':''}">${v==null?'—':f1(v)}</td>`};
   const th=(c,i)=>`<th class="${i===0||i===2?'':'num'} sort" data-sort="${c[0]}">${c[1]}${libSort.k===c[0]?(libSort.d>0?' ▲':' ▼'):''}</th>`;
   return `<table class="rungtab ladder"><thead><tr>${cols.map(th).join('')}<th></th></tr></thead><tbody>
-  ${rows.map(r=>`<tr class="${r.kind} ${r.id===libSel?'sel':''}" data-sel="${esc(r.id)}"><td><span class="dot" style="background:${r.kind==='affine'?'var(--bad)':'var(--acc)'}"></span>${esc(r.kind==='affine'?r.what.replace(/ ·.*| \(.*\)/,''):r.what.replace(/ \(.*\)/,''))}</td><td class="num">${f1(r.gib)}</td><td>${minMac(r.gib)}</td>${[3,4,5,6].map(i=>cell(r,i)).join('')}<td class="num">${r.top1!=null?r.top1+'%':'—'}</td><td>${link(r)?`<a href="${link(r)}" target="_blank" rel="noopener">${esc(r.hf.split('/')[0])} ↗</a>`:''}</td></tr>`).join('')||'<tr><td colspan="9" class="faint">nothing shipped yet</td></tr>'}
+  ${rows.map(r=>`<tr class="${r.kind} ${r.id===libSel?'sel':''}" data-sel="${esc(r.id)}"><td><span class="dot" style="background:${r.kind==='affine'?'var(--bad)':'var(--acc)'}"></span>${esc(r.kind==='affine'?r.what.replace(/ ·.*| \(.*\)/,''):r.what.replace(/ \(.*\)/,''))}</td><td class="num">${f1(r.gib)}</td><td>${minMac(r.gib,r.kind)}</td>${[3,4,5,6].map(i=>cell(r,i)).join('')}<td class="num">${r.top1!=null?r.top1+'%':'—'}</td><td>${link(r)?`<a href="${link(r)}" target="_blank" rel="noopener">${esc(r.hf.split('/')[0])} ↗</a>`:''}</td></tr>`).join('')||'<tr><td colspan="9" class="faint">nothing shipped yet</td></tr>'}
   </tbody></table>`;
 }
 let libSel=null;
@@ -566,7 +566,7 @@ function inspector(t,r){
   const comp=g?Object.entries(g.geo).sort((a,b)=>b[1]-a[1]):null,tot=comp?comp.reduce((a,c)=>a+c[1],0):0;
   const PAL=['var(--acc)','var(--teal)','var(--warn)','var(--g1)','var(--dim)'];const col=k=>PAL[comp.findIndex(c=>c[0]===k)%PAL.length];
   const drift=g&&g.drift.length,behind=g&&g.profile&&g.profile!==RUNTIME_NOW;
-  const mac=MACHINES.find(([gb])=>usable(gb)>=r.gib+vis);
+  const mac=MACHINES.find(([gb])=>usable(gb)>=r.gib+(r.kind==='vq'?vis:0));
   const acts=[];
   if(r.kind==='vq')acts.push(`<button class="btn go" data-fork="${esc(r.id)}">Fork recipe →</button>`);else acts.push(`<button class="btn go" data-fork="${esc(r.id)}">VQ build at this size →</button>`);
   if(behind)acts.push(`<button class="btn" data-act="rebundle">Rebundle on ${RUNTIME_NOW}</button>`);
@@ -575,10 +575,10 @@ function inspector(t,r){
   return `<div class="cart insp">
     <div class="pickrow"><button class="hpick" id="pick">${esc(t.short)} <span>▾</span></button></div>
     <div class="ihead"><div><div class="iname">${esc(r.hf?r.hf.split('/')[1]:r.what)}</div><div class="faint">${r.kind==='affine'?'affine · published comparator':(r.mixed||(comp&&comp.length>1)?'VQ · mixed':'VQ · flat')}${r.hf?' · '+esc(r.hf.split('/')[0]):''}</div></div>${r.hf?`<a class="btn" href="https://huggingface.co/${esc(r.hf)}" target="_blank" rel="noopener">Hub ↗</a>`:''}</div>
-    <div class="ro">fidelity to teacher <span class="faint">${q8?'100% = q8':'100% = 5 mnats'} · log · mnats${t.real?'':' · card figures'}</span> <i class="info" tabindex="0">i<span>Log scale. 100% is this family's affine q8 (nearly lossless), per corpus; 5 mnats where no q8 has been scored. 0% is 1000 mnats, one nat per token. The faint number is the KL itself.</span></i></div>${kl}
+    <div class="ro">fidelity to teacher <i class="info" tabindex="0">i<span>${q8?"100% is this family's affine q8, per corpus":'100% is 5 mnats; this family has no scored q8'}. 0% is 1000 mnats, one nat per token. Log scale. The faint number is the KL, in millinats.${t.real?'':' Figures from the model card, not the shared instrument.'}</span></i></div>${kl}
     <div class="ro">size</div>
     <div class="kv2"><span>text weights</span><b>${f1(r.gib)} GiB</b></div>
-    ${vis?`<div class="kv2"><span>+ vision tower</span><b>${f1(r.gib+vis)} GiB</b></div>`:''}${mtp&&r.kind==='vq'?`<div class="kv2"><span>+ MTP drafting</span><b>${f1(r.gib+vis+mtp)} GiB</b></div>`:''}
+    ${vis&&r.kind==='vq'?`<div class="kv2"><span>+ vision tower</span><b>${f1(r.gib+vis)} GiB</b></div>`:''}${mtp&&r.kind==='vq'?`<div class="kv2"><span>+ MTP drafting</span><b>${f1(r.gib+vis+mtp)} GiB</b></div>`:''}
     <div class="kv2"><span>smallest Mac</span><b>${mac?mac[1]+' GB':'cluster'}</b></div>
     ${comp?`<div class="ro">codebooks <span class="faint">${tot} modules</span></div><div class="compbar">${comp.map(([k,n])=>`<i style="flex:${n};background:${col(k)}" title="${k} × ${n}"></i>`).join('')}</div><div class="key">${comp.map(([k,n])=>`<span><em style="background:${col(k)}"></em>${esc(k)} × ${n}</span>`).join('')}</div>`:''}
     ${g?`<div class="pills" style="margin-top:14px"><span class="pill ${drift?'warn':'ok'}">${drift?'local differs: '+esc(g.drift.slice(0,2).join(', '))+(g.drift.length>2?' +'+(g.drift.length-2):''):'in sync with Hub'}</span><span class="pill ${behind?'warn':'ok'}">runtime ${esc(g.profile)}${behind?' · '+RUNTIME_NOW+' available':''}</span><span class="pill">rev ${esc(g.rev)}</span></div>`:''}
@@ -589,7 +589,7 @@ function pgLibrary(){
   const t=TE(libFam),vis=t.bytes.vision||0,ship=libShip(t);
   if(!ship.some(r=>r.id===libSel))libSel=(ship.find(r=>r.kind==='vq')||ship[0]||{}).id;
   const sel=ship.find(r=>r.id===libSel);
-  const minMac=g=>{const m=MACHINES.find(([gb])=>usable(gb)>=g+vis);return m?m[1]+' GB':'cluster'};
+  const minMac=(g,k)=>{const m=MACHINES.find(([gb])=>usable(gb)>=g+(k==='vq'?vis:0));return m?m[1]+' GB':'cluster'};
   const link=r=>r.hf?`https://huggingface.co/${esc(r.hf)}`:null;
   const vq=ship.filter(r=>r.kind==='vq'),regs=vq.map(r=>REG[r.hf]).filter(Boolean);
   const nd=regs.filter(g=>g.drift.length).length,nb=regs.filter(g=>g.profile&&g.profile!==RUNTIME_NOW).length;
@@ -656,7 +656,7 @@ function pgRecipe(){
     ${t.bytes.mtp?`<button class="addon" aria-pressed="${!!r.mtp}" data-g="mtp"><i></i><span class="n">MTP drafting</span><span class="t">+${f1(t.bytes.mtp)} GiB · faster decode</span></button>`:''}
   </div>
   </div>
-  <div class="foot"><span class="hint">nothing is built until you queue it. Preflight runs every step on one module first.</span><button class="btn">Save recipe.json</button><button class="btn go" id="queue">Queue build →</button></div>
+  <div class="foot"><span class="hint">nothing is built until you start it. Preflight runs every step on one module first.</span><button class="btn">Save recipe.json</button><button class="btn go" id="queue">Review build →</button></div>
   ${PICKER()}
   </section>`;
 }
@@ -812,11 +812,23 @@ function drawStrip(){
 }
 // ================================================================ Jobs
 const STEPS=['fit','geo-build','pack','bundle','graft','mtp-pack','smoke','check-release','kl-ladder','verdict','publish'];
+const KIND={build:'build',rebundle:'rebundle',pull:'pull Hub revision',score:'score'};
+const KSTEPS={rebundle:['bundle','smoke','check-release'],pull:['check-release','smoke'],score:['kl-ladder','verdict']};
+function review(j,t,g,k){
+  const kd=j.kind||'build',r=j.recipe,run=KSTEPS[kd]||STEPS,tm=kd==='build'?fmtT(plan(t,r).reduce((a,p)=>a+p[1],0)):{rebundle:'~20 min',pull:'~10 min',score:'~2 h'}[kd];
+  const kv=(a,b)=>`<div class="kv2"><span>${a}</span><b>${b}</b></div>`;
+  return `<div class="ro">checkout review</div>${kv('teacher',esc(t.short))}${kv('kind',KIND[kd])}
+  ${kd==='build'?kv('mode',r.mode==='affine'?'affine':'VQ')+kv(r.mode==='affine'?'bits':'strategy',r.mode==='affine'?'q'+r.bits:esc(r.strat))+kv('size',f1(g)+' GiB')+(t.judge||isNaN(k)?'':kv('est. KL','~'+k.toFixed(0)+' mnats')):''}
+  ${kv('estimated time',tm)}
+  <div class="ro" style="margin-top:10px">steps that will run</div>
+  <ul class="timeline">${STEPS.filter(x=>run.includes(x)).map(x=>`<li class="wait"><span class="m"></span><span class="c">${x}</span><span class="d"></span><span class="t"></span></li>`).join('')}</ul>`;
+}
 function pgJobs(){
   const j=JOBS.find(x=>x.id===jobSel)||JOBS[0],t=TE(j.recipe.teacher),r=j.recipe,g=sizeOf(t,r),k=klOf(t,r,g);
-  const stepCls=(jb,i)=>i<jb.stepIx?'ok':i===jb.stepIx?(jb.state==='failed'?'bad':'run'):'';
-  const rows=JOBS.map(jb=>`<button class="row" aria-selected="${jb.id===j.id}" data-job="${jb.id}"><span class="n">${esc(jb.name)}</span><span class="act"><span class="state ${jb.state}">${jb.state}</span></span>
-    <span class="d">${esc(TE(jb.recipe.teacher).short)} · ${jb.recipe.mode==='affine'?'affine q'+jb.recipe.bits:jb.recipe.strat} · ${f1(sizeOf(TE(jb.recipe.teacher),jb.recipe))} GiB · ${jb.state==='building'||jb.state==='gating'?STEPS[jb.stepIx]+', done ~'+jb.eta:jb.state==='failed'?'KL gate falsified, needs a decision':jb.state==='shipped'?'published '+jb.started:'queued'}</span>
+  const stepCls=(jb,i)=>i<jb.stepIx?'ok':i===jb.stepIx?(jb.state==='failed'?'bad':jb.state==='stopped'?'':'run'):'';
+  const ord=[...JOBS.filter(x=>x.state==='draft'),...JOBS.filter(x=>x.state!=='draft')];
+  const rows=ord.map(jb=>`<button class="row" aria-selected="${jb.id===j.id}" data-job="${jb.id}"><span class="n">${esc(jb.name)}</span><span class="act"><span class="state ${jb.state}">${jb.state==="draft"?"review":jb.state}</span></span>
+    <span class="d">${esc(TE(jb.recipe.teacher).short)} · ${jb.recipe.mode==='affine'?'affine q'+jb.recipe.bits:jb.recipe.strat} · ${f1(sizeOf(TE(jb.recipe.teacher),jb.recipe))} GiB · ${jb.state==='building'||jb.state==='gating'?STEPS[jb.stepIx]+', done ~'+jb.eta:jb.state==='stopped'?'stopped by you':jb.state==='failed'?'KL gate falsified, needs a decision':jb.state==='shipped'?'published '+jb.started:jb.state==='draft'?'awaiting your review':'queued'}</span>
     <span class="stepbar">${STEPS.map((_,i)=>`<i class="${stepCls(jb,i)}"></i>`).join('')}</span></button>`).join('');
   const desc={fit:'codebooks for the modules not already in the store',['geo-build']:'diff-style rebuild from the teacher',pack:'true bit-width; sizes recomputed',bundle:'self-contained model.py with resolved kernels',graft:'bf16 vision tower',['mtp-pack']:'quantized drafting sidecar',smoke:'one token, one image through the shipped runtime',['check-release']:'files exist and function; bundle matches the repo',['kl-ladder']:'paired vs teacher, three corpora at 12288',verdict:`predicted ~${k.toFixed(0)} mnats`+(j.state==='failed'?' · measured 130 (mean); d2-K4096 at 25.2 GiB against r54 at 21.4 GiB scoring 135':j.state==='shipped'?' · measured 193 · confirmed':''),publish:'card, findings entry, Hub upload · a human action'};
   const st=j.state;
@@ -824,13 +836,13 @@ function pgJobs(){
   <div class="jobs2">
     <div class="jobsel">${rows}</div>
     <div>
-      <div class="jobline" style="margin:0 0 10px"><span class="j">${esc(j.name)}</span><span class="state ${st}">${st}</span></div>
-      <div class="eta">${st==='building'||st==='gating'?`<div><b>${j.eta}</b><small>${st==='building'?'build done':'gates done'}</small></div><div><b>${j.stepIx+1} / ${STEPS.length}</b><small>step</small></div><div><b>${esc(STEPS[j.stepIx])}</b><small>now</small></div>`:
-        st==='failed'?`<div><b>stopped</b><small>${esc(j.started)}</small></div><div><b>8 / 11</b><small>steps passed</small></div><div><b>decide</b><small>next</small></div>`:st==='queued'?`<div><b>${j.eta}</b><small>starts</small></div><div><b>0 / 11</b><small>step</small></div><div><b>2</b><small>jobs ahead</small></div>`:`<div><b>live</b><small>on the Hub</small></div><div><b>11 / 11</b><small>steps</small></div><div><b>${esc(j.started)}</b><small>published</small></div>`}</div>
-      <ul class="timeline">${STEPS.map((sname,i)=>`<li class="${stepCls(j,i)||'wait'}"><span class="m"></span><span class="c">${sname}</span><span class="d">${desc[sname]}</span><span class="t">${i<j.stepIx?'done':i===j.stepIx?(st==='failed'?'FALSIFIED':'running'):''}</span></li>`).join('')}</ul>
+      <div class="jobline" style="margin:0 0 10px"><span class="j">${esc(j.name)}</span><span class="state ${st}">${st==="draft"?"review":st}</span></div>
+      ${st==='draft'?review(j,t,g,k):''}<div class="eta" ${st==='draft'?'hidden':''}>${st==='building'||st==='gating'?`<div><b>${j.eta}</b><small>${st==='building'?'build done':'gates done'}</small></div><div><b>${j.stepIx+1} / ${STEPS.length}</b><small>step</small></div><div><b>${esc(STEPS[j.stepIx])}</b><small>now</small></div>`:
+        st==='stopped'?`<div><b>stopped · ${esc(j.started)}</b><small>by you</small></div><div><b>${Math.max(0,j.stepIx)} / 11</b><small>steps done</small></div><div><b>resume</b><small>next</small></div>`:st==='failed'?`<div><b>stopped</b><small>${esc(j.started)}</small></div><div><b>8 / 11</b><small>steps passed</small></div><div><b>decide</b><small>next</small></div>`:st==='queued'?`<div><b>${j.eta}</b><small>starts</small></div><div><b>0 / 11</b><small>step</small></div><div><b>2</b><small>jobs ahead</small></div>`:`<div><b>live</b><small>on the Hub</small></div><div><b>11 / 11</b><small>steps</small></div><div><b>${esc(j.started)}</b><small>published</small></div>`}</div>
+      <ul class="timeline" ${st==='draft'?'hidden':''}>${STEPS.map((sname,i)=>`<li class="${stepCls(j,i)||'wait'}"><span class="m"></span><span class="c">${sname}</span><span class="d">${desc[sname]}</span><span class="t">${i<j.stepIx?'done':i===j.stepIx?(st==='failed'?'FALSIFIED':st==='stopped'?'':'running'):''}</span></li>`).join('')}</ul>
       ${st==='failed'?`<div class="rework"><div class="t">the KL gate falsified the prediction · pick what happens next</div>d2-K4096 at 25.2 GiB scores a mean 130 mnats; the shipped 5.4 rung (d2-K1024, 21.4 GiB) scores 135. Four more GiB bought 4%: this family's d2 ladder is flat above K1024 (I.9), so the bytes should go to a mixed build instead.
         <div class="opts"><button class="btn go">Rebuild as mixed d2 at 25 GiB (~1.5 h)</button><button class="btn">Keep as a lab candidate</button><button class="btn">Discard</button></div></div>`:''}
-      <div class="foot">${st==='building'||st==='gating'?`<span class="hint">resumable: a GPU timeout restarts from the last module checkpoint.</span><button class="btn">Stop</button>`:st==='shipped'?`<span class="hint">the Hub revision is the baseline from here.</span><a class="btn" href="https://huggingface.co/TheDrainFlorist" target="_blank" rel="noopener">Open on the Hub ↗</a>`:st==='ready'?`<button class="btn go">Publish</button>`:st==='queued'?`<span class="hint">preflight will run every step on one module before the real run.</span><button class="btn">Remove from queue</button>`:''}</div>
+      <div class="foot">${st==='building'||st==='gating'?`<span class="hint">resumable: a GPU timeout restarts from the last module checkpoint.</span><button class="btn" data-jact="stop">Stop</button>`:st==='shipped'?`<span class="hint">the Hub revision is the baseline from here.</span><a class="btn" href="https://huggingface.co/TheDrainFlorist" target="_blank" rel="noopener">Open on the Hub ↗</a>`:st==='ready'?`<button class="btn go">Publish</button>`:st==='stopped'?`<button class="btn go" data-jact="resume">Resume</button><button class="btn" data-jact="discard">Discard</button>`:st==='draft'?`<button class="btn go" data-jact="start">Start</button><button class="btn" data-jact="discard">Discard</button>${(j.kind||'build')==='build'?'<button class="btn" data-jact="edit">Edit recipe</button>':''}`:st==='queued'?`<span class="hint">preflight will run every step on one module before the real run.</span><button class="btn" data-jact="cancel">Cancel</button>`:''}</div>
     </div>
   </div></section>`;
 }
@@ -845,7 +857,7 @@ function render(){
   if(page===0){drawLib();wirePicker();
     document.querySelectorAll('[data-k]').forEach(b=>b.onclick=()=>{show[b.dataset.k]=!show[b.dataset.k];render()});document.querySelectorAll('tr[data-sel]').forEach(tr=>tr.onclick=e=>{if(e.target.closest('a'))return;libSel=tr.dataset.sel;render()});
     document.querySelectorAll('[data-fork]').forEach(b=>b.onclick=()=>{const t=TE(libFam),r=t.rows.find(q=>q.id===b.dataset.fork);openRecipe(t.id,r.gib);if(r.geo){draft.widthPick=r.geo.split('-')[0];draft.strat=r.mixed?'mixed':'flat';resolveAt(t,draft,r.gib);render()}});
-    document.querySelectorAll('[data-act]').forEach(b=>b.onclick=()=>{const t=TE(libFam),r=t.rows.find(q=>q.id===libSel);const a=b.dataset.act;JOBS.unshift({id:'j'+Date.now(),name:(r.hf?r.hf.split('/')[1]:r.id).toLowerCase()+'-'+a,state:'queued',stepIx:-1,recipe:{...newRecipe(),teacher:t.id,size:r.gib},started:'queued',eta:'~20:30'});jobSel=JOBS[0].id;page=2;render()});
+    document.querySelectorAll('[data-act]').forEach(b=>b.onclick=()=>{const t=TE(libFam),r=t.rows.find(q=>q.id===libSel);const a=b.dataset.act;JOBS.unshift({id:'j'+Date.now(),name:(r.hf?r.hf.split('/')[1]:r.id).toLowerCase()+'-'+a,state:'draft',kind:a,stepIx:-1,recipe:{...newRecipe(),teacher:t.id,size:r.gib},started:'draft',eta:'~20:30'});jobSel=JOBS[0].id;page=2;render()});
     document.querySelectorAll('[data-sort]').forEach(h=>h.onclick=()=>{const k=h.dataset.sort;libSort=libSort.k===k?{k,d:-libSort.d}:{k,d:1};render()});
     document.querySelectorAll('[data-recipe]').forEach(b=>b.onclick=()=>openRecipe(b.dataset.recipe,b.dataset.at?+b.dataset.at:undefined))}
   if(page===1){const t=TE(draft.teacher);if(draft.auto)resolveAt(t,draft,sizeOf(t,draft));drawRecipe();drawStrip();drawReadouts();
@@ -855,8 +867,14 @@ function render(){
     wirePicker();
     document.querySelectorAll('.addon').forEach(b=>b.onclick=()=>{draft[b.dataset.g]=!draft[b.dataset.g];if(b.dataset.g==='skel'&&draft.skel){draft.pAttn=6;draft.pEmb=8;draft.pRouter=16}render()});
     document.querySelectorAll('[data-bits]').forEach(b=>b.onclick=()=>{draft[b.dataset.bits]=+b.dataset.v;render()});
-    $('#queue').onclick=()=>{const t=TE(draft.teacher);JOBS.unshift({id:'j'+Date.now(),name:t.short.toLowerCase().replace(/[^a-z0-9]+/g,'-')+'-'+(draft.mode==='affine'?'q'+draft.bits:f1(sizeOf(t,draft))),state:'queued',stepIx:-1,recipe:{...draft},started:'queued',eta:'~20:30'});jobSel=JOBS[0].id;draft=newRecipe();resolveAt(t,draft,(t.xr[0]+t.xr[1])/2);page=2;render()}}
-  if(page===2)document.querySelectorAll('[data-job]').forEach(b=>b.onclick=()=>{jobSel=b.dataset.job;render()});
+    $('#queue').onclick=()=>{const t=TE(draft.teacher);JOBS.unshift({id:'j'+Date.now(),name:t.short.toLowerCase().replace(/[^a-z0-9]+/g,'-')+'-'+(draft.mode==='affine'?'q'+draft.bits:f1(sizeOf(t,draft))),state:'draft',kind:'build',stepIx:-1,recipe:{...draft},started:'draft',eta:'~20:30'});jobSel=JOBS[0].id;draft=newRecipe();resolveAt(t,draft,(t.xr[0]+t.xr[1])/2);page=2;render()}}
+  if(page===2){document.querySelectorAll('[data-job]').forEach(b=>b.onclick=()=>{jobSel=b.dataset.job;render()});
+    document.querySelectorAll('[data-jact]').forEach(b=>b.onclick=()=>{const i=JOBS.findIndex(x=>x.id===jobSel),j=JOBS[i],a=b.dataset.jact;if(!j)return;
+      if(a==='start'){j.state='queued';j.started='queued'}
+      else if(a==='resume'){j.state='queued'}
+      else if(a==='stop'){j.state='stopped';j.started=new Date().toTimeString().slice(0,5)}
+      else{JOBS.splice(i,1);jobSel=(JOBS[0]||{}).id;if(a==='edit'){draft={...j.recipe};page=1}}
+      render()})}
 }
 let rz;addEventListener('resize',()=>{clearTimeout(rz);rz=setTimeout(render,120)});
 $('#homebtn').onclick=()=>{page=0;render()};
