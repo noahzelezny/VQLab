@@ -1,8 +1,6 @@
 # MTP speculative decoding — usage and measurements
 
-Moved verbatim from README.md on 2026-09-15 (it was half the README).
-Per-family findings and open questions live in [MTP.md](MTP.md); the
-exo spec in [MTP-EXO-SPEC.md](MTP-EXO-SPEC.md).
+Per-family findings and open questions live in [MTP.md](MTP.md).
 
 
 VQLab also ships a decode strategy: **multi-token-prediction speculative
@@ -47,7 +45,7 @@ The qwen3_5 head has three wiring choices the checkpoint does not determine —
 the RMSNorm delta convention, the concat order into the fused `fc`, and which
 side of the trunk's final norm it reads. Each wrong choice drafts at chance
 with no error, so `vqlab mtp-probe35` sweeps them against one model load
-instead of trusting an argument. See [docs/MTP.md](docs/MTP.md).
+instead of trusting an argument. See [MTP.md](MTP.md).
 
 The head drafts token t+2 from (trunk hidden at t, embedding of t+1), so each
 step verifies one speculative token inside a single 2-token trunk forward:
@@ -125,7 +123,7 @@ shared prompts**: the spread from workload alone (0.64-1.0) is wider than the
 gaps usually quoted between implementations.
 
 Trunk quantization, by contrast, does NOT affect acceptance — measured across
-three rungs, paired, nothing significant. See [docs/MTP.md](docs/MTP.md).
+three rungs, paired, nothing significant. See [MTP.md](MTP.md).
 
 ### Speedup, measured on a thermally stable machine (2026-08-31)
 
@@ -255,7 +253,7 @@ That is not a VQLab differentiator — Qwen's own head serves the same purpose �
 but it is the reason `mtp-graft` gates on key-set parity rather than guessing.
 
 Per-family findings, falsified predictions and open questions live in
-[docs/MTP.md](docs/MTP.md).
+[MTP.md](MTP.md).
 
 ### Adding a family
 

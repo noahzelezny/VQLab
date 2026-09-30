@@ -68,7 +68,7 @@ SRC, DST = pathlib.Path(a.src), pathlib.Path(a.out)
 SHARD = int(a.shard_gib * 2**30)
 target = FAMILY[a.family]["target_substr"]
 
-# Runtime per family registry (Noah's ruling 08-29: provision for either
+# Runtime per family registry (design decision 2026-08-29: provision for either
 # mlx-lm or mlx-vlm, never fork). mlx_lm families behave exactly as before;
 # an mlx_vlm family (glm5_next) loads the WHOLE model, vision tower
 # included — see the predicate's vision branch.

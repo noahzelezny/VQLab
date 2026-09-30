@@ -11,4 +11,3 @@ Serve it:  `python3 -m http.server 8799 --bind 127.0.0.1 --directory src/vqlab/a
 `index.html` by wrapping it, or just serve `bench.html` from the artifact host.)
 
 Published copy: https://claude.ai/artifact/HxsGKe2CcweEWAy1hM2p8P
-Design decisions and Noah's UI rules: memory file `function-over-form.md`.

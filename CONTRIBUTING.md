@@ -29,8 +29,8 @@ version of what this project asks of contributed results and code:
   before its verdict is trusted.
 - Run `vqlab selftest` before sending a change and after pulling one; it
   exercises every gate in both directions in under a minute.
-- Run `scripts/check_scripts_sync.sh` before long chains — stale scripts on
-  a second box are silent divergence.
+- Run long chains through `vqlab queue run`: it pins the code in a
+  worktree, so a second box or a later edit cannot change what runs.
 
 ## New model families
 

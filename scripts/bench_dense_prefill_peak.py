@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """PREFILL PEAK vs RESIDENT on the dense large-N path (2026-09-03).
 
-Noah's measurement: 27B 3.9bpw, 2048-token prompt, peak 18.7 G vs 11.6 G
+Reference measurement: 27B 3.9bpw, 2048-token prompt, peak 18.7 G vs 11.6 G
 active. The suspect is vq_dense's large-N path -- above the fused-kernel N
 cutoff every VQLinear materialises a decoded fp16 weight, and mlx's lazy
 graph keeps many layers' worth of them alive at once.

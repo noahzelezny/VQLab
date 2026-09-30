@@ -39,8 +39,7 @@ FAMILY = {
         # GLM-5.3-Flash (320B, 8-of-288 routed + 1 shared, 43 MoE layers on
         # indices 3-45 — 42 main + the MTP layer 45, which carries its own
         # full expert stack; layers 0-2 are dense). MEASURED from the BF16
-        # checkpoint's safetensors headers 2026-08-28 (see quantlab
-        # GLM53_VQ_READINESS.md): experts are UNFUSED per-expert 2D tensors
+        # checkpoint's safetensors headers 2026-08-28: experts are UNFUSED per-expert 2D tensors
         # — gate/up [2048, 4096], down [4096, 2048], no gate_up stack, no
         # [E, out, in] stack anywhere. The "{e}" in src_key marks that:
         # expert_src.load_expert_stack gathers experts.{0..E-1} into a

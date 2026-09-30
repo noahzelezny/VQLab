@@ -133,10 +133,10 @@ def _this_host() -> str:
 
 
 # Read-only doc access: the routing layer (CONTEXT.md at the root and in
-# every stage folder), family data (entries, profiles, ledgers), the docs,
-# the law book and the lab notebook.
+# every stage folder), family data, the docs and the law book, plus a
+# private `lab/` notebook when the checkout has one (it is gitignored).
 DOC_ALLOW = ("docs", "families", "CONTEXT.md", "AGENTS.md",
-             "README.md", "METHODOLOGY.md", "REPRODUCING.md", "research/log",
+             "README.md", "METHODOLOGY.md", "REPRODUCING.md", "lab",
              "research/CONTEXT.md")
 FINDINGS_LOG = REPO / "docs" / "FINDINGS-LOG.md"
 VERDICTS = ("CONFIRMED", "FALSIFIED", "VOID", "CORRECTS", "NULL")

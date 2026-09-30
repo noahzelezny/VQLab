@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Runtime dispatch: which library loads a family's models, in one place.
 
-Noah's design ruling (2026-08-29): provision for EITHER mlx-lm or mlx-vlm
+Design decision (2026-08-29): provision for EITHER mlx-lm or mlx-vlm
 rather than forking mlx-lm. Each FAMILY entry may carry a `runtime` field
 ("mlx_lm" default, or "mlx_vlm"); stream_convert, stream_score and smoke
 route every model load through load_for_family(), so when mlx-lm eventually

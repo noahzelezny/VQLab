@@ -7,7 +7,7 @@ allocated, and the live set grew with graph depth: measured 2.758 GiB of
 transient across 16 real VQLinears and 6.811 GiB across 48
 (scripts/bench_dense_prefill_peak.py) -- the ~7 GiB that made an 11.6 GiB
 model need 18.7 GiB of peak on a 2048-token prompt. That matters because
-Noah's use case is several models resident at once, where peak is the budget.
+The target use case is several models resident at once, where peak is the budget.
 
 The fix forces each linear's product to evaluate before the next linear's
 weight is decoded, which caps the live set at one layer's transient.
@@ -164,7 +164,7 @@ def test_eval_flag_reverts_to_the_lazy_pre_arc_path():
 
 
 def test_peak_is_bounded_and_flat_in_depth():
-    """The actual property Noah asked for: transient must not grow with how
+    """The property that matters: transient must not grow with how
     many VQ linears the forward chains together.
 
     Small shapes, so the numbers are small -- what is asserted is the

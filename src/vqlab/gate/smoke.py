@@ -83,7 +83,7 @@ def main(argv=None) -> int:
                   "--skip-preflight if you know better than the check.")
             return 1
 
-    # Runtime dispatch (Noah's ruling 08-29): the artifact's model_type
+    # Runtime dispatch (design decision 2026-08-29): the artifact's model_type
     # resolves to a family, the family names its runtime. mlx_lm families
     # take exactly the path this tool always took. Both runtimes honour the
     # in-checkpoint model.py bundle, so "generate through the runtime the

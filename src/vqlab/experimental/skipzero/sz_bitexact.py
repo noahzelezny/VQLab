@@ -47,7 +47,7 @@ from vqlab import config  # noqa: E402
 
 SEED = 1234
 # The last runtime/vq_switch.py without the native SZ switch, shipped as package data
-WALK_FROZEN = SRC / "vqlab" / "runtime" / "equivalent" / "vq_switch.3f57b9e.py.txt"
+WALK_FROZEN = SRC / "vqlab" / "runtime" / "equivalent" / "vq_switch.40870875499d.py.txt"
 # A u8-vintage bundle (the published 397B 2.4bpw runtime), under config.models()
 U8_MODEL_PY = config.models() / "TheDrainFlorist--Qwen3.5-397B-A17B-VQ-2.4bpw" / "model.py"
 NCASES = {1: (1, 1), 8: (1, 8), 4096: (512, 8), 4097: (4097, 1)}   # N: (T, k)

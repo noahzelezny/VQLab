@@ -497,7 +497,7 @@ try:
 except Exception as _e:  # the gate must report, not crash
     fails.append(f"build record check crashed: {type(_e).__name__}: {_e}")
 
-# CARD SPELLING. Released text is US English (Noah, 2026-09-28): a British
+# CARD SPELLING. Released text is US English (2026-09-28): a British
 # spelling on a card is fixed before release, not in a later revision.
 # `vqlab spelling --fix <artifact>/README.md` rewrites it.
 try:

@@ -3,7 +3,7 @@
 
 Released text (the paper, model cards) is US English. A stray "labelled" or
 "neighbouring" is not worth a new paper revision, so it is caught before
-release instead (Noah, 2026-09-28).
+release instead (2026-09-28).
 
     vqlab spelling <file> [<file> ...]          exit 1 and list every hit
     vqlab spelling <file> ... --fix             rewrite in place, then re-check
