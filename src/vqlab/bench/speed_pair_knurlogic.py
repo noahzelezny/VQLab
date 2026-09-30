@@ -20,8 +20,8 @@ whose runtime is not "bundled" (knurlogic's own vendored runtime would not
 be the code under test).
 
 Timing is Knurlogic's own: usage.knurlogic.timing {prefill_tok_s,
-decode_tok_s} of one greedy /v1/chat/completions request, after an 8-token
-warm-up request on the same load. Requires the Knurlogic source tree
+decode_tok_s} of one greedy /v1/chat/completions request (MTP off by default), after a SAME-LENGTH
+warm-up request on the same load (discarded). Which VQ runtime loaded is read from every rank LOG ("ships its own runtime ... WILL be executed"); nothing over HTTP carries it. Requires the Knurlogic source tree
 (--knurlogic-src) and its page running on this Mac.
 """
 from __future__ import annotations
@@ -58,28 +58,29 @@ def _post(url, doc, timeout=1800):
         return json.loads(r.read())
 
 
-def _vq_runtime(url):
-    """"bundled" / "knurlogic" from the server's /status.json (state.SERVED
-    ["runtime"]), or None if it does not say. The state row's own `runtime`
-    field is the SERVER kind, not which VQ runtime loaded."""
-    try:
-        root = url.rstrip("/")
-        root = root[:-3] if root.endswith("/v1") else root
-        with urllib.request.urlopen(root + "/status.json", timeout=30) as r:
-            doc = json.loads(r.read())
-    except Exception:
-        return None
-    stack = [doc]
-    while stack:
-        d = stack.pop()
-        if isinstance(d, dict):
-            v = d.get("runtime")
-            if v in ("bundled", "knurlogic"):
-                return v
-            stack.extend(d.values())
-        elif isinstance(d, list):
-            stack.extend(d)
-    return None
+BUNDLED = "ships its own runtime (model.py) and it WILL be executed"
+VENDORED = "runtime serves it instead"
+
+
+def _rank_logs(job, hosts):
+    """{machine: log text} for every rank of `job`. The rank log is the only
+    authoritative record of which VQ runtime loaded (Knurlogic, 2026-09-29:
+    SERVED["runtime"] is not exposed over HTTP; state()'s `runtime` is the
+    server kind). `hosts` maps a machine name to "user@host" for ssh; the
+    rest are read locally."""
+    import glob
+    import subprocess
+    out = {}
+    for machine, host in hosts.items():
+        cmd = f"cat ~/.cache/knurlogic/jobs/{job}/rank*.log 2>/dev/null"
+        if host:
+            p = subprocess.run(["ssh", host, cmd], capture_output=True, text=True, timeout=60)
+            out[machine] = p.stdout
+        else:
+            out[machine] = "".join(open(f).read() for f in
+                                   glob.glob(str(pathlib.Path.home() /
+                                                 f".cache/knurlogic/jobs/{job}/rank*.log")))
+    return out
 
 
 def _ready(e):
@@ -94,7 +95,8 @@ def _entry(K, job):
 
 
 def run_arm(K, name, a, prompt):
-    out = K.load(artifact=name, machines=a.machine, split=a.split, link=a.link)
+    out = K.load(artifact=name, machines=a.machine, split=a.split, link=a.link,
+                 sets=a.sets or None)
     job = out.get("job") or out.get("instance")
     if not job or out.get("refused") or out.get("error"):
         raise SystemExit(f"FAIL: load {name}: {out}")
@@ -112,14 +114,18 @@ def run_arm(K, name, a, prompt):
         load_s = time.time() - t0
         served = e.get("name")
         url = out.get("url") or e.get("url") or e.get("where")
-        runtime = _vq_runtime(url)
+        logs = _rank_logs(job, a.hosts)
+        runtime = {m: ("bundled" if BUNDLED in t else "knurlogic" if VENDORED in t else None)
+                   for m, t in logs.items()}
+        named = {m: (f"artifact  {name}" in t) for m, t in logs.items()}
         base = {"model": name, "temperature": 0,
                 "messages": [{"role": "user", "content": prompt}]}
-        _post(url, dict(base, max_tokens=8))                      # warm-up
+        _post(url, dict(base, max_tokens=8))    # warm-up: SAME prompt length (new shapes compile), discarded
         r = _post(url, dict(base, max_tokens=a.gen_tokens))
         u = r.get("usage", {})
         t = (u.get("knurlogic") or {}).get("timing") or {}
-        rec = {"arm": name, "served_name": served, "runtime": runtime,
+        rec = {"arm": name, "served_name": served, "runtime_by_rank": runtime,
+               "named_by_rank": named, "sets": a.sets,
                "job": job, "machines": a.machine, "split": a.split, "link": a.link,
                "load_s": round(load_s, 1), "prompt_tokens": u.get("prompt_tokens"),
                "gen_tokens": u.get("completion_tokens"),
@@ -134,11 +140,11 @@ def run_arm(K, name, a, prompt):
     bad = []
     if served and served != name:
         bad.append(f"served as {served!r}, not {name!r} (identity collapse?)")
-    if runtime == "knurlogic":
-        bad.append("served on knurlogic's vendored runtime, not the bundled model.py")
-    elif runtime is None:
-        print(f"WARNING {name}: /status.json did not say which VQ runtime loaded; "
-              "check the rank logs for 'ships its own runtime'", file=sys.stderr)
+    for m, rt in runtime.items():
+        if rt != "bundled":
+            bad.append(f"rank on {m}: runtime {rt!r} (log lacks {BUNDLED!r})")
+        if not named[m]:
+            bad.append(f"rank on {m}: log does not name artifact {name!r} (identity collapse?)")
     if not rec["decode_tok_s"]:
         bad.append("no usage.knurlogic.timing in the response")
     if bad:
@@ -160,8 +166,19 @@ def main(argv=None) -> int:
     ap.add_argument("--n", type=int, default=3)
     ap.add_argument("--load-timeout", type=int, default=1800)
     ap.add_argument("--knurlogic-src", default=KSRC)
+    ap.add_argument("--set", action="append", default=[], metavar="K=V",
+                    help="Knurlogic launch setting (repeatable); KNURLOGIC_MTP=off is the default "
+                         "so decode speed reflects the kernels, not draft acceptance")
+    ap.add_argument("--host", action="append", default=["M4=noahzelezny@M4"],
+                    metavar="MACHINE=user@host", help="ssh target for a remote rank's logs")
     ap.add_argument("--out")
     a = ap.parse_args(argv)
+    a.sets = {"KNURLOGIC_MTP": "off"}
+    for kv in a.set:
+        k, _, v = kv.partition("=")
+        a.sets[k] = v
+    remote = dict(h.split("=", 1) for h in a.host)
+    a.hosts = {m: remote.get(m) for m in a.machine}
     sys.path.insert(0, a.knurlogic_src)
     from knurlogic.interfaces import mcp as K
 
