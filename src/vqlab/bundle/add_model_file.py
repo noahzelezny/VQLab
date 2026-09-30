@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """Retrofit self-contained `model_file` loading into an EXISTING VQ codes
 artifact (the 35B was built before the packaging existed). Writes model.py
-(= quantlab/vq_switch.py + the loader shim, same text vq_397b_codes.py
+(= runtime/vq_switch.py + the loader shim, same text vq_397b_codes.py
 generates) and adds config.json: model_file + vq_modules.
 
     ./add_model_file.py --artifact <dir> [--k 256 --dim 4 --group 64]
