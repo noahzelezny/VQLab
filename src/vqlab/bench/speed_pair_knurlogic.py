@@ -48,7 +48,10 @@ def _prompt(prompt_tokens):
 
 
 def _post(url, doc, timeout=1800):
-    req = urllib.request.Request(url.rstrip("/") + "/v1/chat/completions",
+    base = url.rstrip("/")
+    if not base.endswith("/v1"):          # Knurlogic's load() url already ends in /v1
+        base += "/v1"
+    req = urllib.request.Request(base + "/chat/completions",
                                  data=json.dumps(doc).encode(),
                                  headers={"Content-Type": "application/json"})
     with urllib.request.urlopen(req, timeout=timeout) as r:
@@ -60,7 +63,9 @@ def _vq_runtime(url):
     ["runtime"]), or None if it does not say. The state row's own `runtime`
     field is the SERVER kind, not which VQ runtime loaded."""
     try:
-        with urllib.request.urlopen(url.rstrip("/") + "/status.json", timeout=30) as r:
+        root = url.rstrip("/")
+        root = root[:-3] if root.endswith("/v1") else root
+        with urllib.request.urlopen(root + "/status.json", timeout=30) as r:
             doc = json.loads(r.read())
     except Exception:
         return None
