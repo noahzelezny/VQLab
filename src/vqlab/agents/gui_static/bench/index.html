@@ -6,7 +6,7 @@
   --fg:oklch(.9 0 0);--dim:oklch(.6 0 0);--faint:oklch(.45 0 0);
   --line:oklch(.25 0 0);--grid:oklch(.2 0 0/.3);
   --ok:oklch(.78 .15 150);--warn:oklch(.78 .15 70);--bad:oklch(.68 .19 25);
-  --acc:oklch(.80 .14 320);--accfg:oklch(.14 .02 320);--teal:oklch(.82 .14 185);--pink:oklch(.72 .19 340);
+  --acc:oklch(.80 .14 320);--accfg:oklch(.14 .02 320);--teal:oklch(.82 .14 185);--mix:oklch(.88 .16 98);--pink:oklch(.72 .19 340);
   --glow:0 0 20px oklch(.80 .14 320/.3);
   --g1:oklch(.50 .10 320);--g2:oklch(.66 .13 320);--g3:oklch(.82 .12 320);--g4:oklch(.92 .06 320);
   --r:.375rem}
@@ -15,7 +15,7 @@
   --fg:oklch(.2 0 0);--dim:oklch(.45 0 0);--faint:oklch(.6 0 0);
   --line:oklch(.89 0 0);--grid:oklch(.8 0 0/.35);
   --ok:oklch(.5 .14 150);--warn:oklch(.55 .13 70);--bad:oklch(.55 .19 25);
-  --acc:oklch(.55 .15 320);--accfg:oklch(1 0 0);--teal:oklch(.5 .11 185);--pink:oklch(.6 .19 340);--glow:none;
+  --acc:oklch(.55 .15 320);--accfg:oklch(1 0 0);--teal:oklch(.5 .11 185);--mix:oklch(.62 .14 98);--pink:oklch(.6 .19 340);--glow:none;
   --g1:oklch(.42 .12 320);--g2:oklch(.58 .14 320);--g3:oklch(.74 .12 320);--g4:oklch(.88 .06 320)}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--fg);letter-spacing:.02em;
@@ -373,7 +373,7 @@ const RESULTS={"397B":[{"id":"r22flat","what":"VQ flat d4/K128 (2.2 v1)","kind":
 // a build is MIXED when its geometry varies by layer (card says mixed, or the
 // registry lists more than one codebook geometry)
 const isMixed=r=>!!(r.mixed||(r.hf&&REG[r.hf]&&Object.keys(REG[r.hf].geo).filter(k=>!k.startsWith('ple:')).length>1));
-const vqCol=r=>r.kind==='affine'?'var(--bad)':isMixed(r)?'var(--teal)':'var(--acc)';
+const vqCol=r=>r.kind==='affine'?'var(--bad)':isMixed(r)?'var(--mix)':'var(--acc)';
 const SHIPS={"TheDrainFlorist/Qwen3.5-397B-A17B-VQ-2.2bpw": "tower+mtp", "TheDrainFlorist/Qwen3.5-397B-A17B-VQ-2.4bpw": "tower+mtp", "TheDrainFlorist/Qwen3.5-397B-A17B-VQ-2.6bpw": "tower+mtp", "TheDrainFlorist/Qwen3.5-397B-A17B-VQ-3.1bpw": "tower+mtp", "TheDrainFlorist/Qwen3.8-Flash-Next-VQ-2.1bpw": "tower+mtp", "TheDrainFlorist/Qwen3.8-Flash-Next-VQ-3.2bpw": "tower+mtp", "TheDrainFlorist/Qwen3.8-Flash-Next-VQ-4.4bpw": "tower+mtp", "TheDrainFlorist/Qwen3.8-Flash-Next-VQ-5.5bpw": "tower+mtp", "TheDrainFlorist/Qwen3.6-35B-A3B-VQ-3.4bpw": "tower", "TheDrainFlorist/Qwen3.6-35B-A3B-VQ-3.8bpw": "tower", "TheDrainFlorist/Qwen3.6-35B-A3B-VQ-4.6bpw": "tower", "TheDrainFlorist/Qwen3.6-35B-A3B-VQ-5.4bpw": "tower", "TheDrainFlorist/Qwen3.8-27B-VQ-3.9bpw": "tower", "TheDrainFlorist/Qwen3.8-27B-VQ-4.5bpw": "tower", "TheDrainFlorist/Qwen3.8-27B-VQ-4.8bpw": "tower", "TheDrainFlorist/gemma-4-26b-a4b-it-VQ-6.2bpw": "tower", "TheDrainFlorist/GLM-5.3-Flash-VQ-2.7bpw": "mtp", "TheDrainFlorist/GLM-5.3-Flash-VQ-3.1bpw": "mtp", "TheDrainFlorist/GLM-5.3-Flash-VQ-3.6bpw": "mtp"};
 for(const h of ['spicyneuron/Qwen3.5-397B-A17B-MLX-2.6bit','spicyneuron/Qwen3.5-397B-A17B-MLX-3.5bit','mlx-community/gemma-4-e4b-it-8bit','TheDrainFlorist/gemma-4-e4b-it-VQ-PLE'])SHIPS[h]='';
 const shipTower=r=>/tower/.test(SHIPS[r.hf]||''),shipMtp=r=>/mtp/.test(SHIPS[r.hf]||'');
@@ -605,7 +605,7 @@ function pgLibrary(){
   <div class="lib3">
     <div class="libmain">
       <svg class="chart" id="libchart" role="img" aria-label="shipped builds, size against mean KL"></svg>
-      <div class="legend"><span><span class="dot" style="background:var(--acc)"></span>VQ flat</span><span><span class="dot" style="background:var(--teal)"></span>VQ mixed</span><span><span class="dot" style="background:var(--bad)"></span>affine</span></div>
+      <div class="legend"><span><span class="dot" style="background:var(--acc)"></span>VQ flat</span><span><span class="dot" style="background:var(--mix)"></span>VQ mixed</span><span><span class="dot" style="background:var(--bad)"></span>affine</span></div>
       ${ladder(t,ship,minMac,link)}
     </div>
     ${inspector(t,sel)}
