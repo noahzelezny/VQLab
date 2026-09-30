@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import pathlib
 import statistics
 import sys
@@ -37,7 +38,7 @@ import urllib.request
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))  # src/
 from vqlab import _layout  # noqa: E402
 
-KSRC = "~/Documents/AgenicAI/knurlogic-cluster/src"
+KSRC = os.environ.get("KNURLOGIC_SRC", "")
 
 
 def _prompt(prompt_tokens):
@@ -169,10 +170,12 @@ def main(argv=None) -> int:
     ap.add_argument("--set", action="append", default=[], metavar="K=V",
                     help="Knurlogic launch setting (repeatable); KNURLOGIC_MTP=off is the default "
                          "so decode speed reflects the kernels, not draft acceptance")
-    ap.add_argument("--host", action="append", default=["M4=noahzelezny@M4"],
+    ap.add_argument("--host", action="append", default=[],
                     metavar="MACHINE=user@host", help="ssh target for a remote rank's logs")
     ap.add_argument("--out")
     a = ap.parse_args(argv)
+    if not a.knurlogic_src:
+        ap.error("--knurlogic-src (or KNURLOGIC_SRC) is required: the Knurlogic source tree")
     a.sets = {"KNURLOGIC_MTP": "off"}
     for kv in a.set:
         k, _, v = kv.partition("=")
