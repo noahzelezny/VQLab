@@ -7,8 +7,8 @@ the answer is the per-pair RATIO B/A. The difference is WHO loads: Knurlogic
 places the model -- on one Mac, or split across several (pipeline) -- which
 is how anything too big for one box gets measured at all.
 
-    vqlab speed-pair-knurlogic <name_a> <name_b> --machine "M4"
-        [--machine "M3" --split pipeline --link tcp]
+    vqlab speed-pair-knurlogic <name_a> <name_b> --machine "<machine>"
+        [--machine "<machine 2>" --split pipeline --link tcp]
         [--prompt-tokens 2048] [--gen-tokens 128] [--n 3] [--out runs.jsonl]
 
 Arms are Knurlogic MODEL NAMES (a symlink under the models dir of EVERY
