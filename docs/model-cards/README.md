@@ -23,8 +23,8 @@ python3 _tools/add_changelog_entry.py \
 
 ## Then publish
 
-The publish source is the artifact's own `README.md` — not this folder, and
-not `research/archive/quantlab/MODEL_CARD_*.md`. Copy, then push:
+The publish source is the artifact's own `README.md`, not this folder. Copy,
+then push:
 
 ```bash
 A="<models>/TheDrainFlorist--<name>"
@@ -54,7 +54,7 @@ Conditional sections keep a fixed slot: `Requirements`, `Changelog`,
 - Provenance is mandatory: base model, its licence, the derivative
   statement, the quantization attribution.
 - Paper links use the concept DOI `10.5281/zenodo.22119017`, never a version
-  DOI (see `research/log/handoff/SESSION_PAPER.md`).
+  DOI.
 - No `TODO` / `TO MEASURE` / `[PENDING]` markers.
 
 ## Before you publish
@@ -68,16 +68,8 @@ fences, placeholder markers, a version DOI, and **any `~` outside code**.
 
 A bare `~` (as in "~2%") is a strikethrough delimiter on the Hub: two of them
 in the same block strike out everything between. Write `≈2%`, or drop the
-tilde where a word like "up to" already hedges. `_tools/fix_tildes.py` does
-this in bulk.
+tilde where a word like "up to" already hedges.
 
 ## Folders
 
-- `_published-2026-09-09/` — snapshot of the live Hub cards, for diffing.
-- `_tools/` — the pipeline that produced these from that snapshot, plus
-  `CARD-CORRECTIONS.diff` (every change, per card).
-
-## Note
-
-`research/archive/quantlab/make_flashnext_cards.py` and `make_qwen38_cards.py` still
-emit the old structure. Fold these rules in before using them again.
+- `_tools/` — `check_cards.py` (the lint above) and `add_changelog_entry.py`.

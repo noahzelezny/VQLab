@@ -1,7 +1,10 @@
 # vq-skipzero — dead rows cost nothing, so don't store or load them
 
-**Status (2026-09-29): EXPERIMENT, measured end to end. Not a shipped format.**
-Code: `src/vqlab/experimental/skipzero/`. Findings: F173, F175–F178.
+**Status (2026-09-29): a runtime feature.** `runtime/vq_switch.py` serves
+compact rows natively (`VQSwitchLinear(row_table=...)`, `#if SZ` in the walk
+decode and gemmseg2 kernels); a bundle opts in with `vq_skipzero` in its
+config. Pack/convert tools: `src/vqlab/experimental/skipzero/`. Findings:
+F173, F175–F178, F183–F184.
 
 ## The finding
 
@@ -68,27 +71,18 @@ vqlab sz-resident <packed> --out <scratch>/<name>_resident    # stage 2
 vqlab sz-bitexact <resident> <artifact> --ref2 <packed> --out <dir>   # gate = vs <packed>
 vqlab sz-bitexact --synthetic --vintage both --out <dir>
 ```
-Queues of record: `research/queues/2026-09-28-skipzero-*.json`. The 397B
-full-model gate needs a box that holds it resident (the M4:
-`vqlab-scratch/skipzero_stage2/m4_gate.sh`).
+The 397B full-model gate needs a machine that holds it resident (128 GB).
 
 ## Open
 
-1. **Make it a real format.** DECIDED 2026-09-29: a runtime FEATURE, not a
-   profile ("option A": rebundle onto the current runtime). Built on branch
-   `feat/skipzero-runtime`: `#if SZ` switch in the walk decode + gemmseg2
-   kernels, `VQSwitchLinear(row_table=)`, `skipzero_weights()` loader,
-   `bundle`/`check-bundle` aware. Gated: 576/576 synthetic arms byte-equal to
-   the expanded form; real 35B 3.4 BYTE-EQUAL to its stage-1 pack in every
-   `sz-bitexact` check. BLOCKER before merge: any runtime text change makes
-   `check-bundle` report drift on every MoE artifact (24/45 pass -> 0) --
-   a fleet decision. 397B: needs the KL gate + speed-pair vs the published
-   2.4 (the rebundle moves it off its u8-vintage kernels).
-2. **Speed.** Dead rows are never read, so decode may be a little faster:
-   one `speed-pair`, resident vs stage 1.
-3. **The other 397B rungs** (2.2 / 2.6 / 3.1): same pack, same gates.
-4. **Skip the down-projections' swap**: their row tables cost more than their
+1. **Shipped as a runtime feature** (2026-09-29): 576/576 synthetic arms and
+   the real 35B 3.4 byte-equal to the expanded form. 397B 2.4: peak memory
+   119.87 -> 107.06 GB at the same decode speed, KL per-position arrays
+   byte-equal to stage 1; 397B 2.6: KL unchanged, peak 117.67 GB. Older
+   bundles report STALE in `check-bundle` (same output, missing the gains).
+2. **The other 397B rungs** (2.2 / 3.1): same pack, same gates, at re-release.
+3. **Skip the down-projections' swap**: their row tables cost more than their
    dead rows save (-0.12 GiB net). Output is identical either way (stage 2 is
    byte-equal, whichever modules are swapped).
-5. A non-leader Knurlogic rank exposes no status endpoint, so per-rank memory
+4. A non-leader Knurlogic rank exposes no status endpoint, so per-rank memory
    on the M3 rank was not read.

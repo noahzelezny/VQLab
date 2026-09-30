@@ -173,7 +173,7 @@ def score_glm5_next(model, ids_list, args):
     small resident model or a known artifact — and the DSA-indexer-with-
     fresh-cache question must be answered by that same run.
 
-    Shape per the readiness design note (research/glm53-flash/READINESS.md):
+    Shape of the glm5_next text stack:
       - text stack one level deeper: model.language_model.model.layers
       - layer signature is (x, mask, cache) — no ids/prev_ctx (no PLE)
       - hc bookends: broadcast h to (B, S, hc_mult, D) BEFORE the stack,

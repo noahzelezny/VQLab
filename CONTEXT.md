@@ -8,7 +8,7 @@ load the rest of the repo. If your question isn't in this table, grep
 instrument that already exists is this repo's #1 failure mode.
 
 Run commands as `python -m vqlab.cli <cmd>`, or with `PYTHONPATH=src` from the
-repo root in the exo env. `<cmd> --help` shows each command's full surface.
+repo root when vqlab is not installed in the active interpreter. `<cmd> --help` shows each command's full surface.
 
 ## Pipeline stages
 
@@ -54,11 +54,9 @@ Design: `docs/PROVENANCE.md`.
 - `docs/ONBOARDING.md`: the mechanical pass to run before fitting a new family
 - `METHODOLOGY.md`: read it before publishing any number
 
-## Working record (changes every run: process it as input, don't cite it as law)
+## The paper
 
-- `research/CONTEXT.md`: what each research folder is. The quantlab `*.py` files there are FROZEN older versions, not copies of `src/`.
-- `research/log/EXPERIMENTS.md`: the lab notebook. **Never describe a released artifact from it**; read the artifact's `config.json` first.
-- dated docs in `docs/` (`*-2026-MM-DD.md`, `MORNING-REPORT-*`)
+- `research/CONTEXT.md`: the paper's source and the scripts that regenerate its tables.
 
 ## Code layout (`src/vqlab/`)
 

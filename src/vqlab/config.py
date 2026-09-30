@@ -26,6 +26,7 @@ from __future__ import annotations
 import functools
 import os
 import pathlib
+import re
 import tomllib
 
 HOME = pathlib.Path.home() / ".vqlab"
@@ -116,6 +117,26 @@ def roots() -> list[pathlib.Path]:
             seen.add(p)
             out.append(p)
     return out
+
+
+_HF_SNAPSHOT = re.compile(r"/models--([^/]+)--([^/]+)/snapshots/([0-9a-f]+)")
+
+
+def portable(path) -> str:
+    """`path` as it should be RECORDED (profiles, build records): relative
+    to a configured location (``<teachers>/X``, ``<models>/X``), or
+    ``hf://org/name@rev`` for a Hugging Face cache snapshot, so records do
+    not carry one machine's disk layout. Anything else stays absolute."""
+    p = pathlib.Path(os.path.realpath(path))
+    m = _HF_SNAPSHOT.search(str(p))
+    if m:
+        return f"hf://{m.group(1)}/{m.group(2)}@{m.group(3)[:12]}"
+    for label, root in (("teachers", teachers()), ("models", models()),
+                        ("scratch", scratch())):
+        r = pathlib.Path(os.path.realpath(root))
+        if r in p.parents:
+            return f"<{label}>/{p.relative_to(r)}"
+    return str(p)
 
 
 def require_storage(path) -> pathlib.Path:

@@ -11,7 +11,7 @@ block-diagonal activation Gram improves KL-to-teacher (mean -2.2% 35B /
 -1.9% Flash, P99.9 tails -8..-10%), top-1 agreement and the 35B's task
 benchmarks. F76-F78 then REJECTED it because wikitext ppl worsened (+0.45%
 35B, +1.9% Flash-2.1) -- and F78 was judged by the ppl gate, which was the
-release gate at the time. Since F118 (Noah, 2026-09-16) the release gate is
+release gate at the time. Since F118 (2026-09-16) the release gate is
 paired 3-corpus KL (`vqlab kl-ladder`, |t|>2); ppl is printed, not gated. A
 method rejected on an instrument that is no longer the gate gets re-tested
 on the instrument that is. Whatever the kl-ladder says, ppl WILL be printed

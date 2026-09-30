@@ -153,7 +153,7 @@ def main() -> int:
                       "whose output is byte-identical to the current one; rebundle "
                       "to pick up:")
                 for name, rev in stale.items():
-                    print(f"    {name} @ {rev['commit']}: {rev['gains']}")
+                    print(f"    {name} @ {rev['sha256'][:12]}: {rev['gains']}")
                 return 2 if a.strict else 0
             names = ", ".join(n for n, _ in drifted)
             print(f"FAIL (dense artifact): bundled model.py "
@@ -224,7 +224,7 @@ def main() -> int:
         return 0
     rev = None if cfg.get("vq_skipzero") else _stale_as(bundle, "vq_switch.py", runtime_profile)
     if rev is not None:
-        print(f"STALE: bundle carries runtime @ {rev['commit']}, whose output is "
+        print(f"STALE: bundle carries runtime @ {rev['sha256'][:12]}, whose output is "
               f"byte-identical to the current runtime (tests/test_runtime_equivalence.py). "
               f"Rebundle to pick up: {rev['gains']}")
         return 2 if a.strict else 0

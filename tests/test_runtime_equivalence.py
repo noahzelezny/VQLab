@@ -33,7 +33,7 @@ def _text(rev):
 
 def _old(rev):
     src = _text(rev)
-    m = types.ModuleType("vq_switch_" + rev["commit"])
+    m = types.ModuleType("vq_switch_" + rev["sha256"][:12])
     exec(compile(src, m.__name__, "exec"), m.__dict__)
     return m
 
@@ -56,7 +56,7 @@ def _code_tokens(text):
             if t.type not in skip]
 
 
-@pytest.mark.parametrize("rev", OTHER, ids=lambda r: r["commit"] + ":" + r["path"].rsplit("/", 1)[-1])
+@pytest.mark.parametrize("rev", OTHER, ids=lambda r: r["sha256"][:12] + ":" + r["path"].rsplit("/", 1)[-1])
 def test_other_runtime_files_differ_only_in_comments(rev):
     """Non-kernel runtime files are certified only when the change is
     comment-only: the token stream (docstrings included) must be identical."""
@@ -65,7 +65,7 @@ def test_other_runtime_files_differ_only_in_comments(rev):
     assert _code_tokens(old) == _code_tokens(new)
 
 
-@pytest.mark.parametrize("rev", SWITCH, ids=lambda r: r["commit"])
+@pytest.mark.parametrize("rev", SWITCH, ids=lambda r: r["sha256"][:12])
 def test_current_runtime_byte_equal_to_certified_revision(rev):
     old = _old(rev)
     r = np.random.default_rng(11)
@@ -88,4 +88,4 @@ def test_current_runtime_byte_equal_to_certified_revision(rev):
                                        group_size=64, **kw)(x, idx) for M in (VS, old)]
                 mx.eval(ys)
                 assert np.array_equal(_bits(ys[0]), _bits(ys[1])), \
-                    (rev["commit"], d, K, packed, IN, T, dt)
+                    (rev["sha256"][:12], d, K, packed, IN, T, dt)

@@ -1,3 +1,4 @@
+# Python
 __pycache__/
 *.pyc
 *.egg-info/
@@ -5,20 +6,26 @@ build/
 dist/
 .venv/
 venv/
+
+# Outputs (artifacts live under vqlab.config storage, never in the checkout)
 manifests/
 fits/
 artifacts/
 caches/
 *.log
 
-# agent tooling state — never publish
+# Machine-local state written by the tools
+registry/*.jsonl
+families/**/onboard.json
+families/**/research/
+families/**/teacher_caches.json
+
+# Private lab notebook: reports, drafts, experiment scripts
+lab/
+
+# Editor / OS / agent tooling
 .claude/
 .DS_Store
 
-# Private lab record: kept on disk (backup on the HDD), not published
-research/archive/
-research/log/
-research/paper/linkedin_drafts.md
-research/paper/DRAFT_pre_rewrite_0822.md
-research/paper/DRAFT_v3_prereview.md
-research/paper/LEDGER_archive_0822.md
+# Per-machine agent instructions
+CLAUDE.local.md

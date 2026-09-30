@@ -47,6 +47,7 @@ import sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))  # src/
 from vqlab import _layout  # noqa: E402,F401  one module object per name
+from vqlab import config  # noqa: E402
 from families import DENSE_FAMILIES, FAMILY  # noqa: E402
 import fitstore  # noqa: E402
 import provenance  # noqa: E402
@@ -273,7 +274,7 @@ def main(argv=None) -> int:
         "schema": "vqlab.family-profile/1",
         "created": datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds"),
         "family": fam, "teacher": sl,
-        "identity": {"path": str(T), "hf_repo": fp.get("hf_repo"),
+        "identity": {"path": config.portable(T), "hf_repo": fp.get("hf_repo"),
                      "hf_revision": fp.get("hf_revision"),
                      "config_sha256": hashlib.sha256((T / "config.json").read_bytes()).hexdigest(),
                      "shards": len(fp.get("shards", {})),
