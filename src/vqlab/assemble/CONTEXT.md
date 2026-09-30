@@ -10,6 +10,6 @@ Fit outputs, a quantized base / struct skeleton.
 A new artifact directory with shards, `config.json` (`vq_modules` + `pack_bits`) and an index.
 
 ## Rules that bite
-- Artifacts never go on the internal disk: scratch goes to `<scratch>/`.
+- Outputs go under the configured storage (`vqlab.config`: scratch, models, fit store), never the repo or an arbitrary path.
 - Same recipe != same bytes: an mlx version change moved 35B skeleton scales up to 12.8%. Record `env.mlx`.
 - Ragged packing (nsub not a multiple of 32) wastes bytes; `geo-build` refuses it.

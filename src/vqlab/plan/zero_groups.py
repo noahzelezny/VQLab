@@ -166,7 +166,7 @@ def main(argv=None):
     ap.add_argument("--family")
     ap.add_argument("--teacher")
     ap.add_argument("--top", type=int, default=8)
-    ap.add_argument("--json", help="write results here (storage array scratch, not the internal disk)")
+    ap.add_argument("--json", help="write results here (under the configured scratch)")
     a = ap.parse_args(argv)
     if a.fits:
         res = scan_fits(a.family, a.teacher)
