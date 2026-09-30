@@ -137,7 +137,7 @@ It charged to MTP (a) a difference between two prefill implementations, and
 (b) an outright bug in ours: the loop did `mx.eval(model(chunk, cache=cache))`,
 forcing the full `lm_head` projection for every prefill position and throwing
 it away. MLX is lazy; mlx-lm evaluates `[c.state for c in cache]` precisely to
-avoid that. Fixed in b8e2430.
+avoid that. Fixed in 5aae748.
 
 The correct control is our OWN loop with seeding on and off, head resident in
 every condition (2.1bpw, e3q8, TTFT = prefill + first token):
@@ -208,7 +208,7 @@ decoding at wrong positions.
 load. Two causes were identified — mlx-vlm tensor namespace (`language_model.*`
 vs our `model.*`), and `model_file` apparently not honoured on the mlx-vlm
 path. **The second needs re-testing**: it was measured against a bundle
-predating VQLab 40a2855, which made the bundle resolve its base arch from
+predating VQLab 8bebe34, which made the bundle resolve its base arch from
 either runtime.
 
 ---
@@ -675,7 +675,7 @@ the distribution.
 
 ### The expert-kernel layout is not the cause either (measured)
 
-The simdgroup-per-row expert kernels (E141, commit 108fe9e) were built partly
+The simdgroup-per-row expert kernels (E141, commit 119a456) were built partly
 on the theory that the 397B's ratio was launch/latency-bound in the expert
 kernel. Measured on the same idle box:
 
