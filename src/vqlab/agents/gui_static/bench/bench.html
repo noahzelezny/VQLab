@@ -353,6 +353,11 @@ details.adv .kv{margin-top:8px}
 .compbar{display:flex;height:12px;border-radius:3px;overflow:hidden;gap:1px}.insp .key{margin-top:6px}
 .iacts{display:flex;flex-wrap:wrap;gap:8px;margin-top:16px;padding-top:12px;border-top:1px solid var(--line)}
 .libmain .legend{display:flex;gap:18px;margin-top:6px;font-size:.85em;color:var(--dim)}.libmain .legend .dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px}
+.chart .cu.aff:not(.ext),.chart .cu.sk:not(.ext){stroke-dasharray:none}.chart .cu.ext{stroke-dasharray:4 4;opacity:.6}.chart .cu.ext.dimmed{opacity:.2}
+.chart .bf16 line{stroke:var(--faint);opacity:.6;stroke-dasharray:2 4}.chart .bf16 text{fill:var(--faint);font-size:11px}
+.nonexp{display:flex;justify-content:space-between;align-items:center}
+.linkbtn{background:none;border:0;color:var(--acc);font:inherit;font-size:.9em;letter-spacing:0;text-transform:none;cursor:pointer;padding:0 2px}
+.linkbtn.hid{visibility:hidden}
 </style>
 
 <header>
@@ -413,7 +418,7 @@ const DRAFTS=[{n:'deepseek-ai/DeepSeek-V4',short:'DeepSeek-V4',fam:'deepseek_v4'
 function lsq(pts){const n=pts.length,mx=pts.reduce((a,p)=>a+p[0],0)/n,my=pts.reduce((a,p)=>a+p[1],0)/n;const b=pts.reduce((a,p)=>a+(p[0]-mx)*(p[1]-my),0)/(pts.reduce((a,p)=>a+(p[0]-mx)**2,0)||1);return [my-b*mx,b]}
 function derive(t){
   const R=t.rows.filter(r=>r.kl);t.scored=R;
-  if(!R.length){t.g0=0;t.g1=t.rows[0].gib/t.rows[0].bpw;t.bpw=g=>g/t.g1;t.klFlat=g=>NaN;t.klAff=null;t.klSk=null;t.mixedF=1;t.flatFitted=false;t.notches=t.rows.map(r=>({geo:r.geo,gib:r.gib,shipped:true}));t.affNotches=[];t.xr=[t.rows[0].gib*0.6,t.rows[t.rows.length-1].gib*1.5];t.rows.forEach(r=>r.type=r.geo?r.geo.split('-')[0]:'vq');return}
+  if(!R.length){t.g0=0;t.g1=t.rows[0].gib/t.rows[0].bpw;t.bpw=g=>g/t.g1;t.klFlat=g=>NaN;t.klAff=null;t.klSk=null;t.spanVQ=null;t.spanAff=null;t.hasMixed=false;t.mixedF=1;t.flatFitted=false;t.notches=t.rows.map(r=>({geo:r.geo,gib:r.gib,shipped:true}));t.affNotches=[];t.xr=[t.rows[0].gib*0.6,t.rows[t.rows.length-1].gib*1.5];t.rows.forEach(r=>r.type=r.geo?r.geo.split('-')[0]:'vq');return}
   // bytes <-> bpw is linear per family; the intercept is the non-quantized carry
   [t.g0,t.g1]=lsq(R.map(r=>[r.bpw,r.gib]));
   t.bpw=g=>(g-t.g0)/t.g1;
@@ -430,6 +435,9 @@ function derive(t){
   const mixedRows=R.filter(r=>r.mixed);
   t.mixedF=t.flatFitted?(mixedRows.length?Math.min(...mixedRows.map(r=>mean(r.kl)/t.klFlat(r.gib))):0.8):1;
   t.klAff=fitExp(R.filter(r=>r.kind==='affine'));
+  // measured span of each fitted curve: outside it the curve is an extrapolation
+  const spanOf=rows=>rows.length?[Math.min(...rows.map(r=>r.gib)),Math.max(...rows.map(r=>r.gib))]:null;
+  t.spanVQ=spanOf(allvq);t.spanAff=spanOf(R.filter(r=>r.kind==='affine'));t.hasMixed=mixedRows.length>0;
   t.klSk=fitExp(R.filter(r=>r.kind==='affine-sk'));
   // row TYPE for slicing: the geometry family, not just who built it
   R.forEach(r=>{r.type=r.kind==='affine'?'affine':r.kind==='affine-sk'?'affine-sk':r.mixed?'mixed':r.geo?r.geo.split('-')[0]:'vq'});
@@ -459,12 +467,24 @@ const affBase=(t,r)=>{const q=t.affNotches.find(n=>n.bits===r.bits);return (q&&r
 // embeddings, bf16 routers); byte and damage deltas are taken from that baseline
 const affExtra=(t,r)=>t.g0*0.35*(0.55*(r.pAttn-8)/8+0.35*(r.pEmb-8)/8+0.02*(r.pRouter-16)/16);
 const affFactor=r=>Math.pow(0.93,(r.pAttn-8)/2)*Math.pow(0.97,(r.pEmb-8)/2)*Math.pow(0.985,(r.pRouter-16)/2)*(r.group===32?0.92:r.group===128?1.08:1);
-const klOf=(t,r,g)=>r.mode==='affine'?(r.skel&&t.klSk?t.klSk(g):(t.klAff?t.klAff(g):t.klFlat(g)*1.6))*affFactor(r):klVQ(t,r,g);
-const newRecipe=()=>({teacher:'q35',mode:'vq',widthPick:'auto',strat:'mixed',width:'d4',size:0,geo:null,bits:4,group:64,pAttn:8,pEmb:8,pRouter:16,skel:false,resel:false,tower:true,mtp:true,auto:true});
+const klOf=(t,r,g)=>r.mode==='affine'?(r.skel&&t.klSk?t.klSk(g):(t.klAff?t.klAff(g):t.klFlat(g)*1.6))*affFactor(r):klVQ(t,r,g-vqDelta(t,r));
+// release skeleton widths per family, read from the shipped artifacts' config.json quantization blocks on 2026-09-30
+const SKEL={q35:{pAttn:6,pEmb:6,pRouter:16},q397:{pAttn:6,pEmb:6,pRouter:16},q27:{pAttn:4,pEmb:4,pRouter:16},fn:{pAttn:8,pEmb:8,pRouter:8},glm:{pAttn:8,pEmb:8,pRouter:16}};
+const AFFW={pAttn:8,pEmb:8,pRouter:16};
+const skelOf=id=>SKEL[id]||AFFW;
+const initWidths=r=>Object.assign(r,r.mode==='vq'?skelOf(r.teacher):AFFW);
+const skDiff=r=>{const S=skelOf(r.teacher);return r.pAttn!==S.pAttn||r.pEmb!==S.pEmb||r.pRouter!==S.pRouter};
+// a recipe cannot exceed its bf16 text teacher
+const bf16Of=t=>{const P=PROF[t.id];return P?P.per*16+P.carry+P.embed:Infinity};
+// VQ: the dragged point is the release-skeleton size; attention/embedding widths off the release add their byte delta
+const vqDelta=(t,r)=>{const P=PROF[t.id];if(!P||r.mode==='affine')return 0;const S=skelOf(r.teacher);return affClass(P.carry,r.pAttn,64)+affClass(P.embed,r.pEmb,64)-affClass(P.carry,S.pAttn,64)-affClass(P.embed,S.pEmb,64)};
+const newRecipe=()=>({teacher:'q35',mode:'vq',widthPick:'auto',strat:'mixed',width:'d4',size:0,geo:null,bits:4,group:64,pAttn:6,pEmb:6,pRouter:16,skel:false,resel:false,tower:true,mtp:true,auto:true});
 const widthOf=geo=>geo?geo.split('-')[0]:'d4';
-const sizeOf=(t,r)=>r.mode==='affine'?affSize(t,r):r.strat==='flat'?(t.notches.find(n=>n.geo===r.geo)||t.notches[0]).gib:r.size;
+const sizeOf=(t,r)=>Math.min(bf16Of(t),r.mode==='affine'?affSize(t,r):(r.strat==='flat'?(t.notches.find(n=>n.geo===r.geo)||t.notches[0]).gib:r.size)+vqDelta(t,r));
+function openRecipe(id,at){draft=newRecipe();draft.teacher=id;initWidths(draft);const t=TE(id);resolveAt(t,draft,at??(t.xr[0]+t.xr[1])/2);page=1;render()}
 function resolveAt(t,r,g){
   if(r.mode==='affine')return;
+  g=Math.min(g,bf16Of(t))-vqDelta(t,r);
   const pool=r.widthPick&&r.widthPick!=='auto'?t.notches.filter(n=>widthOf(n.geo)===r.widthPick):t.notches;
   const near=pool.reduce((a,c)=>Math.abs(c.gib-g)<Math.abs(a.gib-g)?c:a);
   if(r.strat==='flat'){r.geo=near.geo;r.width=widthOf(near.geo)}
@@ -535,7 +555,12 @@ function chartFrame(svg,xr,H,yr){
   s+=`<text class="atitle" x="${W-Rm}" y="${H-B-6}" text-anchor="end">GiB →</text><text class="atitle" x="${L+6}" y="${Tp+10}">KL, mnats ↓ better</text>`;
   return {s,X,Y,W,H,L,Rm,Tp,B,xmin,xmax,ymin,ymax};
 }
-const curve=(c,fn,cls)=>{let d='';for(let g=c.xmin;g<=c.xmax;g+=(c.xmax-c.xmin)/100){const v=fn(g);if(!(v>=c.ymin&&v<=c.ymax)){if(d&&!d.endsWith('|'))d+='|';continue}d+=(d&&!d.endsWith('|')?'L':'M')+c.X(g)+' '+c.Y(v)}return `<path class="cu ${cls}" d="${d.replace(/\|/g,'')}"/>`};
+// span: [lo,hi] in GiB where the curve was fitted; outside it (or everywhere with allExt) it draws dashed
+const curve=(c,fn,cls,span,allExt)=>{const st=(c.xmax-c.xmin)/100,seg={s:'',e:''};let prev=null,lk=null;
+  for(let i=0;i<=100;i++){const g=c.xmin+i*st,v=fn(g);if(!(v>=c.ymin&&v<=c.ymax)){prev=null;continue}
+    if(prev){const m=(g+prev.g)/2,k=(allExt||!span||m<span[0]||m>span[1])?'e':'s';seg[k]+=(lk===k?'L':'M'+c.X(prev.g)+' '+c.Y(prev.v)+'L')+c.X(g)+' '+c.Y(v);lk=k}else lk=null;prev={g,v}}
+  if(!span&&!allExt)return `<path class="cu ${cls}" d="${(seg.s+seg.e)}"/>`;
+  return (seg.s?`<path class="cu ${cls}" d="${seg.s}"/>`:'')+(seg.e?`<path class="cu ext ${cls}" d="${seg.e}"/>`:'')};
 
 // ================================================================ Library
 let libBox=128;
@@ -638,14 +663,17 @@ const STRAT={
  measured:{n:'Measured',s:'+ leverage',one:'Measures this model first (~3 GPU h), then allocates from that.',trades:'About three GPU hours before fitting, for an allocation this teacher earned rather than the law\'s guess.',changes:'layer-leverage ranks layers, alloc-sweep prices cost and value, codes are re-picked activation-aware.',pick:'A new family, or a rung headed for a paper.'}};
 function pgRecipe(){
   const r=draft,t=TE(r.teacher),S=STRAT[r.strat];
-  const vqSide=`<div class="ro" style="margin-bottom:6px">strategy</div>
+  const vqSide=()=>`<div class="ro" style="margin-bottom:6px">strategy</div>
     <div class="kseg">${['flat','mixed','measured'].map(k=>`<button aria-pressed="${r.strat===k}" data-g="strat" data-v="${k}">${STRAT[k].n}<small>${STRAT[k].s}</small></button>`).join('')}</div>
     <div class="kline">${S.one}</div>
     <div class="ro" style="margin-bottom:6px">width</div>
     <div class="kseg small">${[['auto','auto'],['d2','d2'],['d4','d4'],['d8','d8']].map(([v,n])=>`<button aria-pressed="${(r.widthPick||'auto')===v}" data-g="widthPick" data-v="${v}" ${v!=='auto'&&!t.notches.some(n=>widthOf(n.geo)===v)?'disabled title="no measured notch at this width for this teacher"':''}>${n}</button>`).join('')}</div>
-    <div class="seghelp">auto follows the notch nearest the point; a fixed width keeps the point on that ladder.</div>`;
+    <div class="seghelp">auto follows the notch nearest the point; a fixed width keeps the point on that ladder.</div>
+    ${nonexp}`;
   const I=(txt)=>`<i class="info" tabindex="0">i<span>${txt}</span></i>`;
-  const bitrow=(k,label,off)=>`<div class="bitrow ${off||r.skel?'off':''}"><span>${label}</span><div class="kseg small">${[4,6,8,16].map(b=>`<button aria-pressed="${r[k]===b}" data-bits="${k}" data-v="${b}" ${off||r.skel?'disabled':''}>${b===16?'bf16':'q'+b}</button>`).join('')}</div></div>`;
+  const sk=r.mode==='affine'&&r.skel;const bitrow=(k,label,off)=>`<div class="bitrow ${off||sk?'off':''}"><span>${label}</span><div class="kseg small">${[4,6,8,16].map(b=>`<button aria-pressed="${r[k]===b}" data-bits="${k}" data-v="${b}" ${off||sk?'disabled':''}>${b===16?'bf16':'q'+b}</button>`).join('')}</div></div>`;
+  const nonexp=`<div class="ro nonexp"><span>non-expert tensors ${I('Release skeleton: attention, embeddings and routers at the widths the shipped artifacts carry (from their config.json). Changing them moves the size; the KL estimate does not model it.')}</span><button class="linkbtn ${skDiff(r)?'':'hid'}" id="skreset">reset</button></div>
+    ${bitrow('pAttn','attention')}${bitrow('pEmb','embeddings · head')}${bitrow('pRouter','routers',t.topk<=1)}`;
   const affSide=`<div class="ro">experts ${I('Round-to-nearest affine quantization of the expert (or MLP) weights. Bits and group size fix the size exactly, so the point does not drag.')}</div>
     <div class="kseg small">${[2,3,4,5,6,8].map(b=>`<button aria-pressed="${r.bits===b}" data-g="bits" data-v="${b}">q${b}</button>`).join('')}</div>
     <div class="ro" style="margin-top:8px">group size ${I('Weights per scale-and-bias group. Smaller groups cost bytes (bf16 scale and bias per group: +32/group bits per weight) and take damage off. 64 is the published mlx-community recipe and lands on a measured row where one exists.')}</div>
@@ -658,12 +686,12 @@ function pgRecipe(){
   <div class="recipe">
   <div>
     <svg class="chart" id="chart" role="img" aria-label="estimated quality against size; drag to set"></svg>
-    <div class="legend"><span><i style="border-color:var(--acc)"></i>this recipe</span><span><i style="border-color:var(--dim)"></i>flat VQ, fitted</span><span><i style="border-color:var(--bad);border-top-style:dashed"></i>affine, fitted</span><span>● measured build</span><span><i style="border-color:var(--teal)"></i>boxes, after OS and context</span></div>
+    <div class="legend"><span><i style="border-color:var(--acc)"></i>this recipe</span><span><i style="border-color:var(--dim)"></i>flat VQ, fitted</span><span><i style="border-color:var(--bad)"></i>affine, fitted</span><span>● measured build</span><span><i style="border-color:var(--teal)"></i>boxes, after OS and context</span></div>
     <div id="strip"></div>
   </div>
   <div class="cart">
     <div class="seg modeseg">${[['vq','VQ'],['affine','Affine']].map(([v,n])=>`<button aria-pressed="${r.mode===v}" data-g="mode" data-v="${v}">${n}</button>`).join('')}</div>
-    ${r.mode==='vq'?vqSide:affSide}
+    ${r.mode==='vq'?vqSide():affSide}
     <div class="ro">include</div>
     ${t.bytes.vision?`<button class="addon" aria-pressed="${!!r.tower}" data-g="tower"><i></i><span class="n">vision tower</span><span class="t">+${f1(t.bytes.vision)} GiB</span></button>`:''}
     ${t.bytes.mtp?`<button class="addon" aria-pressed="${!!r.mtp}" data-g="mtp"><i></i><span class="n">MTP drafting</span><span class="t">+${f1(t.bytes.mtp)} GiB · faster decode</span></button>`:''}
@@ -772,19 +800,22 @@ function renderPicker(){
   $('#prows').innerHTML=`<div class="pkind"><div class="seg small" style="width:14em">${[['all','all'],['dense','dense'],['moe','MoE']].map(([v,n])=>`<button aria-pressed="${pickKind===v}" data-pk="${v}">${n}</button>`).join('')}</div></div>`+(list.map(row).join('')||'<div class="psect no">nothing matches</div>');
   $('#pfams').querySelectorAll('[data-pf]').forEach(b=>b.onclick=()=>{pickFam=b.dataset.pf;renderPicker()});
   $('#prows').querySelectorAll('[data-pk]').forEach(b=>b.onclick=()=>{pickKind=b.dataset.pk;renderPicker()});
-  $('#prows').querySelectorAll('[data-pt]').forEach(b=>b.onclick=()=>{if(page===0){libFam=b.dataset.pt;render();return}draft=newRecipe();draft.teacher=b.dataset.pt;const t=TE(b.dataset.pt);resolveAt(t,draft,(t.xr[0]+t.xr[1])/2);render()});
+  $('#prows').querySelectorAll('[data-pt]').forEach(b=>b.onclick=()=>{if(page===0){libFam=b.dataset.pt;render();return}draft=newRecipe();draft.teacher=b.dataset.pt;initWidths(draft);const t=TE(b.dataset.pt);resolveAt(t,draft,(t.xr[0]+t.xr[1])/2);render()});
 }
 function drawReadouts(){
   const r=draft,t=TE(r.teacher),P=plan(t,r),tot=P.reduce((a,p)=>a+p[1],0),g=sizeOf(t,r),k=klOf(t,r,g),disk=g+(r.tower?t.bytes.vision:0)+(r.mtp?t.bytes.mtp:0);
   const box=MACHINES.find(([gb])=>usable(gb)>=disk);
   const ship=t.rows.filter(q=>q.kind==='vq');const near=ship.reduce((a,q)=>Math.abs(q.gib-g)<Math.abs(a.gib-g)?q:a);const vs=100*(1-k/mean(near.kl));
+  // estimate provenance: a note replaces the sub-line and the vs readouts go neutral
+  const gb=g-vqDelta(t,r),span=r.mode==='affine'?t.spanAff:t.spanVQ;
+  const est=r.mode==='vq'&&skDiff(r)?'skeleton change not modeled':r.mode==='vq'&&r.strat!=='flat'&&!t.hasMixed?'assumed mix gain':(!span||gb<span[0]-0.05||gb>span[1]+0.05)?'extrapolated':'';
   const aff=t.affNotches.length?t.affNotches.reduce((a,q)=>Math.abs(q.gib-g)<Math.abs(a.gib-g)?q:a):null;
   $('#readouts').innerHTML=`
     <div class="readout acc"><small>size</small><b>${f1(g)} GiB</b><span class="sub">${f1(disk)} on disk · ${t.bpw(g).toFixed(2)} bpw</span></div>
     <div class="readout ${box?'ok':'bad'}"><small>runs on</small><b>${box?box[1]+' GB':'no box'}</b><span class="sub">${box?ctxReserve(box[0])+' GB kept for context':'over every listed box'}</span></div>
-    ${t.judge?`<div class="readout warn"><small>quality</small><b>judge gate</b><span class="sub">blind vs bf16 after the build</span></div>`:`<div class="readout acc"><small>est. KL</small><b>~${k.toFixed(0)}</b><span class="sub">mnats, mean of three corpora</span></div>`}
-    ${t.judge?`<div class="readout"><small>vs shipped ${esc(near.id)}</small><b>—</b><span class="sub">${g>near.gib?'+':''}${f1(g-near.gib)} GiB; judged after gates</span></div>`:`<div class="readout ${vs>3?'ok':vs<-3?'warn':''}"><small>vs shipped ${esc(near.id)}</small><b>${Math.abs(vs)<3?'same':(vs>0?'−':'+')+Math.abs(vs).toFixed(0)+'%'}</b><span class="sub">damage at ${g>near.gib?'+':''}${f1(g-near.gib)} GiB</span></div>`}
-    ${aff&&!isNaN(k)?`<div class="readout ${k<aff.kl?'ok':'warn'}"><small>vs affine q${aff.bits}</small><b>${(k<aff.kl?'−':'+')+(100*Math.abs(1-k/aff.kl)).toFixed(0)}%</b><span class="sub">damage at ${g>aff.gib?'+':''}${f1(g-aff.gib)} GiB</span></div>`:`<div class="readout"><small>vs affine</small><b>—</b><span class="sub">no affine row yet</span></div>`}
+    ${t.judge?`<div class="readout warn"><small>quality</small><b>judge gate</b><span class="sub">blind vs bf16 after the build</span></div>`:`<div class="readout acc"><small>est. KL</small><b>~${k.toFixed(0)}</b><span class="sub">${est||'mnats, mean of three corpora'}</span></div>`}
+    ${t.judge?`<div class="readout"><small>vs shipped ${esc(near.id)}</small><b>—</b><span class="sub">${g>near.gib?'+':''}${f1(g-near.gib)} GiB; judged after gates</span></div>`:`<div class="readout ${est?'':vs>3?'ok':vs<-3?'warn':''}"><small>vs shipped ${esc(near.id)}</small><b>${Math.abs(vs)<3?'same':(vs>0?'−':'+')+Math.abs(vs).toFixed(0)+'%'}</b><span class="sub">${est||'damage at '+(g>near.gib?'+':'')+f1(g-near.gib)+' GiB'}</span></div>`}
+    ${aff&&!isNaN(k)?`<div class="readout ${est?'':k<aff.kl?'ok':'warn'}"><small>vs affine q${aff.bits}</small><b>${(k<aff.kl?'−':'+')+(100*Math.abs(1-k/aff.kl)).toFixed(0)}%</b><span class="sub">${est||'damage at '+(g>aff.gib?'+':'')+f1(g-aff.gib)+' GiB'}</span></div>`:`<div class="readout"><small>vs affine</small><b>—</b><span class="sub">no affine row yet</span></div>`}
     <div class="readout acc"><small>time</small><b>${fmtT(tot)}</b><span class="sub">${r.reuse?`${r.reuse[0]}/${r.reuse[1]} fits from the store · `:''}starts ~19:05</span></div>`;
   const ap=$('#approach');if(ap)ap.textContent={flat:`${r.geo} on all ${t.modules} modules, the measured notch nearest the point.`,mixed:`${r.geo.split('-')[0]} from the nearest notch; ${r.geo} in front, the biggest ${r.geo.split('-')[0]} books in the back.`,measured:'after leverage and alloc-sweep run on this teacher; the strip is a placeholder until then.'}[r.strat];
 }
@@ -792,13 +823,15 @@ function drawRecipe(){
   const r=draft,t=TE(r.teacher),svg=$('#chart');
   const pv=t.rows.filter(q=>q.kl&&(q.kind==='vq'||q.kind==='lab'||q.kind==='affine')).map(q=>mean(q.kl));[0,.5,1].forEach(f=>{const g0=t.xr[0]+f*(t.xr[1]-t.xr[0]);pv.push(t.klFlat(g0));if(t.klAff)pv.push(t.klAff(g0))});
   // the chart always includes the recipe's own point
-  const g0=sizeOf(t,r),xr=[Math.min(t.xr[0],g0*0.93),Math.max(t.xr[1],g0*1.07)];const k0=klOf(t,r,g0);if(isFinite(k0))pv.push(k0);
+  const g0=sizeOf(t,r),cap=bf16Of(t),xr=[Math.min(t.xr[0],g0*0.93),Math.min(cap,Math.max(t.xr[1],g0*1.07))];const k0=klOf(t,r,g0);if(isFinite(k0))pv.push(k0);
   const c=chartFrame(svg,xr,330,yRange(pv));let s=c.s;const {X,Y,L,W,Rm,Tp,H,B,xmin,xmax}=c;
   const g=sizeOf(t,r),extra=(r.tower?t.bytes.vision:0)+(r.mtp?t.bytes.mtp:0);
   MACHINES.forEach(([gb,l])=>{const u=usable(gb)-extra;if(u>xmin&&u<xmax){const near=Math.abs(u-g)<(xmax-xmin)*0.01;s+=`<g class="box ${near?'near':''}"><line x1="${X(u)}" x2="${X(u)}" y1="${Tp}" y2="${H-B}"/><text x="${X(u)+4}" y="${Tp+14}">${l} GB</text></g>`}});
-  if(t.scored.length)s+=curve(c,t.klFlat,'flat '+(r.mode==='vq'&&r.strat==='flat'?'':'dimmed'));
-  if(t.klAff)s+=curve(c,t.klAff,'aff '+(r.mode==='affine'?'':'dimmed'));
-  if(r.mode==='vq'&&r.strat!=='flat'&&t.scored.length)s+=curve(c,x=>klVQ(t,r,x),'mixed');
+  if(isFinite(cap)&&cap<=xmax+1e-6)s+=`<g class="bf16"><line x1="${X(cap)}" x2="${X(cap)}" y1="${Tp}" y2="${H-B}"/><text x="${X(cap)-4}" y="${Tp+28}" text-anchor="end">bf16 teacher</text></g>`;
+  const dl=vqDelta(t,r),sh=t.spanVQ?[t.spanVQ[0]+dl,t.spanVQ[1]+dl]:null;
+  if(t.scored.length)s+=curve(c,x=>t.klFlat(x-dl),'flat '+(r.mode==='vq'&&r.strat==='flat'?'':'dimmed'),sh);
+  if(t.klAff)s+=curve(c,t.klAff,'aff '+(r.mode==='affine'?'':'dimmed'),t.spanAff);
+  if(r.mode==='vq'&&r.strat!=='flat'&&t.scored.length)s+=curve(c,x=>klVQ(t,r,x-dl),'mixed',sh,!t.hasMixed);
   t.rows.filter(q=>q.kl&&(q.kind==='vq'||(q.kind==='affine'&&r.mode==='affine'))).forEach(q=>s+=`<g class="rung"><circle cx="${X(q.gib)}" cy="${Y(mean(q.kl))}" r="4"/><text x="${X(q.gib)+7}" y="${Y(mean(q.kl))+14}">${esc(q.id)}</text></g>`);
   if(r.mode==='vq')t.notches.forEach(n=>{const y=isNaN(t.klFlat(n.gib))?Y(100):Y(t.klFlat(n.gib));s+=`<g class="notch ${(r.widthPick&&r.widthPick!=='auto'&&widthOf(n.geo)!==r.widthPick)?'dimmed':''}"><line x1="${X(n.gib)}" x2="${X(n.gib)}" y1="${y-7}" y2="${y+7}"/><text x="${X(n.gib)}" y="${y+20}" text-anchor="middle">${n.geo}</text></g>`});
   else [2,3,4,5,6,8].forEach(b=>{const rr={...r,bits:b};const gx=sizeOf(t,rr);if(gx<xmin||gx>xmax)return;const kk=klOf(t,rr,gx),y=isNaN(kk)?Y(100):Y(kk);s+=`<g class="notch ${b===r.bits?'':'dimmed'}"><line x1="${X(gx)}" x2="${X(gx)}" y1="${y-7}" y2="${y+7}"/><text x="${X(gx)}" y="${y+20}" text-anchor="middle">q${b}</text></g>`});
@@ -812,9 +845,9 @@ function drawRecipe(){
   svg.onpointermove=e=>{if(svg.classList.contains('drag'))move(e)};
   svg.onpointerup=svg.onpointercancel=()=>{svg.classList.remove('drag');save();render()};
   function move(e){const b=svg.getBoundingClientRect();let gx=xmin+((e.clientX-b.left)/b.width*W-L)/(W-L-Rm)*(xmax-xmin);
-    const snaps=[];MACHINES.forEach(([gb])=>{const u=usable(gb)-extra;if(u>xmin&&u<xmax)snaps.push(u)});(r.mode==='affine'?t.affNotches:t.notches).forEach(n=>snaps.push(n.gib));
+    const snaps=[];MACHINES.forEach(([gb])=>{const u=usable(gb)-extra;if(u>xmin&&u<xmax)snaps.push(u)});(r.mode==='affine'?t.affNotches:t.notches).forEach(n=>snaps.push(n.gib+vqDelta(t,r)));
     const px=(xmax-xmin)/(W-L-Rm)*8;const sn=snaps.find(v=>Math.abs(v-gx)<px);if(sn!=null)gx=sn;
-    gx=Math.max(xmin+0.2,Math.min(xmax-0.2,gx));
+    gx=Math.max(xmin+0.2,Math.min(xmax-0.2,cap,gx));
     resolveAt(t,r,gx);
     drawRecipe();drawStrip();drawReadouts()}
 }
@@ -877,10 +910,11 @@ function render(){
     document.querySelectorAll('[data-recipe]').forEach(b=>b.onclick=()=>openRecipe(b.dataset.recipe,b.dataset.at?+b.dataset.at:undefined))}
   if(page===1){const t=TE(draft.teacher);if(draft.auto)resolveAt(t,draft,sizeOf(t,draft));drawRecipe();drawStrip();drawReadouts();
     document.querySelectorAll('.seg button,.kseg button').forEach(b=>b.onclick=()=>{const g=b.dataset.g,v=b.dataset.v;const t=TE(draft.teacher);
-      if(g==='mode'){draft.mode=v}else if(g==='bits'){draft.bits=+v}else if(g==='group'){draft.group=+v}else if(g==='strat'){draft.strat=v}else if(g==='widthPick'){draft.widthPick=v}
+      if(g==='mode'){if(!draft.skel){const was=draft.mode==='vq'?skelOf(draft.teacher):AFFW,same=['pAttn','pEmb','pRouter'].every(q=>draft[q]===was[q]);draft.mode=v;if(same)initWidths(draft)}else draft.mode=v}else if(g==='bits'){draft.bits=+v}else if(g==='group'){draft.group=+v}else if(g==='strat'){draft.strat=v}else if(g==='widthPick'){draft.widthPick=v}
       resolveAt(t,draft,sizeOf(t,draft));render()});
     wirePicker();
     document.querySelectorAll('.addon').forEach(b=>b.onclick=()=>{draft[b.dataset.g]=!draft[b.dataset.g];if(b.dataset.g==='skel'&&draft.skel){draft.pAttn=6;draft.pEmb=8;draft.pRouter=16}render()});
+    {const rb=$('#skreset');if(rb)rb.onclick=()=>{initWidths(draft);render()}}
     document.querySelectorAll('[data-bits]').forEach(b=>b.onclick=()=>{draft[b.dataset.bits]=+b.dataset.v;render()});
     $('#queue').onclick=()=>{const t=TE(draft.teacher);JOBS.unshift({id:'j'+Date.now(),name:t.short.toLowerCase().replace(/[^a-z0-9]+/g,'-')+'-'+(draft.mode==='affine'?'q'+draft.bits:f1(sizeOf(t,draft))),state:'draft',kind:'build',stepIx:-1,recipe:{...draft},started:'draft',eta:'~20:30'});jobSel=JOBS[0].id;draft=newRecipe();resolveAt(t,draft,(t.xr[0]+t.xr[1])/2);page=2;render()}}
   if(page===2){document.querySelectorAll('[data-job]').forEach(b=>b.onclick=()=>{jobSel=b.dataset.job;render()});
@@ -888,7 +922,7 @@ function render(){
       if(a==='start'){j.state='queued';j.started='queued'}
       else if(a==='resume'){j.state='queued'}
       else if(a==='stop'){j.state='stopped';j.started=new Date().toTimeString().slice(0,5)}
-      else{JOBS.splice(i,1);jobSel=(JOBS[0]||{}).id;if(a==='edit'){draft={...j.recipe};page=1}}
+      else{JOBS.splice(i,1);jobSel=(JOBS[0]||{}).id;if(a==='edit'){draft={...j.recipe};const S=skelOf(draft.teacher);for(const q of ['pAttn','pEmb','pRouter'])if(draft[q]==null)draft[q]=draft.mode==='vq'?S[q]:AFFW[q];page=1}}
       render()})}
 }
 let rz;addEventListener('resize',()=>{clearTimeout(rz);rz=setTimeout(render,120)});
