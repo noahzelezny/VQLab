@@ -3028,8 +3028,9 @@ def _fused_resolve(_plan_key, x, eidx, codes, codebook, scales, pack_bits=0,
 # 16, not 32: the register-heavy DEVX / tiled kernels compile to a pipeline
 # limit BELOW 1024 threads on some Apple GPUs (832 on the GitHub macOS arm64
 # runner), where a 32x32 threadgroup fails at dispatch. Output is byte-identical
-# at any row count (504 configurations checked); on the current kernels 16 vs
-# 32 measured 0.97-1.03x per matmul at 27B / e4b shapes (M3 Ultra, 2026-09-30).
+# at any row count (504 configurations checked). 16 is also not slower on
+# hardware that allows 32: 27B 3.9bpw speed-pair, 16 vs 32 rows (M3 Ultra,
+# 2026-09-30, n=3 alternating): decode x1.014 (1.004-1.047), prefill x1.035.
 _DENSE_ROWS_TG = int(os.environ.get("VQ_DENSE_ROWS_TG", "16"))
 
 

@@ -40,7 +40,12 @@ VPY="$WORK/venv/bin/python"
 rm -rf "$ROOT/build" "$ROOT"/src/*.egg-info
 WHEEL="$(ls "$WORK"/dist/vqlab-*.whl)"
 "$VPY" -m pip install --quiet "$WHEEL[test]"
-"$VPY" -c "import mlx.core as mx; print('mlx', mx.__version__, '| device', mx.default_device(), '| metal', mx.metal.is_available())"
+"$VPY" - <<'EOF'
+import mlx.core as mx
+info = mx.device_info() if hasattr(mx, "device_info") else mx.metal.device_info()
+print(f"mlx {mx.__version__} | {info.get('device_name')} ({info.get('architecture')}) "
+      f"| {info.get('memory_size', 0) / 2**30:.0f} GiB | metal {mx.metal.is_available()}")
+EOF
 
 step "lint"
 "$WORK/venv/bin/ruff" check "$ROOT/src" "$ROOT/tests" "$ROOT/scripts" "$ROOT/research/paper"
