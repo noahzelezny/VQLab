@@ -284,6 +284,7 @@ details.adv .kv{margin-top:8px}
 
 .cart .big{font-size:1.05em;font-weight:700;color:var(--fg);margin-top:2px}
 .hpick{font-size:1.25em;letter-spacing:.02em;text-transform:none;color:var(--fg);font-weight:700;padding:0 4px;border-bottom:1px dashed var(--line)}
+.pickrow{border-bottom:1px solid var(--line);padding-bottom:10px;margin-bottom:12px}
 .hpick:hover{color:var(--acc);border-bottom-color:var(--acc)}.hpick span{color:var(--faint);font-size:.8em}
 /* one screen: tighter vertical budget on the recipe page */
 .readouts{margin-bottom:8px}.readout{padding:6px 10px}.readout b{font-size:1.3em}
@@ -533,7 +534,7 @@ function ladder(t,ship,minMac,link){
 let libSel=null;
 function libShip(t){return t.rows.filter(r=>(r.kind==='vq'||r.kind==='affine')&&r.kl&&(r.kind==='affine'||r.hf)).sort((a,b)=>a.gib-b.gib)}
 function inspector(t,r){
-  if(!r)return '<div class="cart insp"><div class="faint">nothing shipped for this model yet</div></div>';
+  if(!r)return `<div class="cart insp"><div class="pickrow"><button class="hpick" id="pick">${esc(t.short)} <span>▾</span></button></div><div class="faint">nothing shipped for this model yet</div></div>`;
   const g=r.hf&&REG[r.hf],vis=t.bytes.vision||0,mtp=t.bytes.mtp||0,ship=libShip(t);
   const hi=Math.max(...ship.flatMap(q=>q.kl.filter(v=>v!=null))),lo=Math.min(...ship.flatMap(q=>q.kl.filter(v=>v!=null)));
   const bar=(lab,v)=>{if(v==null)return '';const w=8+92*(Math.log(v/lo*1.05)/Math.log(hi/lo*1.05));return `<div class="kbar"><span>${lab}</span><i><b style="width:${w}%;background:${r.kind==='affine'?'var(--bad)':'var(--acc)'}"></b></i><em>${f1(v)}</em></div>`};
@@ -548,6 +549,7 @@ function inspector(t,r){
   if(drift)acts.push(`<button class="btn" data-act="pull">Pull Hub revision</button>`);
   if(!t.real&&!t.judge)acts.push(`<button class="btn" data-act="score">Score on shared instrument</button>`);
   return `<div class="cart insp">
+    <div class="pickrow"><button class="hpick" id="pick">${esc(t.short)} <span>▾</span></button></div>
     <div class="ihead"><div><div class="iname">${esc(r.hf?r.hf.split('/')[1]:r.what)}</div><div class="faint">${r.kind==='affine'?'affine · published comparator':(r.mixed||(comp&&comp.length>1)?'VQ · mixed':'VQ · flat')}${r.hf?' · '+esc(r.hf.split('/')[0]):''}</div></div>${r.hf?`<a class="btn" href="https://huggingface.co/${esc(r.hf)}" target="_blank" rel="noopener">Hub ↗</a>`:''}</div>
     ${g?`<div class="pills"><span class="pill ${drift?'warn':'ok'}">${drift?'local differs: '+esc(g.drift.slice(0,2).join(', '))+(g.drift.length>2?' +'+(g.drift.length-2):''):'in sync with Hub'}</span><span class="pill ${behind?'warn':'ok'}">runtime ${esc(g.profile)}${behind?' · '+RUNTIME_NOW+' available':''}</span><span class="pill">rev ${esc(g.rev)}</span></div>`:''}
     <div class="ro">damage vs teacher <span class="faint">KL, mnats${t.real?'':' · card figures'}</span></div>${kl}
@@ -569,7 +571,7 @@ function pgLibrary(){
   const vq=ship.filter(r=>r.kind==='vq'),regs=vq.map(r=>REG[r.hf]).filter(Boolean);
   const nd=regs.filter(g=>g.drift.length).length,nb=regs.filter(g=>g.profile&&g.profile!==RUNTIME_NOW).length;
   const sum=`<span class="fsum"><b>${vq.length}</b> shipped${nd?` · <b class="w">${nd}</b> differ from Hub`:''}${nb?` · <b class="w">${nb}</b> on runtime ${regs.find(g=>g.profile!==RUNTIME_NOW).profile}`:''}${t.real?'':t.judge?' · judged, not KL-gated':' · not yet on the shared instrument'}</span>`;
-  return `<section class="panel libpage"><h2><span style="display:flex;align-items:baseline;gap:14px">Library <button class="hpick" id="pick">${esc(t.short)} <span>▾</span></button>${sum}</span>
+  return `<section class="panel libpage"><h2><span style="display:flex;align-items:baseline;gap:14px">Library ${sum}</span>
     <button class="chip" aria-pressed="${!!show.lab}" data-k="lab">lab builds on chart</button></h2>
   <div class="lib3">
     <div class="libmain">
@@ -640,11 +642,31 @@ const PICKER=()=>`<div class="modal hidden" id="picker"><div class="box">
     <div class="pickbody"><div class="pfams" id="pfams"></div><div class="prows" id="prows"></div></div>
   </div></div>`;
 let pickFam='all',pickKind='all';
+const HF={q:null,res:null,err:'',timer:0,seq:0};
+async function hubSearch(q){
+  const n=++HF.seq;HF.q=q;HF.res=null;HF.err='';
+  try{const r=await fetch(`https://huggingface.co/api/models?search=${encodeURIComponent(q)}&filter=mlx&sort=downloads&direction=-1&limit=30&expand[]=lastModified&expand[]=downloads&expand[]=likes&expand[]=pipeline_tag`);
+    if(!r.ok)throw new Error('Hub answered '+r.status);
+    const d=await r.json();if(n!==HF.seq)return;HF.res=d}
+  catch(e){if(n!==HF.seq)return;HF.err='could not reach the Hub: '+e.message}
+  if(pickFam==='hf')renderPicker();
+}
+function hubRows(){
+  const loc=new Set(TEACHERS.map(t=>t.n));
+  const row=r=>`<a class="prow" href="https://huggingface.co/${esc(r.id)}" target="_blank" rel="noopener"><span class="n">${esc(r.id)}</span><span class="m">${esc(r.pipeline_tag||'')}${loc.has(r.id)?` · <span style="color:var(--acc)">local teacher</span>`:''}</span><span class="d">${(r.downloads||0).toLocaleString()} downloads · ${r.likes||0} likes · updated ${esc((r.lastModified||'').slice(0,10))}</span></a>`;
+  return HF.err?`<div class="psect no">${esc(HF.err)}</div>`:HF.res===null?'<div class="psect no">searching…</div>':HF.res.length?HF.res.map(row).join(''):'<div class="psect no">nothing matches</div>';
+}
 function renderPicker(){
   const q=($('#psearch').value||'').toLowerCase();
+  $('#psearch').placeholder=pickFam==='hf'?'Search Hugging Face (MLX models)':'model or Hub repo';
   const all=[...TEACHERS,...DRAFTS];
   const creators=[...new Set(all.map(creator))];
-  $('#pfams').innerHTML=[['all','All'],...creators.map(c=>[c,c])].map(([k,l])=>`<button class="pfam" aria-current="${pickFam===k}" data-pf="${k}">${esc(l)}<i>${k==='all'?all.length:all.filter(t=>creator(t)===k).length}</i></button>`).join('');
+  $('#pfams').innerHTML=[['all','All'],...creators.map(c=>[c,c])].map(([k,l])=>`<button class="pfam" aria-current="${pickFam===k}" data-pf="${k}">${esc(l)}<i>${k==='all'?all.length:all.filter(t=>creator(t)===k).length}</i></button>`).join('')+`<button class="pfam" aria-current="${pickFam==='hf'}" data-pf="hf">Hugging Face<i>↗</i></button>`;
+  $('#pfams').querySelectorAll('[data-pf]').forEach(b=>b.onclick=()=>{pickFam=b.dataset.pf;renderPicker()});
+  if(pickFam==='hf'){
+    const hq=$('#psearch').value.trim();
+    if(HF.q===null||(HF.q!==hq&&!HF.timer))hubSearch(hq);
+    $('#prows').innerHTML=hubRows();return}
   const list=all.filter(t=>(pickFam==='all'||creator(t)===pickFam)&&(pickKind==='all'||t.kind.toLowerCase().startsWith(pickKind))&&(!q||(t.n+t.short).toLowerCase().includes(q)));
   const row=t=>t.draft?`<button class="prow no"><span class="n">${esc(t.short)}</span><span class="m">${esc(t.kind)} · not onboarded</span><span class="d">onboard runs profile, loader, cache determinism and the init sweep · about two hours</span></button>`
     :`<button class="prow" aria-current="${t.id===(page===0?libFam:draft.teacher)}" data-pt="${t.id}"><span class="n">${esc(t.short)}</span><span class="m">${esc(t.kind)}</span><span class="d">${t.rows.filter(r=>r.kind==='vq').length} shipped · ${t.scored.length} builds measured · ${t.fits} fits in store${t.note?' · '+t.note:''}${t.judge?' · <span style="color:var(--warn)">judged blind against bf16</span>':''}</span></button>`;
@@ -730,7 +752,7 @@ function pgJobs(){
 // ================================================================ wiring
 function wirePicker(){$('#pick').onclick=()=>{$('#picker').classList.remove('hidden');renderPicker();$('#psearch').focus()};
   $('#pclose').onclick=()=>$('#picker').classList.add('hidden');$('#picker').onclick=e=>{if(e.target.id==='picker')$('#picker').classList.add('hidden')};
-  $('#psearch').oninput=renderPicker;document.onkeydown=e=>{if(e.key==='Escape')$('#picker').classList.add('hidden')}}
+  $('#psearch').oninput=()=>{if(pickFam!=='hf')return renderPicker();clearTimeout(HF.timer);HF.res=null;HF.err='';renderPicker();HF.timer=setTimeout(()=>{HF.timer=0;hubSearch($('#psearch').value.trim())},250)};document.onkeydown=e=>{if(e.key==='Escape')$('#picker').classList.add('hidden')}}
 const PG=[pgLibrary,pgRecipe,pgJobs];
 function render(){
   renderFlow();$('#page').innerHTML=PG[page]();save();
