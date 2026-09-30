@@ -66,18 +66,13 @@ def _stale_as(bundle: str, name: str, rp):
     OUTPUT is byte-identical to the current runtime's for every artifact
     without vq_skipzero (tests/test_runtime_equivalence.py), so a bundle on
     it is STALE -- slower, same numbers -- not broken."""
-    import subprocess
     from vqlab._layout import runtime_file
-    reg = json.loads(runtime_file("equivalent_revisions.json").read_text())
-    root = pathlib.Path(__file__).resolve().parents[3]
+    reg_path = runtime_file("equivalent_revisions.json")
+    reg = json.loads(reg_path.read_text())
     for rev in reg.get("revisions", []):
         if pathlib.PurePath(rev["path"]).name != name:
             continue
-        p = subprocess.run(["git", "show", f"{rev['commit']}:{rev['path']}"],
-                           cwd=root, capture_output=True, text=True)
-        if p.returncode != 0:
-            continue
-        old = p.stdout
+        old = (reg_path.parent / rev["file"]).read_text()
         if rp.matches_any_profile(bundle, old)[0] or rp.matches_modulo_flags(bundle, old)[0]:
             return rev
     return None

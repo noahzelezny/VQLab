@@ -31,6 +31,7 @@ import numpy as np
 HERE = pathlib.Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parents[2]))  # src/
 from vqlab import _layout  # noqa: E402,F401
+from vqlab import config  # noqa: E402
 import fitstore  # noqa: E402
 import provenance  # noqa: E402
 
@@ -38,7 +39,6 @@ sys.path.insert(0, str(HERE))
 import skipzero_load  # noqa: E402
 import sz_resident  # noqa: E402
 
-SCRATCH = "<scratch>/"
 OWN = {"config.json", "model.py", "sz_resident.py", "skipzero_load.py", ".DS_Store"}
 
 
@@ -117,8 +117,8 @@ def main(argv=None):
     out = pathlib.Path(os.path.abspath(a.out))
     if out.exists():
         ap.error(f"{out} exists; sz-resident never overwrites")
-    if not a.allow_any_out and not str(out).startswith(SCRATCH):
-        ap.error(f"--out must be under {SCRATCH}")
+    if not a.allow_any_out:
+        config.require_storage(out.parent)
     cfg, shapes = plan(src)
     mf = cfg.get("model_file") or "model.py"
     stage1 = (src / mf).read_bytes()

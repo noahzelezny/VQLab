@@ -22,7 +22,7 @@ detached, under the GPU lease, refused while an exo instance is placed.
 Without --launch the next command is printed, not run.
 
 State: families/<family>/teachers/<teacher>/onboard.json. Scratch (caches,
-logs): $VQLAB_SCRATCH, default <scratch>/onboard/.
+logs): <vqlab.config.scratch()>/onboard/.
 
     vqlab onboard --teacher <dir> [--family F] [--launch] [--accept-entry NAME]
 
@@ -56,10 +56,8 @@ def now():
 
 
 def scratch(teacher_slug):
-    base = os.environ.get("VQLAB_SCRATCH") or "<scratch>"
-    if not pathlib.Path(base).is_dir():
-        base = str(pathlib.Path.home() / ".vqlab" / "scratch")
-    d = pathlib.Path(base) / "onboard" / teacher_slug
+    from vqlab import config
+    d = config.scratch() / "onboard" / teacher_slug
     d.mkdir(parents=True, exist_ok=True)
     return d
 

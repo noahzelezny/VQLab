@@ -10,8 +10,7 @@
                                             canonical layout (never deletes
                                             the source); re-verified by fit_id
 
---root picks the store (default: first of $VQLAB_FIT_STORE, else the
-SSD store). Indexing never moves or modifies anything; `file`
+--root picks the store (default: the first `vqlab.config.fit_store` root). Indexing never moves or modifies anything; `file`
 copies, verifies, and repoints the index at the filed copy. Removing the
 old run dirs afterwards is a separate, human decision.
 """
