@@ -525,22 +525,20 @@ function pgLibrary(){
   const link=r=>r.hf?`https://huggingface.co/${esc(r.hf)}`:null;
   return `<section class="panel libpage"><h2><span style="display:flex;align-items:baseline;gap:14px">Library <button class="hpick" id="pick">${esc(t.short)} <span>▾</span></button></span>
     </h2>
-  <div class="lib2">
+  <div>
     <div class="libmain">
       <svg class="chart" id="libchart" role="img" aria-label="shipped builds, size against mean KL"></svg>
       ${t.judge?`<div class="note warn">${esc(t.judge)}</div>`:t.real?'':'<div class="note warn">card figures; not yet re-measured on the shared instrument</div>'}
       <div class="libfoot"><button class="chip" aria-pressed="${!!show.lab}" data-k="lab">lab builds on chart</button></div>
       ${ladder(t,ship,minMac,link)}
     </div>
-    <div class="libside">${libAnswer(t)}</div>
   </div>${PICKER()}</section>`;
 }
 function drawLib(){
   const t=TE(libFam),svg=$('#libchart');
   const pts=t.rows.filter(r=>r.kl&&(r.kind==='vq'||r.kind==='affine'||(show.lab&&r.kind!=='affine-sk')));
   const fit=H=>{const c=chartFrame(svg,t.xr,H,yRange(pts.map(r=>mean(r.kl))));let s=c.s;
-    if(t.real&&t.scored.length)s+=curve(c,t.klFlat,'flat');if(t.real&&t.klAff)s+=curve(c,t.klAff,'aff');
-    {const u=usable(libBox)-(t.bytes.vision||0);if(u>c.xmin&&u<c.xmax)s+=`<g class="box near"><line x1="${c.X(u)}" x2="${c.X(u)}" y1="${c.Tp}" y2="${c.H-c.B}"/><text x="${c.X(u)+4}" y="${c.Tp+12}">${libBox} GB Mac</text></g>`}
+    const nvq=t.scored.filter(r=>r.kind==='vq'||r.kind==='lab').length;if(!t.judge&&nvq>=3)s+=curve(c,t.klFlat,'flat');if(!t.judge&&t.klAff&&t.scored.filter(r=>r.kind==='affine').length>=2)s+=curve(c,t.klAff,'aff');
     pts.forEach(r=>{const x=c.X(r.gib),y=c.Y(mean(r.kl));
       if(r.kind==='affine')s+=`<g><path d="M${x-4} ${y-4}L${x+4} ${y+4}M${x+4} ${y-4}L${x-4} ${y+4}" style="fill:none;stroke:var(--bad);stroke-width:1.5"/><text x="${x+7}" y="${y+4}" style="fill:var(--bad)">${esc(r.id)}</text></g>`;
       else if(r.kind==='vq')s+=`<g><circle cx="${x}" cy="${y}" r="5" style="fill:var(--acc)"/><text x="${x+8}" y="${y-7}" style="fill:var(--fg)">${esc(r.id.replace(/^r(\d)(\d)(v2)?$/,'$1.$2$3'))}</text></g>`;
@@ -691,7 +689,7 @@ function wirePicker(){$('#pick').onclick=()=>{$('#picker').classList.remove('hid
 const PG=[pgLibrary,pgRecipe,pgJobs];
 function render(){
   renderFlow();$('#page').innerHTML=PG[page]();save();
-  if(page===0){drawLib();wirePicker();document.querySelectorAll('[data-box]').forEach(b=>b.onclick=()=>{libBox=+b.dataset.box;render()});
+  if(page===0){drawLib();wirePicker();
     document.querySelectorAll('[data-k]').forEach(b=>b.onclick=()=>{show[b.dataset.k]=!show[b.dataset.k];render()});document.querySelectorAll('[data-sort]').forEach(h=>h.onclick=()=>{const k=h.dataset.sort;libSort=libSort.k===k?{k,d:-libSort.d}:{k,d:1};render()});
     document.querySelectorAll('[data-recipe]').forEach(b=>b.onclick=()=>openRecipe(b.dataset.recipe,b.dataset.at?+b.dataset.at:undefined))}
   if(page===1){const t=TE(draft.teacher);if(draft.auto)resolveAt(t,draft,sizeOf(t,draft));drawRecipe();drawStrip();drawReadouts();
