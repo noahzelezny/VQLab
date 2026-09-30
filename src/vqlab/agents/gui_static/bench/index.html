@@ -475,12 +475,13 @@ const skelOf=id=>SKEL[id]||AFFW;
 const initWidths=r=>Object.assign(r,r.mode==='vq'?skelOf(r.teacher):AFFW);
 const skDiff=r=>{const S=skelOf(r.teacher);return r.pAttn!==S.pAttn||r.pEmb!==S.pEmb||r.pRouter!==S.pRouter};
 // a recipe cannot exceed its bf16 text teacher
-const bf16Of=t=>{const P=PROF[t.id];return P?P.per*16+P.carry+P.embed:Infinity};
+// ceiling: the family's affine q8 size (g64 everywhere). Nothing above 8 bits is worth building.
+const bf16Of=t=>{const P=PROF[t.id];return P?P.per*(8+32/64)+affClass(P.carry,8,64)+affClass(P.embed,8,64):Infinity};
 // VQ: the dragged point is the release-skeleton size; attention/embedding widths off the release add their byte delta
 const vqDelta=(t,r)=>{const P=PROF[t.id];if(!P||r.mode==='affine')return 0;const S=skelOf(r.teacher);return affClass(P.carry,r.pAttn,64)+affClass(P.embed,r.pEmb,64)-affClass(P.carry,S.pAttn,64)-affClass(P.embed,S.pEmb,64)};
 const newRecipe=()=>({teacher:'q35',mode:'vq',widthPick:'auto',strat:'mixed',width:'d4',size:0,geo:null,bits:4,group:64,pAttn:6,pEmb:6,pRouter:16,skel:false,resel:false,tower:true,mtp:true,auto:true});
 const widthOf=geo=>geo?geo.split('-')[0]:'d4';
-const sizeOf=(t,r)=>Math.min(bf16Of(t),r.mode==='affine'?affSize(t,r):(r.strat==='flat'?(t.notches.find(n=>n.geo===r.geo)||t.notches[0]).gib:r.size)+vqDelta(t,r));
+const sizeOf=(t,r)=>r.mode==='affine'?affSize(t,r):Math.min(bf16Of(t),(r.strat==='flat'?(t.notches.find(n=>n.geo===r.geo)||t.notches[0]).gib:r.size)+vqDelta(t,r));
 function openRecipe(id,at){draft=newRecipe();draft.teacher=id;initWidths(draft);const t=TE(id);resolveAt(t,draft,at??(t.xr[0]+t.xr[1])/2);page=1;render()}
 function resolveAt(t,r,g){
   if(r.mode==='affine')return;
@@ -495,24 +496,36 @@ function plan(t,r){
   const out=[],sc=Math.sqrt(t.modules/120);r.reuse=null;
   if(r.mode==='affine'){out.push(['stream-convert',12*sc,`round-to-nearest ${r.bits}-bit experts, group ${r.group}; attention ${r.pAttn===16?'bf16':r.pAttn+'-bit'}, embeddings ${r.pEmb===16?'bf16':r.pEmb+'-bit'}, routers ${r.pRouter===16?'bf16':r.pRouter+'-bit'}${r.skel?' (from the VQ release)':''}`])}
   else if(r.strat==='flat'){const have=t.fitStore[r.geo]||0;const need=Math.max(0,t.modules-Math.min(have,t.modules));const per={'K128':.3,'K256':.3,'K512':.5,'K1024':.8,'K2048':1.2,'K4096':2.5,'K8192':4.5,'K16384':9}[r.geo.split('-')[1]]||1;r.reuse=[t.modules-need,t.modules];out.push(['fit',need*per,`${need} of ${t.modules} modules at ${r.geo}; ${t.modules-need} reused from the fit store`])}
-  else{const hot=Math.round(t.layers*0.3);const rich=r.width==='d4'?'d4-K16384':'d2-K4096';const have=t.fitStore[rich]||0;const need=Math.max(0,hot*3-Math.min(have,hot*3));r.reuse=[hot*3-need,hot*3];out.push(['fit',need*(r.width==='d4'?9:3.5)*sc+6,`${need} enriched modules at ${rich} across ${hot} back layers; the front reuses floor fits`])}
+  else{const m=mixPlan(t,r),nm=t.layers*3,hm=m.nhi*3,cnt=g=>Math.min(t.fitStore[g]||0,nm);const per=g=>({'K128':.3,'K256':.3,'K512':.5,'K1024':.8,'K2048':1.2,'K4096':2.5,'K8192':4.5,'K16384':9}[g.split('-')[1]]||1);const needLo=m.nhi<t.layers?Math.max(0,(nm-hm)-cnt(m.lo)):0,needHi=hm?Math.max(0,hm-cnt(m.hi)):0;r.reuse=[nm-needLo-needHi,nm];out.push(['fit',(needLo*per(m.lo)+needHi*per(m.hi))*sc+(needHi?6:0),`${needHi} modules at ${m.hi} (back ${m.nhi} layers), ${needLo} at ${m.lo} (front); rest reused from the fit store`])}
   if(r.mode==='vq'&&r.strat==='measured')out.push(['leverage + alloc-sweep',175*sc,'per-layer damage trajectory, then cost and value curves on this teacher']);
   if(r.mode==='vq'&&r.resel)out.push(['reselect',95,'self-generated Gram bank, codes re-picked activation-aware']);
-  if(r.mode==='vq'){const K=+(r.geo||'d4-K2048').split('K')[1];const rich=r.strat==='flat'?K:(r.width==='d4'?16384:4096);out.push(['geo-build · pack · bundle',(14+Math.log2(rich)*1.1)*sc,`diff-style rebuild, true bit-width; packing and bundling scale with K (${rich})`])}
+  if(r.mode==='vq'){const K=+(r.geo||'d4-K2048').split('K')[1];const rich=r.strat==='flat'?K:+mixPlan(t,r).hi.split('K')[1];out.push(['geo-build · pack · bundle',(14+Math.log2(rich)*1.1)*sc,`diff-style rebuild, true bit-width; packing and bundling scale with K (${rich})`])}
   if(r.tower&&t.bytes.vision)out.push(['graft tower',3,'bf16 vision tower']);
   if(r.mtp&&t.bytes.mtp)out.push(['mtp-pack',6,'quantized drafting sidecar']);
   out.push(['smoke · vision · check-release',12,'one token and one image through the shipped runtime; files exist and function']);
   out.push(t.judge?['blind judge',30*sc,'60 literary continuations judged blind against bf16; exact sign test']:['kl-ladder',40*sc,'paired against the teacher, three corpora at 12288']);
   return out;
 }
+const geoBpw=geo=>{const m=/^d(\d+)-K(\d+)$/.exec(geo);return m?Math.log2(+m[2])/+m[1]:NaN};
+const LADDER={d2:[16,4096],d4:[128,16384],d8:[1024,16384]};
+function mixPlan(t,r){
+  const L=t.layers,gib=Math.min(sizeOf(t,r),bf16Of(t))-vqDelta(t,r);
+  const w=r.widthPick&&r.widthPick!=='auto'?r.widthPick:widthOf(r.geo);
+  // t.bpw is total bits/weight (codebooks, scales); remove the overhead measured at the nearest same-width notch to get CODE bpw
+  const nn=t.notches.filter(n=>widthOf(n.geo)===w),nt=nn.length?nn.reduce((a,c)=>Math.abs(c.gib-gib)<Math.abs(a.gib-gib)?c:a):null,b0=t.bpw(gib)-(nt?t.bpw(nt.gib)-geoBpw(nt.geo):0);
+  const R=LADDER[w]||LADDER.d4,c=[];
+  for(let k=R[0];k<=R[1];k*=2)c.push(`${w}-K${k}`);
+  const sn=c.find(g=>Math.abs(geoBpw(g)-b0)<.01),b=sn?geoBpw(sn):b0; // snap to a candidate within 0.01 bpw (size is rounded to 0.1 GiB)
+  const lo=c.filter(g=>geoBpw(g)<b-1e-6).pop(),hi=c.find(g=>geoBpw(g)>b+1e-6);
+  if(!lo||!hi||isNaN(b)){const near=c.reduce((x,y)=>Math.abs(geoBpw(y)-b)<Math.abs(geoBpw(x)-b)?y:x);return{lo:near,hi:near,nhi:0,b}}
+  const f=(b-geoBpw(lo))/(geoBpw(hi)-geoBpw(lo)),nhi=Math.round(f*L);
+  const tot=(L-nhi)*geoBpw(lo)+nhi*geoBpw(hi);if(Math.abs(tot-b*L)/(b*L)>.015)console.warn('mixed allocation off budget',tot/L,b);
+  return{lo,hi,nhi,b};
+}
 function allocation(t,r){
   const L=t.layers;if(r.mode==='affine')return Array(L).fill('q'+r.bits+' g'+r.group);
   if(r.strat==='flat')return Array(L).fill(r.geo);
-  const lad=t.notches.filter(n=>widthOf(n.geo)===r.width).map(n=>n.geo);const floor=lad[Math.min(1,lad.length-1)],rich=lad[lad.length-1],top=lad[lad.length-1];
-  const lo=t.notches[0].gib,hi=t.notches[t.notches.length-1].gib,frac=(sizeOf(t,r)-lo)/(hi-lo);const hot=Math.round(L*Math.min(.85,Math.max(.1,frac*1.2)));const out=[];
-  for(let l=0;l<L;l++)out.push(l<L-hot?floor:rich);
-  if(r.strat==='measured'){[5,Math.round(L*.4),Math.round(L*.55)].forEach(l=>{if(l<L-hot)out[l]=rich});[L-hot+1,L-hot+3].forEach(l=>{if(l>=0&&l<L)out[l]=floor})}
-  return out;
+  const m=mixPlan(t,r);return Array.from({length:L},(_,l)=>l<L-m.nhi?m.lo:m.hi);
 }
 
 // ================================================================ state
@@ -817,17 +830,17 @@ function drawReadouts(){
     ${t.judge?`<div class="readout"><small>vs shipped ${esc(near.id)}</small><b>—</b><span class="sub">${g>near.gib?'+':''}${f1(g-near.gib)} GiB; judged after gates</span></div>`:`<div class="readout ${est?'':vs>3?'ok':vs<-3?'warn':''}"><small>vs shipped ${esc(near.id)}</small><b>${Math.abs(vs)<3?'same':(vs>0?'−':'+')+Math.abs(vs).toFixed(0)+'%'}</b><span class="sub">${est||'damage at '+(g>near.gib?'+':'')+f1(g-near.gib)+' GiB'}</span></div>`}
     ${aff&&!isNaN(k)?`<div class="readout ${est?'':k<aff.kl?'ok':'warn'}"><small>vs affine q${aff.bits}</small><b>${(k<aff.kl?'−':'+')+(100*Math.abs(1-k/aff.kl)).toFixed(0)}%</b><span class="sub">${est||'damage at '+(g>aff.gib?'+':'')+f1(g-aff.gib)+' GiB'}</span></div>`:`<div class="readout"><small>vs affine</small><b>—</b><span class="sub">no affine row yet</span></div>`}
     <div class="readout acc"><small>time</small><b>${fmtT(tot)}</b><span class="sub">${r.reuse?`${r.reuse[0]}/${r.reuse[1]} fits from the store · `:''}starts ~19:05</span></div>`;
-  const ap=$('#approach');if(ap)ap.textContent={flat:`${r.geo} on all ${t.modules} modules, the measured notch nearest the point.`,mixed:`${r.geo.split('-')[0]} from the nearest notch; ${r.geo} in front, the biggest ${r.geo.split('-')[0]} books in the back.`,measured:'after leverage and alloc-sweep run on this teacher; the strip is a placeholder until then.'}[r.strat];
+  const ap=$('#approach');if(ap)ap.textContent={flat:`${r.geo} on all ${t.modules} modules, the measured notch nearest the point.`,mixed:(m=>m.nhi?`${m.lo} × ${t.layers-m.nhi} layers in front, ${m.hi} × ${m.nhi} in the back, same bytes as the flat size.`:`${m.lo} on all layers (no bracketing geometry at this width).`)(mixPlan(t,r)),measured:'after leverage and alloc-sweep run on this teacher; the strip is a placeholder until then.'}[r.strat];
 }
 function drawRecipe(){
   const r=draft,t=TE(r.teacher),svg=$('#chart');
   const pv=t.rows.filter(q=>q.kl&&(q.kind==='vq'||q.kind==='lab'||q.kind==='affine')).map(q=>mean(q.kl));[0,.5,1].forEach(f=>{const g0=t.xr[0]+f*(t.xr[1]-t.xr[0]);pv.push(t.klFlat(g0));if(t.klAff)pv.push(t.klAff(g0))});
   // the chart always includes the recipe's own point
-  const g0=sizeOf(t,r),cap=bf16Of(t),xr=[Math.min(t.xr[0],g0*0.93),Math.min(cap,Math.max(t.xr[1],g0*1.07))];const k0=klOf(t,r,g0);if(isFinite(k0))pv.push(k0);
+  const g0=sizeOf(t,r),cap=bf16Of(t),xr=[Math.min(t.xr[0],g0*0.93),Math.max(Math.min(cap*1.03,Math.max(t.xr[1],g0*1.07)),g0*1.02)];const k0=klOf(t,r,g0);if(isFinite(k0))pv.push(k0);
   const c=chartFrame(svg,xr,330,yRange(pv));let s=c.s;const {X,Y,L,W,Rm,Tp,H,B,xmin,xmax}=c;
   const g=sizeOf(t,r),extra=(r.tower?t.bytes.vision:0)+(r.mtp?t.bytes.mtp:0);
   MACHINES.forEach(([gb,l])=>{const u=usable(gb)-extra;if(u>xmin&&u<xmax){const near=Math.abs(u-g)<(xmax-xmin)*0.01;s+=`<g class="box ${near?'near':''}"><line x1="${X(u)}" x2="${X(u)}" y1="${Tp}" y2="${H-B}"/><text x="${X(u)+4}" y="${Tp+14}">${l} GB</text></g>`}});
-  if(isFinite(cap)&&cap<=xmax+1e-6)s+=`<g class="bf16"><line x1="${X(cap)}" x2="${X(cap)}" y1="${Tp}" y2="${H-B}"/><text x="${X(cap)-4}" y="${Tp+28}" text-anchor="end">bf16 teacher</text></g>`;
+  if(isFinite(cap)&&cap<=xmax+1e-6)s+=`<g class="bf16"><line x1="${X(cap)}" x2="${X(cap)}" y1="${Tp}" y2="${H-B}"/><text x="${X(cap)-4}" y="${Tp+28}" text-anchor="end">q8 ceiling</text></g>`;
   const dl=vqDelta(t,r),sh=t.spanVQ?[t.spanVQ[0]+dl,t.spanVQ[1]+dl]:null;
   if(t.scored.length)s+=curve(c,x=>t.klFlat(x-dl),'flat '+(r.mode==='vq'&&r.strat==='flat'?'':'dimmed'),sh);
   if(t.klAff)s+=curve(c,t.klAff,'aff '+(r.mode==='affine'?'':'dimmed'),t.spanAff);
