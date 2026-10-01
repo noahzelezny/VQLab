@@ -57,6 +57,15 @@ def _run(argv: list[str], cwd: pathlib.Path | None = None) -> subprocess.Complet
                           capture_output=True, text=True, env=env, timeout=600)
 
 
+def _arch_importable(model_type: str) -> bool:
+    proc = subprocess.run(
+        [sys.executable, "-c",
+         "import importlib.util as u, sys; t = sys.argv[1]; "
+         "sys.exit(0 if any(u.find_spec(f'{p}.models.{t}') for p in ('mlx_vlm', 'mlx_lm')) else 1)",
+         model_type], capture_output=True)
+    return proc.returncode == 0
+
+
 def _a_multimodal_artifact(require_current_shim: bool = False) -> pathlib.Path | None:
     """A local artifact that declares a vision or audio tower.
 
@@ -79,6 +88,11 @@ def _a_multimodal_artifact(require_current_shim: bool = False) -> pathlib.Path |
         except Exception:
             continue
         if not (data.get("vision_config") or data.get("audio_config")):
+            continue
+        # The arch must be importable in the interpreter the test spawns:
+        # glm5_next lives in neither mlx-lm nor mlx-vlm (a serving stack
+        # registers its own), so a GLM rung cannot be smoked here at all.
+        if not _arch_importable(data.get("model_type", "")):
             continue
         if require_current_shim:
             try:
