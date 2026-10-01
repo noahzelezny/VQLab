@@ -253,7 +253,7 @@ details.adv .kv{margin-top:8px}
 .kbox .k{color:var(--faint)}.kbox .v{color:var(--dim)}
 .kseg.small button{padding:5px 4px;font-size:.76em}
 /* readouts above the chart */
-.readouts{display:grid;grid-template-columns:repeat(6,1fr);gap:8px;margin-bottom:10px}
+.readouts{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:10px}
 .readout{background:var(--bg);border:1px solid var(--line);border-radius:var(--r);padding:8px 12px;min-width:0}
 .readout b{display:block;font-size:1.45em;line-height:1.15;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .readout.acc b{color:var(--acc);text-shadow:var(--glow)}.readout.ok b{color:var(--ok)}.readout.bad b{color:var(--bad)}.readout.warn b{color:var(--warn)}
@@ -330,7 +330,6 @@ details.adv .kv{margin-top:8px}
   box-shadow:0 4px 16px oklch(0 0 0/.5);cursor:default}
 .info:hover .bub,.info:focus .bub,.info:focus-within .bub{visibility:visible}
 .whisk line{stroke:var(--mix);stroke-width:2;opacity:.45;stroke-dasharray:3 3}.whisk text{fill:var(--dim);font-size:11px;opacity:.8}
-.readout .qual{font-style:normal;font-weight:400;font-size:.5em;color:var(--faint);letter-spacing:.04em;margin-left:.4em}
 .bitrow{display:grid;grid-template-columns:9em 1fr;gap:10px;align-items:center;font-size:.88em;padding:3px 0}.bitrow span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .bitrow input[type=range]{width:100%;accent-color:var(--acc)}
 .bitrow .v{text-align:right;font-variant-numeric:tabular-nums;color:var(--fg)}
@@ -417,20 +416,8 @@ function speedShort(k){
 function speedOf(t,r,fk){
   const keys=fk?[fk]:[SPEED_FAM[t.id],SPEED_ALT[t.id]];const k=speedKey(t,r);if(!k)return null;
   for(const fam of keys){const F=fam&&SPEED.families[fam];const b=F&&F.builds[k];
-    if(b)return {x:b.decode_x,prefill_x:b.prefill_x,ref:F.reference,setup:F.setup,quotable:b.quotable!==false,fam}}
+    if(b)return {x:b.decode_x,prefill_x:b.prefill_x,ref:F.reference,setup:F.setup,quotable:b.quotable!==false,fam,via:b.via||F.via}}
   return null}
-// recipe-side: decode_x at a size, from the measured builds of one kind in the primary family
-function speedAt(t,mode,g){
-  const fam=SPEED_FAM[t.id];if(!fam)return null;const F=SPEED.families[fam];
-  const pts=t.rows.filter(q=>(mode==='affine'?q.kind==='affine':q.kind==='vq')).map(q=>{const k=speedKey(t,q),b=k&&F.builds[k];return b?{gib:q.gib,x:b.decode_x,p:b.prefill_x,q:b.quotable!==false}:null}).filter(Boolean).sort((a,b)=>a.gib-b.gib);
-  const base={ref:F.reference,setup:F.setup};
-  if(!pts.length)return Object.assign(base,{none:true});
-  const hit=pts.find(p=>Math.abs(p.gib-g)<=0.02*g);
-  if(hit)return Object.assign(base,{x:hit.x,p:hit.p,how:'measured',noisy:!hit.q});
-  if(g<=pts[0].gib)return Object.assign(base,{x:pts[0].x,p:pts[0].p,how:'extrapolated'});
-  const L=pts[pts.length-1];if(g>=L.gib)return Object.assign(base,{x:L.x,p:L.p,how:'extrapolated'});
-  const i=pts.findIndex(p=>p.gib>g),a=pts[i-1],b=pts[i],f=(g-a.gib)/(b.gib-a.gib);
-  return Object.assign(base,{x:a.x+f*(b.x-a.x),p:a.p+f*(b.p-a.p),how:'est.'})}
 const TEACHERS=[
  {id:'q35',res:'35B',n:'Qwen/Qwen3.6-35B-A3B-bf16',short:'Qwen3.6-35B-A3B',fam:'qwen3_5',kind:'MoE · 40 layers · 256 experts',onb:'2026-09-26',fits:1099,layers:40,topk:8,modules:120,bytes:{mtp:1.573,vision:0.832},fitStore:{'d2-K16':121,'d2-K256':240,'d2-K1024':120,'d2-K4096':240,'d4-K2048':240,'d4-K16384':138}},
  {id:'q397',res:'397B',n:'Qwen/Qwen3.5-397B-A17B-bf16',short:'Qwen3.5-397B-A17B',fam:'qwen3_5',kind:'MoE · 60 layers · 512 experts',onb:'2026-09-10',fits:0,layers:60,topk:10,modules:180,bytes:{mtp:2.1,vision:0.849},fitStore:{},note:'751 GB · Exo Models'},
@@ -670,7 +657,12 @@ function inspector(t,r){
   const PAL=['var(--acc)','var(--teal)','var(--warn)','var(--g1)','var(--dim)'];const col=k=>PAL[comp.findIndex(c=>c[0]===k)%PAL.length];
   const drift=g&&g.drift.length,behind=g&&g.profile&&g.profile!==RUNTIME_NOW;
   const mac=MACHINES.find(([gb])=>usable(gb)>=r.gib+(shipTower(r)?vis:0));
-  const sd=speedOf(t,r),spd=sd?(sd.quotable?`<div class="kv2"><span>decode speed</span><b>${sd.x.toFixed(2)}× ${esc(speedShort(sd.ref))}</b></div><div class="kv2"><span>prefill</span><b>${sd.prefill_x.toFixed(2)}×</b></div>`:`<div class="kv2"><span>decode speed</span><b style="color:var(--dim)">noisy, re-run</b></div><div class="kv2"><span>prefill</span><b style="color:var(--dim)">noisy, re-run</b></div>`):'';
+  const sd=speedOf(t,r),sk=speedKey(t,r),dm=v=>`<b style="color:var(--dim)">${v}</b>`;
+  const sinfo=sd?INFO(`Tokens/s relative to ${esc(sd.ref)}, timed back to back in the same setup. ${SETUP_TXT[sd.setup]}. Prompt 2048 tokens, 128 generated, n=3 alternating pairs, latest runtime (F190).${sd.via?` The ratio is chained through ${esc(sd.via)}, timed in the same session.`:''}`):INFO('Tokens/s relative to the family reference build, timed back to back in the same setup. Prompt 2048 tokens, 128 generated, n=3 alternating pairs, latest runtime (F190). This build has not been timed.');
+  const spd=`<div class="ro">speed ${sinfo}</div>`+(!sd?`<div class="kv2"><span>decode</span><b class="faint">not measured</b></div><div class="kv2"><span>prefill</span><b class="faint">not measured</b></div>`
+   :!sd.quotable?`<div class="kv2"><span>decode</span>${dm('noisy, re-run')}</div><div class="kv2"><span>prefill</span>${dm('noisy, re-run')}</div>`
+   :sk===sd.ref?`<div class="kv2"><span>decode</span><b>1.00× reference</b></div><div class="kv2"><span>prefill</span><b>1.00× reference</b></div>`
+   :`<div class="kv2"><span>decode</span><b>${sd.x.toFixed(2)}× <span class="faint">vs ${esc(speedShort(sd.ref))}</span></b></div><div class="kv2"><span>prefill</span><b>${sd.prefill_x.toFixed(2)}×</b></div>`);
   const acts=[];
   if(r.kind==='vq')acts.push(`<button class="btn go" data-fork="${esc(r.id)}">Fork recipe →</button>`);else acts.push(`<button class="btn go" data-fork="${esc(r.id)}">VQ build at this size →</button>`);
   if(behind)acts.push(`<button class="btn" data-act="rebundle">Rebundle on ${RUNTIME_NOW}</button>`);
@@ -874,15 +866,10 @@ function drawReadouts(){
   const gb=g-vqDelta(t,r),span=r.mode==='affine'?t.spanAff:t.spanVQ;
   const est=r.mode==='vq'&&skDiff(r)?'skeleton change not modeled':r.mode==='vq'&&r.strat!=='flat'&&!t.hasMixed?'assumed mix gain':(!span||gb<span[0]-0.05||gb>span[1]+0.05)?'extrapolated':'';
   const aff=t.affNotches.length?t.affNotches.reduce((a,q)=>Math.abs(q.gib-g)<Math.abs(a.gib-g)?q:a):null;
-  const sp=speedAt(t,r.mode,g);let spdReadout;
-  if(!sp||sp.none)spdReadout=`<div class="readout"><small>decode speed</small><b>—</b><span class="sub">not measured</span></div>`;
-  else{const tip=`Decode tokens/s relative to ${esc(sp.ref)}, same machine setup, latest runtime (F190). ${SETUP_TXT[sp.setup]}. Prefill ${sp.p.toFixed(2)}×.<br><strong>measured</strong>: this exact build was timed.<br><strong>est.</strong>: interpolated between two measured builds of the same family.<br><strong>extrapolated</strong>: outside the measured range, so trust it less.`;
-    spdReadout=`<div class="readout ${sp.how==='measured'&&!sp.noisy?(sp.x>1.03?'ok':sp.x<0.9?'warn':''):''}"><small>decode speed ${INFO(tip)}</small><b>${sp.x.toFixed(2)}×<em class="qual">${sp.how==='measured'?(sp.noisy?'measured, noisy':'measured'):sp.how}</em></b><span class="sub">vs ${esc(speedShort(sp.ref))}</span></div>`}
   $('#readouts').innerHTML=`
     <div class="readout acc"><small>size</small><b>${f1(g)} GiB</b><span class="sub">${f1(disk)} on disk · ${t.bpw(g).toFixed(2)} bpw</span></div>
     <div class="readout ${box?'ok':'bad'}"><small>runs on</small><b>${box?box[1]+' GB':'no box'}</b><span class="sub">${box?ctxReserve(box[0])+' GB kept for context':'over every listed box'}</span></div>
     ${t.judge?`<div class="readout warn"><small>quality</small><b>judge gate</b><span class="sub">blind vs bf16 after the build</span></div>`:`<div class="readout acc"><small>est. KL ${INFO(r.mode==='vq'&&r.strat==='measured'?'The measured search includes the mixed split, so it is no worse than mixed but may come back the same. The lower end (about 7% below) is a guess until it runs on this family.':'Mean KL to the teacher over three corpora, in millinats, from the fitted curve at this size.')}</small><b>${r.mode==='vq'&&r.strat==='measured'?'≤ ':'~'}${k.toFixed(0)}</b><span class="sub">${est||'mnats, mean of three corpora'}</span></div>`}
-    ${spdReadout}
     ${aff&&!isNaN(k)?`<div class="readout ${est?'':k<aff.kl?'ok':'warn'}"><small>vs affine q${aff.bits}</small><b>${(k<aff.kl?'−':'+')+(100*Math.abs(1-k/aff.kl)).toFixed(0)}%</b><span class="sub">${est||'damage at '+(g>aff.gib?'+':'')+f1(g-aff.gib)+' GiB'}</span></div>`:`<div class="readout"><small>vs affine</small><b>—</b><span class="sub">no affine row yet</span></div>`}
     <div class="readout acc"><small>time</small><b>${fmtT(tot)}</b><span class="sub">${r.reuse?`${r.reuse[0]}/${r.reuse[1]} fits from the store · `:''}starts ~19:05</span></div>`;
   const ap=$('#approach');if(ap)ap.textContent={flat:`${r.geo} on all ${t.modules} modules, the measured notch nearest the point.`,mixed:(m=>m.nhi?`${m.lo} × ${t.layers-m.nhi} layers in front, ${m.hi} × ${m.nhi} in the back, same bytes as the flat size.`:`${m.lo} on all layers (no bracketing geometry at this width).`)(mixPlan(t,r)),measured:'after leverage and alloc-sweep run on this teacher; the strip is a placeholder until then.'}[r.strat];
