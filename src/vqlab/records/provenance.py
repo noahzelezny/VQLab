@@ -56,6 +56,10 @@ RECORD = "vqlab_provenance.json"
 # before travels with it instead of being overwritten.
 HISTORY = "vqlab_provenance.history.jsonl"
 NOT_OUTPUTS = (RECORD, HISTORY)
+# Local files nobody built: Finder rewrites .DS_Store whenever the folder is
+# opened, which would otherwise fail every record it lands in. check-release
+# refuses to ship them.
+JUNK = (".DS_Store",)
 SCHEMA = "vqlab.provenance/1"
 HEAD = 1 << 20
 # Full-hash files up to this size; above it, head hash + size (the scheme
@@ -271,7 +275,7 @@ def write_build_record(out, *, tool, script=None, ap=None, args=None,
             h.write(json.dumps(old, sort_keys=True) + "\n")
     outs = {}
     for f in sorted(out.iterdir()):
-        if f.name in NOT_OUTPUTS or f.is_dir():
+        if f.name in NOT_OUTPUTS + JUNK or f.name.startswith("._") or f.is_dir():
             continue
         full = (f.name in full_hash) if full_hash is not None else True
         outs[f.name] = file_record(f, full=full)
@@ -296,10 +300,13 @@ def verify(art, rec) -> list:
     bad = []
     if hashlib.sha256(_canon(rec).encode()).hexdigest() != rec.get("id"):
         bad.append((RECORD, "record edited after it was written (id mismatch)"))
-    now = {f.name for f in art.iterdir() if f.is_file() and f.name not in NOT_OUTPUTS}
+    now = {f.name for f in art.iterdir() if f.is_file() and f.name not in NOT_OUTPUTS + JUNK
+           and not f.name.startswith("._")}
     for name in sorted(now - set(rec["outputs"])):
         bad.append((name, "added after build"))
     for name, want in rec["outputs"].items():
+        if name in JUNK or name.startswith("._"):
+            continue                       # recorded by an older build; not an output
         f = art / name
         if not f.exists():
             bad.append((name, "missing"))
