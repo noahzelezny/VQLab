@@ -211,7 +211,7 @@ details.adv .kv{margin-top:8px}
 .rungtab a{color:var(--teal)}.rungtab a:hover{text-decoration:underline}
 .rungtab tr.cmp td{color:var(--bad)}
 .rungtab .best{color:var(--ok)}
-.jobsel .row{margin-bottom:6px}.jobsel{max-height:calc(100vh - 16em);overflow:auto}.jdet{max-height:calc(100vh - 12em);overflow:auto}.timeline.q li{grid-template-columns:20px minmax(0,2fr) minmax(0,3fr) auto}.timeline.q .d{overflow-wrap:anywhere}
+.jobsel .row{margin-bottom:6px}.jobsel{max-height:calc(100vh - 250px);overflow:auto}.jdet{max-height:calc(100vh - 230px);overflow:auto;padding-right:6px}.timeline.q li{grid-template-columns:20px minmax(0,1fr) auto;padding:6px 0}.timeline.q .d{grid-column:2/-1;grid-row:2;overflow-wrap:anywhere;color:var(--faint)}.timeline.q .d:empty{display:none}.timeline.q .t{grid-row:1;grid-column:3}.timeline.q .m{grid-row:1}.qmeta{color:var(--dim);font-size:.85em;margin:-4px 0 10px}
 .stepbar{display:flex;gap:2px;grid-column:1/-1;margin-top:6px}
 .stepbar i{flex:1;height:4px;background:var(--med);border-radius:1px}
 .stepbar i.ok{background:var(--ok)}.stepbar i.run{background:var(--warn)}.stepbar i.bad{background:var(--bad)}
@@ -997,7 +997,7 @@ function pgJobs(){
       <div class="foot"><button class="btn go" data-jact="start">Start</button><button class="btn" data-save="${j.id}">Save recipe.json</button><button class="btn" data-jact="discard">Discard</button>${(j.kind||'build')==='build'?'<button class="btn" data-jact="edit">Edit recipe</button>':''}</div>`}
   else if(sel){const q=sel,kv=(a,b)=>`<div class="kv2"><span>${a}</span><b>${b}</b></div>`;
     det=`<div class="jobline" style="margin:0 0 10px"><span class="j">${esc(q.name)}</span><span class="state ${QCLS[qState(q)]||'queued'}">${esc(qState(q))}</span></div>
-      ${kv('source',esc((q.source||'').split('/').pop()))}${kv('commit',esc((q.commit||'').slice(0,10)))}${kv('created',esc(when(q.created)))}${kv('host',esc(q.host||''))}${kv('kind',q.preflight?'preflight':'run')}
+      <div class="qmeta">${[esc((q.source||'').split('/').pop()),esc((q.commit||'').slice(0,10)),esc(when(q.created)),q.host?esc(q.host):'',q.preflight?'preflight':''].filter(Boolean).join(' · ')}</div>
       <div class="ro" style="margin-top:10px">steps</div>
       <ul class="timeline q">${q.steps.map(x=>{const nt=[...(x.reasons||[]),...(x.warnings||[])];return `<li class="${SCLS(x.status)||'wait'}"><span class="m"></span><span class="c">${esc(x.name)}</span><span class="d">${esc(nt.join(' · '))}</span><span class="t">${esc(x.status)}${x.seconds!=null?' · '+fmtS(x.seconds):''}${x.attempts>1?' · x'+x.attempts:''}${x.rc!=null&&x.rc!==0?' · rc '+x.rc:''}</span></li>`}).join('')}</ul>
       <div class="cmd">vqlab queue status ~/.vqlab/queues/${esc(q.id)}</div>`}
