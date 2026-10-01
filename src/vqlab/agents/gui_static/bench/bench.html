@@ -328,13 +328,10 @@ details.adv .kv{margin-top:8px}
   font-size:13px;line-height:1.45;text-align:left;white-space:normal;
   box-shadow:0 4px 16px oklch(0 0 0/.5);cursor:default}
 .info:hover .bub,.info:focus .bub,.info:focus-within .bub{visibility:visible}
-.whisk line{stroke:var(--mix);stroke-width:2;opacity:.45;stroke-dasharray:3 3}.whisk text{fill:var(--dim);font-size:11px;opacity:.8}
 .bitrow{display:grid;grid-template-columns:9em 1fr;gap:10px;align-items:center;font-size:.88em;padding:3px 0}.bitrow span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .bitrow input[type=range]{width:100%;accent-color:var(--acc)}
 .bitrow .v{text-align:right;font-variant-numeric:tabular-nums;color:var(--fg)}
 .bitrow.off{opacity:.45}
-.cmpmode{border:1px solid var(--line);border-radius:var(--r);padding:8px 10px;margin-top:10px}
-.cmpmode .addon{border-top:0;padding:2px 0}
 
 .libtog{font-size:.8em;letter-spacing:0;text-transform:none}
 .addon.mini{padding:3px 10px;margin:0;display:inline-flex;gap:8px;align-items:center}
@@ -482,8 +479,6 @@ function derive(t){
 TEACHERS.forEach(derive);
 const KLF={flat:1,mixed:null,measured:null};
 const klVQ=(t,r,g)=>t.klFlat(g)*(r.strat==='flat'?1:t.mixedF);
-// measured = the mixed split's value as the upper bound; its search includes mixed, so no worse. The optimistic lower end is a guess.
-const MEAS_LO=0.93;
 // affine estimate: the published-recipe curve at the expert size; protected
 // modules at 8-bit take ~15% off (F168/F169 direction); the VQ skeleton
 // variant follows its own fitted curve, which floors early.
@@ -502,7 +497,19 @@ const affBase=(t,r)=>{const q=t.affNotches.find(n=>n.bits===r.bits);return (q&&r
 // embeddings, bf16 routers); byte and damage deltas are taken from that baseline
 const affExtra=(t,r)=>t.g0*0.35*(0.55*(r.pAttn-8)/8+0.35*(r.pEmb-8)/8+0.02*(r.pRouter-16)/16);
 const affFactor=r=>Math.pow(0.93,(r.pAttn-8)/2)*Math.pow(0.97,(r.pEmb-8)/2)*Math.pow(0.985,(r.pRouter-16)/2)*(r.group===32?0.92:r.group===128?1.08:1);
-const klOf=(t,r,g)=>r.mode==='affine'?(r.skel&&t.klSk?t.klSk(g):(t.klAff?t.klAff(g):t.klFlat(g)*1.6))*affFactor(r):klVQ(t,r,g-vqDelta(t,r));
+// trunk curve T(w): additive KL of the trunk at width w relative to the skeleton width, from matched affine builds
+// (affine q rows: every linear at q; affine-sk rows: experts at q, trunk at the skeleton). Only families that carry both.
+const trunkCurve=t=>{if(t._tc!==undefined)return t._tc;const S=skelOf(t.id),by=(k,b)=>t.rows.find(q=>q.id===k+b&&q.kl),pts={};pts[S.pAttn]=0;
+  for(const w of [4,6,8]){if(w===S.pAttn)continue;const a=by('q',w),b=by('s',w);if(a&&b&&b.kind==='affine-sk')pts[w]=mean(a.kl)-mean(b.kl)}
+  const q8=by('q',8),ws=Object.keys(pts).map(Number).sort((a,b)=>a-b);
+  return t._tc=(ws.length>=3&&q8)?{pts,ws,s8:mean(by('s',8).kl)}:null};
+const trunkT=(t,w)=>{const c=trunkCurve(t);if(!c)return null;const assumed=w>8;if(assumed)w=8;const ws=c.ws;
+  if(w<=ws[0])return {T:c.pts[ws[0]],assumed};if(w>=ws[ws.length-1])return {T:c.pts[ws[ws.length-1]],assumed};
+  for(let i=1;i<ws.length;i++)if(w<=ws[i]){const f=(w-ws[i-1])/(ws[i]-ws[i-1]);return {T:c.pts[ws[i-1]]*(1-f)+c.pts[ws[i]]*f,assumed}}};
+// absolute trunk floor F(w)=mean(s8)+T(w); the expert part E=max(k-F(skeleton),0) rides on top of it
+const trunkAdj=(t,r,k)=>{const x=trunkT(t,r.pAttn);return x?Math.max(k-trunkCurve(t).s8,0)+trunkCurve(t).s8+x.T:k};
+const trunkBelow=(t,r)=>{const g=sizeOf(t,r);return !!trunkCurve(t)&&klVQ(t,r,g-vqDelta(t,r))<trunkCurve(t).s8};
+const klOf=(t,r,g)=>r.mode==='affine'?(t.klAff?t.klAff(g):t.klFlat(g)*1.6)*affFactor(r):trunkAdj(t,r,klVQ(t,r,g-vqDelta(t,r)));
 // release skeleton widths per family, read from the shipped artifacts' config.json quantization blocks on 2026-09-30
 const SKEL={q35:{pAttn:6,pEmb:6,pRouter:16},q397:{pAttn:6,pEmb:6,pRouter:16},q27:{pAttn:4,pEmb:4,pRouter:16},fn:{pAttn:8,pEmb:8,pRouter:8},glm:{pAttn:8,pEmb:8,pRouter:16}};
 const AFFW={pAttn:8,pEmb:8,pRouter:16};
@@ -529,7 +536,7 @@ function resolveAt(t,r,g){
 }
 function plan(t,r){
   const out=[],sc=Math.sqrt(t.modules/120);r.reuse=null;
-  if(r.mode==='affine'){out.push(['stream-convert',12*sc,`round-to-nearest ${r.bits}-bit experts, group ${r.group}; attention ${r.pAttn===16?'bf16':r.pAttn+'-bit'}, embeddings ${r.pEmb===16?'bf16':r.pEmb+'-bit'}, routers ${r.pRouter===16?'bf16':r.pRouter+'-bit'}${r.skel?' (from the VQ release)':''}`])}
+  if(r.mode==='affine'){out.push(['stream-convert',12*sc,`round-to-nearest ${r.bits}-bit experts, group ${r.group}; attention ${r.pAttn===16?'bf16':r.pAttn+'-bit'}, embeddings ${r.pEmb===16?'bf16':r.pEmb+'-bit'}, routers ${r.pRouter===16?'bf16':r.pRouter+'-bit'}`])}
   else if(r.strat==='flat'){const have=t.fitStore[r.geo]||0;const need=Math.max(0,t.modules-Math.min(have,t.modules));const per={'K128':.3,'K256':.3,'K512':.5,'K1024':.8,'K2048':1.2,'K4096':2.5,'K8192':4.5,'K16384':9}[r.geo.split('-')[1]]||1;r.reuse=[t.modules-need,t.modules];out.push(['fit',need*per,`${need} of ${t.modules} modules at ${r.geo}; ${t.modules-need} reused from the fit store`])}
   else{const m=mixPlan(t,r),nm=t.layers*3,hm=m.nhi*3,cnt=g=>Math.min(t.fitStore[g]||0,nm);const per=g=>({'K128':.3,'K256':.3,'K512':.5,'K1024':.8,'K2048':1.2,'K4096':2.5,'K8192':4.5,'K16384':9}[g.split('-')[1]]||1);const needLo=m.nhi<t.layers?Math.max(0,(nm-hm)-cnt(m.lo)):0,needHi=hm?Math.max(0,hm-cnt(m.hi)):0;r.reuse=[nm-needLo-needHi,nm];out.push(['fit',(needLo*per(m.lo)+needHi*per(m.hi))*sc+(needHi?6:0),`${needHi} modules at ${m.hi} (back ${m.nhi} layers), ${needLo} at ${m.lo} (front); rest reused from the fit store`])}
   if(r.mode==='vq'&&r.strat==='measured')out.push(['leverage + alloc-sweep',175*sc,'per-layer damage trajectory, then cost and value curves on this teacher']);
@@ -573,7 +580,7 @@ const JOBS=[
 const PAGES=[{k:'library',n:'Library'},{k:'recipe',n:'Recipe'},{k:'jobs',n:'Jobs'}];
 const ICON={library:'<svg viewBox="0 0 24 24"><path d="M4 19V5M10 19V9M16 19v-6M22 19H2"/></svg>',recipe:'<svg viewBox="0 0 24 24"><path d="M3 18C8 18 8 6 13 6s5 12 8 12"/><circle cx="13" cy="6" r="2"/></svg>',jobs:'<svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h10M4 18h13"/><circle cx="19" cy="12" r="2"/></svg>'};
 let page=0, draft=newRecipe(), libFam='q35', jobSel='j1', show={d4:true,d2:true,d8:true,mixed:true,affine:true,'affine-sk':false,vq:true,lab:false};
-try{const st=JSON.parse(localStorage.getItem('vq.v18')||'{}');if(st.draft)draft=st.draft;if(st.page!=null)page=st.page;if(st.libFam)libFam=st.libFam;if(st.jobSel)jobSel=st.jobSel;if(st.show)show=st.show}catch{}
+try{const st=JSON.parse(localStorage.getItem('vq.v18')||'{}');if(st.draft){draft=st.draft;draft.skel=false}if(st.page!=null)page=st.page;if(st.libFam)libFam=st.libFam;if(st.jobSel)jobSel=st.jobSel;if(st.show)show=st.show}catch{}
 function save(){try{localStorage.setItem('vq.v18',JSON.stringify({draft,page,libFam,jobSel,show}))}catch{}}
 if(!draft.size){const t=TE(draft.teacher);resolveAt(t,draft,(t.xr[0]+t.xr[1])/2)}
 
@@ -726,16 +733,18 @@ function pgRecipe(){
     <div class="seghelp">auto follows the notch nearest the point; a fixed width keeps the point on that ladder.</div>
     ${nonexp}`;
   const I=INFO;
-  const sk=r.mode==='affine'&&r.skel;const bitrow=(k,label,off)=>`<div class="bitrow ${off||sk?'off':''}"><span>${label}</span><div class="kseg small">${[4,6,8,16].map(b=>`<button aria-pressed="${r[k]===b}" data-bits="${k}" data-v="${b}" ${off||sk?'disabled':''}>${b===16?'bf16':'q'+b}</button>`).join('')}</div></div>`;
-  const nonexp=`<div class="ro nonexp"><span>non-expert tensors ${I('Release skeleton: attention, embeddings and routers at the widths the shipped artifacts carry (from their config.json). Changing them moves the size; the KL estimate does not model it.')}</span><button class="linkbtn ${skDiff(r)?'':'hid'}" id="skreset">reset</button></div>
+  const sk=false;const bitrow=(k,label,off)=>`<div class="bitrow ${off||sk?'off':''}"><span>${label}</span><div class="kseg small">${[4,6,8,16].map(b=>`<button aria-pressed="${r[k]===b}" data-bits="${k}" data-v="${b}" ${off||sk?'disabled':''}>${b===16?'bf16':'q'+b}</button>`).join('')}</div></div>`;
+  const nonTxt=(()=>{const c=trunkCurve(t);if(!c)return 'The KL estimate does not model these widths yet: no matched builds on this family. On 27B and 35B the trunk width moves KL as much as the experts do.';
+    const S=skelOf(t.id),w=S.pAttn===4?6:S.pAttn===6?4:4,lo=S.pAttn,hi=8,by=(k,b)=>t.rows.find(q=>q.id===k+b),m=x=>Math.round(mean(x.kl));
+    return `The KL estimate moves with attention width, from affine builds that differ only in trunk width (${t.res}: ${lo}-bit trunk → ${hi}-bit cuts mean KL from ${m(by('s',hi))} to ${m(by('q',hi))} at ${hi}-bit experts). Embeddings and routers are not modeled separately.`})();
+  const nonexp=`<div class="ro nonexp"><span>non-expert tensors ${I(nonTxt)}</span><button class="linkbtn ${skDiff(r)?'':'hid'}" id="skreset">reset</button></div>
     ${bitrow('pAttn','attention')}${bitrow('pEmb','embeddings · head')}${bitrow('pRouter','routers',t.topk<=1)}`;
   const affSide=`<div class="ro">experts ${I('Round-to-nearest affine quantization of the expert (or MLP) weights. Bits and group size fix the size exactly, so the point does not drag.')}</div>
     <div class="kseg small">${[2,3,4,5,6,8].map(b=>`<button aria-pressed="${r.bits===b}" data-g="bits" data-v="${b}">q${b}</button>`).join('')}</div>
     <div class="ro" style="margin-top:8px">group size ${I('Weights per scale-and-bias group. Smaller groups cost bytes (bf16 scale and bias per group: +32/group bits per weight) and take damage off. 64 is the published mlx-community recipe and lands on a measured row where one exists.')}</div>
     <div class="kseg small">${[32,64,128].map(gs=>`<button aria-pressed="${r.group===gs}" data-g="group" data-v="${gs}">${gs}</button>`).join('')}</div>
     <div class="ro" style="margin-top:8px">non-expert tensors ${I('stream-convert --protect-bits. Attention, embeddings and routers are a small share of the bytes and a large share of the damage; keeping them wider is cheap. Factors are estimates until such a row is scored.')}</div>
-    ${bitrow('pAttn','attention')}${bitrow('pEmb','embeddings · head')}${bitrow('pRouter','routers',t.topk<=1)}
-    <div class="cmpmode"><button class="addon" aria-pressed="${!!r.skel}" data-g="skel"><i></i><span class="n">comparison build ${I('For a like-for-like test of affine experts against VQ experts. The non-expert tensors are copied bit-for-bit from the nearest VQ rung (stream-convert --skeleton-from), which sets the three widths above; only the experts differ.')}</span><span class="t">${r.skel?'widths from '+esc((t.rows.find(q=>q.kind==='vq')||{id:'the VQ rung'}).id):'off'}</span></button></div>`;
+    ${bitrow('pAttn','attention')}${bitrow('pEmb','embeddings · head')}${bitrow('pRouter','routers',t.topk<=1)}`;
   return `<section class="panel"><h2><span style="display:flex;align-items:baseline;gap:14px">Recipe <button class="hpick" id="pick">${esc(t.short)} <span>▾</span></button></span><small>drag the point along the curve; notches are measured builds and Apple silicon boxes</small></h2>
   <div class="readouts" id="readouts"></div>
   <div class="recipe">
@@ -863,12 +872,13 @@ function drawReadouts(){
   const ship=t.rows.filter(q=>q.kind==='vq');const near=ship.reduce((a,q)=>Math.abs(q.gib-g)<Math.abs(a.gib-g)?q:a);const vs=100*(1-k/mean(near.kl));
   // estimate provenance: a note replaces the sub-line and the vs readouts go neutral
   const gb=g-vqDelta(t,r),span=r.mode==='affine'?t.spanAff:t.spanVQ;
-  const est=r.mode==='vq'&&skDiff(r)?'skeleton change not modeled':r.mode==='vq'&&r.strat!=='flat'&&!t.hasMixed?'assumed mix gain':(!span||gb<span[0]-0.05||gb>span[1]+0.05)?'extrapolated':'';
+  const tc=r.mode==='vq'&&trunkCurve(t),Sk=skelOf(r.teacher),tn=tc&&trunkT(t,r.pAttn);
+  const est=tc&&(skDiff(r)||trunkBelow(t,r))?[trunkBelow(t,r)?'below trunk floor':'',r.pAttn!==Sk.pAttn?'trunk from affine pairs'+(tn.assumed?', bf16 assumed':''):'',r.pEmb!==r.pAttn?'embeddings not modeled':'',r.pRouter!==Sk.pRouter?'routers not modeled':''].filter(Boolean).join(' · '):r.mode==='vq'&&skDiff(r)?'skeleton change not modeled':r.mode==='vq'&&r.strat!=='flat'&&!t.hasMixed?'assumed mix gain':(!span||gb<span[0]-0.05||gb>span[1]+0.05)?'extrapolated':'';
   const aff=t.affNotches.length?t.affNotches.reduce((a,q)=>Math.abs(q.gib-g)<Math.abs(a.gib-g)?q:a):null;
   $('#readouts').innerHTML=`
     <div class="readout acc"><small>size</small><b>${f1(g)} GiB</b><span class="sub">${f1(disk)} on disk · ${t.bpw(g).toFixed(2)} bpw</span></div>
     <div class="readout ${box?'ok':'bad'}"><small>runs on</small><b>${box?box[1]+' GB':'no box'}</b><span class="sub">${box?ctxReserve(box[0])+' GB kept for context':'over every listed box'}</span></div>
-    ${t.judge?`<div class="readout warn"><small>quality</small><b>judge gate</b><span class="sub">blind vs bf16 after the build</span></div>`:`<div class="readout acc"><small>est. KL ${INFO(r.mode==='vq'&&r.strat==='measured'?'The measured search includes the mixed split, so it is no worse than mixed but may come back the same. The lower end (about 7% below) is a guess until it runs on this family.':'Mean KL to the teacher over three corpora, in millinats, from the fitted curve at this size.')}</small><b>${r.mode==='vq'&&r.strat==='measured'?'≤ ':'~'}${k.toFixed(0)}</b><span class="sub">${est||'mnats, mean of three corpora'}</span></div>`}
+    ${t.judge?`<div class="readout warn"><small>quality</small><b>judge gate</b><span class="sub">blind vs bf16 after the build</span></div>`:`<div class="readout acc"><small>est. KL ${INFO(r.mode==='vq'&&r.strat==='measured'?'The measured search includes the mixed split, so it is no worse than mixed but may come back the same.':'Mean KL to the teacher over three corpora, in millinats, from the fitted curve at this size.')}</small><b>${r.mode==='vq'&&r.strat==='measured'?'≤ ':'~'}${k.toFixed(0)}</b><span class="sub">${est||'mnats, mean of three corpora'}</span></div>`}
     ${aff&&!isNaN(k)?`<div class="readout ${est?'':k<aff.kl?'ok':'warn'}"><small>vs affine q${aff.bits}</small><b>${(k<aff.kl?'−':'+')+(100*Math.abs(1-k/aff.kl)).toFixed(0)}%</b><span class="sub">${est||'damage at '+(g>aff.gib?'+':'')+f1(g-aff.gib)+' GiB'}</span></div>`:`<div class="readout"><small>vs affine</small><b>—</b><span class="sub">no affine row yet</span></div>`}
     <div class="readout acc"><small>time</small><b>${fmtT(tot)}</b><span class="sub">${r.reuse?`${r.reuse[0]}/${r.reuse[1]} fits from the store · `:''}starts ~19:05</span></div>`;
   const ap=$('#approach');if(ap)ap.textContent={flat:`${r.geo} on all ${t.modules} modules, the measured notch nearest the point.`,mixed:(m=>m.nhi?`${m.lo} × ${t.layers-m.nhi} layers in front, ${m.hi} × ${m.nhi} in the back, same bytes as the flat size.`:`${m.lo} on all layers (no bracketing geometry at this width).`)(mixPlan(t,r)),measured:'after leverage and alloc-sweep run on this teacher; the strip is a placeholder until then.'}[r.strat];
@@ -883,16 +893,15 @@ function drawRecipe(){
   MACHINES.forEach(([gb,l])=>{const u=usable(gb)-extra;if(u>xmin&&u<xmax){const near=Math.abs(u-g)<(xmax-xmin)*0.01;s+=`<g class="box ${near?'near':''}"><line x1="${X(u)}" x2="${X(u)}" y1="${Tp}" y2="${H-B}"/><text x="${X(u)+4}" y="${Tp+14}">${l} GB</text></g>`}});
   if(isFinite(cap)&&cap<=xmax+1e-6)s+=`<g class="bf16"><line x1="${X(cap)}" x2="${X(cap)}" y1="${Tp}" y2="${H-B}"/><text x="${X(cap)-4}" y="${Tp+28}" text-anchor="end">q8 ceiling</text></g>`;
   const dl=vqDelta(t,r),sh=t.spanVQ?[t.spanVQ[0]+dl,t.spanVQ[1]+dl]:null;
-  if(t.scored.length)s+=curve(c,x=>t.klFlat(x-dl),'flat '+(r.mode==='vq'&&r.strat==='flat'?'':'dimmed'),sh);
+  if(t.scored.length)s+=curve(c,x=>trunkAdj(t,r,t.klFlat(x-dl)),'flat '+(r.mode==='vq'&&r.strat==='flat'?'':'dimmed'),sh);
   if(t.klAff)s+=curve(c,t.klAff,'aff '+(r.mode==='affine'?'':'dimmed'),t.spanAff);
-  if(r.mode==='vq'&&r.strat!=='flat'&&t.scored.length)s+=curve(c,x=>klVQ(t,r,x-dl),'mixed',sh,!t.hasMixed);
+  if(r.mode==='vq'&&r.strat!=='flat'&&t.scored.length)s+=curve(c,x=>trunkAdj(t,r,klVQ(t,r,x-dl)),'mixed',sh,!t.hasMixed);
   t.rows.filter(q=>q.kl&&(q.kind==='vq'||(q.kind==='affine'&&r.mode==='affine'))).forEach(q=>s+=`<g class="rung"><circle cx="${X(q.gib)}" cy="${Y(mean(q.kl))}" r="4"/><text x="${X(q.gib)+7}" y="${Y(mean(q.kl))+14}">${esc(q.id)}</text></g>`);
   if(r.mode==='vq')t.notches.forEach(n=>{const y=isNaN(t.klFlat(n.gib))?Y(100):Y(t.klFlat(n.gib));s+=`<g class="notch ${(r.widthPick&&r.widthPick!=='auto'&&widthOf(n.geo)!==r.widthPick)?'dimmed':''}"><line x1="${X(n.gib)}" x2="${X(n.gib)}" y1="${y-7}" y2="${y+7}"/><text x="${X(n.gib)}" y="${y+20}" text-anchor="middle">${n.geo}</text></g>`});
   else [2,3,4,5,6,8].forEach(b=>{const rr={...r,bits:b};const gx=sizeOf(t,rr);if(gx<xmin||gx>xmax)return;const kk=klOf(t,rr,gx),y=isNaN(kk)?Y(100):Y(kk);s+=`<g class="notch ${b===r.bits?'':'dimmed'}"><line x1="${X(gx)}" x2="${X(gx)}" y1="${y-7}" y2="${y+7}"/><text x="${X(gx)}" y="${y+20}" text-anchor="middle">q${b}</text></g>`});
   if(false)t.affNotches.forEach(n=>{const y=Y(n.kl);s+=`<g class="notch"><line x1="${X(n.gib)}" x2="${X(n.gib)}" y1="${y-7}" y2="${y+7}"/><text x="${X(n.gib)}" y="${y+20}" text-anchor="middle">q${n.bits}</text></g>`});
   const k=klOf(t,r,g),ky=isNaN(k)?Y(100):Y(k);
   if(t.judge)s+=`<text x="${L+8}" y="${Tp+30}" style="fill:var(--warn)">sizes are exact; KL points are card figures, the gate is a blind judge against bf16</text>`;
-  if(r.mode==='vq'&&r.strat==='measured'&&!isNaN(k)){const y2=Y(k*MEAS_LO);s+=`<g class="whisk"><line x1="${X(g)}" x2="${X(g)}" y1="${ky}" y2="${y2}"/><line x1="${X(g)-5}" x2="${X(g)+5}" y1="${y2}" y2="${y2}"/><text x="${X(g)+9}" y="${y2+4}">guess ~${(k*MEAS_LO).toFixed(0)}</text></g>`}
   s+=`<g class="pick"><line x1="${X(g)}" x2="${X(g)}" y1="${ky}" y2="${H-B}"/><circle cx="${X(g)}" cy="${ky}" r="6.5"/><text x="${X(g)+11}" y="${ky-8}">${f1(g)} GiB${isNaN(k)?'':' · ~'+k.toFixed(0)}</text></g>`;
   svg.innerHTML=s;svg.style.cursor=r.mode==='affine'?'default':'';
   if(r.mode==='affine'){svg.onpointerdown=svg.onpointermove=svg.onpointerup=null;return}
@@ -965,10 +974,10 @@ function render(){
     document.querySelectorAll('[data-recipe]').forEach(b=>b.onclick=()=>openRecipe(b.dataset.recipe,b.dataset.at?+b.dataset.at:undefined))}
   if(page===1){const t=TE(draft.teacher);if(draft.auto)resolveAt(t,draft,sizeOf(t,draft));drawRecipe();drawStrip();drawReadouts();
     document.querySelectorAll('.seg button,.kseg button').forEach(b=>b.onclick=()=>{const g=b.dataset.g,v=b.dataset.v;const t=TE(draft.teacher);
-      if(g==='mode'){if(!draft.skel){const was=draft.mode==='vq'?skelOf(draft.teacher):AFFW,same=['pAttn','pEmb','pRouter'].every(q=>draft[q]===was[q]);draft.mode=v;if(same)initWidths(draft)}else draft.mode=v}else if(g==='bits'){draft.bits=+v}else if(g==='group'){draft.group=+v}else if(g==='strat'){draft.strat=v}else if(g==='widthPick'){draft.widthPick=v}
+      if(g==='mode'){{const was=draft.mode==='vq'?skelOf(draft.teacher):AFFW,same=['pAttn','pEmb','pRouter'].every(q=>draft[q]===was[q]);draft.mode=v;if(same)initWidths(draft)}}else if(g==='bits'){draft.bits=+v}else if(g==='group'){draft.group=+v}else if(g==='strat'){draft.strat=v}else if(g==='widthPick'){draft.widthPick=v}
       resolveAt(t,draft,sizeOf(t,draft));render()});
     wirePicker();
-    document.querySelectorAll('.addon').forEach(b=>b.onclick=()=>{draft[b.dataset.g]=!draft[b.dataset.g];if(b.dataset.g==='skel'&&draft.skel){draft.pAttn=6;draft.pEmb=8;draft.pRouter=16}render()});
+    document.querySelectorAll('.addon').forEach(b=>b.onclick=()=>{draft[b.dataset.g]=!draft[b.dataset.g];render()});
     {const rb=$('#skreset');if(rb)rb.onclick=()=>{initWidths(draft);render()}}
     document.querySelectorAll('[data-bits]').forEach(b=>b.onclick=()=>{draft[b.dataset.bits]=+b.dataset.v;render()});
     $('#queue').onclick=()=>{const t=TE(draft.teacher);JOBS.unshift({id:'j'+Date.now(),name:t.short.toLowerCase().replace(/[^a-z0-9]+/g,'-')+'-'+(draft.mode==='affine'?'q'+draft.bits:f1(sizeOf(t,draft))),state:'draft',kind:'build',stepIx:-1,recipe:{...draft},started:'draft',eta:'~20:30'});jobSel=JOBS[0].id;draft=newRecipe();resolveAt(t,draft,(t.xr[0]+t.xr[1])/2);page=2;render()}}
