@@ -342,7 +342,7 @@ details.adv .kv{margin-top:8px}
 .note.warn{color:var(--warn);font-size:.82em;margin-top:6px}
 .libfoot{display:flex;justify-content:flex-end;margin-top:8px}
 .chip{border:1px solid var(--line);border-radius:var(--r);padding:5px 12px;font-size:.85em;color:var(--dim);background:var(--bg)}.chip[aria-pressed=true]{border-color:var(--acc);color:var(--acc)}
-.ladder{table-layout:fixed}.ladder td{overflow:hidden;text-overflow:ellipsis;padding:6px 4px}.ladder th{padding:4px 4px;white-space:nowrap}.ladder td.what{max-width:none}.ladder .gtog{margin-left:3px;padding:0 2px;border:0;background:none;color:var(--dim);font:inherit;cursor:pointer;line-height:1}.ladder .gtog:hover{color:var(--acc)}
+.ladder{table-layout:fixed}.ladder td{overflow:hidden;text-overflow:ellipsis;padding:6px 4px}.ladder th{padding:4px 3px;white-space:nowrap;letter-spacing:.04em}.ladder td.what{max-width:none}.ladder:not(.tight) td:not(.what):not(.lnk),.ladder:not(.tight) th:not(:first-child):not(:last-child){padding-left:12px;padding-right:12px}.ladder.tight{font-size:.78em}.ladder.tight th{font-size:.9em;letter-spacing:.02em}.ladder.tight td:nth-child(3),.ladder.tight th:nth-child(3){padding-left:10px}.ladder td.num,.ladder th.num{text-align:right}.ladder .gtog{margin-left:3px;padding:0 2px;border:0;background:none;color:var(--dim);font:inherit;cursor:pointer;line-height:1}.ladder .gtog:hover{color:var(--acc)}
 .ladder th.sort{cursor:pointer;user-select:none}.ladder th.sort:hover{color:var(--fg)}
 .libside .cart{font-size:.95em;padding:14px 16px}.libside .big{font-size:1.2em}
 
@@ -359,7 +359,7 @@ details.adv .kv{margin-top:8px}
 .kv2{display:flex;justify-content:space-between;padding:3px 0;color:var(--dim)}.kv2 b{color:var(--fg);font-weight:400}
 .compbar{display:flex;height:12px;border-radius:3px;overflow:hidden;gap:1px}.insp .key{margin-top:6px}
 .iacts{display:flex;flex-wrap:wrap;gap:8px;margin-top:16px;padding-top:12px;border-top:1px solid var(--line)}
-.libmain .legend{display:flex;gap:18px;margin-top:6px;font-size:.85em;color:var(--dim)}.libmain .legend .dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px}
+.libmain .legend{display:flex;gap:18px;margin-top:6px;font-size:.85em;color:var(--dim)}.libmain .legend>.info{margin-left:-10px;align-self:center}.libmain .legend .dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px}
 .chart .cu.aff:not(.ext),.chart .cu.sk:not(.ext){stroke-dasharray:none}.chart .cu.ext{stroke-dasharray:4 4;opacity:.6}.chart .cu.ext.dimmed{opacity:.2}
 .chart .bf16 line{stroke:var(--faint);opacity:.6;stroke-dasharray:2 4}.chart .bf16 text{fill:var(--faint);font-size:11px}
 .nonexp{display:flex;justify-content:space-between;align-items:center}
@@ -653,11 +653,11 @@ function ladder(t,ship,minMac,link){
   const ex=libCols,hasP=ship.some(r=>libW(t,r).hasP);
   const wb=v=>v==null?null:v===16?'bf16':String(v),bp=v=>v==null?null:String(+v.toFixed(2));
   const C=[ // id,label,sort value,cell text (null = —),width em,group
-   ['build','build',r=>r.what,null,0],['gib','GiB',r=>r.gib,null,4.4],['mac','runs on',r=>r.gib,null,5],
-   ...(ex.kl?[['p','prose',r=>r.one||r.lit?null:r.kl[0],null,4.7,'kl'],['c','code',r=>r.one||r.lit?null:r.kl[1],null,4.7,'kl'],['l','literary',r=>r.one?null:r.kl[2],null,5.4,'kl']]:[]),
+   ['build','build',r=>r.what,null,ex.kl||ex.bpw?10:13],['gib','GiB',r=>r.gib,null,5.6],['mac','runs on',r=>r.gib,null,5.6],
+   ...(ex.kl?[['p','prose',r=>r.one||r.lit?null:r.kl[0],null,5.2,'kl'],['c','code',r=>r.one||r.lit?null:r.kl[1],null,5.2,'kl'],['l','literary',r=>r.one?null:r.kl[2],null,5.4,'kl']]:[]),
    ['m',ex.kl?'mean':'mean KL',r=>mean(r.kl),null,ex.kl?5.2:7.6,'klm'],['t','top-1',r=>r.top1,null,4.4],
-   ...(ex.bpw?[['bx','experts',r=>libW(t,r).x,null,4.8,'bpw'],['ba','attention',r=>libW(t,r).a,null,6.2,'bpw'],['be',hasP?'embed/PLE':'embed',r=>libW(t,r).e,null,hasP?6.2:4.2,'bpw'],['br','router',r=>libW(t,r).r,null,4.4,'bpw']]:[]),
-   ['b','bpw',r=>r.bpw,null,ex.bpw?4.4:4.4,'bpwm'],['lnk','',null,null,ex.kl||ex.bpw?2.4:9.8]];
+   ...(ex.bpw?[['bx','experts',r=>libW(t,r).x,null,4.8,'bpw'],['ba','attention',r=>libW(t,r).a,null,5.2,'bpw'],['be',hasP?'embed/PLE':'embed',r=>libW(t,r).e,null,hasP?5.6:4.2,'bpw'],['br','router',r=>libW(t,r).r,null,4.4,'bpw']]:[]),
+   ['b','bpw',r=>r.bpw,null,ex.bpw?4.4:4.4,'bpwm'],['lnk','',null,null,ex.kl||ex.bpw?2.4:12.5]];
   const col=C.find(c=>c[0]===libSort.k&&c[2])||C[1];
   const rows=[...ship].sort((a,b)=>{const x=col[2](a),y=col[2](b);if(x==null)return 1;if(y==null)return -1;return (x>y?1:x<y?-1:0)*libSort.d});
   const best={};
@@ -672,13 +672,13 @@ function ladder(t,ship,minMac,link){
   const tog=(g,on,lab)=>`<button class="gtog" data-grp="${g}" aria-expanded="${on}" aria-label="${lab}">${on?'◂':'▸'}</button>`;
   const th=c=>{const id=c[0];if(id==='lnk')return '<th></th>';
     const g=id==='m'?tog('kl',ex.kl,'columns of mean KL: prose, code, literary'):id==='b'?tog('bpw',ex.bpw,'columns of bits per weight: experts, attention, embed, router'):'';
-    return `<th class="${id==='build'||id==='mac'?'':'num'} sort" data-sort="${id}">${c[1]}${libSort.k===id?(libSort.d>0?'▴':'▾'):''}${g}</th>`};
+    return `<th class="${id==='build'||id==='mac'?'':'num'} sort" data-sort="${id}">${c[1]}${g}</th>`};
   const td=(c,r)=>{const id=c[0];
     if(id==='build')return `<td class="what" title="${esc(r.what)}"><span class="dot" style="background:${vqCol(r)}"></span>${esc(r.kind==='affine'?r.what.replace(/ ·.*| \(.*\)/,''):r.what.replace(/ \(.*\)/,''))}</td>`;
     if(id==='lnk')return `<td class="lnk">${link(r)?`<a href="${link(r)}" target="_blank" rel="noopener" title="${esc(r.hf.split('/')[0])}">${ex.kl||ex.bpw?'↗':esc(r.hf.split('/')[0])+' ↗'}</a>`:''}</td>`;
     if(KL[id]){const v=KL[id](r);return `<td class="num ${v!=null&&v===best[id]?'best':''}">${v==null?'—':f1(v)}</td>`}
     const v=txt(c,r);return `<td class="${id==='mac'?'':'num'}">${v==null?'—':v}</td>`};
-  return `<table class="rungtab ladder"><colgroup>${C.map(c=>`<col${c[4]?` style="width:${c[0]==='lnk'?c[4]:c[4]-.15}em"`:''}>`).join('')}</colgroup><thead><tr>${C.map(th).join('')}</tr></thead><tbody>
+  return `<table class="rungtab ladder${ex.kl||ex.bpw?' tight':''}"><colgroup>${C.map(c=>`<col${c[4]&&(c[0]==='build'||c[0]==='lnk'||ex.kl||ex.bpw)?` style="width:${+(c[0]==='build'||c[0]==='lnk'?c[4]:c[4]*.84).toFixed(2)}em"`:''}>`).join('')}</colgroup><thead><tr>${C.map(th).join('')}</tr></thead><tbody>
   ${rows.map(r=>`<tr class="${r.kind} ${r.id===libSel?'sel':''}" data-sel="${esc(r.id)}">${C.map(c=>td(c,r)).join('')}</tr>`).join('')||`<tr><td colspan="${C.length}" class="faint">nothing shipped yet</td></tr>`}
   </tbody></table>`;
 }
