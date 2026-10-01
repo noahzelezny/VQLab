@@ -342,6 +342,7 @@ details.adv .kv{margin-top:8px}
 .note.warn{color:var(--warn);font-size:.82em;margin-top:6px}
 .libfoot{display:flex;justify-content:flex-end;margin-top:8px}
 .chip{border:1px solid var(--line);border-radius:var(--r);padding:5px 12px;font-size:.85em;color:var(--dim);background:var(--bg)}.chip[aria-pressed=true]{border-color:var(--acc);color:var(--acc)}
+.ladder{table-layout:fixed}.ladder td{overflow:hidden;text-overflow:ellipsis;padding:6px 4px}.ladder th{padding:4px 4px;white-space:nowrap}.ladder td.what{max-width:none}.ladder .gtog{margin-left:3px;padding:0 2px;border:0;background:none;color:var(--dim);font:inherit;cursor:pointer;line-height:1}.ladder .gtog:hover{color:var(--acc)}
 .ladder th.sort{cursor:pointer;user-select:none}.ladder th.sort:hover{color:var(--fg)}
 .libside .cart{font-size:.95em;padding:14px 16px}.libside .big{font-size:1.2em}
 
@@ -414,6 +415,8 @@ function speedOf(t,r,fk){
   for(const fam of keys){const F=fam&&SPEED.families[fam];const b=F&&F.builds[k];
     if(b)return {x:b.decode_x,prefill_x:b.prefill_x,ref:F.reference,setup:F.setup,quotable:b.quotable!==false,fam,via:b.via||F.via}}
   return null}
+// per-build widths read from each build's config.json quantization map + weight index (most common width per module class; 16 = bf16, 'vq' = VQ-coded PLE; x = affine expert bits+32/group). Builds not listed have no local config: shown as —
+const WIDTHS={"TheDrainFlorist/Qwen3.5-397B-A17B-VQ-2.2bpw":{"attn":6,"embed":4,"router":16,"ple":null},"TheDrainFlorist/Qwen3.5-397B-A17B-VQ-2.4bpw":{"attn":6,"embed":6,"router":16,"ple":null},"TheDrainFlorist/Qwen3.5-397B-A17B-VQ-2.6bpw":{"attn":6,"embed":6,"router":16,"ple":null},"TheDrainFlorist/Qwen3.5-397B-A17B-VQ-3.1bpw":{"attn":6,"embed":6,"router":16,"ple":null},"TheDrainFlorist/Qwen3.6-35B-A3B-VQ-3.4bpw":{"attn":6,"embed":6,"router":16,"ple":null},"TheDrainFlorist/Qwen3.6-35B-A3B-VQ-3.8bpw":{"attn":6,"embed":6,"router":16,"ple":null},"TheDrainFlorist/Qwen3.6-35B-A3B-VQ-5.4bpw":{"attn":6,"embed":6,"router":16,"ple":null},"TheDrainFlorist/Qwen3.8-27B-VQ-3.9bpw":{"attn":4,"embed":4,"router":null,"ple":null},"TheDrainFlorist/Qwen3.8-27B-VQ-4.5bpw":{"attn":4,"embed":4,"router":null,"ple":null},"TheDrainFlorist/Qwen3.8-27B-VQ-4.8bpw":{"attn":4,"embed":4,"router":null,"ple":null},"TheDrainFlorist/Qwen3.8-Flash-Next-VQ-5.5bpw":{"attn":8,"embed":8,"router":16,"ple":"vq"},"TheDrainFlorist/gemma-4-26b-a4b-it-VQ-6.2bpw":{"attn":8,"embed":8,"router":16,"ple":null},"TheDrainFlorist/gemma-4-e4b-it-VQ-PLE":{"attn":8,"embed":8,"router":null,"ple":"vq","x":8.5},"TheDrainFlorist/GLM-5.3-Flash-VQ-2.7bpw":{"attn":8,"embed":8,"router":16,"ple":null},"TheDrainFlorist/GLM-5.3-Flash-VQ-3.1bpw":{"attn":8,"embed":8,"router":16,"ple":null},"TheDrainFlorist/GLM-5.3-Flash-VQ-3.6bpw":{"attn":8,"embed":8,"router":16,"ple":null},"TheDrainFlorist/Qwen3.8-Flash-Next-VQ-2.1bpw":{"attn":8,"embed":8,"router":16,"ple":"vq"},"TheDrainFlorist/Qwen3.8-Flash-Next-VQ-3.2bpw":{"attn":8,"embed":8,"router":16,"ple":"vq"},"TheDrainFlorist/Qwen3.8-Flash-Next-VQ-4.4bpw":{"attn":8,"embed":8,"router":16,"ple":"vq"},"spicyneuron/Qwen3.5-397B-A17B-MLX-2.6bit":{"attn":8,"embed":8,"router":16,"ple":null,"x":2.5},"q35:q4":{"attn":4,"embed":4,"router":8,"ple":null,"x":4.5},"q35:q8":{"attn":8,"embed":8,"router":8,"ple":null,"x":8.5},"q27:q8":{"attn":8,"embed":8,"router":null,"ple":null,"x":8.5},"fn:q4":{"attn":4,"embed":4,"router":16,"ple":4,"x":4.5},"mlx-community/gemma-4-e4b-it-8bit":{"attn":8,"embed":8,"router":null,"ple":8,"x":8.5}};
 const TEACHERS=[
  {id:'q35',res:'35B',n:'Qwen/Qwen3.6-35B-A3B-bf16',short:'Qwen3.6-35B-A3B',fam:'qwen3_5',kind:'MoE · 40 layers · 256 experts',onb:'2026-09-26',fits:1099,layers:40,topk:8,modules:120,bytes:{mtp:1.573,vision:0.832},fitStore:{'d2-K16':121,'d2-K256':240,'d2-K1024':120,'d2-K4096':240,'d4-K2048':240,'d4-K16384':138}},
  {id:'q397',res:'397B',n:'Qwen/Qwen3.5-397B-A17B-bf16',short:'Qwen3.5-397B-A17B',fam:'qwen3_5',kind:'MoE · 60 layers · 512 experts',onb:'2026-09-10',fits:0,layers:60,topk:10,modules:180,bytes:{mtp:2.1,vision:0.849},fitStore:{},note:'751 GB · Exo Models'},
@@ -579,9 +582,10 @@ const JOBS=[
 ];
 const PAGES=[{k:'library',n:'Library'},{k:'recipe',n:'Recipe'},{k:'jobs',n:'Jobs'}];
 const ICON={library:'<svg viewBox="0 0 24 24"><path d="M4 19V5M10 19V9M16 19v-6M22 19H2"/></svg>',recipe:'<svg viewBox="0 0 24 24"><path d="M3 18C8 18 8 6 13 6s5 12 8 12"/><circle cx="13" cy="6" r="2"/></svg>',jobs:'<svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h10M4 18h13"/><circle cx="19" cy="12" r="2"/></svg>'};
+let libCols={kl:false,bpw:false};
 let page=0, draft=newRecipe(), libFam='q35', jobSel='j1', show={d4:true,d2:true,d8:true,mixed:true,affine:true,'affine-sk':false,vq:true,lab:false};
-try{const st=JSON.parse(localStorage.getItem('vq.v18')||'{}');if(st.draft){draft=st.draft;draft.skel=false}if(st.page!=null)page=st.page;if(st.libFam)libFam=st.libFam;if(st.jobSel)jobSel=st.jobSel;if(st.show)show=st.show}catch{}
-function save(){try{localStorage.setItem('vq.v18',JSON.stringify({draft,page,libFam,jobSel,show}))}catch{}}
+try{const st=JSON.parse(localStorage.getItem('vq.v18')||'{}');if(st.draft){draft=st.draft;draft.skel=false}if(st.page!=null)page=st.page;if(st.libFam)libFam=st.libFam;if(st.jobSel)jobSel=st.jobSel;if(st.show)show=st.show;if(st.libCols)libCols={kl:!!st.libCols.kl,bpw:!!st.libCols.bpw}}catch{}
+function save(){try{localStorage.setItem('vq.v18',JSON.stringify({draft,page,libFam,jobSel,show,libCols}))}catch{}}
 if(!draft.size){const t=TE(draft.teacher);resolveAt(t,draft,(t.xr[0]+t.xr[1])/2)}
 
 // ================================================================ header
@@ -636,15 +640,46 @@ function libAnswer(t){
     <div class="kseg small" style="margin:6px 0 10px">${boxes.map(b=>`<button aria-pressed="${libBox===b}" data-box="${b}">${b}</button>`).join('')}</div>${ans}<div class="seghelp" style="margin-top:10px">${libBox} GB less ${osReserve(libBox)} for macOS and ${ctxReserve(libBox)} for context leaves ${f1(usable(libBox))} GB for weights</div></div>`;
 }
 let libSort={k:'gib',d:1};
+const LGEO=k=>{const m=/d(\d+)-K(\d+)/.exec(k);return m?Math.log2(+m[2])/+m[1]:null};
+const wavg=es=>{const n=es.reduce((a,e)=>a+e[1],0);return n?es.reduce((a,e)=>a+LGEO(e[0])*e[1],0)/n:null};
+function libW(t,r){
+  const W=WIDTHS[r.hf||t.id+':'+r.id],g=r.hf&&REG[r.hf]?Object.entries(REG[r.hf].geo):[];
+  const pg=g.filter(e=>e[0].startsWith('ple:')).map(e=>[e[0].slice(4),e[1]]),eg=g.filter(e=>!e[0].startsWith('ple:'));
+  let x=null,ple=W?W.ple:null;
+  if(r.kind==='vq'){if(W&&W.ple==='vq'&&!pg.length)ple=wavg(eg);else{x=wavg(eg);if(W&&W.ple==='vq')ple=wavg(pg)}}
+  else if(W)x=W.x??null;
+  return {x,a:W?W.attn:null,e:W?W.embed:null,r:W?W.router:null,p:ple,hasP:!!(W&&W.ple!=null)}}
 function ladder(t,ship,minMac,link){
-  const cols=[['build','build',r=>r.what],['gib','GiB',r=>r.gib],['mac','runs on',r=>r.gib],['p','prose',r=>r.one||r.lit?null:r.kl[0]],['c','code',r=>r.one||r.lit?null:r.kl[1]],['l','literary',r=>r.one?null:r.kl[2]],['m','mean',r=>mean(r.kl)],['t','top-1',r=>r.top1]];
-  const col=cols.find(c=>c[0]===libSort.k)||cols[1];
+  const ex=libCols,hasP=ship.some(r=>libW(t,r).hasP);
+  const wb=v=>v==null?null:v===16?'bf16':String(v),bp=v=>v==null?null:String(+v.toFixed(2));
+  const C=[ // id,label,sort value,cell text (null = —),width em,group
+   ['build','build',r=>r.what,null,0],['gib','GiB',r=>r.gib,null,4.4],['mac','runs on',r=>r.gib,null,5],
+   ...(ex.kl?[['p','prose',r=>r.one||r.lit?null:r.kl[0],null,4.7,'kl'],['c','code',r=>r.one||r.lit?null:r.kl[1],null,4.7,'kl'],['l','literary',r=>r.one?null:r.kl[2],null,5.4,'kl']]:[]),
+   ['m',ex.kl?'mean':'mean KL',r=>mean(r.kl),null,ex.kl?5.2:7.6,'klm'],['t','top-1',r=>r.top1,null,4.4],
+   ...(ex.bpw?[['bx','experts',r=>libW(t,r).x,null,4.8,'bpw'],['ba','attention',r=>libW(t,r).a,null,6.2,'bpw'],['be',hasP?'embed/PLE':'embed',r=>libW(t,r).e,null,hasP?6.2:4.2,'bpw'],['br','router',r=>libW(t,r).r,null,4.4,'bpw']]:[]),
+   ['b','bpw',r=>r.bpw,null,ex.bpw?4.4:4.4,'bpwm'],['lnk','',null,null,ex.kl||ex.bpw?2.4:9.8]];
+  const col=C.find(c=>c[0]===libSort.k&&c[2])||C[1];
   const rows=[...ship].sort((a,b)=>{const x=col[2](a),y=col[2](b);if(x==null)return 1;if(y==null)return -1;return (x>y?1:x<y?-1:0)*libSort.d});
-  const best=[3,4,5,6].map(i=>Math.min(...ship.map(cols[i][2]).filter(v=>v!=null)));
-  const cell=(r,i)=>{const v=cols[i][2](r);return `<td class="num ${v!=null&&v===best[i-3]?'best':''}">${v==null?'—':f1(v)}</td>`};
-  const th=(c,i)=>`<th class="${i===0||i===2?'':'num'} sort" data-sort="${c[0]}">${c[1]}${libSort.k===c[0]?(libSort.d>0?' ▲':' ▼'):''}</th>`;
-  return `<table class="rungtab ladder"><thead><tr>${cols.map(th).join('')}<th></th></tr></thead><tbody>
-  ${rows.map(r=>`<tr class="${r.kind} ${r.id===libSel?'sel':''}" data-sel="${esc(r.id)}"><td><span class="dot" style="background:${vqCol(r)}"></span>${esc(r.kind==='affine'?r.what.replace(/ ·.*| \(.*\)/,''):r.what.replace(/ \(.*\)/,''))}</td><td class="num">${f1(r.gib)}</td><td>${minMac(r.gib,r)}</td>${[3,4,5,6].map(i=>cell(r,i)).join('')}<td class="num">${r.top1!=null?r.top1+'%':'—'}</td><td>${link(r)?`<a href="${link(r)}" target="_blank" rel="noopener">${esc(r.hf.split('/')[0])} ↗</a>`:''}</td></tr>`).join('')||'<tr><td colspan="9" class="faint">nothing shipped yet</td></tr>'}
+  const best={};
+  const KL={p:r=>r.one||r.lit?null:r.kl[0],c:r=>r.one||r.lit?null:r.kl[1],l:r=>r.one?null:r.kl[2],m:r=>mean(r.kl)};
+  for(const id in KL)best[id]=Math.min(...ship.map(KL[id]).filter(v=>v!=null));
+  const txt=(c,r)=>{const id=c[0],w=libW(t,r);
+    if(id==='gib')return f1(r.gib);if(id==='mac')return minMac(r.gib,r);if(id==='t')return r.top1!=null?r.top1+'%':null;
+    if(id==='b')return r.bpw!=null?(+r.bpw).toFixed(2):null;
+    if(id==='bx')return bp(w.x);if(id==='ba')return wb(w.a);if(id==='br')return wb(w.r);
+    if(id==='be'){const e=wb(w.e);if(e==null)return null;return w.hasP?e+'/'+(w.p==null?'—':w.p===16?'bf16':String(+(+w.p).toFixed(2))):e}
+    return null};
+  const tog=(g,on,lab)=>`<button class="gtog" data-grp="${g}" aria-expanded="${on}" aria-label="${lab}">${on?'◂':'▸'}</button>`;
+  const th=c=>{const id=c[0];if(id==='lnk')return '<th></th>';
+    const g=id==='m'?tog('kl',ex.kl,'columns of mean KL: prose, code, literary'):id==='b'?tog('bpw',ex.bpw,'columns of bits per weight: experts, attention, embed, router'):'';
+    return `<th class="${id==='build'||id==='mac'?'':'num'} sort" data-sort="${id}">${c[1]}${libSort.k===id?(libSort.d>0?'▴':'▾'):''}${g}</th>`};
+  const td=(c,r)=>{const id=c[0];
+    if(id==='build')return `<td class="what" title="${esc(r.what)}"><span class="dot" style="background:${vqCol(r)}"></span>${esc(r.kind==='affine'?r.what.replace(/ ·.*| \(.*\)/,''):r.what.replace(/ \(.*\)/,''))}</td>`;
+    if(id==='lnk')return `<td class="lnk">${link(r)?`<a href="${link(r)}" target="_blank" rel="noopener" title="${esc(r.hf.split('/')[0])}">${ex.kl||ex.bpw?'↗':esc(r.hf.split('/')[0])+' ↗'}</a>`:''}</td>`;
+    if(KL[id]){const v=KL[id](r);return `<td class="num ${v!=null&&v===best[id]?'best':''}">${v==null?'—':f1(v)}</td>`}
+    const v=txt(c,r);return `<td class="${id==='mac'?'':'num'}">${v==null?'—':v}</td>`};
+  return `<table class="rungtab ladder"><colgroup>${C.map(c=>`<col${c[4]?` style="width:${c[0]==='lnk'?c[4]:c[4]-.15}em"`:''}>`).join('')}</colgroup><thead><tr>${C.map(th).join('')}</tr></thead><tbody>
+  ${rows.map(r=>`<tr class="${r.kind} ${r.id===libSel?'sel':''}" data-sel="${esc(r.id)}">${C.map(c=>td(c,r)).join('')}</tr>`).join('')||`<tr><td colspan="${C.length}" class="faint">nothing shipped yet</td></tr>`}
   </tbody></table>`;
 }
 let libSel=null;
@@ -698,7 +733,7 @@ function pgLibrary(){
   <div class="lib3">
     <div class="libmain">
       <svg class="chart" id="libchart" role="img" aria-label="shipped builds, size against mean KL"></svg>
-      <div class="legend"><span><span class="dot" style="background:var(--acc)"></span>VQ flat</span><span><span class="dot" style="background:var(--teal)"></span>VQ mixed</span><span><span class="dot" style="background:var(--bad)"></span>affine</span></div>
+      <div class="legend"><span><span class="dot" style="background:var(--acc)"></span>VQ flat</span><span><span class="dot" style="background:var(--teal)"></span>VQ mixed</span><span><span class="dot" style="background:var(--bad)"></span>affine</span>${INFO("▸ on mean KL adds prose, code and literary; ▸ on bpw adds experts, attn, embed (embed/PLE where the family has per-layer embeddings) and router. experts: VQ code bits log2(K)/d weighted by module count, affine bits + 32/group. The other three are quantization widths read from each build's config.json (bf16 = unquantized). — means no config found locally.")}</div>
       ${ladder(t,ship,minMac,link)}
     </div>
     ${inspector(t,sel)}
@@ -970,6 +1005,7 @@ function render(){
     document.querySelectorAll('[data-k]').forEach(b=>b.onclick=()=>{show[b.dataset.k]=!show[b.dataset.k];render()});document.querySelectorAll('tr[data-sel]').forEach(tr=>tr.onclick=e=>{if(e.target.closest('a'))return;libSel=tr.dataset.sel;render()});
     document.querySelectorAll('[data-fork]').forEach(b=>b.onclick=()=>{const t=TE(libFam),r=t.rows.find(q=>q.id===b.dataset.fork);openRecipe(t.id,r.gib);if(r.geo){draft.widthPick=r.geo.split('-')[0];draft.strat=r.mixed?'mixed':'flat';resolveAt(t,draft,r.gib);render()}});
     document.querySelectorAll('[data-act]').forEach(b=>b.onclick=()=>{const t=TE(libFam),r=t.rows.find(q=>q.id===libSel);const a=b.dataset.act;JOBS.unshift({id:'j'+Date.now(),name:(r.hf?r.hf.split('/')[1]:r.id).toLowerCase()+'-'+a,state:'draft',kind:a,stepIx:-1,recipe:{...newRecipe(),teacher:t.id,size:r.gib},started:'draft',eta:'~20:30'});jobSel=JOBS[0].id;page=2;render()});
+    document.querySelectorAll('.gtog').forEach(b=>b.onclick=e=>{e.stopPropagation();const g=b.dataset.grp;libCols[g]=!libCols[g];if(!libCols[g]&&(g==='kl'?['p','c','l']:['bx','ba','be','br']).includes(libSort.k))libSort={k:g==='kl'?'m':'b',d:1};render()});
     document.querySelectorAll('[data-sort]').forEach(h=>h.onclick=()=>{const k=h.dataset.sort;libSort=libSort.k===k?{k,d:-libSort.d}:{k,d:1};render()});
     document.querySelectorAll('[data-recipe]').forEach(b=>b.onclick=()=>openRecipe(b.dataset.recipe,b.dataset.at?+b.dataset.at:undefined))}
   if(page===1){const t=TE(draft.teacher);if(draft.auto)resolveAt(t,draft,sizeOf(t,draft));drawRecipe();drawStrip();drawReadouts();
