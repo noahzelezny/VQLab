@@ -342,7 +342,7 @@ details.adv .kv{margin-top:8px}
 .note.warn{color:var(--warn);font-size:.82em;margin-top:6px}
 .libfoot{display:flex;justify-content:flex-end;margin-top:8px}
 .chip{border:1px solid var(--line);border-radius:var(--r);padding:5px 12px;font-size:.85em;color:var(--dim);background:var(--bg)}.chip[aria-pressed=true]{border-color:var(--acc);color:var(--acc)}
-.ladder{table-layout:fixed}.ladder td{overflow:hidden;text-overflow:ellipsis;padding:6px 4px}.ladder th{padding:4px 3px;white-space:nowrap;letter-spacing:.04em}.ladder td.what{max-width:none}.ladder:not(.tight) td:not(.what):not(.lnk),.ladder:not(.tight) th:not(:first-child):not(:last-child){padding-left:12px;padding-right:12px}.ladder.tight{font-size:.78em}.ladder.tight th{font-size:.9em;letter-spacing:.02em}.ladder.tight td:nth-child(3),.ladder.tight th:nth-child(3){padding-left:10px}.ladder td.num,.ladder th.num{text-align:right}.ladder .gtog{margin-left:3px;padding:0 2px;border:0;background:none;color:var(--dim);font:inherit;cursor:pointer;line-height:1}.ladder .gtog:hover{color:var(--acc)}
+.ladder{table-layout:fixed}.ladder th,.ladder td{padding:0 10px;white-space:nowrap}.ladder td{overflow:hidden;text-overflow:ellipsis;padding-top:6px;padding-bottom:6px}.ladder th{padding-top:4px;padding-bottom:4px;letter-spacing:.04em}.ladder td.what{max-width:none}.ladder td.num,.ladder th.num{text-align:right}.ladder td.lnk,.ladder th.lnkh{text-align:left;padding-left:16px}.ladder .gtog{margin-left:3px;padding:0 2px;border:0;background:none;color:var(--dim);font:inherit;cursor:pointer;line-height:1}.ladder .gtog:hover{color:var(--acc)}
 .ladder th.sort{cursor:pointer;user-select:none}.ladder th.sort:hover{color:var(--fg)}
 .libside .cart{font-size:.95em;padding:14px 16px}.libside .big{font-size:1.2em}
 
@@ -653,11 +653,12 @@ function ladder(t,ship,minMac,link){
   const ex=libCols,hasP=ship.some(r=>libW(t,r).hasP);
   const wb=v=>v==null?null:v===16?'bf16':String(v),bp=v=>v==null?null:String(+v.toFixed(2));
   const C=[ // id,label,sort value,cell text (null = —),width em,group
-   ['build','build',r=>r.what,null,ex.kl||ex.bpw?10:13],['gib','GiB',r=>r.gib,null,5.6],['mac','runs on',r=>r.gib,null,5.6],
-   ...(ex.kl?[['p','prose',r=>r.one||r.lit?null:r.kl[0],null,5.2,'kl'],['c','code',r=>r.one||r.lit?null:r.kl[1],null,5.2,'kl'],['l','literary',r=>r.one?null:r.kl[2],null,5.4,'kl']]:[]),
-   ['m',ex.kl?'mean':'mean KL',r=>mean(r.kl),null,ex.kl?5.2:7.6,'klm'],['t','top-1',r=>r.top1,null,4.4],
-   ...(ex.bpw?[['bx','experts',r=>libW(t,r).x,null,4.8,'bpw'],['ba','attention',r=>libW(t,r).a,null,5.2,'bpw'],['be',hasP?'embed/PLE':'embed',r=>libW(t,r).e,null,hasP?5.6:4.2,'bpw'],['br','router',r=>libW(t,r).r,null,4.4,'bpw']]:[]),
-   ['b','bpw',r=>r.bpw,null,ex.bpw?4.4:4.4,'bpwm'],['lnk','',null,null,ex.kl||ex.bpw?2.4:12.5]];
+   ['build','build',r=>r.what,null,15],['gib','GiB',r=>r.gib,null,5],['mac','runs on',r=>r.gib,null,6.5],
+   ['m','mean KL',r=>mean(r.kl),null,6.5,'klm'],
+   ...(ex.kl?[['p','prose',r=>r.one||r.lit?null:r.kl[0],null,6,'kl'],['c','code',r=>r.one||r.lit?null:r.kl[1],null,6,'kl'],['l','literary',r=>r.one?null:r.kl[2],null,6,'kl']]:[]),
+   ['t','top-1',r=>r.top1,null,5.5],['b','bpw',r=>r.bpw,null,5,'bpwm'],
+   ...(ex.bpw?[['bx','experts',r=>libW(t,r).x,null,5.5,'bpw'],['ba','attention',r=>libW(t,r).a,null,5.5,'bpw'],['be',hasP?'embed/PLE':'embed',r=>libW(t,r).e,null,5.5,'bpw'],['br','router',r=>libW(t,r).r,null,5.5,'bpw']]:[]),
+   ['lnk','',null,null,13.5],['sp','',null,null,0]];
   const col=C.find(c=>c[0]===libSort.k&&c[2])||C[1];
   const rows=[...ship].sort((a,b)=>{const x=col[2](a),y=col[2](b);if(x==null)return 1;if(y==null)return -1;return (x>y?1:x<y?-1:0)*libSort.d});
   const best={};
@@ -670,15 +671,15 @@ function ladder(t,ship,minMac,link){
     if(id==='be'){const e=wb(w.e);if(e==null)return null;return w.hasP?e+'/'+(w.p==null?'—':w.p===16?'bf16':String(+(+w.p).toFixed(2))):e}
     return null};
   const tog=(g,on,lab)=>`<button class="gtog" data-grp="${g}" aria-expanded="${on}" aria-label="${lab}">${on?'◂':'▸'}</button>`;
-  const th=c=>{const id=c[0];if(id==='lnk')return '<th></th>';
+  const th=c=>{const id=c[0];if(id==='lnk')return '<th class="lnkh"></th>';if(id==='sp')return '<th></th>';
     const g=id==='m'?tog('kl',ex.kl,'columns of mean KL: prose, code, literary'):id==='b'?tog('bpw',ex.bpw,'columns of bits per weight: experts, attention, embed, router'):'';
-    return `<th class="${id==='build'||id==='mac'?'':'num'} sort" data-sort="${id}">${c[1]}${g}</th>`};
-  const td=(c,r)=>{const id=c[0];
+    return `<th class="${id==='build'?'':'num'} sort" data-sort="${id}">${c[1]}${g}</th>`};
+  const td=(c,r)=>{const id=c[0];if(id==='sp')return '<td></td>';
     if(id==='build')return `<td class="what" title="${esc(r.what)}"><span class="dot" style="background:${vqCol(r)}"></span>${esc(r.kind==='affine'?r.what.replace(/ ·.*| \(.*\)/,''):r.what.replace(/ \(.*\)/,''))}</td>`;
-    if(id==='lnk')return `<td class="lnk">${link(r)?`<a href="${link(r)}" target="_blank" rel="noopener" title="${esc(r.hf.split('/')[0])}">${ex.kl||ex.bpw?'↗':esc(r.hf.split('/')[0])+' ↗'}</a>`:''}</td>`;
+    if(id==='lnk')return `<td class="lnk">${link(r)?`<a href="${link(r)}" target="_blank" rel="noopener" title="${esc(r.hf.split('/')[0])}">${esc(r.hf.split('/')[0])} ↗</a>`:''}</td>`;
     if(KL[id]){const v=KL[id](r);return `<td class="num ${v!=null&&v===best[id]?'best':''}">${v==null?'—':f1(v)}</td>`}
-    const v=txt(c,r);return `<td class="${id==='mac'?'':'num'}">${v==null?'—':v}</td>`};
-  return `<table class="rungtab ladder${ex.kl||ex.bpw?' tight':''}"><colgroup>${C.map(c=>`<col${c[4]&&(c[0]==='build'||c[0]==='lnk'||ex.kl||ex.bpw)?` style="width:${+(c[0]==='build'||c[0]==='lnk'?c[4]:c[4]*.84).toFixed(2)}em"`:''}>`).join('')}</colgroup><thead><tr>${C.map(th).join('')}</tr></thead><tbody>
+    const v=txt(c,r);return `<td class="num">${v==null?'—':v}</td>`};
+  return `<table class="rungtab ladder"><colgroup>${C.map(c=>c[0]==='sp'?'<col>':`<col${c[0]==='build'?' data-build':''} data-w="${c[4]}" style="width:${c[4]}em">`).join('')}</colgroup><thead><tr>${C.map(th).join('')}</tr></thead><tbody>
   ${rows.map(r=>`<tr class="${r.kind} ${r.id===libSel?'sel':''}" data-sel="${esc(r.id)}">${C.map(c=>td(c,r)).join('')}</tr>`).join('')||`<tr><td colspan="${C.length}" class="faint">nothing shipped yet</td></tr>`}
   </tbody></table>`;
 }
@@ -999,9 +1000,15 @@ function wirePicker(){$('#pick').onclick=()=>{$('#picker').classList.remove('hid
   $('#pclose').onclick=()=>$('#picker').classList.add('hidden');$('#picker').onclick=e=>{if(e.target.id==='picker')$('#picker').classList.add('hidden')};
   $('#psearch').oninput=()=>{if(pickFam!=='hf')return renderPicker();clearTimeout(HF.timer);HF.res=null;HF.err='';HF.open='';renderHub();HF.timer=setTimeout(()=>{HF.timer=0;hubSearch($('#psearch').value.trim())},250)};document.onkeydown=e=>{if(e.key==='Escape')$('#picker').classList.add('hidden')}}
 const PG=[pgLibrary,pgRecipe,pgJobs];
+function fitLadder(){
+  const tb=document.querySelector('table.ladder');if(!tb)return;const w=tb.parentElement;
+  const cols=[...tb.querySelectorAll('col[data-w]')],bc=tb.querySelector('col[data-build]');
+  const em=parseFloat(getComputedStyle(tb).fontSize),tot=cols.reduce((a,c)=>a+ +c.dataset.w,0);
+  /* build width is fitted to the collapsed table (57em), so expanding a group never moves existing columns; extra width scrolls */const over=57-w.clientWidth/em,bw=Math.max(9,Math.min(15,15-Math.max(0,over)));
+  bc.style.width=bw+'em';tb.style.minWidth=(tot-15+bw)+'em'}
 function render(){
   renderFlow();$('#page').innerHTML=PG[page]();save();
-  if(page===0){drawLib();wirePicker();
+  if(page===0){drawLib();wirePicker();fitLadder();
     document.querySelectorAll('[data-k]').forEach(b=>b.onclick=()=>{show[b.dataset.k]=!show[b.dataset.k];render()});document.querySelectorAll('tr[data-sel]').forEach(tr=>tr.onclick=e=>{if(e.target.closest('a'))return;libSel=tr.dataset.sel;render()});
     document.querySelectorAll('[data-fork]').forEach(b=>b.onclick=()=>{const t=TE(libFam),r=t.rows.find(q=>q.id===b.dataset.fork);openRecipe(t.id,r.gib);if(r.geo){draft.widthPick=r.geo.split('-')[0];draft.strat=r.mixed?'mixed':'flat';resolveAt(t,draft,r.gib);render()}});
     document.querySelectorAll('[data-act]').forEach(b=>b.onclick=()=>{const t=TE(libFam),r=t.rows.find(q=>q.id===libSel);const a=b.dataset.act;JOBS.unshift({id:'j'+Date.now(),name:(r.hf?r.hf.split('/')[1]:r.id).toLowerCase()+'-'+a,state:'draft',kind:a,stepIx:-1,recipe:{...newRecipe(),teacher:t.id,size:r.gib},started:'draft',eta:'~20:30'});jobSel=JOBS[0].id;page=2;render()});
