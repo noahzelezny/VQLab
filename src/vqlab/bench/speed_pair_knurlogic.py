@@ -110,8 +110,17 @@ def _entry(K, job):
 
 
 def run_arm(K, name, a, prompt, warm):
-    out = K.load(artifact=name, machines=a.machine, split=a.split, link=a.link,
-                 sets=a.sets or None)
+    # A Mac frees an unloaded model's memory some time AFTER its job is gone,
+    # so a load right behind the previous arm's unload can be refused for room
+    # that is about to come back. Retry those refusals; nothing else.
+    for attempt in range(10):
+        out = K.load(artifact=name, machines=a.machine, split=a.split, link=a.link,
+                     sets=a.sets or None)
+        if "cannot place" not in str(out.get("refused") or ""):
+            break
+        print(f"  {name}: placement refused ({out.get('refused')}); memory still returning, retry in 30 s",
+              file=sys.stderr)
+        time.sleep(30)
     job = out.get("job") or out.get("instance")
     if not job or out.get("refused") or out.get("error"):
         raise SystemExit(f"FAIL: load {name}: {out}")
