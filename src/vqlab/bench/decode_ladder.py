@@ -154,7 +154,7 @@ ARMS = {
                    "full attention deleted (12.4% of bytes/token)"),
     "vq":         (lambda n, t: t.startswith("VQSwitch"),
                    "VQ expert module deleted (12.1% of bytes/token; F48 ref)"),
-    "sharedexp":  (lambda n, t: n.endswith("shared_expert"),
+    "sharedexp":  (lambda n, t: n.endswith(("shared_expert", "shared_experts")),
                    "dense shared expert deleted (4.7% of bytes/token)"),
     "hc-compile": (lambda n, t: False,
                    "hyper-connections FUSED with mx.compile "

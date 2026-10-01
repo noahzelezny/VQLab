@@ -4,7 +4,7 @@
 An artifact (pinned), an idle box.
 
 ## Process
-`vqlab decode-timeline` (stages that sum to the whole), `decode-ladder` (deletion arms + checksums), `active-bytes` (the roofline denominator), `prefill-bench`, `coverage`, `host-attrib`, `hc-micro`.
+`vqlab decode-timeline` (stages that sum to the whole), `prefill-timeline` (the same partition for one prefill, any architecture), `decode-ladder` (deletion arms + checksums), `active-bytes` (the roofline denominator), `prefill-bench`, `coverage`, `host-attrib`, `hc-micro`.
 
 ## Outputs
 Printed timings and ratios.

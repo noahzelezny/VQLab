@@ -87,6 +87,7 @@ COMMANDS = {
     "coverage": ("kernel_coverage.py", "per-module report: which prefill kernel path each geometry takes"),
     "hc-micro": ("hc_micro.py", "single GatedResidual micro-bench: is mx.compile inert on this chain? (split half invalid, see F133)"),
     "decode-timeline": ("decode_timeline.py", "every stage of one decode token, in order, timed, summing to the whole"),
+    "prefill-timeline": ("prefill_timeline.py", "every stage of one prefill (attention / MLP half of each layer), timed, summing to the whole; any arch"),
     "decode-ladder": ("decode_ladder.py", "per-component decode deletion arms (GDN / attn / VQ), Flash-aware"),
     "mtp-accept": ("mtp_accept.py", "paired draft-acceptance across prompts (the reliable instrument)"),
     "mtp-bench": ("mtp_bench.py", "measure the MTP speedup, acceptance and numerics control"),
