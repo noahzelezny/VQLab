@@ -16,8 +16,10 @@ machine used), never paths. Two builds that differ only in model.py share a
 Knurlogic identity (it hashes config + shards), so they MUST be loaded by
 distinct names; each record keeps the name Knurlogic reports back and its
 runtime, and the tool REFUSES a result whose served name is not the arm or
-whose runtime is not "bundled" (knurlogic's own vendored runtime would not
-be the code under test).
+whose runtime is not the one the artifact calls for: "bundled" when it ships
+a model.py (knurlogic's own vendored runtime would not be the code under
+test), stock mlx-lm (neither log marker) when it ships none -- a plain affine
+reference.
 
 Timing is Knurlogic's own: usage.knurlogic.timing {prefill_tok_s,
 decode_tok_s} of one greedy /v1/chat/completions request (MTP off by default), after a SAME-LENGTH
@@ -61,6 +63,17 @@ def _post(url, doc, timeout=1800):
 
 BUNDLED = "ships its own runtime (model.py) and it WILL be executed"
 VENDORED = "runtime serves it instead"
+
+
+def ships_runtime(name, models_dir):
+    """Whether the artifact NAME ships its own runtime (a model.py beside its
+    config). A plain affine build ships none and is served by stock mlx-lm, so
+    its rank logs carry NEITHER marker; that is the expected runtime for it,
+    not a failure. Returns None when the artifact is not found locally."""
+    d = pathlib.Path(models_dir).expanduser() / name
+    if not (d / "config.json").exists():
+        return None
+    return (d / "model.py").exists()
 
 
 def _rank_logs(job, hosts):
@@ -141,9 +154,15 @@ def run_arm(K, name, a, prompt):
     bad = []
     if served and served != name:
         bad.append(f"served as {served!r}, not {name!r} (identity collapse?)")
+    ships = ships_runtime(name, a.models_dir)
+    rec["ships_runtime"] = ships
+    if ships is None:
+        bad.append(f"{name!r} not found under {a.models_dir} (cannot tell which runtime it should run)")
     for m, rt in runtime.items():
-        if rt != "bundled":
+        if ships and rt != "bundled":
             bad.append(f"rank on {m}: runtime {rt!r} (log lacks {BUNDLED!r})")
+        elif ships is False and rt is not None:
+            bad.append(f"rank on {m}: runtime {rt!r}, but {name!r} ships no model.py (expected stock mlx-lm)")
         if not named[m]:
             bad.append(f"rank on {m}: log does not name artifact {name!r} (identity collapse?)")
     if not rec["decode_tok_s"]:
@@ -158,6 +177,9 @@ def main(argv=None) -> int:
                                  description=__doc__.split("\n")[0])
     ap.add_argument("arm_a")
     ap.add_argument("arm_b")
+    ap.add_argument("--models-dir", default=os.environ.get("KNURLOGIC_MODELS", "~/.exo/models"),
+                    help="this Mac's Knurlogic models dir; decides per arm whether a bundled "
+                         "runtime (model.py) is expected or stock mlx-lm")
     ap.add_argument("--machine", action="append", required=True,
                     help="Knurlogic machine name (repeat for a split)")
     ap.add_argument("--split", default="")
