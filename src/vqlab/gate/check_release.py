@@ -512,6 +512,19 @@ try:
 except Exception as _e:  # the gate must report, not crash
     fails.append(f"spelling check crashed: {type(_e).__name__}: {_e}")
 
+# LOCAL JUNK. Finder writes .DS_Store into every folder it opens, Python
+# writes __pycache__ beside model.py on every load, and `hf upload` sends all
+# of it: both gemma repos shipped a .pyc this way (2026-09-26). It comes back
+# whenever the folder is opened or the model loaded, so this WARNS with the
+# flags that keep it off the Hub instead of failing a gate nobody can hold.
+_junk = sorted(f.name for f in A.iterdir()
+               if f.name == ".DS_Store" or f.name.startswith("._")
+               or f.name == "__pycache__" or f.suffix == ".pyc")
+if _junk:
+    print(f"WARNING: local junk in the folder ({', '.join(_junk)}); keep it off the Hub: "
+          "hf upload ... --exclude '.DS_Store' --exclude '._*' "
+          "--exclude '__pycache__/*' --exclude '*.pyc'")
+
 # Resolve the deferred processor-config finding now that the smoke has (or
 # has not) demonstrated that this artifact can actually serve.
 if _proc_gap:
