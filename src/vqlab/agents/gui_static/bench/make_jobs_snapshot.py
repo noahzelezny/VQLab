@@ -32,8 +32,10 @@ def main():
         if r.get("source"):
             r["source"] = pathlib.PurePath(r["source"]).name
         for st in r["steps"]:
-            for k in ("reasons", "warnings"):
+            for k in ("reasons", "warnings", "tail"):
                 st[k] = [scrub(x) for x in st.get(k) or []]
+            if st.get("cmd"):
+                st["cmd"] = scrub(st["cmd"])
     gpu = None
     try:
         import importlib
