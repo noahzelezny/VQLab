@@ -1,0 +1,5182 @@
+{
+ "snapshot": "2026-10-01T12:38:47",
+ "gpu": {
+  "held": false,
+  "by": null
+ },
+ "queues": [
+  {
+   "id": "20261001-101811-speedpass-35b-q8",
+   "name": "speedpass-35b-q8",
+   "status": "passed",
+   "live": false,
+   "preflight": false,
+   "created": "2026-10-01T17:18:11+00:00",
+   "commit": "7fe38bc52bc6a18311a99f04a6a4903dfcac22a9",
+   "source": "queue_35b_q8.json",
+   "steps": [
+    {
+     "name": "pin-mlx-community--Qwen3.6-35B-A3B-8bit",
+     "status": "pass",
+     "seconds": 9.8,
+     "started": "2026-10-01T17:18:13+00:00",
+     "finished": "2026-10-01T17:18:23+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "speed-35b-q8-VQ-3.4",
+     "status": "pass",
+     "seconds": 75.1,
+     "started": "2026-10-01T17:18:23+00:00",
+     "finished": "2026-10-01T17:19:38+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "speed-35b-q8-VQ-3.8",
+     "status": "pass",
+     "seconds": 82.3,
+     "started": "2026-10-01T17:19:38+00:00",
+     "finished": "2026-10-01T17:21:01+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "speed-35b-q8-VQ-4.6",
+     "status": "pass",
+     "seconds": 76.6,
+     "started": "2026-10-01T17:21:01+00:00",
+     "finished": "2026-10-01T17:22:17+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "speed-35b-q8-VQ-5.4",
+     "status": "pass",
+     "seconds": 104.8,
+     "started": "2026-10-01T17:22:17+00:00",
+     "finished": "2026-10-01T17:24:02+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    }
+   ]
+  },
+  {
+   "id": "20261001-101548-speedpass-35b-q8-preflight",
+   "name": "speedpass-35b-q8",
+   "status": "passed",
+   "live": false,
+   "preflight": true,
+   "created": "2026-10-01T17:15:48+00:00",
+   "commit": "7fe38bc52bc6a18311a99f04a6a4903dfcac22a9",
+   "source": "queue_35b_q8.json",
+   "steps": [
+    {
+     "name": "pin-mlx-community--Qwen3.6-35B-A3B-8bit",
+     "status": "pass",
+     "seconds": 25.5,
+     "started": "2026-10-01T17:15:48+00:00",
+     "finished": "2026-10-01T17:16:13+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "speed-35b-q8-VQ-3.4",
+     "status": "pass",
+     "seconds": 22.7,
+     "started": "2026-10-01T17:16:13+00:00",
+     "finished": "2026-10-01T17:16:36+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "speed-35b-q8-VQ-3.8",
+     "status": "pass",
+     "seconds": 27.1,
+     "started": "2026-10-01T17:16:36+00:00",
+     "finished": "2026-10-01T17:17:03+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "speed-35b-q8-VQ-4.6",
+     "status": "pass",
+     "seconds": 29.9,
+     "started": "2026-10-01T17:17:03+00:00",
+     "finished": "2026-10-01T17:17:33+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "speed-35b-q8-VQ-5.4",
+     "status": "pass",
+     "seconds": 32.4,
+     "started": "2026-10-01T17:17:33+00:00",
+     "finished": "2026-10-01T17:18:05+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    }
+   ]
+  },
+  {
+   "id": "20261001-043940-speedpass-stage3-retry",
+   "name": "speedpass-stage3-retry",
+   "status": "passed",
+   "live": false,
+   "preflight": false,
+   "created": "2026-10-01T11:39:40+00:00",
+   "commit": "cd0c953ec7c7cfe42724357f65cf5b5018052acf",
+   "source": "queue_stage3_retry.json",
+   "steps": [
+    {
+     "name": "split-flash-Qwen--Qwen3.8-Flash-Next-8bit",
+     "status": "pass",
+     "seconds": 1231.6,
+     "started": "2026-10-01T11:39:44+00:00",
+     "finished": "2026-10-01T12:00:16+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "split-glm-zai-org--GLM-5.3-Flash-3bit",
+     "status": "pass",
+     "seconds": 1176.5,
+     "started": "2026-10-01T12:00:16+00:00",
+     "finished": "2026-10-01T12:19:52+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "split-glm-TheDrainFlorist--GLM-5.3-Flash-VQ-2.7bpw",
+     "status": "pass",
+     "seconds": 1025.8,
+     "started": "2026-10-01T12:19:52+00:00",
+     "finished": "2026-10-01T12:36:58+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "split-glm-TheDrainFlorist--GLM-5.3-Flash-VQ-3.1bpw",
+     "status": "pass",
+     "seconds": 1224.8,
+     "started": "2026-10-01T12:36:58+00:00",
+     "finished": "2026-10-01T12:57:23+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "split-glm-TheDrainFlorist--GLM-5.3-Flash-VQ-3.6bpw",
+     "status": "pass",
+     "seconds": 1206.2,
+     "started": "2026-10-01T12:57:23+00:00",
+     "finished": "2026-10-01T13:17:29+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "split-397b-TheDrainFlorist--Qwen3.5-397B-A17B-VQ-2.6bpw",
+     "status": "pass",
+     "seconds": 962.7,
+     "started": "2026-10-01T13:17:29+00:00",
+     "finished": "2026-10-01T13:33:32+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "split-397b-TheDrainFlorist--Qwen3.5-397B-A17B-VQ-3.1bpw",
+     "status": "pass",
+     "seconds": 994.5,
+     "started": "2026-10-01T13:33:32+00:00",
+     "finished": "2026-10-01T13:50:06+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    }
+   ]
+  },
+  {
+   "id": "20261001-021404-speedpass-stage3-split",
+   "name": "speedpass-stage3-split",
+   "status": "failed",
+   "live": false,
+   "preflight": false,
+   "created": "2026-10-01T09:14:04+00:00",
+   "commit": "9efb7e92e90e274f979339bb190ad7e1d2feb068",
+   "source": "queue_stage3_split.json",
+   "steps": [
+    {
+     "name": "split-flash-Qwen--Qwen3.8-Flash-Next-3bit",
+     "status": "pass",
+     "seconds": 669.8,
+     "started": "2026-10-01T09:14:08+00:00",
+     "finished": "2026-10-01T09:25:18+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "split-flash-Qwen--Qwen3.8-Flash-Next-5bit",
+     "status": "pass",
+     "seconds": 814.4,
+     "started": "2026-10-01T09:25:18+00:00",
+     "finished": "2026-10-01T09:38:52+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "split-flash-Qwen--Qwen3.8-Flash-Next-6bit",
+     "status": "pass",
+     "seconds": 875.8,
+     "started": "2026-10-01T09:38:52+00:00",
+     "finished": "2026-10-01T09:53:28+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "split-flash-Qwen--Qwen3.8-Flash-Next-8bit",
+     "status": "fail",
+     "seconds": 420.8,
+     "started": "2026-10-01T09:53:28+00:00",
+     "finished": "2026-10-01T10:00:29+00:00",
+     "rc": 1,
+     "attempts": 1,
+     "reasons": [
+      "exit code 1"
+     ],
+     "warnings": []
+    },
+    {
+     "name": "split-flash-TheDrainFlorist--Qwen3.8-Flash-Next-VQ-4.4bpw",
+     "status": "pass",
+     "seconds": 566.0,
+     "started": "2026-10-01T10:00:29+00:00",
+     "finished": "2026-10-01T10:09:55+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "split-flash-TheDrainFlorist--Qwen3.8-Flash-Next-VQ-5.5bpw",
+     "status": "pass",
+     "seconds": 782.9,
+     "started": "2026-10-01T10:09:55+00:00",
+     "finished": "2026-10-01T10:22:58+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "split-glm-zai-org--GLM-5.3-Flash-3bit",
+     "status": "fail",
+     "seconds": 236.2,
+     "started": "2026-10-01T10:22:58+00:00",
+     "finished": "2026-10-01T10:26:54+00:00",
+     "rc": 1,
+     "attempts": 1,
+     "reasons": [
+      "exit code 1"
+     ],
+     "warnings": []
+    },
+    {
+     "name": "split-glm-TheDrainFlorist--GLM-5.3-Flash-VQ-2.7bpw",
+     "status": "fail",
+     "seconds": 854.9,
+     "started": "2026-10-01T10:26:54+00:00",
+     "finished": "2026-10-01T10:41:09+00:00",
+     "rc": 1,
+     "attempts": 1,
+     "reasons": [
+      "exit code 1"
+     ],
+     "warnings": []
+    },
+    {
+     "name": "split-glm-TheDrainFlorist--GLM-5.3-Flash-VQ-3.1bpw",
+     "status": "fail",
+     "seconds": 365.2,
+     "started": "2026-10-01T10:41:09+00:00",
+     "finished": "2026-10-01T10:47:14+00:00",
+     "rc": 1,
+     "attempts": 1,
+     "reasons": [
+      "exit code 1"
+     ],
+     "warnings": []
+    },
+    {
+     "name": "split-glm-TheDrainFlorist--GLM-5.3-Flash-VQ-3.6bpw",
+     "status": "fail",
+     "seconds": 250.9,
+     "started": "2026-10-01T10:47:14+00:00",
+     "finished": "2026-10-01T10:51:25+00:00",
+     "rc": 1,
+     "attempts": 1,
+     "reasons": [
+      "exit code 1"
+     ],
+     "warnings": []
+    },
+    {
+     "name": "split-397b-TheDrainFlorist--Qwen3.5-397B-A17B-VQ-2.2bpw",
+     "status": "pass",
+     "seconds": 876.5,
+     "started": "2026-10-01T10:51:25+00:00",
+     "finished": "2026-10-01T11:06:01+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "split-397b-TheDrainFlorist--Qwen3.5-397B-A17B-VQ-2.4bpw",
+     "status": "pass",
+     "seconds": 867.1,
+     "started": "2026-10-01T11:06:01+00:00",
+     "finished": "2026-10-01T11:20:28+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "split-397b-TheDrainFlorist--Qwen3.5-397B-A17B-VQ-2.6bpw",
+     "status": "fail",
+     "seconds": 469.9,
+     "started": "2026-10-01T11:20:28+00:00",
+     "finished": "2026-10-01T11:28:18+00:00",
+     "rc": 1,
+     "attempts": 1,
+     "reasons": [
+      "exit code 1"
+     ],
+     "warnings": []
+    },
+    {
+     "name": "split-397b-TheDrainFlorist--Qwen3.5-397B-A17B-VQ-3.1bpw",
+     "status": "fail",
+     "seconds": 369.7,
+     "started": "2026-10-01T11:28:18+00:00",
+     "finished": "2026-10-01T11:34:28+00:00",
+     "rc": 1,
+     "attempts": 1,
+     "reasons": [
+      "exit code 1"
+     ],
+     "warnings": []
+    }
+   ]
+  },
+  {
+   "id": "20261001-005822-speedpass-stage3-split-preflight",
+   "name": "speedpass-stage3-split",
+   "status": "passed",
+   "live": false,
+   "preflight": true,
+   "created": "2026-10-01T07:58:22+00:00",
+   "commit": "9efb7e92e90e274f979339bb190ad7e1d2feb068",
+   "source": "queue_stage3_split.json",
+   "steps": [
+    {
+     "name": "split-flash-Qwen--Qwen3.8-Flash-Next-3bit",
+     "status": "pass",
+     "seconds": 188.1,
+     "started": "2026-10-01T07:58:26+00:00",
+     "finished": "2026-10-01T08:01:34+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "split-flash-Qwen--Qwen3.8-Flash-Next-5bit",
+     "status": "pass",
+     "seconds": 210.2,
+     "started": "2026-10-01T08:01:34+00:00",
+     "finished": "2026-10-01T08:05:04+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "split-flash-Qwen--Qwen3.8-Flash-Next-6bit",
+     "status": "pass",
+     "seconds": 313.0,
+     "started": "2026-10-01T08:05:04+00:00",
+     "finished": "2026-10-01T08:10:17+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "split-flash-Qwen--Qwen3.8-Flash-Next-8bit",
+     "status": "pass",
+     "seconds": 419.9,
+     "started": "2026-10-01T08:10:17+00:00",
+     "finished": "2026-10-01T08:17:17+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "split-flash-TheDrainFlorist--Qwen3.8-Flash-Next-VQ-4.4bpw",
+     "status": "pass",
+     "seconds": 270.0,
+     "started": "2026-10-01T08:17:17+00:00",
+     "finished": "2026-10-01T08:21:47+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "split-flash-TheDrainFlorist--Qwen3.8-Flash-Next-VQ-5.5bpw",
+     "status": "pass",
+     "seconds": 211.8,
+     "started": "2026-10-01T08:21:47+00:00",
+     "finished": "2026-10-01T08:25:19+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "split-glm-zai-org--GLM-5.3-Flash-3bit",
+     "status": "pass",
+     "seconds": 431.1,
+     "started": "2026-10-01T08:25:19+00:00",
+     "finished": "2026-10-01T08:32:30+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "split-glm-TheDrainFlorist--GLM-5.3-Flash-VQ-2.7bpw",
+     "status": "pass",
+     "seconds": 356.5,
+     "started": "2026-10-01T08:32:30+00:00",
+     "finished": "2026-10-01T08:38:26+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "split-glm-TheDrainFlorist--GLM-5.3-Flash-VQ-3.1bpw",
+     "status": "pass",
+     "seconds": 325.1,
+     "started": "2026-10-01T08:38:26+00:00",
+     "finished": "2026-10-01T08:43:51+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "split-glm-TheDrainFlorist--GLM-5.3-Flash-VQ-3.6bpw",
+     "status": "pass",
+     "seconds": 434.4,
+     "started": "2026-10-01T08:43:51+00:00",
+     "finished": "2026-10-01T08:51:06+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "split-397b-TheDrainFlorist--Qwen3.5-397B-A17B-VQ-2.2bpw",
+     "status": "pass",
+     "seconds": 278.0,
+     "started": "2026-10-01T08:51:06+00:00",
+     "finished": "2026-10-01T08:55:44+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "split-397b-TheDrainFlorist--Qwen3.5-397B-A17B-VQ-2.4bpw",
+     "status": "pass",
+     "seconds": 360.6,
+     "started": "2026-10-01T08:55:44+00:00",
+     "finished": "2026-10-01T09:01:45+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "split-397b-TheDrainFlorist--Qwen3.5-397B-A17B-VQ-2.6bpw",
+     "status": "pass",
+     "seconds": 355.8,
+     "started": "2026-10-01T09:01:45+00:00",
+     "finished": "2026-10-01T09:07:40+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "split-397b-TheDrainFlorist--Qwen3.5-397B-A17B-VQ-3.1bpw",
+     "status": "pass",
+     "seconds": 333.1,
+     "started": "2026-10-01T09:07:40+00:00",
+     "finished": "2026-10-01T09:13:13+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    }
+   ]
+  },
+  {
+   "id": "20261001-005025-speedpass-stage3-split-preflight",
+   "name": "speedpass-stage3-split",
+   "status": "stopped",
+   "live": false,
+   "preflight": true,
+   "created": "2026-10-01T07:50:25+00:00",
+   "commit": "e0aa5388d340da4a0f15ff7eaf76e47f27bb5358",
+   "source": "queue_stage3_split.json",
+   "steps": [
+    {
+     "name": "split-flash-Qwen--Qwen3.8-Flash-Next-3bit",
+     "status": "fail",
+     "seconds": 256.0,
+     "started": "2026-10-01T07:50:29+00:00",
+     "finished": "2026-10-01T07:54:45+00:00",
+     "rc": 1,
+     "attempts": 1,
+     "reasons": [
+      "exit code 1",
+      "traceback in stderr"
+     ],
+     "warnings": []
+    },
+    {
+     "name": "split-flash-Qwen--Qwen3.8-Flash-Next-5bit",
+     "status": "stopped",
+     "seconds": 144.1,
+     "started": "2026-10-01T07:54:45+00:00",
+     "finished": "2026-10-01T07:57:09+00:00",
+     "rc": -15,
+     "attempts": 1,
+     "reasons": [
+      "exit code -15"
+     ],
+     "warnings": []
+    },
+    {
+     "name": "split-flash-Qwen--Qwen3.8-Flash-Next-6bit",
+     "status": "pending",
+     "seconds": null,
+     "started": null,
+     "finished": null,
+     "rc": null,
+     "attempts": null,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "split-flash-Qwen--Qwen3.8-Flash-Next-8bit",
+     "status": "pending",
+     "seconds": null,
+     "started": null,
+     "finished": null,
+     "rc": null,
+     "attempts": null,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "split-flash-TheDrainFlorist--Qwen3.8-Flash-Next-VQ-4.4bpw",
+     "status": "pending",
+     "seconds": null,
+     "started": null,
+     "finished": null,
+     "rc": null,
+     "attempts": null,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "split-flash-TheDrainFlorist--Qwen3.8-Flash-Next-VQ-5.5bpw",
+     "status": "pending",
+     "seconds": null,
+     "started": null,
+     "finished": null,
+     "rc": null,
+     "attempts": null,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "split-glm-zai-org--GLM-5.3-Flash-3bit",
+     "status": "pending",
+     "seconds": null,
+     "started": null,
+     "finished": null,
+     "rc": null,
+     "attempts": null,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "split-glm-TheDrainFlorist--GLM-5.3-Flash-VQ-2.7bpw",
+     "status": "pending",
+     "seconds": null,
+     "started": null,
+     "finished": null,
+     "rc": null,
+     "attempts": null,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "split-glm-TheDrainFlorist--GLM-5.3-Flash-VQ-3.1bpw",
+     "status": "pending",
+     "seconds": null,
+     "started": null,
+     "finished": null,
+     "rc": null,
+     "attempts": null,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "split-glm-TheDrainFlorist--GLM-5.3-Flash-VQ-3.6bpw",
+     "status": "pending",
+     "seconds": null,
+     "started": null,
+     "finished": null,
+     "rc": null,
+     "attempts": null,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "split-397b-TheDrainFlorist--Qwen3.5-397B-A17B-VQ-2.2bpw",
+     "status": "pending",
+     "seconds": null,
+     "started": null,
+     "finished": null,
+     "rc": null,
+     "attempts": null,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "split-397b-TheDrainFlorist--Qwen3.5-397B-A17B-VQ-2.4bpw",
+     "status": "pending",
+     "seconds": null,
+     "started": null,
+     "finished": null,
+     "rc": null,
+     "attempts": null,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "split-397b-TheDrainFlorist--Qwen3.5-397B-A17B-VQ-2.6bpw",
+     "status": "pending",
+     "seconds": null,
+     "started": null,
+     "finished": null,
+     "rc": null,
+     "attempts": null,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "split-397b-TheDrainFlorist--Qwen3.5-397B-A17B-VQ-3.1bpw",
+     "status": "pending",
+     "seconds": null,
+     "started": null,
+     "finished": null,
+     "rc": null,
+     "attempts": null,
+     "reasons": [],
+     "warnings": []
+    }
+   ]
+  },
+  {
+   "id": "20261001-004943-speedpass-stage3-split-preflight",
+   "name": "speedpass-stage3-split",
+   "status": "failed",
+   "live": false,
+   "preflight": true,
+   "created": "2026-10-01T07:49:43+00:00",
+   "commit": "e0aa5388d340da4a0f15ff7eaf76e47f27bb5358",
+   "source": "queue_stage3_split.json",
+   "steps": [
+    {
+     "name": "split-flash-Qwen--Qwen3.8-Flash-Next-3bit",
+     "status": "fail",
+     "seconds": 2.3,
+     "started": "2026-10-01T07:49:47+00:00",
+     "finished": "2026-10-01T07:49:49+00:00",
+     "rc": 1,
+     "attempts": 1,
+     "reasons": [
+      "exit code 1",
+      "expected output, stdout is empty"
+     ],
+     "warnings": []
+    },
+    {
+     "name": "split-flash-Qwen--Qwen3.8-Flash-Next-5bit",
+     "status": "fail",
+     "seconds": 2.2,
+     "started": "2026-10-01T07:49:49+00:00",
+     "finished": "2026-10-01T07:49:51+00:00",
+     "rc": 1,
+     "attempts": 1,
+     "reasons": [
+      "exit code 1",
+      "expected output, stdout is empty"
+     ],
+     "warnings": []
+    },
+    {
+     "name": "split-flash-Qwen--Qwen3.8-Flash-Next-6bit",
+     "status": "fail",
+     "seconds": 2.3,
+     "started": "2026-10-01T07:49:51+00:00",
+     "finished": "2026-10-01T07:49:54+00:00",
+     "rc": 1,
+     "attempts": 1,
+     "reasons": [
+      "exit code 1",
+      "expected output, stdout is empty"
+     ],
+     "warnings": []
+    },
+    {
+     "name": "split-flash-Qwen--Qwen3.8-Flash-Next-8bit",
+     "status": "fail",
+     "seconds": 2.2,
+     "started": "2026-10-01T07:49:54+00:00",
+     "finished": "2026-10-01T07:49:56+00:00",
+     "rc": 1,
+     "attempts": 1,
+     "reasons": [
+      "exit code 1",
+      "expected output, stdout is empty"
+     ],
+     "warnings": []
+    },
+    {
+     "name": "split-flash-TheDrainFlorist--Qwen3.8-Flash-Next-VQ-4.4bpw",
+     "status": "fail",
+     "seconds": 2.3,
+     "started": "2026-10-01T07:49:56+00:00",
+     "finished": "2026-10-01T07:49:58+00:00",
+     "rc": 1,
+     "attempts": 1,
+     "reasons": [
+      "exit code 1",
+      "expected output, stdout is empty"
+     ],
+     "warnings": []
+    },
+    {
+     "name": "split-flash-TheDrainFlorist--Qwen3.8-Flash-Next-VQ-5.5bpw",
+     "status": "fail",
+     "seconds": 2.3,
+     "started": "2026-10-01T07:49:58+00:00",
+     "finished": "2026-10-01T07:50:00+00:00",
+     "rc": 1,
+     "attempts": 1,
+     "reasons": [
+      "exit code 1",
+      "expected output, stdout is empty"
+     ],
+     "warnings": []
+    },
+    {
+     "name": "split-glm-zai-org--GLM-5.3-Flash-3bit",
+     "status": "fail",
+     "seconds": 2.3,
+     "started": "2026-10-01T07:50:00+00:00",
+     "finished": "2026-10-01T07:50:03+00:00",
+     "rc": 1,
+     "attempts": 1,
+     "reasons": [
+      "exit code 1",
+      "expected output, stdout is empty"
+     ],
+     "warnings": []
+    },
+    {
+     "name": "split-glm-TheDrainFlorist--GLM-5.3-Flash-VQ-2.7bpw",
+     "status": "fail",
+     "seconds": 2.3,
+     "started": "2026-10-01T07:50:03+00:00",
+     "finished": "2026-10-01T07:50:05+00:00",
+     "rc": 1,
+     "attempts": 1,
+     "reasons": [
+      "exit code 1",
+      "expected output, stdout is empty"
+     ],
+     "warnings": []
+    },
+    {
+     "name": "split-glm-TheDrainFlorist--GLM-5.3-Flash-VQ-3.1bpw",
+     "status": "fail",
+     "seconds": 2.2,
+     "started": "2026-10-01T07:50:05+00:00",
+     "finished": "2026-10-01T07:50:07+00:00",
+     "rc": 1,
+     "attempts": 1,
+     "reasons": [
+      "exit code 1",
+      "expected output, stdout is empty"
+     ],
+     "warnings": []
+    },
+    {
+     "name": "split-glm-TheDrainFlorist--GLM-5.3-Flash-VQ-3.6bpw",
+     "status": "fail",
+     "seconds": 2.2,
+     "started": "2026-10-01T07:50:07+00:00",
+     "finished": "2026-10-01T07:50:09+00:00",
+     "rc": 1,
+     "attempts": 1,
+     "reasons": [
+      "exit code 1",
+      "expected output, stdout is empty"
+     ],
+     "warnings": []
+    },
+    {
+     "name": "split-397b-TheDrainFlorist--Qwen3.5-397B-A17B-VQ-2.2bpw",
+     "status": "fail",
+     "seconds": 2.2,
+     "started": "2026-10-01T07:50:09+00:00",
+     "finished": "2026-10-01T07:50:12+00:00",
+     "rc": 1,
+     "attempts": 1,
+     "reasons": [
+      "exit code 1",
+      "expected output, stdout is empty"
+     ],
+     "warnings": []
+    },
+    {
+     "name": "split-397b-TheDrainFlorist--Qwen3.5-397B-A17B-VQ-2.4bpw",
+     "status": "fail",
+     "seconds": 2.2,
+     "started": "2026-10-01T07:50:12+00:00",
+     "finished": "2026-10-01T07:50:14+00:00",
+     "rc": 1,
+     "attempts": 1,
+     "reasons": [
+      "exit code 1",
+      "expected output, stdout is empty"
+     ],
+     "warnings": []
+    },
+    {
+     "name": "split-397b-TheDrainFlorist--Qwen3.5-397B-A17B-VQ-2.6bpw",
+     "status": "fail",
+     "seconds": 2.2,
+     "started": "2026-10-01T07:50:14+00:00",
+     "finished": "2026-10-01T07:50:16+00:00",
+     "rc": 1,
+     "attempts": 1,
+     "reasons": [
+      "exit code 1",
+      "expected output, stdout is empty"
+     ],
+     "warnings": []
+    },
+    {
+     "name": "split-397b-TheDrainFlorist--Qwen3.5-397B-A17B-VQ-3.1bpw",
+     "status": "fail",
+     "seconds": 2.2,
+     "started": "2026-10-01T07:50:16+00:00",
+     "finished": "2026-10-01T07:50:18+00:00",
+     "rc": 1,
+     "attempts": 1,
+     "reasons": [
+      "exit code 1",
+      "expected output, stdout is empty"
+     ],
+     "warnings": []
+    }
+   ]
+  },
+  {
+   "id": "20261001-004802-speedpass-stage3-split-preflight",
+   "name": "speedpass-stage3-split",
+   "status": "failed",
+   "live": false,
+   "preflight": true,
+   "created": "2026-10-01T07:48:02+00:00",
+   "commit": "e0aa5388d340da4a0f15ff7eaf76e47f27bb5358",
+   "source": "queue_stage3_split.json",
+   "steps": [
+    {
+     "name": "split-flash-Qwen--Qwen3.8-Flash-Next-3bit",
+     "status": "fail",
+     "seconds": 3.4,
+     "started": "2026-10-01T07:48:06+00:00",
+     "finished": "2026-10-01T07:48:10+00:00",
+     "rc": 1,
+     "attempts": 1,
+     "reasons": [
+      "exit code 1",
+      "traceback in stderr",
+      "expected output, stdout is empty"
+     ],
+     "warnings": []
+    },
+    {
+     "name": "split-flash-Qwen--Qwen3.8-Flash-Next-5bit",
+     "status": "fail",
+     "seconds": 2.2,
+     "started": "2026-10-01T07:48:10+00:00",
+     "finished": "2026-10-01T07:48:12+00:00",
+     "rc": 1,
+     "attempts": 1,
+     "reasons": [
+      "exit code 1",
+      "traceback in stderr",
+      "expected output, stdout is empty"
+     ],
+     "warnings": []
+    },
+    {
+     "name": "split-flash-Qwen--Qwen3.8-Flash-Next-6bit",
+     "status": "fail",
+     "seconds": 2.2,
+     "started": "2026-10-01T07:48:12+00:00",
+     "finished": "2026-10-01T07:48:14+00:00",
+     "rc": 1,
+     "attempts": 1,
+     "reasons": [
+      "exit code 1",
+      "traceback in stderr",
+      "expected output, stdout is empty"
+     ],
+     "warnings": []
+    },
+    {
+     "name": "split-flash-Qwen--Qwen3.8-Flash-Next-8bit",
+     "status": "fail",
+     "seconds": 2.2,
+     "started": "2026-10-01T07:48:14+00:00",
+     "finished": "2026-10-01T07:48:16+00:00",
+     "rc": 1,
+     "attempts": 1,
+     "reasons": [
+      "exit code 1",
+      "traceback in stderr",
+      "expected output, stdout is empty"
+     ],
+     "warnings": []
+    },
+    {
+     "name": "split-flash-TheDrainFlorist--Qwen3.8-Flash-Next-VQ-4.4bpw",
+     "status": "fail",
+     "seconds": 2.2,
+     "started": "2026-10-01T07:48:16+00:00",
+     "finished": "2026-10-01T07:48:19+00:00",
+     "rc": 1,
+     "attempts": 1,
+     "reasons": [
+      "exit code 1",
+      "traceback in stderr",
+      "expected output, stdout is empty"
+     ],
+     "warnings": []
+    },
+    {
+     "name": "split-flash-TheDrainFlorist--Qwen3.8-Flash-Next-VQ-5.5bpw",
+     "status": "fail",
+     "seconds": 2.3,
+     "started": "2026-10-01T07:48:19+00:00",
+     "finished": "2026-10-01T07:48:21+00:00",
+     "rc": 1,
+     "attempts": 1,
+     "reasons": [
+      "exit code 1",
+      "traceback in stderr",
+      "expected output, stdout is empty"
+     ],
+     "warnings": []
+    },
+    {
+     "name": "split-glm-zai-org--GLM-5.3-Flash-3bit",
+     "status": "fail",
+     "seconds": 2.3,
+     "started": "2026-10-01T07:48:21+00:00",
+     "finished": "2026-10-01T07:48:23+00:00",
+     "rc": 1,
+     "attempts": 1,
+     "reasons": [
+      "exit code 1",
+      "traceback in stderr",
+      "expected output, stdout is empty"
+     ],
+     "warnings": []
+    },
+    {
+     "name": "split-glm-TheDrainFlorist--GLM-5.3-Flash-VQ-2.7bpw",
+     "status": "fail",
+     "seconds": 2.2,
+     "started": "2026-10-01T07:48:23+00:00",
+     "finished": "2026-10-01T07:48:25+00:00",
+     "rc": 1,
+     "attempts": 1,
+     "reasons": [
+      "exit code 1",
+      "traceback in stderr",
+      "expected output, stdout is empty"
+     ],
+     "warnings": []
+    },
+    {
+     "name": "split-glm-TheDrainFlorist--GLM-5.3-Flash-VQ-3.1bpw",
+     "status": "fail",
+     "seconds": 2.2,
+     "started": "2026-10-01T07:48:25+00:00",
+     "finished": "2026-10-01T07:48:28+00:00",
+     "rc": 1,
+     "attempts": 1,
+     "reasons": [
+      "exit code 1",
+      "traceback in stderr",
+      "expected output, stdout is empty"
+     ],
+     "warnings": []
+    },
+    {
+     "name": "split-glm-TheDrainFlorist--GLM-5.3-Flash-VQ-3.6bpw",
+     "status": "fail",
+     "seconds": 2.2,
+     "started": "2026-10-01T07:48:28+00:00",
+     "finished": "2026-10-01T07:48:30+00:00",
+     "rc": 1,
+     "attempts": 1,
+     "reasons": [
+      "exit code 1",
+      "traceback in stderr",
+      "expected output, stdout is empty"
+     ],
+     "warnings": []
+    },
+    {
+     "name": "split-397b-TheDrainFlorist--Qwen3.5-397B-A17B-VQ-2.2bpw",
+     "status": "fail",
+     "seconds": 2.2,
+     "started": "2026-10-01T07:48:30+00:00",
+     "finished": "2026-10-01T07:48:32+00:00",
+     "rc": 1,
+     "attempts": 1,
+     "reasons": [
+      "exit code 1",
+      "traceback in stderr",
+      "expected output, stdout is empty"
+     ],
+     "warnings": []
+    },
+    {
+     "name": "split-397b-TheDrainFlorist--Qwen3.5-397B-A17B-VQ-2.4bpw",
+     "status": "fail",
+     "seconds": 2.2,
+     "started": "2026-10-01T07:48:32+00:00",
+     "finished": "2026-10-01T07:48:34+00:00",
+     "rc": 1,
+     "attempts": 1,
+     "reasons": [
+      "exit code 1",
+      "traceback in stderr",
+      "expected output, stdout is empty"
+     ],
+     "warnings": []
+    },
+    {
+     "name": "split-397b-TheDrainFlorist--Qwen3.5-397B-A17B-VQ-2.6bpw",
+     "status": "fail",
+     "seconds": 2.2,
+     "started": "2026-10-01T07:48:34+00:00",
+     "finished": "2026-10-01T07:48:36+00:00",
+     "rc": 1,
+     "attempts": 1,
+     "reasons": [
+      "exit code 1",
+      "traceback in stderr",
+      "expected output, stdout is empty"
+     ],
+     "warnings": []
+    },
+    {
+     "name": "split-397b-TheDrainFlorist--Qwen3.5-397B-A17B-VQ-3.1bpw",
+     "status": "fail",
+     "seconds": 2.2,
+     "started": "2026-10-01T07:48:36+00:00",
+     "finished": "2026-10-01T07:48:38+00:00",
+     "rc": 1,
+     "attempts": 1,
+     "reasons": [
+      "exit code 1",
+      "traceback in stderr",
+      "expected output, stdout is empty"
+     ],
+     "warnings": []
+    }
+   ]
+  },
+  {
+   "id": "20261001-000052-speedpass-stage3-pins",
+   "name": "speedpass-stage3-pins",
+   "status": "passed",
+   "live": false,
+   "preflight": false,
+   "created": "2026-10-01T07:00:52+00:00",
+   "commit": "e0aa5388d340da4a0f15ff7eaf76e47f27bb5358",
+   "source": "queue_stage3_pins.json",
+   "steps": [
+    {
+     "name": "pin-Qwen--Qwen3.8-Flash-Next-4bit",
+     "status": "pass",
+     "seconds": 2.7,
+     "started": "2026-10-01T07:00:56+00:00",
+     "finished": "2026-10-01T07:00:59+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-Qwen--Qwen3.8-Flash-Next-5bit",
+     "status": "pass",
+     "seconds": 2.7,
+     "started": "2026-10-01T07:00:59+00:00",
+     "finished": "2026-10-01T07:01:01+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-Qwen--Qwen3.8-Flash-Next-6bit",
+     "status": "pass",
+     "seconds": 2.7,
+     "started": "2026-10-01T07:01:01+00:00",
+     "finished": "2026-10-01T07:01:04+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-Qwen--Qwen3.8-Flash-Next-8bit",
+     "status": "pass",
+     "seconds": 2.7,
+     "started": "2026-10-01T07:01:04+00:00",
+     "finished": "2026-10-01T07:01:07+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-TheDrainFlorist--Qwen3.8-Flash-Next-VQ-4.4bpw",
+     "status": "pass",
+     "seconds": 6.3,
+     "started": "2026-10-01T07:01:07+00:00",
+     "finished": "2026-10-01T07:01:13+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-TheDrainFlorist--Qwen3.8-Flash-Next-VQ-5.5bpw",
+     "status": "pass",
+     "seconds": 6.4,
+     "started": "2026-10-01T07:01:13+00:00",
+     "finished": "2026-10-01T07:01:19+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-zai-org--GLM-5.3-Flash-3bit",
+     "status": "pass",
+     "seconds": 2.6,
+     "started": "2026-10-01T07:01:19+00:00",
+     "finished": "2026-10-01T07:01:22+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-zai-org--GLM-5.3-Flash-4bit",
+     "status": "pass",
+     "seconds": 2.7,
+     "started": "2026-10-01T07:01:22+00:00",
+     "finished": "2026-10-01T07:01:25+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-TheDrainFlorist--GLM-5.3-Flash-VQ-2.7bpw",
+     "status": "pass",
+     "seconds": 5.0,
+     "started": "2026-10-01T07:01:25+00:00",
+     "finished": "2026-10-01T07:01:30+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-TheDrainFlorist--GLM-5.3-Flash-VQ-3.1bpw",
+     "status": "pass",
+     "seconds": 5.7,
+     "started": "2026-10-01T07:01:30+00:00",
+     "finished": "2026-10-01T07:01:36+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-TheDrainFlorist--GLM-5.3-Flash-VQ-3.6bpw",
+     "status": "pass",
+     "seconds": 5.2,
+     "started": "2026-10-01T07:01:36+00:00",
+     "finished": "2026-10-01T07:01:41+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-spicyneuron--Qwen3.5-397B-A17B-MLX-2.6bit",
+     "status": "pass",
+     "seconds": 2.6,
+     "started": "2026-10-01T07:01:41+00:00",
+     "finished": "2026-10-01T07:01:43+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-TheDrainFlorist--Qwen3.5-397B-A17B-VQ-2.2bpw",
+     "status": "pass",
+     "seconds": 28.5,
+     "started": "2026-10-01T07:01:43+00:00",
+     "finished": "2026-10-01T07:02:12+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-TheDrainFlorist--Qwen3.5-397B-A17B-VQ-2.4bpw",
+     "status": "pass",
+     "seconds": 24.6,
+     "started": "2026-10-01T07:02:12+00:00",
+     "finished": "2026-10-01T07:02:36+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-TheDrainFlorist--Qwen3.5-397B-A17B-VQ-2.6bpw",
+     "status": "pass",
+     "seconds": 13.6,
+     "started": "2026-10-01T07:02:36+00:00",
+     "finished": "2026-10-01T07:02:50+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-TheDrainFlorist--Qwen3.5-397B-A17B-VQ-3.1bpw",
+     "status": "pass",
+     "seconds": 13.3,
+     "started": "2026-10-01T07:02:50+00:00",
+     "finished": "2026-10-01T07:03:03+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    }
+   ]
+  },
+  {
+   "id": "20260930-235759-speedpass-stage3-pins-preflight",
+   "name": "speedpass-stage3-pins",
+   "status": "passed",
+   "live": false,
+   "preflight": true,
+   "created": "2026-10-01T06:57:59+00:00",
+   "commit": "e0aa5388d340da4a0f15ff7eaf76e47f27bb5358",
+   "source": "queue_stage3_pins.json",
+   "steps": [
+    {
+     "name": "pin-Qwen--Qwen3.8-Flash-Next-4bit",
+     "status": "pass",
+     "seconds": 3.3,
+     "started": "2026-10-01T06:58:04+00:00",
+     "finished": "2026-10-01T06:58:07+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-Qwen--Qwen3.8-Flash-Next-5bit",
+     "status": "pass",
+     "seconds": 2.5,
+     "started": "2026-10-01T06:58:07+00:00",
+     "finished": "2026-10-01T06:58:09+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-Qwen--Qwen3.8-Flash-Next-6bit",
+     "status": "pass",
+     "seconds": 2.6,
+     "started": "2026-10-01T06:58:09+00:00",
+     "finished": "2026-10-01T06:58:12+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-Qwen--Qwen3.8-Flash-Next-8bit",
+     "status": "pass",
+     "seconds": 2.8,
+     "started": "2026-10-01T06:58:12+00:00",
+     "finished": "2026-10-01T06:58:15+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-TheDrainFlorist--Qwen3.8-Flash-Next-VQ-4.4bpw",
+     "status": "pass",
+     "seconds": 6.3,
+     "started": "2026-10-01T06:58:15+00:00",
+     "finished": "2026-10-01T06:58:21+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-TheDrainFlorist--Qwen3.8-Flash-Next-VQ-5.5bpw",
+     "status": "pass",
+     "seconds": 6.3,
+     "started": "2026-10-01T06:58:21+00:00",
+     "finished": "2026-10-01T06:58:28+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-zai-org--GLM-5.3-Flash-3bit",
+     "status": "pass",
+     "seconds": 2.3,
+     "started": "2026-10-01T06:58:28+00:00",
+     "finished": "2026-10-01T06:58:30+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-zai-org--GLM-5.3-Flash-4bit",
+     "status": "pass",
+     "seconds": 2.4,
+     "started": "2026-10-01T06:58:30+00:00",
+     "finished": "2026-10-01T06:58:32+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-TheDrainFlorist--GLM-5.3-Flash-VQ-2.7bpw",
+     "status": "pass",
+     "seconds": 5.0,
+     "started": "2026-10-01T06:58:32+00:00",
+     "finished": "2026-10-01T06:58:37+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-TheDrainFlorist--GLM-5.3-Flash-VQ-3.1bpw",
+     "status": "pass",
+     "seconds": 5.1,
+     "started": "2026-10-01T06:58:37+00:00",
+     "finished": "2026-10-01T06:58:42+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-TheDrainFlorist--GLM-5.3-Flash-VQ-3.6bpw",
+     "status": "pass",
+     "seconds": 5.4,
+     "started": "2026-10-01T06:58:42+00:00",
+     "finished": "2026-10-01T06:58:48+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-spicyneuron--Qwen3.5-397B-A17B-MLX-2.6bit",
+     "status": "pass",
+     "seconds": 2.8,
+     "started": "2026-10-01T06:58:48+00:00",
+     "finished": "2026-10-01T06:58:51+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-TheDrainFlorist--Qwen3.5-397B-A17B-VQ-2.2bpw",
+     "status": "pass",
+     "seconds": 32.1,
+     "started": "2026-10-01T06:58:51+00:00",
+     "finished": "2026-10-01T06:59:23+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-TheDrainFlorist--Qwen3.5-397B-A17B-VQ-2.4bpw",
+     "status": "pass",
+     "seconds": 14.2,
+     "started": "2026-10-01T06:59:23+00:00",
+     "finished": "2026-10-01T06:59:37+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-TheDrainFlorist--Qwen3.5-397B-A17B-VQ-2.6bpw",
+     "status": "pass",
+     "seconds": 17.1,
+     "started": "2026-10-01T06:59:37+00:00",
+     "finished": "2026-10-01T06:59:54+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-TheDrainFlorist--Qwen3.5-397B-A17B-VQ-3.1bpw",
+     "status": "pass",
+     "seconds": 20.4,
+     "started": "2026-10-01T06:59:54+00:00",
+     "finished": "2026-10-01T07:00:14+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    }
+   ]
+  },
+  {
+   "id": "20260930-165409-speedpass-onebox-20260930",
+   "name": "speedpass-onebox-20260930",
+   "status": "passed",
+   "live": false,
+   "preflight": false,
+   "created": "2026-09-30T23:54:09+00:00",
+   "commit": "6d77ffa129197b077bae82087ff4341d1b6ece6c",
+   "source": "queue_onebox.json",
+   "steps": [
+    {
+     "name": "pin-Qwen--Qwen3.8-27B-8bit",
+     "status": "pass",
+     "seconds": 19.3,
+     "started": "2026-09-30T23:54:13+00:00",
+     "finished": "2026-09-30T23:54:32+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-comparator_27b_q4",
+     "status": "pass",
+     "seconds": 13.0,
+     "started": "2026-09-30T23:54:32+00:00",
+     "finished": "2026-09-30T23:54:45+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "speed-27b-comparator_27b_q4",
+     "status": "pass",
+     "seconds": 92.5,
+     "started": "2026-09-30T23:54:45+00:00",
+     "finished": "2026-09-30T23:56:18+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-TheDrainFlorist--Qwen3.8-27B-VQ-3.9bpw",
+     "status": "pass",
+     "seconds": 20.2,
+     "started": "2026-09-30T23:56:18+00:00",
+     "finished": "2026-09-30T23:56:38+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "speed-27b-TheDrainFlorist--Qwen3.8-27B-VQ-3.9bpw",
+     "status": "pass",
+     "seconds": 100.0,
+     "started": "2026-09-30T23:56:38+00:00",
+     "finished": "2026-09-30T23:58:18+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-TheDrainFlorist--Qwen3.8-27B-VQ-4.5bpw",
+     "status": "pass",
+     "seconds": 18.9,
+     "started": "2026-09-30T23:58:18+00:00",
+     "finished": "2026-09-30T23:58:37+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "speed-27b-TheDrainFlorist--Qwen3.8-27B-VQ-4.5bpw",
+     "status": "pass",
+     "seconds": 103.3,
+     "started": "2026-09-30T23:58:37+00:00",
+     "finished": "2026-10-01T00:00:20+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-TheDrainFlorist--Qwen3.8-27B-VQ-4.8bpw",
+     "status": "pass",
+     "seconds": 16.5,
+     "started": "2026-10-01T00:00:20+00:00",
+     "finished": "2026-10-01T00:00:37+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "speed-27b-TheDrainFlorist--Qwen3.8-27B-VQ-4.8bpw",
+     "status": "pass",
+     "seconds": 97.3,
+     "started": "2026-10-01T00:00:37+00:00",
+     "finished": "2026-10-01T00:02:14+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-Qwen--Qwen3.8-Flash-Next-3bit",
+     "status": "pass",
+     "seconds": 129.3,
+     "started": "2026-10-01T00:02:14+00:00",
+     "finished": "2026-10-01T00:04:23+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-TheDrainFlorist--Qwen3.8-Flash-Next-VQ-2.1bpw",
+     "status": "pass",
+     "seconds": 30.5,
+     "started": "2026-10-01T00:04:23+00:00",
+     "finished": "2026-10-01T00:04:54+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "speed-flash-TheDrainFlorist--Qwen3.8-Flash-Next-VQ-2.1bpw",
+     "status": "pass",
+     "seconds": 521.6,
+     "started": "2026-10-01T00:04:54+00:00",
+     "finished": "2026-10-01T00:13:35+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-TheDrainFlorist--Qwen3.8-Flash-Next-VQ-3.2bpw",
+     "status": "pass",
+     "seconds": 50.3,
+     "started": "2026-10-01T00:13:35+00:00",
+     "finished": "2026-10-01T00:14:26+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "speed-flash-TheDrainFlorist--Qwen3.8-Flash-Next-VQ-3.2bpw",
+     "status": "pass",
+     "seconds": 491.5,
+     "started": "2026-10-01T00:14:26+00:00",
+     "finished": "2026-10-01T00:22:37+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-TheDrainFlorist--Qwen3.6-35B-A3B-VQ-3.4bpw",
+     "status": "pass",
+     "seconds": 20.2,
+     "started": "2026-10-01T00:22:37+00:00",
+     "finished": "2026-10-01T00:22:57+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-TheDrainFlorist--Qwen3.6-35B-A3B-VQ-3.8bpw",
+     "status": "pass",
+     "seconds": 19.9,
+     "started": "2026-10-01T00:22:57+00:00",
+     "finished": "2026-10-01T00:23:17+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "speed-35b-TheDrainFlorist--Qwen3.6-35B-A3B-VQ-3.8bpw",
+     "status": "pass",
+     "seconds": 47.9,
+     "started": "2026-10-01T00:23:17+00:00",
+     "finished": "2026-10-01T00:24:06+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-TheDrainFlorist--Qwen3.6-35B-A3B-VQ-4.6bpw",
+     "status": "pass",
+     "seconds": 17.8,
+     "started": "2026-10-01T00:24:06+00:00",
+     "finished": "2026-10-01T00:24:24+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "speed-35b-TheDrainFlorist--Qwen3.6-35B-A3B-VQ-4.6bpw",
+     "status": "pass",
+     "seconds": 49.1,
+     "started": "2026-10-01T00:24:24+00:00",
+     "finished": "2026-10-01T00:25:13+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-TheDrainFlorist--Qwen3.6-35B-A3B-VQ-5.4bpw",
+     "status": "pass",
+     "seconds": 22.4,
+     "started": "2026-10-01T00:25:13+00:00",
+     "finished": "2026-10-01T00:25:35+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "speed-35b-TheDrainFlorist--Qwen3.6-35B-A3B-VQ-5.4bpw",
+     "status": "pass",
+     "seconds": 61.0,
+     "started": "2026-10-01T00:25:35+00:00",
+     "finished": "2026-10-01T00:26:36+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-mlx-community--gemma-4-e4b-it-8bit",
+     "status": "pass",
+     "seconds": 16.7,
+     "started": "2026-10-01T00:26:36+00:00",
+     "finished": "2026-10-01T00:26:53+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-TheDrainFlorist--gemma-4-e4b-it-VQ-PLE",
+     "status": "pass",
+     "seconds": 17.7,
+     "started": "2026-10-01T00:26:53+00:00",
+     "finished": "2026-10-01T00:27:11+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "speed-e4b-TheDrainFlorist--gemma-4-e4b-it-VQ-PLE",
+     "status": "pass",
+     "seconds": 55.2,
+     "started": "2026-10-01T00:27:11+00:00",
+     "finished": "2026-10-01T00:28:06+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    }
+   ]
+  },
+  {
+   "id": "20260930-163928-speedpass-onebox-20260930-preflight",
+   "name": "speedpass-onebox-20260930",
+   "status": "passed",
+   "live": false,
+   "preflight": true,
+   "created": "2026-09-30T23:39:28+00:00",
+   "commit": "c8b559517f2cc0c284a08b637878b45321eb36e0",
+   "source": "queue_onebox.json",
+   "steps": [
+    {
+     "name": "pin-Qwen--Qwen3.8-27B-8bit",
+     "status": "pass",
+     "seconds": 27.8,
+     "started": "2026-09-30T23:39:33+00:00",
+     "finished": "2026-09-30T23:40:01+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-comparator_27b_q4",
+     "status": "pass",
+     "seconds": 19.4,
+     "started": "2026-09-30T23:40:01+00:00",
+     "finished": "2026-09-30T23:40:20+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "speed-27b-comparator_27b_q4",
+     "status": "pass",
+     "seconds": 15.4,
+     "started": "2026-09-30T23:40:20+00:00",
+     "finished": "2026-09-30T23:40:36+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-TheDrainFlorist--Qwen3.8-27B-VQ-3.9bpw",
+     "status": "pass",
+     "seconds": 21.0,
+     "started": "2026-09-30T23:40:36+00:00",
+     "finished": "2026-09-30T23:40:57+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "speed-27b-TheDrainFlorist--Qwen3.8-27B-VQ-3.9bpw",
+     "status": "pass",
+     "seconds": 16.8,
+     "started": "2026-09-30T23:40:57+00:00",
+     "finished": "2026-09-30T23:41:13+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-TheDrainFlorist--Qwen3.8-27B-VQ-4.5bpw",
+     "status": "pass",
+     "seconds": 15.9,
+     "started": "2026-09-30T23:41:13+00:00",
+     "finished": "2026-09-30T23:41:29+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "speed-27b-TheDrainFlorist--Qwen3.8-27B-VQ-4.5bpw",
+     "status": "pass",
+     "seconds": 16.1,
+     "started": "2026-09-30T23:41:29+00:00",
+     "finished": "2026-09-30T23:41:45+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-TheDrainFlorist--Qwen3.8-27B-VQ-4.8bpw",
+     "status": "pass",
+     "seconds": 17.0,
+     "started": "2026-09-30T23:41:45+00:00",
+     "finished": "2026-09-30T23:42:02+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "speed-27b-TheDrainFlorist--Qwen3.8-27B-VQ-4.8bpw",
+     "status": "pass",
+     "seconds": 17.0,
+     "started": "2026-09-30T23:42:02+00:00",
+     "finished": "2026-09-30T23:42:19+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-Qwen--Qwen3.8-Flash-Next-3bit",
+     "status": "pass",
+     "seconds": 89.8,
+     "started": "2026-09-30T23:42:19+00:00",
+     "finished": "2026-09-30T23:43:49+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-TheDrainFlorist--Qwen3.8-Flash-Next-VQ-2.1bpw",
+     "status": "pass",
+     "seconds": 49.5,
+     "started": "2026-09-30T23:43:49+00:00",
+     "finished": "2026-09-30T23:44:39+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "speed-flash-TheDrainFlorist--Qwen3.8-Flash-Next-VQ-2.1bpw",
+     "status": "pass",
+     "seconds": 146.0,
+     "started": "2026-09-30T23:44:39+00:00",
+     "finished": "2026-09-30T23:47:05+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-TheDrainFlorist--Qwen3.8-Flash-Next-VQ-3.2bpw",
+     "status": "pass",
+     "seconds": 61.6,
+     "started": "2026-09-30T23:47:05+00:00",
+     "finished": "2026-09-30T23:48:06+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "speed-flash-TheDrainFlorist--Qwen3.8-Flash-Next-VQ-3.2bpw",
+     "status": "pass",
+     "seconds": 170.7,
+     "started": "2026-09-30T23:48:06+00:00",
+     "finished": "2026-09-30T23:50:57+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-TheDrainFlorist--Qwen3.6-35B-A3B-VQ-3.4bpw",
+     "status": "pass",
+     "seconds": 21.9,
+     "started": "2026-09-30T23:50:57+00:00",
+     "finished": "2026-09-30T23:51:19+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-TheDrainFlorist--Qwen3.6-35B-A3B-VQ-3.8bpw",
+     "status": "pass",
+     "seconds": 16.2,
+     "started": "2026-09-30T23:51:19+00:00",
+     "finished": "2026-09-30T23:51:35+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "speed-35b-TheDrainFlorist--Qwen3.6-35B-A3B-VQ-3.8bpw",
+     "status": "pass",
+     "seconds": 14.7,
+     "started": "2026-09-30T23:51:35+00:00",
+     "finished": "2026-09-30T23:51:50+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-TheDrainFlorist--Qwen3.6-35B-A3B-VQ-4.6bpw",
+     "status": "pass",
+     "seconds": 18.2,
+     "started": "2026-09-30T23:51:50+00:00",
+     "finished": "2026-09-30T23:52:09+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "speed-35b-TheDrainFlorist--Qwen3.6-35B-A3B-VQ-4.6bpw",
+     "status": "pass",
+     "seconds": 12.6,
+     "started": "2026-09-30T23:52:09+00:00",
+     "finished": "2026-09-30T23:52:21+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-TheDrainFlorist--Qwen3.6-35B-A3B-VQ-5.4bpw",
+     "status": "pass",
+     "seconds": 19.2,
+     "started": "2026-09-30T23:52:21+00:00",
+     "finished": "2026-09-30T23:52:40+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "speed-35b-TheDrainFlorist--Qwen3.6-35B-A3B-VQ-5.4bpw",
+     "status": "pass",
+     "seconds": 14.3,
+     "started": "2026-09-30T23:52:40+00:00",
+     "finished": "2026-09-30T23:52:55+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-mlx-community--gemma-4-e4b-it-8bit",
+     "status": "pass",
+     "seconds": 11.5,
+     "started": "2026-09-30T23:52:55+00:00",
+     "finished": "2026-09-30T23:53:06+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-TheDrainFlorist--gemma-4-e4b-it-VQ-PLE",
+     "status": "pass",
+     "seconds": 12.5,
+     "started": "2026-09-30T23:53:06+00:00",
+     "finished": "2026-09-30T23:53:19+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "speed-e4b-TheDrainFlorist--gemma-4-e4b-it-VQ-PLE",
+     "status": "pass",
+     "seconds": 11.8,
+     "started": "2026-09-30T23:53:19+00:00",
+     "finished": "2026-09-30T23:53:30+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    }
+   ]
+  },
+  {
+   "id": "20260930-163339-speedpass-20260930-preflight",
+   "name": "speedpass-20260930",
+   "status": "stopped",
+   "live": false,
+   "preflight": true,
+   "created": "2026-09-30T23:33:39+00:00",
+   "commit": "c8b559517f2cc0c284a08b637878b45321eb36e0",
+   "source": "queue.json",
+   "steps": [
+    {
+     "name": "pin-Qwen--Qwen3.8-27B-8bit",
+     "status": "pass",
+     "seconds": 25.3,
+     "started": "2026-09-30T23:33:43+00:00",
+     "finished": "2026-09-30T23:34:08+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-comparator_27b_q4",
+     "status": "pass",
+     "seconds": 17.5,
+     "started": "2026-09-30T23:34:08+00:00",
+     "finished": "2026-09-30T23:34:26+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "speed-27b-comparator_27b_q4",
+     "status": "pass",
+     "seconds": 19.8,
+     "started": "2026-09-30T23:34:26+00:00",
+     "finished": "2026-09-30T23:34:46+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-TheDrainFlorist--Qwen3.8-27B-VQ-3.9bpw",
+     "status": "pass",
+     "seconds": 22.5,
+     "started": "2026-09-30T23:34:46+00:00",
+     "finished": "2026-09-30T23:35:08+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "speed-27b-TheDrainFlorist--Qwen3.8-27B-VQ-3.9bpw",
+     "status": "pass",
+     "seconds": 19.2,
+     "started": "2026-09-30T23:35:08+00:00",
+     "finished": "2026-09-30T23:35:27+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-TheDrainFlorist--Qwen3.8-27B-VQ-4.5bpw",
+     "status": "pass",
+     "seconds": 23.6,
+     "started": "2026-09-30T23:35:27+00:00",
+     "finished": "2026-09-30T23:35:51+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "speed-27b-TheDrainFlorist--Qwen3.8-27B-VQ-4.5bpw",
+     "status": "pass",
+     "seconds": 23.4,
+     "started": "2026-09-30T23:35:51+00:00",
+     "finished": "2026-09-30T23:36:15+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-TheDrainFlorist--Qwen3.8-27B-VQ-4.8bpw",
+     "status": "pass",
+     "seconds": 24.4,
+     "started": "2026-09-30T23:36:15+00:00",
+     "finished": "2026-09-30T23:36:39+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "speed-27b-TheDrainFlorist--Qwen3.8-27B-VQ-4.8bpw",
+     "status": "pass",
+     "seconds": 22.9,
+     "started": "2026-09-30T23:36:39+00:00",
+     "finished": "2026-09-30T23:37:02+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-Qwen--Qwen3.8-Flash-Next-8bit",
+     "status": "pass",
+     "seconds": 2.7,
+     "started": "2026-09-30T23:37:02+00:00",
+     "finished": "2026-09-30T23:37:04+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-Qwen--Qwen3.8-Flash-Next-3bit",
+     "status": "stopped",
+     "seconds": 68.4,
+     "started": "2026-09-30T23:37:04+00:00",
+     "finished": "2026-09-30T23:38:13+00:00",
+     "rc": -15,
+     "attempts": 1,
+     "reasons": [
+      "exit code -15",
+      "expected output, stdout is empty"
+     ],
+     "warnings": []
+    },
+    {
+     "name": "speed-flash-Qwen--Qwen3.8-Flash-Next-3bit",
+     "status": "pending",
+     "seconds": null,
+     "started": null,
+     "finished": null,
+     "rc": null,
+     "attempts": null,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-Qwen--Qwen3.8-Flash-Next-4bit",
+     "status": "pending",
+     "seconds": null,
+     "started": null,
+     "finished": null,
+     "rc": null,
+     "attempts": null,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "speed-flash-Qwen--Qwen3.8-Flash-Next-4bit",
+     "status": "pending",
+     "seconds": null,
+     "started": null,
+     "finished": null,
+     "rc": null,
+     "attempts": null,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-Qwen--Qwen3.8-Flash-Next-5bit",
+     "status": "pending",
+     "seconds": null,
+     "started": null,
+     "finished": null,
+     "rc": null,
+     "attempts": null,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "speed-flash-Qwen--Qwen3.8-Flash-Next-5bit",
+     "status": "pending",
+     "seconds": null,
+     "started": null,
+     "finished": null,
+     "rc": null,
+     "attempts": null,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-Qwen--Qwen3.8-Flash-Next-6bit",
+     "status": "pending",
+     "seconds": null,
+     "started": null,
+     "finished": null,
+     "rc": null,
+     "attempts": null,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "speed-flash-Qwen--Qwen3.8-Flash-Next-6bit",
+     "status": "pending",
+     "seconds": null,
+     "started": null,
+     "finished": null,
+     "rc": null,
+     "attempts": null,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-TheDrainFlorist--Qwen3.8-Flash-Next-VQ-2.1bpw",
+     "status": "pending",
+     "seconds": null,
+     "started": null,
+     "finished": null,
+     "rc": null,
+     "attempts": null,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "speed-flash-TheDrainFlorist--Qwen3.8-Flash-Next-VQ-2.1bpw",
+     "status": "pending",
+     "seconds": null,
+     "started": null,
+     "finished": null,
+     "rc": null,
+     "attempts": null,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-TheDrainFlorist--Qwen3.8-Flash-Next-VQ-3.2bpw",
+     "status": "pending",
+     "seconds": null,
+     "started": null,
+     "finished": null,
+     "rc": null,
+     "attempts": null,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "speed-flash-TheDrainFlorist--Qwen3.8-Flash-Next-VQ-3.2bpw",
+     "status": "pending",
+     "seconds": null,
+     "started": null,
+     "finished": null,
+     "rc": null,
+     "attempts": null,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-TheDrainFlorist--Qwen3.8-Flash-Next-VQ-4.4bpw",
+     "status": "pending",
+     "seconds": null,
+     "started": null,
+     "finished": null,
+     "rc": null,
+     "attempts": null,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "speed-flash-TheDrainFlorist--Qwen3.8-Flash-Next-VQ-4.4bpw",
+     "status": "pending",
+     "seconds": null,
+     "started": null,
+     "finished": null,
+     "rc": null,
+     "attempts": null,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-TheDrainFlorist--Qwen3.8-Flash-Next-VQ-5.5bpw",
+     "status": "pending",
+     "seconds": null,
+     "started": null,
+     "finished": null,
+     "rc": null,
+     "attempts": null,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "speed-flash-TheDrainFlorist--Qwen3.8-Flash-Next-VQ-5.5bpw",
+     "status": "pending",
+     "seconds": null,
+     "started": null,
+     "finished": null,
+     "rc": null,
+     "attempts": null,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-zai-org--GLM-5.3-Flash-6bit",
+     "status": "pending",
+     "seconds": null,
+     "started": null,
+     "finished": null,
+     "rc": null,
+     "attempts": null,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-zai-org--GLM-5.3-Flash-3bit",
+     "status": "pending",
+     "seconds": null,
+     "started": null,
+     "finished": null,
+     "rc": null,
+     "attempts": null,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "speed-glm-zai-org--GLM-5.3-Flash-3bit",
+     "status": "pending",
+     "seconds": null,
+     "started": null,
+     "finished": null,
+     "rc": null,
+     "attempts": null,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-zai-org--GLM-5.3-Flash-4bit",
+     "status": "pending",
+     "seconds": null,
+     "started": null,
+     "finished": null,
+     "rc": null,
+     "attempts": null,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "speed-glm-zai-org--GLM-5.3-Flash-4bit",
+     "status": "pending",
+     "seconds": null,
+     "started": null,
+     "finished": null,
+     "rc": null,
+     "attempts": null,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-TheDrainFlorist--GLM-5.3-Flash-VQ-2.7bpw",
+     "status": "pending",
+     "seconds": null,
+     "started": null,
+     "finished": null,
+     "rc": null,
+     "attempts": null,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "speed-glm-TheDrainFlorist--GLM-5.3-Flash-VQ-2.7bpw",
+     "status": "pending",
+     "seconds": null,
+     "started": null,
+     "finished": null,
+     "rc": null,
+     "attempts": null,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-TheDrainFlorist--GLM-5.3-Flash-VQ-3.1bpw",
+     "status": "pending",
+     "seconds": null,
+     "started": null,
+     "finished": null,
+     "rc": null,
+     "attempts": null,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "speed-glm-TheDrainFlorist--GLM-5.3-Flash-VQ-3.1bpw",
+     "status": "pending",
+     "seconds": null,
+     "started": null,
+     "finished": null,
+     "rc": null,
+     "attempts": null,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-TheDrainFlorist--GLM-5.3-Flash-VQ-3.6bpw",
+     "status": "pending",
+     "seconds": null,
+     "started": null,
+     "finished": null,
+     "rc": null,
+     "attempts": null,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "speed-glm-TheDrainFlorist--GLM-5.3-Flash-VQ-3.6bpw",
+     "status": "pending",
+     "seconds": null,
+     "started": null,
+     "finished": null,
+     "rc": null,
+     "attempts": null,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-spicyneuron--Qwen3.5-397B-A17B-MLX-2.6bit",
+     "status": "pending",
+     "seconds": null,
+     "started": null,
+     "finished": null,
+     "rc": null,
+     "attempts": null,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-TheDrainFlorist--Qwen3.5-397B-A17B-VQ-2.2bpw",
+     "status": "pending",
+     "seconds": null,
+     "started": null,
+     "finished": null,
+     "rc": null,
+     "attempts": null,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "speed-397b-TheDrainFlorist--Qwen3.5-397B-A17B-VQ-2.2bpw",
+     "status": "pending",
+     "seconds": null,
+     "started": null,
+     "finished": null,
+     "rc": null,
+     "attempts": null,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-TheDrainFlorist--Qwen3.5-397B-A17B-VQ-2.4bpw",
+     "status": "pending",
+     "seconds": null,
+     "started": null,
+     "finished": null,
+     "rc": null,
+     "attempts": null,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "speed-397b-TheDrainFlorist--Qwen3.5-397B-A17B-VQ-2.4bpw",
+     "status": "pending",
+     "seconds": null,
+     "started": null,
+     "finished": null,
+     "rc": null,
+     "attempts": null,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-TheDrainFlorist--Qwen3.5-397B-A17B-VQ-2.6bpw",
+     "status": "pending",
+     "seconds": null,
+     "started": null,
+     "finished": null,
+     "rc": null,
+     "attempts": null,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "speed-397b-TheDrainFlorist--Qwen3.5-397B-A17B-VQ-2.6bpw",
+     "status": "pending",
+     "seconds": null,
+     "started": null,
+     "finished": null,
+     "rc": null,
+     "attempts": null,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-TheDrainFlorist--Qwen3.5-397B-A17B-VQ-3.1bpw",
+     "status": "pending",
+     "seconds": null,
+     "started": null,
+     "finished": null,
+     "rc": null,
+     "attempts": null,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "speed-397b-TheDrainFlorist--Qwen3.5-397B-A17B-VQ-3.1bpw",
+     "status": "pending",
+     "seconds": null,
+     "started": null,
+     "finished": null,
+     "rc": null,
+     "attempts": null,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-TheDrainFlorist--Qwen3.6-35B-A3B-VQ-3.4bpw",
+     "status": "pending",
+     "seconds": null,
+     "started": null,
+     "finished": null,
+     "rc": null,
+     "attempts": null,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-TheDrainFlorist--Qwen3.6-35B-A3B-VQ-3.8bpw",
+     "status": "pending",
+     "seconds": null,
+     "started": null,
+     "finished": null,
+     "rc": null,
+     "attempts": null,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "speed-35b-TheDrainFlorist--Qwen3.6-35B-A3B-VQ-3.8bpw",
+     "status": "pending",
+     "seconds": null,
+     "started": null,
+     "finished": null,
+     "rc": null,
+     "attempts": null,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-TheDrainFlorist--Qwen3.6-35B-A3B-VQ-4.6bpw",
+     "status": "pending",
+     "seconds": null,
+     "started": null,
+     "finished": null,
+     "rc": null,
+     "attempts": null,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "speed-35b-TheDrainFlorist--Qwen3.6-35B-A3B-VQ-4.6bpw",
+     "status": "pending",
+     "seconds": null,
+     "started": null,
+     "finished": null,
+     "rc": null,
+     "attempts": null,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-TheDrainFlorist--Qwen3.6-35B-A3B-VQ-5.4bpw",
+     "status": "pending",
+     "seconds": null,
+     "started": null,
+     "finished": null,
+     "rc": null,
+     "attempts": null,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "speed-35b-TheDrainFlorist--Qwen3.6-35B-A3B-VQ-5.4bpw",
+     "status": "pending",
+     "seconds": null,
+     "started": null,
+     "finished": null,
+     "rc": null,
+     "attempts": null,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-mlx-community--gemma-4-e4b-it-8bit",
+     "status": "pending",
+     "seconds": null,
+     "started": null,
+     "finished": null,
+     "rc": null,
+     "attempts": null,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-TheDrainFlorist--gemma-4-e4b-it-VQ-PLE",
+     "status": "pending",
+     "seconds": null,
+     "started": null,
+     "finished": null,
+     "rc": null,
+     "attempts": null,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "speed-e4b-TheDrainFlorist--gemma-4-e4b-it-VQ-PLE",
+     "status": "pending",
+     "seconds": null,
+     "started": null,
+     "finished": null,
+     "rc": null,
+     "attempts": null,
+     "reasons": [],
+     "warnings": []
+    }
+   ]
+  },
+  {
+   "id": "20260928-200412-skipzero-35b-kl",
+   "name": "skipzero-35b-kl",
+   "status": "passed",
+   "live": false,
+   "preflight": false,
+   "created": "2026-09-29T03:04:12+00:00",
+   "commit": "0bfff4d207dc8897434a7f457658d8140ebb8528",
+   "source": "2026-09-28-skipzero-35b-kl.json",
+   "steps": [
+    {
+     "name": "sz-pack",
+     "status": "pass",
+     "seconds": 15.1,
+     "started": "2026-09-29T03:04:12+00:00",
+     "finished": "2026-09-29T03:04:27+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "sz-check",
+     "status": "pass",
+     "seconds": 12.3,
+     "started": "2026-09-29T03:04:27+00:00",
+     "finished": "2026-09-29T03:04:40+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-skipzero",
+     "status": "pass",
+     "seconds": 13.1,
+     "started": "2026-09-29T03:04:40+00:00",
+     "finished": "2026-09-29T03:04:53+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-orig",
+     "status": "pass",
+     "seconds": 12.7,
+     "started": "2026-09-29T03:04:53+00:00",
+     "finished": "2026-09-29T03:05:05+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "kl-ladder",
+     "status": "pass",
+     "seconds": 141.5,
+     "started": "2026-09-29T03:05:06+00:00",
+     "finished": "2026-09-29T03:07:27+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    }
+   ]
+  },
+  {
+   "id": "20260928-200249-skipzero-35b-kl-preflight",
+   "name": "skipzero-35b-kl",
+   "status": "passed",
+   "live": false,
+   "preflight": true,
+   "created": "2026-09-29T03:02:49+00:00",
+   "commit": "0bfff4d207dc8897434a7f457658d8140ebb8528",
+   "source": "2026-09-28-skipzero-35b-kl.json",
+   "steps": [
+    {
+     "name": "sz-pack",
+     "status": "pass",
+     "seconds": 12.5,
+     "started": "2026-09-29T03:02:50+00:00",
+     "finished": "2026-09-29T03:03:02+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "sz-check",
+     "status": "pass",
+     "seconds": 7.4,
+     "started": "2026-09-29T03:03:02+00:00",
+     "finished": "2026-09-29T03:03:09+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-skipzero",
+     "status": "pass",
+     "seconds": 16.5,
+     "started": "2026-09-29T03:03:09+00:00",
+     "finished": "2026-09-29T03:03:26+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-orig",
+     "status": "pass",
+     "seconds": 13.1,
+     "started": "2026-09-29T03:03:26+00:00",
+     "finished": "2026-09-29T03:03:39+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "kl-ladder",
+     "status": "pass",
+     "seconds": 27.7,
+     "started": "2026-09-29T03:03:39+00:00",
+     "finished": "2026-09-29T03:04:07+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    }
+   ]
+  },
+  {
+   "id": "20260928-191313-skipzero-397b-full-kl",
+   "name": "skipzero-397b-full-kl",
+   "status": "passed",
+   "live": false,
+   "preflight": false,
+   "created": "2026-09-29T02:13:13+00:00",
+   "commit": "328c97f5a244f1809400ba421299be9f033c62fc",
+   "source": "2026-09-28-skipzero-397b-full-kl.json",
+   "steps": [
+    {
+     "name": "sz-pack",
+     "status": "pass",
+     "seconds": 157.8,
+     "started": "2026-09-29T02:13:13+00:00",
+     "finished": "2026-09-29T02:15:51+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "sz-check",
+     "status": "pass",
+     "seconds": 157.1,
+     "started": "2026-09-29T02:15:51+00:00",
+     "finished": "2026-09-29T02:18:28+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-skipzero",
+     "status": "pass",
+     "seconds": 9.9,
+     "started": "2026-09-29T02:18:28+00:00",
+     "finished": "2026-09-29T02:18:38+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "kl-ladder",
+     "status": "pass",
+     "seconds": 968.8,
+     "started": "2026-09-29T02:18:38+00:00",
+     "finished": "2026-09-29T02:34:46+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": [
+      "WARNING pin_sz_full: pin NOT smoked (too large for this box:   Run it on a box with more RAM. Scoring is exempt: the streaming referee streams by design.). Smoke it on a cluster before citing a number.",
+      "WARNING pin_orig: pin NOT smoked (too large for this box:   Run it on a box with more RAM. Scoring is exempt: the streaming referee streams by design.). Smoke it on a cluster before citing a number."
+     ]
+    }
+   ]
+  },
+  {
+   "id": "20260928-183155-skipzero-397b-full-kl-preflight",
+   "name": "skipzero-397b-full-kl",
+   "status": "passed",
+   "live": false,
+   "preflight": true,
+   "created": "2026-09-29T01:31:55+00:00",
+   "commit": "2076699f773eadd09503cfcfb883aa3698f75ea6",
+   "source": "2026-09-28-skipzero-397b-full-kl.json",
+   "steps": [
+    {
+     "name": "sz-pack",
+     "status": "pass",
+     "seconds": 10.3,
+     "started": "2026-09-29T02:09:56+00:00",
+     "finished": "2026-09-29T02:10:06+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "sz-check",
+     "status": "pass",
+     "seconds": 6.9,
+     "started": "2026-09-29T02:10:06+00:00",
+     "finished": "2026-09-29T02:10:13+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-skipzero",
+     "status": "pass",
+     "seconds": 9.7,
+     "started": "2026-09-29T02:10:13+00:00",
+     "finished": "2026-09-29T02:10:23+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "kl-ladder",
+     "status": "pass",
+     "seconds": 164.9,
+     "started": "2026-09-29T02:10:23+00:00",
+     "finished": "2026-09-29T02:13:08+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": [
+      "WARNING pin_sz_full: pin NOT smoked (too large for this box:   Run it on a box with more RAM. Scoring is exempt: the streaming referee streams by design.). Smoke it on a cluster before citing a number.",
+      "WARNING pin_orig: pin NOT smoked (too large for this box:   Run it on a box with more RAM. Scoring is exempt: the streaming referee streams by design.). Smoke it on a cluster before citing a number."
+     ]
+    }
+   ]
+  },
+  {
+   "id": "20260928-182708-reselect-35b-published-repeat",
+   "name": "reselect-35b-published-repeat",
+   "status": "passed",
+   "live": false,
+   "preflight": false,
+   "created": "2026-09-29T01:27:08+00:00",
+   "commit": "2076699f773eadd09503cfcfb883aa3698f75ea6",
+   "source": "2026-09-28-reselect-35b-published-repeat.json",
+   "steps": [
+    {
+     "name": "calibrate",
+     "status": "pass",
+     "seconds": 170.0,
+     "started": "2026-09-29T01:27:08+00:00",
+     "finished": "2026-09-29T01:29:58+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "apply-keep",
+     "status": "pass",
+     "seconds": 2231.5,
+     "started": "2026-09-29T01:29:58+00:00",
+     "finished": "2026-09-29T02:07:10+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-base",
+     "status": "pass",
+     "seconds": 13.8,
+     "started": "2026-09-29T02:07:10+00:00",
+     "finished": "2026-09-29T02:07:23+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-keep",
+     "status": "pass",
+     "seconds": 12.9,
+     "started": "2026-09-29T02:07:23+00:00",
+     "finished": "2026-09-29T02:07:36+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "kl-ladder",
+     "status": "pass",
+     "seconds": 138.0,
+     "started": "2026-09-29T02:07:36+00:00",
+     "finished": "2026-09-29T02:09:54+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    }
+   ]
+  },
+  {
+   "id": "20260928-182432-reselect-35b-published-repeat-preflight",
+   "name": "reselect-35b-published-repeat",
+   "status": "passed",
+   "live": false,
+   "preflight": true,
+   "created": "2026-09-29T01:24:32+00:00",
+   "commit": "2076699f773eadd09503cfcfb883aa3698f75ea6",
+   "source": "2026-09-28-reselect-35b-published-repeat.json",
+   "steps": [
+    {
+     "name": "calibrate",
+     "status": "pass",
+     "seconds": 25.7,
+     "started": "2026-09-29T01:24:32+00:00",
+     "finished": "2026-09-29T01:24:58+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "apply-keep",
+     "status": "pass",
+     "seconds": 38.8,
+     "started": "2026-09-29T01:24:58+00:00",
+     "finished": "2026-09-29T01:25:37+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-base",
+     "status": "pass",
+     "seconds": 25.3,
+     "started": "2026-09-29T01:25:37+00:00",
+     "finished": "2026-09-29T01:26:02+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-keep",
+     "status": "pass",
+     "seconds": 25.0,
+     "started": "2026-09-29T01:26:02+00:00",
+     "finished": "2026-09-29T01:26:27+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "kl-ladder",
+     "status": "pass",
+     "seconds": 35.0,
+     "started": "2026-09-29T01:26:28+00:00",
+     "finished": "2026-09-29T01:27:02+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    }
+   ]
+  },
+  {
+   "id": "20260928-171325-additive-vs-k16384-35b",
+   "name": "additive-vs-k16384-35b",
+   "status": "passed",
+   "live": false,
+   "preflight": false,
+   "created": "2026-09-29T00:13:25+00:00",
+   "commit": "4d5c7644eb80e576c55fe322c99167dc8f7343c7",
+   "source": "2026-09-28-additive-vs-k16384-35b.json",
+   "steps": [
+    {
+     "name": "fit-additive",
+     "status": "pass",
+     "seconds": 421.1,
+     "started": "2026-09-29T00:13:25+00:00",
+     "finished": "2026-09-29T00:20:26+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "build-additive",
+     "status": "pass",
+     "seconds": 13.2,
+     "started": "2026-09-29T00:20:26+00:00",
+     "finished": "2026-09-29T00:20:39+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "build-true16k",
+     "status": "pass",
+     "seconds": 2979.3,
+     "started": "2026-09-29T00:20:39+00:00",
+     "finished": "2026-09-29T01:10:19+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-true16k",
+     "status": "pass",
+     "seconds": 13.3,
+     "started": "2026-09-29T01:10:19+00:00",
+     "finished": "2026-09-29T01:10:32+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-additive",
+     "status": "pass",
+     "seconds": 15.7,
+     "started": "2026-09-29T01:10:32+00:00",
+     "finished": "2026-09-29T01:10:48+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "kl-ladder",
+     "status": "pass",
+     "seconds": 155.3,
+     "started": "2026-09-29T01:10:48+00:00",
+     "finished": "2026-09-29T01:13:23+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    }
+   ]
+  },
+  {
+   "id": "20260928-170720-additive-vs-k16384-35b-preflight",
+   "name": "additive-vs-k16384-35b",
+   "status": "passed",
+   "live": false,
+   "preflight": true,
+   "created": "2026-09-29T00:07:20+00:00",
+   "commit": "4d5c7644eb80e576c55fe322c99167dc8f7343c7",
+   "source": "2026-09-28-additive-vs-k16384-35b.json",
+   "steps": [
+    {
+     "name": "fit-additive",
+     "status": "pass",
+     "seconds": 43.4,
+     "started": "2026-09-29T00:07:20+00:00",
+     "finished": "2026-09-29T00:08:04+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "build-additive",
+     "status": "pass",
+     "seconds": 14.8,
+     "started": "2026-09-29T00:08:04+00:00",
+     "finished": "2026-09-29T00:08:18+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "build-true16k",
+     "status": "pass",
+     "seconds": 250.8,
+     "started": "2026-09-29T00:08:18+00:00",
+     "finished": "2026-09-29T00:12:29+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-true16k",
+     "status": "pass",
+     "seconds": 12.3,
+     "started": "2026-09-29T00:12:29+00:00",
+     "finished": "2026-09-29T00:12:42+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-additive",
+     "status": "pass",
+     "seconds": 11.6,
+     "started": "2026-09-29T00:12:42+00:00",
+     "finished": "2026-09-29T00:12:53+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "kl-ladder",
+     "status": "pass",
+     "seconds": 26.2,
+     "started": "2026-09-29T00:12:53+00:00",
+     "finished": "2026-09-29T00:13:19+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    }
+   ]
+  },
+  {
+   "id": "20260928-155238-reselect-35b-kl",
+   "name": "reselect-35b-kl",
+   "status": "passed",
+   "live": false,
+   "preflight": false,
+   "created": "2026-09-28T22:52:38+00:00",
+   "commit": "fed62df06300ae395b7ea9aa23567a5fecf80e0e",
+   "source": "2026-09-28-reselect-35b-kl.json",
+   "steps": [
+    {
+     "name": "calibrate",
+     "status": "pass",
+     "seconds": 139.7,
+     "started": "2026-09-28T22:52:38+00:00",
+     "finished": "2026-09-28T22:54:58+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "apply-recompute",
+     "status": "pass",
+     "seconds": 2145.6,
+     "started": "2026-09-28T22:54:58+00:00",
+     "finished": "2026-09-28T23:30:44+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "apply-keep",
+     "status": "pass",
+     "seconds": 2190.2,
+     "started": "2026-09-28T23:30:44+00:00",
+     "finished": "2026-09-29T00:07:14+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-base",
+     "status": "pass",
+     "seconds": 13.8,
+     "started": "2026-09-29T01:13:37+00:00",
+     "finished": "2026-09-29T01:13:51+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-recompute",
+     "status": "pass",
+     "seconds": 18.7,
+     "started": "2026-09-29T01:13:51+00:00",
+     "finished": "2026-09-29T01:14:10+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-keep",
+     "status": "pass",
+     "seconds": 18.3,
+     "started": "2026-09-29T01:14:10+00:00",
+     "finished": "2026-09-29T01:14:28+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "kl-ladder",
+     "status": "pass",
+     "seconds": 216.3,
+     "started": "2026-09-29T01:14:28+00:00",
+     "finished": "2026-09-29T01:18:04+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    }
+   ]
+  },
+  {
+   "id": "20260928-155019-reselect-35b-kl-preflight",
+   "name": "reselect-35b-kl",
+   "status": "passed",
+   "live": false,
+   "preflight": true,
+   "created": "2026-09-28T22:50:19+00:00",
+   "commit": "fed62df06300ae395b7ea9aa23567a5fecf80e0e",
+   "source": "2026-09-28-reselect-35b-kl.json",
+   "steps": [
+    {
+     "name": "calibrate",
+     "status": "pass",
+     "seconds": 19.2,
+     "started": "2026-09-28T22:50:19+00:00",
+     "finished": "2026-09-28T22:50:38+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "apply-recompute",
+     "status": "pass",
+     "seconds": 28.4,
+     "started": "2026-09-28T22:50:38+00:00",
+     "finished": "2026-09-28T22:51:07+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "apply-keep",
+     "status": "pass",
+     "seconds": 27.8,
+     "started": "2026-09-28T22:51:07+00:00",
+     "finished": "2026-09-28T22:51:34+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-base",
+     "status": "pass",
+     "seconds": 11.2,
+     "started": "2026-09-28T22:51:34+00:00",
+     "finished": "2026-09-28T22:51:46+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-recompute",
+     "status": "pass",
+     "seconds": 11.2,
+     "started": "2026-09-28T22:51:46+00:00",
+     "finished": "2026-09-28T22:51:57+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-keep",
+     "status": "pass",
+     "seconds": 11.3,
+     "started": "2026-09-28T22:51:57+00:00",
+     "finished": "2026-09-28T22:52:08+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "kl-ladder",
+     "status": "pass",
+     "seconds": 25.0,
+     "started": "2026-09-28T22:52:08+00:00",
+     "finished": "2026-09-28T22:52:33+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    }
+   ]
+  },
+  {
+   "id": "20260928-153450-skipzero-397b-L0-4-kl",
+   "name": "skipzero-397b-L0-4-kl",
+   "status": "passed",
+   "live": false,
+   "preflight": false,
+   "created": "2026-09-28T22:34:51+00:00",
+   "commit": "4bc9c44be8db885bf2512002de42411b3ba653f5",
+   "source": "2026-09-28-skipzero-397b-L0-4-kl.json",
+   "steps": [
+    {
+     "name": "sz-pack",
+     "status": "pass",
+     "seconds": 17.2,
+     "started": "2026-09-28T22:34:51+00:00",
+     "finished": "2026-09-28T22:35:08+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "sz-check",
+     "status": "pass",
+     "seconds": 11.1,
+     "started": "2026-09-28T22:35:08+00:00",
+     "finished": "2026-09-28T22:35:19+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-orig",
+     "status": "pass",
+     "seconds": 8.8,
+     "started": "2026-09-28T22:35:19+00:00",
+     "finished": "2026-09-28T22:35:28+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-skipzero",
+     "status": "pass",
+     "seconds": 8.1,
+     "started": "2026-09-28T22:35:28+00:00",
+     "finished": "2026-09-28T22:35:36+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "kl-ladder",
+     "status": "pass",
+     "seconds": 877.0,
+     "started": "2026-09-28T22:35:36+00:00",
+     "finished": "2026-09-28T22:50:13+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": [
+      "WARNING pin_sz: pin NOT smoked (too large for this box:   Run it on a box with more RAM. Scoring is exempt: the streaming referee streams by design.). Smoke it on a cluster before citing a number.",
+      "WARNING pin_orig: pin NOT smoked (too large for this box:   Run it on a box with more RAM. Scoring is exempt: the streaming referee streams by design.). Smoke it on a cluster before citing a number."
+     ]
+    }
+   ]
+  },
+  {
+   "id": "20260928-153139-skipzero-397b-L0-4-kl-preflight",
+   "name": "skipzero-397b-L0-4-kl",
+   "status": "passed",
+   "live": false,
+   "preflight": true,
+   "created": "2026-09-28T22:31:39+00:00",
+   "commit": "4bc9c44be8db885bf2512002de42411b3ba653f5",
+   "source": "2026-09-28-skipzero-397b-L0-4-kl.json",
+   "steps": [
+    {
+     "name": "sz-pack",
+     "status": "pass",
+     "seconds": 9.3,
+     "started": "2026-09-28T22:31:39+00:00",
+     "finished": "2026-09-28T22:31:49+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "sz-check",
+     "status": "pass",
+     "seconds": 7.1,
+     "started": "2026-09-28T22:31:49+00:00",
+     "finished": "2026-09-28T22:31:56+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-orig",
+     "status": "pass",
+     "seconds": 9.8,
+     "started": "2026-09-28T22:31:56+00:00",
+     "finished": "2026-09-28T22:32:06+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-skipzero",
+     "status": "pass",
+     "seconds": 8.3,
+     "started": "2026-09-28T22:32:06+00:00",
+     "finished": "2026-09-28T22:32:14+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "kl-ladder",
+     "status": "pass",
+     "seconds": 150.4,
+     "started": "2026-09-28T22:32:14+00:00",
+     "finished": "2026-09-28T22:34:44+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": [
+      "WARNING pin_sz: pin NOT smoked (too large for this box:   Run it on a box with more RAM. Scoring is exempt: the streaming referee streams by design.). Smoke it on a cluster before citing a number.",
+      "WARNING pin_orig: pin NOT smoked (too large for this box:   Run it on a box with more RAM. Scoring is exempt: the streaming referee streams by design.). Smoke it on a cluster before citing a number."
+     ]
+    }
+   ]
+  },
+  {
+   "id": "20260928-152523-skipzero-397b-L0-4-kl-preflight",
+   "name": "skipzero-397b-L0-4-kl",
+   "status": "passed",
+   "live": false,
+   "preflight": true,
+   "created": "2026-09-28T22:25:23+00:00",
+   "commit": "9c7dc25dc1ee2adcd2ca1a24fcbc3f37edc45a29",
+   "source": "2026-09-28-skipzero-397b-L0-4-kl.json",
+   "steps": [
+    {
+     "name": "sz-pack",
+     "status": "pass",
+     "seconds": 9.5,
+     "started": "2026-09-28T22:25:23+00:00",
+     "finished": "2026-09-28T22:25:32+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "sz-check",
+     "status": "pass",
+     "seconds": 6.3,
+     "started": "2026-09-28T22:25:32+00:00",
+     "finished": "2026-09-28T22:25:39+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-orig",
+     "status": "pass",
+     "seconds": 9.5,
+     "started": "2026-09-28T22:25:39+00:00",
+     "finished": "2026-09-28T22:25:48+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-skipzero",
+     "status": "pass",
+     "seconds": 7.5,
+     "started": "2026-09-28T22:25:48+00:00",
+     "finished": "2026-09-28T22:25:56+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "kl-ladder",
+     "status": "pass",
+     "seconds": 159.0,
+     "started": "2026-09-28T22:25:56+00:00",
+     "finished": "2026-09-28T22:28:35+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": [
+      "WARNING pin_orig: pin NOT smoked (too large for this box:   Run it on a box with more RAM. Scoring is exempt: the streaming referee streams by design.). Smoke it on a cluster before citing a number.",
+      "WARNING pin_sz: pin NOT smoked (too large for this box:   Run it on a box with more RAM. Scoring is exempt: the streaming referee streams by design.). Smoke it on a cluster before citing a number."
+     ]
+    }
+   ]
+  },
+  {
+   "id": "20260928-151915-additive-vs-k16384-35b-preflight",
+   "name": "additive-vs-k16384-35b",
+   "status": "failed",
+   "live": false,
+   "preflight": true,
+   "created": "2026-09-28T22:19:15+00:00",
+   "commit": "9c7dc25dc1ee2adcd2ca1a24fcbc3f37edc45a29",
+   "source": "2026-09-28-additive-vs-k16384-35b.json",
+   "steps": [
+    {
+     "name": "fit-additive",
+     "status": "pass",
+     "seconds": 42.8,
+     "started": "2026-09-28T22:19:15+00:00",
+     "finished": "2026-09-28T22:19:58+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "build-additive",
+     "status": "pass",
+     "seconds": 11.2,
+     "started": "2026-09-28T22:19:58+00:00",
+     "finished": "2026-09-28T22:20:09+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "build-true16k",
+     "status": "pass",
+     "seconds": 257.0,
+     "started": "2026-09-28T22:20:09+00:00",
+     "finished": "2026-09-28T22:24:26+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-true16k",
+     "status": "pass",
+     "seconds": 12.5,
+     "started": "2026-09-28T22:24:26+00:00",
+     "finished": "2026-09-28T22:24:39+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-additive",
+     "status": "pass",
+     "seconds": 12.3,
+     "started": "2026-09-28T22:24:39+00:00",
+     "finished": "2026-09-28T22:24:51+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "kl-ladder",
+     "status": "fail",
+     "seconds": 26.8,
+     "started": "2026-09-28T22:24:51+00:00",
+     "finished": "2026-09-28T22:25:18+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [
+      "0 stdout line(s) match 'add16k', need 1"
+     ],
+     "warnings": []
+    }
+   ]
+  },
+  {
+   "id": "20260928-151657-reselect-35b-kl-preflight",
+   "name": "reselect-35b-kl",
+   "status": "failed",
+   "live": false,
+   "preflight": true,
+   "created": "2026-09-28T22:16:57+00:00",
+   "commit": "9c7dc25dc1ee2adcd2ca1a24fcbc3f37edc45a29",
+   "source": "2026-09-28-reselect-35b-kl.json",
+   "steps": [
+    {
+     "name": "calibrate",
+     "status": "pass",
+     "seconds": 14.3,
+     "started": "2026-09-28T22:16:57+00:00",
+     "finished": "2026-09-28T22:17:11+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "apply-recompute",
+     "status": "pass",
+     "seconds": 29.0,
+     "started": "2026-09-28T22:17:11+00:00",
+     "finished": "2026-09-28T22:17:40+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "apply-keep",
+     "status": "pass",
+     "seconds": 28.9,
+     "started": "2026-09-28T22:17:40+00:00",
+     "finished": "2026-09-28T22:18:09+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-base",
+     "status": "pass",
+     "seconds": 11.8,
+     "started": "2026-09-28T22:18:09+00:00",
+     "finished": "2026-09-28T22:18:21+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-recompute",
+     "status": "pass",
+     "seconds": 12.1,
+     "started": "2026-09-28T22:18:21+00:00",
+     "finished": "2026-09-28T22:18:33+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-keep",
+     "status": "pass",
+     "seconds": 11.7,
+     "started": "2026-09-28T22:18:33+00:00",
+     "finished": "2026-09-28T22:18:45+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "kl-ladder",
+     "status": "fail",
+     "seconds": 25.8,
+     "started": "2026-09-28T22:18:45+00:00",
+     "finished": "2026-09-28T22:19:11+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [
+      "0 stdout line(s) match 'rs_keep', need 1"
+     ],
+     "warnings": []
+    }
+   ]
+  },
+  {
+   "id": "20260928-151629-skipzero-397b-L0-4-kl-preflight",
+   "name": "skipzero-397b-L0-4-kl",
+   "status": "failed",
+   "live": false,
+   "preflight": true,
+   "created": "2026-09-28T22:16:29+00:00",
+   "commit": "b3ca2d8da49a728085b674ec29567fd90bec03c4",
+   "source": "2026-09-28-skipzero-397b-L0-4-kl.json",
+   "steps": [
+    {
+     "name": "sz-pack",
+     "status": "fail",
+     "seconds": null,
+     "started": null,
+     "finished": "2026-09-28T22:16:29+00:00",
+     "rc": null,
+     "attempts": null,
+     "reasons": [
+      "not enough scratch for this preflight on sz-pack: 48 GiB free, full-size step may write ~0 GiB, margin 50 GiB"
+     ],
+     "warnings": []
+    },
+    {
+     "name": "sz-check",
+     "status": "fail",
+     "seconds": null,
+     "started": null,
+     "finished": "2026-09-28T22:16:29+00:00",
+     "rc": null,
+     "attempts": null,
+     "reasons": [
+      "not enough scratch for this preflight on sz-check: 48 GiB free, full-size step may write ~0 GiB, margin 50 GiB"
+     ],
+     "warnings": []
+    },
+    {
+     "name": "pin-orig",
+     "status": "fail",
+     "seconds": null,
+     "started": null,
+     "finished": "2026-09-28T22:16:29+00:00",
+     "rc": null,
+     "attempts": null,
+     "reasons": [
+      "not enough scratch for this preflight on pin-orig: 48 GiB free, full-size step may write ~0 GiB, margin 50 GiB"
+     ],
+     "warnings": []
+    },
+    {
+     "name": "pin-skipzero",
+     "status": "fail",
+     "seconds": null,
+     "started": null,
+     "finished": "2026-09-28T22:16:29+00:00",
+     "rc": null,
+     "attempts": null,
+     "reasons": [
+      "not enough scratch for this preflight on pin-skipzero: 48 GiB free, full-size step may write ~0 GiB, margin 50 GiB"
+     ],
+     "warnings": []
+    },
+    {
+     "name": "kl-ladder",
+     "status": "fail",
+     "seconds": null,
+     "started": null,
+     "finished": "2026-09-28T22:16:29+00:00",
+     "rc": null,
+     "attempts": null,
+     "reasons": [
+      "not enough scratch for this preflight on kl-ladder: 48 GiB free, full-size step may write ~0 GiB, margin 50 GiB"
+     ],
+     "warnings": []
+    }
+   ]
+  },
+  {
+   "id": "20260928-151623-additive-vs-k16384-35b-preflight",
+   "name": "additive-vs-k16384-35b",
+   "status": "failed",
+   "live": false,
+   "preflight": true,
+   "created": "2026-09-28T22:16:24+00:00",
+   "commit": "b3ca2d8da49a728085b674ec29567fd90bec03c4",
+   "source": "2026-09-28-additive-vs-k16384-35b.json",
+   "steps": [
+    {
+     "name": "fit-additive",
+     "status": "fail",
+     "seconds": null,
+     "started": null,
+     "finished": "2026-09-28T22:16:24+00:00",
+     "rc": null,
+     "attempts": null,
+     "reasons": [
+      "not enough scratch for this preflight on fit-additive: 48 GiB free, full-size step may write ~0 GiB, margin 50 GiB"
+     ],
+     "warnings": []
+    },
+    {
+     "name": "build-additive",
+     "status": "fail",
+     "seconds": null,
+     "started": null,
+     "finished": "2026-09-28T22:16:24+00:00",
+     "rc": null,
+     "attempts": null,
+     "reasons": [
+      "not enough scratch for this preflight on build-additive: 48 GiB free, full-size step may write ~0 GiB, margin 50 GiB"
+     ],
+     "warnings": []
+    },
+    {
+     "name": "build-true16k",
+     "status": "fail",
+     "seconds": null,
+     "started": null,
+     "finished": "2026-09-28T22:16:24+00:00",
+     "rc": null,
+     "attempts": null,
+     "reasons": [
+      "not enough scratch for this preflight on build-true16k: 48 GiB free, full-size step may write ~0 GiB, margin 50 GiB"
+     ],
+     "warnings": []
+    },
+    {
+     "name": "pin-true16k",
+     "status": "fail",
+     "seconds": null,
+     "started": null,
+     "finished": "2026-09-28T22:16:24+00:00",
+     "rc": null,
+     "attempts": null,
+     "reasons": [
+      "not enough scratch for this preflight on pin-true16k: 48 GiB free, full-size step may write ~0 GiB, margin 50 GiB"
+     ],
+     "warnings": []
+    },
+    {
+     "name": "pin-additive",
+     "status": "fail",
+     "seconds": null,
+     "started": null,
+     "finished": "2026-09-28T22:16:24+00:00",
+     "rc": null,
+     "attempts": null,
+     "reasons": [
+      "not enough scratch for this preflight on pin-additive: 48 GiB free, full-size step may write ~0 GiB, margin 50 GiB"
+     ],
+     "warnings": []
+    },
+    {
+     "name": "kl-ladder",
+     "status": "fail",
+     "seconds": null,
+     "started": null,
+     "finished": "2026-09-28T22:16:24+00:00",
+     "rc": null,
+     "attempts": null,
+     "reasons": [
+      "not enough scratch for this preflight on kl-ladder: 48 GiB free, full-size step may write ~0 GiB, margin 50 GiB"
+     ],
+     "warnings": []
+    }
+   ]
+  },
+  {
+   "id": "20260928-151434-reselect-35b-kl-preflight",
+   "name": "reselect-35b-kl",
+   "status": "failed",
+   "live": false,
+   "preflight": true,
+   "created": "2026-09-28T22:14:34+00:00",
+   "commit": "b3ca2d8da49a728085b674ec29567fd90bec03c4",
+   "source": "2026-09-28-reselect-35b-kl.json",
+   "steps": [
+    {
+     "name": "calibrate",
+     "status": "pass",
+     "seconds": 24.2,
+     "started": "2026-09-28T22:14:35+00:00",
+     "finished": "2026-09-28T22:14:59+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "apply-recompute",
+     "status": "pass",
+     "seconds": 33.3,
+     "started": "2026-09-28T22:14:59+00:00",
+     "finished": "2026-09-28T22:15:32+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "apply-keep",
+     "status": "pass",
+     "seconds": 40.3,
+     "started": "2026-09-28T22:15:32+00:00",
+     "finished": "2026-09-28T22:16:12+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-base",
+     "status": "fail",
+     "seconds": null,
+     "started": null,
+     "finished": "2026-09-28T22:16:12+00:00",
+     "rc": null,
+     "attempts": null,
+     "reasons": [
+      "not enough scratch for this preflight on pin-base: 48 GiB free, full-size step may write ~0 GiB, margin 50 GiB"
+     ],
+     "warnings": []
+    },
+    {
+     "name": "pin-recompute",
+     "status": "fail",
+     "seconds": null,
+     "started": null,
+     "finished": "2026-09-28T22:16:12+00:00",
+     "rc": null,
+     "attempts": null,
+     "reasons": [
+      "not enough scratch for this preflight on pin-recompute: 48 GiB free, full-size step may write ~0 GiB, margin 50 GiB"
+     ],
+     "warnings": []
+    },
+    {
+     "name": "pin-keep",
+     "status": "fail",
+     "seconds": null,
+     "started": null,
+     "finished": "2026-09-28T22:16:12+00:00",
+     "rc": null,
+     "attempts": null,
+     "reasons": [
+      "not enough scratch for this preflight on pin-keep: 48 GiB free, full-size step may write ~0 GiB, margin 50 GiB"
+     ],
+     "warnings": []
+    },
+    {
+     "name": "kl-ladder",
+     "status": "fail",
+     "seconds": null,
+     "started": null,
+     "finished": "2026-09-28T22:16:12+00:00",
+     "rc": null,
+     "attempts": null,
+     "reasons": [
+      "not enough scratch for this preflight on kl-ladder: 48 GiB free, full-size step may write ~0 GiB, margin 50 GiB"
+     ],
+     "warnings": []
+    }
+   ]
+  },
+  {
+   "id": "20260928-150516-additive-vs-k16384-35b-preflight",
+   "name": "additive-vs-k16384-35b",
+   "status": "failed",
+   "live": false,
+   "preflight": true,
+   "created": "2026-09-28T22:05:16+00:00",
+   "commit": "5a500bf0eace5c997e7e18a3de9c7b307fb04faf",
+   "source": "2026-09-28-additive-vs-k16384-35b.json",
+   "steps": [
+    {
+     "name": "fit-additive",
+     "status": "fail",
+     "seconds": null,
+     "started": null,
+     "finished": "2026-09-28T22:05:16+00:00",
+     "rc": null,
+     "attempts": null,
+     "reasons": [
+      "input path does not exist: add_parts"
+     ],
+     "warnings": []
+    },
+    {
+     "name": "build-additive",
+     "status": "fail",
+     "seconds": null,
+     "started": null,
+     "finished": "2026-09-28T22:05:16+00:00",
+     "rc": null,
+     "attempts": null,
+     "reasons": [
+      "input path does not exist: add_parts"
+     ],
+     "warnings": []
+    },
+    {
+     "name": "build-true16k",
+     "status": "pass",
+     "seconds": 261.2,
+     "started": "2026-09-28T22:05:16+00:00",
+     "finished": "2026-09-28T22:09:38+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-true16k",
+     "status": "pass",
+     "seconds": 14.7,
+     "started": "2026-09-28T22:09:38+00:00",
+     "finished": "2026-09-28T22:09:52+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-additive",
+     "status": "fail",
+     "seconds": null,
+     "started": null,
+     "finished": "2026-09-28T22:09:52+00:00",
+     "rc": null,
+     "attempts": null,
+     "reasons": [
+      "input path does not exist: r35_add16k"
+     ],
+     "warnings": []
+    },
+    {
+     "name": "kl-ladder",
+     "status": "fail",
+     "seconds": null,
+     "started": null,
+     "finished": "2026-09-28T22:09:52+00:00",
+     "rc": null,
+     "attempts": null,
+     "reasons": [
+      "input path does not exist: pin_add16k"
+     ],
+     "warnings": []
+    }
+   ]
+  },
+  {
+   "id": "20260928-150428-reselect-35b-kl-preflight",
+   "name": "reselect-35b-kl",
+   "status": "failed",
+   "live": false,
+   "preflight": true,
+   "created": "2026-09-28T22:04:29+00:00",
+   "commit": "5a500bf0eace5c997e7e18a3de9c7b307fb04faf",
+   "source": "2026-09-28-reselect-35b-kl.json",
+   "steps": [
+    {
+     "name": "calibrate",
+     "status": "pass",
+     "seconds": 20.8,
+     "started": "2026-09-28T22:04:29+00:00",
+     "finished": "2026-09-28T22:04:49+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "apply-recompute",
+     "status": "fail",
+     "seconds": 5.0,
+     "started": "2026-09-28T22:04:49+00:00",
+     "finished": "2026-09-28T22:04:54+00:00",
+     "rc": 1,
+     "attempts": 1,
+     "reasons": [
+      "exit code 1",
+      "traceback in stderr",
+      "expected output, stdout is empty"
+     ],
+     "warnings": []
+    },
+    {
+     "name": "apply-keep",
+     "status": "fail",
+     "seconds": 4.8,
+     "started": "2026-09-28T22:04:54+00:00",
+     "finished": "2026-09-28T22:04:59+00:00",
+     "rc": 1,
+     "attempts": 1,
+     "reasons": [
+      "exit code 1",
+      "traceback in stderr",
+      "expected output, stdout is empty"
+     ],
+     "warnings": []
+    },
+    {
+     "name": "pin-base",
+     "status": "pass",
+     "seconds": 12.0,
+     "started": "2026-09-28T22:04:59+00:00",
+     "finished": "2026-09-28T22:05:11+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-recompute",
+     "status": "fail",
+     "seconds": null,
+     "started": null,
+     "finished": "2026-09-28T22:05:11+00:00",
+     "rc": null,
+     "attempts": null,
+     "reasons": [
+      "input path does not exist: art_reselect_recompute"
+     ],
+     "warnings": []
+    },
+    {
+     "name": "pin-keep",
+     "status": "fail",
+     "seconds": null,
+     "started": null,
+     "finished": "2026-09-28T22:05:11+00:00",
+     "rc": null,
+     "attempts": null,
+     "reasons": [
+      "input path does not exist: art_reselect_keep"
+     ],
+     "warnings": []
+    },
+    {
+     "name": "kl-ladder",
+     "status": "fail",
+     "seconds": null,
+     "started": null,
+     "finished": "2026-09-28T22:05:11+00:00",
+     "rc": null,
+     "attempts": null,
+     "reasons": [
+      "input path does not exist: pin_recompute",
+      "input path does not exist: pin_keep"
+     ],
+     "warnings": []
+    }
+   ]
+  },
+  {
+   "id": "20260928-133038-paper-matched-skeleton",
+   "name": "paper-matched-skeleton",
+   "status": "passed",
+   "live": false,
+   "preflight": false,
+   "created": "2026-09-28T20:30:38+00:00",
+   "commit": "dbead0ffabe097bab4c000185b97bcf6f71d579a",
+   "source": "queue.json",
+   "steps": [
+    {
+     "name": "convert-m2",
+     "status": "pass",
+     "seconds": 40.2,
+     "started": "2026-09-28T20:30:41+00:00",
+     "finished": "2026-09-28T20:31:21+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "convert-m3",
+     "status": "pass",
+     "seconds": 25.0,
+     "started": "2026-09-28T20:31:21+00:00",
+     "finished": "2026-09-28T20:31:46+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "convert-m4",
+     "status": "pass",
+     "seconds": 27.2,
+     "started": "2026-09-28T20:31:46+00:00",
+     "finished": "2026-09-28T20:32:13+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "convert-m5",
+     "status": "pass",
+     "seconds": 30.9,
+     "started": "2026-09-28T20:32:13+00:00",
+     "finished": "2026-09-28T20:32:44+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "convert-m6",
+     "status": "pass",
+     "seconds": 32.9,
+     "started": "2026-09-28T20:32:44+00:00",
+     "finished": "2026-09-28T20:33:17+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "convert-m8",
+     "status": "pass",
+     "seconds": 37.8,
+     "started": "2026-09-28T20:33:17+00:00",
+     "finished": "2026-09-28T20:33:55+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-m2",
+     "status": "pass",
+     "seconds": 12.8,
+     "started": "2026-09-28T20:33:55+00:00",
+     "finished": "2026-09-28T20:34:08+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-m3",
+     "status": "pass",
+     "seconds": 12.5,
+     "started": "2026-09-28T20:34:08+00:00",
+     "finished": "2026-09-28T20:34:20+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-m4",
+     "status": "pass",
+     "seconds": 13.3,
+     "started": "2026-09-28T20:34:20+00:00",
+     "finished": "2026-09-28T20:34:33+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-m5",
+     "status": "pass",
+     "seconds": 14.3,
+     "started": "2026-09-28T20:34:33+00:00",
+     "finished": "2026-09-28T20:34:48+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-m6",
+     "status": "pass",
+     "seconds": 15.3,
+     "started": "2026-09-28T20:34:48+00:00",
+     "finished": "2026-09-28T20:35:03+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-m8",
+     "status": "pass",
+     "seconds": 17.2,
+     "started": "2026-09-28T20:35:03+00:00",
+     "finished": "2026-09-28T20:35:20+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "ladder",
+     "status": "pass",
+     "seconds": 1441.1,
+     "started": "2026-09-28T20:35:20+00:00",
+     "finished": "2026-09-28T20:59:21+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "reskeleton-r24",
+     "status": "pass",
+     "seconds": 125.9,
+     "started": "2026-09-28T20:59:21+00:00",
+     "finished": "2026-09-28T21:01:27+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "reskeleton-r26",
+     "status": "pass",
+     "seconds": 175.8,
+     "started": "2026-09-28T21:01:27+00:00",
+     "finished": "2026-09-28T21:04:23+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "reskeleton-r31",
+     "status": "pass",
+     "seconds": 524.2,
+     "started": "2026-09-28T21:04:23+00:00",
+     "finished": "2026-09-28T21:13:07+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-r24",
+     "status": "pass",
+     "seconds": 28.9,
+     "started": "2026-09-28T21:13:07+00:00",
+     "finished": "2026-09-28T21:13:36+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-r26",
+     "status": "pass",
+     "seconds": 34.2,
+     "started": "2026-09-28T21:13:36+00:00",
+     "finished": "2026-09-28T21:14:10+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-r31",
+     "status": "pass",
+     "seconds": 33.6,
+     "started": "2026-09-28T21:14:10+00:00",
+     "finished": "2026-09-28T21:14:44+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "ladder-397b",
+     "status": "pass",
+     "seconds": 1391.6,
+     "started": "2026-09-28T21:14:44+00:00",
+     "finished": "2026-09-28T21:37:56+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": [
+      "WARNING pin_r24_sk8: pin NOT smoked (too large for this box:   Run it on a box with more RAM. Scoring is exempt: the streaming referee streams by design.). Smoke it on a cluster before citing a number.",
+      "WARNING pin_r26_sk8: pin NOT smoked (too large for this box:   Run it on a box with more RAM. Scoring is exempt: the streaming referee streams by design.). Smoke it on a cluster before citing a number.",
+      "WARNING pin_r31_sk8: pin NOT smoked (too large for this box:   Run it on a box with more RAM. Scoring is exempt: the streaming referee streams by design.). Smoke it on a cluster before citing a number."
+     ]
+    }
+   ]
+  },
+  {
+   "id": "20260928-131726-aff27-matched-skeleton-preflight",
+   "name": "aff27-matched-skeleton",
+   "status": "stopped",
+   "live": false,
+   "preflight": true,
+   "created": "2026-09-28T20:17:26+00:00",
+   "commit": "03cc4c8fc92501bbfef6fe297e312afc3b829c29",
+   "source": "queue.json",
+   "steps": [
+    {
+     "name": "convert-m2",
+     "status": "pass",
+     "seconds": 40.9,
+     "started": "2026-09-28T20:17:26+00:00",
+     "finished": "2026-09-28T20:18:07+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "convert-m3",
+     "status": "pass",
+     "seconds": 25.3,
+     "started": "2026-09-28T20:18:07+00:00",
+     "finished": "2026-09-28T20:18:32+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "convert-m4",
+     "status": "pass",
+     "seconds": 27.5,
+     "started": "2026-09-28T20:18:32+00:00",
+     "finished": "2026-09-28T20:19:00+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "convert-m5",
+     "status": "pass",
+     "seconds": 30.4,
+     "started": "2026-09-28T20:19:00+00:00",
+     "finished": "2026-09-28T20:19:30+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "convert-m6",
+     "status": "pass",
+     "seconds": 46.7,
+     "started": "2026-09-28T20:19:30+00:00",
+     "finished": "2026-09-28T20:20:17+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "convert-m8",
+     "status": "pass",
+     "seconds": 74.7,
+     "started": "2026-09-28T20:20:17+00:00",
+     "finished": "2026-09-28T20:21:32+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-m2",
+     "status": "pass",
+     "seconds": 12.2,
+     "started": "2026-09-28T20:21:32+00:00",
+     "finished": "2026-09-28T20:21:44+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-m3",
+     "status": "pass",
+     "seconds": 12.5,
+     "started": "2026-09-28T20:21:44+00:00",
+     "finished": "2026-09-28T20:21:57+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-m4",
+     "status": "pass",
+     "seconds": 13.6,
+     "started": "2026-09-28T20:21:57+00:00",
+     "finished": "2026-09-28T20:22:10+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-m5",
+     "status": "pass",
+     "seconds": 14.7,
+     "started": "2026-09-28T20:22:10+00:00",
+     "finished": "2026-09-28T20:22:25+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-m6",
+     "status": "stopped",
+     "seconds": 10.8,
+     "started": "2026-09-28T20:22:25+00:00",
+     "finished": "2026-09-28T20:22:36+00:00",
+     "rc": -15,
+     "attempts": 1,
+     "reasons": [
+      "exit code -15",
+      "expected output, stdout is empty"
+     ],
+     "warnings": []
+    },
+    {
+     "name": "pin-m8",
+     "status": "pending",
+     "seconds": null,
+     "started": null,
+     "finished": null,
+     "rc": null,
+     "attempts": null,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "ladder",
+     "status": "pending",
+     "seconds": null,
+     "started": null,
+     "finished": null,
+     "rc": null,
+     "attempts": null,
+     "reasons": [],
+     "warnings": []
+    }
+   ]
+  },
+  {
+   "id": "20260928-122435-aff35-matched-skeleton",
+   "name": "aff35-matched-skeleton",
+   "status": "passed",
+   "live": false,
+   "preflight": false,
+   "created": "2026-09-28T19:24:35+00:00",
+   "commit": "e02ae7912bdad3b5e570e4fcca11543b3f940fd8",
+   "source": "queue.json",
+   "steps": [
+    {
+     "name": "convert-q2",
+     "status": "pass",
+     "seconds": 97.9,
+     "started": "2026-09-28T19:24:37+00:00",
+     "finished": "2026-09-28T19:26:15+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "convert-q3",
+     "status": "pass",
+     "seconds": 86.5,
+     "started": "2026-09-28T19:26:15+00:00",
+     "finished": "2026-09-28T19:27:42+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "convert-q5",
+     "status": "pass",
+     "seconds": 100.3,
+     "started": "2026-09-28T19:27:42+00:00",
+     "finished": "2026-09-28T19:29:22+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "convert-q6",
+     "status": "pass",
+     "seconds": 130.6,
+     "started": "2026-09-28T19:29:22+00:00",
+     "finished": "2026-09-28T19:31:33+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "convert-q8",
+     "status": "pass",
+     "seconds": 157.8,
+     "started": "2026-09-28T19:31:33+00:00",
+     "finished": "2026-09-28T19:34:10+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-q2",
+     "status": "pass",
+     "seconds": 19.0,
+     "started": "2026-09-28T19:34:10+00:00",
+     "finished": "2026-09-28T19:34:29+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-q3",
+     "status": "pass",
+     "seconds": 21.5,
+     "started": "2026-09-28T19:34:29+00:00",
+     "finished": "2026-09-28T19:34:51+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-q4",
+     "status": "pass",
+     "seconds": 33.9,
+     "started": "2026-09-28T19:34:51+00:00",
+     "finished": "2026-09-28T19:35:25+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-q5",
+     "status": "pass",
+     "seconds": 26.3,
+     "started": "2026-09-28T19:35:25+00:00",
+     "finished": "2026-09-28T19:35:51+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-q6",
+     "status": "pass",
+     "seconds": 51.8,
+     "started": "2026-09-28T19:35:51+00:00",
+     "finished": "2026-09-28T19:36:43+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-q8",
+     "status": "pass",
+     "seconds": 23.3,
+     "started": "2026-09-28T19:36:43+00:00",
+     "finished": "2026-09-28T19:56:27+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "ladder",
+     "status": "pass",
+     "seconds": 1204.6,
+     "started": "2026-09-28T19:56:27+00:00",
+     "finished": "2026-09-28T20:16:31+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    }
+   ]
+  },
+  {
+   "id": "20260928-121350-aff35-matched-skeleton-preflight",
+   "name": "aff35-matched-skeleton",
+   "status": "passed",
+   "live": false,
+   "preflight": true,
+   "created": "2026-09-28T19:13:50+00:00",
+   "commit": "e02ae7912bdad3b5e570e4fcca11543b3f940fd8",
+   "source": "queue.json",
+   "steps": [
+    {
+     "name": "convert-q2",
+     "status": "pass",
+     "seconds": 55.6,
+     "started": "2026-09-28T19:13:50+00:00",
+     "finished": "2026-09-28T19:14:46+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "convert-q3",
+     "status": "pass",
+     "seconds": 52.4,
+     "started": "2026-09-28T19:14:46+00:00",
+     "finished": "2026-09-28T19:15:38+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "convert-q5",
+     "status": "pass",
+     "seconds": 106.7,
+     "started": "2026-09-28T19:15:38+00:00",
+     "finished": "2026-09-28T19:17:25+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "convert-q6",
+     "status": "pass",
+     "seconds": 76.4,
+     "started": "2026-09-28T19:17:25+00:00",
+     "finished": "2026-09-28T19:18:41+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "convert-q8",
+     "status": "pass",
+     "seconds": 121.1,
+     "started": "2026-09-28T19:18:41+00:00",
+     "finished": "2026-09-28T19:20:43+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-q2",
+     "status": "pass",
+     "seconds": 18.7,
+     "started": "2026-09-28T19:20:43+00:00",
+     "finished": "2026-09-28T19:21:01+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-q3",
+     "status": "pass",
+     "seconds": 19.4,
+     "started": "2026-09-28T19:21:01+00:00",
+     "finished": "2026-09-28T19:21:21+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-q4",
+     "status": "pass",
+     "seconds": 21.7,
+     "started": "2026-09-28T19:21:21+00:00",
+     "finished": "2026-09-28T19:21:42+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-q5",
+     "status": "pass",
+     "seconds": 23.5,
+     "started": "2026-09-28T19:21:42+00:00",
+     "finished": "2026-09-28T19:22:06+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-q6",
+     "status": "pass",
+     "seconds": 22.2,
+     "started": "2026-09-28T19:22:06+00:00",
+     "finished": "2026-09-28T19:22:28+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-q8",
+     "status": "pass",
+     "seconds": 32.7,
+     "started": "2026-09-28T19:22:28+00:00",
+     "finished": "2026-09-28T19:23:01+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "ladder",
+     "status": "pass",
+     "seconds": 76.2,
+     "started": "2026-09-28T19:23:01+00:00",
+     "finished": "2026-09-28T19:24:17+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    }
+   ]
+  },
+  {
+   "id": "20260926-224709-e112-397b-fullvocab",
+   "name": "e112-397b-fullvocab",
+   "status": "passed",
+   "live": false,
+   "preflight": false,
+   "created": "2026-09-27T05:47:09+00:00",
+   "commit": "f8a86614550b3f2765e5b0629277ed9d04b2e172",
+   "source": "queue.json",
+   "steps": [
+    {
+     "name": "build-A-unweighted",
+     "status": "pass",
+     "seconds": 7280.1,
+     "started": "2026-09-27T05:47:12+00:00",
+     "finished": "2026-09-27T07:48:32+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "build-B-tailw4",
+     "status": "pass",
+     "seconds": 6857.6,
+     "started": "2026-09-27T07:48:32+00:00",
+     "finished": "2026-09-27T09:42:49+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-A",
+     "status": "pass",
+     "seconds": 22.5,
+     "started": "2026-09-27T09:42:49+00:00",
+     "finished": "2026-09-27T09:43:12+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-B",
+     "status": "pass",
+     "seconds": 15.7,
+     "started": "2026-09-27T09:43:12+00:00",
+     "finished": "2026-09-27T09:43:28+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "ladder",
+     "status": "pass",
+     "seconds": 925.2,
+     "started": "2026-09-27T09:43:28+00:00",
+     "finished": "2026-09-27T09:58:53+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": [
+      "WARNING pin_A: pin NOT smoked (too large for this box:   Run it on a box with more RAM. Scoring is exempt: the streaming referee streams by design.). Smoke it on a cluster before citing a number.",
+      "WARNING pin_B: pin NOT smoked (too large for this box:   Run it on a box with more RAM. Scoring is exempt: the streaming referee streams by design.). Smoke it on a cluster before citing a number."
+     ]
+    }
+   ]
+  },
+  {
+   "id": "20260926-223802-e112-397b-fullvocab-preflight",
+   "name": "e112-397b-fullvocab",
+   "status": "passed",
+   "live": false,
+   "preflight": true,
+   "created": "2026-09-27T05:38:03+00:00",
+   "commit": "f8a86614550b3f2765e5b0629277ed9d04b2e172",
+   "source": "queue.json",
+   "steps": [
+    {
+     "name": "build-A-unweighted",
+     "status": "pass",
+     "seconds": 80.9,
+     "started": "2026-09-27T05:38:03+00:00",
+     "finished": "2026-09-27T05:39:24+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "build-B-tailw4",
+     "status": "pass",
+     "seconds": 57.1,
+     "started": "2026-09-27T05:39:24+00:00",
+     "finished": "2026-09-27T05:40:21+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-A",
+     "status": "pass",
+     "seconds": 16.6,
+     "started": "2026-09-27T05:40:21+00:00",
+     "finished": "2026-09-27T05:40:37+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-B",
+     "status": "pass",
+     "seconds": 24.4,
+     "started": "2026-09-27T05:40:37+00:00",
+     "finished": "2026-09-27T05:41:02+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "ladder",
+     "status": "pass",
+     "seconds": 195.9,
+     "started": "2026-09-27T05:41:02+00:00",
+     "finished": "2026-09-27T05:44:18+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": [
+      "WARNING pin_A: pin NOT smoked (too large for this box:   Run it on a box with more RAM. Scoring is exempt: the streaming referee streams by design.). Smoke it on a cluster before citing a number.",
+      "WARNING pin_B: pin NOT smoked (too large for this box:   Run it on a box with more RAM. Scoring is exempt: the streaming referee streams by design.). Smoke it on a cluster before citing a number."
+     ]
+    }
+   ]
+  },
+  {
+   "id": "20260926-131556-night4-replay2-preflight",
+   "name": "night4-replay2",
+   "status": "passed",
+   "live": false,
+   "preflight": true,
+   "created": "2026-09-26T20:15:56+00:00",
+   "commit": "7395a92e4b7425fe3895c7665e005a64cf204820",
+   "source": "night4_replay2.json",
+   "steps": [
+    {
+     "name": "build-35b-d2k16",
+     "status": "pass",
+     "seconds": 38.2,
+     "started": "2026-09-26T20:15:57+00:00",
+     "finished": "2026-09-26T20:16:35+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "fit-27b-d2k64",
+     "status": "pass",
+     "seconds": 10.6,
+     "started": "2026-09-26T20:16:35+00:00",
+     "finished": "2026-09-26T20:16:45+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "pin-35b-d2k16",
+     "status": "pass",
+     "seconds": 26.0,
+     "started": "2026-09-26T20:16:45+00:00",
+     "finished": "2026-09-26T20:17:11+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "ladder-35b",
+     "status": "pass",
+     "seconds": 87.4,
+     "started": "2026-09-26T20:17:11+00:00",
+     "finished": "2026-09-26T20:18:39+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    },
+    {
+     "name": "speed-35b",
+     "status": "pass",
+     "seconds": 33.7,
+     "started": "2026-09-26T20:18:39+00:00",
+     "finished": "2026-09-26T20:19:12+00:00",
+     "rc": 0,
+     "attempts": 1,
+     "reasons": [],
+     "warnings": []
+    }
+   ]
+  }
+ ]
+}

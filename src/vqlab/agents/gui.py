@@ -13,6 +13,10 @@ already keeps -- nothing here computes a number of its own:
              can be assembled from without paying for a k-means
   Families   families/*/teachers/*/{profile,onboard}.json
   Runs       ~/.vqlab/runs.jsonl, the MCP run dirs, and who holds the GPU
+  Queues     /api/queues: recent `vqlab queue` runs (state.json per run, with
+             `live` = the runner pid is alive, the check `queue status` uses)
+  Bench      /bench/ serves gui_static/bench/ (the Library/Recipe/Jobs page)
+             on the same origin, so its Jobs page reads /api/queues live
 
 Stdlib only; reads index files and small JSON, never a tensor, so it is safe
 on a box that is mid-experiment. Every endpoint is a GET; there is no way to
@@ -163,8 +167,42 @@ def api_runs(q):
     return {"runs": list(reversed(runs)), "mcp": mcp, "gpu": gpu}
 
 
+def queues_snapshot(n=40):
+    """Most recent queue runs, newest first. `live` reuses the runner-alive
+    check `vqlab queue status` makes (mcp_server._pid_alive on state.pid)."""
+    import importlib
+    ms = importlib.import_module("vqlab.agents.mcp_server")
+    rq = importlib.import_module("vqlab.agents.run_queue")
+    dirs = sorted((p for p in rq.queues_dir().glob("*") if (p / "state.json").exists()),
+                  key=lambda p: p.name, reverse=True)[:max(1, n)]
+    out = []
+    for d in dirs:
+        try:
+            s = json.loads((d / "state.json").read_text())
+        except ValueError:
+            continue
+        out.append({"id": d.name, "name": s.get("name"), "status": s.get("status"),
+                    "live": bool(ms._pid_alive(s.get("pid"))), "preflight": bool(s.get("preflight")),
+                    "created": s.get("created"), "host": s.get("host"), "commit": s.get("commit"),
+                    "source": s.get("source"),
+                    "steps": [{k: r.get(k) for k in ("name", "status", "seconds", "started", "finished",
+                                                     "rc", "attempts", "reasons", "warnings")}
+                              for r in s.get("steps", [])]})
+    return out
+
+
+def api_queues(q):
+    return queues_snapshot(int(q.get("n", ["40"])[0]))
+
+
 ROUTES = {"/api/fleet": api_fleet, "/api/provenance": api_provenance,
-          "/api/fits": api_fits, "/api/families": api_families, "/api/runs": api_runs}
+          "/api/fits": api_fits, "/api/families": api_families, "/api/runs": api_runs,
+          "/api/queues": api_queues}
+
+
+BENCH_TYPES = {".html": "text/html; charset=utf-8", ".json": "application/json",
+               ".css": "text/css", ".js": "text/javascript", ".svg": "image/svg+xml",
+               ".png": "image/png"}
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -179,10 +217,25 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def _bench(self, rel):
+        root = (STATIC / "bench").resolve()
+        f = (root / urllib.parse.unquote(rel)).resolve()
+        ctype = BENCH_TYPES.get(f.suffix)
+        if root not in f.parents or ctype is None or not f.is_file():
+            return self._send(404, b'{"error":"not found"}', "application/json")
+        self._send(200, f.read_bytes(), ctype)
+
     def do_GET(self):
         u = urllib.parse.urlparse(self.path)
         if u.path in ("/", "/index.html"):
             return self._send(200, (STATIC / "index.html").read_bytes(), "text/html; charset=utf-8")
+        if u.path == "/bench":
+            self.send_response(301)
+            self.send_header("Location", "/bench/")
+            self.end_headers()
+            return
+        if u.path.startswith("/bench/"):
+            return self._bench(u.path[len("/bench/"):] or "index.html")
         fn = ROUTES.get(u.path)
         if fn is None:
             return self._send(404, b'{"error":"not found"}', "application/json")
