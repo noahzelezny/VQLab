@@ -827,7 +827,7 @@ function hfRow(m){
   const why=!st?'no safetensors weights'
     :(c.quantization||c.quantization_config||!tot||fp*2<=tot)?'already quantized; pick the bf16 original'
     :!VQ_TYPES.has(mt)?mt+' has no VQ Lab family profile':'';
-  return {id:m.id,downloads:m.downloads||0,gated:!!m.gated,size:tot*2,why};
+  const dt=Object.entries(pp).sort((a,b)=>b[1]-a[1])[0];return {id:m.id,downloads:m.downloads||0,gated:!!m.gated,size:tot*2,why,dtype:dt?dt[0].toLowerCase():''};
 }
 async function hubSearch(q){
   const n=++HF.seq;HF.q=q;HF.res=null;HF.err='';
@@ -848,7 +848,7 @@ function hubDialog(){
   const line=local?'already a local teacher':busy?'downloading…':r.why?r.why:r.gated?'gated — needs access on your Hub account':'';
   const can=!r.why&&!local&&!busy;
   const el=document.createElement('div');el.className='hfdlg';
-  el.innerHTML=`<div class="hfbox"><div class="hfttl">${esc(id)}</div><div class="hfsz">${gbs(r.size)}</div><div class="vs faintl">then: onboard (profile, loader, cache determinism, init sweep)</div><div class="vs hfnote">${esc(line)}</div><div class="hfbtns"><button class="mini" data-c>Cancel</button><button class="mini pri" data-d${can?'':' disabled'}>Download</button></div></div>`;
+  el.innerHTML=`<div class="hfbox"><div class="hfttl">${esc(id)}</div><div class="hfsz">${r.why?esc(r.dtype||''):esc(r.dtype||'bf16')+' teacher'}</div><div class="hfsz">${gbs(r.size)}</div><div class="vs hfnote">${esc(line)}</div><div class="hfbtns"><button class="mini" data-c>Cancel</button><button class="mini pri" data-d${can?'':' disabled'}>Download</button></div></div>`;
   const esc_=e=>{if(e.key==='Escape'){e.stopPropagation();close()}};
   const close=()=>{removeEventListener('keydown',esc_,true);HF.open='';el.remove();renderHub()};
   HF.esc=esc_;addEventListener('keydown',esc_,true);
