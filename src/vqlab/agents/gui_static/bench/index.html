@@ -651,13 +651,13 @@ function libW(t,r){
   return {inf:!!(W&&W.inf),x,a:W?W.attn:null,e:W?W.embed:null,r:W?W.router:null,p:ple,hasP:!!(W&&W.ple!=null)}}
 function ladder(t,ship,minMac,link){
   const ex=libCols,hasP=ship.some(r=>libW(t,r).hasP);
-  const wb=v=>v==null?null:v===16?'bf16':String(v),bp=v=>v==null?null:String(+v.toFixed(2));
+  const wb=v=>v==null?null:v===16?'bf16':v+'-bit',bp=v=>v==null?null:String(+v.toFixed(2));
   const C=[ // id,label,sort value,cell text (null = —),width em,group
    ['build','build',r=>r.what,null,15],['gib','GiB',r=>r.gib,null,5],['mac','runs on',r=>r.gib,null,6.5],
    ['m','mean KL',r=>mean(r.kl),null,6.5,'klm'],
    ...(ex.kl?[['p','prose',r=>r.one||r.lit?null:r.kl[0],null,6,'kl'],['c','code',r=>r.one||r.lit?null:r.kl[1],null,6,'kl'],['l','literary',r=>r.one?null:r.kl[2],null,6,'kl']]:[]),
    ['t','top-1',r=>r.top1,null,5.5],['b','bpw',r=>r.bpw,null,5,'bpwm'],
-   ...(ex.bpw?[['bx','experts',r=>libW(t,r).x,null,5.5,'bpw'],['ba','attention',r=>libW(t,r).a,null,5.5,'bpw'],['be',hasP?'embed/PLE':'embed',r=>libW(t,r).e,null,5.5,'bpw'],['br','router',r=>libW(t,r).r,null,5.5,'bpw']]:[]),
+   ...(ex.bpw?[['bx','experts',r=>libW(t,r).x,null,5.5,'bpw'],['ba','attention',r=>libW(t,r).a,null,5.5,'bpw'],['be',hasP?'embed/PLE':'embed',r=>libW(t,r).e,null,hasP?9:5.5,'bpw'],['br','router',r=>libW(t,r).r,null,5.5,'bpw']]:[]),
    ['lnk','',null,null,13.5],['sp','',null,null,0]];
   const col=C.find(c=>c[0]===libSort.k&&c[2])||C[1];
   const rows=[...ship].sort((a,b)=>{const x=col[2](a),y=col[2](b);if(x==null)return 1;if(y==null)return -1;return (x>y?1:x<y?-1:0)*libSort.d});
