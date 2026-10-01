@@ -167,6 +167,26 @@ def api_runs(q):
     return {"runs": list(reversed(runs)), "mcp": mcp, "gpu": gpu}
 
 
+def _tail(p, n=12, width=300):
+    try:
+        lines = [x[:width] for x in p.read_text(errors="replace").splitlines() if x.strip()]
+    except OSError:
+        return []
+    return lines[-n:]
+
+
+def _step_files(sd):
+    """What a step left on disk: the command it ran and the end of its output
+    (stderr, or stdout when stderr is empty) -- the 'why' behind a status."""
+    if sd is None:
+        return {"cmd": None, "tail": []}
+    try:
+        cmd = (sd / "cmd").read_text().strip()
+    except OSError:
+        cmd = None
+    return {"cmd": cmd, "tail": _tail(sd / "stderr") or _tail(sd / "stdout")}
+
+
 def queues_snapshot(n=40):
     """Most recent queue runs, newest first. `live` reuses the runner-alive
     check `vqlab queue status` makes (mcp_server._pid_alive on state.pid)."""
@@ -181,13 +201,15 @@ def queues_snapshot(n=40):
             s = json.loads((d / "state.json").read_text())
         except ValueError:
             continue
+        sdirs = {p.name.split("-", 1)[0]: p for p in (d / "steps").glob("*") if p.is_dir()}
         out.append({"id": d.name, "name": s.get("name"), "status": s.get("status"),
                     "live": bool(ms._pid_alive(s.get("pid"))), "preflight": bool(s.get("preflight")),
                     "created": s.get("created"), "host": s.get("host"), "commit": s.get("commit"),
                     "source": s.get("source"),
-                    "steps": [{k: r.get(k) for k in ("name", "status", "seconds", "started", "finished",
-                                                     "rc", "attempts", "reasons", "warnings")}
-                              for r in s.get("steps", [])]})
+                    "steps": [dict({k: r.get(k) for k in ("name", "status", "seconds", "started", "finished",
+                                                          "rc", "attempts", "reasons", "warnings")},
+                                   **_step_files(sdirs.get(f"{i:02d}")))
+                              for i, r in enumerate(s.get("steps", []))]})
     return out
 
 
