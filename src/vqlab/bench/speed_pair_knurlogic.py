@@ -43,11 +43,12 @@ from vqlab import _layout  # noqa: E402
 KSRC = os.environ.get("KNURLOGIC_SRC", "")
 
 
-def _prompt(prompt_tokens):
+def _prompt(prompt_tokens, offset=0):
     # ~4 chars/token on the house prose corpus; the served prompt_tokens
     # count comes back in the response and is what gets recorded.
     text = _layout.corpus("prose").read_text()
-    return text[: prompt_tokens * 4]
+    n = prompt_tokens * 4
+    return text[offset: offset + n]
 
 
 def _post(url, doc, timeout=1800):
@@ -108,7 +109,7 @@ def _entry(K, job):
     return None
 
 
-def run_arm(K, name, a, prompt):
+def run_arm(K, name, a, prompt, warm):
     out = K.load(artifact=name, machines=a.machine, split=a.split, link=a.link,
                  sets=a.sets or None)
     job = out.get("job") or out.get("instance")
@@ -134,7 +135,11 @@ def run_arm(K, name, a, prompt):
         named = {m: (f"artifact  {name}" in t) for m, t in logs.items()}
         base = {"model": name, "temperature": 0,
                 "messages": [{"role": "user", "content": prompt}]}
-        _post(url, dict(base, max_tokens=8))    # warm-up: SAME prompt length (new shapes compile), discarded
+        # warm-up: a DIFFERENT prompt of the SAME length (new shapes compile),
+        # discarded. Reusing the timed prompt lets prefill read Knurlogic's
+        # prompt cache, and the timed request then reports no prefill at all.
+        _post(url, {"model": name, "temperature": 0, "max_tokens": 8,
+                    "messages": [{"role": "user", "content": warm}]})
         r = _post(url, dict(base, max_tokens=a.gen_tokens))
         u = r.get("usage", {})
         t = (u.get("knurlogic") or {}).get("timing") or {}
@@ -208,10 +213,11 @@ def main(argv=None) -> int:
     from knurlogic.interfaces import mcp as K
 
     prompt = _prompt(a.prompt_tokens)
+    warm = _prompt(a.prompt_tokens, offset=a.prompt_tokens * 4)
     recs = {a.arm_a: [], a.arm_b: []}
     for rep in range(1, a.n + 1):
         for arm in (a.arm_a, a.arm_b):
-            rec = dict(run_arm(K, arm, a, prompt), rep=rep, n=a.n)
+            rec = dict(run_arm(K, arm, a, prompt, warm), rep=rep, n=a.n)
             print(json.dumps(rec), flush=True)
             if a.out:
                 with open(a.out, "a") as f:
@@ -223,7 +229,10 @@ def main(argv=None) -> int:
           f"prompt {recs[a.arm_a][0]['prompt_tokens']} tokens, {a.gen_tokens} generated, "
           f"n={a.n}, alternating")
     for key, label in (("decode_tok_s", "decode"), ("prefill_tok_s", "prefill")):
-        r = [b[key] / x[key] for x, b in zip(recs[a.arm_a], recs[a.arm_b])]
+        r = [b[key] / x[key] for x, b in zip(recs[a.arm_a], recs[a.arm_b]) if x[key] and b[key]]
+        if not r:
+            print(f"  {label:8} not reported by Knurlogic for these runs")
+            continue
         print(f"  {label:8} ratio per pair {', '.join(f'{v:.3f}' for v in r)}   "
               f"median {statistics.median(r):.3f}  range {min(r):.3f}-{max(r):.3f}")
     if a.n < 3:
