@@ -57,6 +57,22 @@ def _resolve_arch(_mt, _multimodal):
             return _importlib.import_module(f"{_pkg}.models.{_mt}")
         except ModuleNotFoundError as _e:
             _err = _e
+        except Exception as _e:
+            # An INSTALLED but incompatible mlx_vlm (stale, or built against
+            # another mlx) fails here with ImportError / AttributeError, not
+            # ModuleNotFoundError. Unless mlx_vlm itself is the loader, that
+            # must not cost the text model: fall through to mlx_lm, which
+            # serves text (the same binding an mlx_lm load takes), and say
+            # that vision is unavailable rather than failing the whole load.
+            if _pkg != "mlx_vlm" or _LOADER == "mlx_vlm":
+                raise
+            import warnings as _warnings
+            _warnings.warn(
+                f"mlx_vlm is installed but its {_mt} architecture failed to "
+                f"import ({type(_e).__name__}: {_e}); serving TEXT through "
+                f"mlx_lm. Vision is unavailable until mlx-vlm is upgraded.",
+                RuntimeWarning, stacklevel=2)
+            _err = _e
     raise _err
 
 
