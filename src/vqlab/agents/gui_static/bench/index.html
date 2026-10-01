@@ -211,7 +211,7 @@ details.adv .kv{margin-top:8px}
 .rungtab a{color:var(--teal)}.rungtab a:hover{text-decoration:underline}
 .rungtab tr.cmp td{color:var(--bad)}
 .rungtab .best{color:var(--ok)}
-.jobsel .row{margin-bottom:6px}.jobsel{max-height:calc(100vh - 250px);overflow:auto}.jdet{max-height:calc(100vh - 230px);overflow:auto;padding-right:6px}.timeline.q li{grid-template-columns:20px minmax(0,1fr) auto;padding:6px 0}.timeline.q .d{grid-column:2/-1;grid-row:2;overflow-wrap:anywhere;color:var(--faint)}.timeline.q .d:empty{display:none}.timeline.q .t{grid-row:1;grid-column:3}.timeline.q .m{grid-row:1}.qmeta{color:var(--dim);font-size:.85em;margin:-4px 0 10px}
+.jobsel .row{margin-bottom:6px}.jobsel{overflow:auto}.jdet{overflow:auto;padding-right:6px}.timeline.q li{grid-template-columns:20px minmax(0,1fr) auto;padding:6px 0}.timeline.q .d{grid-column:2/-1;grid-row:2;overflow-wrap:anywhere;color:var(--faint)}.timeline.q .d:empty{display:none}.timeline.q .t{grid-row:1;grid-column:3}.timeline.q .m{grid-row:1}.qmeta{color:var(--dim);font-size:.85em;margin:-4px 0 10px}
 .stepbar{display:flex;gap:2px;grid-column:1/-1;margin-top:6px}
 .stepbar i{flex:1;height:4px;background:var(--med);border-radius:1px}
 .stepbar i.ok{background:var(--ok)}.stepbar i.run{background:var(--warn)}.stepbar i.bad{background:var(--bad)}
@@ -1020,6 +1020,8 @@ function fitLadder(){
   const em=parseFloat(getComputedStyle(tb).fontSize),tot=cols.reduce((a,c)=>a+ +c.dataset.w,0);
   /* build width is fitted to the collapsed table (57em), so expanding a group never moves existing columns; extra width scrolls */const over=57-w.clientWidth/em,bw=Math.max(9,Math.min(15,15-Math.max(0,over)));
   bc.style.width=bw+'em';tb.style.minWidth=(tot-15+bw)+'em'}
+// Jobs panes: each scrolls inside the window, measured from its own top (the panel's bottom padding stays visible)
+function fitJobs(){const pad=parseFloat(getComputedStyle(document.querySelector('.panel')).paddingBottom)+28;for(const el of document.querySelectorAll('.jobsel,.jdet'))el.style.maxHeight=Math.max(160,innerHeight-el.getBoundingClientRect().top-pad)+'px'}
 function render(){
   renderFlow();$('#page').innerHTML=PG[page]();save();
   if(page===0){drawLib();wirePicker();fitLadder();
@@ -1038,7 +1040,7 @@ function render(){
     {const rb=$('#skreset');if(rb)rb.onclick=()=>{initWidths(draft);render()}}
     document.querySelectorAll('[data-bits]').forEach(b=>b.onclick=()=>{draft[b.dataset.bits]=+b.dataset.v;render()});
     $('#queue').onclick=()=>{const t=TE(draft.teacher);JDRAFTS.unshift({id:'d'+Date.now(),name:t.short.toLowerCase().replace(/[^a-z0-9]+/g,'-')+'-'+(draft.mode==='affine'?'q'+draft.bits:f1(sizeOf(t,draft))),state:'draft',kind:'build',recipe:{...draft}});jobSel=JDRAFTS[0].id;draft=newRecipe();resolveAt(t,draft,(t.xr[0]+t.xr[1])/2);page=2;render()}}
-  if(page===2){document.querySelectorAll('[data-job]').forEach(b=>b.onclick=()=>{jobSel=b.dataset.job;render()});
+  if(page===2){fitJobs();document.querySelectorAll('[data-job]').forEach(b=>b.onclick=()=>{jobSel=b.dataset.job;render()});
     document.querySelectorAll('[data-pre]').forEach(b=>b.onclick=()=>{showPre=!showPre;render()});
     document.querySelectorAll('[data-jact]').forEach(b=>b.onclick=()=>{const i=JDRAFTS.findIndex(x=>x.id===jobSel),j=JDRAFTS[i],a=b.dataset.jact;if(!j)return;
       if(a==='start')j.cli=true;
