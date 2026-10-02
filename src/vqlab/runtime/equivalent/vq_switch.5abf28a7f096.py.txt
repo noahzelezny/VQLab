@@ -4648,19 +4648,7 @@ def skipzero_row_table(rowmask, E, OUT):
             .astype(mx.int32).reshape(E, OUT)
 
 
-def _sz_module(modules, p):
-    """(config key, vq_skipzero.modules entry) for weight prefix p; the
-    config's module key may be in the other layout spelling."""
-    if p in modules:
-        return p, modules[p]
-    for k, v in modules.items():
-        if k.endswith(p.split("layers.", 1)[-1]):
-            return k, v
-    raise KeyError(f"skipzero tensors for {p!r} but no "
-                   f"vq_skipzero.modules entry")
-
-
-def skipzero_weights(weights, modules, shard=None):
+def skipzero_weights(weights, modules):
     """SKIPZERO on-disk tensors -> what VQSwitchLinear(row_table=...) loads.
 
     On disk (vqlab sz-pack) each module in config `vq_skipzero.modules`
@@ -4668,158 +4656,27 @@ def skipzero_weights(weights, modules, shard=None):
     bytes identical to the source rung), {p}.sz_rowmask and {p}.sz_shape.
     They become {p}.codes / {p}.vq_scales (compact) + {p}.row_table.
     Idempotent (no sz_ keys -> unchanged). Accepts a dict or a list of
-    pairs and returns the same kind. `modules` supplies (experts, out).
-    `shard` = (rank, n) applies skipzero_shard first, with the UNSPLIT
-    modules."""
+    pairs and returns the same kind. `modules` supplies (experts, out)."""
     as_list = not isinstance(weights, dict)
     d = dict(weights) if as_list else weights
     pre = [k[: -len(".sz_rowmask")] for k in d if k.endswith(".sz_rowmask")]
     if not pre:
         return weights
-    if shard is not None:
-        d, modules = skipzero_shard(d, modules, *shard)
     out = {k: v for k, v in d.items() if ".sz_" not in k}
     for p in pre:
-        m = _sz_module(modules, p)[1]
+        # the config's module key may be in the other layout spelling
+        m = modules.get(p)
+        if m is None:
+            m = next((v for k, v in modules.items()
+                      if k.endswith(p.split("layers.", 1)[-1])), None)
+        if m is None:
+            raise KeyError(f"skipzero tensors for {p!r} but no "
+                           f"vq_skipzero.modules entry")
         out[p + ".codes"] = d[p + ".sz_codes"]
         out[p + ".vq_scales"] = d[p + ".sz_scales"]
         out[p + ".row_table"] = skipzero_row_table(
             d[p + ".sz_rowmask"], int(m["experts"]), int(m["out"]))
     return list(out.items()) if as_list else out
-
-
-# TENSOR-PARALLEL SPLIT of skipzero modules. A tensor split cuts gate_proj /
-# up_proj along OUTPUT rows and down_proj along its INPUT axis. A row cut
-# cannot be taken through the compact live-row list (it is expert-major over
-# live rows only), so it is taken through the row mask instead: rank r keeps
-# original rows [r*OUT/n, (r+1)*OUT/n) of every expert and exactly those of
-# them that are live, in compact order. down_proj keeps whole rows, so its
-# row table is unchanged and the ordinary input-axis cut of codes/vq_scales
-# applies after load -- legal only where it lands on a group boundary and,
-# packed, on a 32-code block (BITS whole words), which is checked here.
-_SZ_ROW_SPLIT = ("gate_proj", "up_proj")
-_SZ_IN_SPLIT = ("down_proj",)
-
-
-def skipzero_live(rowmask, E, OUT):
-    """bit-packed uint8 [E, ceil(OUT/8)] (little bit order) -> numpy bool
-    [E, OUT] live mask. Host side: the mask is small (E*OUT/8 bytes)."""
-    rm = np.asarray(rowmask, dtype=np.uint8).reshape(E, -1)
-    return np.unpackbits(rm, axis=-1, bitorder="little")[:, :OUT].astype(bool)
-
-
-def skipzero_shard_modules(modules, rank, n, rowmask):
-    """Per-rank vq_skipzero.modules for a tensor split of n ranks.
-
-    gate_proj/up_proj entries get out = OUT/n and live_rows = rank's count;
-    down_proj entries are returned unchanged after the input-axis alignment
-    check (needs the vq_modules geometry in the entry: in, dim, group,
-    pack_bits). rowmask(key) -> that module's sz_rowmask (array-like).
-    REFUSES OUT % n != 0, an unaligned input cut, and any other leaf."""
-    if not (isinstance(n, int) and n >= 1 and 0 <= rank < n):
-        raise ValueError(f"skipzero shard: bad rank/n {rank}/{n}")
-    out = {}
-    for key, m in modules.items():
-        leaf = key.rsplit(".", 1)[-1]
-        E, OUT = int(m["experts"]), int(m["out"])
-        if leaf in _SZ_ROW_SPLIT:
-            if OUT % n:
-                raise ValueError(f"skipzero shard: {key} OUT={OUT} does not "
-                                 f"divide into {n} ranks")
-            lo, hi = rank * OUT // n, (rank + 1) * OUT // n
-            live = skipzero_live(rowmask(key), E, OUT)[:, lo:hi]
-            out[key] = dict(m, out=OUT // n, live_rows=int(live.sum()))
-        elif leaf in _SZ_IN_SPLIT:
-            try:
-                IN, D, G = int(m["in"]), int(m["dim"]), int(m.get("group", 64))
-            except KeyError:
-                raise KeyError(f"skipzero shard: {key} needs its vq_modules "
-                               f"geometry (in, dim, group, pack_bits) to "
-                               f"check the input-axis cut") from None
-            pb = int(m.get("pack_bits") or 0)
-            ok = IN % n == 0 and (IN // n) % G == 0 and (IN // n) % D == 0
-            if ok and pb:
-                ok = (IN // n // D) % 32 == 0
-            if not ok:
-                raise ValueError(
-                    f"skipzero shard: {key} IN={IN} split {n} ways is not "
-                    f"aligned to group {G}" + (f" and 32-code blocks (d={D}, "
-                    f"{pb}-bit words)" if pb else ""))
-            out[key] = dict(m)
-        else:
-            raise ValueError(f"skipzero shard: no tensor split rule for "
-                             f"{key} (leaf {leaf!r})")
-    return out
-
-
-def skipzero_read_rowmasks(model_dir, prefixes):
-    """{prefix: numpy uint8 sz_rowmask} read straight from the safetensors
-    shards named in model_dir's index: only those tensors' bytes, no other
-    tensor is touched (Model.__init__ sizes per-rank placeholders from them
-    before any weight is loaded)."""
-    import json
-    import pathlib
-    import struct
-    root = pathlib.Path(model_dir)
-    wmap = json.loads((root / "model.safetensors.index.json")
-                      .read_text())["weight_map"]
-    out, headers = {}, {}
-    for p in prefixes:
-        name = p + ".sz_rowmask"
-        if name not in wmap:
-            raise KeyError(f"{name} is not in {root}'s safetensors index")
-        f = root / wmap[name]
-        with open(f, "rb") as fh:
-            if f not in headers:
-                (n,) = struct.unpack("<Q", fh.read(8))
-                headers[f] = (8 + n, json.loads(fh.read(n)))
-            base, hdr = headers[f]
-            t = hdr[name]
-            if t["dtype"] != "U8":
-                raise ValueError(f"{name}: dtype {t['dtype']}, expected U8")
-            a, b = t["data_offsets"]
-            fh.seek(base + a)
-            out[p] = np.frombuffer(fh.read(b - a), np.uint8) \
-                .reshape(t["shape"])
-    return out
-
-
-def skipzero_shard(weights, modules, rank, n):
-    """Rank `rank` of an n-way tensor split, on the ON-DISK sz tensors
-    (before skipzero_weights). gate_proj/up_proj: sz_codes / sz_scales /
-    sz_rowmask / sz_shape sliced to the rank's output rows. down_proj:
-    untouched. Returns (weights, per-rank modules) -- the same kind of
-    weights as given (dict or list of pairs); modules as
-    skipzero_shard_modules. LAZY on the CPU stream (see skipzero_row_table):
-    only the small row masks are read on the host here."""
-    as_list = not isinstance(weights, dict)
-    d = dict(weights) if as_list else dict(weights)
-    pre = [k[: -len(".sz_rowmask")] for k in d if k.endswith(".sz_rowmask")]
-    keyed = {p: _sz_module(modules, p) for p in pre}
-    by_key = {k: p for p, (k, _) in keyed.items()}
-    sub = {k: m for p, (k, m) in keyed.items()}
-    smods = skipzero_shard_modules(
-        sub, rank, n, lambda k: np.array(d[by_key[k] + ".sz_rowmask"]))
-    for p, (key, m) in keyed.items():
-        if key.rsplit(".", 1)[-1] not in _SZ_ROW_SPLIT:
-            continue
-        E, OUT = int(m["experts"]), int(m["out"])
-        lo, hi = rank * OUT // n, (rank + 1) * OUT // n
-        live = skipzero_live(np.array(d[p + ".sz_rowmask"]), E, OUT)
-        pos = (np.cumsum(live.reshape(-1)) - 1).reshape(E, OUT)
-        keep = pos[:, lo:hi][live[:, lo:hi]].astype(np.uint32)
-        shp = np.array(d[p + ".sz_shape"]).astype(np.int32).copy()
-        shp[1] = hi - lo
-        with mx.stream(mx.cpu):
-            ki = mx.array(keep)
-            d[p + ".sz_codes"] = mx.take(d[p + ".sz_codes"], ki, axis=0)
-            d[p + ".sz_scales"] = mx.take(d[p + ".sz_scales"], ki, axis=0)
-        d[p + ".sz_rowmask"] = mx.array(
-            np.packbits(live[:, lo:hi], axis=-1, bitorder="little"))
-        d[p + ".sz_shape"] = mx.array(shp)
-    mods = dict(modules)
-    mods.update(smods)
-    return (list(d.items()) if as_list else d), mods
 
 
 class VQSwitchLinear(nn.Module):
