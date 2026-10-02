@@ -539,8 +539,10 @@ for si, sh in enumerate(shards):
         for k in (k for k, v in base_idx.items() if v == sh):
             mod = k.rsplit(".", 1)[0]
             if is_vq_target(k):
+                # codes live in the shard that holds the module's .weight
+                # (its .scales may sit in the next shard)
                 for suf in (".codes", ".codebook", ".vq_scales"):
-                    out_map[mod + suf] = sh
+                    out_map[mod + suf] = base_idx.get(mod + ".weight", sh)
             else:
                 out_map[k] = sh
         have = dst if dst.exists() else shipped
@@ -574,9 +576,20 @@ for si, sh in enumerate(shards):
             mod = name.rsplit(".", 1)[0]
             if mod in done:
                 continue
+            # A module's tensors can straddle a shard boundary (mlx-community
+            # DeepSeek-V4: layer 1's switch_mlp .weight in one shard, .scales
+            # in the next). Fit it ONCE, in the shard holding .weight; in any
+            # other shard its tensors are simply dropped.
+            if base_idx.get(mod + ".weight", sh) != sh:
+                continue
             proj = mod.rsplit(".", 1)[1]
             li = layer_of(mod)
-            sc = data[mod + ".scales"]
+            if mod + ".scales" in data:
+                sc = data[mod + ".scales"]
+            else:
+                with mx.stream(mx.cpu):
+                    sc = mx.load(str(BASE / base_idx[mod + ".scales"]))[mod + ".scales"]
+                    mx.eval(sc)
             bg = base_cfg["quantization"][mod].get("group_size", G)
             want = (sc.shape[0], sc.shape[1], sc.shape[2] * bg)
             codes, cb, vsc, err = vq_tensor_codes(li, proj, want)
