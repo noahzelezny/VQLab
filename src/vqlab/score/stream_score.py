@@ -376,7 +376,7 @@ def score_qwen3_5_moe(model, ids_list, args):
 
 
 def score_deepseek_v4(model, ids_list, args):
-    """Streamed deepseek_v4 scorer (DeepSeek-V4-Flash). UNVALIDATED.
+    """Streamed deepseek_v4 scorer (DeepSeek-V4-Flash). Rule 5: see SCORERS.
 
     LINE-MIRRORED against mlx_lm.models.deepseek_v4 (DeepseekV4Model.__call__
     / Model.__call__), in the reference's order:
@@ -394,9 +394,8 @@ def score_deepseek_v4(model, ids_list, args):
     is chunk-dependent and must be measured the way generation computes it.
     hc_head and norm are per-position, so applying them per chunk is exact.
 
-    Rule 5 before this enters any ladder: streamed vs a direct resident
-    forward that walks the same chunks with one shared cache list, to all
-    printed decimals, at 2048 AND 12288 tokens.
+    Validated (rule 5) streamed vs a direct resident forward that walks the
+    same chunks with one shared cache list: bitwise at 2048 and 12288.
     """
     lm = getattr(model, "language_model", model)
     core = lm.model
@@ -479,11 +478,15 @@ SCORERS = {
     # 5.227517/5.227517 at 2048 and 5.829932/5.829932 at 12288, exact.
     "qwen3_5": {"fn": score_qwen3_5_moe, "family": "qwen3_5",
                 "validated": True, "cpu_stream_load": True},
-    # DeepSeek-V4-Flash. Rule 5 owed: the VQ artifact fits resident on the
-    # 128 GB box, so it is the direct-forward reference (as the 35B was for
-    # the 397B). cpu_stream_load: the converted teacher's blocks are ~3.5 GiB.
+    # DeepSeek-V4-Flash. Rule-5 run 2026-10-02 on a 4-layer slice of the
+    # exact teacher (sanitize-stream output; layers 0-2 hash-routed, 3 score-
+    # routed, compressor/indexer attention), chunk 512, vs a direct resident
+    # forward over the same chunks with one shared cache list: logits
+    # BITWISE identical (max|d| 0.0) at 2048 and 12288 tokens. Scope: 4 of 43
+    # layers, real weights; the rest of the stack is the same block class.
+    # cpu_stream_load: the converted teacher's blocks are ~3.5 GiB.
     "deepseek_v4": {"fn": score_deepseek_v4, "family": "deepseek_v4",
-                    "validated": False, "cpu_stream_load": True},
+                    "validated": True, "cpu_stream_load": True},
 }
 
 
