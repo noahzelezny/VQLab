@@ -22,6 +22,11 @@ from __future__ import annotations
 SUFFIXES = ("sz_shape", "sz_rowmask", "sz_codes", "sz_scales")
 FORMAT = "vq-skipzero"
 VERSION = 1
+# Codebook dims the runtime row-table switch can SERVE compact. vq_switch.py's
+# gemmseg prefill is the binding site: it raises "SKIPZERO prefill: gemmseg2
+# d4 with VQ_SPEC_KERNELS=1 only" for any other dim, and d2 has no fused
+# kernel at all. sz-pack packs and check-bundle gates against this one set.
+SUPPORTED_DIMS = (4,)
 
 
 def _prefixes(keys):
