@@ -5,8 +5,10 @@ BYTE-EQUAL to the same module over EXPANDED rows (dead rows = code 0,
 scale +0) -- that is the stage-1 layout F175/F176 gated on KL, so byte
 equality with it is the whole correctness claim. Checked for every
 geometry the switch serves (packed d4 at 11 and 8 bits, unpacked uint8
-d4 via U8-VIEW), at decode N (fused WALK) and prefill N (gemmseg2), with
-skewed routing and whole dead experts. Compared as uint16 bit patterns.
+d4 via U8-VIEW, packed d8 K16384 at 14 bits -- the 397B 2.2's geometry),
+at decode N (fused d4 WALK; d8 SIMD_DEVX_SS at N <= 20 and IN/G >= 32, d8
+WALK otherwise) and prefill N (gemmseg2), with skewed routing, whole dead
+experts and odd OUT. Compared as uint16 bit patterns.
 
 The second test pins that adding the switch left the NON-sz kernels
 unchanged: the SZ code sits behind `#if SZ`, so a runtime without the
@@ -24,10 +26,10 @@ def _bits(a):
     return np.array(a.astype(mx.float16)).view(np.uint16)
 
 
-def _mk(E, OUT, IN, K, packed, dead_frac, seed=0):
+def _mk(E, OUT, IN, K, packed, dead_frac, seed=0, D=4):
     """(expanded module, compact sz module) for the same weights."""
     r = np.random.default_rng(seed)
-    D, G = 4, 64
+    G = 64
     NSUB = IN // D
     codes = r.integers(0, K, (E, OUT, NSUB)).astype(np.uint16 if K > 256 else np.uint8)
     cb = (r.standard_normal((K, D)) * 0.05).astype(np.float16)
@@ -57,18 +59,25 @@ def _idx(T, top, E, seed=1):
     r = np.random.default_rng(seed)
     p = np.ones(E); p[0] = 10; p /= p.sum()
     idx = r.choice(E, size=(T, top), p=p).astype(np.uint32)
-    idx[0, :] = 1                            # the dead expert gets traffic
+    idx[0, 0] = 1                            # the dead expert gets traffic
+    # (one slot only: at T=1 a whole row of it would make every output +0)
     return mx.array(idx)
 
 
-GEOMS = [("packed11", 2048, True), ("packed8", 256, True), ("u8view", 256, False)]
+# (name, d, K, packed, IN, OUT); the d8 rows are the 2.2's gate/up shape
+# class (IN/G = 32 -> simd at small N) and down shape class (IN/G = 16 ->
+# walk at every decode N), at odd OUT.
+GEOMS = [("packed11", 4, 2048, True, 512, 96), ("packed8", 4, 256, True, 512, 96),
+         ("u8view", 4, 256, False, 512, 96),
+         ("d8_gateup", 8, 16384, True, 2048, 97), ("d8_down", 8, 16384, True, 1024, 97)]
 
 
-@pytest.mark.parametrize("name,K,packed", GEOMS)
-@pytest.mark.parametrize("T", [1, 3, 700])     # decode, decode, prefill (N=5600)
-def test_sz_byte_equal_to_expanded(name, K, packed, T):
-    E, OUT, IN, top = 8, 96, 512, 8
-    full, sz = _mk(E, OUT, IN, K, packed, dead_frac=0.4)
+@pytest.mark.parametrize("name,D,K,packed,IN,OUT", GEOMS)
+@pytest.mark.parametrize("T,top", [(1, 8), (1, 10), (2, 10), (3, 10), (700, 8)])
+def test_sz_byte_equal_to_expanded(name, D, K, packed, IN, OUT, T, top):
+    # N = 8 / 10 / 20 (d8 simd), 30 (d8 walk), 5600 (prefill, gemmseg2)
+    E = 8
+    full, sz = _mk(E, OUT, IN, K, packed, dead_frac=0.4, D=D)
     assert sz.skipzero and not full.skipzero
     assert (sz.num_experts, sz.output_dims, sz.input_dims) == \
         (full.num_experts, full.output_dims, full.input_dims)
@@ -79,6 +88,35 @@ def test_sz_byte_equal_to_expanded(name, K, packed, T):
     mx.eval(a, b)
     assert a.shape == b.shape
     assert np.array_equal(_bits(a), _bits(b)), name
+
+
+@pytest.mark.parametrize("dead_frac", [0.0, 0.95])
+@pytest.mark.parametrize("T,top", [(1, 10), (3, 10), (450, 10)])
+def test_sz_d8_extremes(dead_frac, T, top):
+    """No dead rows, and nearly all dead, at decode and prefill N, bf16 in."""
+    E, OUT, IN = 8, 63, 2048
+    full, sz = _mk(E, OUT, IN, 16384, True, dead_frac=dead_frac, seed=5, D=8)
+    x = mx.array(np.random.default_rng(6).standard_normal((T, 1, 1, IN))
+                 .astype(np.float32)).astype(mx.bfloat16)
+    idx = _idx(T, top, E, seed=7)
+    a, b = full(x, idx), sz(x, idx)
+    mx.eval(a, b)
+    assert np.array_equal(_bits(a), _bits(b))
+
+
+@pytest.mark.parametrize("flag", ["_D8_WALK", "_D8_SS", "_D8_DEVX"])
+def test_sz_d8_refuses_unswitched_kernel(flag):
+    E, OUT, IN = 4, 32, 2048
+    _, sz = _mk(E, OUT, IN, 16384, True, dead_frac=0.3, D=8)
+    T = 3 if flag == "_D8_WALK" else 1          # N=30 walks, N=10 is simd
+    old = getattr(VS, flag)
+    setattr(VS, flag, False)
+    try:
+        with pytest.raises(NotImplementedError):
+            sz(mx.zeros((T, 1, 1, IN), mx.float16),
+               mx.zeros((T, 10), mx.uint32))
+    finally:
+        setattr(VS, flag, old)
 
 
 def test_sz_refuses_unswitched_kernel():

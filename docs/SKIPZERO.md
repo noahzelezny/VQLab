@@ -1,8 +1,8 @@
 # vq-skipzero — dead rows cost nothing, so don't store or load them
 
 **Status (2026-09-29): a runtime feature.** `runtime/vq_switch.py` serves
-compact rows natively (`VQSwitchLinear(row_table=...)`, `#if SZ` in the walk
-decode and gemmseg2 kernels); a bundle opts in with `vq_skipzero` in its
+compact rows natively (`VQSwitchLinear(row_table=...)`, `#if SZ` in the d4
+walk, packed d8 walk / simd devx_ss decode kernels and gemmseg2 at d4 and d8); a bundle opts in with `vq_skipzero` in its
 config. Pack/convert tools: `src/vqlab/experimental/skipzero/`. Findings:
 F173, F175–F178, F183–F184.
 
@@ -81,6 +81,11 @@ The 397B full-model gate needs a machine that holds it resident (128 GB).
    byte-equal to stage 1; 397B 2.6: KL unchanged, peak 117.67 GB. Older
    bundles report STALE in `check-bundle` (same output, missing the gains).
 2. **The other 397B rungs** (2.2 / 3.1): same pack, same gates, at re-release.
+   The 2.2's packed d8 K16384 modules are served since 2026-10-01 (byte-equal
+   to the expanded form on synthetic tensors at its shapes, decode and
+   prefill: tests/test_vq_skipzero.py, `sz-bitexact --synthetic --vintage
+   native`); no real 2.2 layer has been checked yet. Unpacked d8 stays
+   unservable and sz-pack leaves it alone.
 3. **Skip the down-projections' swap**: their row tables cost more than their
    dead rows save (-0.12 GiB net). Output is identical either way (stage 2 is
    byte-equal, whichever modules are swapped).
