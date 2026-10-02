@@ -234,8 +234,9 @@ if (A / "model.safetensors.index.json").exists() and cfg:
     #     against its own entry -- stronger than peer uniformity, and it
     #     catches a config/tensor divergence no peer comparison could.
     for _m, _e in cfg.get("vq_modules", {}).items():
-        _k = _m + ".codes"
-        if _k not in _dt:
+        # a skip-zero module stores the same codes under .sz_codes
+        _k = next((_m + s for s in (".codes", ".sz_codes") if _m + s in _dt), None)
+        if _k is None:
             continue
         _want = ("U32" if _e.get("pack_bits")
                  else ("U8" if _e.get("k", 0) <= 256 else "U16"))
@@ -244,11 +245,12 @@ if (A / "model.safetensors.index.json").exists() and cfg:
                          f"(dim={_e.get('dim')} k={_e.get('k')} "
                          f"pack_bits={_e.get('pack_bits')}) implies {_want}")
 
-    # (c) tensors filling the same role across layers must agree. `codes` is
-    #     exempt -- (b) owns it. Uniformly-fp32 classes (A_log) never fire.
+    # (c) tensors filling the same role across layers must agree. `codes`
+    #     and skip-zero `sz_codes` are exempt -- (b) owns them. Uniformly-fp32
+    #     classes (A_log) never fire.
     _cls = collections.defaultdict(list)
     for _k in _dt:
-        if not _k.endswith(".codes"):
+        if not _k.endswith((".codes", ".sz_codes")):
             _cls[re.sub(r"\.\d+\.", ".", _k)].append(_k)
     for _cn, _names in sorted(_cls.items()):
         _c = collections.Counter(_dt[n] for n in _names)
