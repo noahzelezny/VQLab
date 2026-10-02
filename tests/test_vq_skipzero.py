@@ -5,7 +5,8 @@ BYTE-EQUAL to the same module over EXPANDED rows (dead rows = code 0,
 scale +0) -- that is the stage-1 layout F175/F176 gated on KL, so byte
 equality with it is the whole correctness claim. Checked for every
 geometry the switch serves (packed d4 at 11 and 8 bits, unpacked uint8
-d4 via U8-VIEW, packed d8 K16384 at 14 bits -- the 397B 2.2's geometry),
+d4 via U8-VIEW, packed d8 K16384 at 14 bits -- the 397B 2.2's geometry,
+packed d2 at K256-K2048),
 at decode N (fused d4 WALK; d8 SIMD_DEVX_SS at N <= 20 and IN/G >= 32, d8
 WALK otherwise) and prefill N (gemmseg2), with skewed routing, whole dead
 experts and odd OUT. Compared as uint16 bit patterns.
@@ -102,6 +103,49 @@ def test_sz_d8_extremes(dead_frac, T, top):
     a, b = full(x, idx), sz(x, idx)
     mx.eval(a, b)
     assert np.array_equal(_bits(a), _bits(b))
+
+
+# packed d2 at the fleet's K's (35B-4.6 K512, 35B-5.4 K1024, ...): gate/up
+# shape class (IN 2048) and down shape class (IN 512), odd OUT. Decode is the
+# d2 WALK at every N; prefill is gemmseg2 D_BAKE=2 with the threadgroup
+# codebook, and again with the device codebook forced.
+D2_GEOMS = [(K, IN, OUT) for K in (256, 512, 1024, 2048)
+            for IN, OUT in ((2048, 97), (512, 129))]
+
+
+@pytest.mark.parametrize("K,IN,OUT", D2_GEOMS)
+@pytest.mark.parametrize("dead_frac", [0.0, 0.4, 0.95])
+@pytest.mark.parametrize("T,top", [(1, 1), (1, 8), (2, 10), (3, 10), (700, 8)])
+@pytest.mark.parametrize("dtype", ["float16", "bfloat16"])
+def test_sz_d2_byte_equal(K, IN, OUT, dead_frac, T, top, dtype):
+    # N = 1 / 8 / 20 / 30 (decode, d2 WALK), 5600 (prefill, gemmseg2)
+    E = 8
+    full, sz = _mk(E, OUT, IN, K, True, dead_frac=dead_frac, seed=K + IN, D=2)
+    x = mx.array(np.random.default_rng(6).standard_normal((T, 1, 1, IN))
+                 .astype(np.float32)).astype(getattr(mx, dtype))
+    idx = _idx(T, top, E, seed=7)
+    cbdev = ["0", "1"] if T > 100 else [VS._GEMMSEG_CBDEV]
+    old = VS._GEMMSEG_CBDEV
+    try:
+        for arm in cbdev:
+            VS._GEMMSEG_CBDEV = arm
+            a, b = full(x, idx), sz(x, idx)
+            mx.eval(a, b)
+            assert np.array_equal(_bits(a), _bits(b)), arm
+    finally:
+        VS._GEMMSEG_CBDEV = old
+
+
+def test_sz_d2_refuses_unswitched_kernel():
+    E, OUT, IN = 4, 32, 512
+    _, sz = _mk(E, OUT, IN, 1024, True, dead_frac=0.3, D=2)
+    old = VS._D2_WALK
+    VS._D2_WALK = False
+    try:
+        with pytest.raises(NotImplementedError):
+            sz(mx.zeros((1, 1, 1, IN), mx.float16), mx.zeros((1, 8), mx.uint32))
+    finally:
+        VS._D2_WALK = old
 
 
 @pytest.mark.parametrize("flag", ["_D8_WALK", "_D8_SS", "_D8_DEVX"])

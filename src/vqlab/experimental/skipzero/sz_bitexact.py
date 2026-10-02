@@ -26,9 +26,9 @@ uint32) and "u8" (the 397B bundle; unpacked uint8 d4 K256). --synthetic
 compares each vintage's SZ kernels against THAT vintage's own kernels on the
 expanded tensors: walk against runtime/vq_switch.py, u8 against the runtime
 part of the 397B bundle's model.py (exec'd from its text, read-only).
---vintage native stresses the runtime's own row-table switch (packed d4 and
-the 397B 2.2's packed d8 K16384) against the same runtime on expanded
-tensors; --vintage all runs all three.
+--vintage native stresses the runtime's own row-table switch (packed d4,
+packed d2 at K256-K2048, and the 397B 2.2's packed d8 K16384) against the
+same runtime on expanded tensors; --vintage all runs all three.
 """
 from __future__ import annotations
 
@@ -354,7 +354,8 @@ def synthetic(outdir, which="both", u8_model_py=U8_MODEL_PY):
     if which in ("native", "all"):
         # The runtime's NATIVE switch (VQSwitchLinear(row_table=...)) against
         # the same runtime on expanded tensors: packed d4 K2048/11 and the
-        # 397B 2.2's packed d8 K16384/14, at its gate/up and down shapes.
+        # 397B 2.2's packed d8 K16384/14, at its gate/up and down shapes,
+        # and packed d2 at every K the fleet ships (K256-K2048).
         spec = importlib.util.spec_from_file_location("vq_switch_ro", SRC / "vqlab/runtime/vq_switch.py")
         vs = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(vs)
@@ -363,7 +364,10 @@ def synthetic(outdir, which="both", u8_model_py=U8_MODEL_PY):
         for name, D, K, BITS, E, OUT, IN in (
                 ("native d4 gate", 4, 2048, 11, 16, 512, 2048),
                 ("native d8 gate", 8, 16384, 14, 16, 1024, 4096),
-                ("native d8 down", 8, 16384, 14, 16, 4096, 1024)):
+                ("native d8 down", 8, 16384, 14, 16, 4096, 1024),
+                *((f"native d2 K{k} {s}", 2, k, k.bit_length() - 1, 16, o, i)
+                  for k in (256, 512, 1024, 2048)
+                  for s, o, i in (("gate", 512, 2048), ("down", 2048, 512)))):
             G = IN // 64
             codes = vq_pack.pack(rng.integers(0, K, (E, OUT, IN // D)).astype(np.uint32), BITS)
             W = codes.shape[-1]

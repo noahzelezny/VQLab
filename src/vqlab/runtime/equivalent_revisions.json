@@ -30,6 +30,12 @@
    "path": "src/vqlab/runtime/vq_switch.py",
    "file": "equivalent/vq_switch.6d8ab6873adf.py.txt",
    "gains": "skipzero row-table switch for packed d8 (decode d8 WALK and SIMD_DEVX_SS, prefill gemmseg2 D_BAKE=8); no change for bundles without vq_skipzero"
+  },
+  {
+   "sha256": "e6fecc09a842194ba629b576a2ef38201c0dd0f4a5d6ef2980df8403d3738034",
+   "path": "src/vqlab/runtime/vq_switch.py",
+   "file": "equivalent/vq_switch.e6fecc09a842.py.txt",
+   "gains": "skipzero row-table switch for packed d2 (decode d2 WALK, prefill gemmseg2 D_BAKE=2); no change for bundles without vq_skipzero"
   }
  ]
 }

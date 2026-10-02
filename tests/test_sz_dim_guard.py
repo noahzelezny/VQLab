@@ -1,7 +1,8 @@
 """Pin that skipzero is refused for codebook dims the runtime cannot serve.
 
-The runtime row-table switch serves compact rows at d4 and packed d8; its
-prefill raises NotImplementedError for any other dim. sz-pack once packed d8
+The runtime row-table switch serves compact rows at d4 and packed d2 / d8;
+its decode raises NotImplementedError for unpacked d2 / d8 and its prefill for
+any other dim. sz-pack once packed d8
 modules before the d8 switch existed, every bundle gate passed, and the
 artifact crashed on its first prompt. Two guards: sz-pack leaves unservable
 modules untouched, and check-bundle FAILS a config whose vq_skipzero lists one.
@@ -67,11 +68,12 @@ def test_sz_pack_skips_unsupported_dim(tmp_path, capsys):
     mods = cfg["vq_skipzero"]["modules"]
     assert list(mods) == ["model.layers.0.mlp.switch_mlp.up_proj"]
     err = capsys.readouterr().out
-    assert "skipped 1 module(s)" in err and "dim=2: 1" in err
+    assert "skipped 1 module(s)" in err and "dim=2 unpacked: 1" in err
 
 
-def test_sz_pack_packs_packed_d8(tmp_path):
-    art = _artifact(tmp_path, [4, 8], pack_bits=8)
+@pytest.mark.parametrize("dim", [2, 8])
+def test_sz_pack_packs_packed_d2_d8(tmp_path, dim):
+    art = _artifact(tmp_path, [4, dim], pack_bits=8)
     out = tmp_path / "out"
     assert sz_pack.main([str(art), "--out", str(out), "--allow-any-out"]) == 0
     mods = json.loads((out / "config.json").read_text())["vq_skipzero"]["modules"]
@@ -93,12 +95,12 @@ def test_sz_pack_refuses_when_nothing_qualifies(tmp_path, capsys):
     assert "REFUSED" in capsys.readouterr().err
 
 
-@pytest.mark.parametrize("dim,pack_bits", [(2, 10), (8, None)])
+@pytest.mark.parametrize("dim,pack_bits", [(2, None), (8, None), (6, 10)])
 def test_check_bundle_fails_on_unservable_skipzero_module(tmp_path, dim, pack_bits):
     art = tmp_path / "art"
     art.mkdir()
     p = "model.layers.0.mlp.switch_mlp.up_proj"
-    spec = {"dim": dim, "k": 1024 if dim == 2 else 16384, "group": 64}
+    spec = {"dim": dim, "k": {2: 1024, 8: 16384}.get(dim, 256), "group": 64}
     if pack_bits:
         spec["pack_bits"] = pack_bits
     cfg = {"vq_modules": {p: spec},
