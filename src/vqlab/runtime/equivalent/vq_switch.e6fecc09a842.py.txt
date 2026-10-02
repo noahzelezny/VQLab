@@ -1163,30 +1163,6 @@ _SRC_FUSED_PACKED_D2_WALK = _PACK_FETCH + r"""
 """
 
 
-# SKIPZERO switch (docs/SKIPZERO.md), compiled out unless SZ=1: the same
-# row-table lookup as the d4 and d8 walks. A dead row reads no code or scale
-# bytes and writes the +0 the expanded path produces (fma(+0 scale, gacc, +0)).
-_SZ_D2_WALK_ROWS = """    const uint e = eidx[t];
-    const device uint* crow = codes + (size_t)e * OUT * WPR + (size_t)r * WPR;
-    const device half* srow = scales + (size_t)e * OUT * NGRP + (size_t)r * NGRP;
-"""
-assert _SRC_FUSED_PACKED_D2_WALK.count(_SZ_D2_WALK_ROWS) == 1, (
-    "packed d2 walk row-address text drifted; the SKIPZERO switch did not apply")
-_SRC_FUSED_PACKED_D2_WALK = _SRC_FUSED_PACKED_D2_WALK.replace(
-    _SZ_D2_WALK_ROWS,
-    """    const uint e = eidx[t];
-#if SZ
-    const int sz_lr = rowtbl[(size_t)e * OUT + r];
-    if (sz_lr < 0) { y[(size_t)t * OUT + r] = static_cast<T>(0.0f); return; }
-    const device uint* crow = codes + (size_t)sz_lr * WPR;
-    const device half* srow = scales + (size_t)sz_lr * NGRP;
-#else
-    const device uint* crow = codes + (size_t)e * OUT * WPR + (size_t)r * WPR;
-    const device half* srow = scales + (size_t)e * OUT * NGRP + (size_t)r * NGRP;
-#endif
-""")
-
-
 _SRC_FUSED_PACKED_D8 = _PACK_FETCH + r"""
     const int OUT  = dims[0];
     const int IN   = dims[1];
@@ -2978,16 +2954,15 @@ def _fused_resolve(_plan_key, x, eidx, codes, codebook, scales, pack_bits=0,
                 f"no FUSED packed kernel for d={D}; only d=4, d=2 and d=8 "
                 f"are implemented and each is dispatched explicitly.")
         if rowtbl is not None:
-            # Exactly four kernels carry the switch: packed/U8-VIEW d4 WALK
-            # with a threadgroup codebook, packed d2 WALK, and packed d8
-            # device-codebook WALK and SIMD_DEVX_SS. Everything else REFUSES
-            # -- a kernel that ignored the row table would read compact rows
-            # at full offsets.
+            # Exactly three kernels carry the switch: packed/U8-VIEW d4 WALK
+            # with a threadgroup codebook, and packed d8 device-codebook WALK
+            # and SIMD_DEVX_SS. Everything else REFUSES -- a kernel that
+            # ignored the row table would read compact rows at full offsets.
             if not (_SPEC_KERNELS and name.endswith(
-                    ("_d4_walk", "_d2_walk", "_d8_walk", "_d8_simd_devx_ss"))):
+                    ("_d4_walk", "_d8_walk", "_d8_simd_devx_ss"))):
                 raise NotImplementedError(
-                    f"SKIPZERO decode: only the d4 WALK (threadgroup codebook), "
-                    f"d2 WALK and d8 WALK / SIMD_DEVX_SS kernels carry the row table "
+                    f"SKIPZERO decode: only the d4 WALK (threadgroup codebook) "
+                    f"and d8 WALK / SIMD_DEVX_SS kernels carry the row table "
                     f"switch (VQ_SPEC_KERNELS=1); got {name} d={D} "
                     f"pack_bits={pack_bits} K={K}")
             name += "_sz"
@@ -3634,8 +3609,8 @@ _SRC_GEMMSEG2 = _PACK_FETCH + r"""
     const int wr = (int)tid / 4;
     const int q0 = ((int)tid % 4) * (SPG / 4);
 #if SZ
-  #if D_BAKE != 2 && D_BAKE != 4 && D_BAKE != 8
-    #error "SKIPZERO gemmseg: d2, d4 and d8 only"
+  #if D_BAKE != 4 && D_BAKE != 8
+    #error "SKIPZERO gemmseg: d4 and d8 only"
   #endif
     // SKIPZERO: compact row of each output row this thread decodes
     // (-1 = dead or past OUT). Live rows are addressed by compact row only.
@@ -3768,11 +3743,7 @@ _SRC_GEMMSEG2 = _PACK_FETCH + r"""
             // scale reads.
             const float s = 0.0f;
             for (int q = q0; q < q0 + SPG / 4; ++q) {
-  #if D_BAKE == 2
-                const half2 v = cb[0];
-                wtT[q * 2][wr]     = (half)(s * (float)v.x);
-                wtT[q * 2 + 1][wr] = (half)(s * (float)v.y);
-  #elif D_BAKE == 4
+  #if D_BAKE == 4
                 const half4 v = cb[0];
                 wtT[q * 4][wr]     = (half)(s * (float)v.x);
                 wtT[q * 4 + 1][wr] = (half)(s * (float)v.y);
@@ -4350,9 +4321,9 @@ def _gemmseg_prefill(xsrc, src_rows, idx_sorted_np, codes, codebook, scales,
         if xsrc.dtype == mx.bfloat16:
             name += "_bf16io"
         if rowtbl is not None:
-            if D not in (2, 4, 8) or not _SPEC_KERNELS:
+            if D not in (4, 8) or not _SPEC_KERNELS:
                 raise NotImplementedError(
-                    "SKIPZERO prefill: gemmseg2 d2/d4/d8 with VQ_SPEC_KERNELS=1 only")
+                    "SKIPZERO prefill: gemmseg2 d4/d8 with VQ_SPEC_KERNELS=1 only")
             name += "_sz"
         template = [("BITS", pack_bits), ("GROUP", 64),
                     ("MAX_K", 1 if cb_dev else K), ("D_BAKE", D),

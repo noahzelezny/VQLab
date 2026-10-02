@@ -24,12 +24,12 @@ FORMAT = "vq-skipzero"
 VERSION = 1
 # Codebook dims the runtime row-table switch can SERVE compact. vq_switch.py's
 # gemmseg prefill is the binding site: it raises "SKIPZERO prefill: gemmseg2
-# d4/d8 with VQ_SPEC_KERNELS=1 only" for any other dim, and d2 has no fused
-# kernel at all. d8 is switched only in the PACKED decode kernels (walk and
-# simd devx_ss), so an unpacked d8 module is not servable. sz-pack packs and
+# d2/d4/d8 with VQ_SPEC_KERNELS=1 only" for any other dim. d2 and d8 are
+# switched only in the PACKED decode kernels (d2 walk; d8 walk and simd
+# devx_ss), so an unpacked d2 or d8 module is not servable. sz-pack packs and
 # check-bundle gates against servable().
-SUPPORTED_DIMS = (4, 8)
-PACKED_ONLY_DIMS = (8,)
+SUPPORTED_DIMS = (2, 4, 8)
+PACKED_ONLY_DIMS = (2, 8)
 
 
 def servable(spec):
