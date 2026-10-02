@@ -91,8 +91,9 @@ def plan_shard(path, specs, rng, tiny=TINY, skipped=None):
         sp = specs.get(p)
         if sp is None or sp.get("kind") != "expert" or not in_layers(p, rng):
             continue
-        if sp.get("dim") not in skipzero_load.SUPPORTED_DIMS:
-            skipped[p] = sp.get("dim")       # no skipzero kernel serves this dim
+        if not skipzero_load.servable(sp):
+            d = sp.get("dim")                # no skipzero kernel serves this dim
+            skipped[p] = d if d not in skipzero_load.SUPPORTED_DIMS else f"{d} unpacked"
             continue
         if p + ".codes" not in h:
             _log(f"WARN {p}: codes not in the same shard as scales; left unchanged")
@@ -222,6 +223,7 @@ def main(argv=None):
             by_dim[d] = by_dim.get(d, 0) + 1
         _log(f"skipped {len(skipped)} module(s) left unpacked: the runtime serves "
              f"skipzero only at dim {list(skipzero_load.SUPPORTED_DIMS)} "
+             f"(d{skipzero_load.PACKED_ONLY_DIMS} packed only) "
              f"(found {', '.join(f'dim={d}: {n}' for d, n in sorted(by_dim.items(), key=str))}), "
              f"e.g. {sorted(skipped)[0]}")
     rewrite = {k: v for k, v in plans.items() if v[2]}
