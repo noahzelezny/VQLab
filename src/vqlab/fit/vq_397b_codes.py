@@ -252,7 +252,12 @@ def is_vq_target(name):
         return False
     mod = name.rsplit(".", 1)[0]
     q = base_cfg["quantization"].get(mod)
-    return isinstance(q, dict) and q.get("bits") == 2
+    if not isinstance(q, dict):
+        return False
+    # a struct base marks experts 2-bit; a family whose SOURCE is already
+    # mxfp4 (deepseek_v4) can use its mxfp4 conversion as the base directly
+    return q.get("bits") == 2 or (FAM.get("src_quant") == "mxfp4"
+                                  and q.get("mode") == "mxfp4")
 
 
 def kmeanspp_init(X, k, cap=200_000, W=None):
@@ -572,7 +577,8 @@ for si, sh in enumerate(shards):
             proj = mod.rsplit(".", 1)[1]
             li = layer_of(mod)
             sc = data[mod + ".scales"]
-            want = (sc.shape[0], sc.shape[1], sc.shape[2] * G)
+            bg = base_cfg["quantization"][mod].get("group_size", G)
+            want = (sc.shape[0], sc.shape[1], sc.shape[2] * bg)
             codes, cb, vsc, err = vq_tensor_codes(li, proj, want)
             # SANITY GATE. kmeans init is random and unseeded, and a fit can
             # collapse: tail30 (08-18) produced L26 down_proj at relerr
@@ -639,8 +645,10 @@ for m in targets:
         # audited tonight's rung's config — it did not fire.)
         li = int(re.search(r"layers\.(\d+)\.", m).group(1))
         pd, pk = geom_for(li, m.rsplit(".", 1)[1])
+        # the BASE's group (32 for an mxfp4 base), not the VQ group
         vq_modules[m] = {"experts": sc.shape[0], "out": sc.shape[1],
-                         "in": sc.shape[2] * G, "k": pk, "dim": pd, "group": G}
+                         "in": sc.shape[2] * q.get("group_size", G),
+                         "k": pk, "dim": pd, "group": G}
 
 new_cfg["model_file"] = "model.py"
 new_cfg["vq_modules"] = vq_modules
