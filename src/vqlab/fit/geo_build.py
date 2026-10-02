@@ -611,6 +611,19 @@ def main():
     # "Unable to quantize model of type VQSwitchLinear" -- measured, not
     # theorised: the first restored 3.1 build assembled cleanly, passed its
     # shape audit, and could not be loaded at all.
+    # A refit module that shipped vq-skipzero (sz_codes + row mask) comes
+    # out as plain codes: it leaves the skip-zero map (the loader would
+    # otherwise look for its sz tensors), and its sz tensors are dropped
+    # below like a restored module's affine ones. Untouched modules keep
+    # their skip-zero bytes and entries.
+    szc = cfg.get("vq_skipzero")
+    if isinstance(szc, dict) and isinstance(szc.get("modules"), dict):
+        was_sz = [n for n in geo if n in szc["modules"]]
+        for n in was_sz:
+            szc["modules"].pop(n)
+        if was_sz:
+            _log(f"  {len(was_sz)} refit modules leave the vq_skipzero map "
+                 f"(now plain codes)")
     qmap = cfg.get("quantization")
     if isinstance(qmap, dict):
         gone = [n for n in geo if n in qmap]
@@ -634,7 +647,8 @@ def main():
     drop, add_to = set(), {}
     for n in restored:
         host = None
-        for suf in (".weight", ".scales", ".biases"):
+        for suf in (".weight", ".scales", ".biases",
+                    ".sz_codes", ".sz_scales", ".sz_rowmask", ".sz_shape"):
             if n + suf in a_wm:
                 drop.add(n + suf)
                 host = host or a_wm[n + suf]
