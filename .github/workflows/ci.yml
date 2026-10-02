@@ -1,9 +1,8 @@
 name: CI
 
+# Manual only: the same suite runs locally before every push
+# (.githooks/pre-push), so Actions minutes are spent only on request.
 on:
-  push:
-    branches: [master]
-  pull_request:
   workflow_dispatch:
 
 concurrency:
