@@ -67,6 +67,39 @@ def count_experts(fam: dict, src_idx: dict, li: int) -> int:
     return len(es)
 
 
+def _raw_tensor(path: str, key: str, hdr_cache: dict) -> mx.array:
+    """One tensor's bytes as uint8 [*shape] (1-byte dtypes only), read from
+    the safetensors header + offsets. mx.load refuses a WHOLE shard that
+    holds any F8_E8M0 tensor (DeepSeek-V4's FP4 scales), so the mxfp4 path
+    reads its pairs this way instead."""
+    import json
+    import struct
+    import numpy as np
+    if path not in hdr_cache:
+        with open(path, "rb") as fh:
+            n = struct.unpack("<Q", fh.read(8))[0]
+            hdr_cache[path] = (n, json.loads(fh.read(n)))
+    n, h = hdr_cache[path]
+    m = h[key]
+    if m["dtype"] not in ("I8", "U8", "F8_E8M0", "F8_E4M3"):
+        raise ValueError(f"{key}: raw read is for 1-byte dtypes, got {m['dtype']}")
+    a, b = m["data_offsets"]
+    arr = np.memmap(path, np.uint8, "r", offset=8 + n + a, shape=(b - a,))
+    return mx.array(np.asarray(arr).reshape(m["shape"]))
+
+
+def _dequant_mxfp4(w8: mx.array, s8: mx.array, key: str) -> mx.array:
+    """One FP4 expert matrix -> bf16, exactly. `w8` holds two e2m1 codes per
+    byte ([out, in/2]); `s8` one E8M0 exponent per 32 inputs ([out, in/32]).
+    mx.dequantize's mxfp4 mode reads the same nibble order and exponent
+    bias, so this is a reinterpretation, not a re-quantization."""
+    if w8.shape[-1] % 4 or s8.shape[-1] * 16 != w8.shape[-1]:
+        raise ValueError(f"{key}: not an mxfp4 pair (weight {w8.shape}, "
+                         f"scale {s8.shape})")
+    return mx.dequantize(mx.view(w8, dtype=mx.uint32), s8, group_size=32,
+                         bits=4, mode="mxfp4").astype(mx.bfloat16)
+
+
 def load_expert_stack(src_dir, src_idx: dict, fam: dict, li: int, proj: str,
                       experts: int | None = None, shard_path=None,
                       shard_cache: dict | None = None) -> mx.array:
@@ -110,10 +143,18 @@ def load_expert_stack(src_dir, src_idx: dict, fam: dict, li: int, proj: str,
             by_shard: dict[str, list[int]] = {}
             for e, k in enumerate(keys):
                 by_shard.setdefault(src_idx[k], []).append(e)
-            for sh, es in by_shard.items():
-                data = _shard(sh)
-                for e in es:
-                    per_expert[e] = data[keys[e]]
+            if fam.get("src_quant") == "mxfp4":
+                hdr: dict = {}
+                for e, k in enumerate(keys):
+                    sk = k[: -len(".weight")] + ".scale"
+                    per_expert[e] = _dequant_mxfp4(
+                        _raw_tensor(_resolve(src_idx[k]), k, hdr),
+                        _raw_tensor(_resolve(src_idx[sk]), sk, hdr), k)
+            else:
+                for sh, es in by_shard.items():
+                    data = _shard(sh)
+                    for e in es:
+                        per_expert[e] = data[keys[e]]
             T = mx.stack(per_expert)
         else:
             sk = fam["src_key"].format(li=li, key=key_t)

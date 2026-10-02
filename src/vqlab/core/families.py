@@ -102,6 +102,26 @@ FAMILY = {
                  "up_proj": ("up_proj", None),
                  "down_proj": ("down_proj", None)},
     },
+    "deepseek_v4": {
+        # DeepSeek-V4-Flash (~280B, 6-of-256 routed + 1 shared, 43 layers).
+        # MEASURED from the official release's safetensors headers: experts
+        # are UNFUSED per-expert 2D tensors `layers.{li}.ffn.experts.{e}.
+        # {w1,w2,w3}.weight` (I8 = two FP4 e2m1 codes per byte) with an
+        # F8_E8M0 `.scale` sibling, one scale per 32 inputs -- the mxfp4
+        # layout. No bf16 release exists; the FP4 chat release IS the
+        # teacher. expert_src dequantizes it through mx.dequantize(mode=
+        # "mxfp4"), which is exact (an e2m1 value times a power of two is
+        # representable in bf16). w1 = gate, w3 = up, w2 = down. The runtime
+        # module (mlx-lm deepseek_v4) is ffn.switch_mlp.
+        "runtime": "mlx_lm",
+        "model_type": "deepseek_v4",
+        "target_substr": "switch_mlp",
+        "src_key": "layers.{li}.ffn.experts.{e}.{key}.weight",
+        "src_quant": "mxfp4",
+        "proj": {"gate_proj": ("w1", None),
+                 "up_proj": ("w3", None),
+                 "down_proj": ("w2", None)},
+    },
     "qwen3_5_mlx": {
         # SAME architecture as qwen3_5 (qwen3_5_moe, switch_mlp, shared
         # expert) but sourced from an mlx-community MLX-FORMAT bf16
