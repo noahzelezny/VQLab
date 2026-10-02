@@ -24,6 +24,12 @@
    "path": "src/vqlab/runtime/vq_switch.py",
    "file": "equivalent/vq_switch.b41c1064c82b.py.txt",
    "gains": "runs on GPUs whose pipeline limit is below 1024 threads: dense kernels launch 16-row threadgroups (VQ_DENSE_ROWS_TG)"
+  },
+  {
+   "sha256": "6d8ab6873adf0ca69b7c6db5439c3f6a3d72167fa930d469a16adadf1c15540e",
+   "path": "src/vqlab/runtime/vq_switch.py",
+   "file": "equivalent/vq_switch.6d8ab6873adf.py.txt",
+   "gains": "skipzero row-table switch for packed d8 (decode d8 WALK and SIMD_DEVX_SS, prefill gemmseg2 D_BAKE=8); no change for bundles without vq_skipzero"
   }
  ]
 }
