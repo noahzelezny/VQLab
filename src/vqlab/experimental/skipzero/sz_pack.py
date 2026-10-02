@@ -76,8 +76,12 @@ def _nbytes(t):
     return b - a
 
 
-def plan_shard(path, specs, rng, tiny=TINY):
-    """Which modules in this shard have dead rows, and their live masks."""
+def plan_shard(path, specs, rng, tiny=TINY, skipped=None):
+    """Which modules in this shard have dead rows, and their live masks.
+
+    Modules whose codebook dim the runtime cannot serve compact are left
+    untouched and recorded in `skipped` {module: dim}."""
+    skipped = {} if skipped is None else skipped
     h, base = fitstore.read_header(path)
     mods = {}
     for key in h:
@@ -86,6 +90,9 @@ def plan_shard(path, specs, rng, tiny=TINY):
         p = key[: -len(".vq_scales")]
         sp = specs.get(p)
         if sp is None or sp.get("kind") != "expert" or not in_layers(p, rng):
+            continue
+        if sp.get("dim") not in skipzero_load.SUPPORTED_DIMS:
+            skipped[p] = sp.get("dim")       # no skipzero kernel serves this dim
             continue
         if p + ".codes" not in h:
             _log(f"WARN {p}: codes not in the same shard as scales; left unchanged")
@@ -195,9 +202,9 @@ def main(argv=None):
     specs = registry.vq_specs(cfg)
     shards = sorted(src.glob("*.safetensors"))
 
-    plans, text_orig, text_new = {}, 0, 0
+    plans, text_orig, text_new, skipped = {}, 0, 0, {}
     for f in shards:
-        h, base, mods = plan_shard(f, specs, rng, a.tiny)
+        h, base, mods = plan_shard(f, specs, rng, a.tiny, skipped)
         size = os.path.getsize(os.path.realpath(f))
         text_orig += size
         if mods:
@@ -209,6 +216,14 @@ def main(argv=None):
         plans[f.name] = (h, base, mods, size, new)
         if mods:
             _log(f"{f.name}: {len(mods)} modules, {size / GIB:.3f} -> {new / GIB:.3f} GiB")
+    if skipped:
+        by_dim = {}
+        for d in skipped.values():
+            by_dim[d] = by_dim.get(d, 0) + 1
+        _log(f"skipped {len(skipped)} module(s) left unpacked: the runtime serves "
+             f"skipzero only at dim {list(skipzero_load.SUPPORTED_DIMS)} "
+             f"(found {', '.join(f'dim={d}: {n}' for d, n in sorted(by_dim.items(), key=str))}), "
+             f"e.g. {sorted(skipped)[0]}")
     rewrite = {k: v for k, v in plans.items() if v[2]}
     new_bytes = sum(v[4] for v in rewrite.values())
     allm = {p: m for v in plans.values() for p, m in v[2].items()}
@@ -221,11 +236,21 @@ def main(argv=None):
                "text_bytes_orig": text_orig, "text_bytes_packed": text_new,
                "saved_bytes": text_orig - text_new,
                "saved_pct": 100 * (text_orig - text_new) / max(text_orig, 1),
-               "new_bytes_written": new_bytes}
+               "new_bytes_written": new_bytes,
+               "modules_skipped_unsupported_dim": len(skipped),
+               "skip_reason": (f"runtime skipzero serves dim {list(skipzero_load.SUPPORTED_DIMS)} only"
+                               if skipped else None)}
     _log(f"text {text_orig / GIB:.3f} -> {text_new / GIB:.3f} GiB, saved "
          f"{summary['saved_bytes'] / GIB:.3f} GiB ({summary['saved_pct']:.2f}%); "
          f"{len(allm)} modules, {dead} dead rows; rewrites {len(rewrite)} shards = "
          f"{new_bytes / GIB:.3f} GiB of NEW bytes")
+    if not allm:
+        reason = (f"; {len(skipped)} module(s) skipped for an unsupported dim"
+                  if skipped else "")
+        print(f"[sz-pack] REFUSED: no module qualifies for skipzero (needs dim in "
+              f"{list(skipzero_load.SUPPORTED_DIMS)} and at least one dead row{reason})",
+              file=sys.stderr)
+        return 1
     if a.json:
         json.dump({**summary, "modules": {p: {k: v for k, v in m.items() if k != "live"}
                                           for p, m in allm.items()}},
