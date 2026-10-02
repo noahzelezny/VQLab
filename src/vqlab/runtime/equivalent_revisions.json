@@ -36,6 +36,12 @@
    "path": "src/vqlab/runtime/vq_switch.py",
    "file": "equivalent/vq_switch.e6fecc09a842.py.txt",
    "gains": "skipzero row-table switch for packed d2 (decode d2 WALK, prefill gemmseg2 D_BAKE=2); no change for bundles without vq_skipzero"
+  },
+  {
+   "sha256": "5abf28a7f0964d50d9b30667e677b21774f1915f4620cc34b965a73e30f169ab",
+   "path": "src/vqlab/runtime/vq_switch.py",
+   "file": "equivalent/vq_switch.5abf28a7f096.py.txt",
+   "gains": "skipzero tensor-parallel split (skipzero_shard, skipzero_shard_modules, skipzero_read_rowmasks; skipzero_weights shard=); no kernel change, no change for bundles without vq_skipzero"
   }
  ]
 }
