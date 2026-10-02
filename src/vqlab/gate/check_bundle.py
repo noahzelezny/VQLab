@@ -195,12 +195,13 @@ def main() -> int:
         _spec.loader.exec_module(_szl)
         vqm = cfg.get("vq_modules", {})
         wrong = [m for m in sz.get("modules", {})
-                 if (vqm[m] or {}).get("dim") not in _szl.SUPPORTED_DIMS]
+                 if not _szl.servable(vqm[m])]
         if wrong:
             print(f"FAIL: {len(wrong)} skipzero module(s) have a codebook dim "
                   f"the runtime has no skipzero kernel for, e.g. {wrong[0]} "
                   f"(dim={vqm[wrong[0]].get('dim')}; supported: "
-                  f"{list(_szl.SUPPORTED_DIMS)}). Re-run sz-pack.")
+                  f"{list(_szl.SUPPORTED_DIMS)}, d{_szl.PACKED_ONLY_DIMS} "
+                  f"packed only). Re-run sz-pack.")
             return 1
         print(f"skipzero: {len(sz.get('modules', {}))} module(s) served "
               f"resident through the runtime row-table switch")
