@@ -1,10 +1,10 @@
 """Pin that skipzero is refused for codebook dims the runtime cannot serve.
 
-The runtime row-table switch serves compact rows only at d4; its prefill
-raises NotImplementedError for any other dim. sz-pack once packed d8 modules
-anyway, every bundle gate passed, and the artifact crashed on its first
-prompt. Two guards: sz-pack leaves unsupported dims untouched, and
-check-bundle FAILS a config whose vq_skipzero lists one.
+The runtime row-table switch serves compact rows at d4 and packed d8; its
+prefill raises NotImplementedError for any other dim. sz-pack once packed d8
+modules before the d8 switch existed, every bundle gate passed, and the
+artifact crashed on its first prompt. Two guards: sz-pack leaves unservable
+modules untouched, and check-bundle FAILS a config whose vq_skipzero lists one.
 """
 import json
 import struct
@@ -13,6 +13,7 @@ import sys
 from pathlib import Path
 
 import numpy as np
+import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 GATE = ROOT / "src" / "vqlab" / "gate" / "check_bundle.py"
@@ -41,13 +42,15 @@ def _module(E=2, OUT=8, W=4, G=2):
             "vq_scales": ("F32", sc)}
 
 
-def _artifact(tmp_path, dims):
+def _artifact(tmp_path, dims, pack_bits=None):
     art = tmp_path / "src_art"
     art.mkdir()
     vqm, tens = {}, {}
     for i, d in enumerate(dims):
         p = f"model.layers.{i}.mlp.switch_mlp.up_proj"
         vqm[p] = {"dim": d, "k": 256, "group": 64}
+        if pack_bits:
+            vqm[p]["pack_bits"] = pack_bits
         for leaf, t in _module().items():
             tens[f"{p}.{leaf}"] = t
     _write_st(art / "model-00001-of-00001.safetensors", tens)
@@ -57,31 +60,52 @@ def _artifact(tmp_path, dims):
 
 
 def test_sz_pack_skips_unsupported_dim(tmp_path, capsys):
-    art = _artifact(tmp_path, [4, 8])
+    art = _artifact(tmp_path, [4, 2])
     out = tmp_path / "out"
     assert sz_pack.main([str(art), "--out", str(out), "--allow-any-out"]) == 0
     cfg = json.loads((out / "config.json").read_text())
     mods = cfg["vq_skipzero"]["modules"]
     assert list(mods) == ["model.layers.0.mlp.switch_mlp.up_proj"]
     err = capsys.readouterr().out
-    assert "skipped 1 module(s)" in err and "dim=8: 1" in err
+    assert "skipped 1 module(s)" in err and "dim=2: 1" in err
+
+
+def test_sz_pack_packs_packed_d8(tmp_path):
+    art = _artifact(tmp_path, [4, 8], pack_bits=8)
+    out = tmp_path / "out"
+    assert sz_pack.main([str(art), "--out", str(out), "--allow-any-out"]) == 0
+    mods = json.loads((out / "config.json").read_text())["vq_skipzero"]["modules"]
+    assert sorted(mods) == [f"model.layers.{i}.mlp.switch_mlp.up_proj" for i in (0, 1)]
+
+
+def test_sz_pack_skips_unpacked_d8(tmp_path, capsys):
+    art = _artifact(tmp_path, [4, 8])
+    out = tmp_path / "out"
+    assert sz_pack.main([str(art), "--out", str(out), "--allow-any-out"]) == 0
+    mods = json.loads((out / "config.json").read_text())["vq_skipzero"]["modules"]
+    assert list(mods) == ["model.layers.0.mlp.switch_mlp.up_proj"]
+    assert "dim=8 unpacked: 1" in capsys.readouterr().out
 
 
 def test_sz_pack_refuses_when_nothing_qualifies(tmp_path, capsys):
-    art = _artifact(tmp_path, [8])
+    art = _artifact(tmp_path, [2])
     assert sz_pack.main([str(art), "--dry-run"]) == 1
     assert "REFUSED" in capsys.readouterr().err
 
 
-def test_check_bundle_fails_on_dim8_skipzero_module(tmp_path):
+@pytest.mark.parametrize("dim,pack_bits", [(2, 10), (8, None)])
+def test_check_bundle_fails_on_unservable_skipzero_module(tmp_path, dim, pack_bits):
     art = tmp_path / "art"
     art.mkdir()
     p = "model.layers.0.mlp.switch_mlp.up_proj"
-    cfg = {"vq_modules": {p: {"dim": 8, "k": 16384, "group": 64}},
+    spec = {"dim": dim, "k": 1024 if dim == 2 else 16384, "group": 64}
+    if pack_bits:
+        spec["pack_bits"] = pack_bits
+    cfg = {"vq_modules": {p: spec},
            "vq_skipzero": {"loader": "runtime", "modules": {p: {}}}}
     (art / "config.json").write_text(json.dumps(cfg))
     (art / "model.py").write_text("_SZ_MODS = None\n")
     r = subprocess.run([sys.executable, str(GATE), "--artifact", str(art)],
                        capture_output=True, text=True)
     assert r.returncode == 1, r.stdout + r.stderr
-    assert "no skipzero kernel" in r.stdout and p in r.stdout and "dim=8" in r.stdout
+    assert "no skipzero kernel" in r.stdout and p in r.stdout and f"dim={dim}" in r.stdout

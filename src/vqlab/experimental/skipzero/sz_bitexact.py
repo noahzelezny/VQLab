@@ -2,7 +2,7 @@
 
     vqlab sz-bitexact <resident> <reference> [--ref2 <stage1_pack>]
                       [--mem-ref <stage1_pack>] --out <dir under vqlab-scratch>
-    vqlab sz-bitexact --synthetic --out <dir> [--vintage walk|u8|both]
+    vqlab sz-bitexact --synthetic --out <dir> [--vintage walk|u8|both|native|all]
                       [--u8-model-py <397B bundle model.py>]   # GPU kernel stress, no model
     vqlab sz-bitexact --selftest                 # CPU only, no GPU
 
@@ -26,6 +26,9 @@ uint32) and "u8" (the 397B bundle; unpacked uint8 d4 K256). --synthetic
 compares each vintage's SZ kernels against THAT vintage's own kernels on the
 expanded tensors: walk against runtime/vq_switch.py, u8 against the runtime
 part of the 397B bundle's model.py (exec'd from its text, read-only).
+--vintage native stresses the runtime's own row-table switch (packed d4 and
+the 397B 2.2's packed d8 K16384) against the same runtime on expanded
+tensors; --vintage all runs all three.
 """
 from __future__ import annotations
 
@@ -322,10 +325,12 @@ def synthetic(outdir, which="both", u8_model_py=U8_MODEL_PY):
     import sz_resident
     rng = np.random.default_rng(SEED)
     fails, lines = 0, []
-    if which in ("walk", "both"):
-        spec = importlib.util.spec_from_file_location("vq_switch_ro", SRC / "vqlab/runtime/vq_switch.py")
-        vs = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(vs)
+    if which in ("walk", "both", "all"):
+        # The walk fork targets the last runtime WITHOUT the native switch
+        # (the current one no longer takes the patch; see selftest).
+        import types
+        vs = types.ModuleType("vq_switch_walk_frozen")
+        exec(compile(WALK_FROZEN.read_text(), vs.__name__, "exec"), vs.__dict__)
         SZ = sz_resident.install(vars(vs))
         assert SZ.vintage == "walk", SZ.vintage
         K, BITS = 2048, 11
@@ -346,7 +351,38 @@ def synthetic(outdir, which="both", u8_model_py=U8_MODEL_PY):
                       mx.array(scales.reshape(E * OUT, G)[live.reshape(-1)]),
                       mx.array(tbl), pack_bits=BITS, in_features=IN)
             fails += _synthetic_cases(name, ref, cmp_, rng, live, E, IN, vs.VQ_FUSED_MAX_N, lines)
-    if which in ("u8", "both"):
+    if which in ("native", "all"):
+        # The runtime's NATIVE switch (VQSwitchLinear(row_table=...)) against
+        # the same runtime on expanded tensors: packed d4 K2048/11 and the
+        # 397B 2.2's packed d8 K16384/14, at its gate/up and down shapes.
+        spec = importlib.util.spec_from_file_location("vq_switch_ro", SRC / "vqlab/runtime/vq_switch.py")
+        vs = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(vs)
+        sys.path.insert(0, str(SRC / "vqlab/runtime"))
+        import vq_pack
+        for name, D, K, BITS, E, OUT, IN in (
+                ("native d4 gate", 4, 2048, 11, 16, 512, 2048),
+                ("native d8 gate", 8, 16384, 14, 16, 1024, 4096),
+                ("native d8 down", 8, 16384, 14, 16, 4096, 1024)):
+            G = IN // 64
+            codes = vq_pack.pack(rng.integers(0, K, (E, OUT, IN // D)).astype(np.uint32), BITS)
+            W = codes.shape[-1]
+            scales = (rng.standard_normal((E, OUT, G)) * 0.02).astype(np.float16)
+            cb = (rng.standard_normal((K, D))).astype(np.float16)
+            live = _live_pattern(rng, E, OUT)
+            full_c, full_s = codes.copy(), scales.copy()
+            full_c[~live] = 0
+            full_s[~live] = 0
+            tbl = np.full((E, OUT), -1, np.int32)
+            tbl[live] = np.arange(int(live.sum()), dtype=np.int32)
+            ref = vs.VQSwitchLinear(mx.array(full_c), mx.array(cb), mx.array(full_s),
+                                    pack_bits=BITS, in_features=IN)
+            cmp_ = vs.VQSwitchLinear(mx.array(codes.reshape(E * OUT, W)[live.reshape(-1)]),
+                                     mx.array(cb),
+                                     mx.array(scales.reshape(E * OUT, G)[live.reshape(-1)]),
+                                     pack_bits=BITS, in_features=IN, row_table=mx.array(tbl))
+            fails += _synthetic_cases(name, ref, cmp_, rng, live, E, IN, vs.VQ_FUSED_MAX_N, lines)
+    if which in ("u8", "both", "all"):
         ns = load_u8_runtime(u8_model_py)
         SZ = sz_resident.install(ns)
         assert SZ.vintage == "u8", SZ.vintage
@@ -592,7 +628,7 @@ def main(argv=None):
                     help="real-weights module test for layers A-B: <resident> <stage1_pack> "
                          "[--original <rung>] (no full model load)")
     ap.add_argument("--original")
-    ap.add_argument("--vintage", choices=("walk", "u8", "both"), default="both",
+    ap.add_argument("--vintage", choices=("walk", "u8", "both", "native", "all"), default="both",
                     help="--synthetic: which runtime vintage(s) to stress")
     ap.add_argument("--u8-model-py", default=U8_MODEL_PY,
                     help="--synthetic: the u8-vintage bundle model.py (read only)")
