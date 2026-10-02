@@ -94,3 +94,24 @@ The 397B full-model gate needs a machine that holds it resident (128 GB).
    byte-equal, whichever modules are swapped).
 4. A non-leader Knurlogic rank exposes no status endpoint, so per-rank memory
    on the M3 rank was not read.
+
+## Tensor-parallel split (2026-10-01)
+
+A tensor split cuts gate_proj/up_proj on output rows and down_proj on its
+input axis. The row cut cannot run through the compact live-row list, so a
+bundled `model.py` does it through the row mask: a loader asks for rank r of
+n with `mlx_lm` `load(path, lazy=True, model_config={"vq_skipzero":
+{**config["vq_skipzero"], "shard": {"rank": r, "n": n}}})`. `Model.__init__`
+reads only the `sz_rowmask` tensors (via the index) to size each rank's
+gate/up placeholders (out = OUT/n, that rank's live rows) and marks them
+`_vq_sharded = (r, n)`, which the loader must not cut again; `sanitize` /
+`load_weights` slice the on-disk tensors with `vq_switch.skipzero_shard`
+before building row tables. down_proj loads whole and is cut on the input
+axis after load as usual, which is refused at init unless IN/n lands on a
+group and a 32-code block. Bundles carrying this expose `SKIPZERO_SHARD = 1`;
+older skip-zero bundles gain it with a rebundle only (no config or tensor
+change). Rank outputs concatenated (gate/up) or summed (down) are byte-equal
+to the unsplit module and to the expanded module split the same way, at d2,
+d4 and d8 on synthetic tensors (tests/test_sz_shard.py, including a tiny
+bundled artifact loaded through `load_model`); no real artifact has been
+split yet.

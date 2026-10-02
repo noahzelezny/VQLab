@@ -171,16 +171,50 @@ _cfg = _json.load(open(_pathlib.Path(__file__).parent / "config.json"))
 
 _SZ_MODS = (_cfg.get("vq_skipzero") or {}).get("modules", {})
 
+# SKIPZERO TENSOR SPLIT. A tensor-parallel loader asks for rank r of n with
+#   mlx_lm load(path, lazy=True, model_config={"vq_skipzero":
+#       {**config["vq_skipzero"], "shard": {"rank": r, "n": n}}})
+# Model.__init__ then sizes each skipzero gate_proj/up_proj for its own
+# output rows (live counts read from the sz_rowmask tensors alone) and marks
+# it `_vq_sharded = (r, n)`: the loader must NOT cut it again. down_proj is
+# built whole and the loader cuts codes/vq_scales on the input axis after
+# load, as for any VQ module. SKIPZERO_SHARD is what the loader checks for.
+SKIPZERO_SHARD = 1
+
+if _SZ_MODS:
+    class ModelArgs(ModelArgs):
+        # from_dict keeps only the dataclass fields, so the shard request is
+        # carried across on the instance.
+        @classmethod
+        def from_dict(cls, params):
+            _a = super().from_dict(params)
+            object.__setattr__(_a, "_vq_sz_shard",
+                               (params.get("vq_skipzero") or {}).get("shard"))
+            return _a
+
 
 class Model(_arch.Model):
     def __init__(self, args):
+        _shard = getattr(args, "_vq_sz_shard", None)
         args = _coerce_module_configs(args)
         super().__init__(args)
-        for _path, _m in _cfg.get("vq_modules", {}).items():
+        _vqm = _cfg.get("vq_modules", {})
+        _sz_mods, _rn = _SZ_MODS, None
+        if _shard and _SZ_MODS:
+            _rn = (int(_shard["rank"]), int(_shard["n"]))
+            _sz_mods = {_k: dict(_vqm.get(_k, {}), **_v)
+                        for _k, _v in _SZ_MODS.items()}
+            _masks = skipzero_read_rowmasks(_pathlib.Path(__file__).parent,
+                                            list(_sz_mods))
+            _sz_full = _sz_mods
+            _sz_mods = skipzero_shard_modules(_sz_mods, _rn[0], _rn[1],
+                                              _masks.__getitem__)
+            object.__setattr__(self, "_vq_sz_shard_args", (_sz_full, _rn))
+        for _path, _m in _vqm.items():
             _obj, _leaf = _reach_vq(self, _path)
             _parts = [_leaf]
             _pb = _m.get("pack_bits", 0)
-            _sz = _SZ_MODS.get(_path)
+            _sz = _sz_mods.get(_path)
             if _sz is not None:
                 # SKIPZERO: compact live rows + [E, OUT] row table resident.
                 _nsub = _m["in"] // _m["dim"]
@@ -188,15 +222,21 @@ class Model(_arch.Model):
                     _w, _ct = (_nsub + 31) // 32 * _pb, mx.uint32
                 else:
                     _w, _ct = _nsub, (mx.uint8 if _m["k"] <= 256 else mx.uint16)
-                _attach_vq(_obj, _leaf, VQSwitchLinear(
+                _lin = VQSwitchLinear(
                     mx.zeros((_sz["live_rows"], _w), dtype=_ct),
                     mx.zeros((_m["k"], _m["dim"]), dtype=mx.float16),
                     mx.zeros((_sz["live_rows"], _m["in"] // _m["group"]),
                              dtype=mx.float16),
                     group_size=_m["group"], pack_bits=_pb,
                     in_features=_m["in"] if _pb else None,
-                    row_table=mx.zeros((_m["experts"], _m["out"]),
-                                       dtype=mx.int32)))
+                    row_table=mx.zeros((_m["experts"], _sz["out"]),
+                                       dtype=mx.int32))
+                if _rn is not None and _path.rsplit(".", 1)[-1] in (
+                        "gate_proj", "up_proj"):
+                    # already this rank's rows: the loader must not cut it
+                    # (a plain attribute, not a parameter)
+                    object.__setattr__(_lin, "_vq_sharded", _rn)
+                _attach_vq(_obj, _leaf, _lin)
                 continue
             if _pb:
                 # packed: uint32 words, 32 codes per BITS words, row-local
@@ -236,9 +276,15 @@ class Model(_arch.Model):
     def __call__(self, *_a, **_kw):
         return _arrayish(super().__call__(*_a, **_kw))
 
+    def _sz_convert(self, _weights):
+        _sa = getattr(self, "_vq_sz_shard_args", None)
+        if _sa is None:
+            return skipzero_weights(_weights, _SZ_MODS)
+        return skipzero_weights(_weights, _sa[0], shard=_sa[1])
+
     def sanitize(self, _weights):
         if _SZ_MODS:
-            _weights = skipzero_weights(_weights, _SZ_MODS)
+            _weights = self._sz_convert(_weights)
         if _LOADER == "mlx_vlm" and _arch.__name__.startswith("mlx_vlm."):
             return _sanitize_for_vlm(self, _weights)
         _base = getattr(super(), "sanitize", None)
@@ -248,7 +294,7 @@ class Model(_arch.Model):
         # mlx_vlm SKIPS sanitize for format=mlx shards and goes straight here,
         # so the skipzero conversion must also run on this path (idempotent).
         if _SZ_MODS and not isinstance(file_or_weights, (str, _pathlib.Path)):
-            file_or_weights = skipzero_weights(file_or_weights, _SZ_MODS)
+            file_or_weights = self._sz_convert(file_or_weights)
         return super().load_weights(file_or_weights, strict=strict)
 '''
 _model_py = runtime + shim
