@@ -185,6 +185,23 @@ def main() -> int:
             print(f"FAIL: {len(missing)} skipzero module(s) missing from "
                   f"vq_modules, e.g. {missing[0]}")
             return 1
+        # The runtime serves compact rows only at the dims skipzero_load
+        # declares; any other dim crashes on the first prefill, not at load.
+        import importlib.util as _ilu
+        _p = pathlib.Path(__file__).resolve().parents[1] / "experimental" / \
+            "skipzero" / "skipzero_load.py"
+        _spec = _ilu.spec_from_file_location("skipzero_load", _p)
+        _szl = _ilu.module_from_spec(_spec)
+        _spec.loader.exec_module(_szl)
+        vqm = cfg.get("vq_modules", {})
+        wrong = [m for m in sz.get("modules", {})
+                 if (vqm[m] or {}).get("dim") not in _szl.SUPPORTED_DIMS]
+        if wrong:
+            print(f"FAIL: {len(wrong)} skipzero module(s) have a codebook dim "
+                  f"the runtime has no skipzero kernel for, e.g. {wrong[0]} "
+                  f"(dim={vqm[wrong[0]].get('dim')}; supported: "
+                  f"{list(_szl.SUPPORTED_DIMS)}). Re-run sz-pack.")
+            return 1
         print(f"skipzero: {len(sz.get('modules', {}))} module(s) served "
               f"resident through the runtime row-table switch")
 
