@@ -71,7 +71,13 @@ def check(packed, orig, skip_passthrough=False):
     shim = _load_shim(packed)
     pix, oix = _index(packed), _index(orig)
     fails, tiny = [], float(sz["tiny"])
-    for p, meta in sz["modules"].items():
+    # An INCREMENTAL pack (sz-pack on a source that was already skipzero):
+    # modules the original already holds as sz tensors are passthrough and
+    # must match it tensor for tensor; only modules the original holds as
+    # plain codes are expanded and compared row by row.
+    prior = {p for p in sz["modules"] if p + ".sz_codes" in oix}
+    new_mods = {p: m for p, m in sz["modules"].items() if p not in prior}
+    for p, meta in new_mods.items():
         (shp_raw, _), (rm_raw, rmt) = _arr(pix, p + ".sz_shape"), _arr(pix, p + ".sz_rowmask")
         shape = np.frombuffer(shp_raw, np.int32)
         rmask = np.frombuffer(rm_raw, np.uint8).reshape(rmt["shape"])
@@ -101,8 +107,8 @@ def check(packed, orig, skip_passthrough=False):
                 if (s[live] < tiny).all(axis=-1).any():
                     fails.append(f"{p}: a kept row was fully dead")
     # every other tensor
-    sz_keys = {f"{p}.{s}" for p in sz["modules"] for s in shim.SUFFIXES}
-    dropped = {f"{p}.{s}" for p in sz["modules"] for s in ("codes", "vq_scales")}
+    sz_keys = {f"{p}.{s}" for p in new_mods for s in shim.SUFFIXES}
+    dropped = {f"{p}.{s}" for p in new_mods for s in ("codes", "vq_scales")}
     missing = set(oix) - dropped - set(pix)
     extra = set(pix) - sz_keys - set(oix)
     if missing or extra:
@@ -125,6 +131,7 @@ def check(packed, orig, skip_passthrough=False):
     size = lambda d: sum(os.path.getsize(os.path.realpath(f)) for f in pathlib.Path(d).glob("*.safetensors"))
     so, sp = size(orig), size(packed)
     rep = {"packed": str(packed), "original": str(orig), "modules": len(sz["modules"]),
+           "modules_expanded_and_checked": len(new_mods), "modules_already_sz_in_original": len(prior),
            "passthrough_tensors_compared": passthrough,
            "text_bytes_orig": so, "text_bytes_packed": sp, "saved_bytes": so - sp,
            "saved_pct": 100 * (so - sp) / max(so, 1), "fails": fails,
