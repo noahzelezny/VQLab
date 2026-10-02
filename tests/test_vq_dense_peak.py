@@ -196,8 +196,15 @@ def test_peak_is_bounded_and_flat_in_depth():
             VD._DENSE_DECODE_EVAL = prev
             mx.clear_cache()
 
-    un1, un4 = chain(1, False), chain(4, False)
-    ti1, ti4 = chain(1, True), chain(4, True)
+    # Best of three per arm: a one-off allocation landing inside one
+    # measurement (seen once on the CI runner's paravirtual GPU: tiled
+    # 4.5 -> 7.6 MB, clean on rerun) inflates a single peak, never all
+    # three, while the lazy arm's growth with depth shows in every run.
+    def best(depth, ev):
+        return min(chain(depth, ev) for _ in range(3))
+
+    un1, un4 = best(1, False), best(4, False)
+    ti1, ti4 = best(1, True), best(4, True)
     # unbounded grows with depth; tiled stays put.
     assert un4 > un1 * 1.5, (un1, un4)
     assert ti4 < ti1 * 1.5, (ti1, ti4)
