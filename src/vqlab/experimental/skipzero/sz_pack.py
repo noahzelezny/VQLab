@@ -198,8 +198,12 @@ def main(argv=None):
     src = pathlib.Path(a.artifact).resolve()
     rng = parse_layers(a.layers)
     cfg = json.loads((src / "config.json").read_text())
-    if "vq_skipzero" in cfg:
-        ap.error("source is already vq-skipzero")
+    # An already-skipzero source is packed INCREMENTALLY: its sz modules carry
+    # sz_scales (not vq_scales), so the planner never sees them; only modules
+    # still in plain codes (e.g. refit by geo-build) are packed, and their
+    # entries are merged into the existing map. The model.py hook is already
+    # there and is not appended twice.
+    prior_sz = cfg.get("vq_skipzero")
     specs = registry.vq_specs(cfg)
     shards = sorted(src.glob("*.safetensors"))
 
@@ -298,19 +302,34 @@ def main(argv=None):
     shutil.copyfile(HERE / "skipzero_load.py", out / "skipzero_load.py")
     mf = cfg.get("model_file") or "model.py"
     src_model = (src / mf).read_bytes()
+    # A source that is already skipzero carries a runtime that serves it
+    # (the appended stage-1 hook, or the native row-table switch driven by
+    # config.vq_skipzero): its model.py is kept byte-for-byte and only the
+    # config map grows.
     with open(out / mf, "xb") as fo:
-        fo.write(src_model + skipzero_load.MODEL_HOOK.encode())
-    cfg["vq_skipzero"] = {
-        "format": skipzero_load.FORMAT, "version": skipzero_load.VERSION,
-        "experimental": True,
-        "note": "EXPERIMENTAL, not a shipped format. Dead VQ rows dropped on disk; "
-                "skipzero_load.py re-expands at load. RAM is unchanged (stage 1).",
-        "tiny": a.tiny, "layers": a.layers, "source": str(src),
-        "source_model_py_bytes": len(src_model),
-        "modules": {p: {"experts": m["E"], "out": m["OUT"], "live_rows": m["live_rows"],
-                        "dead_rows": m["dead_rows"]} for p, m in sorted(allm.items())},
-        "saved_bytes": summary["saved_bytes"],
-    }
+        fo.write(src_model if prior_sz else src_model + skipzero_load.MODEL_HOOK.encode())
+    if prior_sz:
+        merged = dict(prior_sz)
+        merged["modules"] = {**prior_sz["modules"],
+                             **{p: {"experts": m["E"], "out": m["OUT"], "live_rows": m["live_rows"],
+                                    "dead_rows": m["dead_rows"]} for p, m in sorted(allm.items())}}
+        merged["saved_bytes"] = prior_sz.get("saved_bytes", 0) + summary["saved_bytes"]
+        merged["incremental"] = (prior_sz.get("incremental", []) +
+                                 [{"layers": a.layers, "modules": len(allm),
+                                   "saved_bytes": summary["saved_bytes"], "source": str(src)}])
+        cfg["vq_skipzero"] = merged
+    else:
+        cfg["vq_skipzero"] = {
+            "format": skipzero_load.FORMAT, "version": skipzero_load.VERSION,
+            "experimental": True,
+            "note": "EXPERIMENTAL, not a shipped format. Dead VQ rows dropped on disk; "
+                    "skipzero_load.py re-expands at load. RAM is unchanged (stage 1).",
+            "tiny": a.tiny, "layers": a.layers, "source": str(src),
+            "source_model_py_bytes": len(src_model),
+            "modules": {p: {"experts": m["E"], "out": m["OUT"], "live_rows": m["live_rows"],
+                            "dead_rows": m["dead_rows"]} for p, m in sorted(allm.items())},
+            "saved_bytes": summary["saved_bytes"],
+        }
     with open(out / "config.json", "x") as fo:
         json.dump(cfg, fo, indent=2)
     provenance.write_build_record(
