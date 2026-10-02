@@ -283,7 +283,28 @@ if (A / "model.safetensors.index.json").exists() and cfg:
 if (A / "tokenizer.json").exists():
     try:
         from transformers import AutoTokenizer
-        tok = AutoTokenizer.from_pretrained(str(A))
+        try:
+            tok = AutoTokenizer.from_pretrained(str(A))
+        except Exception as e_auto:
+            # A model_type transformers does not register yet (deepseek_v4
+            # until huggingface/transformers#45616) breaks AutoTokenizer's
+            # config probe even though the tokenizer itself is fine. Load it
+            # the way the shipped runtime does -- mlx-lm's load_tokenizer,
+            # which falls back to a generic config -- and hold it to the
+            # same round-trip. Say so; never pass it silently.
+            # Knurlogic's vendored architecture registers the missing HF
+            # config at import (its deepseek_v4: max_position_embeddings,
+            # rope_theta). Importing it is exactly what serving does.
+            mt = json.loads((A / "config.json").read_text()).get("model_type")
+            if mt not in ("deepseek_v4",):
+                raise
+            from knurlogic.engine import register as _kreg   # serving's own path
+            _kreg.register(mt)
+            tok = AutoTokenizer.from_pretrained(str(A))
+            print(f"WARNING: plain transformers cannot load this tokenizer "
+                  f"({type(e_auto).__name__}: {e_auto}); it loads once "
+                  f"Knurlogic registers model_type {mt!r}, as serving does. "
+                  f"The card must say Knurlogic serves it")
         probe = "The harbourmaster recorded 417 brass lanterns at dawn."
         ids = tok.encode(probe)
         if len(ids) < 5:
