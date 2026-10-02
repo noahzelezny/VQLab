@@ -41,6 +41,7 @@ COMMANDS = {
     "pack": ("pack_artifact.py", "pack MoE codes to true bit-width; recompute sizes"),
     "pack-ple": ("pack_ple.py", "pack PLE codes row-aligned to true bit-width"),
     "stream-convert": ("stream_convert.py", "streaming affine convert / struct base for models bigger than RAM"),
+    "sanitize-stream": ("sanitize_stream.py", "exact runtime-layout teacher, one layer at a time through Model.sanitize (DeepSeek-V4)"),
     "splice-ple": ("splice_ple.py", "splice VQ PLE codes into a packed artifact"),
     "pack-dense": ("pack_dense.py", "pack a dense VQ artifact"),
     "unpack-dense": ("unpack_dense.py", "diagnostic twin with PLAIN codes: isolates PACKING from every other variable (F141)"),
@@ -121,7 +122,7 @@ COMMANDS = {
 # kept in vqlab_provenance.history.jsonl and linked by id.
 BUILD_OUTPUTS = {
     "pack": ("--out",), "pack-dense": ("--out",), "build-dense": ("--out",),
-    "stream-convert": ("--out",), "ple-swap": ("--out",), "unpack-dense": ("--out",),
+    "stream-convert": ("--out",), "sanitize-stream": ("--out",), "ple-swap": ("--out",), "unpack-dense": ("--out",),
     "pack-ple": ("--artifact",), "graft": ("--artifact",), "splice-ple": ("--artifact",),
     "bundle": ("--artifact",), "rebundle-dense": ("--artifact",),
     "patch-arch": ("--out",), "vision-layout": ("--out", 0),
