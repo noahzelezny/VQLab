@@ -67,10 +67,17 @@ def main(argv=None):
                     help="name=prose,code,lit[,gib] for a row measured elsewhere")
     a = ap.parse_args(argv)
     labels = dict(x.split("=", 1) for x in a.label)
-    rows, paired, builds = _rows(a.kl)
+    print(render(a.kl, labels, a.this, a.extra))
+    return 0
+
+
+def render(kl_paths, labels=None, this=None, extras=()) -> str:
+    """The card's tables as one Markdown string (`vqlab card` embeds this)."""
+    labels = labels or {}
+    rows, paired, builds = _rows(kl_paths)
     stamp = measured_with(builds)
     out = ["| build | GiB (text) | prose | code | literary | mean |", "|---|---|---|---|---|---|"]
-    for x in a.extra:
+    for x in extras:
         name, nums = x.split("=", 1)
         v = [float(n) for n in nums.split(",")]
         gib = f"{v[3]:.1f}" if len(v) > 3 else "?"
@@ -83,20 +90,20 @@ def main(argv=None):
             gib = "?"
         cells = [gib] + [f"{v:.1f}" for v in r["vals"]] + [f"{sum(r['vals']) / 3:.1f}"]
         name = labels.get(rung, rung)
-        if rung == a.this:
+        if rung == this:
             name, cells = f"**{name}**", [f"**{c}**" for c in cells]
         out.append(f"| {name} | " + " | ".join(cells) + " |")
-    print("\n".join(out))
-    print(f"\n{stamp}")
+    out += ["", stamp]
     if paired:
-        print("\nPaired deltas on identical positions (this rung minus reference; |t|>2 is a difference):\n")
-        print("| rung | vs | prose | code | literary |")
-        print("|---|---|---|---|---|")
+        out += ["", "Paired deltas on identical positions (this rung minus reference; "
+                "|t|>2 is a difference):", "",
+                "| rung | vs | prose | code | literary |", "|---|---|---|---|---|"]
         for rung, ref, per in paired:
             cells = [f"{per[c]['delta']:+.1f} (t {per[c]['t']:+.1f})" for c in CORPORA]
-            print(f"| {labels.get(rung, rung)} | {labels.get(ref, ref)} | " + " | ".join(cells) + " |")
-        print(f"\n{stamp}")
-    return 0
+            out.append(f"| {labels.get(rung, rung)} | {labels.get(ref, ref)} | "
+                       + " | ".join(cells) + " |")
+        out += ["", stamp]
+    return "\n".join(out)
 
 
 if __name__ == "__main__":
