@@ -100,8 +100,12 @@ def main(argv=None):
     if not pick:
         raise SystemExit(f"{src}: nothing matches preset {a.preset}")
     if len(probe) < 3:
+        hint = ""
+        if sum(k in art.index for k in sw) > len(sw) // 2:
+            hint = (" --src already uses the artifact's (MLX) names: pass the OFFICIAL release "
+                    "(HF names, e.g. layers.0.attn_norm.weight), not an MLX conversion of it.")
         raise SystemExit(f"identity probe found only {len(probe)} mapped tensors; "
-                         "the preset's names do not fit this artifact. Nothing written.")
+                         f"the preset's names do not fit this artifact.{hint} Nothing written.")
     hdrs = {}
     def hdr(d, f):
         if (d, f) not in hdrs:
