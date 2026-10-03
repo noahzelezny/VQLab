@@ -135,3 +135,11 @@ def alias_fused(skel: dict, triples) -> dict:
                     raise ValueError(f"{k} and {pre + y} have different widths; cannot fuse into {fused}")
                 skel[pre + fused] = a_
     return skel
+
+
+def variant_for(model_type: str):
+    """The scorer's current numerics variant for model_type (None when the
+    family declares none). Stamped into every cache and result by
+    core.numerics.build."""
+    fn = (scorers().get(model_type) or {}).get("variant")
+    return fn() if callable(fn) else None
