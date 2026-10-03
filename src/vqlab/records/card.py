@@ -180,7 +180,8 @@ def geometry(cfg: dict) -> list:
     """[(label, layers, n_modules, experts)] from vq_modules, grouped by
     (dim, K, code bits), most layers first."""
     groups = {}
-    for name, m in (cfg.get("vq_modules") or {}).items():
+    # MoE builds keep their codebooks in vq_modules, dense builds in vq_linear
+    for name, m in {**(cfg.get("vq_modules") or {}), **(cfg.get("vq_linear") or {})}.items():
         dim, k = m.get("dim"), m.get("k")
         bits = m.get("pack_bits") or (k - 1).bit_length()
         g = groups.setdefault((dim, k, bits), {"layers": set(), "n": 0, "experts": set()})
@@ -329,12 +330,16 @@ def build(a) -> str:
     geo = geometry(cfg)
     if geo:
         nlay = cfg.get("num_hidden_layers")
-        L += [f"Vector-quantized modules ({sum(g[2] for g in geo)} in `vq_modules`"
+        key = "vq_modules" if cfg.get("vq_modules") else "vq_linear"
+        nlay = nlay or (cfg.get("text_config") or {}).get("num_hidden_layers")
+        L += [f"Vector-quantized modules ({sum(g[2] for g in geo)} in `{key}`"
               + (f", over {nlay} layers" if nlay else "") + "):", ""]
-        L += ["| geometry | layers | modules | experts per module |", "|---|---|---|---|"]
+        moe = any(set(ex) - {1} for *_, ex in geo)       # dense: every module is one "expert"
+        L += (["| geometry | layers | modules | experts per module |", "|---|---|---|---|"] if moe
+              else ["| geometry | layers | modules |", "|---|---|---|"])
         for label, lay, n, ex in geo:
-            L.append(f"| {label} | {_ranges(lay) or '-'} | {n} | "
-                     f"{', '.join(map(str, sorted(ex))) or '-'} |")
+            L.append(f"| {label} | {_ranges(lay) or '-'} | {n} |"
+                     + (f" {', '.join(map(str, sorted(ex))) or '-'} |" if moe else ""))
         L.append("")
     sk = skeleton(cfg)
     if sk:
