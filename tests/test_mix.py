@@ -57,3 +57,12 @@ def test_runtime_mismatch_refused(tmp_path):
     (hi / "model.py").write_text("# other runtime\n")
     with pytest.raises(SystemExit, match="one runtime"):
         mix.build(tmp_path / "out", base, [(hi, 0, 0)])
+
+
+def test_minibase(tmp_path):
+    from vqlab.assemble import minibase
+    base = _art(tmp_path / "base", 256, {"a.safetensors": [0, 1], "b.safetensors": [2, 3]})
+    minibase.main(["--base", str(base), "--layers", "2-3", "--out", str(tmp_path / "mb")])
+    wm = json.load(open(tmp_path / "mb" / "model.safetensors.index.json"))["weight_map"]
+    assert set(wm.values()) == {"b.safetensors"}
+    assert (tmp_path / "mb" / "config.json").exists()
