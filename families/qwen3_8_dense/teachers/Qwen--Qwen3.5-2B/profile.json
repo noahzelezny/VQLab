@@ -1,0 +1,1294 @@
+{
+ "schema": "vqlab.family-profile/1",
+ "created": "2026-10-03T21:33:21+00:00",
+ "family": "qwen3_8_dense",
+ "teacher": "Qwen--Qwen3.5-2B",
+ "identity": {
+  "path": "<models>/Qwen--Qwen3.5-2B",
+  "hf_repo": null,
+  "hf_revision": null,
+  "config_sha256": "ed1c1723241f23f7f4e23430759cbd7dcfb4103cbdfe052bfe7626b57c2615b4",
+  "shards": 1,
+  "shard_fingerprint": "6f279d8c3dc2d06724673741a413b952d8564e943876d9b781a5c7315fa5e4a5"
+ },
+ "arch": {
+  "model_type": "qwen3_5",
+  "text_model_type": "qwen3_5_text",
+  "layers": 24,
+  "experts": null,
+  "experts_per_token": null,
+  "hidden": 2048,
+  "expert_intermediate": null,
+  "dense_intermediate": 6144,
+  "kind": "dense",
+  "vq_layers": [
+   0,
+   1,
+   2,
+   3,
+   4,
+   5,
+   6,
+   7,
+   8,
+   9,
+   10,
+   11,
+   12,
+   13,
+   14,
+   15,
+   16,
+   17,
+   18,
+   19,
+   20,
+   21,
+   22,
+   23
+  ],
+  "vision_tower": true,
+  "mtp_head": true
+ },
+ "bytes": {
+  "by_class_gib": {
+   "carry": 0.87,
+   "embed": 0.947,
+   "mtp": 0.113,
+   "vision": 0.617,
+   "vq_target": 1.688
+  },
+  "vq_target_gib_per_layer": {
+   "0": 0.0703,
+   "1": 0.0703,
+   "2": 0.0703,
+   "3": 0.0703,
+   "4": 0.0703,
+   "5": 0.0703,
+   "6": 0.0703,
+   "7": 0.0703,
+   "8": 0.0703,
+   "9": 0.0703,
+   "10": 0.0703,
+   "11": 0.0703,
+   "12": 0.0703,
+   "13": 0.0703,
+   "14": 0.0703,
+   "15": 0.0703,
+   "16": 0.0703,
+   "17": 0.0703,
+   "18": 0.0703,
+   "19": 0.0703,
+   "20": 0.0703,
+   "21": 0.0703,
+   "22": 0.0703,
+   "23": 0.0703
+  },
+  "vq_target_params": 905969664,
+  "vq_target_gib_per_bit": 0.1055
+ },
+ "modules": {
+  "signatures": {
+   "gate_proj": [
+    [
+     1,
+     6144,
+     2048
+    ]
+   ],
+   "up_proj": [
+    [
+     1,
+     6144,
+     2048
+    ]
+   ],
+   "down_proj": [
+    [
+     1,
+     2048,
+     6144
+    ]
+   ]
+  },
+  "count": 72
+ },
+ "geometries": {
+  "gate_proj": [
+   {
+    "d": 2,
+    "K": 16,
+    "bits_per_weight": 2.25,
+    "exact_packing": true,
+    "fused_kernel_ok": true,
+    "legal": true,
+    "bytes": 3539008,
+    "stack_gib": 0.079
+   },
+   {
+    "d": 2,
+    "K": 32,
+    "bits_per_weight": 2.75,
+    "exact_packing": true,
+    "fused_kernel_ok": true,
+    "legal": true,
+    "bytes": 4325504,
+    "stack_gib": 0.097
+   },
+   {
+    "d": 2,
+    "K": 64,
+    "bits_per_weight": 3.25,
+    "exact_packing": true,
+    "fused_kernel_ok": true,
+    "legal": true,
+    "bytes": 5112064,
+    "stack_gib": 0.114
+   },
+   {
+    "d": 2,
+    "K": 128,
+    "bits_per_weight": 3.75,
+    "exact_packing": true,
+    "fused_kernel_ok": true,
+    "legal": true,
+    "bytes": 5898752,
+    "stack_gib": 0.132
+   },
+   {
+    "d": 2,
+    "K": 256,
+    "bits_per_weight": 4.25,
+    "exact_packing": true,
+    "fused_kernel_ok": true,
+    "legal": true,
+    "bytes": 6685696,
+    "stack_gib": 0.149
+   },
+   {
+    "d": 2,
+    "K": 512,
+    "bits_per_weight": 4.75,
+    "exact_packing": true,
+    "fused_kernel_ok": true,
+    "legal": true,
+    "bytes": 7473152,
+    "stack_gib": 0.167
+   },
+   {
+    "d": 2,
+    "K": 1024,
+    "bits_per_weight": 5.25,
+    "exact_packing": true,
+    "fused_kernel_ok": true,
+    "legal": true,
+    "bytes": 8261632,
+    "stack_gib": 0.185
+   },
+   {
+    "d": 2,
+    "K": 2048,
+    "bits_per_weight": 5.75,
+    "exact_packing": true,
+    "fused_kernel_ok": true,
+    "legal": true,
+    "bytes": 9052160,
+    "stack_gib": 0.202
+   },
+   {
+    "d": 2,
+    "K": 4096,
+    "bits_per_weight": 6.25,
+    "exact_packing": true,
+    "fused_kernel_ok": true,
+    "legal": true,
+    "bytes": 9846784,
+    "stack_gib": 0.22
+   },
+   {
+    "d": 2,
+    "K": 8192,
+    "bits_per_weight": 6.75,
+    "exact_packing": true,
+    "fused_kernel_ok": false,
+    "legal": false,
+    "bytes": 10649600,
+    "stack_gib": 0.238
+   },
+   {
+    "d": 2,
+    "K": 16384,
+    "bits_per_weight": 7.25,
+    "exact_packing": true,
+    "fused_kernel_ok": false,
+    "legal": false,
+    "bytes": 11468800,
+    "stack_gib": 0.256
+   },
+   {
+    "d": 2,
+    "K": 32768,
+    "bits_per_weight": 7.75,
+    "exact_packing": true,
+    "fused_kernel_ok": false,
+    "legal": false,
+    "bytes": 12320768,
+    "stack_gib": 0.275
+   },
+   {
+    "d": 2,
+    "K": 65536,
+    "bits_per_weight": 8.25,
+    "exact_packing": true,
+    "fused_kernel_ok": false,
+    "legal": false,
+    "bytes": 13238272,
+    "stack_gib": 0.296
+   },
+   {
+    "d": 4,
+    "K": 16,
+    "bits_per_weight": 1.25,
+    "exact_packing": true,
+    "fused_kernel_ok": true,
+    "legal": true,
+    "bytes": 1966208,
+    "stack_gib": 0.044
+   },
+   {
+    "d": 4,
+    "K": 32,
+    "bits_per_weight": 1.5,
+    "exact_packing": true,
+    "fused_kernel_ok": true,
+    "legal": true,
+    "bytes": 2359552,
+    "stack_gib": 0.053
+   },
+   {
+    "d": 4,
+    "K": 64,
+    "bits_per_weight": 1.75,
+    "exact_packing": true,
+    "fused_kernel_ok": true,
+    "legal": true,
+    "bytes": 2753024,
+    "stack_gib": 0.062
+   },
+   {
+    "d": 4,
+    "K": 128,
+    "bits_per_weight": 2.0,
+    "exact_packing": true,
+    "fused_kernel_ok": true,
+    "legal": true,
+    "bytes": 3146752,
+    "stack_gib": 0.07
+   },
+   {
+    "d": 4,
+    "K": 256,
+    "bits_per_weight": 2.25,
+    "exact_packing": true,
+    "fused_kernel_ok": true,
+    "legal": true,
+    "bytes": 3540992,
+    "stack_gib": 0.079
+   },
+   {
+    "d": 4,
+    "K": 512,
+    "bits_per_weight": 2.5,
+    "exact_packing": true,
+    "fused_kernel_ok": true,
+    "legal": true,
+    "bytes": 3936256,
+    "stack_gib": 0.088
+   },
+   {
+    "d": 4,
+    "K": 1024,
+    "bits_per_weight": 2.75,
+    "exact_packing": true,
+    "fused_kernel_ok": true,
+    "legal": true,
+    "bytes": 4333568,
+    "stack_gib": 0.097
+   },
+   {
+    "d": 4,
+    "K": 2048,
+    "bits_per_weight": 3.0,
+    "exact_packing": true,
+    "fused_kernel_ok": true,
+    "legal": true,
+    "bytes": 4734976,
+    "stack_gib": 0.106
+   },
+   {
+    "d": 4,
+    "K": 4096,
+    "bits_per_weight": 3.25,
+    "exact_packing": true,
+    "fused_kernel_ok": false,
+    "legal": false,
+    "bytes": 5144576,
+    "stack_gib": 0.115
+   },
+   {
+    "d": 4,
+    "K": 8192,
+    "bits_per_weight": 3.5,
+    "exact_packing": true,
+    "fused_kernel_ok": false,
+    "legal": false,
+    "bytes": 5570560,
+    "stack_gib": 0.125
+   },
+   {
+    "d": 4,
+    "K": 16384,
+    "bits_per_weight": 3.75,
+    "exact_packing": true,
+    "fused_kernel_ok": false,
+    "legal": false,
+    "bytes": 6029312,
+    "stack_gib": 0.135
+   },
+   {
+    "d": 4,
+    "K": 32768,
+    "bits_per_weight": 4.0,
+    "exact_packing": true,
+    "fused_kernel_ok": false,
+    "legal": false,
+    "bytes": 6553600,
+    "stack_gib": 0.146
+   },
+   {
+    "d": 4,
+    "K": 65536,
+    "bits_per_weight": 4.25,
+    "exact_packing": true,
+    "fused_kernel_ok": false,
+    "legal": false,
+    "bytes": 7208960,
+    "stack_gib": 0.161
+   },
+   {
+    "d": 8,
+    "K": 16,
+    "bits_per_weight": 0.75,
+    "exact_packing": true,
+    "fused_kernel_ok": true,
+    "legal": true,
+    "bytes": 1179904,
+    "stack_gib": 0.026
+   },
+   {
+    "d": 8,
+    "K": 32,
+    "bits_per_weight": 0.875,
+    "exact_packing": true,
+    "fused_kernel_ok": true,
+    "legal": true,
+    "bytes": 1376768,
+    "stack_gib": 0.031
+   },
+   {
+    "d": 8,
+    "K": 64,
+    "bits_per_weight": 1.0,
+    "exact_packing": true,
+    "fused_kernel_ok": true,
+    "legal": true,
+    "bytes": 1573888,
+    "stack_gib": 0.035
+   },
+   {
+    "d": 8,
+    "K": 128,
+    "bits_per_weight": 1.125,
+    "exact_packing": true,
+    "fused_kernel_ok": true,
+    "legal": true,
+    "bytes": 1771520,
+    "stack_gib": 0.04
+   },
+   {
+    "d": 8,
+    "K": 256,
+    "bits_per_weight": 1.25,
+    "exact_packing": true,
+    "fused_kernel_ok": true,
+    "legal": true,
+    "bytes": 1970176,
+    "stack_gib": 0.044
+   },
+   {
+    "d": 8,
+    "K": 512,
+    "bits_per_weight": 1.375,
+    "exact_packing": true,
+    "fused_kernel_ok": true,
+    "legal": true,
+    "bytes": 2170880,
+    "stack_gib": 0.049
+   },
+   {
+    "d": 8,
+    "K": 1024,
+    "bits_per_weight": 1.5,
+    "exact_packing": true,
+    "fused_kernel_ok": true,
+    "legal": true,
+    "bytes": 2375680,
+    "stack_gib": 0.053
+   },
+   {
+    "d": 8,
+    "K": 2048,
+    "bits_per_weight": 1.625,
+    "exact_packing": true,
+    "fused_kernel_ok": false,
+    "legal": false,
+    "bytes": 2588672,
+    "stack_gib": 0.058
+   },
+   {
+    "d": 8,
+    "K": 4096,
+    "bits_per_weight": 1.75,
+    "exact_packing": true,
+    "fused_kernel_ok": false,
+    "legal": false,
+    "bytes": 2818048,
+    "stack_gib": 0.063
+   },
+   {
+    "d": 8,
+    "K": 8192,
+    "bits_per_weight": 1.875,
+    "exact_packing": true,
+    "fused_kernel_ok": false,
+    "legal": false,
+    "bytes": 3080192,
+    "stack_gib": 0.069
+   },
+   {
+    "d": 8,
+    "K": 16384,
+    "bits_per_weight": 2.0,
+    "exact_packing": true,
+    "fused_kernel_ok": false,
+    "legal": false,
+    "bytes": 3407872,
+    "stack_gib": 0.076
+   },
+   {
+    "d": 8,
+    "K": 32768,
+    "bits_per_weight": 2.125,
+    "exact_packing": true,
+    "fused_kernel_ok": false,
+    "legal": false,
+    "bytes": 3866624,
+    "stack_gib": 0.086
+   },
+   {
+    "d": 8,
+    "K": 65536,
+    "bits_per_weight": 2.25,
+    "exact_packing": true,
+    "fused_kernel_ok": false,
+    "legal": false,
+    "bytes": 4587520,
+    "stack_gib": 0.103
+   }
+  ],
+  "up_proj": [
+   {
+    "d": 2,
+    "K": 16,
+    "bits_per_weight": 2.25,
+    "exact_packing": true,
+    "fused_kernel_ok": true,
+    "legal": true,
+    "bytes": 3539008,
+    "stack_gib": 0.079
+   },
+   {
+    "d": 2,
+    "K": 32,
+    "bits_per_weight": 2.75,
+    "exact_packing": true,
+    "fused_kernel_ok": true,
+    "legal": true,
+    "bytes": 4325504,
+    "stack_gib": 0.097
+   },
+   {
+    "d": 2,
+    "K": 64,
+    "bits_per_weight": 3.25,
+    "exact_packing": true,
+    "fused_kernel_ok": true,
+    "legal": true,
+    "bytes": 5112064,
+    "stack_gib": 0.114
+   },
+   {
+    "d": 2,
+    "K": 128,
+    "bits_per_weight": 3.75,
+    "exact_packing": true,
+    "fused_kernel_ok": true,
+    "legal": true,
+    "bytes": 5898752,
+    "stack_gib": 0.132
+   },
+   {
+    "d": 2,
+    "K": 256,
+    "bits_per_weight": 4.25,
+    "exact_packing": true,
+    "fused_kernel_ok": true,
+    "legal": true,
+    "bytes": 6685696,
+    "stack_gib": 0.149
+   },
+   {
+    "d": 2,
+    "K": 512,
+    "bits_per_weight": 4.75,
+    "exact_packing": true,
+    "fused_kernel_ok": true,
+    "legal": true,
+    "bytes": 7473152,
+    "stack_gib": 0.167
+   },
+   {
+    "d": 2,
+    "K": 1024,
+    "bits_per_weight": 5.25,
+    "exact_packing": true,
+    "fused_kernel_ok": true,
+    "legal": true,
+    "bytes": 8261632,
+    "stack_gib": 0.185
+   },
+   {
+    "d": 2,
+    "K": 2048,
+    "bits_per_weight": 5.75,
+    "exact_packing": true,
+    "fused_kernel_ok": true,
+    "legal": true,
+    "bytes": 9052160,
+    "stack_gib": 0.202
+   },
+   {
+    "d": 2,
+    "K": 4096,
+    "bits_per_weight": 6.25,
+    "exact_packing": true,
+    "fused_kernel_ok": true,
+    "legal": true,
+    "bytes": 9846784,
+    "stack_gib": 0.22
+   },
+   {
+    "d": 2,
+    "K": 8192,
+    "bits_per_weight": 6.75,
+    "exact_packing": true,
+    "fused_kernel_ok": false,
+    "legal": false,
+    "bytes": 10649600,
+    "stack_gib": 0.238
+   },
+   {
+    "d": 2,
+    "K": 16384,
+    "bits_per_weight": 7.25,
+    "exact_packing": true,
+    "fused_kernel_ok": false,
+    "legal": false,
+    "bytes": 11468800,
+    "stack_gib": 0.256
+   },
+   {
+    "d": 2,
+    "K": 32768,
+    "bits_per_weight": 7.75,
+    "exact_packing": true,
+    "fused_kernel_ok": false,
+    "legal": false,
+    "bytes": 12320768,
+    "stack_gib": 0.275
+   },
+   {
+    "d": 2,
+    "K": 65536,
+    "bits_per_weight": 8.25,
+    "exact_packing": true,
+    "fused_kernel_ok": false,
+    "legal": false,
+    "bytes": 13238272,
+    "stack_gib": 0.296
+   },
+   {
+    "d": 4,
+    "K": 16,
+    "bits_per_weight": 1.25,
+    "exact_packing": true,
+    "fused_kernel_ok": true,
+    "legal": true,
+    "bytes": 1966208,
+    "stack_gib": 0.044
+   },
+   {
+    "d": 4,
+    "K": 32,
+    "bits_per_weight": 1.5,
+    "exact_packing": true,
+    "fused_kernel_ok": true,
+    "legal": true,
+    "bytes": 2359552,
+    "stack_gib": 0.053
+   },
+   {
+    "d": 4,
+    "K": 64,
+    "bits_per_weight": 1.75,
+    "exact_packing": true,
+    "fused_kernel_ok": true,
+    "legal": true,
+    "bytes": 2753024,
+    "stack_gib": 0.062
+   },
+   {
+    "d": 4,
+    "K": 128,
+    "bits_per_weight": 2.0,
+    "exact_packing": true,
+    "fused_kernel_ok": true,
+    "legal": true,
+    "bytes": 3146752,
+    "stack_gib": 0.07
+   },
+   {
+    "d": 4,
+    "K": 256,
+    "bits_per_weight": 2.25,
+    "exact_packing": true,
+    "fused_kernel_ok": true,
+    "legal": true,
+    "bytes": 3540992,
+    "stack_gib": 0.079
+   },
+   {
+    "d": 4,
+    "K": 512,
+    "bits_per_weight": 2.5,
+    "exact_packing": true,
+    "fused_kernel_ok": true,
+    "legal": true,
+    "bytes": 3936256,
+    "stack_gib": 0.088
+   },
+   {
+    "d": 4,
+    "K": 1024,
+    "bits_per_weight": 2.75,
+    "exact_packing": true,
+    "fused_kernel_ok": true,
+    "legal": true,
+    "bytes": 4333568,
+    "stack_gib": 0.097
+   },
+   {
+    "d": 4,
+    "K": 2048,
+    "bits_per_weight": 3.0,
+    "exact_packing": true,
+    "fused_kernel_ok": true,
+    "legal": true,
+    "bytes": 4734976,
+    "stack_gib": 0.106
+   },
+   {
+    "d": 4,
+    "K": 4096,
+    "bits_per_weight": 3.25,
+    "exact_packing": true,
+    "fused_kernel_ok": false,
+    "legal": false,
+    "bytes": 5144576,
+    "stack_gib": 0.115
+   },
+   {
+    "d": 4,
+    "K": 8192,
+    "bits_per_weight": 3.5,
+    "exact_packing": true,
+    "fused_kernel_ok": false,
+    "legal": false,
+    "bytes": 5570560,
+    "stack_gib": 0.125
+   },
+   {
+    "d": 4,
+    "K": 16384,
+    "bits_per_weight": 3.75,
+    "exact_packing": true,
+    "fused_kernel_ok": false,
+    "legal": false,
+    "bytes": 6029312,
+    "stack_gib": 0.135
+   },
+   {
+    "d": 4,
+    "K": 32768,
+    "bits_per_weight": 4.0,
+    "exact_packing": true,
+    "fused_kernel_ok": false,
+    "legal": false,
+    "bytes": 6553600,
+    "stack_gib": 0.146
+   },
+   {
+    "d": 4,
+    "K": 65536,
+    "bits_per_weight": 4.25,
+    "exact_packing": true,
+    "fused_kernel_ok": false,
+    "legal": false,
+    "bytes": 7208960,
+    "stack_gib": 0.161
+   },
+   {
+    "d": 8,
+    "K": 16,
+    "bits_per_weight": 0.75,
+    "exact_packing": true,
+    "fused_kernel_ok": true,
+    "legal": true,
+    "bytes": 1179904,
+    "stack_gib": 0.026
+   },
+   {
+    "d": 8,
+    "K": 32,
+    "bits_per_weight": 0.875,
+    "exact_packing": true,
+    "fused_kernel_ok": true,
+    "legal": true,
+    "bytes": 1376768,
+    "stack_gib": 0.031
+   },
+   {
+    "d": 8,
+    "K": 64,
+    "bits_per_weight": 1.0,
+    "exact_packing": true,
+    "fused_kernel_ok": true,
+    "legal": true,
+    "bytes": 1573888,
+    "stack_gib": 0.035
+   },
+   {
+    "d": 8,
+    "K": 128,
+    "bits_per_weight": 1.125,
+    "exact_packing": true,
+    "fused_kernel_ok": true,
+    "legal": true,
+    "bytes": 1771520,
+    "stack_gib": 0.04
+   },
+   {
+    "d": 8,
+    "K": 256,
+    "bits_per_weight": 1.25,
+    "exact_packing": true,
+    "fused_kernel_ok": true,
+    "legal": true,
+    "bytes": 1970176,
+    "stack_gib": 0.044
+   },
+   {
+    "d": 8,
+    "K": 512,
+    "bits_per_weight": 1.375,
+    "exact_packing": true,
+    "fused_kernel_ok": true,
+    "legal": true,
+    "bytes": 2170880,
+    "stack_gib": 0.049
+   },
+   {
+    "d": 8,
+    "K": 1024,
+    "bits_per_weight": 1.5,
+    "exact_packing": true,
+    "fused_kernel_ok": true,
+    "legal": true,
+    "bytes": 2375680,
+    "stack_gib": 0.053
+   },
+   {
+    "d": 8,
+    "K": 2048,
+    "bits_per_weight": 1.625,
+    "exact_packing": true,
+    "fused_kernel_ok": false,
+    "legal": false,
+    "bytes": 2588672,
+    "stack_gib": 0.058
+   },
+   {
+    "d": 8,
+    "K": 4096,
+    "bits_per_weight": 1.75,
+    "exact_packing": true,
+    "fused_kernel_ok": false,
+    "legal": false,
+    "bytes": 2818048,
+    "stack_gib": 0.063
+   },
+   {
+    "d": 8,
+    "K": 8192,
+    "bits_per_weight": 1.875,
+    "exact_packing": true,
+    "fused_kernel_ok": false,
+    "legal": false,
+    "bytes": 3080192,
+    "stack_gib": 0.069
+   },
+   {
+    "d": 8,
+    "K": 16384,
+    "bits_per_weight": 2.0,
+    "exact_packing": true,
+    "fused_kernel_ok": false,
+    "legal": false,
+    "bytes": 3407872,
+    "stack_gib": 0.076
+   },
+   {
+    "d": 8,
+    "K": 32768,
+    "bits_per_weight": 2.125,
+    "exact_packing": true,
+    "fused_kernel_ok": false,
+    "legal": false,
+    "bytes": 3866624,
+    "stack_gib": 0.086
+   },
+   {
+    "d": 8,
+    "K": 65536,
+    "bits_per_weight": 2.25,
+    "exact_packing": true,
+    "fused_kernel_ok": false,
+    "legal": false,
+    "bytes": 4587520,
+    "stack_gib": 0.103
+   }
+  ],
+  "down_proj": [
+   {
+    "d": 2,
+    "K": 16,
+    "bits_per_weight": 2.25,
+    "exact_packing": true,
+    "fused_kernel_ok": true,
+    "legal": true,
+    "bytes": 3539008,
+    "stack_gib": 0.079
+   },
+   {
+    "d": 2,
+    "K": 32,
+    "bits_per_weight": 2.75,
+    "exact_packing": true,
+    "fused_kernel_ok": true,
+    "legal": true,
+    "bytes": 4325504,
+    "stack_gib": 0.097
+   },
+   {
+    "d": 2,
+    "K": 64,
+    "bits_per_weight": 3.25,
+    "exact_packing": true,
+    "fused_kernel_ok": true,
+    "legal": true,
+    "bytes": 5112064,
+    "stack_gib": 0.114
+   },
+   {
+    "d": 2,
+    "K": 128,
+    "bits_per_weight": 3.75,
+    "exact_packing": true,
+    "fused_kernel_ok": true,
+    "legal": true,
+    "bytes": 5898752,
+    "stack_gib": 0.132
+   },
+   {
+    "d": 2,
+    "K": 256,
+    "bits_per_weight": 4.25,
+    "exact_packing": true,
+    "fused_kernel_ok": true,
+    "legal": true,
+    "bytes": 6685696,
+    "stack_gib": 0.149
+   },
+   {
+    "d": 2,
+    "K": 512,
+    "bits_per_weight": 4.75,
+    "exact_packing": true,
+    "fused_kernel_ok": true,
+    "legal": true,
+    "bytes": 7473152,
+    "stack_gib": 0.167
+   },
+   {
+    "d": 2,
+    "K": 1024,
+    "bits_per_weight": 5.25,
+    "exact_packing": true,
+    "fused_kernel_ok": true,
+    "legal": true,
+    "bytes": 8261632,
+    "stack_gib": 0.185
+   },
+   {
+    "d": 2,
+    "K": 2048,
+    "bits_per_weight": 5.75,
+    "exact_packing": true,
+    "fused_kernel_ok": true,
+    "legal": true,
+    "bytes": 9052160,
+    "stack_gib": 0.202
+   },
+   {
+    "d": 2,
+    "K": 4096,
+    "bits_per_weight": 6.25,
+    "exact_packing": true,
+    "fused_kernel_ok": true,
+    "legal": true,
+    "bytes": 9846784,
+    "stack_gib": 0.22
+   },
+   {
+    "d": 2,
+    "K": 8192,
+    "bits_per_weight": 6.75,
+    "exact_packing": true,
+    "fused_kernel_ok": false,
+    "legal": false,
+    "bytes": 10649600,
+    "stack_gib": 0.238
+   },
+   {
+    "d": 2,
+    "K": 16384,
+    "bits_per_weight": 7.25,
+    "exact_packing": true,
+    "fused_kernel_ok": false,
+    "legal": false,
+    "bytes": 11468800,
+    "stack_gib": 0.256
+   },
+   {
+    "d": 2,
+    "K": 32768,
+    "bits_per_weight": 7.75,
+    "exact_packing": true,
+    "fused_kernel_ok": false,
+    "legal": false,
+    "bytes": 12320768,
+    "stack_gib": 0.275
+   },
+   {
+    "d": 2,
+    "K": 65536,
+    "bits_per_weight": 8.25,
+    "exact_packing": true,
+    "fused_kernel_ok": false,
+    "legal": false,
+    "bytes": 13238272,
+    "stack_gib": 0.296
+   },
+   {
+    "d": 4,
+    "K": 16,
+    "bits_per_weight": 1.25,
+    "exact_packing": true,
+    "fused_kernel_ok": true,
+    "legal": true,
+    "bytes": 1966208,
+    "stack_gib": 0.044
+   },
+   {
+    "d": 4,
+    "K": 32,
+    "bits_per_weight": 1.5,
+    "exact_packing": true,
+    "fused_kernel_ok": true,
+    "legal": true,
+    "bytes": 2359552,
+    "stack_gib": 0.053
+   },
+   {
+    "d": 4,
+    "K": 64,
+    "bits_per_weight": 1.75,
+    "exact_packing": true,
+    "fused_kernel_ok": true,
+    "legal": true,
+    "bytes": 2753024,
+    "stack_gib": 0.062
+   },
+   {
+    "d": 4,
+    "K": 128,
+    "bits_per_weight": 2.0,
+    "exact_packing": true,
+    "fused_kernel_ok": true,
+    "legal": true,
+    "bytes": 3146752,
+    "stack_gib": 0.07
+   },
+   {
+    "d": 4,
+    "K": 256,
+    "bits_per_weight": 2.25,
+    "exact_packing": true,
+    "fused_kernel_ok": true,
+    "legal": true,
+    "bytes": 3540992,
+    "stack_gib": 0.079
+   },
+   {
+    "d": 4,
+    "K": 512,
+    "bits_per_weight": 2.5,
+    "exact_packing": true,
+    "fused_kernel_ok": true,
+    "legal": true,
+    "bytes": 3936256,
+    "stack_gib": 0.088
+   },
+   {
+    "d": 4,
+    "K": 1024,
+    "bits_per_weight": 2.75,
+    "exact_packing": true,
+    "fused_kernel_ok": true,
+    "legal": true,
+    "bytes": 4333568,
+    "stack_gib": 0.097
+   },
+   {
+    "d": 4,
+    "K": 2048,
+    "bits_per_weight": 3.0,
+    "exact_packing": true,
+    "fused_kernel_ok": true,
+    "legal": true,
+    "bytes": 4734976,
+    "stack_gib": 0.106
+   },
+   {
+    "d": 4,
+    "K": 4096,
+    "bits_per_weight": 3.25,
+    "exact_packing": true,
+    "fused_kernel_ok": false,
+    "legal": false,
+    "bytes": 5144576,
+    "stack_gib": 0.115
+   },
+   {
+    "d": 4,
+    "K": 8192,
+    "bits_per_weight": 3.5,
+    "exact_packing": true,
+    "fused_kernel_ok": false,
+    "legal": false,
+    "bytes": 5570560,
+    "stack_gib": 0.125
+   },
+   {
+    "d": 4,
+    "K": 16384,
+    "bits_per_weight": 3.75,
+    "exact_packing": true,
+    "fused_kernel_ok": false,
+    "legal": false,
+    "bytes": 6029312,
+    "stack_gib": 0.135
+   },
+   {
+    "d": 4,
+    "K": 32768,
+    "bits_per_weight": 4.0,
+    "exact_packing": true,
+    "fused_kernel_ok": false,
+    "legal": false,
+    "bytes": 6553600,
+    "stack_gib": 0.146
+   },
+   {
+    "d": 4,
+    "K": 65536,
+    "bits_per_weight": 4.25,
+    "exact_packing": true,
+    "fused_kernel_ok": false,
+    "legal": false,
+    "bytes": 7208960,
+    "stack_gib": 0.161
+   },
+   {
+    "d": 8,
+    "K": 16,
+    "bits_per_weight": 0.75,
+    "exact_packing": true,
+    "fused_kernel_ok": true,
+    "legal": true,
+    "bytes": 1179904,
+    "stack_gib": 0.026
+   },
+   {
+    "d": 8,
+    "K": 32,
+    "bits_per_weight": 0.875,
+    "exact_packing": true,
+    "fused_kernel_ok": true,
+    "legal": true,
+    "bytes": 1376768,
+    "stack_gib": 0.031
+   },
+   {
+    "d": 8,
+    "K": 64,
+    "bits_per_weight": 1.0,
+    "exact_packing": true,
+    "fused_kernel_ok": true,
+    "legal": true,
+    "bytes": 1573888,
+    "stack_gib": 0.035
+   },
+   {
+    "d": 8,
+    "K": 128,
+    "bits_per_weight": 1.125,
+    "exact_packing": true,
+    "fused_kernel_ok": true,
+    "legal": true,
+    "bytes": 1771520,
+    "stack_gib": 0.04
+   },
+   {
+    "d": 8,
+    "K": 256,
+    "bits_per_weight": 1.25,
+    "exact_packing": true,
+    "fused_kernel_ok": true,
+    "legal": true,
+    "bytes": 1970176,
+    "stack_gib": 0.044
+   },
+   {
+    "d": 8,
+    "K": 512,
+    "bits_per_weight": 1.375,
+    "exact_packing": true,
+    "fused_kernel_ok": true,
+    "legal": true,
+    "bytes": 2170880,
+    "stack_gib": 0.049
+   },
+   {
+    "d": 8,
+    "K": 1024,
+    "bits_per_weight": 1.5,
+    "exact_packing": true,
+    "fused_kernel_ok": true,
+    "legal": true,
+    "bytes": 2375680,
+    "stack_gib": 0.053
+   },
+   {
+    "d": 8,
+    "K": 2048,
+    "bits_per_weight": 1.625,
+    "exact_packing": true,
+    "fused_kernel_ok": false,
+    "legal": false,
+    "bytes": 2588672,
+    "stack_gib": 0.058
+   },
+   {
+    "d": 8,
+    "K": 4096,
+    "bits_per_weight": 1.75,
+    "exact_packing": true,
+    "fused_kernel_ok": false,
+    "legal": false,
+    "bytes": 2818048,
+    "stack_gib": 0.063
+   },
+   {
+    "d": 8,
+    "K": 8192,
+    "bits_per_weight": 1.875,
+    "exact_packing": true,
+    "fused_kernel_ok": false,
+    "legal": false,
+    "bytes": 3080192,
+    "stack_gib": 0.069
+   },
+   {
+    "d": 8,
+    "K": 16384,
+    "bits_per_weight": 2.0,
+    "exact_packing": true,
+    "fused_kernel_ok": false,
+    "legal": false,
+    "bytes": 3407872,
+    "stack_gib": 0.076
+   },
+   {
+    "d": 8,
+    "K": 32768,
+    "bits_per_weight": 2.125,
+    "exact_packing": true,
+    "fused_kernel_ok": false,
+    "legal": false,
+    "bytes": 3866624,
+    "stack_gib": 0.086
+   },
+   {
+    "d": 8,
+    "K": 65536,
+    "bits_per_weight": 2.25,
+    "exact_packing": true,
+    "fused_kernel_ok": false,
+    "legal": false,
+    "bytes": 4587520,
+    "stack_gib": 0.103
+   }
+  ]
+ }
+}
