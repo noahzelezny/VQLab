@@ -132,7 +132,7 @@ def decode_all(art: pathlib.Path):
         sc = data[m + ".vq_scales"]
         D = int(cb.shape[1])
         nsub = meta["in"] // D
-        c = codes.reshape(-1, codes.shape[-1])
+        c = codes.reshape(-1, codes.shape[-2], codes.shape[-1])   # [E, OUT, NSUB or words]
         if meta.get("pack_bits"):
             c = mx.array(vq_pack.unpack(np_of(c), nsub, meta["pack_bits"]))
         c = c.reshape(-1, nsub)
@@ -233,12 +233,21 @@ def main(argv=None) -> int:
         # ---------------------------------------------------------------
         print("[3/7] packer")
         packed = tmp / "packed"
-        p = run([str(_find("pack_dense.py")), "--src", str(f1), "--out", str(packed)],
+        # `pack` (expert format, [E, OUT, NSUB]) is what packs a raw fit's
+        # vq_modules; pack-dense takes a BUILT dense artifact's vq_linear.
+        # Until 2026-10-03 this step ran pack-dense on the raw fit, which
+        # packed nothing: "smaller" passed on header bytes and "bit-exact"
+        # compared the unpacked codes with themselves.
+        p = run([str(_find("pack_artifact.py")), "--src", str(f1), "--out", str(packed)],
                 verbose=v)
         if check("pack runs", p.returncode == 0):
             u = sum(f.stat().st_size for f in f1.glob("*.safetensors"))
             q = sum(f.stat().st_size for f in packed.glob("*.safetensors"))
-            check("packed artifact is smaller than unpacked", q < u,
+            pk = json.load(open(packed / "config.json"))["vq_modules"]
+            check("every module packed to 4 bits (K16)",
+                  all(m.get("pack_bits") == 4 for m in pk.values()),
+                  f"{sum(bool(m.get('pack_bits')) for m in pk.values())}/{len(pk)}")
+            check("packed artifact is smaller than unpacked", q < u * 0.9,
                   f"{q} < {u} bytes")
             D_ = decode_all(packed)
             worst = max(float(mx.max(mx.abs(A[k] - D_[k])).item()) for k in A)
@@ -448,10 +457,10 @@ def main(argv=None) -> int:
         cli = lambda *a_: subprocess.run([PY, "-m", "vqlab.cli", *a_],
                                          capture_output=True, text=True, env=cenv)
         p2 = tmp / "packed-cli"
-        cli("pack-dense", "--src", str(f1), "--out", str(p2))
+        cli("pack", "--src", str(f1), "--out", str(p2))      # a raw fit's vq_modules (see [3/7])
         r2 = json.load(open(p2 / "vqlab_provenance.json")) if (p2 / "vqlab_provenance.json").exists() else {}
-        check("pack-dense via the CLI gets a build record linked to its fit",
-              r2.get("tool", {}).get("name") == "pack-dense"
+        check("pack via the CLI gets a build record linked to its fit",
+              r2.get("tool", {}).get("name") == "pack"
               and any(i.get("provenance_id") for i in r2.get("inputs", [])))
         if (g["out"] / "vqlab_provenance.json").exists():
             before = json.load(open(g["out"] / "vqlab_provenance.json"))["id"]
