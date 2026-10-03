@@ -89,6 +89,7 @@ COMMANDS = {
     "kernel-truth": ("kernel_truth.py", "fused vs fallback: which is closer to an EXACT float64 reference? (F146)"),
     "kernel-truth-moe": ("kernel_truth_moe.py", "MoE twin of kernel-truth: decode (small-N fused) vs prefill (gemmseg2) expert kernels against an exact float64 reference"),
     "kl-pair": ("kl_pair.py", "paired KL between two arms scored in SEPARATE runs (env-var arms)"),
+    "runtime-equiv": ("runtime_equiv.py", "same model slice through two interpreters: bitwise equal, or max |logit diff| (F194; run whenever an env moves)"),
     "kl-ladder": ("kl_ladder.py", "rank rungs by KL against per-corpus teacher caches, with error bars"),
     # bench/
     "speed-pair": ("speed_pair.py", "decode/prefill speed of TWO artifacts as a per-pair ratio (fresh process per arm, alternating, n>=3)"),
