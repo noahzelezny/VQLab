@@ -644,8 +644,8 @@ def main():
     # the affine tensors they supersede, and REWRITE the index, because the
     # key set changes. The VQ tensors go into the shard that held the
     # affine ones so the module's bytes stay co-located.
-    a_wm = json.load(open(os.path.join(
-        a.artifact, "model.safetensors.index.json")))["weight_map"]
+    from vqlab.core.artifact import Artifact, write_index
+    a_wm = dict(Artifact.open(a.artifact).index)
     restored = [n for n in geo if (n + ".codes") not in a_wm]
     drop, add_to = set(), {}
     for n in restored:
@@ -691,12 +691,12 @@ def main():
         mx.save_safetensors(dst, out)
         del tens, out
         mx.clear_cache()
-    if restored:
-        ip = os.path.join(a.out, "model.safetensors.index.json")
-        idx = json.load(open(ip))
-        idx["weight_map"] = wm_out
-        idx.pop("metadata", None) if False else None
-        json.dump(idx, open(ip, "w"), indent=1)
+    # The index is always REWRITTEN with total_size measured from the output
+    # shards: a refit at a new K changes shard sizes, and a copied
+    # total_size describes the PARENT (the stale-size bug that made exo
+    # refuse to place the flagship, 2026-08-21; geo-build kept it until
+    # 2026-10-02).
+    write_index(a.out, wm_out)
     modules = {}
     for n in sorted(geo):
         fn = part_name(n, geo[n]["dim"], geo[n]["k"])
