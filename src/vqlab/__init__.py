@@ -14,6 +14,11 @@ See README.md and METHODOLOGY.md.
 __version__ = "0.2.0"
 
 from . import _layout  # noqa: E402,F401  stage folders + pre-split import names
+from .family import arch as _arch  # noqa: E402
+
+# deepseek_v4 / qwen4_exp / Knurlogic's qwen3_5, gemma4, glm5_next as
+# mlx_lm.models.<name> (family/arch/__init__.py; VQLAB_VENDORED_ARCH=0 for stock)
+_arch.install()
 
 from .mtp import (  # noqa: E402
     FAMILIES,
