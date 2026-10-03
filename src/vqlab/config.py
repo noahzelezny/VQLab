@@ -139,6 +139,25 @@ def portable(path) -> str:
     return str(p)
 
 
+def require_free(path, need_bytes: int, what: str, margin_gib: float = 5.0) -> None:
+    """Refuse a writer BEFORE it starts when its output volume cannot hold it.
+    `need_bytes` is the writer's own estimate of what it still has to write;
+    a run that would die hours in at 0 bytes free is refused in a second.
+    VQLAB_SKIP_DISK_CHECK=1 overrides (you know the estimate is wrong)."""
+    import shutil
+    if os.environ.get("VQLAB_SKIP_DISK_CHECK") == "1":
+        return
+    p = pathlib.Path(path)
+    while not p.exists() and p != p.parent:
+        p = p.parent
+    free = shutil.disk_usage(p).free
+    need = need_bytes + margin_gib * 2**30
+    if need > free:
+        raise SystemExit(f"REFUSED ({what}): {path} needs ~{need_bytes / 2**30:.1f} GiB "
+                         f"+ {margin_gib:g} GiB margin, only {free / 2**30:.1f} GiB free "
+                         f"(VQLAB_SKIP_DISK_CHECK=1 overrides)")
+
+
 def require_storage(path) -> pathlib.Path:
     """Refuse a large-output path outside the configured storage."""
     rp = pathlib.Path(os.path.realpath(path))

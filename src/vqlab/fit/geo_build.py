@@ -410,6 +410,9 @@ def main():
                          "names it")
     ap.add_argument("--preflight-module", help="with --preflight: this geomap module")
     a = ap.parse_args()
+    from vqlab import config as _cfg
+    _cfg.require_free(a.out, sum(os.path.getsize(f) for f in glob.glob(
+        os.path.join(a.artifact, "*.safetensors"))), "geo-build")
 
     mx.set_wired_limit(0)
     mx.set_memory_limit(a.memory_limit_gb * 1024 ** 3)
