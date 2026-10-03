@@ -49,6 +49,7 @@ COMMANDS = {
     "mix": ("mix.py", "assemble an artifact from per-layer-band sources, shard by shard; config maps follow the bytes"),
     "release-prep": ("release_prep.py", "everything before an upload: sizes, junk, provenance, check-release, Hub diff; prints the publish line"),
     "card-tables": ("card_tables.py", "a model card's KL table and paired deltas as Markdown, from kl-ladder JSON + each rung's own headers"),
+    "slice": ("slice_teacher.py", "a small REAL slice of any teacher (--layers 0-3: those layers + embeddings/norm/head, config adjusted) for preflighting a writer in minutes"),
     "size": ("size_cmd.py", "an artifact's size three ways (text / +tower / +MTP) and the full download, from its headers"),
     "teacher-prep": ("teacher_prep.py", "official release -> exact MLX teacher: cache guard, F8_E8M0 relabel, disk preflight, sanitize-stream"),
     "graft-extras": ("graft_extras.py", "byte-copy a release's extra tensors (vision tower, image tokens, image-routing biases) into a text VQ artifact under the runtime's names; identity-probed"),
@@ -112,6 +113,7 @@ COMMANDS = {
     "manifest": ("artifact_manifest.py", "tamper stamp: were these shard bytes rewritten? (outside the artifact)"),
     "runs": ("runlog.py", "the run log: every vqlab invocation, argv, commit, exit code"),
     "provenance": ("provenance.py", "build record: how an artifact was made (tool, fitter, inputs, runtime, lineage)"),
+    "scratch": ("scratch_cmd.py", "scratch reclaimable: unpacked dirs whose verified pack exists, sizes + total, and the rm lines for a human (never deletes)"),
     "registry": ("registry.py", "index of every artifact from provable facts; Hub drift check (metadata only)"),
     # ship/
     "publish": ("publish.py", "upload to the Hub, gated on check-release passing"),
@@ -138,7 +140,7 @@ COMMANDS = {
 # stamps that dir. In-place tools produce an AMENDMENT: the prior record is
 # kept in vqlab_provenance.history.jsonl and linked by id.
 BUILD_OUTPUTS = {
-    "pack": ("--out",), "pack-dense": ("--out",), "build-dense": ("--out",),
+    "pack": ("--out",), "pack-dense": ("--out",), "build-dense": ("--out",), "slice": ("--out",),
     "stream-convert": ("--out",), "sanitize-stream": ("--out",), "teacher-prep": ("--out",), "mix": ("--out",), "ple-swap": ("--out",), "unpack-dense": ("--out",),
     "pack-ple": ("--artifact",), "graft": ("--artifact",), "graft-extras": ("--artifact",), "splice-ple": ("--artifact",),
     "bundle": ("--artifact",), "rebundle-dense": ("--artifact",),
