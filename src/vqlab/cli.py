@@ -109,11 +109,11 @@ COMMANDS = {
     # agents/
     "mcp": ("mcp_server.py", "serve the lab to agents over MCP (stdio); one server per box"),
     "gui": ("gui.py", "a local, read-only window onto the lab (127.0.0.1:8781)"),
-    # experimental/ -- NOT shipped formats
-    "sz-pack": ("experimental/skipzero/sz_pack.py", "EXPERIMENTAL vq-skipzero: drop fully-dead VQ rows on disk (live rows + row mask), expanded at load; --dry-run prices it"),
-    "sz-check": ("experimental/skipzero/sz_check.py", "EXPERIMENTAL: numpy check that a vq-skipzero artifact expands to the original (live rows byte-identical, dead rows zero); --selftest"),
-    "sz-resident": ("experimental/skipzero/sz_resident_build.py", "EXPERIMENTAL stage 2: stage-1 pack -> compact-RESIDENT artifact (row table, new dir)"),
-    "sz-bitexact": ("experimental/skipzero/sz_bitexact.py", "EXPERIMENTAL: byte-equality gate, resident vs reference (modules N=1/8/4096/4097, logits, 9k prefill, greedy); --synthetic, --selftest"),
+    # skipzero/ -- the vq-skipzero format (shipped in released artifacts since 2026-09-29)
+    "sz-pack": ("skipzero/sz_pack.py", "vq-skipzero: drop fully-dead VQ rows on disk (live rows + row mask), expanded at load; --dry-run prices it"),
+    "sz-check": ("skipzero/sz_check.py", "numpy check that a vq-skipzero artifact expands to the original (live rows byte-identical, dead rows zero); --selftest"),
+    "sz-resident": ("skipzero/sz_resident_build.py", "stage 2: stage-1 pack -> compact-RESIDENT artifact (row table, new dir)"),
+    "sz-bitexact": ("skipzero/sz_bitexact.py", "byte-equality gate, resident vs reference (modules N=1/8/4096/4097, logits, 9k prefill, greedy); --synthetic, --selftest"),
     "queue": ("run_queue.py", "run a list of steps from PINNED code (git worktree), under the GPU lease, failing loudly; --preflight"),
 }
 

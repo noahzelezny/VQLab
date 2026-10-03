@@ -18,7 +18,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 GATE = ROOT / "src" / "vqlab" / "gate" / "check_bundle.py"
-SZ_DIR = ROOT / "src" / "vqlab" / "experimental" / "skipzero"
+SZ_DIR = ROOT / "src" / "vqlab" / "skipzero"
 sys.path.insert(0, str(SZ_DIR))
 import sz_pack  # noqa: E402
 

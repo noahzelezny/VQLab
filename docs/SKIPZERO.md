@@ -4,7 +4,7 @@
 compact rows natively (`VQSwitchLinear(row_table=...)`, `#if SZ` in the d4
 walk, packed d2 walk, packed d8 walk / simd devx_ss decode kernels and
 gemmseg2 at d2, d4 and d8); a bundle opts in with `vq_skipzero` in its
-config. Pack/convert tools: `src/vqlab/experimental/skipzero/`. Findings:
+config. Pack/convert tools: `src/vqlab/skipzero/`. Findings:
 F173, F175–F178, F183–F184.
 
 ## The finding
