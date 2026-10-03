@@ -351,3 +351,18 @@ def test_total_size_is_tensor_bytes(fx, name):
     a = Artifact.open(out)
     md = json.loads((out / "model.safetensors.index.json").read_text()).get("metadata", {})
     assert md.get("total_size") == tensor_bytes(out, a.shards)
+
+
+def test_size_fix_index(fx, tmp_path):
+    import shutil
+    from vqlab.records import size_cmd
+    d = tmp_path / "stale"
+    shutil.copytree(fx["vq16"], d)
+    p = d / "model.safetensors.index.json"
+    doc = json.loads(p.read_text())
+    doc["metadata"] = {"total_size": 10 ** 12}
+    p.write_text(json.dumps(doc))
+    assert size_cmd.main([str(d), "--check-index"]) == 1
+    size_cmd.main([str(d), "--fix-index"])
+    assert size_cmd.main([str(d), "--check-index"]) == 0
+    assert json.loads(p.read_text())["weight_map"] == doc["weight_map"]
