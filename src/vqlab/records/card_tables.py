@@ -20,7 +20,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import pathlib
 import sys
 
 from vqlab.core.artifact import sizes
