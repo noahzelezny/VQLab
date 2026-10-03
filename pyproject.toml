@@ -52,7 +52,14 @@ vqlab = ["score/referee/*.txt", "score/referee/*.json", "score/referee/*.py", "*
 [tool.pytest.ini_options]
 pythonpath = ["src"]
 testpaths = ["tests"]
-markers = ["integration: needs a real artifact; set VQLAB_MTP_MODEL"]
+markers = [
+    "integration: needs a real artifact; set VQLAB_MTP_MODEL",
+    "lab: reads real lab artifacts or lab-only storage; deselected by default, run with `pytest -m lab`",
+]
+# The default run is what a fresh clone (and scripts/ci.sh) can answer. A later
+# -m on the command line replaces this one: `pytest -m lab` runs only the lab
+# tests, `pytest -m "lab or not lab"` runs everything.
+addopts = '-m "not lab"'
 
 [tool.ruff]
 target-version = "py312"

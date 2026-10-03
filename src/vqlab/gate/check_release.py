@@ -68,6 +68,11 @@ ap.add_argument("--knurlogic-smoke", metavar="MACHINE", action="append", default
                      "serve on. The Knurlogic models-dir entry must resolve to THIS "
                      "artifact. With an mtp-head*.safetensors present, drafting is on "
                      "and the head must accept tokens (a head that never binds is a FAIL).")
+ap.add_argument("--no-vision-smoke", action="store_true",
+                help="skip the IMAGE smoke an artifact with tower tensors "
+                     "otherwise requires. The gate then FAILS for such an "
+                     "artifact unless --no-smoke was also given: a tower "
+                     "nobody put an image through is not released.")
 ap.add_argument("--knurlogic-split", default="", help="pipeline | tensor")
 ap.add_argument("--knurlogic-link", default="", help="tcp | rdma")
 ap.add_argument("--knurlogic-host", action="append", default=[], metavar="MACHINE=user@host",
@@ -191,6 +196,25 @@ if (A / "model.safetensors.index.json").exists():
     for sh in sorted(set(wm.values())):
         if not (A / sh).exists():
             fails.append(f"index names missing shard {sh}")
+    # INDEX total_size. Loaders size and place a model by
+    # metadata.total_size; the 2026-10-03 fleet audit found three Hub
+    # indexes overstating it by 34-59% and two without it at all. Same
+    # function as `vqlab size --check-index`, so the two cannot disagree.
+    if not any(f.startswith("index names missing shard") for f in fails):
+        try:
+            from vqlab.records.size_cmd import index_total_size
+            _have, _want, _state = index_total_size(A)
+            if _state != "ok":
+                fails.append(f"index metadata.total_size {_have} vs tensor bytes "
+                             f"{_want}: {_state}; run `vqlab size --fix-index {A}`")
+        except Exception as _e:  # the gate must report, not crash
+            fails.append(f"index total_size check crashed: {type(_e).__name__}: {_e}")
+    # A grafted tower is only proven wired by an image through the runtime
+    # (graft-extras proves the bytes; generation proves the wiring).
+    from vqlab.core.artifact import tensor_class as _tc
+    _n_tower = sum(_tc(k) == "tower" for k in wm)
+else:
+    _n_tower = 0
 
 # DTYPE CENSUS. Two artifacts shipped in one day (2026-09-07) with a single
 # tensor class silently promoted to float32, and NOTHING here caught either:
@@ -573,6 +597,36 @@ elif not args.no_smoke and not fails:
 elif args.no_smoke:
     print("NOTE: --no-smoke; static checks only, generation NOT verified.")
 
+# IMAGE SMOKE. Any tower tensor (core.artifact.tensor_class == "tower") makes
+# an image through the serving runtime part of the gate, on the same arm the
+# text smoke used. DeepSeek-V4 Vision-Exp has no vision_config (flat vision_*
+# keys), so this keys on the tensors, not the config.
+_vision_note = ""
+if _n_tower and not args.no_smoke and not fails:
+    if args.no_vision_smoke:
+        fails.append(f"artifact carries {_n_tower} tower tensors but "
+                     "--no-vision-smoke skipped the image smoke")
+    else:
+        _vcmd = [sys.executable, str(_find("vision_smoke.py")), str(A)]
+        if args.knurlogic_smoke:
+            for _m in args.knurlogic_smoke:
+                _vcmd += ["--knurlogic", _m]
+            if args.knurlogic_split:
+                _vcmd += ["--knurlogic-split", args.knurlogic_split]
+            if args.knurlogic_link:
+                _vcmd += ["--knurlogic-link", args.knurlogic_link]
+        elif args.cluster_smoke:
+            _vcmd += ["--cluster", args.cluster_smoke]
+        print(f"running IMAGE smoke ({_n_tower} tower tensors) ...", flush=True)
+        if subprocess.run(_vcmd).returncode != 0:
+            fails.append("image smoke failed -- see its output above. The tower "
+                         "bytes are present but no image was shown to move "
+                         "the model through the serving runtime.")
+        else:
+            _vision_note = ", image smoke passed"
+elif _n_tower and args.no_smoke:
+    print(f"NOTE: --no-smoke; {_n_tower} tower tensors, image path NOT verified.")
+
 # BUILD RECORD (docs/PROVENANCE.md). A record whose bytes no longer verify
 # means the artifact changed after it was recorded -- a rebundle or rewrite
 # by a tool that left no amendment -- so what is being released is not what
@@ -653,4 +707,4 @@ _smoked = ("" if args.no_smoke else
            ", strict smoke generated a token")
 print(f"PASS: {len(REQUIRED)} required files present, index complete, "
       f"tokenizer round-trips, bundle imports nothing a downloader "
-      f"lacks{_smoked}{_prov_note}")
+      f"lacks, index total_size matches{_smoked}{_vision_note}{_prov_note}")

@@ -19,7 +19,7 @@ import os
 
 import pytest
 
-pytestmark = pytest.mark.integration
+pytestmark = [pytest.mark.integration, pytest.mark.lab]
 
 MODEL = os.environ.get("VQLAB_MTP_MODEL")
 SIDECAR = os.environ.get("VQLAB_MTP_SIDECAR")

@@ -24,7 +24,9 @@ gemma-4-e4b-it-VQ-PLE, FAIL with the F153 diagnostic on the mutant.
 
 These tests skip rather than fail when no multimodal artifact is on this box,
 because a box without the artifacts cannot answer the question and a fake
-bundle would only test the fake.
+bundle would only test the fake. Tests 2-4 read the configured models dir,
+so they carry `@pytest.mark.lab` and are deselected by default; run them on
+a lab box with `pytest -m lab`.
 """
 
 from __future__ import annotations
@@ -124,6 +126,7 @@ def test_vision_surface_is_wired_into_the_composite_gate():
     )
 
 
+@pytest.mark.lab
 def test_vision_arm_passes_a_correctly_bundled_multimodal_artifact():
     art = _a_multimodal_artifact(require_current_shim=True)
     if art is None:
@@ -139,6 +142,7 @@ def test_vision_arm_passes_a_correctly_bundled_multimodal_artifact():
     )
 
 
+@pytest.mark.lab
 def test_vision_arm_fails_the_historical_bug():
     """Mutation test: restore the pre-fix arch ordering, demand a FAIL.
 
@@ -174,6 +178,7 @@ def test_vision_arm_fails_the_historical_bug():
     )
 
 
+@pytest.mark.lab
 def test_text_only_artifacts_are_skipped_not_failed():
     """A text-only artifact must not be punished by a vision gate.
 
