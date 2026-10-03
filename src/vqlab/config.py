@@ -81,6 +81,28 @@ def _many(key: str) -> list[pathlib.Path]:
     return [pathlib.Path(p).expanduser() for p in v if p] if v else []
 
 
+@functools.lru_cache(maxsize=None)
+def _file_table(path: str, table: str) -> dict:
+    p = pathlib.Path(path)
+    if not p.is_file():
+        return {}
+    with p.open("rb") as f:
+        return tomllib.load(f).get(table, {})
+
+
+def boxes() -> dict:
+    """Other machines a queue may run on (`vqlab queue run --on NAME`).
+
+        [boxes.m4]
+        ssh       = "user@10.0.0.2"
+        repo      = "/Volumes/Shared/vqlab-clone"   # a clone of THIS repo on shared storage
+        python    = "/opt/homebrew/anaconda3/envs/exo/bin/python"
+        config    = "/Volumes/Shared/m4-config.toml" # that box's own [paths]
+        queue_dir = "/Volumes/Shared/queues-m4"      # shared, so this box can `queue wait` on it
+    """
+    return _file_table(str(config_file()), "boxes")
+
+
 def scratch() -> pathlib.Path:
     """Builds, pins and run outputs."""
     return _one("scratch")
