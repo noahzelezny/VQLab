@@ -44,7 +44,7 @@ def _kv(pairs, what):
 
 
 def score_one(python, model, cache_dir, corpus, tokens, chunk, stream_ple,
-              lazy_over_gb, per_pos=None):
+              lazy_over_gb, per_pos=None, allow_build_mismatch=False):
     cmd = [python, "-m", "vqlab.stream_score", "--model", model,
            "--corpus", corpus, "--tokens", str(tokens), "--chunk", str(chunk),
            "--kl-cache", cache_dir, "--lazy-over-gb", str(lazy_over_gb)]
@@ -52,6 +52,8 @@ def score_one(python, model, cache_dir, corpus, tokens, chunk, stream_ple,
         cmd += ["--kl-per-position", per_pos]
     if stream_ple:
         cmd.append("--stream-ple")
+    if allow_build_mismatch:
+        cmd.append("--allow-build-mismatch")
     r = subprocess.run(cmd, capture_output=True, text=True)
     line = [l for l in r.stdout.splitlines() if l.startswith("{")]
     if not line:
@@ -62,6 +64,48 @@ def score_one(python, model, cache_dir, corpus, tokens, chunk, stream_ple,
                          f"(rc={r.returncode}): "
                          + (tail[-1] if tail else "no output"))
     return json.loads(line[-1])
+
+
+def interpreter_build(python, model_dir):
+    """core.numerics.build as the SCORING interpreter resolves it (it may not
+    be this one). Reads files and metadata only; None if it cannot run."""
+    r = subprocess.run([python, "-m", "vqlab.core.numerics", "--model", model_dir],
+                       capture_output=True, text=True)
+    line = [x for x in r.stdout.splitlines() if x.startswith("{")]
+    return json.loads(line[-1]) if r.returncode == 0 and line else None
+
+
+# Preflight compares what does not depend on how a family resolves its
+# runtime; the arch file is compared per cell by stream_score itself.
+PREFLIGHT_FIELDS = ("mlx", "mlx_lm", "scorer_variant")
+
+
+def _preflight_builds(python, rungs, meta, caches, allow):
+    run = interpreter_build(python, next(iter(rungs.values())))
+    if run is None:
+        print("[kl-ladder] WARNING: could not read the scoring interpreter's numerics "
+              "build; each cell is still checked by stream_score", flush=True)
+        return None
+    bad = []
+    for name, d in caches.items():
+        m = json.load(open(os.path.join(d, "meta.json")))
+        cb = m.get("numerics")
+        if cb is None:
+            print(f"[kl-ladder] WARNING: cache {name} carries NO numerics build stamp "
+                  f"(written before 2026-10-03); mlx/mlx-lm/arch cannot be checked", flush=True)
+            cb = {"scorer_variant": m.get("scorer_variant")}
+            fields = ("scorer_variant",)
+        else:
+            fields = PREFLIGHT_FIELDS
+        bad += [f"{name}: {k} cache {cb.get(k)!r} vs run {run.get(k)!r}"
+                for k in fields if cb.get(k) != run.get(k)]
+    if bad and not allow:
+        raise SystemExit("FAIL: cache(s) built with different numerics than the scoring "
+                         "interpreter -- " + "; ".join(bad) + ". Rebuild them here, or pass "
+                         "--allow-build-mismatch (recorded).")
+    for b in bad:
+        print(f"[kl-ladder] WARNING: build mismatch ALLOWED: {b}", flush=True)
+    return run
 
 
 def main():
@@ -80,6 +124,10 @@ def main():
     ap.add_argument("--preflight", action="store_true",
                     help="first --cache x first --rung only (a small real run for "
                          "`vqlab queue --preflight`); not a result")
+    ap.add_argument("--allow-build-mismatch", action="store_true",
+                    help="score against caches built with different numerics (mlx, "
+                         "mlx-lm, arch file, scorer variant). REFUSED by default; "
+                         "recorded in every cell and in --out when allowed.")
     a = ap.parse_args()
     if a.preflight:
         a.cache, a.rung = a.cache[:1], a.rung[:1]
@@ -114,6 +162,13 @@ def main():
     if refused:
         raise SystemExit(f"FAIL: refusing to score unsmoked or changed pins: {', '.join(refused)}")
 
+    # THE NUMERICS BUILD, checked before the first GPU minute: the scoring
+    # interpreter's mlx / mlx-lm / scorer variant against every cache's stamp
+    # (F194). stream_score re-checks each cell, arch file included, after its
+    # (lazy) load; this catches the common case, a cache from the other env,
+    # before any model is touched.
+    run_build = _preflight_builds(a.python, rungs, meta, caches, a.allow_build_mismatch)
+
     # What each rung IS, stamped before the first GPU minute and re-checked
     # after the last: another session rebundling a rung mid-campaign (F151)
     # is a filesystem write no power gate can see.
@@ -138,14 +193,18 @@ def main():
             rec = None
             if os.path.exists(pp) and os.path.exists(rj):
                 old_rec = json.load(open(rj))
+                ob = old_rec.get("numerics")
+                same_build = not (ob and run_build) or all(
+                    ob.get(k) == run_build.get(k) for k in PREFLIGHT_FIELDS)
                 if (old_rec.get("model") == rdir
-                        and old_rec.get("_cache_dir") == cm["dir"]):
+                        and old_rec.get("_cache_dir") == cm["dir"] and same_build):
                     rec = old_rec
                     print("    (resumed from saved record)", flush=True)
             if rec is None:
                 rec = score_one(a.python, rdir, cm["dir"], cm["corpus"],
                                 cm["tokens"], cm["chunk"], a.stream_ple,
-                                a.lazy_over_gb, per_pos=pp)
+                                a.lazy_over_gb, per_pos=pp,
+                                allow_build_mismatch=a.allow_build_mismatch)
                 rec["_cache_dir"] = cm["dir"]
                 with open(rj + ".tmp", "w") as f:
                     json.dump(rec, f)
@@ -215,6 +274,7 @@ def main():
     if a.out:
         pathlib.Path(a.out).write_text(json.dumps(
             {"measured": before, "changed_during_run": changed,
+             "allow_build_mismatch": bool(a.allow_build_mismatch),
              "caches": meta, "rungs": rungs, "reference": ref,
              "table": table, "per_position_dir": ppdir,
              "paired": {r: {c: paired(r, c) for c in names}

@@ -461,6 +461,11 @@ def main():
                          "forward (rule 5). The output record is stamped "
                          "\"unvalidated\": true; such a number must never "
                          "enter a ladder or a card.")
+    ap.add_argument("--allow-build-mismatch", action="store_true",
+                    help="score against a --kl-cache built with different numerics "
+                         "(mlx, mlx-lm, arch file, scorer variant). REFUSED by "
+                         "default; when allowed, the mismatch is recorded in the "
+                         "result (numerics_check).")
     a = ap.parse_args()
 
     from mlx_lm.utils import load_tokenizer
@@ -499,6 +504,19 @@ def main():
     if bos is not None and (not ids or ids[0] != bos):
         ids = [bos] + ids[: a.tokens]
 
+    # THE NUMERICS BUILD (F194), resolved and checked BEFORE the forward: a
+    # cache made by another mlx / mlx-lm / arch file / scorer variant is
+    # refused before the first GPU minute, not after the last.
+    from vqlab.core import numerics
+    variant = entry["variant"]() if callable(entry.get("variant")) else None
+    build = numerics.build(mt, family=entry["family"], model=model, variant=variant)
+    build_check = None
+    if a.kl_cache:
+        cmeta = pathlib.Path(a.kl_cache) / "meta.json"
+        build_check = numerics.check_cache(
+            json.loads(cmeta.read_text()) if cmeta.exists() else {}, build,
+            allow=a.allow_build_mismatch)
+
     logits = entry["fn"](model, ids, a)
     tgt = mx.array(ids[1:])
     lse = mx.logsumexp(logits, axis=-1)
@@ -507,20 +525,17 @@ def main():
     ppl = math.exp(float(mx.mean(nll).item()))
     rec = {"model": str(mp), "corpus": a.corpus,
            "tokens": len(ids) - 1, "ppl": round(ppl, 6)}
-    variant = entry["variant"]() if callable(entry.get("variant")) else None
     if variant:
         rec["scorer_variant"] = variant
+    rec["numerics"] = build
+    if build_check is not None:
+        rec["numerics_check"] = build_check
     if not entry["validated"]:
         rec["unvalidated"] = True           # rule 5: never enters a ladder
 
     if a.kl_cache:
         cd = pathlib.Path(a.kl_cache)
-        cmeta = cd / "meta.json"
-        cvar = json.loads(cmeta.read_text()).get("scorer_variant") if cmeta.exists() else None
-        if cvar != variant:
-            raise SystemExit(f"FAIL: the teacher cache was built with scorer variant {cvar!r} and "
-                             f"this run is {variant!r}: teacher and student must be computed by "
-                             "the same numerics, or the KL measures the variant, not the build.")
+        rec["kl_cache"] = numerics.cache_identity(cd)
         cache_tok = mx.load(str(cd / "tokens.safetensors"))["tokens"][0]
         if cache_tok.tolist() != ids:
             raise SystemExit("FAIL: token ids differ from the cache — the "
@@ -627,6 +642,13 @@ def main():
     from vqlab.records.provenance import measured as _measured
     rec["measured"] = _measured(mp)          # what this number is a number OF
     print(json.dumps(rec), flush=True)
+    if a.kl_cache and getattr(a, "kl_per_position", None):
+        # The array's MANIFEST: rung, artifact fingerprint, cache identity and
+        # numerics build travel beside it, so kl-pair verifies a pairing from
+        # these instead of trusting two file names (kl-ladder rewrites this
+        # file with the same record plus its own bookkeeping).
+        side = pathlib.Path(a.kl_per_position + ".json")
+        side.write_text(json.dumps(rec))
 
     if a.save_topk:
         C_ = max(1, int(getattr(a, "chunk", 512) or 512))
@@ -675,6 +697,7 @@ def main():
              "captured_mass": round(captured, 6),
              "full_vocab": bool(a.save_full),
              "scorer_variant": variant,
+             "numerics": build,
              "teacher_measured": rec["measured"]}, indent=1))
         print(f"top-{a.save_topk} cache -> {outd}  captured_mass "
               f"{captured:.4f}", flush=True)

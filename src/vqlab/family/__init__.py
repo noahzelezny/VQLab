@@ -71,3 +71,11 @@ def tokenizer_hook(model_type: str) -> Optional[Callable[[str], None]]:
         if model_type in (p.model_types or (p.name,)) and p.tokenizer_register:
             return p.tokenizer_register
     return None
+
+
+def variant_for(model_type: str):
+    """The scorer's current numerics variant for model_type (None when the
+    family declares none). Stamped into every cache and result by
+    core.numerics.build."""
+    fn = (scorers().get(model_type) or {}).get("variant")
+    return fn() if callable(fn) else None
