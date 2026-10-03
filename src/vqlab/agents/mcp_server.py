@@ -54,6 +54,8 @@ from typing import Any, Dict, List, Optional
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))  # src/
 from vqlab import config  # noqa: E402
+from vqlab.agents import queue_eta as _queue_eta  # noqa: E402
+from vqlab.agents import reserve as _resv  # noqa: E402
 
 PROTOCOL_VERSION = "2024-11-05"
 SERVER_NAME = "vqlab"
@@ -505,10 +507,23 @@ def t_queue_status(name: Optional[str] = None, n: int = 5) -> Dict[str, Any]:
         here = socket.gethostname().split(".")[0]
         if st == "running" and s.get("host", here) == here and not _pid_alive(s.get("pid")):
             st = "died"
+        live = st in ("running", "created")
+        try:
+            eta = _queue_eta.queue_eta(q, _queues_dir())
+        except Exception as e:  # noqa: BLE001 -- an ETA must never hide the state
+            eta = {"steps": [{"eta_s": None, "basis": f"eta failed: {e}"}] * len(s["steps"]),
+                   "eta_s": None, "finish": None}
         out.append({"queue": str(q), "status": st, "terminal": st in (
             "passed", "failed", "stopped", "deferred", "died"),
+            "eta_s": eta["eta_s"] if live else None,
+            "eta": _queue_eta.fmt(eta["eta_s"]) if live else None,
+            "finish": eta["finish"] if live else None,
+            "reservation_override": s.get("reservation_override"),
             "steps": [{"name": r["name"], "status": r["status"], "seconds": r.get("seconds"),
-                       "reasons": r.get("reasons", [])} for r in s["steps"]]})
+                       "reasons": r.get("reasons", []),
+                       **({"eta_s": e["eta_s"], "eta_basis": e["basis"]}
+                          if r["status"] in ("running", "pending") else {})}
+                      for r, e in zip(s["steps"], eta["steps"])]})
     return {"queues_dir": str(_queues_dir()), "queues": out}
 
 
@@ -549,6 +564,11 @@ def t_gpu_state(boxes: bool = True) -> Dict[str, Any]:
     out = {"host": socket.gethostname().split(".")[0], "lease": str(lease_path()),
            "lease_holder": _lease_holder(), "exo_instances": _exo_instances(),
            "lab_state": _lab_state(), "this_host": _this_host()}
+    try:   # every box's reservation (`vqlab reserve`), from the shared file
+        out["reservations"] = [dict(r, text=_resv.describe(r)) for r in _resv.active()]
+        out["reservations_file"] = str(_resv.shared_path())
+    except Exception as e:  # noqa: BLE001
+        out["reservations"] = {"error": str(e)[:300]}
     if boxes and config.boxes():
         out["boxes"] = {n: _box_state(n, b) for n, b in config.boxes().items()}
     return out
@@ -809,14 +829,17 @@ TOOLS: Dict[str, Dict[str, Any]] = {
         "fn": t_gpu_state, "readonly": True,
         "description": "Who holds this box's GPU lease and which exo instances are placed; with "
                        "[boxes.*] in the vqlab config, the same for every other box over ssh "
-                       "(lease holder, load, GPU-heavy processes). Check it before loading a big "
-                       "model on a box that might be fitting.",
+                       "(lease holder, load, GPU-heavy processes), plus every box's reservation "
+                       "(`vqlab reserve`: who has it, until when). Check it before loading a big "
+                       "model on a box that might be fitting or is reserved.",
         "schema": _schema({"boxes": B("also report the other configured boxes (default true)")}, []),
     },
     "queue_status": {
         "fn": t_queue_status, "readonly": True,
         "description": "State of `vqlab queue` runs on this box from state.json: per-step status and "
-                       "reasons, terminal=true once passed/failed/stopped/deferred/died. Use this (or "
+                       "reasons, terminal=true once passed/failed/stopped/deferred/died, and an ETA "
+                       "(eta_s, finish, per-step eta_basis) from the running step's own progress lines "
+                       "or past runs of the same step -- null means unknown, not zero. Use this (or "
                        "`vqlab queue wait`) to know a queue finished; never grep its log.",
         "schema": _schema({"name": S("substring of the queue dir name"), "n": I("most recent n (default 5)")}, []),
     },
