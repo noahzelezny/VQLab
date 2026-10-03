@@ -4,7 +4,7 @@
 A bf16 teacher (on the HDD, never re-downloaded), a family, a geometry (d, K) or a geomap.
 
 ## Process
-`vqlab fit-moe`, `fit-dense`, `fit-ple`, `geo-build` (refit only the named modules; every other module keeps its shipped bytes), `harvest-parts`, `fits` (the fit store: index / list / file).
+`vqlab fit-moe` (`--pack` packs codes to true bit width as each shard is written, so unpacked K>256 codes never land on disk), `fit-dense`, `fit-ple`, `geo-build` (refit only the named modules; every other module keeps its shipped bytes), `harvest-parts`, `fits` (the fit store: index / list / file).
 
 ## Outputs
 A new directory (never in place) carrying `vqlab_provenance.json`: the fitter settings, seed, inputs and per-module origin. `geo-build` also keeps `origins.json` in its parts dir.
