@@ -291,7 +291,9 @@ def test_pack(fx, tmp_path):
 
 def test_sz_pack(fx):
     out = fx["root"] / "sz"
-    cli("sz-pack", fx["vq16"], "--out", out, "--allow-any-out")
+    p = cli("sz-pack", fx["vq16"], "--out", out, "--allow-any-out")
+    # the straddling L1.gate_proj is left unpacked, and said so (not silently)
+    assert "straddle a shard boundary" in p.stdout + p.stderr
     s = snapshot(out)
     s["files"] = [f for f in s["files"] if f != "model.py"]
     check("sz_pack", s, fx["root"])
