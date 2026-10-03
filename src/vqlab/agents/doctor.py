@@ -55,11 +55,19 @@ def report():
          "vqlab_on_path": shutil.which("vqlab"), "packages": {}, "arch_files": {}, "storage": {},
          "hf_home": os.environ.get("HF_HOME"), "hf_token": _hf_token(), "problems": [], "notes": []}
     src = pathlib.Path(vqlab.__file__).parent.parent
+    installed = _pkg("vqlab")["version"] is not None
     if (src.parent / "pyproject.toml").exists() and "site-packages" not in str(src):
-        r["notes"].append(f"vqlab imported from a checkout ({src}), not an installed package")
-    if not r["vqlab_on_path"]:
-        r["notes"].append("`vqlab` is not on PATH: run `python -m vqlab.cli`, or "
-                          "`pip install -e . --no-deps` into this interpreter")
+        r["notes"].append(f"vqlab runs from the checkout {src}"
+                          + (" (editable install)" if installed else
+                             " via PYTHONPATH, not installed: `pip install -e . --no-deps`"))
+    own = pathlib.Path(sys.executable).parent / "vqlab"
+    if own.exists() and r["vqlab_on_path"] != str(own):
+        r["notes"].append(f"this interpreter's `vqlab` is {own}, but the shell's PATH "
+                          f"{'finds ' + r['vqlab_on_path'] if r['vqlab_on_path'] else 'does not reach it'}: "
+                          f"activate the environment, or call {own} directly")
+    elif not own.exists() and not r["vqlab_on_path"]:
+        r["notes"].append("`vqlab` is not installed in this interpreter: `pip install -e . --no-deps`, "
+                          "or run `python -m vqlab.cli`")
     for p in ("mlx", "mlx-lm", "mlx-vlm", "knurlogic"):
         r["packages"][p] = _pkg(p)
     if not r["packages"]["mlx"]["version"]:
