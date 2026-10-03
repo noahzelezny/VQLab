@@ -153,8 +153,7 @@ def main(argv=None):
     tmp.rename(art.dir / SHARD)
     wm = {k: f for k, f in art.index.items() if f != SHARD}
     wm.update({t: SHARD for t in pick.values()})
-    total = sum((art.dir / f).stat().st_size for f in set(wm.values()))
-    write_index(art.dir, wm, total_size=total)
+    write_index(art.dir, wm)
     if cfg_add:
         cfg = {**art.config, **cfg_add}
         (art.dir / "config.json").write_text(json.dumps(cfg, indent=1))

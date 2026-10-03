@@ -150,9 +150,26 @@ def place(src, dst, copy=False):
         os.symlink(src, dst)
 
 
-def write_index(out, weight_map, total_size=None, metadata=None) -> None:
+def tensor_bytes(out, shards) -> int:
+    """metadata.total_size as HF defines it: the sum of tensor DATA bytes
+    across the shards (headers excluded), read from the shards' headers."""
+    out = pathlib.Path(out)
+    n = 0
+    for f in set(shards):
+        for v in read_header(out / f).values():
+            a, b = v["data_offsets"]
+            n += b - a
+    return n
+
+
+def write_index(out, weight_map, total_size="auto", metadata=None) -> None:
+    """Write model.safetensors.index.json. total_size="auto" (the default)
+    measures it from the output shards' headers, so it can never describe a
+    parent's bytes; None omits it."""
     out = pathlib.Path(out)
     md = dict(metadata or {})
+    if total_size == "auto":
+        total_size = tensor_bytes(out, weight_map.values())
     if total_size is not None:
         md["total_size"] = total_size
     (out / INDEX).write_text(json.dumps({"metadata": md, "weight_map": weight_map}, indent=1))

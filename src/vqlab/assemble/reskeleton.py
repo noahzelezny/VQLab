@@ -141,7 +141,7 @@ def write(vq, sk, out, src, qmap, vcfg):
             del arrs
     flush()
     total = sum((out / fn).stat().st_size for fn in set(index.values()))
-    write_index(out, dict(sorted(index.items())), total_size=total)
+    write_index(out, dict(sorted(index.items())))
     return len(index), total
 
 
