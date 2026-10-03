@@ -24,6 +24,8 @@ def _source(key):
     env = C._ENV[key]
     if os.environ.get(env):
         return f"${env}"
+    if key == "teachers" and C.box_teachers():
+        return f"[boxes.{C.this_box()}] teachers: running on that box"
     if C._file_paths(str(C.config_file())).get(key):
         return str(C.config_file())
     return "default"
@@ -39,6 +41,12 @@ def show():
     print(f"  {'roots':10s} {', '.join(map(str, C.roots()))}")
     for name, b in C.boxes().items():
         print(f"  box {name}: ssh {b.get('ssh')}, repo {b.get('repo')}")
+        print("      teachers " + (f"{b['teachers']}  (local copy; used when running on {name})"
+                                   if b.get("teachers") else
+                                   f"= [paths] teachers (add `teachers = \"<path>\"` under "
+                                   f"[boxes.{name}] to use a local copy there)"))
+    print(f"  this box: {C.this_box() or 'home (no [boxes.*] entry matches)'}"
+          f"  [$VQLAB_BOX, else hostname vs box name / `hostname`]")
     return 0
 
 

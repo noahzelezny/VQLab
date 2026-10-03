@@ -122,6 +122,7 @@ COMMANDS = {
     "sz-resident": ("skipzero/sz_resident_build.py", "stage 2: stage-1 pack -> compact-RESIDENT artifact (row table, new dir)"),
     "sz-bitexact": ("skipzero/sz_bitexact.py", "byte-equality gate, resident vs reference (modules N=1/8/4096/4097, logits, 9k prefill, greedy); --synthetic, --selftest"),
     "queue": ("run_queue.py", "run a list of steps from PINNED code (git worktree), under the GPU lease, failing loudly; --preflight"),
+    "reserve": ("reserve.py", "say who has a box until when (`reserve m4 --for X --until +3h`, --list, --release); queue run refuses a box reserved for someone else"),
 }
 
 
@@ -222,6 +223,8 @@ def main() -> int:
         from vqlab.bench import box_quiet   # timed commands refuse a busy Mac (rule III)
         box_quiet.guard(cmd)
     script = _layout.find(COMMANDS[cmd][0])
+    from vqlab import config as _cfg   # <teachers>/X -> this box's teachers root (a local copy on a box with one)
+    rest = [_cfg.expand(a) for a in rest]
     sys.argv = [str(script), *rest]
     import runlog
     run = runlog.start(cmd, rest)
