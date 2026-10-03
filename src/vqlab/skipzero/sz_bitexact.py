@@ -582,6 +582,14 @@ def selftest():
             print(f"[selftest] {label}: {path} not found: FAIL")
             ok = False
             continue
+        if want == "u8":
+            txt = path.read_text()
+            if txt.count("#if SZ") >= 2 and "def skipzero_weights" in txt:
+                # rebundled onto a runtime with the SZ switch built in (the
+                # 397B was, 2026-10-01): no fork applies, none is needed
+                print(f"[selftest] {label}: carries the SZ switch natively (rebundled), "
+                      "no u8 fork needed: OK")
+                continue
         s = _src_strings(path, names)
         try:
             v, d, p = sz_resident.patch_vintage(s)
