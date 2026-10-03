@@ -40,3 +40,10 @@ def test_mcp_queue_status(tmp_path, monkeypatch):
     _q(tmp_path, "20261002-a", "running", pid=2**22 + 12345)
     r = ms.t_queue_status()
     assert r["queues"][0]["status"] == "died" and r["queues"][0]["terminal"]
+
+
+def test_remote_queue_not_judged_by_local_pid(tmp_path):
+    d = _q(tmp_path, "r", "running", pid=2**22 + 12345)
+    s = json.loads((d / "state.json").read_text()); s["host"] = "some-other-box"
+    (d / "state.json").write_text(json.dumps(s))
+    assert rq.wait([d], timeout=0.05, poll=0.01) == 2      # still running, not died
