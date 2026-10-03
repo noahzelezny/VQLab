@@ -47,3 +47,13 @@ def test_remote_queue_not_judged_by_local_pid(tmp_path):
     s = json.loads((d / "state.json").read_text()); s["host"] = "some-other-box"
     (d / "state.json").write_text(json.dumps(s))
     assert rq.wait([d], timeout=0.05, poll=0.01) == 2      # still running, not died
+
+
+def test_written_paths_are_outputs():
+    """stream-score --kl-per-position and runtime-equiv --keep-dir WRITE their
+    path: the queue must not demand it exists. (--save-topk is the top-k COUNT;
+    the cache dir is --out.)"""
+    from vqlab.agents import run_queue
+    assert "--save-topk" not in run_queue.OUT_FLAGS
+    for f in ("--kl-per-position", "--keep-dir"):
+        assert f in run_queue.OUT_FLAGS
