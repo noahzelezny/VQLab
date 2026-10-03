@@ -42,6 +42,7 @@ COMMANDS = {
     "pack-ple": ("pack_ple.py", "pack PLE codes row-aligned to true bit-width"),
     "stream-convert": ("stream_convert.py", "streaming affine convert / struct base for models bigger than RAM"),
     "sanitize-stream": ("sanitize_stream.py", "exact runtime-layout teacher, one layer at a time through Model.sanitize (DeepSeek-V4)"),
+    "minibase": ("minibase.py", "a fit base of one layer band's shards (symlinks), so a band fit writes only those"),
     "mix": ("mix.py", "assemble an artifact from per-layer-band sources, shard by shard; config maps follow the bytes"),
     "teacher-prep": ("teacher_prep.py", "official release -> exact MLX teacher: cache guard, F8_E8M0 relabel, disk preflight, sanitize-stream"),
     "splice-ple": ("splice_ple.py", "splice VQ PLE codes into a packed artifact"),
