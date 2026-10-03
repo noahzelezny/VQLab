@@ -306,10 +306,11 @@ if (A / "tokenizer.json").exists():
             # config at import (its deepseek_v4: max_position_embeddings,
             # rope_theta). Importing it is exactly what serving does.
             mt = json.loads((A / "config.json").read_text()).get("model_type")
-            if mt not in ("deepseek_v4",):
+            from vqlab.family import tokenizer_hook
+            hook = tokenizer_hook(mt)            # the family plugin says how serving does it
+            if hook is None:
                 raise
-            from knurlogic.engine import register as _kreg   # serving's own path
-            _kreg.register(mt)
+            hook(mt)
             tok = AutoTokenizer.from_pretrained(str(A))
             print(f"WARNING: plain transformers cannot load this tokenizer "
                   f"({type(e_auto).__name__}: {e_auto}); it loads once "

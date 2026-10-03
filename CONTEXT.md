@@ -74,6 +74,7 @@ src/vqlab/
   ship/         publish (a human action) + serve
   agents/       MCP server, queue runner, read-only GUI
   mtp/          MTP speculative-decoding LIBRARY (vqlab.mtp); its tools live in the stages
+  family/       model families as plugins, one file each (fit layout, streamed scorer, tokenizer hook); deepseek_v4 first
   skipzero/     the vq-skipzero pack/check tools (the runtime switch itself lives in runtime/)
 ```
 
