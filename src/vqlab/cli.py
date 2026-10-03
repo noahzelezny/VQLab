@@ -59,6 +59,7 @@ COMMANDS = {
     "graft": ("graft_vision.py", "graft the bf16 vision tower into an artifact"),
     "ple-swap": ("ple_swap.py", "swap an artifact's PLE tables for another rung's (symlinks; prices PLE bytes on KL)"),
     "mtp-extract": ("mtp_extract.py", "pull a model's MTP head out of its source checkpoint into a graft"),
+    "mtp-head-ds4": ("mtp_head_ds4.py", "DeepSeek-V4-Flash draft head for a VQ trunk: exact mtp.0 via the runtime sanitize, VQ experts at trunk geometry, affine dense (the shipped q6 recipe)"),
     "mtp-pack": ("mtp_pack.py", "pack a bf16 MTP graft into a quantized drafting sidecar"),
     "mtp-graft": ("mtp_graft.py", "emit the MTP head in a native runtime's layout (language_model.mtp.*)"),
     # bundle/
