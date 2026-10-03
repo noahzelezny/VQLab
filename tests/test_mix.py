@@ -66,3 +66,20 @@ def test_minibase(tmp_path):
     wm = json.load(open(tmp_path / "mb" / "model.safetensors.index.json"))["weight_map"]
     assert set(wm.values()) == {"b.safetensors"}
     assert (tmp_path / "mb" / "config.json").exists()
+
+
+def test_loo_bands(tmp_path):
+    from vqlab.assemble import loo_bands
+    lay = {"a.safetensors": [0, 1], "b.safetensors": [2, 3]}
+    vq = _art(tmp_path / "vq", 256, lay)
+    ex = _art(tmp_path / "ex", 256, lay)
+    (ex / "config.json").write_text(json.dumps({"quantization": {
+        "bits": 4, "layers.2.mlp.experts": {"bits": 4, "mode": "mxfp4"},
+        "layers.3.mlp.experts": {"bits": 4, "mode": "mxfp4"}}}))
+    loo_bands.main(["--vq", str(vq), "--exact", str(ex), "--bands", "2-3",
+                    "--out-dir", str(tmp_path / "loo"), "--cache", "prose=/x"])
+    cfg = json.load(open(tmp_path / "loo" / "loo-L2-3" / "config.json"))
+    assert set(cfg["vq_modules"]) == {"layers.0.mlp.experts", "layers.1.mlp.experts"}
+    assert cfg["quantization"]["layers.2.mlp.experts"]["mode"] == "mxfp4"
+    q = json.load(open(tmp_path / "loo" / "loo-queue.json"))
+    assert q["steps"][0]["args"][q["steps"][0]["args"].index("--rung") + 1].startswith("vq=")
