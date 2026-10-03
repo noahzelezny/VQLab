@@ -4,10 +4,17 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "vqlab"
-version = "0.1.0"
+version = "0.2.0"
 description = "Size-targeted, data-free vector quantization of large models on Apple Silicon (MLX)"
 readme = "README.md"
 requires-python = ">=3.12"
+keywords = ["quantization", "vector-quantization", "mlx", "apple-silicon", "llm"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: MacOS",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Development Status :: 4 - Beta",
+]
 license = "Apache-2.0"
 license-files = ["LICENSE"]
 # Tested: the lab runs mlx 0.32.0.dev + mlx-lm 0.31.9; CI (scripts/ci.sh)
@@ -25,6 +32,12 @@ dependencies = [
 # kl/ppl scoring and check-release's tokenizer round-trip
 score = ["transformers>=4.57"]
 test = ["pytest", "ruff", "build"]
+
+[project.urls]
+Homepage = "https://github.com/noahzelezny/VQLab"
+Changelog = "https://github.com/noahzelezny/VQLab/blob/master/CHANGELOG.md"
+Paper = "https://doi.org/10.5281/zenodo.22119017"
+Models = "https://huggingface.co/TheDrainFlorist"
 
 [project.scripts]
 vqlab = "vqlab.cli:main"
