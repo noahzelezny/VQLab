@@ -30,6 +30,7 @@ A generated caption is PRINTED for the human, never asserted on -- captions
 are not a deterministic instrument and III.11 does not need them to be.
 
     vqlab vision-smoke <artifact> [--static] [--prompt ...] [--image f.png]
+    vqlab vision-smoke <artifact> --knurlogic m3 [--knurlogic m4 --knurlogic-split pipeline]
 """
 import argparse
 import importlib.util
@@ -37,6 +38,8 @@ import json
 import os
 import pathlib
 import sys
+
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))  # src/
 
 # A synthetic probe beats a checked-in JPEG: no binary in the repo, no license
 # question, and the content is known exactly, so the printed caption is worth
@@ -51,6 +54,126 @@ def _probe_image(path):
     im.save(path)
     return path
 
+
+
+def _image_request_check(post, mid, img, max_tokens):
+    """The HTTP image arm shared by --cluster (exo) and --knurlogic.
+
+    `post(doc) -> dict` sends one OpenAI chat-completions body. Asserts the
+    image request carried MORE prompt tokens than the same question as text
+    (the tower's patches entered the prompt) and that a caption came back.
+    Returns a list of problems (empty = pass); the caption is printed, never
+    asserted on.
+    """
+    import base64
+    b64 = base64.b64encode(open(img, "rb").read()).decode()
+    q = "What shape and colors are in this image? Answer in one short sentence."
+
+    def _body(content, ntok):
+        return {"model": mid, "max_tokens": ntok, "temperature": 0,
+                "messages": [{"role": "user", "content": content}]}
+
+    try:
+        n_text = post(_body(q, 1))["usage"]["prompt_tokens"]
+    except Exception as exc:
+        return [f"no text answer from {mid} ({type(exc).__name__}: {exc})"]
+    try:
+        out = post(_body([{"type": "image_url",
+                           "image_url": {"url": "data:image/png;base64," + b64}},
+                          {"type": "text", "text": q}], max_tokens))
+        msg = (out.get("choices") or [{}])[0].get("message") or {}
+        cap = (msg.get("content") or "").strip()
+        n_img = (out.get("usage") or {}).get("prompt_tokens")
+    except Exception as exc:
+        return [f"the server refused the image request "
+                f"({type(exc).__name__}: {exc})"]
+    print(f"prompt_tokens   : text-only {n_text} -> with image {n_img}"
+          + (f" (+{n_img - n_text} image tokens)" if n_img is not None else ""))
+    print(f"\nprobe is {PROBE_DESC}\nmodel says: {cap}")
+    probs = []
+    if n_img is None:
+        probs.append("the image response reported no usage.prompt_tokens, so "
+                     "nothing shows the image reached the prompt")
+    elif n_img <= n_text:
+        probs.append("the image added NO prompt tokens -- the request was "
+                     "served as text and the tower never ran")
+    if not cap:
+        probs.append("image accepted but no caption came back")
+    return probs
+
+
+def _knurlogic(art, a, K=None, SPK=None, ready_timeout=1800, poll=10):
+    """Put the probe image through Knurlogic, the runtime we serve on.
+
+    The arm for DeepSeek-V4 Vision-Exp: its tower is not an mlx_vlm
+    VisionModel (no vision_config, flat vision_* keys), so the local arms
+    cannot load it, and it is too large for one box anyway. The load mirrors
+    `check-release --knurlogic-smoke`: the models-dir entry must resolve to
+    THIS artifact, and the job is unloaded whatever happens. K / SPK are
+    injectable for tests.
+    """
+    import os
+    import time
+    if SPK is None:
+        from vqlab.bench import speed_pair_knurlogic as SPK
+    if K is None:
+        ksrc = os.environ.get("KNURLOGIC_SRC", "")
+        if ksrc:
+            sys.path.insert(0, ksrc)
+        try:
+            from knurlogic.interfaces import mcp as K
+        except ImportError:
+            raise SystemExit("FAIL: knurlogic not importable (set KNURLOGIC_SRC "
+                             "to its source tree)")
+    md = pathlib.Path(os.environ.get("KNURLOGIC_MODELS", "~/.exo/models")).expanduser()
+    name = art.resolve().name
+    if (md / name).resolve() != art.resolve():
+        raise SystemExit(f"FAIL: Knurlogic models dir entry {md / name} does not "
+                         f"resolve to {art.resolve()}: the smoke would load "
+                         "something else")
+    img = a.image or _probe_image(
+        pathlib.Path(__import__("tempfile").mkdtemp()) / "probe.png")
+    out = K.load(artifact=name, machines=a.knurlogic, split=a.knurlogic_split,
+                 link=a.knurlogic_link, sets={"KNURLOGIC_MTP": "off"})
+    job = out.get("job") or out.get("instance")
+    if not job or out.get("refused") or out.get("error"):
+        raise SystemExit(f"FAIL: Knurlogic load refused or failed: {out}")
+    try:
+        t0 = time.time()
+        while True:
+            e = SPK._entry(K, job)
+            if e and SPK._ready(e):
+                break
+            if e and (e.get("phase") in ("failed", "stopped") or e.get("state") == "failed"):
+                raise SystemExit(f"FAIL: Knurlogic job {job} {e.get('phase')}: {e}")
+            if time.time() - t0 > ready_timeout:
+                raise SystemExit(f"FAIL: Knurlogic job {job} not ready after "
+                                 f"{ready_timeout} s")
+            time.sleep(poll)
+        url = out.get("url") or e.get("url") or e.get("where")
+        print(f"knurlogic       : {', '.join(a.knurlogic)} at {url}\n"
+              f"model_id        : {name}")
+        probs = _image_request_check(lambda d: SPK._post(url, d), name, img,
+                                     a.max_tokens)
+    finally:
+        K.unload(job=str(job))
+    if probs:
+        raise SystemExit("\nFAIL: " + "; ".join(probs))
+    print("\nPASS (KNURLOGIC): the probe image went through the serving "
+          "runtime, its patches entered the prompt and a caption came back. "
+          "The caption is PRINTED, not asserted on -- read it.")
+    return 0
+
+
+def _n_tower_tensors(art):
+    """Tower tensors in the index, by core.artifact.tensor_class -- the same
+    classifier `size` and `check-release` use."""
+    idx = art / "model.safetensors.index.json"
+    if not idx.exists():
+        return 0
+    from vqlab.core.artifact import tensor_class
+    wm = json.loads(idx.read_text())["weight_map"]
+    return sum(tensor_class(k) == "tower" for k in wm)
 
 
 def _cluster(art, a):
@@ -70,51 +193,25 @@ def _cluster(art, a):
     patch count) and that a caption came back -- a model served WITHOUT the
     image would answer the same question with a far shorter prompt.
     """
-    import base64, json as _json, urllib.request
+    import json as _json, urllib.request
     mid = a.cluster_model or ("TheDrainFlorist/" + art.name.split("--", 1)[-1])
     img = a.image or _probe_image(
         pathlib.Path(__import__("tempfile").mkdtemp()) / "probe.png")
-    b64 = base64.b64encode(open(img, "rb").read()).decode()
 
-    def _post(content, ntok):
+    def _post(doc):
         req = urllib.request.Request(
             a.cluster.rstrip("/") + "/v1/chat/completions",
-            data=_json.dumps({"model": mid, "max_tokens": ntok,
-                              "temperature": 0,
-                              "messages": [{"role": "user",
-                                            "content": content}]}).encode(),
+            data=_json.dumps(doc).encode(),
             headers={"Content-Type": "application/json"})
         with urllib.request.urlopen(req, timeout=a.cluster_timeout) as r:
             return _json.load(r)
 
-    q = "What shape and colors are in this image? Answer in one short sentence."
     print(f"cluster         : {a.cluster}\nmodel_id        : {mid}")
-    try:
-        base = _post(q, 1)
-    except Exception as exc:
-        raise SystemExit(f"FAIL: no instance answering for {mid} at "
-                         f"{a.cluster} ({exc}). Place one first -- and note "
-                         f"a model CARD in /state is not a placed instance.")
-    n_text = base["usage"]["prompt_tokens"]
-
-    try:
-        out = _post([{"type": "image_url",
-                      "image_url": {"url": "data:image/png;base64," + b64}},
-                     {"type": "text", "text": q}], a.max_tokens)
-    except Exception as exc:
-        raise SystemExit(f"FAIL: the cluster refused the image request: {exc}")
-    msg = out["choices"][0]["message"]
-    cap = (msg.get("content") or "").strip()
-    n_img = out["usage"]["prompt_tokens"]
-
-    print(f"prompt_tokens   : text-only {n_text} -> with image {n_img} "
-          f"(+{n_img - n_text} image tokens)")
-    print(f"\nprobe is {PROBE_DESC}\nmodel says: {cap}")
-    if n_img <= n_text:
-        raise SystemExit("\nFAIL: the image added NO prompt tokens -- the "
-                         "request was served as text and the tower never ran.")
-    if not cap:
-        raise SystemExit("\nFAIL: image accepted but no caption came back.")
+    probs = _image_request_check(_post, mid, img, a.max_tokens)
+    if probs:
+        raise SystemExit("\nFAIL: " + "; ".join(probs) + " (no instance? "
+                         "place one first -- a model CARD in /state is not "
+                         "a placed instance)")
     print("\nPASS (CLUSTER): the artifact's own vision tower ran inside the "
           "served pipeline, its patches entered the language model, and the "
           "model captioned the image. This IS III.11 vision evidence.\n"
@@ -250,16 +347,30 @@ def main() -> int:
                     help="exo model_id; default derives it from the "
                          "artifact dir name (owner--name -> owner/name).")
     ap.add_argument("--cluster-timeout", type=float, default=600.0)
+    ap.add_argument("--knurlogic", metavar="MACHINE", action="append", default=[],
+                    help="put the image through Knurlogic on these machine(s) "
+                         "(repeat for a split): the runtime we serve on, and "
+                         "the only arm that drives DeepSeek-V4 Vision-Exp, whose "
+                         "tower is not an mlx_vlm VisionModel. The Knurlogic "
+                         "models-dir entry must resolve to THIS artifact.")
+    ap.add_argument("--knurlogic-split", default="", help="pipeline | tensor")
+    ap.add_argument("--knurlogic-link", default="", help="tcp | rdma")
     ap.add_argument("--max-tokens", type=int, default=32)
     a = ap.parse_args()
 
     art = pathlib.Path(a.artifact)
     cfg = json.loads((art / "config.json").read_text())
-    mm = bool(cfg.get("vision_config") or cfg.get("audio_config"))
+    # Tower TENSORS count too: DeepSeek-V4 Vision-Exp carries a grafted tower
+    # with flat vision_* config keys and no vision_config, and a config-only
+    # test SKIPPED it as text-only.
+    n_tower = _n_tower_tensors(art)
+    mm = bool(cfg.get("vision_config") or cfg.get("audio_config") or n_tower)
     if not mm:
-        print(f"SKIP: {art.name} is text-only (no vision_config/audio_config). "
-              "`smoke` is the gate for it.")
+        print(f"SKIP: {art.name} is text-only (no vision_config/audio_config, "
+              "no tower tensors). `smoke` is the gate for it.")
         return 0
+    if a.knurlogic:
+        return _knurlogic(art, a)
     if a.cluster:
         # The cluster serves the artifact from its OWN directory, so no
         # local load and no bundle import -- the runtime under test is
@@ -267,6 +378,11 @@ def main() -> int:
         return _cluster(art, a)
     if not (art / "model.py").exists():
         raise SystemExit("FAIL: artifact has no model.py to exercise.")
+    if n_tower and not cfg.get("vision_config"):
+        raise SystemExit(
+            f"FAIL: {n_tower} tower tensors but no vision_config, so no "
+            "mlx_vlm arm can load this tower (DeepSeek-V4 Vision-Exp). Drive "
+            "it through the serving runtime: --knurlogic MACHINE.")
 
     # ---- 1. SURFACE -------------------------------------------------------
     mod = _load_bundle_module(art)
