@@ -42,6 +42,7 @@ COMMANDS = {
     "pack-ple": ("pack_ple.py", "pack PLE codes row-aligned to true bit-width"),
     "stream-convert": ("stream_convert.py", "streaming affine convert / struct base for models bigger than RAM"),
     "sanitize-stream": ("sanitize_stream.py", "exact runtime-layout teacher, one layer at a time through Model.sanitize (DeepSeek-V4)"),
+    "mix": ("mix.py", "assemble an artifact from per-layer-band sources, shard by shard; config maps follow the bytes"),
     "teacher-prep": ("teacher_prep.py", "official release -> exact MLX teacher: cache guard, F8_E8M0 relabel, disk preflight, sanitize-stream"),
     "splice-ple": ("splice_ple.py", "splice VQ PLE codes into a packed artifact"),
     "pack-dense": ("pack_dense.py", "pack a dense VQ artifact"),
@@ -123,7 +124,7 @@ COMMANDS = {
 # kept in vqlab_provenance.history.jsonl and linked by id.
 BUILD_OUTPUTS = {
     "pack": ("--out",), "pack-dense": ("--out",), "build-dense": ("--out",),
-    "stream-convert": ("--out",), "sanitize-stream": ("--out",), "teacher-prep": ("--out",), "ple-swap": ("--out",), "unpack-dense": ("--out",),
+    "stream-convert": ("--out",), "sanitize-stream": ("--out",), "teacher-prep": ("--out",), "mix": ("--out",), "ple-swap": ("--out",), "unpack-dense": ("--out",),
     "pack-ple": ("--artifact",), "graft": ("--artifact",), "splice-ple": ("--artifact",),
     "bundle": ("--artifact",), "rebundle-dense": ("--artifact",),
     "patch-arch": ("--out",), "vision-layout": ("--out", 0),
