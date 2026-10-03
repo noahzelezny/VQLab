@@ -11,10 +11,12 @@ snapshot; it was never a release, and moves to this commit when this ships.)
   works. `fit/vq_397b_codes.py` is now `fit_moe.py`, `assemble/pack_artifact.py`
   is `pack.py` (old names import).
 - **Own environment and the architectures it needs**: `vqlab doctor`
-  (interpreter, mlx builds, arch shas, storage, token). Knurlogic's vendored
-  architectures (deepseek_v4, qwen4_exp, qwen3_5/_moe, gemma4, glm5_next)
-  ship in `vqlab.family.arch` and load as `mlx_lm.models.<name>` on
-  `import vqlab`: stock mlx-lm 0.32 has no deepseek_v4 or qwen4_exp.
+  (interpreter, mlx builds, arch shas, storage, token). VQLab depends on
+  [Knurlogic](https://github.com/noahzelezny/Knurlogic) for the
+  architecture files stock mlx-lm 0.32 lacks or differs on (deepseek_v4,
+  qwen4_exp, qwen3_5/_moe, gemma4, glm5_next): `import vqlab` serves them as
+  `mlx_lm.models.<name>` through Knurlogic's own `register()`, so scoring
+  loads exactly the arithmetic Knurlogic serves, from one copy.
   `VQLAB_VENDORED_ARCH=0` scores stock mlx-lm.
 - **Numerics stamps**: every teacher cache, score and per-position array
   records mlx, mlx-lm, the arch file's sha and the scorer variant; scoring
