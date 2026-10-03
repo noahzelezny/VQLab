@@ -59,6 +59,15 @@ def main(argv=None):
     cfg = json.load(open(src / "config.json"))
     model_cls, args_cls = _get_classes(cfg)
     model = model_cls(args_cls.from_dict(cfg))   # never evaluated: params lazy
+    # Keys the sanitize passes through but the runtime model has no slot for
+    # (DeepSeek-V4-Flash-Vision-Exp: vision.*, aligner.*, image_*, the
+    # image-token gate bias_vl) would make a strict load fail. Keep exactly
+    # the model's own parameters and REPORT what was dropped, never silently.
+    from mlx.utils import tree_flatten
+    model_keys = {k for k, _ in tree_flatten(model.parameters())}
+    # quantized outputs carry .scales/.biases the unquantized model lacks
+    model_mods = {k.rsplit(".", 1)[0] for k in model_keys}
+    dropped = collections.Counter()
 
     wmap = json.load(open(src / "model.safetensors.index.json"))["weight_map"]
     groups = collections.defaultdict(list)
@@ -90,6 +99,9 @@ def main(argv=None):
                 sub.update({k: data[k] for k in ks})
                 del data
             res = model.sanitize(sub)
+            for k in [k for k in res if not _wanted(k, model_keys, model_mods)]:
+                dropped[re.sub(r"\.\d+\.", ".N.", k)] += 1
+                del res[k]
             mx.eval(list(res.values()))
         tmp = out / fn.replace(".safetensors", ".tmp.safetensors")
         mx.save_safetensors(str(tmp), res, metadata={"format": "mlx"})
@@ -102,6 +114,11 @@ def main(argv=None):
         del sub, res
         mx.clear_cache()
 
+    if dropped:
+        print(f"dropped {sum(dropped.values())} tensors the runtime model has "
+              f"no parameter for:", flush=True)
+        for k, n in sorted(dropped.items()):
+            print(f"  {n:5d} x {k}", flush=True)
     tot = sum((out / f).stat().st_size for f in set(index.values()))
     (out / "model.safetensors.index.json").write_text(json.dumps(
         {"metadata": {"total_size": tot}, "weight_map": index}, indent=1))
@@ -117,6 +134,15 @@ def main(argv=None):
     print(f"saved {tot / 2**30:.1f} GiB, {len(index)} tensors, "
           f"{len(quant)} quantized modules ({time.time() - t0:.0f}s)", flush=True)
     return 0
+
+
+def _wanted(k, model_keys, model_mods):
+    if k in model_keys:
+        return True
+    if "." not in k:                      # top-level tensor (image_pad, ...)
+        return False
+    mod, leaf = k.rsplit(".", 1)
+    return leaf in ("scales", "biases") and mod in model_mods
 
 
 def _header(p):
