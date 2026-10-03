@@ -109,6 +109,20 @@ def _entry(K, job):
     return None
 
 
+def _drafting(url):
+    """Knurlogic's cumulative drafting counters from /status.json (None when
+    the server does not report them). Deltas around one request give its
+    acceptance."""
+    root = url.rstrip("/")
+    if root.endswith("/v1"):
+        root = root[:-3]
+    try:
+        with urllib.request.urlopen(root + "/status.json", timeout=10) as r:
+            return (json.loads(r.read()).get("drafting") or None)
+    except Exception:  # noqa: BLE001
+        return None
+
+
 def run_arm(K, name, a, prompt, warm):
     # A Mac frees an unloaded model's memory some time AFTER its job is gone,
     # so a load right behind the previous arm's unload can be refused for room
@@ -149,7 +163,9 @@ def run_arm(K, name, a, prompt, warm):
         # prompt cache, and the timed request then reports no prefill at all.
         _post(url, {"model": name, "temperature": 0, "max_tokens": 8,
                     "messages": [{"role": "user", "content": warm}]})
+        d0 = _drafting(url) if a.draft else None
         r = _post(url, dict(base, max_tokens=a.gen_tokens))
+        d1 = _drafting(url) if a.draft else None
         u = r.get("usage", {})
         t = (u.get("knurlogic") or {}).get("timing") or {}
         rec = {"arm": name, "served_name": served, "runtime_by_rank": runtime,
@@ -159,6 +175,14 @@ def run_arm(K, name, a, prompt, warm):
                "gen_tokens": u.get("completion_tokens"),
                "prefill_tok_s": t.get("prefill_tok_s"), "decode_tok_s": t.get("decode_tok_s"),
                "ttft_s": t.get("ttft_s")}
+        if a.draft:
+            if d0 is None or d1 is None:
+                rec["acceptance"] = None
+            else:
+                st = d1.get("steps", 0) - d0.get("steps", 0)
+                ac = d1.get("accepted", 0) - d0.get("accepted", 0)
+                rec.update(draft_steps=st, draft_accepted=ac,
+                           acceptance=round(ac / st, 4) if st else None)
     finally:
         K.unload(job=str(job))
         for _ in range(60):                       # wait until it is gone everywhere
@@ -208,11 +232,14 @@ def main(argv=None) -> int:
                          "so decode speed reflects the kernels, not draft acceptance")
     ap.add_argument("--host", action="append", default=[],
                     metavar="MACHINE=user@host", help="ssh target for a remote rank's logs")
+    ap.add_argument("--draft", action="store_true",
+                    help="drafting ON (KNURLOGIC_MTP=on) and record per-request acceptance from "
+                         "/status.json; arms are then usually two heads on one trunk (vqlab mtp-arms)")
     ap.add_argument("--out")
     a = ap.parse_args(argv)
     if not a.knurlogic_src:
         ap.error("--knurlogic-src (or KNURLOGIC_SRC) is required: the Knurlogic source tree")
-    a.sets = {"KNURLOGIC_MTP": "off"}
+    a.sets = {"KNURLOGIC_MTP": "on" if a.draft else "off"}
     for kv in a.set:
         k, _, v = kv.partition("=")
         a.sets[k] = v
@@ -244,6 +271,10 @@ def main(argv=None) -> int:
             continue
         print(f"  {label:8} ratio per pair {', '.join(f'{v:.3f}' for v in r)}   "
               f"median {statistics.median(r):.3f}  range {min(r):.3f}-{max(r):.3f}")
+    if a.draft:
+        for arm in (a.arm_a, a.arm_b):
+            acc = [x.get("acceptance") for x in recs[arm]]
+            print(f"  acceptance {arm}: {', '.join('-' if v is None else f'{v:.3f}' for v in acc)}")
     if a.n < 3:
         print("  NOTE: n < 3 -- a smoke of the instrument, not a quotable ratio")
     return 0

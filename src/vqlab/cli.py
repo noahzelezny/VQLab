@@ -103,6 +103,7 @@ COMMANDS = {
     "decode-ladder": ("decode_ladder.py", "per-component decode deletion arms (GDN / attn / VQ), Flash-aware"),
     "mtp-accept": ("mtp_accept.py", "paired draft-acceptance across prompts (the reliable instrument)"),
     "mtp-bench": ("mtp_bench.py", "measure the MTP speedup, acceptance and numerics control"),
+    "mtp-arms": ("mtp_arms.py", "one pinned, servable arm per draft head (symlinks; the release is never touched) for a head A/B via speed-pair-knurlogic --draft"),
     # records/
     "manifest": ("artifact_manifest.py", "tamper stamp: were these shard bytes rewritten? (outside the artifact)"),
     "runs": ("runlog.py", "the run log: every vqlab invocation, argv, commit, exit code"),
