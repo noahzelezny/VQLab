@@ -6,7 +6,9 @@
 #   1. lint         ruff (pyflakes + syntax) over code, tests, scripts
 #   2. install      build a wheel and install it into a fresh venv
 #   3. package      the INSTALLED package: CLI entry point, shipped data files
-#   4. tests        pytest
+#   4. tests        pytest (the default set: pyproject deselects @pytest.mark.lab, which
+#                   reads real lab artifacts; storage here is a throwaway dir, so they
+#                   could only skip. On a lab box run them by hand: `pytest -m lab`)
 #   5. selftest     every gate, both directions (`vqlab selftest`), from the installed wheel
 #
 # Runs isolated from this machine's lab setup: no vqlab config file, storage
