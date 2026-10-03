@@ -47,6 +47,7 @@ COMMANDS = {
     "minibase": ("minibase.py", "a fit base of one layer band's shards (symlinks), so a band fit writes only those"),
     "mix": ("mix.py", "assemble an artifact from per-layer-band sources, shard by shard; config maps follow the bytes"),
     "release-prep": ("release_prep.py", "everything before an upload: sizes, junk, provenance, check-release, Hub diff; prints the publish line"),
+    "card-tables": ("card_tables.py", "a model card's KL table and paired deltas as Markdown, from kl-ladder JSON + each rung's own headers"),
     "size": ("size_cmd.py", "an artifact's size three ways (text / +tower / +MTP) and the full download, from its headers"),
     "teacher-prep": ("teacher_prep.py", "official release -> exact MLX teacher: cache guard, F8_E8M0 relabel, disk preflight, sanitize-stream"),
     "splice-ple": ("splice_ple.py", "splice VQ PLE codes into a packed artifact"),
