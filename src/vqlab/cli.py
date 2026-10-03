@@ -261,7 +261,8 @@ def _help():
 # richer one in this run (the fitters do). Candidates are tried in order; a
 # FILE output is recorded in the artifact dir that holds it, and only a dir
 # with a config.json counts, so a sidecar written to a scratch dir never
-# stamps that dir. In-place tools produce an AMENDMENT: the prior record is
+# stamps that dir -- nor falls back to stamping --model: mtp-pack once
+# recorded two scratch probe heads as builds of the model they read. In-place tools produce an AMENDMENT: the prior record is
 # kept in vqlab_provenance.history.jsonl and linked by id.
 BUILD_OUTPUTS = {
     "pack": ("--out",), "pack-dense": ("--out",), "build-dense": ("--out",), "slice": ("--out",),
@@ -269,8 +270,8 @@ BUILD_OUTPUTS = {
     "pack-ple": ("--artifact",), "graft": ("--artifact",), "graft-extras": ("--artifact",), "splice-ple": ("--artifact",),
     "bundle": ("--artifact",), "rebundle-dense": ("--artifact",),
     "patch-arch": ("--out",), "vision-layout": ("--out", 0),
-    "mtp-pack": ("--out", "--model"), "mtp-extract": ("--out",),
-    "mtp-graft": ("--out", "--model"),
+    "mtp-pack": ("--out",), "mtp-extract": ("--out",),
+    "mtp-graft": ("--out",),
 }
 
 

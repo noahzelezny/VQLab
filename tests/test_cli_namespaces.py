@@ -146,3 +146,12 @@ def test_renamed_modules_keep_old_names():
     assert m["vq_397b_codes"] == m["vqlab.vq_397b_codes"] == "vqlab.fit.fit_moe"
     assert m["pack_artifact"] == m["vqlab.assemble.pack_artifact"] == "vqlab.assemble.pack"
     assert cli.COMMANDS["fit-moe"][0] == "fit_moe.py" and cli.COMMANDS["pack"][0] == "pack.py"
+
+
+def test_sidecar_writers_never_stamp_the_model_they_read():
+    """mtp-pack / mtp-graft record only where --out lands; a scratch --out
+    must not fall back to stamping --model (2026-10-03: two probe heads were
+    recorded as builds of the 35B they read)."""
+    from vqlab import cli
+    for c in ("mtp-pack", "mtp-graft"):
+        assert "--model" not in cli.BUILD_OUTPUTS[c]
