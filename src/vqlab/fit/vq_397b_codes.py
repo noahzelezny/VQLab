@@ -674,9 +674,9 @@ for m in targets:
 new_cfg["model_file"] = "model.py"
 new_cfg["vq_modules"] = vq_modules
 
-tsz = sum(shard_sizes.values())
-json.dump({"metadata": {"total_size": tsz}, "weight_map": out_map},
-          open(OUT / "model.safetensors.index.json", "w"))
+from vqlab.core.artifact import write_index  # noqa: E402
+write_index(OUT, out_map)          # total_size = tensor bytes of the shards written
+tsz = sum(shard_sizes.values())    # on-disk bytes, for the closing summary line
 json.dump(new_cfg, open(OUT / "config.json", "w"), indent=1)
 
 # ---- model.py: vq_switch runtime + loader shim, one self-contained file ---
