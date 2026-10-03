@@ -62,13 +62,20 @@ def main() -> int:
     compile(model_py, "model.py", "exec")
 
     dst = art / "model.py"
+    before = (dst.read_bytes() if dst.exists() else None, cfg_path.read_bytes())
     if a.backup_suffix and dst.exists():
         (art / f"model.py{a.backup_suffix}").write_text(dst.read_text())
     dst.write_text(model_py)
     if cfg.get("model_file") != "model.py":
         cfg["model_file"] = "model.py"
         cfg_path.write_text(json.dumps(cfg, indent=1))
-    print(f"dense bundle rewritten ({len(model_py.splitlines())} lines): {dst}")
+    changed = [n for n, p, b in (("model.py", dst, before[0]), ("config.json", cfg_path, before[1]))
+               if p.read_bytes() != b]
+    # idempotent like `bundle`: an already-current bundle is not a failure,
+    # but it is said, never reported as a rewrite
+    print(f"dense bundle rewritten ({len(model_py.splitlines())} lines): {dst}; "
+          + (f"changed: {', '.join(changed)}" if changed
+             else "UNCHANGED (bundle was already current; bytes identical)"))
     return 0
 
 

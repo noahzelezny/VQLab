@@ -41,6 +41,11 @@ def plan(base, bands):
     for a, lo, hi in srcs:
         want = set(range(lo, hi + 1))
         slayers = a.shard_layers(vq)
+        if a.dir.resolve() == base.dir.resolve():
+            raise SystemExit(f"band {a.dir}:{lo}-{hi} is --base itself; it changes nothing")
+        if not any(ls & want for ls in layers.values()):
+            raise SystemExit(f"band {a.dir}:{lo}-{hi} selects no shard (no VQ module "
+                             "layer of --base lies in it); it would change nothing")
         for f, ls in layers.items():
             if ls & want:
                 if not ls <= want:
@@ -110,7 +115,9 @@ def build(out, base, bands, copy=False, files_from=None):
     copy_other_files(ff, out)
     ks = collections.Counter(f"d{e.get('dim', e.get('d', '?'))}/K{e.get('k', '?')}"
                              for e in cfg["vq_modules"].values())
-    print(f"{out.name}: {len(cfg['vq_modules'])} VQ modules {dict(ks)}, "
+    banded = sum(1 for a in pick.values() if a.dir != base.dir)
+    print(f"{out.name}: {banded} of {len(pick)} shards from bands, "
+          f"{len(cfg['vq_modules'])} VQ modules {dict(ks)}, "
           f"{total / 2**30:.1f} GiB, {'copied' if copy else 'linked'}")
     return 0
 
@@ -138,6 +145,9 @@ def main(argv=None):
         for f in sorted(layers):
             print(f"{f:40s} layers {sorted(layers[f])}  <- {pick[f].dir}")
         return 0
+    if not a.band and not a.files_from:
+        raise SystemExit("no --band and no --files-from: the output would be --base "
+                         "relinked; nothing to mix")
     from vqlab import config as _cfg
     if a.copy:
         _cfg.require_free(a.out, sum(p.stat().st_size for p in base.glob("*.safetensors")), "mix --copy")

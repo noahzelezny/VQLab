@@ -15,6 +15,11 @@
     "bits": 2,
     "group_size": 64
    },
+   "model.language_model.layers.0.self_attn.o_proj": {
+    "bits": 4,
+    "group_size": 64,
+    "mode": "affine"
+   },
    "model.language_model.layers.1.mlp.switch_mlp.down_proj": {
     "bits": 2,
     "group_size": 64
@@ -27,6 +32,11 @@
     "bits": 2,
     "group_size": 64
    },
+   "model.language_model.layers.1.self_attn.o_proj": {
+    "bits": 4,
+    "group_size": 64,
+    "mode": "affine"
+   },
    "model.language_model.layers.2.mlp.switch_mlp.down_proj": {
     "bits": 2,
     "group_size": 64
@@ -38,6 +48,11 @@
    "model.language_model.layers.2.mlp.switch_mlp.up_proj": {
     "bits": 2,
     "group_size": 64
+   },
+   "model.language_model.layers.2.self_attn.o_proj": {
+    "bits": 4,
+    "group_size": 64,
+    "mode": "affine"
    }
   }
  },
@@ -55,6 +70,9 @@
   "model.language_model.layers.1.mlp.switch_mlp.up_proj.biases": "model-00002-of-00002.safetensors",
   "model.language_model.layers.1.mlp.switch_mlp.up_proj.scales": "model-00002-of-00002.safetensors",
   "model.language_model.layers.1.mlp.switch_mlp.up_proj.weight": "model-00002-of-00002.safetensors",
+  "model.language_model.layers.1.self_attn.o_proj.biases": "model-00002-of-00002.safetensors",
+  "model.language_model.layers.1.self_attn.o_proj.scales": "model-00002-of-00002.safetensors",
+  "model.language_model.layers.1.self_attn.o_proj.weight": "model-00002-of-00002.safetensors",
   "model.language_model.layers.2.input_layernorm.weight": "model-00002-of-00002.safetensors",
   "model.language_model.layers.2.mlp.switch_mlp.down_proj.biases": "model-00002-of-00002.safetensors",
   "model.language_model.layers.2.mlp.switch_mlp.down_proj.scales": "model-00002-of-00002.safetensors",
@@ -64,7 +82,10 @@
   "model.language_model.layers.2.mlp.switch_mlp.gate_proj.weight": "model-00002-of-00002.safetensors",
   "model.language_model.layers.2.mlp.switch_mlp.up_proj.biases": "model-00002-of-00002.safetensors",
   "model.language_model.layers.2.mlp.switch_mlp.up_proj.scales": "model-00002-of-00002.safetensors",
-  "model.language_model.layers.2.mlp.switch_mlp.up_proj.weight": "model-00002-of-00002.safetensors"
+  "model.language_model.layers.2.mlp.switch_mlp.up_proj.weight": "model-00002-of-00002.safetensors",
+  "model.language_model.layers.2.self_attn.o_proj.biases": "model-00002-of-00002.safetensors",
+  "model.language_model.layers.2.self_attn.o_proj.scales": "model-00002-of-00002.safetensors",
+  "model.language_model.layers.2.self_attn.o_proj.weight": "model-00002-of-00002.safetensors"
  },
  "tensors": {
   "model.language_model.layers.1.mlp.switch_mlp.down_proj.biases": {
@@ -147,9 +168,36 @@
    ],
    "shard": "model-00002-of-00002.safetensors"
   },
+  "model.language_model.layers.1.self_attn.o_proj.biases": {
+   "dtype": "F16",
+   "sha": "a26c0c6a091a745e",
+   "shape": [
+    128,
+    2
+   ],
+   "shard": "model-00002-of-00002.safetensors"
+  },
+  "model.language_model.layers.1.self_attn.o_proj.scales": {
+   "dtype": "F16",
+   "sha": "e56761d376139359",
+   "shape": [
+    128,
+    2
+   ],
+   "shard": "model-00002-of-00002.safetensors"
+  },
+  "model.language_model.layers.1.self_attn.o_proj.weight": {
+   "dtype": "U32",
+   "sha": "1bb6bf2f8b48ffe4",
+   "shape": [
+    128,
+    16
+   ],
+   "shard": "model-00002-of-00002.safetensors"
+  },
   "model.language_model.layers.2.input_layernorm.weight": {
    "dtype": "F16",
-   "sha": "94db0fae1410ff7a",
+   "sha": "7009d21e8656bf9e",
    "shape": [
     128
    ],
@@ -242,6 +290,33 @@
     2,
     128,
     8
+   ],
+   "shard": "model-00002-of-00002.safetensors"
+  },
+  "model.language_model.layers.2.self_attn.o_proj.biases": {
+   "dtype": "F16",
+   "sha": "2f5628cadb16ec48",
+   "shape": [
+    128,
+    2
+   ],
+   "shard": "model-00002-of-00002.safetensors"
+  },
+  "model.language_model.layers.2.self_attn.o_proj.scales": {
+   "dtype": "F16",
+   "sha": "f0c84c28b02adbbc",
+   "shape": [
+    128,
+    2
+   ],
+   "shard": "model-00002-of-00002.safetensors"
+  },
+  "model.language_model.layers.2.self_attn.o_proj.weight": {
+   "dtype": "U32",
+   "sha": "82fea005c2d26d9d",
+   "shape": [
+    128,
+    16
    ],
    "shard": "model-00002-of-00002.safetensors"
   }

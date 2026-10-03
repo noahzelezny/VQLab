@@ -404,6 +404,8 @@ def cmd_apply(a):
     if a.modules:
         want = set(a.modules.split(","))
         mods = [m for m in mods if m in want]
+    if not mods:
+        sys.exit("REFUSED: no banked module selected (see --modules); nothing to apply")
     missing = [m for m in mods if m not in vqm or not aix.has(m + ".codes")]
     if missing:
         sys.exit(f"{len(missing)} banked modules absent from the artifact, e.g. {missing[:3]}")
@@ -458,6 +460,11 @@ def cmd_apply(a):
         mx.clear_cache()
         _log(f"[{i + 1}/{len(mods)}] {n}: {100 * r['changed_frac']:.1f}% codes changed, "
              f"J_train {100 * r['J_train_gain']:+.2f}% [{time.time() - t0:.0f}s]")
+
+    if a.scales == "keep" and not any(r["changed_frac"] for r in report.values()):
+        # codes-only and not one code moved: the output would be the input
+        sys.exit("REFUSED: re-selection changed no code in any module (--scales keep); "
+                 "nothing to write")
 
     # ---- assemble a NEW dir: rewritten shards new, everything else linked
     new = {}

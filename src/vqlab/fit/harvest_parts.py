@@ -132,7 +132,11 @@ def main():
                      "stochastic and (module,d,K) is not unique",
              "fits": manifest}, indent=1))
     print(f"harvested {written} modules, skipped {skipped} -> {a.out}")
+    if not written:
+        print("REFUSED: no module matched (see --geometry); nothing harvested")
+        return 1
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

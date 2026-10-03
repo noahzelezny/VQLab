@@ -28,10 +28,22 @@ ap.add_argument("--src", required=True)
 ap.add_argument("--out", required=True)
 args = ap.parse_args()
 SRC, OUT = pathlib.Path(args.src), pathlib.Path(args.out)
-OUT.mkdir(parents=True, exist_ok=True)
 
 cfg = json.load(open(SRC / "config.json"))
 vq_l, vq_e = cfg.get("vq_linear", {}), cfg.get("vq_embed", {})
+
+
+def _packs(meta):
+    """Would the loop below pack this module? (decided from config alone)"""
+    return (not meta.get("pack_bits") and (meta["in"] // meta["dim"]) % 32 == 0
+            and int(meta["k"] - 1).bit_length() % 8 != 0)
+
+
+if not any(_packs(m) for m in list(vq_l.values()) + list(vq_e.values())):
+    raise SystemExit(f"REFUSED: nothing in {SRC} to pack (no vq_linear/vq_embed module, "
+                     "or every one is already packed, byte-aligned or NSUB-unaligned); "
+                     "nothing written")
+OUT.mkdir(parents=True, exist_ok=True)
 idx = json.load(open(SRC / "model.safetensors.index.json"))["weight_map"]
 targets = {m + ".codes": m for m in list(vq_l) + list(vq_e)}
 
@@ -55,6 +67,8 @@ for sh in sorted(set(idx.values())):
         if m is None:
             continue
         meta = vq_l.get(m) or vq_e.get(m)
+        if meta.get("pack_bits"):
+            continue                      # already packed: never pack twice
         K = meta["k"]
         bits = int(K - 1).bit_length()
         nsub = meta["in"] // meta["dim"]

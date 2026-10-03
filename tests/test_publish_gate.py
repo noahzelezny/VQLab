@@ -84,3 +84,13 @@ def test_docs_only_uploads_skip_the_smoke_but_not_the_static_checks():
     assert SRC.index("r = subprocess.run(gate)") < SRC.index("from huggingface_hub")
     # and the user is told which verification actually happened
     assert "generation NOT re-verified" in SRC
+
+
+def test_an_upload_the_hub_already_holds_is_a_noop_failure():
+    """A writer that changed nothing exits non-zero (operator notes
+    2026-10-03, 1.6): an upload whose commit leaves the repo sha unchanged
+    says NO-OP and returns 1, never 'uploaded' with 0."""
+    i = SRC.index("if after == before:")
+    branch = SRC[i:i + 500]
+    assert "NO-OP" in branch and "nothing uploaded" in branch
+    assert "return 1" in branch and "return 0" not in branch
