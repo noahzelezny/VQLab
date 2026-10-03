@@ -68,7 +68,7 @@ def _gate(layer_id, n_hash=1):
     args = types.SimpleNamespace(n_routed_experts=8, num_experts_per_tok=2,
                                  num_hash_layers=n_hash, scoring_func="sqrtsoftplus",
                                  routed_scaling_factor=1.5, norm_topk_prob=True,
-                                 hidden_size=16, vocab_size=32)
+                                 hidden_size=16, vocab_size=32, vision_n_layers=0)
     return A.MoEGate(args, layer_id)
 
 

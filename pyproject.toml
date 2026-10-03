@@ -47,7 +47,8 @@ where = ["src"]
 
 [tool.setuptools.package-data]
 vqlab = ["score/referee/*.txt", "score/referee/*.json", "score/referee/*.py", "*/CONTEXT.md", "agents/gui_static/*.html",
-         "agents/gui_static/bench/*", "runtime/*.json", "runtime/equivalent/*.txt"]
+         "agents/gui_static/bench/*", "runtime/*.json", "runtime/equivalent/*.txt",
+         "family/arch/*/*.md", "family/arch/*/*.json"]
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]
@@ -64,6 +65,8 @@ addopts = '-m "not lab"'
 [tool.ruff]
 target-version = "py312"
 line-length = 100
+# vendored architectures are kept byte-identical to Knurlogic's (family/arch/)
+extend-exclude = ["src/vqlab/family/arch/*/"]
 
 [tool.ruff.lint]
 # Pyflakes (undefined names, unused imports, dead f-strings) and syntax
