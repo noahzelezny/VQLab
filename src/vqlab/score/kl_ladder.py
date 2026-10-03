@@ -138,7 +138,9 @@ def main():
     for name, d in caches.items():
         m = json.load(open(os.path.join(d, "meta.json")))
         corpus = m["corpus"]
-        if not os.path.isabs(corpus):
+        if "/" not in corpus:                    # a house corpus NAME (prose / code / lit)
+            corpus = str(_layout.corpus(corpus))
+        elif not os.path.isabs(corpus):
             corpus = os.path.join(os.path.dirname(os.path.dirname(
                 os.path.dirname(HERE))), corpus)     # repo root
         corpus = _layout.legacy_path(corpus)    # pre-split caches
