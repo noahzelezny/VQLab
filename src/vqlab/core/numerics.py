@@ -67,9 +67,28 @@ def _version(dist: str, module: str) -> str | None:
         return None
 
 
+def _knurlogic() -> str | None:
+    """knurlogic's version + commit (its architecture files are the ones
+    loaded). Recorded, not compared: arch_sha256 already compares the bytes
+    that matter, and a knurlogic commit that leaves them alone changes no
+    number."""
+    try:
+        d = importlib.metadata.distribution("knurlogic")
+    except importlib.metadata.PackageNotFoundError:
+        return None
+    commit = None
+    try:
+        commit = (json.loads(d.read_text("direct_url.json") or "{}")
+                  .get("vcs_info", {}).get("commit_id"))
+    except ValueError:
+        pass
+    return d.version + (f"@{commit[:9]}" if commit else "")
+
+
 def versions() -> dict:
     return {"mlx": _version("mlx", "mlx.core") or _version("mlx", "mlx"),
-            "mlx_lm": _version("mlx-lm", "mlx_lm")}
+            "mlx_lm": _version("mlx-lm", "mlx_lm"),
+            "knurlogic": _knurlogic()}
 
 
 def model_type_of(model_dir) -> str | None:
@@ -153,7 +172,8 @@ def describe(st: dict | None) -> str:
     if not st:
         return "build not stamped"
     return (f"mlx {st.get('mlx')}, mlx-lm {st.get('mlx_lm')}, "
-            f"variant {st.get('scorer_variant') or 'none'}")
+            + (f"knurlogic {st['knurlogic']}, " if st.get("knurlogic") else "")
+            + f"variant {st.get('scorer_variant') or 'none'}")
 
 
 def check_cache(meta: dict, run: dict, allow: bool = False, what: str = "teacher cache") -> dict:
