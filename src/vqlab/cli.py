@@ -5,6 +5,12 @@ auditable tool with its own argparse surface, and several run at module
 scope). This dispatcher sets sys.argv and executes the chosen script in
 its own right, so `vqlab fit-moe --help` shows the script's full surface
 and behavior is identical to running the script directly.
+
+Commands are grouped by pipeline stage: `vqlab fit moe` is `vqlab fit-moe`.
+The flat names are the canonical keys (COMMANDS, BUILD_OUTPUTS, the run
+log, box_quiet, queue steps all speak them) and keep working unchanged; a
+namespaced call is resolved to its flat name before anything else runs, so
+the two spellings are one code path, not two.
 """
 
 from __future__ import annotations
@@ -131,6 +137,123 @@ COMMANDS = {
     "reserve": ("reserve.py", "say who has a box until when (`reserve m4 --for X --until +3h`, --list, --release); queue run refuses a box reserved for someone else"),
 }
 
+# Namespaces, in pipeline order: namespace -> (what it is for, {sub: flat}).
+# A sub drops the namespace's own prefix (fit-moe -> fit moe) and otherwise
+# keeps the flat name, so nothing has to be relearned twice. Every COMMANDS
+# key sits in exactly one namespace (asserted below).
+NAMESPACES = {
+    "plan": ("what will it cost, where should the bits go, what IS this model", {
+        "onboard": "onboard", "family-profile": "family-profile", "price": "price",
+        "zero-groups": "zero-groups", "layer-leverage": "layer-leverage",
+        "loo-bands": "loo-bands", "alloc-sweep": "alloc-sweep", "probe-init": "probe-init",
+        "preflight-ram": "preflight-ram", "preflight-disk": "preflight-disk",
+        "mtp-probe": "mtp-probe", "mtp-probe35": "mtp-probe35"}),
+    "fit": ("teacher weights -> codebooks + codes", {
+        "fits": "fits", "moe": "fit-moe", "dense": "fit-dense", "ple": "fit-ple",
+        "additive": "fit-additive", "geo-build": "geo-build", "reselect": "reselect",
+        "harvest-parts": "harvest-parts"}),
+    "build": ("codes -> an artifact that loads (the assemble/ stage)", {
+        "pack": "pack", "pack-dense": "pack-dense", "pack-ple": "pack-ple",
+        "splice-ple": "splice-ple", "ple-swap": "ple-swap", "unpack-dense": "unpack-dense",
+        "dense": "build-dense", "reskeleton": "reskeleton", "slice": "slice",
+        "minibase": "minibase", "mix": "mix", "stream-convert": "stream-convert",
+        "sanitize-stream": "sanitize-stream", "teacher-prep": "teacher-prep",
+        "graft": "graft", "graft-extras": "graft-extras", "mtp-extract": "mtp-extract",
+        "mtp-pack": "mtp-pack", "mtp-graft": "mtp-graft", "mtp-head-ds4": "mtp-head-ds4",
+        "mtp-arms": "mtp-arms", "sz-pack": "sz-pack", "sz-resident": "sz-resident"}),
+    "bundle": ("ship the runtime inside the artifact", {
+        "moe": "bundle", "dense": "rebundle-dense", "patch-arch": "patch-arch",
+        "vision-layout": "vision-layout"}),
+    "gate": ("is it loadable, correct and releasable", {
+        "check": "check", "check-release": "check-release", "check-bundle": "check-bundle",
+        "check-comparator": "check-comparator", "bundle-accept": "bundle-accept",
+        "verify": "verify", "smoke": "smoke", "vision-smoke": "vision-smoke",
+        "parity": "parity", "selftest": "selftest", "validate": "validate", "pin": "pin",
+        "mtp-smoke-head": "mtp-smoke-head", "spelling": "spelling",
+        "sz-check": "sz-check", "sz-bitexact": "sz-bitexact"}),
+    "score": ("how much damage does it carry", {
+        "kl-ladder": "kl-ladder", "kl-pair": "kl-pair", "kl": "kl", "ppl": "score",
+        "stream-score": "stream-score", "tasks": "tasks", "kernel-truth": "kernel-truth",
+        "kernel-truth-moe": "kernel-truth-moe", "act-stats": "act-stats",
+        "runtime-equiv": "runtime-equiv"}),
+    "bench": ("how fast is it, and where does the time go", {
+        "decode-timeline": "decode-timeline", "prefill-timeline": "prefill-timeline",
+        "decode-ladder": "decode-ladder", "active-bytes": "active-bytes",
+        "prefill-bench": "prefill-bench", "coverage": "coverage", "host-attrib": "host-attrib",
+        "hc-micro": "hc-micro", "mtp-bench": "mtp-bench", "mtp-accept": "mtp-accept",
+        "speed-pair": "speed-pair", "speed-pair-knurlogic": "speed-pair-knurlogic"}),
+    "ship": ("publish or serve it", {
+        "release-prep": "release-prep", "size": "size", "card-tables": "card-tables",
+        "publish": "publish", "serve": "serve", "mtp-generate": "mtp-generate"}),
+    "lab": ("the lab around the pipeline: records, queues, boxes, agents", {
+        "doctor": "doctor", "config": "config", "runs": "runs", "provenance": "provenance",
+        "manifest": "manifest", "registry": "registry", "scratch": "scratch",
+        "queue": "queue", "reserve": "reserve", "mcp": "mcp", "gui": "gui"}),
+}
+
+# flat name -> its namespaced spelling, for help and error text
+SPELLING = {flat: f"{ns} {sub}" for ns, (_, subs) in NAMESPACES.items()
+            for sub, flat in subs.items()}
+assert sorted(SPELLING) == sorted(COMMANDS) and len(SPELLING) == sum(
+    len(subs) for _, subs in NAMESPACES.values()), "every command in exactly one namespace"
+
+
+def resolve(argv):
+    """(flat command, rest) for a namespaced or flat argv; (None, argv) if
+    argv names neither. A namespace that is ALSO a flat command (`score`,
+    `bundle`) is namespaced only when its next word is one of its subs:
+    `vqlab score --corpus x` is still the flat referee scorer."""
+    if not argv:
+        return None, argv
+    head = argv[0]
+    if head in NAMESPACES and len(argv) > 1 and argv[1] in NAMESPACES[head][1]:
+        return NAMESPACES[head][1][argv[1]], argv[2:]
+    if head in COMMANDS:
+        return head, argv[1:]
+    return None, argv
+
+
+def routed(text):
+    """Flat names of the commands a Markdown text routes to: every `code`
+    span read as a command line, namespaced (`fit moe ...`) or flat
+    (`fit-moe ...`), with or without a leading `vqlab`. The selftest's
+    CONTEXT.md check and its test share this, so both spellings count."""
+    import re
+    out = set()
+    for span in re.findall(r"`([^`]+)`", text):
+        words = span.split()
+        if words and words[0] == "vqlab":
+            words = words[1:]
+        flat, _ = resolve(words)
+        if flat:
+            out.add(flat)
+    return out
+
+
+def _namespace_help(ns):
+    blurb, subs = NAMESPACES[ns]
+    print(f"vqlab {ns} -- {blurb}\n")
+    for sub, flat in subs.items():
+        alias = "" if flat == sub else f"  [alias: {flat}]"
+        print(f"  {sub:22s} {COMMANDS[flat][1]}{alias}")
+    print(f"\n`vqlab {ns} <command> --help` shows each command's full surface.")
+
+
+def _help():
+    print("vqlab — size-targeted VQ quantization for MLX\n\nnamespaces (pipeline order):")
+    for ns, (blurb, subs) in NAMESPACES.items():
+        print(f"  {ns:8s} {blurb} ({len(subs)})")
+    for ns, (_, subs) in NAMESPACES.items():
+        print(f"\n{ns}:")
+        for sub, flat in subs.items():
+            alias = "" if flat == sub else f"  [alias: {flat}]"
+            print(f"  {ns + ' ' + sub:28s} {COMMANDS[flat][1]}{alias}")
+    print("\nEvery flat name is an alias kept for this release (`vqlab fit-moe` is")
+    print("`vqlab fit moe`; `vqlab pack` is `vqlab build pack`) and behaves identically.")
+    print("`vqlab <namespace>` lists one namespace;")
+    print("`vqlab <namespace> <command> --help` shows each command's full surface.")
+    print("Read METHODOLOGY.md before publishing any number.")
+
 
 # Build tools whose output is an ARTIFACT: after a clean exit the CLI writes
 # its build record (records/provenance.py) unless the tool already wrote a
@@ -221,15 +344,19 @@ def _record_build(cmd, rest, script):
 def main() -> int:
     argv = sys.argv[1:]
     if not argv or argv[0] in ("-h", "--help"):
-        print("vqlab — size-targeted VQ quantization for MLX\n\ncommands:")
-        for name, (_, desc) in COMMANDS.items():
-            print(f"  {name:18s} {desc}")
-        print("\n`vqlab <command> --help` shows each command's full surface.")
-        print("Read METHODOLOGY.md before publishing any number.")
+        _help()
         return 0
-    cmd, rest = argv[0], argv[1:]
-    if cmd not in COMMANDS:
-        print(f"unknown command: {cmd}", file=sys.stderr)
+    if argv[0] in NAMESPACES and (len(argv) == 1 or (
+            argv[1] in ("-h", "--help") and argv[0] not in COMMANDS)):
+        _namespace_help(argv[0])
+        return 0
+    cmd, rest = resolve(argv)
+    if cmd is None:
+        if argv[0] in NAMESPACES:
+            print(f"unknown command: vqlab {argv[0]} {argv[1]}", file=sys.stderr)
+            _namespace_help(argv[0])
+        else:
+            print(f"unknown command: {argv[0]}", file=sys.stderr)
         return 2
     from vqlab import _layout   # stage dirs on sys.path; old dotted names aliased
     if not any(a in ("-h", "--help") for a in rest):
