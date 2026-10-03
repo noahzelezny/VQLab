@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "vqlab"
-version = "0.2.0"
+version = "0.1.0"
 description = "Size-targeted, data-free vector quantization of large models on Apple Silicon (MLX)"
 readme = "README.md"
 requires-python = ">=3.12"
