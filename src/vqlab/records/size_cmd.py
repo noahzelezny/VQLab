@@ -22,7 +22,30 @@ def main(argv=None):
     ap = argparse.ArgumentParser(prog="vqlab size", description=__doc__.split("\n")[0])
     ap.add_argument("artifact")
     ap.add_argument("--json", action="store_true")
+    ap.add_argument("--check-index", action="store_true",
+                    help="exit 1 if the index's metadata.total_size is missing or differs from the "
+                         "shards' tensor bytes (loaders size and place models by it)")
+    ap.add_argument("--fix-index", action="store_true",
+                    help="rewrite metadata.total_size from the shards (the weight_map is unchanged); "
+                         "a shipped artifact then needs its index re-published")
     a = ap.parse_args(argv)
+    if a.check_index or a.fix_index:
+        import pathlib
+        from vqlab.core.artifact import Artifact, tensor_bytes, write_index
+        art = Artifact.open(a.artifact)
+        p = pathlib.Path(a.artifact) / "model.safetensors.index.json"
+        doc = json.loads(p.read_text())
+        have = (doc.get("metadata") or {}).get("total_size")
+        want = tensor_bytes(art.dir, art.shards)
+        state = "ok" if have == want else ("missing" if have is None else
+                                           f"stale by {(have - want) / GIB:+.2f} GiB")
+        print(f"index total_size {have} vs tensor bytes {want}: {state}")
+        if have != want and a.fix_index:
+            md = {k: v for k, v in (doc.get("metadata") or {}).items() if k != "total_size"}
+            write_index(art.dir, art.index, total_size=want, metadata=md)
+            print(f"rewrote {p.name} (total_size {want})")
+            return 0
+        return 0 if have == want else 1
     s = sizes(a.artifact)
     if a.json:
         print(json.dumps(s, indent=1))
