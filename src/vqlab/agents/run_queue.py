@@ -566,6 +566,35 @@ def status(qdir):
     return 0
 
 
+def run_on(name, file, preflight=False, force=False) -> int:
+    """Launch a queue file on another box: fast-forward its clone (shared
+    storage) to this repo's HEAD, then `queue run --detach` there over ssh with
+    that box's config and a SHARED queue dir, so `vqlab queue wait <qdir>`
+    works from here. The queue still pins its own worktree there."""
+    from vqlab import config as _cfg
+    b = _cfg.boxes().get(name)
+    if not b:
+        raise SystemExit(f"no [boxes.{name}] in {_cfg.config_file()}")
+    clone = pathlib.Path(b["repo"])
+    if _git("status", "--porcelain", "--untracked-files=no", cwd=clone):
+        raise SystemExit(f"{clone} has local changes; refusing to fast-forward it")
+    br = _git("rev-parse", "--abbrev-ref", "HEAD")
+    r = subprocess.run(["git", "-C", str(clone), "pull", "-q", "--ff-only", str(REPO), br],
+                       capture_output=True, text=True)
+    if r.returncode:
+        raise SystemExit(f"fast-forward of {clone} failed: {r.stderr.strip()}")
+    head = _git("rev-parse", "HEAD", cwd=clone)
+    if head != _git("rev-parse", "HEAD"):
+        raise SystemExit(f"{clone} is at {head[:10]}, not this repo's HEAD")
+    remote = (f"cd {shlex.quote(str(clone))} && VQLAB_CONFIG={shlex.quote(b['config'])} "
+              f"VQLAB_QUEUE_DIR={shlex.quote(b['queue_dir'])} PYTHONPATH=src "
+              f"{shlex.quote(b['python'])} -m vqlab.cli queue run "
+              f"{shlex.quote(str(pathlib.Path(file).resolve()))} --detach"
+              + (" --preflight" if preflight else "") + (" --force" if force else ""))
+    print(f"{name}: clone at {head[:10]}; launching over ssh {b['ssh']}", flush=True)
+    return subprocess.call(["ssh", "-o", "ConnectTimeout=10", b["ssh"], remote])
+
+
 TERMINAL = ("passed", "failed", "stopped", "deferred")
 
 
@@ -611,6 +640,7 @@ def main(argv=None) -> int:
     pr.add_argument("--detach", action="store_true", help="run in its own session; survives the shell")
     pr.add_argument("--force", action="store_true", help="ignore a placed exo instance")
     pr.add_argument("--lease-wait", type=int, default=1800)
+    pr.add_argument("--on", help="run on another box from [boxes.NAME] in the vqlab config")
     pr.add_argument("--keep-preflight", action="store_true",
                     help="keep preflight outputs after a passing preflight (default: removed)")
     ps = sub.add_parser("status")
@@ -636,6 +666,10 @@ def main(argv=None) -> int:
 
     if bool(a.file) == bool(a.resume):
         ap.error("give a queue file, or --resume <queue dir>")
+    if a.on:
+        if not a.file:
+            ap.error("--on takes a queue file")
+        return run_on(a.on, a.file, a.preflight, a.force)
     qdir = pathlib.Path(a.resume) if a.resume else create(a.file, a.commit, a.allow_dirty, a.preflight)
     if a.detach:
         cmd = [sys.executable, "-m", "vqlab.cli", "queue", "run", "--resume", str(qdir),
