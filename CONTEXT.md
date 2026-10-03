@@ -28,7 +28,7 @@ teacher, writes a new directory (never in place), and leaves a record.
 
 Experiments (NOT shipped formats), `src/vqlab/experimental/`: `sz-pack` / `sz-check` / `sz-resident` / `sz-bitexact` (vq-skipzero: fully-dead VQ rows dropped on disk, expanded at load by a shim; 397B -10.8% priced, disk only, KL-untested).
 
-Around the pipeline: `queue` (run a list of steps from pinned code under the GPU lease; `--preflight` first), `mcp` (the lab over MCP for agents), `gui` (read-only local window).
+Around the pipeline: `config` (where vqlab reads and writes; `config init` on a new machine), `queue` (run a list of steps from pinned code under the GPU lease; `--preflight` first), `mcp` (the lab over MCP for agents), `gui` (read-only local window).
 
 ## Records: nothing happens without one
 
