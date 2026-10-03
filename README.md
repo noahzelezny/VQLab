@@ -86,7 +86,7 @@ restated. The settled results are
 Flat rungs leave gaps. VQLab prices an artifact **before fitting it**:
 
 ```bash
-vqlab price --family qwen397b --budget-gib 108
+vqlab plan price --family qwen397b --budget-gib 108
 ```
 
 Two measured size models back this: the 397B harvest form
@@ -113,36 +113,40 @@ pip install "vqlab[score]"      # or, from a checkout: pip install -e ".[score,t
 
 # Where models, teachers, fits and scratch live. Nothing large belongs on a
 # small system disk; point this at a big volume once per machine.
-vqlab config init --root /Volumes/Big/vqlab
-vqlab config                    # shows every location and where it came from
+vqlab lab config init --root /Volumes/Big/vqlab
+vqlab lab config                    # shows every location and where it came from
 
-vqlab selftest        # real pipeline on a tiny synthetic model (<1 min, uses the GPU)
+vqlab gate selftest        # real pipeline on a tiny synthetic model (<1 min, uses the GPU)
+
+# Commands are grouped by pipeline stage: plan / fit / build / bundle / gate /
+# score / bench / ship / lab. `vqlab fit` lists one group, `vqlab --help` all of
+# them. The older flat names (`vqlab fit-moe`, `vqlab pack`) still work.
 
 # MoE families (Qwen3.5/3.6-class): fit against an affine skeleton + bf16 source
-vqlab fit-moe --family qwen3_5 --base <affine-skeleton> --src <bf16> \
+vqlab fit moe --family qwen3_5 --base <affine-skeleton> --src <bf16> \
     --vq-layers 0-56 --k 256 --dim 4 --out fits/K256
-vqlab pack  --src fits/K256 --out artifacts/K256-packed
-vqlab graft --artifact artifacts/K256-packed --src <bf16>   # vision tower
+vqlab build pack  --src fits/K256 --out artifacts/K256-packed
+vqlab build graft --artifact artifacts/K256-packed --src <bf16>   # vision tower
 
 # Dense families: fit the MLP trio, splice into a quantized base
-vqlab fit-dense --family qwen3_8_dense --src <bf16> --k 512 --dim 2 \
+vqlab fit dense --family qwen3_8_dense --src <bf16> --k 512 --dim 2 \
     --out fits/d2K512
-vqlab build-dense --family qwen3_8_dense --base <q4-base> \
+vqlab build dense --family qwen3_8_dense --base <q4-base> \
     --mlp fits/d2K512 --out assembled --dry-run   # then without --dry-run
-vqlab pack-dense --src assembled --out artifacts/d2K512-packed
+vqlab build pack-dense --src assembled --out artifacts/d2K512-packed
 
 # Gates — run these before believing anything (see METHODOLOGY.md)
-vqlab verify --artifact fits/K256 --src <bf16> --family qwen3_5 \
+vqlab gate verify --artifact fits/K256 --src <bf16> --family qwen3_5 \
     --outlier 3.0                       # BEFORE any score is believed
-vqlab check artifacts/K256-packed       # release + bundle gates
-vqlab smoke artifacts/K256-packed       # generate through the SHIPPED runtime
+vqlab gate check artifacts/K256-packed       # release + bundle gates
+vqlab gate smoke artifacts/K256-packed       # generate through the SHIPPED runtime
 
 # Score (referee ppl streams > RAM; KL needs a teacher cache)
-vqlab score --model artifacts/K256-packed
-vqlab kl cache --model <bf16> --out-dir caches/family
-vqlab kl score --model artifacts/K256-packed --cache-dir caches/family
+vqlab score ppl --model artifacts/K256-packed
+vqlab score kl cache --model <bf16> --out-dir caches/family
+vqlab score kl score --model artifacts/K256-packed --cache-dir caches/family
 
-vqlab manifest write artifacts/K256-packed   # stamp provenance
+vqlab lab manifest write artifacts/K256-packed   # stamp provenance
 ```
 
 `vqlab --help` lists all commands; `vqlab <cmd> --help` shows each surface.
@@ -151,14 +155,14 @@ vqlab manifest write artifacts/K256-packed   # stamp provenance
 ## Per-layer allocation (v2 artifacts)
 
 v2 artifacts carry a measured per-layer geometry instead of one flat rung.
-The process is three commands: `layer-leverage` ranks layers by the jump in
-trajectory damage, `alloc-sweep` measures the cost and value curves and
-prints the marginal-ppl-per-100MB frontier, `geo-build` refits only the
+The process is three commands: `plan layer-leverage` ranks layers by the jump in
+trajectory damage, `plan alloc-sweep` measures the cost and value curves and
+prints the marginal-ppl-per-100MB frontier, `fit geo-build` refits only the
 named modules from the bf16 teacher and keeps every other shipped byte.
 
 ## MTP speculative decoding
 
-`vqlab serve` and `vqlab mtp-generate` decode with a multi-token-prediction
+`vqlab ship serve` and `vqlab ship mtp-generate` decode with a multi-token-prediction
 head as the drafter. Setup, supported families, and the measured speedups
 are in [docs/MTP-USAGE.md](https://github.com/noahzelezny/VQLab/blob/master/docs/MTP-USAGE.md); per-family findings in
 [docs/MTP.md](https://github.com/noahzelezny/VQLab/blob/master/docs/MTP.md).
@@ -173,7 +177,7 @@ Install into a disposable venv, never a shared interpreter: the package
 ships a model runtime, and which copy of a runtime resolves has produced
 wrong conclusions before (METHODOLOGY.md §5).
 
-`vqlab selftest` runs the real fitter, outlier gate, packer, manifest and
+`vqlab gate selftest` runs the real fitter, outlier gate, packer, manifest and
 Metal kernels over a small synthetic checkpoint, exercising every gate in
 both directions. It uses the GPU; do not run it on a box mid-experiment.
 The two stages that need a real checkpoint, generation and scoring, report
@@ -184,7 +188,7 @@ as SKIPPED with the reason.
 - MLX/Metal only. Kernel conclusions are Apple Silicon specific.
 - Families onboarded: Qwen3.5-397B-A17B, Qwen3.6-35B-A3B, dense Qwen 27B,
   Qwen3.8-Flash-Next, GLM-5.3-Flash, DeepSeek-V4-Flash (FP4 experts read
-  natively; `vqlab teacher-prep` builds the exact teacher). Gemma fitting code ships but no
+  natively; `vqlab build teacher-prep` builds the exact teacher). Gemma fitting code ships but no
   quality claims are made for it; its scoring instrument is
   non-deterministic.
 - New family: read [docs/ONBOARDING.md](https://github.com/noahzelezny/VQLab/blob/master/docs/ONBOARDING.md) first.
