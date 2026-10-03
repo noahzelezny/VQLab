@@ -507,11 +507,20 @@ def main():
     ppl = math.exp(float(mx.mean(nll).item()))
     rec = {"model": str(mp), "corpus": a.corpus,
            "tokens": len(ids) - 1, "ppl": round(ppl, 6)}
+    variant = entry["variant"]() if callable(entry.get("variant")) else None
+    if variant:
+        rec["scorer_variant"] = variant
     if not entry["validated"]:
         rec["unvalidated"] = True           # rule 5: never enters a ladder
 
     if a.kl_cache:
         cd = pathlib.Path(a.kl_cache)
+        cmeta = cd / "meta.json"
+        cvar = json.loads(cmeta.read_text()).get("scorer_variant") if cmeta.exists() else None
+        if cvar != variant:
+            raise SystemExit(f"FAIL: the teacher cache was built with scorer variant {cvar!r} and "
+                             f"this run is {variant!r}: teacher and student must be computed by "
+                             "the same numerics, or the KL measures the variant, not the build.")
         cache_tok = mx.load(str(cd / "tokens.safetensors"))["tokens"][0]
         if cache_tok.tolist() != ids:
             raise SystemExit("FAIL: token ids differ from the cache — the "
@@ -665,6 +674,7 @@ def main():
              "model": str(mp), "tokens": len(ids),
              "captured_mass": round(captured, 6),
              "full_vocab": bool(a.save_full),
+             "scorer_variant": variant,
              "teacher_measured": rec["measured"]}, indent=1))
         print(f"top-{a.save_topk} cache -> {outd}  captured_mass "
               f"{captured:.4f}", flush=True)

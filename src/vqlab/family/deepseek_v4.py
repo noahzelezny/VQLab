@@ -61,6 +61,7 @@ def score_deepseek_v4(model, ids_list, args):
     """
     lm = getattr(model, "language_model", model)
     core = lm.model
+    _apply_variant(core)
     ids = mx.array([ids_list[:-1]])
     S = ids.shape[1]
     C = max(1, int(getattr(args, "chunk", 512) or 512))
@@ -108,6 +109,29 @@ def score_deepseek_v4(model, ids_list, args):
     return mx.concatenate(lg, axis=0) if len(lg) > 1 else lg[0]
 
 
+def _variant():
+    """The scorer's numerics variant, stamped into every cache and result.
+    VQLAB_DS4_SHARED_CLAMP=1 applies DeepSeek's reference SwiGLU clamp
+    (limit = swiglu_limit, 10) to the SHARED expert too; mlx-lm's
+    deepseek_v4 builds it unclamped (F195: the clamp fires on ~0.026% of
+    shared activations and moves that expert's output 2% on average)."""
+    import os
+    return "shared-clamp" if os.environ.get("VQLAB_DS4_SHARED_CLAMP") == "1" else None
+
+
+def _apply_variant(core):
+    if _variant() == "shared-clamp":
+        lim = float(getattr(core.args, "swiglu_limit", 10.0) or 10.0)
+        n = 0
+        for blk in core.layers:
+            sh = getattr(getattr(blk, "ffn", None), "shared_experts", None)
+            if sh is not None and hasattr(sh, "swiglu_limit"):
+                sh.swiglu_limit = lim
+                n += 1
+        print(f"  [deepseek_v4] shared-expert SwiGLU clamped at {lim:g} on {n} layers "
+              f"(reference parity, F195)", flush=True)
+
+
 def _budgeted(blk, lazy_over_gb):
     from vqlab.core.mem_budget import eval_params_budgeted
     return eval_params_budgeted(blk, lazy_over_gb)
@@ -132,6 +156,6 @@ SPEC = FamilyPlugin(
     # real weights; the rest of the stack is the same block class.
     # cpu_stream_load: the converted teacher's blocks are ~3.5 GiB.
     scorer={"fn": score_deepseek_v4, "family": "deepseek_v4",
-            "validated": True, "cpu_stream_load": True},
+            "validated": True, "cpu_stream_load": True, "variant": _variant},
     tokenizer_register=_register_tokenizer,
 )
