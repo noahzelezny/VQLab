@@ -35,6 +35,8 @@ import sys
 
 import mlx.core as mx
 
+from vqlab.core.artifact import Artifact, write_index
+
 LM = "language_model."
 VQ_SUFFIX = (".codes", ".codebook", ".vq_scales")
 AFF_SUFFIX = (".weight", ".scales", ".biases")
@@ -54,10 +56,8 @@ def _module(key):
 
 def plan(vq: pathlib.Path, sk: pathlib.Path):
     """(sources {key: (dir, file)}, new quantization map, report). Raises on mismatch."""
-    vcfg = json.load(open(vq / "config.json"))
-    scfg = json.load(open(sk / "config.json"))
-    vidx = json.load(open(vq / "model.safetensors.index.json"))["weight_map"]
-    sidx = json.load(open(sk / "model.safetensors.index.json"))["weight_map"]
+    va, sa = Artifact.open(vq), Artifact.open(sk)
+    vcfg, scfg, vidx, sidx = va.config, sa.config, va.index, sa.index
     experts = set(vcfg.get("vq_modules") or vcfg.get("text_config", {}).get("vq_modules") or {})
     if not experts:
         raise SystemExit(f"FAIL: {vq} has no vq_modules; not a VQ artifact")
@@ -141,8 +141,7 @@ def write(vq, sk, out, src, qmap, vcfg):
             del arrs
     flush()
     total = sum((out / fn).stat().st_size for fn in set(index.values()))
-    json.dump({"metadata": {"total_size": total}, "weight_map": dict(sorted(index.items()))},
-              open(out / "model.safetensors.index.json", "w"), indent=2)
+    write_index(out, dict(sorted(index.items())), total_size=total)
     return len(index), total
 
 
