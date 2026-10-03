@@ -27,17 +27,16 @@ import argparse
 import json
 import pathlib
 import shutil
-import struct
 import subprocess
 import sys
 
 import mlx.core as mx
-import numpy as np
 
 import pathlib as _pl, sys as _sys
 _sys.path.insert(0, str(_pl.Path(__file__).resolve().parents[2]))  # src/
 from vqlab import _layout  # noqa: E402,F401  one module object per name
 import vq_pack
+import codepack  # noqa: E402  the packing rule fit-moe --pack shares
 
 def _assert_tower_belongs(src_cfg, art_cfg, src_name, art_name):
     """Refuse a vision tower that cannot project into THIS model.
@@ -139,9 +138,7 @@ for si, sh in enumerate(shards, 1):
             k, dim = int(_vqm[mod]["k"]), int(_vqm[mod]["dim"])
         else:
             k, dim = data[mod + ".codebook"].shape[0], data[mod + ".codebook"].shape[1]
-        bits = vq_pack.bits_for_k(k)
-        codes = np.array(val, copy=False)
-        nsub = codes.shape[2]
+        nsub = val.shape[2]
         # NSUB alignment: since 2026-08-29 the block layout PADS an unaligned
         # tail block (vq_pack pads, kernels use ceil-WPR and never read the
         # pad since n < NSUB), so gemma-26b's NSUB=176 and qwen4_exp d8
@@ -150,9 +147,7 @@ for si, sh in enumerate(shards, 1):
         # copy-through unless --pack-unaligned is set; mixed artifacts stay
         # legal either way (dtype dispatch, absent pack_bits = unpacked).
         if nsub % vq_pack.BLOCK and not args.pack_unaligned:
-            out_data[key] = val
             skipped.append((mod, nsub))
-            continue
         # BYTE-ALIGNED skip (08-20, found by the 397B session's A/B): when
         # bits %% 8 == 0, packing saves ZERO bytes (32 codes x 8 bits = 32
         # bytes either way) but routes the tensor through the packed
@@ -160,20 +155,17 @@ for si, sh in enumerate(shards, 1):
         # cheap-shallow 397B, whose 141 K256 tensors were "packed" at 8
         # bits for nothing. Same pass-through mechanism as the NSUB skip:
         # absent pack_bits IS the unpacked signal, so mixed artifacts stay
-        # safe by construction.
-        if bits % 8 == 0:
-            out_data[key] = val
-            continue
-        packed = vq_pack.pack(codes.astype(np.uint16), bits)
-        # verify THIS tensor round-trips before we let it out of the process:
-        # a silent packing error decodes to plausible garbage, not an error.
-        back = vq_pack.unpack(packed, nsub, bits)
-        if not np.array_equal(back.astype(np.uint16), codes.astype(np.uint16)):
-            sys.exit(f"FATAL: {mod} did not round-trip through the packer")
-        out_data[key] = mx.array(packed)
-        vq_meta[mod] = {"pack_bits": bits, "in": nsub * dim}
-        n_packed += 1
-    mx.save_safetensors(str(OUT / sh), out_data, metadata={"format": "mlx"})
+        # safe by construction. Both rules (and the round-trip check) live in
+        # codepack.pack_codes, which `fit-moe --pack` shares: a fit packed as
+        # it is written is byte for byte this pass's output.
+        out_data[key], bits = codepack.pack_codes(mod, val, k, args.pack_unaligned)
+        if bits:
+            vq_meta[mod] = {"pack_bits": bits, "in": nsub * dim}
+            n_packed += 1
+    # key-sorted, so the tensor order is a function of the key set alone (not
+    # of mx.load's hash order): `fit-moe --pack` writes the same bytes
+    mx.save_safetensors(str(OUT / sh), dict(sorted(out_data.items())),
+                        metadata={"format": "mlx"})
     print(f"[{si}/{len(shards)}] {sh}: packed {n_packed} code tensors",
           flush=True)
     del data, out_data
@@ -186,17 +178,9 @@ for si, sh in enumerate(shards, 1):
 # found with sufficient memory" — and any downloader would be misled the same
 # way. Recomputed below from the packed shards' own headers.
 _idx = json.load(open(idx_path))
-_total = 0
-for _sh in sorted(set(_idx["weight_map"].values())):
-    with open(OUT / _sh, "rb") as _f:
-        _n = struct.unpack("<Q", _f.read(8))[0]
-        _hdr = json.loads(_f.read(_n))
-    for _name, _meta in _hdr.items():
-        if _name != "__metadata__":
-            _s, _e = _meta["data_offsets"]
-            _total += _e - _s
-_idx.setdefault("metadata", {})["total_size"] = _total
-json.dump(_idx, open(OUT / idx_path.name, "w"), indent=1)
+from vqlab.core.artifact import tensor_bytes, write_index  # noqa: E402
+_total = tensor_bytes(OUT, _idx["weight_map"].values())
+write_index(OUT, _idx["weight_map"], total_size=_total, metadata=_idx.get("metadata"))
 print(f"index total_size recomputed from packed shards: {_total} "
       f"({_total / 2**30:.2f} GiB)")
 
