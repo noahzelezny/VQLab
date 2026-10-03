@@ -234,7 +234,8 @@ def main(argv=None):
     # so no single shard holds all of it and it is never packed. Say so: a
     # silent skip reads as "no dead rows here" (writer contracts, 2026-10-02).
     from vqlab.core.artifact import Artifact
-    straddle = sorted(m for m in Artifact.open(src).straddling() if m in specs)
+    straddle = (sorted(m for m in Artifact.open(src).straddling() if m in specs)
+                if (src / "model.safetensors.index.json").exists() else [])
     if straddle:
         _log(f"WARNING: {len(straddle)} module(s) straddle a shard boundary and are left "
              f"unpacked (sz-pack plans one shard at a time), e.g. {straddle[0]}")
