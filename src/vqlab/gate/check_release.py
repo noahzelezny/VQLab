@@ -62,6 +62,16 @@ ap.add_argument("--cluster-peer", metavar="USER@HOST", default=None,
                      "pipeline rank's copy; their model.py/config.json/"
                      "index are hashed and shard sizes compared against "
                      "this artifact before the smoke counts.")
+ap.add_argument("--knurlogic-smoke", metavar="MACHINE", action="append", default=[],
+                help="run the generation smoke through Knurlogic on these machine(s) "
+                     "(repeat for a split) instead of a local load: the runtime we "
+                     "serve on. The Knurlogic models-dir entry must resolve to THIS "
+                     "artifact. With an mtp-head*.safetensors present, drafting is on "
+                     "and the head must accept tokens (a head that never binds is a FAIL).")
+ap.add_argument("--knurlogic-split", default="", help="pipeline | tensor")
+ap.add_argument("--knurlogic-link", default="", help="tcp | rdma")
+ap.add_argument("--knurlogic-host", action="append", default=[], metavar="MACHINE=user@host",
+                help="ssh target for a remote rank's log (runtime check)")
 args = ap.parse_args()
 A = pathlib.Path(args.artifact)
 
@@ -457,7 +467,79 @@ def _cluster_smoke() -> list[str]:
     return []
 
 
-if args.cluster_smoke and not args.no_smoke and not fails:
+def _knurlogic_smoke() -> list[str]:
+    """Load THIS artifact through Knurlogic on the named machine(s), generate
+    greedily, check the bundled runtime ran (rank logs), the text is real and
+    not looping, and (with an MTP head) that drafting accepted tokens."""
+    import os
+    import time
+    from vqlab.bench import speed_pair_knurlogic as SPK
+    ksrc = os.environ.get("KNURLOGIC_SRC", "")
+    if ksrc:
+        sys.path.insert(0, ksrc)
+    try:
+        from knurlogic.interfaces import mcp as K
+    except ImportError:
+        return ["knurlogic not importable (set KNURLOGIC_SRC to its source tree)"]
+    md = pathlib.Path(os.environ.get("KNURLOGIC_MODELS", "~/.exo/models")).expanduser()
+    name = A.resolve().name
+    if (md / name).resolve() != A.resolve():
+        return [f"Knurlogic models dir entry {md / name} does not resolve to {A.resolve()}: "
+                "the smoke would load something else"]
+    head = sorted(A.glob("mtp-head*.safetensors"))
+    sets = {"KNURLOGIC_MTP": "on" if head else "off"}
+    out = K.load(artifact=name, machines=args.knurlogic_smoke, split=args.knurlogic_split,
+                 link=args.knurlogic_link, sets=sets)
+    job = out.get("job") or out.get("instance")
+    if not job or out.get("refused") or out.get("error"):
+        return [f"Knurlogic load refused or failed: {out}"]
+    probs = []
+    try:
+        t0 = time.time()
+        while True:
+            e = SPK._entry(K, job)
+            if e and SPK._ready(e):
+                break
+            if e and (e.get("phase") in ("failed", "stopped") or e.get("state") == "failed"):
+                return [f"Knurlogic job {job} {e.get('phase')}: {e}"]
+            if time.time() - t0 > 1800:
+                return [f"Knurlogic job {job} not ready after 1800 s"]
+            time.sleep(10)
+        url = out.get("url") or e.get("url") or e.get("where")
+        d0 = SPK._drafting(url) if head else None
+        r = SPK._post(url, {"model": name, "temperature": 0, "max_tokens": max(args.max_tokens, 96),
+                            "messages": [{"role": "user", "content":
+                                          "Explain in three sentences why the sky is blue."}]})
+        d1 = SPK._drafting(url) if head else None
+        text = ((r.get("choices") or [{}])[0].get("message") or {}).get("content") or ""
+        words = text.split()
+        grams = [" ".join(words[i:i + 8]) for i in range(max(0, len(words) - 7))]
+        if len(words) < 8:
+            probs.append(f"Knurlogic smoke produced almost nothing: {text[:200]!r}")
+        elif len(set(grams)) < len(grams):
+            probs.append(f"Knurlogic smoke output repeats an 8-word span (looping): {text[:200]!r}")
+        hosts = dict(h.split("=", 1) for h in args.knurlogic_host)
+        logs = SPK._rank_logs(job, {m: hosts.get(m) for m in args.knurlogic_smoke})
+        for m, t in logs.items():
+            if (A / "model.py").exists() and SPK.BUNDLED not in t:
+                probs.append(f"rank on {m}: bundled runtime did not run (log lacks the marker)")
+        if head:
+            st = (d1 or {}).get("steps", 0) - (d0 or {}).get("steps", 0)
+            ac = (d1 or {}).get("accepted", 0) - (d0 or {}).get("accepted", 0)
+            print(f"  drafting with {head[0].name}: {ac}/{st} accepted")
+            if not st or not ac:
+                probs.append(f"MTP head {head[0].name} present but drafting accepted {ac}/{st}")
+        print(f"  Knurlogic smoke ({', '.join(args.knurlogic_smoke)}"
+              f"{' ' + args.knurlogic_split if args.knurlogic_split else ''}): {text.strip()[:120]!r}")
+    finally:
+        K.unload(job=str(job))
+    return probs
+
+
+if args.knurlogic_smoke and not args.no_smoke and not fails:
+    print("running KNURLOGIC smoke (the serving runtime) ...", flush=True)
+    fails += _knurlogic_smoke()
+elif args.cluster_smoke and not args.no_smoke and not fails:
     print("running CLUSTER smoke (2-node exo pipeline; peer identity "
           "checked first) ...", flush=True)
     fails += _cluster_smoke()
