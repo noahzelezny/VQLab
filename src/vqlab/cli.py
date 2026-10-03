@@ -28,6 +28,7 @@ COMMANDS = {
     "probe-init": ("probe_init_sweep.py", "per-family k-means++ vs random init sweep"),
     "mtp-probe": ("mtp_probe.py", "MTP head draft-acceptance probe (qwen4_exp)"),
     "mtp-probe35": ("mtp_probe35.py", "MTP wiring sweep + acceptance probe (qwen3_5 / qwen3_5_moe)"),
+    "doctor": ("doctor.py", "which interpreter, mlx / mlx-lm / arch files, storage roots and HF token this run would use (no GPU)"),
     "config": ("config_cmd.py", "show where vqlab reads/writes (and why), or `config init` a starter config"),
     # fit/
     "fits": ("fits.py", "the fit store: index / list / file fitted modules by family, teacher, layer, geometry"),
