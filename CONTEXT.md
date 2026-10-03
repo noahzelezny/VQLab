@@ -28,7 +28,7 @@ teacher, writes a new directory (never in place), and leaves a record.
 
 Skip-zero, `src/vqlab/skipzero/` (a shipped format since 2026-09-29, served natively by the runtime): `sz-pack` / `sz-check` / `sz-resident` / `sz-bitexact` (vq-skipzero: fully-dead VQ rows dropped on disk; 397B -10.8% disk / -11.1% resident at identical KL; docs/SKIPZERO.md).
 
-Around the pipeline: `config` (where vqlab reads and writes; `config init` on a new machine), `queue` (run a list of steps from pinned code under the GPU lease; `--preflight` first), `mcp` (the lab over MCP for agents), `gui` (read-only local window).
+Around the pipeline: `size` (text / +tower / +MTP, the card's three numbers), `config` (where vqlab reads and writes; `config init` on a new machine), `queue` (run a list of steps from pinned code under the GPU lease; `--preflight` first), `mcp` (the lab over MCP for agents), `gui` (read-only local window).
 
 ## Records: nothing happens without one
 

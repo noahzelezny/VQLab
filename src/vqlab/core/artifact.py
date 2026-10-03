@@ -165,3 +165,42 @@ def write_config(out, cfg) -> None:
 def copy_other_files(src: Artifact, out) -> None:
     for f in src.other_files():
         shutil.copy(f, out)
+
+
+# ------------------------------------------------------------------- sizes
+# Which tensors are NOT the text model. Spellings per family, measured on
+# the shipped fleet (2026-10-02): Qwen3.5 model.visual, Qwen3.6 vision_tower,
+# GLM vision_model, DeepSeek-V4-Flash-Vision-Exp vision/aligner. An MTP head
+# is either indexed (397B: top-level block.* + fc.*; DeepSeek source: mtp.*)
+# or a sidecar file (mtp-head*.safetensors) that the index does not list.
+TOWER_PREFIXES = ("model.visual.", "visual.", "vision_tower.", "vision_model.",
+                  "vision.", "aligner.", "model.vision_tower.", "model.vision_model.")
+MTP_PREFIXES = ("block.", "fc.", "mtp.", "model.mtp.")
+
+
+def tensor_class(key: str) -> str:
+    if key.startswith(TOWER_PREFIXES):
+        return "tower"
+    if key.startswith(MTP_PREFIXES):
+        return "mtp"
+    return "text"
+
+
+def sizes(path) -> dict:
+    """Bytes three ways (memory note artifact-size-three-ways): text weights,
+    the vision tower, an MTP head (indexed or sidecar), and the full download
+    (every file in the dir). Quote TEXT as the headline or sizes never
+    reconcile across cards."""
+    a = Artifact.open(path)
+    out = {"text": 0, "tower": 0, "mtp": 0}
+    for f in a.shards:
+        for k, v in a.header(f).items():
+            s, e = v["data_offsets"]
+            out[tensor_class(k)] += e - s
+    listed = set(a.shards)
+    side = [p for p in a.dir.glob("mtp-head*.safetensors") if p.name not in listed]
+    out["mtp_sidecar"] = sum(p.stat().st_size for p in side)
+    out["mtp_files"] = sorted(p.name for p in side)
+    out["download"] = sum(p.stat().st_size for p in a.dir.iterdir()
+                          if p.is_file() and not p.name.startswith("."))
+    return out
