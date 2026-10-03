@@ -527,10 +527,31 @@ def t_disk_free() -> Dict[str, Any]:
     return {"roots": out}
 
 
-def t_gpu_state() -> Dict[str, Any]:
-    return {"host": socket.gethostname().split(".")[0], "lease": str(lease_path()),
-            "lease_holder": _lease_holder(), "exo_instances": _exo_instances(),
-            "lab_state": _lab_state(), "this_host": _this_host()}
+def _box_state(name: str, b: Dict[str, Any]) -> Dict[str, Any]:
+    """Another box's lease holder and GPU-heavy processes, over ssh, from its
+    own clone and config (the [boxes.NAME] table). Never raises."""
+    remote = (f"cd {shlex.quote(b['repo'])} && VQLAB_CONFIG={shlex.quote(b['config'])} "
+              f"PYTHONPATH=src {shlex.quote(b['python'])} -c "
+              + shlex.quote("import json; from vqlab.agents import mcp_server as m; "
+                            "from vqlab.bench import box_quiet as q; s=q.state(); "
+                            "print(json.dumps({'lease_holder': m._lease_holder(), 'load1': s['load1'], "
+                            "'heavy': s['heavy'][:5]}))"))
+    try:
+        r = subprocess.run(["ssh", "-o", "ConnectTimeout=5", "-o", "BatchMode=yes", b["ssh"], remote],
+                           capture_output=True, text=True, timeout=30)
+        return json.loads(r.stdout.strip().splitlines()[-1]) if r.returncode == 0 else \
+            {"error": (r.stderr or r.stdout).strip()[-300:]}
+    except Exception as e:  # noqa: BLE001
+        return {"error": str(e)[:300]}
+
+
+def t_gpu_state(boxes: bool = True) -> Dict[str, Any]:
+    out = {"host": socket.gethostname().split(".")[0], "lease": str(lease_path()),
+           "lease_holder": _lease_holder(), "exo_instances": _exo_instances(),
+           "lab_state": _lab_state(), "this_host": _this_host()}
+    if boxes and config.boxes():
+        out["boxes"] = {n: _box_state(n, b) for n, b in config.boxes().items()}
+    return out
 
 
 _F_HEAD = re.compile(r"^## F(\d+)\b")
@@ -786,8 +807,11 @@ TOOLS: Dict[str, Dict[str, Any]] = {
     },
     "gpu_state": {
         "fn": t_gpu_state, "readonly": True,
-        "description": "Who holds this box's GPU lease and which exo instances are placed.",
-        "schema": _schema({}, []),
+        "description": "Who holds this box's GPU lease and which exo instances are placed; with "
+                       "[boxes.*] in the vqlab config, the same for every other box over ssh "
+                       "(lease holder, load, GPU-heavy processes). Check it before loading a big "
+                       "model on a box that might be fitting.",
+        "schema": _schema({"boxes": B("also report the other configured boxes (default true)")}, []),
     },
     "queue_status": {
         "fn": t_queue_status, "readonly": True,
