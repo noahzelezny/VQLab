@@ -15,7 +15,7 @@ results that nobody can reproduce.
 # If vqlab is not installed in the interpreter that loads your model,
 # run the CLI from the repo root with PYTHONPATH=src.
 sed -n 1,40p CONTEXT.md             # question -> stage -> command; each src/vqlab/<stage>/CONTEXT.md is that stage's contract
-python -m vqlab.cli --help          # 41 commands. Read the list. Twice.
+python -m vqlab.cli --help          # every command (88 today). Read the list. Twice.
 sed -n 1,60p docs/INDEX.md          # what every doc is FOR + whether it still holds
 sed -n 1,40p docs/ONBOARDING.md     # the mechanical pass before fitting ANY new family
 ```

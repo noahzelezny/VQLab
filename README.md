@@ -42,7 +42,7 @@ Every artifact this tool's pipeline has shipped (20 repos, live list on the Hub)
 \* Released and usable, but no quality claims are made for the gemma family
 anywhere in this repo or the paper: its scoring instrument is
 non-deterministic (see "Known scope limits"). All sizes are measured packed bytes; every margin is stated against
-a measured seed-noise floor; see [METHODOLOGY.md](METHODOLOGY.md) for the
+a measured seed-noise floor; see [METHODOLOGY.md](https://github.com/noahzelezny/VQLab/blob/master/METHODOLOGY.md) for the
 rules that keep these numbers honest.
 
 ## Results in one table
@@ -78,8 +78,8 @@ and by 8 bits affine is lossless. Prefill is ~0.5x affine at 35B.
 Every margin is quoted against a measured seed-noise floor; the code corpus
 is private and the vision-tower size offset is disclosed rather than
 restated. The settled results are
-[docs/FINDINGS.md](docs/FINDINGS.md); the rules are
-[METHODOLOGY.md](METHODOLOGY.md).
+[docs/FINDINGS.md](https://github.com/noahzelezny/VQLab/blob/master/docs/FINDINGS.md); the rules are
+[METHODOLOGY.md](https://github.com/noahzelezny/VQLab/blob/master/METHODOLOGY.md).
 
 ## The differentiating feature: size targeting
 
@@ -109,7 +109,13 @@ fit → verify (outlier gate) → pack → graft (vision) → release checks
 # package ships a model runtime, and which copy of a runtime resolves is a
 # real source of wrong conclusions (METHODOLOGY.md §5).
 python3 -m venv .venv && . .venv/bin/activate
-pip install -e .
+pip install "vqlab[score]"      # or, from a checkout: pip install -e ".[score,test]"
+
+# Where models, teachers, fits and scratch live. Nothing large belongs on a
+# small system disk; point this at a big volume once per machine.
+vqlab config init --root /Volumes/Big/vqlab
+vqlab config                    # shows every location and where it came from
+
 vqlab selftest        # real pipeline on a tiny synthetic model (<1 min, uses the GPU)
 
 # MoE families (Qwen3.5/3.6-class): fit against an affine skeleton + bf16 source
@@ -140,7 +146,7 @@ vqlab manifest write artifacts/K256-packed   # stamp provenance
 ```
 
 `vqlab --help` lists all commands; `vqlab <cmd> --help` shows each surface.
-[REPRODUCING.md](REPRODUCING.md) maps every paper table to its commands.
+[REPRODUCING.md](https://github.com/noahzelezny/VQLab/blob/master/REPRODUCING.md) maps every paper table to its commands.
 
 ## Per-layer allocation (v2 artifacts)
 
@@ -154,8 +160,8 @@ named modules from the bf16 teacher and keeps every other shipped byte.
 
 `vqlab serve` and `vqlab mtp-generate` decode with a multi-token-prediction
 head as the drafter. Setup, supported families, and the measured speedups
-are in [docs/MTP-USAGE.md](docs/MTP-USAGE.md); per-family findings in
-[docs/MTP.md](docs/MTP.md).
+are in [docs/MTP-USAGE.md](https://github.com/noahzelezny/VQLab/blob/master/docs/MTP-USAGE.md); per-family findings in
+[docs/MTP.md](https://github.com/noahzelezny/VQLab/blob/master/docs/MTP.md).
 
 ## Requirements
 
@@ -177,20 +183,24 @@ as SKIPPED with the reason.
 
 - MLX/Metal only. Kernel conclusions are Apple Silicon specific.
 - Families onboarded: Qwen3.5-397B-A17B, Qwen3.6-35B-A3B, dense Qwen 27B,
-  Qwen3.8-Flash-Next, GLM-5.3-Flash. Gemma fitting code ships but no
+  Qwen3.8-Flash-Next, GLM-5.3-Flash, DeepSeek-V4-Flash (FP4 experts read
+  natively; `vqlab teacher-prep` builds the exact teacher). Gemma fitting code ships but no
   quality claims are made for it; its scoring instrument is
   non-deterministic.
-- New family: read [docs/ONBOARDING.md](docs/ONBOARDING.md) first.
+- New family: read [docs/ONBOARDING.md](https://github.com/noahzelezny/VQLab/blob/master/docs/ONBOARDING.md) first.
 
 ## Layout
 
-- `src/vqlab/` — the toolkit. Every command is a standalone script.
-- `docs/` — start at [docs/INDEX.md](docs/INDEX.md), which says what each
+- `src/vqlab/` — the toolkit, one folder per pipeline stage (fit, assemble,
+  bundle, gate, score, bench, ...); `CONTEXT.md` maps a question to its
+  command. `core/artifact.py` is the one place that knows an artifact's
+  layout.
+- `docs/` — start at [docs/INDEX.md](https://github.com/noahzelezny/VQLab/blob/master/docs/INDEX.md), which says what each
   doc is for and whether it still holds.
 - `families/` — per-family profiles: what the toolkit knows about each
   checkpoint, as data.
 - `research/paper/` — the paper and the scripts that regenerate its tables.
-- [docs/FINDINGS.md](docs/FINDINGS.md) is the law book: settled laws,
+- [docs/FINDINGS.md](https://github.com/noahzelezny/VQLab/blob/master/docs/FINDINGS.md) is the law book: settled laws,
   retracted leads, instrument rules.
 - `AGENTS.md` — instructions for coding agents working in this repo.
 
@@ -203,5 +213,5 @@ measurements, the artifacts and every published claim are the author's.
 
 Apache-2.0 for code. Corpus data files carry their own terms
 (CC BY-SA for the WikiText prose corpus, public domain for the literary
-corpus); see [docs/CORPORA.md](docs/CORPORA.md). If you use VQLab or its
+corpus); see [docs/CORPORA.md](https://github.com/noahzelezny/VQLab/blob/master/docs/CORPORA.md). If you use VQLab or its
 artifacts in published work, cite the companion paper.
