@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """Retrofit self-contained `model_file` loading into an EXISTING VQ codes
 artifact (the 35B was built before the packaging existed). Writes model.py
-(= runtime/vq_switch.py + the loader shim, same text vq_397b_codes.py
+(= runtime/vq_switch.py + the loader shim, same text fit_moe.py
 generates) and adds config.json: model_file + vq_modules.
 
     ./add_model_file.py --artifact <dir> [--k 256 --dim 4 --group 64]
@@ -115,7 +115,7 @@ for sh, mods in sorted(by_shard.items()):
             if not bits or not in_d:
                 raise SystemExit(
                     f"{m}: codes are uint32 (packed) but config carries no "
-                    "pack_bits/in for them. Run pack_artifact.py, which writes "
+                    "pack_bits/in for them. Run pack.py, which writes "
                     "both — do not retrofit a packed artifact by hand.")
         else:
             bits, in_d = 0, ncol * cb_shape[1]

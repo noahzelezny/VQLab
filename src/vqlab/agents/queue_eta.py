@@ -6,7 +6,7 @@ order, and is "ETA unknown" when neither applies (never a guess):
 
 1. the RUNNING step's own progress lines:
    * fit-moe prints ``[i/N] <shard>  (Ts)`` after each shard, T cumulative
-     seconds (fit/vq_397b_codes.py);
+     seconds (fit/fit_moe.py);
    * kl-ladder prints ``[kl-ladder] RUNG x CACHE`` then ``    KL ...`` per
      cell, ``(resumed from saved record)`` for a cell it did not recompute;
      the cell count is --rung x --cache from the step's args (1 under

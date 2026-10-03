@@ -213,7 +213,7 @@ for sh in sorted(set(vis.values())):
     # which E123 proved can silently return ZEROS. This script runs on EVERY
     # published artifact, and check_vision.py verifies tensors are PRESENT,
     # not non-zero, so a zeroed graft would have passed every gate we own.
-    # Third sibling of the same defect (build_dense_vq, pack_artifact,
+    # Third sibling of the same defect (build_dense_vq, pack,
     # pack_dense); found by sweeping for the pattern rather than by hitting it.
     with mx.stream(mx.cpu):
         data = mx.load(str(SRC / sh))

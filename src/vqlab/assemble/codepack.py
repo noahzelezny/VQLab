@@ -1,9 +1,9 @@
 """The one packing decision for MoE expert codes, shared by `vqlab pack`
-(pack_artifact.py, after the fact) and `vqlab fit-moe --pack` (as each shard
+(pack.py, after the fact) and `vqlab fit-moe --pack` (as each shard
 is written). Both call `pack_codes`, so a fit packed in flight is byte for
 byte the fit packed afterwards (tests/test_fit_pack.py pins that).
 
-Rules (each one paid for; see pack_artifact.py for the history):
+Rules (each one paid for; see pack.py for the history):
   * bits % 8 == 0 (K256, K65536): packing saves zero bytes and costs the
     packed kernel's bit extraction (37% decode tax measured), so the codes
     stay byte-aligned;

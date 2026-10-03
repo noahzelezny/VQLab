@@ -184,5 +184,5 @@ def test_runtime_equiv_is_a_routed_command():
     from vqlab import cli
     assert cli.COMMANDS["runtime-equiv"][0] == "runtime_equiv.py"
     root = pathlib.Path(__file__).resolve().parents[1]
-    assert "`runtime-equiv`" in (root / "CONTEXT.md").read_text()
+    assert "runtime-equiv" in cli.routed((root / "CONTEXT.md").read_text())
     assert "`runtime-equiv`" in (root / "src/vqlab/score/CONTEXT.md").read_text()
