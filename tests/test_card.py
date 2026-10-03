@@ -139,3 +139,18 @@ def test_mixed_builds_refuse(tmp_path):
     with pytest.raises(SystemExit) as e:
         C.main(["--artifact", str(art), "--kl", str(j), "--this", "cand", "--draft"])
     assert e.value.code == 2
+
+
+def test_mtp_sidecar_with_unprefixed_keys_is_not_text(tmp_path):
+    """A packed MTP head stores block.* / fc.* keys (no mtp. prefix);
+    outside the index and named mtp-head*, it is a sidecar, not text."""
+    import json
+    import mlx.core as mx
+    from vqlab.records import card
+    mx.set_default_device(mx.cpu)
+    mx.save_safetensors(str(tmp_path / "model.safetensors"), {"model.norm.weight": mx.ones((4,))})
+    (tmp_path / "model.safetensors.index.json").write_text(
+        json.dumps({"weight_map": {"model.norm.weight": "model.safetensors"}}))
+    want = card._fp([tmp_path / "model.safetensors"])
+    mx.save_safetensors(str(tmp_path / "mtp-head-q6.safetensors"), {"block.mlp.down_proj.weight": mx.ones((4,))})
+    assert card.text_match(tmp_path, want) == ["mtp-head-q6.safetensors"]
