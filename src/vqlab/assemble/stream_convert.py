@@ -45,6 +45,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))  # src/
 from vqlab import _layout  # noqa: E402,F401  one module object per name
 from families import FAMILY
 import runtime_load
+from vqlab.family import alias_fused, fused_projections  # noqa: E402
 
 ap = argparse.ArgumentParser()
 ap.add_argument("--src", required=True)
@@ -98,21 +99,12 @@ if a.skeleton_from:
             SKEL[m.removeprefix("language_model.")] = v
     # FUSED ALIASES: a runtime whose sanitize fuses two projections that share
     # their input (deepseek_v4: attn.wq_a + attn.wkv -> attn.wqkv_a) meets a
-    # reference that stores them apart. Affine groups run along the INPUT
-    # dimension, so quantizing the fused matrix at the halves' common width is
-    # the same as quantizing each half; differing widths are refused.
-    FUSED = (("attn.wq_a", "attn.wkv", "attn.wqkv_a"),                # deepseek_v4 attention
-             ("compressor.wkv", "compressor.wgate", "compressor.wkv_gate"))  # its compressors
-    for k in list(SKEL):
-        for x, y, fused in FUSED:
-            if k.endswith("." + x):
-                pre = k[: -len(x)]
-                if pre + y not in SKEL:
-                    continue
-                a_, b_ = SKEL[k], SKEL[pre + y]
-                if (a_.get("bits"), a_.get("group_size")) != (b_.get("bits"), b_.get("group_size")):
-                    sys.exit(f"FAIL: {k} and {pre + y} have different widths; cannot fuse into {fused}")
-                SKEL[pre + fused] = a_
+    # reference that stores them apart. The table lives in the family plugin
+    # (vqlab.family.<name>.SPEC.fused); see family.alias_fused for the rule.
+    try:
+        alias_fused(SKEL, fused_projections(a.family))
+    except ValueError as e:
+        sys.exit(f"FAIL: {e}")
     SKEL_HITS = {"skeleton": 0, "expert": 0, "bf16": 0}
 
 
