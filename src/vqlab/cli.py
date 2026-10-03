@@ -72,6 +72,7 @@ COMMANDS = {
     "check": ("check_all.py", "run the release gates that need no source model"),
     "smoke": ("smoke.py", "generate one token through the runtime the artifact ships"),
     "spelling": ("us_spelling.py", "fail on British spellings in released text (paper, cards); --fix rewrites to US"),
+    "parity": ("parity.py", "a family's checklist of REFERENCE inference behaviours (clamps, eps, routing) and the test for each; exits 1 if a required one is untested"),
     "pin": ("pin.py", "freeze an artifact for measurement (symlinked weights, optional --runtime re-bake), smoke it, write vqlab_pin.json"),
     "verify": ("verify_artifact.py", "outlier gate: decode artifact bytes vs bf16 source"),
     "validate": ("validate_queue.py", "overnight validation queue: drain artifacts through the gates, never publish"),
@@ -88,6 +89,7 @@ COMMANDS = {
     "kl": ("kl_damage.py", "KL-to-bf16 damage vs a cached teacher (cache/score)"),
     "kernel-truth": ("kernel_truth.py", "fused vs fallback: which is closer to an EXACT float64 reference? (F146)"),
     "kernel-truth-moe": ("kernel_truth_moe.py", "MoE twin of kernel-truth: decode (small-N fused) vs prefill (gemmseg2) expert kernels against an exact float64 reference"),
+    "act-stats": ("act_stats.py", "how often each clamp/limit in a family's parity checklist fires on the house corpora (GPU, streamed teacher)"),
     "kl-pair": ("kl_pair.py", "paired KL between two arms scored in SEPARATE runs (env-var arms)"),
     "kl-ladder": ("kl_ladder.py", "rank rungs by KL against per-corpus teacher caches, with error bars"),
     # bench/
