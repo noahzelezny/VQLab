@@ -34,7 +34,7 @@ def main(argv=None):
     sub = {k: f for k, f in base.index.items() if f in keep}
     for f in keep:
         os.symlink(base.shard_path(f), out / f)
-    write_index(out, sub)
+    write_index(out, sub, total_size=None)   # a fit input, not an artifact
     (out / "config.json").write_text((base.dir / "config.json").read_text())
     copy_other_files(base, out)
     other = sorted({layer_of(k) for k in sub} - set(range(lo, hi + 1)) - {-1})

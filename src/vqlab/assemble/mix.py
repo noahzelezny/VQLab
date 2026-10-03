@@ -104,8 +104,8 @@ def build(out, base, bands, copy=False, files_from=None):
         cfg["quantization"] = {**qtop, **merged["quantization"]}
     if merged["vq_skipzero"] or "vq_skipzero" in cfg:
         cfg["vq_skipzero"] = merged["vq_skipzero"]
+    write_index(out, wm)
     total = sum((out / f).stat().st_size for f in set(wm.values()))   # follows symlinks
-    write_index(out, wm, total_size=total)
     write_config(out, cfg)
     copy_other_files(ff, out)
     ks = collections.Counter(f"d{e.get('dim', e.get('d', '?'))}/K{e.get('k', '?')}"
