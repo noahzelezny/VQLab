@@ -55,6 +55,7 @@ def compare(name, mod, seeds=3, n_dec=8, topk=6, n_experts=8):
     E = mod.codes.shape[0]
     IN = mod.input_dims
     pool = np.arange(min(E, n_experts))
+    topk = min(topk, len(pool))
     Ws = _weights(mod, pool)
     pairs_big = VS.VQ_FUSED_MAX_N // topk + 16           # just above the fused gate
     res = []
