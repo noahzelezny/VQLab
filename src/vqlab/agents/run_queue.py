@@ -611,7 +611,10 @@ def wait(qdirs, timeout=None, poll=15.0) -> int:
         for q in qdirs:
             s = json.loads((q / "state.json").read_text())
             st = s["status"]
-            if st == "running" and not ms._pid_alive(s.get("pid")):
+            # a pid is only meaningful on the box that wrote it: a queue run
+            # --on another box is judged by its state.json alone
+            here = socket.gethostname().split(".")[0]
+            if st == "running" and s.get("host", here) == here and not ms._pid_alive(s.get("pid")):
                 st = "died"
             states[q] = st
             if seen.get(q) != st:

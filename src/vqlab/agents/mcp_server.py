@@ -502,7 +502,8 @@ def t_queue_status(name: Optional[str] = None, n: int = 5) -> Dict[str, Any]:
     for q in qs[-max(1, int(n)):]:
         s = json.loads((q / "state.json").read_text())
         st = s["status"]
-        if st == "running" and not _pid_alive(s.get("pid")):
+        here = socket.gethostname().split(".")[0]
+        if st == "running" and s.get("host", here) == here and not _pid_alive(s.get("pid")):
             st = "died"
         out.append({"queue": str(q), "status": st, "terminal": st in (
             "passed", "failed", "stopped", "deferred", "died"),
