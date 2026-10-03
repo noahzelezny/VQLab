@@ -44,7 +44,7 @@ import time
 import numpy as np
 
 HERE = pathlib.Path(__file__).resolve().parent
-SRC = HERE.parents[2]
+SRC = HERE.parents[1]
 sys.path.insert(0, str(SRC))
 from vqlab import config  # noqa: E402
 

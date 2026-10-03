@@ -188,8 +188,8 @@ def main() -> int:
         # The runtime serves compact rows only at the dims skipzero_load
         # declares; any other dim crashes on the first prefill, not at load.
         import importlib.util as _ilu
-        _p = pathlib.Path(__file__).resolve().parents[1] / "experimental" / \
-            "skipzero" / "skipzero_load.py"
+        _p = pathlib.Path(__file__).resolve().parents[1] / "skipzero" / \
+            "skipzero_load.py"
         _spec = _ilu.spec_from_file_location("skipzero_load", _p)
         _szl = _ilu.module_from_spec(_spec)
         _spec.loader.exec_module(_szl)
