@@ -50,6 +50,7 @@ COMMANDS = {
     "card-tables": ("card_tables.py", "a model card's KL table and paired deltas as Markdown, from kl-ladder JSON + each rung's own headers"),
     "size": ("size_cmd.py", "an artifact's size three ways (text / +tower / +MTP) and the full download, from its headers"),
     "teacher-prep": ("teacher_prep.py", "official release -> exact MLX teacher: cache guard, F8_E8M0 relabel, disk preflight, sanitize-stream"),
+    "graft-extras": ("graft_extras.py", "byte-copy a release's extra tensors (vision tower, image tokens, image-routing biases) into a text VQ artifact under the runtime's names; identity-probed"),
     "splice-ple": ("splice_ple.py", "splice VQ PLE codes into a packed artifact"),
     "pack-dense": ("pack_dense.py", "pack a dense VQ artifact"),
     "unpack-dense": ("unpack_dense.py", "diagnostic twin with PLAIN codes: isolates PACKING from every other variable (F141)"),
@@ -131,7 +132,7 @@ COMMANDS = {
 BUILD_OUTPUTS = {
     "pack": ("--out",), "pack-dense": ("--out",), "build-dense": ("--out",),
     "stream-convert": ("--out",), "sanitize-stream": ("--out",), "teacher-prep": ("--out",), "mix": ("--out",), "ple-swap": ("--out",), "unpack-dense": ("--out",),
-    "pack-ple": ("--artifact",), "graft": ("--artifact",), "splice-ple": ("--artifact",),
+    "pack-ple": ("--artifact",), "graft": ("--artifact",), "graft-extras": ("--artifact",), "splice-ple": ("--artifact",),
     "bundle": ("--artifact",), "rebundle-dense": ("--artifact",),
     "patch-arch": ("--out",), "vision-layout": ("--out", 0),
     "mtp-pack": ("--out", "--model"), "mtp-extract": ("--out",),
@@ -166,6 +167,8 @@ def _record_build(cmd, rest, script):
         named, pos = _parse(rest)
         if cmd == "vision-layout" and "--fix" not in named:
             return                                    # report-only mode
+        if "--dry-run" in rest or "--plan" in rest:
+            return                                    # nothing was built
         target = None
         for c in BUILD_OUTPUTS[cmd]:
             v = pos[c] if isinstance(c, int) and len(pos) > c else named.get(c)
