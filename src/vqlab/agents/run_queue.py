@@ -624,12 +624,17 @@ def run_on(name, file, preflight=False, force=False) -> int:
     head = _git("rev-parse", "HEAD", cwd=clone)
     if head != _git("rev-parse", "HEAD"):
         raise SystemExit(f"{clone} is at {head[:10]}, not this repo's HEAD")
-    remote = (f"cd {shlex.quote(str(clone))} && VQLAB_CONFIG={shlex.quote(b['config'])} "
+    # numerics switches must match on both boxes (runtime VQ_* flags, family
+    # scorer variants such as VQLAB_DS4_SHARED_CLAMP): forward the ones set here
+    fwd = " ".join(f"{k}={shlex.quote(v)}" for k, v in sorted(os.environ.items())
+                   if k.startswith(("VQ_", "VQLAB_DS4_")))
+    remote = (f"cd {shlex.quote(str(clone))} && {fwd} VQLAB_CONFIG={shlex.quote(b['config'])} "
               f"VQLAB_QUEUE_DIR={shlex.quote(b['queue_dir'])} PYTHONPATH=src "
               f"{shlex.quote(b['python'])} -m vqlab.cli queue run "
               f"{shlex.quote(str(pathlib.Path(file).resolve()))} --detach"
               + (" --preflight" if preflight else "") + (" --force" if force else ""))
-    print(f"{name}: clone at {head[:10]}; launching over ssh {b['ssh']}", flush=True)
+    print(f"{name}: clone at {head[:10]}; launching over ssh {b['ssh']}"
+          + (f" with {fwd}" if fwd else ""), flush=True)
     return subprocess.call(["ssh", "-o", "ConnectTimeout=10", b["ssh"], remote])
 
 
