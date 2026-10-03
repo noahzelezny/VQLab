@@ -48,6 +48,7 @@ import sys
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))  # src/
 from vqlab import _layout  # noqa: E402,F401  one module object per name
 from vqlab import config  # noqa: E402
+from vqlab.core.artifact import tensor_class  # noqa: E402
 from families import DENSE_FAMILIES, FAMILY  # noqa: E402
 import fitstore  # noqa: E402
 import provenance  # noqa: E402
@@ -109,9 +110,10 @@ def dense_rows(tmpl, shapes, n_layers):
 
 def classify(key: str, expert_rx) -> str:
     k = key.lower()
-    if "vision" in k or "visual" in k:
+    cls = tensor_class(key)              # the one classifier (core.artifact)
+    if cls == "tower":
         return "vision"
-    if ".mtp." in k or k.startswith("mtp."):
+    if cls == "mtp":
         return "mtp"
     if expert_rx and expert_rx.search(key):
         return "vq_target"

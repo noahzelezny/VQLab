@@ -366,3 +366,30 @@ def test_size_fix_index(fx, tmp_path):
     size_cmd.main([str(d), "--fix-index"])
     assert size_cmd.main([str(d), "--check-index"]) == 0
     assert json.loads(p.read_text())["weight_map"] == doc["weight_map"]
+
+
+@pytest.mark.parametrize("key,cls", [
+    ("model.language_model.layers.0.mlp.switch_mlp.gate_proj.codes", "text"),
+    ("language_model.model.layers.1.self_attn.q_proj.weight", "text"),
+    ("model.layers.3.ffn.experts.w1.codes", "text"),
+    ("lm_head.weight", "text"),
+    ("model.visual.blocks.0.attn.qkv.weight", "tower"),         # Qwen3.5 HF
+    ("vision_tower.blocks.0.attn.qkv.weight", "tower"),         # Qwen3.6 / gemma
+    ("embed_vision.embedding_projection.weight", "tower"),      # gemma's 2nd half
+    ("model.vision_model.encoder.layers.0.w", "tower"),         # GLM
+    ("vision.blocks.0.w", "tower"),                             # DeepSeek release
+    ("aligner.layers.0.weight", "tower"),
+    ("image_newline", "tower"),                                 # release name
+    ("model.image_newline", "tower"),                           # runtime name
+    ("model.layers.7.ffn.gate.bias_vl", "tower"),               # image routing bias
+    ("block.mlp.switch_mlp.up_proj.weight", "mtp"),             # 397B indexed head
+    ("fc.weight", "mtp"),
+    ("mtp.0.attn.wq_a.weight", "mtp"),                          # DeepSeek source
+    ("language_model.mtp.layers.0.mlp.gate.weight", "mtp"),     # native runtime layout
+])
+def test_tensor_class(key, cls):
+    """The one classifier (operator notes 2026-10-03, 1.5): every spelling the
+    fleet uses, including DeepSeek Vision-Exp's tower, image tokens and the
+    per-layer image-routing bias."""
+    from vqlab.core.artifact import tensor_class
+    assert tensor_class(key) == cls
