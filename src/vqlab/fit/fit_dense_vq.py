@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """VQ-fit a DENSE mlp trio from a bf16 source (family-aware: gemma4_e4b, qwen3_8).
 
-WHY A SEPARATE FITTER. vq_397b_codes.py targets modules that a prepared
+WHY A SEPARATE FITTER. fit_moe.py targets modules that a prepared
 struct BASE marked as 2-bit placeholders (is_vq_target checks bits==2);
 dense e4b has no such base. This is the minimum honest experiment for
 "does VQ transfer to a small dense model": fit gate/up/down_proj
@@ -218,7 +218,7 @@ for li in range(LO, HI + 1):
         report.append(rel)
         print(f"L{li:02d} {proj:10s} relerr {rel:.4f}  "
               f"[{time.time()-t0:6.0f}s]", flush=True)
-        # ABORT on a degenerate fit. vq_397b_codes.py has had --relerr-abort
+        # ABORT on a degenerate fit. fit_moe.py has had --relerr-abort
         # for weeks; this fitter only PRINTED relerr and carried on. Measured
         # 2026-08-21: the E95 dense 27B shipped L60 up_proj with codebook,
         # codes AND scales all exactly zero against a real source tensor

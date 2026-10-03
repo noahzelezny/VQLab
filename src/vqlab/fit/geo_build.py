@@ -237,13 +237,13 @@ def fit_module(W, D, K, rng, tail_pow=0.0, plain=False):
 
     tail_pow > 0 is E112's magnitude-weighted k-means: each subvector's
     weight in every Lloyd update is its norm in ORIGINAL weight units raised
-    to tail_pow, normalized to mean 1 (vq_397b_codes.py --tail-weight-pow).
+    to tail_pow, normalized to mean 1 (fit_moe.py --tail-weight-pow).
     That norm is independent of the per-group scale, so the same weights
     apply in the alternation rounds, where they multiply the s**2 term --
     applying them only to the first Lloyd pass would let alternation undo
     them. tail_pow = 0 takes the original unweighted path bit-for-bit.
 
-    plain=True is E112's fitter (vq_397b_codes.py): Lloyd on max-abs-scaled
+    plain=True is E112's fitter (fit_moe.py): Lloyd on max-abs-scaled
     subvectors, NO scale alternation, max-abs scales at encode. Needed to
     replicate E112 faithfully: with alternation on, least-squares scales
     drift against a tail-weighted codebook and the tail error gets WORSE,

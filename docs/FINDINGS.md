@@ -366,7 +366,7 @@ them needs new evidence first, not disk.
    Scope: the gate ran at ONE dense geometry (d2/K256); the ppl width it
    explains was measured at 397B d4/K256. Not crossed silently, per III.12.
    **The vintage fitters (`fitter_0816_cdcdeab.py` md5 22436a2c,
-   `vq_397b_codes.py` md5 2c5c3abb) are deliberately LEFT UNSEEDED — E121,
+   `vq_397b_codes.py`, now `fit_moe.py`, md5 2c5c3abb) are deliberately LEFT UNSEEDED — E121,
    E129 and E136 are valid only as draws from the process AS IT WAS, and
    seeding them would void those arms retroactively.** [E139, E136b]
 

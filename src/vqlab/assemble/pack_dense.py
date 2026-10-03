@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Pack a DENSE VQ artifact's codes in place (new output dir).
 
-pack_artifact.py speaks the expert format ([E, OUT, NSUB]); dense e4b
+pack.py speaks the expert format ([E, OUT, NSUB]); dense e4b
 artifacts carry 2D codes for VQLinear and row-table codes for VQEmbedding.
 Same vq_pack layout (32 codes/block, NSUB %% 32 == 0), so the packed words
 are identical to what the expert packer would emit — only the walking
@@ -56,7 +56,7 @@ for sh in sorted(set(idx.values())):
     # forces evaluation, which can silently yield ZEROS. That is the exact
     # mechanism confirmed in E123 (fitter, read returned zeros to one consumer
     # and correct bytes to the next) and the cause of the L60 zeroed splice in
-    # build_dense_vq (013d2bb); pack_artifact had the same defect. This is the
+    # build_dense_vq (013d2bb); pack had the same defect. This is the
     # THIRD file in the family, found 2026-08-21 before its first use on a
     # real dense rung. Do NOT remove the eval.
     with mx.stream(mx.cpu):

@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """Pack an existing (unpacked) VQ codes artifact into the sub-byte format.
 
-    ./pack_artifact.py --src <unpacked-dir> --out <packed-dir>
+    ./pack.py --src <unpacked-dir> --out <packed-dir>
 
 This is a pure REPRESENTATION change: every decoded weight is bit-identical
 to the source artifact's, so the packed model must referee to exactly the
@@ -157,7 +157,7 @@ for si, sh in enumerate(shards, 1):
     # and shard 5 (K256, where n_packed=0 makes EVERY tensor a lazy
     # passthrough); same artifacts pack clean on M3's local disk. The eval
     # is LOAD-BEARING -- creation-binding to the CPU stream alone is
-    # measured-insufficient. Same family as vq_397b_codes.py's load path.
+    # measured-insufficient. Same family as fit_moe.py's load path.
     with mx.stream(mx.cpu):
         data = mx.load(str(SRC / sh))
         mx.eval(list(data.values()))

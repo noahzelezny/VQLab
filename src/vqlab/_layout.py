@@ -41,12 +41,23 @@ STAGES = ("runtime", "core", "plan", "fit", "assemble", "bundle", "gate",
 SEARCH = STAGES + ("mtp", "score/referee")
 
 
+# Modules renamed to their command names (2026-10-03). The OLD names keep
+# working everywhere a name is looked up: find("vq_397b_codes.py"), a bare
+# `import pack_artifact`, `vqlab.vq_397b_codes` and the dotted stage name
+# all reach the renamed module, ONE module object (see _Alias). Queue files,
+# shell chains and old ledger entries name the old files.
+RENAMED = {"vq_397b_codes": "fit_moe", "pack_artifact": "pack"}
+
+
 def stage_dirs():
     return [PKG / s for s in STAGES]
 
 
 def find(name: str) -> pathlib.Path:
     """Path of a module FILE by its (pre-split) filename or relative path."""
+    stem, dot, ext = name.rpartition("/")[2].partition(".")
+    if stem in RENAMED:
+        name = name[:len(name) - len(stem + dot + ext)] + RENAMED[stem] + dot + ext
     for d in (PKG, *(PKG / s for s in SEARCH)):
         p = d / name
         if p.exists():
@@ -122,6 +133,10 @@ def _names():
                 canon = f"vqlab.{s}.{f.stem}"
                 out[f.stem] = canon
                 out[f"vqlab.{f.stem}"] = canon
+    for old, new in RENAMED.items():
+        canon = out[new]
+        out[old] = out[f"vqlab.{old}"] = canon
+        out[f"{canon.rsplit('.', 1)[0]}.{old}"] = canon
     # MTP heads lived at vqlab.mtp_head* before the split. Dotted alias only:
     # the vqlab.mtp library's own module names (runtime, loop, ...) are too
     # generic to answer for as bare names.
