@@ -667,9 +667,14 @@ def main(argv=None) -> int:
                 qdirs.append(qd)
                 qrc = Q.run(qd)
             qs = json.load(open(qd / "state.json"))
-            check("queue: steps run from a worktree pinned at the queue's commit",
-                  Q._git("rev-parse", "HEAD", cwd=qd / "tree") == qs["commit"]
-                  and str(qd / "tree") in (qd / "steps" / "00-ok" / "cmd").read_text() + qs["tree"])
+            if Q.installed():
+                check("queue: an installed package is pinned by version + file hash",
+                      qs.get("installed") and qs["commit"].startswith("installed:")
+                      and qs["commit"].endswith(":" + Q._package_hash()))
+            else:
+                check("queue: steps run from a worktree pinned at the queue's commit",
+                      Q._git("rev-parse", "HEAD", cwd=qd / "tree") == qs["commit"]
+                      and str(qd / "tree") in (qd / "steps" / "00-ok" / "cmd").read_text() + qs["tree"])
             check("queue: a missing input path FAILS the step and stops the queue",
                   qrc == 4 and [r["status"] for r in qs["steps"]] == ["pass", "fail", "pending"]
                   and "does not exist" in qs["steps"][1]["reasons"][0])
@@ -752,11 +757,16 @@ def main(argv=None) -> int:
               _il.reload(_bare) is _canon and _canon.__name__ == "vqlab.runtime.vq_switch")
         import re as _re
         from vqlab import cli as _cli
-        _ctx = (L.SRC.parent / "CONTEXT.md").read_text()
-        _named = set(_re.findall(r"`(?:vqlab )?([a-z][a-z0-9-]*)(?: [^`]*)?`", _ctx))
-        _unrouted = sorted(k for k in _cli.COMMANDS if k not in _named)
-        check("every CLI command is routed in the root CONTEXT.md (agents navigate by it)",
-              not _unrouted, ", ".join(_unrouted))
+        _root_ctx = L.SRC.parent / "CONTEXT.md"
+        if _root_ctx.exists():
+            _ctx = _root_ctx.read_text()
+            _named = set(_re.findall(r"`(?:vqlab )?([a-z][a-z0-9-]*)(?: [^`]*)?`", _ctx))
+            _unrouted = sorted(k for k in _cli.COMMANDS if k not in _named)
+            check("every CLI command is routed in the root CONTEXT.md (agents navigate by it)",
+                  not _unrouted, ", ".join(_unrouted))
+        else:
+            skip("every CLI command is routed in the root CONTEXT.md",
+                 "an installed package carries no repo root; checked in the checkout")
         _nodoc = sorted(s_ for s_ in L.STAGES if not (L.PKG / s_ / "CONTEXT.md").exists())
         check("every stage folder has its CONTEXT.md contract", not _nodoc, ", ".join(_nodoc))
         check("no stage module name collides with stdlib / site-packages",
