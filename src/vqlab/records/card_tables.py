@@ -28,6 +28,12 @@ CORPORA = ("prose", "code", "lit")
 GIB = 2 ** 30
 
 
+def _gib(x: float) -> str:
+    """Two decimals under 10 GiB: on a small model 0.96 / 0.99 / 1.01 IS the
+    size story, and one decimal prints all three as 1.0."""
+    return f"{x:.2f}" if x < 10 else f"{x:.1f}"
+
+
 def _rows(paths):
     rows, paired, builds = {}, [], []
     for p in paths:
@@ -80,12 +86,12 @@ def render(kl_paths, labels=None, this=None, extras=()) -> str:
     for x in extras:
         name, nums = x.split("=", 1)
         v = [float(n) for n in nums.split(",")]
-        gib = f"{v[3]:.1f}" if len(v) > 3 else "?"
+        gib = _gib(v[3]) if len(v) > 3 else "?"
         out.append(f"| {name} | {gib} | " + " | ".join(f"{n:.1f}" for n in v[:3])
                    + f" | {sum(v[:3]) / 3:.1f} |")
     for rung, r in sorted(rows.items(), key=lambda kv: -sum(kv[1]["vals"])):
         try:
-            gib = f"{sizes(r['path'])['text'] / GIB:.1f}"
+            gib = _gib(sizes(r['path'])['text'] / GIB)
         except (SystemExit, OSError):
             gib = "?"
         cells = [gib] + [f"{v:.1f}" for v in r["vals"]] + [f"{sum(r['vals']) / 3:.1f}"]
