@@ -755,12 +755,11 @@ def main(argv=None) -> int:
               _bare is _canon is _old and _canon.__name__ == "vqlab.runtime.vq_switch")
         check("reload by the bare name re-executes the module",
               _il.reload(_bare) is _canon and _canon.__name__ == "vqlab.runtime.vq_switch")
-        import re as _re
         from vqlab import cli as _cli
         _root_ctx = L.SRC.parent / "CONTEXT.md"
         if _root_ctx.exists():
             _ctx = _root_ctx.read_text()
-            _named = set(_re.findall(r"`(?:vqlab )?([a-z][a-z0-9-]*)(?: [^`]*)?`", _ctx))
+            _named = _cli.routed(_ctx)      # `fit moe` and `fit-moe` both route
             _unrouted = sorted(k for k in _cli.COMMANDS if k not in _named)
             check("every CLI command is routed in the root CONTEXT.md (agents navigate by it)",
                   not _unrouted, ", ".join(_unrouted))

@@ -54,7 +54,8 @@ Queue file (JSON):
         "timeout_s": 3600}
      ]}
 
-`cmd` is a vqlab subcommand; `script` is a path relative to the repo (run
+`cmd` is a vqlab subcommand, flat (`fit-moe`) or namespaced (`fit moe`; stored
+flat); `script` is a path relative to the repo (run
 from the pinned tree). `python` (queue or step) picks the interpreter, e.g.
 the exo env. `preflight` is {"args": [...]} (replace), {"append": [...]} or
 {"skip": "reason"}, or {"full": "reason"} to run the real step full-size on
@@ -151,6 +152,15 @@ def validate(q) -> list[str]:
         names.add(st.get("name"))
         if bool(st.get("cmd")) == bool(st.get("script")):
             errs.append(f"{tag}: give exactly one of cmd / script")
+        if isinstance(st.get("cmd"), str) and st["cmd"]:
+            # `fit moe` and `fit-moe` are one command; the queue (SCORING,
+            # GPU_FREE, RESUMABLE, the saved queue.json) speaks the flat name
+            from vqlab import cli as _cli
+            flat, extra = _cli.resolve(st["cmd"].split())
+            if flat is None or extra:
+                errs.append(f"{tag}: unknown command {st['cmd']!r}")
+            else:
+                st["cmd"] = flat
         if st.get("cmd") == "publish":
             errs.append(f"{tag}: publish is a human action, never queued")
         if st.get("on_fail", "stop") not in ("stop", "continue"):
