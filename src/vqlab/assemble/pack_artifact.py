@@ -90,6 +90,9 @@ ap.add_argument("--vision-config-from", default="",
 args = ap.parse_args()
 
 SRC, OUT = pathlib.Path(args.src), pathlib.Path(args.out)
+from vqlab import config as _cfg  # noqa: E402
+_cfg.require_free(OUT, sum(p.stat().st_size for p in SRC.glob("*.safetensors")
+                           if not (OUT / p.name).exists()), "pack")
 OUT.mkdir(parents=True, exist_ok=True)
 
 idx_path = SRC / "model.safetensors.index.json"
