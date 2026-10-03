@@ -288,15 +288,15 @@ def main() -> int:
     idx = art / "model.safetensors.index.json"
     if idx.exists():
         wm = json.loads(idx.read_text())["weight_map"]
-        # Match on any path SEGMENT containing "vis", not a hardcoded prefix
-        # list. The families in this fleet already use four different spellings
-        # -- vision_tower (gemma, qwen3_5*), vision_model (glm5_next),
+        # core.artifact.tensor_class, the one classifier: it matches any
+        # path SEGMENT naming vision/visual, not only a prefix list. The
+        # families in this fleet already use four different spellings --
+        # vision_tower (gemma, qwen3_5*), vision_model (glm5_next),
         # model.visual (qwen HF layout) and embed_vision -- and the first cut
         # of this gate listed three of them and reported the GLM rungs as
-        # having ZERO vision tensors. Hardcoding a name list is the same
-        # brittleness that produced F153; do not reintroduce it.
-        n_vis = sum(any("vis" in seg for seg in k.split("."))
-                    for k in wm)
+        # having ZERO vision tensors (F153's brittleness).
+        from vqlab.core.artifact import tensor_class
+        n_vis = sum(tensor_class(k) == "tower" for k in wm)
         print(f"vision tensors   : {n_vis}")
         if not n_vis:
             raise SystemExit("FAIL: vision_config present but ZERO vision "

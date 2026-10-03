@@ -27,6 +27,8 @@ import shutil
 
 import mlx.core as mx
 
+from vqlab.core.artifact import tensor_class
+
 # A 5-D conv weight is channels-last iff its LAST axis is a channel count.
 # Real images give 1, 3 or 4; a patch grid never does.
 _CHANNELS = (1, 3, 4)
@@ -42,7 +44,7 @@ def scan(art: pathlib.Path):
     """[(key, shard, shape, verdict)] for every 5-D vision conv weight."""
     idx = art / "model.safetensors.index.json"
     wm = json.loads(idx.read_text())["weight_map"]
-    vis = [k for k in wm if any("vis" in s for s in k.split("."))]
+    vis = [k for k in wm if tensor_class(k) == "tower"]
     out = []
     for sh in sorted({wm[k] for k in vis}):
         data = mx.load(str(art / sh))
