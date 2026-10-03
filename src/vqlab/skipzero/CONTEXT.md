@@ -1,4 +1,4 @@
-# experimental/skipzero/ — vq-skipzero: drop dead VQ rows on disk (EXPERIMENT)
+# skipzero/ — vq-skipzero: drop dead VQ rows on disk (a shipped format since 2026-09-29)
 
 **This is an experiment, not a shipped format.** Nothing here is in `runtime/`,
 no published artifact uses it, and the shipped vq_switch runtime and kernels

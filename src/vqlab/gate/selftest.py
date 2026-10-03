@@ -593,14 +593,14 @@ def main(argv=None) -> int:
             mx.set_default_device(_dev)
 
         print("[6a39/7] vq-skipzero experiment (pack -> expand, CPU)")
-        from vqlab.experimental.skipzero import sz_check as _szc
+        from vqlab.skipzero import sz_check as _szc
         with contextlib.redirect_stdout(io.StringIO()):
             _szok = _szc.selftest(root=tmp / "skipzero")
         check("vq-skipzero: live rows byte-identical after expansion, dead rows exactly zero",
               _szok is not False)
 
         from vqlab import _layout as _Lz
-        _szr = subprocess.run([sys.executable, str(_Lz.PKG / "experimental" / "skipzero" / "sz_bitexact.py"),
+        _szr = subprocess.run([sys.executable, str(_Lz.PKG / "skipzero" / "sz_bitexact.py"),
                                "--selftest"], capture_output=True, text=True,
                               env={**__import__("os").environ, "PYTHONPATH": str(_Lz.SRC)})
         check("vq-skipzero: runtime carries the SZ switch natively; the experimental forks still "

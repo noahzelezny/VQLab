@@ -26,7 +26,7 @@ import tempfile
 import numpy as np
 
 HERE = pathlib.Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE.parents[2]))  # src/
+sys.path.insert(0, str(HERE.parents[1]))  # src/
 from vqlab import _layout  # noqa: E402,F401
 import fitstore  # noqa: E402
 

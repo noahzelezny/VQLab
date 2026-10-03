@@ -26,7 +26,7 @@ teacher, writes a new directory (never in place), and leaves a record.
 | 7 | **bench** | How fast is it, and where does the time go? | `decode-timeline`, `prefill-timeline`, `decode-ladder`, `active-bytes`, `prefill-bench`, `coverage`, `host-attrib`, `hc-micro`, `mtp-bench`, `mtp-accept`, `speed-pair` (two arms, fresh process each, ratio), `speed-pair-knurlogic` (same, served by Knurlogic: one Mac or a pipeline split) |
 | 8 | **ship / serve** | Publish or serve it | `publish` (a human action), `serve`, `mtp-generate` |
 
-Experiments (NOT shipped formats), `src/vqlab/experimental/`: `sz-pack` / `sz-check` / `sz-resident` / `sz-bitexact` (vq-skipzero: fully-dead VQ rows dropped on disk, expanded at load by a shim; 397B -10.8% priced, disk only, KL-untested).
+Skip-zero, `src/vqlab/skipzero/` (a shipped format since 2026-09-29, served natively by the runtime): `sz-pack` / `sz-check` / `sz-resident` / `sz-bitexact` (vq-skipzero: fully-dead VQ rows dropped on disk; 397B -10.8% disk / -11.1% resident at identical KL; docs/SKIPZERO.md).
 
 Around the pipeline: `config` (where vqlab reads and writes; `config init` on a new machine), `queue` (run a list of steps from pinned code under the GPU lease; `--preflight` first), `mcp` (the lab over MCP for agents), `gui` (read-only local window).
 
@@ -74,7 +74,7 @@ src/vqlab/
   ship/         publish (a human action) + serve
   agents/       MCP server, queue runner, read-only GUI
   mtp/          MTP speculative-decoding LIBRARY (vqlab.mtp); its tools live in the stages
-  experimental/ experiments with their own names (vq-skipzero); never imported by runtime/
+  skipzero/     the vq-skipzero pack/check tools (the runtime switch itself lives in runtime/)
 ```
 
 Tools are standalone scripts that import siblings by bare name (`import
