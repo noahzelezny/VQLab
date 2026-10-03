@@ -27,6 +27,8 @@ import shutil
 
 import mlx.core as mx
 
+from vqlab.core.artifact import tensor_class
+
 # A 5-D conv weight is channels-last iff its LAST axis is a channel count.
 # Real images give 1, 3 or 4; a patch grid never does.
 _CHANNELS = (1, 3, 4)
@@ -42,7 +44,7 @@ def scan(art: pathlib.Path):
     """[(key, shard, shape, verdict)] for every 5-D vision conv weight."""
     idx = art / "model.safetensors.index.json"
     wm = json.loads(idx.read_text())["weight_map"]
-    vis = [k for k in wm if any("vis" in s for s in k.split("."))]
+    vis = [k for k in wm if tensor_class(k) == "tower"]
     out = []
     for sh in sorted({wm[k] for k in vis}):
         data = mx.load(str(art / sh))
@@ -71,6 +73,9 @@ def main() -> int:
     if not found:
         print("no 5-D vision conv weights found -- nothing this tool checks. "
               "(gemma-style towers use a 2-D patch embed.)")
+        if a.fix:
+            print("--fix: nothing to rewrite; nothing written.")
+            return 1                      # a writer that changed nothing
         return 0
     bad = [f for f in found if f[3] == "hf-layout"]
     for k, sh, shape, verdict in found:
@@ -78,6 +83,9 @@ def main() -> int:
         print(f"  {k}\n    shape={shape} in {sh}  -> {flag}")
     if not bad:
         print("\nPASS: every 5-D vision conv weight is channels-last.")
+        if a.fix:
+            print("--fix: nothing to rewrite; nothing written.")
+            return 1                      # a writer that changed nothing
         return 0
     if not a.fix:
         print(f"\nNOTE: {len(bad)} tensor(s) in HF layout. Both real loaders "

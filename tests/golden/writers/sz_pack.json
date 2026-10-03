@@ -3,7 +3,19 @@
   "model_file": "model.py",
   "quantization": {
    "bits": 4,
-   "group_size": 64
+   "group_size": 64,
+   "model.language_model.layers.0.self_attn.o_proj": {
+    "bits": 4,
+    "group_size": 64
+   },
+   "model.language_model.layers.1.self_attn.o_proj": {
+    "bits": 4,
+    "group_size": 64
+   },
+   "model.language_model.layers.2.self_attn.o_proj": {
+    "bits": 4,
+    "group_size": 64
+   }
   },
   "vq_modules": {
    "model.language_model.layers.0.mlp.switch_mlp.down_proj": {
@@ -92,7 +104,7 @@
     }
    },
    "note": "EXPERIMENTAL, not a shipped format. Dead VQ rows dropped on disk; skipzero_load.py re-expands at load. RAM is unchanged (stage 1).",
-   "saved_bytes": -36,
+   "saved_bytes": -12,
    "source": "<fixture>/vq16",
    "source_model_py_bytes": 18,
    "tiny": 6.2e-05,
@@ -119,6 +131,9 @@
   "model.language_model.layers.0.mlp.switch_mlp.up_proj.sz_rowmask": "model-00001-of-00002.safetensors",
   "model.language_model.layers.0.mlp.switch_mlp.up_proj.sz_scales": "model-00001-of-00002.safetensors",
   "model.language_model.layers.0.mlp.switch_mlp.up_proj.sz_shape": "model-00001-of-00002.safetensors",
+  "model.language_model.layers.0.self_attn.o_proj.biases": "model-00001-of-00002.safetensors",
+  "model.language_model.layers.0.self_attn.o_proj.scales": "model-00001-of-00002.safetensors",
+  "model.language_model.layers.0.self_attn.o_proj.weight": "model-00001-of-00002.safetensors",
   "model.language_model.layers.1.input_layernorm.weight": "model-00001-of-00002.safetensors",
   "model.language_model.layers.1.mlp.switch_mlp.down_proj.codebook": "model-00002-of-00002.safetensors",
   "model.language_model.layers.1.mlp.switch_mlp.down_proj.codes": "model-00002-of-00002.safetensors",
@@ -129,6 +144,9 @@
   "model.language_model.layers.1.mlp.switch_mlp.up_proj.codebook": "model-00002-of-00002.safetensors",
   "model.language_model.layers.1.mlp.switch_mlp.up_proj.codes": "model-00002-of-00002.safetensors",
   "model.language_model.layers.1.mlp.switch_mlp.up_proj.vq_scales": "model-00002-of-00002.safetensors",
+  "model.language_model.layers.1.self_attn.o_proj.biases": "model-00002-of-00002.safetensors",
+  "model.language_model.layers.1.self_attn.o_proj.scales": "model-00002-of-00002.safetensors",
+  "model.language_model.layers.1.self_attn.o_proj.weight": "model-00002-of-00002.safetensors",
   "model.language_model.layers.2.input_layernorm.weight": "model-00002-of-00002.safetensors",
   "model.language_model.layers.2.mlp.switch_mlp.down_proj.codebook": "model-00002-of-00002.safetensors",
   "model.language_model.layers.2.mlp.switch_mlp.down_proj.codes": "model-00002-of-00002.safetensors",
@@ -138,12 +156,15 @@
   "model.language_model.layers.2.mlp.switch_mlp.gate_proj.vq_scales": "model-00002-of-00002.safetensors",
   "model.language_model.layers.2.mlp.switch_mlp.up_proj.codebook": "model-00002-of-00002.safetensors",
   "model.language_model.layers.2.mlp.switch_mlp.up_proj.codes": "model-00002-of-00002.safetensors",
-  "model.language_model.layers.2.mlp.switch_mlp.up_proj.vq_scales": "model-00002-of-00002.safetensors"
+  "model.language_model.layers.2.mlp.switch_mlp.up_proj.vq_scales": "model-00002-of-00002.safetensors",
+  "model.language_model.layers.2.self_attn.o_proj.biases": "model-00002-of-00002.safetensors",
+  "model.language_model.layers.2.self_attn.o_proj.scales": "model-00002-of-00002.safetensors",
+  "model.language_model.layers.2.self_attn.o_proj.weight": "model-00002-of-00002.safetensors"
  },
  "tensors": {
   "model.language_model.layers.0.input_layernorm.weight": {
    "dtype": "F16",
-   "sha": "94db0fae1410ff7a",
+   "sha": "1b8b76ff18936e88",
    "shape": [
     128
    ],
@@ -251,9 +272,36 @@
    ],
    "shard": "model-00001-of-00002.safetensors"
   },
+  "model.language_model.layers.0.self_attn.o_proj.biases": {
+   "dtype": "F16",
+   "sha": "a0145a1ba1fe21ca",
+   "shape": [
+    128,
+    2
+   ],
+   "shard": "model-00001-of-00002.safetensors"
+  },
+  "model.language_model.layers.0.self_attn.o_proj.scales": {
+   "dtype": "F16",
+   "sha": "caa2542985300d8b",
+   "shape": [
+    128,
+    2
+   ],
+   "shard": "model-00001-of-00002.safetensors"
+  },
+  "model.language_model.layers.0.self_attn.o_proj.weight": {
+   "dtype": "U32",
+   "sha": "98ab149cf85c62b0",
+   "shape": [
+    128,
+    16
+   ],
+   "shard": "model-00001-of-00002.safetensors"
+  },
   "model.language_model.layers.1.input_layernorm.weight": {
    "dtype": "F16",
-   "sha": "94db0fae1410ff7a",
+   "sha": "b1824569040b1996",
    "shape": [
     128
    ],
@@ -346,9 +394,36 @@
    ],
    "shard": "model-00002-of-00002.safetensors"
   },
+  "model.language_model.layers.1.self_attn.o_proj.biases": {
+   "dtype": "F16",
+   "sha": "5f6c4dbaf77960c5",
+   "shape": [
+    128,
+    2
+   ],
+   "shard": "model-00002-of-00002.safetensors"
+  },
+  "model.language_model.layers.1.self_attn.o_proj.scales": {
+   "dtype": "F16",
+   "sha": "11bc58d6712bc04e",
+   "shape": [
+    128,
+    2
+   ],
+   "shard": "model-00002-of-00002.safetensors"
+  },
+  "model.language_model.layers.1.self_attn.o_proj.weight": {
+   "dtype": "U32",
+   "sha": "9fd11a99a5463c26",
+   "shape": [
+    128,
+    16
+   ],
+   "shard": "model-00002-of-00002.safetensors"
+  },
   "model.language_model.layers.2.input_layernorm.weight": {
    "dtype": "F16",
-   "sha": "94db0fae1410ff7a",
+   "sha": "73c217b4797821d9",
    "shape": [
     128
    ],
@@ -438,6 +513,33 @@
     2,
     128,
     2
+   ],
+   "shard": "model-00002-of-00002.safetensors"
+  },
+  "model.language_model.layers.2.self_attn.o_proj.biases": {
+   "dtype": "F16",
+   "sha": "fbf95abd07e4fe76",
+   "shape": [
+    128,
+    2
+   ],
+   "shard": "model-00002-of-00002.safetensors"
+  },
+  "model.language_model.layers.2.self_attn.o_proj.scales": {
+   "dtype": "F16",
+   "sha": "620b79c439e254ec",
+   "shape": [
+    128,
+    2
+   ],
+   "shard": "model-00002-of-00002.safetensors"
+  },
+  "model.language_model.layers.2.self_attn.o_proj.weight": {
+   "dtype": "U32",
+   "sha": "978a2f7d215bf03b",
+   "shape": [
+    128,
+    16
    ],
    "shard": "model-00002-of-00002.safetensors"
   }

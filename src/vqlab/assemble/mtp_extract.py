@@ -28,16 +28,18 @@ from collections import defaultdict
 
 import mlx.core as mx
 
-# Default matcher: Qwen/DeepSeek-style checkpoints name the head mtp.* /
-# nextn.*. NOT every family does: GLM-5.3 stores its MTP layer as plain
+from vqlab.core.artifact import tensor_class
+
+# Default matcher: core.artifact.tensor_class (the one classifier); Qwen/
+# DeepSeek-style checkpoints name the head mtp.* / nextn.*. NOT every family
+# does: GLM-5.3 stores its MTP layer as plain
 # `...layers.<num_hidden_layers>.*` (index 45 on Flash — eh_proj/enorm/
 # hnorm + a full expert stack), which this regex cannot see. Use
 # --key-regex for those, e.g. --key-regex '\.layers\.45\.'  (experts.45
 # does not collide: the segment there is `experts`, not `layers`).
-MTP_KEY = re.compile(r"(^|\.)(mtp|nextn)\b", re.IGNORECASE)
 
 
-def find_mtp_keys(src: pathlib.Path, key_re: "re.Pattern[str]" = MTP_KEY):
+def find_mtp_keys(src: pathlib.Path, key_re: "re.Pattern[str] | None" = None):
     """{shard: [keys]} for every MTP tensor, from the index."""
     idx = src / "model.safetensors.index.json"
     if not idx.exists():
@@ -45,7 +47,7 @@ def find_mtp_keys(src: pathlib.Path, key_re: "re.Pattern[str]" = MTP_KEY):
     wm = json.loads(idx.read_text())["weight_map"]
     by_shard = defaultdict(list)
     for k, shard in wm.items():
-        if key_re.search(k):
+        if (key_re.search(k) if key_re is not None else tensor_class(k) == "mtp"):
             by_shard[shard].append(k)
     return dict(by_shard), len(wm)
 
@@ -57,7 +59,7 @@ def main():
     ap.add_argument("--key-regex", default=None,
                     help="override the mtp/nextn key matcher (families "
                          "like glm5_next store the head as plain "
-                         "layers.<N>.* — see MTP_KEY's comment)")
+                         "layers.<N>.* — see the default matcher's comment)")
     ap.add_argument("--strip-prefix", default=None,
                     help="drop this leading prefix from every key "
                          "(default: keep keys as found)")
@@ -66,7 +68,7 @@ def main():
     a = ap.parse_args()
 
     src = pathlib.Path(a.src)
-    key_re = re.compile(a.key_regex) if a.key_regex else MTP_KEY
+    key_re = re.compile(a.key_regex) if a.key_regex else None
     by_shard, n_total = find_mtp_keys(src, key_re)
     n_mtp = sum(len(v) for v in by_shard.values())
     if not n_mtp:

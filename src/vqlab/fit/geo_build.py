@@ -418,6 +418,9 @@ def main():
     mx.set_memory_limit(a.memory_limit_gb * 1024 ** 3)
     rng = np.random.default_rng(None if a.seed < 0 else a.seed)
     geo = json.load(open(a.geomap))
+    if not geo:
+        # a no-op build: the output would be the shipped artifact relinked
+        raise SystemExit(f"REFUSED: {a.geomap} names no module; nothing to rebuild")
     if a.preflight or a.preflight_module:
         names = list(geo)
         pick = a.preflight_module
@@ -440,6 +443,13 @@ def main():
         rp = os.path.realpath(f)
         for k in mx.load(rp):
             a_index[k] = rp
+    # A geomap name the artifact does not carry (a typo, another family's
+    # spelling) would be fit from the teacher and then never swapped in.
+    have = {k.rsplit(".", 1)[0] for k in a_index}
+    absent = sorted(n for n in geo if n not in have)
+    if absent:
+        raise SystemExit(f"REFUSED: {len(absent)} geomap module(s) are not in "
+                         f"{a.artifact}, e.g. {absent[:3]}")
 
     # ---- reuse: verified by CODEBOOK SHAPE *and* MODULE SHAPE ----
     # The codebook shape only pins (K, d). It does NOT pin the module the fit

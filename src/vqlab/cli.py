@@ -150,6 +150,13 @@ BUILD_OUTPUTS = {
 }
 
 
+# Flags under which a build command writes nothing: the automatic build
+# record must never fire for them (a --dry-run once wrote a record into the
+# teacher's folder; --help exits 0 too). vision-layout's report mode (no
+# --fix) is handled by name below.
+READ_ONLY_FLAGS = frozenset({"--dry-run", "--plan", "-h", "--help"})
+
+
 def _parse(argv):
     named, pos, i = {}, [], 0
     while i < len(argv):
@@ -177,7 +184,7 @@ def _record_build(cmd, rest, script):
         named, pos = _parse(rest)
         if cmd == "vision-layout" and "--fix" not in named:
             return                                    # report-only mode
-        if "--dry-run" in rest or "--plan" in rest:
+        if READ_ONLY_FLAGS.intersection(rest):
             return                                    # nothing was built
         target = None
         for c in BUILD_OUTPUTS[cmd]:

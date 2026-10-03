@@ -17,6 +17,15 @@ output is reduced to a snapshot:
 Fitting writers (fit-moe, geo-build) are pinned on STRUCTURE only: their
 k-means is seeded but GPU reductions can differ in the last place.
 
+ADVERSARIAL INPUTS (operator notes 2026-10-03, section 4): wherever a writer
+chooses between inputs, the inputs DIFFER, so a golden can only pass if the
+writer took the right one. The reskeleton golden once passed before AND after
+a fundamental fix because the skeleton tensors were byte-identical in both
+builds. So every artifact carries its OWN skeleton bytes (norms, and an
+affine attention o_proj) and its own spelling of the o_proj quantization
+entry (affine/vq32 say mode=affine, vq16 does not): mix, loo-bands and
+reskeleton must show the bytes AND the config entry of the source they took.
+
 Regenerate goldens deliberately:  VQLAB_UPDATE_GOLDEN=1 pytest tests/test_writer_contracts.py
 """
 from __future__ import annotations
@@ -34,10 +43,25 @@ import pytest
 
 GOLD = pathlib.Path(__file__).parent / "golden" / "writers"
 SRC = pathlib.Path(__file__).resolve().parents[1] / "src"
+CPU_SITE = pathlib.Path(__file__).resolve().parent / "cpu_site"
 E, H, I, G, L = 2, 128, 128, 64, 3
 PROJS = ("gate_proj", "up_proj", "down_proj")
 MOD = "model.language_model.layers.{li}.mlp.switch_mlp.{p}"
 NORM = "model.language_model.layers.{li}.input_layernorm.weight"
+OPROJ = "model.language_model.layers.{li}.self_attn.o_proj"
+
+
+def _skeleton(r, li, shards, q, mode):
+    """One layer's non-expert tensors, bytes drawn from THIS artifact's rng:
+    a norm and a 4-bit affine o_proj whose quant entry spells `mode` or not."""
+    shards.setdefault(_place(li, "norm", ""), {})[NORM.format(li=li)] = \
+        (1 + r.standard_normal(H) * .01).astype(np.float16)
+    m = OPROJ.format(li=li)
+    for suf, arr in ((".weight", r.integers(0, 2**32, (H, H * 4 // 32), dtype=np.uint64).astype(np.uint32)),
+                     (".scales", (r.random((H, H // G)) * .01 + .001).astype(np.float16)),
+                     (".biases", (r.standard_normal((H, H // G)) * .01).astype(np.float16))):
+        shards.setdefault(_place(li, "o_proj", suf), {})[m + suf] = arr
+    q[m] = {"group_size": G, "bits": 4, **({"mode": "affine"} if mode else {})}
 
 
 # ----------------------------------------------------------------- fixture io
@@ -116,6 +140,7 @@ def fx(tmp_path_factory):
 
     # affine base (2-bit group 64, uint32 words), the fit-moe / reskeleton skeleton
     shards, q = {}, {"group_size": G, "bits": 4}
+    rs = np.random.default_rng(99)       # skeleton bytes: own stream, experts unchanged
     for li in range(L):
         for p in PROJS:
             m = MOD.format(li=li, p=p)
@@ -126,14 +151,15 @@ def fx(tmp_path_factory):
                              (".biases", (r.standard_normal((E, outs, ins // G)) * .01).astype(np.float16))):
                 shards.setdefault(_place(li, p, suf), {})[m + suf] = arr
             q[m] = {"group_size": G, "bits": 2}
-        shards.setdefault(_place(li, "norm", ""), {})[NORM.format(li=li)] = np.ones(H, np.float16)
+        _skeleton(rs, li, shards, q, mode=True)
     base = root / "affine"
     _art(base, shards, {"model_type": "qwen3_5_moe", "quantization": q})
 
     # VQ artifact (unpacked d4/K16), built directly: deterministic bytes
-    def vq(K, seed):
+    def vq(K, seed, mode):
         rr = np.random.default_rng(seed)
-        sh, vqm = {}, {}
+        sh, vqm, qv = {}, {}, {"group_size": G, "bits": 4}
+        rs = np.random.default_rng(seed + 100)
         for li in range(L):
             for p in PROJS:
                 m = MOD.format(li=li, p=p)
@@ -147,17 +173,17 @@ def fx(tmp_path_factory):
                                  (".vq_scales", sc)):
                     sh.setdefault(_place(li, p, suf), {})[m + suf] = arr
                 vqm[m] = {"experts": E, "out": outs, "in": ins, "k": K, "dim": 4, "group": G}
-            sh.setdefault(_place(li, "norm", ""), {})[NORM.format(li=li)] = np.ones(H, np.float16)
-        return sh, vqm
-    sh, vqm = vq(16, 1)
+            _skeleton(rs, li, sh, qv, mode)
+        return sh, vqm, qv
+    sh, vqm, qv = vq(16, 1, mode=False)
     vqa = root / "vq16"
     _art(vqa, sh, {"model_type": "qwen3_5_moe", "model_file": "model.py",
-                   "quantization": {"group_size": G, "bits": 4}, "vq_modules": vqm})
+                   "quantization": qv, "vq_modules": vqm})
     (vqa / "model.py").write_text("# fixture runtime\n")
-    sh, vqm = vq(32, 2)
+    sh, vqm, qv = vq(32, 2, mode=True)
     vqb = root / "vq32"
     _art(vqb, sh, {"model_type": "qwen3_5_moe", "model_file": "model.py",
-                   "quantization": {"group_size": G, "bits": 4}, "vq_modules": vqm})
+                   "quantization": qv, "vq_modules": vqm})
     (vqb / "model.py").write_text("# fixture runtime\n")
     return {"root": root, "teacher": teacher, "affine": base, "vq16": vqa, "vq32": vqb}
 
@@ -207,12 +233,18 @@ def check(name, snap, root=None):
 
 
 def cli(*args, ok=True):
-    env = {**os.environ, "PYTHONPATH": str(SRC), "VQLAB_SKIP_DISK_CHECK": "1"}
+    # cpu_site/sitecustomize.py pins MLX to the CPU in the child: no GPU use
+    env = {**os.environ, "PYTHONPATH": f"{CPU_SITE}{os.pathsep}{SRC}",
+           "VQLAB_SKIP_DISK_CHECK": "1"}
     p = subprocess.run([sys.executable, "-m", "vqlab.cli", *map(str, args)],
                        capture_output=True, text=True, env=env)
     if ok:
         assert p.returncode == 0, f"{args[0]} failed:\n{p.stdout[-2000:]}\n{p.stderr[-3000:]}"
     return p
+
+
+def _shas(snap):
+    return {k: v["sha"] for k, v in snap["tensors"].items()}
 
 
 # ------------------------------------------------------------------- writers
@@ -221,7 +253,13 @@ def test_mix(fx):
     # band covering any VQ layer of shard 2 is the whole model.
     out = fx["root"] / "mix"
     cli("mix", "--out", out, "--base", fx["vq16"], "--band", f"{fx['vq32']}:0-2")
-    check("mix", snapshot(out))
+    snap = snapshot(out)
+    check("mix", snap)
+    # adversarial: vq16 and vq32 differ in EVERY tensor and in the o_proj
+    # quant spelling, so these hold only if the bytes and maps came from vq32
+    got, want, other = _shas(snap), _shas(snapshot(fx["vq32"])), _shas(snapshot(fx["vq16"]))
+    assert got == want and all(got[k] != other[k] for k in got)
+    assert snap["config"]["quantization"][OPROJ.format(li=0)].get("mode") == "affine"
 
 
 @pytest.mark.parametrize("band", ["1-2", "2-2", "1-1"])
@@ -273,7 +311,8 @@ def test_pack(fx, tmp_path):
         h, start = _header(fx["vq16"] / f)
         a, b = h[k]["data_offsets"]
         raw = (fx["vq16"] / f).read_bytes()[start + a:start + b]
-        np_dt = {"U8": np.uint8, "U16": np.uint16, "F16": np.float16}[h[k]["dtype"]]
+        np_dt = {"U8": np.uint8, "U16": np.uint16, "U32": np.uint32,
+                 "F16": np.float16}[h[k]["dtype"]]
         arr = np.frombuffer(raw, np_dt).reshape(h[k]["shape"])
         tgt = "model-00002-of-00002.safetensors" if ".layers.1.mlp.switch_mlp.gate_proj" in k else f
         shards.setdefault(tgt, {})[k] = arr
@@ -302,7 +341,19 @@ def test_sz_pack(fx):
 def test_reskeleton(fx):
     out = fx["root"] / "resk"
     cli("reskeleton", "--vq", fx["vq16"], "--skeleton", fx["affine"], "--out", out)
-    check("reskeleton", snapshot(out))
+    snap = snapshot(out)
+    check("reskeleton", snap)
+    # adversarial: the two builds' skeletons differ byte for byte and in the
+    # o_proj quant spelling; experts come from the VQ build, everything else
+    # from the skeleton build, and the config entry follows the bytes
+    got = _shas(snap)
+    vq, sk = _shas(snapshot(fx["vq16"])), _shas(snapshot(fx["affine"]))
+    experts = {k for k in got if ".switch_mlp." in k}
+    assert experts and all(got[k] == vq[k] for k in experts)
+    skel = set(got) - experts
+    assert skel and all(got[k] == sk[k] != vq[k] for k in skel)
+    for li in range(L):
+        assert snap["config"]["quantization"][OPROJ.format(li=li)].get("mode") == "affine"
 
 
 def test_fit_moe(fx):
@@ -363,6 +414,168 @@ def test_size_fix_index(fx, tmp_path):
     doc["metadata"] = {"total_size": 10 ** 12}
     p.write_text(json.dumps(doc))
     assert size_cmd.main([str(d), "--check-index"]) == 1
-    size_cmd.main([str(d), "--fix-index"])
+    assert size_cmd.main([str(d), "--fix-index"]) == 0
     assert size_cmd.main([str(d), "--check-index"]) == 0
     assert json.loads(p.read_text())["weight_map"] == doc["weight_map"]
+    # a second --fix-index has nothing to fix: a no-op writer exits non-zero
+    before = p.read_bytes()
+    assert size_cmd.main([str(d), "--fix-index"]) == 1
+    assert p.read_bytes() == before
+
+
+@pytest.mark.parametrize("key,cls", [
+    ("model.language_model.layers.0.mlp.switch_mlp.gate_proj.codes", "text"),
+    ("language_model.model.layers.1.self_attn.q_proj.weight", "text"),
+    ("model.layers.3.ffn.experts.w1.codes", "text"),
+    ("lm_head.weight", "text"),
+    ("model.visual.blocks.0.attn.qkv.weight", "tower"),         # Qwen3.5 HF
+    ("vision_tower.blocks.0.attn.qkv.weight", "tower"),         # Qwen3.6 / gemma
+    ("embed_vision.embedding_projection.weight", "tower"),      # gemma's 2nd half
+    ("model.vision_model.encoder.layers.0.w", "tower"),         # GLM
+    ("vision.blocks.0.w", "tower"),                             # DeepSeek release
+    ("aligner.layers.0.weight", "tower"),
+    ("image_newline", "tower"),                                 # release name
+    ("model.image_newline", "tower"),                           # runtime name
+    ("model.layers.7.ffn.gate.bias_vl", "tower"),               # image routing bias
+    ("block.mlp.switch_mlp.up_proj.weight", "mtp"),             # 397B indexed head
+    ("fc.weight", "mtp"),
+    ("mtp.0.attn.wq_a.weight", "mtp"),                          # DeepSeek source
+    ("language_model.mtp.layers.0.mlp.gate.weight", "mtp"),     # native runtime layout
+])
+def test_tensor_class(key, cls):
+    """The one classifier (operator notes 2026-10-03, 1.5): every spelling the
+    fleet uses, including DeepSeek Vision-Exp's tower, image tokens and the
+    per-layer image-routing bias."""
+    from vqlab.core.artifact import tensor_class
+    assert tensor_class(key) == cls
+
+
+# ---------------------------------------------------- no-op writers refuse
+# Operator notes 2026-10-03, 1.6: a writer prints what it changed and exits
+# non-zero when it changed nothing it was asked to change -- and a refused
+# run never leaves an output behind or a build record.
+def _copy(src, d):
+    import shutil
+    shutil.copytree(src, d, symlinks=False)
+    return d
+
+
+def _refused(p, *words):
+    out = p.stdout + p.stderr
+    assert p.returncode != 0, out[-2000:]
+    for w in words:
+        assert w in out, out[-2000:]
+
+
+def test_noop_pack_twice_refused(fx, tmp_path):
+    once = tmp_path / "once"
+    cli("pack", "--src", fx["vq16"], "--out", once)
+    p = cli("pack", "--src", once, "--out", tmp_path / "twice", ok=False)
+    _refused(p, "nothing in")
+    assert not (tmp_path / "twice").exists()
+
+
+@pytest.mark.parametrize("bands,why", [
+    (["{vq32}:7-9"], "selects no shard"),
+    (["{vq16}:0-2"], "is --base itself"),
+    ([], "nothing to mix"),
+])
+def test_noop_mix_refused(fx, tmp_path, bands, why):
+    args = []
+    for b in bands:
+        args += ["--band", b.format(vq16=fx["vq16"], vq32=fx["vq32"])]
+    p = cli("mix", "--out", tmp_path / "m", "--base", fx["vq16"], *args, ok=False)
+    _refused(p, why)
+    assert not (tmp_path / "m").exists()
+
+
+@pytest.mark.parametrize("geomap,why", [
+    ({}, "names no module"),
+    ({"model.language_model.layers.9.mlp.switch_mlp.up_proj": {"dim": 4, "k": 32}},
+     "not in"),
+])
+def test_noop_geo_build_refused(fx, tmp_path, geomap, why):
+    gm = tmp_path / "g.json"
+    gm.write_text(json.dumps(geomap))
+    p = cli("geo-build", "--artifact", fx["vq16"], "--teacher", fx["teacher"], "--family",
+            "qwen3_5", "--geomap", gm, "--out", tmp_path / "geo", ok=False)
+    _refused(p, why)
+    assert not (tmp_path / "geo").exists()
+
+
+def test_noop_vision_layout_fix_refused_and_unrecorded(fx, tmp_path):
+    d = _copy(fx["vq16"], tmp_path / "a")
+    p = cli("vision-layout", d, "--fix", ok=False)
+    _refused(p, "nothing written")
+    assert not (d / "vqlab_provenance.json").exists()
+
+
+def test_noop_pack_dense_refused(fx, tmp_path):
+    p = cli("pack-dense", "--src", fx["vq16"], "--out", tmp_path / "pd", ok=False)
+    _refused(p, "nothing in")
+    assert not (tmp_path / "pd").exists()
+
+
+def test_noop_pack_ple_refused(tmp_path):
+    d = tmp_path / "ple"
+    m = "model.layers.0.ngram_embedding.0"
+    _art(d, {"model.safetensors": {m + ".codes": np.zeros((4, 8), np.uint8),
+                                   m + ".codebook": np.zeros((16, 4), np.float16)}},
+         {"model_type": "x", "vq_ple": {"geometry": {"k": 16, "dim": 4}, "keys": [m]}})
+    before = (d / "config.json").read_bytes()
+    p = cli("pack-ple", "--artifact", d, ok=False)
+    _refused(p, "nothing written")
+    assert (d / "config.json").read_bytes() == before
+
+
+def test_noop_splice_ple_refused(fx, tmp_path):
+    d = _copy(fx["vq16"], tmp_path / "a")
+    fit = tmp_path / "fit"
+    fit.mkdir()
+    (fit / "ple_manifest.json").write_text(json.dumps({"geometry": {}, "tensors": {}}))
+    before = (d / "model.safetensors.index.json").read_bytes()
+    p = cli("splice-ple", "--artifact", d, "--ple-fit", fit, ok=False)
+    _refused(p, "nothing to splice")
+    assert (d / "model.safetensors.index.json").read_bytes() == before
+
+
+def test_noop_ple_swap_refused(fx, tmp_path):
+    p = cli("ple-swap", "--artifact", fx["vq16"], "--donor", fx["vq32"],
+            "--out", tmp_path / "o", ok=False)
+    _refused(p, "change nothing")
+    assert not (tmp_path / "o").exists()
+
+
+def test_noop_harvest_refused(fx, tmp_path):
+    p = cli("harvest-parts", "--artifact", fx["vq16"], "--out", tmp_path / "parts",
+            "--geometry", "d4-K9999", ok=False)
+    _refused(p, "nothing harvested")
+
+
+def test_bundle_refuses_empty_and_says_unchanged(fx, tmp_path):
+    p = cli("bundle", "--artifact", _copy(fx["affine"], tmp_path / "aff"), ok=False)
+    _refused(p, "no VQ expert modules")
+    d = _copy(fx["vq16"], tmp_path / "a")
+    first = cli("bundle", "--artifact", d)
+    assert "changed: model.py" in first.stdout
+    again = cli("bundle", "--artifact", d)     # idempotent: rc 0, but SAID
+    assert "UNCHANGED" in again.stdout
+
+
+# ------------------------------------------- read-only modes never record
+@pytest.mark.parametrize("cmd,flag", [
+    ("bundle", "--artifact"), ("pack-ple", "--artifact"), ("graft", "--artifact"),
+    ("graft-extras", "--artifact")])
+def test_help_never_records(fx, tmp_path, cmd, flag):
+    """--help exits 0, and the CLI's automatic build record fired on any clean
+    exit of a build command: `vqlab bundle --artifact X --help` stamped X."""
+    d = _copy(fx["vq16"], tmp_path / "a")
+    for h in ("--help", "-h"):
+        p = cli(cmd, flag, d, h)
+        assert p.returncode == 0
+    assert not (d / "vqlab_provenance.json").exists()
+
+
+def test_read_only_flags_cover_the_cli():
+    from vqlab import cli as vcli
+    assert {"--dry-run", "--plan", "-h", "--help"} <= vcli.READ_ONLY_FLAGS

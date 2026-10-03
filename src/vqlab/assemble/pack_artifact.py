@@ -89,6 +89,43 @@ ap.add_argument("--vision-config-from", default="",
 args = ap.parse_args()
 
 SRC, OUT = pathlib.Path(args.src), pathlib.Path(args.out)
+
+
+def _packable(art):
+    """Modules this run would pack, from headers + config alone (nothing is
+    written yet): not already packed, not byte-aligned, NSUB-aligned unless
+    --pack-unaligned. Mirrors the per-tensor decisions in the loop below."""
+    vqm, out, hdr = art.map("vq_modules"), [], {}
+
+    def meta(key):
+        f = art.index[key]
+        if f not in hdr:
+            hdr[f] = art.header(f)
+        return hdr[f][key]
+
+    for key in art.index:
+        if not key.endswith(".codes"):
+            continue
+        mod = key[:-len(".codes")]
+        e = vqm.get(mod, {})
+        shape = meta(key)["shape"]
+        if e.get("pack_bits") or len(shape) != 3:
+            continue                      # already packed / a PLE table
+        k = int(e["k"]) if "k" in e else meta(mod + ".codebook")["shape"][0]
+        if vq_pack.bits_for_k(k) % 8 == 0:
+            continue
+        nsub = shape[2]
+        if nsub % vq_pack.BLOCK and not args.pack_unaligned:
+            continue
+        out.append(mod)
+    return out
+
+
+from vqlab.core.artifact import Artifact as _Artifact  # noqa: E402
+if not _packable(_Artifact.open(SRC)):
+    raise SystemExit(f"REFUSED: nothing in {SRC} to pack (every VQ module is already packed, "
+                     "byte-aligned (K256/K65536), or NSUB-unaligned without --pack-unaligned); "
+                     "nothing written")
 from vqlab import config as _cfg  # noqa: E402
 _cfg.require_free(OUT, sum(p.stat().st_size for p in SRC.glob("*.safetensors")
                            if not (OUT / p.name).exists()), "pack")
@@ -131,6 +168,9 @@ for si, sh in enumerate(shards, 1):
             out_data[key] = val
             continue
         mod = key[:-len(".codes")]
+        if _vqm.get(mod, {}).get("pack_bits"):
+            out_data[key] = val           # already packed: never pack twice
+            continue
         # Geometry from the config map, not from a .codebook in THIS shard: a
         # module's tensors may straddle a shard boundary (the codebook lives
         # in the next shard), which was a KeyError here until 2026-10-02.
