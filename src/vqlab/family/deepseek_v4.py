@@ -111,12 +111,13 @@ def score_deepseek_v4(model, ids_list, args):
 
 def _variant():
     """The scorer's numerics variant, stamped into every cache and result.
-    VQLAB_DS4_SHARED_CLAMP=1 applies DeepSeek's reference SwiGLU clamp
-    (limit = swiglu_limit, 10) to the SHARED expert too; mlx-lm's
+    DEFAULT: DeepSeek's reference numerics, which apply the SwiGLU clamp
+    (limit = swiglu_limit, 10) to the SHARED expert too. mlx-lm's
     deepseek_v4 builds it unclamped (F195: the clamp fires on ~0.026% of
-    shared activations and moves that expert's output 2% on average)."""
+    shared activations and moves that expert's output 2% on average);
+    VQLAB_DS4_SHARED_CLAMP=0 opts into mlx-lm's variant, for comparison only."""
     import os
-    return "shared-clamp" if os.environ.get("VQLAB_DS4_SHARED_CLAMP") == "1" else None
+    return None if os.environ.get("VQLAB_DS4_SHARED_CLAMP") == "0" else "shared-clamp"
 
 
 def _apply_variant(core):

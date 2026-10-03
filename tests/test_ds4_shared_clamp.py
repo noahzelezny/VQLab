@@ -1,6 +1,6 @@
-"""VQLAB_DS4_SHARED_CLAMP=1 really changes the shared expert: setting
+"""The shared-expert clamp (DeepSeek's reference, the DEFAULT) really changes the shared expert: setting
 swiglu_limit on mlx-lm's DeepseekV4MLP clamps gate/up exactly as DeepSeek's
-reference does, and the plugin stamps the variant."""
+reference does, and the plugin stamps the variant; =0 opts out."""
 import types
 
 import mlx.core as mx
@@ -25,9 +25,9 @@ def test_plugin_applies_and_stamps(monkeypatch):
     sh = types.SimpleNamespace(swiglu_limit=0.0)
     core = types.SimpleNamespace(args=types.SimpleNamespace(swiglu_limit=10.0),
                                  layers=[types.SimpleNamespace(ffn=types.SimpleNamespace(shared_experts=sh))])
-    monkeypatch.delenv("VQLAB_DS4_SHARED_CLAMP", raising=False)
+    monkeypatch.setenv("VQLAB_DS4_SHARED_CLAMP", "0")
     P._apply_variant(core)
     assert sh.swiglu_limit == 0.0 and P._variant() is None
-    monkeypatch.setenv("VQLAB_DS4_SHARED_CLAMP", "1")
+    monkeypatch.delenv("VQLAB_DS4_SHARED_CLAMP", raising=False)
     P._apply_variant(core)
     assert sh.swiglu_limit == 10.0 and P._variant() == "shared-clamp"
