@@ -323,3 +323,15 @@ def test_geo_build(fx):
     s = snapshot(out, values=False)
     s["files"] = [f for f in s["files"] if f != "model.py"]
     check("geo_build", s)
+
+
+def test_sizes_three_ways(fx, tmp_path):
+    from vqlab.core.artifact import sizes
+    d = tmp_path / "sized"
+    _art(d, {"a.safetensors": {"model.layers.0.w": np.zeros(256, np.uint8),
+                               "model.visual.blocks.0.w": np.zeros(64, np.uint8),
+                               "block.mlp.w": np.zeros(32, np.uint8)}}, {"model_type": "x"})
+    _save(d / "mtp-head-q6.safetensors", {"x": np.zeros(16, np.uint8)})
+    s = sizes(d)
+    assert (s["text"], s["tower"], s["mtp"]) == (256, 64, 32)
+    assert s["mtp_files"] == ["mtp-head-q6.safetensors"] and s["mtp_sidecar"] > 16
