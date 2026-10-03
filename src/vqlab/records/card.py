@@ -148,8 +148,16 @@ def text_match(artifact: pathlib.Path, want: str):
     from itertools import combinations
     from vqlab.core.artifact import read_header, tensor_class
     files = sorted(artifact.glob("*.safetensors"))
+    try:
+        listed = set(json.load(open(artifact / "model.safetensors.index.json"))["weight_map"].values())
+    except (OSError, KeyError, ValueError):
+        listed = set()
+    # an MTP sidecar (mtp-head*.safetensors outside the index, as `size`
+    # counts it) stores its keys without the mtp. prefix (block.*, fc.*), so
+    # it is recognised by that rule, not by tensor_class
     side = [f for f in files
-            if all(tensor_class(k) != "text" for k in read_header(f))]
+            if (f.name.startswith("mtp-head") and f.name not in listed)
+            or all(tensor_class(k) != "text" for k in read_header(f))]
     for r in range(1, len(side) + 1):
         for drop in combinations(side, r):
             if _fp([f for f in files if f not in drop]) == want:
