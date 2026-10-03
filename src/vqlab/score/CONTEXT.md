@@ -4,7 +4,7 @@
 An artifact, per-corpus teacher caches, and the house corpora in `referee/`.
 
 ## Process
-`vqlab kl-ladder` (THE release gate: paired, three corpora at 12288, |t|>2), `kl-pair` (pairs two already-scored runs, zero GPU), `kl`, `score` (ppl: printed, not gated), `tasks` (lm-eval task benchmarks, layer-streamed), `kernel-truth` (which rounding is closer to an exact float64 reference).
+`vqlab kl-ladder` (THE release gate: paired, three corpora at 12288, |t|>2), `kl-pair` (pairs two already-scored runs, zero GPU), `kl`, `score` (ppl: printed, not gated), `tasks` (lm-eval task benchmarks, layer-streamed), `kernel-truth` (which rounding is closer to an exact float64 reference), `act-stats` (how often each clamp in a family's parity checklist fires on the house corpora; GPU, the family plugin's hook).
 
 ## Outputs
 Per-position arrays and JSON records. kl-ladder resumes from them.

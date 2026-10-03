@@ -4,7 +4,7 @@
 An artifact directory (most gates need no source model); `spelling` takes release TEXT (cards, the paper draft).
 
 ## Process
-`vqlab check` (all static gates), `check-release`, `check-bundle`, `bundle-accept`, `verify` (outlier gate vs bf16), `smoke` (one token through the SHIPPED runtime), `vision-smoke`, `check-comparator`, `selftest`, `validate` (overnight queue, never publishes), `pin` (symlinked copy + smoke + `vqlab_pin.json`; scorers refuse an unsmoked pin), `mtp-smoke-head`, `spelling`. Not CLI: `e134_accept.py` / `verify_e134_devcb.py`, frozen acceptance checks for the E134 runtime change (cited by bench/prefill_bench.py).
+`vqlab check` (all static gates), `check-release`, `check-bundle`, `bundle-accept`, `verify` (outlier gate vs bf16), `smoke` (one token through the SHIPPED runtime), `vision-smoke`, `check-comparator`, `parity` (family checklist of reference-inference behaviours -- clamps, eps, routing -- each with the test that checks it; exits 1 on an untested required item; no GPU), `selftest`, `validate` (overnight queue, never publishes), `pin` (symlinked copy + smoke + `vqlab_pin.json`; scorers refuse an unsmoked pin), `mtp-smoke-head`, `spelling`. Not CLI: `e134_accept.py` / `verify_e134_devcb.py`, frozen acceptance checks for the E134 runtime change (cited by bench/prefill_bench.py).
 
 ## Outputs
 Exit codes and printed verdicts.

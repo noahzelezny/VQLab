@@ -13,7 +13,7 @@ import time
 
 import mlx.core as mx
 
-from vqlab.family import FamilyPlugin
+from vqlab.family import FamilyPlugin, Parity
 
 FIT = {
         # DeepSeek-V4-Flash (~280B, 6-of-256 routed + 1 shared, 43 layers).
@@ -145,6 +145,129 @@ def _register_tokenizer(model_type: str) -> None:
     kreg.register(model_type)
 
 
+# --- reference parity (operator notes 1.4) ---------------------------------
+# The official inference code ships with the release, under inference/
+# (model.py, kernel.py, config.json). Line numbers below are the
+# DeepSeek-V4-Flash-Vision-Exp copy read 2026-10-03; mlx-lm is the exo env's
+# mlx_lm/models/deepseek_v4.py.
+REFERENCE = ("deepseek-ai/DeepSeek-V4-Flash (and -Vision-Exp): "
+             "inference/model.py, inference/kernel.py, inference/config.json")
+
+_T = "tests/test_ds4_parity.py::"
+PARITY = (
+    Parity("shared_expert_swiglu_clamp",
+           "MoE.shared_experts = Expert(..., swiglu_limit=args.swiglu_limit) (model.py:682): "
+           "the SHARED expert clamps like the routed ones",
+           "mlx-lm builds shared_experts with swiglu_limit=0.0 (UNCLAMPED, F195); the scorer's "
+           "default variant sets it to swiglu_limit (_apply_variant). Serving through stock "
+           "mlx-lm is still unclamped",
+           "tests/test_ds4_shared_clamp.py::test_plugin_applies_and_stamps",
+           probe="shared"),
+    Parity("routed_expert_swiglu_clamp",
+           "Expert.forward (model.py:653-658): up = clamp(up, -limit, limit); "
+           "gate = clamp(gate, max=limit); silu(gate) * up; limit = swiglu_limit (10)",
+           "_limited_swiglu (min(gate, limit), clip(up, -limit, limit)) via "
+           "SwitchGLU(activation=_DSV4SwiGLU(args.swiglu_limit))",
+           _T + "test_routed_clamp_matches_reference", probe="routed"),
+    Parity("routing_score_and_bias",
+           "Gate.forward (model.py:611-639): scores = sqrtsoftplus(x.float() @ W.float()); "
+           "bias added for top-k SELECTION only; weights = unbiased scores at the chosen "
+           "experts / their sum, * route_scale (1.5)",
+           "MoEGate fallback path (float32): same, with e_score_correction_bias (renamed from "
+           "ffn.gate.bias in sanitize) and a +1e-20 in the normalizer",
+           _T + "test_gate_matches_reference"),
+    Parity("routing_fused_gate_kernel",
+           "scores computed in float32 (model.py:612)",
+           "non-hash layers on Metal take _moe_gate_kernel, which forms x @ W.T in the "
+           "ACTIVATION dtype (bf16) before sqrtsoftplus + bias + top-k: a lower-precision "
+           "score, so near-tied experts may be chosen differently. Never measured",
+           required=False),
+    Parity("hash_routing_layers",
+           "layers < n_hash_layers (3): indices = tid2eid[input_ids]; weights from the "
+           "unbiased scores, normalized, * route_scale (model.py:599-636)",
+           "MoEGate.hash = layer_id < num_hash_layers; inds = tid2eid[ids]; the scorer "
+           "passes each chunk's own ids to every block",
+           _T + "test_hash_gate_matches_reference"),
+    Parity("norm_eps",
+           "RMSNorm / per-head q rsqrt / hc_pre all use norm_eps from inference/config.json "
+           "(1e-20 in the release, not the dataclass default 1e-6)",
+           "mlx-lm reads rms_norm_eps from the HF config.json (1e-20 in the release); "
+           "hc_eps 1e-6 both. Config-driven; no test reads both configs",
+           required=False),
+    Parity("hyperconnection_sinkhorn",
+           "hc_split_sinkhorn (kernel.py), hc_sinkhorn_iters=20, hc_eps",
+           "mlx-lm _hc_split_sinkhorn_ops / fused Metal kernel, same iters and eps from config",
+           required=False),
+    Parity("activation_quant_simulation",
+           "every fp8 Linear quantizes its INPUT to fp8 (act_quant, ue8m0 block scales) "
+           "before the GEMM; kv gets act_quant(64) and the indexer fp4_act_quant (QAT "
+           "simulation, model.py:125-133, 410-459, 547)",
+           "mlx-lm does NOT simulate activation quantization: it dequantizes fp8 weights to "
+           "bf16 at sanitize and runs bf16 activations. A known divergence, never measured",
+           required=False),
+    Parity("image_token_routing",
+           "Vision-Exp: Gate.bias_vl replaces bias for image tokens (input_ids >= vocab_size) "
+           "and overrides hash routing for them (model.py:609-633)",
+           "text-only mlx-lm has no bias_vl; irrelevant on the text corpora, owned by the "
+           "vision runtime (graft-extras carries the tensors)",
+           required=False),
+)
+
+# Projections mlx-lm's sanitize fuses ("Fuse wq_a + wkv -> wqkv_a, and
+# Compressor wkv + wgate -> wkv_gate"); the release stores them apart.
+# stream-convert --skeleton-from reads this through the plugin registry.
+FUSED = (("attn.wq_a", "attn.wkv", "attn.wqkv_a"),                       # attention
+         ("compressor.wkv", "compressor.wgate", "compressor.wkv_gate"))  # its compressors
+
+
+def act_stats(model_dir, corpora, tokens, args):
+    """How often each SwiGLU clamp in PARITY fires: per corpus, the routed
+    experts (_DSV4SwiGLU, clamp live) and the shared expert (counted at
+    swiglu_limit whether or not the scorer variant applies it). Streams the
+    teacher through the validated scorer. GPU; yields one dict per probe."""
+    import pathlib
+    import types
+
+    import mlx_lm.models.deepseek_v4 as A
+    from mlx_lm.utils import load_tokenizer
+
+    from vqlab.core import runtime_load
+    from vqlab.score.act_stats import ClampCounter, corpus_ids
+
+    tok = load_tokenizer(pathlib.Path(model_dir))
+    counters = {}
+    orig_mlp, orig_act = A.DeepseekV4MLP.__call__, A._DSV4SwiGLU.__call__
+
+    def mlp_call(self, x):                        # the shared expert
+        g, u = self.gate_proj(x), self.up_proj(x)
+        counters["shared"].add(g, u)
+        return self.down_proj(A._limited_swiglu(g, u, self.swiglu_limit))
+
+    def act_call(self, x, gate):                  # routed: SwitchGLU passes (up, gate)
+        counters["routed"].add(gate, x)
+        return orig_act(self, x, gate)
+
+    A.DeepseekV4MLP.__call__, A._DSV4SwiGLU.__call__ = mlp_call, act_call
+    try:
+        for name in corpora:
+            ids = corpus_ids(tok, name, tokens)
+            model, _ = runtime_load.load_for_family("deepseek_v4", model_dir,
+                                                    lazy=True, cpu_stream=True)
+            core = getattr(model, "language_model", model).model
+            lim = float(getattr(core.args, "swiglu_limit", 10.0) or 10.0)
+            counters["shared"], counters["routed"] = ClampCounter(lim), ClampCounter(lim)
+            score_deepseek_v4(model, ids, types.SimpleNamespace(
+                chunk=getattr(args, "chunk", 512),
+                lazy_over_gb=getattr(args, "lazy_over_gb", 16.0)))
+            for probe, c in counters.items():
+                yield {"corpus": name, "tokens": len(ids) - 1, "probe": probe,
+                       "variant": _variant(), **c.result()}
+            del model, core
+            mx.clear_cache()
+    finally:
+        A.DeepseekV4MLP.__call__, A._DSV4SwiGLU.__call__ = orig_mlp, orig_act
+
+
 SPEC = FamilyPlugin(
     name="deepseek_v4",
     model_types=("deepseek_v4",),
@@ -159,4 +282,8 @@ SPEC = FamilyPlugin(
     scorer={"fn": score_deepseek_v4, "family": "deepseek_v4",
             "validated": True, "cpu_stream_load": True, "variant": _variant},
     tokenizer_register=_register_tokenizer,
+    reference=REFERENCE,
+    parity=PARITY,
+    fused=FUSED,
+    act_stats=act_stats,
 )
