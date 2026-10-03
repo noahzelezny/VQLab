@@ -167,6 +167,14 @@ def forward_logprobs(model, batch):
     return logits - mx.logsumexp(logits, axis=-1, keepdims=True)
 
 
+def _build(model_dir, model):
+    """The numerics build (core.numerics) this direct forward runs under. The
+    variant is None: load_direct calls the model as mlx-lm builds it and
+    applies no family scorer variant."""
+    from vqlab.core import numerics
+    return numerics.build(model_dir=model_dir, model=model, variant=None)
+
+
 # --------------------------------------------------------------------------
 def cmd_cache(args):
     out = Path(args.out_dir)
@@ -174,6 +182,7 @@ def cmd_cache(args):
 
     print(f"[1/3] teacher: {args.model}", flush=True)
     model, tok = load_direct(args.model, args.allow_unmatched)
+    build = _build(args.model, model)
 
     print(f"[2/3] corpus: {args.num_samples} x {args.seq_len} "
           f"({'chat-wrapped' if not args.raw else 'raw'})", flush=True)
@@ -213,6 +222,7 @@ def cmd_cache(args):
         "top_k": args.top_k, "chat_wrapped": not args.raw,
         "shape": list(idx.shape), "captured_mass": round(captured, 6),
         "format": "dwq_cache_teacher-compatible",
+        "numerics": build,
     }, indent=1))
     print(f"\ndone -> {out}  indices {idx.shape}")
     print(f"captured_mass {captured:.4f}  "
@@ -236,6 +246,9 @@ def cmd_score(args):
     print(f"student: {args.model}\n", flush=True)
 
     model, _ = load_direct(args.model, args.allow_unmatched)
+    from vqlab.core import numerics
+    build = _build(args.model, model)
+    build_check = numerics.check_cache(meta, build, allow=args.allow_build_mismatch)
 
     kl_sum = n_tok = agree = 0.0
     t0 = time.time()
@@ -276,6 +289,8 @@ def cmd_score(args):
         "top_k": meta["top_k"],
         "captured_mass": meta.get("captured_mass"),
         "chat_wrapped": meta.get("chat_wrapped"),
+        "numerics": build,
+        "numerics_check": build_check,
     }
     from vqlab.records.provenance import measured
     result["measured"] = measured(args.model)
@@ -317,6 +332,9 @@ def main():
     s.add_argument("--batch-size", type=int, default=None)
     s.add_argument("--out", default=None, help="write result JSON here")
     s.add_argument("--allow-unmatched", action="store_true")
+    s.add_argument("--allow-build-mismatch", action="store_true",
+                   help="score against a cache built with different numerics "
+                        "(mlx, mlx-lm, arch file); recorded in the result")
     s.set_defaults(func=cmd_score)
 
     args = ap.parse_args()

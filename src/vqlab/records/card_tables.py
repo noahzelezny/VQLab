@@ -29,7 +29,7 @@ GIB = 2 ** 30
 
 
 def _rows(paths):
-    rows, paired = {}, []
+    rows, paired, builds = {}, [], []
     for p in paths:
         d = json.load(open(p))
         for rung, per in d["table"].items():
@@ -37,9 +37,25 @@ def _rows(paths):
             if len(vals) != len(CORPORA):
                 raise SystemExit(f"{p}: rung {rung} lacks a corpus ({sorted(per)})")
             rows[rung] = {"vals": vals, "path": d["rungs"][rung]}
+            builds += [per[c].get("numerics") for c in CORPORA]
         for rung, per in (d.get("paired") or {}).items():
             paired.append((rung, d["reference"], per))
-    return rows, paired
+    return rows, paired, builds
+
+
+def measured_with(builds) -> str:
+    """One line naming the numerics build behind the numbers (F194: a KL
+    number is only meaningful for the build that produced it). Every
+    distinct build is named; a mixed table says so."""
+    from vqlab.core.numerics import describe
+    seen = []
+    for b in builds:
+        line = describe(b)
+        if line not in seen:
+            seen.append(line)
+    if len(seen) == 1:
+        return f"Measured with: {seen[0]}."
+    return "Measured with MIXED builds (not one harness): " + " | ".join(seen) + "."
 
 
 def main(argv=None):
@@ -51,7 +67,8 @@ def main(argv=None):
                     help="name=prose,code,lit[,gib] for a row measured elsewhere")
     a = ap.parse_args(argv)
     labels = dict(x.split("=", 1) for x in a.label)
-    rows, paired = _rows(a.kl)
+    rows, paired, builds = _rows(a.kl)
+    stamp = measured_with(builds)
     out = ["| build | GiB (text) | prose | code | literary | mean |", "|---|---|---|---|---|---|"]
     for x in a.extra:
         name, nums = x.split("=", 1)
@@ -70,6 +87,7 @@ def main(argv=None):
             name, cells = f"**{name}**", [f"**{c}**" for c in cells]
         out.append(f"| {name} | " + " | ".join(cells) + " |")
     print("\n".join(out))
+    print(f"\n{stamp}")
     if paired:
         print("\nPaired deltas on identical positions (this rung minus reference; |t|>2 is a difference):\n")
         print("| rung | vs | prose | code | literary |")
@@ -77,6 +95,7 @@ def main(argv=None):
         for rung, ref, per in paired:
             cells = [f"{per[c]['delta']:+.1f} (t {per[c]['t']:+.1f})" for c in CORPORA]
             print(f"| {labels.get(rung, rung)} | {labels.get(ref, ref)} | " + " | ".join(cells) + " |")
+        print(f"\n{stamp}")
     return 0
 
 
