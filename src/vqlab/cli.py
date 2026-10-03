@@ -86,6 +86,7 @@ COMMANDS = {
     "stream-score": ("stream_score.py", "layer-streamed ppl / teacher top-k cache / KL-to-teacher: the KL gate's instrument (kl-ladder runs it per rung)"),
     "kl": ("kl_damage.py", "KL-to-bf16 damage vs a cached teacher (cache/score)"),
     "kernel-truth": ("kernel_truth.py", "fused vs fallback: which is closer to an EXACT float64 reference? (F146)"),
+    "kernel-truth-moe": ("kernel_truth_moe.py", "MoE twin of kernel-truth: decode (small-N fused) vs prefill (gemmseg2) expert kernels against an exact float64 reference"),
     "kl-pair": ("kl_pair.py", "paired KL between two arms scored in SEPARATE runs (env-var arms)"),
     "kl-ladder": ("kl_ladder.py", "rank rungs by KL against per-corpus teacher caches, with error bars"),
     # bench/
