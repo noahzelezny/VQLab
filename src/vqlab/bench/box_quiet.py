@@ -17,7 +17,8 @@ import subprocess
 TIMED = {"speed-pair", "speed-pair-knurlogic", "prefill-bench", "decode-timeline",
          "prefill-timeline", "decode-ladder", "mtp-bench", "hc-micro"}
 # Processes that own the GPU for minutes to hours.
-HEAVY = ("fit-moe", "fit-dense", "geo-build", "vq_397b_codes", "fit_dense_vq",
+HEAVY = ("fit-moe", "fit-dense", "fit moe", "fit dense", "geo-build", "fit_moe",
+         "vq_397b_codes", "fit_dense_vq",
          "stream-score", "stream_score", "kl-ladder", "knurlogic serve", "exo ")
 LOAD_FRACTION = 0.25          # load1 above a quarter of the cores is busy
 
