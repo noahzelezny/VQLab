@@ -323,7 +323,9 @@ def main(argv=None) -> int:
     if not text or not text.strip():
         print("\nFAIL: generation returned empty text.")
         return 1
-    print(f"\n  {a.prompt!r} -> {text!r}")
+    shown = a.prompt if len(a.prompt) <= 120 else (
+        f"{a.prompt[:60]}... [{len(a.prompt)} chars] ...{a.prompt[-40:]}")
+    print(f"\n  {shown!r} -> {text!r}")
     print("\nPASS: artifact generated through its shipping runtime. "
           "Record the resolved paths above in any runtime-dependent claim.")
     return 0
