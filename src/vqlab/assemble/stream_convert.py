@@ -96,6 +96,23 @@ if a.skeleton_from:
             v = _q.get(m) if isinstance(_q.get(m), dict) else _default
             SKEL[m] = v
             SKEL[m.removeprefix("language_model.")] = v
+    # FUSED ALIASES: a runtime whose sanitize fuses two projections that share
+    # their input (deepseek_v4: attn.wq_a + attn.wkv -> attn.wqkv_a) meets a
+    # reference that stores them apart. Affine groups run along the INPUT
+    # dimension, so quantizing the fused matrix at the halves' common width is
+    # the same as quantizing each half; differing widths are refused.
+    FUSED = (("attn.wq_a", "attn.wkv", "attn.wqkv_a"),                # deepseek_v4 attention
+             ("compressor.wkv", "compressor.wgate", "compressor.wkv_gate"))  # its compressors
+    for k in list(SKEL):
+        for x, y, fused in FUSED:
+            if k.endswith("." + x):
+                pre = k[: -len(x)]
+                if pre + y not in SKEL:
+                    continue
+                a_, b_ = SKEL[k], SKEL[pre + y]
+                if (a_.get("bits"), a_.get("group_size")) != (b_.get("bits"), b_.get("group_size")):
+                    sys.exit(f"FAIL: {k} and {pre + y} have different widths; cannot fuse into {fused}")
+                SKEL[pre + fused] = a_
     SKEL_HITS = {"skeleton": 0, "expert": 0, "bf16": 0}
 
 
@@ -131,12 +148,19 @@ def predicate(path, module):
     b = a.protect_bits if a.struct else a.bits
     return {"group_size": 64, "bits": b}
 
+# Experts that ARRIVE quantized (deepseek_v4's teacher keeps the release's
+# mxfp4 experts) are never offered to the predicate by mlx's quantizer, so
+# they cannot count as hits; they ride through unchanged.
+PREQ = sum(1 for n, m in model.named_modules()
+           if target in n and "Quantized" in type(m).__name__)
 gbits = a.protect_bits if a.struct else a.bits
 model, config = quantize_model(model, config, 32, gbits, mode="affine",
                                quant_predicate=predicate)
 if SKEL is not None:
-    print(f"skeleton-from {a.skeleton_from}: {SKEL_HITS}", flush=True)
-    if SKEL_HITS["expert"] == 0 or SKEL_HITS["skeleton"] == 0:
+    print(f"skeleton-from {a.skeleton_from}: {SKEL_HITS}"
+          + (f"; {PREQ} expert modules arrived already quantized and are kept as-is" if PREQ else ""),
+          flush=True)
+    if (SKEL_HITS["expert"] == 0 and not PREQ) or SKEL_HITS["skeleton"] == 0:
         sys.exit("FAIL: --skeleton-from matched no expert or no skeleton "
                  "module; path spellings differ between the artifact and the "
                  "loaded model")
