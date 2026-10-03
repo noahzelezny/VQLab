@@ -210,6 +210,9 @@ def main() -> int:
         print(f"unknown command: {cmd}", file=sys.stderr)
         return 2
     from vqlab import _layout   # stage dirs on sys.path; old dotted names aliased
+    if not any(a in ("-h", "--help") for a in rest):
+        from vqlab.bench import box_quiet   # timed commands refuse a busy Mac (rule III)
+        box_quiet.guard(cmd)
     script = _layout.find(COMMANDS[cmd][0])
     sys.argv = [str(script), *rest]
     import runlog
