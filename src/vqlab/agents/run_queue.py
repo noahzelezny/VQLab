@@ -4,6 +4,9 @@ failing loudly.
 
     vqlab queue run <queue.json> [--commit REV] [--preflight] [--detach]
     vqlab queue run --resume <queue dir>      skip steps that already passed
+    vqlab queue run <queue.json> --on m4      another box: reservation + remote-path check first
+    (a box reserved for someone else by `vqlab reserve` is refused unless
+    --override-reservation, which state.json records)
     vqlab queue status [<queue dir>]          default: the latest queue
     vqlab queue list
 
@@ -86,6 +89,8 @@ from vqlab import _layout  # noqa: E402,F401  one module object per name
 import mcp_server as ms  # noqa: E402
 import step_verdict as sv  # noqa: E402
 import pin as pinmod  # noqa: E402
+import queue_eta  # noqa: E402
+import reserve as resv  # noqa: E402
 
 REPO = _layout.SRC.parent
 SCHEMA = "vqlab.queue/1"
@@ -389,7 +394,8 @@ def _redirect_outs(args, pfdir: pathlib.Path, outmap: dict):
 
 def _run_step(q, st, rec, sdir, state, preflight, force, outmap=None):
     tree = pathlib.Path(state["tree"])
-    args = [str(a) for a in st.get("args", [])]
+    from vqlab import config as _cfg   # <teachers>/X: this box's root, so static_check sees the real path
+    args = [_cfg.expand(str(a)) for a in st.get("args", [])]
     if preflight:
         pf = st.get("preflight")
         if pf is None:
@@ -399,9 +405,9 @@ def _run_step(q, st, rec, sdir, state, preflight, force, outmap=None):
         if "skip" in pf:
             return {"verdict": "skipped", "reasons": [f"preflight skipped: {pf['skip']}"]}
         if "args" in pf:
-            args = [str(a) for a in pf["args"]]
+            args = [_cfg.expand(str(a)) for a in pf["args"]]
         elif "append" in pf:
-            args = args + [str(a) for a in pf["append"]]
+            args = args + [_cfg.expand(str(a)) for a in pf["append"]]
         pfdir = preflight_root() / pathlib.Path(state["qdir"]).name / _slug(st["name"])
         pfdir.mkdir(parents=True, exist_ok=True)
         args = _redirect_outs(args, pfdir, outmap if outmap is not None else {})
@@ -593,26 +599,156 @@ def status(qdir):
         return 1
     s = json.loads((qdir / "state.json").read_text())
     alive = ms._pid_alive(s.get("pid"))
+    eta = queue_eta.queue_eta(qdir, queues_dir())
     print(f"{s['name']}  {s['status']}{' (runner alive)' if alive else ''}  "
           f"@ {s['commit'][:10]}  {qdir}")
+    if s.get("reservation_override"):
+        print(f"  ran over a reservation: {s['reservation_override']}")
     for i, r in enumerate(s["steps"]):
+        e = eta["steps"][i]
         print(f"  {i:2d} {r['status']:8s} {r['name'][:40]:40s} "
               f"{'' if r.get('seconds') is None else str(r['seconds']) + ' s':>10s} "
-              f"{'x' + str(r['attempts']) if r.get('attempts', 1) > 1 else ''}")
+              f"{'x' + str(r['attempts']) if r.get('attempts', 1) > 1 else ''}"
+              + (f"  {queue_eta.fmt(e['eta_s'])} ({e['basis']})"
+                 if r["status"] in ("running", "pending") else ""))
         for x in r.get("reasons", []) + r.get("warnings", []):
             print(f"       {x}")
+    if s["status"] in ("running", "created"):
+        print(f"  queue: {queue_eta.fmt(eta['eta_s'])}"
+              + (f", done ~{eta['finish']}" if eta["finish"] else
+                 " (a step has neither progress lines nor a past run)"))
     return 0
 
 
-def run_on(name, file, preflight=False, force=False) -> int:
-    """Launch a queue file on another box: fast-forward its clone (shared
-    storage) to this repo's HEAD, then `queue run --detach` there over ssh with
-    that box's config and a SHARED queue dir, so `vqlab queue wait <qdir>`
-    works from here. The queue still pins its own worktree there."""
+# Runs ON the remote with that box's python: for each path, does it exist,
+# list, and READ? An SMB mount can list directories while every read returns
+# EIO (the M4, 2026-10-03), so one file per path is actually read.
+_REMOTE_PROBE = r"""
+import errno, json, os, sys
+def probe(p):
+    r = {"path": p}
+    if not os.path.exists(p):
+        a = p
+        while a != os.path.dirname(a) and not os.path.exists(a):
+            a = os.path.dirname(a)
+        r.update(exists=False, ancestor=a)
+        return r
+    r["exists"] = True
+    try:
+        f = None
+        if os.path.isdir(p):
+            names = sorted(os.listdir(p))
+            r["listed"] = True
+            for n in names[:64]:
+                q = os.path.join(p, n)
+                if os.path.isfile(q) and not n.startswith("."):
+                    f = q
+                    break
+        else:
+            f = p
+        if f:
+            with open(f, "rb") as h:
+                h.read(64)
+            r["read"] = f
+        r["readable"] = True
+    except OSError as e:
+        r.update(readable=False, errno=errno.errorcode.get(e.errno, str(e.errno)), error=str(e)[:200])
+    return r
+print(json.dumps([probe(p) for p in json.loads(sys.argv[1])]))
+"""
+
+
+def _mount(path: str):
+    parts = pathlib.PurePosixPath(path).parts
+    return str(pathlib.PurePosixPath(*parts[:3])) if len(parts) >= 3 and parts[1] == "Volumes" else None
+
+
+def remote_paths(q, file, b, name, preflight=False) -> list[str]:
+    """Every absolute path a queue names, as the box `name` will see it:
+    the queue file, the clone, config and queue dir, each step's input paths
+    and the nearest existing ancestor of each output."""
+    from vqlab import config as _cfg
+    out = [str(pathlib.Path(file).resolve()), b["repo"], b["config"],
+           str(pathlib.Path(b["queue_dir"]).parent)]
+    for st in q["steps"]:
+        arglists = [st.get("args", [])]
+        pf = st.get("preflight") or {}
+        if preflight and "args" in pf:
+            arglists.append(pf["args"])
+        for args in arglists:
+            ins, outs = _path_args([_cfg.expand(str(a), box=name) for a in args])
+            out += [p for p in ins if p.startswith("/")]
+            for o in outs:
+                if o.startswith("/"):
+                    a = pathlib.Path(o).parent
+                    while not a.exists() and a != a.parent:
+                        a = a.parent
+                    out.append(str(a))
+    seen, res = set(), []
+    for p in out:
+        if p not in seen:
+            seen.add(p)
+            res.append(p)
+    return res
+
+
+def remote_check(name, b, paths) -> list[str]:
+    """Plain problems with `paths` on box `name` (empty: all readable)."""
+    cmd = f"{shlex.quote(b['python'])} -c {shlex.quote(_REMOTE_PROBE)} {shlex.quote(json.dumps(paths))}"
+    try:
+        r = subprocess.run(["ssh", "-o", "ConnectTimeout=10", "-o", "BatchMode=yes", b["ssh"], cmd],
+                           capture_output=True, text=True, timeout=120)
+    except subprocess.TimeoutExpired:
+        return [f"on {name}: the path check timed out after 120 s (a hung mount?)"]
+    if r.returncode:
+        return [f"on {name}: could not run the path check over ssh {b['ssh']} "
+                f"(exit {r.returncode}): {(r.stderr or r.stdout).strip()[-300:]}"]
+    try:
+        res = json.loads(r.stdout.strip().splitlines()[-1])
+    except (ValueError, IndexError):
+        return [f"on {name}: path check printed no result: {r.stdout.strip()[-300:]}"]
+    probs, said = [], set()
+    for x in res:
+        p, m = x["path"], _mount(x["path"])
+        vol = pathlib.PurePosixPath(m).name if m else None
+        if not x.get("exists"):
+            anc = x.get("ancestor") or "/"
+            if m and not (anc == m or anc.startswith(m + "/")):
+                if m not in said:
+                    said.add(m)
+                    probs.append(f"on {name}: {m} is not mounted ({p} does not exist): "
+                                 f"mount {vol} on {name}")
+            else:
+                probs.append(f"on {name}: {p} does not exist")
+        elif not x.get("readable"):
+            key = m or p
+            if key not in said:
+                said.add(key)
+                probs.append(f"on {name}: {key} is listed but unreadable ({x.get('errno')}): "
+                             + (f"remount {vol} on {name}" if m else f"check {p} on {name}"))
+    return probs
+
+
+def run_on(name, file, preflight=False, force=False, override_reservation=False) -> int:
+    """Launch a queue file on another box: refuse a box reserved for someone
+    else, check every path the queue names is READABLE there, fast-forward its
+    clone (shared storage) to this repo's HEAD, then `queue run --detach` there
+    over ssh with that box's config and a SHARED queue dir, so `vqlab queue
+    wait <qdir>` works from here. The queue still pins its own worktree there."""
     from vqlab import config as _cfg
     b = _cfg.boxes().get(name)
     if not b:
         raise SystemExit(f"no [boxes.{name}] in {_cfg.config_file()}")
+    why = resv.refusal(name, override_reservation)
+    if why:
+        raise SystemExit(why)
+    q = json.loads(pathlib.Path(file).read_text())
+    errs = validate(q)
+    if errs:
+        raise SystemExit("queue file invalid:\n  " + "\n  ".join(errs))
+    probs = remote_check(name, b, remote_paths(q, file, b, name, preflight))
+    if probs:
+        raise SystemExit("REFUSED, nothing launched:\n  " + "\n  ".join(probs))
     clone = pathlib.Path(b["repo"])
     if _git("status", "--porcelain", "--untracked-files=no", cwd=clone):
         raise SystemExit(f"{clone} has local changes; refusing to fast-forward it")
@@ -628,12 +764,17 @@ def run_on(name, file, preflight=False, force=False) -> int:
     # scorer variants such as VQLAB_DS4_SHARED_CLAMP): forward the ones set here
     fwd = " ".join(f"{k}={shlex.quote(v)}" for k, v in sorted(os.environ.items())
                    if k.startswith(("VQ_", "VQLAB_DS4_")))
-    remote = (f"cd {shlex.quote(str(clone))} && {fwd} VQLAB_CONFIG={shlex.quote(b['config'])} "
+    # VQLAB_BOX names the box there (its reservation, its `teachers` override);
+    # the override is forwarded too, since that box's own config may not carry it
+    ident = f"VQLAB_BOX={shlex.quote(name)} VQLAB_WHO={shlex.quote(resv.who())}" + (
+        f" VQLAB_TEACHERS_DIR={shlex.quote(b['teachers'])}" if b.get("teachers") else "")
+    remote = (f"cd {shlex.quote(str(clone))} && {fwd} {ident} VQLAB_CONFIG={shlex.quote(b['config'])} "
               f"VQLAB_QUEUE_DIR={shlex.quote(b['queue_dir'])} PYTHONPATH=src "
               f"{shlex.quote(b['python'])} -m vqlab.cli queue run "
               f"{shlex.quote(str(pathlib.Path(file).resolve()))} --detach"
-              + (" --preflight" if preflight else "") + (" --force" if force else ""))
-    print(f"{name}: clone at {head[:10]}; launching over ssh {b['ssh']}"
+              + (" --preflight" if preflight else "") + (" --force" if force else "")
+              + (" --override-reservation" if override_reservation else ""))
+    print(f"{name}: paths readable, clone at {head[:10]}; launching over ssh {b['ssh']}"
           + (f" with {fwd}" if fwd else ""), flush=True)
     return subprocess.call(["ssh", "-o", "ConnectTimeout=10", b["ssh"], remote])
 
@@ -687,6 +828,8 @@ def main(argv=None) -> int:
     pr.add_argument("--force", action="store_true", help="ignore a placed exo instance")
     pr.add_argument("--lease-wait", type=int, default=1800)
     pr.add_argument("--on", help="run on another box from [boxes.NAME] in the vqlab config")
+    pr.add_argument("--override-reservation", action="store_true",
+                    help="run on a box reserved for someone else (`vqlab reserve`); recorded in state.json")
     pr.add_argument("--keep-preflight", action="store_true",
                     help="keep preflight outputs after a passing preflight (default: removed)")
     ps = sub.add_parser("status")
@@ -715,11 +858,22 @@ def main(argv=None) -> int:
     if a.on:
         if not a.file:
             ap.error("--on takes a queue file")
-        return run_on(a.on, a.file, a.preflight, a.force)
+        return run_on(a.on, a.file, a.preflight, a.force, a.override_reservation)
+    why = resv.refusal("here", a.override_reservation)
+    if why:
+        raise SystemExit(why)
+    held = resv.get("here") or resv.get(resv._host())
     qdir = pathlib.Path(a.resume) if a.resume else create(a.file, a.commit, a.allow_dirty, a.preflight)
+    if a.override_reservation and held and held.get("for") != resv.who():
+        state = json.loads((qdir / "state.json").read_text())
+        state["reservation_override"] = {**{k: held.get(k) for k in ("box", "for", "until", "note", "by")},
+                                         "overridden_by": resv.who(), "at": _now()}
+        _save(qdir, state)
+        print(f"overriding: {resv.describe(held)}", flush=True)
     if a.detach:
         cmd = [sys.executable, "-m", "vqlab.cli", "queue", "run", "--resume", str(qdir),
                "--lease-wait", str(a.lease_wait)] + (["--force"] if a.force else []) \
+            + (["--override-reservation"] if a.override_reservation else []) \
             + (["--keep-preflight"] if a.keep_preflight else [])
         env = dict(os.environ)
         env["PYTHONPATH"] = str(REPO / "src") + (os.pathsep + env["PYTHONPATH"] if env.get("PYTHONPATH") else "")

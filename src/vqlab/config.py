@@ -99,8 +99,38 @@ def boxes() -> dict:
         python    = "/opt/homebrew/anaconda3/envs/exo/bin/python"
         config    = "/Volumes/Shared/m4-config.toml" # that box's own [paths]
         queue_dir = "/Volumes/Shared/queues-m4"      # shared, so this box can `queue wait` on it
+        teachers  = "/Volumes/M4Local/teachers"     # optional: that box's LOCAL teacher copies
+        hostname  = "noahs-m4"                      # optional: its short hostname, if not NAME
+
+    `teachers` makes `teachers()` resolve to the box's local copy when
+    running ON that box (see `this_box`), so minibase / fit-moe read local
+    shards without hand-written paths (a local copy roughly halved the M4
+    fit's read contention over SMB, 2026-10-02). Teacher shards are shared
+    by hard link with other tenants: never rewrite one in place.
     """
     return _file_table(str(config_file()), "boxes")
+
+
+def this_box() -> str | None:
+    """The [boxes.NAME] this process runs on: $VQLAB_BOX (`queue run --on`
+    sets it on the remote), else the box whose NAME or `hostname` is this
+    machine's short hostname, else None (this is the home box)."""
+    env = os.environ.get("VQLAB_BOX")
+    if env:
+        return env
+    import socket
+    host = socket.gethostname().split(".")[0].lower()
+    for name, b in boxes().items():
+        if host in (name.lower(), str(b.get("hostname", "")).lower()):
+            return name
+    return None
+
+
+def box_teachers(name: str | None = None) -> pathlib.Path | None:
+    """The `teachers` override of box NAME (default: this box), or None."""
+    b = boxes().get(name if name is not None else (this_box() or ""))
+    v = (b or {}).get("teachers")
+    return pathlib.Path(v).expanduser() if v else None
 
 
 def scratch() -> pathlib.Path:
@@ -114,7 +144,12 @@ def models() -> pathlib.Path:
 
 
 def teachers() -> pathlib.Path:
-    """bf16 teacher checkpoints."""
+    """bf16 teacher checkpoints: $VQLAB_TEACHERS_DIR, else this box's
+    `[boxes.NAME] teachers` override (a local copy), else [paths]."""
+    if not os.environ.get(_ENV["teachers"]):
+        local = box_teachers()
+        if local:
+            return local
     return _one("teachers")
 
 
@@ -159,6 +194,26 @@ def portable(path) -> str:
         if r in p.parents:
             return f"<{label}>/{p.relative_to(r)}"
     return str(p)
+
+
+_PLACEHOLDER = re.compile(r"(^|=)<(teachers|models|scratch)>(?=/|$)")
+
+
+def expand(arg: str, box: str | None = None) -> str:
+    """``<teachers>/X`` (the form `portable` records) -> this box's teachers
+    root + /X; likewise ``<models>`` and ``<scratch>``. Also after an ``=``
+    (``--src=<teachers>/X``, ``prose=<scratch>/c``). `vqlab <cmd>` applies it
+    to every argument, so a queue step naming ``<teachers>/DeepSeek-V4`` reads
+    the M4's local copy on the M4 and the HDD on the M3. `box` resolves for
+    another box ([boxes.NAME] teachers, else this config's [paths])."""
+    def sub(m):
+        key = m.group(2)
+        if key == "teachers" and box is not None:
+            root = box_teachers(box) or _one("teachers")
+        else:
+            root = {"teachers": teachers, "models": models, "scratch": scratch}[key]()
+        return m.group(1) + str(root)
+    return _PLACEHOLDER.sub(sub, arg, count=1)
 
 
 def require_free(path, need_bytes: int, what: str, margin_gib: float = 5.0) -> None:

@@ -28,7 +28,7 @@ teacher, writes a new directory (never in place), and leaves a record.
 
 Skip-zero, `src/vqlab/skipzero/` (a shipped format since 2026-09-29, served natively by the runtime): `sz-pack` / `sz-check` / `sz-resident` / `sz-bitexact` (vq-skipzero: fully-dead VQ rows dropped on disk; 397B -10.8% disk / -11.1% resident at identical KL; docs/SKIPZERO.md).
 
-Around the pipeline: `release-prep` (sizes, junk, provenance, gate, Hub diff, then the exact `publish` line), `size` (text / +tower / +MTP, the card's three numbers), `card-tables` (the card's KL table from the scorer's JSON), `config` (where vqlab reads and writes; `config init` on a new machine), `queue` (run a list of steps from pinned code under the GPU lease; `--preflight` first), `mcp` (the lab over MCP for agents), `gui` (read-only local window).
+Around the pipeline: `release-prep` (sizes, junk, provenance, gate, Hub diff, then the exact `publish` line), `size` (text / +tower / +MTP, the card's three numbers), `card-tables` (the card's KL table from the scorer's JSON), `config` (where vqlab reads and writes; `config init` on a new machine), `queue` (run a list of steps from pinned code under the GPU lease; `--preflight` first; `status` shows an ETA from the data; `--on BOX` checks paths read on that box first), `reserve` (who has a box until when; `queue run` refuses a box reserved for someone else), `mcp` (the lab over MCP for agents), `gui` (read-only local window).
 
 ## Records: nothing happens without one
 
@@ -41,6 +41,7 @@ Around the pipeline: `release-prep` (sizes, junk, provenance, gate, Hub diff, th
 | **fit store** | `<store>/fits/<family>/<teacher>/L<layer>/<proj>/d<D>-K<K>/<fit_id>` + `index.jsonl` (HDD archive; `$VQLAB_FIT_STORE`) | every fitted module with its recipe; fitters file into it, `geo-build --pool` reuses from it (recipe must match) | `vqlab fits list / stats / census / retag` |
 | **artifact registry** | `registry/artifacts.jsonl`, `registry/hub.jsonl` (in git) | every artifact from provable facts (runtime, geometry, size, fingerprint, record id); latest Hub comparison | `vqlab registry list / hub` |
 | **queues** | `~/.vqlab/queues/<stamp>-<name>/` | each step's cmd, stdout, stderr, verdict; the pinned commit | `vqlab queue status / list` |
+| **box reservations** | `<scratch>/vqlab-reservations.json` (the shared SSD; `$VQLAB_RESERVATIONS`; local fallback `~/.vqlab/reservations.json`) | who has each box until when, and why | `vqlab reserve --list`, MCP `gpu_state` |
 | **family data** | `families/<family>/` | `entry.json` (how to read the tensors, no code change) and `teachers/<teacher>/{profile,onboard,teacher_caches}.json` | `vqlab family-profile`, `vqlab onboard`, MCP `where_is` |
 | **findings** | `lab/FINDINGS-LOG.md` (private; `$VQLAB_FINDINGS_LOG`) | every measured result, F-numbered | MCP `findings_tail`; reserve a number with `next_f_number reserve=true` |
 
