@@ -11,7 +11,7 @@ Silicon (MLX), and MTP speculative decoding over stock mlx-lm.
 See README.md and METHODOLOGY.md.
 """
 
-__version__ = "0.2.0"
+__version__ = "0.1.0"
 
 from . import _layout  # noqa: E402,F401  stage folders + pre-split import names
 from .family import arch as _arch  # noqa: E402

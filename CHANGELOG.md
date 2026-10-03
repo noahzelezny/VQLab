@@ -1,8 +1,53 @@
 # Changelog
 
-## 0.2.0 (unreleased)
+## 0.1.0 (unreleased)
 
-First PyPI release. 0.1.0 (2026-08-26) was the paper snapshot, git only.
+First release. (A `v0.1.0` git tag from 2026-08-26 marked the paper
+snapshot; it was never a release, and moves to this commit when this ships.)
+
+### Since the first draft of these notes (2026-10-03)
+- **CLI namespaces**: `vqlab plan | fit | build | bundle | gate | score |
+  bench | ship | lab <command>`; every flat name (`vqlab fit-moe`) still
+  works. `fit/vq_397b_codes.py` is now `fit_moe.py`, `assemble/pack_artifact.py`
+  is `pack.py` (old names import).
+- **Own environment and the architectures it needs**: `vqlab doctor`
+  (interpreter, mlx builds, arch shas, storage, token). Knurlogic's vendored
+  architectures (deepseek_v4, qwen4_exp, qwen3_5/_moe, gemma4, glm5_next)
+  ship in `vqlab.family.arch` and load as `mlx_lm.models.<name>` on
+  `import vqlab`: stock mlx-lm 0.32 has no deepseek_v4 or qwen4_exp.
+  `VQLAB_VENDORED_ARCH=0` scores stock mlx-lm.
+- **Numerics stamps**: every teacher cache, score and per-position array
+  records mlx, mlx-lm, the arch file's sha and the scorer variant; scoring
+  refuses a cache from another build (`--allow-build-mismatch` records the
+  override), `kl-pair` verifies a pairing from sidecars, `card-tables`
+  prints "Measured with" and flags MIXED builds. `vqlab runtime-equiv`
+  runs one slice through two interpreters. DeepSeek's reference
+  shared-expert clamp is the default scorer variant.
+- **Family parity**: plugins declare their reference inference code and a
+  checklist of its behaviours; `vqlab parity` runs each item's test (a
+  skipped test counts as untested). `vqlab act-stats` counts how often each
+  clamp fires.
+- **Writers refuse a no-op** and exit 1 (pack, pack-dense, pack-ple,
+  splice-ple, ple-swap, mix, geo-build, reselect, harvest-parts,
+  vision-layout --fix, size --fix-index, publish when the Hub already
+  holds the bytes); `--help` and `--dry-run` never write a build record.
+  One tensor classifier (`core.artifact.tensor_class`) behind every
+  tower / MTP / text decision.
+- **Release gates**: `check-release` fails a wrong or missing index
+  `total_size` and requires an image smoke for artifacts with a tower
+  (`vision-smoke --knurlogic` drives DeepSeek Vision-Exp). `vqlab card`
+  writes the whole model card from config + KL JSON + build record and
+  refuses numbers measured on other bytes.
+- **Disk and machines**: `fit-moe --pack` (unpacked K>256 codes never hit
+  disk), `vqlab scratch reclaimable` (prints rm lines, never deletes),
+  `vqlab slice` (a small real teacher for preflights), `vqlab reserve`
+  (who has a box until when; queues refuse a box reserved for someone
+  else), queue ETAs from the step's own timings, `queue run --on` reads a
+  byte of every path on the remote first.
+- **Fixed**: the selftest's packer step had never packed (it ran pack-dense
+  on a raw fit); mtp-pack no longer records a scratch head as a build of
+  the model it read; graft-extras says to pass the official release when
+  given an MLX conversion.
 
 ### Installing and setup
 - `pip install vqlab` works without a checkout: CI runs the full `vqlab
