@@ -50,6 +50,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))  # src/
 from vqlab import _layout  # noqa: E402,F401  one module object per name
 from families import FAMILY  # shared registry (families.py)
 import expert_src            # shared source-layout loader (incl. unfused)
+import codepack              # --pack: the same packing rule as `vqlab pack`
 
 ap = argparse.ArgumentParser()
 ap.add_argument("--base", required=True)
@@ -130,14 +131,27 @@ ap.add_argument("--tail-geom", default=None,
                      "This is a QWEN-FAMILY law and does NOT transfer to "
                      "gemma (LADDER_GEMMA.md:180; gemma vq-tail10 scored "
                      "BELOW flat K256, 76.92 vs 79.81).")
+ap.add_argument("--pack", action="store_true",
+                help="pack codes to their true bit width as each shard is "
+                     "written (same rule and bytes as `vqlab pack`: K256 stays "
+                     "uint8, NSUB %% 32 != 0 stays unpacked), so unpacked K>256 "
+                     "uint16 codes never land on disk. The output is the "
+                     "packed artifact, bundled by add_model_file.py; byte for "
+                     "byte what fit-then-`vqlab pack` writes "
+                     "(tests/test_fit_pack.py).")
+ap.add_argument("--pack-unaligned", action="store_true",
+                help="with --pack: also pack NSUB %% 32 != 0 tensors (same "
+                     "GPU-pending gate as `vqlab pack --pack-unaligned`)")
 args = ap.parse_args()
+if args.pack_unaligned and not args.pack:
+    raise SystemExit("--pack-unaligned needs --pack")
 # Disk preflight: every base shard not yet written is rewritten; codes for
-# K > 256 are written unpacked (uint16, ~2x) until `vqlab pack`.
+# K > 256 are written unpacked (uint16, ~2x) unless --pack.
 from vqlab import config as _cfg  # noqa: E402
 _cfg.require_free(args.out, int(sum(
     os.path.getsize(f) for f in glob.glob(os.path.join(args.base, "*.safetensors"))
     if not os.path.exists(os.path.join(args.out, os.path.basename(f))))
-    * (2 if args.k > 256 else 1)), "fit-moe")
+    * (2 if args.k > 256 and not args.pack else 1)), "fit-moe")
 
 # SEEDING. mx.random is process-global, so seeding once here covers every
 # random draw in this fitter: the k-means++ subsample (kmeanspp), the first
@@ -619,12 +633,19 @@ for si, sh in enumerate(shards):
                          f"{args.relerr_abort} after {args.max_refit} refits. "
                          f"The fit is unstable for this tensor — do not ship "
                          f"this artifact.")
+            pd, pk = geom_for(li, proj)
+            pbits = 0
+            if args.pack:
+                # pack HERE, before the shard is written: the uint16 codes
+                # never reach the disk (devlist #13)
+                codes, pbits = codepack.pack_codes(mod, codes, pk, args.pack_unaligned)
             new[mod + ".codes"] = codes
             new[mod + ".codebook"] = cb
             new[mod + ".vq_scales"] = vsc
-            pd, pk = geom_for(li, proj)
             vq_modules[mod] = {"experts": want[0], "out": want[1],
                               "in": want[2], "k": pk, "dim": pd, "group": G}
+            if pbits:
+                vq_modules[mod]["pack_bits"] = pbits
             errs.append(err)
             done.add(mod)
             print(f"    L{li:02d} {proj:10s} relerr {err:.4f}", flush=True)
@@ -636,7 +657,12 @@ for si, sh in enumerate(shards):
         else:
             new[name] = val
     tmp = OUT / sh.replace(".safetensors", ".tmp.safetensors")
-    mx.save_safetensors(str(tmp), new)
+    # --pack writes the header metadata `vqlab pack` writes, so the shard is
+    # byte for byte the after-the-fact pack of the unpacked one
+    if args.pack:
+        mx.save_safetensors(str(tmp), dict(sorted(new.items())), metadata={"format": "mlx"})
+    else:
+        mx.save_safetensors(str(tmp), new)
     tmp.rename(dst)
     # File this shard's fits in the fit store BEFORE ship() can move the
     # shard: the fits are the expensive part and must outlive the candidate.
@@ -670,6 +696,11 @@ for m in targets:
         vq_modules[m] = {"experts": sc.shape[0], "out": sc.shape[1],
                          "in": sc.shape[2] * q.get("group_size", G),
                          "k": pk, "dim": pd, "group": G}
+        if args.pack:
+            # a resumed shard was packed by the same rule when it was written
+            _pb = codepack.pack_bits_for(pk, vq_modules[m]["in"] // pd, args.pack_unaligned)
+            if _pb:
+                vq_modules[m]["pack_bits"] = _pb
 
 new_cfg["model_file"] = "model.py"
 new_cfg["vq_modules"] = vq_modules
@@ -721,6 +752,13 @@ for extra in BASE.iterdir():
     if extra.is_file() and extra.suffix != ".safetensors" \
             and extra.name not in ("config.json", "model.safetensors.index.json"):
         shutil.copy2(extra, OUT / extra.name)
+
+if args.pack:
+    # The shim above only knows unpacked codes. Bundle the packed artifact the
+    # way `vqlab pack` does (add_model_file reads pack_bits/in from the config
+    # just written), so model.py and config match fit-then-pack.
+    subprocess.run([sys.executable, str(_layout.find("add_model_file.py")),
+                    "--artifact", str(OUT), "--group", str(G)], check=True)
 
 provenance.write_build_record(
     OUT, tool="fit-moe", script=__file__, ap=ap, args=args, method=METHOD,
