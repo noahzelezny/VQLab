@@ -230,6 +230,14 @@ def main(argv=None):
              f"(d{skipzero_load.PACKED_ONLY_DIMS} packed only) "
              f"(found {', '.join(f'dim={d}: {n}' for d, n in sorted(by_dim.items(), key=str))}), "
              f"e.g. {sorted(skipped)[0]}")
+    # A module whose tensors straddle a shard boundary is planned per shard,
+    # so no single shard holds all of it and it is never packed. Say so: a
+    # silent skip reads as "no dead rows here" (writer contracts, 2026-10-02).
+    from vqlab.core.artifact import Artifact
+    straddle = sorted(m for m in Artifact.open(src).straddling() if m in specs)
+    if straddle:
+        _log(f"WARNING: {len(straddle)} module(s) straddle a shard boundary and are left "
+             f"unpacked (sz-pack plans one shard at a time), e.g. {straddle[0]}")
     rewrite = {k: v for k, v in plans.items() if v[2]}
     new_bytes = sum(v[4] for v in rewrite.values())
     allm = {p: m for v in plans.values() for p, m in v[2].items()}
