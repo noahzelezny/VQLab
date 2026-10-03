@@ -44,6 +44,18 @@ def main(argv=None):
             md = {k: v for k, v in (doc.get("metadata") or {}).items() if k != "total_size"}
             write_index(art.dir, art.index, total_size=want, metadata=md)
             print(f"rewrote {p.name} (total_size {want})")
+            from vqlab.records import provenance
+            if (art.dir / provenance.RECORD).exists():
+                # an in-place edit is an AMENDMENT: the prior record goes to
+                # history, and this one says exactly what changed
+                provenance.write_build_record(
+                    art.dir, tool="size --fix-index",
+                    argv=["size", str(art.dir), "--fix-index"],
+                    method={"recorded_by": "size --fix-index",
+                            "note": f"index metadata.total_size {have} -> {want} (tensor bytes); "
+                                    "weight_map and every shard unchanged"},
+                    full_hash={"model.safetensors.index.json"})
+                print("build record amended (prior record kept in history)")
             return 0
         return 0 if have == want else 1
     s = sizes(a.artifact)
