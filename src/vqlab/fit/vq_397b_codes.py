@@ -32,6 +32,7 @@ Designed to run on the M4 while the M3 grinds its own queue:
 import argparse
 import gc
 import json
+import glob
 import os
 import math
 import pathlib
@@ -130,6 +131,13 @@ ap.add_argument("--tail-geom", default=None,
                      "gemma (LADDER_GEMMA.md:180; gemma vq-tail10 scored "
                      "BELOW flat K256, 76.92 vs 79.81).")
 args = ap.parse_args()
+# Disk preflight: every base shard not yet written is rewritten; codes for
+# K > 256 are written unpacked (uint16, ~2x) until `vqlab pack`.
+from vqlab import config as _cfg  # noqa: E402
+_cfg.require_free(args.out, int(sum(
+    os.path.getsize(f) for f in glob.glob(os.path.join(args.base, "*.safetensors"))
+    if not os.path.exists(os.path.join(args.out, os.path.basename(f))))
+    * (2 if args.k > 256 else 1)), "fit-moe")
 
 # SEEDING. mx.random is process-global, so seeding once here covers every
 # random draw in this fitter: the k-means++ subsample (kmeanspp), the first
