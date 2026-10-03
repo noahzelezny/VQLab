@@ -375,77 +375,6 @@ def score_qwen3_5_moe(model, ids_list, args):
     return logits
 
 
-def score_deepseek_v4(model, ids_list, args):
-    """Streamed deepseek_v4 scorer (DeepSeek-V4-Flash). Rule 5: see SCORERS.
-
-    LINE-MIRRORED against mlx_lm.models.deepseek_v4 (DeepseekV4Model.__call__
-    / Model.__call__), in the reference's order:
-      - embed_tokens, then BROADCAST h to (B, S, hc_mult, D) + mx.contiguous
-        (hyper-connection bookend #1; the hc mixing itself lives inside each
-        block's hc_attn / hc_ffn).
-      - block signature is (h, cache, input_ids): the first num_hash_layers
-        route experts by a hash of the TOKEN IDS, so each chunk passes its
-        own ids slice -- a hidden-state-only loop would silently mis-route
-        those layers.
-      - after the stack: model.hc_head(h) (bookend #2: collapses hc), THEN
-        model.norm, then lm_head (never tied on this family).
-    CHUNKED with each layer's own DeepseekV4Cache: the attention keeps a
-    sliding window plus compressed / indexed long-range state, so the metric
-    is chunk-dependent and must be measured the way generation computes it.
-    hc_head and norm are per-position, so applying them per chunk is exact.
-
-    Validated (rule 5) streamed vs a direct resident forward that walks the
-    same chunks with one shared cache list: bitwise at 2048 and 12288.
-    """
-    lm = getattr(model, "language_model", model)
-    core = lm.model
-    ids = mx.array([ids_list[:-1]])
-    S = ids.shape[1]
-    C = max(1, int(getattr(args, "chunk", 512) or 512))
-    with mx.stream(mx.cpu):
-        mx.eval(core.embed_tokens.parameters())
-    h = core.embed_tokens(ids)
-    h = mx.contiguous(mx.broadcast_to(
-        h[:, :, None, :], (*h.shape[:2], core.args.hc_mult, h.shape[-1])))
-    mx.eval(h)
-
-    caches = lm.make_cache()               # before any layer is dropped
-    n = len(core.layers)
-    for i in range(n):
-        blk = core.layers[i]
-        with mx.stream(mx.cpu):
-            _, skipped = eval_params_budgeted(
-                blk, getattr(args, "lazy_over_gb", 8.0))
-        if skipped:
-            print(f"  layer {i}: {skipped / 1024 ** 3:.1f} GiB left lazy",
-                  flush=True)
-        t0 = time.time()
-        c = caches[i]
-        parts = []
-        for s0 in range(0, S, C):
-            e0 = min(s0 + C, S)
-            parts.append(blk(h[:, s0:e0], c, ids[:, s0:e0]))
-        h = mx.concatenate(parts, axis=1) if len(parts) > 1 else parts[0]
-        mx.eval(h)
-        core.layers[i] = None
-        caches[i] = None
-        del blk, parts
-        gc.collect()
-        mx.clear_cache()
-        print(f"  layer {i}/{n-1} {time.time()-t0:.1f}s "
-              f"(peak {mx.get_peak_memory()/1024**3:.1f}G)", flush=True)
-
-    with mx.stream(mx.cpu):
-        mx.eval(core.hc_head.parameters(), core.norm.parameters(),
-                lm.lm_head.parameters())
-    lg = []
-    for s0 in range(0, S, C):
-        o = core.norm(core.hc_head(h[:, s0:min(s0 + C, S)]))
-        lg.append(lm.lm_head(o).astype(mx.float32)[0])
-        mx.eval(lg[-1])
-    return mx.concatenate(lg, axis=0) if len(lg) > 1 else lg[0]
-
-
 # family -> scorer entry. `runtime` names the loader (runtime_load), and
 # `validated` is house rule 5: a scorer is validated only once its streamed
 # pass has reproduced a direct forward to all printed decimals. Unvalidated
@@ -478,16 +407,12 @@ SCORERS = {
     # 5.227517/5.227517 at 2048 and 5.829932/5.829932 at 12288, exact.
     "qwen3_5": {"fn": score_qwen3_5_moe, "family": "qwen3_5",
                 "validated": True, "cpu_stream_load": True},
-    # DeepSeek-V4-Flash. Rule-5 run 2026-10-02 on a 4-layer slice of the
-    # exact teacher (sanitize-stream output; layers 0-2 hash-routed, 3 score-
-    # routed, compressor/indexer attention), chunk 512, vs a direct resident
-    # forward over the same chunks with one shared cache list: logits
-    # BITWISE identical (max|d| 0.0) at 2048 and 12288 tokens. Scope: 4 of 43
-    # layers, real weights; the rest of the stack is the same block class.
-    # cpu_stream_load: the converted teacher's blocks are ~3.5 GiB.
-    "deepseek_v4": {"fn": score_deepseek_v4, "family": "deepseek_v4",
-                    "validated": True, "cpu_stream_load": True},
 }
+
+
+# Families that live as plugins (vqlab/family/) add their scorers here.
+from vqlab.family import scorers as _plugin_scorers  # noqa: E402
+SCORERS.update(_plugin_scorers())
 
 
 def main():
