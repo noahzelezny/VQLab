@@ -1,0 +1,379 @@
+{
+ "config": {
+  "model_file": "model.py",
+  "quantization": {
+   "bits": 4,
+   "group_size": 64
+  },
+  "vq_modules": {
+   "model.language_model.layers.0.mlp.switch_mlp.down_proj": {
+    "dim": 4,
+    "experts": 2,
+    "group": 64,
+    "in": 128,
+    "k": 16,
+    "out": 128
+   },
+   "model.language_model.layers.0.mlp.switch_mlp.gate_proj": {
+    "dim": 4,
+    "experts": 2,
+    "group": 64,
+    "in": 128,
+    "k": 16,
+    "out": 128
+   },
+   "model.language_model.layers.0.mlp.switch_mlp.up_proj": {
+    "dim": 4,
+    "experts": 2,
+    "group": 64,
+    "in": 128,
+    "k": 16,
+    "out": 128
+   },
+   "model.language_model.layers.1.mlp.switch_mlp.down_proj": {
+    "dim": 4,
+    "experts": 2,
+    "group": 64,
+    "in": 128,
+    "k": 16,
+    "out": 128
+   },
+   "model.language_model.layers.1.mlp.switch_mlp.gate_proj": {
+    "dim": 4,
+    "experts": 2,
+    "group": 64,
+    "in": 128,
+    "k": 16,
+    "out": 128
+   },
+   "model.language_model.layers.1.mlp.switch_mlp.up_proj": {
+    "dim": 4,
+    "experts": 2,
+    "group": 64,
+    "in": 128,
+    "k": 16,
+    "out": 128
+   },
+   "model.language_model.layers.2.mlp.switch_mlp.down_proj": {
+    "dim": 4,
+    "experts": 2,
+    "group": 64,
+    "in": 128,
+    "k": 32,
+    "out": 128,
+    "pack_bits": 5
+   },
+   "model.language_model.layers.2.mlp.switch_mlp.gate_proj": {
+    "dim": 4,
+    "experts": 2,
+    "group": 64,
+    "in": 128,
+    "k": 16,
+    "out": 128
+   },
+   "model.language_model.layers.2.mlp.switch_mlp.up_proj": {
+    "dim": 4,
+    "experts": 2,
+    "group": 64,
+    "in": 128,
+    "k": 16,
+    "out": 128
+   }
+  }
+ },
+ "files": [
+  "config.json",
+  "model-00001-of-00002.safetensors ->",
+  "model-00002-of-00002.safetensors",
+  "model.safetensors.index.json"
+ ],
+ "index": {
+  "model.language_model.layers.0.input_layernorm.weight": "model-00001-of-00002.safetensors",
+  "model.language_model.layers.0.mlp.switch_mlp.down_proj.codebook": "model-00001-of-00002.safetensors",
+  "model.language_model.layers.0.mlp.switch_mlp.down_proj.codes": "model-00001-of-00002.safetensors",
+  "model.language_model.layers.0.mlp.switch_mlp.down_proj.vq_scales": "model-00001-of-00002.safetensors",
+  "model.language_model.layers.0.mlp.switch_mlp.gate_proj.codebook": "model-00001-of-00002.safetensors",
+  "model.language_model.layers.0.mlp.switch_mlp.gate_proj.codes": "model-00001-of-00002.safetensors",
+  "model.language_model.layers.0.mlp.switch_mlp.gate_proj.vq_scales": "model-00001-of-00002.safetensors",
+  "model.language_model.layers.0.mlp.switch_mlp.up_proj.codebook": "model-00001-of-00002.safetensors",
+  "model.language_model.layers.0.mlp.switch_mlp.up_proj.codes": "model-00001-of-00002.safetensors",
+  "model.language_model.layers.0.mlp.switch_mlp.up_proj.vq_scales": "model-00001-of-00002.safetensors",
+  "model.language_model.layers.1.input_layernorm.weight": "model-00001-of-00002.safetensors",
+  "model.language_model.layers.1.mlp.switch_mlp.down_proj.codebook": "model-00002-of-00002.safetensors",
+  "model.language_model.layers.1.mlp.switch_mlp.down_proj.codes": "model-00002-of-00002.safetensors",
+  "model.language_model.layers.1.mlp.switch_mlp.down_proj.vq_scales": "model-00002-of-00002.safetensors",
+  "model.language_model.layers.1.mlp.switch_mlp.gate_proj.codebook": "model-00002-of-00002.safetensors",
+  "model.language_model.layers.1.mlp.switch_mlp.gate_proj.codes": "model-00001-of-00002.safetensors",
+  "model.language_model.layers.1.mlp.switch_mlp.gate_proj.vq_scales": "model-00002-of-00002.safetensors",
+  "model.language_model.layers.1.mlp.switch_mlp.up_proj.codebook": "model-00002-of-00002.safetensors",
+  "model.language_model.layers.1.mlp.switch_mlp.up_proj.codes": "model-00002-of-00002.safetensors",
+  "model.language_model.layers.1.mlp.switch_mlp.up_proj.vq_scales": "model-00002-of-00002.safetensors",
+  "model.language_model.layers.2.input_layernorm.weight": "model-00002-of-00002.safetensors",
+  "model.language_model.layers.2.mlp.switch_mlp.down_proj.codebook": "model-00002-of-00002.safetensors",
+  "model.language_model.layers.2.mlp.switch_mlp.down_proj.codes": "model-00002-of-00002.safetensors",
+  "model.language_model.layers.2.mlp.switch_mlp.down_proj.vq_scales": "model-00002-of-00002.safetensors",
+  "model.language_model.layers.2.mlp.switch_mlp.gate_proj.codebook": "model-00002-of-00002.safetensors",
+  "model.language_model.layers.2.mlp.switch_mlp.gate_proj.codes": "model-00002-of-00002.safetensors",
+  "model.language_model.layers.2.mlp.switch_mlp.gate_proj.vq_scales": "model-00002-of-00002.safetensors",
+  "model.language_model.layers.2.mlp.switch_mlp.up_proj.codebook": "model-00002-of-00002.safetensors",
+  "model.language_model.layers.2.mlp.switch_mlp.up_proj.codes": "model-00002-of-00002.safetensors",
+  "model.language_model.layers.2.mlp.switch_mlp.up_proj.vq_scales": "model-00002-of-00002.safetensors"
+ },
+ "tensors": {
+  "model.language_model.layers.0.input_layernorm.weight": {
+   "dtype": "F16",
+   "shape": [
+    128
+   ],
+   "shard": "model-00001-of-00002.safetensors"
+  },
+  "model.language_model.layers.0.mlp.switch_mlp.down_proj.codebook": {
+   "dtype": "F16",
+   "shape": [
+    16,
+    4
+   ],
+   "shard": "model-00001-of-00002.safetensors"
+  },
+  "model.language_model.layers.0.mlp.switch_mlp.down_proj.codes": {
+   "dtype": "U8",
+   "shape": [
+    2,
+    128,
+    32
+   ],
+   "shard": "model-00001-of-00002.safetensors"
+  },
+  "model.language_model.layers.0.mlp.switch_mlp.down_proj.vq_scales": {
+   "dtype": "F16",
+   "shape": [
+    2,
+    128,
+    2
+   ],
+   "shard": "model-00001-of-00002.safetensors"
+  },
+  "model.language_model.layers.0.mlp.switch_mlp.gate_proj.codebook": {
+   "dtype": "F16",
+   "shape": [
+    16,
+    4
+   ],
+   "shard": "model-00001-of-00002.safetensors"
+  },
+  "model.language_model.layers.0.mlp.switch_mlp.gate_proj.codes": {
+   "dtype": "U8",
+   "shape": [
+    2,
+    128,
+    32
+   ],
+   "shard": "model-00001-of-00002.safetensors"
+  },
+  "model.language_model.layers.0.mlp.switch_mlp.gate_proj.vq_scales": {
+   "dtype": "F16",
+   "shape": [
+    2,
+    128,
+    2
+   ],
+   "shard": "model-00001-of-00002.safetensors"
+  },
+  "model.language_model.layers.0.mlp.switch_mlp.up_proj.codebook": {
+   "dtype": "F16",
+   "shape": [
+    16,
+    4
+   ],
+   "shard": "model-00001-of-00002.safetensors"
+  },
+  "model.language_model.layers.0.mlp.switch_mlp.up_proj.codes": {
+   "dtype": "U8",
+   "shape": [
+    2,
+    128,
+    32
+   ],
+   "shard": "model-00001-of-00002.safetensors"
+  },
+  "model.language_model.layers.0.mlp.switch_mlp.up_proj.vq_scales": {
+   "dtype": "F16",
+   "shape": [
+    2,
+    128,
+    2
+   ],
+   "shard": "model-00001-of-00002.safetensors"
+  },
+  "model.language_model.layers.1.input_layernorm.weight": {
+   "dtype": "F16",
+   "shape": [
+    128
+   ],
+   "shard": "model-00001-of-00002.safetensors"
+  },
+  "model.language_model.layers.1.mlp.switch_mlp.down_proj.codebook": {
+   "dtype": "F16",
+   "shape": [
+    16,
+    4
+   ],
+   "shard": "model-00002-of-00002.safetensors"
+  },
+  "model.language_model.layers.1.mlp.switch_mlp.down_proj.codes": {
+   "dtype": "U8",
+   "shape": [
+    2,
+    128,
+    32
+   ],
+   "shard": "model-00002-of-00002.safetensors"
+  },
+  "model.language_model.layers.1.mlp.switch_mlp.down_proj.vq_scales": {
+   "dtype": "F16",
+   "shape": [
+    2,
+    128,
+    2
+   ],
+   "shard": "model-00002-of-00002.safetensors"
+  },
+  "model.language_model.layers.1.mlp.switch_mlp.gate_proj.codebook": {
+   "dtype": "F16",
+   "shape": [
+    16,
+    4
+   ],
+   "shard": "model-00002-of-00002.safetensors"
+  },
+  "model.language_model.layers.1.mlp.switch_mlp.gate_proj.codes": {
+   "dtype": "U8",
+   "shape": [
+    2,
+    128,
+    32
+   ],
+   "shard": "model-00001-of-00002.safetensors"
+  },
+  "model.language_model.layers.1.mlp.switch_mlp.gate_proj.vq_scales": {
+   "dtype": "F16",
+   "shape": [
+    2,
+    128,
+    2
+   ],
+   "shard": "model-00002-of-00002.safetensors"
+  },
+  "model.language_model.layers.1.mlp.switch_mlp.up_proj.codebook": {
+   "dtype": "F16",
+   "shape": [
+    16,
+    4
+   ],
+   "shard": "model-00002-of-00002.safetensors"
+  },
+  "model.language_model.layers.1.mlp.switch_mlp.up_proj.codes": {
+   "dtype": "U8",
+   "shape": [
+    2,
+    128,
+    32
+   ],
+   "shard": "model-00002-of-00002.safetensors"
+  },
+  "model.language_model.layers.1.mlp.switch_mlp.up_proj.vq_scales": {
+   "dtype": "F16",
+   "shape": [
+    2,
+    128,
+    2
+   ],
+   "shard": "model-00002-of-00002.safetensors"
+  },
+  "model.language_model.layers.2.input_layernorm.weight": {
+   "dtype": "F16",
+   "shape": [
+    128
+   ],
+   "shard": "model-00002-of-00002.safetensors"
+  },
+  "model.language_model.layers.2.mlp.switch_mlp.down_proj.codebook": {
+   "dtype": "F16",
+   "shape": [
+    32,
+    4
+   ],
+   "shard": "model-00002-of-00002.safetensors"
+  },
+  "model.language_model.layers.2.mlp.switch_mlp.down_proj.codes": {
+   "dtype": "U32",
+   "shape": [
+    2,
+    128,
+    5
+   ],
+   "shard": "model-00002-of-00002.safetensors"
+  },
+  "model.language_model.layers.2.mlp.switch_mlp.down_proj.vq_scales": {
+   "dtype": "F16",
+   "shape": [
+    2,
+    128,
+    2
+   ],
+   "shard": "model-00002-of-00002.safetensors"
+  },
+  "model.language_model.layers.2.mlp.switch_mlp.gate_proj.codebook": {
+   "dtype": "F16",
+   "shape": [
+    16,
+    4
+   ],
+   "shard": "model-00002-of-00002.safetensors"
+  },
+  "model.language_model.layers.2.mlp.switch_mlp.gate_proj.codes": {
+   "dtype": "U8",
+   "shape": [
+    2,
+    128,
+    32
+   ],
+   "shard": "model-00002-of-00002.safetensors"
+  },
+  "model.language_model.layers.2.mlp.switch_mlp.gate_proj.vq_scales": {
+   "dtype": "F16",
+   "shape": [
+    2,
+    128,
+    2
+   ],
+   "shard": "model-00002-of-00002.safetensors"
+  },
+  "model.language_model.layers.2.mlp.switch_mlp.up_proj.codebook": {
+   "dtype": "F16",
+   "shape": [
+    16,
+    4
+   ],
+   "shard": "model-00002-of-00002.safetensors"
+  },
+  "model.language_model.layers.2.mlp.switch_mlp.up_proj.codes": {
+   "dtype": "U8",
+   "shape": [
+    2,
+    128,
+    32
+   ],
+   "shard": "model-00002-of-00002.safetensors"
+  },
+  "model.language_model.layers.2.mlp.switch_mlp.up_proj.vq_scales": {
+   "dtype": "F16",
+   "shape": [
+    2,
+    128,
+    2
+   ],
+   "shard": "model-00002-of-00002.safetensors"
+  }
+ }
+}
