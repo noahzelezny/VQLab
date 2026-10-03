@@ -99,7 +99,8 @@ SCORING = {"score", "kl", "kl-ladder", "kl-pair", "tasks", "decode-timeline",
            "decode-ladder", "active-bytes"}
 # Flags whose value is an OUTPUT path: it need not exist yet, its parent must.
 OUT_FLAGS = {"--out", "--out-dir", "--output", "-o", "--per-pos-dir",
-             "--parts", "--parts-dir", "--out-parts", "--save", "--log", "--json-out", "--cache-out"}
+             "--parts", "--parts-dir", "--out-parts", "--save", "--log", "--json-out", "--cache-out",
+             "--kl-per-position", "--keep-dir"}
 _PATHLIKE = re.compile(r"""["'](/(?:Volumes|Users|opt|tmp|private)/[^"'\n]+|(?:src|scripts|research|families)/[^"'\s\n]+)["']""")
 
 
