@@ -566,6 +566,37 @@ def status(qdir):
     return 0
 
 
+TERMINAL = ("passed", "failed", "stopped", "deferred")
+
+
+def wait(qdirs, timeout=None, poll=15.0) -> int:
+    """Block until every queue reaches a terminal state, judged from
+    state.json (the runner writes it after each step's verdict.json), never
+    from log wording. A runner that died mid-queue is terminal too. Exit 0
+    only if every queue passed; 4 if any failed/stopped/deferred/died; 2 on
+    timeout."""
+    qdirs = [pathlib.Path(q) for q in qdirs] or [_latest()]
+    t0, seen = time.time(), {}
+    while True:
+        states = {}
+        for q in qdirs:
+            s = json.loads((q / "state.json").read_text())
+            st = s["status"]
+            if st == "running" and not ms._pid_alive(s.get("pid")):
+                st = "died"
+            states[q] = st
+            if seen.get(q) != st:
+                n = sum(r["status"] == "pass" for r in s["steps"])
+                print(f"{_now()}  {q.name}: {st} ({n}/{len(s['steps'])} passed)", flush=True)
+                seen[q] = st
+        if all(v in TERMINAL + ("died",) for v in states.values()):
+            return 0 if all(v == "passed" for v in states.values()) else 4
+        if timeout and time.time() - t0 > timeout:
+            print(f"timed out after {timeout} s", flush=True)
+            return 2
+        time.sleep(poll)
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(prog="vqlab queue", description=__doc__.split("\n")[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -585,6 +616,10 @@ def main(argv=None) -> int:
     ps = sub.add_parser("status")
     ps.add_argument("qdir", nargs="?")
     sub.add_parser("list")
+    pw = sub.add_parser("wait", help="block until the queue(s) finish; exit 0 only if all passed")
+    pw.add_argument("qdirs", nargs="*")
+    pw.add_argument("--timeout", type=float)
+    pw.add_argument("--poll", type=float, default=15.0)
     a = ap.parse_args(argv)
 
     if a.cmd == "list":
@@ -596,6 +631,8 @@ def main(argv=None) -> int:
         return 0
     if a.cmd == "status":
         return status(a.qdir)
+    if a.cmd == "wait":
+        return wait(a.qdirs, a.timeout, a.poll)
 
     if bool(a.file) == bool(a.resume):
         ap.error("give a queue file, or --resume <queue dir>")
