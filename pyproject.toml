@@ -10,16 +10,21 @@ readme = "README.md"
 requires-python = ">=3.12"
 license = "Apache-2.0"
 license-files = ["LICENSE"]
+# Tested: the lab runs mlx 0.32.0.dev + mlx-lm 0.31.9; CI (scripts/ci.sh)
+# installs the newest releases inside these ranges. The runtime bundled into
+# every artifact (runtime/vq_switch.py) calls mlx Metal-kernel APIs, so mlx
+# is capped at the next minor until CI has run on it.
 dependencies = [
-    "mlx>=0.32.0",
-    "mlx-lm",
-    "numpy",
-    "safetensors",
+    "mlx>=0.32.0,<0.33",
+    "mlx-lm>=0.31.0,<0.33",
+    "numpy>=2.0",
+    "safetensors>=0.4",
 ]
 
 [project.optional-dependencies]
-score = ["transformers"]
-test = ["pytest", "ruff"]
+# kl/ppl scoring and check-release's tokenizer round-trip
+score = ["transformers>=4.57"]
+test = ["pytest", "ruff", "build"]
 
 [project.scripts]
 vqlab = "vqlab.cli:main"

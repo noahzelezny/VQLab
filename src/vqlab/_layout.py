@@ -98,7 +98,8 @@ def legacy_path(p):
     s = str(p)
     if pathlib.Path(s).exists():
         return p
-    for old, new in (("src/vqlab/referee/", "src/vqlab/score/referee/"),):
+    # "vqlab/referee/" (no src/) also covers an INSTALLED package's site-packages path
+    for old, new in (("vqlab/referee/", "vqlab/score/referee/"),):
         if old in s:
             cand = s.replace(old, new)
             if pathlib.Path(cand).exists() or not pathlib.Path(s).is_absolute():
