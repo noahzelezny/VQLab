@@ -7,7 +7,7 @@
 #   2. install      build a wheel and install it into a fresh venv
 #   3. package      the INSTALLED package: CLI entry point, shipped data files
 #   4. tests        pytest
-#   5. selftest     every gate, both directions (`vqlab selftest`)
+#   5. selftest     every gate, both directions (`vqlab selftest`), from the installed wheel
 #
 # Runs isolated from this machine's lab setup: no vqlab config file, storage
 # under a throwaway directory. PYTHON picks the interpreter (default python3.12).
@@ -74,7 +74,7 @@ step "tests"
 cd "$ROOT"
 "$VPY" -m pytest -q -p no:cacheprovider
 
-step "selftest"
-PYTHONPATH="$ROOT/src" "$VPY" -m vqlab.cli selftest
+step "selftest (the INSTALLED wheel, run from outside the checkout: what pip users get)"
+(cd "$WORK" && env -u PYTHONPATH "$WORK/venv/bin/vqlab" selftest)
 
 printf '\nCI passed.\n'

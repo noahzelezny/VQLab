@@ -171,11 +171,42 @@ def _needs_gpu(st):
 
 
 # ------------------------------------------------------------------ create
+def installed() -> bool:
+    """True when vqlab runs from an installed package, not a git checkout.
+    Then there is no tree to pin: the installed files ARE the pin, and the
+    state records the version plus a hash of every installed .py file."""
+    return not (REPO / ".git").exists()
+
+
+def _package_hash() -> str:
+    import hashlib
+    h = hashlib.sha256()
+    pkg = _layout.SRC / "vqlab"
+    for f in sorted(pkg.rglob("*.py")):
+        h.update(str(f.relative_to(pkg)).encode())
+        h.update(f.read_bytes())
+    return h.hexdigest()[:16]
+
+
 def create(qfile, commit=None, allow_dirty=False, preflight=False):
     q = json.loads(pathlib.Path(qfile).read_text())
     errs = validate(q)
     if errs:
         raise SystemExit("queue file invalid:\n  " + "\n  ".join(errs))
+    if installed():
+        from vqlab import __version__
+        stamp = time.strftime("%Y%m%d-%H%M%S")
+        qdir = queues_dir() / f"{stamp}-{_slug(q.get('name') or pathlib.Path(qfile).stem)}{'-preflight' if preflight else ''}"
+        qdir.mkdir(parents=True, exist_ok=False)
+        (qdir / "queue.json").write_text(json.dumps(q, indent=1))
+        state = {"schema": SCHEMA, "name": q.get("name"), "source": str(pathlib.Path(qfile).resolve()),
+                 "commit": f"installed:{__version__}:{_package_hash()}", "installed": True,
+                 "tree": str(_layout.SRC), "live_repo": str(_layout.SRC),
+                 "host": socket.gethostname().split(".")[0], "preflight": preflight,
+                 "created": _now(), "status": "created", "queue_run_id": None,
+                 "steps": [{"name": st["name"], "status": "pending"} for st in q["steps"]]}
+        _save(qdir, state)
+        return qdir
     rev = commit or q.get("commit") or "HEAD"
     if rev == "HEAD" and not allow_dirty:
         dirty = "\n".join(
@@ -315,7 +346,8 @@ def _argv(q, st, args, tree):
 def _env(state):
     env = dict(os.environ)
     tree = state["tree"]
-    env["PYTHONPATH"] = str(pathlib.Path(tree) / "src") + (
+    src = pathlib.Path(tree) if state.get("installed") else pathlib.Path(tree) / "src"
+    env["PYTHONPATH"] = str(src) + (
         os.pathsep + env["PYTHONPATH"] if env.get("PYTHONPATH") else "")
     env.setdefault("PYTHONPYCACHEPREFIX", str(pathlib.Path.home() / ".pycache-vqlab"))
     env.setdefault("VQLAB_FAMILIES_DIR", str(pathlib.Path(state["live_repo"]) / "families"))
@@ -461,9 +493,15 @@ def run(qdir: pathlib.Path, force=False, lease_wait=1800, keep_preflight=False) 
     tree = pathlib.Path(state["tree"])
     if not tree.is_dir():
         raise SystemExit(f"pinned tree is gone: {tree}")
-    head = _git("rev-parse", "HEAD", cwd=tree)
-    if head != state["commit"]:
-        raise SystemExit(f"pinned tree moved: HEAD {head[:10]} != {state['commit'][:10]}")
+    if state.get("installed"):
+        now = _package_hash()
+        if not state["commit"].endswith(":" + now):
+            raise SystemExit(f"installed vqlab changed since the queue was created "
+                             f"({state['commit']} -> {now}); create the queue again")
+    else:
+        head = _git("rev-parse", "HEAD", cwd=tree)
+        if head != state["commit"]:
+            raise SystemExit(f"pinned tree moved: HEAD {head[:10]} != {state['commit'][:10]}")
     preflight = state.get("preflight", False)
     signal.signal(signal.SIGTERM, _term)
     signal.signal(signal.SIGINT, _term)
@@ -532,7 +570,7 @@ def run(qdir: pathlib.Path, force=False, lease_wait=1800, keep_preflight=False) 
     elif preflight and pfroot and pfroot.is_dir():
         state["preflight_outputs"] = str(pfroot)
         _save(qdir, state)
-    if done and not preflight:
+    if done and not preflight and not state.get("installed"):
         subprocess.run(["git", "worktree", "remove", "--force", str(tree)], cwd=REPO,
                        capture_output=True)
         state["tree_removed"] = True
