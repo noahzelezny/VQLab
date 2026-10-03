@@ -281,7 +281,7 @@ nothing -- and rebundle from it, or you publish a runtime nobody scored.
 
 ## Long runs
 
-**Use `vqlab queue run <file> --preflight`, then `--detach`** (src/vqlab/agents/run_queue.py). It pins the code in a worktree (no tree freeze), holds the GPU lease, retries resumable builds, refuses unsmoked pins (`vqlab pin`), and fails loudly. Hand-rolled chains are what night 4 (2026-09-26) paid for. The text below is why it exists.
+**Use `vqlab queue run <file> --preflight`, then `--detach`** (src/vqlab/agents/run_queue.py). It pins the code in a worktree (no tree freeze), holds the GPU lease, retries resumable builds, refuses unsmoked pins (`vqlab pin`), and fails loudly. Hand-rolled chains are what night 4 (2026-09-26) paid for. **To know it finished, block on `vqlab queue wait <qdir>...`** (exit 0 only if every queue passed; a dead runner counts as finished) or MCP `queue_status`; never grep a log for wording -- on 2026-10-02 two finished fits sat idle for 3.5 h that way. MCP `disk_free` before any multi-hour writer. The text below is why it exists.
 
 Overnight/multi-hour work needs `nohup ... & disown` plus per-module
 checkpoints — a chain tied to the session dies with it. Geometry refits crash

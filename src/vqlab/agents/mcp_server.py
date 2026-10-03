@@ -39,6 +39,7 @@ import errno
 import fcntl
 import json
 import os
+import shutil
 import re
 import shlex
 import signal
@@ -486,6 +487,45 @@ def t_list_runs(n: int = 20) -> Dict[str, Any]:
     return {"host": socket.gethostname().split(".")[0], "runs": runs, "runs_dir": str(base)}
 
 
+def _queues_dir() -> Path:
+    # same resolution as run_queue.queues_dir (run_queue imports this module)
+    return Path(os.environ.get("VQLAB_QUEUE_DIR") or Path.home() / ".vqlab" / "queues")
+
+
+def t_queue_status(name: Optional[str] = None, n: int = 5) -> Dict[str, Any]:
+    """Queue state from state.json (what `vqlab queue wait` blocks on): never
+    from log wording. A 'running' queue whose runner pid is gone is 'died'."""
+    qs = sorted(p for p in _queues_dir().glob("*") if (p / "state.json").exists())
+    if name:
+        qs = [p for p in qs if name in p.name]
+    out = []
+    for q in qs[-max(1, int(n)):]:
+        s = json.loads((q / "state.json").read_text())
+        st = s["status"]
+        if st == "running" and not _pid_alive(s.get("pid")):
+            st = "died"
+        out.append({"queue": str(q), "status": st, "terminal": st in (
+            "passed", "failed", "stopped", "deferred", "died"),
+            "steps": [{"name": r["name"], "status": r["status"], "seconds": r.get("seconds"),
+                       "reasons": r.get("reasons", [])} for r in s["steps"]]})
+    return {"queues_dir": str(_queues_dir()), "queues": out}
+
+
+def t_disk_free() -> Dict[str, Any]:
+    """Free space on every configured storage root (writers run out mid-run)."""
+    seen, out = set(), []
+    for r in lab_roots():
+        try:
+            u = shutil.disk_usage(r)
+        except OSError:
+            continue
+        key = (u.total, u.free)
+        out.append({"root": str(r), "free_gib": round(u.free / 2**30, 1),
+                    "total_gib": round(u.total / 2**30, 1), "same_volume_as_previous": key in seen})
+        seen.add(key)
+    return {"roots": out}
+
+
 def t_gpu_state() -> Dict[str, Any]:
     return {"host": socket.gethostname().split(".")[0], "lease": str(lease_path()),
             "lease_holder": _lease_holder(), "exo_instances": _exo_instances(),
@@ -746,6 +786,18 @@ TOOLS: Dict[str, Dict[str, Any]] = {
     "gpu_state": {
         "fn": t_gpu_state, "readonly": True,
         "description": "Who holds this box's GPU lease and which exo instances are placed.",
+        "schema": _schema({}, []),
+    },
+    "queue_status": {
+        "fn": t_queue_status, "readonly": True,
+        "description": "State of `vqlab queue` runs on this box from state.json: per-step status and "
+                       "reasons, terminal=true once passed/failed/stopped/deferred/died. Use this (or "
+                       "`vqlab queue wait`) to know a queue finished; never grep its log.",
+        "schema": _schema({"name": S("substring of the queue dir name"), "n": I("most recent n (default 5)")}, []),
+    },
+    "disk_free": {
+        "fn": t_disk_free, "readonly": True,
+        "description": "Free GiB on every configured storage root. Check before any multi-hour writer.",
         "schema": _schema({}, []),
     },
     "next_f_number": {
