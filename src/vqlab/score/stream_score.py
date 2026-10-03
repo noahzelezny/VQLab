@@ -499,7 +499,7 @@ def main():
         if not ple_stream.install(model, str(mp)):
             print("[ple_stream] no sharded n-gram tables found", flush=True)
     tok = load_tokenizer(mp)
-    ids = tok.encode(open(_layout.legacy_path(a.corpus)).read())[: a.tokens + 1]
+    ids = tok.encode(open(_layout.corpus(a.corpus)).read())[: a.tokens + 1]
     bos = getattr(tok, "bos_token_id", None)
     if bos is not None and (not ids or ids[0] != bos):
         ids = [bos] + ids[: a.tokens]
