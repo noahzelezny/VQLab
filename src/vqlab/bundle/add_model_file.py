@@ -50,6 +50,8 @@ args = ap.parse_args()
 ART = pathlib.Path(args.artifact)
 idx = json.load(open(ART / "model.safetensors.index.json"))["weight_map"]
 cfg = json.load(open(ART / "config.json"))
+_cfg_before = (ART / "config.json").read_bytes()
+_py_before = (ART / "model.py").read_bytes() if (ART / "model.py").exists() else None
 
 # DENSE REFUSAL (2026-09-07). This is the MoE bundler: it scans for 3-D
 # `.codes` (expert modules) and splices vq_switch.py + the MoE shim. Run
@@ -124,6 +126,11 @@ for sh, mods in sorted(by_shard.items()):
             vq_modules[m]["pack_bits"] = bits
     del data
 
+if not vq_modules:
+    # the same silent failure as the dense case above: an empty vq_modules
+    # bundle loads every expert as a random-init dense layer
+    raise SystemExit(f"REFUSING: {ART} has no VQ expert modules (no 3-D .codes, no "
+                     "skipzero modules); nothing to bundle, nothing written")
 cfg["model_file"] = "model.py"
 cfg["vq_modules"] = vq_modules
 if sz_mods:
@@ -307,4 +314,11 @@ _model_py = runtime + shim
 # only caught when a smoke run came back silent.
 compile(_model_py, "model.py", "exec")
 (ART / "model.py").write_text(_model_py)
-print(f"wrote model.py + config keys: {len(vq_modules)} vq modules -> {ART}")
+_changed = [n for n, b in (("model.py", _py_before), ("config.json", _cfg_before))
+            if (ART / n).read_bytes() != b]
+# Re-bundling an artifact that is already current is legitimate and
+# idempotent (pin --runtime re-bakes every pinned copy), so it is not a
+# failure -- but it is SAID, never reported as a rewrite.
+print(f"wrote model.py + config keys: {len(vq_modules)} vq modules -> {ART}; "
+      + (f"changed: {', '.join(_changed)}" if _changed
+         else "UNCHANGED (bundle was already current; bytes identical)"))

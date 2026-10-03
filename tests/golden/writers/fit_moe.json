@@ -3,7 +3,22 @@
   "model_file": "model.py",
   "quantization": {
    "bits": 4,
-   "group_size": 64
+   "group_size": 64,
+   "model.language_model.layers.0.self_attn.o_proj": {
+    "bits": 4,
+    "group_size": 64,
+    "mode": "affine"
+   },
+   "model.language_model.layers.1.self_attn.o_proj": {
+    "bits": 4,
+    "group_size": 64,
+    "mode": "affine"
+   },
+   "model.language_model.layers.2.self_attn.o_proj": {
+    "bits": 4,
+    "group_size": 64,
+    "mode": "affine"
+   }
   },
   "vq_modules": {
    "model.language_model.layers.0.mlp.switch_mlp.down_proj": {
@@ -97,6 +112,9 @@
   "model.language_model.layers.0.mlp.switch_mlp.up_proj.codebook": "model-00001-of-00002.safetensors",
   "model.language_model.layers.0.mlp.switch_mlp.up_proj.codes": "model-00001-of-00002.safetensors",
   "model.language_model.layers.0.mlp.switch_mlp.up_proj.vq_scales": "model-00001-of-00002.safetensors",
+  "model.language_model.layers.0.self_attn.o_proj.biases": "model-00001-of-00002.safetensors",
+  "model.language_model.layers.0.self_attn.o_proj.scales": "model-00001-of-00002.safetensors",
+  "model.language_model.layers.0.self_attn.o_proj.weight": "model-00001-of-00002.safetensors",
   "model.language_model.layers.1.input_layernorm.weight": "model-00001-of-00002.safetensors",
   "model.language_model.layers.1.mlp.switch_mlp.down_proj.codebook": "model-00002-of-00002.safetensors",
   "model.language_model.layers.1.mlp.switch_mlp.down_proj.codes": "model-00002-of-00002.safetensors",
@@ -107,6 +125,9 @@
   "model.language_model.layers.1.mlp.switch_mlp.up_proj.codebook": "model-00002-of-00002.safetensors",
   "model.language_model.layers.1.mlp.switch_mlp.up_proj.codes": "model-00002-of-00002.safetensors",
   "model.language_model.layers.1.mlp.switch_mlp.up_proj.vq_scales": "model-00002-of-00002.safetensors",
+  "model.language_model.layers.1.self_attn.o_proj.biases": "model-00002-of-00002.safetensors",
+  "model.language_model.layers.1.self_attn.o_proj.scales": "model-00002-of-00002.safetensors",
+  "model.language_model.layers.1.self_attn.o_proj.weight": "model-00002-of-00002.safetensors",
   "model.language_model.layers.2.input_layernorm.weight": "model-00002-of-00002.safetensors",
   "model.language_model.layers.2.mlp.switch_mlp.down_proj.codebook": "model-00002-of-00002.safetensors",
   "model.language_model.layers.2.mlp.switch_mlp.down_proj.codes": "model-00002-of-00002.safetensors",
@@ -116,7 +137,10 @@
   "model.language_model.layers.2.mlp.switch_mlp.gate_proj.vq_scales": "model-00002-of-00002.safetensors",
   "model.language_model.layers.2.mlp.switch_mlp.up_proj.codebook": "model-00002-of-00002.safetensors",
   "model.language_model.layers.2.mlp.switch_mlp.up_proj.codes": "model-00002-of-00002.safetensors",
-  "model.language_model.layers.2.mlp.switch_mlp.up_proj.vq_scales": "model-00002-of-00002.safetensors"
+  "model.language_model.layers.2.mlp.switch_mlp.up_proj.vq_scales": "model-00002-of-00002.safetensors",
+  "model.language_model.layers.2.self_attn.o_proj.biases": "model-00002-of-00002.safetensors",
+  "model.language_model.layers.2.self_attn.o_proj.scales": "model-00002-of-00002.safetensors",
+  "model.language_model.layers.2.self_attn.o_proj.weight": "model-00002-of-00002.safetensors"
  },
  "tensors": {
   "model.language_model.layers.0.input_layernorm.weight": {
@@ -201,6 +225,30 @@
     2,
     128,
     2
+   ],
+   "shard": "model-00001-of-00002.safetensors"
+  },
+  "model.language_model.layers.0.self_attn.o_proj.biases": {
+   "dtype": "F16",
+   "shape": [
+    128,
+    2
+   ],
+   "shard": "model-00001-of-00002.safetensors"
+  },
+  "model.language_model.layers.0.self_attn.o_proj.scales": {
+   "dtype": "F16",
+   "shape": [
+    128,
+    2
+   ],
+   "shard": "model-00001-of-00002.safetensors"
+  },
+  "model.language_model.layers.0.self_attn.o_proj.weight": {
+   "dtype": "U32",
+   "shape": [
+    128,
+    16
    ],
    "shard": "model-00001-of-00002.safetensors"
   },
@@ -289,6 +337,30 @@
    ],
    "shard": "model-00002-of-00002.safetensors"
   },
+  "model.language_model.layers.1.self_attn.o_proj.biases": {
+   "dtype": "F16",
+   "shape": [
+    128,
+    2
+   ],
+   "shard": "model-00002-of-00002.safetensors"
+  },
+  "model.language_model.layers.1.self_attn.o_proj.scales": {
+   "dtype": "F16",
+   "shape": [
+    128,
+    2
+   ],
+   "shard": "model-00002-of-00002.safetensors"
+  },
+  "model.language_model.layers.1.self_attn.o_proj.weight": {
+   "dtype": "U32",
+   "shape": [
+    128,
+    16
+   ],
+   "shard": "model-00002-of-00002.safetensors"
+  },
   "model.language_model.layers.2.input_layernorm.weight": {
    "dtype": "F16",
    "shape": [
@@ -371,6 +443,30 @@
     2,
     128,
     2
+   ],
+   "shard": "model-00002-of-00002.safetensors"
+  },
+  "model.language_model.layers.2.self_attn.o_proj.biases": {
+   "dtype": "F16",
+   "shape": [
+    128,
+    2
+   ],
+   "shard": "model-00002-of-00002.safetensors"
+  },
+  "model.language_model.layers.2.self_attn.o_proj.scales": {
+   "dtype": "F16",
+   "shape": [
+    128,
+    2
+   ],
+   "shard": "model-00002-of-00002.safetensors"
+  },
+  "model.language_model.layers.2.self_attn.o_proj.weight": {
+   "dtype": "U32",
+   "shape": [
+    128,
+    16
    ],
    "shard": "model-00002-of-00002.safetensors"
   }

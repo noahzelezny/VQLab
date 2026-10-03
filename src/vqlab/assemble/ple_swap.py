@@ -49,6 +49,12 @@ def main():
     if bkeys != dkeys:
         sys.exit(f"REFUSED: PLE key sets differ (base {len(bkeys)}, donor "
                  f"{len(dkeys)}, symmetric diff {len(bkeys ^ dkeys)})")
+    if not dkeys:
+        sys.exit("REFUSED: neither rung carries PLE tensors; the swap would "
+                 "change nothing")
+    if {(base / bwm[k]).resolve() for k in bkeys} == {(donor / dwm[k]).resolve() for k in dkeys}:
+        sys.exit("REFUSED: the donor's PLE shards ARE the base's (same files); "
+                 "the swap would change nothing")
 
     out.mkdir(parents=True, exist_ok=True)
     for f in base.iterdir():

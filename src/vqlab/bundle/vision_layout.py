@@ -73,6 +73,9 @@ def main() -> int:
     if not found:
         print("no 5-D vision conv weights found -- nothing this tool checks. "
               "(gemma-style towers use a 2-D patch embed.)")
+        if a.fix:
+            print("--fix: nothing to rewrite; nothing written.")
+            return 1                      # a writer that changed nothing
         return 0
     bad = [f for f in found if f[3] == "hf-layout"]
     for k, sh, shape, verdict in found:
@@ -80,6 +83,9 @@ def main() -> int:
         print(f"  {k}\n    shape={shape} in {sh}  -> {flag}")
     if not bad:
         print("\nPASS: every 5-D vision conv weight is channels-last.")
+        if a.fix:
+            print("--fix: nothing to rewrite; nothing written.")
+            return 1                      # a writer that changed nothing
         return 0
     if not a.fix:
         print(f"\nNOTE: {len(bad)} tensor(s) in HF layout. Both real loaders "

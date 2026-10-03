@@ -37,6 +37,14 @@ idx = json.load(open(idx_p)); wm = idx["weight_map"]
 shards = sorted({wm[k + ".codes"] for k in ple["keys"]})
 nsub = None
 
+# Refuse a no-op BEFORE anything is rewritten: the loop below packs only 2-D
+# uint16 codes, and with none it used to die on row_bytes = None * bits.
+from vqlab.core.artifact import read_header  # noqa: E402
+_hdrs = {s: read_header(ART / s) for s in shards}
+if not any(v["dtype"] == "U16" and len(v["shape"]) == 2
+           for h in _hdrs.values() for k, v in h.items() if k.endswith(".codes")):
+    raise SystemExit("REFUSED: no unpacked (2-D uint16) PLE codes to pack; nothing written")
+
 def pack_rows(c16):
     rows, n = c16.shape
     total_bits = n * bits
