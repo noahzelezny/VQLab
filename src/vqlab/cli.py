@@ -32,7 +32,7 @@ COMMANDS = {
     "config": ("config_cmd.py", "show where vqlab reads/writes (and why), or `config init` a starter config"),
     # fit/
     "fits": ("fits.py", "the fit store: index / list / file fitted modules by family, teacher, layer, geometry"),
-    "fit-moe": ("vq_397b_codes.py", "fit VQ codebooks for MoE expert tensors (per --family)"),
+    "fit-moe": ("fit_moe.py", "fit VQ codebooks for MoE expert tensors (per --family)"),
     "fit-dense": ("fit_dense_vq.py", "fit VQ codebooks for a dense MLP trio"),
     "fit-ple": ("fit_ple.py", "fit per-tensor VQ codebooks for PLE ngram banks"),
     "geo-build": ("geo_build.py", "rebuild an artifact under a new per-layer geometry map (diff-style)"),
@@ -40,7 +40,7 @@ COMMANDS = {
     "fit-additive": ("additive_vq.py", "additive VQ: two small codebooks per module, expanded to one d4-K(K1*K2) fit for zero-kernel KL tests"),
     "harvest-parts": ("harvest_parts.py", "extract a shipped rung's VQ fits into a geo-build --reuse parts dir"),
     # assemble/
-    "pack": ("pack_artifact.py", "pack MoE codes to true bit-width; recompute sizes"),
+    "pack": ("pack.py", "pack MoE codes to true bit-width; recompute sizes"),
     "pack-ple": ("pack_ple.py", "pack PLE codes row-aligned to true bit-width"),
     "stream-convert": ("stream_convert.py", "streaming affine convert / struct base for models bigger than RAM"),
     "sanitize-stream": ("sanitize_stream.py", "exact runtime-layout teacher, one layer at a time through Model.sanitize (DeepSeek-V4)"),

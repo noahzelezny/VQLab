@@ -70,14 +70,14 @@ def test_fit_pack_is_fit_then_pack(tmp_path):
            "VQLAB_CONFIG": str(tmp_path / "no-config.toml"),
            "VQLAB_FIT_STORE": str(tmp_path / "fits"),
            "VQLAB_SCRATCH": str(tmp_path), "VQLAB_SKIP_DISK_CHECK": "1"}
-    fit = [find("vq_397b_codes.py"), "--base", base, "--src", teacher,
+    fit = [find("fit_moe.py"), "--base", base, "--src", teacher,
            "--vq-layers", "0", "--geom", "gate_proj=d4k512,up_proj=d4k256",
            "--iters", "2", "--sample", "1000", "--family", "qwen3_5",
            "--relerr-abort", "1.0"]
     unpacked, packed_after, packed_inflight = (tmp_path / n for n in
                                                ("fit", "fit-then-pack", "fit-pack"))
     _run(*fit, "--out", unpacked, env=env)
-    _run(find("pack_artifact.py"), "--src", unpacked, "--out", packed_after, env=env)
+    _run(find("pack.py"), "--src", unpacked, "--out", packed_after, env=env)
     _run(*fit, "--out", packed_inflight, "--pack", env=env)
 
     from safetensors import safe_open

@@ -8,7 +8,7 @@ Two lessons from the Flash-Next arc, both fatal to stock convert there:
   (q8 at ~186 GiB on a 96 GB box), so shards are written and RELEASED from
   the module tree as they fill.
 Shard boundaries never split a module (weight/scales/biases co-located) —
-vq_397b_codes.py's shard-oriented splice depends on it.
+fit_moe.py's shard-oriented splice depends on it.
 
 Modes:
   default        uniform --bits everywhere the recipe quantizes

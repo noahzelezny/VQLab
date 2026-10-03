@@ -3,7 +3,7 @@
 MoE/verify families (FAMILY): tensor-name templates and projection maps for
 the MoE fitter and the outlier gate. Dense fitter families (DENSE_FAMILIES):
 key template + default layer range for fit_dense_vq. Historically this dict
-lived inline in vq_397b_codes.py, was text-scraped-and-exec'd by
+lived inline in fit_moe.py, was text-scraped-and-exec'd by
 verify_artifact.py, and was duplicated (with a diverged name) in
 fit_dense_vq.py; one table, imported everywhere, ends that.
 """

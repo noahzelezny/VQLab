@@ -426,7 +426,7 @@ def main(argv=None) -> int:
                    "quantization": {"group_size": G, "bits": 4,
                                     bm: {"group_size": G, "bits": 2}}},
                   open(mb / "config.json", "w"))
-        p = run([str(_find("vq_397b_codes.py")), "--base", str(mb), "--src", str(mt),
+        p = run([str(_find("fit_moe.py")), "--base", str(mb), "--src", str(mt),
                  "--out", str(mo), "--vq-layers", "0", "--k", "16", "--dim", "4",
                  "--iters", "2", "--sample", "1000", "--family", "qwen3_5",
                  "--relerr-abort", "1.0"], verbose=v)

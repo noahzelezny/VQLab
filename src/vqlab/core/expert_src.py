@@ -5,7 +5,7 @@ Motivation (GLM-5.3-Flash onboarding, 2026-08-28): glm5_next stores experts
 UNFUSED as per-expert 2D tensors (`...mlp.experts.{e}.gate_proj.weight`,
 no gate_up stack, no [E, out, in] stack anywhere in the checkpoint — measured
 from the safetensors headers). Every reader before this file assumed a single
-pre-stacked 3D key; three of them (vq_397b_codes, verify_artifact,
+pre-stacked 3D key; three of them (fit_moe, verify_artifact,
 probe_init_sweep) each had their own copy of the read-slice-eval dance. This
 module is the one implementation of all source layouts:
 
