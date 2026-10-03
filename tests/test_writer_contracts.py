@@ -250,12 +250,14 @@ def test_minibase(fx):
     check("minibase", snapshot(out))
 
 
-@pytest.mark.xfail(strict=True, reason="KNOWN BUG pinned 2026-10-02: pack assumes a "
-                   "module's tensors share one shard; L1.gate_proj straddles -> KeyError "
-                   "on .codebook (fit-moe had the same bug, fixed in f32e1b8). The "
-                   "Artifact port must fix it and turn this into a golden.")
 def test_pack_straddle(fx):
-    cli("pack", "--src", fx["vq16"], "--out", fx["root"] / "packed-straddle")
+    # Was a KeyError on .codebook until the Artifact port (2026-10-02): pack now
+    # takes K/dim from vq_modules, so a straddling module packs in place.
+    out = fx["root"] / "packed-straddle"
+    cli("pack", "--src", fx["vq16"], "--out", out)
+    s = snapshot(out)
+    s["files"] = [f for f in s["files"] if f != "model.py"]
+    check("pack_straddle", s)
 
 
 def test_pack(fx, tmp_path):

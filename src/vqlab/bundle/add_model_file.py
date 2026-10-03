@@ -88,11 +88,15 @@ for m in sz_mods:
     if m not in prev:
         raise SystemExit(f"{m}: skipzero module has no vq_modules geometry")
     vq_modules[m] = dict(prev[m])
+from vqlab.core.artifact import Artifact  # noqa: E402
+_art = Artifact.open(ART)
 for sh, mods in sorted(by_shard.items()):
     data = mx.load(str(ART / sh))
     for m in mods:
         codes = data[m + ".codes"]
-        cb = data[m + ".codebook"]
+        # the codebook may sit in another shard (a module straddling the
+        # boundary): its SHAPE is all we need, read from that shard's header
+        cb_shape = _art.header(_art.index[m + ".codebook"])[m + ".codebook"]["shape"]
         if codes.ndim == 2:
             # PLE/embedding table (registered under config vq_ple) — not an
             # expert module.
@@ -112,10 +116,10 @@ for sh, mods in sorted(by_shard.items()):
                     "pack_bits/in for them. Run pack_artifact.py, which writes "
                     "both — do not retrofit a packed artifact by hand.")
         else:
-            bits, in_d = 0, ncol * cb.shape[1]
+            bits, in_d = 0, ncol * cb_shape[1]
         vq_modules[m] = {"experts": E, "out": out_d,
-                         "in": in_d, "k": cb.shape[0],
-                         "dim": cb.shape[1], "group": args.group}
+                         "in": in_d, "k": cb_shape[0],
+                         "dim": cb_shape[1], "group": args.group}
         if bits:
             vq_modules[m]["pack_bits"] = bits
     del data

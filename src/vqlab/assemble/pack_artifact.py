@@ -96,8 +96,11 @@ _cfg.require_free(OUT, sum(p.stat().st_size for p in SRC.glob("*.safetensors")
 OUT.mkdir(parents=True, exist_ok=True)
 
 idx_path = SRC / "model.safetensors.index.json"
-weight_map = json.load(open(idx_path))["weight_map"]
-shards = sorted(set(weight_map.values()))
+from vqlab.core.artifact import Artifact  # noqa: E402
+_art = Artifact.open(SRC)
+weight_map = _art.index
+shards = _art.shards
+_vqm = _art.map("vq_modules")
 
 # non-tensor files (config, tokenizer, template, README...) come along
 for f in SRC.iterdir():
@@ -129,8 +132,13 @@ for si, sh in enumerate(shards, 1):
             out_data[key] = val
             continue
         mod = key[:-len(".codes")]
-        k = data[mod + ".codebook"].shape[0]
-        dim = data[mod + ".codebook"].shape[1]
+        # Geometry from the config map, not from a .codebook in THIS shard: a
+        # module's tensors may straddle a shard boundary (the codebook lives
+        # in the next shard), which was a KeyError here until 2026-10-02.
+        if mod in _vqm:
+            k, dim = int(_vqm[mod]["k"]), int(_vqm[mod]["dim"])
+        else:
+            k, dim = data[mod + ".codebook"].shape[0], data[mod + ".codebook"].shape[1]
         bits = vq_pack.bits_for_k(k)
         codes = np.array(val, copy=False)
         nsub = codes.shape[2]
