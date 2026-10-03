@@ -181,18 +181,25 @@ def main(argv=None) -> int:
         print("\n--dry-run: gate passed, nothing uploaded.")
         return 0
 
-    from huggingface_hub import HfApi
+    from huggingface_hub import CommitOperationAdd, HfApi
     api = HfApi()
     msg = a.message or "Update artifact runtime/card (gated by vqlab publish)"
     print("\n--- uploading ---", flush=True)
-    for p in targets:
-        rel = str(p.relative_to(art))
-        info = api.upload_file(path_or_fileobj=str(p), path_in_repo=rel,
-                               repo_id=a.repo, commit_message=msg)
-        print(f"   {rel} -> {getattr(info, 'commit_url', info)}")
+    before = api.repo_info(a.repo).sha
+    ops = [CommitOperationAdd(path_in_repo=str(p.relative_to(art)), path_or_fileobj=str(p))
+           for p in targets]
+    info = api.create_commit(repo_id=a.repo, operations=ops, commit_message=msg)
+    after = api.repo_info(a.repo).sha
     how = ("static checks only (documentation-only upload)" if docs_only
            else "a clean release gate including a generation smoke")
-    print(f"\nPASS: {len(targets)} file(s) uploaded to {a.repo} after {how}.")
+    if after == before:
+        print(f"\nPASS: {a.repo} already holds these {len(targets)} file(s) byte for byte; "
+              f"nothing uploaded (gate: {how}).")
+        return 0
+    for p in targets:
+        print(f"   {p.relative_to(art)}")
+    print(f"   one commit: {getattr(info, 'commit_url', info)}")
+    print(f"\nPASS: {len(targets)} file(s) uploaded to {a.repo} in one commit after {how}.")
     return 0
 
 
