@@ -21,6 +21,10 @@ import shutil
 import sys
 
 
+# architectures the lab's families load through mlx-lm (the family's model_type)
+ARCHES = ("deepseek_v4", "qwen3_5_moe", "qwen3_5", "gemma4", "glm4_moe", "qwen4_exp")
+
+
 def _pkg(name):
     try:
         from importlib.metadata import version
@@ -82,9 +86,15 @@ def report():
         r["metal"] = {"available": False, "error": str(e)}
     mlm = r["packages"]["mlx-lm"]["path"]
     if mlm:
-        for f in sorted(pathlib.Path(mlm, "models").glob("*.py")):
-            if f.stem in ("deepseek_v4", "qwen3_5_moe", "qwen3_5", "gemma4", "glm4_moe", "qwen4_exp"):
-                r["arch_files"][f.stem] = _sha(f)
+        for arch in ARCHES:
+            try:
+                spec = importlib.util.find_spec(f"mlx_lm.models.{arch}")
+            except Exception:
+                spec = None
+            r["arch_files"][arch] = _sha(spec.origin) if spec and spec.origin else None
+            if r["arch_files"][arch] is None:
+                r["notes"].append(f"mlx-lm has no {arch} architecture: VQLab cannot load, score or "
+                                  f"convert that family in this interpreter")
     for key, fn in (("scratch", C.scratch), ("models", C.models), ("teachers", C.teachers)):
         p = fn()
         ok = p.exists()
@@ -117,7 +127,7 @@ def main(argv=None):
     print(f"metal       {m.get('device') or '-'}  {m.get('memory_gib', '-')} GiB" if m.get("available")
           else f"metal       unavailable {m.get('error', '')}")
     for k, v in r["arch_files"].items():
-        print(f"arch        {k}.py sha {v}")
+        print(f"arch        {k}.py " + (f"sha {v}" if v else "MISSING"))
     for k, v in r["storage"].items():
         print(f"{k:11s} {v['path']}  " + (f"{v['free_gib']} GiB free" if v["exists"] else "MISSING"))
     print(f"HF_HOME     {r['hf_home'] or '-'}  token: {'yes' if r['hf_token'] else 'no'}")
