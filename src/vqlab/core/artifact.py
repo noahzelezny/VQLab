@@ -1,0 +1,167 @@
+"""The one place that knows how an artifact directory is laid out.
+
+An artifact is: a config.json (with the three per-module maps vq_modules,
+quantization and vq_skipzero), a model.safetensors.index.json (tensor ->
+shard), shards, and other files (model.py, tokenizer, card). Every writer
+used to re-derive "which tensors belong to which module, which shard holds
+them, which config entries describe them" on its own, and every bug fixed on
+2026-10-02 was one of those copies disagreeing with the others (a module
+straddling a shard boundary, a skip-zero module refit, a group size).
+
+This module answers those questions once. Writers read through it and write
+through it; tests/test_writer_contracts.py pins what they produce.
+"""
+from __future__ import annotations
+
+import collections
+import json
+import os
+import pathlib
+import re
+import shutil
+import struct
+import subprocess
+from functools import cached_property
+
+INDEX = "model.safetensors.index.json"
+CONFIG = "config.json"
+RECORDS = ("vqlab_provenance.json", "vqlab_provenance.history.jsonl")
+MAPS = ("vq_modules", "quantization", "vq_skipzero")
+_LAYER = re.compile(r"(?:^|\.)layers\.(\d+)\.")
+
+
+def module_of(key: str) -> str:
+    """'a.b.gate_proj.codes' -> 'a.b.gate_proj'."""
+    return key.rsplit(".", 1)[0]
+
+
+def layer_of(key: str) -> int:
+    """Layer number of a tensor or module name, -1 for top-level tensors."""
+    m = _LAYER.search(key)
+    return int(m.group(1)) if m else -1
+
+
+def read_header(path) -> dict:
+    with open(path, "rb") as fh:
+        n = struct.unpack("<Q", fh.read(8))[0]
+        h = json.loads(fh.read(n))
+    h.pop("__metadata__", None)
+    return h
+
+
+class Artifact:
+    def __init__(self, path):
+        self.dir = pathlib.Path(path)
+
+    @classmethod
+    def open(cls, path) -> "Artifact":
+        a = cls(path)
+        if not (a.dir / CONFIG).exists():
+            raise SystemExit(f"{a.dir}: no {CONFIG}")
+        return a
+
+    # ---------------------------------------------------------------- reading
+    @cached_property
+    def config(self) -> dict:
+        return json.loads((self.dir / CONFIG).read_text())
+
+    @cached_property
+    def index(self) -> dict:
+        """tensor -> shard file name."""
+        return json.loads((self.dir / INDEX).read_text())["weight_map"]
+
+    def map(self, name: str) -> dict:
+        """One of vq_modules / quantization / vq_skipzero; module entries only
+        (quantization's top-level group_size/bits/mode are not modules)."""
+        return {k: v for k, v in (self.config.get(name) or {}).items() if isinstance(v, dict)}
+
+    @property
+    def vq_modules(self) -> set:
+        return set(self.map("vq_modules"))
+
+    @cached_property
+    def shards(self) -> list:
+        return sorted(set(self.index.values()))
+
+    @cached_property
+    def modules(self) -> dict:
+        """module -> its tensor names."""
+        out = collections.defaultdict(list)
+        for k in self.index:
+            out[module_of(k)].append(k)
+        return dict(out)
+
+    def shards_of(self, module: str) -> set:
+        return {self.index[k] for k in self.modules.get(module, [])}
+
+    def straddling(self) -> dict:
+        """modules whose tensors sit in more than one shard -> those shards."""
+        return {m: s for m in self.modules if len(s := self.shards_of(m)) > 1}
+
+    def shard_layers(self, only: set | None = None) -> dict:
+        """shard -> layers of the modules it holds (only those in `only`, when
+        given; every shard is present, possibly with an empty set)."""
+        out = {f: set() for f in self.shards}
+        for k, f in self.index.items():
+            if only is not None and module_of(k) not in only:
+                continue
+            out[f].add(layer_of(k))
+        return out
+
+    def header(self, shard: str) -> dict:
+        return read_header(self.dir / shard)
+
+    def shard_path(self, shard: str) -> str:
+        return os.path.realpath(self.dir / shard)
+
+    def other_files(self):
+        """Non-shard, non-index, non-config, non-record files (model.py,
+        tokenizer, card, template...)."""
+        skip = {CONFIG, INDEX, *RECORDS}
+        return [f for f in self.dir.iterdir() if f.is_file()
+                and not f.name.endswith(".safetensors") and f.name not in skip]
+
+    def size(self) -> int:
+        return sum(os.path.getsize(self.shard_path(f)) for f in self.shards)
+
+
+def merge_maps(sources) -> dict:
+    """[(Artifact, modules)] -> {map: {module: entry}}: each module's entries
+    come from the source whose bytes it takes; a module that is VQ anywhere
+    loses any affine `quantization` entry."""
+    merged = {m: {} for m in MAPS}
+    for art, mods in sources:
+        for name in MAPS:
+            for mod, e in art.map(name).items():
+                if mod in mods:
+                    merged[name][mod] = e
+    for mod in merged["vq_modules"]:
+        merged["quantization"].pop(mod, None)
+    return merged
+
+
+def place(src, dst, copy=False):
+    """Put a shard into an output dir: a symlink, or (copy) an APFS clone
+    with a plain copy as fallback."""
+    if copy:
+        if subprocess.run(["cp", "-c", src, str(dst)], capture_output=True).returncode:
+            shutil.copy(src, dst)
+    else:
+        os.symlink(src, dst)
+
+
+def write_index(out, weight_map, total_size=None, metadata=None) -> None:
+    out = pathlib.Path(out)
+    md = dict(metadata or {})
+    if total_size is not None:
+        md["total_size"] = total_size
+    (out / INDEX).write_text(json.dumps({"metadata": md, "weight_map": weight_map}, indent=1))
+
+
+def write_config(out, cfg) -> None:
+    (pathlib.Path(out) / CONFIG).write_text(json.dumps(cfg, indent=1))
+
+
+def copy_other_files(src: Artifact, out) -> None:
+    for f in src.other_files():
+        shutil.copy(f, out)
