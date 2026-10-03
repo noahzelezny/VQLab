@@ -25,6 +25,9 @@ ART = pathlib.Path(_a.artifact); PLE = pathlib.Path(_a.ple_fit)
 idx_p = ART / "model.safetensors.index.json"
 idx = json.load(open(idx_p)); wm = idx["weight_map"]
 man = json.load(open(PLE / "ple_manifest.json"))
+if not man.get("tensors"):
+    raise SystemExit(f"REFUSED: {PLE / 'ple_manifest.json'} lists no tensors; "
+                     "nothing to splice, nothing written")
 
 ngram_mods = {k.rsplit(".weight", 1)[0].replace("model.language_model.", "model.")
               for k in man["tensors"]}

@@ -193,9 +193,11 @@ def main(argv=None) -> int:
     how = ("static checks only (documentation-only upload)" if docs_only
            else "a clean release gate including a generation smoke")
     if after == before:
-        print(f"\nPASS: {a.repo} already holds these {len(targets)} file(s) byte for byte; "
+        # A writer that changed nothing exits non-zero (operator notes
+        # 2026-10-03, 1.6): a script or queue must not read this as a release.
+        print(f"\nNO-OP: {a.repo} already holds these {len(targets)} file(s) byte for byte; "
               f"nothing uploaded (gate: {how}).")
-        return 0
+        return 1
     for p in targets:
         print(f"   {p.relative_to(art)}")
     print(f"   one commit: {getattr(info, 'commit_url', info)}")

@@ -70,6 +70,9 @@ def main(argv=None):
                     full_hash={"model.safetensors.index.json"})
                 print("build record amended (prior record kept in history)")
             return 0
+        if a.fix_index:
+            print(f"--fix-index: {p.name} already correct; nothing rewritten")
+            return 1                      # a writer that changed nothing
         return 0 if have == want else 1
     s = sizes(a.artifact)
     if a.json:

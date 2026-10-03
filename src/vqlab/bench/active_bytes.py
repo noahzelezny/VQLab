@@ -24,6 +24,8 @@ import struct
 import sys
 from pathlib import Path
 
+from vqlab.core.artifact import tensor_class
+
 # dtype -> bytes/element, as safetensors spells them
 _ITEMSIZE = {
     "BOOL": 1, "U8": 1, "I8": 1, "F8_E4M3": 1, "F8_E5M2": 1,
@@ -83,7 +85,8 @@ def _component(name: str) -> tuple[str, str]:
     n = name
     # qwen4_exp spells the tower `model.visual.*`, so a startswith() test
     # silently billed 0.9 GB/token of idle vision weights as dense trunk.
-    if n.startswith("visual") or ".visual." in n or "vision" in n:
+    # One classifier for every spelling (DeepSeek's aligner/image_*/bias_vl too).
+    if tensor_class(n) == "tower":
         return "vision tower (idle on text)", GATHERED  # untouched: 0 rows
     # --- gathered lookup tables: indexed per token, never read whole ---
     if "ple_embedding" in n:

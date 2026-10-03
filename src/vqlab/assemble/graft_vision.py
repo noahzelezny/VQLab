@@ -25,15 +25,18 @@ import pathlib
 
 import mlx.core as mx
 
+from vqlab.core.artifact import tensor_bytes, tensor_class
+
 ap = argparse.ArgumentParser()
 ap.add_argument("--artifact", required=True)
 ap.add_argument("--src", required=True,
                 help="bf16 source model dir holding the vision tower")
-ap.add_argument("--prefixes", default="model.visual,vision_tower",
-                help="comma-separated key prefixes to graft. Default is the "
-                     "Qwen set. gemma-4 needs "
-                     "'vision_tower,embed_vision' (the tower is split across "
-                     "two prefixes; grafting only one yields a broken tower).")
+ap.add_argument("--prefixes", default="",
+                help="comma-separated key prefixes to graft. Default: every "
+                     "tensor core.artifact.tensor_class calls the tower (Qwen "
+                     "model.visual / vision_tower, and BOTH halves of "
+                     "gemma-4's split tower, vision_tower + embed_vision; "
+                     "grafting only one yields a broken tower).")
 ap.add_argument("--copy-config-keys", default="vision_config,image_token_id",
                 help="comma-separated config keys to copy from --src when the "
                      "artifact lacks them. mlx_lm.convert drops these for "
@@ -72,10 +75,17 @@ GRAFT_SHARD = "model-vision-graft.safetensors"
 src_map = json.load(open(SRC / "model.safetensors.index.json"))["weight_map"]
 # Qwen keeps the whole tower under one prefix; gemma-4 splits it across
 # vision_tower.* AND embed_vision.* (356 tensors total), so a single-prefix
-# filter silently grafts an incomplete tower. --prefixes is additive and the
-# default reproduces the original Qwen behaviour exactly.
+# filter silently grafts an incomplete tower. The default asks the one
+# classifier (core.artifact.tensor_class), which knows both halves; an
+# explicit --prefixes still restricts the graft to exactly those.
 _PREFIXES = tuple(p for p in args.prefixes.split(",") if p)
-vis = {k: sh for k, sh in src_map.items() if k.startswith(_PREFIXES)}
+
+
+def _is_vis(k):
+    return k.startswith(_PREFIXES) if _PREFIXES else tensor_class(k) == "tower"
+
+
+vis = {k: sh for k, sh in src_map.items() if _is_vis(k)}
 if not vis:
     raise SystemExit(f"source {SRC} has no vision tensors")
 
@@ -117,7 +127,7 @@ _art_map0 = json.load(open(ART / "model.safetensors.index.json"))["weight_map"]
 # it is the only thing standing between us and a wrong tower.
 def _pairs(art_keys):
     direct = [(k, k) for k in art_keys
-              if k in src_map and not k.startswith(_PREFIXES)]
+              if k in src_map and not _is_vis(k)]
     # A quantized artifact can share a HANDFUL of names whose bytes lawfully
     # differ (lm_head.weight keeps its name through quantization). One or two
     # direct hits are not evidence of same-layout — fall through to mapping
@@ -244,7 +254,9 @@ for k in vis:
     art_map[k] = GRAFT_SHARD
 idx["weight_map"] = art_map
 if "metadata" in idx and "total_size" in idx["metadata"]:
-    idx["metadata"]["total_size"] += total
+    # measured from the shards (HF's definition), never incremented: a re-run
+    # replaces the graft shard, and += counted the tower twice
+    idx["metadata"]["total_size"] = tensor_bytes(ART, art_map.values())
 json.dump(idx, open(idx_path, "w"), indent=1)
 
 cfg = json.load(open(ART / "config.json"))

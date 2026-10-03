@@ -46,6 +46,7 @@ import mlx.core as mx
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))  # src/
 from vqlab import _layout  # noqa: E402,F401  one module object per name
+from vqlab.core.artifact import tensor_class  # noqa: E402
 from vqlab.mtp.mtp_head import MTPHead
 
 PREFIX = "language_model.mtp."
@@ -147,7 +148,7 @@ def main():
         ref = json.loads(pathlib.Path(a.reference).read_text())
         if isinstance(ref, dict):
             ref = list(ref.get("weight_map", ref))
-        want = {k for k in ref if ".mtp." in k}
+        want = {k for k in ref if tensor_class(k) == "mtp"}
         got = set(flat)
         missing, extra = sorted(want - got), sorted(got - want)
         print(f"\nkey-set parity vs reference: {len(got)} emitted, "

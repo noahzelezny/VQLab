@@ -185,20 +185,38 @@ def copy_other_files(src: Artifact, out) -> None:
 
 
 # ------------------------------------------------------------------- sizes
-# Which tensors are NOT the text model. Spellings per family, measured on
-# the shipped fleet (2026-10-02): Qwen3.5 model.visual, Qwen3.6 vision_tower,
-# GLM vision_model, DeepSeek-V4-Flash-Vision-Exp vision/aligner. An MTP head
-# is either indexed (397B: top-level block.* + fc.*; DeepSeek source: mtp.*)
-# or a sidecar file (mtp-head*.safetensors) that the index does not list.
+# Which tensors are NOT the text model. This is THE classifier: every writer,
+# gate and bench that asks "is this the tower / the MTP head?" calls
+# tensor_class (operator notes 2026-10-03, 1.5: three bugs in one night were
+# name heuristics disagreeing). Spellings per family, measured on the shipped
+# fleet (2026-10-02): Qwen3.5 model.visual, Qwen3.6 vision_tower, GLM
+# vision_model, gemma vision_tower + embed_vision, DeepSeek-V4-Flash-Vision-Exp
+# vision/aligner plus its image tokens (image_* in the release, model.image_*
+# in the runtime) and the image-routing gate bias every layer carries
+# (layers.N.ffn.gate.bias_vl). Any path SEGMENT naming vision/visual is a
+# tower too, so a new spelling of the tower (vision_smoke's lesson: four
+# spellings already) is not silently billed as text. An MTP head is either
+# indexed (397B: top-level block.* + fc.*; DeepSeek source: mtp.*; a native
+# runtime layout: language_model.mtp.*; DeepSeek-V3 style nextn.*) or a sidecar file
+# (mtp-head*.safetensors) that the index does not list. GLM's MTP layer is
+# spelled as an ordinary layer index and cannot be told apart by name.
 TOWER_PREFIXES = ("model.visual.", "visual.", "vision_tower.", "vision_model.",
-                  "vision.", "aligner.", "model.vision_tower.", "model.vision_model.")
+                  "vision.", "aligner.", "model.vision_tower.", "model.vision_model.",
+                  "model.aligner.", "embed_vision.", "model.embed_vision.",
+                  "image_", "model.image_")
+TOWER_SUFFIXES = (".bias_vl",)
 MTP_PREFIXES = ("block.", "fc.", "mtp.", "model.mtp.")
+MTP_SEGMENTS = ("mtp", "nextn")
 
 
 def tensor_class(key: str) -> str:
-    if key.startswith(TOWER_PREFIXES):
+    """'text', 'tower' (vision tower, projector, image tokens, image-routing
+    biases) or 'mtp' (an indexed draft head)."""
+    segs = key.split(".")
+    if key.startswith(TOWER_PREFIXES) or key.endswith(TOWER_SUFFIXES) \
+            or any("vision" in s or "visual" in s for s in segs):
         return "tower"
-    if key.startswith(MTP_PREFIXES):
+    if key.startswith(MTP_PREFIXES) or any(s.lower() in MTP_SEGMENTS for s in segs):
         return "mtp"
     return "text"
 
