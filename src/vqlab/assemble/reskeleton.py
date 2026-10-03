@@ -35,9 +35,16 @@ import sys
 
 import mlx.core as mx
 
-from vqlab.core.artifact import Artifact, write_index
+from vqlab.core.artifact import Artifact, tensor_class, write_index
 
-LM = "language_model."
+def _text(key):
+    """A text-model tensor: the skeleton is every text tensor that is not an
+    expert. Vision towers and MTP heads (core.artifact.tensor_class) stay
+    with the VQ artifact. This was a `language_model.` prefix test, which is
+    true for no tensor of an HF-layout (`model.language_model.*`) or
+    DeepSeek (`model.layers.*`) artifact: reskeleton then copied the VQ
+    build unchanged and reported success (caught 2026-10-03)."""
+    return tensor_class(key) == "text"
 VQ_SUFFIX = (".codes", ".codebook", ".vq_scales")
 AFF_SUFFIX = (".weight", ".scales", ".biases")
 SHARD = 5 * 2**30
@@ -66,18 +73,18 @@ def plan(vq: pathlib.Path, sk: pathlib.Path):
     if missing:
         raise SystemExit(f"FAIL: {len(missing)} VQ expert modules absent from the skeleton "
                          f"build, e.g. {missing[:3]}")
-    v_lm = {_module(k) for k in vidx if k.startswith(LM)} - experts
-    s_lm = {_module(k) for k in sidx if k.startswith(LM)} - experts
+    v_lm = {_module(k) for k in vidx if _text(k)} - experts
+    s_lm = {_module(k) for k in sidx if _text(k)} - experts
     if v_lm != s_lm:
         only_v, only_s = sorted(v_lm - s_lm), sorted(s_lm - v_lm)
         raise SystemExit(f"FAIL: skeleton module sets differ: only in VQ {only_v[:5]} "
                          f"({len(only_v)}), only in skeleton {only_s[:5]} ({len(only_s)})")
     src = {}
     for k, f in vidx.items():
-        if not k.startswith(LM) or _module(k) in experts:
+        if not _text(k) or _module(k) in experts:
             src[k] = (vq, f)                         # VQ experts + vision/MTP
     for k, f in sidx.items():
-        if k.startswith(LM) and _module(k) not in experts:
+        if _text(k) and _module(k) not in experts:
             src[k] = (sk, f)                         # skeleton, verbatim
     sq, vqmap = _qmap(scfg), dict(_qmap(vcfg))
     sdefault = {"group_size": sq.get("group_size", 64), "bits": sq.get("bits"),
@@ -90,6 +97,9 @@ def plan(vq: pathlib.Path, sk: pathlib.Path):
         if vqmap.get(m) != new:
             changed += 1
         vqmap[m] = new
+    if not any(d == sk for d, _ in src.values()):
+        raise SystemExit("FAIL: no tensor would come from the skeleton build; "
+                         "the output would be the VQ artifact unchanged")
     report = {"experts": len(experts), "skeleton_modules": len(quantized),
               "quant_entries_changed": changed,
               "from_vq": sum(1 for d, _ in src.values() if d == vq),
