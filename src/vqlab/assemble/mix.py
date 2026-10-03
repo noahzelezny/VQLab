@@ -110,19 +110,25 @@ def _check_skeleton(base, pick):
                                  f"({w and (w['dtype'], w['shape'])} vs {(v['dtype'], v['shape'])})")
 
 
-def build(out, base, bands, copy=False):
+def build(out, base, bands, copy=False, files_from=None):
+    """files_from: where model.py, the non-map config keys and every other
+    non-shard file come from (default --base). Use it when --base is an exact
+    teacher that carries no VQ runtime: e.g. base=teacher, bands = the fitted
+    halves, files_from = one fitted half."""
+    ff = pathlib.Path(files_from) if files_from else base
     pick, _ = plan(base, bands)
-    for src in {s for s in pick.values()} - {base}:
-        a, b = base / "model.py", src / "model.py"
+    for src in {s for s in pick.values()} - {ff}:
+        a, b = ff / "model.py", src / "model.py"
         if a.exists() and b.exists() and not filecmp.cmp(a, b, shallow=False):
-            raise SystemExit(f"{src}/model.py differs from --base's: one artifact, one runtime")
+            raise SystemExit(f"{src}/model.py differs from {ff.name}'s: one artifact, one runtime")
     _check_skeleton(base, pick)
     out.mkdir(parents=True, exist_ok=False)
-    cfg = json.load(open(base / "config.json"))
+    cfg = json.load(open(ff / "config.json"))
     maps = ("vq_modules", "quantization", "vq_skipzero")
     merged = {m: {} for m in maps}
     # keep non-module quantization keys (group_size, bits, mode) from base
-    qtop = {k: v for k, v in cfg.get("quantization", {}).items() if not isinstance(v, dict)}
+    qtop = {k: v for k, v in json.load(open(base / "config.json")).get(
+        "quantization", {}).items() if not isinstance(v, dict)}
     wm = {}
     for src in sorted({s for s in pick.values()}, key=str):
         si, sc = _idx(src), json.load(open(src / "config.json"))
@@ -154,7 +160,7 @@ def build(out, base, bands, copy=False):
     (out / "model.safetensors.index.json").write_text(json.dumps(
         {"metadata": {"total_size": total}, "weight_map": wm}, indent=1))
     (out / "config.json").write_text(json.dumps(cfg, indent=1))
-    for f in base.iterdir():
+    for f in ff.iterdir():
         if f.is_file() and not f.name.endswith(".safetensors") and f.name not in SKIP:
             shutil.copy(f, out)
     ks = collections.Counter(f"d{e.get('dim', e.get('d', '?'))}/K{e.get('k', '?')}"
@@ -177,6 +183,8 @@ def main(argv=None):
     ap.add_argument("--band", action="append", default=[], type=_band,
                     help="SRC:LO-HI, repeatable; later bands win")
     ap.add_argument("--copy", action="store_true", help="real files instead of symlinks")
+    ap.add_argument("--files-from", help="take model.py, config and other non-shard files from "
+                                         "this source instead of --base (e.g. base = exact teacher)")
     ap.add_argument("--plan", action="store_true", help="print shard -> layers -> source and stop")
     a = ap.parse_args(argv)
     base = pathlib.Path(a.base)
@@ -188,7 +196,7 @@ def main(argv=None):
     from vqlab import config as _cfg
     if a.copy:
         _cfg.require_free(a.out, sum(p.stat().st_size for p in base.glob("*.safetensors")), "mix --copy")
-    return build(pathlib.Path(a.out), base, a.band, a.copy)
+    return build(pathlib.Path(a.out), base, a.band, a.copy, a.files_from)
 
 
 if __name__ == "__main__":
