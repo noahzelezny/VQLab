@@ -2,7 +2,7 @@
 
 **Noah Zelezny**
 
-*2026 · doi:[10.5281/zenodo.22119017](https://doi.org/10.5281/zenodo.22119017).
+*October 2026 · doi:[10.5281/zenodo.23147587](https://doi.org/10.5281/zenodo.23147587).
 Every quality comparison holds the non-quantized skeleton byte-identical
 between arms, is paired on identical token positions, and is read against
 a measured fit-to-fit noise floor.*
@@ -685,7 +685,7 @@ Learning Models.* Technical report, 2023.
 
 ## Appendix A. Changes from earlier versions
 
-Versions 1–4 of this paper were deposited at the DOI above. Version 5
+Versions 1–4 of this paper were deposited under the concept DOI [10.5281/zenodo.22119017](https://doi.org/10.5281/zenodo.22119017), which resolves to the latest version. Version 5
 differs as follows.
 
 * **Matched skeleton.** Earlier versions compared VQ builds against
