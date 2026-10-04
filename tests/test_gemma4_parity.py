@@ -395,9 +395,19 @@ def _as_bool(m, L):
     return a.reshape(a.shape[-2:]).astype(bool)
 
 
-def knurlogic_masks(block_ids):
-    fake = types.SimpleNamespace(layers=[types.SimpleNamespace(layer_type=t) for t in LTYPES],
-                                 window_size=WIN)
+def _fake_model(bidirectional=None):
+    """The attributes Gemma4TextModel._make_masks reads, and the config field
+    the corrected runtime gates the image overlay on (None on e2b/e4b,
+    "vision" on 26B/31B)."""
+    return types.SimpleNamespace(
+        layers=[types.SimpleNamespace(layer_type=t) for t in LTYPES], window_size=WIN,
+        config=types.SimpleNamespace(use_bidirectional_attention=bidirectional),
+        args=types.SimpleNamespace(use_bidirectional_attention=bidirectional),
+        use_bidirectional_attention=bidirectional)
+
+
+def knurlogic_masks(block_ids, bidirectional=None):
+    fake = _fake_model(bidirectional)
     h = mx.zeros((1, L_IMG, 4))
     mm = mx.array(block_ids, dtype=mx.int32)[None]
     ms = A.Gemma4TextModel._make_masks(fake, h, [None] * len(LTYPES), mm_mask=mm)
@@ -415,8 +425,7 @@ def _mask_diff(got, want):
 
 def test_text_only_masks_match_reference():
     """No image: causal on full layers, kv > q - W on sliding layers (both runtimes)."""
-    fake = types.SimpleNamespace(layers=[types.SimpleNamespace(layer_type=t) for t in LTYPES],
-                                 window_size=WIN)
+    fake = _fake_model(None)
     ms = A.Gemma4TextModel._make_masks(fake, mx.zeros((1, L_IMG, 4)), [None, None], mm_mask=None)
     want = ref_masks(L_IMG, WIN)
     for t, m in zip(LTYPES, ms):
@@ -428,7 +437,7 @@ def test_image_mask_26b_bidirectional_on_sliding_layers():
     image blocks bidirectional on the SLIDING layers and leaves FULL layers
     causal (HF:2080-2141). Knurlogic 6a2ab49 `_make_masks`
     (gemma4_text.py:503-566) does the opposite. Known bug, unfixed."""
-    got, want = knurlogic_masks(BLOCKS), ref_masks(L_IMG, WIN, BLOCKS, "vision")
+    got, want = knurlogic_masks(BLOCKS, "vision"), ref_masks(L_IMG, WIN, BLOCKS, "vision")
     d = _mask_diff(got, want)
     assert all(v[0] == 0 and v[1] == 0 for v in d.values()), (
         "image-block mask differs from the reference "
