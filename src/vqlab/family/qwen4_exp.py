@@ -40,6 +40,13 @@ def _stored(model_dir: pathlib.Path) -> dict:
     return out
 
 
+def _default(cls, name):
+    """A dataclass field's default, whether declared plain or as a factory."""
+    import dataclasses
+    f = cls.__dataclass_fields__[name]
+    return f.default_factory() if f.default is dataclasses.MISSING else f.default
+
+
 def rebuilt(model_dir: pathlib.Path) -> dict:
     """{layer: [int, ...]} as the LOADED architecture rebuilds them from this
     config (its own TextArgs default fills a missing `seed`)."""
@@ -48,8 +55,8 @@ def rebuilt(model_dir: pathlib.Path) -> dict:
     A = importlib.import_module("mlx_lm.models.qwen4_exp")
     cfg = json.load(open(model_dir / "config.json"))
     t = cfg.get("text_config", cfg)
-    seed = t.get("seed", A.TextArgs.__dataclass_fields__["seed"].default)
-    ids = t.get("ple_layer_ids", A.TextArgs.__dataclass_fields__["ple_layer_ids"].default_factory())
+    seed = t.get("seed", _default(A.TextArgs, "seed"))
+    ids = t.get("ple_layer_ids", _default(A.TextArgs, "ple_layer_ids"))
     v, n = t["vocab_size"], t["ngram_size"]
     half = max(1, (((1 << 63) - 1) // max(v, 1)) // 2)
     out = {}
