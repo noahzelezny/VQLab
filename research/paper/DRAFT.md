@@ -31,14 +31,13 @@ matches the 3.5-bit build at 22.5 GiB less. On the 35B, at identical size,
 VQ reduces divergence against 3-bit affine experts by 38%, 14% and 60%. On
 the 27B, VQ at 0.5 GiB less than 4-bit affine MLPs is better by 18% on prose
 and 8% on literary text, with code within noise. From about 5.3 bits upward
-the two quantizers tie on both models where that range was measured: each
-reaches the floor set by the shared skeleton. Separately, a fitter change
+the two quantizers tie or nearly tie on both models where that range was
+measured: each reaches the floor set by the shared skeleton. Separately, a fitter change
 that improves reconstruction of the largest-magnitude weights at identical
 size degrades literary text by 35–60% on both MoE models while improving
 code on one: a bulk reconstruction statistic did not rank these builds.
-Eleven VQ builds are published with the Metal kernels that run them; on the
-35B, VQ decodes at 0.77× and prefills at 0.86× the throughput of a
-similar-size affine build.
+The VQ builds measured here are published with the Metal kernels that run
+them. VQ is slower than affine at decode (§3.4).
 
 ## 1. Introduction
 
@@ -96,9 +95,8 @@ tensors on at least one corpus, and worse on none, in every comparison from
 than their comparator are reported alongside: on the 397B they win or tie;
 on the 35B and 27B, VQ builds 1.5–1.8 GiB smaller than the nearest affine
 build are mixed on one model and worse on the other. From about 5.3 bits per
-weight upward the two quantizers tie. The advantage costs speed: on the
-35B, VQ decode throughput is 0.77× and prefill 0.86× that of a similar-size
-affine build (§3.4).
+weight upward the two quantizers tie, with one exception: on the 35B at 6.2
+bits VQ is worse on literary text. The advantage costs speed (§3.4).
 
 **Claim 2 (measurement).** A fitter change that reduces reconstruction
 error on the largest-magnitude weights, at identical size, moves output
@@ -383,13 +381,15 @@ Sizes, bpw and KL on the same basis: text weights over 34.66B (35B) and
 | d4/K2048, 1.8 GiB smaller | 3-bit | +2.8% (+1.5) | +6.1% (+2.1) | −18.2% (−6.2) |
 | d2/K256, 0.9 GiB smaller | 4-bit | −6.8% (−3.1) | −2.7% (−1.0) | −14.0% (−2.2) |
 | d2/K1024, 0.9 GiB smaller | 5-bit | −0.0% (−0.0) | −2.2% (−0.8) | −4.8% (−1.0) |
-| d2/K4096, 0.9 GiB smaller | 6-bit | +1.2% (+0.8) | +0.7% (+0.3) | +16.2% (+2.5) |
+| d2/K4096, 0.9 GiB smaller | 6-bit | +1.2% (+0.8) | +0.7% (+0.3) | +16.2% (+2.51) |
 
 At the same 14.8 GiB, VQ reduces divergence against 3-bit affine experts by
 14–60% on every corpus. At 4.4 bits VQ is better on prose and ties on the
-other two. From 5.3 bits upward the two quantizers tie: the 8-bit affine
+other two. From 5.3 bits upward the two quantizers tie on prose and code;
+on literary text VQ at 6.2 bits is worse than 6-bit affine experts (+16%,
+t 2.51), just past the claim threshold. The 8-bit affine
 experts score 20.1 mnats on prose and VQ at 6.2 bits 20.8, so what remains above
-5 bits is set by the skeleton, not the expert quantizer.
+5 bits is set mostly by the skeleton, not the expert quantizer.
 
 Code KL is an order of magnitude higher on the 35B than on the other two
 models for every quantization, including 8-bit experts. The mean is
@@ -471,23 +471,15 @@ prefill, bit-exact). All kernel variants are accepted only on bit-identity
 with a reference path where both load, and on relative error against a
 float32 reference where only one does.
 
-Speed against affine, measured on the 35B: the d2/K256 build (17.64 GiB)
-against uniform q4 (18.17 GiB), a 2,048-token prompt from the prose corpus
-and 128 generated tokens, one fresh process per arm per run, arms
-alternating, three runs each, in one session on an otherwise idle machine:
-
-| | run 1 | run 2 | run 3 | median |
-|---|---|---|---|---|
-| decode, VQ / affine | 0.73 | 0.78 | 0.77 | 0.77 |
-| prefill, VQ / affine | 0.78 | 0.86 | 0.88 | 0.86 |
-
-*Peak memory 20.6 GB (VQ) and 21.4 GB (affine). Apple M3 Ultra.*
-
-VQ costs about a quarter of decode throughput and a seventh of prefill
-throughput at this prompt length. Shorter prompts were not measured at
-n ≥ 3. Speed numbers are same-session ratios between arms: decode
-throughput at ~100 GiB residency was bimodal on our hardware (the same
-build varying 40% run to run), so no absolute throughput is published.
+Speed against affine was measured on the 35B: the d2/K256 build (17.64 GiB)
+against uniform q4 (18.17 GiB), a 2,048-token prompt, one fresh process per
+arm, three alternating runs each in one session on an idle Apple M3 Ultra,
+with the VQ runtime of the scored builds. VQ decoded at 0.77× and prefilled
+at 0.86× the affine build's throughput (medians; runs 0.73–0.78 and
+0.78–0.88). Later runtime revisions change these ratios, so they describe
+the cost's size, not a fixed property of the method. Only same-session
+ratios are reported: decode throughput at ~100 GiB residency was bimodal on
+our hardware, so no absolute throughput is published.
 Three further kernel changes — fused row-gather, byte-aligned packing and
 native-bf16 kernels — each gave no speedup or a slowdown.
 
@@ -495,8 +487,9 @@ native-bf16 kernels — each gave no speedup or a slowdown.
 
 ### 4.1 Above 5 bits
 
-Neither quantizer of the target tensors improves on the other above about
-5.3 bits per weight (§3.3), and on both smaller models 8-bit affine experts
+Above about 5.3 bits per weight neither quantizer of the target tensors
+improves meaningfully on the other (§3.3; the one claimed margin, 35B
+literary at 6.2 bits, favors affine), and on both smaller models 8-bit affine experts
 or MLPs are within 6% of 6-bit on every corpus: what remains is the skeleton's.
 
 ### 4.2 Dimension above 3 bits
@@ -568,8 +561,8 @@ the comparison measures the skeleton as much as the quantizer. Decode
 throughput was bimodal at ~100 GiB residency and is uncharacterized at
 other sizes; speed was measured on one pair of builds at one prompt length.
 
-**Costs.** On the 35B, VQ decode runs at 0.77× and prefill at 0.86× the
-throughput of a similar-size affine build (§3.4).
+**Costs.** VQ is slower than affine: on the 35B, about three quarters of the
+decode throughput of a similar-size affine build (§3.4).
 
 ## 7. Reproducibility
 
@@ -671,7 +664,7 @@ differs as follows.
   a skeleton difference with the quantizer difference. On the 35B, most of
   the reported advantage over uniform q4 was skeleton (§3.3). Every primary
   comparison now holds the skeleton byte-identical (§2.1), and the title's
-  bound moves from 6 bits to 5, where the matched comparisons tie.
+  bound moves from 6 bits to 5, above which the matched comparisons tie or favor affine.
 * **Instrument.** KL is now exact over the full 248,320-token vocabulary;
   version 4 used a top-64 approximation. Significance is now the chunk-level
   t over 24 chunk means (§2.6); version 4 reported a per-position t, which
@@ -704,7 +697,7 @@ Claude, Opus and Sonnet-class models), which operated the fitting,
 packing, verification, and scoring pipelines under the author's
 direction, and assisted in drafting this manuscript. All quantitative
 results were produced by the deterministic instruments described in
-§2.6, are traceable to a committed laboratory record, and were verified
+§2.6, are traceable to a laboratory record, and were verified
 independently of any model-generated summary. The author directed all
 experiments, made all methodological decisions, and takes sole
 responsibility for the content.
