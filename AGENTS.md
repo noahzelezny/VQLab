@@ -279,6 +279,18 @@ published on 2026-09-19, mostly local v2 against published v1.5. Pull the real
 one first -- `hf download <repo> model.py --local-dir /tmp/hfcheck/<repo>` costs
 nothing -- and rebundle from it, or you publish a runtime nobody scored.
 
+## Close a campaign's scratch when its finding is written
+
+Storage is not a dumping ground. On 2026-10-03 the SSD hit 14 GiB free with
+3.9 TB of finished campaigns in scratch: every LOO / add-one / sweep arm is a
+whole multi-GB artifact, and nothing ever removed them once the finding was
+recorded. When you write the F-entry, in the same step:
+1. file any fits that exist nowhere else in the fit store (`vqlab fit fits`);
+2. confirm the result that ships is in the models root (and on the Hub);
+3. run `vqlab lab scratch reclaimable` and hand Noah the printed `rm` lines
+   for the campaign's directories (deletion is his action; never run it).
+A failed `queue --preflight` leaves its full-size copies behind; list those too.
+
 ## Long runs
 
 **Use `vqlab queue run <file> --preflight`, then `--detach`** (src/vqlab/agents/run_queue.py). It pins the code in a worktree (no tree freeze), holds the GPU lease, retries resumable builds, refuses unsmoked pins (`vqlab pin`), and fails loudly. Hand-rolled chains are what night 4 (2026-09-26) paid for. **To know it finished, block on `vqlab queue wait <qdir>...`** (exit 0 only if every queue passed; a dead runner counts as finished) or MCP `queue_status`; never grep a log for wording -- on 2026-10-02 two finished fits sat idle for 3.5 h that way. MCP `disk_free` before any multi-hour writer. The text below is why it exists.
