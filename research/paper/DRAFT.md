@@ -13,8 +13,8 @@ Vector quantization (VQ) stores each group of d consecutive weights as an
 index into a K-entry codebook fit by k-means to the weights themselves, at
 log2(K)/d bits per weight, with no calibration data. We compare it against
 data-free round-to-nearest affine quantization (group size 64, the quantizer
-MLX ships) on three models — Qwen3.5-397B-A17B and Qwen3.6-35B-A3B
-(mixture-of-experts) and Qwen3.8-27B (dense). Only the byte-dominant
+MLX ships) on three models: two mixture-of-experts models,
+Qwen3.5-397B-A17B and Qwen3.6-35B-A3B, and one dense model, Qwen3.8-27B. Only the byte-dominant
 tensors are quantized by the method under test — the routed experts, or the
 dense model's MLPs — and every other tensor is byte-identical between the
 two arms, so the quantizer is the only difference. Quality is exact
@@ -26,10 +26,10 @@ Below 5 bits per weight, at matched size (the two builds within 1 GiB),
 VQ is never worse than affine on any corpus and is better on most. On the 397B, on the skeleton of
 the leading community mixed-precision build, VQ experts at that 2.6-bit
 build's exact size reduce divergence by 51% on prose, 42% on code and 74% on
-literary text, and at 11.3 GiB less by 31%, 11% and 44%; at 3.1 bits VQ
-matches the 3.5-bit build at 22.5 GiB less. On the 35B, at identical size,
+literary text, and a VQ build 11.3 GiB smaller reduces it by 31%, 11% and
+44%; at 3.1 bits a VQ build 22.5 GiB smaller than the 3.5-bit build matches it. On the 35B, at identical size,
 VQ reduces divergence against 3-bit affine experts by 38%, 14% and 60%. On
-the 27B, VQ at 0.5 GiB less than 4-bit affine MLPs is better by 18% on prose
+the 27B, a VQ build 0.5 GiB smaller than one with 4-bit affine MLPs is better by 18% on prose
 and 8% on literary text, with code within noise. From about 5.3 bits upward
 the two quantizers tie or nearly tie on both models where that range was
 measured: each reaches the floor set by the shared skeleton. Separately, a fitter change
@@ -100,9 +100,10 @@ bits VQ is worse on literary text. The advantage costs speed (§3.4).
 
 **Claim 2 (measurement).** A fitter change that reduces reconstruction
 error on the largest-magnitude weights, at identical size, moves output
-quality in opposite directions on different corpora and different models
-(§4.3). In these experiments mean reconstruction error did not rank output
-quality; only scoring the assembled model did.
+quality (KL of the assembled model against its bf16 teacher) in opposite
+directions on different corpora and different models (§4.3). In these
+experiments neither mean nor tail-targeted reconstruction error ranked
+output quality; only scoring the assembled model did.
 
 
 ## 2. Method
@@ -141,8 +142,8 @@ holds the skeleton byte-identical between the arms:
   projections at 4-bit, routers at bf16, and routed experts at 2 and 3 bits
   respectively. Our VQ expert tensors are transplanted, bit for bit, onto
   that skeleton; the result differs from the community build only in how
-  the experts are stored. This costs our builds 1.36 GiB over their
-  published skeleton.
+  the experts are stored. Because that skeleton is 8-bit where ours is
+  6-bit, our builds are 1.36 GiB larger on it than as published.
 
 Comparisons against the published builds as they are distributed, with
 their own skeletons, are reported separately in each section; there the
@@ -291,7 +292,8 @@ indices over 4 weights), so the high bands belong to d2. Codebook size pays
 with steep diminishing returns: on the 35B, d4 at K2048, K8192 and K16384
 scores 76.6, 46.1 and 39.8 mnats of prose KL. Large codebooks also outgrow
 Apple's 32 KB threadgroup memory — a d4 codebook above K = 2048, a d2
-codebook above K = 4096 — and are then served from device memory.
+codebook above K = 4096 — and are then served from device memory, a
+slower path.
 
 ### 3.2 The 397B
 
@@ -319,7 +321,7 @@ over the model's 396.35 billion text parameters.
 | d4/K2048, 22.5 GiB smaller | 3.5-bit | +2.4% (+0.7) | +4.4% (+0.5) | −1.5% (−0.1) |
 
 At the 2.6-bit build's exact size VQ experts reduce divergence on every
-corpus by 42–74%, and at 11.3 GiB less still by 11–44%. Against the 3.5-bit
+corpus by 42–74%, and a VQ build 11.3 GiB smaller still reduces it by 11–44%. Against the 3.5-bit
 build the result is a tie on all three corpora at 14% fewer bytes. Top-1
 agreement moves with KL throughout. No affine build above 3.5 bits was
 scored on this model (§6).
@@ -476,8 +478,10 @@ against uniform q4 (18.17 GiB), a 2,048-token prompt, one fresh process per
 arm, three alternating runs each in one session on an idle Apple M3 Ultra,
 with the VQ runtime of the scored builds. VQ decoded at 0.77× and prefilled
 at 0.86× the affine build's throughput (medians; runs 0.73–0.78 and
-0.78–0.88). Later runtime revisions change these ratios, so they describe
-the cost's size, not a fixed property of the method. Only same-session
+0.78–0.88). Kernel and runtime design has moved these ratios substantially (the
+zero-copy view above alone added 33% to prefill), and how far further kernel
+work can close the gap is not known; the ratios describe the cost's size
+with this runtime, not a fixed property of the method. Only same-session
 ratios are reported: decode throughput at ~100 GiB residency was bimodal on
 our hardware, so no absolute throughput is published.
 Three further kernel changes — fused row-gather, byte-aligned packing and
@@ -697,7 +701,8 @@ Claude, Opus and Sonnet-class models), which operated the fitting,
 packing, verification, and scoring pipelines under the author's
 direction, and assisted in drafting this manuscript. All quantitative
 results were produced by the deterministic instruments described in
-§2.6, are traceable to a laboratory record, and were verified
-independently of any model-generated summary. The author directed all
+§2.6, are traceable to a laboratory record, and every table is generated
+by script from the saved per-position arrays rather than transcribed from
+any model-generated summary. The author directed all
 experiments, made all methodological decisions, and takes sole
 responsibility for the content.
