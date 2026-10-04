@@ -119,11 +119,9 @@ E112 = [("397b", "e112_B", "e112_A"), ("35b", "e112_B", "e112_A"),
 KNOWN_GIB = {("397b", "spicy35"): 165.57, ("35b", "q3"): 14.14, ("35b", "q4"): 18.17,
              ("35b", "q6"): 26.23, ("35b", "q8"): 34.30, ("27b", "q2"): 7.83,
              ("27b", "q3"): 10.96, ("27b", "q4"): 14.09, ("27b", "q6"): 20.36, ("27b", "q8"): 26.62,
-             # matched-skeleton affine builds (conversions deleted after scoring): VQ build's
+             # 27B matched-skeleton affine builds (deleted after scoring): VQ build's
              # non-expert text bytes + teacher expert elements x (bits + 0.5)/8 (group-64,
              # bf16 scale+bias). Reproduces s4 = uniform q4 = 14.09 on the 27B exactly.
-             ("35b", "s2"): 11.08, ("35b", "s3"): 14.83, ("35b", "s4"): 18.58,
-             ("35b", "s5"): 22.33, ("35b", "s6"): 26.08, ("35b", "s8"): 33.58,
              ("27b", "s2"): 10.11, ("27b", "s3"): 12.10, ("27b", "s4"): 14.09,
              ("27b", "s5"): 16.09, ("27b", "s6"): 18.08, ("27b", "s8"): 22.06}
 # Text weights = tensors under language_model.* -- the MTP sidecar (block.*, fc.*,
@@ -133,6 +131,11 @@ TEXT_PREFIX = "language_model."
 # text-weight bytes of every row, measured from the artifacts on 2026-09-29 and frozen
 # here so the tables regenerate after the builds are deleted.
 TEXT_BYTES = {
+ # 35B matched-skeleton affine builds: metadata.total_size of each surviving pin's
+ # model.safetensors.index.json (text only; no vision tower in these pins). The
+ # 27B formula below reproduces all six to 0.01 GiB.
+ ('35b', 's2'): 11898123075, ('35b', 's3'): 15924655259, ('35b', 's4'): 19951186969,
+ ('35b', 's5'): 23977718875, ('35b', 's6'): 28004250454, ('35b', 's8'): 36057314375,
  ('27b', 'd2k4096'): 18879364096,
  ('27b', 'd2k64'): 12458982400,
  ('27b', 'd4k1024'): 11390958592,

@@ -86,9 +86,9 @@ to d4/K16384. For example, d4/K2048 groups weights into subvectors of 4
 consecutive values and replaces each with an index into a 2048-entry
 codebook, storing log2(2048)/4 = 2.75 bits per weight before scales. Every
 size in this paper is the size of the text weights on disk: measured, except
-for the affine comparators on our skeleton (§2.1), which were deleted after
-scoring and whose sizes are computed from their tensor shapes, which fix an
-affine build's size. Every quality number is measured on the assembled model.
+for the 27B affine comparators on our skeleton (§2.1), which were deleted
+after scoring and whose sizes are computed from their tensor shapes. The same
+computation reproduces all six measured 35B comparator sizes to 0.01 GiB. Every quality number is measured on the assembled model.
 
 **Claim 1 (method).** With the skeleton held byte-identical and the two
 builds within 1 GiB of each other, data-free VQ of the byte-dominant tensors
