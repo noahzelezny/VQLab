@@ -291,6 +291,12 @@ recorded. When you write the F-entry, in the same step:
    for the campaign's directories (deletion is his action; never run it).
 A failed `queue --preflight` leaves its full-size copies behind; list those too.
 
+**Name a campaign's folder for its finding**: `<scratch>/F197-vision-exp/`,
+reserved with `next_f_number(reserve=true)` before the first byte is written,
+never `night-20261002` or `sweep_alt9`. The name says who owns it and which
+entry closes it; `vqlab lab doctor` lists scratch folders untouched for 14+
+days that no finding names, and warns when a storage volume runs low.
+
 ## Long runs
 
 **Use `vqlab queue run <file> --preflight`, then `--detach`** (src/vqlab/agents/run_queue.py). It pins the code in a worktree (no tree freeze), holds the GPU lease, retries resumable builds, refuses unsmoked pins (`vqlab pin`), and fails loudly. Hand-rolled chains are what night 4 (2026-09-26) paid for. **To know it finished, block on `vqlab queue wait <qdir>...`** (exit 0 only if every queue passed; a dead runner counts as finished) or MCP `queue_status`; never grep a log for wording -- on 2026-10-02 two finished fits sat idle for 3.5 h that way. MCP `disk_free` before any multi-hour writer. The text below is why it exists.

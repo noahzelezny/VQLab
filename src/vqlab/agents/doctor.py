@@ -17,8 +17,51 @@ import importlib.util
 import json
 import os
 import pathlib
+import re
 import shutil
 import sys
+
+
+# Disk: writers refuse below their own margins; say so before they do
+LOW_FREE_WARN_GIB = 200
+LOW_FREE_PROBLEM_GIB = 30
+STALE_DAYS = 14
+# a campaign folder is named for its finding (F197-vision-exp) or its date
+_CAMPAIGN = re.compile(r"^(F\d{2,4})\b")
+
+
+def _findings_text() -> str:
+    for p in (os.environ.get("VQLAB_FINDINGS_LOG"),
+              pathlib.Path(__file__).resolve().parents[3] / "lab" / "FINDINGS-LOG.md"):
+        try:
+            return pathlib.Path(p).read_text() if p else ""
+        except OSError:
+            continue
+    return ""
+
+
+def stale_scratch(root, now=None) -> list:
+    """Top-level scratch folders untouched for STALE_DAYS+ days whose name no
+    finding mentions (an F-prefixed name counts as its finding's): campaign
+    leftovers nobody closed. Metadata only -- no du over terabytes."""
+    import time
+    root = pathlib.Path(root)
+    if not root.is_dir():
+        return []
+    now = now or time.time()
+    text = _findings_text()
+    out = []
+    for d in sorted(root.iterdir()):
+        if not d.is_dir() or d.name.startswith((".", "_", "queue-preflight")):
+            continue
+        age = (now - d.stat().st_mtime) / 86400
+        if age < STALE_DAYS:
+            continue
+        m = _CAMPAIGN.match(d.name)
+        if (m and m.group(1) in text) or d.name in text:
+            continue
+        out.append({"name": d.name, "age_days": int(age)})
+    return sorted(out, key=lambda x: -x["age_days"])
 
 
 # architectures the lab's families load through mlx-lm (the family's model_type)
@@ -104,6 +147,19 @@ def report():
                              "free_gib": round(free, 1) if free is not None else None}
         if not ok:
             r["problems"].append(f"{key} root {p} does not exist (unmounted volume?)")
+        elif free < LOW_FREE_PROBLEM_GIB:
+            r["problems"].append(f"{key} volume has {free:.0f} GiB free: writers will refuse; "
+                                 f"run `vqlab lab scratch reclaimable`")
+        elif free < LOW_FREE_WARN_GIB:
+            r["notes"].append(f"{key} volume has {free:.0f} GiB free (under {LOW_FREE_WARN_GIB})")
+    r["stale_scratch"] = stale_scratch(C.scratch())
+    if r["stale_scratch"]:
+        names = ", ".join(f"{d['name']} ({d['age_days']}d)" for d in r["stale_scratch"][:8])
+        more = len(r["stale_scratch"]) - 8
+        r["notes"].append(f"{len(r['stale_scratch'])} scratch folder(s) untouched for "
+                          f"{STALE_DAYS}+ days and named in no finding: {names}"
+                          + (f" and {more} more" if more > 0 else "")
+                          + ". Close them out (AGENTS.md: close a campaign's scratch)")
     if not r["hf_token"]:
         r["notes"].append("no Hugging Face token (HF_TOKEN or $HF_HOME/token): downloads of gated "
                           "repos and publish will fail")
