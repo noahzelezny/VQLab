@@ -50,7 +50,12 @@ def worker(model, out, tokens, chunk, knurlogic=False) -> int:
     from mlx_lm.utils import load_model, load_tokenizer
     tok = load_tokenizer(mp)
     ids = tok.encode(pathlib.Path(_layout.corpus("prose")).read_text())[:tokens]
-    m, _ = load_model(mp, lazy=False)
+    # FINDINGS IV.1: bind the weight reads to the CPU stream AT LOAD and
+    # evaluate inside it; a lazy read paid inside a GPU command buffer gets
+    # watchdog-killed on a multi-GB slice (2026-10-03: 3 of 5 slices died so)
+    with mx.stream(mx.cpu):
+        m, _ = load_model(mp, lazy=True)
+        mx.eval(m.parameters())
     if hasattr(m, "make_cache"):
         cache = m.make_cache()
     else:
