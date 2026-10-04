@@ -31,8 +31,9 @@ literary text, and a VQ build 11.3 GiB smaller reduces it by 31%, 11% and
 VQ reduces divergence against 3-bit affine experts by 38%, 14% and 60%. On
 the 27B, a VQ build 0.5 GiB smaller than one with 4-bit affine MLPs is better by 18% on prose
 and 8% on literary text, with code within noise. From about 5.3 bits upward
-the two quantizers tie or nearly tie on both models where that range was
-measured: each reaches the floor set by the shared skeleton. Separately, a fitter change
+the two quantizers tie on both models where that range was measured, in every
+cell but one (35B literary text at 6.2 bits, where affine is better): each
+reaches the floor set by the shared skeleton. Separately, a fitter change
 that improves reconstruction of the largest-magnitude weights at identical
 size degrades literary text by 35–60% on both MoE models while improving
 code on one: a bulk reconstruction statistic did not rank these builds.
@@ -84,8 +85,10 @@ dimension and M the codebook size; builds in this paper range from d2/K16
 to d4/K16384. For example, d4/K2048 groups weights into subvectors of 4
 consecutive values and replaces each with an index into a 2048-entry
 codebook, storing log2(2048)/4 = 2.75 bits per weight before scales. Every
-size in this paper is the measured size of the text weights on disk; every
-quality number is measured on the assembled model.
+size in this paper is the size of the text weights on disk: measured, except
+for the affine comparators on our skeleton (§2.1), which were deleted after
+scoring and whose sizes are computed from their tensor shapes, which fix an
+affine build's size. Every quality number is measured on the assembled model.
 
 **Claim 1 (method).** With the skeleton held byte-identical and the two
 builds within 1 GiB of each other, data-free VQ of the byte-dominant tensors
@@ -93,10 +96,10 @@ is better than data-free round-to-nearest affine quantization of the same
 tensors on at least one corpus, and worse on none, in every comparison from
 2.6 to 4.7 bits per weight on all three models (§3). VQ builds much smaller
 than their comparator are reported alongside: on the 397B they win or tie;
-on the 35B and 27B, VQ builds 1.5–1.8 GiB smaller than the nearest affine
-build are mixed on one model and worse on the other. From about 5.3 bits per
-weight upward the two quantizers tie, with one exception: on the 35B at 6.2
-bits VQ is worse on literary text. The advantage costs speed (§3.4).
+on the 35B a VQ build 1.9 GiB smaller is better on one corpus and ties the
+other two, and on the 27B one 1.5 GiB smaller is worse on all three. From
+about 5.3 bits per weight upward the two quantizers tie in every cell but
+one (35B literary text at 6.2 bits, where affine is better). The advantage costs speed (§3.4).
 
 **Claim 2 (measurement).** A fitter change that reduces reconstruction
 error on the largest-magnitude weights, at identical size, moves output
@@ -143,7 +146,7 @@ holds the skeleton byte-identical between the arms:
   respectively. Our VQ expert tensors are transplanted, bit for bit, onto
   that skeleton; the result differs from the community build only in how
   the experts are stored. Because that skeleton is 8-bit where ours is
-  6-bit, our builds are 1.36 GiB larger on it than as published.
+  6-bit, our builds are 1.37 GiB larger on it than as published.
 
 Comparisons against the published builds as they are distributed, with
 their own skeletons, are reported separately in each section; there the
@@ -168,7 +171,7 @@ codebooks:
 
 | artifact | initialization | notes |
 |---|---|---|
-| 397B VQ-2.4bpw | random | first-generation fitter (frozen as `research/archive/quantlab/fitter_0816_cdcdeab.py`) |
+| 397B VQ-2.4bpw | random | first-generation fitter (2026-08-16) |
 | 397B VQ-2.6bpw, VQ-3.1bpw | k-means++ (the default from 2026-08-18) | |
 | 397B, all three artifacts, layers 57–59 | k-means++ | 9 of 180 expert modules refit in 2026-09 with scale–codebook alternation (Appendix A) |
 | 35B VQ-3.8bpw | k-means++ | |
@@ -185,7 +188,7 @@ compare a fresh fit with the current fitter against a published original.
 Codes are packed to their true bit-width after fitting; packing is
 bit-exact, verified at the logit level. Byte-aligned code widths are
 stored directly (packing them saves nothing and costs decode speed).
-All sizes are packed sizes measured on disk, and a row's size and its
+All VQ sizes are packed sizes measured on disk, and a row's size and its
 quality always come from the same artifact.
 
 ### 2.4 Sizes
@@ -278,8 +281,8 @@ draws.
 
 ### 3.1 Geometry: what d and K buy
 
-At matched code rate, builds of byte-identical size (d4 minus d2, negative
-= d4 better):
+At matched code rate, builds within 6 MB of each other in size (d4 minus d2,
+negative = d4 better):
 
 | code rate | pair | prose | code | literary |
 |---|---|---|---|---|
@@ -323,7 +326,7 @@ over the model's 396.35 billion text parameters.
 At the 2.6-bit build's exact size VQ experts reduce divergence on every
 corpus by 42–74%, and a VQ build 11.3 GiB smaller still reduces it by 11–44%. Against the 3.5-bit
 build the result is a tie on all three corpora at 14% fewer bytes. Top-1
-agreement moves with KL throughout. No affine build above 3.5 bits was
+agreement moves with KL wherever a difference is claimed. No affine build above 3.5 bits was
 scored on this model (§6).
 
 **As published.** The published VQ builds carry the 6-bit skeleton of §2.1:
@@ -336,7 +339,9 @@ scored on this model (§6).
 | **d4/K2048** | **VQ-3.1bpw** | 141.7 | 3.07 | 93.0 | 33.3 | 16.6 | 91.7% |
 
 *Bold rows are published under `TheDrainFlorist/Qwen3.5-397B-A17B-<release>`.
-Release names were set at release; VQ-2.4bpw measures 2.34 (Appendix A). The
+Release names were set at release under an earlier size accounting and run
+above the measured text bpw on all three models; VQ-2.4bpw also lost 2.8 GiB
+in a later correction (Appendix A). The
 bpw figure counts codes, scales and skeleton together; the d4/K2048 codebook
 rate alone is 2.75 bits per quantized weight.*
 
@@ -345,7 +350,7 @@ than the 2.6-bit build, −30% prose (t −5.1), −10% code (−3.2), −44%
 literary (−15.9); VQ-2.6bpw, 1.4 GiB smaller, −50% (−6.0), −42% (−6.0), −75%
 (−21.3); VQ-3.1bpw against the 3.5-bit build, 23.9 GiB smaller, +6% prose
 (+1.6), +7% code (+0.8), −2% literary (−0.2), a tie. Moving the VQ experts
-from the 6-bit to the 8-bit skeleton changes KL by at most 3.4% on any
+from the 6-bit to the 8-bit skeleton changes KL by at most 3.5% on any
 corpus. The d4/K128 build, 23.9 GiB smaller than the 2.6-bit build, is worse
 on all three corpora: +6% prose (+2.9), +29% code (+7.6), +14% literary
 (+4.7).
@@ -380,27 +385,26 @@ Sizes, bpw and KL on the same basis: text weights over 34.66B (35B) and
 | VQ build | vs affine experts | prose | code | literary |
 |---|---|---|---|---|
 | d4/K8192, same size | 3-bit | −38.1% (t −10.7) | −13.6% (−3.8) | −59.9% (−16.2) |
-| d4/K2048, 1.8 GiB smaller | 3-bit | +2.8% (+1.5) | +6.1% (+2.1) | −18.2% (−6.2) |
+| d4/K2048, 1.9 GiB smaller | 3-bit | +2.8% (+1.5) | +6.1% (+2.1) | −18.2% (−6.2) |
 | d2/K256, 0.9 GiB smaller | 4-bit | −6.8% (−3.1) | −2.7% (−1.0) | −14.0% (−2.2) |
 | d2/K1024, 0.9 GiB smaller | 5-bit | −0.0% (−0.0) | −2.2% (−0.8) | −4.8% (−1.0) |
 | d2/K4096, 0.9 GiB smaller | 6-bit | +1.2% (+0.8) | +0.7% (+0.3) | +16.2% (+2.51) |
 
 At the same 14.8 GiB, VQ reduces divergence against 3-bit affine experts by
 14–60% on every corpus. At 4.4 bits VQ is better on prose and ties on the
-other two. From 5.3 bits upward the two quantizers tie on prose and code;
-on literary text VQ at 6.2 bits is worse than 6-bit affine experts (+16%,
-t 2.51), just past the claim threshold. The 8-bit affine
+other two. From 5.3 bits upward the two quantizers tie in every cell but
+one: on literary text VQ at 6.2 bits is worse than 6-bit affine experts
+(+16%, t 2.51), just past the claim threshold. The 8-bit affine
 experts score 20.1 mnats on prose and VQ at 6.2 bits 20.8, so what remains above
 5 bits is set mostly by the skeleton, not the expert quantizer.
 
 Code KL is an order of magnitude higher on the 35B than on the other two
 models for every quantization, including 8-bit experts. The mean is
-dominated by a heavy tail of positions at which every quantized build
-routes to different experts than the teacher; the orderings above hold for
-the mean, a trimmed mean and the median alike.
+dominated by a heavy tail of positions; every claimed difference on code
+holds for the median as well as the mean.
 
-**As published.** The mlx-community uniform builds quantize every linear
-layer, including attention and the routers, at one width:
+**Uniform builds.** Uniform conversions quantize every linear layer,
+including attention and the routers, at one width:
 
 | build | GiB | bpw | prose | code | literary | prose top-1 |
 |---|---|---|---|---|---|---|
@@ -413,7 +417,7 @@ layer, including attention and the routers, at one width:
 and q6 are ours, by the same converter.*
 
 Against these builds VQ-3.8bpw, 3.3 GiB smaller than q4, is −30% on prose
-(t −14.3), −34% on code (−6.6) and ties on literary (−3.5%, −0.7), and
+(t −14.3), −33.5% on code (−6.6) and ties on literary (−3.5%, −0.7), and
 d2/K256, 0.5 GiB smaller than q4, is −53% (−20.7), −44% (−8.1), −50%
 (−11.9). Most of that margin is skeleton: 4-bit experts on our skeleton
 score 33.2 mnats on prose against uniform q4's 65.4. Above 5 bits the
@@ -459,7 +463,7 @@ skeleton.
 Against uniform conversions, which for this model share our 4-bit skeleton
 at 4 bits but not at other widths: uniform q3 (10.96 GiB) scores 192.4,
 86.3 and 965.1, and VQ-3.9bpw, 0.65 GiB larger, is −24% (t −8.0), −52%
-(−9.8) and −39% (−39.6) against it; uniform q6 and q8 (20.36 and 26.62 GiB)
+(−9.8) and −39.5% (−39.6) against it; uniform q6 and q8 (20.36 and 26.62 GiB)
 score 10.9 and 3.5 on prose, below every build on the 4-bit skeleton.
 
 ### 3.4 Runtime performance and kernel support
@@ -492,10 +496,10 @@ native-bf16 kernels — each gave no speedup or a slowdown.
 
 ### 4.1 Above 5 bits
 
-Above about 5.3 bits per weight neither quantizer of the target tensors
-improves meaningfully on the other (§3.3; the one claimed margin, 35B
-literary at 6.2 bits, favors affine), and on both smaller models 8-bit affine experts
-or MLPs are within 6% of 6-bit on every corpus: what remains is the skeleton's.
+Above about 5.3 bits per weight the two quantizers of the target tensors
+tie in every cell but one (§3.3; 35B literary text at 6.2 bits, where affine
+is better), and on both smaller models 8-bit affine experts or MLPs are
+within 6.2% of 6-bit on every corpus: what remains is the skeleton's.
 
 ### 4.2 Dimension above 3 bits
 
@@ -540,8 +544,10 @@ builds, because their order depended on the model and the corpus.
 ## 5. Measurement discipline
 
 A margin is claimed only where it exceeds the measured floor for its model
-(§2.6). Every number in §3–4 comes from one instrument, and a row's size and
-quality come from the same build. No build is treated as releasable until it
+(§2.6). Every number in §3–4 comes from one instrument: each model was
+scored in a single pinned environment, since changing the environment moves
+KL on the same build by up to 0.3%. A row's size and quality come from the
+same build. No build is treated as releasable until it
 has generated tokens through the exact runtime it ships with. A published
 artifact is identified by its pinned Hugging Face revision, and stored
 metadata is verified against the bytes rather than trusted.
@@ -549,7 +555,8 @@ metadata is verified against the bytes rather than trusted.
 ## 6. Limitations
 
 **Comparator.** The affine comparator is data-free round-to-nearest; no
-calibrated method, affine or vector, was scored. On the 397B, the matched
+calibrated method, affine or vector, was scored, nor any data-free method
+that optimizes the affine grid, such as HQQ [14]. On the 397B, the matched
 comparison is on spicyneuron's skeleton, and no affine build above 3.5 bits
 was scored: at ~225 GB for 4-bit and ~320 GB for 6-bit, such builds exceed
 the memory of any machine available to this project.
@@ -560,8 +567,15 @@ conclusions, including threadgroup capacity, are specific to Apple Silicon.
 Quality is measured by KL to the teacher on three 12,288-token corpora, not
 by downstream task benchmarks.
 
-**Instrument.** Each model's noise floor is a single pair of fits at one
-geometry, so the floor has no variance estimate of its own. Above 5 bits
+**Instrument.** The chunk-level t captures variation across token positions,
+not across fits; fit-to-fit variation enters only through the noise floor,
+which is a single pair of fits at one geometry per model and so has no
+variance estimate of its own. No correction for multiple comparisons is
+applied. The headline margins (|t| 5–23, 30–75%) are far outside both, but
+three claimed differences sit within twice their model's floor: 35B d2/K256
+on prose (−6.8% against a 5.8% floor) and 27B d2/K256 on literary and d2/K512
+on prose (−8.3% and −9.7% against 3.4%). A tie is a failure to find a
+difference, not a demonstration of equivalence. Above 5 bits
 the comparison measures the skeleton as much as the quantizer. Decode
 throughput was bimodal at ~100 GiB residency and is uncharacterized at
 other sizes; speed was measured on one pair of builds at one prompt length.
@@ -575,7 +589,17 @@ All artifacts are published under `TheDrainFlorist` on Hugging Face with
 their VQ runtimes bundled in-checkpoint: they load in stock mlx-lm,
 unpatched, with `trust_remote_code=True`. Where a repository's weights were
 upgraded in place, the previous build remains fetchable at its pinned
-revision. Most published fits are unseeded single draws (§2.2):
+revision. The scored revisions (Hugging Face commit, first 12 characters):
+
+| artifact | revision |
+|---|---|
+| TheDrainFlorist 397B VQ-2.4bpw / 2.6bpw / 3.1bpw | bb4887a06bee / ea58bf237b06 / f2c22ab5988e |
+| TheDrainFlorist 35B VQ-3.4bpw / 3.8bpw / 5.4bpw | c19d1e56736b / 73a8b39d2dbd / 7f86f33f2c44 |
+| TheDrainFlorist 27B VQ-3.9bpw / 4.5bpw / 4.8bpw | 30c2147f3faa / f1805e61893d / f85736b073cc |
+| spicyneuron 397B 2.6-bit / 3.5-bit [15] | dc77505e97a4 / 16a9eaf13095 |
+
+Later revisions of the three 397B repositories repack their weights; the
+revisions above are the ones scored. Most published fits are unseeded single draws (§2.2):
 reproducible in recipe and geometry, not bit-for-bit. Every build made for
 this paper is seeded.
 
@@ -669,7 +693,8 @@ differs as follows.
   a skeleton difference with the quantizer difference. On the 35B, most of
   the reported advantage over uniform q4 was skeleton (§3.3). Every primary
   comparison now holds the skeleton byte-identical (§2.1), and the title's
-  bound moves from 6 bits to 5, above which the matched comparisons tie or favor affine.
+  bound moves from 6 bits to 5, above which the matched comparisons tie in
+  every cell but one, where affine is better.
 * **Instrument.** KL is now exact over the full 248,320-token vocabulary;
   version 4 used a top-64 approximation. Significance is now the chunk-level
   t over 24 chunk means (§2.6); version 4 reported a per-position t, which

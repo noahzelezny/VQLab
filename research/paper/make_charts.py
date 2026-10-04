@@ -69,13 +69,17 @@ def panel_row(axes, fam, legend):
         ax.tick_params(labelsize=8)
     axes[0].set_ylabel("KL to bf16 (mnats, log)", fontsize=8.5)
     if legend:
-        axes[0].legend(fontsize=7.5, loc="lower left")
+        if fam == "397b":   # every corner of these panels holds data: legend below
+            h, l = axes[0].get_legend_handles_labels()
+            axes[0].figure.legend(h, l, fontsize=8, loc="lower center", ncol=3, frameon=False)
+        else:
+            axes[0].legend(fontsize=7.5, loc="lower left")
 
 
 def main():
     fig, axes = plt.subplots(1, 3, figsize=(12, 3.8))
     panel_row(axes, "397b", True)
-    fig.tight_layout()
+    fig.tight_layout(rect=(0, 0.07, 1, 1))
     fig.savefig(HERE / "fig_397b_ladder.png", dpi=200)
 
     fig, axes = plt.subplots(2, 3, figsize=(12, 7.4))
