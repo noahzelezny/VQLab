@@ -110,6 +110,8 @@ PAIRS = [
 ]
 FLOORS = [("27b", "r45", "floor_d2k256", "d2/K256"), ("35b", "r54", "floor_d2k1024", "d2/K1024"),
           ("397b", "r22flat", "floor_d4k128", "d4/K128")]
+# Geometry twins at matched code rate (d4 arm vs d2 reference), §3.1
+GEOMETRY = [("35b", "e112_A", "d2k16"), ("27b", "r39", "d2k64")]
 E112 = [("397b", "e112_B", "e112_A"), ("35b", "e112_B", "e112_A"),
         ("397b", "e112_A", "r24")]
 
@@ -222,8 +224,9 @@ def main():
       "12,288 positions per corpus, paired on identical positions. VQ rows are scored on the "
       "v2 runtime (both bf16-I/O flags on); affine and spicyneuron rows are unaffected by the "
       "VQ runtime. Sizes: text weights (no vision tower, no MTP head); "
-      "bpw = text bytes × 8 / text parameters. The 397B VQ rows are not yet generation-smoked "
-      "on v2 (too large for one box; cluster smoke pending).\n")
+      "bpw = text bytes × 8 / text parameters. Sizes of rows whose builds were deleted after "
+      "scoring (KNOWN_GIB) are computed from tensor shapes, which fix an affine build's size; "
+      "every other size is measured.\n")
     for fam, rows in ROWS.items():
         w(f"\n## {fam.upper()}  ({PARAMS[fam] / 1e9:.2f}B text parameters)\n\n"
           "| row | what | GiB | bpw | prose | code | literary | prose top-1 | prose median "
@@ -244,12 +247,12 @@ def main():
         for fam, arm, ref, *_ in items:
             A, R = data[fam, arm], data[fam, ref]
             for c in CORPORA:
-                if A[c]["cache"] != R[c]["cache"]:
+                if not A[c]["cache"] or A[c]["cache"] != R[c]["cache"]:
                     raise SystemExit(f"{fam} {arm} vs {ref} {c}: different caches, cannot pair")
                 dm, t, tc, better = pair(A[c]["kl"], R[c]["kl"])
                 rm = R[c]["kl"].mean()
                 w(f"| {fam.upper()} | {arm} ({size[fam, arm]:.1f}) | {ref} ({size[fam, ref]:.1f}) | "
-                  f"{c} | {rm:.1f} | {A[c]['kl'].mean():.1f} | {dm / rm * 100:+.1f}% | {t:+.1f} | {tc:+.1f} | "
+                  f"{c} | {rm:.1f} | {A[c]['kl'].mean():.1f} | {dm / rm * 100:+.1f}% | {t:+.1f} | {tc:+.2f} | "
                   f"{better * 100:.0f}% |\n")
 
     pair_table("Noise floors (independent second fit of the same geometry, paired)", FLOORS,
@@ -262,6 +265,7 @@ def main():
                "experts/MLPs. 397B: the VQ build's experts on spicyneuron's skeleton "
                "(attention/shared/linear-attention 8-bit where the VQ release used 6-bit).\n\n")
     pair_table("Against published builds (skeletons differ; arm − reference)", PAIRS)
+    pair_table("Geometry at matched code rate (d4 − d2; negative = d4 better)", GEOMETRY)
     pair_table("Tail weighting at fixed bytes (d4/K256, plain fitter, seed 1234)", E112,
                "Arm = magnitude weighting p=4 on body layers (397B: layers ≥20 of 60; "
                "35B: ≥13 of 40); reference = unweighted, byte-identical. Last row: the "
