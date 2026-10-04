@@ -81,7 +81,7 @@ SPEC = FamilyPlugin(
             runtime="GD:545-555 gated_delta_kernel (Metal) is what runs on the GPU; the parity tests "
                     "run on the CPU stream and reach only the ops path GD:557-602. The kernel is "
                     "not compared with the reference here",
-            test="",
+            test="tests/test_qwen3_5_parity.py::test_gdn_metal_kernel_matches_ops",
         ),
         Parity(
             name="full_attention",
