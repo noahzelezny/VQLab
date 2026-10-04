@@ -40,7 +40,17 @@ RUNTIMES = ("mlx_lm", "mlx_vlm")
 def runtime_for(family: str) -> str:
     """The runtime a family loads under. Unknown/dense families default to
     mlx_lm — the behaviour every existing call site had before this file."""
-    rt = FAMILY.get(family, {}).get("runtime", "mlx_lm")
+    entry = FAMILY.get(family, {})
+    rt = entry.get("runtime", "mlx_lm")
+    # Knurlogic serves some architectures that used to exist only in mlx_vlm
+    # (glm5_next) under mlx_lm.models, and VQLab loads Knurlogic's files
+    # (vqlab.family.arch). When it serves this family's model_type, load
+    # through mlx_lm: that is the arithmetic users run, and a VQLab env has
+    # no mlx_vlm (2026-10-03: GLM could not load in ~/.venvs/vqlab at all).
+    if rt == "mlx_vlm" and entry.get("model_type"):
+        from vqlab.family import arch
+        if arch.enabled() and entry["model_type"] in arch.available():
+            rt = "mlx_lm"
     if rt not in RUNTIMES:
         raise ValueError(f"family {family!r} declares unknown runtime {rt!r}")
     return rt
