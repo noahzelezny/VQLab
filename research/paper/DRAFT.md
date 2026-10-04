@@ -16,7 +16,7 @@ data-free round-to-nearest affine quantization (group size 64, the quantizer
 MLX ships) on three models: two mixture-of-experts models,
 Qwen3.5-397B-A17B and Qwen3.6-35B-A3B, and one dense model, Qwen3.8-27B. Only the byte-dominant
 tensors are quantized by the method under test — the routed experts, or the
-dense model's MLPs — and every other tensor is byte-identical between the
+dense model's feed-forward (MLP) layers — and every other tensor is byte-identical between the
 two arms, so the quantizer is the only difference. Quality is exact
 full-vocabulary KL divergence from the bf16 model, paired over the same
 12,288 positions on each of three corpora, with cluster-robust t statistics
@@ -467,9 +467,10 @@ score 10.9 and 3.5 on prose, below every build on the 4-bit skeleton.
 None of this serves without custom Metal kernels: a fused
 decode-and-matmul path that reads codes and codebook directly (per-K
 bit-width extraction in-kernel), a device-memory codebook variant for the
-codebooks that exceed Apple's 32 KB threadgroup memory, and a zero-copy view
-that dispatches byte-aligned unpacked codes through the packed kernel (+33%
-prefill, bit-exact). All kernel variants are accepted only on bit-identity
+codebooks that exceed Apple's 32 KB threadgroup memory, and a path that
+feeds codes stored at a whole number of bytes straight to the packed kernel
+without first copying them (bit-exact; prefill throughput 1.33× what it was
+before). All kernel variants are accepted only on bit-identity
 with a reference path where both load, and on relative error against a
 float32 reference where only one does.
 
@@ -479,7 +480,7 @@ arm, three alternating runs each in one session on an idle Apple M3 Ultra,
 with the VQ runtime of the scored builds. VQ decoded at 0.77× and prefilled
 at 0.86× the affine build's throughput (medians; runs 0.73–0.78 and
 0.78–0.88). Kernel and runtime design has moved these ratios substantially (the
-zero-copy view above alone added 33% to prefill), and how far further kernel
+copy-free path above alone made prefill 1.33× faster), and how far further kernel
 work can close the gap is not known; the ratios describe the cost's size
 with this runtime, not a fixed property of the method. Only same-session
 ratios are reported: decode throughput at ~100 GiB residency was bimodal on
