@@ -110,7 +110,7 @@ hr{border:none; border-top:1px solid var(--rule); margin:44px 0}
 """
 
 CANONICAL_URL = "https://thedrainflorist.com/ai/papers/data-free-vector-quantization/"
-PAGE_DESCRIPTION = "Data-free vector quantization beats affine quantization at matched bytes below 6 bits, measured on Apple Silicon."
+PAGE_DESCRIPTION = "Data-free vector quantization beats affine quantization at matched bytes below 5 bits, measured on Apple Silicon."
 OG_IMAGE = "https://thedrainflorist.com/images/below-six-bits-og.png"
 
 page = f"""<meta charset="utf-8">

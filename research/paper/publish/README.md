@@ -1,5 +1,5 @@
 ---
-title: Below Six Bits
+title: Below Five Bits
 emoji: 🧮
 colorFrom: gray
 colorTo: blue
@@ -8,11 +8,12 @@ pinned: false
 license: cc-by-4.0
 ---
 
-# Data-Free Vector Quantization Beats Calibrated Affine at Matched Bytes Below 6 Bits
+# Data-Free Vector Quantization Beats Affine Quantization at Matched Bytes Below 5 Bits
 
-Draft 5, 2026-08-26. Vector quantization of Qwen3.5-397B-A17B,
-Qwen3.6-35B-A3B, and the dense Qwen3.8-27B, measured against uniform and
-mixed-bit-depth calibrated affine builds at matched or smaller file sizes.
-No calibration corpus, no activations, no teacher model.
+Version 5, October 2026 (doi:10.5281/zenodo.23147587; all versions:
+10.5281/zenodo.22119017). Vector quantization of Qwen3.5-397B-A17B,
+Qwen3.6-35B-A3B and the dense Qwen3.8-27B, measured against data-free
+round-to-nearest affine quantization with every other tensor held
+byte-identical. No calibration data.
 
-All artifacts are published: https://huggingface.co/TheDrainFlorist
+The VQ builds measured in the paper are published: https://huggingface.co/TheDrainFlorist
