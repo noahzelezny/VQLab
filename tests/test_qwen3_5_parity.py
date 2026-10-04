@@ -579,3 +579,41 @@ def test_maker_stored_layout(mt):
         E, I, D = t["num_experts"], t["moe_intermediate_size"], t["hidden_size"]
         assert h[pre + "mlp.experts.gate_up_proj"]["shape"] == [E, 2 * I, D]
         assert h[pre + "mlp.experts.down_proj"]["shape"] == [E, D, I]
+
+
+@pytest.mark.parametrize("dtype", ["float32", "bfloat16"])
+def test_gdn_metal_kernel_matches_ops(dtype):
+    """The fused Metal gated-delta kernel (what the GPU runs at serving and
+    scoring) against gated_delta_ops, the path test_gdn_gating_and_recurrence
+    checks against the maker's recurrence. Shipped geometry: Dk = Dv = 128,
+    GQA (Hv = 2 * Hk), a carried-in state and a padding mask."""
+    import mlx.core as mx
+    if not mx.metal.is_available():
+        pytest.skip("no Metal device: the kernel path cannot run")
+    from mlx_lm.models import gated_delta as G
+    dt = getattr(mx, dtype)
+    rng = np.random.default_rng(1234)
+    B, T, Hk, Hv, D = 2, 37, 2, 4, 128
+
+    def arr(*s, scale=1.0):
+        return mx.array((rng.standard_normal(s) * scale).astype(np.float32))
+    q, k = arr(B, T, Hk, D, scale=0.09), arr(B, T, Hk, D, scale=0.09)
+    v = arr(B, T, Hv, D)
+    a, b = arr(B, T, Hv), arr(B, T, Hv)
+    A_log, dt_bias = arr(Hv, scale=0.5), arr(Hv, scale=0.5)
+    state = arr(B, Hv, D, D, scale=0.1)
+    mask = mx.array(np.arange(T)[None, :] < np.array([[T], [T - 5]]))
+    q, k, v = q.astype(dt), k.astype(dt), v.astype(dt)
+    assert mx.default_device() == mx.gpu
+    y_k, s_k = G.gated_delta_update(q, k, v, a, b, A_log, dt_bias, state, mask, use_kernel=True)
+    y_o, s_o = G.gated_delta_update(q, k, v, a, b, A_log, dt_bias, state, mask, use_kernel=False)
+    mx.eval(y_k, s_k, y_o, s_o)
+    y_k, y_o = np.array(y_k.astype(mx.float32)), np.array(y_o.astype(mx.float32))
+    s_k, s_o = np.array(s_k.astype(mx.float32)), np.array(s_o.astype(mx.float32))
+    # masked (padding) positions are discarded by every caller and the two
+    # paths fill them differently (measured 0.36 apart); compare real tokens
+    valid = np.array(mask)[:, :, None, None]
+    d = np.where(valid, np.abs(y_k - y_o), 0.0)
+    tol = 2e-5 if dtype == "float32" else 2e-2       # bf16 output rounding
+    assert d.max() <= tol * max(1.0, np.abs(y_o).max()), d.max()
+    assert np.abs(s_k - s_o).max() <= 2e-5 * max(1.0, np.abs(s_o).max()), np.abs(s_k - s_o).max()
