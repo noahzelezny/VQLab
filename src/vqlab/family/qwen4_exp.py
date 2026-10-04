@@ -62,12 +62,38 @@ def rebuilt(model_dir: pathlib.Path) -> dict:
     return out
 
 
-def ple_multiplier_check(model_dir) -> list:
-    """[(layer, stored, rebuilt)] for every PLE layer whose rebuilt hash
-    multipliers differ from the checkpoint's stored ones; [] when they agree
-    (or the checkpoint stores none)."""
+def used(model_dir: pathlib.Path) -> dict:
+    """{layer: [int, ...]} the multipliers the LOADED runtime actually hashes
+    with: the model is built lazily from this config (nothing allocated), the
+    checkpoint's stored multiplier tensors go through the architecture's own
+    sanitize (knurlogic edit 4 adopts them there), and each PLE module's
+    `_mults` is read back. This tests the path that runs, not a formula."""
+    import importlib
+    import mlx.core as mx
+    import vqlab  # noqa: F401
+    A = importlib.import_module("mlx_lm.models.qwen4_exp")
+    cfg = json.load(open(model_dir / "config.json"))
+    model = A.Model(A.ModelArgs.from_dict(cfg))
+    stored = {f"model.layers.{li}.ple.ple_embedding.layer_multipliers": mx.array(v, dtype=mx.int64)
+              for li, v in _stored(model_dir).items()}
+    target = model.language_model if hasattr(model, "language_model") else model
+    san = getattr(target, "sanitize", None) or model.sanitize
+    san(dict(stored))
+    out = {}
+    for li, layer in enumerate(target.model.layers if hasattr(target, "model") else target.layers):
+        ple = getattr(layer, "ple", None)
+        if ple is not None:
+            out[li] = [int(x) for x in ple.ple_embedding._mults.tolist()]
+    return out
+
+
+def ple_multiplier_check(model_dir, runtime: bool = True) -> list:
+    """[(layer, stored, runtime)] for every PLE layer whose multipliers in the
+    LOADED runtime (runtime=True; the formula rebuild with False) differ from
+    the checkpoint's stored ones; [] when they agree (or none are stored)."""
     d = pathlib.Path(model_dir)
-    s, r = _stored(d), rebuilt(d)
+    s = _stored(d)
+    r = used(d) if runtime else rebuilt(d)
     return [(li, s[li], r.get(li)) for li in sorted(s) if s[li] != r.get(li)]
 
 

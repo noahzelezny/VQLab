@@ -28,10 +28,10 @@ def _fixture(tmp_path, stored, seed=None):
 def test_check_catches_a_wrong_seed(tmp_path):
     from vqlab.family import qwen4_exp as Q
     d = _fixture(tmp_path, [1, 3, 5], seed=1234)
-    bad = Q.ple_multiplier_check(d)
+    bad = Q.ple_multiplier_check(d, runtime=False)
     assert bad and bad[0][0] == 1 and bad[0][1] == [1, 3, 5]
     good = _fixture(tmp_path, Q.rebuilt(d)[1], seed=1234)
-    assert Q.ple_multiplier_check(good) == []
+    assert Q.ple_multiplier_check(good, runtime=False) == []
 
 
 @pytest.mark.lab
@@ -44,3 +44,23 @@ def test_ple_multipliers_match_stored():
     assert Q.ple_multiplier_check(FLASH_NEXT) == [], (
         "rebuilt PLE hash multipliers differ from the checkpoint's stored ones: "
         "the architecture's `seed` default is wrong (reference: 1234)")
+
+
+@pytest.mark.lab
+def test_runtime_adopts_stored_multipliers_over_a_wrong_seed(tmp_path):
+    """Edit 4 is what makes this pass: with the config's seed forced WRONG (0),
+    the formula rebuild differs from the checkpoint, yet the loaded runtime
+    still hashes with the stored multipliers. Proves the check exercises the
+    adopt-from-checkpoint path, not a lucky default."""
+    if not FLASH_NEXT.exists():
+        pytest.skip("Flash-Next maker checkpoint not on this machine")
+    from vqlab.family import qwen4_exp as Q
+    cfg = json.load(open(FLASH_NEXT / "config.json"))
+    (cfg.get("text_config") or cfg)["seed"] = 0
+    (tmp_path / "config.json").write_text(json.dumps(cfg))
+    idx = json.load(open(FLASH_NEXT / "model.safetensors.index.json"))
+    (tmp_path / "model.safetensors.index.json").write_text(json.dumps(idx))
+    for f in {v for k, v in idx["weight_map"].items() if k.endswith("layer_multipliers")}:
+        (tmp_path / f).symlink_to(FLASH_NEXT / f)
+    assert Q.ple_multiplier_check(tmp_path, runtime=False) != []   # the seed-0 formula is wrong
+    assert Q.ple_multiplier_check(tmp_path) == []                   # the runtime is not fooled
