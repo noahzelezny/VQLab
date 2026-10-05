@@ -8,7 +8,7 @@ data-free, pack to true bit-width, verify, and serve through stock `mlx-lm`.
 The runtime ships inside the artifact.
 
 Paper: *Data-Free Vector Quantization Beats Affine Quantization at Matched
-Bytes Below 6 Bits*, doi:[10.5281/zenodo.22119017](https://doi.org/10.5281/zenodo.22119017).
+Bytes Below 5 Bits*, doi:[10.5281/zenodo.22119017](https://doi.org/10.5281/zenodo.22119017).
 Artifacts: [TheDrainFlorist](https://huggingface.co/TheDrainFlorist) on
 Hugging Face.
 
