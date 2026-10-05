@@ -170,7 +170,7 @@ rules behind every number here:
 [**Data-Free Vector Quantization Beats Affine Quantization at Matched Bytes
 Below 6 Bits**](https://doi.org/10.5281/zenodo.22119017) (CC BY 4.0) ·
 code: [VQLab](https://github.com/noahzelezny/VQLab) ·
-web version: [Space](https://huggingface.co/spaces/TheDrainFlorist/below-six-bits)
+web version: [Space](https://huggingface.co/spaces/TheDrainFlorist/data-free-vector-quantization)
 ## Provenance
 
 Base model: [Qwen/Qwen3.6-35B-A3B](https://huggingface.co/Qwen/Qwen3.6-35B-A3B) — **Apache-2.0**.
