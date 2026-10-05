@@ -12,6 +12,8 @@ mx.set_default_device: it leaks into later tests)."""
 import importlib
 import json
 import pathlib
+from vqlab import config as _cfg
+import huggingface_hub.constants as _hfc
 import types
 
 import numpy as np
@@ -30,8 +32,8 @@ V = pytest.importorskip("knurlogic.engine.families.gemma4.vision.vision")
 VC = pytest.importorskip("knurlogic.engine.families.gemma4.vision.config")
 VF = pytest.importorskip("knurlogic.engine.families.gemma4.vision")
 
-EXO = pathlib.Path("/Volumes/Storage SSD/Exo Models")
-HUB = pathlib.Path("/Volumes/Storage SSD/Mlx_Models/hub")
+EXO = _cfg.models()
+HUB = pathlib.Path(_hfc.HF_HUB_CACHE)
 
 
 @pytest.fixture(autouse=True)

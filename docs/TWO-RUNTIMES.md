@@ -10,11 +10,11 @@ reason is the point of the document.**
 
 | | mlx-lm | `load_model` hook | `models/vq_switch.py` |
 |---|---|---|---|
-| `<exo-env>` (M3, **live**) | 0.31.9 | **none** | **absent** |
+| the exo conda env (M3, **live**) | 0.31.9 | **none** | **absent** |
 | `/opt/homebrew/anaconda3/envs/exo` (M4, **live**) | 0.31.9 | **none** | **absent** |
 | `~/exo/.venv` (both boxes, **dormant**) | 0.31.9 | present, line 501 | present, 228 lines |
 
-The running process on the M3 is `<exo-env>/bin/python3.13`;
+The running process on the M3 is the exo env's `python3.13`;
 the M4's supervised process is the equivalent homebrew conda env. mlx-lm
 0.31.9's `load_model` takes no `trust_remote_code` argument at all and
 executes a config's `model_file` unconditionally, so on the live path the

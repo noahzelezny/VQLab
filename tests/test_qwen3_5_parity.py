@@ -22,6 +22,7 @@ import copy
 import importlib
 import json
 import pathlib
+from vqlab import config as _cfg
 import struct
 
 import numpy as np
@@ -35,8 +36,8 @@ A = importlib.import_module("mlx_lm.models.qwen3_5")
 AM = importlib.import_module("mlx_lm.models.qwen3_5_moe")
 
 MAKER = {
-    "qwen3_5": pathlib.Path("/Volumes/Storage SSD/Exo Models/Qwen--Qwen3.5-2B"),
-    "qwen3_5_moe": pathlib.Path("/Volumes/Storage HDD/Teacher Models/Qwen--Qwen3.6-35B-A3B-bf16"),
+    "qwen3_5": _cfg.models() / "Qwen--Qwen3.5-2B",
+    "qwen3_5_moe": _cfg.teachers() / "Qwen--Qwen3.6-35B-A3B-bf16",
 }
 
 EPS = 1e-6
