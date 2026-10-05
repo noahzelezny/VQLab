@@ -192,7 +192,7 @@ rules behind every number here:
 [**Data-Free Vector Quantization Beats Affine Quantization at Matched Bytes
 Below 6 Bits**](https://doi.org/10.5281/zenodo.22119017) (CC BY 4.0) ·
 code: [VQLab](https://github.com/noahzelezny/VQLab) ·
-web version: [Space](https://huggingface.co/spaces/TheDrainFlorist/below-six-bits)
+web version: [Space](https://huggingface.co/spaces/TheDrainFlorist/data-free-vector-quantization)
 ## Provenance
 
 Base model: [google/gemma-4-e4b-it](https://huggingface.co/google/gemma-4-e4b-it) — governed by the **Gemma Terms of Use**.
