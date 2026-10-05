@@ -15,6 +15,7 @@ one fails again, fix the architecture, not the test.
 """
 import json
 import pathlib
+from vqlab import config as _cfg
 import struct
 import sys
 import types
@@ -49,7 +50,7 @@ if _STUB:
     del sys.modules["PIL"], sys.modules["PIL.Image"]
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
-TEACHER = pathlib.Path("/Volumes/Storage HDD/Teacher Models/zai-org--GLM-5.3-Flash-BF16")
+TEACHER = _cfg.teachers() / "zai-org--GLM-5.3-Flash-BF16"
 LIMIT = 10.0
 EPS = 1e-5          # the checkpoint's rms_norm_eps (config.json text_config)
 

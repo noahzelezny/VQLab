@@ -13,8 +13,8 @@ BOX`) refuses a box reserved for someone else unless --override-reservation,
 which the queue's state.json records; MCP `gpu_state` lists every box's.
 
 WHERE. One JSON file, `<scratch>/vqlab-reservations.json` ($VQLAB_RESERVATIONS
-overrides). Scratch is the shared SSD that every box mounts (the M3 owns the
-Storage, the M4 reaches it over SMB, and `queue run --on` already relies on
+overrides). Scratch is the shared SSD that every box mounts (one box owns the
+drive, the others reach it over SMB, and `queue run --on` already relies on
 that for its queue dir), so a reservation written on either box is read by
 both. When scratch is not reachable (SSD unmounted), it falls back to
 `~/.vqlab/reservations.json` on this host and SAYS so: such a reservation is

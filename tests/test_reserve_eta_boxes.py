@@ -139,19 +139,19 @@ def test_remote_check_eio_and_unmounted(monkeypatch):
     b = {"ssh": "u@m4", "python": "/py"}
     seen = []
     monkeypatch.setattr(rq.subprocess, "run", _fake_ssh([
-        {"path": "/Volumes/Storage SSD/a", "exists": True, "listed": True,
+        {"path": "/Volumes/Store SSD/a", "exists": True, "listed": True,
          "readable": False, "errno": "EIO"},
-        {"path": "/Volumes/Storage SSD/b", "exists": True, "readable": False, "errno": "EIO"},
-        {"path": "/Volumes/Storage HDD/t", "exists": False, "ancestor": "/Volumes"},
-        {"path": "/Volumes/Storage SSD/x/missing", "exists": False,
-         "ancestor": "/Volumes/Storage SSD/x"},
-        {"path": "/Volumes/Storage SSD/ok", "exists": True, "readable": True}], seen))
-    probs = rq.remote_check("m4", b, ["/Volumes/Storage SSD/a"])
+        {"path": "/Volumes/Store SSD/b", "exists": True, "readable": False, "errno": "EIO"},
+        {"path": "/Volumes/Store HDD/t", "exists": False, "ancestor": "/Volumes"},
+        {"path": "/Volumes/Store SSD/x/missing", "exists": False,
+         "ancestor": "/Volumes/Store SSD/x"},
+        {"path": "/Volumes/Store SSD/ok", "exists": True, "readable": True}], seen))
+    probs = rq.remote_check("m4", b, ["/Volumes/Store SSD/a"])
     assert probs == [
-        "on m4: /Volumes/Storage SSD is listed but unreadable (EIO): remount Storage SSD on m4",
-        "on m4: /Volumes/Storage HDD is not mounted (/Volumes/Storage HDD/t does not exist): "
-        "mount Storage HDD on m4",
-        "on m4: /Volumes/Storage SSD/x/missing does not exist"]
+        "on m4: /Volumes/Store SSD is listed but unreadable (EIO): remount Store SSD on m4",
+        "on m4: /Volumes/Store HDD is not mounted (/Volumes/Store HDD/t does not exist): "
+        "mount Store HDD on m4",
+        "on m4: /Volumes/Store SSD/x/missing does not exist"]
     assert seen[0][:2] == ["ssh", "-o"] and seen[0][-2] == "u@m4"
 
 

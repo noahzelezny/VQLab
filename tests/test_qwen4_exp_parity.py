@@ -3,12 +3,13 @@ from config must equal the ones the checkpoint stores (2026-10-03: a seed
 default of 0 vs the reference's 1234 sent every n-gram to the wrong rows)."""
 import json
 import pathlib
+from vqlab import config as _cfg
 
 import pytest
 
 pytest.importorskip("knurlogic")
 
-FLASH_NEXT = pathlib.Path("/Volumes/Storage SSD/Exo Models/Qwen--Qwen3.8-Flash-Next-3bit")
+FLASH_NEXT = _cfg.models() / "Qwen--Qwen3.8-Flash-Next-3bit"
 
 
 def _fixture(tmp_path, stored, seed=None):
