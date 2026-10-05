@@ -76,6 +76,51 @@ def panel_row(axes, fam, legend):
             axes[0].legend(fontsize=7.5, loc="lower left")
 
 
+from matplotlib.transforms import blended_transform_factory
+
+
+def card():
+    """Share card (1680x1040): the matched-size 397B comparison, linear scale."""
+    d = load("397b")
+    aff, vq = d["spicy26"], d["r26_sk8"]
+    fig = plt.figure(figsize=(8.4, 5.2), dpi=200)
+    fig.patch.set_facecolor("white")
+    fig.text(0.5, 0.93, "Data-Free Vector Quantization Beats Affine Quantization\n"
+             "at Matched Bytes Below 5 Bits", ha="center", va="top",
+             fontsize=17, weight="bold", color="#151A20", linespacing=1.25)
+    fig.text(0.5, 0.79, f"Qwen3.5-397B-A17B · both builds {aff[0]:.1f} GiB, same skeleton, "
+             "only the expert quantizer differs · Noah Zelezny · v5",
+             ha="center", fontsize=8.5, color="#5C6672")
+    ax = fig.add_axes((0.17, 0.13, 0.66, 0.6))
+    ys, labels = [], []
+    for i, c in enumerate(mr.CORPORA):
+        y = 2 - i
+        a, v = aff[1][c], vq[1][c]
+        ax.barh(y + 0.19, a, 0.34, color="#9CA3AF")
+        ax.barh(y - 0.19, v, 0.34, color=VQ)
+        ax.text(a + 6, y + 0.19, f"{a:.0f}", va="center", fontsize=9, color="#5C6672")
+        ax.text(v + 6, y - 0.19, f"{v:.0f}", va="center", fontsize=9, color=VQ)
+        ax.text(1.03, y, f"−{(1 - v / a) * 100:.0f}%", va="center", fontsize=22,
+                weight="bold", color=VQ, clip_on=False,
+                transform=blended_transform_factory(ax.transAxes, ax.transData))
+        ys.append(y); labels.append(CORPUS_NAME[c])
+    ax.set_yticks(ys, labels, fontsize=11)
+    ax.set_xlim(0, 360)
+    ax.set_xlabel("divergence from the full-precision model (KL, mnats; lower is better)",
+                  fontsize=8.5, color="#5C6672")
+    for sp in ("top", "right", "left"):
+        ax.spines[sp].set_visible(False)
+    ax.tick_params(axis="y", length=0)
+    ax.tick_params(axis="x", labelsize=8, colors="#5C6672")
+    ax.grid(axis="x", alpha=.25)
+    ax.set_axisbelow(True)
+    from matplotlib.patches import Patch
+    ax.legend(handles=[Patch(color="#9CA3AF", label="affine (spicyneuron 2.6-bit)"),
+                       Patch(color=VQ, label="vector quantization")],
+              loc="lower right", fontsize=8.5, frameon=False)
+    fig.savefig(HERE / "og_card.png", dpi=200)
+
+
 def main():
     fig, axes = plt.subplots(1, 3, figsize=(12, 3.8))
     panel_row(axes, "397b", True)
@@ -87,6 +132,7 @@ def main():
     panel_row(axes[1], "27b", True)
     fig.tight_layout()
     fig.savefig(HERE / "fig_35b_27b.png", dpi=200)
+    card()
     print(f"wrote {HERE / 'fig_397b_ladder.png'} and {HERE / 'fig_35b_27b.png'}")
 
 
