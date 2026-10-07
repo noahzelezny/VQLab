@@ -720,3 +720,19 @@ them needs new evidence first, not disk.
   "169h" predates the k-means fixes). Decisive test is a 35B fit pair scored
   on kl_cache_qwen36 — quality first, kernel work only if it wins.
 - Why is creation-binding insufficient for lazy loads? (MLX-side curiosity.)
+## VI. Kernel ideas live in `docs/KernelProposals.md` (separate file, 2026-10-07)
+
+Round-2 prefill ideas (affine-borrowing round) were moved OUT of this file into
+`vqlab/docs/KernelProposals.md` so proposals never get confused with settled
+findings. That file carries the corrected versions: reading the actual kernel
+source against the original drafts killed idea 4 (scale is per out-row, not a
+codebook property — replaced with accumulator-side scaling) and reframed idea 1
+(gemmseg already amortizes the decode across 32 token rows; the real deltas are
+scalar strided stores, the per-code random gather, and missing gather
+pipelining). Every idea there quotes the kernel lines it would change.
+
+As of 2026-10-07 `docs/` and `src/` are tracked in git (the two-session
+workflow — local Scout + cloud Claude — reads them from GitHub). `lab/`
+(FINDINGS-LOG, EXPERIMENTS, archive, queues) is and stays gitignored — the
+private notebook. Ledger context the cloud session needs is quoted into
+`KernelProposals.md`, not copied wholesale.
