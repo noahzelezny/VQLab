@@ -40,11 +40,10 @@ Read the timeline's verdict and noise floor before any single stage; only
 aggregates are trustworthy below the noise floor.
 
 Not covered: KV-cache reads (weights only; fine at context 64, understated
-at long context). **decode-timeline's prefix forward is written for the
-qwen3_5 hybrid trunk** (`is_linear`, `fa_idx`, `create_ssm_mask`); on
-another family it fails loudly. Making it generic the way prefill-timeline
-is (truncate the trunk's `layers`, stub the last MLP) is the first job if
-the artifact under study is GLM.
+at long context). The timeline runs the model's own forward with its trunk
+truncated, so it covers any architecture whose trunk carries `layers` and
+`embed_tokens` and whose layers expose `mlp`; a layer without `mlp` is
+timed whole, as `Lnn`.
 
 ## 2. Serving: where does a served request's time go?
 
@@ -107,7 +106,7 @@ Only for the kernels steps 1-3 pointed at.
 
 | instrument | blind to |
 |---|---|
-| decode-timeline | overlap between stages (it reports drift); families other than qwen3_5 |
+| decode-timeline | overlap between stages (it reports drift); a trunk without `layers` + `embed_tokens` |
 | stage-bandwidth | KV-cache bytes; anything the timeline did not time |
 | serve-timeline | the client side and the network; time two requests share is charged to both |
 | prefill-timeline | the serving layer |

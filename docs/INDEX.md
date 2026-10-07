@@ -13,6 +13,7 @@ carries the conclusions.
 | doc | what it is |
 |---|---|
 | [FINDINGS.md](FINDINGS.md) | The law book: settled laws, retracted leads (do not re-chase), instrument rules, MLX/Metal rules, open questions. Read before proposing any experiment. |
+| [CHECKLIST.md](CHECKLIST.md) | The whole procedure in order, family -> rung -> quality -> speed card -> release -> close, each line naming its command. Tick it per campaign. |
 | [ONBOARDING.md](ONBOARDING.md) | The mechanical pass before fitting a new model family (`vqlab onboard`). |
 | [CORPORA.md](CORPORA.md) | The three referee corpora: provenance, licensing, why they are frozen. |
 

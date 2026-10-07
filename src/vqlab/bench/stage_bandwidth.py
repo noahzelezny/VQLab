@@ -2,8 +2,8 @@
 """stage-bandwidth — achieved memory bandwidth of EVERY decode stage.
 
 The two halves already existed and nothing joined them. `decode-timeline`
-partitions one decode token's time into stages (Lnn.attn / Lnn.gdn /
-Lnn.mlp / embed / final_norm / lm_head); `active-bytes` bills the weight
+partitions one decode token's time into stages (head+embed / Lnn.attn /
+Lnn.lin / Lnn.mlp); `active-bytes` bills the weight
 bytes a decode step reads, but by COMPONENT, summed over the whole network.
 Bytes / time per stage is the number that says WHERE a token's time is
 spent above the bandwidth roofline -- and the lab's open decode question
@@ -107,14 +107,27 @@ def _key(stage_name: str) -> str:
     return stage_name
 
 
+def _claims(stage_name: str) -> list[str]:
+    """The bytes_by_stage keys one timeline stage reads. `head+embed` is the
+    no-layer prefix (embedding, final norm, lm_head); a bare `Lnn` is a
+    layer the timeline could not split (no `mlp` attribute)."""
+    if stage_name == "head+embed":
+        return ["embed", "final_norm", "lm_head"]
+    m = re.match(r"^L(\d+)$", stage_name)
+    if m:
+        i = int(m.group(1))
+        return [f"L{i:02d}.attn", f"L{i:02d}.mlp"]
+    return [_key(stage_name)]
+
+
 def join(timeline: dict, byts: dict[str, float],
          peak_gbs: float | None) -> dict:
     """One row per timed stage, plus the bytes no timed stage claimed."""
     rows, claimed = [], set()
     for st in timeline["stages"]:
-        k = _key(st["name"])
-        b = byts.get(k, 0.0)
-        claimed.add(k)
+        keys = _claims(st["name"])
+        b = sum(byts.get(k, 0.0) for k in keys)
+        claimed.update(keys)
         ms = float(st["ms"])
         row = {"name": st["name"], "kind": st.get("kind") or st["name"],
                "bytes": b, "ms": ms,
