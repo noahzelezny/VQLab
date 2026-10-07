@@ -22,7 +22,7 @@ slice per (row, group)". The source says otherwise — the decode is already
 once per (out-row, group) and phase 3 already reuses it across 32 token rows:
 
 ```python
-# vq_switch.py:3737-3743  (phase 1/2, _SRC_GEMMSEG2, d4 arm)
+# vq_switch.py:3747-3750  (phase 1/2, _SRC_GEMMSEG2, d4 arm)
             const uint c = VQ_FETCH(j0 + q);
 #elif D_BAKE == 4
                 const half4 v = cb[c];
@@ -31,9 +31,9 @@ once per (out-row, group) and phase 3 already reuses it across 32 token rows:
                 wtT[q * 4 + 2][wr] = (half)(s * (float)v.z);
                 wtT[q * 4 + 3][wr] = (half)(s * (float)v.w);
 ```
-`wtT` is `threadgroup half wtT[GROUP][32]` (vq_switch.py:3636) — the shared
+`wtT` is `threadgroup half wtT[GROUP][32]` (vq_switch.py:3608) — the shared
 decoded weight tile — and phase 3 mma's all 32 token rows against it
-(vq_switch.py:3893-3905). So the BLOCK_M amortization steel has, we have.
+(vq_switch.py:3876-3905). So the BLOCK_M amortization steel has, we have.
 
 **What we actually lack vs steel (the quotable deltas):**
 - **(a) scalar strided half stores.** Four 2-byte stores per code, each
@@ -60,9 +60,9 @@ instantiation list. K = NSUB·WPR·32 is huge; at step-512, M·N output is tiny.
 Lines that would change — the serial group loop and the single-threadgroup
 epilogue:
 ```python
-# vq_switch.py:3714    for (int g = 0; g < NGRP; ++g) {          <- serial over K
-# vq_switch.py:3893    for (int k8 = 0; k8 < G / 8; ++k8) {      <- phase 3 mma
-# vq_switch.py:3990+   simdgroup_store(C0, &ybuf[0][...], 32);   <- one-TG epilogue
+# vq_switch.py:3697    for (int g = 0; g < NGRP; ++g) {          <- serial over K
+# vq_switch.py:3876    for (int k8 = 0; k8 < G / 8; ++k8) {      <- phase 3 mma
+# vq_switch.py:3966+   simdgroup_store(C0, &ybuf[0][...], 32);   <- one-TG epilogue
 ```
 Split-K form: each threadgroup owns a g-slice, accumulates a partial, and a
 second pass (or atomics) reduces partials into y.
@@ -104,7 +104,7 @@ Kill: < +2% at step-512 shapes.
 each codebook entry at pack time. The scale is not a codebook property —
 it is per (out-row, group):
 ```python
-# vq_switch.py:3704-3706  (_SRC_GEMMSEG2)
+# vq_switch.py:3662-3663  (_SRC_GEMMSEG2)
     const device half* srow_base = scales
         + (size_t)e * OUT * NGRP + (size_t)(o0 + wr) * NGRP;
 ...
@@ -146,7 +146,7 @@ Kill ladder (in order; each step gates the next):
 
 PIPE already prefetches the *independent* loads (codes + scale):
 ```python
-# vq_switch.py:3717-3721
+# vq_switch.py:3689/3720
 #if PIPE
     // Prefetch pipeline (kernel-body campaign arm 1.5, salvaged design):
     // g+1's code words + scale are INDEPENDENT device loads issued before
@@ -245,16 +245,19 @@ then `put_along_axis` sparse bool mask). So "add DSA" is not a proposal.
 What remains: indexer cost inside the 9.1% attn stage, and long-context
 decode — both minor at the 2048-token shapes the serving pipeline runs.
 
-### R3-1 — Ship u8view (standing; the round's goal may already be built)
+### R3-1 — u8view: ALREADY SHIPPED, not a decode lever (CORRECTED 2026-10-07)
 
-E81 measured u8view at +33% decode, bit-exact, still unshipped in
-published bundles. Goal math on the ledger's own ratios: GLM VQ-2.7
-decode x0.81 vs 4-bit (F190 stage 3) x 1.33 ≈ **x1.08 — VQ decode would
-beat the affine reference**. No new kernel work; a rebundle + check-bundle
-+ smoke per AGENTS.md's two-agent gate (announce → pin → smoke → one
-family at a time; F154 is the cost of skipping it).
-**Kill: the +33% does not reproduce on GLM/Flash-Next shapes in the
-rebundle smoke (n≥3, ratio vs pre-rebundle same session).**
+**CORRECTED 2026-10-07.** This section claimed "+33% decode, still unshipped"
+and a x1.08 goal (x0.81 x 1.33). Both wrong. E81 (lab/log/EXPERIMENTS.md)
+measured u8view at **+33% PREFILL, only +3% DECODE** on the 35B; E90 shipped it
+2026-08-20; the dispatch is live in `vq_switch.py` `_fused_resolve`
+(pack_bits==0 && uint8 && d==4, then a d=2 twin). Decode math at best:
+x0.81 x 1.03 ≈ x0.83, and F190's x0.81 (latest runtime) likely already
+includes it. VQ decode does NOT beat affine from this lever.
+Remaining work is only fleet coverage: artifacts whose bundled model.py
+predates the dispatch (see the 2026-10-07 fleet audit). Rebundle rules per
+AGENTS.md's two-agent gate (announce → pin → smoke → one family at a time).
+**Kill: n/a — prefill-only lever; do not re-score it as a decode win.**
 
 ### R3-2 — Turn MTP speculative decoding ON (machinery already exists)
 
@@ -435,8 +438,9 @@ per AGENTS.md.
   larger than any kernel win available. Also per F191: rerun at reps 2
   before quoting single layers (drift +10.5% at best-of-1).
 
-- **u8view (+33% decode, bit-exact, E81) is still unshipped** in the
-  published bundles. A rebundle is a write to another session's experiment
+- **u8view: CORRECTED 2026-10-07** — it is +33% PREFILL / +3% decode (E81),
+  shipped 2026-08-20 (E90), dispatch live in `vq_switch.py`. Only bundles
+  with a pre-dispatch model.py lack it. A rebundle is a write to another session's experiment
   (AGENTS.md, "Two agents, one artifact root"): announce the fleet-wide
   write first, pin + smoke (`vqlab smoke --max-tokens 8` AND
   `vqlab vision-smoke`) ONE artifact per family, gate ONE per family before
