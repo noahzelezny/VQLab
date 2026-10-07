@@ -208,6 +208,190 @@ IV speed rule; the decode instrument is bimodal at ~100 GiB).
 
 ---
 
+## VII — Round 3: decode-first proposals (2026-10-07 session, Brave search restored)
+
+### The reframe the ledger forces
+
+Three ledger facts reorder the round:
+
+1. **The frontier is DECODE, not prefill.** F190 (2026-10-01): "VQ decodes
+   slower than affine at equal active bytes (F135 ...); on the latest
+   runtime the gap narrows but VQ stays below affine per byte. VQ prefill
+   is slower than affine (F134)." Measured: "VQ below affine per byte
+   everywhere ... on MoE VQ trails a SMALLER affine (Flash-Next VQ-2.1
+   x0.82 vs 3-bit; 397B VQ-2.2 x0.86 vs 2.6-bit)". Prefill on the serving
+   pipeline is mostly closed already: "the exception is GLM VQ-2.7 at
+   x1.10 over GLM 4-bit" (pipeline stage 3, PREFILL_CHUNK=2048).
+2. **The decode gap is NOT bandwidth — the operator's "software
+   constraint" intuition is measured fact.** F135/F190 effective bandwidth
+   on the 27B, same machine: "8-bit 626 GB/s, q4 544, VQ-3.9 346,
+   VQ-4.8 453". VQ moves fewer bytes AND uses less bandwidth — the loss
+   is overhead/latency, not physics. (Caveat per the ratio law: these are
+   derived rates, quote ratios between arms, not absolutes.)
+3. **Prefill's two big non-VQ levers are now named.** F191 partition
+   (timeline-glm27.json groups): lin 2.359 s (25.3%), moe 5.772 s (61.8%),
+   attn 0.848 s (9.1%), head+embed 0.196 s (2.1%), dense 0.162 s (1.7%).
+   The MoE stage is only ~half VQ kernels ("~63 ms/layer vs ~137 ms/layer
+   measured MoE stage") — router/sort/gather/scatter/SwiGLU/shared carry
+   the rest.
+
+### DSA honesty note (before anyone proposes it)
+
+GLM-5.3-Next **already ships DSA-style sparse attention**: the vendored
+tree carries `_mlx_vlm/models/deepseek_v32/language.py` and
+`Glm5NextIndexer` produces `topk_indices` consumed as a sparse mask
+(`glm5_shim.py`: `topk_indices = self.indexer(x, qr, mask, cache=cache[1])`,
+then `put_along_axis` sparse bool mask). So "add DSA" is not a proposal.
+What remains: indexer cost inside the 9.1% attn stage, and long-context
+decode — both minor at the 2048-token shapes the serving pipeline runs.
+
+### R3-1 — Ship u8view (standing; the round's goal may already be built)
+
+E81 measured u8view at +33% decode, bit-exact, still unshipped in
+published bundles. Goal math on the ledger's own ratios: GLM VQ-2.7
+decode x0.81 vs 4-bit (F190 stage 3) x 1.33 ≈ **x1.08 — VQ decode would
+beat the affine reference**. No new kernel work; a rebundle + check-bundle
++ smoke per AGENTS.md's two-agent gate (announce → pin → smoke → one
+family at a time; F154 is the cost of skipping it).
+**Kill: the +33% does not reproduce on GLM/Flash-Next shapes in the
+rebundle smoke (n≥3, ratio vs pre-rebundle same session).**
+
+### R3-2 — Turn MTP speculative decoding ON (machinery already exists)
+
+The lab already built the whole stack; it is currently OFF:
+
+- `vqlab/src/vqlab/mtp/` — loop.py (draft/verify), registry.py, heads
+  `mtp_head_glm5.py`; CONTEXT.md: "`mtp-accept` (paired, across prompts)
+  is the reliable acceptance instrument".
+- Knurlogic has the head vendored and a q6 sidecar format:
+  `heads/glm5.py` L1-13: "GLM-5.3 (glm5_next) MTP drafting head ... only
+  LOADS the packed q6 sidecar (`mtp-head-q6.safetensors`, 889 tensors)".
+- F190's instrument line: "stage 3: vqlab speed-pair-knurlogic M3+M4
+  pipeline tcp, **MTP off**, KNURLOGIC_PREFILL_CHUNK=2048" — the serving
+  flag exists and was deliberately off.
+- The absorbed-MLA shim (`runtime/glm5_shim.py`) was built for exactly
+  this: "That expansion is the right trade for a long prefill ... and
+  exactly the wrong one for MTP speculative verification, which runs
+  L = 2 against a long cache" — measured stock L=2 at Kv=13312 is
+  40.22x the absorbed route (docstring table).
+
+Mechanism: draft k tokens per step with the sidecar head, verify in one
+trunk pass. DeepSeek reports 85-90% acceptance / ~1.8x (public sources);
+MLX evidence is MIXED (1.6-2.3x claims vs one 11-24% Metal throughput
+DROP report), so measure on this stack, do not assume. The drafter
+shares the trunk's VQ layers (graft from `layers.45.`), so R3-1 and
+R3-2 compose.
+**Testability: NO rebundle** (sidecar + serving flag). **Kill: net
+decode ratio ≤ 1.0 on the serving stack (n≥3, MTP on vs off, same
+session), or acceptance < 60% on mtp-accept.**
+
+### R3-3 — Chunked KDA scan: the 25.3% "lin" stage is a SEQUENTIAL kernel
+
+Quote (knurlogic `engine/families/glm5/architecture/glm5_next/_mlx_vlm/
+models/gated_delta.py`):
+
+> L69:  `for (int t = 0; t < T; ++t) {{`
+> L214: `grid=(32, Dv, B * Hv),`
+> L215: `threadgroup=(32, 4, 1),`
+
+At prefill (PREFILL_CHUNK=2048) the gated delta rule runs T=2048
+sequential steps with parallelism only Dv·B·Hv — the classic recurrent
+scan bottleneck. The standard fix is the chunked delta-rule form (WY/UT
+representation; flash-linear-attention's chunked KDA): intra-chunk
+parallel, inter-chunk sequential over T/C chunks. This is the "different
+algorithm, fewer operations" move the operator is asking for, and it is
+25.3% of prefill.
+**Testability: serving-side** (knurlogic vendored `_mlx_vlm`), no vqlab
+rebundle. NOT bit-exact (accumulation order changes) → kernel-truth vs
+float64 reference FIRST, then KL gate per law III.12.
+**Kill: prefill ratio < +10% at the 2048-token chunk (n≥3, same session)
+or KL regression beyond the family gate.**
+
+### R3-4 — MoE dispatch overhead: ~37% of prefill is outside the VQ kernels
+
+F191: VQ kernels ~63 ms/layer vs 137 ms/layer MoE stage → ~74 ms/layer
+of router/sort/gather/scatter/SwiGLU/shared. Quote (knurlogic
+`_mlx_vlm/models/switch_layers.py`):
+
+> L175: `do_sort = indices.size >= 64`
+> L179: `x, idx, inv_order = _gather_sort(x, indices)`
+> L191: `x = _scatter_unsort(x, inv_order, indices.shape)`
+
+and `glm5_next/language.py` L~90: `y = self.switch_mlp(x, inds)` /
+`y = (y * scores[..., None]).sum(axis=-2)`.
+Sub-levers: (a) sub-partition the MoE stage first (router / sort / VQ /
+shared) with prefill-timeline at reps 2 — F191's own registered next
+step, and its drift +10.5% must be fixed before quoting; (b) fuse
+router+sort; (c) real-routing-skew kernels — F191: "Per-layer MoE cost
+varies ~2x across layers (130-277 ms), which synthetic uniform routing
+cannot show"; (d) overlap scatter with the next layer's attention.
+**Testability: serving-side.** **Kill: any sub-lever < +3% prefill
+(n≥3, ratio same session).**
+
+### R3-5 — LUT→ALU: rank-r structured codebooks (decode)
+
+Quote (vqlab `src/vqlab/runtime/vq_switch.py`, the device-codebook
+decode kernel):
+
+> L824: `_SRC_FUSED_D4_DEVCB = r"""`
+> L853-856:
+> `gacc += dot(float4(cb[(uint)crow[j]]),   float4(xs[j]))`
+> `+ dot(float4(cb[(uint)crow[j+1]]), float4(xs[j+1]))`
+> `+ dot(float4(cb[(uint)crow[j+2]]), float4(xs[j+2]))`
+> `+ dot(float4(cb[(uint)crow[j+3]]), float4(xs[j+3]));`
+
+`cb[c]` is a random per-code gather of 8 bytes from a Kx4 device table —
+the structural VQ-vs-affine tax (round 2, idea #1's named delta (b)).
+Replace the table with a rank-r factorization `cb[c] ≈ Σ_k a_k[c]·b_k`:
+`a_k` as K-byte fp8 tables (K=256 → 256 B/table, L1-resident), `b_k`
+shared dim-vectors; phase 1 becomes r cached gathers + r FMAs. At r≤4
+this also CUTS codebook bytes. Pack-time fit per layer (low-rank
+approximation of the fp16 codebook). Lossy → KL gate (law III.12);
+microbench first with synthetic codebooks.
+**Kill: decode microbench ratio < +5% (n≥3) or KL worse than the
+family gate.**
+
+### R3-6 — Two-level (residual) codebook for big-K geometries
+
+For d8/K16384 the codebook is 256 KB > the 32 KB threadgroup ceiling
+(runtime/CONTEXT.md: "`K * dim * 2 < 32768` is a hard ceiling"), which
+is the measured ~19% decode-streaming tax. VPTQ (arXiv 2409.17066) is
+the prior art: residual VQ codebooks. Here: coarse table (e.g. 256
+entries, threadgroup-resident) + small residual table → both fit the
+ceiling; two cached gathers replace one 256 KB device stream. Lossy →
+KL gate. Microbench on the d8 geometry first.
+**Kill: decode ratio < +8% on the big-K geometry (n≥3) or KL
+regression.**
+
+### R3-7 — Prefix/KV caching in Knurlogic serving
+
+Noah's chats re-send long shared prefixes every turn. A radix/prefix
+cache skips prefill entirely on a hit. Serving-side only. Also
+interacts with F188 (its 2734-token prompts recur).
+**Kill: measured hit rate < ~30% of real serving traffic.**
+
+### R3-8 — Phase-switched weight expansion (prefill-only scratch) — DEFERRED
+
+Dequant VQ→fp16 (exact, ~60-70 GB) or int4-affine (approx, ~15 GB,
+KL-gated) scratch at load; run stock MLX dense/affine prefill kernels;
+decode keeps the 2-bit VQ path. Zero new kernel code, and the fp16
+variant is plausibly bit-exact vs the fused prefill (the fused kernel
+mma's the same fp16 values). Kept on the list because it attacks the
+one-box prefill ceiling (stage-1 VQ prefill x0.92-0.96, F190) and gives
+the F188 M4-only serving gap a candidate cause, but it is DEMOTED below
+R3-1..R3-4 and needs the M4-only machine mode (~128 GiB free) the
+operator described. Revisit after the earlier verdicts.
+
+### Sequencing (Claude, tomorrow)
+
+R3-1 (ship u8view) → R3-2 (mtp-accept, then flag on) → R3-3 (chunked
+KDA) → R3-4 (MoE sub-partition, then levers) → R3-5/R3-6 microbenches →
+R3-7 → R3-8. Standing above all: F188 verification (section VI) and the
+u8view ship itself. Every step: n≥3, one process per arm, RATIO quoted
+per AGENTS.md.
+
+---
+
 ## Provenance & rules
 
 - All ledger numbers cited are pre-existing measurements (F/E entries in
