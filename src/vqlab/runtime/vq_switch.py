@@ -3744,9 +3744,37 @@ _SRC_GEMMSEG2 = _PACK_FETCH + r"""
 #else
             const float s = (float)srow_w[g];
 #endif
+#if CVEC && BITS > 0 && !PIPE
+            // R2-6 (2026-10-07): this thread's SPG/4 codes are CONTIGUOUS
+            // bits of one row (the span is aligned and never crosses a
+            // 32-code block), so load the <= 5 covering words ONCE and
+            // extract from registers instead of 1-2 dependent loads per
+            // code. Same integer per code -- bit-exact by construction.
+            uint cv[SPG / 4];
+            {
+                const int jj   = j0 + q0;
+                const int boff = (jj & 31) * BITS;
+                const int w0   = (jj >> 5) * BITS + (boff >> 5);
+                const int sh   = boff & 31;
+                const int nw   = (sh + (SPG / 4) * BITS + 31) >> 5;
+                uint wv[6];
+                for (int i = 0; i < 6; ++i)
+                    wv[i] = (i < nw) ? wrow_codes[w0 + i] : 0u;
+                for (int i = 0; i < SPG / 4; ++i) {
+                    const int o  = sh + i * BITS;
+                    const int wi = o >> 5;
+                    const int sb = o & 31;
+                    cv[i] = ((wv[wi] >> sb)
+                             | ((sb + BITS > 32) ? (wv[wi + 1] << (32 - sb)) : 0u))
+                            & VQ_MASK;
+                }
+            }
+#endif
             for (int q = q0; q < q0 + SPG / 4; ++q) {
 #if PIPE
                 const uint c = cq[q - q0];
+#elif CVEC && BITS > 0
+                const uint c = cv[q - q0];
 #else
                 const uint c = VQ_FETCH(j0 + q);
 #endif
@@ -4144,6 +4172,10 @@ _GEMMSEG_PH2V = os.environ.get("VQ_GEMMSEG_PH2V", "1") == "1"
 # threadgroup-codebook budget is untouched). Bit-exact. Default OFF until
 # benched.
 _GEMMSEG_WTV = os.environ.get("VQ_GEMMSEG_WTV", "0")
+# R2-6 (2026-10-07): per-thread contiguous code-word load. "1" loads the
+# <=5 words covering a thread's SPG/4 packed codes once per group and
+# extracts in registers (packed arm, PIPE off). Bit-exact. Default OFF.
+_GEMMSEG_CVEC = os.environ.get("VQ_GEMMSEG_CVEC", "0") == "1"
 # threadgroup tile bytes at RTILE=32, tracked so cb_dev/fits arithmetic
 # follows the flags (F51's rule: budget follows every byte change).
 _TILES_R32 = (2 if _GEMMSEG_DSTORE else 3) * 4096
@@ -4398,6 +4430,9 @@ def _gemmseg_prefill(xsrc, src_rows, idx_sorted_np, codes, codebook, scales,
         wpad = 8 if (_GEMMSEG_WTV == "2" and cb_dev) else 0
         if wtv:
             name += f"_wtv{wpad}"
+        cvec = 1 if (_GEMMSEG_CVEC and pack_bits and not _GEMMSEG_PIPE) else 0
+        if cvec:
+            name += "_cv"
         # TIO follows xsrc's dtype so the kernel cache never mixes builds.
         if xsrc.dtype == mx.bfloat16:
             name += "_bf16io"
@@ -4413,7 +4448,7 @@ def _gemmseg_prefill(xsrc, src_rows, idx_sorted_np, codes, codebook, scales,
                     ("OT2", ot2), ("DSTORE", 1 if _GEMMSEG_DSTORE else 0),
                     ("PIPE", 1 if _GEMMSEG_PIPE else 0),
                     ("PH2V", 1 if _GEMMSEG_PH2V else 0),
-                    ("WTV", wtv), ("WPAD", wpad)]
+                    ("WTV", wtv), ("WPAD", wpad), ("CVEC", cvec)]
         if not pack_bits:
             # unpacked arm reads codes as CT (uchar/ushort), not uint words
             template.append(("CT", codes.dtype))
