@@ -159,7 +159,8 @@ def _delete_gdn_scan(model):
 
     n = 0
     for name, mod in list(_sys.modules.items()):
-        if mod is not None and getattr(mod, "gated_delta_update", None) is not None \
+        if mod is not None and name.startswith(("mlx_lm.", "vqlab", "knurlogic")) \
+                and getattr(mod, "gated_delta_update", None) is not None \
                 and name != "mlx_lm.models.gated_delta":
             mod.gated_delta_update = stub
             n += 1
@@ -178,7 +179,8 @@ def _chunk_gdn_scan(model):
     from vqlab.runtime.gated_delta_chunked import gated_delta_update as gdu
     n = 0
     for name, mod in list(_sys.modules.items()):
-        if mod is not None and getattr(mod, "gated_delta_update", None) is not None \
+        if mod is not None and name.startswith(("mlx_lm.", "vqlab", "knurlogic")) \
+                and getattr(mod, "gated_delta_update", None) is not None \
                 and name != "mlx_lm.models.gated_delta" \
                 and not name.startswith("vqlab.runtime.gated_delta_chunked"):
             mod.gated_delta_update = gdu
