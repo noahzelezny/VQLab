@@ -3856,6 +3856,12 @@ _SRC_GEMMSEG2 = _PACK_FETCH + r"""
                 for (int q = q0; q < q0 + SPG / 4; ++q)
                     cq[q - q0] = pfc[ob][q - q0];
             }
+#elif ACCS
+            // R2-4' (2026-10-07): accumulator-side scaling. wtT holds the
+            // UNSCALED codebook entries (s=1 folds the multiply away; the
+            // (half) round of an exact half is exact); s[row,g] is applied
+            // in fp32 to the group's fp32 mma result in phase 3.
+            const float s = 1.0f;
 #else
             const float s = (float)srow_w[g];
 #endif
@@ -4045,6 +4051,33 @@ _SRC_GEMMSEG2 = _PACK_FETCH + r"""
         threadgroup_barrier(mem_flags::mem_threadgroup);
         // phase 3: C[tokens 32 x outs 32] += X[32 x G] @ WtT[G x 32]
         // simdgroup sg owns out-block col sg*8; ti indexes token blocks.
+#if ACCS
+  #if PIPE || SZ || RTILE == 64
+    #error "ACCS: PIPE/SZ/RTILE64 unsupported"
+  #endif
+        // per-group fp32 temporaries, scaled per out-column then added
+        simdgroup_float8x8 T0 = simdgroup_float8x8(0);
+        simdgroup_float8x8 T1 = simdgroup_float8x8(0);
+        simdgroup_float8x8 T2 = simdgroup_float8x8(0);
+        simdgroup_float8x8 T3 = simdgroup_float8x8(0);
+  #define VQA0 T0
+  #define VQA1 T1
+  #define VQA2 T2
+  #define VQA3 T3
+  #define VQB0 T0
+  #define VQB1 T1
+  #define VQB2 T2
+  #define VQB3 T3
+#else
+  #define VQA0 C0
+  #define VQA1 C1
+  #define VQA2 C2
+  #define VQA3 C3
+  #define VQB0 Db0
+  #define VQB1 Db1
+  #define VQB2 Db2
+  #define VQB3 Db3
+#endif
 #if OT2
         if (ob == 0)
 #endif
@@ -4058,13 +4091,13 @@ _SRC_GEMMSEG2 = _PACK_FETCH + r"""
 #endif
             simdgroup_half8x8 A;
             simdgroup_load(A, &xt[0][k8 * 8], GROUP + XPAD);
-            simdgroup_multiply_accumulate(C0, A, B, C0);
+            simdgroup_multiply_accumulate(VQA0, A, B, VQA0);
             simdgroup_load(A, &xt[8][k8 * 8], GROUP + XPAD);
-            simdgroup_multiply_accumulate(C1, A, B, C1);
+            simdgroup_multiply_accumulate(VQA1, A, B, VQA1);
             simdgroup_load(A, &xt[16][k8 * 8], GROUP + XPAD);
-            simdgroup_multiply_accumulate(C2, A, B, C2);
+            simdgroup_multiply_accumulate(VQA2, A, B, VQA2);
             simdgroup_load(A, &xt[24][k8 * 8], GROUP + XPAD);
-            simdgroup_multiply_accumulate(C3, A, B, C3);
+            simdgroup_multiply_accumulate(VQA3, A, B, VQA3);
 #if RTILE == 64
             simdgroup_load(A, &xt[32][k8 * 8], GROUP + XPAD);
             simdgroup_multiply_accumulate(C4, A, B, C4);
@@ -4087,15 +4120,47 @@ _SRC_GEMMSEG2 = _PACK_FETCH + r"""
 #endif
             simdgroup_half8x8 A;
             simdgroup_load(A, &xt[0][k8 * 8], GROUP + XPAD);
-            simdgroup_multiply_accumulate(Db0, A, B, Db0);
+            simdgroup_multiply_accumulate(VQB0, A, B, VQB0);
             simdgroup_load(A, &xt[8][k8 * 8], GROUP + XPAD);
-            simdgroup_multiply_accumulate(Db1, A, B, Db1);
+            simdgroup_multiply_accumulate(VQB1, A, B, VQB1);
             simdgroup_load(A, &xt[16][k8 * 8], GROUP + XPAD);
-            simdgroup_multiply_accumulate(Db2, A, B, Db2);
+            simdgroup_multiply_accumulate(VQB2, A, B, VQB2);
             simdgroup_load(A, &xt[24][k8 * 8], GROUP + XPAD);
-            simdgroup_multiply_accumulate(Db3, A, B, Db3);
+            simdgroup_multiply_accumulate(VQB3, A, B, VQB3);
         }
 #endif
+#if ACCS
+        {
+            // lane owns row fm, cols fn..fn+1 of each 8x8 fragment (steel
+            // mapping, as DSTORE); col = output row of the weight.
+            const short fn = (((lane / 4) & 2) * 2) + ((lane % 2) * 2);
+            const int oc = oo + (int)sg * 8 + fn;
+            const device half* sp = scales + ((size_t)e * OUT + oc) * NGRP + g;
+            const float s0 = (oc < OUT) ? (float)sp[0] : 0.0f;
+            const float s1 = (oc + 1 < OUT) ? (float)sp[NGRP] : 0.0f;
+  #define VQ_ACC(CK, TK) { thread auto& ce = (CK).thread_elements(); \
+            thread auto te = (TK).thread_elements(); \
+            ce[0] += s0 * te[0]; ce[1] += s1 * te[1]; }
+  #if OT2
+            if (ob == 0) {
+  #endif
+            VQ_ACC(C0, T0) VQ_ACC(C1, T1) VQ_ACC(C2, T2) VQ_ACC(C3, T3)
+  #if OT2
+            } else {
+            VQ_ACC(Db0, T0) VQ_ACC(Db1, T1) VQ_ACC(Db2, T2) VQ_ACC(Db3, T3)
+            }
+  #endif
+  #undef VQ_ACC
+        }
+#endif
+#undef VQA0
+#undef VQA1
+#undef VQA2
+#undef VQA3
+#undef VQB0
+#undef VQB1
+#undef VQB2
+#undef VQB3
         threadgroup_barrier(mem_flags::mem_threadgroup);
       }
     }
@@ -4291,6 +4356,11 @@ _GEMMSEG_WTV = os.environ.get("VQ_GEMMSEG_WTV", "0")
 # <=5 words covering a thread's SPG/4 packed codes once per group and
 # extracts in registers (packed arm, PIPE off). Bit-exact. Default OFF.
 _GEMMSEG_CVEC = os.environ.get("VQ_GEMMSEG_CVEC", "0") == "1"
+# R2-4' (2026-10-07): accumulator-side scaling. "1" stages UNSCALED codebook
+# entries in wtT and applies s[row,g] in fp32 to each group's fp32 mma
+# partial (no per-element half round of s*v). NUMERICS CHANGE. RTILE=32,
+# PIPE off, no SKIPZERO. Default OFF.
+_GEMMSEG_ACCS = os.environ.get("VQ_GEMMSEG_ACCS", "0") == "1"
 # threadgroup tile bytes at RTILE=32, tracked so cb_dev/fits arithmetic
 # follows the flags (F51's rule: budget follows every byte change).
 _TILES_R32 = (2 if _GEMMSEG_DSTORE else 3) * 4096
@@ -4548,6 +4618,10 @@ def _gemmseg_prefill(xsrc, src_rows, idx_sorted_np, codes, codebook, scales,
         cvec = 1 if (_GEMMSEG_CVEC and pack_bits and not _GEMMSEG_PIPE) else 0
         if cvec:
             name += "_cv"
+        accs = 1 if (_GEMMSEG_ACCS and rtile == 32 and not _GEMMSEG_PIPE
+                     and rowtbl is None) else 0
+        if accs:
+            name += "_accs"
         # TIO follows xsrc's dtype so the kernel cache never mixes builds.
         if xsrc.dtype == mx.bfloat16:
             name += "_bf16io"
@@ -4563,7 +4637,8 @@ def _gemmseg_prefill(xsrc, src_rows, idx_sorted_np, codes, codebook, scales,
                     ("OT2", ot2), ("DSTORE", 1 if _GEMMSEG_DSTORE else 0),
                     ("PIPE", 1 if _GEMMSEG_PIPE else 0),
                     ("PH2V", 1 if _GEMMSEG_PH2V else 0),
-                    ("WTV", wtv), ("WPAD", wpad), ("CVEC", cvec)]
+                    ("WTV", wtv), ("WPAD", wpad), ("CVEC", cvec),
+                    ("ACCS", accs)]
         if not pack_bits:
             # unpacked arm reads codes as CT (uchar/ushort), not uint words
             template.append(("CT", codes.dtype))
