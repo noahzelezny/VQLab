@@ -43,6 +43,19 @@ and it is still a valid ranking. The tool does NOT refuse on drift by
 default; `--require-clean` restores a hard gate for when a strict partition
 is actually needed.
 
+THE PREFIX IS THE MODEL'S OWN FORWARD. Prefix k runs the real model with
+its trunk's `layers` list truncated and, for an attention-half stage, the
+last kept layer's MLP replaced by `x * 0` (prefill-timeline's method). So
+the instrument is architecture-agnostic: hyper-connections, PLE tables,
+sparse or compressed attention, masks and positions run exactly as the
+model runs them. (Its first version re-implemented the forward for the
+qwen3_5 trunk and was silently wrong on any other.) Stages:
+
+    head+embed   what runs with no layers: embedding, final norm, lm_head
+    Lnn.attn     layer nn up to its MLP (Lnn.lin for a linear-attention
+                 layer: fixed-size state, cost flat in the context)
+    Lnn.mlp      layer nn's MLP (kind `moe` or `dense`)
+
 COST is O(n^2) work -- prefix k re-runs stages 0..k -- which is fine
 because a decode step is ~40 ms and there are ~130 prefixes.
 
@@ -58,10 +71,82 @@ import sys
 import time
 
 import mlx.core as mx
+import mlx.nn as nn
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))  # src/
 from vqlab import _layout  # noqa: E402,F401  one module object per name
 from vqlab import runtime_load  # noqa: E402
+
+
+class _ZeroMLP(nn.Module):
+    """Stands in for a layer's MLP: x * 0 depends on its input, so the
+    upstream graph is still computed (a constant would let laziness drop
+    it: F48)."""
+
+    def __call__(self, x, *args, **kwargs):
+        return x * 0
+
+
+def _trunk(m, depth=0):
+    """The module carrying both `layers` and `embed_tokens`. Requiring BOTH
+    stops the walk at the right level (a wrapper can have `layers` without
+    `embed_tokens`, which is how the first version of this landed on the
+    wrong module)."""
+    if depth > 6:
+        return None
+    if hasattr(m, "layers") and hasattr(m, "embed_tokens"):
+        return m
+    for attr in ("language_model", "model"):
+        sub = getattr(m, attr, None)
+        if sub is not None and sub is not m:
+            got = _trunk(sub, depth + 1)
+            if got is not None:
+                return got
+    return None
+
+
+def _kind(layer):
+    """(attention-half kind, MLP-half kind) of one decoder layer."""
+    attn = "lin" if getattr(layer, "is_linear", False) else "attn"
+    mlp = getattr(layer, "mlp", None)
+    moe = mlp is not None and any(hasattr(mlp, a) for a in
+                                  ("switch_mlp", "experts", "gate"))
+    return attn, ("moe" if moe else "dense")
+
+
+def _family_of(art) -> str:
+    """The family that loads this artifact: the one registered for its
+    config's model_type, else the model_type itself (runtime_load treats an
+    unregistered family as stock mlx-lm). Never guessed from a name."""
+    cfg = json.loads((pathlib.Path(art) / "config.json").read_text())
+    mt = cfg.get("model_type") or cfg.get("text_config", {}).get("model_type", "")
+    return runtime_load.family_for_model_type(mt) or mt
+
+
+def _cache_arrays(cache):
+    for c in cache or []:
+        st = getattr(c, "state", None)
+        for x in (st if isinstance(st, (list, tuple)) else [st]):
+            if isinstance(x, mx.array):
+                yield x
+
+
+def _offsets(cache):
+    return [getattr(c, "offset", None) for c in cache or []]
+
+
+def _trim_back(cache, before):
+    """Undo the token a timed step appended, on every cache that can trim
+    (KV caches). Fixed-size recurrent state cannot and need not: its cost
+    does not depend on how many tokens it has seen."""
+    for c, b in zip(cache or [], before):
+        now = getattr(c, "offset", None)
+        try:
+            if b is not None and isinstance(now, int) and now > b \
+                    and c.is_trimmable():
+                c.trim(now - b)
+        except (AttributeError, TypeError):
+            pass
 
 
 def gpu_watts() -> float:
@@ -79,7 +164,9 @@ def gpu_watts() -> float:
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--art", required=True)
-    ap.add_argument("--family", default="qwen3_5")
+    ap.add_argument("--family", default=None,
+                    help="loader family; default: the one registered for the "
+                         "artifact's config model_type (stock mlx-lm if none)")
     ap.add_argument("--context", type=int, default=64,
                     help="prompt tokens prefilled before the timed decode "
                          "step. Full-attention layers cost more at longer "
@@ -107,98 +194,78 @@ def main() -> int:
             f"REFUSING: GPU at {w0:.1f} W (limit {a.max_watts:.0f}). Rule III: "
             "never measure on a contended box.")
 
-    model, _cfg = runtime_load.load_for_family(a.family, a.art, lazy=True)
-    from mlx_lm.utils import load_tokenizer
+    family = a.family or _family_of(a.art)
+    model, _cfg = runtime_load.load_for_family(family, a.art, lazy=True)
     from mlx_lm.models.cache import make_prompt_cache
+    from mlx_lm.utils import load_tokenizer
     tok = load_tokenizer(pathlib.Path(a.art))
 
     text = ("the quick brown fox jumps over the lazy dog while considering "
             "distributed inference ")
     ids = tok.encode(text * (a.context // 13 + 2))[: a.context]
 
-    # Resolve the trunk by what it CARRIES, not by a guessed path. This
-    # family nests model.language_model.model; requiring BOTH layers and
-    # embed_tokens stops the walk at the right level (a wrapper can have
-    # `layers` without `embed_tokens`, which is how the first version of
-    # this landed on the wrong module).
-    def _trunk(m, depth=0):
-        if depth > 6:
-            return None
-        try:
-            if hasattr(m, "layers") and hasattr(m, "embed_tokens"):
-                return m
-        except Exception:
-            pass
-        for attr in ("language_model", "model"):
-            sub = getattr(m, attr, None)
-            if sub is not None and sub is not m:
-                got = _trunk(sub, depth + 1)
-                if got is not None:
-                    return got
-        return None
-
     inner = _trunk(model)
     if inner is None:
         raise SystemExit("FAIL: could not locate a trunk carrying both "
                          "`layers` and `embed_tokens`")
-    # the head lives on the module that OWNS the trunk
-    head_owner = getattr(model, "language_model", model)
-    layers = inner.layers
-    arch = sys.modules[type(layers[0]).__module__]
+    layers = list(inner.layers)
 
-    # Stage list, in execution order. Sub-layer granularity: the attention
-    # half and the MLP half are separated because they are different
-    # kernels with different levers (F131 found the regime inverts between
-    # them), and lumping them would hide exactly what this is for.
-    stages = [("embed", None, None)]
+    # Stage list, in execution order, as (name, kind, (kept, stub)). A
+    # prefix is the MODEL'S OWN forward with the trunk truncated to `kept`
+    # layers and, when `stub`, the last kept layer's MLP replaced by a
+    # zero (prefill-timeline's method). Nothing about the architecture is
+    # re-implemented: hyper-connections, PLE tables, compressed or sparse
+    # attention, masks and positions all run exactly as the model runs
+    # them. The old hand-written prefix knew one trunk (qwen3_5) and was
+    # silently wrong on any other.
+    #
+    # Sub-layer granularity: the attention half and the MLP half are
+    # separate stages because they are different kernels with different
+    # levers (F131 found the regime inverts between them). The attention
+    # half is named by what the layer carries: `lin` for a linear
+    # (GatedDeltaNet / KDA) layer, whose state is fixed-size, `attn` for
+    # full attention, whose cost grows with the context.
+    stages = [("head+embed", "head+embed", (0, False))]
     for i, lyr in enumerate(layers):
-        # gdn and full attention are SEPARATE stage types. Lumping them
-        # hides the thing most worth knowing: GatedDeltaNet carries
-        # fixed-size recurrent state while full attention grows with
-        # context, so their shares move in opposite directions as context
-        # grows and a combined "attn" number is a blend of the two at one
-        # context length.
-        kind = "gdn" if getattr(lyr, "is_linear", False) else "attn"
-        stages.append((f"L{i:02d}.{kind}", i, kind))
-        stages.append((f"L{i:02d}.mlp", i, "mlp"))
-    stages.append(("final_norm", None, None))
-    stages.append(("lm_head", None, None))
+        attn, mlp = _kind(lyr)
+        if getattr(lyr, "mlp", None) is not None:
+            stages.append((f"L{i:02d}.{attn}", attn, (i + 1, True)))
+            stages.append((f"L{i:02d}.mlp", mlp, (i + 1, False)))
+        else:
+            stages.append((f"L{i:02d}", "layer", (i + 1, False)))
 
     def fresh_cache():
         c = make_prompt_cache(model)
         model(mx.array([ids]), cache=c)      # untimed prefill, real work
-        mx.eval([x for x in (c or []) if x is not None] or mx.array(0.0))
+        mx.eval([x for x in _cache_arrays(c)] or mx.array(0.0))
         return c
 
-    def forward_prefix(k, cache, tokid):
-        """Run the decode step truncated AFTER stage k, return the tensor."""
-        h = inner.embed_tokens(tokid)
-        if k == 0:
-            return h
-        fa = arch.create_attention_mask(h, cache[inner.fa_idx])
-        ssm = arch.create_ssm_mask(h, cache[inner.ssm_idx])
-        s = 1
-        for i, lyr in enumerate(layers):
-            mask = ssm if lyr.is_linear else fa
-            att = lyr.linear_attn if lyr.is_linear else lyr.self_attn
-            r = att(lyr.input_layernorm(h), mask, cache[i])
-            h = h + r
-            if s == k:
-                return h
-            s += 1
-            h = h + lyr.mlp(lyr.post_attention_layernorm(h))
-            if s == k:
-                return h
-            s += 1
-        h = inner.norm(h)
-        if s == k:
-            return h
-        tie = getattr(getattr(head_owner, "args", None),
-                      "tie_word_embeddings", False)
-        return (inner.embed_tokens.as_linear(h) if tie
-                else head_owner.lm_head(h))
-
     tokid = mx.array([[ids[-1]]])
+
+    def forward_prefix(k, cache, _tok):
+        """Run one decode step through prefix k, return what it made.
+
+        The cache is the FULL model's (forwards index it by absolute layer
+        position, not by the kept count). Every timed step appends a token
+        to the kept layers' caches; it is trimmed back afterwards wherever
+        the cache can trim, so repeated steps see the same context."""
+        kept, stub = stages[k][2]
+        before = _offsets(cache)
+        inner.layers = layers[:kept]
+        saved = None
+        if stub and kept:
+            saved = layers[kept - 1].mlp
+            layers[kept - 1].mlp = _ZeroMLP()
+        try:
+            out = model(_tok, cache=cache)
+            out = getattr(out, "logits", out)
+            mx.eval(out)
+        finally:
+            if saved is not None:
+                layers[kept - 1].mlp = saved
+            inner.layers = layers
+        _trim_back(cache, before)
+        return out
 
     def timed_pair(k):
         """Time prefix k-1 and prefix k INTERLEAVED in one window.
@@ -234,13 +301,10 @@ def main() -> int:
     def timed(k):
         # ONE cache rebuild per stage, reps inside it. Rebuilding per rep
         # made the prefill dominate the run (4x the prefills for the same
-        # number of timings). The bias this accepts: each rep leaves one
-        # extra token in the cache, so rep n sees a context of
-        # `context + n - 1`. At the default 64 that is a <5% context drift
-        # across 4 reps, and only the full-attention layers notice it at
-        # all -- the GatedDeltaNet layers carry fixed-size recurrent state.
-        # `best-of` then takes the fastest, which is the SHORTEST context,
-        # so the bias does not accumulate into the reported number.
+        # number of timings). Each rep's token is trimmed off the KV caches
+        # again (forward_prefix), so every rep sees the same context; a
+        # cache that cannot trim is fixed-size state, whose cost does not
+        # depend on its length.
         c = fresh_cache()
         best = float("inf")
         for _ in range(a.reps + 1):
@@ -253,12 +317,13 @@ def main() -> int:
         del c
         return best * 1e3
 
+
     print(f"\ndecode-timeline  {pathlib.Path(a.art).name}")
     print(f"context {a.context} tokens, best-of-{a.reps}, {len(stages)} stages"
           f"   GPU {w0:.1f} W\n", flush=True)
 
     rows = []
-    for k, (name, _li, kind) in enumerate(stages):
+    for k, (name, kind, _bound) in enumerate(stages):
         if k == 0:
             d = t = timed(0)
         else:

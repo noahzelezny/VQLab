@@ -7,6 +7,8 @@ every rerun and records each step's result in
 the GPU lease (and over MCP `run`, so an agent can drive it). This document
 explains WHY each step exists; `onboard` is how you run them.
 
+Part of the whole procedure in CHECKLIST.md (section A).
+
 This is a two-hour, mechanical characterisation pass. The lab spent weeks on
 a fitter regression whose cause (a seeding choice interacting with layer
 depth) could have been front-loaded into this pass. It tells you which knobs

@@ -96,3 +96,50 @@ def test_serve_timeline_summary_is_a_median_partition():
     assert s["median_s"]["prefill_forward"] == 2.1
     assert s["min_s"]["queue"] == 0.1 and s["max_s"]["queue"] == 0.3
     assert s["ttft_side_s"] == pytest.approx(0.2 + 2.1)
+
+
+def test_head_and_unsplit_layers_claim_their_bytes(moe):
+    tl = {"stages": [{"name": "head+embed", "kind": "head+embed", "ms": 0.3},
+                     {"name": "L00", "kind": "layer", "ms": 1.0}]}
+    j = join(tl, bytes_by_stage(moe), peak_gbs=None)
+    rows = {r["name"]: r for r in j["rows"]}
+    assert rows["head+embed"]["bytes"] == pytest.approx(16 + 16 + 16000)
+    assert rows["L00"]["bytes"] == pytest.approx(128 + 100 + 200)
+    assert j["unclaimed"] == {}
+
+
+class _KV:
+    """A trimmable cache, as mlx-lm's KVCache presents itself."""
+    def __init__(self, offset):
+        self.offset = offset
+
+    def is_trimmable(self):
+        return True
+
+    def trim(self, n):
+        self.offset -= n
+
+
+class _State:
+    """Fixed-size recurrent state: no offset, cannot trim."""
+    def is_trimmable(self):
+        return False
+
+
+def test_decode_timeline_trims_the_timed_token_back():
+    pytest.importorskip("mlx.core")
+    from vqlab.bench.decode_timeline import _offsets, _trim_back
+    cache = [_KV(64), _State(), _KV(64)]
+    before = _offsets(cache)
+    cache[0].offset += 1          # the kept layers advanced
+    _trim_back(cache, before)
+    assert [getattr(c, "offset", None) for c in cache] == [64, None, 64]
+
+
+def test_decode_timeline_names_layer_halves_by_what_they_carry():
+    pytest.importorskip("mlx.core")
+    from types import SimpleNamespace as NS
+
+    from vqlab.bench.decode_timeline import _kind
+    assert _kind(NS(is_linear=True, mlp=NS(switch_mlp=1))) == ("lin", "moe")
+    assert _kind(NS(mlp=NS(up_proj=1))) == ("attn", "dense")
