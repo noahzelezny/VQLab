@@ -136,6 +136,37 @@ def _compile_router(model):
     return n
 
 
+def _delete_gdn_scan(model):
+    """DELETION arm (F200, R3-3): delete ONLY the gated-delta recurrence.
+
+    The `gdn` arm deletes the whole GatedDeltaNet (projections, conv, norm,
+    recurrence). This one rebinds `gated_delta_update` in every loaded arch
+    module that imported it, so the projections and conv still run and only
+    the sequential scan is gone: gdn - gdn-scan = the projections' share.
+    The stub keeps q, k, a, b alive (F48: a stub must depend on its inputs).
+    """
+    import sys as _sys
+
+    def stub(q, k, v, a, b, A_log, dt_bias, state=None, mask=None,
+             use_kernel=True):
+        live = (q.sum() + k.sum() + a.sum() + b.sum()) * 0
+        if state is None:
+            B, _, _, Dk = q.shape
+            Hv, Dv = v.shape[-2:]
+            state = mx.zeros((B, Hv, Dv, Dk), dtype=mx.float32)
+        return v * 0 + live.astype(v.dtype), state
+
+    n = 0
+    for name, mod in list(_sys.modules.items()):
+        if mod is not None and getattr(mod, "gated_delta_update", None) is not None \
+                and name != "mlx_lm.models.gated_delta":
+            mod.gated_delta_update = stub
+            n += 1
+    if n == 0:
+        raise SystemExit("gdn-scan matched nothing -- refusing to run.")
+    return n
+
+
 def _compile_hc(model):
     """REPLACEMENT arm, not a deletion: fuse each GatedResidual with mx.compile.
 
@@ -218,6 +249,8 @@ ARMS = {
                    "whole MoE block deleted (router, experts, shared, combine)"),
     "switch":     (lambda n, t: n.endswith("switch_mlp"),
                    "routed SwitchGLU deleted (VQ linears + sort/act/scatter glue)"),
+    "gdn-scan":   (lambda n, t: False,
+                   "gated-delta RECURRENCE deleted, projections/conv kept"),
     "router-compile": (lambda n, t: False,
                    "MoE router + combine FUSED with mx.compile "
                    "(replacement arm: checksum MUST match baseline)"),
@@ -264,6 +297,8 @@ def main() -> int:
         hits = 0
     elif a.arm == "hc-compile":
         hits = _compile_hc(model)
+    elif a.arm == "gdn-scan":
+        hits = _delete_gdn_scan(model)
     elif a.arm == "router-compile":
         hits = _compile_router(model)
     else:
