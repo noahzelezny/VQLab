@@ -1,4 +1,4 @@
-# The checklist: a new family, a new rung, a release
+# Family onboarding checklist: a new family, a new rung, a release
 
 One list, in order, so nothing is left out by accident. Each line names the
 command that does it and the document that explains why. A line is ticked

@@ -18,6 +18,7 @@ sed -n 1,40p CONTEXT.md             # question -> stage -> command; each src/vql
 python -m vqlab.cli --help          # every command (88 today). Read the list. Twice.
 sed -n 1,60p docs/INDEX.md          # what every doc is FOR + whether it still holds
 sed -n 1,40p docs/ONBOARDING.md     # the mechanical pass before fitting ANY new family
+sed -n 1,80p docs/FAMILY-ONBOARDING-CHECKLIST.md  # new family / rung / release: the whole list, tick it
 ```
 
 Then grep for the thing you were about to build:
