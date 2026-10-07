@@ -168,6 +168,26 @@ def _delete_gdn_scan(model):
     return n
 
 
+def _chunk_gdn_scan(model):
+    """REPLACEMENT arm (R3-3): rebind gated_delta_update to the chunked WY
+    form (vqlab.runtime.gated_delta_chunked) for T >= VQ_GDN_CHUNK_MIN_T;
+    decode stays on the stock kernel. CHANGES NUMERICS (fp32, different
+    summation order): its checksum is NOT expected to match baseline.
+    """
+    import sys as _sys
+    from vqlab.runtime.gated_delta_chunked import gated_delta_update as gdu
+    n = 0
+    for name, mod in list(_sys.modules.items()):
+        if mod is not None and getattr(mod, "gated_delta_update", None) is not None \
+                and name != "mlx_lm.models.gated_delta" \
+                and not name.startswith("vqlab.runtime.gated_delta_chunked"):
+            mod.gated_delta_update = gdu
+            n += 1
+    if n == 0:
+        raise SystemExit("gdn-chunked matched nothing -- refusing to run.")
+    return n
+
+
 def _compile_gdn(model, fuse_proj=False):
     """REPLACEMENT arm (F200): fuse the pure segments AROUND the gated-delta
     scan with mx.compile, for qwen3_5-style GatedDeltaNet (in_proj_qkv/z/b/a).
@@ -355,6 +375,9 @@ ARMS = {
                    "routed SwitchGLU deleted (VQ linears + sort/act/scatter glue)"),
     "gdn-scan":   (lambda n, t: False,
                    "gated-delta RECURRENCE deleted, projections/conv kept"),
+    "gdn-chunked": (lambda n, t: False,
+                   "gated-delta scan replaced by the chunked WY form at prefill "
+                   "(numerics change: checksum NOT expected to match)"),
     "gdn-fuseproj": (lambda n, t: False,
                    "gdn-compile + qkv/z and b/a projections merged "
                    "(replacement arm: checksum MUST match baseline)"),
@@ -413,6 +436,8 @@ def main() -> int:
         hits = _compile_gdn(model, fuse_proj=True)
     elif a.arm == "gdn-scan":
         hits = _delete_gdn_scan(model)
+    elif a.arm == "gdn-chunked":
+        hits = _chunk_gdn_scan(model)
     elif a.arm == "router-compile":
         hits = _compile_router(model)
     else:
@@ -447,7 +472,9 @@ def main() -> int:
         spread = (max(times) - min(times)) / min(times) * 100
         print(f"  prefill {best:7.3f} s   {len(ids)/best:8.1f} tok/s   "
               f"best-of-{a.reps} spread {spread:4.1f}%", flush=True)
-        _kind = ("REPLACEMENT: checksum must MATCH baseline"
+        _kind = ("NUMERICS CHANGE: checksum may differ; gate on kernel-truth/KL"
+                 if a.arm == "gdn-chunked" else
+                 "REPLACEMENT: checksum must MATCH baseline"
                  if a.arm in _REPLACEMENT_ARMS else
                  "baseline" if a.arm == "baseline" else
                  "DELETION: checksum must DIFFER from baseline")
