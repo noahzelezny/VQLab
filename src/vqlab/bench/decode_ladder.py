@@ -167,6 +167,80 @@ def _delete_gdn_scan(model):
     return n
 
 
+def _compile_gdn(model):
+    """REPLACEMENT arm (F200): fuse the pure segments AROUND the gated-delta
+    scan with mx.compile, for qwen3_5-style GatedDeltaNet (in_proj_qkv/z/b/a).
+
+    F200's gdn-scan arm put ~0% of decode and ~10% of prefill in the
+    recurrence and the rest of GDN's 27%/34% in the work around it: conv,
+    silu, split, a hand-written q/k L2 norm (~8 elementwise ops each), and
+    the gated RMSNorm. Segment 1 = conv_input -> (q, k, v); segment 2 =
+    norm(out, z). Cache writes, projections and the scan stay outside the
+    trace. Checksum (and logits) MUST match baseline.
+    """
+    import sys as _sys
+    n = 0
+    for _name, mod in model.named_modules():
+        cls = type(mod)
+        if not (cls.__name__.endswith("GatedDeltaNet")
+                and hasattr(mod, "in_proj_qkv") and hasattr(mod, "in_proj_a")):
+            continue
+        gdu = getattr(_sys.modules[cls.__module__], "gated_delta_update")
+
+        def seg1(conv_input, _m=mod):
+            conv_out = mx.sigmoid(_c := _m.conv1d(conv_input)) * _c
+            B, S = conv_out.shape[0], conv_out.shape[1]
+            q, k, v = [
+                t.reshape(B, S, h, d) for t, h, d in zip(
+                    mx.split(conv_out, [_m.key_dim, 2 * _m.key_dim], -1),
+                    [_m.num_k_heads, _m.num_k_heads, _m.num_v_heads],
+                    [_m.head_k_dim, _m.head_k_dim, _m.head_v_dim])]
+            inv_scale = k.shape[-1] ** -0.5
+            q = inv_scale * q * mx.rsqrt((q * q).sum(axis=-1, keepdims=True) + 1e-6)
+            k = k * mx.rsqrt((k * k).sum(axis=-1, keepdims=True) + 1e-6)
+            return q, k, v
+
+        mod._vq_seg1 = mx.compile(seg1)
+        mod._vq_seg2 = mx.compile(lambda out, z, _m=mod: _m.norm(out, z))
+
+        def call(self, inputs, mask=None, cache=None, _gdu=gdu):
+            B, S, _ = inputs.shape
+            qkv = self.in_proj_qkv(inputs)
+            z = self.in_proj_z(inputs).reshape(B, S, self.num_v_heads, self.head_v_dim)
+            b = self.in_proj_b(inputs)
+            a = self.in_proj_a(inputs)
+            if cache is not None and cache[0] is not None:
+                conv_state = cache[0]
+            else:
+                conv_state = mx.zeros((B, self.conv_kernel_size - 1, self.conv_dim),
+                                      dtype=inputs.dtype)
+            if mask is not None:
+                qkv = mx.where(mask[..., None], qkv, 0)
+            conv_input = mx.concatenate([conv_state, qkv], axis=1)
+            if cache is not None:
+                n_keep = self.conv_kernel_size - 1
+                if cache.lengths is not None:
+                    ends = mx.clip(cache.lengths, 0, S)
+                    positions = (ends[:, None] + mx.arange(n_keep))[..., None]
+                    cache[0] = mx.take_along_axis(conv_input, positions, axis=1)
+                else:
+                    cache[0] = mx.contiguous(conv_input[:, -n_keep:, :])
+            q, k, v = self._vq_seg1(conv_input)
+            state = cache[1] if cache else None
+            out, state = _gdu(q, k, v, a, b, self.A_log, self.dt_bias, state, mask,
+                              use_kernel=not self.training)
+            if cache is not None:
+                cache[1] = state
+                cache.advance(S)
+            return self.out_proj(self._vq_seg2(out, z).reshape(B, S, -1))
+
+        mod.__class__ = type(f"Compiled{cls.__name__}", (cls,), {"__call__": call})
+        n += 1
+    if n == 0:
+        raise SystemExit("gdn-compile matched nothing -- refusing to run.")
+    return n
+
+
 def _compile_hc(model):
     """REPLACEMENT arm, not a deletion: fuse each GatedResidual with mx.compile.
 
@@ -231,7 +305,7 @@ def _patch(model, predicate, label):
 
 # Arms that preserve the model's arithmetic. Their checksum must MATCH the
 # baseline; deletion arms' must differ. See the print at the end of main().
-_REPLACEMENT_ARMS = {"hc-compile", "router-compile"}
+_REPLACEMENT_ARMS = {"hc-compile", "router-compile", "gdn-compile"}
 
 ARMS = {
     "baseline":   (lambda n, t: False, "untouched"),
@@ -251,6 +325,9 @@ ARMS = {
                    "routed SwitchGLU deleted (VQ linears + sort/act/scatter glue)"),
     "gdn-scan":   (lambda n, t: False,
                    "gated-delta RECURRENCE deleted, projections/conv kept"),
+    "gdn-compile": (lambda n, t: False,
+                   "GDN conv/norm segments FUSED with mx.compile "
+                   "(replacement arm: checksum MUST match baseline)"),
     "router-compile": (lambda n, t: False,
                    "MoE router + combine FUSED with mx.compile "
                    "(replacement arm: checksum MUST match baseline)"),
@@ -297,6 +374,8 @@ def main() -> int:
         hits = 0
     elif a.arm == "hc-compile":
         hits = _compile_hc(model)
+    elif a.arm == "gdn-compile":
+        hits = _compile_gdn(model)
     elif a.arm == "gdn-scan":
         hits = _delete_gdn_scan(model)
     elif a.arm == "router-compile":
