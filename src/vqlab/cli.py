@@ -115,6 +115,7 @@ COMMANDS = {
     "gpu-capture": ("gpu_capture.py", "record ONE decode step's Metal work as an Xcode .gputrace (per-kernel counters: occupancy, bandwidth, limiters); needs MTL_CAPTURE_ENABLED=1"),
     "serve-timeline": ("serve_timeline.py", "where a request SERVED by Knurlogic spends its time: its own partition (http, queue, admission, prefill/decode steps), n requests, median per bucket"),
     "prefill-timeline": ("prefill_timeline.py", "every stage of one prefill (attention / MLP half of each layer), timed, summing to the whole; any arch"),
+    "gdn-chunk-truth": ("gdn_chunk_truth.py", "chunked vs sequential gated-delta scan: error vs an fp64 reference + scan microbench (R3-3)"),
     "decode-ladder": ("decode_ladder.py", "per-component decode deletion arms (GDN / attn / VQ), Flash-aware"),
     "mtp-accept": ("mtp_accept.py", "paired draft-acceptance across prompts (the reliable instrument)"),
     "mtp-bench": ("mtp_bench.py", "measure the MTP speedup, acceptance and numerics control"),
@@ -182,7 +183,7 @@ NAMESPACES = {
         "runtime-equiv": "runtime-equiv"}),
     "bench": ("how fast is it, and where does the time go", {
         "decode-timeline": "decode-timeline", "prefill-timeline": "prefill-timeline",
-        "decode-ladder": "decode-ladder", "active-bytes": "active-bytes",
+        "decode-ladder": "decode-ladder", "gdn-chunk-truth": "gdn-chunk-truth", "active-bytes": "active-bytes",
         "stage-bandwidth": "stage-bandwidth", "serve-timeline": "serve-timeline",
         "gpu-capture": "gpu-capture",
         "prefill-bench": "prefill-bench", "coverage": "coverage", "host-attrib": "host-attrib",
