@@ -1187,6 +1187,102 @@ _SRC_FUSED_PACKED_D2_WALK = _SRC_FUSED_PACKED_D2_WALK.replace(
 """)
 
 
+
+# R2-3 (2026-10-07): qmv_wide analog for the small-N packed WALK kernels
+# (d4 threadgroup-codebook and d2). VQ_FUSED_WIDE=W (2|4, default 1 = off).
+#
+# WHY. The walk kernels launch one threadgroup per (256 output rows, ONE
+# (token, expert) pair) and every threadgroup restages the WHOLE codebook
+# (d4 K2048: 16 KB; d2 K1024: 4 KB) before doing one row-dot per thread.
+# At decode N=top_k=8 that is 8x the codebook staging per output block; at
+# a 512-token prefill (N=4096) it is 4096x. Here one threadgroup owns W
+# consecutive pairs: the codebook is staged ONCE and each thread then walks
+# W rows. Pairs are NOT grouped by expert -- at decode a token's top_k
+# experts are distinct, so there is no weight (code-word) reuse to harvest
+# and the win is codebook-staging amortization alone. What IS shared: under
+# VQ_DECODE_XKREP (the default) pair t reads token t/XKREP, so when W
+# divides XKREP all W pairs of a block read the SAME token and x is staged
+# once too (XS_ROWS=1); otherwise XS_ROWS=W rows are staged.
+# Threadgroup bytes = (K + XS_ROWS*NSUB) * 2D; W halves until it fits the
+# 32 KB cap (Metal rule IV), so the ceiling is never crossed.
+# BIT-EXACTNESS: per pair, the code walk, the cb/x half operands, the
+# ((d0+d1)+d2)+d3 shape and the per-group fma are textually the base walk's.
+def _wide_walk_src(D):
+    hv = f"half{D}"
+    fv = f"float{D}"
+    if D == 4:
+        stage_x = ("xs[w * NSUB + i] = half4((half)xrow[i*4], (half)xrow[i*4+1],\n"
+                   "                                     (half)xrow[i*4+2], (half)xrow[i*4+3]);")
+    else:
+        stage_x = "xs[w * NSUB + i] = half2((half)xrow[i*2], (half)xrow[i*2+1]);"
+    return _PACK_FETCH + f"""
+    const int OUT  = dims[0];
+    const int IN   = dims[1];
+    const int G    = dims[3];
+    const int N    = dims[4];
+    const int K    = dims[5];
+    const int NSUB = IN / {D};
+    const int NGRP = IN / G;
+    const int QPG  = G / {4 * D};
+    const int WPR  = (NSUB + 31) / 32 * BITS;
+    uint r = thread_position_in_grid.x;
+    uint tb = thread_position_in_grid.y;
+    uint lid = thread_position_in_threadgroup.x;
+    uint tgsize = threads_per_threadgroup.x;
+
+    threadgroup {hv} cb[MAX_K];
+    threadgroup {hv} xs[XS_ROWS * MAX_NSUB];
+    const device {hv}* cbg = (const device {hv}*)codebook;
+    for (uint i = lid; i < (uint)K; i += tgsize)
+        cb[i] = cbg[i];
+    for (int w = 0; w < XS_ROWS; ++w) {{
+        const uint tw = tb * WIDE + (uint)w;
+        if (tw >= (uint)N) break;
+        const device T* xrow = x + (size_t)(tw / (uint)XKREP) * IN;
+        for (uint i = lid; i < (uint)NSUB; i += tgsize)
+            {stage_x}
+    }}
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+    if (r >= (uint)OUT) return;
+    for (int w = 0; w < WIDE; ++w) {{
+        const uint t = tb * WIDE + (uint)w;
+        if (t >= (uint)N) break;
+        const threadgroup {hv}* xw = xs + (XS_ROWS == 1 ? 0 : w) * NSUB;
+        const uint e = eidx[t];
+        const device uint* crow = codes + (size_t)e * OUT * WPR + (size_t)r * WPR;
+        const device half* srow = scales + (size_t)e * OUT * NGRP + (size_t)r * NGRP;
+        float acc = 0.0f;
+        int j = 0;
+        int wi = 0;
+        ulong buf = 0;
+        int nb = 0;
+        for (int g = 0; g < NGRP; ++g) {{
+            float gacc = 0.0f;
+            for (int q = 0; q < QPG; ++q) {{
+                uint cq[4];
+                for (int u = 0; u < 4; ++u) {{
+                    if (nb < BITS) {{ buf |= (ulong)crow[wi++] << nb; nb += 32; }}
+                    cq[u] = (uint)(buf & (ulong)VQ_MASK);
+                    buf >>= BITS; nb -= BITS;
+                }}
+                gacc += dot({fv}(cb[cq[0]]), {fv}(xw[j]))
+                      + dot({fv}(cb[cq[1]]), {fv}(xw[j+1]))
+                      + dot({fv}(cb[cq[2]]), {fv}(xw[j+2]))
+                      + dot({fv}(cb[cq[3]]), {fv}(xw[j+3]));
+                j += 4;
+            }}
+            acc = fma((float)srow[g], gacc, acc);
+        }}
+        y[(size_t)t * OUT + r] = static_cast<T>(acc);
+    }}
+"""
+
+
+_FUSED_WIDE = int(os.environ.get("VQ_FUSED_WIDE", "1"))
+if _FUSED_WIDE not in (1, 2, 4):
+    raise ValueError(f"VQ_FUSED_WIDE must be 1, 2 or 4, got {_FUSED_WIDE}")
+
+
 _SRC_FUSED_PACKED_D8 = _PACK_FETCH + r"""
     const int OUT  = dims[0];
     const int IN   = dims[1];
@@ -2815,7 +2911,7 @@ def _fused(x, eidx, codes, codebook, scales, pack_bits=0, simd=None,
     key = ("plan", x.shape, x.dtype, codes.shape, codes.dtype, codebook.shape,
            scales.shape, pack_bits, simd, d2_u32,
            _D8_SIMDSUM, _D8_REGBUF, _D8_DEVX, _D8_SS, _SPEC_KERNELS,
-           _D4_WALK, _D4_DEVCB_WALK, _D2_WALK, _D8_WALK,
+           _D4_WALK, _D4_DEVCB_WALK, _D2_WALK, _D8_WALK, _FUSED_WIDE,
            None if rowtbl is None else rowtbl.shape, xkrep)
     plan = _KERNELS.get(key)
     if plan is not None:
@@ -3066,11 +3162,30 @@ def _fused_resolve(_plan_key, x, eidx, codes, codebook, scales, pack_bits=0,
                     ("MAX_NX4", IN // 4)]
     else:
         raise NotImplementedError(f"no fused kernel for subvector dim d={D}")
-    if xkrep is not None:
+    wide = 1
+    if (_FUSED_WIDE > 1 and rowtbl is None and simd_rows is None and pack_bits
+            and D in (2, 4) and name.endswith(("_d4_walk", "_d2_walk"))):
+        # R2-3: see _wide_walk_src. Halve W until the staging fits the cap.
+        wide = _FUSED_WIDE
+        while wide > 1:
+            xs_rows = 1 if (xkrep is not None and xkrep % wide == 0) else wide
+            if (K + xs_rows * NSUB) * 2 * D <= _TG_CAP_BYTES:
+                break
+            wide //= 2
+    if wide > 1:
+        src = _wide_walk_src(D)
+        xk = int(xkrep) if xkrep is not None else 1
+        name = f"{name}_w{wide}x{xs_rows}k{xk}"
+        template = list(template) + [("WIDE", wide), ("XS_ROWS", xs_rows),
+                                     ("XKREP", xk)]
+    elif xkrep is not None:
         src = _xkrep_src(src)
         name = name + "_xk"
         template = list(template) + [("XKREP", int(xkrep))]
-    if simd_rows is not None:
+    if wide > 1:
+        grid = (((OUT + tgx - 1) // tgx) * tgx, (N + wide - 1) // wide, 1)
+        threadgroup = (tgx, 1, 1)
+    elif simd_rows is not None:
         grid = (32, ((OUT + simd_rows - 1) // simd_rows) * simd_rows, N)
         threadgroup = (32, simd_rows, 1)
     else:
