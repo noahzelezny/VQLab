@@ -39,6 +39,7 @@ never absolutes -- the ~100 GiB decode instrument is bimodal (rule III).
 from __future__ import annotations
 
 import argparse
+import os
 import time
 
 import mlx.core as mx
@@ -167,7 +168,7 @@ def _delete_gdn_scan(model):
     return n
 
 
-def _compile_gdn(model):
+def _compile_gdn(model, fuse_proj=False):
     """REPLACEMENT arm (F200): fuse the pure segments AROUND the gated-delta
     scan with mx.compile, for qwen3_5-style GatedDeltaNet (in_proj_qkv/z/b/a).
 
@@ -200,15 +201,44 @@ def _compile_gdn(model):
             k = k * mx.rsqrt((k * k).sum(axis=-1, keepdims=True) + 1e-6)
             return q, k, v
 
+        if fuse_proj:
+            # gdn-fuseproj: qkv+z as ONE affine matmul (same bits/group/mode,
+            # rows concatenated) and b+a as ONE bf16 matmul -- 4 launches -> 2.
+            import mlx.nn as _nn
+            p, zz = mod.in_proj_qkv, mod.in_proj_z
+            if not (isinstance(p, _nn.QuantizedLinear) and isinstance(zz, _nn.QuantizedLinear)
+                    and (p.bits, p.group_size, getattr(p, "mode", None))
+                    == (zz.bits, zz.group_size, getattr(zz, "mode", None))):
+                raise SystemExit("gdn-fuseproj: qkv/z are not matching QuantizedLinears")
+            fq = _nn.QuantizedLinear(p.group_size, 32, bias=False, group_size=p.group_size, bits=p.bits)
+            fq.weight = mx.concatenate([p.weight, zz.weight], 0)
+            fq.scales = mx.concatenate([p.scales, zz.scales], 0)
+            fq.biases = mx.concatenate([p.biases, zz.biases], 0)
+            if hasattr(p, "mode"):
+                fq.mode = p.mode
+            mod._vq_qkvz, mod._vq_nqkv = fq, p.weight.shape[0]
+            mod._vq_ba = mx.concatenate([mod.in_proj_b.weight, mod.in_proj_a.weight], 0)
+            mod._vq_nb = mod.in_proj_b.weight.shape[0]
+            mx.eval(fq.parameters(), mod._vq_ba)
         mod._vq_seg1 = mx.compile(seg1)
         mod._vq_seg2 = mx.compile(lambda out, z, _m=mod: _m.norm(out, z))
 
         def call(self, inputs, mask=None, cache=None, _gdu=gdu):
             B, S, _ = inputs.shape
-            qkv = self.in_proj_qkv(inputs)
-            z = self.in_proj_z(inputs).reshape(B, S, self.num_v_heads, self.head_v_dim)
-            b = self.in_proj_b(inputs)
-            a = self.in_proj_a(inputs)
+            if hasattr(self, "_vq_qkvz"):
+                qkvz = self._vq_qkvz(inputs)
+                qkv, z = qkvz[..., :self._vq_nqkv], qkvz[..., self._vq_nqkv:]
+                if os.environ.get("VQ_LADDER_FUSE_BA", "1") == "1":
+                    ba = inputs @ self._vq_ba.T
+                    b, a = ba[..., :self._vq_nb], ba[..., self._vq_nb:]
+                else:
+                    b, a = self.in_proj_b(inputs), self.in_proj_a(inputs)
+            else:
+                qkv = self.in_proj_qkv(inputs)
+                z = self.in_proj_z(inputs)
+                b = self.in_proj_b(inputs)
+                a = self.in_proj_a(inputs)
+            z = z.reshape(B, S, self.num_v_heads, self.head_v_dim)
             if cache is not None and cache[0] is not None:
                 conv_state = cache[0]
             else:
@@ -305,7 +335,7 @@ def _patch(model, predicate, label):
 
 # Arms that preserve the model's arithmetic. Their checksum must MATCH the
 # baseline; deletion arms' must differ. See the print at the end of main().
-_REPLACEMENT_ARMS = {"hc-compile", "router-compile", "gdn-compile"}
+_REPLACEMENT_ARMS = {"hc-compile", "router-compile", "gdn-compile", "gdn-fuseproj"}
 
 ARMS = {
     "baseline":   (lambda n, t: False, "untouched"),
@@ -325,6 +355,9 @@ ARMS = {
                    "routed SwitchGLU deleted (VQ linears + sort/act/scatter glue)"),
     "gdn-scan":   (lambda n, t: False,
                    "gated-delta RECURRENCE deleted, projections/conv kept"),
+    "gdn-fuseproj": (lambda n, t: False,
+                   "gdn-compile + qkv/z and b/a projections merged "
+                   "(replacement arm: checksum MUST match baseline)"),
     "gdn-compile": (lambda n, t: False,
                    "GDN conv/norm segments FUSED with mx.compile "
                    "(replacement arm: checksum MUST match baseline)"),
@@ -376,6 +409,8 @@ def main() -> int:
         hits = _compile_hc(model)
     elif a.arm == "gdn-compile":
         hits = _compile_gdn(model)
+    elif a.arm == "gdn-fuseproj":
+        hits = _compile_gdn(model, fuse_proj=True)
     elif a.arm == "gdn-scan":
         hits = _delete_gdn_scan(model)
     elif a.arm == "router-compile":
