@@ -100,13 +100,17 @@ RUN_ALLOWLIST = {
     # -> KL gate -> task benchmarks; plus the records that make it auditable
     "onboard", "family-profile", "probe-init", "fits", "kl-ladder", "kl-pair", "tasks",
     "provenance", "runs", "registry", "active-bytes", "decode-timeline",
+    "stage-bandwidth", "serve-timeline",
     "stream-score",
 }
 # Commands that never touch the GPU (header reads, index queries, records).
 # They are not gated on an exo placement or the GPU lease, and do not take
 # the lease: profiling a teacher must not wait on, or block, a fit.
 GPU_FREE = {"onboard", "family-profile", "fits", "provenance", "runs", "price",
-            "manifest", "check-bundle", "active-bytes", "registry"}
+            "manifest", "check-bundle", "active-bytes", "registry",
+            # a header read + a JSON file; and an HTTP client of a server
+            # that holds its own memory (the GPU work is Knurlogic's)
+            "stage-bandwidth", "serve-timeline"}
 # Commands that checkpoint and resume: a GPU-timeout crash is retried.
 RESUMABLE = {"fit-moe", "fit-dense", "geo-build", "alloc-sweep", "validate"}
 DEFAULT_RETRIES = 2
