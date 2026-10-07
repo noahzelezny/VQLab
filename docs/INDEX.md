@@ -33,6 +33,7 @@ carries the conclusions.
 | [RUNTIME-SETTINGS.md](RUNTIME-SETTINGS.md) | Every runtime setting that makes these artifacts runnable, in one place. |
 | [RUNTIME-SHIP-PLAN.md](RUNTIME-SHIP-PLAN.md) | Which runtime profile (v1.5 / v2) ships with which weights. |
 | [V2-RUNTIME.md](V2-RUNTIME.md) | The v2 runtime: what it is and how it ships. |
+| [MEASUREMENT.md](MEASUREMENT.md) | The runbook: which timing instrument to run in which order (decode stages, bandwidth per stage, served requests, GPU captures) and what each cannot see. |
 | [KERNEL-COVERAGE.md](KERNEL-COVERAGE.md) | Which Metal kernel serves each module geometry. |
 | [SKIPZERO.md](SKIPZERO.md) | Dead-row skipping: the 397B's all-zero rows stored and served compactly. |
 | [MEMORY-PLAYBOOK.md](MEMORY-PLAYBOOK.md) | Peak memory too high? Measured fixes, in order. |

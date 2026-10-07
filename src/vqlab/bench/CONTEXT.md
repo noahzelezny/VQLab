@@ -4,7 +4,7 @@
 An artifact (pinned), an idle box.
 
 ## Process
-`vqlab decode-timeline` (stages that sum to the whole), `prefill-timeline` (the same partition for one prefill, any architecture), `decode-ladder` (deletion arms + checksums), `active-bytes` (the roofline denominator), `prefill-bench`, `coverage`, `host-attrib`, `hc-micro`.
+`vqlab decode-timeline` (stages that sum to the whole), `prefill-timeline` (the same partition for one prefill, any architecture), `decode-ladder` (deletion arms + checksums), `active-bytes` (the roofline denominator), `stage-bandwidth` (the two joined: GB/s and excess ms per decode stage), `serve-timeline` (a Knurlogic-served request's own partition, n runs), `gpu-capture` (one decode step as an Xcode .gputrace, for the per-kernel WHY), `prefill-bench`, `coverage`, `host-attrib`, `hc-micro`.
 
 ## Outputs
 Printed timings and ratios.

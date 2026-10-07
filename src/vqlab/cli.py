@@ -111,6 +111,9 @@ COMMANDS = {
     "coverage": ("kernel_coverage.py", "per-module report: which prefill kernel path each geometry takes"),
     "hc-micro": ("hc_micro.py", "single GatedResidual micro-bench: is mx.compile inert on this chain? (split half invalid, see F133)"),
     "decode-timeline": ("decode_timeline.py", "every stage of one decode token, in order, timed, summing to the whole"),
+    "stage-bandwidth": ("stage_bandwidth.py", "achieved GB/s and time above the roofline for EVERY decode stage (decode-timeline JSON + active-bytes billing; no GPU)"),
+    "gpu-capture": ("gpu_capture.py", "record ONE decode step's Metal work as an Xcode .gputrace (per-kernel counters: occupancy, bandwidth, limiters); needs MTL_CAPTURE_ENABLED=1"),
+    "serve-timeline": ("serve_timeline.py", "where a request SERVED by Knurlogic spends its time: its own partition (http, queue, admission, prefill/decode steps), n requests, median per bucket"),
     "prefill-timeline": ("prefill_timeline.py", "every stage of one prefill (attention / MLP half of each layer), timed, summing to the whole; any arch"),
     "decode-ladder": ("decode_ladder.py", "per-component decode deletion arms (GDN / attn / VQ), Flash-aware"),
     "mtp-accept": ("mtp_accept.py", "paired draft-acceptance across prompts (the reliable instrument)"),
@@ -180,6 +183,8 @@ NAMESPACES = {
     "bench": ("how fast is it, and where does the time go", {
         "decode-timeline": "decode-timeline", "prefill-timeline": "prefill-timeline",
         "decode-ladder": "decode-ladder", "active-bytes": "active-bytes",
+        "stage-bandwidth": "stage-bandwidth", "serve-timeline": "serve-timeline",
+        "gpu-capture": "gpu-capture",
         "prefill-bench": "prefill-bench", "coverage": "coverage", "host-attrib": "host-attrib",
         "hc-micro": "hc-micro", "mtp-bench": "mtp-bench", "mtp-accept": "mtp-accept",
         "speed-pair": "speed-pair", "speed-pair-knurlogic": "speed-pair-knurlogic"}),
