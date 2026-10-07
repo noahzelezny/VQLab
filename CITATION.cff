@@ -9,7 +9,7 @@ license: Apache-2.0
 repository-code: "https://github.com/noahzelezny/VQLab"
 preferred-citation:
   type: article
-  title: "Data-Free Vector Quantization Beats Affine Quantization at Matched Bytes Below 6 Bits"
+  title: "Data-Free Vector Quantization Beats Affine Quantization at Matched Bytes Below 5 Bits"
   authors:
     - family-names: Zelezny
       given-names: Noah
