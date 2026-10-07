@@ -3605,7 +3605,19 @@ _SRC_GEMMSEG2 = _PACK_FETCH + r"""
     // 64 rows instead of twice. wtT is unchanged (it is OUT x G, not
     // token-shaped); xt and ybuf double. CB_DEV only: with a threadgroup
     // codebook at d4-K2048 the sum would be 16384 + 20480 = 36864 > cap.
+#if WTV
+    // R2-1a (2026-10-07): wtT stored OUT-major, [32 out-rows][GROUP], so one
+    // code's D halves are CONTIGUOUS -> one halfD vector store per code
+    // instead of D scalar stores 64 B apart. Phase 3 reads B with
+    // simdgroup_load's transpose flag: same logical 8x8 fragment, same MACs
+    // in the same order -- bit-exact by construction. WPAD (0|8) pads the
+    // row so the transposed fragment load does not hit one bank column.
+    threadgroup half  wtT[32][GROUP + WPAD];
+    #define WT(k, n) wtT[(n)][(k)]
+#else
     threadgroup half  wtT[GROUP][32];    // transposed, pre-scaled (4 KB)
+    #define WT(k, n) wtT[(k)][(n)]
+#endif
     // XPAD (0 or 8): leading-dimension pad on xt. GROUP = 64 halves is an
     // exact 128 B row stride, so all eight rows of a simdgroup A fragment
     // land on one bank column -- the worst-conflict geometry. Affine's
@@ -3740,25 +3752,45 @@ _SRC_GEMMSEG2 = _PACK_FETCH + r"""
 #endif
 #if D_BAKE == 2
                 const half2 v = cb[c];
-                wtT[q * 2][wr]     = (half)(s * (float)v.x);
-                wtT[q * 2 + 1][wr] = (half)(s * (float)v.y);
+  #if WTV
+                *(threadgroup half2*)&wtT[wr][q * 2] =
+                    half2((half)(s * (float)v.x), (half)(s * (float)v.y));
+  #else
+                WT(q * 2, wr)     = (half)(s * (float)v.x);
+                WT(q * 2 + 1, wr) = (half)(s * (float)v.y);
+  #endif
 #elif D_BAKE == 4
                 const half4 v = cb[c];
-                wtT[q * 4][wr]     = (half)(s * (float)v.x);
-                wtT[q * 4 + 1][wr] = (half)(s * (float)v.y);
-                wtT[q * 4 + 2][wr] = (half)(s * (float)v.z);
-                wtT[q * 4 + 3][wr] = (half)(s * (float)v.w);
+  #if WTV
+                *(threadgroup half4*)&wtT[wr][q * 4] =
+                    half4((half)(s * (float)v.x), (half)(s * (float)v.y),
+                          (half)(s * (float)v.z), (half)(s * (float)v.w));
+  #else
+                WT(q * 4, wr)     = (half)(s * (float)v.x);
+                WT(q * 4 + 1, wr) = (half)(s * (float)v.y);
+                WT(q * 4 + 2, wr) = (half)(s * (float)v.z);
+                WT(q * 4 + 3, wr) = (half)(s * (float)v.w);
+  #endif
 #else
                 const half4 v0 = cb[2 * c];
                 const half4 v1 = cb[2 * c + 1];
-                wtT[q * 8][wr]     = (half)(s * (float)v0.x);
-                wtT[q * 8 + 1][wr] = (half)(s * (float)v0.y);
-                wtT[q * 8 + 2][wr] = (half)(s * (float)v0.z);
-                wtT[q * 8 + 3][wr] = (half)(s * (float)v0.w);
-                wtT[q * 8 + 4][wr] = (half)(s * (float)v1.x);
-                wtT[q * 8 + 5][wr] = (half)(s * (float)v1.y);
-                wtT[q * 8 + 6][wr] = (half)(s * (float)v1.z);
-                wtT[q * 8 + 7][wr] = (half)(s * (float)v1.w);
+  #if WTV
+                *(threadgroup half4*)&wtT[wr][q * 8] =
+                    half4((half)(s * (float)v0.x), (half)(s * (float)v0.y),
+                          (half)(s * (float)v0.z), (half)(s * (float)v0.w));
+                *(threadgroup half4*)&wtT[wr][q * 8 + 4] =
+                    half4((half)(s * (float)v1.x), (half)(s * (float)v1.y),
+                          (half)(s * (float)v1.z), (half)(s * (float)v1.w));
+  #else
+                WT(q * 8, wr)     = (half)(s * (float)v0.x);
+                WT(q * 8 + 1, wr) = (half)(s * (float)v0.y);
+                WT(q * 8 + 2, wr) = (half)(s * (float)v0.z);
+                WT(q * 8 + 3, wr) = (half)(s * (float)v0.w);
+                WT(q * 8 + 4, wr) = (half)(s * (float)v1.x);
+                WT(q * 8 + 5, wr) = (half)(s * (float)v1.y);
+                WT(q * 8 + 6, wr) = (half)(s * (float)v1.z);
+                WT(q * 8 + 7, wr) = (half)(s * (float)v1.w);
+  #endif
 #endif
             }
 #if SZ
@@ -3770,32 +3802,32 @@ _SRC_GEMMSEG2 = _PACK_FETCH + r"""
             for (int q = q0; q < q0 + SPG / 4; ++q) {
   #if D_BAKE == 2
                 const half2 v = cb[0];
-                wtT[q * 2][wr]     = (half)(s * (float)v.x);
-                wtT[q * 2 + 1][wr] = (half)(s * (float)v.y);
+                WT(q * 2, wr)     = (half)(s * (float)v.x);
+                WT(q * 2 + 1, wr) = (half)(s * (float)v.y);
   #elif D_BAKE == 4
                 const half4 v = cb[0];
-                wtT[q * 4][wr]     = (half)(s * (float)v.x);
-                wtT[q * 4 + 1][wr] = (half)(s * (float)v.y);
-                wtT[q * 4 + 2][wr] = (half)(s * (float)v.z);
-                wtT[q * 4 + 3][wr] = (half)(s * (float)v.w);
+                WT(q * 4, wr)     = (half)(s * (float)v.x);
+                WT(q * 4 + 1, wr) = (half)(s * (float)v.y);
+                WT(q * 4 + 2, wr) = (half)(s * (float)v.z);
+                WT(q * 4 + 3, wr) = (half)(s * (float)v.w);
   #else
                 const half4 v0 = cb[0];
                 const half4 v1 = cb[1];
-                wtT[q * 8][wr]     = (half)(s * (float)v0.x);
-                wtT[q * 8 + 1][wr] = (half)(s * (float)v0.y);
-                wtT[q * 8 + 2][wr] = (half)(s * (float)v0.z);
-                wtT[q * 8 + 3][wr] = (half)(s * (float)v0.w);
-                wtT[q * 8 + 4][wr] = (half)(s * (float)v1.x);
-                wtT[q * 8 + 5][wr] = (half)(s * (float)v1.y);
-                wtT[q * 8 + 6][wr] = (half)(s * (float)v1.z);
-                wtT[q * 8 + 7][wr] = (half)(s * (float)v1.w);
+                WT(q * 8, wr)     = (half)(s * (float)v0.x);
+                WT(q * 8 + 1, wr) = (half)(s * (float)v0.y);
+                WT(q * 8 + 2, wr) = (half)(s * (float)v0.z);
+                WT(q * 8 + 3, wr) = (half)(s * (float)v0.w);
+                WT(q * 8 + 4, wr) = (half)(s * (float)v1.x);
+                WT(q * 8 + 5, wr) = (half)(s * (float)v1.y);
+                WT(q * 8 + 6, wr) = (half)(s * (float)v1.z);
+                WT(q * 8 + 7, wr) = (half)(s * (float)v1.w);
   #endif
             }
 #endif
         } else {
             for (int q = q0; q < q0 + SPG / 4; ++q) {
                 for (int u = 0; u < D_BAKE; ++u)
-                    wtT[q * D_BAKE + u][wr] = (half)0;
+                    WT(q * D_BAKE + u, wr) = (half)0;
             }
         }
 #if PIPE
@@ -3875,7 +3907,12 @@ _SRC_GEMMSEG2 = _PACK_FETCH + r"""
 #endif
         for (int k8 = 0; k8 < G / 8; ++k8) {
             simdgroup_half8x8 B;
+            #if WTV
+            simdgroup_load(B, &wtT[(int)sg * 8][k8 * 8], GROUP + WPAD,
+                           ulong2(0, 0), true);
+#else
             simdgroup_load(B, &wtT[k8 * 8][(int)sg * 8], 32);
+#endif
             simdgroup_half8x8 A;
             simdgroup_load(A, &xt[0][k8 * 8], GROUP + XPAD);
             simdgroup_multiply_accumulate(C0, A, B, C0);
@@ -3899,7 +3936,12 @@ _SRC_GEMMSEG2 = _PACK_FETCH + r"""
 #if OT2
         else for (int k8 = 0; k8 < G / 8; ++k8) {
             simdgroup_half8x8 B;
+            #if WTV
+            simdgroup_load(B, &wtT[(int)sg * 8][k8 * 8], GROUP + WPAD,
+                           ulong2(0, 0), true);
+#else
             simdgroup_load(B, &wtT[k8 * 8][(int)sg * 8], 32);
+#endif
             simdgroup_half8x8 A;
             simdgroup_load(A, &xt[0][k8 * 8], GROUP + XPAD);
             simdgroup_multiply_accumulate(Db0, A, B, Db0);
@@ -4096,6 +4138,12 @@ _GEMMSEG_PIPE = os.environ.get("VQ_GEMMSEG_PIPE", "0") == "1"
 # The refuter attacked this arm's traffic claim (correctly) but the real
 # mechanism is instruction count + hoisted predication. Default ON for v2.
 _GEMMSEG_PH2V = os.environ.get("VQ_GEMMSEG_PH2V", "1") == "1"
+# R2-1a (2026-10-07): vectorized wtT staging. "1" stores wtT out-major so a
+# code's D halves are one vector store; phase 3 loads B transposed. "2" also
+# pads each wtT row by 8 halves (+512 B threadgroup; CB_DEV arm only, so the
+# threadgroup-codebook budget is untouched). Bit-exact. Default OFF until
+# benched.
+_GEMMSEG_WTV = os.environ.get("VQ_GEMMSEG_WTV", "0")
 # threadgroup tile bytes at RTILE=32, tracked so cb_dev/fits arithmetic
 # follows the flags (F51's rule: budget follows every byte change).
 _TILES_R32 = (2 if _GEMMSEG_DSTORE else 3) * 4096
@@ -4346,6 +4394,10 @@ def _gemmseg_prefill(xsrc, src_rows, idx_sorted_np, codes, codebook, scales,
             name += "_pf"
         if _GEMMSEG_PH2V:
             name += "_p2v"
+        wtv = 1 if _GEMMSEG_WTV in ("1", "2") else 0
+        wpad = 8 if (_GEMMSEG_WTV == "2" and cb_dev) else 0
+        if wtv:
+            name += f"_wtv{wpad}"
         # TIO follows xsrc's dtype so the kernel cache never mixes builds.
         if xsrc.dtype == mx.bfloat16:
             name += "_bf16io"
@@ -4360,7 +4412,8 @@ def _gemmseg_prefill(xsrc, src_rows, idx_sorted_np, codes, codebook, scales,
                     ("XPAD", _XT_PAD_HALVES), ("TIO", xsrc.dtype),
                     ("OT2", ot2), ("DSTORE", 1 if _GEMMSEG_DSTORE else 0),
                     ("PIPE", 1 if _GEMMSEG_PIPE else 0),
-                    ("PH2V", 1 if _GEMMSEG_PH2V else 0)]
+                    ("PH2V", 1 if _GEMMSEG_PH2V else 0),
+                    ("WTV", wtv), ("WPAD", wpad)]
         if not pack_bits:
             # unpacked arm reads codes as CT (uchar/ushort), not uint words
             template.append(("CT", codes.dtype))
