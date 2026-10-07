@@ -708,7 +708,7 @@ them needs new evidence first, not disk.
 
 - E80 (tonight): does harvest cost keep falling at K2048? Bar = 2.3997.
 - Fair e4b embedding test: affine + fp32 path vs VQ + fp32 path. Cheap, decisive.
-- Ship u8view (+33% prefill, bit-exact, E81) and re-splice bundled model.py
+- (SHIPPED 2026-08-20, E90; stale) Ship u8view (+33% prefill, +3% decode, bit-exact, E81) and re-splice bundled model.py
   in d4-K256 artifacts; then artifact-level 397B recheck of the E70 37% tax
   (does not reproduce at kernel level — laws 8/9 may need edits).
 - Bundled-runtime gate: check_release should verify the artifact's model.py

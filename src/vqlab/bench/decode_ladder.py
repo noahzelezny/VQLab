@@ -49,6 +49,13 @@ def _stub(_self, x, *args, **kwargs):
     return x * 0
 
 
+def _switch_stub(_self, x, indices, *args, **kwargs):
+    """SwitchGLU returns one row per (token, expert): (*indices.shape, D).
+    The generic stub's x-shaped output would not combine with the scores."""
+    return mx.broadcast_to(mx.expand_dims(x, -2) * 0,
+                           (*indices.shape, x.shape[-1]))
+
+
 def _hc_stub(self, hyper):
     """Delete the hyper-connection's LEARNED MACHINERY, keep its plumbing.
 
@@ -79,6 +86,54 @@ def _hc_stub(self, hyper):
         return mixed
     inject = mx.ones((*hyper.shape[:-1], hc), dtype=hyper.dtype)
     return mixed, hyper, inject
+
+
+def _compile_router(model):
+    """REPLACEMENT arm (F200): fuse the MoE ROUTER and COMBINE with mx.compile.
+
+    F200 measured the 35B's MoE block at 54% of decode against 28% for the
+    routed SwitchGLU and 4% for the shared expert: ~3.8 ms/token sits in the
+    ~11 small launches per layer around them (softmax, argpartition,
+    take_along_axis, normalize, weight, reduce, sigmoid gate, add). The
+    linears (gate, switch_mlp, shared_expert, shared_expert_gate) stay
+    uncompiled -- the VQ kernels read host-side routing in prefill. Checksum
+    MUST match baseline (see _compile_hc).
+    """
+    k_cache = {}
+
+    def route(gates, k, norm):
+        gates = mx.softmax(gates, axis=-1, precise=True)
+        inds = mx.argpartition(gates, kth=-k, axis=-1)[..., -k:]
+        scores = mx.take_along_axis(gates, inds, axis=-1)
+        if norm:
+            scores = scores / scores.sum(axis=-1, keepdims=True)
+        return inds, scores
+
+    def combine(y, scores, shared_y, sg):
+        y = (y * scores[..., None]).sum(axis=-2)
+        return y + mx.sigmoid(sg) * shared_y
+
+    comb = mx.compile(combine)
+
+    def call(self, x):
+        key = (self.top_k, bool(self.norm_topk_prob))
+        if key not in k_cache:
+            k_cache[key] = mx.compile(
+                lambda g, _k=key[0], _n=key[1]: route(g, _k, _n))
+        inds, scores = k_cache[key](self.gate(x))
+        y = self.switch_mlp(x, inds)
+        return comb(y, scores, self.shared_expert(x), self.shared_expert_gate(x))
+
+    n = 0
+    for _name, mod in model.named_modules():
+        cls = type(mod)
+        if (cls.__name__.endswith("SparseMoeBlock") and hasattr(mod, "shared_expert_gate")
+                and getattr(mod, "sharding_group", None) is None):
+            mod.__class__ = type(f"Compiled{cls.__name__}", (cls,), {"__call__": call})
+            n += 1
+    if n == 0:
+        raise SystemExit("router-compile matched nothing -- refusing to run.")
+    return n
 
 
 def _compile_hc(model):
@@ -126,7 +181,8 @@ def _patch(model, predicate, label):
     for name, mod in model.named_modules():
         if predicate(name, type(mod).__name__):
             cls = type(mod)
-            fn = _hc_stub if cls.__name__.endswith("GatedResidual") else _stub
+            fn = (_hc_stub if cls.__name__.endswith("GatedResidual")
+                  else _switch_stub if label == "switch" else _stub)
             mod.__class__ = type(f"Deleted{cls.__name__}", (cls,),
                                  {"__call__": fn})
             if type(mod).__call__ is not fn:
@@ -144,7 +200,7 @@ def _patch(model, predicate, label):
 
 # Arms that preserve the model's arithmetic. Their checksum must MATCH the
 # baseline; deletion arms' must differ. See the print at the end of main().
-_REPLACEMENT_ARMS = {"hc-compile"}
+_REPLACEMENT_ARMS = {"hc-compile", "router-compile"}
 
 ARMS = {
     "baseline":   (lambda n, t: False, "untouched"),
@@ -156,6 +212,15 @@ ARMS = {
                    "VQ expert module deleted (12.1% of bytes/token; F48 ref)"),
     "sharedexp":  (lambda n, t: n.endswith(("shared_expert", "shared_experts")),
                    "dense shared expert deleted (4.7% of bytes/token)"),
+    # The MoE partition (F200): moe - switch = router + shared expert +
+    # combine; switch - vq = SwitchGLU glue (sort, activation, scatter).
+    "moe":        (lambda n, t: t.endswith(("SparseMoeBlock", "MoEBlock", "MoE")),
+                   "whole MoE block deleted (router, experts, shared, combine)"),
+    "switch":     (lambda n, t: n.endswith("switch_mlp"),
+                   "routed SwitchGLU deleted (VQ linears + sort/act/scatter glue)"),
+    "router-compile": (lambda n, t: False,
+                   "MoE router + combine FUSED with mx.compile "
+                   "(replacement arm: checksum MUST match baseline)"),
     "hc-compile": (lambda n, t: False,
                    "hyper-connections FUSED with mx.compile "
                    "(replacement arm: checksum MUST match baseline)"),
@@ -199,6 +264,8 @@ def main() -> int:
         hits = 0
     elif a.arm == "hc-compile":
         hits = _compile_hc(model)
+    elif a.arm == "router-compile":
+        hits = _compile_router(model)
     else:
         hits = _patch(model, predicate, a.arm)
     print(f"arm={a.arm}  patched_instances={hits}  {label}", flush=True)
