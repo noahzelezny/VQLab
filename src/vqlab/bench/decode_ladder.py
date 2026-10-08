@@ -410,6 +410,20 @@ def main() -> int:
                          "share mirrors at batch, where GEMVs become GEMMs and "
                          "per-row cost amortizes")
     ap.add_argument("--prefill-tokens", type=int, default=4096)
+    ap.add_argument("--grid-arm", action="append", default=[],
+                    metavar="NAME=VQ_X:V[,VQ_Y:W]",
+                    help="prefill GRID mode (F204): one runtime config per "
+                         "arm, set on the vq_switch module globals in ONE "
+                         "process, reps interleaved across arms and lengths. "
+                         "A cutoff SWEEP instrument (one load instead of "
+                         "arms x lengths x n loads); confirm the winner with "
+                         "one process per arm. 'base' (runtime values) runs first")
+    ap.add_argument("--grid-tokens", default="",
+                    help="comma list of prefill lengths (grid mode; with no "
+                         "--grid-arm, times 'base' only = env-var arm, one process)")
+    ap.add_argument("--grid-decode", type=int, default=0,
+                    help="grid mode: also time this many greedy decode tokens "
+                         "per arm (ms/tok, best of reps) -- the decode-unchanged check")
     a = ap.parse_args()
 
     from mlx_lm import load
@@ -426,6 +440,9 @@ def main() -> int:
     import sys as _sys
     print(f"arch={arch}  file={getattr(_sys.modules.get(arch), '__file__', '?')}",
           flush=True)
+
+    if a.grid_arm or a.grid_tokens:
+        return _grid(model, tok, a)
 
     predicate, label = ARMS[a.arm]
     if a.arm == "baseline":
@@ -530,6 +547,99 @@ def main() -> int:
              "baseline" if a.arm == "baseline" else
              "DELETION: checksum must DIFFER from baseline")
     print(f"  output_checksum {checksum}  ({_kind})", flush=True)
+    _print_mem()
+    return 0
+
+
+def _grid(model, tok, a) -> int:
+    """F204 prefill grid: arms x lengths in one process, interleaved reps.
+    Prints best-of-reps seconds, the ratio to 'base', and an all-position
+    argmax checksum per cell (a bit-exact arm must match base)."""
+    from mlx_lm.models.cache import make_prompt_cache
+    from vqlab.score.kernel_truth import _parse_arm, _attr
+    vq = next((m for _, m in model.named_modules()
+               if type(m).__name__ == "VQSwitchLinear"), None)
+    if vq is None:
+        raise SystemExit("FAIL: no VQSwitchLinear in this model")
+    vqg = type(vq).__call__.__globals__
+    arms = [("base", {})] + [_parse_arm(s) for s in a.grid_arm]
+    lens = [int(x) for x in a.grid_tokens.split(",") if x]
+    word = ("the quick brown fox jumps over the lazy dog while considering "
+            "distributed inference ")
+    allids = tok.encode(word * (max(lens) // 13 + 2))
+    times = {(n, L): [] for n, _ in arms for L in lens}
+    chk = {}
+    for rep in range(a.reps + 1):
+        for L in lens:
+            ids = mx.array([allids[:L]])
+            for name, kv in arms:
+                saved = {}
+                for k, v in kv.items():
+                    at = _attr(vqg, k)
+                    saved[at] = vqg[at]
+                    vqg[at] = v
+                try:
+                    cache = make_prompt_cache(model)
+                    mx.synchronize()
+                    t0 = time.time()
+                    logits = model(ids, cache=cache)
+                    mx.eval(logits)
+                    mx.synchronize()
+                    dt = time.time() - t0
+                    c = int(mx.sum(mx.argmax(logits[0], axis=-1)).item())
+                finally:
+                    for at, v in saved.items():
+                        vqg[at] = v
+                if rep:
+                    times[(name, L)].append(dt)
+                chk[(name, L)] = c
+    if a.grid_decode:
+        from mlx_lm.models.cache import make_prompt_cache as _mpc
+        dts = {n: [] for n, _ in arms}
+        dchk = {}
+        p0 = mx.array([allids[:64]])
+        for rep in range(a.reps + 1):
+            for name, kv in arms:
+                saved = {}
+                for k, v in kv.items():
+                    at = _attr(vqg, k)
+                    saved[at] = vqg[at]
+                    vqg[at] = v
+                try:
+                    cache = _mpc(model)
+                    lg = model(p0, cache=cache)
+                    t = mx.argmax(lg[:, -1, :], axis=-1)
+                    mx.eval(t)
+                    mx.synchronize()
+                    t0 = time.time()
+                    acc = 0
+                    for _ in range(a.grid_decode):
+                        lg = model(t[None], cache=cache)
+                        t = mx.argmax(lg[:, -1, :], axis=-1)
+                        mx.eval(t)
+                        acc += int(t.item())
+                    mx.synchronize()
+                    dt = time.time() - t0
+                finally:
+                    for at, v in saved.items():
+                        vqg[at] = v
+                if rep:
+                    dts[name].append(dt / a.grid_decode * 1e3)
+                dchk[name] = acc
+        bd = min(dts["base"])
+        for name, _ in arms:
+            print(f"DECODE {name:>14s} ms/tok {min(dts[name]):8.3f} "
+                  f"base/arm {bd/min(dts[name]):6.3f} checksum {dchk[name]} "
+                  f"same_as_base {dchk[name] == dchk['base']}", flush=True)
+    print("GRID  arm  tokens  best_s  spread%  base/arm  checksum  same_as_base", flush=True)
+    for L in lens:
+        b = min(times[("base", L)])
+        for name, _ in arms:
+            t = times[(name, L)]
+            print(f"GRID {name:>14s} {L:6d} {min(t):8.4f} "
+                  f"{(max(t)-min(t))/min(t)*100:6.1f} {b/min(t):7.3f} "
+                  f"{chk[(name, L)]:12d} {chk[(name, L)] == chk[('base', L)]}",
+                  flush=True)
     _print_mem()
     return 0
 
