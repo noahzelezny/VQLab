@@ -57,8 +57,8 @@ import mlx.nn as nn
 # So the fused path wins here on speed and churn, not on survival. Never
 # quote get_peak_memory() as a RAM requirement -- measure RSS. Doing the
 # former produced a false alarm that briefly went into a public model card.
-_DENSE_FUSED_MAX_N_PACKED = int(os.environ.get("VQ_DENSE_FUSED_MAX_N", 96))
-_DENSE_FUSED_MAX_N_PLAIN = int(os.environ.get("VQ_DENSE_FUSED_MAX_N_PLAIN", 12))
+_DENSE_FUSED_MAX_N_PACKED = int(os.environ.get("VQ_DENSE_FUSED_MAX_N", "96"))
+_DENSE_FUSED_MAX_N_PLAIN = int(os.environ.get("VQ_DENSE_FUSED_MAX_N_PLAIN", "12"))
 
 # THE PACKED CUTOFF IS GEOMETRY-DEPENDENT, and 96 was a d=2 number.
 #
@@ -261,7 +261,7 @@ def _unpack_rows(packed, nsub, bits):
 # width-independent, but NOT bit-identity-guaranteed (see above).
 _DENSE_DECODE_EVAL = os.environ.get("VQ_DENSE_DECODE_EVAL", "1") != "0"
 _DENSE_DECODE_TILE_MB = float(
-    os.environ.get("VQ_DENSE_DECODE_TILE_MB", 0))
+    os.environ.get("VQ_DENSE_DECODE_TILE_MB", "0"))
 
 
 def _decode_matmul(xf, codes_in, codebook, scales, group_size, OUT, IN,
