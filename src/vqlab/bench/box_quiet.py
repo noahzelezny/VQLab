@@ -16,7 +16,7 @@ import subprocess
 # Commands whose OUTPUT is a timing. Everything else is free to run anywhere.
 TIMED = {"speed-pair", "speed-pair-knurlogic", "prefill-bench", "decode-timeline",
          "prefill-timeline", "decode-ladder", "mtp-bench", "hc-micro",
-         "gpu-capture"}
+         "gpu-capture", "lut-bench"}
 # Processes that own the GPU for minutes to hours.
 HEAVY = ("fit-moe", "fit-dense", "fit moe", "fit dense", "geo-build", "fit_moe",
          "vq_397b_codes", "fit_dense_vq",
