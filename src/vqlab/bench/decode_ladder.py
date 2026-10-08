@@ -477,6 +477,9 @@ def main() -> int:
             t0 = time.time()
             logits = model(mx.array([ids]), cache=cache)
             mx.eval(logits)
+            # host read inside the timed region (F204: eval alone returned
+            # early on glm5_next's walk path)
+            _ = mx.sum(mx.argmax(logits[0], axis=-1)).item()
             mx.synchronize()
             if rep:
                 times.append(time.time() - t0)
@@ -583,10 +586,13 @@ def _grid(model, tok, a) -> int:
                     mx.synchronize()
                     t0 = time.time()
                     logits = model(ids, cache=cache)
-                    mx.eval(logits)
+                    # The checksum's .item() is INSIDE the timed region: on
+                    # glm5_next's shipped (walk) path mx.eval(logits) +
+                    # mx.synchronize() returned in 5 ms for a 2.2 s forward
+                    # (F204); only a host read proved the work was done.
+                    c = int(mx.sum(mx.argmax(logits[0], axis=-1)).item())
                     mx.synchronize()
                     dt = time.time() - t0
-                    c = int(mx.sum(mx.argmax(logits[0], axis=-1)).item())
                 finally:
                     for at, v in saved.items():
                         vqg[at] = v
