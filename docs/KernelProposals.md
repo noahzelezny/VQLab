@@ -11,6 +11,33 @@ runtime; line numbers as of 2026-10-07, file is 5101 lines). MLX grounding:
 2026-10-07). Web search was down that session (no BRAVE_SEARCH_API_KEY —
 since fixed and verified working); direct fetches carried the round.
 
+## Verdicts (measured 2026-10-07, F200-F204) — read before proposing anything below again
+
+Measured on Qwen3.6-35B-A3B VQ (M3 Ultra), rolled out to every MoE family.
+Decode on that model runs at 14% of peak bandwidth: it is latency/dispatch
+bound, which is why most byte-saving and occupancy-trading ideas lost.
+
+| idea | verdict | evidence |
+|---|---|---|
+| R2-1a vectorized wtT (`VQ_GEMMSEG_WTV`) | dead (noise) | exact; 1.014x on 3.8, ~1.00x on 3.4/4.6/5.4 |
+| R2-2 split-K | not applicable | no prefill step is threadgroup-starved (~10k TGs vs ~1-2k resident) |
+| R2-3 qmv_wide (`VQ_FUSED_WIDE`) | dead | exact; decode 0.50-0.91x, p512 0.95-0.99x (fewer TGs) |
+| R2-4' accumulator-side scaling (`VQ_GEMMSEG_ACCS`) | **ship, as an accuracy fix** | removes gemmseg2's extra fp16 (s*cb) rounding; walk accuracy on all 11 fleet geometries; 0.95-0.99x |
+| R2-5 double-buffered gather (`VQ_GEMMSEG_PIPE`) | dead | exact; 0.97x |
+| R2-6 contiguous code loads (`VQ_GEMMSEG_CVEC`) | **ship** | bit-exact everywhere; prefill-2048 1.03-1.05x (35B) |
+| R3-1 u8view | already shipped (E90) | E81's +33% was prefill; decode +3% |
+| R3-2 MTP on | already on in Knurlogic | ~1.4x decode (35B, n=3) |
+| R3-3 chunked gated-delta scan | dead | scan is ~10% of prefill, ~0% decode; chunked 0.90x; more accurate vs fp64 on real activations |
+| R3-4 MoE dispatch overhead | small | 2-5% of prefill, not 37%; router-compile null |
+| R3-5 rank-r LUT / R3-6 residual codebook | dead | free-LUT bound 2.5-4.1% of a decode token (`vqlab bench lut-bench`) |
+| R3-7 prefix caching | already in Knurlogic | missing only a persisted hit-rate counter |
+| R3-8 phase-switched expansion | rejected | +60 GiB resident defeats VQ; fp16 2.3% less accurate; ceiling = affine speed |
+| (off-list) `VQ_FUSED_MAX_N` 4096 -> 512 | **ship, with ACCS** | short-prompt prefill 1.5-2.6x on every MoE family (F200, F203, F204) |
+| (off-list) `gdn-compile` | ship in Knurlogic (mlx-lm side) | exact; decode 1.035x (35B), 1.017x (27B) |
+
+Open: the dense runtime (`vq_dense.py` `_decode_matmul`) has the same fp16
+s*cb rounding above its cutoff and no ACCS equivalent.
+
 ---
 
 ## Round 2 — affine-borrowing round (2026-10-07), corrected against source
