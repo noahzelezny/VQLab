@@ -125,7 +125,14 @@ def main() -> int:
         codes = np.array(mod.codes)
         cb = np.array(mod.codebook.astype(mx.float32)).astype(np.float64)
         sc = np.array(mod.vq_scales.astype(mx.float32)).astype(np.float64)
-        OUT, NSUB = codes.shape
+        OUT = codes.shape[0]
+        NSUB = IN // cb.shape[1]
+        if getattr(mod, "pack_bits", 0):
+            # packed dense rows ([OUT, WPR] uint32): unpack first, or the
+            # words index the codebook as codes (crashed on 27B 3.9, F203)
+            from vqlab.runtime import vq_pack
+            codes = vq_pack.unpack(codes[None], NSUB, mod.pack_bits)[0]
+        codes = codes.reshape(OUT, NSUB)
         W = cb[codes.astype(np.int64)].reshape(OUT, NSUB * cb.shape[1])
         srow = sc.reshape(OUT, -1)
         W = W * np.repeat(srow, IN // srow.shape[1], axis=1)
