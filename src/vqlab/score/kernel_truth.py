@@ -49,6 +49,14 @@ from vqlab import _layout  # noqa: E402,F401  one module object per name
 from vqlab import runtime_load  # noqa: E402
 
 
+def _num(v):
+    """'512' -> 512 so a numeric knob compares as a number; strings pass."""
+    try:
+        return int(v)
+    except (TypeError, ValueError):
+        return v
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--artifact", required=True)
@@ -66,7 +74,8 @@ def main() -> int:
                          "carry the verdict")
     ap.add_argument("--switch-flag", default=None,
                     help="MoE mode: vq_switch module flag name to A/B, e.g. "
-                         "VQ_GEMMSEG_ACCS (module attr _GEMMSEG_ACCS)")
+                         "VQ_GEMMSEG_ACCS (module attr _GEMMSEG_ACCS), or a "
+                        "numeric knob such as VQ_FUSED_MAX_N with --switch-value 512")
     ap.add_argument("--switch-value", default=None,
                     help="value the flag takes when ON (default True); for a "
                          "string-valued flag, e.g. --switch-flag "
@@ -150,9 +159,13 @@ def switch_main(a) -> int:
         raise SystemExit(f"FAIL: no VQSwitchLinear matched {want}")
     # bundle model.py modules are not in sys.modules; reach the globals
     vqg = type(pick[0][1]).__call__.__globals__
-    attr = "_" + a.switch_flag[3:] if a.switch_flag.startswith("VQ_") else a.switch_flag
+    attr = a.switch_flag if a.switch_flag in vqg else (
+        "_" + a.switch_flag[3:] if a.switch_flag.startswith("VQ_") else a.switch_flag)
     if attr not in vqg:
         raise SystemExit(f"FAIL: runtime has no {attr} (wrong model.py?)")
+    # OFF is the runtime's own value (False for a boolean flag; the shipped
+    # number for a numeric knob such as VQ_FUSED_MAX_N), restored afterwards.
+    off_val = vqg[attr]
     E_USE, TOPK, T = 16, 8, a.switch_tokens
 
     def bf16_exact(arr):
@@ -183,16 +196,16 @@ def switch_main(a) -> int:
             ref = np.stack([x.astype(np.float64) @ Ws[e].T for e in range(E_USE)])
             ref = ref[idx, np.arange(T)[:, None]]          # [T, TOPK, OUT]
             out = {}
-            on_val = True if a.switch_value is None else a.switch_value
+            on_val = True if a.switch_value is None else _num(a.switch_value)
             for flag in (False, True):
-                vqg[attr] = on_val if flag else False
+                vqg[attr] = on_val if flag else off_val
                 xm = mx.broadcast_to(mx.array(x).astype(mx.bfloat16)
                                      [None, :, None, None, :], (1, T, TOPK, 1, IN))
                 y = mod(xm, mx.array(idx)[None])
                 mx.eval(y)
                 out[flag] = np.array(y.astype(mx.float32)).astype(
                     np.float64).reshape(T, TOPK, OUT)
-            vqg[attr] = False
+            vqg[attr] = off_val
             e0 = float(np.sqrt(((out[False] - ref) ** 2).mean()))
             e1 = float(np.sqrt(((out[True] - ref) ** 2).mean()))
             w = "TIE" if e0 == e1 else ("ON" if e1 < e0 else "OFF")
