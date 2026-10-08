@@ -21,7 +21,6 @@ NOT bit-exact with the sequential kernel: different summation order.
 """
 from __future__ import annotations
 
-import math
 import os
 
 import mlx.core as mx
