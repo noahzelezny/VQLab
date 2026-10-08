@@ -42,7 +42,7 @@ import numpy as np
 
 # below this many (token, expert) pairs use the fused kernel; above, the
 # decode+padded-GEMM path (decode cost amortizes). Tune in M1e if needed.
-VQ_FUSED_MAX_N = int(os.environ.get("VQ_FUSED_MAX_N", "4096"))
+VQ_FUSED_MAX_N = int(os.environ.get("VQ_FUSED_MAX_N", "512"))
 
 # Experts decoded to dense fp16 per prefill chunk. THIS IS THE MEMORY KNOB,
 # not the KV cache: measured 2026-08-15 on a 128 GB M4 Max running the
@@ -4385,12 +4385,12 @@ _GEMMSEG_WTV = os.environ.get("VQ_GEMMSEG_WTV", "0")
 # R2-6 (2026-10-07): per-thread contiguous code-word load. "1" loads the
 # <=5 words covering a thread's SPG/4 packed codes once per group and
 # extracts in registers (packed arm, PIPE off). Bit-exact. Default OFF.
-_GEMMSEG_CVEC = os.environ.get("VQ_GEMMSEG_CVEC", "0") == "1"
+_GEMMSEG_CVEC = os.environ.get("VQ_GEMMSEG_CVEC", "1") == "1"
 # R2-4' (2026-10-07): accumulator-side scaling. "1" stages UNSCALED codebook
 # entries in wtT and applies s[row,g] in fp32 to each group's fp32 mma
 # partial (no per-element half round of s*v). NUMERICS CHANGE. RTILE=32,
 # PIPE off, no SKIPZERO. Default OFF.
-_GEMMSEG_ACCS = os.environ.get("VQ_GEMMSEG_ACCS", "0") == "1"
+_GEMMSEG_ACCS = os.environ.get("VQ_GEMMSEG_ACCS", "1") == "1"
 # threadgroup tile bytes at RTILE=32, tracked so cb_dev/fits arithmetic
 # follows the flags (F51's rule: budget follows every byte change).
 _TILES_R32 = (2 if _GEMMSEG_DSTORE else 3) * 4096
