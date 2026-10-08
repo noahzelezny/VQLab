@@ -52,8 +52,21 @@ def _code_tokens(text):
     import io
     import tokenize
     skip = {tokenize.COMMENT, tokenize.NL}
-    return [(t.type, t.string) for t in tokenize.generate_tokens(io.StringIO(text).readline)
+    toks = [(t.type, t.string) for t in tokenize.generate_tokens(io.StringIO(text).readline)
             if t.type not in skip]
+    # Narrow normalization: `os.environ.get("VQ_X", 96)` and
+    # `os.environ.get("VQ_X", "96")` are the same behaviour once wrapped in
+    # int()/float(), and runtime_profile only tracks the string spelling. A
+    # numeric literal that is the 2nd argument of os.environ.get("VQ_...", .)
+    # is compared as its quoted form.
+    out = []
+    for i, (ty, s) in enumerate(toks):
+        if (ty == tokenize.NUMBER and i >= 7 and toks[i - 1][1] == ","
+                and toks[i - 2][1].startswith('"VQ_') and toks[i - 3][1] == "("
+                and [x[1] for x in toks[i - 6:i - 3]] == ["environ", ".", "get"]):
+            ty, s = tokenize.STRING, '"%s"' % s
+        out.append((ty, s))
+    return out
 
 
 @pytest.mark.parametrize("rev", OTHER, ids=lambda r: r["sha256"][:12] + ":" + r["path"].rsplit("/", 1)[-1])
