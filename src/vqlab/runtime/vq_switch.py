@@ -5100,6 +5100,50 @@ def skipzero_shard(weights, modules, rank, n):
     return (list(d.items()) if as_list else d), mods
 
 
+# PHASE-SWITCHED WEIGHT EXPANSION (R3-8, opt-in). VQ_PREFILL_EXPAND=fp16
+# expands each expert tensor ONCE (first prefill call) into a dense fp16
+# scratch -- the exact dequant codebook[codes]*scales, the same fp16 values
+# the fused kernels feed their mma -- and prefill (N > VQ_FUSED_MAX_N) runs
+# stock MLX gather_mm on it. q8 / q4 re-quantize that fp16 to group-64
+# affine and run gather_qmm (APPROXIMATE: a numerics change, KL-gated).
+# Decode (N <= VQ_FUSED_MAX_N) never touches the scratch. The scratch is
+# held outside the module tree (keyed by id), so parameters(), saving and
+# sharding see exactly the VQ tensors. Memory: fp16 is ~2 B/weight of
+# every expert on top of the VQ bytes -- a big-RAM, prefill-bound mode.
+_PREFILL_EXPAND = os.environ.get("VQ_PREFILL_EXPAND", "").lower()
+if _PREFILL_EXPAND in ("", "0", "off", "none"):
+    _PREFILL_EXPAND = ""
+elif _PREFILL_EXPAND not in ("fp16", "q8", "q4"):
+    raise ValueError(f"VQ_PREFILL_EXPAND={_PREFILL_EXPAND!r}: use fp16|q8|q4")
+_EXPAND_STORE = {}
+
+
+def _expand_weights(codes, codebook, scales, pack_bits, in_features):
+    """Dense [E, OUT, IN] fp16 (or affine-quantized) copy of every expert,
+    decoded in chunks with an eval per chunk so the transient stays small."""
+    E = int(codes.shape[0])
+    step = 16
+    parts = []
+    for e0 in range(0, E, step):
+        eids = mx.arange(e0, min(E, e0 + step), dtype=mx.uint32)
+        w = _decode_chunk(codes, codebook, scales, eids, pack_bits=pack_bits,
+                          in_features=in_features).astype(mx.float16)
+        if _PREFILL_EXPAND in ("q8", "q4"):
+            bits = 8 if _PREFILL_EXPAND == "q8" else 4
+            w = mx.quantize(w, group_size=64, bits=bits)
+            mx.eval(*w)
+        else:
+            mx.eval(w)
+        parts.append(w)
+    if _PREFILL_EXPAND == "fp16":
+        out = (mx.concatenate(parts, axis=0),)
+    else:
+        out = tuple(mx.concatenate([p[i] for p in parts], axis=0)
+                    for i in range(3))
+    mx.eval(*out)
+    return out
+
+
 class VQSwitchLinear(nn.Module):
     """Drop-in for QuantizedSwitchLinear over VQ codes. No bias support
     (Qwen3.5 experts are bias-free)."""
@@ -5222,6 +5266,26 @@ class VQSwitchLinear(nn.Module):
         # old force-to-_prefill workaround is gone. _fused still raises
         # explicitly for any (D, pack_bits) without a dedicated kernel.
         T_tok = x.size // IN
+        if _PREFILL_EXPAND and N > VQ_FUSED_MAX_N and rt is None:
+            ent = _EXPAND_STORE.get(id(self))
+            if ent is None or ent[0] is not self["codes"]:
+                ent = (self["codes"], _expand_weights(
+                    self["codes"], self["codebook"], self["vq_scales"], pb,
+                    IN))
+                _EXPAND_STORE[id(self)] = ent
+            ws = ent[1]
+            xe = x if x.dtype == mx.float16 else x.astype(mx.float16)
+            if _PREFILL_EXPAND == "fp16":
+                y = mx.gather_mm(xe, mx.swapaxes(ws[0], -1, -2),
+                                 rhs_indices=indices,
+                                 sorted_indices=sorted_indices)
+            else:
+                y = mx.gather_qmm(xe, ws[0], ws[1], ws[2],
+                                  rhs_indices=indices, transpose=True,
+                                  group_size=64,
+                                  bits=8 if _PREFILL_EXPAND == "q8" else 4,
+                                  sorted_indices=sorted_indices)
+            return y.astype(in_dtype).reshape(*indices.shape, 1, OUT)
         if (N <= VQ_FUSED_MAX_N and _DECODE_XKREP and T_tok > 0
                 and N % T_tok == 0):
             x2 = x.reshape(T_tok, IN)
