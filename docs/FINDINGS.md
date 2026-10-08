@@ -535,6 +535,18 @@ them needs new evidence first, not disk.
    that cannot fire is indistinguishable from a bug that is not there)
    applied to acceptance tests. [E135, E113]
 
+- **A NUMERICS change must clear a NULL arm, not zero (F202).** On the 35B
+  3.8 code corpus (mean KL ~408 mnats) re-associating the fused walk's fp32
+  sums -- no accuracy change, 0.009% of bf16 expert outputs moved --
+  shifted paired code KL by +10.1/+11.2/+13.9 mnats (one at t=+2.2, "WORSE")
+  at chunk 512, and by -2.7/-9.2/-12.2 at chunk 2048. All perturbations of
+  one reference move together (they share its divergence), so the paired t
+  over 12288 positions of ONE sequence is not a test of the arm's accuracy.
+  F201's gemmseg2 "+21.9 t=3.4" sat in that band's tail and reversed sign
+  at chunk 2048 (-5.9, t -0.9). Before reading a kernel-numerics KL delta,
+  score 2-3 `VQ_DIAG_WALK` null arms beside it, and measure accuracy
+  directly: `kernel-truth --acts-corpus` (real activations vs fp64).
+
 ## IV. MLX/Metal engineering rules (each cost ≥1 run to learn)
 
 - **THE d4/d2 FUSED KERNELS CACHE THE CODEBOOK IN THREADGROUP MEMORY, SO
