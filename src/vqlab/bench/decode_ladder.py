@@ -481,6 +481,7 @@ def main() -> int:
                  "baseline" if a.arm == "baseline" else
                  "DELETION: checksum must DIFFER from baseline")
         print(f"  output_checksum {checksum}  ({_kind})", flush=True)
+        _print_mem()
         return 0
 
     # Manual step loop: one forward per token, GPU drained each step. It
@@ -529,7 +530,16 @@ def main() -> int:
              "baseline" if a.arm == "baseline" else
              "DELETION: checksum must DIFFER from baseline")
     print(f"  output_checksum {checksum}  ({_kind})", flush=True)
+    _print_mem()
     return 0
+
+
+def _print_mem():
+    # Resident cost of the arm: weights plus any load-time scratch (e.g.
+    # VQ_PREFILL_EXPAND). Peak includes the transient activations.
+    gib = 1024 ** 3
+    print(f"  memory active {mx.get_active_memory() / gib:6.2f} GiB   "
+          f"peak {mx.get_peak_memory() / gib:6.2f} GiB", flush=True)
 
 
 if __name__ == "__main__":
