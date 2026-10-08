@@ -16,6 +16,17 @@ import pytest
 from vqlab import vq_switch as VS
 from vqlab import vq_pack as VP
 
+
+@pytest.fixture(autouse=True)
+def _legacy_prefill_flags(monkeypatch):
+    """These tests certify byte-equality against reference paths / earlier
+    revisions that predate the rebundle defaults (VQ_FUSED_MAX_N 512,
+    VQ_GEMMSEG_ACCS=1, VQ_GEMMSEG_CVEC=1; F200-F204). Those defaults change
+    numerics for N in 512..4096 by design, so pin the legacy values here."""
+    monkeypatch.setattr(VS, "VQ_FUSED_MAX_N", 4096)
+    monkeypatch.setattr(VS, "_GEMMSEG_ACCS", False)
+    monkeypatch.setattr(VS, "_GEMMSEG_CVEC", False)
+
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 REG = json.loads((ROOT / "src/vqlab/runtime/equivalent_revisions.json").read_text())
 
