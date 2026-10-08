@@ -67,6 +67,10 @@ def main() -> int:
     ap.add_argument("--switch-flag", default=None,
                     help="MoE mode: vq_switch module flag name to A/B, e.g. "
                          "VQ_GEMMSEG_ACCS (module attr _GEMMSEG_ACCS)")
+    ap.add_argument("--switch-value", default=None,
+                    help="value the flag takes when ON (default True); for a "
+                         "string-valued flag, e.g. --switch-flag "
+                         "VQ_PREFILL_EXPAND --switch-value fp16")
     ap.add_argument("--switch-tokens", type=int, default=1024)
     ap.add_argument("--switch-modules", default="layers.0.mlp.switch_mlp.gate_proj,"
                     "layers.13.mlp.switch_mlp.up_proj,"
@@ -179,8 +183,9 @@ def switch_main(a) -> int:
             ref = np.stack([x.astype(np.float64) @ Ws[e].T for e in range(E_USE)])
             ref = ref[idx, np.arange(T)[:, None]]          # [T, TOPK, OUT]
             out = {}
+            on_val = True if a.switch_value is None else a.switch_value
             for flag in (False, True):
-                vqg[attr] = flag
+                vqg[attr] = on_val if flag else False
                 xm = mx.broadcast_to(mx.array(x).astype(mx.bfloat16)
                                      [None, :, None, None, :], (1, T, TOPK, 1, IN))
                 y = mod(xm, mx.array(idx)[None])
