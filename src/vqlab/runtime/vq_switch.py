@@ -42,8 +42,7 @@ import numpy as np
 
 # below this many (token, expert) pairs use the fused kernel; above, the
 # decode+padded-GEMM path (decode cost amortizes). Tune in M1e if needed.
-VQ_FUSED_MAX_N = int(os.environ.get("VQ_FUSED_MAX_N",
-                     4096))
+VQ_FUSED_MAX_N = int(os.environ.get("VQ_FUSED_MAX_N", "4096"))
 
 # Experts decoded to dense fp16 per prefill chunk. THIS IS THE MEMORY KNOB,
 # not the KV cache: measured 2026-08-15 on a 128 GB M4 Max running the
