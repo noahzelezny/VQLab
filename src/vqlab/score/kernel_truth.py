@@ -81,11 +81,28 @@ def main() -> int:
                          "string-valued flag, e.g. --switch-flag "
                          "VQ_PREFILL_EXPAND --switch-value fp16")
     ap.add_argument("--switch-tokens", type=int, default=1024)
+    ap.add_argument("--acts-corpus", default=None,
+                    help="switch mode: replace the random-normal inputs with "
+                         "REAL activations -- the (x, routing indices) each "
+                         "picked module receives in ONE forward over the "
+                         "first --switch-tokens tokens of this corpus (F202: "
+                         "random inputs saw a uniform 0.8%% where code text "
+                         "moved KL by 22 mnats)")
+    ap.add_argument("--acts-offset", type=int, default=0,
+                    help="start token of the --acts-corpus window")
+    ap.add_argument("--arm", action="append", default=[],
+                    help="with --acts-corpus: NAME=FLAG:VAL[,FLAG:VAL] -- "
+                         "one runtime configuration, every arm scored against "
+                         "the same float64 reference (repeatable; 'base' = "
+                         "the runtime's own values is always run first). "
+                         "FLAG is a VQ_* name or module attr.")
     ap.add_argument("--switch-modules", default="layers.0.mlp.switch_mlp.gate_proj,"
                     "layers.13.mlp.switch_mlp.up_proj,"
                     "layers.26.mlp.switch_mlp.down_proj,"
                     "layers.39.mlp.switch_mlp.gate_proj")
     a = ap.parse_args()
+    if a.acts_corpus:
+        return acts_main(a)
     if a.switch_flag:
         return switch_main(a)
 
@@ -144,6 +161,200 @@ def main() -> int:
     else:
         print("SPLIT: the verdict depends on the module or the input; do NOT "
               "quote a single ratio from this run.")
+    return 0
+
+
+def _parse_arm(spec):
+    """'name=VQ_A:1,VQ_B:512' -> ('name', {'VQ_A': 1, 'VQ_B': 512})."""
+    name, _, body = spec.partition("=")
+    kv = {}
+    for item in filter(None, (s.strip() for s in body.split(","))):
+        k, _, v = item.partition(":")
+        kv[k] = {"": True, "true": True, "false": False}.get(v, _num(v))
+    return name, kv
+
+
+def _attr(vqg, flag):
+    attr = flag if flag in vqg else (
+        "_" + flag[3:] if flag.startswith("VQ_") else flag)
+    if attr not in vqg:
+        raise SystemExit(f"FAIL: runtime has no {attr} (wrong model.py?)")
+    return attr
+
+
+def acts_main(a) -> int:
+    """Real-activation switch mode (F202): capture what each picked
+    VQSwitchLinear actually receives on a corpus window, then score every
+    --arm against the exact float64 product on those inputs.
+
+    Also prints three host SIMULATIONS (float64 numpy, no kernel) that
+    isolate one rounding each on the same inputs, every one followed by the
+    kernels' own output rounding (fp32 -> fp16 -> bf16):
+      sim:out       the output rounding alone
+      sim:x16       + the fp16 cast of the bf16 input
+      sim:x16+w16   + fp16 rounding of each staged weight s*cb (gemmseg2's
+                    wtT; the fused walk never rounds the product)
+    A kernel arm far above sim:x16+w16 carries an error the simulation does
+    not model (accumulation / matrix-unit precision)."""
+    from mlx_lm import load
+    from vqlab.runtime import vq_pack
+    model, tok = load(a.artifact)
+    want = tuple(x.strip() for x in a.switch_modules.split(",") if x.strip())
+    pick = [(n, m) for n, m in model.named_modules()
+            if type(m).__name__ == "VQSwitchLinear" and n.endswith(want)]
+    if not pick:
+        raise SystemExit(f"FAIL: no VQSwitchLinear matched {want}")
+    vqg = type(pick[0][1]).__call__.__globals__
+    arms = [("base", {})] + [_parse_arm(s) for s in a.arm]
+
+    # ---- capture: one forward, every picked module records its call ------
+    text = open(a.acts_corpus, encoding="utf-8").read()
+    ids = tok.encode(text)[a.acts_offset:a.acts_offset + a.switch_tokens]
+    cls = type(pick[0][1])
+    names = {id(m): n for n, m in pick}
+    rec = {}
+    orig = cls.__call__
+
+    def recording(self, x, indices, sorted_indices=False):
+        if id(self) in names and id(self) not in rec:
+            mx.eval(x, indices)
+            rec[id(self)] = (np.array(x.astype(mx.float32)),
+                             np.array(indices).astype(np.int64),
+                             bool(sorted_indices))
+        return orig(self, x, indices, sorted_indices)
+    cls.__call__ = recording
+    try:
+        mx.eval(model(mx.array(ids)[None]))
+    finally:
+        cls.__call__ = orig
+    print(f"\ncaptured {len(rec)}/{len(pick)} modules from "
+          f"{pathlib.Path(a.acts_corpus).name} tokens "
+          f"[{a.acts_offset}, {a.acts_offset + len(ids)}), one forward "
+          f"(N = {len(ids)} x top-k pairs per module)")
+    print("arms: " + "; ".join(f"{n}={kv or 'runtime defaults'}" for n, kv in arms))
+
+    def f16(v):
+        return v.astype(np.float16).astype(np.float64)
+
+    # The kernels' output store. bf16-I/O runtimes (profile v2) round fp32
+    # straight to bf16 ONCE; v1.5 stores fp16 and the host casts to bf16
+    # (a double rounding that alone flips ~6% of outputs off the correctly
+    # rounded value). Follow the runtime actually loaded.
+    double = not (vqg.get("_GEMMSEG_BF16IO") and vqg.get("_DECODE_BF16IO"))
+    print(f"output store modelled as "
+          f"{'fp32->fp16->bf16 (v1.5)' if double else 'fp32->bf16 (bf16 I/O)'}")
+
+    def outr(v):
+        h = v.astype(np.float32)
+        if double:
+            h = h.astype(np.float16).astype(np.float32)
+        return np.array(mx.array(h).astype(mx.bfloat16).astype(mx.float32)
+                        ).astype(np.float64)
+
+    rows = []
+    for mname, mod in pick:
+        if id(mod) not in rec:
+            print(f"  {mname}: not called in the forward, skipped")
+            continue
+        x, idx, srt = rec[id(mod)]
+        IN, OUT = mod.input_dims, mod.output_dims
+        idx_flat = idx.reshape(-1)
+        N = idx_flat.size
+        xf = np.broadcast_to(x, (*idx.shape, 1, IN)).reshape(N, IN).astype(np.float64)
+        cb32 = np.array(mod.codebook.astype(mx.float32))
+        D = cb32.shape[1]
+        NSUB = IN // D
+        sc32 = np.array(mod.vq_scales.astype(mx.float32))
+        ref = np.zeros((N, OUT))
+        s_x16 = np.zeros((N, OUT))
+        s_w16 = np.zeros((N, OUT))
+        x16 = f16(xf)
+        for e in np.unique(idx_flat):
+            rows_e = np.nonzero(idx_flat == e)[0]
+            c = np.array(mod.codes[int(e)])
+            if mod.pack_bits:
+                c = vq_pack.unpack(c[None], NSUB, mod.pack_bits)[0]
+            Wc = cb32[c.astype(np.int64)].reshape(OUT, IN)          # fp32 exact
+            s_e = np.repeat(sc32[e].reshape(OUT, -1),
+                            IN // sc32[e].reshape(OUT, -1).shape[1], axis=1)
+            W = Wc.astype(np.float64) * s_e.astype(np.float64)
+            W16 = (Wc * s_e).astype(np.float32).astype(np.float16).astype(np.float64)
+            ref[rows_e] = xf[rows_e] @ W.T
+            s_x16[rows_e] = x16[rows_e] @ W.T
+            s_w16[rows_e] = x16[rows_e] @ W16.T
+        rref = float(np.sqrt((ref ** 2).mean()))
+        res = {}
+
+        def err(v):
+            return float(np.sqrt(((v - ref) ** 2).mean()))
+        res["sim:out"] = err(outr(ref))
+        res["sim:x16"] = err(outr(s_x16))
+        res["sim:x16+w16"] = err(outr(s_w16))
+        res["sim:out/f16"] = err(f16(ref))
+        res["sim:x16/f16"] = err(f16(s_x16))
+        res["sim:x16+w16/f16"] = err(f16(s_w16))
+        kept = {}
+        for an, kv in arms:
+            saved = {}
+            for k, v in kv.items():
+                at = _attr(vqg, k)
+                saved[at] = vqg[at]
+                vqg[at] = v
+            outs = {}
+            try:
+                # bf16 in -> bf16 out is the shipped I/O; its output rounding
+                # (rel ~1.6e-3) swamps every kernel-internal term. The SAME
+                # bf16 values fed as fp16 (exact: fp16 has more mantissa)
+                # come back in fp16, 8x finer, so the kernel's own error
+                # is visible ("arm/f16").
+                for dt in (mx.bfloat16, mx.float16):
+                    xm = mx.array(x).astype(dt)
+                    y = mod(xm, mx.array(idx), sorted_indices=srt) if srt \
+                        else mod(xm, mx.array(idx))
+                    mx.eval(y)
+                    outs[dt] = np.array(y.astype(mx.float32)).astype(
+                        np.float64).reshape(N, OUT)
+            finally:
+                for at, v in saved.items():
+                    vqg[at] = v
+            res[an] = err(outs[mx.bfloat16])
+            res[an + "/f16"] = err(outs[mx.float16])
+            kept[an] = outs
+        sub = float((np.abs(x16[x16 != 0]) < 6.103515625e-05).mean()) if (x16 != 0).any() else 0.0
+        short = mname.split("model.")[-1]
+        print(f"\n  {short}  N={N}  ref rms {rref:.4e}  |x|max {np.abs(xf).max():.3g}  "
+              f"fp16-subnormal x {100*sub:.2f}%")
+        for k, v in res.items():
+            b = res["base/f16"] if k.endswith("/f16") else res["base"]
+            print(f"    {k:22s} rms err {v:.4e}  rel {v/rref:.3e}  /base {v/b:.3f}")
+        # correctness of the shipped bf16 output, element by element
+        rb = outr(ref)
+        first = arms[1][0] if len(arms) > 1 else None
+        for an, _ in arms:
+            yb, yh = kept[an][mx.bfloat16], kept[an][mx.float16]
+            mis = float((yb != rb).mean())
+            bias = float((yh - ref).mean()) / rref
+            line = (f"    {an:22s} bf16 != round(exact) {100*mis:6.3f}%   "
+                    f"mean signed err/f16 {bias:+.2e} (rel)")
+            if first and an != first:
+                line += f"   bf16 != {first} {100*float((yb != kept[first][mx.bfloat16]).mean()):6.3f}%"
+            print(line)
+            res[an + ":mis"] = mis
+        rows.append((short, rref, res))
+    if rows:
+        print("\nSUMMARY  median over modules of (arm rms err / base rms err; "
+              "':mis' = raw fraction of bf16 outputs not equal to the "
+              "correctly rounded exact value)")
+        for k in rows[0][2]:
+            if k.endswith(":mis"):
+                r = [res[k] for _, _, res in rows]
+                print(f"    {k:22s} {100*float(np.median(r)):.3f}%   "
+                      f"[{100*min(r):.3f} .. {100*max(r):.3f}]")
+                continue
+            b = "base/f16" if k.endswith("/f16") else "base"
+            r = [res[k] / res[b] for _, _, res in rows]
+            print(f"    {k:22s} {float(np.median(r)):.3f}   "
+                  f"[{min(r):.3f} .. {max(r):.3f}]")
     return 0
 
 

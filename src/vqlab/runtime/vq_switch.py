@@ -944,6 +944,9 @@ _SRC_FUSED_PACKED_D4_DEVCB_WALK = _PACK_FETCH + r"""
     const device half* srow = scales + (size_t)e * OUT * NGRP + (size_t)r * NGRP;
     const device half4* cb = (const device half4*)codebook;
     float acc = 0.0f;
+#if WDIAG & 1
+    float acc1 = 0.0f;
+#endif
     int j = 0;
     int w = 0;
     ulong buf = 0;
@@ -957,16 +960,40 @@ _SRC_FUSED_PACKED_D4_DEVCB_WALK = _PACK_FETCH + r"""
                 cq[u] = (uint)(buf & (ulong)VQ_MASK);
                 buf >>= BITS; nb -= BITS;
             }
+#if WDIAG & 2
+            gacc += (dot(float4(cb[cq[3]]), float4(xs[j+3]))
+                     + dot(float4(cb[cq[2]]), float4(xs[j+2])))
+                  + (dot(float4(cb[cq[1]]), float4(xs[j+1]))
+                     + dot(float4(cb[cq[0]]), float4(xs[j])));
+#else
             gacc += dot(float4(cb[cq[0]]), float4(xs[j]))
                   + dot(float4(cb[cq[1]]), float4(xs[j+1]))
                   + dot(float4(cb[cq[2]]), float4(xs[j+2]))
                   + dot(float4(cb[cq[3]]), float4(xs[j+3]));
+#endif
             j += 4;
         }
+#if WDIAG & 1
+        if (g & 1) acc1 = fma((float)srow[g], gacc, acc1);
+        else
+#endif
         acc = fma((float)srow[g], gacc, acc);
     }
+#if WDIAG & 1
+    acc += acc1;
+#endif
     y[(size_t)t * OUT + r] = static_cast<T>(acc);
 """
+# F202 NULL-PERTURBATION knob (diagnostic only; default 0 = the shipped
+# kernel, same source, bit-identical). The devcb walk with its fp32 sums
+# re-associated: bit 1 splits the group accumulator into even/odd partials,
+# bit 2 pairs the four dot terms (d3+d2)+(d1+d0). Every arm is the SAME
+# arithmetic class as the shipped walk (fp32 sums of the same exact
+# products), so it is no more and no less accurate -- it only moves WHICH
+# outputs round which way. Scoring these arms measures how far the KL gate
+# moves under a perturbation that carries no accuracy change: the null a
+# kernel-numerics delta has to clear.
+_DIAG_WALK = int(os.environ.get("VQ_DIAG_WALK", "0"))
 
 
 # d=4, DEVICE codebook, one simdgroup per output row. The d4 counterpart of
@@ -2911,6 +2938,7 @@ def _fused(x, eidx, codes, codebook, scales, pack_bits=0, simd=None,
            scales.shape, pack_bits, simd, d2_u32,
            _D8_SIMDSUM, _D8_REGBUF, _D8_DEVX, _D8_SS, _SPEC_KERNELS,
            _D4_WALK, _D4_DEVCB_WALK, _D2_WALK, _D8_WALK, _FUSED_WIDE,
+           _DIAG_WALK,
            None if rowtbl is None else rowtbl.shape, xkrep)
     plan = _KERNELS.get(key)
     if plan is not None:
@@ -3006,6 +3034,9 @@ def _fused_resolve(_plan_key, x, eidx, codes, codebook, scales, pack_bits=0,
                 # kswarm opt-in, default OFF; bit-identical to _d4_devcb.
                 name = f"vq_fused_packed{pack_bits}_d4_devcb_walk"
                 src = _SRC_FUSED_PACKED_D4_DEVCB_WALK
+                if _DIAG_WALK:
+                    name += f"_wdiag{_DIAG_WALK}"
+                    src = f"#define WDIAG {int(_DIAG_WALK)}\n" + src
             else:
                 name = f"vq_fused_packed{pack_bits}_d4_devcb"
                 src = _SRC_FUSED_PACKED_D4_DEVCB
