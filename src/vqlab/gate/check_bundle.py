@@ -242,9 +242,17 @@ def main() -> int:
         return 0
     rev = None if cfg.get("vq_skipzero") else _stale_as(bundle, "vq_switch.py", runtime_profile)
     if rev is not None:
+        # Certification (tests/test_runtime_equivalence.py) is at the LEGACY
+        # prefill defaults (VQ_FUSED_MAX_N=4096, ACCS/CVEC off): since the
+        # F200-F204 flip, the current runtime takes gemmseg2+ACCS for 512 <
+        # N <= 4096 pairs, so "byte-identical to the current runtime" is no
+        # longer true for those prompts. Still STALE (not broken), but say so.
         print(f"STALE: bundle carries runtime @ {rev['sha256'][:12]}, whose output is "
-              f"byte-identical to the current runtime (tests/test_runtime_equivalence.py). "
-              f"Rebundle to pick up: {rev['gains']}")
+              f"byte-identical to the current runtime run at the LEGACY prefill defaults "
+              f"(VQ_FUSED_MAX_N=4096, VQ_GEMMSEG_ACCS=0, VQ_GEMMSEG_CVEC=0; "
+              f"tests/test_runtime_equivalence.py). At the current defaults, prompts of "
+              f"512..4096 (token, expert) pairs differ: a rebundle adds the faster, "
+              f"ACCS-corrected short-prompt prefill (F200-F204) and {rev['gains']}")
         return 2 if a.strict else 0
     print(f"FAIL: bundled model.py ({len(bundle.splitlines())} lines) does not "
           f"contain the current runtime ({len(runtime.splitlines())} lines). "
