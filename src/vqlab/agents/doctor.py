@@ -21,6 +21,8 @@ import re
 import shutil
 import sys
 
+from vqlab import config as _config
+
 
 # Disk: writers refuse below their own margins; say so before they do
 LOW_FREE_WARN_GIB = 200
@@ -32,7 +34,7 @@ _CAMPAIGN = re.compile(r"^(F\d{2,4})\b")
 
 def _findings_text() -> str:
     for p in (os.environ.get("VQLAB_FINDINGS_LOG"),
-              pathlib.Path(__file__).resolve().parents[3] / "lab" / "FINDINGS-LOG.md"):
+              _config.findings_log()):
         try:
             return pathlib.Path(p).read_text() if p else ""
         except OSError:

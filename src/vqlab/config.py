@@ -17,6 +17,13 @@ Example config::
     fit_store = ["/Volumes/Archive/vqlab-fits"]   # first entry receives new fits
     roots     = ["/Volumes/Fast", "/Volumes/Archive"]  # where lookups may search
     gpu_lease = "/Volumes/Fast/gpu.lease"         # shared with other GPU tenants
+    records   = "~/.local/share/vqlab"            # findings log, registry, families, notes
+
+``records`` holds the state vqlab WRITES that is not an artifact: the
+findings log, the artifact registry, family profiles, research notes and
+queue records, each in a fixed subfolder (see `records()`). It never
+defaults into the installed package or a checkout; a checkout user who
+wants the old in-repo ``lab/`` sets ``records`` to it.
 
 Large outputs belong on the volumes named here: `require_storage` refuses a
 write path that is not under one of them.
@@ -38,6 +45,7 @@ _ENV = {
     "fit_store": "VQLAB_FIT_STORE",
     "roots": "VQLAB_ROOTS",
     "gpu_lease": "VQLAB_GPU_LEASE",
+    "records": "VQLAB_RECORDS",
 }
 _DEFAULT = {
     "scratch": HOME / "scratch",
@@ -45,7 +53,11 @@ _DEFAULT = {
     "teachers": HOME / "teachers",
     "fit_store": HOME / "fits",
     "gpu_lease": HOME / "gpu.lease",
+    "records": pathlib.Path(os.environ.get("XDG_DATA_HOME")
+                            or pathlib.Path.home() / ".local" / "share") / "vqlab",
 }
+KEYS = ("scratch", "models", "teachers", "fit_store", "roots", "gpu_lease", "records")
+MULTI = ("fit_store", "roots")
 
 
 def config_file() -> pathlib.Path:
@@ -162,6 +174,49 @@ def fit_store() -> list[pathlib.Path]:
 def gpu_lease() -> pathlib.Path:
     """Advisory lock file every GPU job on this machine takes."""
     return _one("gpu_lease")
+
+
+def records() -> pathlib.Path:
+    """User-written state that is not an artifact ($VQLAB_RECORDS, [paths]
+    records, else ~/.local/share/vqlab or $XDG_DATA_HOME/vqlab)."""
+    return _one("records")
+
+
+def findings_log() -> pathlib.Path:
+    """The F-numbered findings log: $VQLAB_FINDINGS_LOG, else
+    <records>/FINDINGS-LOG.md."""
+    env = os.environ.get("VQLAB_FINDINGS_LOG")
+    return pathlib.Path(env).expanduser() if env else records() / "FINDINGS-LOG.md"
+
+
+def registry_dir() -> pathlib.Path:
+    """Artifact registry (artifacts.jsonl, hub.jsonl): <records>/registry."""
+    return records() / "registry"
+
+
+def families_dir() -> pathlib.Path:
+    """Family entries and teacher profiles: $VQLAB_FAMILIES_DIR, else
+    <records>/families."""
+    env = os.environ.get("VQLAB_FAMILIES_DIR")
+    return pathlib.Path(env).expanduser() if env else records() / "families"
+
+
+def research_dir() -> pathlib.Path:
+    """Research notes, sweep plans, result tables: <records>/research."""
+    return records() / "research"
+
+
+def queues_dir() -> pathlib.Path:
+    """Queue run records: $VQLAB_QUEUE_DIR, else <records>/queues."""
+    env = os.environ.get("VQLAB_QUEUE_DIR")
+    return pathlib.Path(env).expanduser() if env else records() / "queues"
+
+
+def source(key: str) -> str:
+    """Where `key`'s value comes from: 'env', 'file' or 'default'."""
+    if os.environ.get(_ENV[key]):
+        return "env"
+    return "file" if _file_paths(str(config_file())).get(key) else "default"
 
 
 def roots() -> list[pathlib.Path]:

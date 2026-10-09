@@ -47,13 +47,13 @@ import sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))  # src/
 from vqlab import _layout  # noqa: E402,F401  one module object per name
+from vqlab import config as _config  # noqa: E402
 from vqlab import config  # noqa: E402
 from vqlab.core.artifact import tensor_class  # noqa: E402
 from families import DENSE_FAMILIES, FAMILY  # noqa: E402
 import fitstore  # noqa: E402
 import provenance  # noqa: E402
 
-REPO = _layout.SRC.parent
 GSZ = 64                       # scale group, every shipped geometry
 TG_BYTES = 32768               # threadgroup codebook cache ceiling
 DTYPE_BYTES = {"BF16": 2, "F16": 2, "F32": 4, "F8_E4M3": 1, "F8_E5M2": 1,
@@ -307,7 +307,7 @@ def main(argv=None) -> int:
         prof["unknown_family"] = True
         prof["suggested_entry"] = suggest_entry(shapes)
     out = pathlib.Path(a.out) if a.out else (
-        pathlib.Path(os.environ.get("VQLAB_FAMILIES_DIR") or REPO / "families")
+        _config.families_dir()
         / (fam or "_unknown") / "teachers" / sl)
     out.mkdir(parents=True, exist_ok=True)
     pf = out / "profile.json"
@@ -338,8 +338,7 @@ def main(argv=None) -> int:
         if not ent:
             print("  no expert-like tensors found; nothing to write")
             return 1
-        ed_dir = pathlib.Path(os.environ.get("VQLAB_FAMILIES_DIR")
-                              or REPO / "families") / a.write_entry
+        ed_dir = _config.families_dir() / a.write_entry
         ed_dir.mkdir(parents=True, exist_ok=True)
         ent["_source"] = f"family-profile --suggest-entry on {sl}"
         (ed_dir / "entry.json").write_text(json.dumps(ent, indent=1))

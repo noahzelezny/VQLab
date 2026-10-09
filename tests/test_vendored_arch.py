@@ -1,6 +1,6 @@
 """vqlab.family.arch loads Knurlogic's architectures as mlx_lm.models.<name>
 (one copy: VQLab depends on knurlogic), including the ones stock mlx-lm
-lacks; VQLAB_VENDORED_ARCH=0 turns it off."""
+lacks, once vqlab.use_knurlogic_arch() is called; VQLAB_VENDORED_ARCH=0 turns it off."""
 import os
 import subprocess
 import sys
@@ -10,7 +10,7 @@ import pytest
 pytest.importorskip("mlx_lm")
 pytest.importorskip("knurlogic")
 
-PROBE = ("import importlib, vqlab;"
+PROBE = ("import importlib, vqlab; vqlab.use_knurlogic_arch();"
          "m = importlib.import_module('mlx_lm.models.deepseek_v4');"
          "print(m.__file__)")
 

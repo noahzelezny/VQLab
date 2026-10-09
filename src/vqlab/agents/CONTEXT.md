@@ -12,8 +12,10 @@ JSON-RPC over stdio (`mcp`); a queue file of steps (`queue`).
 
 `[boxes.NAME] teachers = "<path>"`: that box's local teacher copies. `config.teachers()` returns it when running ON that box (`$VQLAB_BOX`, which `--on` sets, else hostname), and `vqlab <cmd>` expands a `<teachers>/X` argument through it, so a queue step naming `<teachers>/Model` reads the local copy there.
 
+`vqlab config` / `config set KEY PATH` / `config init` and the GUI's Settings view share ONE implementation, `agents/settings.py` (`locations`, `validate`, `set_value`, `campaign_sizes`): validate (absolute, a directory or creatable with `--create`, writable, free space shown), then rewrite only that key's line in `[paths]`. `records` (`$VQLAB_RECORDS`, else `~/.local/share/vqlab`) holds user-written state: `FINDINGS-LOG.md` (`$VQLAB_FINDINGS_LOG` still overrides), `registry/`, `families/` (`$VQLAB_FAMILIES_DIR`), `research/`, `queues/` (`$VQLAB_QUEUE_DIR`). Accessors: `config.records()`, `findings_log()`, `registry_dir()`, `families_dir()`, `research_dir()`, `queues_dir()`. A checkout that wants the old in-repo `lab/` sets `records` to it.
+
 ## Outputs
-Detached runs under the MCP runs dir, FINDINGS-LOG entries; queues under `~/.vqlab/queues/<stamp>-<name>/` (state.json, steps/NN-name/{cmd,stdout,stderr,verdict.json}).
+Detached runs under the MCP runs dir, FINDINGS-LOG entries; queues under `<records>/queues/<stamp>-<name>/` (state.json, steps/NN-name/{cmd,stdout,stderr,verdict.json}).
 
 ## Rules that bite
 - Use `where_is` before claiming anything is missing.

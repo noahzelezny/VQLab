@@ -87,6 +87,7 @@ import time
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))  # src/
 from vqlab import _layout  # noqa: E402,F401  one module object per name
+from vqlab import config as _config  # noqa: E402
 import mcp_server as ms  # noqa: E402
 import step_verdict as sv  # noqa: E402
 import pin as pinmod  # noqa: E402
@@ -119,7 +120,8 @@ def preflight_root() -> pathlib.Path:
 
 
 def queues_dir() -> pathlib.Path:
-    return pathlib.Path(os.environ.get("VQLAB_QUEUE_DIR") or pathlib.Path.home() / ".vqlab" / "queues")
+    from vqlab import config
+    return config.queues_dir()
 
 
 def _git(*a, cwd=REPO):
@@ -366,7 +368,7 @@ def _env(state):
     env["PYTHONPATH"] = str(src) + (
         os.pathsep + env["PYTHONPATH"] if env.get("PYTHONPATH") else "")
     env.setdefault("PYTHONPYCACHEPREFIX", str(pathlib.Path.home() / ".pycache-vqlab"))
-    env.setdefault("VQLAB_FAMILIES_DIR", str(pathlib.Path(state["live_repo"]) / "families"))
+    env.setdefault("VQLAB_FAMILIES_DIR", str(_config.families_dir()))
     env["VQLAB_QUEUE"] = state["qdir"]
     env["VQLAB_QUEUE_COMMIT"] = state["commit"]
     return env
@@ -887,8 +889,9 @@ def main(argv=None) -> int:
             + (["--override-reservation"] if a.override_reservation else []) \
             + (["--keep-preflight"] if a.keep_preflight else [])
         env = dict(os.environ)
-        env["PYTHONPATH"] = str(REPO / "src") + (os.pathsep + env["PYTHONPATH"] if env.get("PYTHONPATH") else "")
-        p = subprocess.Popen(cmd, cwd=str(REPO), env=env, stdin=subprocess.DEVNULL,
+        if (REPO / "src" / "vqlab").is_dir():        # a checkout; an installed wheel needs no path
+            env["PYTHONPATH"] = str(REPO / "src") + (os.pathsep + env["PYTHONPATH"] if env.get("PYTHONPATH") else "")
+        p = subprocess.Popen(cmd, cwd=str(REPO if (REPO / "src" / "vqlab").is_dir() else pathlib.Path.cwd()), env=env, stdin=subprocess.DEVNULL,
                              stdout=open(qdir / "queue.log", "ab"), stderr=subprocess.STDOUT,
                              start_new_session=True)
         print(f"detached (pid {p.pid}); vqlab queue status {qdir}")

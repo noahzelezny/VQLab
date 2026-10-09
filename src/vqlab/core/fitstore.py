@@ -55,8 +55,8 @@ def roots():
 
 
 def _families_dir():
-    return pathlib.Path(os.environ.get("VQLAB_FAMILIES_DIR")
-                        or pathlib.Path(__file__).resolve().parents[3] / "families")
+    from vqlab import config
+    return config.families_dir()
 
 
 def teacher_identity(teacher_dir):

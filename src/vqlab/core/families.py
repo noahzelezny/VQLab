@@ -146,9 +146,11 @@ DENSE_REMAP = {
 # what lets a family be onboarded through `vqlab family-profile
 # --write-entry` (or MCP `run`) without editing VQLab or waiting on a PR.
 #
-#   <repo>/families/<name>/entry.json      checked-in families
-#   ~/.vqlab/families/<name>/entry.json    a user's own families
-#   $VQLAB_FAMILIES_DIR/<name>/entry.json  anywhere else
+#   <repo>/families/<name>/entry.json      checked-in families (read-only,
+#                                          present only in a checkout)
+#   <families>/<name>/entry.json           a user's own: vqlab.config
+#                                          families_dir() ($VQLAB_FAMILIES_DIR,
+#                                          else <records>/families)
 #
 # entry.json: {"kind": "moe", "target_substr", "src_key", "proj":
 # {proj: [src, half|null]}, ...} or {"kind": "dense", "src_key", "layers":
@@ -156,13 +158,11 @@ DENSE_REMAP = {
 # over a data entry of the same name, so a data file cannot silently
 # redefine a published family.
 def _family_dirs():
-    import os
     import pathlib
-    dirs = [pathlib.Path(__file__).resolve().parents[3] / "families",
-            pathlib.Path.home() / ".vqlab" / "families"]
-    if os.environ.get("VQLAB_FAMILIES_DIR"):
-        dirs.append(pathlib.Path(os.environ["VQLAB_FAMILIES_DIR"]))
-    return dirs
+
+    from vqlab import config
+    checked_in = pathlib.Path(__file__).resolve().parents[3] / "families"
+    return [checked_in, config.families_dir()]
 
 
 def _load_data_entries():

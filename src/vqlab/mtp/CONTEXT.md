@@ -17,5 +17,6 @@ Tokens. The MTP TOOLS live in the stage folders like every other tool:
 `ship/mtp_run.py` (`vqlab mtp-generate`).
 
 ## Rules that bite
+- `load_mtp_head` / `mtp_generate` never install Knurlogic's architectures. For deepseek_v4 / qwen4_exp, call `vqlab.use_knurlogic_arch()` before `mlx_lm.load` (the CLI does it for every command).
 - A new family is a `FamilySpec` in `registry.py` plus a head module. Read that docstring first.
 - `mtp-accept` (paired, across prompts) is the reliable acceptance instrument; a single-prompt number is not.

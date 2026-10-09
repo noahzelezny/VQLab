@@ -1,27 +1,35 @@
 #!/usr/bin/env python3
-"""vqlab gui — a local, READ-ONLY window onto the lab.
+"""vqlab gui — a local window onto the lab (read-only except storage settings).
 
     vqlab gui [--port 8781] [--open]
 
 Serves one page on 127.0.0.1 (never another interface) over data the lab
 already keeps -- nothing here computes a number of its own:
 
-  Fleet      registry/artifacts.jsonl + registry/hub.jsonl (runtime profile,
+  Fleet      <records>/registry/{artifacts,hub}.jsonl (runtime profile,
              geometry mix, size, Hub drift, build record), lineage on click
   Fit store  <store>/index.jsonl: per teacher, a layer x projection grid of
              which (d, K) are already fitted -- what a mixed-codebook build
              can be assembled from without paying for a k-means
-  Families   families/*/teachers/*/{profile,onboard}.json
+  Families   <families>/*/teachers/*/{profile,onboard}.json
   Runs       ~/.vqlab/runs.jsonl, the MCP run dirs, and who holds the GPU
   Queues     /api/queues: recent `vqlab queue` runs (state.json per run, with
              `live` = the runner pid is alive, the check `queue status` uses)
+  Settings   /api/settings: every storage location, its source and free
+             space; POST /api/settings sets one (agents/settings.py, the same
+             validation `vqlab config set` runs)
+  Scratch    /api/scratch: top-level scratch folders with sizes, and
+             /api/scratch/reclaimable: `vqlab scratch reclaimable` with its
+             rm lines -- shown, never run
   Bench      /bench/ serves gui_static/bench/ (the Library/Recipe/Jobs page)
              on the same origin, so its Jobs page reads /api/queues live
 
 Stdlib only; reads index files and small JSON, never a tensor, so it is safe
-on a box that is mid-experiment. Every endpoint is a GET; there is no way to
-launch, delete or write anything from the page. Launching stays with the CLI
-and MCP `run`, where the GPU lease and exo gates live.
+on a box that is mid-experiment. Every endpoint is a GET except one POST
+that writes one key of the user's config file (same-origin JSON only; the
+server listens on 127.0.0.1). There is no way to launch or delete anything
+from the page. Launching stays with the CLI and MCP `run`, where the GPU
+lease and exo gates live.
 """
 from __future__ import annotations
 
@@ -39,7 +47,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))  # src/
 from vqlab import _layout  # noqa: E402,F401  one module object per name
 
-REPO = _layout.SRC.parent
+from vqlab import config  # noqa: E402
 STATIC = pathlib.Path(__file__).resolve().parent / "gui_static"
 
 
@@ -60,13 +68,13 @@ def _jsonl(p, limit=None):
 
 
 def _families_dir():
-    return pathlib.Path(os.environ.get("VQLAB_FAMILIES_DIR") or REPO / "families")
+    return config.families_dir()
 
 
 # ---------------------------------------------------------------- endpoints
 def api_fleet(_q):
-    arts = _jsonl(REPO / "registry" / "artifacts.jsonl")
-    hub = {h["repo"]: h for h in _jsonl(REPO / "registry" / "hub.jsonl")}
+    arts = _jsonl(config.registry_dir() / "artifacts.jsonl")
+    hub = {h["repo"]: h for h in _jsonl(config.registry_dir() / "hub.jsonl")}
     twins = {}
     for e in arts:
         twins.setdefault(e["fingerprint"], []).append(e["name"])
@@ -80,7 +88,7 @@ def api_provenance(q):
     """Build record + lineage for a REGISTERED artifact only: the page can
     never be used to read an arbitrary path."""
     path = q.get("path", [""])[0]
-    known = {e["path"] for e in _jsonl(REPO / "registry" / "artifacts.jsonl")}
+    known = {e["path"] for e in _jsonl(config.registry_dir() / "artifacts.jsonl")}
     if path not in known:
         return {"error": "not a registered artifact"}
     import provenance
@@ -217,9 +225,44 @@ def api_queues(q):
     return queues_snapshot(int(q.get("n", ["40"])[0]))
 
 
+def api_settings(_q):
+    from vqlab.agents import settings
+    return {"config_file": str(config.config_file()),
+            "config_exists": config.config_file().exists(),
+            "locations": settings.locations(),
+            "records": {"findings_log": str(config.findings_log()),
+                        "registry": str(config.registry_dir()),
+                        "families": str(config.families_dir()),
+                        "research": str(config.research_dir()),
+                        "queues": str(config.queues_dir())}}
+
+
+def api_scratch(_q):
+    from vqlab.agents import settings
+    return {"root": str(config.scratch()), "folders": settings.campaign_sizes()}
+
+
+def api_scratch_reclaimable(_q):
+    import shlex
+
+    from vqlab.records import scratch_cmd
+    cands, kept = scratch_cmd.reclaimable([config.scratch()])
+    return {"root": str(config.scratch()), "reclaimable": cands, "kept": kept,
+            "total_bytes": sum(c["bytes"] for c in cands),
+            "rm_lines": [f"rm -rf {shlex.quote(c['path'])}" for c in cands]}
+
+
+def post_settings(body):
+    from vqlab.agents import settings
+    return settings.set_value(str(body.get("key", "")), str(body.get("path", "")),
+                              create=bool(body.get("create")))
+
+
 ROUTES = {"/api/fleet": api_fleet, "/api/provenance": api_provenance,
           "/api/fits": api_fits, "/api/families": api_families, "/api/runs": api_runs,
-          "/api/queues": api_queues}
+          "/api/queues": api_queues, "/api/settings": api_settings,
+          "/api/scratch": api_scratch, "/api/scratch/reclaimable": api_scratch_reclaimable}
+POSTS = {"/api/settings": post_settings}
 
 
 BENCH_TYPES = {".html": "text/html; charset=utf-8", ".json": "application/json",
@@ -246,6 +289,32 @@ class Handler(BaseHTTPRequestHandler):
         if root not in f.parents or ctype is None or not f.is_file():
             return self._send(404, b'{"error":"not found"}', "application/json")
         self._send(200, f.read_bytes(), ctype)
+
+    def _same_origin(self) -> bool:
+        """A POST must come from this page: a JSON body, and an Origin (when
+        the browser sends one) naming this server's own host:port."""
+        if (self.headers.get("Content-Type") or "").split(";")[0].strip() != "application/json":
+            return False
+        origin = self.headers.get("Origin")
+        host = self.headers.get("Host") or ""
+        return origin is None or origin == f"http://{host}"
+
+    def do_POST(self):
+        u = urllib.parse.urlparse(self.path)
+        fn = POSTS.get(u.path)
+        if fn is None:
+            return self._send(404, b'{"error":"not found"}', "application/json")
+        if not self._same_origin():
+            return self._send(403, b'{"error":"cross-origin or non-JSON request refused"}',
+                              "application/json")
+        try:
+            n = min(int(self.headers.get("Content-Length") or 0), 65536)
+            body = json.loads(self.rfile.read(n) or b"{}")
+            data = fn(body if isinstance(body, dict) else {})
+            code = 200 if data.get("ok", True) else 400
+        except Exception as e:                   # noqa: BLE001
+            data, code = {"ok": False, "error": f"{type(e).__name__}: {e}"}, 500
+        self._send(code, json.dumps(data, default=str).encode(), "application/json")
 
     def do_GET(self):
         u = urllib.parse.urlparse(self.path)
@@ -276,7 +345,7 @@ def main(argv=None) -> int:
     a = ap.parse_args(argv)
     srv = ThreadingHTTPServer(("127.0.0.1", a.port), Handler)
     url = f"http://127.0.0.1:{a.port}/"
-    print(f"vqlab gui (read-only) on {url}  (ctrl-c to stop)", flush=True)
+    print(f"vqlab gui on {url}  (ctrl-c to stop)", flush=True)
     if a.open:
         webbrowser.open(url)
     try:

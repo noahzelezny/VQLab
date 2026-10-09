@@ -146,8 +146,8 @@ DOC_ALLOW = ("docs", "families", "CONTEXT.md", "AGENTS.md",
              "README.md", "METHODOLOGY.md", "REPRODUCING.md", "lab",
              "research/CONTEXT.md")
 # The F-numbered findings log is the lab's own record: private (lab/ is
-# gitignored) unless VQLAB_FINDINGS_LOG points elsewhere.
-FINDINGS_LOG = Path(os.environ.get("VQLAB_FINDINGS_LOG") or REPO / "lab" / "FINDINGS-LOG.md")
+# gitignored); it lives under the configured records location (vqlab.config).
+FINDINGS_LOG = config.findings_log()   # $VQLAB_FINDINGS_LOG, else <records>/FINDINGS-LOG.md
 VERDICTS = ("CONFIRMED", "FALSIFIED", "VOID", "CORRECTS", "NULL")
 
 
@@ -426,7 +426,8 @@ def t_run(cmd: str, args: Optional[List[str]] = None, tag: str = "",
             "created": time.strftime("%Y-%m-%dT%H:%M:%S")}
     (rd / "meta.json").write_text(json.dumps(meta, indent=1))
     env = dict(os.environ)
-    env["PYTHONPATH"] = str(REPO / "src") + (os.pathsep + env["PYTHONPATH"] if env.get("PYTHONPATH") else "")
+    if (REPO / "src" / "vqlab").is_dir():            # a checkout; an installed wheel needs no path
+        env["PYTHONPATH"] = str(REPO / "src") + (os.pathsep + env["PYTHONPATH"] if env.get("PYTHONPATH") else "")
     env.setdefault("PYTHONPYCACHEPREFIX", str(Path.home() / ".pycache-vqlab"))
     sup = subprocess.Popen(
         [sys.executable, str(AGENTS_DIR / "mcp_server.py"), "--supervise", str(rd)],
