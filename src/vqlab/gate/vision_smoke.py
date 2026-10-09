@@ -104,7 +104,7 @@ def _image_request_check(post, mid, img, max_tokens, extra=None):
 
 
 PAGE = "http://127.0.0.1:8899"
-ALIASES = {"m3": ("studio", "m3"), "m4": ("book", "m4", "nozzle")}
+ALIASES = {"m3": ("studio", "m3"), "m4": ("book", "m4")}
 
 
 def _machine_names(K, wanted):
