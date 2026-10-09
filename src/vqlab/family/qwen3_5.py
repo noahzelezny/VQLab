@@ -63,7 +63,7 @@ SPEC = FamilyPlugin(
                       "then q /= sqrt(Dk) (Q35:467)",
             runtime="K:299-301 q = Dk^-1 * rms_norm(q, 1e-6), k = Dk^-0.5 * rms_norm(k, 1e-6) == "
                     "x*rsqrt(sum(x^2) + Dk*1e-6): eps 128x too large at Dk=128. KNOWN BUG on "
-                    "knurlogic 6a2ab49 (test fails); fixed by the family-audit pin",
+                    "knurlogic 9595650 (6a2ab49 before the 2026-10-09 history rewrite) (test fails); fixed by the family-audit pin",
             test=_T + "test_gdn_l2norm_eps",
         ),
         Parity(

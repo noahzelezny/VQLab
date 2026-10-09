@@ -9,10 +9,10 @@ expansion) plus the maker checkpoint's config.json and stored dtypes.
 Paths below: M = transformers/models/glm5_next/modeling_glm5_next.py,
 K = knurlogic/engine/families/glm5/architecture/glm5_next/ (language.py
 unless named), V = K/_mlx_vlm/models/. Lines are at transformers 5.18 and
-knurlogic 6a2ab49. Every test is tests/test_glm5_next_parity.py; it
+knurlogic 9595650 (6a2ab49 before the 2026-10-09 history rewrite). Every test is tests/test_glm5_next_parity.py; it
 transcribes M into numpy and runs the knurlogic module on tiny CPU inputs.
 
-Found at knurlogic 6a2ab49 (each test FAILED there and printed the
+Found at knurlogic 9595650 (6a2ab49 before the 2026-10-09 history rewrite) (each test FAILED there and printed the
 measurement, recorded in the item's `runtime`), all fixed in f03ec21 where
 every test passes: the SwiGLU clamp at swiglu_limit=10 is missing in the dense MLP, the shared
 expert and the routed experts; router logits are not fp32; the MLA latent
