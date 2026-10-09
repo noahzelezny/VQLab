@@ -44,7 +44,7 @@ import numpy as np
 # decode+padded-GEMM path (decode cost amortizes). Tune in M1e if needed.
 VQ_FUSED_MAX_N = int(os.environ.get("VQ_FUSED_MAX_N", "512"))
 # The fused walk's cutoff before F200-F204. A module whose gemmseg2 cannot take
-# ACCS (skipzero row tables, RTILE 64, PIPE) keeps it: below 4096 pairs the walk
+# ACCS (RTILE 64, PIPE) keeps it; skipzero row tables take ACCS since F206: below 4096 pairs the walk
 # is the more accurate path there, and a speedup may not cost accuracy.
 _LEGACY_FUSED_MAX_N = 4096
 
@@ -3980,8 +3980,13 @@ _SRC_GEMMSEG2 = _PACK_FETCH + r"""
         } else if (oo + wr < OUT) {
             // SKIPZERO dead row: stage exactly what the expanded path stages
             // for code 0 / scale +0 (signed zeros included), with no code or
-            // scale reads.
+            // scale reads. Under ACCS the expanded path stages the UNSCALED
+            // cb[0] (s=1) and applies its +0 scale in the epilogue (F206).
+  #if ACCS
+            const float s = 1.0f;
+  #else
             const float s = 0.0f;
+  #endif
             for (int q = q0; q < q0 + SPG / 4; ++q) {
   #if D_BAKE == 2
                 const half2 v = cb[0];
@@ -4086,8 +4091,8 @@ _SRC_GEMMSEG2 = _PACK_FETCH + r"""
         // phase 3: C[tokens 32 x outs 32] += X[32 x G] @ WtT[G x 32]
         // simdgroup sg owns out-block col sg*8; ti indexes token blocks.
 #if ACCS
-  #if PIPE || SZ || RTILE == 64
-    #error "ACCS: PIPE/SZ/RTILE64 unsupported"
+  #if PIPE || RTILE == 64
+    #error "ACCS: PIPE/RTILE64 unsupported"
   #endif
         // per-group fp32 temporaries, scaled per out-column then added
         simdgroup_float8x8 T0 = simdgroup_float8x8(0);
@@ -4169,9 +4174,18 @@ _SRC_GEMMSEG2 = _PACK_FETCH + r"""
             // mapping, as DSTORE); col = output row of the weight.
             const short fn = (((lane / 4) & 2) * 2) + ((lane % 2) * 2);
             const int oc = oo + (int)sg * 8 + fn;
+  #if SZ
+            // SKIPZERO (F206): scales hold LIVE rows only, addressed by the
+            // compact row; a dead row's scale is the expanded form's +0.
+            const int lr0 = (oc < OUT) ? rowtbl[(size_t)e * OUT + oc] : -1;
+            const int lr1 = (oc + 1 < OUT) ? rowtbl[(size_t)e * OUT + oc + 1] : -1;
+            const float s0 = (lr0 >= 0) ? (float)scales[(size_t)lr0 * NGRP + g] : 0.0f;
+            const float s1 = (lr1 >= 0) ? (float)scales[(size_t)lr1 * NGRP + g] : 0.0f;
+  #else
             const device half* sp = scales + ((size_t)e * OUT + oc) * NGRP + g;
             const float s0 = (oc < OUT) ? (float)sp[0] : 0.0f;
             const float s1 = (oc + 1 < OUT) ? (float)sp[NGRP] : 0.0f;
+  #endif
   #define VQ_ACC(CK, TK) { thread auto& ce = (CK).thread_elements(); \
             thread auto te = (TK).thread_elements(); \
             ce[0] += s0 * te[0]; ce[1] += s1 * te[1]; }
@@ -4393,7 +4407,7 @@ _GEMMSEG_CVEC = os.environ.get("VQ_GEMMSEG_CVEC", "1") == "1"
 # R2-4' (2026-10-07): accumulator-side scaling. "1" stages UNSCALED codebook
 # entries in wtT and applies s[row,g] in fp32 to each group's fp32 mma
 # partial (no per-element half round of s*v). NUMERICS CHANGE. RTILE=32,
-# PIPE off, no SKIPZERO. Default OFF.
+# PIPE off; SKIPZERO row tables supported (F206). Default ON.
 _GEMMSEG_ACCS = os.environ.get("VQ_GEMMSEG_ACCS", "1") == "1"
 # threadgroup tile bytes at RTILE=32, tracked so cb_dev/fits arithmetic
 # follows the flags (F51's rule: budget follows every byte change).
@@ -4652,8 +4666,7 @@ def _gemmseg_prefill(xsrc, src_rows, idx_sorted_np, codes, codebook, scales,
         cvec = 1 if (_GEMMSEG_CVEC and pack_bits and not _GEMMSEG_PIPE) else 0
         if cvec:
             name += "_cv"
-        accs = 1 if (_GEMMSEG_ACCS and rtile == 32 and not _GEMMSEG_PIPE
-                     and rowtbl is None) else 0
+        accs = 1 if (_GEMMSEG_ACCS and rtile == 32 and not _GEMMSEG_PIPE) else 0
         if accs:
             name += "_accs"
         # TIO follows xsrc's dtype so the kernel cache never mixes builds.
@@ -5297,7 +5310,7 @@ class VQSwitchLinear(nn.Module):
         rt = self["row_table"] if self.skipzero else None
         # Short-prompt cutoff only where gemmseg2 runs with ACCS (walk accuracy);
         # elsewhere keep the legacy cutoff so no module loses accuracy (F205).
-        max_n = (VQ_FUSED_MAX_N if (rt is None and _GEMMSEG_ACCS and _GEMMSEG_RTILE == 32
+        max_n = (VQ_FUSED_MAX_N if (_GEMMSEG_ACCS and _GEMMSEG_RTILE == 32
                                     and not _GEMMSEG_PIPE)
                  else max(VQ_FUSED_MAX_N, _LEGACY_FUSED_MAX_N))
         # Packed d=2 now has its own fused kernel (vq_fused_packed{bits}_d2,
