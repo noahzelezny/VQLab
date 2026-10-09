@@ -144,6 +144,10 @@ def _knurlogic(art, a, K=None, SPK=None, ready_timeout=1800, poll=10,
     THIS artifact, and the job is unloaded whatever happens. K / SPK are
     injectable for tests.
     """
+    machines = list(a.knurlogic)   # role words / names pass straight to load()
+    if "fit" in machines and len(machines) > 1:
+        raise SystemExit("FAIL: --knurlogic fit stands alone; do not combine it "
+                         "with other roles or machine names")
     import os
     import time
     sleep = sleep or time.sleep
@@ -166,10 +170,6 @@ def _knurlogic(art, a, K=None, SPK=None, ready_timeout=1800, poll=10,
                          "something else")
     img = a.image or _probe_image(
         pathlib.Path(__import__("tempfile").mkdtemp()) / "probe.png")
-    machines = list(a.knurlogic)   # role words / names pass straight to load()
-    if "fit" in machines and len(machines) > 1:
-        raise SystemExit("FAIL: --knurlogic fit stands alone; do not combine it "
-                         "with other roles or machine names")
     out = K.load(artifact=name, machines=machines, split=a.knurlogic_split,
                  link=a.knurlogic_link, sets={"KNURLOGIC_MTP": "off"})
     job = out.get("job") or out.get("instance")
