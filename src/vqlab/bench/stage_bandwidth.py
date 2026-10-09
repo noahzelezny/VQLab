@@ -166,8 +166,8 @@ def main() -> int:
     ap.add_argument("--timeline", required=True,
                     help="a decode-timeline --json-out file")
     ap.add_argument("--peak-gbs", type=float, default=None,
-                    help="this box's peak memory bandwidth (M4 Max 546, "
-                         "M3 Ultra 819). Without it there is no floor and no "
+                    help="this box's peak memory bandwidth in GB/s "
+                         "(its chip's spec). Without it there is no floor and no "
                          "excess column, only GB/s")
     ap.add_argument("--gather-rows", type=int, default=8)
     ap.add_argument("--top", type=int, default=12)

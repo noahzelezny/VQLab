@@ -17,7 +17,7 @@ mlx_lm.utils.load_model imports the model class from inside the checkpoint.
 Scales are FP16-rounded (matches the M1 kernels exactly; the E35 proxies
 used bf16 — sub-0.1% referee difference, see M1_KERNEL_PLAN M1e).
 
-Designed to run on the M4 while the M3 grinds its own queue:
+Designed to run on a second box while the first grinds its own queue:
   --base     staged LOCAL copy of the shipped artifact (mmap-safe APFS)
   --src      bf16 source; over SMB use --stage-dir (cp -> mx.load -> evict)
   --ship-to  after each output shard is written, rsync it to this dir

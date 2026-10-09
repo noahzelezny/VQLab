@@ -94,18 +94,20 @@ def boxes() -> dict:
     """Other machines a queue may run on (`vqlab queue run --on NAME`).
 
         [boxes.m4]
-        ssh       = "user@10.0.0.2"
+        ssh       = "user@192.0.2.2"
         repo      = "/Volumes/Shared/vqlab-clone"   # a clone of THIS repo on shared storage
-        python    = "/opt/homebrew/anaconda3/envs/exo/bin/python"
+        python    = "/path/to/envs/exo/bin/python"
         config    = "/Volumes/Shared/m4-config.toml" # that box's own [paths]
         queue_dir = "/Volumes/Shared/queues-m4"      # shared, so this box can `queue wait` on it
-        teachers  = "/Volumes/M4Local/teachers"     # optional: that box's LOCAL teacher copies
-        hostname  = "noahs-m4"                      # optional: its short hostname, if not NAME
+        teachers  = "/Volumes/Local/teachers"     # optional: that box's LOCAL teacher copies
+        hostname  = "box-b"                         # optional: its short hostname, if not NAME
+        machine   = "Mac Studio"                    # optional: the name the Knurlogic page lists this box under
+                                                    # (vision-smoke --knurlogic NAME needs it)
 
     `teachers` makes `teachers()` resolve to the box's local copy when
     running ON that box (see `this_box`), so minibase / fit-moe read local
-    shards without hand-written paths (a local copy roughly halved the M4
-    fit's read contention over SMB, 2026-10-02). Teacher shards are shared
+    shards without hand-written paths (a local copy roughly halved a remote
+    box's fit read contention over SMB, 2026-10-02). Teacher shards are shared
     by hard link with other tenants: never rewrite one in place.
     """
     return _file_table(str(config_file()), "boxes")
@@ -204,7 +206,7 @@ def expand(arg: str, box: str | None = None) -> str:
     root + /X; likewise ``<models>`` and ``<scratch>``. Also after an ``=``
     (``--src=<teachers>/X``, ``prose=<scratch>/c``). `vqlab <cmd>` applies it
     to every argument, so a queue step naming ``<teachers>/DeepSeek-V4`` reads
-    the M4's local copy on the M4 and the HDD on the M3. `box` resolves for
+    that box's local copy on a box with a `teachers` override and the shared [paths] teachers elsewhere. `box` resolves for
     another box ([boxes.NAME] teachers, else this config's [paths])."""
     def sub(m):
         key = m.group(2)
