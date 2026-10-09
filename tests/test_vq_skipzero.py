@@ -23,15 +23,16 @@ from vqlab import vq_switch as VS
 from vqlab import vq_pack as VP
 
 
-@pytest.fixture(autouse=True)
-def _legacy_prefill_flags(monkeypatch):
-    """These tests certify byte-equality against reference paths / earlier
-    revisions that predate the rebundle defaults (VQ_FUSED_MAX_N 512,
-    VQ_GEMMSEG_ACCS=1, VQ_GEMMSEG_CVEC=1; F200-F204). Those defaults change
-    numerics for N in 512..4096 by design, so pin the legacy values here."""
-    monkeypatch.setattr(VS, "VQ_FUSED_MAX_N", 4096)
-    monkeypatch.setattr(VS, "_GEMMSEG_ACCS", False)
-    monkeypatch.setattr(VS, "_GEMMSEG_CVEC", False)
+@pytest.fixture(autouse=True, params=["defaults", "legacy"])
+def _prefill_flags(request, monkeypatch):
+    """sz must equal the expanded module under whatever flags serve it. Run at
+    the shipped defaults (VQ_FUSED_MAX_N 512 + ACCS + CVEC, which since F206
+    covers the row-table gemmseg2 too) AND at the legacy pre-F200 values
+    (fused walk to 4096, no ACCS/CVEC) so neither kernel family loses cover."""
+    if request.param == "legacy":
+        monkeypatch.setattr(VS, "VQ_FUSED_MAX_N", 4096)
+        monkeypatch.setattr(VS, "_GEMMSEG_ACCS", False)
+        monkeypatch.setattr(VS, "_GEMMSEG_CVEC", False)
 
 
 def _bits(a):
@@ -85,9 +86,11 @@ GEOMS = [("packed11", 4, 2048, True, 512, 96), ("packed8", 4, 256, True, 512, 96
 
 
 @pytest.mark.parametrize("name,D,K,packed,IN,OUT", GEOMS)
-@pytest.mark.parametrize("T,top", [(1, 8), (1, 10), (2, 10), (3, 10), (700, 8)])
+@pytest.mark.parametrize("T,top", [(1, 8), (1, 10), (2, 10), (3, 10), (52, 10),
+                                   (100, 8), (300, 10), (700, 8)])
 def test_sz_byte_equal_to_expanded(name, D, K, packed, IN, OUT, T, top):
-    # N = 8 / 10 / 20 (d8 simd), 30 (d8 walk), 5600 (prefill, gemmseg2)
+    # N = 8 / 10 / 20 (d8 simd), 30 (d8 walk), 520 / 800 / 3000 (gemmseg2 at
+    # the default cutoff 512, the walk at legacy 4096), 5600 (gemmseg2 both)
     E = 8
     full, sz = _mk(E, OUT, IN, K, packed, dead_frac=0.4, D=D)
     assert sz.skipzero and not full.skipzero
@@ -103,7 +106,7 @@ def test_sz_byte_equal_to_expanded(name, D, K, packed, IN, OUT, T, top):
 
 
 @pytest.mark.parametrize("dead_frac", [0.0, 0.95])
-@pytest.mark.parametrize("T,top", [(1, 10), (3, 10), (450, 10)])
+@pytest.mark.parametrize("T,top", [(1, 10), (3, 10), (60, 10), (450, 10)])
 def test_sz_d8_extremes(dead_frac, T, top):
     """No dead rows, and nearly all dead, at decode and prefill N, bf16 in."""
     E, OUT, IN = 8, 63, 2048
@@ -126,7 +129,7 @@ D2_GEOMS = [(K, IN, OUT) for K in (256, 512, 1024, 2048)
 
 @pytest.mark.parametrize("K,IN,OUT", D2_GEOMS)
 @pytest.mark.parametrize("dead_frac", [0.0, 0.4, 0.95])
-@pytest.mark.parametrize("T,top", [(1, 1), (1, 8), (2, 10), (3, 10), (700, 8)])
+@pytest.mark.parametrize("T,top", [(1, 1), (1, 8), (2, 10), (3, 10), (80, 10), (700, 8)])
 @pytest.mark.parametrize("dtype", ["float16", "bfloat16"])
 def test_sz_d2_byte_equal(K, IN, OUT, dead_frac, T, top, dtype):
     # N = 1 / 8 / 20 / 30 (decode, d2 WALK), 5600 (prefill, gemmseg2)
@@ -135,7 +138,7 @@ def test_sz_d2_byte_equal(K, IN, OUT, dead_frac, T, top, dtype):
     x = mx.array(np.random.default_rng(6).standard_normal((T, 1, 1, IN))
                  .astype(np.float32)).astype(getattr(mx, dtype))
     idx = _idx(T, top, E, seed=7)
-    cbdev = ["0", "1"] if T > 100 else [VS._GEMMSEG_CBDEV]
+    cbdev = ["0", "1"] if T * top > VS.VQ_FUSED_MAX_N else [VS._GEMMSEG_CBDEV]
     old = VS._GEMMSEG_CBDEV
     try:
         for arm in cbdev:
