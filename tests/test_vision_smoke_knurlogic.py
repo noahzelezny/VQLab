@@ -13,8 +13,8 @@ class FakeK:
         self.unloaded = None
 
     def state(self):
-        return {"machines": [{"machine": "Noah's Mac Studio", "here": True},
-                             {"machine": "NozzleBook Pro", "here": False}]}
+        return {"machines": [{"machine": "Mac Studio", "here": True},
+                             {"machine": "MacBook Pro", "here": False}]}
 
     def load(self, **kw):
         self.loaded = kw
@@ -25,8 +25,8 @@ class FakeK:
 
 
 def test_alias_mapping():
-    assert vs._machine_names(FakeK(), ["m4", "m3", "Noah's Mac Studio"]) == [
-        "NozzleBook Pro", "Noah's Mac Studio", "Noah's Mac Studio"]
+    assert vs._machine_names(FakeK(), ["m4", "m3", "Mac Studio"]) == [
+        "MacBook Pro", "Mac Studio", "Mac Studio"]
     with pytest.raises(SystemExit):
         vs._machine_names(types.SimpleNamespace(state=lambda: {"machines": []}), ["m4"])
 
@@ -64,5 +64,5 @@ def test_routes_via_page(tmp_path, monkeypatch):
                            image=str(img), max_tokens=8)
     assert vs._knurlogic(art, a, K=K, SPK=types.SimpleNamespace(_post=post),
                          sleep=lambda s: None) == 0
-    assert K.loaded["machines"] == ["NozzleBook Pro"] and K.unloaded == "j1"
+    assert K.loaded["machines"] == ["MacBook Pro"] and K.unloaded == "j1"
     assert posts and all(u == "http://127.0.0.1:8899" and m == "mdl" for u, m in posts)
