@@ -9,7 +9,7 @@ vqlab/family/glm5_next.py names these tests.
 Weights go through the runtime's own LanguageModel.sanitize + load_weights
 (checkpoint key names, conv/kv_b layouts), so the conversions are covered too.
 
-Tests marked "known bug" FAILED on knurlogic 6a2ab49 (the failure message
+Tests marked "known bug" FAILED on knurlogic 9595650 (6a2ab49 before the 2026-10-09 history rewrite) (the failure message
 carries the measured discrepancy) and pass on f03ec21, which fixed them. If
 one fails again, fix the architecture, not the test.
 """
