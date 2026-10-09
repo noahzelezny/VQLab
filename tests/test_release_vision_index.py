@@ -158,7 +158,7 @@ class _FakeK:
         return {"job": "j1", "url": "http://fake"}
 
     def state(self):
-        return {"machines": [{"machine": "m3"}, {"machine": "m4"}]}
+        return {"machines": []}
 
     def unload(self, job):
         self.unloaded.append(job)
@@ -180,7 +180,7 @@ class _FakeSPK:
 
 
 def _knurlogic_args(img):
-    return argparse.Namespace(knurlogic=["m3", "m4"], knurlogic_split="pipeline",
+    return argparse.Namespace(knurlogic=["here", "peers"], knurlogic_split="pipeline",
                               knurlogic_link="", image=str(img), max_tokens=16)
 
 
@@ -198,7 +198,7 @@ def test_knurlogic_arm_loads_this_artifact_and_unloads(tmp_path, monkeypatch):
     K, (post, sent) = _FakeK(), _server()
     assert vs._knurlogic(art, _knurlogic_args(_probe(tmp_path, vs)), K=K,
                          SPK=_FakeSPK(post), page="http://fake") == 0
-    assert K.loaded[0]["machines"] == ["m3", "m4"] and K.loaded[0]["split"] == "pipeline"
+    assert K.loaded[0]["machines"] == ["here", "peers"] and K.loaded[0]["split"] == "pipeline"
     assert K.unloaded == ["j1"] and len(sent) == 2
 
 

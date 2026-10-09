@@ -30,7 +30,7 @@ A generated caption is PRINTED for the human, never asserted on -- captions
 are not a deterministic instrument and III.11 does not need them to be.
 
     vqlab vision-smoke <artifact> [--static] [--prompt ...] [--image f.png]
-    vqlab vision-smoke <artifact> --knurlogic m3 (or a page machine name) [--knurlogic m4 --knurlogic-split pipeline]
+    vqlab vision-smoke <artifact> --knurlogic [fit|here|peers|all|<page machine name>] [--knurlogic-split pipeline]
 """
 import argparse
 import importlib.util
@@ -106,30 +106,6 @@ def _image_request_check(post, mid, img, max_tokens, extra=None):
 PAGE = "http://127.0.0.1:8899"
 
 
-def _machine_names(K, wanted):
-    """Map box aliases onto the machine names the page knows, via config only
-    ([boxes.<alias>] machine = "..."); names the page already knows pass
-    through unchanged."""
-    from vqlab import config
-    known = [str(m.get("machine")) for m in (K.state().get("machines") or [])
-             if m.get("machine")]
-    out = []
-    for w in wanted:
-        if w in known:
-            out.append(w)
-            continue
-        box = {k.lower(): v for k, v in config.boxes().items()}.get(w.lower())
-        name = (box or {}).get("machine")
-        if not name:
-            raise SystemExit(f"FAIL: --knurlogic {w} is not a machine the page knows "
-                             f"{known}; set boxes.{w}.machine in the vqlab config")
-        if name not in known:
-            raise SystemExit(f"FAIL: boxes.{w}.machine = {name!r} is not among the "
-                             f"page's machines {known}")
-        out.append(name)
-    return out
-
-
 def _wait_ready(page, name, timeout, poll, sleep, get=None):
     """Poll the page's GET /v1/models until the model reads status=ready;
     returns the id to route by."""
@@ -190,7 +166,10 @@ def _knurlogic(art, a, K=None, SPK=None, ready_timeout=1800, poll=10,
                          "something else")
     img = a.image or _probe_image(
         pathlib.Path(__import__("tempfile").mkdtemp()) / "probe.png")
-    machines = _machine_names(K, a.knurlogic)
+    machines = list(a.knurlogic)   # role words / names pass straight to load()
+    if "fit" in machines and len(machines) > 1:
+        raise SystemExit("FAIL: --knurlogic fit stands alone; do not combine it "
+                         "with other roles or machine names")
     out = K.load(artifact=name, machines=machines, split=a.knurlogic_split,
                  link=a.knurlogic_link, sets={"KNURLOGIC_MTP": "off"})
     job = out.get("job") or out.get("instance")
@@ -401,9 +380,14 @@ def main() -> int:
                     help="exo model_id; default derives it from the "
                          "artifact dir name (owner--name -> owner/name).")
     ap.add_argument("--cluster-timeout", type=float, default=600.0)
-    ap.add_argument("--knurlogic", metavar="MACHINE", action="append", default=[],
-                    help="put the image through Knurlogic on these machine(s) "
-                         "(repeat for a split): the runtime we serve on, and "
+    ap.add_argument("--knurlogic", metavar="ROLE", action="append", default=[],
+                    nargs="?", const="fit",
+                    help="put the image through Knurlogic on this role: here | "
+                         "peers | all | fit (default when given no value; stands "
+                         "alone: this Mac if it fits, else the smallest set that "
+                         "places it), or a page machine name; passed straight "
+                         "to load(machines=...); roles and names may mix, "
+                         "fit may not. The runtime we serve on, and "
                          "the only arm that drives DeepSeek-V4 Vision-Exp, whose "
                          "tower is not an mlx_vlm VisionModel. The Knurlogic "
                          "models-dir entry must resolve to THIS artifact.")
@@ -436,7 +420,7 @@ def main() -> int:
         raise SystemExit(
             f"FAIL: {n_tower} tower tensors but no vision_config, so no "
             "mlx_vlm arm can load this tower (DeepSeek-V4 Vision-Exp). Drive "
-            "it through the serving runtime: --knurlogic MACHINE.")
+            "it through the serving runtime: --knurlogic fit.")
 
     # ---- 1. SURFACE -------------------------------------------------------
     mod = _load_bundle_module(art)
