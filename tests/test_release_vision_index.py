@@ -157,6 +157,9 @@ class _FakeK:
         self.loaded.append(kw)
         return {"job": "j1", "url": "http://fake"}
 
+    def state(self):
+        return {"machines": [{"machine": "m3"}, {"machine": "m4"}]}
+
     def unload(self, job):
         self.unloaded.append(job)
 
@@ -184,6 +187,7 @@ def _knurlogic_args(img):
 def test_knurlogic_arm_loads_this_artifact_and_unloads(tmp_path, monkeypatch):
     pytest.importorskip("PIL")
     vs = _vs()
+    vs._wait_ready = lambda page, name, *a, **k: name
     art = _artifact(tmp_path, tower=True)
     md = tmp_path.parent / "kmodels"
     md.mkdir(exist_ok=True)
@@ -193,7 +197,7 @@ def test_knurlogic_arm_loads_this_artifact_and_unloads(tmp_path, monkeypatch):
     monkeypatch.setenv("KNURLOGIC_MODELS", str(md))
     K, (post, sent) = _FakeK(), _server()
     assert vs._knurlogic(art, _knurlogic_args(_probe(tmp_path, vs)), K=K,
-                         SPK=_FakeSPK(post)) == 0
+                         SPK=_FakeSPK(post), page="http://fake") == 0
     assert K.loaded[0]["machines"] == ["m3", "m4"] and K.loaded[0]["split"] == "pipeline"
     assert K.unloaded == ["j1"] and len(sent) == 2
 
@@ -201,6 +205,7 @@ def test_knurlogic_arm_loads_this_artifact_and_unloads(tmp_path, monkeypatch):
 def test_knurlogic_arm_fails_and_still_unloads(tmp_path, monkeypatch):
     pytest.importorskip("PIL")
     vs = _vs()
+    vs._wait_ready = lambda page, name, *a, **k: name
     art = _artifact(tmp_path, tower=True)
     md = tmp_path.parent / "kmodels2"
     md.mkdir(exist_ok=True)
@@ -210,7 +215,7 @@ def test_knurlogic_arm_fails_and_still_unloads(tmp_path, monkeypatch):
     monkeypatch.setenv("KNURLOGIC_MODELS", str(md))
     K, (post, _) = _FakeK(), _server(n_img=12)
     with pytest.raises(SystemExit, match="NO prompt tokens"):
-        vs._knurlogic(art, _knurlogic_args(_probe(tmp_path, vs)), K=K, SPK=_FakeSPK(post))
+        vs._knurlogic(art, _knurlogic_args(_probe(tmp_path, vs)), K=K, SPK=_FakeSPK(post), page="http://fake")
     assert K.unloaded == ["j1"]
 
 
