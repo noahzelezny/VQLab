@@ -86,14 +86,14 @@ label { color: var(--mute); font-size: 12px; }
 </head>
 <body>
 <header>
-  <h1>VQLab <span>· read-only lab view</span></h1>
+  <h1>VQLab <span>· lab view</span></h1>
   <nav id="nav"></nav>
   <div id="gpu">…</div>
 </header>
 <main id="main"><div class="empty">loading…</div></main>
 <aside id="drawer"><button class="x" onclick="closeDrawer()">×</button><div id="dbody"></div></aside>
 <script>
-const TABS = ["Fleet", "Fit store", "Families", "Runs"];
+const TABS = ["Fleet", "Fit store", "Families", "Runs", "Scratch", "Settings"];
 let tab = localStorageGet("tab") || "Fleet";
 const $ = (s) => document.querySelector(s);
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
@@ -297,6 +297,66 @@ async function runs() {
   $("#rq").oninput = draw; draw();
 }
 
+// ------------------------------------------------------------ Settings
+const gib = n => n == null ? "?" : (n / 2 ** 30).toFixed(1) + " GiB";
+async function settings(msg) {
+  const d = await api("/api/settings");
+  $("#main").innerHTML = `
+    <p class="lede">Where vqlab reads and writes on this machine. Each value comes from its environment variable, then
+      <span class="mono">${esc(d.config_file)}</span>${d.config_exists ? "" : " (not written yet)"}, then a default.
+      Saving runs the same checks as <span class="mono">vqlab config set</span> and writes only that one line of the config file.</p>
+    ${msg || ""}
+    <table><thead><tr><th>location</th><th>path</th><th class="num">free</th><th>source</th><th></th></tr></thead><tbody>
+    ${d.locations.map(r => `<tr><td><b>${esc(r.key)}</b><div class="geo">${esc(r.description)}</div></td>
+      <td><input class="mono" data-k="${esc(r.key)}" value="${esc(r.paths.join(", "))}" size="56"
+        ${r.paths.length > 1 ? 'disabled title="several paths: edit the config file"' : ""}>
+        ${r.exists.every(x => x) ? "" : " " + tag("missing", "warn")}</td>
+      <td class="num">${r.free_bytes.map(gib).join("<br>")}</td>
+      <td class="geo">${esc(r.source)}</td>
+      <td>${r.paths.length > 1 ? "" : `<button data-save="${esc(r.key)}">save</button>`}</td></tr>`).join("")}
+    </tbody></table>
+    <label style="display:block;margin-top:10px"><input type="checkbox" id="mk"> create a missing directory</label>
+    <h3 style="margin-top:22px">Under records</h3>
+    <table><tbody>${Object.entries(d.records).map(([k, v]) => `<tr><td>${esc(k)}</td><td class="mono">${esc(v)}</td></tr>`).join("")}</tbody></table>`;
+  $("#main").querySelectorAll("button[data-save]").forEach(b => b.onclick = async () => {
+    const key = b.dataset.save, path = $(`input[data-k="${key}"]`).value.trim();
+    const r = await fetch("/api/settings", { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ key, path, create: $("#mk").checked }) }).then(r => r.json());
+    const m = r.ok ? `<p>${tag("saved", "ok")} <span class="mono">${esc(key)} = ${esc(r.path)}</span> (${gib(r.free_bytes)} free${r.created ? ", created" : ""})${r.shadowed_by ? ` · ${esc(r.shadowed_by)} overrides the file for processes that set it` : ""}</p>`
+                   : `<p>${tag("refused", "bad")} <span class="mono">${esc(key)}</span>: ${esc(r.error)}</p>`;
+    settings(m);
+  });
+}
+
+// ------------------------------------------------------------- Scratch
+async function scratch() {
+  $("#main").innerHTML = `<div class="empty">sizing scratch folders…</div>`;
+  const d = await api("/api/scratch");
+  const F = d.folders.slice().sort((a, b) => (b.bytes || 0) - (a.bytes || 0));
+  const total = F.reduce((t, f) => t + (f.bytes || 0), 0);
+  $("#main").innerHTML = `
+    <p class="lede">Top-level folders of <span class="mono">${esc(d.root)}</span> (a campaign folder is named for its finding).
+      Nothing on this page deletes anything: it shows the <span class="mono">rm</span> lines for a human to run.</p>
+    <div class="stats"><div class="stat"><b>${F.length}</b><small>folders</small></div><div class="stat"><b>${gib(total)}</b><small>sized total</small></div></div>
+    <table><thead><tr><th>folder</th><th class="num">size</th><th>modified</th></tr></thead><tbody>
+    ${F.map(f => `<tr><td class="mono">${esc(f.name)}</td><td class="num">${f.bytes == null ? tag("du timed out", "warn") : gib(f.bytes)}</td>
+      <td class="geo">${esc(new Date(f.mtime * 1000).toISOString().slice(0, 10))}</td></tr>`).join("") || `<tr><td colspan="3" class="empty">empty</td></tr>`}
+    </tbody></table>
+    <h3 style="margin-top:22px">Reclaimable</h3>
+    <div id="rc"><button id="rcb">check what is safe to delete</button>
+      <span class="geo">runs <span class="mono">vqlab scratch reclaimable</span> (walks scratch; can take a while)</span></div>`;
+  $("#rcb").onclick = async () => {
+    $("#rc").innerHTML = `<div class="empty">checking…</div>`;
+    const r = await api("/api/scratch/reclaimable");
+    if (r.error) { $("#rc").innerHTML = `<div class="empty err">${esc(r.error)}</div>`; return; }
+    $("#rc").innerHTML = `
+      ${r.reclaimable.length ? `<p>${gib(r.total_bytes)} in ${r.reclaimable.length} dir(s), each an unpacked source whose packed artifact verifies.</p>
+        <pre class="mono">${esc("# Nothing was deleted. To reclaim the space, a human runs:\n" + r.rm_lines.join("\n"))}</pre>`
+        : `<div class="empty">nothing reclaimable</div>`}
+      ${r.kept.length ? `<h4>kept</h4><table><tbody>${r.kept.map(k => `<tr><td class="mono">${esc(k.path)}</td><td class="geo">${esc(k.reason)}</td></tr>`).join("")}</tbody></table>` : ""}`;
+  };
+}
+
 async function gpuState() {
   try {
     const d = await api("/api/runs?n=1");
@@ -312,7 +372,8 @@ async function gpuState() {
 async function show() {
   renderNav(); closeDrawer();
   $("#main").innerHTML = `<div class="empty">loading…</div>`;
-  try { await ({ "Fleet": fleet, "Fit store": fitstore, "Families": families, "Runs": runs })[tab](); }
+  try { await ({ "Fleet": fleet, "Fit store": fitstore, "Families": families, "Runs": runs,
+                  "Scratch": scratch, "Settings": settings })[tab](); }
   catch (e) { $("#main").innerHTML = `<div class="empty err">${esc(e)}</div>`; }
 }
 show(); gpuState(); setInterval(gpuState, 30000);

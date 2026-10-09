@@ -40,9 +40,10 @@ from vqlab import _layout  # noqa: E402,F401  one module object per name
 import provenance  # noqa: E402
 import runtime_profile  # noqa: E402
 
-REPO = _layout.SRC.parent
-REG = REPO / "registry" / "artifacts.jsonl"
-HUB = REPO / "registry" / "hub.jsonl"          # latest Hub comparison per repo
+from vqlab import config as _config  # noqa: E402
+
+REG = _config.registry_dir() / "artifacts.jsonl"   # <records>/registry (vqlab.config)
+HUB = _config.registry_dir() / "hub.jsonl"         # latest Hub comparison per repo
 HF_OWNER_SEP = "--"
 
 

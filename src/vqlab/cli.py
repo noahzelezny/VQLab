@@ -368,6 +368,8 @@ def main() -> int:
             print(f"unknown command: {argv[0]}", file=sys.stderr)
         return 2
     from vqlab import _layout   # stage dirs on sys.path; old dotted names aliased
+    import vqlab
+    vqlab.use_knurlogic_arch()  # every command loads Knurlogic's archs (VQLAB_VENDORED_ARCH=0: stock)
     if not any(a in ("-h", "--help") for a in rest):
         from vqlab.bench import box_quiet   # timed commands refuse a busy Mac (rule III)
         box_quiet.guard(cmd)

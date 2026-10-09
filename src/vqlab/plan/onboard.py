@@ -43,9 +43,9 @@ import sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))  # src/
 from vqlab import _layout  # noqa: E402,F401  one module object per name
+from vqlab import config as _config  # noqa: E402
 import fitstore  # noqa: E402
 
-REPO = _layout.SRC.parent
 PY = sys.executable
 STEPS = ("profile", "loader", "cache_a", "cache_b", "determinism", "init_sweep")
 GPU_STEPS = {"cache_a", "cache_b", "init_sweep"}
@@ -218,7 +218,7 @@ def main(argv=None) -> int:
     # the profile step decides the family, which decides where state lives
     st, res = step_profile(ctx)
     fam = ctx["family"] or "_unknown"
-    fams = pathlib.Path(os.environ.get("VQLAB_FAMILIES_DIR") or REPO / "families")
+    fams = _config.families_dir()
     sp = fams / fam / "teachers" / slug / "onboard.json"
     sp.parent.mkdir(parents=True, exist_ok=True)
     state = json.loads(sp.read_text()) if sp.exists() else {

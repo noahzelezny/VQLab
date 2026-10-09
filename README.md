@@ -12,6 +12,24 @@ Bytes Below 5 Bits*, doi:[10.5281/zenodo.22119017](https://doi.org/10.5281/zenod
 Artifacts: [TheDrainFlorist](https://huggingface.co/TheDrainFlorist) on
 Hugging Face.
 
+## Using vqlab as a library
+
+`import vqlab` has no side effects on other packages. To load deepseek_v4 or
+qwen4_exp (which stock mlx-lm lacks) or Knurlogic's edited qwen3_5 / gemma4 /
+glm5_next, opt in before loading:
+
+```python
+import vqlab
+vqlab.use_knurlogic_arch()          # mlx_lm.models.<name> -> Knurlogic's vendored archs
+from mlx_lm import load
+model, tok = load(path, trust_remote_code=True)
+```
+
+Every `vqlab` CLI command does this for you; `VQLAB_VENDORED_ARCH=0` turns it
+off. Storage locations (scratch, models, teachers, fit store, and `records`
+for the findings log, registry, families and queue records) are set with
+`vqlab lab config set KEY PATH` or `vqlab lab config init`.
+
 ## Published models
 
 Every artifact this tool's pipeline has shipped (20 repos, live list on the Hub):

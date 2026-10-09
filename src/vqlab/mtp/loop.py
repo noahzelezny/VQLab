@@ -175,6 +175,10 @@ def load_mtp_head(model, sidecar=None, family: Optional[str] = None,
     The head is optional by construction: sidecars are named outside mlx-lm's
     `model*.safetensors` glob, so a model directory carrying one still loads
     normally through the stock loader.
+
+    This does NOT install Knurlogic's architectures. For deepseek_v4 and
+    qwen4_exp (which stock mlx-lm lacks), call `vqlab.use_knurlogic_arch()`
+    before `mlx_lm.load`, so the model and its head share one arch module.
     """
     import pathlib
 
@@ -518,7 +522,8 @@ def mtp_generate(model, tokenizer, prompt, head, *, verbose: bool = False,
     """Generate a completion with MTP speculative drafting; return the text.
 
     Mirrors `mlx_lm.generate`'s shape. `mtp_stream_generate` exposes the
-    per-token stream and the acceptance statistics.
+    per-token stream and the acceptance statistics. For deepseek_v4 /
+    qwen4_exp models, call `vqlab.use_knurlogic_arch()` before loading.
     """
     parts, last = [], None
     for r in mtp_stream_generate(model, tokenizer, prompt, head, **kwargs):
