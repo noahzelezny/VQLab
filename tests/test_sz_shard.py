@@ -19,15 +19,16 @@ from vqlab import vq_switch as VS
 from vqlab import vq_pack as VP
 
 
-@pytest.fixture(autouse=True)
-def _legacy_prefill_flags(monkeypatch):
-    """These tests certify byte-equality against reference paths / earlier
-    revisions that predate the rebundle defaults (VQ_FUSED_MAX_N 512,
-    VQ_GEMMSEG_ACCS=1, VQ_GEMMSEG_CVEC=1; F200-F204). Those defaults change
-    numerics for N in 512..4096 by design, so pin the legacy values here."""
-    monkeypatch.setattr(VS, "VQ_FUSED_MAX_N", 4096)
-    monkeypatch.setattr(VS, "_GEMMSEG_ACCS", False)
-    monkeypatch.setattr(VS, "_GEMMSEG_CVEC", False)
+@pytest.fixture(autouse=True, params=["defaults", "legacy"])
+def _prefill_flags(request, monkeypatch):
+    """sz must equal the expanded module under whatever flags serve it. Run at
+    the shipped defaults (VQ_FUSED_MAX_N 512 + ACCS + CVEC, which since F206
+    covers the row-table gemmseg2 too) AND at the legacy pre-F200 values
+    (fused walk to 4096, no ACCS/CVEC) so neither kernel family loses cover."""
+    if request.param == "legacy":
+        monkeypatch.setattr(VS, "VQ_FUSED_MAX_N", 4096)
+        monkeypatch.setattr(VS, "_GEMMSEG_ACCS", False)
+        monkeypatch.setattr(VS, "_GEMMSEG_CVEC", False)
 
 
 def _bits(a):
@@ -85,7 +86,7 @@ def _xi(T, top, E, IN, seed):
 @pytest.mark.parametrize("D", [2, 4, 8])
 @pytest.mark.parametrize("leaf", ["gate_proj", "up_proj"])
 @pytest.mark.parametrize("OUT,n", [(96, 2), (96, 4), (102, 2), (64, 1)])
-@pytest.mark.parametrize("T,top", [(1, 8), (3, 10), (600, 8)])
+@pytest.mark.parametrize("T,top", [(1, 8), (3, 10), (80, 10), (600, 8)])
 def test_row_split_concat_byte_equal(D, leaf, OUT, n, T, top):
     E, IN = 8, 512
     p = f"model.layers.3.mlp.switch_mlp.{leaf}"
@@ -112,7 +113,7 @@ def test_row_split_concat_byte_equal(D, leaf, OUT, n, T, top):
 
 @pytest.mark.parametrize("D", [2, 4, 8])
 @pytest.mark.parametrize("n", [2, 4])
-@pytest.mark.parametrize("T,top", [(1, 8), (3, 10), (600, 8)])
+@pytest.mark.parametrize("T,top", [(1, 8), (3, 10), (80, 10), (600, 8)])
 def test_down_input_split_sum_byte_equal(D, n, T, top):
     E, OUT, IN = 8, 97, 1024
     p = "model.layers.3.mlp.switch_mlp.down_proj"
