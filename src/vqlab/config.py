@@ -101,7 +101,6 @@ def boxes() -> dict:
         queue_dir = "/Volumes/Shared/queues-m4"      # shared, so this box can `queue wait` on it
         teachers  = "/Volumes/Local/teachers"     # optional: that box's LOCAL teacher copies
         hostname  = "box-b"                         # optional: its short hostname, if not NAME
-        machine   = "Mac Studio"                    # optional: the name the Knurlogic page lists this box under
                                                     # (vision-smoke --knurlogic NAME needs it)
 
     `teachers` makes `teachers()` resolve to the box's local copy when

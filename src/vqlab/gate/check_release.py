@@ -62,9 +62,11 @@ ap.add_argument("--cluster-peer", metavar="USER@HOST", default=None,
                      "pipeline rank's copy; their model.py/config.json/"
                      "index are hashed and shard sizes compared against "
                      "this artifact before the smoke counts.")
-ap.add_argument("--knurlogic-smoke", metavar="MACHINE", action="append", default=[],
-                help="run the generation smoke through Knurlogic on these machine(s) "
-                     "(repeat for a split) instead of a local load: the runtime we "
+ap.add_argument("--knurlogic-smoke", metavar="ROLE", action="append", default=[],
+                nargs="?", const="fit",
+                help="run the generation smoke through Knurlogic on this role "
+                     "(here | peers | all | fit, default fit; or a page machine "
+                     "name; passed to load(machines=...); repeat to mix) instead of a local load: the runtime we "
                      "serve on. The Knurlogic models-dir entry must resolve to THIS "
                      "artifact. With an mtp-head*.safetensors present, drafting is on "
                      "and the head must accept tokens (a head that never binds is a FAIL).")

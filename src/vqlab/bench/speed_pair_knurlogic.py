@@ -7,8 +7,8 @@ the answer is the per-pair RATIO B/A. The difference is WHO loads: Knurlogic
 places the model -- on one Mac, or split across several (pipeline) -- which
 is how anything too big for one box gets measured at all.
 
-    vqlab speed-pair-knurlogic <name_a> <name_b> --machine "<machine>"
-        [--machine "<machine 2>" --split pipeline --link tcp]
+    vqlab speed-pair-knurlogic <name_a> <name_b> --machine fit
+        [--machine peers --split pipeline --link tcp]
         [--prompt-tokens 2048] [--gen-tokens 128] [--n 3] [--out runs.jsonl]
 
 Arms are Knurlogic MODEL NAMES (a symlink under the models dir of EVERY
@@ -218,8 +218,9 @@ def main(argv=None) -> int:
     ap.add_argument("--models-dir", default=os.environ.get("KNURLOGIC_MODELS", "~/.exo/models"),
                     help="this Mac's Knurlogic models dir; decides per arm whether a bundled "
                          "runtime (model.py) is expected or stock mlx-lm")
-    ap.add_argument("--machine", action="append", required=True,
-                    help="Knurlogic machine name (repeat for a split)")
+    ap.add_argument("--machine", action="append", default=None,
+                    help="Knurlogic role (here | peers | all | fit) or page machine "
+                         "name, passed to load(machines=...); repeat to mix. Default: fit")
     ap.add_argument("--split", default="")
     ap.add_argument("--link", default="")
     ap.add_argument("--prompt-tokens", type=int, default=2048)
@@ -237,6 +238,7 @@ def main(argv=None) -> int:
                          "/status.json; arms are then usually two heads on one trunk (vqlab mtp-arms)")
     ap.add_argument("--out")
     a = ap.parse_args(argv)
+    a.machine = a.machine or ["fit"]
     if not a.knurlogic_src:
         ap.error("--knurlogic-src (or KNURLOGIC_SRC) is required: the Knurlogic source tree")
     a.sets = {"KNURLOGIC_MTP": "on" if a.draft else "off"}
