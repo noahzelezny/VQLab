@@ -104,24 +104,29 @@ def _image_request_check(post, mid, img, max_tokens, extra=None):
 
 
 PAGE = "http://127.0.0.1:8899"
-ALIASES = {"m3": ("studio", "m3"), "m4": ("book", "m4")}
 
 
 def _machine_names(K, wanted):
-    """Map m3/m4 aliases onto the machine names the page knows; names the
-    page already knows pass through unchanged."""
+    """Map box aliases onto the machine names the page knows, via config only
+    ([boxes.<alias>] machine = "..."); names the page already knows pass
+    through unchanged."""
+    from vqlab import config
     known = [str(m.get("machine")) for m in (K.state().get("machines") or [])
              if m.get("machine")]
     out = []
     for w in wanted:
-        if w in known or w.lower() not in ALIASES:
+        if w in known:
             out.append(w)
             continue
-        hits = [k for k in known if any(t in k.lower() for t in ALIASES[w.lower()])]
-        if len(hits) != 1:
-            raise SystemExit(f"FAIL: --knurlogic {w} matches {hits or 'no machine'} "
-                             f"among the page's machines {known}")
-        out.append(hits[0])
+        box = {k.lower(): v for k, v in config.boxes().items()}.get(w.lower())
+        name = (box or {}).get("machine")
+        if not name:
+            raise SystemExit(f"FAIL: --knurlogic {w} is not a machine the page knows "
+                             f"{known}; set boxes.{w}.machine in the vqlab config")
+        if name not in known:
+            raise SystemExit(f"FAIL: boxes.{w}.machine = {name!r} is not among the "
+                             f"page's machines {known}")
+        out.append(name)
     return out
 
 
@@ -374,8 +379,8 @@ def main() -> int:
                          "gate: it does NOT test the merge into the LM and "
                          "is NOT III.11 evidence, and says so in its own "
                          "output. For an artifact too large for this box "
-                         "(the 397B rungs are 112-155 GiB against 96 GiB "
-                         "here and on the M3), prefer the EXO CLUSTER: exo "
+                         "(e.g. the 397B rungs are 112-155 GiB, more "
+                         "than one box's unified memory), prefer the EXO CLUSTER: exo "
                          "does serve images -- see "
                          "exo/worker/engines/mlx/vision.py and the "
                          "chat_completions adapter's image_url handling -- "

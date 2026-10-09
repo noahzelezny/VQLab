@@ -10,8 +10,8 @@ reason is the point of the document.**
 
 | | mlx-lm | `load_model` hook | `models/vq_switch.py` |
 |---|---|---|---|
-| the exo conda env (M3, **live**) | 0.31.9 | **none** | **absent** |
-| `/opt/homebrew/anaconda3/envs/exo` (M4, **live**) | 0.31.9 | **none** | **absent** |
+| the exo conda env on the first box (**live**) | 0.31.9 | **none** | **absent** |
+| the exo conda env on the second box (**live**) | 0.31.9 | **none** | **absent** |
 | `~/exo/.venv` (both boxes, **dormant**) | 0.31.9 | present, line 501 | present, 228 lines |
 
 The running process on the M3 is the exo env's `python3.13`;

@@ -1,4 +1,4 @@
-"""Knurlogic arm of vision-smoke: routes via the page, waits for ready, maps m3/m4 (F205)."""
+"""Knurlogic arm of vision-smoke: routes via the page, waits for ready, maps box aliases via config (F205)."""
 import argparse
 import types
 
@@ -24,11 +24,19 @@ class FakeK:
         self.unloaded = job
 
 
-def test_alias_mapping():
-    assert vs._machine_names(FakeK(), ["m4", "m3", "Mac Studio"]) == [
+def test_alias_mapping(tmp_path, monkeypatch):
+    cfg = tmp_path / "c.toml"
+    cfg.write_text('[boxes.a]\nmachine = "MacBook Pro"\n[boxes.b]\nmachine = "Mac Studio"\n'
+                   '[boxes.c]\nssh = "x"\n')
+    monkeypatch.setenv("VQLAB_CONFIG", str(cfg))
+    assert vs._machine_names(FakeK(), ["a", "b", "Mac Studio"]) == [
         "MacBook Pro", "Mac Studio", "Mac Studio"]
+    with pytest.raises(SystemExit, match="boxes.c.machine"):
+        vs._machine_names(FakeK(), ["c"])
+    with pytest.raises(SystemExit, match="boxes.zz.machine"):
+        vs._machine_names(FakeK(), ["zz"])
     with pytest.raises(SystemExit):
-        vs._machine_names(types.SimpleNamespace(state=lambda: {"machines": []}), ["m4"])
+        vs._machine_names(types.SimpleNamespace(state=lambda: {"machines": []}), ["a"])
 
 
 def test_wait_loading_then_ready():
@@ -42,6 +50,9 @@ def test_wait_loading_then_ready():
 
 
 def test_routes_via_page(tmp_path, monkeypatch):
+    cfg = tmp_path / "c.toml"
+    cfg.write_text('[boxes.a]\nmachine = "MacBook Pro"\n')
+    monkeypatch.setenv("VQLAB_CONFIG", str(cfg))
     art = tmp_path / "mdl"
     art.mkdir()
     md = tmp_path / "models"
@@ -60,7 +71,7 @@ def test_routes_via_page(tmp_path, monkeypatch):
                 "choices": [{"message": {"content": "a circle"}}]}
 
     K = FakeK()
-    a = argparse.Namespace(knurlogic=["m4"], knurlogic_split="", knurlogic_link="",
+    a = argparse.Namespace(knurlogic=["a"], knurlogic_split="", knurlogic_link="",
                            image=str(img), max_tokens=8)
     assert vs._knurlogic(art, a, K=K, SPK=types.SimpleNamespace(_post=post),
                          sleep=lambda s: None) == 0

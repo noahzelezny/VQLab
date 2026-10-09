@@ -443,7 +443,7 @@ def _cluster_smoke() -> list[str]:
     for peer in peers:
         # peer syntax: user@host[:models-root]; default root is the exo
         # convention "$HOME/Exo Models". A peer whose root lives elsewhere
-        # (the M3 keeps models on an external volume) names it explicitly.
+        # (a box that keeps models on an external volume) names it explicitly.
         host, _, root = peer.partition(":")
         root = root or "$HOME/Exo Models"
         script = ("cd \"" + root + "/" + dirname + "\" && "

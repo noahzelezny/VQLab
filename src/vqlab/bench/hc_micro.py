@@ -24,6 +24,7 @@ import argparse
 import time
 
 import json
+import shutil
 import subprocess
 
 import mlx.core as mx
@@ -40,7 +41,7 @@ def gpu_watts() -> float:
     """
     try:
         out = subprocess.run(
-            ["/opt/homebrew/bin/macmon", "pipe", "--interval", "700", "-s", "1"],
+            [shutil.which("macmon") or "macmon", "pipe", "--interval", "700", "-s", "1"],
             capture_output=True, text=True, timeout=6).stdout.splitlines()
         return float(json.loads(out[0])["gpu_power"])
     except Exception:
