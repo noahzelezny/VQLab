@@ -43,6 +43,10 @@ import numpy as np
 # below this many (token, expert) pairs use the fused kernel; above, the
 # decode+padded-GEMM path (decode cost amortizes). Tune in M1e if needed.
 VQ_FUSED_MAX_N = int(os.environ.get("VQ_FUSED_MAX_N", "512"))
+# The fused walk's cutoff before F200-F204. A module whose gemmseg2 cannot take
+# ACCS (skipzero row tables, RTILE 64, PIPE) keeps it: below 4096 pairs the walk
+# is the more accurate path there, and a speedup may not cost accuracy.
+_LEGACY_FUSED_MAX_N = 4096
 
 # Experts decoded to dense fp16 per prefill chunk. THIS IS THE MEMORY KNOB,
 # not the KV cache: measured 2026-08-15 on a 128 GB M4 Max running the
@@ -5291,12 +5295,17 @@ class VQSwitchLinear(nn.Module):
             xf = xf.astype(mx.float16)
         pb = self.pack_bits
         rt = self["row_table"] if self.skipzero else None
+        # Short-prompt cutoff only where gemmseg2 runs with ACCS (walk accuracy);
+        # elsewhere keep the legacy cutoff so no module loses accuracy (F205).
+        max_n = (VQ_FUSED_MAX_N if (rt is None and _GEMMSEG_ACCS and _GEMMSEG_RTILE == 32
+                                    and not _GEMMSEG_PIPE)
+                 else max(VQ_FUSED_MAX_N, _LEGACY_FUSED_MAX_N))
         # Packed d=2 now has its own fused kernel (vq_fused_packed{bits}_d2,
         # 2026-08-19, verified against vq_pack.unpack numpy reference); the
         # old force-to-_prefill workaround is gone. _fused still raises
         # explicitly for any (D, pack_bits) without a dedicated kernel.
         T_tok = x.size // IN
-        if _PREFILL_EXPAND and N > VQ_FUSED_MAX_N and rt is None:
+        if _PREFILL_EXPAND and N > max_n and rt is None:
             ent = _EXPAND_STORE.get(id(self))
             if ent is None or ent[0] is not self["codes"]:
                 ent = (self["codes"], _expand_weights(
@@ -5316,7 +5325,7 @@ class VQSwitchLinear(nn.Module):
                                   bits=8 if _PREFILL_EXPAND == "q8" else 4,
                                   sorted_indices=sorted_indices)
             return y.astype(in_dtype).reshape(*indices.shape, 1, OUT)
-        if (N <= VQ_FUSED_MAX_N and _DECODE_XKREP and T_tok > 0
+        if (N <= max_n and _DECODE_XKREP and T_tok > 0
                 and N % T_tok == 0):
             x2 = x.reshape(T_tok, IN)
             if x2.dtype not in (mx.float16,) and not _keep_bf16:
@@ -5324,7 +5333,7 @@ class VQSwitchLinear(nn.Module):
             y = _fused(x2, idx_flat.astype(mx.uint32),
                        self["codes"], self["codebook"], self["vq_scales"],
                        pack_bits=pb, xkrep=N // T_tok, rowtbl=rt)
-        elif N <= VQ_FUSED_MAX_N:
+        elif N <= max_n:
             y = _fused(xf, idx_flat.astype(mx.uint32),
                        self["codes"], self["codebook"], self["vq_scales"],
                        pack_bits=pb, rowtbl=rt)
