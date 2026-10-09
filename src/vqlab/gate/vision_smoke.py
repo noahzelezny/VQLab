@@ -56,7 +56,7 @@ def _probe_image(path):
 
 
 
-def _image_request_check(post, mid, img, max_tokens):
+def _image_request_check(post, mid, img, max_tokens, extra=None):
     """The HTTP image arm shared by --cluster (exo) and --knurlogic.
 
     `post(doc) -> dict` sends one OpenAI chat-completions body. Asserts the
@@ -71,7 +71,8 @@ def _image_request_check(post, mid, img, max_tokens):
 
     def _body(content, ntok):
         return {"model": mid, "max_tokens": ntok, "temperature": 0,
-                "messages": [{"role": "user", "content": content}]}
+                "messages": [{"role": "user", "content": content}],
+                **(extra or {})}
 
     try:
         n_text = post(_body(q, 1))["usage"]["prompt_tokens"]
@@ -198,9 +199,13 @@ def _knurlogic(art, a, K=None, SPK=None, ready_timeout=1800, poll=10,
         print(f"knurlogic       : {', '.join(machines)} via {page}\n"
               f"model_id        : {mid}")
         probs = _image_request_check(lambda d: SPK._post(page, d), mid, img,
-                                     a.max_tokens)
+                                     a.max_tokens,
+                                     extra={"reasoning_effort": "none"})
     finally:
-        K.unload(job=str(job))
+        # a single-Mac load answers with an instance id (job is null in the
+        # page's rows), so unload by whichever id load returned
+        K.unload(**({"job": str(out["job"])} if out.get("job")
+                    else {"instance": str(job)}))
     if probs:
         raise SystemExit("\nFAIL: " + "; ".join(probs))
     print("\nPASS (KNURLOGIC): the probe image went through the serving "
