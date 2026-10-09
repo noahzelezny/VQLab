@@ -30,7 +30,7 @@ A generated caption is PRINTED for the human, never asserted on -- captions
 are not a deterministic instrument and III.11 does not need them to be.
 
     vqlab vision-smoke <artifact> [--static] [--prompt ...] [--image f.png]
-    vqlab vision-smoke <artifact> --knurlogic m3 [--knurlogic m4 --knurlogic-split pipeline]
+    vqlab vision-smoke <artifact> --knurlogic m3 (or a page machine name) [--knurlogic m4 --knurlogic-split pipeline]
 """
 import argparse
 import importlib.util
@@ -56,7 +56,7 @@ def _probe_image(path):
 
 
 
-def _image_request_check(post, mid, img, max_tokens):
+def _image_request_check(post, mid, img, max_tokens, extra=None):
     """The HTTP image arm shared by --cluster (exo) and --knurlogic.
 
     `post(doc) -> dict` sends one OpenAI chat-completions body. Asserts the
@@ -71,7 +71,8 @@ def _image_request_check(post, mid, img, max_tokens):
 
     def _body(content, ntok):
         return {"model": mid, "max_tokens": ntok, "temperature": 0,
-                "messages": [{"role": "user", "content": content}]}
+                "messages": [{"role": "user", "content": content}],
+                **(extra or {})}
 
     try:
         n_text = post(_body(q, 1))["usage"]["prompt_tokens"]
@@ -102,7 +103,57 @@ def _image_request_check(post, mid, img, max_tokens):
     return probs
 
 
-def _knurlogic(art, a, K=None, SPK=None, ready_timeout=1800, poll=10):
+PAGE = "http://127.0.0.1:8899"
+ALIASES = {"m3": ("studio", "m3"), "m4": ("book", "m4", "nozzle")}
+
+
+def _machine_names(K, wanted):
+    """Map m3/m4 aliases onto the machine names the page knows; names the
+    page already knows pass through unchanged."""
+    known = [str(m.get("machine")) for m in (K.state().get("machines") or [])
+             if m.get("machine")]
+    out = []
+    for w in wanted:
+        if w in known or w.lower() not in ALIASES:
+            out.append(w)
+            continue
+        hits = [k for k in known if any(t in k.lower() for t in ALIASES[w.lower()])]
+        if len(hits) != 1:
+            raise SystemExit(f"FAIL: --knurlogic {w} matches {hits or 'no machine'} "
+                             f"among the page's machines {known}")
+        out.append(hits[0])
+    return out
+
+
+def _wait_ready(page, name, timeout, poll, sleep, get=None):
+    """Poll the page's GET /v1/models until the model reads status=ready;
+    returns the id to route by."""
+    import time
+    import urllib.request
+    if get is None:
+        def get(u):
+            with urllib.request.urlopen(u, timeout=30) as r:
+                return json.loads(r.read())
+    t0 = time.time()
+    while True:
+        try:
+            data = get(page + "/v1/models").get("data") or []
+        except Exception:
+            data = []
+        for m in data:
+            mid = str(m.get("id", ""))
+            if mid and (mid == name or mid.endswith(name) or name.endswith(mid)):
+                if m.get("status") == "ready":
+                    return mid
+                if m.get("status") == "failed":
+                    raise SystemExit(f"FAIL: Knurlogic model {mid} failed to load")
+        if time.time() - t0 > timeout:
+            raise SystemExit(f"FAIL: {name} not ready on the page after {timeout} s")
+        sleep(poll)
+
+
+def _knurlogic(art, a, K=None, SPK=None, ready_timeout=1800, poll=10,
+               sleep=None, page=PAGE):
     """Put the probe image through Knurlogic, the runtime we serve on.
 
     The arm for DeepSeek-V4 Vision-Exp: its tower is not an mlx_vlm
@@ -114,6 +165,7 @@ def _knurlogic(art, a, K=None, SPK=None, ready_timeout=1800, poll=10):
     """
     import os
     import time
+    sleep = sleep or time.sleep
     if SPK is None:
         from vqlab.bench import speed_pair_knurlogic as SPK
     if K is None:
@@ -133,30 +185,27 @@ def _knurlogic(art, a, K=None, SPK=None, ready_timeout=1800, poll=10):
                          "something else")
     img = a.image or _probe_image(
         pathlib.Path(__import__("tempfile").mkdtemp()) / "probe.png")
-    out = K.load(artifact=name, machines=a.knurlogic, split=a.knurlogic_split,
+    machines = _machine_names(K, a.knurlogic)
+    out = K.load(artifact=name, machines=machines, split=a.knurlogic_split,
                  link=a.knurlogic_link, sets={"KNURLOGIC_MTP": "off"})
     job = out.get("job") or out.get("instance")
     if not job or out.get("refused") or out.get("error"):
         raise SystemExit(f"FAIL: Knurlogic load refused or failed: {out}")
     try:
-        t0 = time.time()
-        while True:
-            e = SPK._entry(K, job)
-            if e and SPK._ready(e):
-                break
-            if e and (e.get("phase") in ("failed", "stopped") or e.get("state") == "failed"):
-                raise SystemExit(f"FAIL: Knurlogic job {job} {e.get('phase')}: {e}")
-            if time.time() - t0 > ready_timeout:
-                raise SystemExit(f"FAIL: Knurlogic job {job} not ready after "
-                                 f"{ready_timeout} s")
-            time.sleep(poll)
-        url = out.get("url") or e.get("url") or e.get("where")
-        print(f"knurlogic       : {', '.join(a.knurlogic)} at {url}\n"
-              f"model_id        : {name}")
-        probs = _image_request_check(lambda d: SPK._post(url, d), name, img,
-                                     a.max_tokens)
+        # Readiness and routing both go through THIS Mac's page: a model
+        # server binds 127.0.0.1 by design, so a probe straight at its port
+        # from the other Mac is refused (F205).
+        mid = _wait_ready(page, name, ready_timeout, poll, sleep)
+        print(f"knurlogic       : {', '.join(machines)} via {page}\n"
+              f"model_id        : {mid}")
+        probs = _image_request_check(lambda d: SPK._post(page, d), mid, img,
+                                     a.max_tokens,
+                                     extra={"reasoning_effort": "none"})
     finally:
-        K.unload(job=str(job))
+        # a single-Mac load answers with an instance id (job is null in the
+        # page's rows), so unload by whichever id load returned
+        K.unload(**({"job": str(out["job"])} if out.get("job")
+                    else {"instance": str(job)}))
     if probs:
         raise SystemExit("\nFAIL: " + "; ".join(probs))
     print("\nPASS (KNURLOGIC): the probe image went through the serving "
