@@ -165,8 +165,7 @@ def api_runs(q):
                      "seconds": e.get("seconds") if e else None, "ended": bool(e)})
     mcp, gpu = [], None
     try:
-        import importlib
-        ms = importlib.import_module("vqlab.agents.mcp_server")
+        from vqlab.agents.mcp import tools_runs as ms
         gpu = ms.t_gpu_state()
         mcp = ms.t_list_runs(40).get("runs", [])
     except Exception as e:

@@ -82,7 +82,7 @@ src/vqlab/
   records/      run log + build records + score stamps + artifact registry + tamper stamp
   ship/         publish (a human action) + serve + the model card (card, card_tables, card_checks) + `size`
   queue/        the job queue (`queue`, `reserve`, `validate`): launches commands BY NAME from pinned code; never a bare `queue` (stdlib)
-  agents/       MCP server, read-only GUI, scratch housekeeping (`vqlab scratch`)
+  agents/       MCP server (package agents/mcp/: server + tools_storage/runs/findings), read-only GUI, scratch housekeeping (`vqlab scratch`)
   mtp/          MTP speculative-decoding LIBRARY (vqlab.mtp); its tools live in the stages
   family/       the family registry (registry.py), family-aware loading (model_loader.py) and version stamping (version_stamp.py), and model families as plugins, one file each (fit layout, streamed scorer, tokenizer hook); deepseek_v4 first
   skipzero/     the vq-skipzero pack/check tools (the runtime switch itself lives in runtime/)

@@ -17,7 +17,7 @@ over MCP) and it picks up where it stopped:
   init_sweep   GPU  launched `vqlab probe-init` across depth at low K,
                              2 seeds (ONBOARDING §2).
 
-GPU steps launch through the MCP runner (agents/mcp_server.t_run):
+GPU steps launch through the MCP runner (agents/mcp/tools_runs.t_run):
 detached, under the GPU lease, refused while an exo instance is placed.
 Without --launch the next command is printed, not run.
 
@@ -180,12 +180,12 @@ def fits_resident(ctx):
 
 
 def launch(cmd_args, tag):
-    from vqlab.agents import mcp_server as ms
+    from vqlab.agents.mcp import tools_runs as ms
     return ms.t_run(cmd_args[0], cmd_args[1:], tag=tag)
 
 
 def poll(run_id):
-    from vqlab.agents import mcp_server as ms
+    from vqlab.agents.mcp import tools_runs as ms
     st = ms.t_status(run_id, tail=20)
     s = st.get("status")
     if s == "completed":
