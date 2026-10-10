@@ -173,6 +173,38 @@ def test_every_package_has_a_layer():
     assert not missing, f"give these a layer in LAYER: {missing}"
 
 
+# Tests whose PURPOSE is the old (bare / pre-split) names: they check that
+# the alias finder hands back the canonical module object.
+TESTS_ALIAS_ALLOWED = {"test_public_imports.py"}
+
+
+def test_tests_use_canonical_imports():
+    """tests/ imports modules where they live: no bare stems (`import
+    vq_switch`) and no pre-split spellings (`from vqlab import vq_pack`)."""
+    stems = _stems()
+    bad = []
+    for path in sorted((ROOT / "tests").rglob("*.py")):
+        if path.name in TESTS_ALIAS_ALLOWED:
+            continue
+        for node in ast.walk(ast.parse(path.read_text(), filename=str(path))):
+            if isinstance(node, ast.Import):
+                names = [a.name for a in node.names]
+            elif isinstance(node, ast.ImportFrom) and not node.level:
+                names = [node.module or ""]
+                if node.module == "vqlab":
+                    names += [f"vqlab.{a.name}" for a in node.names]
+            else:
+                continue
+            for name in names:
+                parts = name.split(".")
+                if parts[0] in stems:
+                    bad.append(f"{path.name}:{node.lineno} {name}")
+                elif (parts[0] == "vqlab" and len(parts) > 1
+                      and stems.get(parts[1], f"vqlab.{parts[1]}") != f"vqlab.{parts[1]}"):
+                    bad.append(f"{path.name}:{node.lineno} {name} -> {stems[parts[1]]}")
+    assert not bad, "import these where they live:\n  " + "\n  ".join(bad)
+
+
 if __name__ == "__main__" and "--write" in sys.argv:
     ALLOWLIST.parent.mkdir(exist_ok=True)
     ALLOWLIST.write_text(json.dumps({

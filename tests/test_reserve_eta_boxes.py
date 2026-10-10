@@ -13,10 +13,10 @@ import pytest
 from vqlab import _layout  # noqa: F401
 from vqlab import config as C
 sys.path.insert(0, str(_layout.SRC / "vqlab" / "agents"))
-import mcp_server as ms  # noqa: E402
-import queue_eta  # noqa: E402
-import reserve as R  # noqa: E402
-import run_queue as rq  # noqa: E402
+from vqlab.agents import mcp_server as ms
+from vqlab.agents import queue_eta
+from vqlab.agents import reserve as R
+from vqlab.agents import run_queue as rq
 
 
 @pytest.fixture

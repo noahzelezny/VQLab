@@ -12,7 +12,7 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
-import vqlab.mcp_server as m  # noqa: E402
+from vqlab.agents import mcp_server as m
 
 
 @pytest.fixture

@@ -37,8 +37,8 @@ import mlx.core as mx
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]
                        / "src" / "vqlab"))
-import vq_pack  # noqa: E402
-import vq_switch as V  # noqa: E402
+from vqlab.runtime import vq_pack
+from vqlab.runtime import vq_switch as V
 
 
 def _layer(OUT, IN, K, D, G, seed=0, packed=0, dtype=mx.float16):

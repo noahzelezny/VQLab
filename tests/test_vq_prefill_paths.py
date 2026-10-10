@@ -16,7 +16,7 @@ import numpy as np
 import mlx.core as mx
 import pytest
 
-from vqlab import vq_switch as VS
+from vqlab.runtime import vq_switch as VS
 
 
 def _mk(E=16, OUT=48, IN=64, K=64, D=2, seed=0):
@@ -172,7 +172,7 @@ def test_vector_decode_bit_identical(setup):
 
 def _mk_packed(E=16, OUT=48, IN=128, K=64, seed=0, D=2):
     """Packed module at a gemmseg-eligible geometry (G=64, d in 2/4)."""
-    from vqlab import vq_pack
+    from vqlab.runtime import vq_pack
     r = np.random.default_rng(seed)
     NSUB = IN // D
     bits = vq_pack.bits_for_k(K)
@@ -285,7 +285,7 @@ def test_gemmseg_cbdev_numeric(D, K, IN):
     """Device-codebook arm (armed explicitly): same numeric gate. K here
     is over the threadgroup cap, so this also proves the kernel LOADS —
     an over-budget threadgroup allocation would fail at load, not run."""
-    from vqlab import vq_pack
+    from vqlab.runtime import vq_pack
     r = np.random.default_rng(23)
     NSUB = IN // D
     bits = vq_pack.bits_for_k(K)
@@ -331,7 +331,7 @@ def test_gemmseg_rtile64_numeric(D, K, IN):
     Also a LOAD gate: RTILE=64 raises the threadgroup allocation from
     12288 to 20480 B, and an over-budget kernel fails at load (E134).
     """
-    from vqlab import vq_pack
+    from vqlab.runtime import vq_pack
     r = np.random.default_rng(64)
     NSUB = IN // D
     bits = vq_pack.bits_for_k(K)
@@ -374,7 +374,7 @@ def test_gemmseg_cbdev_vs_threadgroup_equivalent():
     profiles, identical arithmetic, so this is a rel<1e-3 gate and the
     speed question is decided by measurement, not by this test.
     """
-    from vqlab import vq_pack
+    from vqlab.runtime import vq_pack
     D, K, IN = 4, 2048, 256
     r = np.random.default_rng(2048)
     NSUB = IN // D
@@ -420,7 +420,7 @@ def test_gemmseg_ragged_nsub_numeric():
     = 14 whole words, so the straddle read crow[VQ_W(j)+1] never crosses
     out of the row. This test is what proves it rather than argues it.
     """
-    from vqlab import vq_pack
+    from vqlab.runtime import vq_pack
     D, K, IN, E = 8, 16384, 640, 8
     NSUB = IN // D
     assert NSUB % 32 != 0, "geometry must be ragged or this tests nothing"

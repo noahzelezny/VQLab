@@ -30,7 +30,7 @@ import numpy as np
 import pytest
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1] / "src" / "vqlab"))
-import vq_dense as D
+from vqlab.runtime import vq_dense as D
 
 
 def _embed(rows=32, IN=64, K=16, dim=2, group=16, seed=0, **kw):

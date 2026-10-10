@@ -13,7 +13,7 @@ import pytest
 pytest.importorskip("mlx.core")
 import mlx.core as mx  # noqa: E402
 
-from vqlab import vq_switch as vs  # noqa: E402
+from vqlab.runtime import vq_switch as vs
 
 
 @pytest.fixture(autouse=True)

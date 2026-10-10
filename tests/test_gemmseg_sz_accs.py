@@ -16,8 +16,8 @@ import numpy as np
 import mlx.core as mx
 import pytest
 
-from vqlab import vq_switch as VS
-from vqlab import vq_pack as VP
+from vqlab.runtime import vq_switch as VS
+from vqlab.runtime import vq_pack as VP
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from test_gemmseg_flags_geoms import E, SLACK, _exact, _inputs, _rms, _run  # noqa: E402

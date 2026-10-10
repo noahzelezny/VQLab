@@ -14,8 +14,8 @@ import pytest
 
 import mlx.core as mx
 
-import vq_pack
-import vq_switch as V
+from vqlab.runtime import vq_pack
+from vqlab.runtime import vq_switch as V
 
 CASES = [(2, 512, 0), (2, 512, 9), (2, 4096, 0), (4, 256, 0), (4, 4096, 12)]
 
