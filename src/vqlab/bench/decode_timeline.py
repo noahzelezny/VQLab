@@ -66,8 +66,6 @@ from __future__ import annotations
 import argparse
 import json
 import pathlib
-import shutil
-import subprocess
 import sys
 import time
 
@@ -77,6 +75,8 @@ import mlx.nn as nn
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))  # src/
 from vqlab import _layout  # noqa: E402,F401  one module object per name
 from vqlab import runtime_load  # noqa: E402
+from vqlab.bench.power import gpu_watts  # noqa: E402,F401  (old name kept)
+from vqlab.bench.timeline_common import layer_kind as _kind, trunk as _trunk  # noqa: E402
 
 
 class _ZeroMLP(nn.Module):
@@ -86,33 +86,6 @@ class _ZeroMLP(nn.Module):
 
     def __call__(self, x, *args, **kwargs):
         return x * 0
-
-
-def _trunk(m, depth=0):
-    """The module carrying both `layers` and `embed_tokens`. Requiring BOTH
-    stops the walk at the right level (a wrapper can have `layers` without
-    `embed_tokens`, which is how the first version of this landed on the
-    wrong module)."""
-    if depth > 6:
-        return None
-    if hasattr(m, "layers") and hasattr(m, "embed_tokens"):
-        return m
-    for attr in ("language_model", "model"):
-        sub = getattr(m, attr, None)
-        if sub is not None and sub is not m:
-            got = _trunk(sub, depth + 1)
-            if got is not None:
-                return got
-    return None
-
-
-def _kind(layer):
-    """(attention-half kind, MLP-half kind) of one decoder layer."""
-    attn = "lin" if getattr(layer, "is_linear", False) else "attn"
-    mlp = getattr(layer, "mlp", None)
-    moe = mlp is not None and any(hasattr(mlp, a) for a in
-                                  ("switch_mlp", "experts", "gate"))
-    return attn, ("moe" if moe else "dense")
 
 
 def _family_of(art) -> str:
@@ -148,18 +121,6 @@ def _trim_back(cache, before):
                 c.trim(now - b)
         except (AttributeError, TypeError):
             pass
-
-
-def gpu_watts() -> float:
-    """Instantaneous GPU package watts, or -1. Utilization is NOT usable:
-    WindowServer pegs gpu_usage to 60-95% while drawing 2-4 W."""
-    try:
-        out = subprocess.run(
-            [shutil.which("macmon") or "macmon", "pipe", "--interval", "700", "-s", "1"],
-            capture_output=True, text=True, timeout=6).stdout.splitlines()
-        return float(json.loads(out[0])["gpu_power"])
-    except Exception:
-        return -1.0
 
 
 def main() -> int:

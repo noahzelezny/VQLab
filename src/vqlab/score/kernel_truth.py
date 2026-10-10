@@ -171,7 +171,7 @@ def main() -> int:
     return 0
 
 
-def _parse_arm(spec):
+def parse_arm(spec):
     """'name=VQ_A:1,VQ_B:512' -> ('name', {'VQ_A': 1, 'VQ_B': 512})."""
     name, _, body = spec.partition("=")
     kv = {}
@@ -181,12 +181,19 @@ def _parse_arm(spec):
     return name, kv
 
 
-def _attr(vqg, flag):
+def module_attr(vqg, flag):
+    """The vq_switch module global an env flag maps to (VQ_FOO -> _FOO);
+    exits if the loaded runtime has neither spelling."""
     attr = flag if flag in vqg else (
         "_" + flag[3:] if flag.startswith("VQ_") else flag)
     if attr not in vqg:
         raise SystemExit(f"FAIL: runtime has no {attr} (wrong model.py?)")
     return attr
+
+
+# Pre-2026-10-10 private names; bench/decode_ladder.py and old scripts used them.
+_parse_arm = parse_arm
+_attr = module_attr
 
 
 def acts_main(a) -> int:
@@ -212,7 +219,7 @@ def acts_main(a) -> int:
     if not pick:
         raise SystemExit(f"FAIL: no VQSwitchLinear matched {want}")
     vqg = type(pick[0][1]).__call__.__globals__
-    arms = [("base", {})] + [_parse_arm(s) for s in a.arm]
+    arms = [("base", {})] + [parse_arm(s) for s in a.arm]
 
     # ---- capture: one forward, every picked module records its call ------
     text = open(a.acts_corpus, encoding="utf-8").read()
@@ -304,7 +311,7 @@ def acts_main(a) -> int:
         for an, kv in arms:
             saved = {}
             for k, v in kv.items():
-                at = _attr(vqg, k)
+                at = module_attr(vqg, k)
                 saved[at] = vqg[at]
                 vqg[at] = v
             outs = {}

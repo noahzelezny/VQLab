@@ -6,6 +6,8 @@ An artifact (pinned), an idle box.
 ## Process
 `vqlab decode-timeline` (stages that sum to the whole), `prefill-timeline` (the same partition for one prefill, any architecture), `decode-ladder` (deletion arms + checksums), `active-bytes` (the roofline denominator), `stage-bandwidth` (the two joined: GB/s and excess ms per decode stage), `serve-timeline` (a Knurlogic-served request's own partition, n runs), `gpu-capture` (one decode step as an Xcode .gputrace, for the per-kernel WHY), `prefill-bench`, `coverage`, `host-attrib`, `hc-micro`.
 
+Library: `timeline_common.py` (`trunk()`: the module holding layers + embed_tokens; `layer_kind()`: (lin|attn, moe|dense)), shared by the two timelines; `power.py` (`gpu_watts()`: GPU package watts from macmon, -1 without it). `score/kernel_truth.py` exports `parse_arm` / `module_attr` for decode-ladder.
+
 ## Outputs
 Printed timings and ratios.
 
