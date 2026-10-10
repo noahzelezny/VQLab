@@ -72,14 +72,11 @@ def norm_block(T):
     return (Wg / s).reshape(-1, D), s.astype(mx.float16)
 
 
+from vqlab.fit.kmeans import assign_mx  # noqa: E402
+
+
 def assign(X, C, chunk=1_000_000):
-    outs = []
-    for s in range(0, X.shape[0], chunk):
-        x = X[s:s + chunk]
-        d = (x * x).sum(1, keepdims=True) - 2 * x @ C.T + (C * C).sum(1)
-        outs.append(mx.argmin(d, axis=1).astype(mx.uint32))
-        mx.eval(outs[-1])
-    return mx.concatenate(outs)
+    return assign_mx(X, C, chunk)
 
 
 manifest = {"geometry": {"k": K, "dim": D, "group": G, "iters": a.iters,

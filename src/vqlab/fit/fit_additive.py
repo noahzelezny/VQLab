@@ -38,72 +38,14 @@ greedily (greedy-only is what makes naive residual VQ underperform).
 """
 import numpy as np
 
-try:                                   # MLX for the hot loop; numpy is the
-    import mlx.core as mx              # reference and the fallback
-    _HAVE_MX = True
-except Exception:                      # pragma: no cover
-    _HAVE_MX = False
 
-
-def _assign_mx(X, C, chunk=1 << 18):
-    """argmin_k ||x - c_k||^2 on the GPU. Same result as _assign, ~20x faster.
-
-    The additive fit assigns 100M+ subvectors against 128 centroids per stage
-    per iteration; in numpy that is the whole cost of the job.
-    """
-    Cm = mx.array(np.ascontiguousarray(C, dtype=np.float32))
-    cn = mx.sum(Cm * Cm, axis=1)
-    out = np.empty(X.shape[0], np.int32)
-    for i in range(0, X.shape[0], chunk):
-        xb = mx.array(np.ascontiguousarray(X[i:i + chunk], dtype=np.float32))
-        d = (mx.sum(xb * xb, axis=1)[:, None] - 2.0 * (xb @ Cm.T)
-             + cn[None, :])
-        a = mx.argmin(d, axis=1)
-        mx.eval(a)
-        out[i:i + chunk] = np.array(a)
-        mx.clear_cache()
-    return out
-
-
-def _kmeanspp(X, K, rng):
-    n = X.shape[0]
-    C = np.empty((K, X.shape[1]), np.float32)
-    C[0] = X[rng.integers(n)]
-    d2 = ((X - C[0]) ** 2).sum(1)
-    for i in range(1, K):
-        p = d2 / max(d2.sum(), 1e-12)
-        C[i] = X[rng.choice(n, p=p)]
-        d2 = np.minimum(d2, ((X - C[i]) ** 2).sum(1))
-    return C
-
-
-def _assign(X, C, chunk=1 << 16, prefer_mx=True):
-    if prefer_mx and _HAVE_MX and X.shape[0] > 1 << 15:
-        return _assign_mx(X, C)
-    out = np.empty(X.shape[0], np.int32)
-    cn = (C * C).sum(1)
-    for i in range(0, X.shape[0], chunk):
-        xb = X[i:i + chunk]
-        d = (xb * xb).sum(1)[:, None] - 2.0 * (xb @ C.T) + cn[None, :]
-        out[i:i + chunk] = np.argmin(d, axis=1)
-    return out
-
-
-def _lloyd(X, C, iters, rng):
-    """Lloyd with a vectorised M-step -- a K-long python loop over 100M-row
-    masks is slower than the assignment it follows."""
-    K, D = C.shape
-    for _ in range(iters):
-        a = _assign(X, C)
-        cnt = np.bincount(a, minlength=K).astype(np.float32)
-        sums = np.zeros((K, D), np.float32)
-        for d in range(D):                     # D is 2/4/8, not K
-            sums[:, d] = np.bincount(a, weights=X[:, d], minlength=K)
-        live = cnt > 0
-        C[live] = sums[live] / cnt[live, None]
-        if (~live).any():                      # revive dead centroids
-            C[~live] = X[rng.integers(X.shape[0], size=int((~live).sum()))]
-    return C
+# The k-means steps live in fit/kmeans.py (one home); old names kept.
+from vqlab.fit.kmeans import (  # noqa: E402,F401
+    assign as _assign,
+    assign_mx_np as _assign_mx,
+    kmeanspp_init as _kmeanspp,
+    lloyd as _lloyd,
+)
 
 
 def fit_additive(X, K, M=2, iters=12, rng=None):
