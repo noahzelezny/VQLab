@@ -498,7 +498,7 @@ def _knurlogic_smoke() -> list[str]:
     not looping, and (with an MTP head) that drafting accepted tokens."""
     import os
     import time
-    from vqlab.bench import speed_pair_knurlogic as SPK
+    from vqlab.core import knurlogic_client as SPK
     ksrc = os.environ.get("KNURLOGIC_SRC", "")
     if ksrc:
         sys.path.insert(0, ksrc)
@@ -522,8 +522,8 @@ def _knurlogic_smoke() -> list[str]:
     try:
         t0 = time.time()
         while True:
-            e = SPK._entry(K, job)
-            if e and SPK._ready(e):
+            e = SPK.entry(K, job)
+            if e and SPK.ready(e):
                 break
             if e and (e.get("phase") in ("failed", "stopped") or e.get("state") == "failed"):
                 return [f"Knurlogic job {job} {e.get('phase')}: {e}"]
@@ -531,11 +531,11 @@ def _knurlogic_smoke() -> list[str]:
                 return [f"Knurlogic job {job} not ready after 1800 s"]
             time.sleep(10)
         url = out.get("url") or e.get("url") or e.get("where")
-        d0 = SPK._drafting(url) if head else None
-        r = SPK._post(url, {"model": name, "temperature": 0, "max_tokens": max(args.max_tokens, 96),
+        d0 = SPK.drafting(url) if head else None
+        r = SPK.post(url, {"model": name, "temperature": 0, "max_tokens": max(args.max_tokens, 96),
                             "messages": [{"role": "user", "content":
                                           "Explain in three sentences why the sky is blue."}]})
-        d1 = SPK._drafting(url) if head else None
+        d1 = SPK.drafting(url) if head else None
         text = ((r.get("choices") or [{}])[0].get("message") or {}).get("content") or ""
         words = text.split()
         grams = [" ".join(words[i:i + 8]) for i in range(max(0, len(words) - 7))]
@@ -544,7 +544,7 @@ def _knurlogic_smoke() -> list[str]:
         elif len(set(grams)) < len(grams):
             probs.append(f"Knurlogic smoke output repeats an 8-word span (looping): {text[:200]!r}")
         hosts = dict(h.split("=", 1) for h in args.knurlogic_host)
-        logs = SPK._rank_logs(job, {m: hosts.get(m) for m in args.knurlogic_smoke})
+        logs = SPK.rank_logs(job, {m: hosts.get(m) for m in args.knurlogic_smoke})
         for m, t in logs.items():
             if (A / "model.py").exists() and SPK.BUNDLED not in t:
                 probs.append(f"rank on {m}: bundled runtime did not run (log lacks the marker)")

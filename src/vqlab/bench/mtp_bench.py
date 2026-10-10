@@ -14,7 +14,7 @@ import pathlib
 import sys
 
 from vqlab.mtp.bench import benchmark
-from vqlab.ship.mtp_run import add_sampling_args, load_all, prompt_ids
+from vqlab.mtp.cli_common import add_sampling_args, load_all, prompt_ids
 
 
 def main():

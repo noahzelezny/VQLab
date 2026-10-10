@@ -21,6 +21,7 @@ Nothing here uploads: publishing is a human's action.
 from __future__ import annotations
 
 import argparse
+import importlib.resources
 import os
 import pathlib
 import shlex
@@ -28,11 +29,14 @@ import subprocess
 import sys
 
 from vqlab.core.artifact import sizes
+from vqlab.core.hub import LFS_MIN, hub_diff  # noqa: F401  (re-exported)
 from vqlab.util.hashing import git_blob_sha1, sha256_file
+
+_git_blob = git_blob_sha1   # old private names, kept for callers/tests
+_sha256 = sha256_file
 
 GIB = 2 ** 30
 JUNK = (".DS_Store",)
-LFS_MIN = 10 << 20          # files above this are LFS on the Hub
 
 
 def _junk(d):
@@ -47,46 +51,11 @@ def _junk(d):
     return out
 
 
-_git_blob = git_blob_sha1
-_sha256 = sha256_file
-
-
-def hub_diff(art, repo, deep=False):
-    """-> (changed_or_new, only_on_hub, repo_exists). Needs HF auth for
-    private repos (HF_HOME / HF_TOKEN as for `hf`)."""
-    from huggingface_hub import HfApi
-    from huggingface_hub.utils import RepositoryNotFoundError
-    try:
-        info = HfApi().model_info(repo, files_metadata=True)
-    except RepositoryNotFoundError:
-        return None, None, False
-    hub = {s.rfilename: s for s in info.siblings}
-    local = [p for p in sorted(art.rglob("*")) if p.is_file()
-             and p.relative_to(art).as_posix() not in ()
-             and not any(part == "__pycache__" or part.startswith(".") for part in p.relative_to(art).parts)
-             and not p.name.endswith(".pyc")]
-    changed = []
-    for p in local:
-        rel = p.relative_to(art).as_posix()
-        h = hub.get(rel)
-        if h is None:
-            changed.append(rel)
-            continue
-        size = p.stat().st_size
-        if h.size != size:
-            changed.append(rel)
-        elif size < LFS_MIN or h.lfs is None:
-            if h.blob_id and _git_blob(p) != h.blob_id:
-                changed.append(rel)
-        elif deep and h.lfs.sha256 != _sha256(p):
-            changed.append(rel)
-    have = {p.relative_to(art).as_posix() for p in local}
-    only_hub = sorted(k for k in hub if k not in have and k != ".gitattributes")
-    return changed, only_hub, True
-
-
 def _run(cmd):
-    env = {**os.environ, "PYTHONPATH": str(pathlib.Path(__file__).resolve().parents[2])}
+    # the directory holding THIS vqlab package, so the child CLI runs the
+    # same tree (a checkout's src/, or site-packages when installed)
+    pkg = pathlib.Path(str(importlib.resources.files("vqlab"))).resolve()
+    env = {**os.environ, "PYTHONPATH": str(pkg.parent)}
     return subprocess.run([sys.executable, "-m", "vqlab.cli", *cmd], env=env).returncode
 
 

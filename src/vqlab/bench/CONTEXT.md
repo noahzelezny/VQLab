@@ -17,3 +17,4 @@ Printed timings and ratios.
 - Never quote an effective bandwidth without `active-bytes` (F130).
 
 - `speed-pair-knurlogic`: the same ratio rule when Knurlogic places the model (one Mac, or a pipeline split for models too big for one box). Arms are Knurlogic model NAMES; it refuses a run whose served name is not the arm (identity collapse: Knurlogic does not hash model.py) or whose runtime is not the bundled model.py.
+- `speed_pair_knurlogic` re-exports its HTTP/job helpers from `core/knurlogic_client.py`; `box_quiet` reads the lease via `core/gpu_lease.py`; `mtp_bench` takes its CLI plumbing from `mtp/cli_common.py`. bench never imports agents or ship.

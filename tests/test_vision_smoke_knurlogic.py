@@ -54,7 +54,7 @@ def test_routes_via_page(tmp_path, monkeypatch):
     K = FakeK()
     a = argparse.Namespace(knurlogic=["fit"], knurlogic_split="", knurlogic_link="",
                            image=str(img), max_tokens=8)
-    assert vs._knurlogic(art, a, K=K, SPK=types.SimpleNamespace(_post=post),
+    assert vs._knurlogic(art, a, K=K, SPK=types.SimpleNamespace(post=post),
                          sleep=lambda s: None) == 0
     assert K.loaded["machines"] == ["fit"] and K.unloaded == "j1"
     assert posts and all(u == "http://127.0.0.1:8899" and m == "mdl" for u, m in posts)

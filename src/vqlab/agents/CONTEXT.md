@@ -22,3 +22,4 @@ Detached runs under the MCP runs dir, FINDINGS-LOG entries; queues under `<recor
 - `run` launches through `python -m vqlab.cli`, so every agent job is in the run log.
 - A queue step never imports the live checkout: commit mid-run freely. Uncommitted src/ changes are NOT in the queue (it refuses unless --allow-dirty).
 - Every queue step needs a `preflight` block; run `--preflight` before any multi-hour queue.
+- `onboard.py` (`vqlab plan onboard`) lives here, not in plan/: it drives the MCP server's `t_run`/`t_status`. Old name `vqlab.plan.onboard` is an alias for one release. The GPU lease file logic is `core/gpu_lease.py`.

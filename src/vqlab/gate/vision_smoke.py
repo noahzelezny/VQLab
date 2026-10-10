@@ -151,7 +151,7 @@ def _knurlogic(art, a, K=None, SPK=None, ready_timeout=1800, poll=10,
     import time
     sleep = sleep or time.sleep
     if SPK is None:
-        from vqlab.bench import speed_pair_knurlogic as SPK
+        from vqlab.core import knurlogic_client as SPK
     if K is None:
         ksrc = os.environ.get("KNURLOGIC_SRC", "")
         if ksrc:
@@ -181,7 +181,7 @@ def _knurlogic(art, a, K=None, SPK=None, ready_timeout=1800, poll=10,
         mid = _wait_ready(page, name, ready_timeout, poll, sleep)
         print(f"knurlogic       : {', '.join(machines)} via {page}\n"
               f"model_id        : {mid}")
-        probs = _image_request_check(lambda d: SPK._post(page, d), mid, img,
+        probs = _image_request_check(lambda d: SPK.post(page, d), mid, img,
                                      a.max_tokens,
                                      extra={"reasoning_effort": "none"})
     finally:

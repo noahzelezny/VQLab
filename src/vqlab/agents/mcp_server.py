@@ -56,6 +56,8 @@ from vqlab import config
 from vqlab import commands as _commands
 from vqlab.agents import queue_eta as _queue_eta
 from vqlab.agents import reserve as _resv
+from vqlab.core.gpu_lease import lease_holder as _lease_holder
+from vqlab.core.gpu_lease import lease_path
 from vqlab.util.fs import dir_bytes
 
 PROTOCOL_VERSION = "2024-11-05"
@@ -81,12 +83,6 @@ def runs_dir() -> Path:
     if env:
         return Path(env)
     return config.scratch() / "mcp-runs" / socket.gethostname().split(".")[0]
-
-
-def lease_path() -> Path:
-    """The GPU lease file (`vqlab.config.gpu_lease`). Point every GPU tenant
-    on the machine at the same file and they take turns."""
-    return config.gpu_lease()
 
 
 def exo_api() -> str:
@@ -198,27 +194,6 @@ def _exo_instances() -> Optional[List[str]]:
         return None
     inst = st.get("instances") or {}
     return list(inst.keys()) if isinstance(inst, dict) else [str(i) for i in inst]
-
-
-def _lease_holder() -> Optional[Dict[str, Any]]:
-    p = lease_path()
-    if not p.exists():
-        return None
-    fd = os.open(p, os.O_RDWR)
-    try:
-        try:
-            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except OSError as exc:
-            if exc.errno in (errno.EAGAIN, errno.EACCES, errno.EWOULDBLOCK):
-                try:
-                    return json.loads(Path(p).read_text() or "{}")
-                except Exception:
-                    return {"holder": "unknown"}
-            raise
-        fcntl.flock(fd, fcntl.LOCK_UN)
-        return None
-    finally:
-        os.close(fd)
 
 
 def _read_meta(run_dir: Path) -> Dict[str, Any]:
