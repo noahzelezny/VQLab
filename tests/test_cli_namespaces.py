@@ -11,7 +11,7 @@ from vqlab import _layout  # noqa: F401
 from vqlab import cli
 
 from vqlab.bench import box_quiet
-from vqlab.agents import run_queue as rq
+from vqlab.queue import steps as rq
 from vqlab.records import runlog
 
 PAIRS = [(flat, cli.SPELLING[flat].split()) for flat in cli.COMMANDS]

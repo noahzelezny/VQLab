@@ -196,10 +196,9 @@ def _step_files(sd):
 
 def queues_snapshot(n=40):
     """Most recent queue runs, newest first. `live` reuses the runner-alive
-    check `vqlab queue status` makes (mcp_server._pid_alive on state.pid)."""
-    import importlib
-    ms = importlib.import_module("vqlab.agents.mcp_server")
-    rq = importlib.import_module("vqlab.agents.run_queue")
+    check `vqlab queue status` makes (core.gpu_lease.pid_alive on state.pid)."""
+    from vqlab.core.gpu_lease import pid_alive
+    from vqlab.queue import files as rq
     dirs = sorted((p for p in rq.queues_dir().glob("*") if (p / "state.json").exists()),
                   key=lambda p: p.name, reverse=True)[:max(1, n)]
     out = []
@@ -210,7 +209,7 @@ def queues_snapshot(n=40):
             continue
         sdirs = {p.name.split("-", 1)[0]: p for p in (d / "steps").glob("*") if p.is_dir()}
         out.append({"id": d.name, "name": s.get("name"), "status": s.get("status"),
-                    "live": bool(ms._pid_alive(s.get("pid"))), "preflight": bool(s.get("preflight")),
+                    "live": bool(pid_alive(s.get("pid"))), "preflight": bool(s.get("preflight")),
                     "created": s.get("created"), "host": s.get("host"), "commit": s.get("commit"),
                     "source": s.get("source"),
                     "steps": [dict({k: r.get(k) for k in ("name", "status", "seconds", "started", "finished",

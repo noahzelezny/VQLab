@@ -35,8 +35,6 @@ pip-installed into them.
 
 from __future__ import annotations
 
-import errno
-import fcntl
 import json
 import os
 import shutil
@@ -47,15 +45,18 @@ import socket
 import subprocess
 import sys
 import time
-import urllib.request
 from datetime import date, datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from vqlab import config
 from vqlab import commands as _commands
-from vqlab.agents import queue_eta as _queue_eta
-from vqlab.agents import reserve as _resv
+from vqlab.core.exo import exo_api  # noqa: F401  (was defined here; kept for callers)
+from vqlab.core.exo import exo_instances as _exo_instances
+from vqlab.core.gpu_lease import acquire_lease, release_lease
+from vqlab.core.gpu_lease import pid_alive as _pid_alive
+from vqlab.queue import eta as _queue_eta
+from vqlab.queue import reserve as _resv
 from vqlab.core.gpu_lease import lease_holder as _lease_holder
 from vqlab.core.gpu_lease import lease_path
 from vqlab.util.fs import dir_bytes
@@ -85,10 +86,6 @@ def runs_dir() -> Path:
     return config.scratch() / "mcp-runs" / socket.gethostname().split(".")[0]
 
 
-def exo_api() -> str:
-    return os.environ.get("VQLAB_EXO_API", "http://127.0.0.1:52415")
-
-
 # Subcommands an agent may launch, and the subset that never touches the GPU
 # (header reads, index queries, records, HTTP clients of a server holding its
 # own memory): not gated on an exo placement or the GPU lease, and they do
@@ -97,8 +94,8 @@ def exo_api() -> str:
 RUN_ALLOWLIST = _commands.mcp_allowlist()
 GPU_FREE = _commands.mcp_gpu_free()
 # Commands that checkpoint and resume: a GPU-timeout crash is retried.
-RESUMABLE = {"fit-moe", "fit-dense", "geo-build", "alloc-sweep", "validate"}
-DEFAULT_RETRIES = 2
+RESUMABLE = _commands.RESUMABLE
+DEFAULT_RETRIES = _commands.DEFAULT_RETRIES
 
 # Commands that need the box's memory to themselves. When an external
 # scheduler records in lab-state.json (scratch) that this box hosts a
@@ -185,32 +182,11 @@ def _walk(roots: List[Path], max_depth: int):
                     stack.append((Path(e.path), depth + 1))
 
 
-def _exo_instances() -> Optional[List[str]]:
-    """Instance ids currently placed on this cluster, or None if exo is down."""
-    try:
-        with urllib.request.urlopen(exo_api() + "/state", timeout=3) as r:
-            st = json.load(r)
-    except Exception:  # exo down means nothing is placed here
-        return None
-    inst = st.get("instances") or {}
-    return list(inst.keys()) if isinstance(inst, dict) else [str(i) for i in inst]
-
-
 def _read_meta(run_dir: Path) -> Dict[str, Any]:
     try:
         return json.loads((run_dir / "meta.json").read_text())
     except Exception:
         return {}
-
-
-def _pid_alive(pid: Optional[int]) -> bool:
-    if not pid:
-        return False
-    try:
-        os.kill(pid, 0)
-        return True
-    except OSError:
-        return False
 
 
 # --------------------------------------------------------------------------- #
@@ -458,7 +434,7 @@ def t_list_runs(n: int = 20) -> Dict[str, Any]:
 
 
 def _queues_dir() -> Path:
-    # same resolution as run_queue.queues_dir (run_queue imports this module)
+    # same resolution as vqlab.queue.files.queues_dir
     return Path(os.environ.get("VQLAB_QUEUE_DIR") or Path.home() / ".vqlab" / "queues")
 
 
@@ -940,42 +916,6 @@ def serve(inp=None, out=None) -> int:
 # --------------------------------------------------------------------------- #
 # Supervisor (the detached process that owns the lease and runs the job)
 # --------------------------------------------------------------------------- #
-
-def acquire_lease(lp: Path, holder: str, run_id: Optional[str], wait_s: float = 1800,
-                  poll_s: float = 15) -> Optional[int]:
-    """Take an exclusive flock on `lp`, waiting up to wait_s; stamp the holder.
-    Returns the fd (keep it open to hold the lease; release_lease to drop it)
-    or None if it stayed held. Shared by the MCP supervisor and `vqlab queue`,
-    so there is one lease protocol, not a pgrep script per campaign."""
-    lp.parent.mkdir(parents=True, exist_ok=True)
-    fd = os.open(lp, os.O_RDWR | os.O_CREAT, 0o644)
-    deadline = time.time() + wait_s
-    while True:
-        try:
-            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-            break
-        except OSError as exc:
-            if exc.errno not in (errno.EAGAIN, errno.EACCES, errno.EWOULDBLOCK):
-                os.close(fd)
-                raise
-            if time.time() > deadline:
-                os.close(fd)
-                return None
-            time.sleep(poll_s)
-    os.ftruncate(fd, 0)
-    os.lseek(fd, 0, os.SEEK_SET)
-    os.write(fd, json.dumps({"holder": holder, "pid": os.getpid(), "run_id": run_id,
-                             "since": time.strftime("%Y-%m-%dT%H:%M:%S")}).encode())
-    os.fsync(fd)
-    return fd
-
-
-def release_lease(fd: int) -> None:
-    try:
-        fcntl.flock(fd, fcntl.LOCK_UN)
-    finally:
-        os.close(fd)
-
 
 def supervise(run_dir: Path) -> int:
     meta = _read_meta(run_dir)

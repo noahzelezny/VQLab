@@ -38,7 +38,7 @@ import subprocess
 import sys
 import time
 
-ROOT = pathlib.Path(__file__).resolve().parents[3]   # repo root (gate/ -> vqlab/ -> src/ -> repo)
+ROOT = pathlib.Path(__file__).resolve().parents[3]   # repo root (queue/ -> vqlab/ -> src/ -> repo)
 STATE = ROOT / "caches" / "validate"
 QUEUE = STATE / "queue.jsonl"
 DEFAULT_GATES = "check,check-release,bundle-accept"
