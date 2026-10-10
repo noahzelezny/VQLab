@@ -71,7 +71,24 @@ def verify(fa: str, fb: str, allow: bool = False) -> list:
     return probs
 
 
-def main() -> int:
+def pair_one(per_pos_dir: str, arm: str, ref: str, corpus: str,
+             allow: bool = False) -> dict:
+    """One corpus's paired comparison of rung `arm` against rung `ref` from
+    their saved per-position arrays: paired() plus the sidecar problems
+    (empty when verified) and the delta as a % of the reference's own KL.
+    Raises SystemExit on a missing array or an unverifiable pairing."""
+    fa = os.path.join(per_pos_dir, f"{arm}__{corpus}.safetensors")
+    fb = os.path.join(per_pos_dir, f"{ref}__{corpus}.safetensors")
+    for f in (fa, fb):
+        if not os.path.exists(f):
+            raise SystemExit(f"FAIL: missing {f}")
+    probs = verify(fa, fb, allow)
+    r = paired(fa, fb)
+    pct = r["delta"] / r["ref_mean"] * 100 if r["ref_mean"] else 0.0
+    return {"corpus": corpus, **r, "pct": pct, "problems": probs}
+
+
+def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--per-pos-dir", required=True)
     ap.add_argument("--arm", required=True, help="rung name of the ARM")
@@ -82,7 +99,7 @@ def main() -> int:
                     help="pair arrays whose sidecars do not prove the same cache and "
                          "numerics build (old arrays, or a deliberate cross-build "
                          "comparison); every such corpus is flagged UNVERIFIED")
-    a = ap.parse_args()
+    a = ap.parse_args(argv)
 
     print(f"\npaired KL: {a.arm} minus {a.ref}   (negative = arm is BETTER)\n")
     print(f"  {'corpus':<10} {'ref KL':>10} {'arm KL':>10} {'delta':>9} "
@@ -91,16 +108,10 @@ def main() -> int:
     worst = 0.0
     unverified = []
     for c in a.corpus:
-        fa = os.path.join(a.per_pos_dir, f"{a.arm}__{c}.safetensors")
-        fb = os.path.join(a.per_pos_dir, f"{a.ref}__{c}.safetensors")
-        for f in (fa, fb):
-            if not os.path.exists(f):
-                raise SystemExit(f"FAIL: missing {f}")
-        probs = verify(fa, fb, a.allow_unverified_pair)
+        r = pair_one(a.per_pos_dir, a.arm, a.ref, c, a.allow_unverified_pair)
+        probs, pct = r["problems"], r["pct"]
         if probs:
             unverified.append((c, probs))
-        r = paired(fa, fb)
-        pct = r["delta"] / r["ref_mean"] * 100 if r["ref_mean"] else 0.0
         worst = max(worst, abs(pct))
         print(f"  {c:<10} {r['ref_mean']:>10.3f} {r['arm_mean']:>10.3f} "
               f"{r['delta']:>+9.3f} {pct:>+6.2f}% {r['sem']:>8.4f} "

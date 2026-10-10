@@ -229,21 +229,27 @@ def pairing_problems(a: dict | None, b: dict | None) -> list:
     return probs
 
 
-def main(argv=None) -> int:
-    ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    ap.add_argument("--model", help="model dir (its config.json names the model_type)")
-    ap.add_argument("--model-type")
-    ap.add_argument("--family")
-    a = ap.parse_args(argv)
-    mt = a.model_type or (model_type_of(a.model) if a.model else None)
-    family = a.family
+def stamp(model_type: str | None = None, *, family: str | None = None,
+          model_dir=None) -> dict:
+    """build() for a model_type, or the one a model dir's config names; the
+    family defaults to the one the family registry maps that model_type to."""
+    mt = model_type or (model_type_of(model_dir) if model_dir else None)
     if family is None and mt:
         try:
             from vqlab.family import model_loader as runtime_load
             family = runtime_load.family_for_model_type(mt)
         except Exception:
             family = None
-    print(json.dumps(build(mt, family=family)))
+    return build(mt, family=family)
+
+
+def main(argv=None) -> int:
+    ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
+    ap.add_argument("--model", help="model dir (its config.json names the model_type)")
+    ap.add_argument("--model-type")
+    ap.add_argument("--family")
+    a = ap.parse_args(argv)
+    print(json.dumps(stamp(a.model_type, family=a.family, model_dir=a.model)))
     return 0
 
 

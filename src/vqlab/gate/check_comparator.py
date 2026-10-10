@@ -41,14 +41,12 @@ def normalize(names):
         out.add(k)
     return out
 
-def main(argv=None) -> int:
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--artifact", required=True)
-    ap.add_argument("--teacher", required=True)
-    ap.add_argument("--quiet", action="store_true")
-    a = ap.parse_args(argv)
-
-    art, tea = normalize(core_tensors(a.artifact)), normalize(core_tensors(a.teacher))
+def check(artifact, teacher, quiet=False):
+    """(exit code, report lines): 0 PASS, 1 FAIL (tensor sets differ), 2
+    INCONCLUSIVE (naming conventions too far apart to compare by name).
+    main() prints the lines; vqlab.api.gate returns them."""
+    lines = []
+    art, tea = normalize(core_tensors(artifact)), normalize(core_tensors(teacher))
     overlap = len(art & tea) / max(1, min(len(art), len(tea)))
 
     # A name-based diff can only detect DROPPED tensors when both sides use the
@@ -58,34 +56,45 @@ def main(argv=None) -> int:
     # cry wolf on every legitimate MLX comparator -- and a gate that always fails
     # is a gate nobody reads.
     if overlap < 0.90:
-        print(f"INCONCLUSIVE: naming conventions differ too much to compare by name "
-              f"(only {overlap:.0%} of sites align; artifact {len(art)}, teacher "
-              f"{len(tea)}). This is NOT evidence of missing tensors -- MLX fuses "
-              f"gate/up and renames experts. Compare against a same-convention "
-              f"reference, or check structural uniformity per layer instead.")
-        return 2
+        lines.append(f"INCONCLUSIVE: naming conventions differ too much to compare by name "
+                     f"(only {overlap:.0%} of sites align; artifact {len(art)}, teacher "
+                     f"{len(tea)}). This is NOT evidence of missing tensors -- MLX fuses "
+                     f"gate/up and renames experts. Compare against a same-convention "
+                     f"reference, or check structural uniformity per layer instead.")
+        return 2, lines
 
     extra, missing = sorted(art - tea), sorted(tea - art)
 
-    if not a.quiet:
+    if not quiet:
         for label, s in (("EXTRA (in artifact, not teacher)", extra),
                          ("MISSING (in teacher, not artifact)", missing)):
             if s:
-                print(f"  {label}: {len(s)}")
+                lines.append(f"  {label}: {len(s)}")
                 for t in s[:5]:
-                    print(f"      {t}")
+                    lines.append(f"      {t}")
                 if len(s) > 5:
-                    print(f"      ... and {len(s) - 5} more")
+                    lines.append(f"      ... and {len(s) - 5} more")
 
     if extra or missing:
-        print(f"FAIL: tensor sets differ — {len(extra)} extra, {len(missing)} missing "
-              f"(artifact {len(art)} core sites, teacher {len(tea)}). A comparator that "
-              f"loads with dropped tensors scores WORSE and flatters us; do not trust "
-              f"a benchmark row from this pairing until resolved.")
-        return 1
-    print(f"PASS: {len(art)} core tensor sites, identical to teacher")
-    return 0
+        lines.append(f"FAIL: tensor sets differ — {len(extra)} extra, {len(missing)} missing "
+                     f"(artifact {len(art)} core sites, teacher {len(tea)}). A comparator that "
+                     f"loads with dropped tensors scores WORSE and flatters us; do not trust "
+                     f"a benchmark row from this pairing until resolved.")
+        return 1, lines
+    lines.append(f"PASS: {len(art)} core tensor sites, identical to teacher")
+    return 0, lines
 
+
+def main(argv=None) -> int:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--artifact", required=True)
+    ap.add_argument("--teacher", required=True)
+    ap.add_argument("--quiet", action="store_true")
+    a = ap.parse_args(argv)
+    rc, lines = check(a.artifact, a.teacher, a.quiet)
+    for line in lines:
+        print(line)
+    return rc
 
 if __name__ == "__main__":
     sys.exit(main())

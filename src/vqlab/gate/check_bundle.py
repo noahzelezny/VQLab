@@ -78,14 +78,14 @@ def _stale_as(bundle: str, name: str, rp):
     return None
 
 
-def main() -> int:
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--artifact", required=True)
-    ap.add_argument("--strict", action="store_true",
-                    help="exit 2 on STALE (default: STALE exits 0; it is a to-do, not a defect)")
-    a = ap.parse_args()
+def check(artifact, strict=False):
+    """(exit code, report lines) for one artifact's bundle: 0 PASS (or STALE
+    without strict), 1 FAIL, 2 STALE under strict. main() prints the lines;
+    vqlab.api.gate returns them."""
+    lines = []
+    _out = lines.append
     from vqlab._layout import runtime_file
-    art = pathlib.Path(a.artifact)
+    art = pathlib.Path(artifact)
 
     cfg = {}
     cfg_path = art / "config.json"
@@ -95,8 +95,8 @@ def main() -> int:
 
     bp = art / "model.py"
     if not bp.exists():
-        print("FAIL: no bundled model.py")
-        return 1
+        _out("FAIL: no bundled model.py")
+        return 1, lines
     bundle = bp.read_text()
 
     if dense:
@@ -111,12 +111,12 @@ def main() -> int:
         if absent:
             detail = "; ".join(
                 f"{n} (undefined: {', '.join(u)})" for n, u in absent)
-            print(f"FAIL (dense artifact): bundle is missing {detail}. "
+            _out(f"FAIL (dense artifact): bundle is missing {detail}. "
                   "Its fused path would resolve against site-packages, so the "
                   "artifact requires a VQ-patched mlx-lm and raises "
                   "ModuleNotFoundError on a stock install. Re-run build-dense "
                   "to write a bundle carrying both runtimes.")
-            return 1
+            return 1, lines
         if drifted:
             # Same code, different baked defaults is not drift -- see the
             # dense-equivalent note on the MoE path below.
@@ -131,16 +131,16 @@ def main() -> int:
                 oks.append(o)
                 all_deltas.update(d)
             if all(oks):
-                print(f"PASS (dense artifact): bundle carries both runtimes "
+                _out(f"PASS (dense artifact): bundle carries both runtimes "
                       f"verbatim, with {len(all_deltas)} baked default(s) "
                       f"differing from the repo:")
                 for flag, (have, repo) in sorted(all_deltas.items()):
-                    print(f"    {flag:26s} bundle={have!r}  repo={repo!r}")
-                print("  These are the values the artifact SHIPPED with and "
+                    _out(f"    {flag:26s} bundle={have!r}  repo={repo!r}")
+                _out("  These are the values the artifact SHIPPED with and "
                       "were preserved deliberately. Any runtime claim must "
                       "name them. (Still instrument the resolved import "
                       "before any runtime claim.)")
-                return 0
+                return 0, lines
             stale = {}
             for name, _u in drifted:
                 rev = _stale_as(bundle, name, _rp)
@@ -148,23 +148,23 @@ def main() -> int:
                     break
                 stale[name] = rev
             else:
-                print("STALE (dense artifact): the bundle carries an earlier runtime "
+                _out("STALE (dense artifact): the bundle carries an earlier runtime "
                       "whose output is byte-identical to the current one; rebundle "
                       "to pick up:")
                 for name, rev in stale.items():
-                    print(f"    {name} @ {rev['sha256'][:12]}: {rev['gains']}")
-                return 2 if a.strict else 0
+                    _out(f"    {name} @ {rev['sha256'][:12]}: {rev['gains']}")
+                return (2 if strict else 0), lines
             names = ", ".join(n for n, _ in drifted)
-            print(f"FAIL (dense artifact): bundled model.py "
+            _out(f"FAIL (dense artifact): bundled model.py "
                   f"({len(bundle.splitlines())} lines) carries every top-level "
                   f"def of {names}, but not the CURRENT text. This is drift, "
                   "not a missing runtime \u2014 the artifact loads on a stock "
                   "install and runs code older than the benches. Re-splice "
                   "before publishing any claim.")
-            return 1
-        print("PASS: dense bundle carries both runtimes verbatim (still "
+            return 1, lines
+        _out("PASS: dense bundle carries both runtimes verbatim (still "
               "instrument the resolved import before any runtime claim)")
-        return 0
+        return 0, lines
 
     # SKIPZERO (docs/SKIPZERO.md): the compact rows are only safe under a
     # bundle whose loader builds row-table modules. The experimental stage-1/2
@@ -173,17 +173,17 @@ def main() -> int:
     if sz:
         bad = [h for h in ("skipzero_load", "sz_resident") if h in bundle]
         if bad or sz.get("loader") != "runtime" or "_SZ_MODS" not in bundle:
-            print(f"FAIL: config declares vq_skipzero but the bundle does not "
+            _out(f"FAIL: config declares vq_skipzero but the bundle does not "
                   f"serve it through the runtime (loader={sz.get('loader')!r}, "
                   f"experimental hooks present: {bad or 'none'}). Re-run "
                   f"`vqlab bundle` on it.")
-            return 1
+            return 1, lines
         missing = [m for m in sz.get("modules", {})
                    if m not in cfg.get("vq_modules", {})]
         if missing:
-            print(f"FAIL: {len(missing)} skipzero module(s) missing from "
+            _out(f"FAIL: {len(missing)} skipzero module(s) missing from "
                   f"vq_modules, e.g. {missing[0]}")
-            return 1
+            return 1, lines
         # The runtime serves compact rows only at the dims skipzero_load
         # declares; any other dim crashes on the first prefill, not at load.
         import importlib.util as _ilu
@@ -196,13 +196,13 @@ def main() -> int:
         wrong = [m for m in sz.get("modules", {})
                  if not _szl.servable(vqm[m])]
         if wrong:
-            print(f"FAIL: {len(wrong)} skipzero module(s) have a codebook dim "
+            _out(f"FAIL: {len(wrong)} skipzero module(s) have a codebook dim "
                   f"the runtime has no skipzero kernel for, e.g. {wrong[0]} "
                   f"(dim={vqm[wrong[0]].get('dim')}; supported: "
                   f"{list(_szl.SUPPORTED_DIMS)}, d{_szl.PACKED_ONLY_DIMS} "
                   f"packed only). Re-run sz-pack.")
-            return 1
-        print(f"skipzero: {len(sz.get('modules', {}))} module(s) served "
+            return 1, lines
+        _out(f"skipzero: {len(sz.get('modules', {}))} module(s) served "
               f"resident through the runtime row-table switch")
 
     runtime = (runtime_file("vq_switch.py")).read_text()
@@ -218,10 +218,10 @@ def main() -> int:
     _spec.loader.exec_module(runtime_profile)
     ok, profile = runtime_profile.matches_any_profile(bundle, runtime)
     if ok:
-        print(f"PASS: bundle carries the current runtime "
+        _out(f"PASS: bundle carries the current runtime "
               f"({len(runtime.splitlines())} lines) verbatim "
               f"[profile: {profile}]")
-        return 0
+        return 0, lines
     # Same CODE, different baked DEFAULTS is not drift. A rebundle preserves
     # the defaults the artifact shipped with (runtime_profile.resolve_runtime),
     # so any tracked VQ_* flag can legitimately differ from the repo's current
@@ -231,42 +231,54 @@ def main() -> int:
     # gate needs to see which flags, not just that it passed.
     ok, deltas = runtime_profile.matches_modulo_flags(bundle, runtime)
     if ok:
-        print(f"PASS: bundle carries the current runtime "
+        _out(f"PASS: bundle carries the current runtime "
               f"({len(runtime.splitlines())} lines) verbatim, with "
               f"{len(deltas)} baked default(s) differing from the repo:")
         for flag, (have, repo) in sorted(deltas.items()):
-            print(f"    {flag:26s} bundle={have!r}  repo={repo!r}")
-        print("  These are the values the artifact SHIPPED with and were "
+            _out(f"    {flag:26s} bundle={have!r}  repo={repo!r}")
+        _out("  These are the values the artifact SHIPPED with and were "
               "preserved deliberately. Any runtime claim must name them.")
-        return 0
+        return 0, lines
     rev = None if cfg.get("vq_skipzero") else _stale_as(bundle, "vq_switch.py", runtime_profile)
     if rev is not None:
         if rev.get("flags"):
             # Certified at its OWN baked prefill defaults, which match the
             # current runtime's (tests/test_runtime_equivalence.py).
             fl = ", ".join(f"{k}={int(v)}" for k, v in rev["flags"].items())
-            print(f"STALE: bundle carries runtime @ {rev['sha256'][:12]}, whose output is "
+            _out(f"STALE: bundle carries runtime @ {rev['sha256'][:12]}, whose output is "
                   f"byte-identical to the current runtime at its baked defaults ({fl}; "
                   f"tests/test_runtime_equivalence.py). A rebundle adds: {rev['gains']}")
-            return 2 if a.strict else 0
+            return (2 if strict else 0), lines
         # Legacy entries are certified at the LEGACY prefill defaults
         # (VQ_FUSED_MAX_N=4096, ACCS/CVEC off): since the F200-F204 flip, the
         # current runtime takes gemmseg2+ACCS for 512 < N <= 4096 pairs, so
         # "byte-identical to the current runtime" is no longer true for those
         # prompts. Still STALE (not broken), but say so.
-        print(f"STALE: bundle carries runtime @ {rev['sha256'][:12]}, whose output is "
+        _out(f"STALE: bundle carries runtime @ {rev['sha256'][:12]}, whose output is "
               f"byte-identical to the current runtime run at the LEGACY prefill defaults "
               f"(VQ_FUSED_MAX_N=4096, VQ_GEMMSEG_ACCS=0, VQ_GEMMSEG_CVEC=0; "
               f"tests/test_runtime_equivalence.py). At the current defaults, prompts of "
               f"512..4096 (token, expert) pairs differ: a rebundle adds the faster, "
               f"ACCS-corrected short-prompt prefill (F200-F204) and {rev['gains']}")
-        return 2 if a.strict else 0
-    print(f"FAIL: bundled model.py ({len(bundle.splitlines())} lines) does not "
+        return (2 if strict else 0), lines
+    _out(f"FAIL: bundled model.py ({len(bundle.splitlines())} lines) does not "
           f"contain the current runtime ({len(runtime.splitlines())} lines). "
           "Downloaders run different code than the benches. Re-splice before "
           "publishing any claim.")
-    return 1
+    return 1, lines
 
+
+
+def main(argv=None) -> int:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--artifact", required=True)
+    ap.add_argument("--strict", action="store_true",
+                    help="exit 2 on STALE (default: STALE exits 0; it is a to-do, not a defect)")
+    a = ap.parse_args(argv)
+    rc, lines = check(a.artifact, a.strict)
+    for line in lines:
+        print(line)
+    return rc
 
 if __name__ == "__main__":
     sys.exit(main())

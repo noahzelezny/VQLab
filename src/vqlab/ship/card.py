@@ -291,7 +291,8 @@ def build(a) -> str:
     return "\n".join(L).rstrip() + "\n"
 
 
-def main(argv=None) -> int:
+def parser() -> argparse.ArgumentParser:
+    """The `vqlab card` argument parser (vqlab.api.card parses through it)."""
     ap = argparse.ArgumentParser(prog="vqlab card", description=__doc__.split("\n")[0])
     ap.add_argument("--artifact", required=True)
     ap.add_argument("--kl", action="append", required=True)
@@ -305,13 +306,22 @@ def main(argv=None) -> int:
     ap.add_argument("--license", help="license id (default: read from the artifact's LICENSE)")
     ap.add_argument("--draft", action="store_true", help="exit 0 even with TODOs / spellings")
     ap.add_argument("--out", help="write here instead of stdout (only this path is written)")
-    a = ap.parse_args(argv)
+    return ap
+
+
+def todo_count(text: str) -> int:
+    """TODO blocks (and a TODO license) left in a card's text."""
+    return text.count(f"<!-- {TODO} -->") + text.count(f"license: {TODO}")
+
+
+def main(argv=None) -> int:
+    a = parser().parse_args(argv)
     text = build(a)
     from vqlab.gate import spelling
     spell = spelling.scan(text)
     for off, word, us in spell:
         print(f"card:{text.count(chr(10), 0, off) + 1}: {word} -> {us}", file=sys.stderr)
-    n_todo = text.count(f"<!-- {TODO} -->") + text.count(f"license: {TODO}")
+    n_todo = todo_count(text)
     if a.out:
         pathlib.Path(a.out).write_text(text)
         print(f"wrote {a.out}", file=sys.stderr)
