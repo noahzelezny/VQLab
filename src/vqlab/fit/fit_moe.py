@@ -41,6 +41,7 @@ import subprocess
 import sys
 import re
 import time
+from dataclasses import dataclass, field
 
 import mlx.core as mx
 
@@ -54,11 +55,31 @@ from vqlab.core import fitstore
 from vqlab.records import provenance
 from vqlab.core.artifact import write_index
 
-def geom_for(li, proj):
+
+@dataclass
+class FitRun:
+    """One fit's settings and source tables, passed to every helper (no
+    module globals: the fitter is callable as a library function)."""
+    args: argparse.Namespace
+    G: int                      # VQ scale group
+    SRC: pathlib.Path           # bf16 source dir
+    OUT: pathlib.Path
+    SHIP: pathlib.Path | None   # --ship-to
+    GEOM: dict                  # proj -> (D, K)
+    TAIL_GEOM: tuple | None
+    TAIL_FROM: int | None
+    FAM: dict                   # family registry row
+    LAYER_SET: frozenset
+    base_cfg: dict
+    src_idx: dict
+    staged: dict = field(default_factory=dict)   # the one staged source shard
+
+
+def geom_for(run, li, proj):
     """(D, K) for this layer+projection — the tail may differ from the body."""
-    if TAIL_GEOM is not None and li >= TAIL_FROM:
-        return TAIL_GEOM
-    return GEOM[proj]
+    if run.TAIL_GEOM is not None and li >= run.TAIL_FROM:
+        return run.TAIL_GEOM
+    return run.GEOM[proj]
 
 
 def code_dtype(k):
@@ -71,42 +92,39 @@ def layer_of(name):
         return -1
 
 
-def is_vq_target(name):
-    if FAM["target_substr"] not in name:
+def is_vq_target(run, name):
+    if run.FAM["target_substr"] not in name:
         return False
     li = layer_of(name)
-    if li not in LAYER_SET:
+    if li not in run.LAYER_SET:
         return False
     mod = name.rsplit(".", 1)[0]
-    q = base_cfg["quantization"].get(mod)
+    q = run.base_cfg["quantization"].get(mod)
     if not isinstance(q, dict):
         return False
     # a struct base marks experts 2-bit; a family whose SOURCE is already
     # mxfp4 (deepseek_v4) can use its mxfp4 conversion as the base directly
-    return q.get("bits") == 2 or (FAM.get("src_quant") == "mxfp4"
+    return q.get("bits") == 2 or (run.FAM.get("src_quant") == "mxfp4"
                                   and q.get("mode") == "mxfp4")
 
 from vqlab.fit.kmeans import kmeans, kmeanspp_init_mx as kmeanspp_init  # noqa: F401
 
-_staged = {}
-
-
-def _shard_path(fname):
-    if not args.stage_dir:
-        return str(SRC / fname)
-    st = pathlib.Path(args.stage_dir)
+def _shard_path(run, fname):
+    if not run.args.stage_dir:
+        return str(run.SRC / fname)
+    st = pathlib.Path(run.args.stage_dir)
     st.mkdir(parents=True, exist_ok=True)
     local = st / fname
-    if fname not in _staged:
-        for old in _staged.values():
+    if fname not in run.staged:
+        for old in run.staged.values():
             old.unlink(missing_ok=True)
-        _staged.clear()
-        shutil.copy2(SRC / fname, local)
-        _staged[fname] = local
+        run.staged.clear()
+        shutil.copy2(run.SRC / fname, local)
+        run.staged[fname] = local
     return str(local)
 
 
-def load_src_expert(li, proj):
+def load_src_expert(run, li, proj):
     # All source layouts (fused-3D half-slice, pre-stacked 3D, unfused
     # per-expert 2D as on glm5_next) live in expert_src.load_expert_stack —
     # including the CPU-stream materialization (IV.1: the lazy shard read of
@@ -115,14 +133,15 @@ def load_src_expert(li, proj):
     # load AND slice must be created under mx.cpu). _shard_path keeps the
     # staging behaviour: unfused reads are grouped per shard, so the
     # one-staged-shard cache is never thrashed.
-    return expert_src.load_expert_stack(SRC, src_idx, FAM, li, proj,
-                                        shard_path=_shard_path)
+    return expert_src.load_expert_stack(run.SRC, run.src_idx, run.FAM, li, proj,
+                                        shard_path=lambda f: _shard_path(run, f))
 
 
-def vq_tensor_codes(li, proj, want_shape):
+def vq_tensor_codes(run, li, proj, want_shape):
     """Fit one expert tensor -> (codes, codebook fp16, scales fp16, relerr)."""
-    D, K = geom_for(li, proj)
-    T = load_src_expert(li, proj)
+    args, G = run.args, run.G
+    D, K = geom_for(run, li, proj)
+    T = load_src_expert(run, li, proj)
     assert tuple(T.shape) == tuple(want_shape), (li, proj, T.shape, want_shape)
     n_exp, out_d, in_d = T.shape
     EC = args.expert_chunk
@@ -201,23 +220,22 @@ def vq_tensor_codes(li, proj, want_shape):
     return codes, C16, scales, math.sqrt(num / den)
 
 
-def ship(shard_name):
-    if SHIP is None:
+def ship(run, shard_name):
+    if run.SHIP is None:
         return
-    SHIP.mkdir(parents=True, exist_ok=True)
-    src = OUT / shard_name
-    subprocess.run(["rsync", "-a", str(src), str(SHIP) + "/"], check=True)
+    run.SHIP.mkdir(parents=True, exist_ok=True)
+    src = run.OUT / shard_name
+    subprocess.run(["rsync", "-a", str(src), str(run.SHIP) + "/"], check=True)
     src.unlink()
 
-def stored_bpw(d, k):
+
+def stored_bpw(d, k, G):
     # codes are whole bytes (the M2 trap): uint8 for K<=256 else uint16
     return (8 if k <= 256 else 16) / d + 16.0 / G
 
 
 def main(argv=None) -> int:
     mx.set_cache_limit(8 << 30)
-    global args, G, SRC, OUT, SHIP, GEOM, TAIL_GEOM, TAIL_FROM, FAM, LAYER_SET
-    global base_cfg, src_idx
     ap = argparse.ArgumentParser()
     ap.add_argument("--base", required=True)
     ap.add_argument("--src", required=True)
@@ -409,19 +427,21 @@ def main(argv=None) -> int:
             "(src/vqlab/families.py) AND run docs/ONBOARDING.md's "
             "characterisation pass first. If the family is right, check the "
             "source dir (HF vs mlx layout differ; see families.py comments).")
-    PROJ = FAM["proj"]  # noqa: F841
+    run = FitRun(args=args, G=G, SRC=SRC, OUT=OUT, SHIP=SHIP, GEOM=GEOM,
+                 TAIL_GEOM=TAIL_GEOM, TAIL_FROM=TAIL_FROM, FAM=FAM,
+                 LAYER_SET=LAYER_SET, base_cfg=base_cfg, src_idx=src_idx)
 
 
     # ---- plan -----------------------------------------------------------------
-    targets = sorted({n.rsplit(".", 1)[0] for n in base_idx if is_vq_target(n)})
+    targets = sorted({n.rsplit(".", 1)[0] for n in base_idx if is_vq_target(run, n)})
 
 
-    geom_str = ", ".join(f"{p}=d{d}k{k} ({stored_bpw(d, k):.2f} bpw stored)"
+    geom_str = ", ".join(f"{p}=d{d}k{k} ({stored_bpw(d, k, G):.2f} bpw stored)"
                          for p, (d, k) in GEOM.items())
     if TAIL_GEOM is not None:
         _d, _k = TAIL_GEOM
         geom_str += (f"  ||  TAIL layers {TAIL_FROM}-{HI}: d{_d}k{_k} "
-                     f"({stored_bpw(_d, _k):.2f} bpw stored)")
+                     f"({stored_bpw(_d, _k, G):.2f} bpw stored)")
     print(f"base {BASE.name}: {len(targets)} expert tensors -> CODES "
           f"(layers {LO}-{HI})  {geom_str}", flush=True)
     if not targets:
@@ -467,7 +487,7 @@ def main(argv=None) -> int:
         if dst.exists() or (shipped is not None and shipped.exists()):
             for k in (k for k, v in base_idx.items() if v == sh):
                 mod = k.rsplit(".", 1)[0]
-                if is_vq_target(k):
+                if is_vq_target(run, k):
                     # codes live in the shard that holds the module's .weight
                     # (its .scales may sit in the next shard)
                     for suf in (".codes", ".codebook", ".vq_scales"):
@@ -501,7 +521,7 @@ def main(argv=None) -> int:
         new = {}
         done = set()
         for name, val in data.items():
-            if is_vq_target(name):
+            if is_vq_target(run, name):
                 mod = name.rsplit(".", 1)[0]
                 if mod in done:
                     continue
@@ -521,7 +541,7 @@ def main(argv=None) -> int:
                         mx.eval(sc)
                 bg = base_cfg["quantization"][mod].get("group_size", G)
                 want = (sc.shape[0], sc.shape[1], sc.shape[2] * bg)
-                codes, cb, vsc, err = vq_tensor_codes(li, proj, want)
+                codes, cb, vsc, err = vq_tensor_codes(run, li, proj, want)
                 # SANITY GATE. kmeans init is random and unseeded, and a fit can
                 # collapse: tail30 (08-18) produced L26 down_proj at relerr
                 # 1.0000 (reconstruction ~= zero, i.e. that weight destroyed)
@@ -534,13 +554,13 @@ def main(argv=None) -> int:
                     print(f"    !! L{li:02d} {proj} relerr {err:.4f} > "
                           f"{args.relerr_abort} — refit {attempt + 1}/"
                           f"{args.max_refit}", flush=True)
-                    codes, cb, vsc, err = vq_tensor_codes(li, proj, want)
+                    codes, cb, vsc, err = vq_tensor_codes(run, li, proj, want)
                 if err > args.relerr_abort:
                     sys.exit(f"FATAL: L{li} {proj} relerr {err:.4f} still above "
                              f"{args.relerr_abort} after {args.max_refit} refits. "
                              f"The fit is unstable for this tensor — do not ship "
                              f"this artifact.")
-                pd, pk = geom_for(li, proj)
+                pd, pk = geom_for(run, li, proj)
                 pbits = 0
                 if args.pack:
                     # pack HERE, before the shard is written: the uint16 codes
@@ -574,7 +594,7 @@ def main(argv=None) -> int:
         # File this shard's fits in the fit store BEFORE ship() can move the
         # shard: the fits are the expensive part and must outlive the candidate.
         for _m in sorted(done):
-            _pd, _pk = geom_for(layer_of(_m), _m.rsplit(".", 1)[1])
+            _pd, _pk = geom_for(run, layer_of(_m), _m.rsplit(".", 1)[1])
             fitstore.put(dst, _m, args.family, TEACHER,
                          recipe={**RECIPE, "fitter": {**RECIPE["fitter"], "dim": _pd, "k": _pk}})
         shard_sizes[sh] = dst.stat().st_size
@@ -583,7 +603,7 @@ def main(argv=None) -> int:
         del data, new
         gc.collect()
         mx.clear_cache()
-        ship(sh)
+        ship(run, sh)
         print(f"[{si+1}/{len(shards)}] {sh}  ({time.time()-t0:.0f}s)", flush=True)
 
     # vq_modules may be partial on resume — rebuild for every target from config
@@ -598,7 +618,7 @@ def main(argv=None) -> int:
             # wrong codebook size, silently. (Latent until a tail run resumes;
             # audited tonight's rung's config — it did not fire.)
             li = int(re.search(r"layers\.(\d+)\.", m).group(1))
-            pd, pk = geom_for(li, m.rsplit(".", 1)[1])
+            pd, pk = geom_for(run, li, m.rsplit(".", 1)[1])
             # the BASE's group (32 for an mxfp4 base), not the VQ group
             vq_modules[m] = {"experts": sc.shape[0], "out": sc.shape[1],
                              "in": sc.shape[2] * q.get("group_size", G),

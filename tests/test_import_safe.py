@@ -12,6 +12,7 @@ from __future__ import annotations
 import os
 import subprocess
 import sys
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import pytest
@@ -41,8 +42,7 @@ def _modules() -> list[str]:
     return out
 
 
-@pytest.mark.parametrize("mod", _modules())
-def test_import_is_side_effect_free(mod, tmp_path):
+def _import_in_fresh_process(mod: str, cwd: Path):
     code = (
         "import sys, importlib\n"
         "sys.argv = ['x', '--definitely-not-a-flag']\n"
@@ -51,12 +51,33 @@ def test_import_is_side_effect_free(mod, tmp_path):
     env = dict(os.environ)
     env["PYTHONPATH"] = str(SRC) + os.pathsep + env.get("PYTHONPATH", "")
     r = subprocess.run(
-        [sys.executable, "-c", code], cwd=tmp_path, env=env,
+        [sys.executable, "-c", code], cwd=cwd, env=env,
         capture_output=True, text=True, timeout=120,
     )
+    return r, sorted(p.name for p in cwd.iterdir())
+
+
+@pytest.fixture(scope="module")
+def results(tmp_path_factory):
+    """Every module's import, run in parallel (one subprocess each, own cwd):
+    serially this file took ~3 min; each subprocess is independent."""
+    mods = _modules()
+    base = tmp_path_factory.mktemp("import_safe")
+    cwds = []
+    for i, _ in enumerate(mods):
+        d = base / str(i)
+        d.mkdir()
+        cwds.append(d)
+    with ThreadPoolExecutor(max(2, os.cpu_count() or 2)) as ex:
+        return dict(zip(mods, ex.map(_import_in_fresh_process, mods, cwds)))
+
+
+@pytest.mark.parametrize("mod", _modules())
+def test_import_is_side_effect_free(mod, results):
+    r, wrote = results[mod]
     if r.returncode != 0 and "ModuleNotFoundError" in r.stderr and "vqlab" not in r.stderr.splitlines()[-1]:
         pytest.skip(f"optional dependency missing: {r.stderr.splitlines()[-1]}")
     assert r.returncode == 0, f"import exited {r.returncode}:\n{r.stderr[-2000:]}"
     assert r.stdout == "", f"import printed to stdout:\n{r.stdout[:2000]}"
     assert r.stderr == "", f"import printed to stderr:\n{r.stderr[:2000]}"
-    assert list(tmp_path.iterdir()) == [], f"import wrote files: {list(tmp_path.iterdir())}"
+    assert wrote == [], f"import wrote files: {wrote}"

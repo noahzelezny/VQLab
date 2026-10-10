@@ -10,8 +10,9 @@ it without an edge (tests/test_layering.py puts it at layer 0).
   name    the flat command name: the canonical key (run log, queue steps,
           BUILD_OUTPUTS, box_quiet all speak it)
   module  the dotted module `vqlab <name>` runs (runpy.run_module)
-  file    its pre-split filename, kept for cli.COMMANDS' old (file, help)
-          view and _layout.find() callers
+  file    its file, relative to its package folder (`mcp/server.py` for a
+          module inside a sub-package); kept for cli.COMMANDS' old
+          (file, help) view and _layout.find() callers
   stage   its CLI namespace (`vqlab <stage> <sub>`)
   mcp     an agent may launch it through MCP `run` (publish never is)
   gpu     it may touch the GPU; False = header reads / records / HTTP
@@ -236,7 +237,7 @@ COMMANDS: dict[str, Command] = {c.name: c for c in (
        'generate with MTP speculative drafting'),
     _C('serve', 'vqlab.ship.serve', 'serve.py', 'ship', False, True,
        'serve an artifact over an OpenAI-compatible API (mlx-lm server + MTP decode)'),
-    _C('mcp', 'vqlab.agents.mcp_server', 'mcp_server.py', 'lab', False, True,
+    _C('mcp', 'vqlab.agents.mcp.server', 'mcp/server.py', 'lab', False, True,
        'serve the lab to agents over MCP (stdio); one server per box'),
     _C('gui', 'vqlab.agents.gui', 'gui.py', 'lab', False, True,
        'a local, read-only window onto the lab (127.0.0.1:8781)'),

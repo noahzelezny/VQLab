@@ -20,7 +20,10 @@ def test_registry_is_pure_data():
 def test_every_module_exists_and_names_its_file():
     for c in commands.COMMANDS.values():
         spec = importlib.util.find_spec(c.module)
-        assert spec is not None and spec.origin.endswith(c.file.rsplit("/", 1)[-1]), c
+        # `file` is relative to the package folder; a module inside a
+        # sub-package (vqlab.agents.mcp.server) names it with its folder
+        assert spec is not None and spec.origin.endswith("/" + c.file), c
+        assert c.module.replace(".", "/").endswith(c.file[:-3].removesuffix("/__init__")), c
         assert c.name in commands.NAMESPACES[c.stage][1].values(), c
 
 
