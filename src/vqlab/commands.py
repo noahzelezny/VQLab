@@ -74,7 +74,7 @@ COMMANDS: dict[str, Command] = {c.name: c for c in (
        'rebuild an artifact under a new per-layer geometry map (diff-style)'),
     _C('reselect', 'vqlab.fit.reselect', 'reselect.py', 'fit', False, True,
        'activation-aware code re-selection: calibrate (self-gen Gram bank) / apply (new artifact, codes only)'),
-    _C('fit-additive', 'vqlab.fit.additive_vq', 'additive_vq.py', 'fit', False, True,
+    _C('fit-additive', 'vqlab.fit.fit_additive', 'fit_additive.py', 'fit', False, True,
        'additive VQ: two small codebooks per module, expanded to one d4-K(K1*K2) fit for zero-kernel KL tests'),
     _C('harvest-parts', 'vqlab.fit.harvest_parts', 'harvest_parts.py', 'fit', False, True,
        "extract a shipped rung's VQ fits into a geo-build --reuse parts dir"),

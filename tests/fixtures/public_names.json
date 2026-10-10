@@ -223,7 +223,7 @@
   "vqlab.families",
   "vqlab.family.arch",
   "vqlab.family_profile",
-  "vqlab.fit.fit_additive",
+  "vqlab.fit.additive_vq",
   "vqlab.fit.mtp_head_ds4",
   "vqlab.fit.vq_397b_codes",
   "vqlab.fit_additive",

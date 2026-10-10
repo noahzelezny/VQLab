@@ -1,5 +1,25 @@
 # Changelog
 
+## Unreleased
+
+### Renamed (untangle step 15; old names import for one release)
+- `plan/probe_init_sweep.py` is `plan/init_sweep.py`, `plan/mtp_probe.py` is
+  `plan/mtp_probe_qwen4_exp.py`, `plan/mtp_probe35.py` is
+  `plan/mtp_probe_qwen35.py`; `fit/mtp_head_ds4.py` moved to
+  `build/mtp_head_ds4.py`. Command names (`probe-init`, `mtp-probe`,
+  `mtp-probe35`, `mtp-head-ds4`) are unchanged.
+- **`vqlab.fit.fit_additive` changed meaning.** It was the additive-VQ
+  library (`fit_additive()`, k-means helpers); that library is now
+  `vqlab.fit.additive_codebooks`. The name `fit_additive` now belongs to the
+  `fit-additive` command module (formerly `vqlab.fit.additive_vq`, which
+  still aliases it). Code that did `from vqlab.fit.fit_additive import
+  fit_additive` must import from `vqlab.fit.additive_codebooks`.
+- Generic `install()` functions say what they install:
+  `_layout.install_import_aliases`, `ple_stream.install_ple_stream`,
+  `sz_resident.install_resident`, `serve.install_serving` (`install` kept as
+  an alias). `runtime/glm5_shim.install` is shipped text and keeps its name.
+  `sz_resident_build.plan` is `plan_resident` (`plan` kept as an alias).
+
 ## 0.1.0 (2026-10-10)
 
 First release. VQLab fits size-targeted, data-free vector-quantization
