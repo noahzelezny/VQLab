@@ -21,67 +21,15 @@ import argparse
 import json
 import os
 import pathlib
+import sys
 import time
 
 import mlx.core as mx
 
-ap = argparse.ArgumentParser()
-ap.add_argument("--src", required=True)
-ap.add_argument("--out", required=True)
-ap.add_argument("--k", type=int, default=2048)
-ap.add_argument("--dim", type=int, default=2)
-ap.add_argument("--group", type=int, default=64)
-ap.add_argument("--iters", type=int, default=10)
-ap.add_argument("--layers", default=None)
-ap.add_argument("--family", default="gemma4_e4b",
-                choices=["gemma4_e4b", "qwen3_8_dense"],
-                help="selects tensor-name template and default layer range")
-ap.add_argument("--init-cap", type=int, default=200_000,
-                help="rows subsampled for the k-means++ INIT draw. Default "
-                     "200_000 is the historical value. At K=65536 that is ~3 "
-                     "samples per centroid for seeding (the Lloyd loop still "
-                     "refines over ALL rows, measured 22.28M / 340 per "
-                     "centroid, 0 dead codes). Cost is ~O(k*cap) and is <1%% of "
-                     "one Lloyd iteration, so raising it is nearly free. "
-                     "Added 2026-08-24 to TEST whether the thin init starves "
-                     "high-K fits (E141).")
-ap.add_argument("--seed", type=int, default=1234,
-                help="RNG seed for the k-means++ subsample and centroid draws. "
-                     "DEFAULT IS SEEDED (1234) so fits are REPRODUCIBLE. "
-                     "Before 2026-08-22 nothing seeded these and every fit was "
-                     "a fresh draw: measured spread at 397B d4/K256, same "
-                     "stack, n=2, was 0.0256 wikitext ppl while mean relerr "
-                     "moved only 0.0001 (E136/E136b). Pass --seed -1 to "
-                     "restore the old unseeded behaviour, e.g. to MEASURE a "
-                     "draw distribution on purpose (III.12 floors).")
-ap.add_argument("--relerr-abort", type=float, default=0.90,
-                help="stop the fit if any tensor exceeds this relative error. "
-                     "Default 0.90 catches the degenerate case (relerr 1.0 = "
-                     "reconstruction is exactly zero) without tripping on "
-                     "legitimately hard low-K geometries.")
-args = ap.parse_args()
-
-
-# SEEDING (2026-08-22). mx.random is process-global; seeding here covers the
-# subsample draw at kmeanspp():70, the first-centroid draw at :72 and the
-# k-means++ selection at :76 — the only randomness in this fitter (no numpy
-# RNG is used). -1 means "do not seed", which is the pre-2026-08-22 behaviour.
-if args.seed >= 0:
-    mx.random.seed(args.seed)
-    print(f"SEEDED mx.random with {args.seed} — this fit is reproducible", flush=True)
-else:
-    print("UNSEEDED (--seed -1) — this fit is a fresh draw", flush=True)
-SRC, OUT = pathlib.Path(args.src), pathlib.Path(args.out)
-K, D, G = args.k, args.dim, args.group
+from vqlab.core import fitstore
 from vqlab.family.registry import DENSE_FAMILIES
-KEY_TMPL, _default_layers = DENSE_FAMILIES[args.family]
-LO, HI = (int(x) for x in (args.layers or _default_layers).split("-"))
-OUT.mkdir(parents=True, exist_ok=True)
-src_idx = json.load(open(SRC / "model.safetensors.index.json"))["weight_map"]
-PROJ = ["gate_proj", "up_proj", "down_proj"]
-KEY = KEY_TMPL
-# guard call is BELOW the def (module runs top-to-bottom); see line order
-
+from vqlab.fit.kmeans import assign_mx as assign
+from vqlab.records.provenance import write_build_record
 
 
 def _assert_family_layout(src_idx, sample_key, family, registry_name):
@@ -111,11 +59,7 @@ def _assert_family_layout(src_idx, sample_key, family, registry_name):
         f"mlx layout).")
 
 
-_assert_family_layout(src_idx, KEY.format(li=LO, key=PROJ[0]), args.family,
-                      "DENSE_FAMILIES")
-
-
-def normalize(T):
+def normalize(T, D, G):
     """group-64 max-abs scales along IN, mirrored from the main fitter."""
     out_d, in_d = T.shape
     Wg = T.reshape(out_d, in_d // G, G)
@@ -124,8 +68,7 @@ def normalize(T):
     return Xn, scale.astype(mx.float16)
 
 
-def kmeanspp(X, k, cap=None):
-    cap = args.init_cap if cap is None else cap
+def kmeanspp(X, k, cap):
     n = X.shape[0]
     idx = mx.random.randint(0, n, (min(cap, n),))
     P = X[idx]
@@ -142,13 +85,11 @@ def kmeanspp(X, k, cap=None):
     return C
 
 
-from vqlab.fit.kmeans import assign_mx as assign
-
-
-def fit_tensor(T):
-    Xn, scale = normalize(T.astype(mx.float32))
-    C = kmeanspp(Xn, K)
-    for _ in range(args.iters):
+def fit_tensor(T, K, D, G, iters, init_cap):
+    """Fit one tensor -> (codes, codebook fp16, scales fp16, relerr)."""
+    Xn, scale = normalize(T.astype(mx.float32), D, G)
+    C = kmeanspp(Xn, K, init_cap)
+    for _ in range(iters):
         a = assign(Xn, C)
         oh = mx.zeros((K, D)).at[a].add(Xn)
         cnt = mx.zeros((K,)).at[a].add(mx.ones((Xn.shape[0],)))
@@ -170,85 +111,146 @@ def fit_tensor(T):
     return codes, C.astype(mx.float16), scale.reshape(1, T.shape[0], -1), relerr
 
 
-weights, vq_modules, report = {}, {}, []
-t0 = time.time()
-for li in range(LO, HI + 1):
-    for proj in PROJ:
-        sk = KEY.format(li=li, key=proj)
-        sh = src_idx[sk]
-        # MATERIALISE THE READ HERE, on the cpu stream (FINDINGS IV.1).
-        # mx.load is LAZY: left unevaluated, the source read is paid inside
-        # the kmeans GPU command buffer, and it can silently yield ZEROS.
-        # Measured 2026-08-21 (E123) by instrumenting this exact loop:
-        #   Xn all-zero, codebook all-zero, scales all-zero (fp16 underflow of
-        #   the 1e-8 floor), reconstruction all-zero -> relerr exactly 1.0000,
-        #   while the SAME lazy T re-evaluated moments later for the relerr
-        #   denominator read back correctly at norm 104.28.
-        # One tensor in ~90 on this path. The abort catches it; this prevents
-        # it. Do NOT "optimise" this eval away.
-        with mx.stream(mx.cpu):
-            T = mx.load(str(SRC / sh))[sk]
-            mx.eval(T)
-        codes, cb, sc, rel = fit_tensor(T)
-        mod = KEY_TMPL.replace(".weight", "").format(li=li, key=proj)
-        weights[mod + ".codes"] = codes
-        weights[mod + ".codebook"] = cb
-        weights[mod + ".vq_scales"] = sc
-        vq_modules[mod] = {"experts": 1, "out": int(T.shape[0]),
-                           "in": int(T.shape[1]), "k": K, "dim": D, "group": G}
-        report.append(rel)
-        print(f"L{li:02d} {proj:10s} relerr {rel:.4f}  "
-              f"[{time.time()-t0:6.0f}s]", flush=True)
-        # ABORT on a degenerate fit. fit_moe.py has had --relerr-abort
-        # for weeks; this fitter only PRINTED relerr and carried on. Measured
-        # 2026-08-21: the E95 dense 27B shipped L60 up_proj with codebook,
-        # codes AND scales all exactly zero against a real source tensor
-        # (absmax 0.283) — relerr 1.0000, printed, ignored, and invisible until
-        # the outlier gate learned to read dense artifacts hours later. A fit
-        # that reconstructs NOTHING must stop the run, not decorate the log.
-        if rel > args.relerr_abort:
-            raise SystemExit(
-                f"FATAL: L{li} {proj} relerr {rel:.4f} > {args.relerr_abort} "
-                f"— degenerate fit, do not ship this artifact. "
-                f"(relerr 1.0 means the reconstruction is exactly zero.)")
-        del T
-        mx.clear_cache()
+def main(argv=None) -> int:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--src", required=True)
+    ap.add_argument("--out", required=True)
+    ap.add_argument("--k", type=int, default=2048)
+    ap.add_argument("--dim", type=int, default=2)
+    ap.add_argument("--group", type=int, default=64)
+    ap.add_argument("--iters", type=int, default=10)
+    ap.add_argument("--layers", default=None)
+    ap.add_argument("--family", default="gemma4_e4b",
+                    choices=["gemma4_e4b", "qwen3_8_dense"],
+                    help="selects tensor-name template and default layer range")
+    ap.add_argument("--init-cap", type=int, default=200_000,
+                    help="rows subsampled for the k-means++ INIT draw. Default "
+                         "200_000 is the historical value. At K=65536 that is ~3 "
+                         "samples per centroid for seeding (the Lloyd loop still "
+                         "refines over ALL rows, measured 22.28M / 340 per "
+                         "centroid, 0 dead codes). Cost is ~O(k*cap) and is <1%% of "
+                         "one Lloyd iteration, so raising it is nearly free. "
+                         "Added 2026-08-24 to TEST whether the thin init starves "
+                         "high-K fits (E141).")
+    ap.add_argument("--seed", type=int, default=1234,
+                    help="RNG seed for the k-means++ subsample and centroid draws. "
+                         "DEFAULT IS SEEDED (1234) so fits are REPRODUCIBLE. "
+                         "Before 2026-08-22 nothing seeded these and every fit was "
+                         "a fresh draw: measured spread at 397B d4/K256, same "
+                         "stack, n=2, was 0.0256 wikitext ppl while mean relerr "
+                         "moved only 0.0001 (E136/E136b). Pass --seed -1 to "
+                         "restore the old unseeded behaviour, e.g. to MEASURE a "
+                         "draw distribution on purpose (III.12 floors).")
+    ap.add_argument("--relerr-abort", type=float, default=0.90,
+                    help="stop the fit if any tensor exceeds this relative error. "
+                         "Default 0.90 catches the degenerate case (relerr 1.0 = "
+                         "reconstruction is exactly zero) without tripping on "
+                         "legitimately hard low-K geometries.")
+    args = ap.parse_args(argv)
 
-mx.save_safetensors(str(OUT / "model-00001-of-00001.safetensors"), weights)
-idx = {"metadata": {}, "weight_map":
-       {k: "model-00001-of-00001.safetensors" for k in weights}}
-json.dump(idx, open(OUT / "model.safetensors.index.json", "w"), indent=1)
-cfg = json.load(open(SRC / "config.json"))
-cfg["vq_modules"] = vq_modules
-json.dump(cfg, open(OUT / "config.json", "w"), indent=1)
-# BUILD RECORD (docs/PROVENANCE.md). Last write, so it hashes the final bytes.
-from vqlab.records.provenance import write_build_record
-write_build_record(
-    OUT, tool="fit-dense", script=__file__, ap=ap, args=args,
-    method={"init": "kmeans++", "init_cap": args.init_cap,
-            "lloyd_iters": args.iters, "sample": "all rows",
-            "scales": "max-abs per group", "alternation": False,
-            "tail_weight_pow": 0.0,
-            "seed": args.seed if args.seed >= 0 else "unseeded",
-            "k": K, "dim": D, "group": G,
-            "mean_relerr": round(sum(report) / len(report), 6),
-            "worst_relerr": round(max(report), 6)},
-    inputs=[("source", SRC)],
-    modules={m: {**v, "origin": "fit"} for m, v in vq_modules.items()})
-# File every module's fit in the fit store (core/fitstore.py): findable by
-# family / teacher / layer / geometry, and never paid for twice.
-from vqlab.core import fitstore
-_teacher = fitstore.teacher_slug(SRC)
-_recipe = {"origin": "fit", "tool": "fit-dense", "run_id": os.environ.get("VQLAB_RUN_ID"),
-           "commit": __import__("provenance").code_state()["commit"],
-           "fitter": {"init": "kmeans++", "init_cap": args.init_cap,
-                      "lloyd_iters": args.iters, "alternation": False,
-                      "scales": "max-abs per group",
-                      "seed": args.seed if args.seed >= 0 else "unseeded"}}
-for _m in vq_modules:
-    fitstore.put(OUT / "model-00001-of-00001.safetensors", _m, args.family,
-                 _teacher, recipe=_recipe)
-print(f"stored {len(vq_modules)} fits in {fitstore.roots()[0]}")
-print(f"\nfit {len(report)} tensors, mean relerr "
-      f"{sum(report)/len(report):.4f}, worst {max(report):.4f}, "
-      f"{time.time()-t0:.0f}s total -> {OUT}")
+
+    # SEEDING (2026-08-22). mx.random is process-global; seeding here covers the
+    # subsample draw at kmeanspp():73, the first-centroid draw at :75 and the
+    # k-means++ selection at :79 — the only randomness in this fitter (no numpy
+    # RNG is used). -1 means "do not seed", which is the pre-2026-08-22 behaviour.
+    if args.seed >= 0:
+        mx.random.seed(args.seed)
+        print(f"SEEDED mx.random with {args.seed} — this fit is reproducible", flush=True)
+    else:
+        print("UNSEEDED (--seed -1) — this fit is a fresh draw", flush=True)
+    SRC, OUT = pathlib.Path(args.src), pathlib.Path(args.out)
+    K, D, G = args.k, args.dim, args.group
+    KEY_TMPL, _default_layers = DENSE_FAMILIES[args.family]
+    LO, HI = (int(x) for x in (args.layers or _default_layers).split("-"))
+    OUT.mkdir(parents=True, exist_ok=True)
+    src_idx = json.load(open(SRC / "model.safetensors.index.json"))["weight_map"]
+    PROJ = ["gate_proj", "up_proj", "down_proj"]
+    KEY = KEY_TMPL
+    _assert_family_layout(src_idx, KEY.format(li=LO, key=PROJ[0]), args.family,
+                          "DENSE_FAMILIES")
+
+    weights, vq_modules, report = {}, {}, []
+    t0 = time.time()
+    for li in range(LO, HI + 1):
+        for proj in PROJ:
+            sk = KEY.format(li=li, key=proj)
+            sh = src_idx[sk]
+            # MATERIALISE THE READ HERE, on the cpu stream (FINDINGS IV.1).
+            # mx.load is LAZY: left unevaluated, the source read is paid inside
+            # the kmeans GPU command buffer, and it can silently yield ZEROS.
+            # Measured 2026-08-21 (E123) by instrumenting this exact loop:
+            #   Xn all-zero, codebook all-zero, scales all-zero (fp16 underflow of
+            #   the 1e-8 floor), reconstruction all-zero -> relerr exactly 1.0000,
+            #   while the SAME lazy T re-evaluated moments later for the relerr
+            #   denominator read back correctly at norm 104.28.
+            # One tensor in ~90 on this path. The abort catches it; this prevents
+            # it. Do NOT "optimise" this eval away.
+            with mx.stream(mx.cpu):
+                T = mx.load(str(SRC / sh))[sk]
+                mx.eval(T)
+            codes, cb, sc, rel = fit_tensor(T, K, D, G, args.iters, args.init_cap)
+            mod = KEY_TMPL.replace(".weight", "").format(li=li, key=proj)
+            weights[mod + ".codes"] = codes
+            weights[mod + ".codebook"] = cb
+            weights[mod + ".vq_scales"] = sc
+            vq_modules[mod] = {"experts": 1, "out": int(T.shape[0]),
+                               "in": int(T.shape[1]), "k": K, "dim": D, "group": G}
+            report.append(rel)
+            print(f"L{li:02d} {proj:10s} relerr {rel:.4f}  "
+                  f"[{time.time()-t0:6.0f}s]", flush=True)
+            # ABORT on a degenerate fit. fit_moe.py has had --relerr-abort
+            # for weeks; this fitter only PRINTED relerr and carried on. Measured
+            # 2026-08-21: the E95 dense 27B shipped L60 up_proj with codebook,
+            # codes AND scales all exactly zero against a real source tensor
+            # (absmax 0.283) — relerr 1.0000, printed, ignored, and invisible until
+            # the outlier gate learned to read dense artifacts hours later. A fit
+            # that reconstructs NOTHING must stop the run, not decorate the log.
+            if rel > args.relerr_abort:
+                raise SystemExit(
+                    f"FATAL: L{li} {proj} relerr {rel:.4f} > {args.relerr_abort} "
+                    f"— degenerate fit, do not ship this artifact. "
+                    f"(relerr 1.0 means the reconstruction is exactly zero.)")
+            del T
+            mx.clear_cache()
+
+    mx.save_safetensors(str(OUT / "model-00001-of-00001.safetensors"), weights)
+    idx = {"metadata": {}, "weight_map":
+           {k: "model-00001-of-00001.safetensors" for k in weights}}
+    json.dump(idx, open(OUT / "model.safetensors.index.json", "w"), indent=1)
+    cfg = json.load(open(SRC / "config.json"))
+    cfg["vq_modules"] = vq_modules
+    json.dump(cfg, open(OUT / "config.json", "w"), indent=1)
+    # BUILD RECORD (docs/PROVENANCE.md). Last write, so it hashes the final bytes.
+    write_build_record(
+        OUT, tool="fit-dense", script=__file__, ap=ap, args=args,
+        method={"init": "kmeans++", "init_cap": args.init_cap,
+                "lloyd_iters": args.iters, "sample": "all rows",
+                "scales": "max-abs per group", "alternation": False,
+                "tail_weight_pow": 0.0,
+                "seed": args.seed if args.seed >= 0 else "unseeded",
+                "k": K, "dim": D, "group": G,
+                "mean_relerr": round(sum(report) / len(report), 6),
+                "worst_relerr": round(max(report), 6)},
+        inputs=[("source", SRC)],
+        modules={m: {**v, "origin": "fit"} for m, v in vq_modules.items()})
+    # File every module's fit in the fit store (core/fitstore.py): findable by
+    # family / teacher / layer / geometry, and never paid for twice.
+    _teacher = fitstore.teacher_slug(SRC)
+    _recipe = {"origin": "fit", "tool": "fit-dense", "run_id": os.environ.get("VQLAB_RUN_ID"),
+               "commit": __import__("provenance").code_state()["commit"],
+               "fitter": {"init": "kmeans++", "init_cap": args.init_cap,
+                          "lloyd_iters": args.iters, "alternation": False,
+                          "scales": "max-abs per group",
+                          "seed": args.seed if args.seed >= 0 else "unseeded"}}
+    for _m in vq_modules:
+        fitstore.put(OUT / "model-00001-of-00001.safetensors", _m, args.family,
+                     _teacher, recipe=_recipe)
+    print(f"stored {len(vq_modules)} fits in {fitstore.roots()[0]}")
+    print(f"\nfit {len(report)} tensors, mean relerr "
+          f"{sum(report)/len(report):.4f}, worst {max(report):.4f}, "
+          f"{time.time()-t0:.0f}s total -> {OUT}")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

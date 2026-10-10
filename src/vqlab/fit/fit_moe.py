@@ -44,182 +44,15 @@ import time
 
 import mlx.core as mx
 
-mx.set_cache_limit(8 << 30)
 
 from vqlab import _layout
 from vqlab.family.registry import FAMILY  # shared registry (family/registry.py)
 from vqlab.core import expert_src  # shared source-layout loader (incl. unfused)
 from vqlab.core import codepack  # --pack: the same packing rule as `vqlab pack`
-
-ap = argparse.ArgumentParser()
-ap.add_argument("--base", required=True)
-ap.add_argument("--src", required=True)
-ap.add_argument("--out", required=True,
-                help="output dir. EXISTING SHARDS ARE SKIPPED (the fit RESUMES). "
-                     "Do NOT delete this dir to 'start clean' on a retry -- that "
-                     "throws away hours of completed, valid work. Two relaunches "
-                     "cost ~107 GiB of finished shards to exactly that reflex.")
-ap.add_argument("--vq-layers", required=True)
-ap.add_argument("--k", type=int, default=256)
-ap.add_argument("--dim", type=int, default=4)
-ap.add_argument("--group", type=int, default=64)
-ap.add_argument("--iters", type=int, default=20)
-ap.add_argument("--init", choices=("kmeans++", "random"),
-                default="kmeans++",
-                help="codebook seeding. Artifacts built before 08-18 used 'random'.")
-ap.add_argument("--expert-chunk", type=int, default=32)
-ap.add_argument("--family", default="qwen3_5", choices=sorted(FAMILY),
-                help="module naming / source-key family. Default reproduces "
-                     "the shipped 397B behaviour exactly.")
-ap.add_argument("--sample", type=int, default=2_000_000)
-ap.add_argument("--stage-dir", default=None)
-ap.add_argument("--ship-to", default=None,
-                help="rsync each finished shard here, then delete local")
-ap.add_argument("--geom", default=None,
-                help="per-projection geometry override, e.g. "
-                     "'gate_proj=d4k256,up_proj=d4k256,down_proj=d8k4096' "
-                     "(E36: down_proj prefers d8; gate/up never recovers)")
-ap.add_argument("--seed", type=int, default=1234,
-                help="RNG seed for the k-means++ subsample and centroid "
-                     "draws. Default 1234 = seeded, so the fit is "
-                     "reproducible from recipe plus seed. Pass -1 for "
-                     "unseeded fresh draws — required when measuring a "
-                     "noise floor, and the behaviour that produced the "
-                     "paper's MoE artifacts.")
-ap.add_argument("--relerr-abort", type=float, default=0.35,
-                help="refit, then abort, if any tensor exceeds this relerr. "
-                     "GEOMETRY-DEPENDENT: healthy d4k2048 ~0.19, d2k2048 "
-                     "~0.032 — the 0.35 default suits those. d8 runs much "
-                     "higher by nature (397B d8k16384 MEAN was 0.3156; "
-                     "flash-next d8 worst 0.3539 aborted a run that was "
-                     "fine, 2026-08-28) — pass ~0.45 for d8. A collapse "
-                     "reads ~1.0 either way.")
-ap.add_argument("--max-refit", type=int, default=2,
-                help="refit attempts for a tensor over --relerr-abort")
-ap.add_argument("--tail-weight-from", type=int, default=0,
-                help="apply --tail-weight-pow only from this layer onward. "
-                     "Shallow layers are HEAVY-TAILED (E110: L00-L10 excess "
-                     "kurtosis +1.25 vs body -0.38) and magnitude weighting "
-                     "destroys them — L00 down_proj went 0.118 -> 0.487 mean "
-                     "relerr at p=4 and aborted a 397B fit (E106). The body "
-                     "is sub-Gaussian and is where the tail trade is live. "
-                     "0 = every layer.")
-ap.add_argument("--tail-weight-pow", type=float, default=0.0,
-                help="MAGNITUDE-WEIGHTED k-means for the codebook fit. 0.0 "
-                     "(default) is the unweighted objective every existing "
-                     "artifact was fit with — bit-identical code path. p>0 "
-                     "weights each training subvector by its WEIGHT-SPACE L2 "
-                     "norm to the p: w = (scale_g * ||x||_2)^p, where scale_g "
-                     "is the group-64 max-abs the subvector was normalized by "
-                     "(64 %% d == 0, so a subvector never straddles two "
-                     "groups). p=2 makes Lloyd minimize true weight-space MSE "
-                     "instead of normalized-space MSE; p>2 buys the tail at "
-                     "the bulk's expense. WHY (E102): k-means minimizes "
-                     "AVERAGE distortion, so at low K it packs centroids into "
-                     "the dense middle and abandons the rare large weights "
-                     "that dominate the output — measured as a monotonic "
-                     "crossover, better on |w| 0-90 pct, worse on 99-100. "
-                     "Only expected to matter where centroids are scarce; at "
-                     "K2048/K8192 the codebook already serves both.")
-ap.add_argument("--tail-from", type=int, default=None,
-                help="first layer index of the TAIL (see --tail-geom)")
-ap.add_argument("--tail-geom", default=None,
-                help="geometry for layers >= --tail-from, e.g. 'd2k2048', "
-                     "applied to all three projections. Spends bytes where "
-                     "they help: E25/E29 put the 397B knee at ~tail30 of 60. "
-                     "This is a QWEN-FAMILY law and does NOT transfer to "
-                     "gemma (LADDER_GEMMA.md:180; gemma vq-tail10 scored "
-                     "BELOW flat K256, 76.92 vs 79.81).")
-ap.add_argument("--pack", action="store_true",
-                help="pack codes to their true bit width as each shard is "
-                     "written (same rule and bytes as `vqlab pack`: K256 stays "
-                     "uint8, NSUB %% 32 != 0 stays unpacked), so unpacked K>256 "
-                     "uint16 codes never land on disk. The output is the "
-                     "packed artifact, bundled by add_model_file.py; byte for "
-                     "byte what fit-then-`vqlab pack` writes "
-                     "(tests/test_fit_pack.py).")
-ap.add_argument("--pack-unaligned", action="store_true",
-                help="with --pack: also pack NSUB %% 32 != 0 tensors (same "
-                     "GPU-pending gate as `vqlab pack --pack-unaligned`)")
-args = ap.parse_args()
-if args.pack_unaligned and not args.pack:
-    raise SystemExit("--pack-unaligned needs --pack")
-# Disk preflight: every base shard not yet written is rewritten; codes for
-# K > 256 are written unpacked (uint16, ~2x) unless --pack.
 from vqlab import config as _cfg
-_cfg.require_free(args.out, int(sum(
-    os.path.getsize(f) for f in glob.glob(os.path.join(args.base, "*.safetensors"))
-    if not os.path.exists(os.path.join(args.out, os.path.basename(f))))
-    * (2 if args.k > 256 and not args.pack else 1)), "fit-moe")
-
-# SEEDING. mx.random is process-global, so seeding once here covers every
-# random draw in this fitter: the k-means++ subsample (kmeanspp), the first
-# centroid, the k-means++ selection draw, and the random-init path. No numpy
-# RNG is used.
-#
-# Default is SEEDED. Note this DIVERGES from the fitter that produced the
-# paper's MoE artifacts, which had no seed at all and whose every build is a
-# single unseeded draw — upstream keeps that file unseeded on purpose so the
-# vintage-comparison arms stay valid. Use `--seed -1` for the historical
-# behaviour: it is the pre-seeding code path exactly (no seed call), and it
-# is what you want when MEASURING a noise floor, where independent draws are
-# the point. Seeding is necessary but not sufficient for bitwise
-# reproducibility: with the RNG pinned, ~0.01% of codes still differ from a
-# second, unidentified nondeterminism source. See METHODOLOGY.md §3.
-if args.seed >= 0:
-    mx.random.seed(args.seed)
-    print(f"SEEDED mx.random with {args.seed} — this fit is reproducible "
-          f"from its recipe plus this seed (but not bitwise; see docs)",
-          flush=True)
-else:
-    print("UNSEEDED (--seed -1) — this fit is a fresh draw", flush=True)
-
-BASE, SRC, OUT = pathlib.Path(args.base), pathlib.Path(args.src), pathlib.Path(args.out)
-
-# Records (docs/PROVENANCE.md): every fit is filed in the fit store with this
-# recipe, and the artifact gets a build record at the end.
 from vqlab.core import fitstore
 from vqlab.records import provenance
-TEACHER = fitstore.teacher_slug(SRC)
-METHOD = {"init": args.init, "lloyd_iters": args.iters, "sample_rows": args.sample,
-          "scales": "max-abs per group", "alternation": False, "group": args.group,
-          "tail_weight_pow": args.tail_weight_pow,
-          "tail_weight_from": args.tail_weight_from,
-          "tail_from": args.tail_from, "tail_geom": args.tail_geom,
-          "geom": args.geom, "dim": args.dim, "k": args.k,
-          "relerr_abort": args.relerr_abort, "max_refit": args.max_refit,
-          "seed": args.seed if args.seed >= 0 else "unseeded", "rng": "mx.random"}
-RECIPE = {"origin": "fit", "tool": "fit-moe", "run_id": os.environ.get("VQLAB_RUN_ID"),
-          "commit": provenance.code_state()["commit"], "fitter": METHOD}
-SHIP = pathlib.Path(args.ship_to) if args.ship_to else None
-# "LO-HI" range, or a comma list ("3,8,11") for leverage-guided scatter
-# fits. LAYER_SET is the membership test; LO/HI remain for range prints
-# and --tail-from, which stays range-based.
-if "," in args.vq_layers:
-    LAYER_SET = frozenset(int(x) for x in args.vq_layers.split(","))
-    LO, HI = min(LAYER_SET), max(LAYER_SET)
-else:
-    _lo, _, _hi = args.vq_layers.partition("-")   # "30" or "0-56"
-    LO, HI = int(_lo), int(_hi or _lo)
-    LAYER_SET = frozenset(range(LO, HI + 1))
-G = args.group
-
-# per-projection (D, K); default = the uniform --dim/--k
-GEOM = {p: (args.dim, args.k) for p in ("gate_proj", "up_proj", "down_proj")}
-if args.geom:
-    for part in args.geom.split(","):
-        proj, dk = part.split("=")
-        d_s, k_s = dk.lstrip("d").split("k")
-        assert proj in GEOM, proj
-        GEOM[proj] = (int(d_s), int(k_s))
-
-# tail override: layers >= TAIL_FROM use TAIL_GEOM for every projection
-TAIL_GEOM, TAIL_FROM = None, args.tail_from
-if args.tail_geom:
-    assert TAIL_FROM is not None, "--tail-geom requires --tail-from"
-    _d, _k = args.tail_geom.lstrip("d").split("k")
-    TAIL_GEOM = (int(_d), int(_k))
-
+from vqlab.core.artifact import write_index
 
 def geom_for(li, proj):
     """(D, K) for this layer+projection — the tail may differ from the body."""
@@ -230,33 +63,6 @@ def geom_for(li, proj):
 
 def code_dtype(k):
     return mx.uint8 if k <= 256 else mx.uint16
-
-base_idx = json.load(open(BASE / "model.safetensors.index.json"))["weight_map"]
-src_idx = json.load(open(SRC / "model.safetensors.index.json"))["weight_map"]
-base_cfg = json.load(open(BASE / "config.json"))
-
-# FAMILY TABLE. Default is qwen3_5 and is BIT-IDENTICAL to the behaviour that
-# produced the shipped 397B artifacts — the constants below are exactly what
-# was hardcoded before. gemma4 differs only in the module substring and the
-# source-key template; its fused gate_up stack and split axis are the same
-# (mlx_lm gemma4_text.py:627 splits axis=-2 of a rank-3 [E,2I,H], which IS
-# axis 1, the same OUT-dim half-slice used here).
-FAM = FAMILY[args.family]
-
-_fam_probe = expert_src.probe_key(FAM, LO)
-if not any(k.startswith(_fam_probe.rsplit(".", 1)[0]) or k == _fam_probe
-           for k in src_idx):
-    _near = [k for k in list(src_idx) if "mlp" in k or "expert" in k][:3]
-    raise SystemExit(
-        f"FAIL: this source does not match --family {args.family!r}.\n"
-        f"  expected key like: {_fam_probe}\n"
-        f"  source has e.g.:   " + ("\n                     ".join(_near) or "(no mlp/expert keys)") + "\n"
-        "To onboard a new model family: add its key template to FAMILY "
-        "(src/vqlab/families.py) AND run docs/ONBOARDING.md's "
-        "characterisation pass first. If the family is right, check the "
-        "source dir (HF vs mlx layout differ; see families.py comments).")
-PROJ = FAM["proj"]
-
 
 def layer_of(name):
     try:
@@ -280,9 +86,7 @@ def is_vq_target(name):
     return q.get("bits") == 2 or (FAM.get("src_quant") == "mxfp4"
                                   and q.get("mode") == "mxfp4")
 
-
 from vqlab.fit.kmeans import kmeans, kmeanspp_init_mx as kmeanspp_init  # noqa: F401
-
 
 _staged = {}
 
@@ -405,221 +209,417 @@ def ship(shard_name):
     subprocess.run(["rsync", "-a", str(src), str(SHIP) + "/"], check=True)
     src.unlink()
 
-
-# ---- plan -----------------------------------------------------------------
-targets = sorted({n.rsplit(".", 1)[0] for n in base_idx if is_vq_target(n)})
-
-
 def stored_bpw(d, k):
     # codes are whole bytes (the M2 trap): uint8 for K<=256 else uint16
     return (8 if k <= 256 else 16) / d + 16.0 / G
 
 
-geom_str = ", ".join(f"{p}=d{d}k{k} ({stored_bpw(d, k):.2f} bpw stored)"
-                     for p, (d, k) in GEOM.items())
-if TAIL_GEOM is not None:
-    _d, _k = TAIL_GEOM
-    geom_str += (f"  ||  TAIL layers {TAIL_FROM}-{HI}: d{_d}k{_k} "
-                 f"({stored_bpw(_d, _k):.2f} bpw stored)")
-print(f"base {BASE.name}: {len(targets)} expert tensors -> CODES "
-      f"(layers {LO}-{HI})  {geom_str}", flush=True)
-if not targets:
-    raise SystemExit("no 2-bit expert tensors in range")
+def main(argv=None) -> int:
+    mx.set_cache_limit(8 << 30)
+    global args, G, SRC, OUT, SHIP, GEOM, TAIL_GEOM, TAIL_FROM, FAM, LAYER_SET
+    global base_cfg, src_idx
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--base", required=True)
+    ap.add_argument("--src", required=True)
+    ap.add_argument("--out", required=True,
+                    help="output dir. EXISTING SHARDS ARE SKIPPED (the fit RESUMES). "
+                         "Do NOT delete this dir to 'start clean' on a retry -- that "
+                         "throws away hours of completed, valid work. Two relaunches "
+                         "cost ~107 GiB of finished shards to exactly that reflex.")
+    ap.add_argument("--vq-layers", required=True)
+    ap.add_argument("--k", type=int, default=256)
+    ap.add_argument("--dim", type=int, default=4)
+    ap.add_argument("--group", type=int, default=64)
+    ap.add_argument("--iters", type=int, default=20)
+    ap.add_argument("--init", choices=("kmeans++", "random"),
+                    default="kmeans++",
+                    help="codebook seeding. Artifacts built before 08-18 used 'random'.")
+    ap.add_argument("--expert-chunk", type=int, default=32)
+    ap.add_argument("--family", default="qwen3_5", choices=sorted(FAMILY),
+                    help="module naming / source-key family. Default reproduces "
+                         "the shipped 397B behaviour exactly.")
+    ap.add_argument("--sample", type=int, default=2_000_000)
+    ap.add_argument("--stage-dir", default=None)
+    ap.add_argument("--ship-to", default=None,
+                    help="rsync each finished shard here, then delete local")
+    ap.add_argument("--geom", default=None,
+                    help="per-projection geometry override, e.g. "
+                         "'gate_proj=d4k256,up_proj=d4k256,down_proj=d8k4096' "
+                         "(E36: down_proj prefers d8; gate/up never recovers)")
+    ap.add_argument("--seed", type=int, default=1234,
+                    help="RNG seed for the k-means++ subsample and centroid "
+                         "draws. Default 1234 = seeded, so the fit is "
+                         "reproducible from recipe plus seed. Pass -1 for "
+                         "unseeded fresh draws — required when measuring a "
+                         "noise floor, and the behaviour that produced the "
+                         "paper's MoE artifacts.")
+    ap.add_argument("--relerr-abort", type=float, default=0.35,
+                    help="refit, then abort, if any tensor exceeds this relerr. "
+                         "GEOMETRY-DEPENDENT: healthy d4k2048 ~0.19, d2k2048 "
+                         "~0.032 — the 0.35 default suits those. d8 runs much "
+                         "higher by nature (397B d8k16384 MEAN was 0.3156; "
+                         "flash-next d8 worst 0.3539 aborted a run that was "
+                         "fine, 2026-08-28) — pass ~0.45 for d8. A collapse "
+                         "reads ~1.0 either way.")
+    ap.add_argument("--max-refit", type=int, default=2,
+                    help="refit attempts for a tensor over --relerr-abort")
+    ap.add_argument("--tail-weight-from", type=int, default=0,
+                    help="apply --tail-weight-pow only from this layer onward. "
+                         "Shallow layers are HEAVY-TAILED (E110: L00-L10 excess "
+                         "kurtosis +1.25 vs body -0.38) and magnitude weighting "
+                         "destroys them — L00 down_proj went 0.118 -> 0.487 mean "
+                         "relerr at p=4 and aborted a 397B fit (E106). The body "
+                         "is sub-Gaussian and is where the tail trade is live. "
+                         "0 = every layer.")
+    ap.add_argument("--tail-weight-pow", type=float, default=0.0,
+                    help="MAGNITUDE-WEIGHTED k-means for the codebook fit. 0.0 "
+                         "(default) is the unweighted objective every existing "
+                         "artifact was fit with — bit-identical code path. p>0 "
+                         "weights each training subvector by its WEIGHT-SPACE L2 "
+                         "norm to the p: w = (scale_g * ||x||_2)^p, where scale_g "
+                         "is the group-64 max-abs the subvector was normalized by "
+                         "(64 %% d == 0, so a subvector never straddles two "
+                         "groups). p=2 makes Lloyd minimize true weight-space MSE "
+                         "instead of normalized-space MSE; p>2 buys the tail at "
+                         "the bulk's expense. WHY (E102): k-means minimizes "
+                         "AVERAGE distortion, so at low K it packs centroids into "
+                         "the dense middle and abandons the rare large weights "
+                         "that dominate the output — measured as a monotonic "
+                         "crossover, better on |w| 0-90 pct, worse on 99-100. "
+                         "Only expected to matter where centroids are scarce; at "
+                         "K2048/K8192 the codebook already serves both.")
+    ap.add_argument("--tail-from", type=int, default=None,
+                    help="first layer index of the TAIL (see --tail-geom)")
+    ap.add_argument("--tail-geom", default=None,
+                    help="geometry for layers >= --tail-from, e.g. 'd2k2048', "
+                         "applied to all three projections. Spends bytes where "
+                         "they help: E25/E29 put the 397B knee at ~tail30 of 60. "
+                         "This is a QWEN-FAMILY law and does NOT transfer to "
+                         "gemma (LADDER_GEMMA.md:180; gemma vq-tail10 scored "
+                         "BELOW flat K256, 76.92 vs 79.81).")
+    ap.add_argument("--pack", action="store_true",
+                    help="pack codes to their true bit width as each shard is "
+                         "written (same rule and bytes as `vqlab pack`: K256 stays "
+                         "uint8, NSUB %% 32 != 0 stays unpacked), so unpacked K>256 "
+                         "uint16 codes never land on disk. The output is the "
+                         "packed artifact, bundled by add_model_file.py; byte for "
+                         "byte what fit-then-`vqlab pack` writes "
+                         "(tests/test_fit_pack.py).")
+    ap.add_argument("--pack-unaligned", action="store_true",
+                    help="with --pack: also pack NSUB %% 32 != 0 tensors (same "
+                         "GPU-pending gate as `vqlab pack --pack-unaligned`)")
+    args = ap.parse_args(argv)
+    if args.pack_unaligned and not args.pack:
+        raise SystemExit("--pack-unaligned needs --pack")
+    # Disk preflight: every base shard not yet written is rewritten; codes for
+    # K > 256 are written unpacked (uint16, ~2x) unless --pack.
+    _cfg.require_free(args.out, int(sum(
+        os.path.getsize(f) for f in glob.glob(os.path.join(args.base, "*.safetensors"))
+        if not os.path.exists(os.path.join(args.out, os.path.basename(f))))
+        * (2 if args.k > 256 and not args.pack else 1)), "fit-moe")
 
-OUT.mkdir(parents=True, exist_ok=True)
-new_cfg = json.loads(json.dumps(base_cfg))
-vq_modules = {}
-for m in targets:
-    new_cfg["quantization"].pop(m, None)
-    new_cfg.get("quantization_config", {}).pop(m, None)
-
-t0 = time.time()
-out_map, errs = {}, []
-shard_sizes = {}
-shards = sorted(set(base_idx.values()))
-for si, sh in enumerate(shards):
-    dst = OUT / sh
-    def _complete(f):
-        # A shard is resumable only if its safetensors header parses AND the
-        # header-declared payload matches the bytes on disk. Existence alone
-        # is NOT enough: a file caught mid-transfer is indistinguishable from
-        # a finished one by name, and the skip would then bake a truncated
-        # shard into the artifact silently. (Caught live: model-00005 at
-        # 3.6/8.2 GiB during a resume-copy. Same failure family as the
-        # tokenizer that loaded and encoded nothing.)
-        try:
-            import struct as _st
-            with open(f, "rb") as fh:
-                n = _st.unpack("<Q", fh.read(8))[0]
-                hdr = json.loads(fh.read(n))
-            want = 8 + n + max(v["data_offsets"][1] for k, v in hdr.items()
-                               if k != "__metadata__")
-            return f.stat().st_size == want
-        except Exception:
-            return False
-
-    shipped = SHIP / sh if SHIP else None
-    if dst.exists() and not _complete(dst):
-        print(f"[{si+1}/{len(shards)}] {sh} PARTIAL on disk — refitting it",
+    # SEEDING. mx.random is process-global, so seeding once here covers every
+    # random draw in this fitter: the k-means++ subsample (kmeanspp), the first
+    # centroid, the k-means++ selection draw, and the random-init path. No numpy
+    # RNG is used.
+    #
+    # Default is SEEDED. Note this DIVERGES from the fitter that produced the
+    # paper's MoE artifacts, which had no seed at all and whose every build is a
+    # single unseeded draw — upstream keeps that file unseeded on purpose so the
+    # vintage-comparison arms stay valid. Use `--seed -1` for the historical
+    # behaviour: it is the pre-seeding code path exactly (no seed call), and it
+    # is what you want when MEASURING a noise floor, where independent draws are
+    # the point. Seeding is necessary but not sufficient for bitwise
+    # reproducibility: with the RNG pinned, ~0.01% of codes still differ from a
+    # second, unidentified nondeterminism source. See METHODOLOGY.md §3.
+    if args.seed >= 0:
+        mx.random.seed(args.seed)
+        print(f"SEEDED mx.random with {args.seed} — this fit is reproducible "
+              f"from its recipe plus this seed (but not bitwise; see docs)",
               flush=True)
-        dst.unlink()
-    if dst.exists() or (shipped is not None and shipped.exists()):
-        for k in (k for k, v in base_idx.items() if v == sh):
-            mod = k.rsplit(".", 1)[0]
-            if is_vq_target(k):
-                # codes live in the shard that holds the module's .weight
-                # (its .scales may sit in the next shard)
-                for suf in (".codes", ".codebook", ".vq_scales"):
-                    out_map[mod + suf] = base_idx.get(mod + ".weight", sh)
-            else:
-                out_map[k] = sh
-        have = dst if dst.exists() else shipped
-        shard_sizes[sh] = have.stat().st_size
-        print(f"[{si+1}/{len(shards)}] {sh} exists, skip", flush=True)
-        continue
-    # Materialize the BASE shard ON THE CPU STREAM. Tensors we pass through
-    # untouched go into `new` still LAZY, so the only pending work when
-    # mx.save_safetensors fires below is this read — and it would then be paid
-    # INSIDE a GPU command buffer, where a slow (e.g. network-mounted) read
-    # trips the Metal watchdog. That failure presents at the SAVE, which is
-    # misleading: the write is fine, the read never happened yet. General rule:
-    # any lazy read still pending when a save forces evaluation is paid inside
-    # a GPU command buffer. Stream binds at op creation, so the load must be
-    # created here, not merely evaluated here.
-    with mx.stream(mx.cpu):
-        data = mx.load(str(BASE / sh))
-        # This eval is LOAD-BEARING, not belt-and-braces. Empirical, two runs
-        # on the same box differing only in this line (08-20): with it, 65 min
-        # clean; without it (cpu-stream creation only), watchdog kill at the
-        # save, original traceback. So creation-under-cpu is necessary but not
-        # sufficient -- the deferred read still lands on a GPU command buffer
-        # when save forces it. It also costs ~2x per tensor by materialising
-        # the full base shard eagerly. Both facts are measured. Do not
-        # "optimise" this line out.
-        mx.eval(list(data.values()))
-    new = {}
-    done = set()
-    for name, val in data.items():
-        if is_vq_target(name):
-            mod = name.rsplit(".", 1)[0]
-            if mod in done:
-                continue
-            # A module's tensors can straddle a shard boundary (mlx-community
-            # DeepSeek-V4: layer 1's switch_mlp .weight in one shard, .scales
-            # in the next). Fit it ONCE, in the shard holding .weight; in any
-            # other shard its tensors are simply dropped.
-            if base_idx.get(mod + ".weight", sh) != sh:
-                continue
-            proj = mod.rsplit(".", 1)[1]
-            li = layer_of(mod)
-            if mod + ".scales" in data:
-                sc = data[mod + ".scales"]
-            else:
-                with mx.stream(mx.cpu):
-                    sc = mx.load(str(BASE / base_idx[mod + ".scales"]))[mod + ".scales"]
-                    mx.eval(sc)
-            bg = base_cfg["quantization"][mod].get("group_size", G)
-            want = (sc.shape[0], sc.shape[1], sc.shape[2] * bg)
-            codes, cb, vsc, err = vq_tensor_codes(li, proj, want)
-            # SANITY GATE. kmeans init is random and unseeded, and a fit can
-            # collapse: tail30 (08-18) produced L26 down_proj at relerr
-            # 1.0000 (reconstruction ~= zero, i.e. that weight destroyed)
-            # plus four more >0.12, while the SAME layers fitted cleanly at
-            # 0.032 in tail20. Non-deterministic, so retry with a fresh init;
-            # a silently broken tensor must never reach an artifact.
-            for attempt in range(args.max_refit):
-                if err <= args.relerr_abort:
-                    break
-                print(f"    !! L{li:02d} {proj} relerr {err:.4f} > "
-                      f"{args.relerr_abort} — refit {attempt + 1}/"
-                      f"{args.max_refit}", flush=True)
-                codes, cb, vsc, err = vq_tensor_codes(li, proj, want)
-            if err > args.relerr_abort:
-                sys.exit(f"FATAL: L{li} {proj} relerr {err:.4f} still above "
-                         f"{args.relerr_abort} after {args.max_refit} refits. "
-                         f"The fit is unstable for this tensor — do not ship "
-                         f"this artifact.")
-            pd, pk = geom_for(li, proj)
-            pbits = 0
-            if args.pack:
-                # pack HERE, before the shard is written: the uint16 codes
-                # never reach the disk (devlist #13)
-                codes, pbits = codepack.pack_codes(mod, codes, pk, args.pack_unaligned)
-            new[mod + ".codes"] = codes
-            new[mod + ".codebook"] = cb
-            new[mod + ".vq_scales"] = vsc
-            vq_modules[mod] = {"experts": want[0], "out": want[1],
-                              "in": want[2], "k": pk, "dim": pd, "group": G}
-            if pbits:
-                vq_modules[mod]["pack_bits"] = pbits
-            errs.append(err)
-            done.add(mod)
-            print(f"    L{li:02d} {proj:10s} relerr {err:.4f}", flush=True)
-            del codes, cb, vsc
-            gc.collect()
-            mx.clear_cache()
-        elif name.rsplit(".", 1)[0] in done:
-            continue
-        else:
-            new[name] = val
-    tmp = OUT / sh.replace(".safetensors", ".tmp.safetensors")
-    # --pack writes the header metadata `vqlab pack` writes, so the shard is
-    # byte for byte the after-the-fact pack of the unpacked one
-    if args.pack:
-        mx.save_safetensors(str(tmp), dict(sorted(new.items())), metadata={"format": "mlx"})
     else:
-        mx.save_safetensors(str(tmp), new)
-    tmp.rename(dst)
-    # File this shard's fits in the fit store BEFORE ship() can move the
-    # shard: the fits are the expensive part and must outlive the candidate.
-    for _m in sorted(done):
-        _pd, _pk = geom_for(layer_of(_m), _m.rsplit(".", 1)[1])
-        fitstore.put(dst, _m, args.family, TEACHER,
-                     recipe={**RECIPE, "fitter": {**RECIPE["fitter"], "dim": _pd, "k": _pk}})
-    shard_sizes[sh] = dst.stat().st_size
-    for k in new:
-        out_map[k] = sh
-    del data, new
-    gc.collect()
-    mx.clear_cache()
-    ship(sh)
-    print(f"[{si+1}/{len(shards)}] {sh}  ({time.time()-t0:.0f}s)", flush=True)
+        print("UNSEEDED (--seed -1) — this fit is a fresh draw", flush=True)
 
-# vq_modules may be partial on resume — rebuild for every target from config
-for m in targets:
-    if m not in vq_modules:
-        q = base_cfg["quantization"][m]
-        # shapes recoverable only from the base scales tensor; load lazily
-        sc = mx.load(str(BASE / base_idx[m + ".scales"]))[m + ".scales"]
-        # geom_for, NOT GEOM: this rebuild runs for shards SKIPPED on resume,
-        # and GEOM alone ignores --tail-geom — a resumed tail shard would get
-        # stamped with the SHALLOW K and the runtime would decode against the
-        # wrong codebook size, silently. (Latent until a tail run resumes;
-        # audited tonight's rung's config — it did not fire.)
-        li = int(re.search(r"layers\.(\d+)\.", m).group(1))
-        pd, pk = geom_for(li, m.rsplit(".", 1)[1])
-        # the BASE's group (32 for an mxfp4 base), not the VQ group
-        vq_modules[m] = {"experts": sc.shape[0], "out": sc.shape[1],
-                         "in": sc.shape[2] * q.get("group_size", G),
-                         "k": pk, "dim": pd, "group": G}
+    BASE, SRC, OUT = pathlib.Path(args.base), pathlib.Path(args.src), pathlib.Path(args.out)
+
+    # Records (docs/PROVENANCE.md): every fit is filed in the fit store with this
+    # recipe, and the artifact gets a build record at the end.
+    TEACHER = fitstore.teacher_slug(SRC)
+    METHOD = {"init": args.init, "lloyd_iters": args.iters, "sample_rows": args.sample,
+              "scales": "max-abs per group", "alternation": False, "group": args.group,
+              "tail_weight_pow": args.tail_weight_pow,
+              "tail_weight_from": args.tail_weight_from,
+              "tail_from": args.tail_from, "tail_geom": args.tail_geom,
+              "geom": args.geom, "dim": args.dim, "k": args.k,
+              "relerr_abort": args.relerr_abort, "max_refit": args.max_refit,
+              "seed": args.seed if args.seed >= 0 else "unseeded", "rng": "mx.random"}
+    RECIPE = {"origin": "fit", "tool": "fit-moe", "run_id": os.environ.get("VQLAB_RUN_ID"),
+              "commit": provenance.code_state()["commit"], "fitter": METHOD}
+    SHIP = pathlib.Path(args.ship_to) if args.ship_to else None
+    # "LO-HI" range, or a comma list ("3,8,11") for leverage-guided scatter
+    # fits. LAYER_SET is the membership test; LO/HI remain for range prints
+    # and --tail-from, which stays range-based.
+    if "," in args.vq_layers:
+        LAYER_SET = frozenset(int(x) for x in args.vq_layers.split(","))
+        LO, HI = min(LAYER_SET), max(LAYER_SET)
+    else:
+        _lo, _, _hi = args.vq_layers.partition("-")   # "30" or "0-56"
+        LO, HI = int(_lo), int(_hi or _lo)
+        LAYER_SET = frozenset(range(LO, HI + 1))
+    G = args.group
+
+    # per-projection (D, K); default = the uniform --dim/--k
+    GEOM = {p: (args.dim, args.k) for p in ("gate_proj", "up_proj", "down_proj")}
+    if args.geom:
+        for part in args.geom.split(","):
+            proj, dk = part.split("=")
+            d_s, k_s = dk.lstrip("d").split("k")
+            assert proj in GEOM, proj
+            GEOM[proj] = (int(d_s), int(k_s))
+
+    # tail override: layers >= TAIL_FROM use TAIL_GEOM for every projection
+    TAIL_GEOM, TAIL_FROM = None, args.tail_from
+    if args.tail_geom:
+        assert TAIL_FROM is not None, "--tail-geom requires --tail-from"
+        _d, _k = args.tail_geom.lstrip("d").split("k")
+        TAIL_GEOM = (int(_d), int(_k))
+
+
+    base_idx = json.load(open(BASE / "model.safetensors.index.json"))["weight_map"]
+    src_idx = json.load(open(SRC / "model.safetensors.index.json"))["weight_map"]
+    base_cfg = json.load(open(BASE / "config.json"))
+
+    # FAMILY TABLE. Default is qwen3_5 and is BIT-IDENTICAL to the behaviour that
+    # produced the shipped 397B artifacts — the constants below are exactly what
+    # was hardcoded before. gemma4 differs only in the module substring and the
+    # source-key template; its fused gate_up stack and split axis are the same
+    # (mlx_lm gemma4_text.py:627 splits axis=-2 of a rank-3 [E,2I,H], which IS
+    # axis 1, the same OUT-dim half-slice used here).
+    FAM = FAMILY[args.family]
+
+    _fam_probe = expert_src.probe_key(FAM, LO)
+    if not any(k.startswith(_fam_probe.rsplit(".", 1)[0]) or k == _fam_probe
+               for k in src_idx):
+        _near = [k for k in list(src_idx) if "mlp" in k or "expert" in k][:3]
+        raise SystemExit(
+            f"FAIL: this source does not match --family {args.family!r}.\n"
+            f"  expected key like: {_fam_probe}\n"
+            f"  source has e.g.:   " + ("\n                     ".join(_near) or "(no mlp/expert keys)") + "\n"
+            "To onboard a new model family: add its key template to FAMILY "
+            "(src/vqlab/families.py) AND run docs/ONBOARDING.md's "
+            "characterisation pass first. If the family is right, check the "
+            "source dir (HF vs mlx layout differ; see families.py comments).")
+    PROJ = FAM["proj"]  # noqa: F841
+
+
+    # ---- plan -----------------------------------------------------------------
+    targets = sorted({n.rsplit(".", 1)[0] for n in base_idx if is_vq_target(n)})
+
+
+    geom_str = ", ".join(f"{p}=d{d}k{k} ({stored_bpw(d, k):.2f} bpw stored)"
+                         for p, (d, k) in GEOM.items())
+    if TAIL_GEOM is not None:
+        _d, _k = TAIL_GEOM
+        geom_str += (f"  ||  TAIL layers {TAIL_FROM}-{HI}: d{_d}k{_k} "
+                     f"({stored_bpw(_d, _k):.2f} bpw stored)")
+    print(f"base {BASE.name}: {len(targets)} expert tensors -> CODES "
+          f"(layers {LO}-{HI})  {geom_str}", flush=True)
+    if not targets:
+        raise SystemExit("no 2-bit expert tensors in range")
+
+    OUT.mkdir(parents=True, exist_ok=True)
+    new_cfg = json.loads(json.dumps(base_cfg))
+    vq_modules = {}
+    for m in targets:
+        new_cfg["quantization"].pop(m, None)
+        new_cfg.get("quantization_config", {}).pop(m, None)
+
+    t0 = time.time()
+    out_map, errs = {}, []
+    shard_sizes = {}
+    shards = sorted(set(base_idx.values()))
+    for si, sh in enumerate(shards):
+        dst = OUT / sh
+        def _complete(f):
+            # A shard is resumable only if its safetensors header parses AND the
+            # header-declared payload matches the bytes on disk. Existence alone
+            # is NOT enough: a file caught mid-transfer is indistinguishable from
+            # a finished one by name, and the skip would then bake a truncated
+            # shard into the artifact silently. (Caught live: model-00005 at
+            # 3.6/8.2 GiB during a resume-copy. Same failure family as the
+            # tokenizer that loaded and encoded nothing.)
+            try:
+                import struct as _st
+                with open(f, "rb") as fh:
+                    n = _st.unpack("<Q", fh.read(8))[0]
+                    hdr = json.loads(fh.read(n))
+                want = 8 + n + max(v["data_offsets"][1] for k, v in hdr.items()
+                                   if k != "__metadata__")
+                return f.stat().st_size == want
+            except Exception:
+                return False
+
+        shipped = SHIP / sh if SHIP else None
+        if dst.exists() and not _complete(dst):
+            print(f"[{si+1}/{len(shards)}] {sh} PARTIAL on disk — refitting it",
+                  flush=True)
+            dst.unlink()
+        if dst.exists() or (shipped is not None and shipped.exists()):
+            for k in (k for k, v in base_idx.items() if v == sh):
+                mod = k.rsplit(".", 1)[0]
+                if is_vq_target(k):
+                    # codes live in the shard that holds the module's .weight
+                    # (its .scales may sit in the next shard)
+                    for suf in (".codes", ".codebook", ".vq_scales"):
+                        out_map[mod + suf] = base_idx.get(mod + ".weight", sh)
+                else:
+                    out_map[k] = sh
+            have = dst if dst.exists() else shipped
+            shard_sizes[sh] = have.stat().st_size
+            print(f"[{si+1}/{len(shards)}] {sh} exists, skip", flush=True)
+            continue
+        # Materialize the BASE shard ON THE CPU STREAM. Tensors we pass through
+        # untouched go into `new` still LAZY, so the only pending work when
+        # mx.save_safetensors fires below is this read — and it would then be paid
+        # INSIDE a GPU command buffer, where a slow (e.g. network-mounted) read
+        # trips the Metal watchdog. That failure presents at the SAVE, which is
+        # misleading: the write is fine, the read never happened yet. General rule:
+        # any lazy read still pending when a save forces evaluation is paid inside
+        # a GPU command buffer. Stream binds at op creation, so the load must be
+        # created here, not merely evaluated here.
+        with mx.stream(mx.cpu):
+            data = mx.load(str(BASE / sh))
+            # This eval is LOAD-BEARING, not belt-and-braces. Empirical, two runs
+            # on the same box differing only in this line (08-20): with it, 65 min
+            # clean; without it (cpu-stream creation only), watchdog kill at the
+            # save, original traceback. So creation-under-cpu is necessary but not
+            # sufficient -- the deferred read still lands on a GPU command buffer
+            # when save forces it. It also costs ~2x per tensor by materialising
+            # the full base shard eagerly. Both facts are measured. Do not
+            # "optimise" this line out.
+            mx.eval(list(data.values()))
+        new = {}
+        done = set()
+        for name, val in data.items():
+            if is_vq_target(name):
+                mod = name.rsplit(".", 1)[0]
+                if mod in done:
+                    continue
+                # A module's tensors can straddle a shard boundary (mlx-community
+                # DeepSeek-V4: layer 1's switch_mlp .weight in one shard, .scales
+                # in the next). Fit it ONCE, in the shard holding .weight; in any
+                # other shard its tensors are simply dropped.
+                if base_idx.get(mod + ".weight", sh) != sh:
+                    continue
+                proj = mod.rsplit(".", 1)[1]
+                li = layer_of(mod)
+                if mod + ".scales" in data:
+                    sc = data[mod + ".scales"]
+                else:
+                    with mx.stream(mx.cpu):
+                        sc = mx.load(str(BASE / base_idx[mod + ".scales"]))[mod + ".scales"]
+                        mx.eval(sc)
+                bg = base_cfg["quantization"][mod].get("group_size", G)
+                want = (sc.shape[0], sc.shape[1], sc.shape[2] * bg)
+                codes, cb, vsc, err = vq_tensor_codes(li, proj, want)
+                # SANITY GATE. kmeans init is random and unseeded, and a fit can
+                # collapse: tail30 (08-18) produced L26 down_proj at relerr
+                # 1.0000 (reconstruction ~= zero, i.e. that weight destroyed)
+                # plus four more >0.12, while the SAME layers fitted cleanly at
+                # 0.032 in tail20. Non-deterministic, so retry with a fresh init;
+                # a silently broken tensor must never reach an artifact.
+                for attempt in range(args.max_refit):
+                    if err <= args.relerr_abort:
+                        break
+                    print(f"    !! L{li:02d} {proj} relerr {err:.4f} > "
+                          f"{args.relerr_abort} — refit {attempt + 1}/"
+                          f"{args.max_refit}", flush=True)
+                    codes, cb, vsc, err = vq_tensor_codes(li, proj, want)
+                if err > args.relerr_abort:
+                    sys.exit(f"FATAL: L{li} {proj} relerr {err:.4f} still above "
+                             f"{args.relerr_abort} after {args.max_refit} refits. "
+                             f"The fit is unstable for this tensor — do not ship "
+                             f"this artifact.")
+                pd, pk = geom_for(li, proj)
+                pbits = 0
+                if args.pack:
+                    # pack HERE, before the shard is written: the uint16 codes
+                    # never reach the disk (devlist #13)
+                    codes, pbits = codepack.pack_codes(mod, codes, pk, args.pack_unaligned)
+                new[mod + ".codes"] = codes
+                new[mod + ".codebook"] = cb
+                new[mod + ".vq_scales"] = vsc
+                vq_modules[mod] = {"experts": want[0], "out": want[1],
+                                  "in": want[2], "k": pk, "dim": pd, "group": G}
+                if pbits:
+                    vq_modules[mod]["pack_bits"] = pbits
+                errs.append(err)
+                done.add(mod)
+                print(f"    L{li:02d} {proj:10s} relerr {err:.4f}", flush=True)
+                del codes, cb, vsc
+                gc.collect()
+                mx.clear_cache()
+            elif name.rsplit(".", 1)[0] in done:
+                continue
+            else:
+                new[name] = val
+        tmp = OUT / sh.replace(".safetensors", ".tmp.safetensors")
+        # --pack writes the header metadata `vqlab pack` writes, so the shard is
+        # byte for byte the after-the-fact pack of the unpacked one
         if args.pack:
-            # a resumed shard was packed by the same rule when it was written
-            _pb = codepack.pack_bits_for(pk, vq_modules[m]["in"] // pd, args.pack_unaligned)
-            if _pb:
-                vq_modules[m]["pack_bits"] = _pb
+            mx.save_safetensors(str(tmp), dict(sorted(new.items())), metadata={"format": "mlx"})
+        else:
+            mx.save_safetensors(str(tmp), new)
+        tmp.rename(dst)
+        # File this shard's fits in the fit store BEFORE ship() can move the
+        # shard: the fits are the expensive part and must outlive the candidate.
+        for _m in sorted(done):
+            _pd, _pk = geom_for(layer_of(_m), _m.rsplit(".", 1)[1])
+            fitstore.put(dst, _m, args.family, TEACHER,
+                         recipe={**RECIPE, "fitter": {**RECIPE["fitter"], "dim": _pd, "k": _pk}})
+        shard_sizes[sh] = dst.stat().st_size
+        for k in new:
+            out_map[k] = sh
+        del data, new
+        gc.collect()
+        mx.clear_cache()
+        ship(sh)
+        print(f"[{si+1}/{len(shards)}] {sh}  ({time.time()-t0:.0f}s)", flush=True)
 
-new_cfg["model_file"] = "model.py"
-new_cfg["vq_modules"] = vq_modules
+    # vq_modules may be partial on resume — rebuild for every target from config
+    for m in targets:
+        if m not in vq_modules:
+            q = base_cfg["quantization"][m]
+            # shapes recoverable only from the base scales tensor; load lazily
+            sc = mx.load(str(BASE / base_idx[m + ".scales"]))[m + ".scales"]
+            # geom_for, NOT GEOM: this rebuild runs for shards SKIPPED on resume,
+            # and GEOM alone ignores --tail-geom — a resumed tail shard would get
+            # stamped with the SHALLOW K and the runtime would decode against the
+            # wrong codebook size, silently. (Latent until a tail run resumes;
+            # audited tonight's rung's config — it did not fire.)
+            li = int(re.search(r"layers\.(\d+)\.", m).group(1))
+            pd, pk = geom_for(li, m.rsplit(".", 1)[1])
+            # the BASE's group (32 for an mxfp4 base), not the VQ group
+            vq_modules[m] = {"experts": sc.shape[0], "out": sc.shape[1],
+                             "in": sc.shape[2] * q.get("group_size", G),
+                             "k": pk, "dim": pd, "group": G}
+            if args.pack:
+                # a resumed shard was packed by the same rule when it was written
+                _pb = codepack.pack_bits_for(pk, vq_modules[m]["in"] // pd, args.pack_unaligned)
+                if _pb:
+                    vq_modules[m]["pack_bits"] = _pb
 
-from vqlab.core.artifact import write_index
-write_index(OUT, out_map)          # total_size = tensor bytes of the shards written
-tsz = sum(shard_sizes.values())    # on-disk bytes, for the closing summary line
-json.dump(new_cfg, open(OUT / "config.json", "w"), indent=1)
+    new_cfg["model_file"] = "model.py"
+    new_cfg["vq_modules"] = vq_modules
 
-# ---- model.py: vq_switch runtime + loader shim, one self-contained file ---
-runtime = _layout.runtime_file("vq_switch.py").read_text()
-from vqlab.runtime.arch_resolve import PRELUDE as _ARCH_PRELUDE
-shim = '''
+    write_index(OUT, out_map)          # total_size = tensor bytes of the shards written
+    tsz = sum(shard_sizes.values())    # on-disk bytes, for the closing summary line
+    json.dump(new_cfg, open(OUT / "config.json", "w"), indent=1)
+
+    # ---- model.py: vq_switch runtime + loader shim, one self-contained file ---
+    runtime = _layout.runtime_file("vq_switch.py").read_text()
+    from vqlab.runtime.arch_resolve import PRELUDE as _ARCH_PRELUDE
+    shim = '''
 
 # ---------------------------------------------------------------------------
 # mlx_lm `model_file` shim: stock mlx_lm imports Model/ModelArgs from THIS
@@ -652,30 +652,35 @@ class Model(_arch.Model):
                 group_size=_m["group"],
             ))
 '''
-(OUT / "model.py").write_text(runtime + shim)
+    (OUT / "model.py").write_text(runtime + shim)
 
-for extra in BASE.iterdir():
-    if extra.is_file() and extra.suffix != ".safetensors" \
-            and extra.name not in ("config.json", "model.safetensors.index.json"):
-        shutil.copy2(extra, OUT / extra.name)
+    for extra in BASE.iterdir():
+        if extra.is_file() and extra.suffix != ".safetensors" \
+                and extra.name not in ("config.json", "model.safetensors.index.json"):
+            shutil.copy2(extra, OUT / extra.name)
 
-if args.pack:
-    # The shim above only knows unpacked codes. Bundle the packed artifact the
-    # way `vqlab pack` does (add_model_file reads pack_bits/in from the config
-    # just written), so model.py and config match fit-then-pack.
-    subprocess.run([sys.executable, str(_layout.find("add_model_file.py")),
-                    "--artifact", str(OUT), "--group", str(G)], check=True)
+    if args.pack:
+        # The shim above only knows unpacked codes. Bundle the packed artifact the
+        # way `vqlab pack` does (add_model_file reads pack_bits/in from the config
+        # just written), so model.py and config match fit-then-pack.
+        subprocess.run([sys.executable, str(_layout.find("add_model_file.py")),
+                        "--artifact", str(OUT), "--group", str(G)], check=True)
 
-provenance.write_build_record(
-    OUT, tool="fit-moe", script=__file__, ap=ap, args=args, method=METHOD,
-    inputs=[("base", BASE), ("teacher", SRC)],
-    modules={m: {**v, "origin": "fit"} for m, v in vq_modules.items()})
+    provenance.write_build_record(
+        OUT, tool="fit-moe", script=__file__, ap=ap, args=args, method=METHOD,
+        inputs=[("base", BASE), ("teacher", SRC)],
+        modules={m: {**v, "origin": "fit"} for m, v in vq_modules.items()})
 
-if SHIP is not None:
-    for f in OUT.iterdir():
-        if f.is_file():
-            subprocess.run(["rsync", "-a", str(f), str(SHIP) + "/"], check=True)
+    if SHIP is not None:
+        for f in OUT.iterdir():
+            if f.is_file():
+                subprocess.run(["rsync", "-a", str(f), str(SHIP) + "/"], check=True)
 
-print(f"\ndone in {time.time()-t0:.0f}s  {tsz/2**30:.1f} GiB total "
-      f"-> {SHIP or OUT}")
-print(f"VQ'd {len(errs)} tensors, mean relerr {sum(errs)/max(len(errs),1):.4f}")
+    print(f"\ndone in {time.time()-t0:.0f}s  {tsz/2**30:.1f} GiB total "
+          f"-> {SHIP or OUT}")
+    print(f"VQ'd {len(errs)} tensors, mean relerr {sum(errs)/max(len(errs),1):.4f}")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
