@@ -54,7 +54,7 @@ For a sample of layers spanning depth x every projection:
   effect that only hits the body dominates the artifact. Know this ratio
   before you reason about any per-tensor result.
 
-## 2. Run the init sweep (`probe_init_sweep.py`)
+## 2. Run the init sweep (`vqlab probe-init`, `plan/init_sweep.py`)
 
 Layers x all three projections, K at the low end of your intended range,
 init as the only variable, evaluated on HELD-OUT experts, ≥2 seeds, verdict

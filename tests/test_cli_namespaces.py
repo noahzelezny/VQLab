@@ -181,3 +181,17 @@ def test_assemble_package_is_a_deprecated_alias_of_build():
     from vqlab.build import mix, graft_extras, reskeleton
     assert mix.plan is mix.plan_mix and graft_extras.plan is graft_extras.plan_graft
     assert reskeleton.plan is reskeleton.plan_reskeleton
+
+
+def test_step15_install_names_alias():
+    """untangle step 15: generic install()/plan() say what they install; the
+    old names stay as aliases for one release."""
+    from vqlab import _layout
+    from vqlab.core import ple_stream
+    from vqlab.skipzero import sz_resident, sz_resident_build
+    assert _layout.install is _layout.install_import_aliases
+    assert ple_stream.install is ple_stream.install_ple_stream
+    assert sz_resident.install is sz_resident.install_resident
+    assert sz_resident_build.plan is sz_resident_build.plan_resident
+    src = (_layout.PKG / "ship" / "serve.py").read_text()   # imports mlx_lm
+    assert "install = install_serving" in src

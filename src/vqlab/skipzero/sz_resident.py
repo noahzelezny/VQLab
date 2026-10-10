@@ -9,7 +9,7 @@ stage 2 keeps, per packed VQ switch module:
     row_table  [E, OUT]    int32    compact row of (e, out), -1 = dead
 and dead rows produce EXACTLY 0 without reading a code byte.
 
-It does NOT edit the shipped runtime. `install(ns)` takes the namespace of the
+It does NOT edit the shipped runtime. `install_resident(ns)` takes the namespace of the
 artifact's model.py and builds NEW kernels by patching the source text of
 exactly two kernels. TWO runtime vintages are forked; which one is decided by
 which kernel text is present (`vintage()`), and anything else refuses:
@@ -289,7 +289,7 @@ GEMMSEG_SIG = (["codes", "codebook", "scales", "xsrc", "srcrows", "tmeta", "dims
 
 
 # ----------------------------------------------------------------- runtime
-def install(ns):
+def install_resident(ns):
     """Build SZSwitchLinear against a vq_switch runtime namespace `ns`
     (the artifact model.py's globals(), or vars() of runtime/vq_switch.py).
     Returns the class; also stores it as ns['SZSwitchLinear']."""
@@ -310,6 +310,9 @@ def install(ns):
     cls.vintage = v
     ns["SZSwitchLinear"] = cls
     return cls
+
+
+install = install_resident   # pre-step-15 name; one release
 
 
 def _kernel_factory(ns):
@@ -686,7 +689,7 @@ def swap_modules(model, cfg, reach_fn, ns):
     """Replace every module named in cfg['vq_skipzero']['modules'] with an
     SZSwitchLinear shaped for its compact tensors (shapes from the config)."""
     mx = ns["mx"]
-    SZ = install(ns)
+    SZ = install_resident(ns)
     reach_fn = reach_fn or reach
     vqm, sz = cfg["vq_modules"], cfg["vq_skipzero"]
     for p, m in sz["modules"].items():

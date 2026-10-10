@@ -104,7 +104,7 @@ def check_additive(ctx):
     _dev = mx.default_device()
     mx.set_default_device(mx.cpu)
     try:
-        from vqlab.fit import additive_vq as _av
+        from vqlab.fit import fit_additive as _av
         from vqlab.fit import geo_build as _gb
         _W = mx.array(_np2.random.default_rng(0).standard_normal((2, 32, 256)).astype(_np2.float32))
         with contextlib.redirect_stdout(io.StringIO()):

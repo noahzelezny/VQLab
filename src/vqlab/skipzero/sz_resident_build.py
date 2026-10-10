@@ -43,7 +43,7 @@ OWN = {"config.json", "model.py", "sz_resident.py", "skipzero_load.py", ".DS_Sto
 _log = make_log("[sz-resident]")
 
 
-def plan(src):
+def plan_resident(src):
     cfg = json.loads((src / "config.json").read_text())
     sz = cfg.get("vq_skipzero")
     if not sz:
@@ -89,6 +89,9 @@ def plan(src):
     return cfg, shapes
 
 
+plan = plan_resident   # pre-step-15 name; one release
+
+
 def check_vintage(model_py_text, shapes):
     """The source bundle's kernels must be a forked vintage whose codes dtype
     matches every module's (patches asserted to apply exactly once)."""
@@ -116,7 +119,7 @@ def main(argv=None):
         ap.error(f"{out} exists; sz-resident never overwrites")
     if not a.allow_any_out:
         config.require_storage(out.parent)
-    cfg, shapes = plan(src)
+    cfg, shapes = plan_resident(src)
     mf = cfg.get("model_file") or "model.py"
     stage1 = (src / mf).read_bytes()
     nsrc = cfg["vq_skipzero"]["source_model_py_bytes"]

@@ -4,7 +4,7 @@
 Fit outputs, a quantized base / struct skeleton.
 
 ## Process
-`vqlab pack` (or `fit-moe --pack`, which packs as each shard is written, byte for byte the same), `pack-dense`, `pack-ple`, `unpack-dense` (diagnostic twin), `splice-ple`, `stream-convert`, `build-dense`, `graft`, `ple-swap`, `slice` (a few real teacher layers + embeddings/norm/head, config adjusted, for preflighting a writer).
+`vqlab pack` (or `fit-moe --pack`, which packs as each shard is written, byte for byte the same), `pack-dense`, `pack-ple`, `unpack-dense` (diagnostic twin), `splice-ple`, `stream-convert`, `build-dense`, `graft`, `ple-swap`, `mtp-extract` / `mtp-head-ds4` / `mtp-pack` / `mtp-graft` (draft heads; `mtp_head_ds4.py` moved here from fit/ in untangle step 15, `vqlab.fit.mtp_head_ds4` aliases it for one release), `slice` (a few real teacher layers + embeddings/norm/head, config adjusted, for preflighting a writer).
 
 ## Outputs
 A new artifact directory with shards, `config.json` (`vq_modules` + `pack_bits`) and an index.

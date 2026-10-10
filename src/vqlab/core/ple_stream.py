@@ -36,8 +36,8 @@ is the runtime our artifacts BUNDLE (TWO-RUNTIMES.md, F31), so it is
 installed at RUNTIME on a loaded model, per process, and never edited into
 the venv or into a shipped model.py.
 
-    from ple_stream import install
-    n = install(model, model_path)     # -> number of shard modules bounded
+    from vqlab.core.ple_stream import install_ple_stream
+    n = install_ple_stream(model, model_path)     # -> number of shard modules bounded
 """
 import json
 import os
@@ -82,7 +82,7 @@ def _find_sharded(model):
     return out
 
 
-def install(model, model_path, verbose=True):
+def install_ple_stream(model, model_path, verbose=True):
     """Install the streaming gather on every sharded n-gram table. Idempotent."""
     wmap = _index(model_path)
     if wmap is None:
@@ -120,6 +120,9 @@ def install(model, model_path, verbose=True):
         print(f"[ple_stream] {len(targets)} sharded table(s) found, "
               f"0 streamed", flush=True)
     return bound
+
+
+install = install_ple_stream   # pre-step-15 name; one release
 
 
 def _bind(emb, keys, verbose, path):

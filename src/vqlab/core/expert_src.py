@@ -6,7 +6,7 @@ UNFUSED as per-expert 2D tensors (`...mlp.experts.{e}.gate_proj.weight`,
 no gate_up stack, no [E, out, in] stack anywhere in the checkpoint — measured
 from the safetensors headers). Every reader before this file assumed a single
 pre-stacked 3D key; three of them (fit_moe, verify_artifact,
-probe_init_sweep) each had their own copy of the read-slice-eval dance. This
+init_sweep) each had their own copy of the read-slice-eval dance. This
 module is the one implementation of all source layouts:
 
   fused 3D      src_key names one [E, 2I, H] tensor, proj map half-slices it
@@ -102,7 +102,7 @@ def load_expert_stack(src_dir, src_idx: dict, fam: dict, li: int, proj: str,
     """Return one projection's weights for one layer as [E, out, in] fp/bf16.
 
     experts     read only the first N experts (unfused layout reads ONLY
-                those tensors — the cheap path probe_init_sweep needs);
+                those tensors — the cheap path init_sweep needs);
                 for fused/stacked layouts the stack is sliced after load.
     shard_path  optional fn(shard_filename) -> local path (the fitter's
                 staging hook). Default reads src_dir/<shard>.

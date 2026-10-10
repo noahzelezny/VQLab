@@ -5,13 +5,13 @@ each fitter's numerics are pinned (fits are compared byte-for-byte, and
 tests/test_kmeans_golden.py holds each one to its pre-consolidation output),
 so the variants keep their own arithmetic and are named for how they work.
 
-    in-RAM numpy (additive VQ, fit_additive.py)
+    in-RAM numpy (additive VQ, additive_codebooks.py)
         kmeanspp_init(X, K, rng)          exact k-means++ over all of X
         assign(X, C, chunk, prefer_mx)    argmin; MLX above 32768 rows
         assign_mx_np(X, C, chunk)         the MLX half of assign()
         lloyd(X, C, iters, rng)           vectorised M-step, dead centroids revived
 
-    streamed host data, MLX distances (geo_build.py, additive_vq.py)
+    streamed host data, MLX distances (geo_build.py, fit_additive.py)
         kmeanspp_init_pooled(X, k, rng)   ++ over a 2^18-row sample
         assign_chunked(X, C)              argmin in K-scaled chunks
         lloyd_weighted(X, C, w, iters, K, rng)  weighted float64 M-step

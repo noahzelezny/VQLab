@@ -54,7 +54,16 @@ RENAMED = {"vq_397b_codes": "fit_moe", "pack_artifact": "pack",
            "build_dense_vq": "build_dense",
            # untangle step 11: stems match commands `spelling` / `size` / `scratch`
            "us_spelling": "spelling", "size_cmd": "size",
-           "scratch_cmd": "scratch"}
+           "scratch_cmd": "scratch",
+           # untangle step 15: names say what the module does
+           "probe_init_sweep": "init_sweep",
+           "mtp_probe": "mtp_probe_qwen4_exp",
+           "mtp_probe35": "mtp_probe_qwen35",
+           # the command `fit-additive` takes its own name; the additive-VQ
+           # LIBRARY that used to be fit_additive.py is additive_codebooks.py,
+           # and `fit_additive` / `vqlab.fit.fit_additive` now mean the
+           # COMMAND module (CHANGELOG, Unreleased)
+           "additive_vq": "fit_additive"}
 
 # Packages RENAMED (untangle step 10, 2026-10-10): assemble/ became build/ to
 # match its CLI namespace. {old package: new package}. The old package and
@@ -116,6 +125,9 @@ MOVED = {
     # vqlab.selftest (L12), split one module per stage it checks.
     "vqlab.gate.selftest": "vqlab.selftest",
     "selftest": "vqlab.selftest",
+    # untangle step 15: the DeepSeek draft head is BUILT (beside
+    # mtp_extract/pack/graft), not fitted.
+    "vqlab.fit.mtp_head_ds4": "vqlab.build.mtp_head_ds4",
 }
 ALIASES.update(MOVED)
 assert "queue" not in ALIASES and "vqlab.queue" not in ALIASES   # stdlib `queue` stays the stdlib's
@@ -305,11 +317,12 @@ class _Alias(importlib.abc.MetaPathFinder, importlib.abc.Loader):
         return False
 
 
-def install():
+def install_import_aliases():
     if str(SRC) not in sys.path:
         sys.path.append(str(SRC))
     if not any(isinstance(f, _Alias) for f in sys.meta_path):
         sys.meta_path.insert(0, _Alias())
 
 
-install()
+install = install_import_aliases   # pre-step-15 name; one release
+install_import_aliases()
