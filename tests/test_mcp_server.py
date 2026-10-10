@@ -12,7 +12,8 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
-from vqlab.agents import mcp_server as m
+from vqlab.agents import mcp_server as m   # the deprecated re-export: calls go through it
+from vqlab.agents.mcp import tools_findings, tools_runs, tools_storage  # patches go here
 
 
 @pytest.fixture
@@ -31,8 +32,8 @@ def lab(tmp_path, monkeypatch):
     monkeypatch.setenv("VQLAB_HOSTNAME", "studio-m3")
     log = tmp_path / "FINDINGS-LOG.md"
     log.write_text("# log\n\n## F97 (2026-09-14) — packing is exact\n\nbody\n\n## F98 (2026-09-14) — corrects\n\nbody\n")
-    monkeypatch.setattr(m, "FINDINGS_LOG", log)
-    monkeypatch.setattr(m, "_exo_instances", lambda: [])
+    monkeypatch.setattr(tools_findings, "FINDINGS_LOG", log)
+    monkeypatch.setattr(tools_runs, "_exo_instances", lambda: [])
     return {"root": root, "art": art, "cache": cache, "log": log}
 
 
@@ -97,19 +98,19 @@ def test_run_guards(lab, tmp_path):
 
 
 def test_run_refuses_while_exo_placed(lab, monkeypatch):
-    monkeypatch.setattr(m, "_exo_instances", lambda: ["inst-1"])
+    monkeypatch.setattr(tools_runs, "_exo_instances", lambda: ["inst-1"])
     with pytest.raises(m.ToolError) as ei:
         m.t_run("score", ["--model", str(lab["art"])])
     assert ei.value.code == "EXO_PLACED"
     # selftest has no model resident and is exempt from the placement check
-    monkeypatch.setattr(m, "_lease_holder", lambda: {"holder": "someone"})
+    monkeypatch.setattr(tools_runs, "_lease_holder", lambda: {"holder": "someone"})
     with pytest.raises(m.ToolError) as e2:
         m.t_run("selftest")
     assert e2.value.code == "GPU_BUSY"
 
 
 def test_run_refuses_when_lease_held(lab, monkeypatch):
-    monkeypatch.setattr(m, "_lease_holder", lambda: {"holder": "claude-code-ingest"})
+    monkeypatch.setattr(tools_runs, "_lease_holder", lambda: {"holder": "claude-code-ingest"})
     with pytest.raises(m.ToolError) as ei:
         m.t_run("score", ["--model", str(lab["art"])])
     assert ei.value.code == "GPU_BUSY"
@@ -165,7 +166,7 @@ def test_read_doc_is_confined():
 
 def test_read_doc_without_checkout_points_online(tmp_path, monkeypatch):
     # A wheel install: REPO is site-packages' parent, with no docs/ beside it.
-    monkeypatch.setattr(m, "REPO", tmp_path)
+    monkeypatch.setattr(tools_storage, "REPO", tmp_path)
     with pytest.raises(m.ToolError) as e:
         m.t_read_doc("docs/FINDINGS.md")
     assert e.value.code == "NO_CHECKOUT"
