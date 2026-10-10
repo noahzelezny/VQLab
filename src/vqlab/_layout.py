@@ -97,8 +97,24 @@ MOVED = {
     "vqlab.gate.us_spelling": "vqlab.gate.spelling",
     "vqlab.records.size_cmd": "vqlab.ship.size",
     "vqlab.records.scratch_cmd": "vqlab.agents.scratch",
+    # untangle step 12: the job queue is its own package, vqlab.queue (L11).
+    # queue/ is NOT a stage folder: its stems (runner, steps, files, eta,
+    # validate, ...) are too generic to answer for as bare names, and no
+    # bare `queue` alias may ever exist (it would shadow the stdlib queue).
+    # agents/run_queue.py stays as a deprecated re-export module, since its
+    # names are split across queue/{runner,steps,files,report,remote}.py.
+    "vqlab.agents.queue_eta": "vqlab.queue.eta",
+    "vqlab.queue_eta": "vqlab.queue.eta",
+    "queue_eta": "vqlab.queue.eta",
+    "vqlab.gate.validate_queue": "vqlab.queue.validate",
+    "vqlab.validate_queue": "vqlab.queue.validate",
+    "validate_queue": "vqlab.queue.validate",
+    "vqlab.agents.reserve": "vqlab.queue.reserve",
+    "vqlab.reserve": "vqlab.queue.reserve",
+    "reserve": "vqlab.queue.reserve",
 }
 ALIASES.update(MOVED)
+assert "queue" not in ALIASES and "vqlab.queue" not in ALIASES   # stdlib `queue` stays the stdlib's
 
 
 def stage_dirs():

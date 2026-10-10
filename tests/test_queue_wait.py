@@ -6,7 +6,7 @@ import sys
 
 from vqlab import _layout  # noqa: F401
 sys.path.insert(0, str(_layout.SRC / "vqlab" / "agents"))
-from vqlab.agents import run_queue as rq
+from vqlab.queue import report as rq
 from vqlab.agents import mcp_server as ms
 
 
@@ -53,7 +53,7 @@ def test_written_paths_are_outputs():
     """stream-score --kl-per-position and runtime-equiv --keep-dir WRITE their
     path: the queue must not demand it exists. (--save-topk is the top-k COUNT;
     the cache dir is --out.)"""
-    from vqlab.agents import run_queue
-    assert "--save-topk" not in run_queue.OUT_FLAGS
+    from vqlab.queue import steps
+    assert "--save-topk" not in steps.OUT_FLAGS
     for f in ("--kl-per-position", "--keep-dir"):
-        assert f in run_queue.OUT_FLAGS
+        assert f in steps.OUT_FLAGS

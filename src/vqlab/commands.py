@@ -150,7 +150,7 @@ COMMANDS: dict[str, Command] = {c.name: c for c in (
        'freeze an artifact for measurement (symlinked weights, optional --runtime re-bake), smoke it, write vqlab_pin.json'),
     _C('verify', 'vqlab.gate.verify_artifact', 'verify_artifact.py', 'gate', True, True,
        'outlier gate: decode artifact bytes vs bf16 source'),
-    _C('validate', 'vqlab.gate.validate_queue', 'validate_queue.py', 'gate', True, True,
+    _C('validate', 'vqlab.queue.validate', 'queue/validate.py', 'gate', True, True,
        'overnight validation queue: drain artifacts through the gates, never publish'),
     _C('check-release', 'vqlab.gate.check_release', 'check_release.py', 'gate', True, True,
        'release gate: files exist and function'),
@@ -248,9 +248,9 @@ COMMANDS: dict[str, Command] = {c.name: c for c in (
        'stage 2: stage-1 pack -> compact-RESIDENT artifact (row table, new dir)'),
     _C('sz-bitexact', 'vqlab.skipzero.sz_bitexact', 'skipzero/sz_bitexact.py', 'gate', False, True,
        'byte-equality gate, resident vs reference (modules N=1/8/4096/4097, logits, 9k prefill, greedy); --synthetic, --selftest'),
-    _C('queue', 'vqlab.agents.run_queue', 'run_queue.py', 'lab', False, True,
+    _C('queue', 'vqlab.queue.runner', 'queue/runner.py', 'lab', False, True,
        'run a list of steps from PINNED code (git worktree), under the GPU lease, failing loudly; --preflight'),
-    _C('reserve', 'vqlab.agents.reserve', 'reserve.py', 'lab', False, True,
+    _C('reserve', 'vqlab.queue.reserve', 'queue/reserve.py', 'lab', False, True,
        'say who has a box until when (`reserve m4 --for X --until +3h`, --list, --release); queue run refuses a box reserved for someone else'),
 )}
 
@@ -405,6 +405,12 @@ def resolve(argv):
     if head in COMMANDS:
         return head, argv[1:]
     return None, argv
+
+
+# Resumable builds: on a failure (GPU timeouts under disk contention) the MCP
+# supervisor and the queue runner retry them DEFAULT_RETRIES times.
+RESUMABLE = frozenset({"fit-moe", "fit-dense", "geo-build", "alloc-sweep", "validate"})
+DEFAULT_RETRIES = 2
 
 
 def mcp_allowlist() -> set[str]:

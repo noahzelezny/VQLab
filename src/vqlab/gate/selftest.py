@@ -656,7 +656,14 @@ def main(argv=None) -> int:
 
         print("[6a4/7] queue: pinned tree, loud failure, preflight")
         import os as _os
-        from vqlab.agents import run_queue as Q
+        # The queue is vqlab.queue (L11) now; selftest still sits in gate
+        # (L8) until untangle step 14 moves it to L12, so it reads the queue
+        # through the deprecated re-export (an edge already allowlisted)
+        # rather than adding a new upward gate->queue edge.
+        import warnings as _w
+        with _w.catch_warnings():
+            _w.simplefilter("ignore", DeprecationWarning)
+            from vqlab.agents import run_queue as Q
         from vqlab import _layout as L
         _saved = {k: _os.environ.get(k) for k in ("VQLAB_QUEUE_DIR", "VQLAB_GPU_LEASE",
                                                    "VQLAB_PREFLIGHT_DIR")}

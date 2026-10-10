@@ -14,9 +14,11 @@ from vqlab import _layout  # noqa: F401
 from vqlab import config as C
 sys.path.insert(0, str(_layout.SRC / "vqlab" / "agents"))
 from vqlab.agents import mcp_server as ms
-from vqlab.agents import queue_eta
-from vqlab.agents import reserve as R
-from vqlab.agents import run_queue as rq
+from vqlab.queue import eta as queue_eta
+from vqlab.queue import reserve as R
+from vqlab.queue import remote as rq
+from vqlab.queue import report
+from vqlab.queue import runner
 
 
 @pytest.fixture
@@ -101,13 +103,13 @@ def test_queue_run_refuses_reserved_box(cfg, monkeypatch):
     monkeypatch.setenv("VQLAB_BOX", "m4")              # "here" is m4
     R.reserve("here", "knurlogic", "+1h")
     called = []
-    monkeypatch.setattr(rq, "create", lambda *a, **k: called.append(a))
+    monkeypatch.setattr(runner, "create", lambda *a, **k: called.append(a))
     with pytest.raises(SystemExit) as e:
-        rq.main(["run", str(cfg / "q.json")])
+        runner.main(["run", str(cfg / "q.json")])
     assert "knurlogic" in str(e.value) and not called
     monkeypatch.delenv("VQLAB_BOX")
     with pytest.raises(SystemExit) as e:                # and --on m4 from the home box
-        rq.main(["run", str(cfg / "q.json"), "--on", "m4"])
+        runner.main(["run", str(cfg / "q.json"), "--on", "m4"])
     assert "knurlogic" in str(e.value)
 
 
@@ -118,9 +120,9 @@ def test_override_is_recorded(cfg, monkeypatch):
     qdir = cfg / "qd"
     qdir.mkdir()
     (qdir / "state.json").write_text(json.dumps({"steps": []}))
-    monkeypatch.setattr(rq, "create", lambda *a, **k: qdir)
-    monkeypatch.setattr(rq, "run", lambda *a, **k: 0)
-    assert rq.main(["run", str(cfg / "q.json"), "--override-reservation"]) == 0
+    monkeypatch.setattr(runner, "create", lambda *a, **k: qdir)
+    monkeypatch.setattr(runner, "run", lambda *a, **k: 0)
+    assert runner.main(["run", str(cfg / "q.json"), "--override-reservation"]) == 0
     s = json.loads((qdir / "state.json").read_text())
     assert s["reservation_override"]["for"] == "knurlogic"
     assert s["reservation_override"]["overridden_by"] == "noah"
@@ -275,7 +277,7 @@ def test_status_prints_eta(tmp_path, monkeypatch, capsys):
     monkeypatch.setenv("VQLAB_QUEUE_DIR", str(tmp_path))
     st = {"name": "s", "cmd": "smoke", "args": []}
     d = _queue(tmp_path, "20261003-a", [st], [{"name": "s", "status": "pending"}])
-    rq.status(d)
+    report.status(d)
     assert "ETA unknown" in capsys.readouterr().out
     q = ms.t_queue_status()
     assert q["queues"][0]["eta"] == "ETA unknown" and q["queues"][0]["eta_s"] is None
