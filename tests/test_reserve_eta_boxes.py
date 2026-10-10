@@ -14,7 +14,7 @@ from vqlab import _layout  # noqa: F401
 from vqlab import config as C
 sys.path.insert(0, str(_layout.SRC / "vqlab" / "agents"))
 from vqlab.agents import mcp_server as ms
-from vqlab.agents.mcp import tools_runs
+from vqlab.ops import box as ops_box
 from vqlab.queue import eta as queue_eta
 from vqlab.queue import reserve as R
 from vqlab.queue import remote as rq
@@ -92,8 +92,8 @@ def test_fallback_when_scratch_unreachable(cfg, monkeypatch, capsys):
 
 def test_gpu_state_lists_reservations(cfg, monkeypatch):
     R.reserve("m4", "knurlogic", "+1h")
-    monkeypatch.setattr(tools_runs, "_box_state", lambda n, b: {"stub": True})
-    monkeypatch.setattr(tools_runs, "_exo_instances", lambda: [])
+    monkeypatch.setattr(ops_box, "_box_state", lambda n, b: {"stub": True})
+    monkeypatch.setattr(ops_box, "_exo_instances", lambda: [])
     out = ms.t_gpu_state()
     assert [r["box"] for r in out["reservations"]] == ["m4"]
     assert "knurlogic" in out["reservations"][0]["text"]

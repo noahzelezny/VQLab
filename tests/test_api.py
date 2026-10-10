@@ -17,7 +17,8 @@ from pathlib import Path
 import pytest
 
 from vqlab import api
-from vqlab.agents.mcp import tools_findings, tools_runs
+from vqlab.ops import findings as ops_findings
+from vqlab.ops import runs as ops_runs
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -54,9 +55,9 @@ def lab(tmp_path, monkeypatch):
     monkeypatch.setenv("VQLAB_HOSTNAME", "box-a")
     log = tmp_path / "FINDINGS-LOG.md"
     log.write_text("# log\n\n## F97 (2026-09-14) — packing is exact\n\nbody\n")
-    monkeypatch.setattr(tools_findings, "FINDINGS_LOG", log)
-    monkeypatch.setattr(tools_findings, "_FLOCK_DIR", tmp_path / ".f-locks")
-    monkeypatch.setattr(tools_runs, "_exo_instances", lambda: [])
+    monkeypatch.setattr(ops_findings, "FINDINGS_LOG", log)
+    monkeypatch.setattr(ops_findings, "_FLOCK_DIR", tmp_path / ".f-locks")
+    monkeypatch.setattr(ops_runs, "_exo_instances", lambda: [])
     return {"root": root, "art": art, "tmp": tmp_path}
 
 
@@ -72,7 +73,7 @@ def launched(lab, monkeypatch):
     def fake_popen(argv, **kw):
         calls.append(argv)
         return _FakeProc()
-    monkeypatch.setattr(tools_runs.subprocess, "Popen", fake_popen)
+    monkeypatch.setattr(ops_runs.subprocess, "Popen", fake_popen)
     return calls
 
 
@@ -142,7 +143,7 @@ def test_run_refusals(launched, lab, monkeypatch):
     assert e.value.code == "INVALID_ARG"
     with pytest.raises(api.ApiError):
         api.run(command="")
-    monkeypatch.setattr(tools_runs, "_exo_instances", lambda: ["inst-1"])
+    monkeypatch.setattr(ops_runs, "_exo_instances", lambda: ["inst-1"])
     with pytest.raises(api.ApiError) as e:
         api.run(command="score")
     assert e.value.code == "EXO_PLACED"

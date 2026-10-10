@@ -5,8 +5,9 @@ DEPRECATED location: the server is the package ``vqlab.agents.mcp`` (untangle
 step 13). This module only RE-EXPORTS its names so existing imports keep
 working. It is a re-export, not the home: ``monkeypatch.setattr`` on a name
 here does NOT reach the code that uses it -- patch the defining module
-(``vqlab.agents.mcp.tools_runs``, ``.tools_storage``, ``.tools_findings``,
-``.common`` or ``.server``) instead.
+instead: the lab library (``vqlab.ops.runs``, ``.box``, ``.queues``,
+``.storage``, ``.docs``, ``.findings``, ``.roots``) for the operations, or
+``vqlab.agents.mcp.server`` for the tool table.
 """
 
 from __future__ import annotations

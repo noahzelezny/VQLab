@@ -44,8 +44,10 @@ LAYER = {
     "bench": 9,
     "ship": 10,
     "queue": 11,
+    "ops": 11.5,            # lab operations on this box: runs, storage, findings
+    "api": 11.75,           # the stable surface; consumers (agents, cli) sit above
     "agents": 12, "selftest": 12,
-    "cli": 13, "api": 13,
+    "cli": 13,
 }
 # Infrastructure every layer may name: the package root (public MTP API,
 # use_knurlogic_arch) and the import-alias table. Both shrink in later steps.
