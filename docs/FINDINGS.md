@@ -127,7 +127,7 @@ are finished; this file is now a closed record, not a working one.
     8.81 GiB/bit against shallow's 1.87, a body-only penalty IS an artifact
     penalty — which is why the K256 refit lost while K2048/K8192 won. Mean
     relerr across those body tensors moves -0.00033, so the gate sees nothing.
-    **Run `probe_init_sweep.py` on a new family BEFORE fitting anything** —
+    **Run `vqlab probe-init`, `plan/init_sweep.py` on a new family BEFORE fitting anything** —
     see PROCESS.md. [E107, E108, E109]
 
 14. **THE AFFINE FRONTIER PASSES ABOVE THE VQ FRONTIER BY 6.0 bpw — the

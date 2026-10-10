@@ -11,7 +11,7 @@ the per-family heads `mtp_head*.py`.
 
 ## Outputs
 Tokens. The MTP TOOLS live in the stage folders like every other tool:
-`plan/mtp_probe*.py` (does the teacher's head draft well?),
+`plan/mtp_probe_qwen4_exp.py` / `plan/mtp_probe_qwen35.py` (does the teacher's head draft well?),
 `build/mtp_extract.py`, `mtp_pack.py`, `mtp_graft.py` (build the sidecar),
 `gate/mtp_smoke_head.py`, `bench/mtp_bench.py`, `mtp_accept.py`, and
 `ship/mtp_run.py` (`vqlab mtp-generate`).
