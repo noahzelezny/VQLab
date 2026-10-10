@@ -30,12 +30,11 @@ import sys
 import mlx.core as mx
 import numpy as np
 
-from vqlab import _layout  # noqa: E402,F401  one module object per name
-import vq_pack
+from vqlab.runtime import vq_pack
 
 
-from families import FAMILY  # shared registry (families.py)
-import expert_src            # shared source-layout loader (incl. unfused)
+from vqlab.core.families import FAMILY  # shared registry (families.py)
+from vqlab.core import expert_src            # shared source-layout loader (incl. unfused)
 
 ap = argparse.ArgumentParser()
 ap.add_argument("--artifact", required=True)

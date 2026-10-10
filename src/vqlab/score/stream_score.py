@@ -34,9 +34,8 @@ import time
 
 import mlx.core as mx
 
-from vqlab import _layout  # noqa: E402,F401  one module object per name
-import runtime_load
-from mem_budget import eval_params_budgeted
+from vqlab.core import runtime_load
+from vqlab.core.mem_budget import eval_params_budgeted
 
 
 def score_qwen4_exp(model, ids_list, args):
@@ -409,7 +408,7 @@ SCORERS = {
 
 
 # Families that live as plugins (vqlab/family/) add their scorers here.
-from vqlab.family import scorers as _plugin_scorers  # noqa: E402
+from vqlab.family import scorers as _plugin_scorers
 SCORERS.update(_plugin_scorers())
 
 
@@ -493,10 +492,11 @@ def main():
         cpu_stream=entry.get("cpu_stream_load", False))
     print(runtime_load.resolved_runtime_note(model), flush=True)
     if a.stream_ple:
-        import ple_stream
+        from vqlab.core import ple_stream
         if not ple_stream.install(model, str(mp)):
             print("[ple_stream] no sharded n-gram tables found", flush=True)
     tok = load_tokenizer(mp)
+    from vqlab import _layout
     ids = tok.encode(open(_layout.corpus(a.corpus)).read())[: a.tokens + 1]
     bos = getattr(tok, "bos_token_id", None)
     if bos is not None and (not ids or ids[0] != bos):
@@ -633,7 +633,7 @@ def main():
             rec["mean_kl_top64_millinats"] = round(
                 float(mx.mean(kl_top).item()) * 1000.0, 4)
     if a.stream_ple:
-        import ple_stream as _ps
+        from vqlab.core import ple_stream as _ps
         st = _ps.STATS
         print(f"[ple_stream] {st['calls']} calls, {st['rows']} rows, "
               f"{st['secs']:.1f}s in the gather", flush=True)

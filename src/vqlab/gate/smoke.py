@@ -41,8 +41,7 @@ import pathlib
 import subprocess
 import sys
 
-HERE = pathlib.Path(__file__).parent
-from vqlab._layout import find as _find  # noqa: E402
+from vqlab._layout import find as _find
 
 
 def main(argv=None) -> int:
@@ -88,7 +87,7 @@ def main(argv=None) -> int:
     # in-checkpoint model.py bundle, so "generate through the runtime the
     # artifact SHIPS" holds under either.
     import json as _json
-    import runtime_load
+    from vqlab.core import runtime_load
     _cfg = _json.load(open(art / "config.json"))
     _mt = _cfg.get("model_type") or \
         _cfg.get("text_config", {}).get("model_type")

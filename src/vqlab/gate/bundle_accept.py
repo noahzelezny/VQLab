@@ -41,7 +41,7 @@ print("has cap guard:", hasattr(bvq, "_d4_tg_fits"))
 
 mx.random.seed(0)
 
-from vqlab.gate.kernel_reference import reference  # noqa: E402
+from vqlab.gate.kernel_reference import reference
 
 fails = 0
 for (E, OUT, IN) in [(4, 512, 2048), (2, 256, 1024)]:
@@ -75,8 +75,7 @@ for (E, OUT, IN) in [(4, 512, 2048), (2, 256, 1024)]:
 # qwen4_exp down_proj shape the padded-tail format exists for. The metal
 # reader must agree with the numpy reference through the ceil-WPR stride.
 import numpy as np
-from vqlab import _layout  # noqa: E402,F401  one module object per name
-import vq_pack
+from vqlab.runtime import vq_pack
 for (E, OUT, IN, D, K, bits) in [(2, 128, 640, 8, 4096, 12),
                                  (2, 128, 704, 4, 2048, 11)]:
     NSUB = IN // D

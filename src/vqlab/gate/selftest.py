@@ -28,7 +28,7 @@ import tempfile
 import mlx.core as mx
 
 HERE = pathlib.Path(__file__).parent
-from vqlab._layout import find as _find  # noqa: E402
+from vqlab._layout import find as _find
 PY = sys.executable
 
 # tiny geometry: IN divisible by group(64) and dim; OUT small.
@@ -88,7 +88,7 @@ def geo_fixture(tmp: pathlib.Path):
     module, E=2 experts, IN=128 so d4 gives nsub=32 (geo-build refuses
     ragged packing). The base carries its OWN build record so the child's
     lineage link can be checked."""
-    import provenance
+    from vqlab.records import provenance
     E, I, H = 2, 8, 128
     teacher, base = tmp / "geo-teacher", tmp / "geo-base"
     teacher.mkdir(); base.mkdir()
@@ -117,7 +117,7 @@ def geo_fixture(tmp: pathlib.Path):
 
 def decode_all(art: pathlib.Path):
     """Decode every VQ tensor in an artifact to dense weights."""
-    import vq_pack
+    from vqlab.runtime import vq_pack
     cfg = json.load(open(art / "config.json"))
     mods = cfg.get("vq_modules") or cfg.get("vq_linear") or {}
     idx = json.load(open(art / "model.safetensors.index.json"))["weight_map"]
@@ -392,7 +392,7 @@ def main(argv=None) -> int:
         x = (mx.random.normal((1, IN_D)) * 0.5).astype(mx.float16)
         yb = ns["VQLinear"](codes, cb, sc, group_size=G, pack_bits=0)(x)
         mx.eval(yb)
-        import vq_dense
+        from vqlab.runtime import vq_dense
         yi = vq_dense.VQLinear(codes, cb, sc, group_size=G, pack_bits=0)(x)
         mx.eval(yi)
         check("bundled and installed runtimes agree bit-for-bit",
@@ -756,7 +756,7 @@ def main(argv=None) -> int:
                            f.stem in sys.stdlib_module_names
                            or _im.PathFinder.find_spec(f.stem, outside) is not None))
         import importlib as _il
-        import vq_switch as _bare
+        from vqlab.runtime import vq_switch as _bare
         import vqlab.runtime.vq_switch as _canon
         import vqlab.vq_switch as _old
         check("bare, dotted and pre-split names give ONE module object",

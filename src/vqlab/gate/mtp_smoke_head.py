@@ -29,7 +29,6 @@ import time
 import mlx.core as mx
 mx.random.seed(1234)  # lab default: nothing random unless asked
 
-from vqlab import _layout  # noqa: E402,F401  one module object per name
 from vqlab.mtp import registry
 
 

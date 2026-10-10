@@ -43,8 +43,7 @@ import pathlib
 import numpy as np
 import mlx.core as mx
 
-from vqlab import _layout  # noqa: E402,F401  one module object per name
-from vqlab import runtime_load  # noqa: E402
+from vqlab.core import runtime_load
 
 
 def _num(v):
