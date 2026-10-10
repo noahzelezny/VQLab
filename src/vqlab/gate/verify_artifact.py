@@ -33,7 +33,7 @@ import numpy as np
 from vqlab.runtime import vq_pack
 
 
-from vqlab.core.families import FAMILY  # shared registry (families.py)
+from vqlab.family.registry import FAMILY  # shared registry (family/registry.py)
 from vqlab.core import expert_src            # shared source-layout loader (incl. unfused)
 
 ap = argparse.ArgumentParser()

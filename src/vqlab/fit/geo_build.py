@@ -54,7 +54,7 @@ import time
 import numpy as np
 import mlx.core as mx
 
-from vqlab.core.families import FAMILY
+from vqlab.family.registry import FAMILY
 from vqlab.records import provenance
 from vqlab.core import fitstore
 from vqlab.util.log import make_log

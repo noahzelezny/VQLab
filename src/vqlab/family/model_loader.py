@@ -22,7 +22,7 @@ resolved_runtime_note(model) and print it.
 
 CPU-only selftest (dispatch logic only, loads nothing):
 
-    python -m vqlab.runtime_load --selftest
+    python -m vqlab.family.model_loader --selftest
 """
 from __future__ import annotations
 
@@ -30,7 +30,7 @@ import pathlib
 import mlx.core as mx
 import sys
 
-from vqlab.core.families import FAMILY
+from vqlab.family.registry import FAMILY
 
 RUNTIMES = ("mlx_lm", "mlx_vlm")
 
@@ -42,11 +42,11 @@ def runtime_for(family: str) -> str:
     rt = entry.get("runtime", "mlx_lm")
     # Knurlogic serves some architectures that used to exist only in mlx_vlm
     # (glm5_next) under mlx_lm.models, and VQLab loads Knurlogic's files
-    # (vqlab.family.arch). When it serves this family's model_type, load
+    # (vqlab.core.arch_finder). When it serves this family's model_type, load
     # through mlx_lm: that is the arithmetic users run, and a VQLab env has
     # no mlx_vlm (2026-10-03: GLM could not load in ~/.venvs/vqlab at all).
     if rt == "mlx_vlm" and entry.get("model_type"):
-        from vqlab.family import arch
+        from vqlab.core import arch_finder as arch
         if arch.enabled() and entry["model_type"] in arch.available():
             rt = "mlx_lm"
     if rt not in RUNTIMES:

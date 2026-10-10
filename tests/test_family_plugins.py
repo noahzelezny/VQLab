@@ -1,7 +1,7 @@
 """Family plugins feed the shared tables: a plugin's fit layout appears in
-core.families.FAMILY, its scorer in stream_score.SCORERS, its tokenizer hook
+family.registry.FAMILY, its scorer in stream_score.SCORERS, its tokenizer hook
 in check-release's probe; families without a plugin get no hook."""
-from vqlab.core import families
+from vqlab.family import registry as families
 from vqlab.family import plugins, tokenizer_hook
 
 

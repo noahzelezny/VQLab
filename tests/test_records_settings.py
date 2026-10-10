@@ -153,7 +153,7 @@ def test_import_leaves_meta_path_unchanged():
     # vqlab's own stage-alias finder (_layout._Alias: old vqlab.* names only)
     # is internal; nothing that resolves another package's modules may appear
     r = _py("import sys; before = list(sys.meta_path); import vqlab; "
-            "from vqlab import _layout; from vqlab.family import arch; "
+            "from vqlab import _layout; from vqlab.core import arch_finder as arch; "
             "new = [f for f in sys.meta_path if f not in before "
             "and not isinstance(f, _layout._Alias)]; "
             "print(new == [] and arch._FINDER not in sys.meta_path)")
@@ -163,7 +163,7 @@ def test_import_leaves_meta_path_unchanged():
 
 def test_use_knurlogic_arch_installs_one_finder(monkeypatch):
     import vqlab
-    from vqlab.family import arch
+    from vqlab.core import arch_finder as arch
 
     class _Reg:
         def available(self):

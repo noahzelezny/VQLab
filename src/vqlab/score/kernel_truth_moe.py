@@ -105,7 +105,7 @@ def main(argv=None) -> int:
         for K, bits in ((2048, 11), (4096, 12)):
             cells += compare(f"synthetic d4/K{K} packed{bits}", synthetic(K, bits), a.seeds)
     elif a.artifact:
-        from vqlab.core import runtime_load
+        from vqlab.family import model_loader as runtime_load
         model, _ = runtime_load.load_for_family(a.family, a.artifact, lazy=True)
         want = tuple(s.strip() for s in a.modules.split(",") if s.strip())
         pick = [(n, m) for n, m in model.named_modules()

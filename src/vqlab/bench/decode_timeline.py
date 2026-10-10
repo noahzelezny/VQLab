@@ -71,7 +71,7 @@ import time
 import mlx.core as mx
 import mlx.nn as nn
 
-from vqlab.core import runtime_load
+from vqlab.family import model_loader as runtime_load
 from vqlab.bench.power import gpu_watts
 from vqlab.bench.timeline_common import layer_kind as _kind, trunk as _trunk
 

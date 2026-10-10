@@ -216,6 +216,15 @@ def families_dir() -> pathlib.Path:
     return pathlib.Path(env).expanduser() if env else records() / "families"
 
 
+def checkout_families_dir() -> pathlib.Path:
+    """The `families/` data checked in at the root of a source checkout
+    (src/vqlab/config.py -> <checkout>/families). A checkout-only read: an
+    installed package has no such directory and readers skip a missing one.
+    families_dir() is the user's location; registries read both."""
+    here = pathlib.Path(__file__).resolve()
+    return here.parent.parent.parent / "families"
+
+
 def research_dir() -> pathlib.Path:
     """Research notes, sweep plans, result tables: <records>/research."""
     return records() / "research"

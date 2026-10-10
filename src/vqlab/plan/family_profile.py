@@ -48,7 +48,7 @@ import sys
 from vqlab import config as _config
 from vqlab import config
 from vqlab.core.artifact import tensor_class
-from vqlab.core.families import DENSE_FAMILIES, FAMILY
+from vqlab.family.registry import DENSE_FAMILIES, FAMILY
 from vqlab.core import fitstore
 from vqlab.records import provenance
 
@@ -208,7 +208,7 @@ def suggest_entry(idx_keys):
             "proj": proj_map,
             "_note": "DRAFT from index key patterns: confirm target_substr "
                      "against the runtime's module tree, then run "
-                     "`python src/vqlab/core/expert_src.py --selftest`"}
+                     "`pytest tests/test_expert_src_loader.py`"}
 
 
 def main(argv=None) -> int:
@@ -341,7 +341,7 @@ def main(argv=None) -> int:
         ent["_source"] = f"family-profile --suggest-entry on {sl}"
         (ed_dir / "entry.json").write_text(json.dumps(ent, indent=1))
         print(f"  wrote DRAFT entry {ed_dir / 'entry.json'}; re-profiling under it")
-        from vqlab.core import families as _f
+        from vqlab.family import registry as _f
         importlib_reload = __import__("importlib").reload
         importlib_reload(_f)
         FAMILY.update(_f.FAMILY)

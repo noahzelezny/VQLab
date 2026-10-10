@@ -41,8 +41,8 @@ from mlx.utils import tree_flatten, tree_unflatten
 # PROVISIONAL until a glm5_next struct base is built.
 from mlx_lm.utils import load_tokenizer, quantize_model, save_config
 
-from vqlab.core.families import FAMILY
-from vqlab.core import runtime_load
+from vqlab.family.registry import FAMILY
+from vqlab.family import model_loader as runtime_load
 from vqlab.family import alias_fused, fused_projections
 
 ap = argparse.ArgumentParser()

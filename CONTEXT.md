@@ -77,13 +77,13 @@ src/vqlab/
   _layout.py    stage folders on sys.path, runtime_file()/find(), pre-split import aliases
   util/         stdlib-only helpers: hashing (sha256_file, fingerprint), clock, log, fs. Import from here; never write a private _sha/_log/_now
   runtime/      SHIPPED code, spliced verbatim into every model.py
-  core/         shared libraries (families registry, source loaders)
+  core/         shared libraries (source loaders, Knurlogic arch finder, stamp field compare/print); imports nothing from family/
   plan/  fit/  assemble/  bundle/  gate/  score/  bench/    the pipeline, in order
   records/      run log + build records + score stamps + artifact registry + tamper stamp
   ship/         publish (a human action) + serve
   agents/       MCP server, queue runner, read-only GUI
   mtp/          MTP speculative-decoding LIBRARY (vqlab.mtp); its tools live in the stages
-  family/       model families as plugins, one file each (fit layout, streamed scorer, tokenizer hook); deepseek_v4 first
+  family/       the family registry (registry.py), family-aware loading (model_loader.py) and version stamping (version_stamp.py), and model families as plugins, one file each (fit layout, streamed scorer, tokenizer hook); deepseek_v4 first
   skipzero/     the vq-skipzero pack/check tools (the runtime switch itself lives in runtime/)
 ```
 

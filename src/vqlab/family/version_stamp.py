@@ -24,7 +24,7 @@ never match while the architecture they both call must. The file the model
 class actually came from is recorded beside it (`loaded_file`/`loaded_sha256`)
 and is not compared.
 
-    python -m vqlab.core.numerics --model <dir>    # this interpreter's build, JSON
+    python -m vqlab.family.version_stamp --model <dir>    # this interpreter's build, JSON
 
 Reads files and package metadata only; never touches the GPU.
 """
@@ -37,10 +37,9 @@ import importlib.util
 import json
 import pathlib
 import sys
+from vqlab.core.stamp_fields import COMPARED, describe, diff  # noqa: F401  (re-exported)
 from vqlab.util.hashing import sha256_file
 
-# The fields a cache and a run must agree on. Order is the report order.
-COMPARED = ("mlx", "mlx_lm", "arch_sha256", "scorer_variant")
 _UNSET = object()
 
 
@@ -94,7 +93,7 @@ def _runtime_for(family: str | None) -> str:
     if not family:
         return "mlx_lm"
     try:
-        from vqlab.core import runtime_load
+        from vqlab.family import model_loader as runtime_load
         return runtime_load.runtime_for(family)
     except Exception:
         return "mlx_lm"
@@ -123,13 +122,11 @@ def arch_file(model_type: str | None, runtime: str = "mlx_lm") -> str | None:
 
 
 def scorer_variant(model_type: str | None):
-    if not model_type:
-        return None
-    try:
-        from vqlab.family import variant_for
-        return variant_for(model_type)
-    except Exception:
-        return None
+    """family.registry.scorer_variant (moved there 2026-10-10; this name is
+    kept for one release). Imported at call time, as before the move, so
+    reading a stamp never loads the family plugins."""
+    from vqlab.family.registry import scorer_variant as _variant
+    return _variant(model_type)
 
 
 def build(model_type: str | None = None, *, family: str | None = None,
@@ -152,21 +149,6 @@ def build(model_type: str | None = None, *, family: str | None = None,
         if lf:
             out["loaded_file"], out["loaded_sha256"] = lf, _sha(lf)
     return out
-
-
-def diff(a: dict | None, b: dict | None) -> list:
-    """[(field, a, b)] for every COMPARED field that differs."""
-    a, b = a or {}, b or {}
-    return [(k, a.get(k), b.get(k)) for k in COMPARED if a.get(k) != b.get(k)]
-
-
-def describe(st: dict | None) -> str:
-    """'mlx X, mlx-lm Y, variant Z' -- the card line."""
-    if not st:
-        return "build not stamped"
-    return (f"mlx {st.get('mlx')}, mlx-lm {st.get('mlx_lm')}, "
-            + (f"knurlogic {st['knurlogic']}, " if st.get("knurlogic") else "")
-            + f"variant {st.get('scorer_variant') or 'none'}")
 
 
 def check_cache(meta: dict, run: dict, allow: bool = False, what: str = "teacher cache") -> dict:
@@ -257,7 +239,7 @@ def main(argv=None) -> int:
     family = a.family
     if family is None and mt:
         try:
-            from vqlab.core import runtime_load
+            from vqlab.family import model_loader as runtime_load
             family = runtime_load.family_for_model_type(mt)
         except Exception:
             family = None

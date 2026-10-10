@@ -18,7 +18,7 @@ import argparse, json, pathlib
 import mlx.core as mx
 import numpy as np
 
-from vqlab.core.families import FAMILY
+from vqlab.family.registry import FAMILY
 from vqlab.core import expert_src
 
 ap = argparse.ArgumentParser()

@@ -50,6 +50,25 @@ RENAMED = {"vq_397b_codes": "fit_moe", "pack_artifact": "pack",
            # 2026-10-10: experiment numbers out of file names
            "e134_accept": "kernel_accept", "verify_e134_devcb": "verify_dev_codebook"}
 
+# Modules MOVED between packages (untangle step 9a, 2026-10-10: the core <->
+# family cycle). {old dotted or bare name: new canonical dotted name}. Kept
+# for one release; one module object under either name (_Alias).
+ALIASES = {
+    "vqlab.core.families": "vqlab.family.registry",
+    "vqlab.families": "vqlab.family.registry",
+    "families": "vqlab.family.registry",
+    "vqlab.core.numerics": "vqlab.family.version_stamp",
+    "vqlab.numerics": "vqlab.family.version_stamp",
+    "numerics": "vqlab.family.version_stamp",
+    "vqlab.core.version_stamp": "vqlab.family.version_stamp",
+    "vqlab.version_stamp": "vqlab.family.version_stamp",
+    "version_stamp": "vqlab.family.version_stamp",
+    "vqlab.core.runtime_load": "vqlab.family.model_loader",
+    "vqlab.runtime_load": "vqlab.family.model_loader",
+    "runtime_load": "vqlab.family.model_loader",
+    "vqlab.family.arch": "vqlab.core.arch_finder",
+}
+
 
 def stage_dirs():
     return [PKG / s for s in STAGES]
@@ -139,6 +158,7 @@ def _names():
         canon = out[new]
         out[old] = out[f"vqlab.{old}"] = canon
         out[f"{canon.rsplit('.', 1)[0]}.{old}"] = canon
+    out.update(ALIASES)
     # MTP heads lived at vqlab.mtp_head* before the split. Dotted alias only:
     # the vqlab.mtp library's own module names (runtime, loop, ...) are too
     # generic to answer for as bare names.

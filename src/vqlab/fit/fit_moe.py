@@ -47,7 +47,7 @@ import mlx.core as mx
 mx.set_cache_limit(8 << 30)
 
 from vqlab import _layout
-from vqlab.core.families import FAMILY  # shared registry (families.py)
+from vqlab.family.registry import FAMILY  # shared registry (family/registry.py)
 from vqlab.core import expert_src  # shared source-layout loader (incl. unfused)
 from vqlab.assemble import codepack  # --pack: the same packing rule as `vqlab pack`
 

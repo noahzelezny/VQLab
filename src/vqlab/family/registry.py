@@ -158,11 +158,8 @@ DENSE_REMAP = {
 # over a data entry of the same name, so a data file cannot silently
 # redefine a published family.
 def _family_dirs():
-    import pathlib
-
     from vqlab import config
-    checked_in = pathlib.Path(__file__).resolve().parents[3] / "families"
-    return [checked_in, config.families_dir()]
+    return [config.checkout_families_dir(), config.families_dir()]
 
 
 def _load_data_entries():
@@ -205,10 +202,23 @@ def teacher_caches(teacher=None):
             if teacher and teacher.lower() not in t.lower():
                 continue
             for c in json.loads(f.read_text()).get("caches", []):
-                out.append({"family": f.parents[2].name, "teacher": t, **c})
+                out.append({"family": f.parent.parent.parent.name, "teacher": t, **c})
     return out
 
 
 # Families that live as plugins (vqlab/family/) add their fit layouts here.
 from vqlab.family import fit_families as _plugin_fit
 FAMILY.update(_plugin_fit())
+
+
+def scorer_variant(model_type: str | None):
+    """The family plugin's current scorer variant for model_type (None
+    without one, or when the plugin cannot say). Stamped into every cache
+    and result by family.version_stamp.build."""
+    if not model_type:
+        return None
+    try:
+        from vqlab.family import variant_for
+        return variant_for(model_type)
+    except Exception:
+        return None

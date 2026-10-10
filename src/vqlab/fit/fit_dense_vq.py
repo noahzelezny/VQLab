@@ -73,7 +73,7 @@ else:
     print("UNSEEDED (--seed -1) — this fit is a fresh draw", flush=True)
 SRC, OUT = pathlib.Path(args.src), pathlib.Path(args.out)
 K, D, G = args.k, args.dim, args.group
-from vqlab.core.families import DENSE_FAMILIES
+from vqlab.family.registry import DENSE_FAMILIES
 KEY_TMPL, _default_layers = DENSE_FAMILIES[args.family]
 LO, HI = (int(x) for x in (args.layers or _default_layers).split("-"))
 OUT.mkdir(parents=True, exist_ok=True)

@@ -22,7 +22,7 @@ See README.md and METHODOLOGY.md.
 __version__ = "0.1.0"
 
 from . import _layout  # noqa: F401  stage folders + pre-split import names
-from .family import arch as _arch
+from .core import arch_finder as _arch
 
 
 def use_knurlogic_arch() -> bool:
@@ -30,7 +30,7 @@ def use_knurlogic_arch() -> bool:
     qwen3_5 / gemma4 / glm5_next) as mlx_lm.models.<name>. Call it before
     mlx_lm.load. Idempotent; returns False when VQLAB_VENDORED_ARCH=0 or
     knurlogic is not installed (stock mlx-lm then serves every name)."""
-    return _arch.install()
+    return _arch.install_arch_finder()
 
 
 def _main_is_vqlab() -> bool:
