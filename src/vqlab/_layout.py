@@ -317,11 +317,12 @@ class _Alias(importlib.abc.MetaPathFinder, importlib.abc.Loader):
         return False
 
 
-def install():
+def install_import_aliases():
     if str(SRC) not in sys.path:
         sys.path.append(str(SRC))
     if not any(isinstance(f, _Alias) for f in sys.meta_path):
         sys.meta_path.insert(0, _Alias())
 
 
-install()
+install = install_import_aliases   # pre-step-15 name; one release
+install_import_aliases()

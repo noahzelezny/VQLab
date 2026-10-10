@@ -157,7 +157,7 @@ def _make_stream_generate(real_stream_generate):
     return stream_generate
 
 
-def install(model_path, sidecar=None, family=None, quiet=False):
+def install_serving(model_path, sidecar=None, family=None, quiet=False):
     """Patch mlx-lm's server in place. Returns the server module."""
     from mlx_lm import server as srv
 
@@ -188,6 +188,9 @@ def install(model_path, sidecar=None, family=None, quiet=False):
               f"loop will refuse requests rather than mis-position the head",
               file=sys.stderr)
     return srv
+
+
+install = install_serving   # pre-step-15 name; one release
 
 
 def selfcheck(srv):
@@ -223,7 +226,7 @@ def main():
     ap.add_argument("--port", type=int, default=8080)
     a, rest = ap.parse_known_args()
 
-    srv = install(a.model, a.sidecar, a.family)
+    srv = install_serving(a.model, a.sidecar, a.family)
     selfcheck(srv)
     print('vqlab serve: patch self-check passed', flush=True)
 

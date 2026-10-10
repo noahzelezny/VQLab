@@ -326,7 +326,7 @@ def synthetic(outdir, which="both", u8_model_py=U8_MODEL_PY):
         import types
         vs = types.ModuleType("vq_switch_walk_frozen")
         exec(compile(WALK_FROZEN.read_text(), vs.__name__, "exec"), vs.__dict__)
-        SZ = sz_resident.install(vars(vs))
+        SZ = sz_resident.install_resident(vars(vs))
         assert SZ.vintage == "walk", SZ.vintage
         K, BITS = 2048, 11
         for name, E, OUT, IN in (("walk gate", 16, 512, 2048), ("walk down", 16, 2048, 512)):
@@ -382,7 +382,7 @@ def synthetic(outdir, which="both", u8_model_py=U8_MODEL_PY):
             fails += _synthetic_cases(name, ref, cmp_, rng, live, E, IN, vs.VQ_FUSED_MAX_N, lines)
     if which in ("u8", "both", "all"):
         ns = load_u8_runtime(u8_model_py)
-        SZ = sz_resident.install(ns)
+        SZ = sz_resident.install_resident(ns)
         assert SZ.vintage == "u8", SZ.vintage
         K = 256
         # 397B shapes (gate/up 4096->1024, down 1024->4096) at small E

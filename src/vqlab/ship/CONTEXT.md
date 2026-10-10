@@ -4,7 +4,7 @@
 A gated artifact.
 
 ## Process
-`vqlab publish` (a HUMAN action, gated on check-release; the MCP server does not expose it), `serve` (OpenAI-compatible, with MTP drafting).
+`vqlab publish` (a HUMAN action, gated on check-release; the MCP server does not expose it), `serve` (OpenAI-compatible, with MTP drafting; `serve.install_serving()` patches the mlx-lm server, alias `install`).
 
 Release text: `card.py` (`vqlab card`: the model card filled from config.json, the KL JSON via `card_tables.render`, `sizes()` and the build record via `records/provenance.records`; stdout unless `--out`), `card_checks.py` (its refusals: a KL fingerprint mismatch -- a later sidecar with no text tensors is allowed and named by `text_match` -- mixed builds, or artifacts changed during the run), `card_tables.py` (`vqlab card-tables`), `size.py` (`vqlab size`: text / +tower / +MTP; `--check-index`/`--fix-index` use `core/artifact_size.index_total_size`). The spelling lint is `gate/spelling.py` (check-release runs it).
 

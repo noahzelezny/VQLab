@@ -493,7 +493,7 @@ def main():
     print(runtime_load.resolved_runtime_note(model), flush=True)
     if a.stream_ple:
         from vqlab.core import ple_stream
-        if not ple_stream.install(model, str(mp)):
+        if not ple_stream.install_ple_stream(model, str(mp)):
             print("[ple_stream] no sharded n-gram tables found", flush=True)
     tok = load_tokenizer(mp)
     from vqlab import _layout

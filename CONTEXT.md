@@ -74,7 +74,7 @@ Outputs / Rules that bite). Read the one for your stage and skip the rest.
 src/vqlab/
   commands.py   THE command registry (pure data): name, module, stage, mcp, gpu, help; CLI, MCP allowlist and queue all read it
   cli.py        dispatcher: argv -> commands.py -> runpy.run_module (python -m vqlab.cli <cmd>)
-  _layout.py    stage folders on sys.path, runtime_file()/find(), pre-split import aliases
+  _layout.py    stage folders on sys.path, runtime_file()/find(), pre-split import aliases (install_import_aliases())
   util/         stdlib-only helpers: hashing (sha256_file, fingerprint), clock, log, fs. Import from here; never write a private _sha/_log/_now
   runtime/      SHIPPED code, spliced verbatim into every model.py
   core/         shared libraries (source loaders, Knurlogic arch finder, GPU lease + exo check, stamp field compare/print, artifact_size: the index total_size check shared by `size` and check-release); imports nothing from family/

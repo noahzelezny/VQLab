@@ -45,7 +45,7 @@ A vq-skipzero artifact under vqlab-scratch/ and a printed size report.
 ## Stage 2: compact RESIDENT (EXPERIMENTAL, not gated yet)
 Keeps live rows' codes/scales + an int32 [E, OUT] row table (-1 = dead)
 resident; dead rows read no code bytes and output exact zeros.
-- `sz_resident.py` -- copied into the artifact; `install(ns)` detects the
+- `sz_resident.py` -- copied into the artifact; `install_resident(ns)` (alias `install`) detects the
   runtime VINTAGE from its kernel text and forks exactly two kernels by
   EXACT-TEXT patch (each asserted to match once); anything else refuses:
   * `walk` (repo runtime, 35B): `_SRC_FUSED_PACKED_D4_WALK` ->
