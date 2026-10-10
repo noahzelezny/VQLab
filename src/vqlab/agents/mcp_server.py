@@ -64,6 +64,8 @@ SERVER_VERSION = "0.1.0"
 AGENTS_DIR = Path(__file__).resolve().parent
 PKG = AGENTS_DIR.parent          # src/vqlab
 REPO = PKG.parents[1]
+# Where read_doc points a wheel install, which carries no docs/.
+DOCS_URL = "https://github.com/noahzelezny/VQLab/blob/master"
 
 # --------------------------------------------------------------------------- #
 # Lab layout
@@ -359,8 +361,15 @@ def t_read_doc(path: str, start: int = 1, lines: int = 200) -> Dict[str, Any]:
                                    for a in DOC_ALLOW):
         raise ToolError("NOT_ALLOWED", f"{path} is not a readable lab doc",
                         allowed=list(DOC_ALLOW))
-    p = REPO / rel
+    # Stage contracts ship inside the package, so they resolve from PKG even
+    # in a wheel install; everything else lives only in a source checkout.
+    p = PKG / rel[len("src/vqlab/"):] if is_contract else REPO / rel
     if not p.is_file():
+        if not is_contract and not (REPO / "docs").is_dir():
+            url = f"{DOCS_URL}/{rel}"
+            raise ToolError("NO_CHECKOUT", f"{rel} is not installed: the docs ship only in a "
+                            f"source checkout of VQLab, not in the wheel. Read it at {url}",
+                            url=url)
         raise ToolError("NOT_FOUND", f"{p} does not exist")
     all_lines = p.read_text(errors="replace").split("\n")
     start = max(1, start)
