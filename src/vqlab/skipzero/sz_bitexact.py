@@ -82,8 +82,7 @@ def _sha(a):
 
 def dead_experts(art):
     """{module: experts ordered by dead-row count desc} from the resident pack."""
-    from vqlab import _layout  # noqa: F401
-    import fitstore
+    from vqlab.core import fitstore
     cfg = json.loads((pathlib.Path(art) / "config.json").read_text())
     mods = cfg["vq_skipzero"]["modules"]
     out = {}
@@ -355,7 +354,7 @@ def synthetic(outdir, which="both", u8_model_py=U8_MODEL_PY):
         spec = importlib.util.spec_from_file_location("vq_switch_ro", SRC / "vqlab/runtime/vq_switch.py")
         vs = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(vs)
-        import vq_pack
+        from vqlab.runtime import vq_pack
         for name, D, K, BITS, E, OUT, IN in (
                 ("native d4 gate", 4, 2048, 11, 16, 512, 2048),
                 ("native d8 gate", 8, 16384, 14, 16, 1024, 4096),
@@ -422,8 +421,7 @@ def partial(resident, stage1, layers, outdir, original=None):
     --original adds the ORIGINAL rung's modules as information only."""
     import importlib.util
     import mlx.core as mx
-    from vqlab import _layout  # noqa: F401
-    import fitstore
+    from vqlab.core import fitstore
     res, st1 = pathlib.Path(resident), pathlib.Path(stage1)
     cfg = json.loads((res / "config.json").read_text())
     sz = cfg["vq_skipzero"]

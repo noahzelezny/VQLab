@@ -54,10 +54,9 @@ import time
 import numpy as np
 import mlx.core as mx
 
-from vqlab import _layout  # noqa: E402,F401  one module object per name
-from families import FAMILY
-import provenance
-import fitstore
+from vqlab.core.families import FAMILY
+from vqlab.records import provenance
+from vqlab.core import fitstore
 from vqlab.util.log import make_log  # noqa: E402
 # Packing is the shipped runtime's (runtime/vq_pack.py): one packer.
 from vqlab.runtime.vq_pack import pack, words_per_row  # noqa: E402

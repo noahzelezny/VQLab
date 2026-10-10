@@ -31,8 +31,7 @@ import pathlib
 
 import mlx.core as mx
 
-from vqlab import _layout  # noqa: E402,F401  one module object per name
-import runtime_load
+from vqlab.core import runtime_load
 
 
 def report_norm_convention(g):

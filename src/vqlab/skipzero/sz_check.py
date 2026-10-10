@@ -25,11 +25,9 @@ import tempfile
 
 import numpy as np
 
-HERE = pathlib.Path(__file__).resolve().parent
-from vqlab import _layout  # noqa: E402,F401
-import fitstore  # noqa: E402
+from vqlab.core import fitstore
 
-from vqlab.skipzero import sz_pack  # noqa: E402
+from vqlab.skipzero import sz_pack
 
 GIB = 2 ** 30
 

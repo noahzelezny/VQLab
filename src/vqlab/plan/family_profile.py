@@ -45,13 +45,12 @@ import re
 import struct
 import sys
 
-from vqlab import _layout  # noqa: E402,F401  one module object per name
 from vqlab import config as _config  # noqa: E402
 from vqlab import config  # noqa: E402
 from vqlab.core.artifact import tensor_class  # noqa: E402
-from families import DENSE_FAMILIES, FAMILY  # noqa: E402
-import fitstore  # noqa: E402
-import provenance  # noqa: E402
+from vqlab.core.families import DENSE_FAMILIES, FAMILY
+from vqlab.core import fitstore
+from vqlab.records import provenance
 
 GSZ = 64                       # scale group, every shipped geometry
 TG_BYTES = 32768               # threadgroup codebook cache ceiling
@@ -342,7 +341,7 @@ def main(argv=None) -> int:
         ent["_source"] = f"family-profile --suggest-entry on {sl}"
         (ed_dir / "entry.json").write_text(json.dumps(ent, indent=1))
         print(f"  wrote DRAFT entry {ed_dir / 'entry.json'}; re-profiling under it")
-        import families as _f
+        from vqlab.core import families as _f
         importlib_reload = __import__("importlib").reload
         importlib_reload(_f)
         FAMILY.update(_f.FAMILY)

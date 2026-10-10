@@ -73,8 +73,7 @@ else:
     print("UNSEEDED (--seed -1) — this fit is a fresh draw", flush=True)
 SRC, OUT = pathlib.Path(args.src), pathlib.Path(args.out)
 K, D, G = args.k, args.dim, args.group
-from vqlab import _layout  # noqa: E402,F401  one module object per name
-from families import DENSE_FAMILIES
+from vqlab.core.families import DENSE_FAMILIES
 KEY_TMPL, _default_layers = DENSE_FAMILIES[args.family]
 LO, HI = (int(x) for x in (args.layers or _default_layers).split("-"))
 OUT.mkdir(parents=True, exist_ok=True)
@@ -223,7 +222,7 @@ cfg = json.load(open(SRC / "config.json"))
 cfg["vq_modules"] = vq_modules
 json.dump(cfg, open(OUT / "config.json", "w"), indent=1)
 # BUILD RECORD (docs/PROVENANCE.md). Last write, so it hashes the final bytes.
-from provenance import write_build_record
+from vqlab.records.provenance import write_build_record
 write_build_record(
     OUT, tool="fit-dense", script=__file__, ap=ap, args=args,
     method={"init": "kmeans++", "init_cap": args.init_cap,
@@ -238,7 +237,7 @@ write_build_record(
     modules={m: {**v, "origin": "fit"} for m, v in vq_modules.items()})
 # File every module's fit in the fit store (core/fitstore.py): findable by
 # family / teacher / layer / geometry, and never paid for twice.
-import fitstore  # noqa: E402
+from vqlab.core import fitstore
 _teacher = fitstore.teacher_slug(SRC)
 _recipe = {"origin": "fit", "tool": "fit-dense", "run_id": os.environ.get("VQLAB_RUN_ID"),
            "commit": __import__("provenance").code_state()["commit"],

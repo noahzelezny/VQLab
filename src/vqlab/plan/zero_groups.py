@@ -33,9 +33,8 @@ import sys
 
 import numpy as np
 
-from vqlab import _layout  # noqa: E402,F401  one module object per name
-import fitstore  # noqa: E402
-import registry  # noqa: E402
+from vqlab.core import fitstore
+from vqlab.records import registry
 
 TINY = 6.2e-5          # fp16 smallest normal is 6.10e-5
 GIB = 2 ** 30

@@ -42,9 +42,8 @@ import time
 import numpy as np
 import mlx.core as mx
 
-from vqlab import _layout  # noqa: E402,F401  one module object per name
-import geo_build as gb      # reuse the helpers; never copy them
-from geo_build import GSZ, NFITG, ITERS_LLOYD, _assign, _kmeanspp, _lloyd, pack
+from vqlab.fit import geo_build as gb  # reuse the helpers; never copy them
+from vqlab.fit.geo_build import GSZ, NFITG, ITERS_LLOYD, _assign, _kmeanspp, _lloyd, pack
 
 ROUNDS = 8          # alternation rounds (joint assign -> scale -> C1 -> C2)
 BEAM = 8            # C1 candidates searched per subvector in the joint assign

@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import numpy as np
 
-import vq_pack
+from vqlab.runtime import vq_pack
 
 
 def pack_bits_for(k: int, nsub: int, pack_unaligned: bool = False) -> int:
