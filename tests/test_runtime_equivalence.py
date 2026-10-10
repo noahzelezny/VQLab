@@ -89,10 +89,25 @@ def test_other_runtime_files_differ_only_in_comments(rev):
     assert _code_tokens(old) == _code_tokens(new)
 
 
+LEGACY_FLAGS = {"VQ_FUSED_MAX_N": 4096, "VQ_GEMMSEG_ACCS": False, "VQ_GEMMSEG_CVEC": False}
+
+
 @pytest.mark.gpu
 @pytest.mark.parametrize("rev", SWITCH, ids=lambda r: r["sha256"][:12])
-def test_current_runtime_byte_equal_to_certified_revision(rev):
+def test_current_runtime_byte_equal_to_certified_revision(rev, monkeypatch):
+    """Each revision runs at its OWN baked defaults (its text, exec'd with no
+    VQ_* overrides) and the current runtime is pinned to those same values
+    (the entry's `flags`, legacy when absent)."""
+    for k in LEGACY_FLAGS:
+        monkeypatch.delenv(k, raising=False)
+    flags = dict(LEGACY_FLAGS, **rev.get("flags", {}))
     old = _old(rev)
+    assert (old.VQ_FUSED_MAX_N, getattr(old, "_GEMMSEG_ACCS", False),
+            getattr(old, "_GEMMSEG_CVEC", False)) == tuple(flags.values()), \
+        "entry flags must match the revision's baked defaults"
+    monkeypatch.setattr(VS, "VQ_FUSED_MAX_N", flags["VQ_FUSED_MAX_N"])
+    monkeypatch.setattr(VS, "_GEMMSEG_ACCS", flags["VQ_GEMMSEG_ACCS"])
+    monkeypatch.setattr(VS, "_GEMMSEG_CVEC", flags["VQ_GEMMSEG_CVEC"])
     r = np.random.default_rng(11)
     E = 8
     for d, K, packed, IN, OUT in GEOMS:
@@ -104,7 +119,7 @@ def test_current_runtime_byte_equal_to_certified_revision(rev):
             bits = VP.bits_for_k(K)
             codes = VP.pack(codes.astype(np.uint32), bits)
             kw = dict(pack_bits=bits, in_features=IN)
-        for T, top in ((1, 8), (3, 10), (700, 8)):
+        for T, top in ((1, 8), (3, 10), (60, 10), (700, 8)):
             for dt in (mx.float16, mx.bfloat16):
                 x = mx.array(r.standard_normal((T, 1, 1, IN)).astype(np.float32)).astype(dt)
                 p = np.ones(E); p[0] = 6; p /= p.sum()
