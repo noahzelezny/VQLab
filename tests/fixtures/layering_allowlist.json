@@ -66,7 +66,6 @@
   "core/expert_src.py::sys.path.insert",
   "core/families.py::parents[2]",
   "core/families.py::upward:core->family",
-  "core/fitstore.py::upward:core->records",
   "core/numerics.py::bare:runtime_load",
   "core/numerics.py::upward:core->family",
   "core/runtime_load.py::bare:families",

@@ -39,6 +39,7 @@ import sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))  # src/
 from vqlab import config  # noqa: E402
+from vqlab.util.clock import now  # noqa: E402
 
 FILE = "vqlab-reservations.json"
 
@@ -70,8 +71,7 @@ def _box(name: str) -> str:
     return here() if name in (None, "", "here") else name
 
 
-def _now() -> dt.datetime:
-    return dt.datetime.now(dt.timezone.utc)
+_now = now
 
 
 def parse_until(s: str, now: dt.datetime | None = None) -> dt.datetime:

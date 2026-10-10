@@ -32,13 +32,13 @@ from __future__ import annotations
 
 import argparse
 import datetime
-import hashlib
 import json
 import os
 import pathlib
 import shutil
 import subprocess
 import sys
+from vqlab.util.hashing import sha256_file  # noqa: E402
 
 SCHEMA = "vqlab.pin/1"
 MARKER = "vqlab_pin.json"
@@ -47,7 +47,7 @@ _SKIP = {"__pycache__", MARKER, SMOKE_LOG, ".DS_Store"}
 
 
 def _sha(p: pathlib.Path) -> str | None:
-    return hashlib.sha256(p.read_bytes()).hexdigest() if p.exists() else None
+    return sha256_file(p) if p.exists() else None
 
 
 def _kind(src: pathlib.Path) -> str:

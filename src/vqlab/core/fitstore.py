@@ -62,9 +62,9 @@ def _families_dir():
 def teacher_identity(teacher_dir):
     """(config_sha256, shard_fingerprint) -- the same two hashes a family
     profile records under `identity` (per-shard bytes + first-MiB sha256)."""
-    from vqlab.records import provenance
+    from vqlab.util.hashing import fingerprint
     rp = pathlib.Path(os.path.realpath(teacher_dir))
-    fp = provenance.fingerprint(rp)
+    fp = fingerprint(rp)
     return (hashlib.sha256((rp / "config.json").read_bytes()).hexdigest(),
             hashlib.sha256(json.dumps(fp.get("shards", {}), sort_keys=True).encode()).hexdigest())
 

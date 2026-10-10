@@ -72,7 +72,6 @@ chained steps (pin <- build) preflight end to end. A `name=path` argument
 from __future__ import annotations
 
 import argparse
-import datetime
 import json
 import os
 import pathlib
@@ -93,6 +92,7 @@ import step_verdict as sv  # noqa: E402
 import pin as pinmod  # noqa: E402
 import queue_eta  # noqa: E402
 import reserve as resv  # noqa: E402
+from vqlab.util.clock import now_iso, slug  # noqa: E402
 
 REPO = _layout.SRC.parent
 SCHEMA = "vqlab.queue/1"
@@ -105,8 +105,7 @@ OUT_FLAGS = {"--out", "--out-dir", "--output", "-o", "--per-pos-dir",
 _PATHLIKE = re.compile(r"""["'](/(?:Volumes|Users|opt|tmp|private)/[^"'\n]+|(?:src|scripts|research|families)/[^"'\s\n]+)["']""")
 
 
-def _now():
-    return datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds")
+_now = now_iso
 
 
 def preflight_root() -> pathlib.Path:
@@ -137,8 +136,7 @@ def _save(qdir, state):
     tmp.replace(qdir / "state.json")
 
 
-def _slug(s):
-    return re.sub(r"[^\w.-]", "_", s)[:40]
+_slug = slug
 
 
 def validate(q) -> list[str]:

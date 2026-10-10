@@ -61,6 +61,7 @@ from vqlab import _layout  # noqa: E402,F401  one module object per name
 from families import FAMILY
 import provenance
 import fitstore
+from vqlab.util.log import make_log  # noqa: E402
 
 GSZ = 64
 CHUNK = 1 << 18
@@ -110,8 +111,7 @@ def parse_part(fname):
     return (fname[:-len(EXT)] if fname.endswith(EXT) else fname), None, None
 
 
-def _log(*a):
-    print(time.strftime("[%H:%M:%S]"), *a, flush=True)
+_log = make_log(stamp=True)
 
 
 def words_per_row(nsub: int, bits: int) -> int:

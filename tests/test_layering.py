@@ -50,6 +50,8 @@ LAYER = {
 # Infrastructure every layer may name: the package root (public MTP API,
 # use_knurlogic_arch) and the import-alias table. Both shrink in later steps.
 EXEMPT = {"", "_layout"}
+# Peer edges the plan allows explicitly.
+ALLOWED_PEERS = {("util", "config")}
 
 
 def _stems():
@@ -137,7 +139,7 @@ def violations() -> set[str]:
                     target = _pkg_of(canon)
                 if target is None or target in EXEMPT or me in EXEMPT:
                     continue
-                if target == me:
+                if target == me or (me, target) in ALLOWED_PEERS:
                     continue
                 lo, hi = LAYER.get(me), LAYER.get(target)
                 if lo is None or hi is None:

@@ -32,6 +32,7 @@ HERE = pathlib.Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parents[1]))  # src/
 from vqlab import _layout  # noqa: E402,F401
 from vqlab import config  # noqa: E402
+from vqlab.util.log import make_log  # noqa: E402
 import fitstore  # noqa: E402
 import registry  # noqa: E402
 import provenance  # noqa: E402
@@ -47,8 +48,7 @@ SKIP_FILES = {".DS_Store", "config.json", "model.py", "model.safetensors.index.j
 _LAYER = re.compile(r"\.layers\.(\d+)\.")
 
 
-def _log(*a):
-    print("[sz-pack]", *a, flush=True)
+_log = make_log("[sz-pack]")
 
 
 def abs_scales(raw, dtype):

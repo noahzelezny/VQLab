@@ -56,6 +56,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))  # src/
 from vqlab import config  # noqa: E402
 from vqlab.agents import queue_eta as _queue_eta  # noqa: E402
 from vqlab.agents import reserve as _resv  # noqa: E402
+from vqlab.util.fs import dir_bytes  # noqa: E402
 
 PROTOCOL_VERSION = "2024-11-05"
 SERVER_NAME = "vqlab"
@@ -181,15 +182,7 @@ def _under(path: Path, roots: List[Path]) -> bool:
 
 
 def _dir_bytes(d: Path, suffixes=(".safetensors",)) -> int:
-    total = 0
-    try:
-        with os.scandir(d) as it:
-            for e in it:
-                if e.is_file(follow_symlinks=False) and e.name.endswith(suffixes):
-                    total += e.stat(follow_symlinks=False).st_size
-    except OSError:
-        pass
-    return total
+    return dir_bytes(d, suffixes=suffixes, recursive=False)
 
 
 def _walk(roots: List[Path], max_depth: int):

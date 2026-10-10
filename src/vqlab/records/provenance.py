@@ -49,6 +49,7 @@ import pathlib
 import platform
 import subprocess
 import sys
+from vqlab.util.hashing import fingerprint as _fingerprint, sha256_file  # noqa: E402
 
 RECORD = "vqlab_provenance.json"
 # Records this one REPLACED, oldest first: an in-place tool (bundle,
@@ -70,15 +71,8 @@ REPO = pathlib.Path(__file__).resolve().parents[3]
 
 
 # ---------------------------------------------------------------- hashing
-def _sha(path, limit=None, algo="sha256"):
-    h = hashlib.new(algo)
-    with open(path, "rb") as f:
-        if limit is not None:
-            h.update(f.read(limit))
-        else:
-            for blk in iter(lambda: f.read(1 << 24), b""):
-                h.update(blk)
-    return h.hexdigest()
+# One implementation in vqlab.util.hashing; `_sha` is kept for its callers.
+_sha = sha256_file
 
 
 def file_record(p: pathlib.Path, full=True):
@@ -98,33 +92,9 @@ def file_record(p: pathlib.Path, full=True):
 
 
 def fingerprint(d) -> dict:
-    """Identity of an INPUT directory, cheap enough for a 751 GB teacher:
-    per-shard bytes + head hash, full sha of config/index/model.py, its own
-    provenance id if it carries one, and the HF revision if it is a hub
-    snapshot."""
-    d = pathlib.Path(d)
-    rp = pathlib.Path(os.path.realpath(d))
-    out = {"path": str(d), "realpath": str(rp)}
-    parts = rp.parts
-    if "snapshots" in parts:                        # HF hub cache layout
-        i = parts.index("snapshots")
-        if i + 1 < len(parts):
-            out["hf_revision"] = parts[i + 1]
-            out["hf_repo"] = parts[i - 1].removeprefix("models--").replace("--", "/")
-    if not rp.is_dir():
-        return out
-    rec = rp / RECORD
-    if rec.exists():
-        out["provenance_id"] = json.loads(rec.read_text()).get("id")
-    for name in ("config.json", "model.safetensors.index.json", "model.py"):
-        if (rp / name).exists():
-            out.setdefault("files", {})[name] = _sha(rp / name)
-    shards = {}
-    for f in sorted(rp.glob("*.safetensors")):
-        r = pathlib.Path(os.path.realpath(f))
-        shards[f.name] = {"bytes": r.stat().st_size, "head_sha256": _sha(r, HEAD)}
-    out["shards"] = shards
-    return out
+    """Identity of an INPUT directory (vqlab.util.hashing.fingerprint, kept
+    here under its old name)."""
+    return _fingerprint(d, head=HEAD, record=RECORD)
 
 
 # ------------------------------------------------------------- environment
