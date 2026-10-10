@@ -1,5 +1,5 @@
 {
- "_doc": "Earlier runtime/vq_switch.py revisions whose OUTPUT is byte-identical to the current runtime for every artifact WITHOUT vq_skipzero, at their own baked defaults. check-bundle reports a bundle carrying one of these as STALE (rebundle to pick up the listed gains), not FAIL. An entry is added only with tests/test_runtime_equivalence.py passing against it; that test reads this file. Each revision's text ships as `equivalent/<name>.<sha256[:12]>.py.txt`, named by content so the check needs no git checkout and survives history rewrites.",
+ "_doc": "Earlier runtime/vq_switch.py revisions whose OUTPUT is byte-identical to the current runtime for every artifact WITHOUT vq_skipzero, at their own baked defaults. check-bundle reports a bundle carrying one of these as STALE (rebundle to pick up the listed gains), not FAIL. An entry is added only with tests/test_runtime_equivalence.py passing against it; that test reads this file. Each revision's text ships as `equivalent/<name>.<sha256[:12]>.py.txt`, named by content so the check needs no git checkout and survives history rewrites. An entry's optional `flags` records the revision's baked VQ_FUSED_MAX_N / VQ_GEMMSEG_ACCS / VQ_GEMMSEG_CVEC defaults; the test pins the current runtime to those values for that comparison (absent = legacy 4096 / off / off, what every older revision baked).",
  "revisions": [
   {
    "sha256": "40870875499de7cb937be412dd63f9e5cc40e0d58d5adcf4c595661d2b21b67b",
@@ -42,6 +42,17 @@
    "path": "src/vqlab/runtime/vq_switch.py",
    "file": "equivalent/vq_switch.5abf28a7f096.py.txt",
    "gains": "skipzero tensor-parallel split (skipzero_shard, skipzero_shard_modules, skipzero_read_rowmasks; skipzero_weights shard=); no kernel change, no change for bundles without vq_skipzero"
+  },
+  {
+   "sha256": "6254c4531ed5711b0ffa1cfe04d3f513cba400d76996e022775e98d958105579",
+   "path": "src/vqlab/runtime/vq_switch.py",
+   "file": "equivalent/vq_switch.6254c4531ed5.py.txt",
+   "flags": {
+    "VQ_FUSED_MAX_N": 512,
+    "VQ_GEMMSEG_ACCS": true,
+    "VQ_GEMMSEG_CVEC": true
+   },
+   "gains": "none for bundles without vq_skipzero (this is the 2026-10-09 fleet rebundle, F200-F205 defaults baked); skipzero bundles gain F206: gemmseg2 _sz prefill takes ACCS and the 512 fused cutoff"
   }
  ]
 }
