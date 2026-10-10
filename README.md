@@ -17,8 +17,9 @@ Hugging Face.
 `vqlab.api` is the stable surface: one module, every function keyword-only,
 returning a dataclass or a dict of JSON types. Read `src/vqlab/api.py` to see
 everything vqlab can do; every other module is internal. Long GPU jobs return
-a `RunHandle` at once (the same launcher, allowlist, GPU lease and exo
-refusal as the MCP `run` tool); cheap work runs in-process. `import
+a `RunHandle` at once (the lab launcher `vqlab.ops.runs`: allowlist, GPU
+lease and exo refusal); cheap work runs in-process. The bundled MCP server
+(`vqlab lab mcp`) is itself only an adapter over `vqlab.api`. `import
 vqlab.api` loads no mlx. `publish` is deliberately absent: it is a human's
 action.
 

@@ -21,10 +21,13 @@ files may use either); `vqlab --help` shows each flat alias that differs.
 For code (an MCP server, a notebook, another tool) the public API is ONE
 module, `src/vqlab/api.py`: keyword-only functions returning dataclasses or
 JSON dicts, never printing or exiting. GPU jobs return a `RunHandle` through
-the MCP launcher (allowlist, GPU lease, exo refusal; no `publish`); header
-reads, records, static gates and paired KL run in-process. Everything else
-under `src/vqlab/` is internal and may move. The CLI below is the same
-operations for humans and queues.
+the lab launcher `vqlab.ops.runs` (allowlist, GPU lease, exo refusal; no
+`publish`); header reads, records, static gates and paired KL run in-process.
+Everything else under `src/vqlab/` is internal and may move. The CLI below is
+the same operations for humans and queues. Dependency direction: `vqlab.ops`
+(the lab operations) < `vqlab.api` < consumers (`agents/`: our MCP server and
+GUI, `cli`). Our MCP server is a thin adapter over `vqlab.api`, exactly as a
+developer's own would be.
 
 ## Pipeline stages
 
@@ -92,7 +95,9 @@ src/vqlab/
   records/      run log + build records + score stamps + artifact registry + tamper stamp
   ship/         publish (a human action) + serve + the model card (card, card_tables, card_checks) + `size`
   queue/        the job queue (`queue`, `reserve`, `validate`): launches commands BY NAME from pinned code; never a bare `queue` (stdlib)
-  agents/       MCP server (package agents/mcp/: server + tools_storage/runs/findings), read-only GUI, scratch housekeeping (`vqlab scratch`)
+  ops/          the lab operations on THIS box, as a library below vqlab.api: runs (launch/status/stop/list) + supervisor, storage (where_is, list_artifacts, artifact_config, disk_free), docs (read_doc), box (gpu_state), queues (queue_status), findings (F-numbers, reservations, tail, append); one error type, LabError (= api.ApiError)
+  api.py        THE stable library surface (consumes ops/ and the stages)
+  agents/       MCP server (package agents/mcp/: thin adapters over vqlab.api / vqlab.ops), read-only GUI, scratch housekeeping (`vqlab scratch`)
   mtp/          MTP speculative-decoding LIBRARY (vqlab.mtp); its tools live in the stages
   family/       the family registry (registry.py), family-aware loading (model_loader.py) and version stamping (version_stamp.py), and model families as plugins, one file each (fit layout, streamed scorer, tokenizer hook); deepseek_v4 first
   skipzero/     the vq-skipzero pack/check tools (the runtime switch itself lives in runtime/)
