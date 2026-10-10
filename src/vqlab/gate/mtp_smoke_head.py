@@ -24,10 +24,10 @@ costs the sidecar plus one embedding table, not the model.
 """
 import argparse
 import pathlib
+import sys
 import time
 
 import mlx.core as mx
-mx.random.seed(1234)  # lab default: nothing random unless asked
 
 from vqlab.mtp import registry
 
@@ -43,7 +43,8 @@ def _time(fn, *, warmup, iters):
     return (time.perf_counter() - t0) / iters * 1e3      # ms/step
 
 
-def main():
+def main(argv=None) -> int:
+    mx.random.seed(1234)  # lab default: nothing random unless asked
     ap = argparse.ArgumentParser()
     ap.add_argument("--model", required=True,
                     help="artifact dir (lazy; only embed_tokens is read)")
@@ -51,7 +52,7 @@ def main():
     ap.add_argument("--family", default=None)
     ap.add_argument("--steps", type=int, default=20)
     ap.add_argument("--warmup", type=int, default=3)
-    a = ap.parse_args()
+    a = ap.parse_args(argv)
 
     from mlx_lm.utils import load
     model, _ = load(a.model, lazy=True)
@@ -81,7 +82,8 @@ def main():
               flush=True)
 
     print(f"  peak resident {mx.get_peak_memory() / 2**30:.2f} GiB")
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

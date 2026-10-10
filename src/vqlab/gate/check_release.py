@@ -31,361 +31,12 @@ import sys
 
 from vqlab._layout import find as _find
 
-ap = argparse.ArgumentParser()
-ap.add_argument("--artifact", required=True)
-ap.add_argument("--no-smoke", action="store_true",
-                help="skip the strict generation smoke. The static checks "
-                     "still run, but nothing here then proves the artifact "
-                     "can produce a token on a machine that is not ours -- "
-                     "which is exactly how three broken rungs shipped.")
-ap.add_argument("--max-tokens", type=int, default=4)
-ap.add_argument("--no-prefill-smoke", action="store_true",
-                help="skip the LARGE-N prefill smoke. The 4-token smoke only "
-                     "exercises the fused (small-N) path; the entire 35B "
-                     "ladder shipped a _prefill that CRASHED on any long "
-                     "prompt (arc-5 sig mis-binding, 2026-09-06) and every "
-                     "gate stayed green because nothing ever pushed N past "
-                     "the fused cutoff. ~1500 prompt tokens exceeds both the "
-                     "dense packed cutoff (N>96) and the MoE pair cutoff "
-                     "(4096 pairs = 512 tokens at top_k 8).")
-ap.add_argument("--cluster-smoke", metavar="URL", default=None,
-                help="run the generation smoke through an exo cluster API "
-                     "(e.g. http://localhost:52415) instead of a local "
-                     "load. For artifacts too large for any single box we "
-                     "gate on. The exo node on THIS machine must be serving "
-                     "the exact directory being gated (checked by realpath, "
-                     "not trusted).")
-ap.add_argument("--cluster-peer", metavar="USER@HOST", default=None,
-                help="with --cluster-smoke: ssh peer(s) holding the other "
-                     "pipeline rank's copy; their model.py/config.json/"
-                     "index are hashed and shard sizes compared against "
-                     "this artifact before the smoke counts.")
-ap.add_argument("--knurlogic-smoke", metavar="ROLE", action="append", default=[],
-                nargs="?", const="fit",
-                help="run the generation smoke through Knurlogic on this role "
-                     "(here | peers | all | fit, default fit; or a page machine "
-                     "name; passed to load(machines=...); repeat to mix) instead of a local load: the runtime we "
-                     "serve on. The Knurlogic models-dir entry must resolve to THIS "
-                     "artifact. With an mtp-head*.safetensors present, drafting is on "
-                     "and the head must accept tokens (a head that never binds is a FAIL).")
-ap.add_argument("--no-vision-smoke", action="store_true",
-                help="skip the IMAGE smoke an artifact with tower tensors "
-                     "otherwise requires. The gate then FAILS for such an "
-                     "artifact unless --no-smoke was also given: a tower "
-                     "nobody put an image through is not released.")
-ap.add_argument("--knurlogic-split", default="", help="pipeline | tensor")
-ap.add_argument("--knurlogic-link", default="", help="tcp | rdma")
-ap.add_argument("--knurlogic-host", action="append", default=[], metavar="MACHINE=user@host",
-                help="ssh target for a remote rank's log (runtime check)")
-args = ap.parse_args()
-A = pathlib.Path(args.artifact)
-
-REQUIRED = ["config.json", "model.safetensors.index.json", "tokenizer.json",
-            "tokenizer_config.json"]
-fails = []
-for f in REQUIRED:
-    if not (A / f).exists():
-        fails.append(f"MISSING {f}")
-cfg = json.load(open(A / "config.json")) if (A / "config.json").exists() else {}
-if cfg.get("model_file") and not (A / cfg["model_file"]).exists():
-    fails.append(f"config names model_file={cfg['model_file']} but it is absent")
-
-# a vision-capable config commits us to the image-processor contract: any
-# runtime that sees vision_config (mlx_vlm, exo) instantiates an
-# AutoImageProcessor from the artifact dir, and its absence fails EVERY
-# request, text included, after prefill -- which presents as a warmup hang,
-# not a clean error. Fifth exhibit, 2026-09-04: all four Flash-Next rungs
-# shipped without preprocessor_config.json; the fitting pipeline never
-# touches images so nothing ever staged it.
-# 2026-09-07: the file NAME is family-dependent. Qwen-VL ships
-# preprocessor_config.json; gemma-4 ships processor_config.json and no
-# preprocessor at all — its own mlx-community bf16 base has only the
-# latter, so demanding the former failed a correct artifact. Require
-# that SOME processor config is present, and (below) that the artifact
-# is not missing one its own base ships.
-# 2026-09-07 (second correction): this was a blanket FAIL, and it appended
-# to `fails`, which SUPPRESSES the smoke below (`and not fails`) -- so the
-# gate asserted "fails every request, text included" while preventing the
-# one test that could check that claim. It false-failed GLM-5.3-Flash
-# 2.7/3.6, which carry vision_config and serve coherent text on the 2-node
-# ring -- measured twice.
-# Defer the verdict instead: let the smoke run, then judge on evidence.
-#   smoke PASSES -> the "text included" claim is disproven for this
-#                   artifact; the real limitation is that IMAGE requests
-#                   cannot work. Report it loudly, do not fail the gate.
-#   smoke FAILS / skipped -> nothing disproves it; keep the hard FAIL
-#                   (this is the gemma-4 and Flash-Next case, where the
-#                   missing processor presented as a warmup hang).
-# 2026-09-09 (third correction -- the 09-07 note was WRONG on its premise):
-# it claimed GLM-5.3-Flash ships "no processor config in ANY build,
-# including zai-org's own upstream". zai-org/GLM-5.3-Flash ships
-# processor_config.json (909 bytes, verified against the live repo). So the
-# GLM rungs were missing a file their own base ships -- exactly the case the
-# 09-07 note said it was excusing, and exactly what the base-comparison it
-# admits was never written would have caught. That comparison is STILL not
-# written; until it is, this check cannot tell "the family genuinely has no
-# processor config" from "we forgot to stage it", and the deferred verdict
-# below is the only thing standing between those two.
-# The file has since been staged into all three GLM artifacts from upstream
-# (geometry cross-checked: patch_size 14, spatial_merge_size/merge_size 2,
-# temporal_patch_size 2 all agree with the grafted tower).
-#
-# Note on cost, because it shapes behaviour: processor_config.json is not in
-# publish.py's DOC_SUFFIXES, so shipping this 909-byte config takes the full
-# gate -- a generation smoke, which loads the whole artifact (108 GiB for
-# GLM-2.7) to emit two tokens. That is the same disproportion DOC_SUFFIXES
-# exists to prevent, and the same one that gets gates routed around. If a
-# processor-config fix is ever wanted as doc-class, decide it there, not by
-# weakening this check.
-_PROC_FILES = ("preprocessor_config.json", "processor_config.json")
-_proc_gap = ("vision_config" in cfg
-             and not any((A / f).exists() for f in _PROC_FILES))
-_PROC_MSG = (f"config carries vision_config but none of {list(_PROC_FILES)} "
-             "is present; a runtime that instantiates an image processor "
-             "from the artifact dir cannot serve IMAGE requests")
-
-# BASE COMPARISON -- the check the 09-07 note promised and never wrote.
-# Without it this gate cannot tell "this family genuinely ships no processor
-# config" from "we forgot to stage one", and it guessed wrong on GLM for two
-# days. The artifact does not record its base anywhere except README.md's
-# `base_model:` frontmatter, so read it there.
-# Strictly BEST EFFORT: the Hub is a network dependency and a gate must work
-# offline. A lookup that cannot run leaves the deferred verdict exactly as it
-# was; only a POSITIVE answer -- the base demonstrably ships a processor
-# config this artifact lacks -- is allowed to decide anything, and that one
-# is a hard FAIL regardless of the smoke, because it is a staging omission,
-# not a property of the family.
-_base_verdict = None          # None = unknown, True = base ships one, False = it does not
-if _proc_gap:
-    _base = None
-    _rm = A / "README.md"
-    if _rm.exists():
-        _fm = re.match(r"^---\n(.*?)\n---", _rm.read_text(), re.S)
-        if _fm:
-            _m = re.search(r"^base_model:\s*(\S+)\s*$", _fm.group(1), re.M)
-            if _m:
-                _base = _m.group(1).strip().strip('"\'')
-    if _base:
-        try:
-            import urllib.request
-            with urllib.request.urlopen(
-                    f"https://huggingface.co/api/models/{_base}", timeout=10) as r:
-                _files = [s["rfilename"] for s in json.load(r).get("siblings", [])]
-            _base_has = [f for f in _PROC_FILES if f in _files]
-            _base_verdict = bool(_base_has)
-            if _base_verdict:
-                fails.append(
-                    f"base {_base} ships {_base_has[0]} but this artifact has "
-                    f"none of {list(_PROC_FILES)} -- stage it from the base. "
-                    "This is a packaging omission, not a family without a "
-                    "processor config.")
-            else:
-                print(f"NOTE: base {_base} ships no processor config either; "
-                      "the gap is a property of the family, not a staging miss.")
-        except Exception as e:
-            print(f"NOTE: could not reach the Hub to compare against base "
-                  f"{_base} ({type(e).__name__}); processor-config verdict "
-                  "left to the smoke.")
-    else:
-        print("NOTE: no base_model in README frontmatter; cannot compare the "
-              "processor config against the base.")
-
-# index integrity: every mapped shard exists
-if (A / "model.safetensors.index.json").exists():
-    wm = json.load(open(A / "model.safetensors.index.json"))["weight_map"]
-    for sh in sorted(set(wm.values())):
-        if not (A / sh).exists():
-            fails.append(f"index names missing shard {sh}")
-    # INDEX total_size. Loaders size and place a model by
-    # metadata.total_size; the 2026-10-03 fleet audit found three Hub
-    # indexes overstating it by 34-59% and two without it at all. Same
-    # function as `vqlab size --check-index`, so the two cannot disagree.
-    if not any(f.startswith("index names missing shard") for f in fails):
-        try:
-            from vqlab.core.artifact_size import index_total_size
-            _have, _want, _state = index_total_size(A)
-            if _state != "ok":
-                fails.append(f"index metadata.total_size {_have} vs tensor bytes "
-                             f"{_want}: {_state}; run `vqlab size --fix-index {A}`")
-        except Exception as _e:  # the gate must report, not crash
-            fails.append(f"index total_size check crashed: {type(_e).__name__}: {_e}")
-    # A grafted tower is only proven wired by an image through the runtime
-    # (graft-extras proves the bytes; generation proves the wiring).
-    from vqlab.core.artifact import tensor_class as _tc
-    _n_tower = sum(_tc(k) == "tower" for k in wm)
-else:
-    _n_tower = 0
-
-# DTYPE CENSUS. Two artifacts shipped in one day (2026-09-07) with a single
-# tensor class silently promoted to float32, and NOTHING here caught either:
-# every other gate is single-box, and fp32 only fails once a model is
-# sharded. embed_tokens got fp32 scales (mx.quantize returns scales in the
-# INPUT dtype and the requant tool had upcast); the MTP sidecar carries fp32
-# RMSNorm gains (residue of a `+shift` never cast back). Both make the whole
-# forward pass fp32, and at head_dim 256 that asks Metal for a 53 KB
-# threadgroup attention kernel against a 32 KB cap -- every sharded prefill
-# dies, while single-box generation is fine.
-#
-# The check compares each tensor against a SOURCE OF TRUTH for its own
-# class, never a fixed allowlist: this family legitimately stores 45 float32
-# `linear_attn.A_log` tensors, so a blanket "no fp32" rule would fire on
-# every correct build and be muted within a week.
 def _st_header(p):
     with open(p, "rb") as fh:
         n = struct.unpack("<Q", fh.read(8))[0]
         return {k: v for k, v in json.loads(fh.read(n)).items()
                 if k != "__metadata__"}
 
-if (A / "model.safetensors.index.json").exists() and cfg:
-    _wm = json.load(open(A / "model.safetensors.index.json"))["weight_map"]
-    _dt = {}
-    for _sh in sorted(set(_wm.values())):
-        if (A / _sh).exists():
-            for _k, _v in _st_header(A / _sh).items():
-                _dt[_k] = _v["dtype"]
-
-    # (a) every affine module's scales/biases share one dtype, and likewise
-    #     every VQ module's codebook/vq_scales. Catches one mis-quantized
-    #     module among hundreds.
-    _q = {m for m, v in cfg.get("quantization", {}).items()
-          if isinstance(v, dict) and "bits" in v}
-    _vq = set(cfg.get("vq_modules", {}))
-    for _label, _mods, _sufs in (("affine", _q, ("scales", "biases")),
-                                 ("VQ", _vq, ("codebook", "vq_scales"))):
-        for _suf in _sufs:
-            _names = [f"{m}.{_suf}" for m in _mods if f"{m}.{_suf}" in _dt]
-            _c = collections.Counter(_dt[n] for n in _names)
-            if len(_c) > 1:
-                _odd = _c.most_common()[-1]
-                _ex = next(n for n in _names if _dt[n] == _odd[0])
-                fails.append(f"{_label} .{_suf} tensors disagree on dtype: "
-                             f"{dict(_c)} — {_odd[1]} outlier(s), e.g. "
-                             f"{_ex} is {_odd[0]}")
-
-    # (b) a codes tensor's dtype is a FUNCTION of its own geometry (uint32
-    #     when packed, else uint8 for K<=256, else uint16), so a
-    #     mixed-geometry artifact holds several LEGITIMATELY. Test each
-    #     against its own entry -- stronger than peer uniformity, and it
-    #     catches a config/tensor divergence no peer comparison could.
-    for _m, _e in cfg.get("vq_modules", {}).items():
-        # a skip-zero module stores the same codes under .sz_codes
-        _k = next((_m + s for s in (".codes", ".sz_codes") if _m + s in _dt), None)
-        if _k is None:
-            continue
-        _want = ("U32" if _e.get("pack_bits")
-                 else ("U8" if _e.get("k", 0) <= 256 else "U16"))
-        if _dt[_k] != _want:
-            fails.append(f"{_k} is {_dt[_k]} but its vq_modules entry "
-                         f"(dim={_e.get('dim')} k={_e.get('k')} "
-                         f"pack_bits={_e.get('pack_bits')}) implies {_want}")
-
-    # (c) tensors filling the same role across layers must agree. `codes`
-    #     and skip-zero `sz_codes` are exempt -- (b) owns them. Uniformly-fp32
-    #     classes (A_log) never fire.
-    _cls = collections.defaultdict(list)
-    for _k in _dt:
-        if not _k.endswith((".codes", ".sz_codes")):
-            _cls[re.sub(r"\.\d+\.", ".", _k)].append(_k)
-    for _cn, _names in sorted(_cls.items()):
-        _c = collections.Counter(_dt[n] for n in _names)
-        if len(_c) > 1:
-            _odd = _c.most_common()[-1]
-            _ex = next(n for n in _names if _dt[n] == _odd[0])
-            fails.append(f"role class {_cn} has mixed dtypes {dict(_c)} "
-                         f"— e.g. {_ex} is {_odd[0]}")
-
-    # (d) a .safetensors the index does not reference is a SIDECAR (MTP
-    #     head, vision graft). Its tensors must match the dtype the trunk
-    #     uses for the same role -- this is what catches the published MTP
-    #     heads' fp32 norms.
-    _tail = {}
-    for _k, _d in _dt.items():
-        _tail.setdefault(".".join(_k.split(".")[-2:]), set()).add(_d)
-    for _f in sorted(A.glob("*.safetensors")):
-        if _f.name in set(_wm.values()):
-            continue
-        for _k, _v in _st_header(_f).items():
-            _ref = _tail.get(".".join(_k.split(".")[-2:]))
-            if _ref and len(_ref) == 1 and _v["dtype"] not in _ref:
-                fails.append(f"sidecar {_f.name}: {_k} is {_v['dtype']} but "
-                             f"the trunk stores "
-                             f"{'.'.join(_k.split('.')[-2:])} as "
-                             f"{next(iter(_ref))}")
-
-# the tokenizer must FUNCTION, not merely exist (the failure that bit us
-# loaded fine and encoded everything to zero tokens)
-if (A / "tokenizer.json").exists():
-    try:
-        from transformers import AutoTokenizer
-        try:
-            tok = AutoTokenizer.from_pretrained(str(A))
-        except Exception as e_auto:
-            # A model_type transformers does not register yet (deepseek_v4
-            # until huggingface/transformers#45616) breaks AutoTokenizer's
-            # config probe even though the tokenizer itself is fine. Load it
-            # the way the shipped runtime does -- mlx-lm's load_tokenizer,
-            # which falls back to a generic config -- and hold it to the
-            # same round-trip. Say so; never pass it silently.
-            # Knurlogic's vendored architecture registers the missing HF
-            # config at import (its deepseek_v4: max_position_embeddings,
-            # rope_theta). Importing it is exactly what serving does.
-            mt = json.loads((A / "config.json").read_text()).get("model_type")
-            from vqlab.family import tokenizer_hook
-            hook = tokenizer_hook(mt)            # the family plugin says how serving does it
-            if hook is None:
-                raise
-            hook(mt)
-            tok = AutoTokenizer.from_pretrained(str(A))
-            print(f"WARNING: plain transformers cannot load this tokenizer "
-                  f"({type(e_auto).__name__}: {e_auto}); it loads once "
-                  f"Knurlogic registers model_type {mt!r}, as serving does. "
-                  f"The card must say Knurlogic serves it")
-        probe = "The harbourmaster recorded 417 brass lanterns at dawn."
-        ids = tok.encode(probe)
-        if len(ids) < 5:
-            fails.append(f"tokenizer encodes probe to {len(ids)} tokens")
-        elif probe not in tok.decode(ids):
-            fails.append("tokenizer round-trip does not contain the input")
-    except Exception as e:
-        fails.append(f"tokenizer failed to load/encode: {e}")
-
-# The gate itself must be running against a STOCK mlx-lm, or every check
-# below is meaningless: the quantlab-era patch_mlx_lm.py installed
-# vq_switch.py INTO the venv's mlx_lm, silently and persistently, and a
-# gate run in such an env blessed incomplete bundles that ModuleNotFoundError
-# for every real downloader (the 27B rungs, discovered 2026-09-02 night).
-# The env that did it was deleted, but the failure mode is one
-# patch_mlx_lm.py invocation away from coming back -- so the gate checks.
-try:
-    import mlx_lm.models as _mlm
-    _patched = pathlib.Path(_mlm.__file__).parent / "vq_switch.py"
-    if _patched.exists():
-        fails.append(
-            f"THIS VENV IS PATCHED: {_patched} exists (quantlab-era "
-            f"patch_mlx_lm.py residue). A gate run here cannot certify "
-            f"anything -- bundles that depend on the patch pass here and "
-            f"break for every downloader. Remove the file and re-run.")
-except ImportError:
-    pass
-
-# The bundled runtime must not reach for anything a downloader lacks. This
-# is a byte check -- no model load, no GPU -- and it alone would have caught
-# all three broken rungs the moment they were built.
-_mf = cfg.get("model_file")
-if _mf and (A / _mf).exists():
-    _src = (A / _mf).read_text()
-    for _bad in ("from mlx_lm.models.vq_", "import mlx_lm.models.vq_"):
-        if _bad in _src:
-            _lines = [i + 1 for i, l in enumerate(_src.splitlines())
-                      if _bad in l]
-            fails.append(
-                f"{_mf} contains {_bad!r} at line(s) "
-                f"{_lines[:6]} — no released mlx-lm has those modules, so "
-                f"this bundle cannot run outside our venvs")
-    try:
-        compile(_src, _mf, "exec")
-    except SyntaxError as e:
-        fails.append(f"{_mf} does not compile: {e}")
 
 # CLUSTER SMOKE. Rungs larger than any single box we gate on (GLM 3.1/3.6,
 # 397B 2.4+) used to be un-smokeable: the RAM preflight refused, and their
@@ -407,7 +58,7 @@ if _mf and (A / _mf).exists():
 #     peer copy corrupted at equal size with equal index would pass; every
 #     copy we make is rsync'd from this artifact, and the smoke still has
 #     to decode coherent tokens through those bytes.)
-def _cluster_smoke() -> list[str]:
+def _cluster_smoke(args, A) -> list[str]:
     import hashlib
     import subprocess as sp
     import urllib.request
@@ -492,7 +143,7 @@ def _cluster_smoke() -> list[str]:
     return []
 
 
-def _knurlogic_smoke() -> list[str]:
+def _knurlogic_smoke(args, A) -> list[str]:
     """Load THIS artifact through Knurlogic on the named machine(s), generate
     greedily, check the bundled runtime ran (rank logs), the text is real and
     not looping, and (with an MTP head) that drafting accepted tokens."""
@@ -561,148 +212,504 @@ def _knurlogic_smoke() -> list[str]:
     return probs
 
 
-if args.knurlogic_smoke and not args.no_smoke and not fails:
-    print("running KNURLOGIC smoke (the serving runtime) ...", flush=True)
-    fails += _knurlogic_smoke()
-elif args.cluster_smoke and not args.no_smoke and not fails:
-    print("running CLUSTER smoke (2-node exo pipeline; peer identity "
-          "checked first) ...", flush=True)
-    fails += _cluster_smoke()
-# A real token, through the artifact's own runtime, with the resolution
-# assertions on. This is the step that costs a model load, and the one that
-# actually certifies the thing.
-elif not args.no_smoke and not fails:
-    print(f"running strict smoke ({args.max_tokens} token) ...", flush=True)
-    r = subprocess.run([sys.executable, str(_find("smoke.py")), str(A),
-                        "--strict", "--max-tokens", str(args.max_tokens)])
-    if r.returncode != 0:
-        fails.append("strict smoke failed — see its output above. The "
-                     "artifact either could not generate, or resolved its "
-                     "runtime from a copy a downloader does not have.")
-    elif not args.no_prefill_smoke:
-        # Large-N arm: force the PREFILL path (decode fallback / _prefill),
-        # which the 4-token smoke never touches — see --no-prefill-smoke.
-        long_prompt = ("The quick brown fox jumps over the lazy dog. "
-                       "Numbers: 0 1 2 3 4 5 6 7 8 9. ") * 90   # ~1.5k tok
-        print("running LARGE-N prefill smoke (~1.5k-token prompt) ...",
-              flush=True)
-        r = subprocess.run([sys.executable, str(_find("smoke.py")), str(A),
-                            "--strict", "--max-tokens", "2",
-                            "--prompt", long_prompt])
-        if r.returncode != 0:
-            fails.append("LARGE-N prefill smoke failed — the artifact "
-                         "generates fine at decode N but its prefill path "
-                         "(large-N fallback) cannot process a long prompt. "
-                         "This is the failure the 35B ladder shipped with.")
-elif args.no_smoke:
-    print("NOTE: --no-smoke; static checks only, generation NOT verified.")
+def main(argv=None) -> int:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--artifact", required=True)
+    ap.add_argument("--no-smoke", action="store_true",
+                    help="skip the strict generation smoke. The static checks "
+                         "still run, but nothing here then proves the artifact "
+                         "can produce a token on a machine that is not ours -- "
+                         "which is exactly how three broken rungs shipped.")
+    ap.add_argument("--max-tokens", type=int, default=4)
+    ap.add_argument("--no-prefill-smoke", action="store_true",
+                    help="skip the LARGE-N prefill smoke. The 4-token smoke only "
+                         "exercises the fused (small-N) path; the entire 35B "
+                         "ladder shipped a _prefill that CRASHED on any long "
+                         "prompt (arc-5 sig mis-binding, 2026-09-06) and every "
+                         "gate stayed green because nothing ever pushed N past "
+                         "the fused cutoff. ~1500 prompt tokens exceeds both the "
+                         "dense packed cutoff (N>96) and the MoE pair cutoff "
+                         "(4096 pairs = 512 tokens at top_k 8).")
+    ap.add_argument("--cluster-smoke", metavar="URL", default=None,
+                    help="run the generation smoke through an exo cluster API "
+                         "(e.g. http://localhost:52415) instead of a local "
+                         "load. For artifacts too large for any single box we "
+                         "gate on. The exo node on THIS machine must be serving "
+                         "the exact directory being gated (checked by realpath, "
+                         "not trusted).")
+    ap.add_argument("--cluster-peer", metavar="USER@HOST", default=None,
+                    help="with --cluster-smoke: ssh peer(s) holding the other "
+                         "pipeline rank's copy; their model.py/config.json/"
+                         "index are hashed and shard sizes compared against "
+                         "this artifact before the smoke counts.")
+    ap.add_argument("--knurlogic-smoke", metavar="ROLE", action="append", default=[],
+                    nargs="?", const="fit",
+                    help="run the generation smoke through Knurlogic on this role "
+                         "(here | peers | all | fit, default fit; or a page machine "
+                         "name; passed to load(machines=...); repeat to mix) instead of a local load: the runtime we "
+                         "serve on. The Knurlogic models-dir entry must resolve to THIS "
+                         "artifact. With an mtp-head*.safetensors present, drafting is on "
+                         "and the head must accept tokens (a head that never binds is a FAIL).")
+    ap.add_argument("--no-vision-smoke", action="store_true",
+                    help="skip the IMAGE smoke an artifact with tower tensors "
+                         "otherwise requires. The gate then FAILS for such an "
+                         "artifact unless --no-smoke was also given: a tower "
+                         "nobody put an image through is not released.")
+    ap.add_argument("--knurlogic-split", default="", help="pipeline | tensor")
+    ap.add_argument("--knurlogic-link", default="", help="tcp | rdma")
+    ap.add_argument("--knurlogic-host", action="append", default=[], metavar="MACHINE=user@host",
+                    help="ssh target for a remote rank's log (runtime check)")
+    args = ap.parse_args(argv)
+    A = pathlib.Path(args.artifact)
 
-# IMAGE SMOKE. Any tower tensor (core.artifact.tensor_class == "tower") makes
-# an image through the serving runtime part of the gate, on the same arm the
-# text smoke used. DeepSeek-V4 Vision-Exp has no vision_config (flat vision_*
-# keys), so this keys on the tensors, not the config.
-_vision_note = ""
-if _n_tower and not args.no_smoke and not fails:
-    if args.no_vision_smoke:
-        fails.append(f"artifact carries {_n_tower} tower tensors but "
-                     "--no-vision-smoke skipped the image smoke")
-    else:
-        _vcmd = [sys.executable, str(_find("vision_smoke.py")), str(A)]
-        if args.knurlogic_smoke:
-            for _m in args.knurlogic_smoke:
-                _vcmd += ["--knurlogic", _m]
-            if args.knurlogic_split:
-                _vcmd += ["--knurlogic-split", args.knurlogic_split]
-            if args.knurlogic_link:
-                _vcmd += ["--knurlogic-link", args.knurlogic_link]
-        elif args.cluster_smoke:
-            _vcmd += ["--cluster", args.cluster_smoke]
-        print(f"running IMAGE smoke ({_n_tower} tower tensors) ...", flush=True)
-        if subprocess.run(_vcmd).returncode != 0:
-            fails.append("image smoke failed -- see its output above. The tower "
-                         "bytes are present but no image was shown to move "
-                         "the model through the serving runtime.")
+    REQUIRED = ["config.json", "model.safetensors.index.json", "tokenizer.json",
+                "tokenizer_config.json"]
+    fails = []
+    for f in REQUIRED:
+        if not (A / f).exists():
+            fails.append(f"MISSING {f}")
+    cfg = json.load(open(A / "config.json")) if (A / "config.json").exists() else {}
+    if cfg.get("model_file") and not (A / cfg["model_file"]).exists():
+        fails.append(f"config names model_file={cfg['model_file']} but it is absent")
+
+    # a vision-capable config commits us to the image-processor contract: any
+    # runtime that sees vision_config (mlx_vlm, exo) instantiates an
+    # AutoImageProcessor from the artifact dir, and its absence fails EVERY
+    # request, text included, after prefill -- which presents as a warmup hang,
+    # not a clean error. Fifth exhibit, 2026-09-04: all four Flash-Next rungs
+    # shipped without preprocessor_config.json; the fitting pipeline never
+    # touches images so nothing ever staged it.
+    # 2026-09-07: the file NAME is family-dependent. Qwen-VL ships
+    # preprocessor_config.json; gemma-4 ships processor_config.json and no
+    # preprocessor at all — its own mlx-community bf16 base has only the
+    # latter, so demanding the former failed a correct artifact. Require
+    # that SOME processor config is present, and (below) that the artifact
+    # is not missing one its own base ships.
+    # 2026-09-07 (second correction): this was a blanket FAIL, and it appended
+    # to `fails`, which SUPPRESSES the smoke below (`and not fails`) -- so the
+    # gate asserted "fails every request, text included" while preventing the
+    # one test that could check that claim. It false-failed GLM-5.3-Flash
+    # 2.7/3.6, which carry vision_config and serve coherent text on the 2-node
+    # ring -- measured twice.
+    # Defer the verdict instead: let the smoke run, then judge on evidence.
+    #   smoke PASSES -> the "text included" claim is disproven for this
+    #                   artifact; the real limitation is that IMAGE requests
+    #                   cannot work. Report it loudly, do not fail the gate.
+    #   smoke FAILS / skipped -> nothing disproves it; keep the hard FAIL
+    #                   (this is the gemma-4 and Flash-Next case, where the
+    #                   missing processor presented as a warmup hang).
+    # 2026-09-09 (third correction -- the 09-07 note was WRONG on its premise):
+    # it claimed GLM-5.3-Flash ships "no processor config in ANY build,
+    # including zai-org's own upstream". zai-org/GLM-5.3-Flash ships
+    # processor_config.json (909 bytes, verified against the live repo). So the
+    # GLM rungs were missing a file their own base ships -- exactly the case the
+    # 09-07 note said it was excusing, and exactly what the base-comparison it
+    # admits was never written would have caught. That comparison is STILL not
+    # written; until it is, this check cannot tell "the family genuinely has no
+    # processor config" from "we forgot to stage it", and the deferred verdict
+    # below is the only thing standing between those two.
+    # The file has since been staged into all three GLM artifacts from upstream
+    # (geometry cross-checked: patch_size 14, spatial_merge_size/merge_size 2,
+    # temporal_patch_size 2 all agree with the grafted tower).
+    #
+    # Note on cost, because it shapes behaviour: processor_config.json is not in
+    # publish.py's DOC_SUFFIXES, so shipping this 909-byte config takes the full
+    # gate -- a generation smoke, which loads the whole artifact (108 GiB for
+    # GLM-2.7) to emit two tokens. That is the same disproportion DOC_SUFFIXES
+    # exists to prevent, and the same one that gets gates routed around. If a
+    # processor-config fix is ever wanted as doc-class, decide it there, not by
+    # weakening this check.
+    _PROC_FILES = ("preprocessor_config.json", "processor_config.json")
+    _proc_gap = ("vision_config" in cfg
+                 and not any((A / f).exists() for f in _PROC_FILES))
+    _PROC_MSG = (f"config carries vision_config but none of {list(_PROC_FILES)} "
+                 "is present; a runtime that instantiates an image processor "
+                 "from the artifact dir cannot serve IMAGE requests")
+
+    # BASE COMPARISON -- the check the 09-07 note promised and never wrote.
+    # Without it this gate cannot tell "this family genuinely ships no processor
+    # config" from "we forgot to stage one", and it guessed wrong on GLM for two
+    # days. The artifact does not record its base anywhere except README.md's
+    # `base_model:` frontmatter, so read it there.
+    # Strictly BEST EFFORT: the Hub is a network dependency and a gate must work
+    # offline. A lookup that cannot run leaves the deferred verdict exactly as it
+    # was; only a POSITIVE answer -- the base demonstrably ships a processor
+    # config this artifact lacks -- is allowed to decide anything, and that one
+    # is a hard FAIL regardless of the smoke, because it is a staging omission,
+    # not a property of the family.
+    _base_verdict = None          # None = unknown, True = base ships one, False = it does not
+    if _proc_gap:
+        _base = None
+        _rm = A / "README.md"
+        if _rm.exists():
+            _fm = re.match(r"^---\n(.*?)\n---", _rm.read_text(), re.S)
+            if _fm:
+                _m = re.search(r"^base_model:\s*(\S+)\s*$", _fm.group(1), re.M)
+                if _m:
+                    _base = _m.group(1).strip().strip('"\'')
+        if _base:
+            try:
+                import urllib.request
+                with urllib.request.urlopen(
+                        f"https://huggingface.co/api/models/{_base}", timeout=10) as r:
+                    _files = [s["rfilename"] for s in json.load(r).get("siblings", [])]
+                _base_has = [f for f in _PROC_FILES if f in _files]
+                _base_verdict = bool(_base_has)
+                if _base_verdict:
+                    fails.append(
+                        f"base {_base} ships {_base_has[0]} but this artifact has "
+                        f"none of {list(_PROC_FILES)} -- stage it from the base. "
+                        "This is a packaging omission, not a family without a "
+                        "processor config.")
+                else:
+                    print(f"NOTE: base {_base} ships no processor config either; "
+                          "the gap is a property of the family, not a staging miss.")
+            except Exception as e:
+                print(f"NOTE: could not reach the Hub to compare against base "
+                      f"{_base} ({type(e).__name__}); processor-config verdict "
+                      "left to the smoke.")
         else:
-            _vision_note = ", image smoke passed"
-elif _n_tower and args.no_smoke:
-    print(f"NOTE: --no-smoke; {_n_tower} tower tensors, image path NOT verified.")
+            print("NOTE: no base_model in README frontmatter; cannot compare the "
+                  "processor config against the base.")
 
-# BUILD RECORD (docs/PROVENANCE.md). A record whose bytes no longer verify
-# means the artifact changed after it was recorded -- a rebundle or rewrite
-# by a tool that left no amendment -- so what is being released is not what
-# the record describes: FAIL. No record at all is a WARNING, not a FAIL:
-# every artifact published before 2026-09-25 predates records (backfill is
-# tracker VL4.8), and failing them would block the fleet on bookkeeping.
-_prov_note = ""
-try:
-    from vqlab.records import provenance as _prov
+    # index integrity: every mapped shard exists
+    if (A / "model.safetensors.index.json").exists():
+        wm = json.load(open(A / "model.safetensors.index.json"))["weight_map"]
+        for sh in sorted(set(wm.values())):
+            if not (A / sh).exists():
+                fails.append(f"index names missing shard {sh}")
+        # INDEX total_size. Loaders size and place a model by
+        # metadata.total_size; the 2026-10-03 fleet audit found three Hub
+        # indexes overstating it by 34-59% and two without it at all. Same
+        # function as `vqlab size --check-index`, so the two cannot disagree.
+        if not any(f.startswith("index names missing shard") for f in fails):
+            try:
+                from vqlab.core.artifact_size import index_total_size
+                _have, _want, _state = index_total_size(A)
+                if _state != "ok":
+                    fails.append(f"index metadata.total_size {_have} vs tensor bytes "
+                                 f"{_want}: {_state}; run `vqlab size --fix-index {A}`")
+            except Exception as _e:  # the gate must report, not crash
+                fails.append(f"index total_size check crashed: {type(_e).__name__}: {_e}")
+        # A grafted tower is only proven wired by an image through the runtime
+        # (graft-extras proves the bytes; generation proves the wiring).
+        from vqlab.core.artifact import tensor_class as _tc
+        _n_tower = sum(_tc(k) == "tower" for k in wm)
+    else:
+        _n_tower = 0
+
+    # DTYPE CENSUS. Two artifacts shipped in one day (2026-09-07) with a single
+    # tensor class silently promoted to float32, and NOTHING here caught either:
+    # every other gate is single-box, and fp32 only fails once a model is
+    # sharded. embed_tokens got fp32 scales (mx.quantize returns scales in the
+    # INPUT dtype and the requant tool had upcast); the MTP sidecar carries fp32
+    # RMSNorm gains (residue of a `+shift` never cast back). Both make the whole
+    # forward pass fp32, and at head_dim 256 that asks Metal for a 53 KB
+    # threadgroup attention kernel against a 32 KB cap -- every sharded prefill
+    # dies, while single-box generation is fine.
+    #
+    # The check compares each tensor against a SOURCE OF TRUTH for its own
+    # class, never a fixed allowlist: this family legitimately stores 45 float32
+    # `linear_attn.A_log` tensors, so a blanket "no fp32" rule would fire on
+    # every correct build and be muted within a week.
+    if (A / "model.safetensors.index.json").exists() and cfg:
+        _wm = json.load(open(A / "model.safetensors.index.json"))["weight_map"]
+        _dt = {}
+        for _sh in sorted(set(_wm.values())):
+            if (A / _sh).exists():
+                for _k, _v in _st_header(A / _sh).items():
+                    _dt[_k] = _v["dtype"]
+
+        # (a) every affine module's scales/biases share one dtype, and likewise
+        #     every VQ module's codebook/vq_scales. Catches one mis-quantized
+        #     module among hundreds.
+        _q = {m for m, v in cfg.get("quantization", {}).items()
+              if isinstance(v, dict) and "bits" in v}
+        _vq = set(cfg.get("vq_modules", {}))
+        for _label, _mods, _sufs in (("affine", _q, ("scales", "biases")),
+                                     ("VQ", _vq, ("codebook", "vq_scales"))):
+            for _suf in _sufs:
+                _names = [f"{m}.{_suf}" for m in _mods if f"{m}.{_suf}" in _dt]
+                _c = collections.Counter(_dt[n] for n in _names)
+                if len(_c) > 1:
+                    _odd = _c.most_common()[-1]
+                    _ex = next(n for n in _names if _dt[n] == _odd[0])
+                    fails.append(f"{_label} .{_suf} tensors disagree on dtype: "
+                                 f"{dict(_c)} — {_odd[1]} outlier(s), e.g. "
+                                 f"{_ex} is {_odd[0]}")
+
+        # (b) a codes tensor's dtype is a FUNCTION of its own geometry (uint32
+        #     when packed, else uint8 for K<=256, else uint16), so a
+        #     mixed-geometry artifact holds several LEGITIMATELY. Test each
+        #     against its own entry -- stronger than peer uniformity, and it
+        #     catches a config/tensor divergence no peer comparison could.
+        for _m, _e in cfg.get("vq_modules", {}).items():
+            # a skip-zero module stores the same codes under .sz_codes
+            _k = next((_m + s for s in (".codes", ".sz_codes") if _m + s in _dt), None)
+            if _k is None:
+                continue
+            _want = ("U32" if _e.get("pack_bits")
+                     else ("U8" if _e.get("k", 0) <= 256 else "U16"))
+            if _dt[_k] != _want:
+                fails.append(f"{_k} is {_dt[_k]} but its vq_modules entry "
+                             f"(dim={_e.get('dim')} k={_e.get('k')} "
+                             f"pack_bits={_e.get('pack_bits')}) implies {_want}")
+
+        # (c) tensors filling the same role across layers must agree. `codes`
+        #     and skip-zero `sz_codes` are exempt -- (b) owns them. Uniformly-fp32
+        #     classes (A_log) never fire.
+        _cls = collections.defaultdict(list)
+        for _k in _dt:
+            if not _k.endswith((".codes", ".sz_codes")):
+                _cls[re.sub(r"\.\d+\.", ".", _k)].append(_k)
+        for _cn, _names in sorted(_cls.items()):
+            _c = collections.Counter(_dt[n] for n in _names)
+            if len(_c) > 1:
+                _odd = _c.most_common()[-1]
+                _ex = next(n for n in _names if _dt[n] == _odd[0])
+                fails.append(f"role class {_cn} has mixed dtypes {dict(_c)} "
+                             f"— e.g. {_ex} is {_odd[0]}")
+
+        # (d) a .safetensors the index does not reference is a SIDECAR (MTP
+        #     head, vision graft). Its tensors must match the dtype the trunk
+        #     uses for the same role -- this is what catches the published MTP
+        #     heads' fp32 norms.
+        _tail = {}
+        for _k, _d in _dt.items():
+            _tail.setdefault(".".join(_k.split(".")[-2:]), set()).add(_d)
+        for _f in sorted(A.glob("*.safetensors")):
+            if _f.name in set(_wm.values()):
+                continue
+            for _k, _v in _st_header(_f).items():
+                _ref = _tail.get(".".join(_k.split(".")[-2:]))
+                if _ref and len(_ref) == 1 and _v["dtype"] not in _ref:
+                    fails.append(f"sidecar {_f.name}: {_k} is {_v['dtype']} but "
+                                 f"the trunk stores "
+                                 f"{'.'.join(_k.split('.')[-2:])} as "
+                                 f"{next(iter(_ref))}")
+
+    # the tokenizer must FUNCTION, not merely exist (the failure that bit us
+    # loaded fine and encoded everything to zero tokens)
+    if (A / "tokenizer.json").exists():
+        try:
+            from transformers import AutoTokenizer
+            try:
+                tok = AutoTokenizer.from_pretrained(str(A))
+            except Exception as e_auto:
+                # A model_type transformers does not register yet (deepseek_v4
+                # until huggingface/transformers#45616) breaks AutoTokenizer's
+                # config probe even though the tokenizer itself is fine. Load it
+                # the way the shipped runtime does -- mlx-lm's load_tokenizer,
+                # which falls back to a generic config -- and hold it to the
+                # same round-trip. Say so; never pass it silently.
+                # Knurlogic's vendored architecture registers the missing HF
+                # config at import (its deepseek_v4: max_position_embeddings,
+                # rope_theta). Importing it is exactly what serving does.
+                mt = json.loads((A / "config.json").read_text()).get("model_type")
+                from vqlab.family import tokenizer_hook
+                hook = tokenizer_hook(mt)            # the family plugin says how serving does it
+                if hook is None:
+                    raise
+                hook(mt)
+                tok = AutoTokenizer.from_pretrained(str(A))
+                print(f"WARNING: plain transformers cannot load this tokenizer "
+                      f"({type(e_auto).__name__}: {e_auto}); it loads once "
+                      f"Knurlogic registers model_type {mt!r}, as serving does. "
+                      f"The card must say Knurlogic serves it")
+            probe = "The harbourmaster recorded 417 brass lanterns at dawn."
+            ids = tok.encode(probe)
+            if len(ids) < 5:
+                fails.append(f"tokenizer encodes probe to {len(ids)} tokens")
+            elif probe not in tok.decode(ids):
+                fails.append("tokenizer round-trip does not contain the input")
+        except Exception as e:
+            fails.append(f"tokenizer failed to load/encode: {e}")
+
+    # The gate itself must be running against a STOCK mlx-lm, or every check
+    # below is meaningless: the quantlab-era patch_mlx_lm.py installed
+    # vq_switch.py INTO the venv's mlx_lm, silently and persistently, and a
+    # gate run in such an env blessed incomplete bundles that ModuleNotFoundError
+    # for every real downloader (the 27B rungs, discovered 2026-09-02 night).
+    # The env that did it was deleted, but the failure mode is one
+    # patch_mlx_lm.py invocation away from coming back -- so the gate checks.
     try:
-        _rec = _prov.load(A)
-    except FileNotFoundError:
-        print("WARNING: no build record (vqlab_provenance.json). This artifact "
-              "cannot say how it was made; it predates records or was built "
-              "outside the vqlab CLI. Release allowed; backfill is VL4.8.")
-    else:
-        _bad = _prov.verify(A, _rec)
-        if _bad:
-            fails.append("build record does NOT verify: " + "; ".join(
-                f"{n}: {w}" for n, w in _bad[:5]) + " -- the artifact changed "
-                "after it was recorded. Rebuild, or amend through the vqlab "
-                "tool that changed it, before releasing.")
+        import mlx_lm.models as _mlm
+        _patched = pathlib.Path(_mlm.__file__).parent / "vq_switch.py"
+        if _patched.exists():
+            fails.append(
+                f"THIS VENV IS PATCHED: {_patched} exists (quantlab-era "
+                f"patch_mlx_lm.py residue). A gate run here cannot certify "
+                f"anything -- bundles that depend on the patch pass here and "
+                f"break for every downloader. Remove the file and re-run.")
+    except ImportError:
+        pass
+
+    # The bundled runtime must not reach for anything a downloader lacks. This
+    # is a byte check -- no model load, no GPU -- and it alone would have caught
+    # all three broken rungs the moment they were built.
+    _mf = cfg.get("model_file")
+    if _mf and (A / _mf).exists():
+        _src = (A / _mf).read_text()
+        for _bad in ("from mlx_lm.models.vq_", "import mlx_lm.models.vq_"):
+            if _bad in _src:
+                _lines = [i + 1 for i, l in enumerate(_src.splitlines())
+                          if _bad in l]
+                fails.append(
+                    f"{_mf} contains {_bad!r} at line(s) "
+                    f"{_lines[:6]} — no released mlx-lm has those modules, so "
+                    f"this bundle cannot run outside our venvs")
+        try:
+            compile(_src, _mf, "exec")
+        except SyntaxError as e:
+            fails.append(f"{_mf} does not compile: {e}")
+
+    if args.knurlogic_smoke and not args.no_smoke and not fails:
+        print("running KNURLOGIC smoke (the serving runtime) ...", flush=True)
+        fails += _knurlogic_smoke(args, A)
+    elif args.cluster_smoke and not args.no_smoke and not fails:
+        print("running CLUSTER smoke (2-node exo pipeline; peer identity "
+              "checked first) ...", flush=True)
+        fails += _cluster_smoke(args, A)
+    # A real token, through the artifact's own runtime, with the resolution
+    # assertions on. This is the step that costs a model load, and the one that
+    # actually certifies the thing.
+    elif not args.no_smoke and not fails:
+        print(f"running strict smoke ({args.max_tokens} token) ...", flush=True)
+        r = subprocess.run([sys.executable, str(_find("smoke.py")), str(A),
+                            "--strict", "--max-tokens", str(args.max_tokens)])
+        if r.returncode != 0:
+            fails.append("strict smoke failed — see its output above. The "
+                         "artifact either could not generate, or resolved its "
+                         "runtime from a copy a downloader does not have.")
+        elif not args.no_prefill_smoke:
+            # Large-N arm: force the PREFILL path (decode fallback / _prefill),
+            # which the 4-token smoke never touches — see --no-prefill-smoke.
+            long_prompt = ("The quick brown fox jumps over the lazy dog. "
+                           "Numbers: 0 1 2 3 4 5 6 7 8 9. ") * 90   # ~1.5k tok
+            print("running LARGE-N prefill smoke (~1.5k-token prompt) ...",
+                  flush=True)
+            r = subprocess.run([sys.executable, str(_find("smoke.py")), str(A),
+                                "--strict", "--max-tokens", "2",
+                                "--prompt", long_prompt])
+            if r.returncode != 0:
+                fails.append("LARGE-N prefill smoke failed — the artifact "
+                             "generates fine at decode N but its prefill path "
+                             "(large-N fallback) cannot process a long prompt. "
+                             "This is the failure the 35B ladder shipped with.")
+    elif args.no_smoke:
+        print("NOTE: --no-smoke; static checks only, generation NOT verified.")
+
+    # IMAGE SMOKE. Any tower tensor (core.artifact.tensor_class == "tower") makes
+    # an image through the serving runtime part of the gate, on the same arm the
+    # text smoke used. DeepSeek-V4 Vision-Exp has no vision_config (flat vision_*
+    # keys), so this keys on the tensors, not the config.
+    _vision_note = ""
+    if _n_tower and not args.no_smoke and not fails:
+        if args.no_vision_smoke:
+            fails.append(f"artifact carries {_n_tower} tower tensors but "
+                         "--no-vision-smoke skipped the image smoke")
         else:
-            _prov_note = (f", build record {_rec['id'][:12]} verifies "
-                          f"({_rec['tool']['name']})")
-except Exception as _e:  # the gate must report, not crash
-    fails.append(f"build record check crashed: {type(_e).__name__}: {_e}")
+            _vcmd = [sys.executable, str(_find("vision_smoke.py")), str(A)]
+            if args.knurlogic_smoke:
+                for _m in args.knurlogic_smoke:
+                    _vcmd += ["--knurlogic", _m]
+                if args.knurlogic_split:
+                    _vcmd += ["--knurlogic-split", args.knurlogic_split]
+                if args.knurlogic_link:
+                    _vcmd += ["--knurlogic-link", args.knurlogic_link]
+            elif args.cluster_smoke:
+                _vcmd += ["--cluster", args.cluster_smoke]
+            print(f"running IMAGE smoke ({_n_tower} tower tensors) ...", flush=True)
+            if subprocess.run(_vcmd).returncode != 0:
+                fails.append("image smoke failed -- see its output above. The tower "
+                             "bytes are present but no image was shown to move "
+                             "the model through the serving runtime.")
+            else:
+                _vision_note = ", image smoke passed"
+    elif _n_tower and args.no_smoke:
+        print(f"NOTE: --no-smoke; {_n_tower} tower tensors, image path NOT verified.")
 
-# CARD SPELLING. Released text is US English (2026-09-28): a British
-# spelling on a card is fixed before release, not in a later revision.
-# `vqlab spelling --fix <artifact>/README.md` rewrites it.
-try:
-    from vqlab.gate import spelling as _sp
-    _card = A / "README.md"
-    if _card.exists():
-        _hits = _sp.scan(_card.read_text())
-        if _hits:
-            fails.append(f"card has {len(_hits)} British spelling(s) ("
-                         + ", ".join(f"{w}->{u}" for _, w, u in _hits[:6])
-                         + f"); run `vqlab spelling --fix {_card}`")
-except Exception as _e:  # the gate must report, not crash
-    fails.append(f"spelling check crashed: {type(_e).__name__}: {_e}")
+    # BUILD RECORD (docs/PROVENANCE.md). A record whose bytes no longer verify
+    # means the artifact changed after it was recorded -- a rebundle or rewrite
+    # by a tool that left no amendment -- so what is being released is not what
+    # the record describes: FAIL. No record at all is a WARNING, not a FAIL:
+    # every artifact published before 2026-09-25 predates records (backfill is
+    # tracker VL4.8), and failing them would block the fleet on bookkeeping.
+    _prov_note = ""
+    try:
+        from vqlab.records import provenance as _prov
+        try:
+            _rec = _prov.load(A)
+        except FileNotFoundError:
+            print("WARNING: no build record (vqlab_provenance.json). This artifact "
+                  "cannot say how it was made; it predates records or was built "
+                  "outside the vqlab CLI. Release allowed; backfill is VL4.8.")
+        else:
+            _bad = _prov.verify(A, _rec)
+            if _bad:
+                fails.append("build record does NOT verify: " + "; ".join(
+                    f"{n}: {w}" for n, w in _bad[:5]) + " -- the artifact changed "
+                    "after it was recorded. Rebuild, or amend through the vqlab "
+                    "tool that changed it, before releasing.")
+            else:
+                _prov_note = (f", build record {_rec['id'][:12]} verifies "
+                              f"({_rec['tool']['name']})")
+    except Exception as _e:  # the gate must report, not crash
+        fails.append(f"build record check crashed: {type(_e).__name__}: {_e}")
 
-# LOCAL JUNK. Finder writes .DS_Store into every folder it opens, Python
-# writes __pycache__ beside model.py on every load, and `hf upload` sends all
-# of it: both gemma repos shipped a .pyc this way (2026-09-26). It comes back
-# whenever the folder is opened or the model loaded, so this WARNS with the
-# flags that keep it off the Hub instead of failing a gate nobody can hold.
-_junk = sorted(f.name for f in A.iterdir()
-               if f.name == ".DS_Store" or f.name.startswith("._")
-               or f.name == "__pycache__" or f.suffix == ".pyc")
-if _junk:
-    print(f"WARNING: local junk in the folder ({', '.join(_junk)}); keep it off the Hub: "
-          "hf upload ... --exclude '.DS_Store' --exclude '._*' "
-          "--exclude '__pycache__/*' --exclude '*.pyc'")
+    # CARD SPELLING. Released text is US English (2026-09-28): a British
+    # spelling on a card is fixed before release, not in a later revision.
+    # `vqlab spelling --fix <artifact>/README.md` rewrites it.
+    try:
+        from vqlab.gate import spelling as _sp
+        _card = A / "README.md"
+        if _card.exists():
+            _hits = _sp.scan(_card.read_text())
+            if _hits:
+                fails.append(f"card has {len(_hits)} British spelling(s) ("
+                             + ", ".join(f"{w}->{u}" for _, w, u in _hits[:6])
+                             + f"); run `vqlab spelling --fix {_card}`")
+    except Exception as _e:  # the gate must report, not crash
+        fails.append(f"spelling check crashed: {type(_e).__name__}: {_e}")
 
-# Resolve the deferred processor-config finding now that the smoke has (or
-# has not) demonstrated that this artifact can actually serve.
-if _proc_gap:
-    if args.no_smoke or fails:
-        fails.append(_PROC_MSG + " -- and no smoke proved this artifact can "
-                     "serve at all, so the text-path risk stands unrefuted")
-    else:
-        print(f"WARNING: {_PROC_MSG}. Text generation was VERIFIED by the "
-              "smoke above, so this does not block release; vision requests "
-              "on this artifact are expected to fail.")
+    # LOCAL JUNK. Finder writes .DS_Store into every folder it opens, Python
+    # writes __pycache__ beside model.py on every load, and `hf upload` sends all
+    # of it: both gemma repos shipped a .pyc this way (2026-09-26). It comes back
+    # whenever the folder is opened or the model loaded, so this WARNS with the
+    # flags that keep it off the Hub instead of failing a gate nobody can hold.
+    _junk = sorted(f.name for f in A.iterdir()
+                   if f.name == ".DS_Store" or f.name.startswith("._")
+                   or f.name == "__pycache__" or f.suffix == ".pyc")
+    if _junk:
+        print(f"WARNING: local junk in the folder ({', '.join(_junk)}); keep it off the Hub: "
+              "hf upload ... --exclude '.DS_Store' --exclude '._*' "
+              "--exclude '__pycache__/*' --exclude '*.pyc'")
 
-if fails:
-    print("FAIL:")
-    for f in fails:
-        print(f"    {f}")
-    sys.exit(1)
-_smoked = ("" if args.no_smoke else
-           ", CLUSTER smoke generated tokens through a peer-verified "
-           "2-node pipeline" if args.cluster_smoke else
-           ", strict smoke generated a token")
-print(f"PASS: {len(REQUIRED)} required files present, index complete, "
-      f"tokenizer round-trips, bundle imports nothing a downloader "
-      f"lacks, index total_size matches{_smoked}{_vision_note}{_prov_note}")
+    # Resolve the deferred processor-config finding now that the smoke has (or
+    # has not) demonstrated that this artifact can actually serve.
+    if _proc_gap:
+        if args.no_smoke or fails:
+            fails.append(_PROC_MSG + " -- and no smoke proved this artifact can "
+                         "serve at all, so the text-path risk stands unrefuted")
+        else:
+            print(f"WARNING: {_PROC_MSG}. Text generation was VERIFIED by the "
+                  "smoke above, so this does not block release; vision requests "
+                  "on this artifact are expected to fail.")
+
+    if fails:
+        print("FAIL:")
+        for f in fails:
+            print(f"    {f}")
+        return 1
+    _smoked = ("" if args.no_smoke else
+               ", CLUSTER smoke generated tokens through a peer-verified "
+               "2-node pipeline" if args.cluster_smoke else
+               ", strict smoke generated a token")
+    print(f"PASS: {len(REQUIRED)} required files present, index complete, "
+          f"tokenizer round-trips, bundle imports nothing a downloader "
+          f"lacks, index total_size matches{_smoked}{_vision_note}{_prov_note}")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

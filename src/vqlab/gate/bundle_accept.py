@@ -14,87 +14,96 @@ import sys, pathlib, importlib.util
 import mlx.core as mx
 
 import tempfile
-if len(sys.argv) == 2 and sys.argv[1] in ("-h", "--help"):
-    print(__doc__)
-    print("usage: vqlab bundle-accept <artifact-dir>\n\n"
-          "Lifts the runtime out of <artifact-dir>/model.py and runs the\n"
-          "kernel acceptance checks against THAT copy — the code a\n"
-          "downloader executes — rather than whatever is on the import path.")
-    sys.exit(0)
-if len(sys.argv) != 2:
-    sys.exit("usage: vqlab bundle-accept <artifact-dir>")
-ART = sys.argv[1]
-bundle = pathlib.Path(ART) / "model.py"
-text = bundle.read_text()
-cut = text.find("import importlib as _importlib")
-assert cut > 0, "shim marker not found"
-tmp = pathlib.Path(tempfile.mkdtemp(prefix="vqlab_bundle_")) / "_bundled_vq_switch.py"
-tmp.write_text(text[:cut])
 
-spec = importlib.util.spec_from_file_location("bundled_vq_switch", tmp)
-bvq = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(bvq)
-print("module under test:", bvq.__file__)
-print("has devcb kernels:",
-      hasattr(bvq, "_SRC_FUSED_D4_DEVCB"), hasattr(bvq, "_SRC_FUSED_PACKED_D4_DEVCB"))
-print("has cap guard:", hasattr(bvq, "_d4_tg_fits"))
 
-mx.random.seed(0)
+def main(argv=None) -> int:
+    argv = sys.argv[1:] if argv is None else argv
+    if len(argv) == 1 and argv[0] in ("-h", "--help"):
+        print(__doc__)
+        print("usage: vqlab bundle-accept <artifact-dir>\n\n"
+              "Lifts the runtime out of <artifact-dir>/model.py and runs the\n"
+              "kernel acceptance checks against THAT copy — the code a\n"
+              "downloader executes — rather than whatever is on the import path.")
+        return 0
+    if len(argv) != 1:
+        print("usage: vqlab bundle-accept <artifact-dir>", file=sys.stderr)
+        return 1
+    ART = argv[0]
+    bundle = pathlib.Path(ART) / "model.py"
+    text = bundle.read_text()
+    cut = text.find("import importlib as _importlib")
+    assert cut > 0, "shim marker not found"
+    tmp = pathlib.Path(tempfile.mkdtemp(prefix="vqlab_bundle_")) / "_bundled_vq_switch.py"
+    tmp.write_text(text[:cut])
 
-from vqlab.gate.kernel_reference import reference
+    spec = importlib.util.spec_from_file_location("bundled_vq_switch", tmp)
+    bvq = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(bvq)
+    print("module under test:", bvq.__file__)
+    print("has devcb kernels:",
+          hasattr(bvq, "_SRC_FUSED_D4_DEVCB"), hasattr(bvq, "_SRC_FUSED_PACKED_D4_DEVCB"))
+    print("has cap guard:", hasattr(bvq, "_d4_tg_fits"))
 
-fails = 0
-for (E, OUT, IN) in [(4, 512, 2048), (2, 256, 1024)]:
-    for K in [256, 2048, 4096, 8192]:
-        NSUB = IN // 4
-        codes = mx.random.randint(0, K, (E, OUT, NSUB)).astype(
-            mx.uint8 if K <= 256 else mx.uint16)
-        cb = (mx.random.normal((K, 4)) * 0.1).astype(mx.float16)
+    mx.random.seed(0)
+
+    from vqlab.gate.kernel_reference import reference
+
+    fails = 0
+    for (E, OUT, IN) in [(4, 512, 2048), (2, 256, 1024)]:
+        for K in [256, 2048, 4096, 8192]:
+            NSUB = IN // 4
+            codes = mx.random.randint(0, K, (E, OUT, NSUB)).astype(
+                mx.uint8 if K <= 256 else mx.uint16)
+            cb = (mx.random.normal((K, 4)) * 0.1).astype(mx.float16)
+            sc = (mx.random.uniform(shape=(E, OUT, IN // 64)) * 0.5 + 0.5).astype(mx.float16)
+            x = (mx.random.normal((8, IN)) * 0.5).astype(mx.float16)
+            eidx = mx.random.randint(0, E, (8,)).astype(mx.uint32)
+            ref = reference(x, eidx, codes, cb, sc, 4, 64)
+            fits = bvq._d4_tg_fits(K, NSUB)
+            saved = bvq._TG_CAP_BYTES
+            bvq._TG_CAP_BYTES = 0
+            y_dev = bvq._fused(x, eidx, codes, cb, sc); mx.eval(y_dev)
+            note = "n/a (over cap)"
+            if fits:
+                bvq._TG_CAP_BYTES = 1 << 30
+                y_tg = bvq._fused(x, eidx, codes, cb, sc); mx.eval(y_tg)
+                same = bool(mx.array_equal(y_dev, y_tg))
+                note = "BIT-IDENTICAL" if same else "*** DIFFERS ***"
+                if not same: fails += 1
+            bvq._TG_CAP_BYTES = saved
+            rel = float(mx.max(mx.abs(y_dev.astype(mx.float32) - ref))
+                        / mx.maximum(mx.max(mx.abs(ref)), 1e-6))
+            if rel >= 2e-2: fails += 1
+            print("  E%d OUT%-4d IN%-5d K%-6d ref %.1e  %s" % (E, OUT, IN, K, rel, note))
+
+    # UNALIGNED PACKED TAIL BLOCK (2026-08-29): d8 NSUB=80 at 12 bits, the
+    # qwen4_exp down_proj shape the padded-tail format exists for. The metal
+    # reader must agree with the numpy reference through the ceil-WPR stride.
+    import numpy as np
+    from vqlab.runtime import vq_pack
+    for (E, OUT, IN, D, K, bits) in [(2, 128, 640, 8, 4096, 12),
+                                     (2, 128, 704, 4, 2048, 11)]:
+        NSUB = IN // D
+        codes_np = np.random.default_rng(3).integers(0, K, (E, OUT, NSUB),
+                                                     dtype=np.uint16)
+        packed = mx.array(vq_pack.pack(codes_np, bits))
+        codes = mx.array(codes_np)
+        cb = (mx.random.normal((K, D)) * 0.1).astype(mx.float16)
         sc = (mx.random.uniform(shape=(E, OUT, IN // 64)) * 0.5 + 0.5).astype(mx.float16)
         x = (mx.random.normal((8, IN)) * 0.5).astype(mx.float16)
         eidx = mx.random.randint(0, E, (8,)).astype(mx.uint32)
-        ref = reference(x, eidx, codes, cb, sc, 4, 64)
-        fits = bvq._d4_tg_fits(K, NSUB)
-        saved = bvq._TG_CAP_BYTES
-        bvq._TG_CAP_BYTES = 0
-        y_dev = bvq._fused(x, eidx, codes, cb, sc); mx.eval(y_dev)
-        note = "n/a (over cap)"
-        if fits:
-            bvq._TG_CAP_BYTES = 1 << 30
-            y_tg = bvq._fused(x, eidx, codes, cb, sc); mx.eval(y_tg)
-            same = bool(mx.array_equal(y_dev, y_tg))
-            note = "BIT-IDENTICAL" if same else "*** DIFFERS ***"
-            if not same: fails += 1
-        bvq._TG_CAP_BYTES = saved
-        rel = float(mx.max(mx.abs(y_dev.astype(mx.float32) - ref))
+        ref = reference(x, eidx, codes, cb, sc, D, 64)
+        y = bvq._fused(x, eidx, packed, cb, sc, pack_bits=bits); mx.eval(y)
+        rel = float(mx.max(mx.abs(y.astype(mx.float32) - ref))
                     / mx.maximum(mx.max(mx.abs(ref)), 1e-6))
-        if rel >= 2e-2: fails += 1
-        print("  E%d OUT%-4d IN%-5d K%-6d ref %.1e  %s" % (E, OUT, IN, K, rel, note))
+        ok = rel < 2e-2
+        if not ok: fails += 1
+        print("  UNALIGNED d%d NSUB%-4d K%-6d bits%-3d ref %.1e  %s"
+              % (D, NSUB, K, bits, rel, "OK" if ok else "*** DIFFERS ***"))
 
-# UNALIGNED PACKED TAIL BLOCK (2026-08-29): d8 NSUB=80 at 12 bits, the
-# qwen4_exp down_proj shape the padded-tail format exists for. The metal
-# reader must agree with the numpy reference through the ceil-WPR stride.
-import numpy as np
-from vqlab.runtime import vq_pack
-for (E, OUT, IN, D, K, bits) in [(2, 128, 640, 8, 4096, 12),
-                                 (2, 128, 704, 4, 2048, 11)]:
-    NSUB = IN // D
-    codes_np = np.random.default_rng(3).integers(0, K, (E, OUT, NSUB),
-                                                 dtype=np.uint16)
-    packed = mx.array(vq_pack.pack(codes_np, bits))
-    codes = mx.array(codes_np)
-    cb = (mx.random.normal((K, D)) * 0.1).astype(mx.float16)
-    sc = (mx.random.uniform(shape=(E, OUT, IN // 64)) * 0.5 + 0.5).astype(mx.float16)
-    x = (mx.random.normal((8, IN)) * 0.5).astype(mx.float16)
-    eidx = mx.random.randint(0, E, (8,)).astype(mx.uint32)
-    ref = reference(x, eidx, codes, cb, sc, D, 64)
-    y = bvq._fused(x, eidx, packed, cb, sc, pack_bits=bits); mx.eval(y)
-    rel = float(mx.max(mx.abs(y.astype(mx.float32) - ref))
-                / mx.maximum(mx.max(mx.abs(ref)), 1e-6))
-    ok = rel < 2e-2
-    if not ok: fails += 1
-    print("  UNALIGNED d%d NSUB%-4d K%-6d bits%-3d ref %.1e  %s"
-          % (D, NSUB, K, bits, rel, "OK" if ok else "*** DIFFERS ***"))
+    print("BUNDLED-COPY ACCEPTANCE:", "PASS" if fails == 0 else "FAIL (%d)" % fails)
+    return 1 if fails else 0
 
-print("BUNDLED-COPY ACCEPTANCE:", "PASS" if fails == 0 else "FAIL (%d)" % fails)
-sys.exit(1 if fails else 0)
+
+if __name__ == "__main__":
+    sys.exit(main())
