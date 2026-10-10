@@ -67,28 +67,7 @@ def _assert_tower_belongs(src_cfg, art_cfg, src_name, art_name):
             f"present and wrong.")
 
 
-ap = argparse.ArgumentParser()
-ap.add_argument("--src", required=True)
-ap.add_argument("--out", required=True)
-ap.add_argument("--pack-unaligned", action="store_true",
-                help="pack NSUB %% 32 != 0 tensors via the padded tail block. "
-                     "OFF until bundle_accept passes an unaligned geometry on "
-                     "metal — the CPU round-trip is proven, the kernels are "
-                     "ceil-WPR by construction, but rule 5 wants the GPU "
-                     "acceptance before an artifact ships this way.")
-ap.add_argument("--group", type=int, default=64)
-ap.add_argument("--vision-config-from", default="",
-                help="artifact dir to copy vision_config/image_token_id from "
-                     "when the packed config lacks them. Defaults to the Qwen "
-                     "3.5 bf16 source since that is what this lab packs; pass "
-                     "a different path for another family, or \"\" to skip "
-                     "and get a warning instead.")
-args = ap.parse_args()
-
-SRC, OUT = pathlib.Path(args.src), pathlib.Path(args.out)
-
-
-def _packable(art):
+def _packable(art, pack_unaligned=False):
     """Modules this run would pack, from headers + config alone (nothing is
     written yet): not already packed, not byte-aligned, NSUB-aligned unless
     --pack-unaligned. Mirrors the per-tensor decisions in the loop below."""
@@ -112,169 +91,197 @@ def _packable(art):
         if vq_pack.bits_for_k(k) % 8 == 0:
             continue
         nsub = shape[2]
-        if nsub % vq_pack.BLOCK and not args.pack_unaligned:
+        if nsub % vq_pack.BLOCK and not pack_unaligned:
             continue
         out.append(mod)
     return out
 
 
-from vqlab.core.artifact import Artifact as _Artifact
-if not _packable(_Artifact.open(SRC)):
-    raise SystemExit(f"REFUSED: nothing in {SRC} to pack (every VQ module is already packed, "
-                     "byte-aligned (K256/K65536), or NSUB-unaligned without --pack-unaligned); "
-                     "nothing written")
-from vqlab import config as _cfg
-_cfg.require_free(OUT, sum(p.stat().st_size for p in SRC.glob("*.safetensors")
-                           if not (OUT / p.name).exists()), "pack")
-OUT.mkdir(parents=True, exist_ok=True)
+def main(argv=None) -> int:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--src", required=True)
+    ap.add_argument("--out", required=True)
+    ap.add_argument("--pack-unaligned", action="store_true",
+                    help="pack NSUB %% 32 != 0 tensors via the padded tail block. "
+                         "OFF until bundle_accept passes an unaligned geometry on "
+                         "metal — the CPU round-trip is proven, the kernels are "
+                         "ceil-WPR by construction, but rule 5 wants the GPU "
+                         "acceptance before an artifact ships this way.")
+    ap.add_argument("--group", type=int, default=64)
+    ap.add_argument("--vision-config-from", default="",
+                    help="artifact dir to copy vision_config/image_token_id from "
+                         "when the packed config lacks them. Defaults to the Qwen "
+                         "3.5 bf16 source since that is what this lab packs; pass "
+                         "a different path for another family, or \"\" to skip "
+                         "and get a warning instead.")
+    args = ap.parse_args(argv)
 
-idx_path = SRC / "model.safetensors.index.json"
-from vqlab.core.artifact import Artifact
-_art = Artifact.open(SRC)
-weight_map = _art.index
-shards = _art.shards
-_vqm = _art.map("vq_modules")
+    SRC, OUT = pathlib.Path(args.src), pathlib.Path(args.out)
 
-# non-tensor files (config, tokenizer, template, README...) come along
-for f in SRC.iterdir():
-    if f.is_file() and f.suffix not in (".safetensors",):
-        shutil.copy2(f, OUT / f.name)
 
-vq_meta = {}
-skipped = []
-for si, sh in enumerate(shards, 1):
-    # Materialize the shard ON THE CPU STREAM and force it here. Tensors we
-    # pass through untouched (every non-.codes key, and every byte-aligned
-    # or NSUB-skipped codes tensor) go into out_data STILL LAZY, so without
-    # this the only pending work at mx.save_safetensors is a read of SRC --
-    # and it is then paid inside a GPU command buffer. Over a fast local
-    # disk that finishes; over SMB it trips the Metal watchdog and the pack
-    # dies at the write step with a GPU Timeout that names the save, not the
-    # read. Measured 2026-08-21: M4 packing the share died on shard 1 (K512)
-    # and shard 5 (K256, where n_packed=0 makes EVERY tensor a lazy
-    # passthrough); same artifacts pack clean on M3's local disk. The eval
-    # is LOAD-BEARING -- creation-binding to the CPU stream alone is
-    # measured-insufficient. Same family as fit_moe.py's load path.
-    with mx.stream(mx.cpu):
-        data = mx.load(str(SRC / sh))
-        mx.eval(list(data.values()))
-    out_data = {}
-    n_packed = 0
-    for key, val in data.items():
-        if not key.endswith(".codes"):
-            out_data[key] = val
-            continue
-        mod = key[:-len(".codes")]
-        if _vqm.get(mod, {}).get("pack_bits"):
-            out_data[key] = val           # already packed: never pack twice
-            continue
-        # Geometry from the config map, not from a .codebook in THIS shard: a
-        # module's tensors may straddle a shard boundary (the codebook lives
-        # in the next shard), which was a KeyError here until 2026-10-02.
-        if mod in _vqm:
-            k, dim = int(_vqm[mod]["k"]), int(_vqm[mod]["dim"])
+
+
+    from vqlab.core.artifact import Artifact as _Artifact
+    if not _packable(_Artifact.open(SRC), args.pack_unaligned):
+        raise SystemExit(f"REFUSED: nothing in {SRC} to pack (every VQ module is already packed, "
+                         "byte-aligned (K256/K65536), or NSUB-unaligned without --pack-unaligned); "
+                         "nothing written")
+    from vqlab import config as _cfg
+    _cfg.require_free(OUT, sum(p.stat().st_size for p in SRC.glob("*.safetensors")
+                               if not (OUT / p.name).exists()), "pack")
+    OUT.mkdir(parents=True, exist_ok=True)
+
+    idx_path = SRC / "model.safetensors.index.json"
+    from vqlab.core.artifact import Artifact
+    _art = Artifact.open(SRC)
+    shards = _art.shards
+    _vqm = _art.map("vq_modules")
+
+    # non-tensor files (config, tokenizer, template, README...) come along
+    for f in SRC.iterdir():
+        if f.is_file() and f.suffix not in (".safetensors",):
+            shutil.copy2(f, OUT / f.name)
+
+    vq_meta = {}
+    skipped = []
+    for si, sh in enumerate(shards, 1):
+        # Materialize the shard ON THE CPU STREAM and force it here. Tensors we
+        # pass through untouched (every non-.codes key, and every byte-aligned
+        # or NSUB-skipped codes tensor) go into out_data STILL LAZY, so without
+        # this the only pending work at mx.save_safetensors is a read of SRC --
+        # and it is then paid inside a GPU command buffer. Over a fast local
+        # disk that finishes; over SMB it trips the Metal watchdog and the pack
+        # dies at the write step with a GPU Timeout that names the save, not the
+        # read. Measured 2026-08-21: M4 packing the share died on shard 1 (K512)
+        # and shard 5 (K256, where n_packed=0 makes EVERY tensor a lazy
+        # passthrough); same artifacts pack clean on M3's local disk. The eval
+        # is LOAD-BEARING -- creation-binding to the CPU stream alone is
+        # measured-insufficient. Same family as fit_moe.py's load path.
+        with mx.stream(mx.cpu):
+            data = mx.load(str(SRC / sh))
+            mx.eval(list(data.values()))
+        out_data = {}
+        n_packed = 0
+        for key, val in data.items():
+            if not key.endswith(".codes"):
+                out_data[key] = val
+                continue
+            mod = key[:-len(".codes")]
+            if _vqm.get(mod, {}).get("pack_bits"):
+                out_data[key] = val           # already packed: never pack twice
+                continue
+            # Geometry from the config map, not from a .codebook in THIS shard: a
+            # module's tensors may straddle a shard boundary (the codebook lives
+            # in the next shard), which was a KeyError here until 2026-10-02.
+            if mod in _vqm:
+                k, dim = int(_vqm[mod]["k"]), int(_vqm[mod]["dim"])
+            else:
+                k, dim = data[mod + ".codebook"].shape[0], data[mod + ".codebook"].shape[1]
+            nsub = val.shape[2]
+            # NSUB alignment: since 2026-08-29 the block layout PADS an unaligned
+            # tail block (vq_pack pads, kernels use ceil-WPR and never read the
+            # pad since n < NSUB), so gemma-26b's NSUB=176 and qwen4_exp d8
+            # down_proj's NSUB=80 pack like everything else. GPU-PENDING GATE:
+            # until bundle_accept passes an unaligned case on metal, keep the
+            # copy-through unless --pack-unaligned is set; mixed artifacts stay
+            # legal either way (dtype dispatch, absent pack_bits = unpacked).
+            if nsub % vq_pack.BLOCK and not args.pack_unaligned:
+                skipped.append((mod, nsub))
+            # BYTE-ALIGNED skip (08-20, found by the 397B session's A/B): when
+            # bits %% 8 == 0, packing saves ZERO bytes (32 codes x 8 bits = 32
+            # bytes either way) but routes the tensor through the packed
+            # kernel's bit-field extraction — measured 37%% decode tax on the
+            # cheap-shallow 397B, whose 141 K256 tensors were "packed" at 8
+            # bits for nothing. Same pass-through mechanism as the NSUB skip:
+            # absent pack_bits IS the unpacked signal, so mixed artifacts stay
+            # safe by construction. Both rules (and the round-trip check) live in
+            # codepack.pack_codes, which `fit-moe --pack` shares: a fit packed as
+            # it is written is byte for byte this pass's output.
+            out_data[key], bits = codepack.pack_codes(mod, val, k, args.pack_unaligned)
+            if bits:
+                vq_meta[mod] = {"pack_bits": bits, "in": nsub * dim}
+                n_packed += 1
+        # key-sorted, so the tensor order is a function of the key set alone (not
+        # of mx.load's hash order): `fit-moe --pack` writes the same bytes
+        mx.save_safetensors(str(OUT / sh), dict(sorted(out_data.items())),
+                            metadata={"format": "mlx"})
+        print(f"[{si}/{len(shards)}] {sh}: packed {n_packed} code tensors",
+              flush=True)
+        del data, out_data
+
+    # The index must be REWRITTEN, not copied: metadata.total_size describes the
+    # SOURCE (unpacked) tensors, and copying it verbatim makes a packed artifact
+    # declare a size it does not have. Measured 2026-08-21: flatk2048-refit-packed
+    # claimed 197.12 GiB for 143.68 GiB (+37%), flatk512-packed +61%. exo reads
+    # this field to size the model and REFUSED to place the flagship — "No cycles
+    # found with sufficient memory" — and any downloader would be misled the same
+    # way. Recomputed below from the packed shards' own headers.
+    _idx = json.load(open(idx_path))
+    from vqlab.core.artifact import tensor_bytes, write_index
+    _total = tensor_bytes(OUT, _idx["weight_map"].values())
+    write_index(OUT, _idx["weight_map"], total_size=_total, metadata=_idx.get("metadata"))
+    print(f"index total_size recomputed from packed shards: {_total} "
+          f"({_total / 2**30:.2f} GiB)")
+
+    # seed config with pack_bits/in so add_model_file can read them back (it
+    # refuses to guess a bit width, by design)
+    cfg = json.load(open(OUT / "config.json"))
+
+    # ---- vision keys.
+    # The packer copies the fit output's config verbatim, and the fit output never
+    # had vision_config: the FIT's base (struct6-tail3x3) has no such key, and
+    # mlx_lm.convert strips it for text-only artifacts. Result until 2026-08-21:
+    # every chain-built 397B artifact grafted all 333 vision tensors and still
+    # shipped a config exo cannot build a VisionCardConfig from. graft_vision.py
+    # had a flag for it that no chain ever passed. Fixed in both places — here so
+    # a packed artifact is correct even if nobody runs the graft, and there so the
+    # graft repairs one that slipped through.
+    VISION_KEYS = ("vision_config", "image_token_id")
+    _missing = [k for k in VISION_KEYS if k not in cfg]
+    if _missing:
+        _vsrc = pathlib.Path(args.vision_config_from) if args.vision_config_from else None
+        if _vsrc and (_vsrc / "config.json").exists():
+            _vc = json.load(open(_vsrc / "config.json"))
+            # CORRESPONDENCE, not presence: refuse to copy another family's
+            # vision block into this artifact. Checked before any key is copied.
+            _assert_tower_belongs(_vc, cfg, str(_vsrc), str(OUT))
+            _copied = [k for k in _missing if k in _vc]
+            for k in _copied:
+                cfg[k] = _vc[k]
+            if _copied:
+                print(f"copied vision keys from {_vsrc.name}: {_copied}")
+            if [k for k in _missing if k not in _vc]:
+                print(f"WARNING: {[k for k in _missing if k not in _vc]} absent "
+                      f"from {_vsrc.name} too — artifact will not be exo vision-ready.")
         else:
-            k, dim = data[mod + ".codebook"].shape[0], data[mod + ".codebook"].shape[1]
-        nsub = val.shape[2]
-        # NSUB alignment: since 2026-08-29 the block layout PADS an unaligned
-        # tail block (vq_pack pads, kernels use ceil-WPR and never read the
-        # pad since n < NSUB), so gemma-26b's NSUB=176 and qwen4_exp d8
-        # down_proj's NSUB=80 pack like everything else. GPU-PENDING GATE:
-        # until bundle_accept passes an unaligned case on metal, keep the
-        # copy-through unless --pack-unaligned is set; mixed artifacts stay
-        # legal either way (dtype dispatch, absent pack_bits = unpacked).
-        if nsub % vq_pack.BLOCK and not args.pack_unaligned:
-            skipped.append((mod, nsub))
-        # BYTE-ALIGNED skip (08-20, found by the 397B session's A/B): when
-        # bits %% 8 == 0, packing saves ZERO bytes (32 codes x 8 bits = 32
-        # bytes either way) but routes the tensor through the packed
-        # kernel's bit-field extraction — measured 37%% decode tax on the
-        # cheap-shallow 397B, whose 141 K256 tensors were "packed" at 8
-        # bits for nothing. Same pass-through mechanism as the NSUB skip:
-        # absent pack_bits IS the unpacked signal, so mixed artifacts stay
-        # safe by construction. Both rules (and the round-trip check) live in
-        # codepack.pack_codes, which `fit-moe --pack` shares: a fit packed as
-        # it is written is byte for byte this pass's output.
-        out_data[key], bits = codepack.pack_codes(mod, val, k, args.pack_unaligned)
-        if bits:
-            vq_meta[mod] = {"pack_bits": bits, "in": nsub * dim}
-            n_packed += 1
-    # key-sorted, so the tensor order is a function of the key set alone (not
-    # of mx.load's hash order): `fit-moe --pack` writes the same bytes
-    mx.save_safetensors(str(OUT / sh), dict(sorted(out_data.items())),
-                        metadata={"format": "mlx"})
-    print(f"[{si}/{len(shards)}] {sh}: packed {n_packed} code tensors",
-          flush=True)
-    del data, out_data
+            print(f"WARNING: config lacks {_missing} and no --vision-config-from "
+                  f"given. exo will not build a VisionCardConfig. Re-run with "
+                  f"--vision-config-from <bf16 source>, or run graft_vision.py "
+                  f"(its --copy-config-keys now defaults ON).")
+    merged = cfg.get("vq_modules", {})
+    for mod, meta in vq_meta.items():
+        merged.setdefault(mod, {}).update(meta)
+    cfg["vq_modules"] = merged
+    json.dump(cfg, open(OUT / "config.json", "w"), indent=1)
 
-# The index must be REWRITTEN, not copied: metadata.total_size describes the
-# SOURCE (unpacked) tensors, and copying it verbatim makes a packed artifact
-# declare a size it does not have. Measured 2026-08-21: flatk2048-refit-packed
-# claimed 197.12 GiB for 143.68 GiB (+37%), flatk512-packed +61%. exo reads
-# this field to size the model and REFUSED to place the flagship — "No cycles
-# found with sufficient memory" — and any downloader would be misled the same
-# way. Recomputed below from the packed shards' own headers.
-_idx = json.load(open(idx_path))
-from vqlab.core.artifact import tensor_bytes, write_index
-_total = tensor_bytes(OUT, _idx["weight_map"].values())
-write_index(OUT, _idx["weight_map"], total_size=_total, metadata=_idx.get("metadata"))
-print(f"index total_size recomputed from packed shards: {_total} "
-      f"({_total / 2**30:.2f} GiB)")
+    from vqlab._layout import find as _find
+    subprocess.run([sys.executable, str(_find("add_model_file.py")),
+                    "--artifact", str(OUT), "--group", str(args.group)], check=True)
 
-# seed config with pack_bits/in so add_model_file can read them back (it
-# refuses to guess a bit width, by design)
-cfg = json.load(open(OUT / "config.json"))
+    src_gib = sum(f.stat().st_size for f in SRC.glob("*.safetensors")) / 1024 ** 3
+    out_gib = sum(f.stat().st_size for f in OUT.glob("*.safetensors")) / 1024 ** 3
+    print(f"\npacked {len(vq_meta)} tensors: {src_gib:.1f} -> {out_gib:.1f} GiB "
+          f"({out_gib / src_gib:.3f}x)")
+    if skipped:
+        # Loud, because these tensors keep paying full uint16 and are the reason
+        # the achieved size misses the analytic target.
+        shapes = sorted({n for _, n in skipped})
+        print(f"NOT PACKED: {len(skipped)} tensors with NSUB % {vq_pack.BLOCK} "
+              f"!= 0 (NSUB {shapes}) — copied through unpacked, still uint16.")
+        for mod, n in skipped[:3]:
+            print(f"  e.g. {mod} (NSUB={n})")
+    return 0
 
-# ---- vision keys.
-# The packer copies the fit output's config verbatim, and the fit output never
-# had vision_config: the FIT's base (struct6-tail3x3) has no such key, and
-# mlx_lm.convert strips it for text-only artifacts. Result until 2026-08-21:
-# every chain-built 397B artifact grafted all 333 vision tensors and still
-# shipped a config exo cannot build a VisionCardConfig from. graft_vision.py
-# had a flag for it that no chain ever passed. Fixed in both places — here so
-# a packed artifact is correct even if nobody runs the graft, and there so the
-# graft repairs one that slipped through.
-VISION_KEYS = ("vision_config", "image_token_id")
-_missing = [k for k in VISION_KEYS if k not in cfg]
-if _missing:
-    _vsrc = pathlib.Path(args.vision_config_from) if args.vision_config_from else None
-    if _vsrc and (_vsrc / "config.json").exists():
-        _vc = json.load(open(_vsrc / "config.json"))
-        # CORRESPONDENCE, not presence: refuse to copy another family's
-        # vision block into this artifact. Checked before any key is copied.
-        _assert_tower_belongs(_vc, cfg, str(_vsrc), str(OUT))
-        _copied = [k for k in _missing if k in _vc]
-        for k in _copied:
-            cfg[k] = _vc[k]
-        if _copied:
-            print(f"copied vision keys from {_vsrc.name}: {_copied}")
-        if [k for k in _missing if k not in _vc]:
-            print(f"WARNING: {[k for k in _missing if k not in _vc]} absent "
-                  f"from {_vsrc.name} too — artifact will not be exo vision-ready.")
-    else:
-        print(f"WARNING: config lacks {_missing} and no --vision-config-from "
-              f"given. exo will not build a VisionCardConfig. Re-run with "
-              f"--vision-config-from <bf16 source>, or run graft_vision.py "
-              f"(its --copy-config-keys now defaults ON).")
-merged = cfg.get("vq_modules", {})
-for mod, meta in vq_meta.items():
-    merged.setdefault(mod, {}).update(meta)
-cfg["vq_modules"] = merged
-json.dump(cfg, open(OUT / "config.json", "w"), indent=1)
 
-from vqlab._layout import find as _find
-subprocess.run([sys.executable, str(_find("add_model_file.py")),
-                "--artifact", str(OUT), "--group", str(args.group)], check=True)
-
-src_gib = sum(f.stat().st_size for f in SRC.glob("*.safetensors")) / 1024 ** 3
-out_gib = sum(f.stat().st_size for f in OUT.glob("*.safetensors")) / 1024 ** 3
-print(f"\npacked {len(vq_meta)} tensors: {src_gib:.1f} -> {out_gib:.1f} GiB "
-      f"({out_gib / src_gib:.3f}x)")
-if skipped:
-    # Loud, because these tensors keep paying full uint16 and are the reason
-    # the achieved size misses the analytic target.
-    shapes = sorted({n for _, n in skipped})
-    print(f"NOT PACKED: {len(skipped)} tensors with NSUB % {vq_pack.BLOCK} "
-          f"!= 0 (NSUB {shapes}) — copied through unpacked, still uint16.")
-    for mod, n in skipped[:3]:
-        print(f"  e.g. {mod} (NSUB={n})")
+if __name__ == "__main__":
+    sys.exit(main())
