@@ -1,18 +1,17 @@
 # core/ — Shared libraries used by every stage
 
 ## Inputs
-Model-family names, source checkpoints.
+Source checkpoints and their family entries (passed in by the caller).
 
 ## Process
-`expert_src.py` (every reader of MoE source weights), `runtime_load.py` (which library loads a family), `arch_finder.py` (the Knurlogic meta-path finder behind `vqlab.use_knurlogic_arch()`; `install_arch_finder()`), `mem_budget.py`, `ple_stream.py`, `fitstore.py` (the fit store's layout, index, census and content-based teacher naming; `vqlab fits` is its CLI), `version_stamp.py` (where versions are stamped: the numerics build a number was computed under -- mlx, mlx-lm, knurlogic, arch file sha, scorer variant -- and the checks that refuse a mismatched cache or pairing; `python -m vqlab.core.version_stamp --model <dir>`).
+`expert_src.py` (every reader of MoE source weights; its loader checks are `tests/test_expert_src_loader.py`), `arch_finder.py` (the Knurlogic meta-path finder behind `vqlab.use_knurlogic_arch()`; `install_arch_finder()`), `stamp_fields.py` (what a numerics build stamp holds and how two are compared and printed: `COMPARED`, `diff`, `describe`), `mem_budget.py`, `ple_stream.py`, `fitstore.py` (the fit store's layout, index, census and content-based teacher naming; `vqlab fits` is its CLI).
 
-The family registry (FAMILY, teacher_caches, scorer_variant) is NOT here: it is `family/registry.py`.
+Anything that needs the family table is NOT here, it lives in `family/`: the registry (`family/registry.py`), which library loads a family (`family/model_loader.py`), and building a version stamp (`family/version_stamp.py`).
 
 ## Outputs
 Imported as `vqlab.core.<module>`.
 
 ## Rules that bite
-- core imports NOTHING from `vqlab.family` (layer rule, tests/test_layering.py). A core module that needs a family lookup asks the package root at call time: `vqlab._family_registry()`.
-- Old names `vqlab.core.families`, `vqlab.core.numerics` (and bare `families` / `numerics`) and `vqlab.family.arch` are aliases for one release (`_layout.ALIASES`): same module object.
-- The version stamp's fields are compared across caches and runs. Renaming or moving code must not change a stamped value (tests/test_version_stamp_identity.py).
+- core imports NOTHING from `vqlab.family` (layer rule, tests/test_layering.py), directly or through an indirection. A core module that needs a family lookup is in the wrong package: move it up.
+- Old names `vqlab.core.families`, `vqlab.core.numerics`, `vqlab.core.version_stamp`, `vqlab.core.runtime_load` (and bare `families` / `numerics` / `version_stamp` / `runtime_load`) and `vqlab.family.arch` are aliases for one release (`_layout.ALIASES`): same module object.
 - Depth and geometry laws are family-local. Never inherit an allocation across families.

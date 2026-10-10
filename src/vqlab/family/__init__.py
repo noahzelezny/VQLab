@@ -140,6 +140,6 @@ def alias_fused(skel: dict, triples) -> dict:
 def variant_for(model_type: str):
     """The scorer's current numerics variant for model_type (None when the
     family declares none). Stamped into every cache and result by
-    core.version_stamp.build."""
+    family.version_stamp.build."""
     fn = (scorers().get(model_type) or {}).get("variant")
     return fn() if callable(fn) else None

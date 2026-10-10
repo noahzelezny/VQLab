@@ -43,7 +43,7 @@ import pathlib
 import numpy as np
 import mlx.core as mx
 
-from vqlab.core import runtime_load
+from vqlab.family import model_loader as runtime_load
 
 
 def _num(v):

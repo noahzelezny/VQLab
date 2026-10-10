@@ -31,7 +31,7 @@ import pathlib
 
 import mlx.core as mx
 
-from vqlab.core import runtime_load
+from vqlab.family import model_loader as runtime_load
 
 
 def report_norm_convention(g):

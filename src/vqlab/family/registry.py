@@ -214,7 +214,7 @@ FAMILY.update(_plugin_fit())
 def scorer_variant(model_type: str | None):
     """The family plugin's current scorer variant for model_type (None
     without one, or when the plugin cannot say). Stamped into every cache
-    and result by core.version_stamp.build."""
+    and result by family.version_stamp.build."""
     if not model_type:
         return None
     try:

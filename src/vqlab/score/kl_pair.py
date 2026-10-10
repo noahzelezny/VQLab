@@ -55,7 +55,7 @@ def verify(fa: str, fb: str, allow: bool = False) -> list:
     teacher, computed by the SAME numerics build. File names say none of
     that; the .json sidecar stream_score / kl-ladder write beside every array
     does (cache identity, build stamp, position count)."""
-    from vqlab.core.version_stamp import pairing_problems
+    from vqlab.family.version_stamp import pairing_problems
 
     def side(f):
         try:

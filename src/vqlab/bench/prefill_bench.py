@@ -39,7 +39,7 @@ import time
 
 import mlx.core as mx
 
-from vqlab.core import runtime_load
+from vqlab.family import model_loader as runtime_load
 
 
 ARM_ENV = {"device": "1", "threadgroup": "0", "auto": "auto"}

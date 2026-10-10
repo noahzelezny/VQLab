@@ -66,9 +66,9 @@ def score_one(python, model, cache_dir, corpus, tokens, chunk, stream_ple,
 
 
 def interpreter_build(python, model_dir):
-    """core.version_stamp.build as the SCORING interpreter resolves it (it may not
+    """family.version_stamp.build as the SCORING interpreter resolves it (it may not
     be this one). Reads files and metadata only; None if it cannot run."""
-    r = subprocess.run([python, "-m", "vqlab.core.version_stamp", "--model", model_dir],
+    r = subprocess.run([python, "-m", "vqlab.family.version_stamp", "--model", model_dir],
                        capture_output=True, text=True)
     line = [x for x in r.stdout.splitlines() if x.startswith("{")]
     return json.loads(line[-1]) if r.returncode == 0 and line else None

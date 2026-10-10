@@ -208,7 +208,7 @@ def suggest_entry(idx_keys):
             "proj": proj_map,
             "_note": "DRAFT from index key patterns: confirm target_substr "
                      "against the runtime's module tree, then run "
-                     "`python src/vqlab/core/expert_src.py --selftest`"}
+                     "`pytest tests/test_expert_src_loader.py`"}
 
 
 def main(argv=None) -> int:

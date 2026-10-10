@@ -57,9 +57,15 @@ ALIASES = {
     "vqlab.core.families": "vqlab.family.registry",
     "vqlab.families": "vqlab.family.registry",
     "families": "vqlab.family.registry",
-    "vqlab.core.numerics": "vqlab.core.version_stamp",
-    "vqlab.numerics": "vqlab.core.version_stamp",
-    "numerics": "vqlab.core.version_stamp",
+    "vqlab.core.numerics": "vqlab.family.version_stamp",
+    "vqlab.numerics": "vqlab.family.version_stamp",
+    "numerics": "vqlab.family.version_stamp",
+    "vqlab.core.version_stamp": "vqlab.family.version_stamp",
+    "vqlab.version_stamp": "vqlab.family.version_stamp",
+    "version_stamp": "vqlab.family.version_stamp",
+    "vqlab.core.runtime_load": "vqlab.family.model_loader",
+    "vqlab.runtime_load": "vqlab.family.model_loader",
+    "runtime_load": "vqlab.family.model_loader",
     "vqlab.family.arch": "vqlab.core.arch_finder",
 }
 

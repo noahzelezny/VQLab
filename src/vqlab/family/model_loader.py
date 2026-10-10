@@ -22,7 +22,7 @@ resolved_runtime_note(model) and print it.
 
 CPU-only selftest (dispatch logic only, loads nothing):
 
-    python -m vqlab.runtime_load --selftest
+    python -m vqlab.family.model_loader --selftest
 """
 from __future__ import annotations
 
@@ -30,28 +30,15 @@ import pathlib
 import mlx.core as mx
 import sys
 
-from vqlab import _family_registry
+from vqlab.family.registry import FAMILY
 
 RUNTIMES = ("mlx_lm", "mlx_vlm")
-
-
-def _family_table() -> dict:
-    """family.registry.FAMILY, looked up at call time through the package
-    root: core may not import family (layer rule), and the registry is the
-    single source of truth."""
-    return _family_registry().FAMILY
-
-
-def __getattr__(name):
-    if name == "FAMILY":                    # pre-step-9a `runtime_load.FAMILY`
-        return _family_table()
-    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 def runtime_for(family: str) -> str:
     """The runtime a family loads under. Unknown/dense families default to
     mlx_lm — the behaviour every existing call site had before this file."""
-    entry = _family_table().get(family, {})
+    entry = FAMILY.get(family, {})
     rt = entry.get("runtime", "mlx_lm")
     # Knurlogic serves some architectures that used to exist only in mlx_vlm
     # (glm5_next) under mlx_lm.models, and VQLab loads Knurlogic's files
@@ -73,7 +60,7 @@ def family_for_model_type(model_type: str) -> str | None:
     a `model_type` field; families without one are unreachable this way,
     which is deliberate — guessing a family from a name is how the wrong
     --family gate ran on 08-21."""
-    hits = [f for f, e in _family_table().items() if e.get("model_type") == model_type]
+    hits = [f for f, e in FAMILY.items() if e.get("model_type") == model_type]
     if len(hits) > 1:
         raise ValueError(f"model_type {model_type!r} claimed by {hits}")
     return hits[0] if hits else None
@@ -165,7 +152,6 @@ def _selftest() -> int:
     report("unclaimed model_type -> None",
            family_for_model_type("qwen3_5_moe") is None)
     # both directions (III.5): a bad runtime value must raise, not default
-    FAMILY = _family_table()
     saved = FAMILY.get("glm5_next", {}).get("runtime")
     try:
         FAMILY["glm5_next"]["runtime"] = "torch"

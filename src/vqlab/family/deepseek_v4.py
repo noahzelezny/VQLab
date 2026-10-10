@@ -231,7 +231,7 @@ def act_stats(model_dir, corpora, tokens, args):
     import mlx_lm.models.deepseek_v4 as A
     from mlx_lm.utils import load_tokenizer
 
-    from vqlab.core import runtime_load
+    from vqlab.family import model_loader as runtime_load
     from vqlab.score.act_stats import ClampCounter, corpus_ids
 
     tok = load_tokenizer(pathlib.Path(model_dir))

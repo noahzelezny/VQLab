@@ -41,7 +41,7 @@ import time
 import mlx.core as mx
 import mlx.utils
 
-from vqlab.core import runtime_load
+from vqlab.family import model_loader as runtime_load
 
 
 def _rel(a, b):

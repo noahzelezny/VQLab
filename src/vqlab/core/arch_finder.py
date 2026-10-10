@@ -15,7 +15,7 @@ for a name Knurlogic vendors, calls register(name) -- lazily, so nothing
 loads that a run does not use. A module already in sys.modules is left
 alone. VQLAB_VENDORED_ARCH=0 turns it off, to score stock mlx-lm.
 
-The numerics stamp (core/version_stamp.py) records knurlogic's version and
+The numerics stamp (family/version_stamp.py) records knurlogic's version and
 commit beside mlx / mlx-lm, so moving knurlogic is a stamp change and
 scoring refuses caches from the old one.
 """

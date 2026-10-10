@@ -34,7 +34,7 @@ import time
 
 import mlx.core as mx
 
-from vqlab.core import runtime_load
+from vqlab.family import model_loader as runtime_load
 from vqlab.core.mem_budget import eval_params_budgeted
 
 
@@ -505,7 +505,7 @@ def main():
     # THE NUMERICS BUILD (F194), resolved and checked BEFORE the forward: a
     # cache made by another mlx / mlx-lm / arch file / scorer variant is
     # refused before the first GPU minute, not after the last.
-    from vqlab.core import version_stamp as numerics
+    from vqlab.family import version_stamp as numerics
     variant = entry["variant"]() if callable(entry.get("variant")) else None
     build = numerics.build(mt, family=entry["family"], model=model, variant=variant)
     build_check = None

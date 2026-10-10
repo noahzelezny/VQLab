@@ -33,17 +33,6 @@ def use_knurlogic_arch() -> bool:
     return _arch.install_arch_finder()
 
 
-def _family_registry():
-    """vqlab.family.registry (FAMILY, scorer_variant), imported on first use.
-
-    The ONE inversion point that lets core/ look up a family without
-    importing up the layer stack (core is L1, family L3): core/runtime_load,
-    core/version_stamp and core/expert_src's selftest ask for the registry
-    here, at call time, instead of naming vqlab.family."""
-    from .family import registry
-    return registry
-
-
 def _main_is_vqlab() -> bool:
     """True when the running program is one of vqlab's own scripts
     (`python -m vqlab.<stage>.<tool>` or `python <pkg>/<stage>/<tool>.py`):

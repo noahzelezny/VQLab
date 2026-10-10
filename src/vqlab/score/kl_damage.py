@@ -168,10 +168,10 @@ def forward_logprobs(model, batch):
 
 
 def _build(model_dir, model):
-    """The numerics build (core.version_stamp) this direct forward runs under. The
+    """The numerics build (family.version_stamp) this direct forward runs under. The
     variant is None: load_direct calls the model as mlx-lm builds it and
     applies no family scorer variant."""
-    from vqlab.core import version_stamp as numerics
+    from vqlab.family import version_stamp as numerics
     return numerics.build(model_dir=model_dir, model=model, variant=None)
 
 
@@ -246,7 +246,7 @@ def cmd_score(args):
     print(f"student: {args.model}\n", flush=True)
 
     model, _ = load_direct(args.model, args.allow_unmatched)
-    from vqlab.core import version_stamp as numerics
+    from vqlab.family import version_stamp as numerics
     build = _build(args.model, model)
     build_check = numerics.check_cache(meta, build, allow=args.allow_build_mismatch)
 

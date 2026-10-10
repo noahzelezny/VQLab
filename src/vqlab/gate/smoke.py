@@ -87,7 +87,7 @@ def main(argv=None) -> int:
     # in-checkpoint model.py bundle, so "generate through the runtime the
     # artifact SHIPS" holds under either.
     import json as _json
-    from vqlab.core import runtime_load
+    from vqlab.family import model_loader as runtime_load
     _cfg = _json.load(open(art / "config.json"))
     _mt = _cfg.get("model_type") or \
         _cfg.get("text_config", {}).get("model_type")
