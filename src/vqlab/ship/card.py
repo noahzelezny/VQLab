@@ -39,7 +39,9 @@ import re
 import sys
 
 from vqlab.core.artifact import sizes
-from vqlab.records import card_tables, provenance
+from vqlab.records import provenance
+from vqlab.ship import card_tables
+from vqlab.ship.card_checks import Refuse, _fp, check_kl, text_match  # noqa: F401  (re-exported)
 
 GIB = 2 ** 30
 TODO = "TODO(card)"
@@ -92,92 +94,11 @@ house corpora (prose, code, literary), with paired comparisons on identical
 positions. KL is the ranking instrument; perplexity is not gated."""
 
 
-class Refuse(SystemExit):
-    def __init__(self, msg):
-        print(f"vqlab card: REFUSED: {msg}", file=sys.stderr)
-        super().__init__(2)
-
-
 def todo(what: str) -> str:
     return f"<!-- {TODO} -->\n> **TODO:** {what}\n<!-- /{TODO} -->"
 
 
 # ------------------------------------------------------------------ sources
-def check_kl(kl_paths, this: str, artifact: pathlib.Path) -> dict:
-    """Refusals, and the KL JSON facts the card states. Returns
-    {"fingerprint": stamped-or-None, "tokens": {corpus: n}, "variants": set}."""
-    have = provenance.shard_fingerprint(artifact)
-    stamped, found, keys, tokens = set(), False, set(), {}
-    for p in kl_paths:
-        d = json.load(open(p))
-        if d.get("changed_during_run"):
-            raise Refuse(f"{p}: the scorer recorded artifacts changing during the run: "
-                         f"{d['changed_during_run']}")
-        for rung, per in d["table"].items():
-            for c, row in per.items():
-                keys.add((card_tables.measured_with([row.get("numerics")]),
-                          row.get("scorer_variant")))
-                if rung == this:
-                    fp = (row.get("measured") or {}).get("fingerprint")
-                    if fp:
-                        stamped.add(fp)
-                    tokens[c] = row.get("kl_positions") or row.get("tokens")
-        if this in d["table"]:
-            found = True
-            fp = ((d.get("measured") or {}).get(this) or {}).get("fingerprint")
-            if fp:
-                stamped.add(fp)
-    if not found:
-        raise Refuse(f"rung {this!r} is in none of the KL files")
-    if len(keys) > 1:
-        raise Refuse("KL measured under MIXED builds (not one harness): "
-                     + " | ".join(f"{b} variant={v}" for b, v in sorted(keys, key=str)))
-    bad = sorted(s for s in stamped if s != have)
-    added = None
-    if bad and len(stamped) == 1:
-        added = text_match(artifact, bad[0])
-    if bad and added is None:
-        raise Refuse(f"KL for {this!r} was measured on fingerprint {', '.join(bad)}, "
-                     f"but {artifact} is {have}: these numbers are not this artifact's")
-    return {"fingerprint": next(iter(stamped)) if stamped else None, "tokens": tokens,
-            "variant": next(iter(keys))[1], "added_since": added or []}
-
-
-def _fp(files) -> str:
-    import hashlib
-    import os
-    return hashlib.sha256(json.dumps(
-        {f.name: [os.path.getsize(os.path.realpath(f)), provenance._sha(os.path.realpath(f),
-                                                                       provenance.HEAD)]
-         for f in files}, sort_keys=True).encode()).hexdigest()[:16]
-
-
-def text_match(artifact: pathlib.Path, want: str):
-    """The scored fingerprint can predate a sidecar that holds NO text
-    weights (a grafted vision tower, an MTP head). If dropping some set of
-    such files reproduces `want`, the text bytes are the scored ones:
-    return those file names. Else None. A file holding any text tensor is
-    never dropped, so a changed weight still refuses."""
-    from itertools import combinations
-    from vqlab.core.artifact import read_header, tensor_class
-    files = sorted(artifact.glob("*.safetensors"))
-    try:
-        listed = set(json.load(open(artifact / "model.safetensors.index.json"))["weight_map"].values())
-    except (OSError, KeyError, ValueError):
-        listed = set()
-    # an MTP sidecar (mtp-head*.safetensors outside the index, as `size`
-    # counts it) stores its keys without the mtp. prefix (block.*, fc.*), so
-    # it is recognised by that rule, not by tensor_class
-    side = [f for f in files
-            if (f.name.startswith("mtp-head") and f.name not in listed)
-            or all(tensor_class(k) != "text" for k in read_header(f))]
-    for r in range(1, len(side) + 1):
-        for drop in combinations(side, r):
-            if _fp([f for f in files if f not in drop]) == want:
-                return [f.name for f in drop]
-    return None
-
-
 def _ranges(xs) -> str:
     xs, out, i = sorted(xs), [], 0
     while i < len(xs):
@@ -219,20 +140,6 @@ def skeleton(cfg: dict) -> str | None:
             + (f", with {per} per-module overrides in `config.json`" if per else ""))
 
 
-def lineage(art: pathlib.Path):
-    """(records oldest first, recipe record or None) from the build record
-    and its history file."""
-    recs = []
-    h = art / provenance.HISTORY
-    if h.exists():
-        recs += [json.loads(x) for x in h.read_text().splitlines() if x.strip()]
-    if (art / provenance.RECORD).exists():
-        recs.append(provenance.load(art))
-    recipe = next((r for r in recs if r["tool"]["name"].split()[0] in
-                   ("fit-moe", "geo-build", "mix", "build-dense-vq", "fit-dense")), None)
-    return recs, recipe
-
-
 def read_extra(path) -> dict:
     out, cur = {}, "intro"
     if not path:
@@ -268,7 +175,7 @@ def build(a) -> str:
     extra = read_extra(a.extra_md)
     slot = {k.lower(): v for k, v in extra.items() if k.lower() in SLOTS}
     loose = {k: v for k, v in extra.items() if k.lower() not in SLOTS}
-    recs, recipe = lineage(art)
+    recs, recipe = provenance.records(art)
 
     owner, _, title = art.name.partition("--")
     if not title:
@@ -400,8 +307,8 @@ def main(argv=None) -> int:
     ap.add_argument("--out", help="write here instead of stdout (only this path is written)")
     a = ap.parse_args(argv)
     text = build(a)
-    from vqlab.gate import us_spelling
-    spell = us_spelling.scan(text)
+    from vqlab.gate import spelling
+    spell = spelling.scan(text)
     for off, word, us in spell:
         print(f"card:{text.count(chr(10), 0, off) + 1}: {word} -> {us}", file=sys.stderr)
     n_todo = text.count(f"<!-- {TODO} -->") + text.count(f"license: {TODO}")

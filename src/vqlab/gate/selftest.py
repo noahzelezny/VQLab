@@ -734,7 +734,7 @@ def main(argv=None) -> int:
               all(L.corpus(n).is_file() for n in ("prose", "code", "lit", "wikitext"))
               and L.corpus(str(L.SRC / "vqlab" / "referee" / "referee_corpus.txt")).is_file())
 
-        from vqlab.gate import us_spelling as SP
+        from vqlab.gate import spelling as SP
         sp_in = "The `labelled` path is labelled; layer-wise noise, precise analyses, quantisation."
         check("spelling: flags British prose, spares code spans and US words",
               [w for _, w, _ in SP.scan(sp_in)] == ["labelled", "quantisation"])

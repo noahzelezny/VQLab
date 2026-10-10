@@ -202,7 +202,7 @@ if (A / "model.safetensors.index.json").exists():
     # function as `vqlab size --check-index`, so the two cannot disagree.
     if not any(f.startswith("index names missing shard") for f in fails):
         try:
-            from vqlab.records.size_cmd import index_total_size
+            from vqlab.core.artifact_size import index_total_size
             _have, _want, _state = index_total_size(A)
             if _state != "ok":
                 fails.append(f"index metadata.total_size {_have} vs tensor bytes "
@@ -659,7 +659,7 @@ except Exception as _e:  # the gate must report, not crash
 # spelling on a card is fixed before release, not in a later revision.
 # `vqlab spelling --fix <artifact>/README.md` rewrites it.
 try:
-    from vqlab.gate import us_spelling as _sp
+    from vqlab.gate import spelling as _sp
     _card = A / "README.md"
     if _card.exists():
         _hits = _sp.scan(_card.read_text())

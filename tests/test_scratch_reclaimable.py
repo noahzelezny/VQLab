@@ -12,7 +12,7 @@ import subprocess
 import sys
 
 from vqlab.records import provenance
-from vqlab.records import scratch_cmd
+from vqlab.agents import scratch as scratch_cmd
 
 SRC = pathlib.Path(__file__).resolve().parents[1] / "src"
 

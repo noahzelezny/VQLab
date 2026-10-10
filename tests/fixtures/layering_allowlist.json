@@ -6,7 +6,6 @@
   "gate/check_release.py::sys.path.insert",
   "gate/selftest.py::upward:gate->agents",
   "gate/selftest.py::upward:gate->cli",
-  "gate/vision_smoke.py::sys.path.insert",
-  "records/card.py::upward:records->gate"
+  "gate/vision_smoke.py::sys.path.insert"
  ]
 }

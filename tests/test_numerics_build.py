@@ -140,7 +140,7 @@ def test_kl_ladder_preflight(tmp_path, monkeypatch):
 
 
 def test_card_tables_measured_with(tmp_path, capsys):
-    from vqlab.records import card_tables as CT
+    from vqlab.ship import card_tables as CT
     cell = {"mean_kl_millinats": 1.0, "numerics": RUN}
     j = tmp_path / "k.json"
     j.write_text(json.dumps({"table": {"a": {c: cell for c in CT.CORPORA}},
