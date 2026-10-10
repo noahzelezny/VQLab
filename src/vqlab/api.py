@@ -41,14 +41,17 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Literal, Mapping, Optional, Sequence, Union
 
+from vqlab.ops.errors import LabError
+
 __all__ = [
     "ApiError", "CommandInfo", "RunHandle", "GateResult", "ToolOutput", "CardResult",
     "to_json",
-    "commands", "run", "run_status", "stop", "list_runs",
-    "where_is", "list_artifacts", "artifact_info", "artifact_size",
+    "commands", "run", "run_status", "stop", "list_runs", "gpu_state",
+    "where_is", "list_artifacts", "disk_free", "artifact_info", "artifact_size",
     "fit", "geo_build", "score", "bench",
     "bundle", "gate", "kl_pair", "release_prep", "card",
-    "fits", "findings_tail", "next_f_number", "version_stamp",
+    "fits", "findings_tail", "next_f_number", "release_f_number", "findings_append",
+    "version_stamp",
 ]
 
 JSONDict = Dict[str, Any]
@@ -59,17 +62,12 @@ OptValue = Union[str, int, float, bool, None, Sequence[Union[str, int, float]]]
 # Types
 # --------------------------------------------------------------------------- #
 
-class ApiError(Exception):
-    """A refusal or failure. ``code`` is stable (NOT_ALLOWED, OUTSIDE_ROOTS,
-    EXO_PLACED, GPU_BUSY, NOT_FOUND, INVALID_ARG, FAILED, ...); ``extra``
-    carries JSON-typed detail (allowlist, roots, lease holder, ...)."""
-
-    def __init__(self, code: str, message: str, **extra: Any):
-        super().__init__(message)
-        self.code, self.message, self.extra = code, message, extra
-
-    def as_dict(self) -> JSONDict:
-        return {"error": self.code, "message": self.message, **self.extra}
+# A refusal or failure. ``code`` is stable (NOT_ALLOWED, OUTSIDE_ROOTS,
+# EXO_PLACED, GPU_BUSY, NOT_FOUND, INVALID_ARG, FAILED, ...); ``extra`` carries
+# JSON-typed detail; ``as_dict()`` is the JSON form. It is the lab library's
+# own error type (vqlab.ops.errors.LabError), so a refusal raised anywhere in
+# vqlab.ops reaches the caller as-is: one type, no mapping.
+ApiError = LabError
 
 
 @dataclass(frozen=True)
@@ -139,12 +137,10 @@ def to_json(x: Any) -> Any:
 # --------------------------------------------------------------------------- #
 
 def _call(fn: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
-    """Run an internal tool; its ToolError / SystemExit becomes ApiError."""
-    from vqlab.agents.mcp.common import ToolError
+    """Run an internal tool; a SystemExit becomes ApiError (a LabError, which
+    IS ApiError, passes through)."""
     try:
         return fn(*args, **kwargs)
-    except ToolError as e:
-        raise ApiError(e.code, e.message, **e.extra) from None
     except SystemExit as e:
         if e.code in (None, 0):
             raise ApiError("FAILED", f"{getattr(fn, '__name__', fn)} exited early") from None
@@ -201,7 +197,7 @@ def _capture(main: Callable[[List[str]], Optional[int]], argv: List[str]) -> Too
 
 
 # --------------------------------------------------------------------------- #
-# Commands and runs (the MCP launcher: vqlab.agents.mcp.tools_runs)
+# Commands and runs (the launcher: vqlab.ops.runs)
 # --------------------------------------------------------------------------- #
 
 def commands() -> List[CommandInfo]:
@@ -225,8 +221,8 @@ def run(*, command: str, args: Sequence[str] = (), tag: str = "",
     _need(command=command)
     if isinstance(args, str):
         raise ApiError("INVALID_ARG", "args is a sequence of strings, not one string")
-    from vqlab.agents.mcp import tools_runs
-    r = _call(tools_runs.t_run, command, [str(a) for a in args], tag=tag,
+    from vqlab.ops import runs
+    r = _call(runs.launch, command, [str(a) for a in args], tag=tag,
               retries=retries, force=force)
     return RunHandle(run_id=r["run_id"], run_dir=r["run_dir"],
                      log_path=str(Path(r["run_dir"]) / "job.log"),
@@ -238,21 +234,30 @@ def run_status(*, run_id: str, tail: int = 40) -> JSONDict:
     stopped / deferred / lost), exit code, attempts and the last ``tail`` log
     lines. In-process, no GPU."""
     _need(run_id=run_id)
-    from vqlab.agents.mcp import tools_runs
-    return _call(tools_runs.t_status, run_id, tail=tail)
+    from vqlab.ops import runs
+    return _call(runs.status, run_id, tail=tail)
 
 
 def stop(*, run_id: str) -> JSONDict:
     """SIGTERM a run's process group. Returns {run_id, stopped, ...}."""
     _need(run_id=run_id)
-    from vqlab.agents.mcp import tools_runs
-    return _call(tools_runs.t_stop, run_id)
+    from vqlab.ops import runs
+    return _call(runs.stop, run_id)
 
 
 def list_runs(*, n: int = 20) -> JSONDict:
     """The ``n`` most recent runs launched on this box (newest first)."""
-    from vqlab.agents.mcp import tools_runs
-    return _call(tools_runs.t_list_runs, n)
+    from vqlab.ops import runs
+    return _call(runs.list_runs, n)
+
+
+def gpu_state(*, boxes: bool = True) -> JSONDict:
+    """Who holds this box's GPU lease, which exo instances are placed, every
+    box's reservation (``vqlab reserve``) and, with ``boxes`` and [boxes.*]
+    configured, the same for the other boxes over ssh. Check it before
+    run(); a held lease or a placement makes run() refuse. No GPU."""
+    from vqlab.ops import box
+    return _call(box.gpu_state, boxes)
 
 
 # --------------------------------------------------------------------------- #
@@ -265,15 +270,22 @@ def where_is(*, name: str, kind: Literal["any", "dir", "file"] = "any",
     configured storage roots. Deterministic: matches, or found=False with the
     roots searched. ``name`` must be >= 3 characters."""
     _choice("kind", kind, ("any", "dir", "file"))
-    from vqlab.agents.mcp import tools_storage
-    return _call(tools_storage.t_where_is, name, kind=kind, max_depth=max_depth)
+    from vqlab.ops import storage
+    return _call(storage.where_is, name, kind=kind, max_depth=max_depth)
 
 
 def list_artifacts(*, root: str = "", max_depth: int = 3) -> JSONDict:
     """Directories with a config.json under the storage roots (or one root),
     with packed safetensors GiB and whether model.py / README.md exist."""
-    from vqlab.agents.mcp import tools_storage
-    return _call(tools_storage.t_list_artifacts, root, max_depth=max_depth)
+    from vqlab.ops import storage
+    return _call(storage.list_artifacts, root, max_depth=max_depth)
+
+
+def disk_free() -> JSONDict:
+    """Free and total GiB on every configured storage root (a writer that
+    runs out mid-run loses hours: check before any multi-hour job)."""
+    from vqlab.ops import storage
+    return _call(storage.disk_free)
 
 
 def artifact_info(*, path: str) -> JSONDict:
@@ -546,16 +558,37 @@ def fits(*, family: Optional[str] = None, teacher: Optional[str] = None,
 def findings_tail(*, n: int = 10) -> JSONDict:
     """The last ``n`` F-entry headlines of the findings log, with line
     numbers. Read-only."""
-    from vqlab.agents.mcp import tools_findings
-    return _call(tools_findings.t_findings_tail, n)
+    from vqlab.ops import findings
+    return _call(findings.findings_tail, n)
 
 
 def next_f_number(*, reserve: bool = False, owner: str = "") -> JSONDict:
     """The next free F-number. ``reserve=True`` CLAIMS it atomically (a lock
     file, 6 h TTL) -- do that before a long experiment; a bare read races
     any concurrent session."""
-    from vqlab.agents.mcp import tools_findings
-    return _call(tools_findings.t_next_f_number, reserve=reserve, owner=owner)
+    from vqlab.ops import findings
+    return _call(findings.next_f_number, reserve=reserve, owner=owner)
+
+
+def release_f_number(*, n: int) -> JSONDict:
+    """Give back an F-number claimed with next_f_number(reserve=True) whose
+    experiment was abandoned. Returns {released, was_held}."""
+    from vqlab.ops import findings
+    return _call(findings.release_f_number, n)
+
+
+def findings_append(*, headline: str, artifact: str, instrument: str, prediction: str,
+                    measured: str, verdict: str, body: str = "", corrects: str = "",
+                    use_reserved: int = 0) -> JSONDict:
+    """Append the next F-entry to the findings log -- the only library writer
+    of the measured record. Every field is required; ``prediction`` (the
+    pre-registered one) is written verbatim; ``verdict`` is one of CONFIRMED /
+    FALSIFIED / VOID / NULL / CORRECTS (CORRECTS needs ``corrects="F<n>"``).
+    ``use_reserved`` consumes a number this caller reserved (and releases
+    its lock); omitted, a fresh number is allocated. WRITES the log."""
+    from vqlab.ops import findings
+    return _call(findings.findings_append, headline, artifact, instrument, prediction,
+                 measured, verdict, body=body, corrects=corrects, use_reserved=use_reserved)
 
 
 def version_stamp(*, model_type: Optional[str] = None, family: Optional[str] = None,
