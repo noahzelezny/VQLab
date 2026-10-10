@@ -59,6 +59,13 @@ def _run(cmd):
     return subprocess.run([sys.executable, "-m", "vqlab.cli", *cmd], env=env).returncode
 
 
+def publish_line(art, repo, changed, exists) -> str:
+    """The exact upload line a human runs: only what changed, or --all for a
+    first release. Nothing here uploads."""
+    files = "--all" if not exists else "--files " + " ".join(shlex.quote(f) for f in changed)
+    return f"vqlab publish --artifact {shlex.quote(str(art))} --repo {repo} {files}"
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(prog="vqlab release-prep", description=__doc__.split("\n")[0])
     ap.add_argument("artifact")
@@ -105,9 +112,8 @@ def main(argv=None):
     if exists and not changed:
         print("\nREADY, and the Hub already matches: nothing to upload.")
         return 0
-    files = "--all" if not exists else "--files " + " ".join(shlex.quote(f) for f in changed)
     print("\nREADY. Upload (a human runs this):\n")
-    print(f"  vqlab publish --artifact {shlex.quote(str(art))} --repo {a.repo} {files}")
+    print(f"  {publish_line(art, a.repo, changed, exists)}")
     return 0
 
 

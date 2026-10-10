@@ -18,7 +18,7 @@ import pathlib
 from vqlab import _layout
 
 
-def main() -> int:
+def main(argv=None) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--artifact", required=True)
     ap.add_argument("--runtime", choices=["v1.5", "v2"], default=None,
@@ -31,7 +31,7 @@ def main() -> int:
                          "default.")
     ap.add_argument("--backup-suffix", default=".pre-resync",
                     help="suffix for the previous model.py (empty = none)")
-    a = ap.parse_args()
+    a = ap.parse_args(argv)
     art = pathlib.Path(a.artifact)
     cfg_path = art / "config.json"
     if not cfg_path.exists():

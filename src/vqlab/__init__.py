@@ -59,15 +59,19 @@ if _main_is_vqlab():
     use_knurlogic_arch()
 
 
-from .mtp import (
-    FAMILIES,
-    FamilySpec,
-    MTPResponse,
-    load_mtp_head,
-    mtp_generate,
-    mtp_stream_generate,
-    register,
-)
+# The MTP surface loads mlx, so it resolves on first use (PEP 562): a plain
+# `import vqlab` -- and `import vqlab.api`, the stable library/MCP surface --
+# stays free of mlx. `from vqlab import load_mtp_head` works as before.
+_MTP_NAMES = ("FAMILIES", "FamilySpec", "MTPResponse", "load_mtp_head",
+              "mtp_generate", "mtp_stream_generate", "register")
+
+
+def __getattr__(name):
+    if name in _MTP_NAMES:
+        from . import mtp
+        return getattr(mtp, name)
+    raise AttributeError(f"module 'vqlab' has no attribute {name!r}")
+
 
 __all__ = ["use_knurlogic_arch", "FAMILIES", "FamilySpec", "MTPResponse", "load_mtp_head",
            "mtp_generate", "mtp_stream_generate", "register", "__version__"]
