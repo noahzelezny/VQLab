@@ -36,31 +36,12 @@ import time
 import mlx.core as mx
 import mlx.nn as nn
 
+from vqlab.bench.timeline_common import layer_kind as _kind, trunk as _trunk
+
 
 class _ZeroMLP(nn.Module):
     def __call__(self, x, *args, **kwargs):
         return x * 0
-
-
-def _trunk(m, depth=0):
-    if depth > 6:
-        return None
-    if hasattr(m, "layers") and hasattr(m, "embed_tokens"):
-        return m
-    for attr in ("language_model", "model"):
-        sub = getattr(m, attr, None)
-        if sub is not None and sub is not m:
-            got = _trunk(sub, depth + 1)
-            if got is not None:
-                return got
-    return None
-
-
-def _kind(layer):
-    attn = "lin" if getattr(layer, "is_linear", False) else "attn"
-    mlp = getattr(layer, "mlp", None)
-    moe = mlp is not None and any(hasattr(mlp, a) for a in ("switch_mlp", "experts", "gate"))
-    return attn, ("moe" if moe else "dense")
 
 
 def main(argv=None) -> int:

@@ -54,8 +54,10 @@ from typing import Any, Dict, List, Optional
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))  # src/
 from vqlab import config  # noqa: E402
+from vqlab import commands as _commands  # noqa: E402
 from vqlab.agents import queue_eta as _queue_eta  # noqa: E402
 from vqlab.agents import reserve as _resv  # noqa: E402
+from vqlab.util.fs import dir_bytes  # noqa: E402
 
 PROTOCOL_VERSION = "2024-11-05"
 SERVER_NAME = "vqlab"
@@ -92,27 +94,13 @@ def exo_api() -> str:
     return os.environ.get("VQLAB_EXO_API", "http://127.0.0.1:52415")
 
 
-# Subcommands an agent may launch. publish is deliberately absent.
-RUN_ALLOWLIST = {
-    "fit-moe", "fit-dense", "geo-build", "alloc-sweep", "score", "kl",
-    "layer-leverage", "validate", "check-release", "check-bundle", "check",
-    "smoke", "selftest", "price", "verify", "coverage", "manifest",
-    # the onboarding + reuse loop, so a new family needs no human at the CLI:
-    # profile (headers only) -> init sweep -> leverage -> fits from the store
-    # -> KL gate -> task benchmarks; plus the records that make it auditable
-    "onboard", "family-profile", "probe-init", "fits", "kl-ladder", "kl-pair", "tasks",
-    "provenance", "runs", "registry", "active-bytes", "decode-timeline",
-    "stage-bandwidth", "serve-timeline",
-    "stream-score",
-}
-# Commands that never touch the GPU (header reads, index queries, records).
-# They are not gated on an exo placement or the GPU lease, and do not take
-# the lease: profiling a teacher must not wait on, or block, a fit.
-GPU_FREE = {"onboard", "family-profile", "fits", "provenance", "runs", "price",
-            "manifest", "check-bundle", "active-bytes", "registry",
-            # a header read + a JSON file; and an HTTP client of a server
-            # that holds its own memory (the GPU work is Knurlogic's)
-            "stage-bandwidth", "serve-timeline"}
+# Subcommands an agent may launch, and the subset that never touches the GPU
+# (header reads, index queries, records, HTTP clients of a server holding its
+# own memory): not gated on an exo placement or the GPU lease, and they do
+# not take the lease. Both come from the command registry (vqlab/commands.py,
+# the `mcp` and `gpu` fields). publish is deliberately never mcp=True.
+RUN_ALLOWLIST = _commands.mcp_allowlist()
+GPU_FREE = _commands.mcp_gpu_free()
 # Commands that checkpoint and resume: a GPU-timeout crash is retried.
 RESUMABLE = {"fit-moe", "fit-dense", "geo-build", "alloc-sweep", "validate"}
 DEFAULT_RETRIES = 2
@@ -181,15 +169,7 @@ def _under(path: Path, roots: List[Path]) -> bool:
 
 
 def _dir_bytes(d: Path, suffixes=(".safetensors",)) -> int:
-    total = 0
-    try:
-        with os.scandir(d) as it:
-            for e in it:
-                if e.is_file(follow_symlinks=False) and e.name.endswith(suffixes):
-                    total += e.stat(follow_symlinks=False).st_size
-    except OSError:
-        pass
-    return total
+    return dir_bytes(d, suffixes=suffixes, recursive=False)
 
 
 def _walk(roots: List[Path], max_depth: int):

@@ -1,0 +1,23 @@
+{
+ "_doc": "sha256 of every shipped runtime file (tests/test_runtime_frozen.py).",
+ "sha256": {
+  "CONTEXT.md": "2108f7762ec6f0502f9f38c78896a738ebbba5c4dc303f8ffa54b46d0dd3555e",
+  "__init__.py": "e16b31132d06284b02c5ea38c856a9440c29e7fa2a504b710078212f83024890",
+  "arch_resolve.py": "1eadf85416c3c03727318780e13852b8220c4bdad0e85f0b613b473478224e1f",
+  "dense_shim.py": "1d4d348933931e47d89ecdac99d5fc961600a6f760b2f0df6c54b16ea2a83aa8",
+  "equivalent/vq_dense.ac62e4e43f4a.py.txt": "ac62e4e43f4accefeb6761303d16acc3d60f154561ddab3e24ceb3850e89a235",
+  "equivalent/vq_switch.1534dd6b77b8.py.txt": "1534dd6b77b8ed697e40d0ee7fc8bc1dde9f9b3038488a168512b4b416217ffa",
+  "equivalent/vq_switch.40870875499d.py.txt": "40870875499de7cb937be412dd63f9e5cc40e0d58d5adcf4c595661d2b21b67b",
+  "equivalent/vq_switch.5abf28a7f096.py.txt": "5abf28a7f0964d50d9b30667e677b21774f1915f4620cc34b965a73e30f169ab",
+  "equivalent/vq_switch.6d8ab6873adf.py.txt": "6d8ab6873adf0ca69b7c6db5439c3f6a3d72167fa930d469a16adadf1c15540e",
+  "equivalent/vq_switch.b41c1064c82b.py.txt": "b41c1064c82b5d65809f0d62304aaa7b59f3a5fc4457d14f118e62123614554d",
+  "equivalent/vq_switch.e6fecc09a842.py.txt": "e6fecc09a842194ba629b576a2ef38201c0dd0f4a5d6ef2980df8403d3738034",
+  "equivalent_revisions.json": "ec020f3dd07ce4c466715ca5ae7615525d56e331212ea3285e9cc98c09a4c781",
+  "gated_delta_chunked.py": "0faa62768de46624dbce04b1ecd1601000465efd6d9d5fd8ff004cc9caff43a7",
+  "glm5_shim.py": "e54d44bbbd120b3720fbc9f6ac35ef213672cbe1c694f8b7ebd01fc5334d1450",
+  "runtime_profile.py": "1a2fe9db680e2d97ae7b3fae7553762cffb9bb32c9d5e512dbda4593083b62fe",
+  "vq_dense.py": "49b9c4cf3593c7ad506b94f1c832d4a10734c5792e7ed24818b84d0c7f976240",
+  "vq_pack.py": "a6b75db8d1969b3d5995d53ec075d0c267f469324f9e93d0de0a5d4dbd274d29",
+  "vq_switch.py": "defdec40bcfe6d71b1648eb6de078c4610b86fea5e741ca36f15b7f7c926632d"
+ }
+}

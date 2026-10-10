@@ -37,6 +37,7 @@ import sys
 
 from vqlab import config as C
 from vqlab.records import provenance
+from vqlab.util.fs import dir_bytes  # noqa: E402
 
 GIB = 2 ** 30
 # tool name in a build record -> the input role that names what it packed
@@ -66,13 +67,7 @@ def _artifacts(roots):
 def _dir_bytes(d: pathlib.Path) -> int:
     """Bytes deleting `d` frees: regular files only (a symlinked shard is
     another artifact's bytes)."""
-    n = 0
-    for dirpath, _, filenames in os.walk(d):
-        for f in filenames:
-            p = os.path.join(dirpath, f)
-            if not os.path.islink(p):
-                n += os.lstat(p).st_size
-    return n
+    return dir_bytes(d)
 
 
 def _links_into(roots, target: pathlib.Path):

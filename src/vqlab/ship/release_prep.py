@@ -21,7 +21,6 @@ Nothing here uploads: publishing is a human's action.
 from __future__ import annotations
 
 import argparse
-import hashlib
 import os
 import pathlib
 import shlex
@@ -29,6 +28,7 @@ import subprocess
 import sys
 
 from vqlab.core.artifact import sizes
+from vqlab.util.hashing import git_blob_sha1, sha256_file  # noqa: E402
 
 GIB = 2 ** 30
 JUNK = (".DS_Store",)
@@ -47,17 +47,8 @@ def _junk(d):
     return out
 
 
-def _git_blob(p):
-    data = p.read_bytes()
-    return hashlib.sha1(b"blob %d\0" % len(data) + data).hexdigest()
-
-
-def _sha256(p):
-    h = hashlib.sha256()
-    with open(p, "rb") as fh:
-        for b in iter(lambda: fh.read(8 << 20), b""):
-            h.update(b)
-    return h.hexdigest()
+_git_blob = git_blob_sha1
+_sha256 = sha256_file
 
 
 def hub_diff(art, repo, deep=False):

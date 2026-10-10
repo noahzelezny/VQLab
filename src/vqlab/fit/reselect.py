@@ -82,7 +82,6 @@ from __future__ import annotations
 
 import argparse
 import glob
-import hashlib
 import json
 import os
 import pathlib
@@ -97,6 +96,8 @@ from vqlab import _layout  # noqa: E402,F401  one module object per name
 from vqlab import config  # noqa: E402
 import vq_pack  # noqa: E402
 import provenance  # noqa: E402
+from vqlab.util.hashing import sha256_file  # noqa: E402
+from vqlab.util.log import make_log  # noqa: E402
 
 SCHEMA = "vqlab.reselect.grams/1"
 MANIFEST = "manifest.json"
@@ -113,20 +114,14 @@ MODULE_CLASS = "VQSwitchLinear"
 _AP = None
 
 
-def _log(*a):
-    print(time.strftime("[%H:%M:%S]"), *a, flush=True)
+_log = make_log(stamp=True)
 
 
 def _require_storage(p):
     config.require_storage(p)
 
 
-def _sha256(path):
-    h = hashlib.sha256()
-    with open(path, "rb") as f:
-        for b in iter(lambda: f.read(1 << 20), b""):
-            h.update(b)
-    return h.hexdigest()
+_sha256 = sha256_file
 
 
 def _fname(module):

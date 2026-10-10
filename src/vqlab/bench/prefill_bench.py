@@ -8,7 +8,7 @@ WHY ONE ARTIFACT. d4-K2048's codebook is 16384 B against a 12288 B tile
 budget under a 32768 B cap, so 28672 <= 32768: BOTH ARMS ARE LEGAL for it.
 `VQ_MOE_GEMMSEG_CBDEV` forces either ("1" device, "0" threadgroup, "auto"
 by budget), so the same weights run both arms -- identical bytes, identical
-numerics (what e134_accept verifies), only the arm differs. vq_switch's own
+numerics (what gate/kernel_accept.py verifies), only the arm differs. vq_switch's own
 comment says nobody had measured which is faster.
 
 DO NOT USE `gemmseg_cb_dev` TO SELECT THE ARM. It is a REPORTING predicate

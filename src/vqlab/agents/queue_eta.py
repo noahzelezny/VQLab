@@ -25,6 +25,7 @@ import pathlib
 import re
 import statistics
 import time
+from vqlab.util.clock import slug  # noqa: E402
 
 _FIT = re.compile(r"^\[(\d+)/(\d+)\]\s+\S+\s+\((\d+(?:\.\d+)?)s\)\s*$", re.M)
 _KL_CELL = re.compile(r"^[ \t]+KL[ \t]", re.M)
@@ -146,8 +147,7 @@ def queue_eta(qdir: pathlib.Path, qroot: pathlib.Path, now: float | None = None)
                        if open_ and total is not None else None)}
 
 
-def _slug(s):  # same as run_queue._slug
-    return re.sub(r"[^\w.-]", "_", s)[:40]
+_slug = slug
 
 
 def fmt(eta_s) -> str:

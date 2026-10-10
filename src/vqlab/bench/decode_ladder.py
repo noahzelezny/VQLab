@@ -559,13 +559,13 @@ def _grid(model, tok, a) -> int:
     Prints best-of-reps seconds, the ratio to 'base', and an all-position
     argmax checksum per cell (a bit-exact arm must match base)."""
     from mlx_lm.models.cache import make_prompt_cache
-    from vqlab.score.kernel_truth import _parse_arm, _attr
+    from vqlab.score.kernel_truth import module_attr, parse_arm
     vq = next((m for _, m in model.named_modules()
                if type(m).__name__ == "VQSwitchLinear"), None)
     if vq is None:
         raise SystemExit("FAIL: no VQSwitchLinear in this model")
     vqg = type(vq).__call__.__globals__
-    arms = [("base", {})] + [_parse_arm(s) for s in a.grid_arm]
+    arms = [("base", {})] + [parse_arm(s) for s in a.grid_arm]
     lens = [int(x) for x in a.grid_tokens.split(",") if x]
     word = ("the quick brown fox jumps over the lazy dog while considering "
             "distributed inference ")
@@ -578,7 +578,7 @@ def _grid(model, tok, a) -> int:
             for name, kv in arms:
                 saved = {}
                 for k, v in kv.items():
-                    at = _attr(vqg, k)
+                    at = module_attr(vqg, k)
                     saved[at] = vqg[at]
                     vqg[at] = v
                 try:
@@ -608,7 +608,7 @@ def _grid(model, tok, a) -> int:
             for name, kv in arms:
                 saved = {}
                 for k, v in kv.items():
-                    at = _attr(vqg, k)
+                    at = module_attr(vqg, k)
                     saved[at] = vqg[at]
                     vqg[at] = v
                 try:

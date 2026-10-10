@@ -61,6 +61,18 @@ from vqlab import _layout  # noqa: E402,F401  one module object per name
 from families import FAMILY
 import provenance
 import fitstore
+from vqlab.util.log import make_log  # noqa: E402
+# Packing is the shipped runtime's (runtime/vq_pack.py): one packer.
+from vqlab.runtime.vq_pack import pack, words_per_row  # noqa: E402
+# k-means lives in fit/kmeans.py; the old private names are kept for
+# additive_vq.py and anything else that imported them.
+from vqlab.fit.kmeans import (  # noqa: E402
+    assign_chunked as _assign,
+    chunk_rows as _chunk,
+    kmeanspp_init_pooled as _kmeanspp,
+    lloyd_weighted as _lloyd,
+    sq_dists as _dists,
+)
 
 GSZ = 64
 CHUNK = 1 << 18
@@ -110,12 +122,7 @@ def parse_part(fname):
     return (fname[:-len(EXT)] if fname.endswith(EXT) else fname), None, None
 
 
-def _log(*a):
-    print(time.strftime("[%H:%M:%S]"), *a, flush=True)
-
-
-def words_per_row(nsub: int, bits: int) -> int:
-    return math.ceil(nsub / 32) * bits
+_log = make_log(stamp=True)
 
 
 def check_exact(name: str, IN: int, D: int, K: int) -> int:
@@ -131,20 +138,6 @@ def check_exact(name: str, IN: int, D: int, K: int) -> int:
             f"information — {100*(got-ideal)/ideal:.0f}% dead bytes. "
             f"Pick a d that divides IN/32 (d4 -> nsub={IN//4}, d2 -> {IN//2}).")
     return nsub
-
-
-def pack(codes: np.ndarray, bits: int) -> np.ndarray:
-    E_, OUT_, nsub = codes.shape
-    res = np.zeros((E_, OUT_, words_per_row(nsub, bits)), dtype=np.uint64)
-    for j in range(nsub):
-        off = (j & 31) * bits
-        w = (j >> 5) * bits + (off >> 5)
-        sh = off & 31
-        v = codes[:, :, j].astype(np.uint64)
-        res[:, :, w] |= (v << sh) & 0xFFFFFFFF
-        if sh + bits > 32:
-            res[:, :, w + 1] |= v >> (32 - sh)
-    return res.astype(np.uint32)
 
 
 def teacher_weight(teacher: str, index: dict, family: str, name: str) -> mx.array:
@@ -173,63 +166,6 @@ def teacher_weight(teacher: str, index: dict, family: str, name: str) -> mx.arra
         W = W.astype(mx.float32)
         mx.eval(W)
     return W
-
-
-def _dists(X, C):
-    return (mx.sum(X * X, 1, keepdims=True) - 2 * (X @ C.T)
-            + mx.sum(C * C, 1)[None, :])
-
-
-def _chunk(K):
-    # The distance matrix is chunk x K fp32; at K16384 the default CHUNK is a
-    # 17 GB intermediate per step (K2048: 2 GB). Cap it at ~4 GB so large
-    # codebooks fit under the memory limit without changing K<=4096 fits.
-    return min(CHUNK, max(1 << 12, (1 << 30) // K))
-
-
-def _assign(Xs, C):
-    out, ch = [], _chunk(C.shape[0])
-    for i in range(0, Xs.shape[0], ch):
-        a = mx.argmin(_dists(mx.array(Xs[i:i + ch]), C), axis=1)
-        mx.eval(a)
-        out.append(np.array(a))
-    return np.concatenate(out)
-
-
-def _lloyd(Xs, C, w, iters, K, rng):
-    D = Xs.shape[1]
-    for _ in range(iters):
-        num = np.zeros((K, D), dtype=np.float64)
-        den = np.zeros(K, dtype=np.float64)
-        ch = _chunk(K)
-        for i in range(0, Xs.shape[0], ch):
-            xb, wb = Xs[i:i + ch], w[i:i + ch]
-            a = mx.argmin(_dists(mx.array(xb), C), axis=1)
-            mx.eval(a)
-            a = np.array(a)
-            np.add.at(num, a, xb * wb[:, None])
-            np.add.at(den, a, wb)
-        dead = den == 0
-        if dead.any():
-            num[dead] = Xs[rng.choice(Xs.shape[0], int(dead.sum()))]
-            den[dead] = 1
-        C = mx.array((num / den[:, None]).astype(np.float32))
-    return C
-
-
-def _kmeanspp(Xf, k, rng):
-    pool = Xf[rng.choice(Xf.shape[0], min(1 << 18, Xf.shape[0]), replace=False)]
-    P = mx.array(pool)
-    out = [pool[rng.integers(pool.shape[0])]]
-    dmin = None
-    for _ in range(k - 1):
-        d = mx.sum((P - mx.array(out[-1])[None, :]) ** 2, axis=1)
-        dmin = d if dmin is None else mx.minimum(dmin, d)
-        mx.eval(dmin)
-        p = np.array(dmin, dtype=np.float64)
-        p /= p.sum()
-        out.append(pool[rng.choice(pool.shape[0], p=p)])
-    return np.stack(out)
 
 
 def fit_module(W, D, K, rng, tail_pow=0.0, plain=False):

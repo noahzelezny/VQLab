@@ -72,8 +72,10 @@ Outputs / Rules that bite). Read the one for your stage and skip the rest.
 
 ```
 src/vqlab/
-  cli.py        every command -> its script (python -m vqlab.cli <cmd>)
+  commands.py   THE command registry (pure data): name, module, stage, mcp, gpu, help; CLI, MCP allowlist and queue all read it
+  cli.py        dispatcher: argv -> commands.py -> runpy.run_module (python -m vqlab.cli <cmd>)
   _layout.py    stage folders on sys.path, runtime_file()/find(), pre-split import aliases
+  util/         stdlib-only helpers: hashing (sha256_file, fingerprint), clock, log, fs. Import from here; never write a private _sha/_log/_now
   runtime/      SHIPPED code, spliced verbatim into every model.py
   core/         shared libraries (families registry, source loaders)
   plan/  fit/  assemble/  bundle/  gate/  score/  bench/    the pipeline, in order

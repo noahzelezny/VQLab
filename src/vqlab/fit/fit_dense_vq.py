@@ -145,23 +145,7 @@ def kmeanspp(X, k, cap=None):
     return C
 
 
-def assign(X, C, chunk=None):
-    # CHUNK MUST SCALE WITH K. The [chunk, K] fp32 distance matrix is
-    # chunk*K*4 bytes: at the old fixed 2,000,000 rows that is 524 GB at
-    # K=65536, against Metal's 62.6 GB single-buffer cap — the fit dies in
-    # assign() before the first Lloyd step. Identical to the bug 8a4d486
-    # fixed in the MoE fitter; the dense fitter never got the same treatment
-    # because nothing here had exceeded K=2048 until 2026-08-22. Budget by K
-    # instead, floor at 50k rows so small-K fits keep large chunks.
-    if chunk is None:
-        chunk = max(50_000, int(5e8 / C.shape[0]))
-    outs = []
-    for s in range(0, X.shape[0], chunk):
-        x = X[s:s + chunk]
-        d = (x * x).sum(1, keepdims=True) - 2 * x @ C.T + (C * C).sum(1)
-        outs.append(mx.argmin(d, axis=1).astype(mx.uint32))
-        mx.eval(outs[-1])
-    return mx.concatenate(outs)
+from vqlab.fit.kmeans import assign_mx as assign  # noqa: E402
 
 
 def fit_tensor(T):

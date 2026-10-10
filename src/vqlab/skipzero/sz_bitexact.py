@@ -33,7 +33,6 @@ same runtime on expanded tensors; --vintage all runs all three.
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import os
 import pathlib
@@ -47,6 +46,8 @@ HERE = pathlib.Path(__file__).resolve().parent
 SRC = HERE.parents[1]
 sys.path.insert(0, str(SRC))
 from vqlab import config  # noqa: E402
+from vqlab.util.hashing import sha256_bytes  # noqa: E402
+from vqlab.util.log import make_log  # noqa: E402
 
 SEED = 1234
 # The last runtime/vq_switch.py without the native SZ switch, shipped as package data
@@ -57,8 +58,7 @@ NCASES = {1: (1, 1), 8: (1, 8), 4096: (512, 8), 4097: (4097, 1)}   # N: (T, k)
 CORPUS = SRC / "vqlab" / "score" / "referee" / "referee_corpus.txt"
 
 
-def _log(*a):
-    print("[sz-bitexact]", *a, flush=True)
+_log = make_log("[sz-bitexact]")
 
 
 # ------------------------------------------------------------ shared helpers
@@ -78,7 +78,7 @@ def _as_f32(a, dt):
 
 
 def _sha(a):
-    return hashlib.sha256(np.ascontiguousarray(a).tobytes()).hexdigest()
+    return sha256_bytes(np.ascontiguousarray(a).tobytes())
 
 
 def dead_experts(art):

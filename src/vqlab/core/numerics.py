@@ -37,6 +37,7 @@ import importlib.util
 import json
 import pathlib
 import sys
+from vqlab.util.hashing import sha256_file  # noqa: E402
 
 # The fields a cache and a run must agree on. Order is the report order.
 COMPARED = ("mlx", "mlx_lm", "arch_sha256", "scorer_variant")
@@ -44,14 +45,7 @@ _UNSET = object()
 
 
 def _sha(path) -> str | None:
-    try:
-        h = hashlib.sha256()
-        with open(path, "rb") as f:
-            for blk in iter(lambda: f.read(1 << 22), b""):
-                h.update(blk)
-        return h.hexdigest()
-    except OSError:
-        return None
+    return sha256_file(path, missing_ok=True)
 
 
 def _version(dist: str, module: str) -> str | None:

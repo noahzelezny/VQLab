@@ -12,7 +12,6 @@ no GPU (it reads the Metal device description, never allocates on it).
 from __future__ import annotations
 
 import argparse
-import hashlib
 import importlib.util
 import json
 import os
@@ -22,6 +21,7 @@ import shutil
 import sys
 
 from vqlab import config as _config
+from vqlab.util.hashing import sha256_file  # noqa: E402
 
 
 # Disk: writers refuse below their own margins; say so before they do
@@ -86,7 +86,7 @@ def _pkg(name):
 
 
 def _sha(path):
-    return hashlib.sha256(pathlib.Path(path).read_bytes()).hexdigest()[:12]
+    return sha256_file(path)[:12]
 
 
 def _hf_token():

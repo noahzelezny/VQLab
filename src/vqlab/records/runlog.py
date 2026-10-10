@@ -15,12 +15,12 @@ slow a run: every failure here is swallowed. Tools that write a build record
 """
 from __future__ import annotations
 
-import datetime
 import json
 import os
 import pathlib
 import time
 import uuid
+from vqlab.util.clock import now_iso  # noqa: E402
 
 _T0 = {}
 
@@ -41,8 +41,7 @@ def _append(rec) -> None:
         os.close(fd)
 
 
-def _now():
-    return datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds")
+_now = now_iso
 
 
 def start(cmd, argv):
