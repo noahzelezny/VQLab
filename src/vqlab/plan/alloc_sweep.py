@@ -51,7 +51,7 @@ import subprocess
 import sys
 
 REPO = str(pathlib.Path(__file__).resolve().parents[3])
-from vqlab import _layout  # noqa: E402
+from vqlab import _layout
 REF = str(_layout.PKG / "score" / "referee")
 CORPORA = dict(_layout.CORPORA)
 GSZ = 64

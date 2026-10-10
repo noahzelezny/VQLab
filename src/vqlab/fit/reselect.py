@@ -90,11 +90,11 @@ import time
 
 import numpy as np
 
-from vqlab import config  # noqa: E402
+from vqlab import config
 from vqlab.runtime import vq_pack
 from vqlab.records import provenance
-from vqlab.util.hashing import sha256_file  # noqa: E402
-from vqlab.util.log import make_log  # noqa: E402
+from vqlab.util.hashing import sha256_file
+from vqlab.util.log import make_log
 
 SCHEMA = "vqlab.reselect.grams/1"
 MANIFEST = "manifest.json"

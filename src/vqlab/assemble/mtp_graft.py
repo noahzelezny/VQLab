@@ -43,8 +43,7 @@ import pathlib
 
 import mlx.core as mx
 
-from vqlab import _layout  # noqa: E402,F401  one module object per name
-from vqlab.core.artifact import tensor_class  # noqa: E402
+from vqlab.core.artifact import tensor_class
 from vqlab.mtp.mtp_head import MTPHead
 
 PREFIX = "language_model.mtp."

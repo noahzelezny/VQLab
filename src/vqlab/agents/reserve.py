@@ -37,8 +37,8 @@ import re
 import socket
 import sys
 
-from vqlab import config  # noqa: E402
-from vqlab.util.clock import now  # noqa: E402
+from vqlab import config
+from vqlab.util.clock import now
 
 FILE = "vqlab-reservations.json"
 

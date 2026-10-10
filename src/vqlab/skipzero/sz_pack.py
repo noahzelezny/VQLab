@@ -29,13 +29,13 @@ import sys
 import numpy as np
 
 HERE = pathlib.Path(__file__).resolve().parent
-from vqlab import config  # noqa: E402
-from vqlab.util.log import make_log  # noqa: E402
+from vqlab import config
+from vqlab.util.log import make_log
 from vqlab.core import fitstore
 from vqlab.records import registry
 from vqlab.records import provenance
 
-from vqlab.skipzero import skipzero_load  # noqa: E402
+from vqlab.skipzero import skipzero_load
 
 TINY = 6.2e-5                       # same threshold as plan/zero_groups.py
 GIB = 2 ** 30

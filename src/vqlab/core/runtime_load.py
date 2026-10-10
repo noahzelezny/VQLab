@@ -30,8 +30,7 @@ import pathlib
 import mlx.core as mx
 import sys
 
-from vqlab import _layout  # noqa: E402,F401  one module object per name
-from families import FAMILY
+from vqlab.core.families import FAMILY
 
 RUNTIMES = ("mlx_lm", "mlx_vlm")
 

@@ -210,5 +210,5 @@ def teacher_caches(teacher=None):
 
 
 # Families that live as plugins (vqlab/family/) add their fit layouts here.
-from vqlab.family import fit_families as _plugin_fit  # noqa: E402
+from vqlab.family import fit_families as _plugin_fit
 FAMILY.update(_plugin_fit())

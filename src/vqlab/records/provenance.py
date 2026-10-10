@@ -49,7 +49,7 @@ import pathlib
 import platform
 import subprocess
 import sys
-from vqlab.util.hashing import fingerprint as _fingerprint, sha256_file  # noqa: E402
+from vqlab.util.hashing import fingerprint as _fingerprint, sha256_file
 
 RECORD = "vqlab_provenance.json"
 # Records this one REPLACED, oldest first: an in-place tool (bundle,
@@ -192,8 +192,7 @@ def runtime_state(art: pathlib.Path):
         return None
     txt = mp.read_text()
     try:
-        from vqlab import _layout  # noqa: E402,F401  one module object per name
-        import runtime_profile as rpf
+        from vqlab.runtime import runtime_profile as rpf
         profile, flags = rpf.profile_of(txt), rpf.flags_of(txt)
     except Exception:
         profile, flags = None, {}

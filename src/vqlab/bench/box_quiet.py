@@ -43,7 +43,7 @@ def state() -> dict:
         try:
             from vqlab.agents import mcp_server
             holder = mcp_server._lease_holder()
-        except Exception:  # noqa: BLE001
+        except Exception:
             holder = None
     busy = []
     if load1 > LOAD_FRACTION * ncpu:

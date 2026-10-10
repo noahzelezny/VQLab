@@ -37,7 +37,7 @@ def main() -> int:
     if n != 1:
         raise SystemExit(f"REFUSING: expected the mlx_lm-first block exactly once, "
                          f"found {n}. This is not a bundle this tool understands.")
-    from vqlab.arch_resolve import PRELUDE
+    from vqlab.runtime.arch_resolve import PRELUDE
     # PRELUDE also carries the re-export loop and ModelArgs/ModelConfig lines,
     # which the published shim already has right after this block. Take only
     # the resolver: everything up to (not including) the re-export comment.

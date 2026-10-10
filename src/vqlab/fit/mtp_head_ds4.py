@@ -35,7 +35,6 @@ import time
 import mlx.core as mx
 import numpy as np
 
-from vqlab import _layout  # noqa: F401
 from vqlab.core import expert_src as ES
 
 DENSE = (".attn.wq", ".attn.wo", "e_proj", "h_proj", "shared_experts")

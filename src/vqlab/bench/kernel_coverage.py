@@ -60,8 +60,7 @@ def main() -> int:
         print(f"{art.name}: no vq_modules in config — not a VQ MoE artifact?")
         return 1
 
-    from vqlab import _layout  # noqa: E402,F401  one module object per name
-    from vqlab import vq_switch as vq
+    from vqlab.runtime import vq_switch as vq
 
     buckets = collections.Counter()
     detail = {}

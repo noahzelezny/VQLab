@@ -29,13 +29,13 @@ import sys
 import numpy as np
 
 HERE = pathlib.Path(__file__).resolve().parent
-from vqlab import config  # noqa: E402
-from vqlab.util.log import make_log  # noqa: E402
+from vqlab import config
+from vqlab.util.log import make_log
 from vqlab.core import fitstore
 from vqlab.records import provenance
 
-from vqlab.skipzero import skipzero_load  # noqa: E402
-from vqlab.skipzero import sz_resident  # noqa: E402
+from vqlab.skipzero import skipzero_load
+from vqlab.skipzero import sz_resident
 
 OWN = {"config.json", "model.py", "sz_resident.py", "skipzero_load.py", ".DS_Store"}
 

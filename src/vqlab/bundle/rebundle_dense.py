@@ -15,8 +15,7 @@ import argparse
 import json
 import pathlib
 
-HERE = pathlib.Path(__file__).parent
-from vqlab import _layout  # noqa: E402
+from vqlab import _layout
 
 
 def main() -> int:
@@ -43,10 +42,10 @@ def main() -> int:
             "REFUSING: this artifact carries no vq_linear/vq_embed, so it is "
             "NOT dense — use `vqlab bundle` (the MoE bundler) instead.")
 
-    from vqlab.dense_shim import SHIM
+    from vqlab.runtime.dense_shim import SHIM
     if "class Model" not in SHIM or "VQLinear" not in SHIM:
         raise SystemExit("FAIL: dense shim is missing class Model / VQLinear.")
-    import vqlab.runtime_profile as rp
+    from vqlab.runtime import runtime_profile as rp
     runtime = (_layout.runtime_file("vq_switch.py").read_text()
                + _layout.runtime_file("vq_dense.py").read_text())
     dst0 = art / "model.py"

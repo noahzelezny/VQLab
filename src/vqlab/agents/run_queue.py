@@ -84,14 +84,14 @@ import subprocess
 import sys
 import time
 
-from vqlab import _layout  # noqa: E402,F401  one module object per name
-from vqlab import config as _config  # noqa: E402
-import mcp_server as ms  # noqa: E402
-import step_verdict as sv  # noqa: E402
-import pin as pinmod  # noqa: E402
-import queue_eta  # noqa: E402
-import reserve as resv  # noqa: E402
-from vqlab.util.clock import now_iso, slug  # noqa: E402
+from vqlab import _layout
+from vqlab import config as _config
+from vqlab.agents import mcp_server as ms
+from vqlab.records import step_verdict as sv
+from vqlab.gate import pin as pinmod
+from vqlab.agents import queue_eta
+from vqlab.agents import reserve as resv
+from vqlab.util.clock import now_iso, slug
 
 REPO = _layout.SRC.parent
 SCHEMA = "vqlab.queue/1"

@@ -37,7 +37,7 @@ import importlib.util
 import json
 import pathlib
 import sys
-from vqlab.util.hashing import sha256_file  # noqa: E402
+from vqlab.util.hashing import sha256_file
 
 # The fields a cache and a run must agree on. Order is the report order.
 COMPARED = ("mlx", "mlx_lm", "arch_sha256", "scorer_variant")
@@ -94,10 +94,9 @@ def _runtime_for(family: str | None) -> str:
     if not family:
         return "mlx_lm"
     try:
-        from vqlab import _layout  # noqa: F401  bare sibling names
-        import runtime_load
+        from vqlab.core import runtime_load
         return runtime_load.runtime_for(family)
-    except Exception:                                # noqa: BLE001
+    except Exception:
         return "mlx_lm"
 
 
@@ -110,7 +109,7 @@ def arch_file(model_type: str | None, runtime: str = "mlx_lm") -> str | None:
         try:
             from mlx_lm.utils import MODEL_REMAPPING
             mt = MODEL_REMAPPING.get(mt, mt)
-        except Exception:                            # noqa: BLE001
+        except Exception:
             pass
     name = f"{runtime}.models.{mt}"
     mod = sys.modules.get(name)
@@ -129,7 +128,7 @@ def scorer_variant(model_type: str | None):
     try:
         from vqlab.family import variant_for
         return variant_for(model_type)
-    except Exception:                                # noqa: BLE001
+    except Exception:
         return None
 
 
@@ -258,10 +257,9 @@ def main(argv=None) -> int:
     family = a.family
     if family is None and mt:
         try:
-            from vqlab import _layout  # noqa: F401
-            import runtime_load
+            from vqlab.core import runtime_load
             family = runtime_load.family_for_model_type(mt)
-        except Exception:                            # noqa: BLE001
+        except Exception:
             family = None
     print(json.dumps(build(mt, family=family)))
     return 0

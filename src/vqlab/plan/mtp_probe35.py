@@ -30,7 +30,6 @@ import pathlib
 import mlx.core as mx
 from mlx.utils import tree_map
 
-from vqlab import _layout  # noqa: E402,F401  one module object per name
 from vqlab.mtp import registry
 from vqlab.mtp.capture import capture_input
 

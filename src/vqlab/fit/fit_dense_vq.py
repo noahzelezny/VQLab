@@ -142,7 +142,7 @@ def kmeanspp(X, k, cap=None):
     return C
 
 
-from vqlab.fit.kmeans import assign_mx as assign  # noqa: E402
+from vqlab.fit.kmeans import assign_mx as assign
 
 
 def fit_tensor(T):

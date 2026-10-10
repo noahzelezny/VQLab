@@ -21,7 +21,6 @@ import pathlib
 
 import mlx.core as mx
 
-from vqlab import _layout  # noqa: E402,F401  one module object per name
 from vqlab.mtp import registry
 
 SIDECAR_NAME = "mtp-head-q6.safetensors"

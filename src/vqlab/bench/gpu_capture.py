@@ -56,8 +56,7 @@ def main() -> int:
     from mlx_lm.models.cache import make_prompt_cache
     from mlx_lm.utils import load_tokenizer
 
-    from vqlab import _layout  # noqa: F401  one module object per name
-    from vqlab import runtime_load
+    from vqlab.core import runtime_load
 
     model, _cfg = runtime_load.load_for_family(a.family, a.art, lazy=True)
     tok = load_tokenizer(pathlib.Path(a.art))

@@ -23,8 +23,8 @@ PKG = Path(__file__).parent
 
 # The registry is vqlab/commands.py (pure data, shared with the MCP server
 # and the queue). These names are its views, kept for existing callers.
-from vqlab import commands as _registry  # noqa: E402
-from vqlab.commands import NAMESPACES, SPELLING, resolve  # noqa: E402,F401
+from vqlab import commands as _registry
+from vqlab.commands import NAMESPACES, SPELLING, resolve
 
 # Old shape, {flat name: (pre-split filename, help)}: kept for one release.
 COMMANDS = {c.name: (c.file, c.help) for c in _registry.COMMANDS.values()}
@@ -142,7 +142,7 @@ def _record_build(cmd, rest, script):
                 break
         if target is None:
             return
-        import provenance
+        from vqlab.records import provenance
         old = target / provenance.RECORD
         if old.exists():
             import json
@@ -157,7 +157,7 @@ def _record_build(cmd, rest, script):
         provenance.write_build_record(
             target, tool=cmd, script=str(script), argv=[cmd, *rest], inputs=inputs,
             method={"recorded_by": "cli", "note": "this tool's settings are its argv"})
-    except Exception as e:                           # noqa: BLE001
+    except Exception as e:
         print(f"vqlab: build record NOT written for {cmd}: {type(e).__name__}: {e}",
               file=sys.stderr)
 
@@ -179,7 +179,6 @@ def main() -> int:
         else:
             print(f"unknown command: {argv[0]}", file=sys.stderr)
         return 2
-    from vqlab import _layout  # noqa: F401  bare tool imports + old dotted names aliased
     import vqlab
     vqlab.use_knurlogic_arch()  # every command loads Knurlogic's archs (VQLAB_VENDORED_ARCH=0: stock)
     if not any(a in ("-h", "--help") for a in rest):
@@ -191,7 +190,7 @@ def main() -> int:
     from vqlab import config as _cfg   # <teachers>/X -> this box's teachers root (a local copy on a box with one)
     rest = [_cfg.expand(a) for a in rest]
     sys.argv = [str(script), *rest]
-    import runlog
+    from vqlab.records import runlog
     run = runlog.start(cmd, rest)
     rc = 0
     try:

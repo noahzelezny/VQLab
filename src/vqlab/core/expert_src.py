@@ -35,8 +35,7 @@ import sys
 
 import mlx.core as mx
 
-from vqlab import _layout  # noqa: E402,F401  one module object per name
-from families import FAMILY
+from vqlab.core.families import FAMILY
 
 
 def is_unfused(fam: dict) -> bool:

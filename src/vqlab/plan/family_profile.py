@@ -45,9 +45,9 @@ import re
 import struct
 import sys
 
-from vqlab import config as _config  # noqa: E402
-from vqlab import config  # noqa: E402
-from vqlab.core.artifact import tensor_class  # noqa: E402
+from vqlab import config as _config
+from vqlab import config
+from vqlab.core.artifact import tensor_class
 from vqlab.core.families import DENSE_FAMILIES, FAMILY
 from vqlab.core import fitstore
 from vqlab.records import provenance
@@ -346,7 +346,7 @@ def main(argv=None) -> int:
         importlib_reload(_f)
         FAMILY.update(_f.FAMILY)
         return main([*(argv if argv is not None else sys.argv[1:]),
-                     "--family", a.write_entry][:])  # noqa: E501
+                     "--family", a.write_entry][:])
     if a.print:
         print(json.dumps(prof, indent=1))
     print(f"-> {out / 'profile.json'}")
