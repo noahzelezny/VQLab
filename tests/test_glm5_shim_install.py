@@ -24,7 +24,7 @@ import toy_family  # noqa: E402
 @pytest.fixture
 def recorded_install(monkeypatch):
     """Stub vqlab.glm5_shim.install so no mlx_vlm import is needed."""
-    from vqlab import glm5_shim
+    from vqlab.runtime import glm5_shim
     calls = []
     monkeypatch.setattr(glm5_shim, "install", lambda *a, **k: calls.append(1) or True)
     return calls

@@ -14,8 +14,8 @@ import numpy as np
 import mlx.core as mx
 import pytest
 
-from vqlab import vq_switch as VS
-from vqlab import vq_pack as VP
+from vqlab.runtime import vq_switch as VS
+from vqlab.runtime import vq_pack as VP
 
 # (d, K, packed, IN, OUT) -- same classes as test_runtime_equivalence.GEOMS;
 # (4, 256, False) is the unpacked-uint8 (u8view) arm.

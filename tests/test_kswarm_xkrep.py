@@ -10,8 +10,8 @@ import numpy as np
 import mlx.core as mx
 import pytest
 
-from vqlab import vq_switch as V
-from vqlab import vq_pack
+from vqlab.runtime import vq_switch as V
+from vqlab.runtime import vq_pack
 
 # (label, E, OUT, IN, K, d, pack_bits)  -- pack_bits 0 = unpacked u8/u16
 GEOMS = [

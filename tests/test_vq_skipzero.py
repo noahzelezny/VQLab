@@ -19,8 +19,8 @@ import numpy as np
 import mlx.core as mx
 import pytest
 
-from vqlab import vq_switch as VS
-from vqlab import vq_pack as VP
+from vqlab.runtime import vq_switch as VS
+from vqlab.runtime import vq_pack as VP
 
 
 @pytest.fixture(autouse=True, params=["defaults", "legacy"])

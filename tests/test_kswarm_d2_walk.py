@@ -13,8 +13,8 @@ import pytest
 import mlx.core as mx
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1] / "src" / "vqlab"))
-import vq_switch as V
-import vq_pack
+from vqlab.runtime import vq_switch as V
+from vqlab.runtime import vq_pack
 
 
 def _args(E, OUT, IN, K, BITS, N, G=64, seed=0, skew=False):

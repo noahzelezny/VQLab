@@ -27,8 +27,8 @@ import numpy as np
 import pytest
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1] / "src" / "vqlab"))
-import vq_pack  # noqa: E402
-import vq_switch as V  # noqa: E402
+from vqlab.runtime import vq_pack
+from vqlab.runtime import vq_switch as V
 
 
 def _d2_case(E, OUT, IN, K, G, N, packed=0, seed=0):

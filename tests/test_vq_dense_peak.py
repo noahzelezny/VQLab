@@ -34,8 +34,8 @@ import mlx.core as mx
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]
                        / "src" / "vqlab"))
-import vq_dense as VD  # noqa: E402
-import vq_pack  # noqa: E402
+from vqlab.runtime import vq_dense as VD
+from vqlab.runtime import vq_pack
 
 
 def _linear(OUT, IN, K, D, G, seed=0, packed=0):

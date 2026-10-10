@@ -6,8 +6,8 @@ import sys
 
 from vqlab import _layout  # noqa: F401
 sys.path.insert(0, str(_layout.SRC / "vqlab" / "agents"))
-import run_queue as rq  # noqa: E402
-import mcp_server as ms  # noqa: E402
+from vqlab.agents import run_queue as rq
+from vqlab.agents import mcp_server as ms
 
 
 def _q(tmp, name, status, pid=None):

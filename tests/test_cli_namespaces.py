@@ -10,9 +10,9 @@ import pytest
 from vqlab import _layout  # noqa: F401
 from vqlab import cli
 
-import box_quiet  # noqa: E402
-import run_queue as rq  # noqa: E402
-import runlog  # noqa: E402
+from vqlab.bench import box_quiet
+from vqlab.agents import run_queue as rq
+from vqlab.records import runlog
 
 PAIRS = [(flat, cli.SPELLING[flat].split()) for flat in cli.COMMANDS]
 
