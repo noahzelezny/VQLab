@@ -1,7 +1,7 @@
 """fit/kmeans.py reproduces, bit for bit, every k-means it replaced.
 
 The goldens in tests/golden/kmeans/ were captured from the ORIGINAL private
-copies (fit_additive._kmeanspp/_assign/_assign_mx/_lloyd/fit_additive,
+copies (additive_codebooks._kmeanspp/_assign/_assign_mx/_lloyd/fit_additive,
 geo_build._kmeanspp/_assign/_lloyd, fit_moe.kmeanspp_init/kmeans,
 fit_dense_vq.assign, fit_ple.assign) on the inputs `cases()` builds, before
 any caller was switched. Fits are compared byte-for-byte downstream, so any
@@ -96,7 +96,7 @@ def cases():
 
 def new_namespace():
     from vqlab.fit import kmeans as K
-    from vqlab.fit.fit_additive import fit_additive
+    from vqlab.fit.additive_codebooks import fit_additive
     return {"kmeanspp_np": K.kmeanspp_init, "assign_np": K.assign,
             "assign_mx_np": K.assign_mx_np, "lloyd_np": K.lloyd,
             "fit_additive": fit_additive,

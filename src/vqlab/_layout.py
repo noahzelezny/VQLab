@@ -58,7 +58,10 @@ RENAMED = {"vq_397b_codes": "fit_moe", "pack_artifact": "pack",
            # untangle step 15: names say what the module does
            "probe_init_sweep": "init_sweep",
            "mtp_probe": "mtp_probe_qwen4_exp",
-           "mtp_probe35": "mtp_probe_qwen35"}
+           "mtp_probe35": "mtp_probe_qwen35",
+           # the additive-VQ LIBRARY; its old stem collided with the
+           # command `fit-additive` (additive_vq.py)
+           "fit_additive": "additive_codebooks"}
 
 # Packages RENAMED (untangle step 10, 2026-10-10): assemble/ became build/ to
 # match its CLI namespace. {old package: new package}. The old package and

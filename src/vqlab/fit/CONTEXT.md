@@ -6,7 +6,7 @@ A bf16 teacher (on the HDD, never re-downloaded), a family, a geometry (d, K) or
 ## Process
 `vqlab fit-moe` (`--pack` packs codes to true bit width as each shard is written, so unpacked K>256 codes never land on disk), `fit-dense`, `fit-ple`, `geo-build` (refit only the named modules; every other module keeps its shipped bytes), `harvest-parts`, `fits` (the fit store: index / list / file).
 
-Library: `kmeans.py` holds every fitter's k-means (seeding, assignment, Lloyd), one function per variant, named for how it works: numpy in-RAM (`kmeanspp_init`, `assign`, `lloyd`; additive VQ), streamed MLX distances (`kmeanspp_init_pooled`, `assign_chunked`, `lloyd_weighted`; geo-build, fit-additive), resident MLX (`kmeanspp_init_mx`, `kmeans`, `assign_mx`; fit-moe, fit-dense, fit-ple). Packing is the runtime's `runtime/vq_pack.py`; geo-build imports it.
+Library: `kmeans.py` holds every fitter's k-means (seeding, assignment, Lloyd), one function per variant, named for how it works: numpy in-RAM (`kmeanspp_init`, `assign`, `lloyd`; additive VQ, `additive_codebooks.py`), streamed MLX distances (`kmeanspp_init_pooled`, `assign_chunked`, `lloyd_weighted`; geo-build, fit-additive), resident MLX (`kmeanspp_init_mx`, `kmeans`, `assign_mx`; fit-moe, fit-dense, fit-ple). Packing is the runtime's `runtime/vq_pack.py`; geo-build imports it.
 
 ## Outputs
 A new directory (never in place) carrying `vqlab_provenance.json`: the fitter settings, seed, inputs and per-module origin. `geo-build` also keeps `origins.json` in its parts dir.
