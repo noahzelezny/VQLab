@@ -2,20 +2,11 @@
  "_doc": "Known import-rule violations (tests/test_layering.py). Shrinks only.",
  "violations": [
   "_layout.py::sys.path.append",
-  "bench/box_quiet.py::upward:bench->agents",
-  "bench/mtp_bench.py::upward:bench->ship",
   "bench/speed_pair_knurlogic.py::sys.path.insert",
-  "family/deepseek_v4.py::upward:family->score",
-  "fit/fit_moe.py::upward:fit->assemble",
   "gate/check_release.py::sys.path.insert",
-  "gate/check_release.py::upward:gate->bench",
   "gate/selftest.py::upward:gate->agents",
   "gate/selftest.py::upward:gate->cli",
   "gate/vision_smoke.py::sys.path.insert",
-  "gate/vision_smoke.py::upward:gate->bench",
-  "plan/onboard.py::upward:plan->score",
-  "records/card.py::upward:records->gate",
-  "score/kl_ladder.py::peer:score->gate",
-  "ship/release_prep.py::parents[2]"
+  "records/card.py::upward:records->gate"
  ]
 }

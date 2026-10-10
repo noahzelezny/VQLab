@@ -35,9 +35,11 @@ import pathlib
 import statistics
 import sys
 import time
-import urllib.request
 
 from vqlab import _layout
+from vqlab.core.knurlogic_client import (  # noqa: F401  (re-exported)
+    BUNDLED, VENDORED, drafting as _drafting, entry as _entry, post as _post,
+    rank_logs as _rank_logs, ready as _ready)
 
 KSRC = os.environ.get("KNURLOGIC_SRC", "")
 
@@ -50,21 +52,6 @@ def _prompt(prompt_tokens, offset=0):
     return text[offset: offset + n]
 
 
-def _post(url, doc, timeout=1800):
-    base = url.rstrip("/")
-    if not base.endswith("/v1"):          # Knurlogic's load() url already ends in /v1
-        base += "/v1"
-    req = urllib.request.Request(base + "/chat/completions",
-                                 data=json.dumps(doc).encode(),
-                                 headers={"Content-Type": "application/json"})
-    with urllib.request.urlopen(req, timeout=timeout) as r:
-        return json.loads(r.read())
-
-
-BUNDLED = "ships its own runtime (model.py) and it WILL be executed"
-VENDORED = "runtime serves it instead"
-
-
 def ships_runtime(name, models_dir):
     """Whether the artifact NAME ships its own runtime (a model.py beside its
     config). A plain affine build ships none and is served by stock mlx-lm, so
@@ -74,52 +61,6 @@ def ships_runtime(name, models_dir):
     if not (d / "config.json").exists():
         return None
     return (d / "model.py").exists()
-
-
-def _rank_logs(job, hosts):
-    """{machine: log text} for every rank of `job`. The rank log is the only
-    authoritative record of which VQ runtime loaded (Knurlogic, 2026-09-29:
-    SERVED["runtime"] is not exposed over HTTP; state()'s `runtime` is the
-    server kind). `hosts` maps a machine name to "user@host" for ssh; the
-    rest are read locally."""
-    import glob
-    import subprocess
-    out = {}
-    for machine, host in hosts.items():
-        cmd = f"cat ~/.cache/knurlogic/jobs/{job}/rank*.log 2>/dev/null"
-        if host:
-            p = subprocess.run(["ssh", host, cmd], capture_output=True, text=True, timeout=60)
-            out[machine] = p.stdout
-        else:
-            out[machine] = "".join(open(f).read() for f in
-                                   glob.glob(str(pathlib.Path.home() /
-                                                 f".cache/knurlogic/jobs/{job}/rank*.log")))
-    return out
-
-
-def _ready(e):
-    return e.get("phase") == "ready" or (not e.get("job") and e.get("state") == "loaded")
-
-
-def _entry(K, job):
-    for m in K.state().get("models", []):
-        if str(m.get("job")) == str(job) or str(m.get("instance")) == str(job):
-            return m
-    return None
-
-
-def _drafting(url):
-    """Knurlogic's cumulative drafting counters from /status.json (None when
-    the server does not report them). Deltas around one request give its
-    acceptance."""
-    root = url.rstrip("/")
-    if root.endswith("/v1"):
-        root = root[:-3]
-    try:
-        with urllib.request.urlopen(root + "/status.json", timeout=10) as r:
-            return (json.loads(r.read()).get("drafting") or None)
-    except Exception:
-        return None
 
 
 def run_arm(K, name, a, prompt, warm):

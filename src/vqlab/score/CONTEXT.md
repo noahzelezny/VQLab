@@ -15,3 +15,4 @@ Per-position arrays and JSON records. kl-ladder resumes from them.
 - Perplexity is deterministic. A noise floor needs a second INDEPENDENT fit.
 - The KL gate does not exercise the decode kernels (F137, F164). Say which path a number describes.
 - Corpora moved here from `src/vqlab/referee/`. Paths recorded before the move resolve through `_layout.legacy_path`.
+- `check_pin` lives in `core/pin_record.py` (still importable from `gate.pin`); ClampCounter/corpus_ids live in `core/clamps.py` (re-exported from `act_stats`). score imports neither gate nor bench.

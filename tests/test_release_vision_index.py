@@ -166,17 +166,17 @@ class _FakeK:
 
 class _FakeSPK:
     def __init__(self, post):
-        self.post = post
+        self._fn = post
 
-    def _entry(self, K, job):
+    def entry(self, K, job):
         return {"phase": "ready"}
 
-    def _ready(self, e):
+    def ready(self, e):
         return True
 
-    def _post(self, url, doc, timeout=1800):
+    def post(self, url, doc, timeout=1800):
         assert url == "http://fake"
-        return self.post(doc)
+        return self._fn(doc)
 
 
 def _knurlogic_args(img):

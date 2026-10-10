@@ -180,14 +180,12 @@ def fits_resident(ctx):
 
 
 def launch(cmd_args, tag):
-    import importlib
-    ms = importlib.import_module("vqlab.agents.mcp_server")
+    from vqlab.agents import mcp_server as ms
     return ms.t_run(cmd_args[0], cmd_args[1:], tag=tag)
 
 
 def poll(run_id):
-    import importlib
-    ms = importlib.import_module("vqlab.agents.mcp_server")
+    from vqlab.agents import mcp_server as ms
     st = ms.t_status(run_id, tail=20)
     s = st.get("status")
     if s == "completed":

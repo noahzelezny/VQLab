@@ -6,7 +6,7 @@ A loaded trunk (mlx-lm) plus a drafting sidecar (`mtp-head-*.safetensors`).
 ## Process
 `vqlab.mtp` is imported, not run: `loop.py` (draft/verify loop,
 `mtp_generate`, `mtp_stream_generate`), `registry.py` (one `FamilySpec` per
-model family), `caches.py` / `capture.py` / `runtime.py` / `sampling.py`, and
+model family), `cli_common.py` (`add_sampling_args`, `load_all`, `prompt_ids`: shared by mtp-generate and mtp-bench), `caches.py` / `capture.py` / `runtime.py` / `sampling.py`, and
 the per-family heads `mtp_head*.py`.
 
 ## Outputs

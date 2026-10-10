@@ -152,7 +152,7 @@ def main():
 
     # A pinned rung (vqlab pin) must have passed its smoke; checked for EVERY
     # rung before the first GPU minute is spent. Unpinned dirs pass unchanged.
-    from vqlab.gate.pin import check_pin
+    from vqlab.core.pin_record import check_pin
     refused = []
     for rname, rdir in rungs.items():
         ok, msg = check_pin(rdir)

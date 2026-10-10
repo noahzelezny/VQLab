@@ -38,16 +38,10 @@ import pathlib
 import shutil
 import subprocess
 import sys
-from vqlab.util.hashing import sha256_file
+from vqlab.core.pin_record import (  # noqa: F401  (re-exported)
+    MARKER, SCHEMA, SMOKE_LOG, _sha, check_pin)
 
-SCHEMA = "vqlab.pin/1"
-MARKER = "vqlab_pin.json"
-SMOKE_LOG = "vqlab_pin_smoke.log"
 _SKIP = {"__pycache__", MARKER, SMOKE_LOG, ".DS_Store"}
-
-
-def _sha(p: pathlib.Path) -> str | None:
-    return sha256_file(p) if p.exists() else None
 
 
 def _kind(src: pathlib.Path) -> str:
@@ -155,30 +149,6 @@ def pin(src, out, runtime=None, kind="auto", headroom=0.90, max_tokens=8, flags=
     if p.returncode != 0:
         return finish("failed", f"smoke rc={p.returncode}; see {SMOKE_LOG}")
     return finish("ok")
-
-
-def check_pin(d) -> tuple[bool, str]:
-    """(allowed, message) for a directory a scorer is about to measure."""
-    d = pathlib.Path(d)
-    m = d / MARKER
-    if not m.exists():
-        return True, ""
-    try:
-        rec = json.loads(m.read_text())
-    except ValueError:
-        return False, f"REFUSE {d}: {MARKER} is unreadable"
-    if rec.get("schema") != SCHEMA:
-        return False, f"REFUSE {d}: unknown pin schema {rec.get('schema')!r}"
-    if rec.get("model_py_sha256") != _sha(d / "model.py"):
-        return False, (f"REFUSE {d}: model.py changed after the pin was smoked; "
-                       "the smoke no longer describes it. Re-pin.")
-    st = rec.get("state")
-    if st == "ok":
-        return True, ""
-    if st == "deferred-ram":
-        return True, (f"WARNING {d}: pin NOT smoked (too large for this box: "
-                      f"{rec.get('reason')}). Smoke it on a cluster before citing a number.")
-    return False, f"REFUSE {d}: pin state {st!r} ({rec.get('reason')})"
 
 
 def main(argv=None) -> int:

@@ -36,7 +36,7 @@ class Command(NamedTuple):
 
 _C = Command
 COMMANDS: dict[str, Command] = {c.name: c for c in (
-    _C('onboard', 'vqlab.plan.onboard', 'onboard.py', 'plan', True, False,
+    _C('onboard', 'vqlab.agents.onboard', 'onboard.py', 'plan', True, False,
        'sequence a new teacher through ONBOARDING.md: profile, loader, cache determinism, init sweep (resumable; --launch runs GPU steps under the lease)'),
     _C('family-profile', 'vqlab.plan.family_profile', 'family_profile.py', 'plan', True, False,
        'size up a teacher from headers only: arch, bytes per bit, legal (d,K), module signatures'),

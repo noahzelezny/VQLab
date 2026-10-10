@@ -49,7 +49,7 @@ mx.set_cache_limit(8 << 30)
 from vqlab import _layout
 from vqlab.family.registry import FAMILY  # shared registry (family/registry.py)
 from vqlab.core import expert_src  # shared source-layout loader (incl. unfused)
-from vqlab.assemble import codepack  # --pack: the same packing rule as `vqlab pack`
+from vqlab.core import codepack  # --pack: the same packing rule as `vqlab pack`
 
 ap = argparse.ArgumentParser()
 ap.add_argument("--base", required=True)

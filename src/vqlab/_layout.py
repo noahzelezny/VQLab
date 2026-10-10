@@ -67,6 +67,9 @@ ALIASES = {
     "vqlab.runtime_load": "vqlab.family.model_loader",
     "runtime_load": "vqlab.family.model_loader",
     "vqlab.family.arch": "vqlab.core.arch_finder",
+    # step 9b: wrong-direction edges
+    "vqlab.plan.onboard": "vqlab.agents.onboard",
+    "vqlab.assemble.codepack": "vqlab.core.codepack",
 }
 
 

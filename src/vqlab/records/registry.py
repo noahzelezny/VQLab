@@ -27,7 +27,6 @@ from __future__ import annotations
 import argparse
 import collections
 import datetime
-import hashlib
 import json
 import os
 import pathlib
@@ -35,6 +34,7 @@ import re
 import socket
 import sys
 
+from vqlab.core.hub import git_blob_sha1, remote_files
 from vqlab.records import provenance
 from vqlab.runtime import runtime_profile
 
@@ -124,20 +124,13 @@ def write_reg(reg):
                            sorted(reg.values(), key=lambda e: (e["name"], e["host"], e["path"]))))
 
 
-def git_blob_sha1(p):
-    data = pathlib.Path(p).read_bytes()
-    return hashlib.sha1(b"blob %d\0" % len(data) + data).hexdigest()
-
-
 # Local safety copies left by in-place repairs (model.py.pre-arc6,
 # config.json.pre-rows8, model.py.published, *-bak, ...): not drift.
 _BACKUP = re.compile(r"\.(pre[-_][\w-]+|published|rows8|[\w-]*bak)$")
 
 
 def hub_diff(art: pathlib.Path, repo: str, deep=False):
-    from huggingface_hub import HfApi
-    info = HfApi().model_info(repo, files_metadata=True)
-    remote = {s.rfilename: s for s in info.siblings}
+    info, remote = remote_files(repo)
     rows = []
     local = {f.name: f for f in art.iterdir() if f.is_file()
              and f.name not in provenance.NOT_OUTPUTS and not f.name.startswith(".")}
