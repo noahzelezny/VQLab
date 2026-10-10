@@ -91,7 +91,7 @@ def step_profile(ctx):
 
 
 def step_loader(ctx):
-    from vqlab.core import families
+    from vqlab.family import registry as families
     import mlx.core as mx
     prof = ctx["profile"]
     fam = families.FAMILY.get(ctx["family"])
@@ -316,7 +316,7 @@ def main(argv=None) -> int:
         note = (r.get("verdict") or r.get("why") or r.get("run_id")
                 or r.get("launch_refused") or r.get("command") or "")
         print(f"  {s['status']:8s} {step:12s} {str(note)[:100]}")
-    from vqlab.core.families import teacher_caches
+    from vqlab.family.registry import teacher_caches
     gate = [c for c in teacher_caches() if c["teacher"] == slug]
     if gate:
         print("  KL gate caches registered for this teacher (families/.../teacher_caches.json):")

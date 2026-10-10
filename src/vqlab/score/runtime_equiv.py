@@ -13,7 +13,7 @@ lab/scripts/runtime_equiv_ds4.py and generalized to any mlx-lm family.
 Each side runs ONE chunked forward in its own interpreter (a worker process:
 `python -m vqlab.score.runtime_equiv --worker ...`), over the same token ids
 from the house prose corpus, and saves float32 logits plus its numerics build
-(core.numerics). The parent compares them: BITWISE equal, or the max |logit
+(core.version_stamp). The parent compares them: BITWISE equal, or the max |logit
 difference| and the argmax agreement. Use a small slice (`vqlab slice` or a
 4-layer teacher cut): the point is the build, not the model.
 
@@ -39,7 +39,7 @@ import numpy as np
 def worker(model, out, tokens, chunk, knurlogic=False) -> int:
     """One chunked forward in THIS interpreter; logits -> out (.npy), build -> stdout."""
     from vqlab import _layout
-    from vqlab.core import numerics
+    from vqlab.core import version_stamp as numerics
     mp = pathlib.Path(model)
     mt = numerics.model_type_of(mp)
     if knurlogic:
@@ -105,7 +105,7 @@ def _run_side(python, model, out, tokens, chunk, knurlogic):
 
 
 def report(info_a, info_b, res) -> str:
-    from vqlab.core.numerics import describe, diff
+    from vqlab.core.version_stamp import describe, diff
     na, nb = info_a.get("numerics"), info_b.get("numerics")
     lines = [f"  a: {describe(na)}  arch {str((na or {}).get('arch_sha256'))[:12]}"
              f"{'  (knurlogic)' if info_a.get('knurlogic') else ''}",

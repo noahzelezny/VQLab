@@ -4,11 +4,15 @@
 Model-family names, source checkpoints.
 
 ## Process
-`families.py` (the single family registry), `expert_src.py` (every reader of MoE source weights), `runtime_load.py` (which library loads a family), `mem_budget.py`, `ple_stream.py`, `fitstore.py` (the fit store's layout, index, census and content-based teacher naming; `vqlab fits` is its CLI), `numerics.py` (the numerics build a number was computed under: mlx, mlx-lm, arch file sha, scorer variant; and the checks that refuse a mismatched cache or pairing).
+`expert_src.py` (every reader of MoE source weights), `runtime_load.py` (which library loads a family), `arch_finder.py` (the Knurlogic meta-path finder behind `vqlab.use_knurlogic_arch()`; `install_arch_finder()`), `mem_budget.py`, `ple_stream.py`, `fitstore.py` (the fit store's layout, index, census and content-based teacher naming; `vqlab fits` is its CLI), `version_stamp.py` (where versions are stamped: the numerics build a number was computed under -- mlx, mlx-lm, knurlogic, arch file sha, scorer variant -- and the checks that refuse a mismatched cache or pairing; `python -m vqlab.core.version_stamp --model <dir>`).
+
+The family registry (FAMILY, teacher_caches, scorer_variant) is NOT here: it is `family/registry.py`.
 
 ## Outputs
-Imported by bare name from any stage.
+Imported as `vqlab.core.<module>`.
 
 ## Rules that bite
-- A new family is ONE entry in `families.py`. Don't fork a copy into a tool.
+- core imports NOTHING from `vqlab.family` (layer rule, tests/test_layering.py). A core module that needs a family lookup asks the package root at call time: `vqlab._family_registry()`.
+- Old names `vqlab.core.families`, `vqlab.core.numerics` (and bare `families` / `numerics`) and `vqlab.family.arch` are aliases for one release (`_layout.ALIASES`): same module object.
+- The version stamp's fields are compared across caches and runs. Renaming or moving code must not change a stamped value (tests/test_version_stamp_identity.py).
 - Depth and geometry laws are family-local. Never inherit an allocation across families.

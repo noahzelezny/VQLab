@@ -1,6 +1,6 @@
 """Model families as plugins: one file per family (structural feedback #2).
 
-Onboarding DeepSeek-V4-Flash touched six places: core/families.py (source
+Onboarding DeepSeek-V4-Flash touched six places: family/registry.py (source
 layout), core/expert_src.py (FP4 reader), score/stream_score.py (scorer),
 gate/check_release.py (tokenizer registration), the MTP head scripts and a
 fitter guard. A plugin module here declares a family's pieces in one place:
@@ -17,7 +17,7 @@ fitter guard. A plugin module here declares a family's pieces in one place:
         act_stats=fn,                       # how often PARITY's clamps fire
     )
 
-and the shared tables read it: core.families.FAMILY, stream_score.SCORERS,
+and the shared tables read it: family.registry.FAMILY, stream_score.SCORERS,
 check-release's tokenizer probe. Every module in this package is a plugin;
 nothing else needs editing for a new family. Families that predate this
 package still live in those tables directly and move here one at a time.
@@ -140,6 +140,6 @@ def alias_fused(skel: dict, triples) -> dict:
 def variant_for(model_type: str):
     """The scorer's current numerics variant for model_type (None when the
     family declares none). Stamped into every cache and result by
-    core.numerics.build."""
+    core.version_stamp.build."""
     fn = (scorers().get(model_type) or {}).get("variant")
     return fn() if callable(fn) else None

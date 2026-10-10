@@ -273,7 +273,7 @@ def t_where_is(name: str, kind: str = "any", max_depth: int = 3) -> Dict[str, An
     # Registered teacher caches match on their TEACHER or corpus too, not
     # only their directory name: "397B" finds q397_prose_12k.
     try:
-        from vqlab.core.families import teacher_caches
+        from vqlab.family.registry import teacher_caches
         known = {h["path"] for h in hits}
         for c in teacher_caches():
             if needle in (c["teacher"] + " " + c.get("corpus", "") + " " + c["path"]).lower() \

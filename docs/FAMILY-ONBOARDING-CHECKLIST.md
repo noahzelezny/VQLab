@@ -9,7 +9,7 @@ Copy this list into the campaign's notes and tick it there.
 
 - [ ] `vqlab onboard --teacher <dir>`: profile, loader check, cache
       determinism, init sweep. ONBOARDING.md says why each step exists.
-- [ ] Family entry in `core/families.py` (with `model_type`, so
+- [ ] Family entry in `family/registry.py` (with `model_type`, so
       artifact-only tools resolve it); the CPU loader gate passes:
       `python src/vqlab/core/expert_src.py --selftest`.
 - [ ] Teacher archived in configured storage, never re-downloaded

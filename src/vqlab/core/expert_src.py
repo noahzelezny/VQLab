@@ -35,7 +35,7 @@ import sys
 
 import mlx.core as mx
 
-from vqlab.core.families import FAMILY
+from vqlab import _family_registry
 
 
 def is_unfused(fam: dict) -> bool:
@@ -177,6 +177,7 @@ def load_expert_stack(src_dir, src_idx: dict, fam: dict, li: int, proj: str,
 
 def _selftest() -> int:
     import tempfile
+    FAMILY = _family_registry().FAMILY
     E, OUT, IN = 5, 8, 16
     ok = True
 

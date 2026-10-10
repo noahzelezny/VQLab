@@ -505,7 +505,7 @@ def main():
     # THE NUMERICS BUILD (F194), resolved and checked BEFORE the forward: a
     # cache made by another mlx / mlx-lm / arch file / scorer variant is
     # refused before the first GPU minute, not after the last.
-    from vqlab.core import numerics
+    from vqlab.core import version_stamp as numerics
     variant = entry["variant"]() if callable(entry.get("variant")) else None
     build = numerics.build(mt, family=entry["family"], model=model, variant=variant)
     build_check = None

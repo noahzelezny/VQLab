@@ -32,7 +32,7 @@ from vqlab import _layout
 
 import mlx.core as mx
 
-from vqlab.core.families import DENSE_REMAP as FAMILIES  # shared registry
+from vqlab.family.registry import DENSE_REMAP as FAMILIES  # shared registry
 
 PROJS = ("gate_proj", "up_proj", "down_proj")
 

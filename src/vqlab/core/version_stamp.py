@@ -24,7 +24,7 @@ never match while the architecture they both call must. The file the model
 class actually came from is recorded beside it (`loaded_file`/`loaded_sha256`)
 and is not compared.
 
-    python -m vqlab.core.numerics --model <dir>    # this interpreter's build, JSON
+    python -m vqlab.core.version_stamp --model <dir>    # this interpreter's build, JSON
 
 Reads files and package metadata only; never touches the GPU.
 """
@@ -37,6 +37,7 @@ import importlib.util
 import json
 import pathlib
 import sys
+from vqlab import _family_registry
 from vqlab.util.hashing import sha256_file
 
 # The fields a cache and a run must agree on. Order is the report order.
@@ -123,13 +124,9 @@ def arch_file(model_type: str | None, runtime: str = "mlx_lm") -> str | None:
 
 
 def scorer_variant(model_type: str | None):
-    if not model_type:
-        return None
-    try:
-        from vqlab.family import variant_for
-        return variant_for(model_type)
-    except Exception:
-        return None
+    """family.registry.scorer_variant (moved there 2026-10-10; this name is
+    kept for one release)."""
+    return _family_registry().scorer_variant(model_type)
 
 
 def build(model_type: str | None = None, *, family: str | None = None,

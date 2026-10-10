@@ -9,7 +9,7 @@ import numpy as np
 import pytest
 from safetensors.numpy import save_file
 
-from vqlab.core import numerics as N
+from vqlab.core import version_stamp as N
 
 RUN = {"mlx": "0.31.2", "mlx_lm": "0.31.9", "arch_sha256": "aa", "scorer_variant": "shared-clamp"}
 

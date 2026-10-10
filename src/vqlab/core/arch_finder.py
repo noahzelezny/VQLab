@@ -9,13 +9,13 @@ arithmetic from what users run. Knurlogic vendors them (engine/families/
 `knurlogic.engine.register(*names)` as public API for exactly this caller.
 
 ONE copy: VQLab depends on knurlogic and never carries its own (a cloned
-copy drifted within hours, 2026-10-03). `install()` puts a finder at the
+copy drifted within hours, 2026-10-03). `install_arch_finder()` puts a finder at the
 front of sys.meta_path that, on the first import of mlx_lm.models.<name>
 for a name Knurlogic vendors, calls register(name) -- lazily, so nothing
 loads that a run does not use. A module already in sys.modules is left
 alone. VQLAB_VENDORED_ARCH=0 turns it off, to score stock mlx-lm.
 
-The numerics stamp (core/numerics.py) records knurlogic's version and
+The numerics stamp (core/version_stamp.py) records knurlogic's version and
 commit beside mlx / mlx-lm, so moving knurlogic is a stamp change and
 scoring refuses caches from the old one.
 """
@@ -87,7 +87,7 @@ class _Finder(importlib.abc.MetaPathFinder):
 _FINDER = _Finder()
 
 
-def install() -> bool:
+def install_arch_finder() -> bool:
     """Serve Knurlogic's architectures as mlx_lm.models.<name>. Idempotent;
     False when turned off (VQLAB_VENDORED_ARCH=0) or knurlogic is missing."""
     if not enabled() or _register() is None:
@@ -95,6 +95,9 @@ def install() -> bool:
     if _FINDER not in sys.meta_path:
         sys.meta_path.insert(0, _FINDER)
     return True
+
+
+install = install_arch_finder   # pre-step-9a name (vqlab.family.arch.install); one release
 
 
 def uninstall() -> None:

@@ -30,23 +30,36 @@ import pathlib
 import mlx.core as mx
 import sys
 
-from vqlab.core.families import FAMILY
+from vqlab import _family_registry
 
 RUNTIMES = ("mlx_lm", "mlx_vlm")
+
+
+def _family_table() -> dict:
+    """family.registry.FAMILY, looked up at call time through the package
+    root: core may not import family (layer rule), and the registry is the
+    single source of truth."""
+    return _family_registry().FAMILY
+
+
+def __getattr__(name):
+    if name == "FAMILY":                    # pre-step-9a `runtime_load.FAMILY`
+        return _family_table()
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 def runtime_for(family: str) -> str:
     """The runtime a family loads under. Unknown/dense families default to
     mlx_lm — the behaviour every existing call site had before this file."""
-    entry = FAMILY.get(family, {})
+    entry = _family_table().get(family, {})
     rt = entry.get("runtime", "mlx_lm")
     # Knurlogic serves some architectures that used to exist only in mlx_vlm
     # (glm5_next) under mlx_lm.models, and VQLab loads Knurlogic's files
-    # (vqlab.family.arch). When it serves this family's model_type, load
+    # (vqlab.core.arch_finder). When it serves this family's model_type, load
     # through mlx_lm: that is the arithmetic users run, and a VQLab env has
     # no mlx_vlm (2026-10-03: GLM could not load in ~/.venvs/vqlab at all).
     if rt == "mlx_vlm" and entry.get("model_type"):
-        from vqlab.family import arch
+        from vqlab.core import arch_finder as arch
         if arch.enabled() and entry["model_type"] in arch.available():
             rt = "mlx_lm"
     if rt not in RUNTIMES:
@@ -60,7 +73,7 @@ def family_for_model_type(model_type: str) -> str | None:
     a `model_type` field; families without one are unreachable this way,
     which is deliberate — guessing a family from a name is how the wrong
     --family gate ran on 08-21."""
-    hits = [f for f, e in FAMILY.items() if e.get("model_type") == model_type]
+    hits = [f for f, e in _family_table().items() if e.get("model_type") == model_type]
     if len(hits) > 1:
         raise ValueError(f"model_type {model_type!r} claimed by {hits}")
     return hits[0] if hits else None
@@ -152,6 +165,7 @@ def _selftest() -> int:
     report("unclaimed model_type -> None",
            family_for_model_type("qwen3_5_moe") is None)
     # both directions (III.5): a bad runtime value must raise, not default
+    FAMILY = _family_table()
     saved = FAMILY.get("glm5_next", {}).get("runtime")
     try:
         FAMILY["glm5_next"]["runtime"] = "torch"

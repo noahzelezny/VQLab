@@ -22,7 +22,7 @@ See README.md and METHODOLOGY.md.
 __version__ = "0.1.0"
 
 from . import _layout  # noqa: F401  stage folders + pre-split import names
-from .family import arch as _arch
+from .core import arch_finder as _arch
 
 
 def use_knurlogic_arch() -> bool:
@@ -30,7 +30,18 @@ def use_knurlogic_arch() -> bool:
     qwen3_5 / gemma4 / glm5_next) as mlx_lm.models.<name>. Call it before
     mlx_lm.load. Idempotent; returns False when VQLAB_VENDORED_ARCH=0 or
     knurlogic is not installed (stock mlx-lm then serves every name)."""
-    return _arch.install()
+    return _arch.install_arch_finder()
+
+
+def _family_registry():
+    """vqlab.family.registry (FAMILY, scorer_variant), imported on first use.
+
+    The ONE inversion point that lets core/ look up a family without
+    importing up the layer stack (core is L1, family L3): core/runtime_load,
+    core/version_stamp and core/expert_src's selftest ask for the registry
+    here, at call time, instead of naming vqlab.family."""
+    from .family import registry
+    return registry
 
 
 def _main_is_vqlab() -> bool:

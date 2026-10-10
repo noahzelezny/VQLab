@@ -3,7 +3,7 @@
 Fit layout (official FP4 release read natively), the streamed KL/ppl scorer
 (rule-5 validated), and the tokenizer registration check-release needs until
 transformers registers model_type deepseek_v4 (huggingface/transformers#45616).
-Moved here from core/families.py, score/stream_score.py and
+Moved here from family/registry.py, score/stream_score.py and
 gate/check_release.py on 2026-10-02; the scorer body is unchanged.
 """
 from __future__ import annotations
