@@ -4,8 +4,6 @@
   "_layout.py::sys.path.append",
   "bench/speed_pair_knurlogic.py::sys.path.insert",
   "gate/check_release.py::sys.path.insert",
-  "gate/selftest.py::upward:gate->agents",
-  "gate/selftest.py::upward:gate->cli",
   "gate/vision_smoke.py::sys.path.insert"
  ]
 }

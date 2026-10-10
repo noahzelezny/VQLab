@@ -20,9 +20,9 @@ III.13 applies to every load made through here: the RESOLVED module path,
 not the intended one, is what a runtime-dependent claim must name — call
 resolved_runtime_note(model) and print it.
 
-CPU-only selftest (dispatch logic only, loads nothing):
+CPU-only checks of the dispatch logic (loads nothing):
 
-    python -m vqlab.family.model_loader --selftest
+    pytest tests/test_model_loader.py
 """
 from __future__ import annotations
 
@@ -133,40 +133,9 @@ def resolved_runtime_note(model) -> str:
     return f"resolved runtime: {cls.__name__} <- {path}"
 
 
-def _selftest() -> int:
-    ok = True
-
-    def report(name, good, detail=""):
-        nonlocal ok
-        ok &= good
-        print(f"  {'PASS' if good else 'FAIL'}  {name}"
-              f"{(' — ' + detail) if detail else ''}")
-
-    report("qwen4_exp -> mlx_lm", runtime_for("qwen4_exp") == "mlx_lm")
-    report("qwen3_5 (no field) -> mlx_lm", runtime_for("qwen3_5") == "mlx_lm")
-    report("glm5_next -> mlx_vlm", runtime_for("glm5_next") == "mlx_vlm")
-    report("unknown family -> mlx_lm default",
-           runtime_for("no_such_family") == "mlx_lm")
-    report("model_type glm5_next -> family",
-           family_for_model_type("glm5_next") == "glm5_next")
-    report("unclaimed model_type -> None",
-           family_for_model_type("qwen3_5_moe") is None)
-    # both directions (III.5): a bad runtime value must raise, not default
-    saved = FAMILY.get("glm5_next", {}).get("runtime")
-    try:
-        FAMILY["glm5_next"]["runtime"] = "torch"
-        try:
-            runtime_for("glm5_next")
-            report("bad runtime value FAILS", False, "accepted 'torch'")
-        except ValueError:
-            report("bad runtime value FAILS", True)
-    finally:
-        FAMILY["glm5_next"]["runtime"] = saved
-    print("all checks passed" if ok else "CHECKS FAILED")
-    return 0 if ok else 1
-
-
 if __name__ == "__main__":
     if "--selftest" in sys.argv:
-        raise SystemExit(_selftest())
+        # moved to tests/test_model_loader.py (untangle step 14)
+        raise SystemExit("model_loader's self-check is tests/test_model_loader.py: "
+                         "run `pytest tests/test_model_loader.py`")
     raise SystemExit(__doc__)

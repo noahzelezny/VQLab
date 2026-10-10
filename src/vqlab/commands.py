@@ -160,7 +160,7 @@ COMMANDS: dict[str, Command] = {c.name: c for c in (
        'comparator gate: tensor-set parity vs teacher'),
     _C('bundle-accept', 'vqlab.gate.bundle_accept', 'bundle_accept.py', 'gate', False, True,
        'kernel acceptance on the runtime lifted FROM the artifact'),
-    _C('selftest', 'vqlab.gate.selftest', 'selftest.py', 'gate', True, True,
+    _C('selftest', 'vqlab.selftest', 'selftest/__init__.py', 'gate', True, True,
        'run the real pipeline on a tiny synthetic model'),
     _C('mtp-smoke-head', 'vqlab.gate.mtp_smoke_head', 'mtp_smoke_head.py', 'gate', False, True,
        'head-alone load + T=1/T=2 forward timing (no trunk)'),
@@ -405,6 +405,59 @@ def resolve(argv):
     if head in COMMANDS:
         return head, argv[1:]
     return None, argv
+
+
+def _code_spans(text):
+    """re.findall(r"`([^`]+)`", text), without importing re (this module
+    imports nothing: tests/test_commands.py)."""
+    i = 0
+    while True:
+        a = text.find("`", i)
+        b = text.find("`", a + 1) if a >= 0 else -1
+        if b < 0:
+            return
+        if b == a + 1:          # an empty span: the regex retries one later
+            i = a + 1
+            continue
+        yield text[a + 1:b]
+        i = b + 1
+
+
+def routed(text):
+    """Flat names of the commands a Markdown text routes to: every `code`
+    span read as a command line, namespaced (`fit moe ...`) or flat
+    (`fit-moe ...`), with or without a leading `vqlab`. The selftest's
+    CONTEXT.md check and its test share this, so both spellings count."""
+    out = set()
+    for span in _code_spans(text):
+        words = span.split()
+        if words and words[0] == "vqlab":
+            words = words[1:]
+        flat, _ = resolve(words)
+        if flat:
+            out.add(flat)
+    return out
+
+
+# A tool's own self-check that moved to vqlab.selftest (untangle step 14).
+# The tool cannot import it (selftest sits above every stage), so the CLI
+# runs this module instead when the command's argv carries the flag:
+# {flat command: (flag or leading subcommand, module)}.
+SELFTEST_ROUTES = {
+    "reselect": ("selftest", "vqlab.selftest.reselect_fixture"),
+    "sz-check": ("--selftest", "vqlab.selftest.sz_check_fixture"),
+    "sz-bitexact": ("--selftest", "vqlab.selftest.sz_bitexact_cpu"),
+}
+
+
+def selftest_route(cmd, rest):
+    """The module to run for `vqlab <cmd> <rest>` when rest asks for a moved
+    self-check (a flag anywhere, a subcommand first), else None."""
+    flag, module = SELFTEST_ROUTES.get(cmd, (None, None))
+    if flag is None or any(a in ("-h", "--help") for a in rest):
+        return None
+    hit = flag in rest if flag.startswith("-") else rest[:1] == [flag]
+    return module if hit else None
 
 
 # Resumable builds: on a failure (GPU timeouts under disk contention) the MCP
