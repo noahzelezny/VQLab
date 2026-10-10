@@ -47,7 +47,6 @@ import pathlib
 import statistics
 import sys
 
-sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))  # src/
 from vqlab.bench.speed_pair_knurlogic import _post, _prompt  # noqa: E402
 
 TTFT_SIDE = ("http_build", "queue", "tokenize", "admit_memory", "cache_fetch",

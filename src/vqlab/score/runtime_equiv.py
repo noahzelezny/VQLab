@@ -38,7 +38,6 @@ import numpy as np
 # ------------------------------------------------------------------ worker
 def worker(model, out, tokens, chunk, knurlogic=False) -> int:
     """One chunked forward in THIS interpreter; logits -> out (.npy), build -> stdout."""
-    sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))  # src/
     from vqlab import _layout
     from vqlab.core import numerics
     mp = pathlib.Path(model)

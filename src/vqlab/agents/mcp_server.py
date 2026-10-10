@@ -52,7 +52,6 @@ from datetime import date, datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[2]))  # src/
 from vqlab import config  # noqa: E402
 from vqlab import commands as _commands  # noqa: E402
 from vqlab.agents import queue_eta as _queue_eta  # noqa: E402

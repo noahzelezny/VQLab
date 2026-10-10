@@ -8,10 +8,8 @@ Bar (set with the paper + M3 sessions BEFORE the fix existed):
   3. K256/K2048 unchanged; K4096/K8192 move FAIL -> works
 Run at multiple shapes, unpacked and packed.
 """
-import pathlib
 import sys
 import mlx.core as mx
-sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))  # src/
 from vqlab import _layout  # noqa: E402,F401  one module object per name
 import vq_switch, vq_pack
 

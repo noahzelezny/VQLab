@@ -14,11 +14,10 @@ experts, --reps seeds so a delta smaller than the spread is called noise.
 K=256 only: that is where the penalty lives. The K=2048 arm is 5x the cost and
 E107/E108 already showed the penalty shrinks or reverses there.
 """
-import argparse, json, pathlib, sys
+import argparse, json, pathlib
 import mlx.core as mx
 import numpy as np
 
-sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))  # src/
 from vqlab import _layout  # noqa: E402,F401  one module object per name
 from families import FAMILY
 import expert_src

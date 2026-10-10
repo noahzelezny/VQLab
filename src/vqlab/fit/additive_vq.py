@@ -37,14 +37,11 @@ import argparse
 import json
 import math
 import os
-import pathlib
-import sys
 import time
 
 import numpy as np
 import mlx.core as mx
 
-sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))  # src/
 from vqlab import _layout  # noqa: E402,F401  one module object per name
 import geo_build as gb      # reuse the helpers; never copy them
 from geo_build import GSZ, NFITG, ITERS_LLOYD, _assign, _kmeanspp, _lloyd, pack

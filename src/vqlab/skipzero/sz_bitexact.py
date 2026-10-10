@@ -44,7 +44,6 @@ import numpy as np
 
 HERE = pathlib.Path(__file__).resolve().parent
 SRC = HERE.parents[1]
-sys.path.insert(0, str(SRC))
 from vqlab import config  # noqa: E402
 from vqlab.util.hashing import sha256_bytes  # noqa: E402
 from vqlab.util.log import make_log  # noqa: E402
@@ -83,7 +82,6 @@ def _sha(a):
 
 def dead_experts(art):
     """{module: experts ordered by dead-row count desc} from the resident pack."""
-    sys.path.insert(0, str(SRC))
     from vqlab import _layout  # noqa: F401
     import fitstore
     cfg = json.loads((pathlib.Path(art) / "config.json").read_text())
@@ -138,8 +136,7 @@ def worker(art, role, outdir, experts_json, mem_only):
         json.dump(rep, open(out / "report.json", "w"), indent=1)
         return 0
     order = json.load(open(experts_json))
-    sys.path.insert(0, str(HERE))
-    import sz_resident
+    from vqlab.skipzero import sz_resident
     reach = modns.get("_reach_vq") or sz_resident.reach   # the 397B bundle has no _reach_vq
     mods = list(order)
     cfg = json.loads((pathlib.Path(art) / "config.json").read_text())
@@ -321,8 +318,7 @@ def synthetic(outdir, which="both", u8_model_py=U8_MODEL_PY):
     on the expanded tensors, byte for byte, decode and prefill paths."""
     import importlib.util
     import mlx.core as mx
-    sys.path.insert(0, str(HERE))
-    import sz_resident
+    from vqlab.skipzero import sz_resident
     rng = np.random.default_rng(SEED)
     fails, lines = 0, []
     if which in ("walk", "both", "all"):
@@ -359,7 +355,6 @@ def synthetic(outdir, which="both", u8_model_py=U8_MODEL_PY):
         spec = importlib.util.spec_from_file_location("vq_switch_ro", SRC / "vqlab/runtime/vq_switch.py")
         vs = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(vs)
-        sys.path.insert(0, str(SRC / "vqlab/runtime"))
         import vq_pack
         for name, D, K, BITS, E, OUT, IN in (
                 ("native d4 gate", 4, 2048, 11, 16, 512, 2048),
@@ -427,7 +422,6 @@ def partial(resident, stage1, layers, outdir, original=None):
     --original adds the ORIGINAL rung's modules as information only."""
     import importlib.util
     import mlx.core as mx
-    sys.path.insert(0, str(SRC))
     from vqlab import _layout  # noqa: F401
     import fitstore
     res, st1 = pathlib.Path(resident), pathlib.Path(stage1)
@@ -442,8 +436,7 @@ def partial(resident, stage1, layers, outdir, original=None):
     szr = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(szr)
     SZ = szr.install(ns)
-    sys.path.insert(0, str(HERE))
-    import skipzero_load
+    from vqlab.skipzero import skipzero_load
     lo, hi = (int(v) for v in layers.split("-"))
     mods = [p for p in sz["modules"]
             if lo <= int(p.split(".layers.")[1].split(".")[0]) <= hi]
@@ -516,15 +509,13 @@ def partial(resident, stage1, layers, outdir, original=None):
 # ------------------------------------------------------------ selftest (CPU)
 def _src_strings(path, names):
     """Kernel source strings of a runtime/model.py FILE, by AST (no import)."""
-    sys.path.insert(0, str(HERE))
-    import sz_resident
+    from vqlab.skipzero import sz_resident
     return sz_resident.kernel_srcs_from_text(pathlib.Path(path).read_text(), tuple(names))
 
 
 def selftest():
-    sys.path.insert(0, str(HERE))
-    import sz_resident
-    import skipzero_load
+    from vqlab.skipzero import sz_resident
+    from vqlab.skipzero import skipzero_load
     ok = True
     rng = np.random.default_rng(SEED)
     E, OUT, W, G = 6, 77, 5, 3

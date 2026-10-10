@@ -52,7 +52,6 @@ import subprocess
 import sys
 
 HERE = pathlib.Path(__file__).parent
-sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))  # src/
 from vqlab._layout import find as _find  # noqa: E402
 # (gate name, script, how it takes the artifact). vision-smoke predates this
 # composite and takes a POSITIONAL artifact; the others take --artifact.

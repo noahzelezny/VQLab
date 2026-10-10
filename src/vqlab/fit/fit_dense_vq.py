@@ -18,7 +18,6 @@ fit quality first, runtime integration only if the numbers earn it.
     ./fit_e4b_vq.py --src <bf16 snapshot> --out <dir> [--k 2048 --dim 2]
 """
 import argparse
-import sys
 import json
 import os
 import pathlib
@@ -74,7 +73,6 @@ else:
     print("UNSEEDED (--seed -1) — this fit is a fresh draw", flush=True)
 SRC, OUT = pathlib.Path(args.src), pathlib.Path(args.out)
 K, D, G = args.k, args.dim, args.group
-sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))  # src/
 from vqlab import _layout  # noqa: E402,F401  one module object per name
 from families import DENSE_FAMILIES
 KEY_TMPL, _default_layers = DENSE_FAMILIES[args.family]

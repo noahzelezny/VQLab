@@ -18,11 +18,9 @@ wrong token; 6-bit and bf16 measured identical acceptance.
 import argparse
 import importlib
 import pathlib
-import sys
 
 import mlx.core as mx
 
-sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))  # src/
 from vqlab import _layout  # noqa: E402,F401  one module object per name
 from vqlab.mtp import registry
 

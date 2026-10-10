@@ -15,7 +15,6 @@ import argparse
 import collections
 import json
 import pathlib
-import sys
 
 
 def classify(D, K, G, bits, IN, vq):
@@ -61,7 +60,6 @@ def main() -> int:
         print(f"{art.name}: no vq_modules in config — not a VQ MoE artifact?")
         return 1
 
-    sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))  # src/
     from vqlab import _layout  # noqa: E402,F401  one module object per name
     from vqlab import vq_switch as vq
 
