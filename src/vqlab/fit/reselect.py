@@ -90,10 +90,9 @@ import time
 
 import numpy as np
 
-from vqlab import _layout  # noqa: E402,F401  one module object per name
 from vqlab import config  # noqa: E402
-import vq_pack  # noqa: E402
-import provenance  # noqa: E402
+from vqlab.runtime import vq_pack
+from vqlab.records import provenance
 from vqlab.util.hashing import sha256_file  # noqa: E402
 from vqlab.util.log import make_log  # noqa: E402
 

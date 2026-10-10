@@ -21,8 +21,7 @@ import collections
 import pathlib
 import sys
 
-from vqlab import _layout  # noqa: E402,F401  one module object per name
-import fitstore as fs  # noqa: E402
+from vqlab.core import fitstore as fs
 
 FAMILIES = fs._families_dir()   # honours VQLAB_FAMILIES_DIR
 

@@ -28,11 +28,11 @@ import json
 import pathlib
 import shutil
 
-from vqlab import _layout  # noqa: E402,F401  one module object per name
+from vqlab import _layout
 
 import mlx.core as mx
 
-from families import DENSE_REMAP as FAMILIES  # shared registry
+from vqlab.core.families import DENSE_REMAP as FAMILIES  # shared registry
 
 PROJS = ("gate_proj", "up_proj", "down_proj")
 

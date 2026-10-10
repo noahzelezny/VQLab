@@ -36,8 +36,7 @@ import os
 import pathlib
 import sys
 
-from vqlab import _layout  # noqa: E402,F401  one module object per name
-from geo_build import part_name  # noqa: E402
+from vqlab.fit.geo_build import part_name
 
 TRIPLE = ("codebook", "codes", "vq_scales")
 

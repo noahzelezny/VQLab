@@ -38,8 +38,7 @@ import shutil
 import mlx.core as mx
 import numpy as np
 
-from vqlab import _layout  # noqa: E402,F401  one module object per name
-import vq_pack  # noqa: E402
+from vqlab.runtime import vq_pack
 
 
 def main() -> int:

@@ -18,9 +18,8 @@ import argparse, json, pathlib
 import mlx.core as mx
 import numpy as np
 
-from vqlab import _layout  # noqa: E402,F401  one module object per name
-from families import FAMILY
-import expert_src
+from vqlab.core.families import FAMILY
+from vqlab.core import expert_src
 
 ap = argparse.ArgumentParser()
 ap.add_argument("--src", required=True, help="bf16 source model dir")

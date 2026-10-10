@@ -46,10 +46,10 @@ import mlx.core as mx
 
 mx.set_cache_limit(8 << 30)
 
-from vqlab import _layout  # noqa: E402,F401  one module object per name
-from families import FAMILY  # shared registry (families.py)
-import expert_src            # shared source-layout loader (incl. unfused)
-import codepack              # --pack: the same packing rule as `vqlab pack`
+from vqlab import _layout
+from vqlab.core.families import FAMILY  # shared registry (families.py)
+from vqlab.core import expert_src  # shared source-layout loader (incl. unfused)
+from vqlab.assemble import codepack  # --pack: the same packing rule as `vqlab pack`
 
 ap = argparse.ArgumentParser()
 ap.add_argument("--base", required=True)
@@ -178,8 +178,8 @@ BASE, SRC, OUT = pathlib.Path(args.base), pathlib.Path(args.src), pathlib.Path(a
 
 # Records (docs/PROVENANCE.md): every fit is filed in the fit store with this
 # recipe, and the artifact gets a build record at the end.
-import fitstore  # noqa: E402
-import provenance  # noqa: E402
+from vqlab.core import fitstore
+from vqlab.records import provenance
 TEACHER = fitstore.teacher_slug(SRC)
 METHOD = {"init": args.init, "lloyd_iters": args.iters, "sample_rows": args.sample,
           "scales": "max-abs per group", "alternation": False, "group": args.group,

@@ -41,9 +41,9 @@ import pathlib
 import subprocess
 import sys
 
-from vqlab import _layout  # noqa: E402,F401  one module object per name
+from vqlab import _layout
 from vqlab import config as _config  # noqa: E402
-import fitstore  # noqa: E402
+from vqlab.core import fitstore
 
 PY = sys.executable
 STEPS = ("profile", "loader", "cache_a", "cache_b", "determinism", "init_sweep")
@@ -91,19 +91,19 @@ def step_profile(ctx):
 
 
 def step_loader(ctx):
-    import families
+    from vqlab.core import families
     import mlx.core as mx
     prof = ctx["profile"]
     fam = families.FAMILY.get(ctx["family"])
     if fam is None:                       # dense families read by key template
         return "done", {"note": "dense family: key template checked by the profile"}
-    import expert_src
+    from vqlab.core import expert_src
     T = ctx["teacher"]
     ip = T / "model.safetensors.index.json"
     if ip.exists():
         idx = json.loads(ip.read_text())["weight_map"]
     else:                                  # single-file checkpoint: no index
-        from family_profile import header
+        from vqlab.plan.family_profile import header
         idx = {k: f.name for f in sorted(T.glob("*.safetensors"))
                for k in header(os.path.realpath(f))}
     layers = prof["arch"]["vq_layers"]

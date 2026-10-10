@@ -41,8 +41,7 @@ import time
 import mlx.core as mx
 import mlx.utils
 
-from vqlab import _layout  # noqa: E402,F401  one module object per name
-import runtime_load
+from vqlab.core import runtime_load
 
 
 def _rel(a, b):

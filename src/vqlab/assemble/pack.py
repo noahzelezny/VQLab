@@ -32,9 +32,8 @@ import sys
 
 import mlx.core as mx
 
-from vqlab import _layout  # noqa: E402,F401  one module object per name
-import vq_pack
-import codepack  # noqa: E402  the packing rule fit-moe --pack shares
+from vqlab.runtime import vq_pack
+from vqlab.assemble import codepack  # the packing rule fit-moe --pack shares
 
 def _assert_tower_belongs(src_cfg, art_cfg, src_name, art_name):
     """Refuse a vision tower that cannot project into THIS model.

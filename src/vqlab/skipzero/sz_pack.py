@@ -29,12 +29,11 @@ import sys
 import numpy as np
 
 HERE = pathlib.Path(__file__).resolve().parent
-from vqlab import _layout  # noqa: E402,F401
 from vqlab import config  # noqa: E402
 from vqlab.util.log import make_log  # noqa: E402
-import fitstore  # noqa: E402
-import registry  # noqa: E402
-import provenance  # noqa: E402
+from vqlab.core import fitstore
+from vqlab.records import registry
+from vqlab.records import provenance
 
 from vqlab.skipzero import skipzero_load  # noqa: E402
 
