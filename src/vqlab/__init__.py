@@ -21,8 +21,8 @@ See README.md and METHODOLOGY.md.
 
 __version__ = "0.1.0"
 
-from . import _layout  # noqa: E402,F401  stage folders + pre-split import names
-from .family import arch as _arch  # noqa: E402
+from . import _layout  # noqa: F401  stage folders + pre-split import names
+from .family import arch as _arch
 
 
 def use_knurlogic_arch() -> bool:
@@ -59,7 +59,7 @@ if _main_is_vqlab():
     use_knurlogic_arch()
 
 
-from .mtp import (  # noqa: E402
+from .mtp import (
     FAMILIES,
     FamilySpec,
     MTPResponse,

@@ -57,12 +57,12 @@ import mlx.core as mx
 from vqlab.core.families import FAMILY
 from vqlab.records import provenance
 from vqlab.core import fitstore
-from vqlab.util.log import make_log  # noqa: E402
+from vqlab.util.log import make_log
 # Packing is the shipped runtime's (runtime/vq_pack.py): one packer.
-from vqlab.runtime.vq_pack import pack, words_per_row  # noqa: E402
+from vqlab.runtime.vq_pack import pack, words_per_row
 # k-means lives in fit/kmeans.py; the old private names are kept for
 # additive_vq.py and anything else that imported them.
-from vqlab.fit.kmeans import (  # noqa: E402
+from vqlab.fit.kmeans import (
     assign_chunked as _assign,
     chunk_rows as _chunk,
     kmeanspp_init_pooled as _kmeanspp,

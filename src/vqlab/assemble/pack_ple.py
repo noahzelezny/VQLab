@@ -39,7 +39,7 @@ nsub = None
 
 # Refuse a no-op BEFORE anything is rewritten: the loop below packs only 2-D
 # uint16 codes, and with none it used to die on row_bytes = None * bits.
-from vqlab.core.artifact import read_header  # noqa: E402
+from vqlab.core.artifact import read_header
 _hdrs = {s: read_header(ART / s) for s in shards}
 if not any(v["dtype"] == "U16" and len(v["shape"]) == 2
            for h in _hdrs.values() for k, v in h.items() if k.endswith(".codes")):

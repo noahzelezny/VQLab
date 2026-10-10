@@ -635,7 +635,6 @@ elif _n_tower and args.no_smoke:
 # tracker VL4.8), and failing them would block the fleet on bookkeeping.
 _prov_note = ""
 try:
-    from vqlab import _layout as _pl  # noqa: F401
     from vqlab.records import provenance as _prov
     try:
         _rec = _prov.load(A)

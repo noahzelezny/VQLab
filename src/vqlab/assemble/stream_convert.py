@@ -43,7 +43,7 @@ from mlx_lm.utils import load_tokenizer, quantize_model, save_config
 
 from vqlab.core.families import FAMILY
 from vqlab.core import runtime_load
-from vqlab.family import alias_fused, fused_projections  # noqa: E402
+from vqlab.family import alias_fused, fused_projections
 
 ap = argparse.ArgumentParser()
 ap.add_argument("--src", required=True)

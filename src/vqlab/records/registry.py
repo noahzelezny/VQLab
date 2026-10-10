@@ -35,11 +35,10 @@ import re
 import socket
 import sys
 
-from vqlab import _layout  # noqa: E402,F401  one module object per name
-import provenance  # noqa: E402
-import runtime_profile  # noqa: E402
+from vqlab.records import provenance
+from vqlab.runtime import runtime_profile
 
-from vqlab import config as _config  # noqa: E402
+from vqlab import config as _config
 
 REG = _config.registry_dir() / "artifacts.jsonl"   # <records>/registry (vqlab.config)
 HUB = _config.registry_dir() / "hub.jsonl"         # latest Hub comparison per repo
@@ -256,7 +255,7 @@ def main(argv=None) -> int:
         for art, repo in targets:
             try:
                 rev, rows = hub_diff(art, repo, a.deep)
-            except Exception as e:                      # noqa: BLE001
+            except Exception as e:
                 print(f"{repo}: could not read the Hub ({type(e).__name__}: {e})")
                 rc = max(rc, 1)
                 continue

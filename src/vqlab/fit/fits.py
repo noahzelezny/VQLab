@@ -73,7 +73,7 @@ def _census(root, recs, a):
         agg[(r["family"], f"d{r['d']}-K{r['K']}")].append(c)
     print("\nby family x geometry (mean over fits read):")
     for (fam, geo), cs in sorted(agg.items()):
-        m = lambda k: sum(c[k] for c in cs) / len(cs)  # noqa: E731
+        m = lambda k: sum(c[k] for c in cs) / len(cs)
         print(f"  {fam:14s} {geo:10s} n={len(cs):3d}  dead {m('dead_frac'):7.2%}  "
               f"H/Hmax {m('entropy_norm'):.3f}  top1% {m('top1pct_share'):.1%}  "
               f"zero-scale {m('zero_scale_frac'):.1%}")

@@ -42,7 +42,7 @@ import subprocess
 import sys
 
 from vqlab import _layout
-from vqlab import config as _config  # noqa: E402
+from vqlab import config as _config
 from vqlab.core import fitstore
 
 PY = sys.executable

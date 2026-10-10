@@ -37,7 +37,7 @@ import sys
 import time
 import urllib.request
 
-from vqlab import _layout  # noqa: E402
+from vqlab import _layout
 
 KSRC = os.environ.get("KNURLOGIC_SRC", "")
 
@@ -118,7 +118,7 @@ def _drafting(url):
     try:
         with urllib.request.urlopen(root + "/status.json", timeout=10) as r:
             return (json.loads(r.read()).get("drafting") or None)
-    except Exception:  # noqa: BLE001
+    except Exception:
         return None
 
 

@@ -72,7 +72,7 @@ def norm_block(T):
     return (Wg / s).reshape(-1, D), s.astype(mx.float16)
 
 
-from vqlab.fit.kmeans import assign_mx  # noqa: E402
+from vqlab.fit.kmeans import assign_mx
 
 
 def assign(X, C, chunk=1_000_000):

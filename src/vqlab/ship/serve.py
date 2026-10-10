@@ -183,7 +183,7 @@ def install(model_path, sidecar=None, family=None, quiet=False):
         from mlx_lm.models.cache import LRUPromptCache
         LRUPromptCache.fetch_nearest_cache = lambda self, key, prompt: (None,
                                                                         prompt)
-    except Exception as e:                                   # noqa: BLE001
+    except Exception as e:
         print(f"warning: could not disable prompt-cache reuse ({e}); the MTP "
               f"loop will refuse requests rather than mis-position the head",
               file=sys.stderr)

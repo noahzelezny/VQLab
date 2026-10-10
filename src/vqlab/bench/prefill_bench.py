@@ -39,8 +39,7 @@ import time
 
 import mlx.core as mx
 
-from vqlab import _layout  # noqa: E402,F401  one module object per name
-import runtime_load
+from vqlab.core import runtime_load
 
 
 ARM_ENV = {"device": "1", "threadgroup": "0", "auto": "auto"}
@@ -74,7 +73,7 @@ def main():
     mt = cfg.get("model_type") or cfg.get("text_config", {}).get("model_type")
     fam = {"qwen4_exp": "qwen4_exp", "glm5_next": "glm5_next"}.get(mt, mt)
 
-    import vq_switch as vq
+    from vqlab.runtime import vq_switch as vq
     geos = sorted({(v.get("dim"), v.get("k"))
                    for v in (cfg.get("vq_modules") or {}).values()
                    if v.get("dim") and v.get("k")})
@@ -88,7 +87,7 @@ def main():
 
     if a._child:
         import os
-        import vq_switch as vq
+        from vqlab.runtime import vq_switch as vq
         # PROVE THE ARM CHANGED. Twice today a tool reported success while
         # doing nothing (ple_stream's instance patch; this bench's first
         # version patching a REPORTING predicate). The device arm builds

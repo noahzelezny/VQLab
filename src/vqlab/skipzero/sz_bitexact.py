@@ -44,9 +44,9 @@ import numpy as np
 
 HERE = pathlib.Path(__file__).resolve().parent
 SRC = HERE.parents[1]
-from vqlab import config  # noqa: E402
-from vqlab.util.hashing import sha256_bytes  # noqa: E402
-from vqlab.util.log import make_log  # noqa: E402
+from vqlab import config
+from vqlab.util.hashing import sha256_bytes
+from vqlab.util.log import make_log
 
 SEED = 1234
 # The last runtime/vq_switch.py without the native SZ switch, shipped as package data

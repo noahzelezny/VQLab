@@ -28,7 +28,7 @@ import subprocess
 import sys
 
 from vqlab.core.artifact import sizes
-from vqlab.util.hashing import git_blob_sha1, sha256_file  # noqa: E402
+from vqlab.util.hashing import git_blob_sha1, sha256_file
 
 GIB = 2 ** 30
 JUNK = (".DS_Store",)

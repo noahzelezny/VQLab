@@ -12,11 +12,11 @@ import pathlib
 
 import mlx.core as mx
 
-from vqlab.arch_resolve import ARRAYISH as _ARCH_ARRAYISH
-from vqlab.arch_resolve import COERCE as _ARCH_COERCE
-from vqlab.arch_resolve import PATHWALK as _ARCH_PATHWALK
-from vqlab.arch_resolve import PRELUDE as _ARCH_PRELUDE
-from vqlab.arch_resolve import VLM_SANITIZE as _ARCH_VLM_SANITIZE
+from vqlab.runtime.arch_resolve import ARRAYISH as _ARCH_ARRAYISH
+from vqlab.runtime.arch_resolve import COERCE as _ARCH_COERCE
+from vqlab.runtime.arch_resolve import PATHWALK as _ARCH_PATHWALK
+from vqlab.runtime.arch_resolve import PRELUDE as _ARCH_PRELUDE
+from vqlab.runtime.arch_resolve import VLM_SANITIZE as _ARCH_VLM_SANITIZE
 
 ap = argparse.ArgumentParser()
 ap.add_argument("--artifact", required=True)
@@ -90,7 +90,7 @@ for m in sz_mods:
     if m not in prev:
         raise SystemExit(f"{m}: skipzero module has no vq_modules geometry")
     vq_modules[m] = dict(prev[m])
-from vqlab.core.artifact import Artifact  # noqa: E402
+from vqlab.core.artifact import Artifact
 _art = Artifact.open(ART)
 for sh, mods in sorted(by_shard.items()):
     data = mx.load(str(ART / sh))
@@ -148,9 +148,9 @@ for _f in (ART / "model.py", ART / "config.json"):
                          "through it into another artifact")
 json.dump(cfg, open(ART / "config.json", "w"), indent=1)
 
-from vqlab import _layout  # noqa: E402
+from vqlab import _layout
 runtime = _layout.runtime_file("vq_switch.py").read_text()
-import vqlab.runtime_profile as _ba
+from vqlab.runtime import runtime_profile as _ba
 _shipped = (ART / "model.py").read_text() if (ART / "model.py").exists() else None
 runtime, _report = _ba.resolve_runtime(
     _shipped, runtime, profile=args.runtime,

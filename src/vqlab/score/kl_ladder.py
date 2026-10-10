@@ -29,7 +29,7 @@ import subprocess
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-from vqlab import _layout  # noqa: E402
+from vqlab import _layout
 
 
 def _kv(pairs, what):

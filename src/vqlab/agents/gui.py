@@ -45,9 +45,8 @@ import urllib.parse
 import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-from vqlab import _layout  # noqa: E402,F401  one module object per name
 
-from vqlab import config  # noqa: E402
+from vqlab import config
 STATIC = pathlib.Path(__file__).resolve().parent / "gui_static"
 
 
@@ -91,7 +90,7 @@ def api_provenance(q):
     known = {e["path"] for e in _jsonl(config.registry_dir() / "artifacts.jsonl")}
     if path not in known:
         return {"error": "not a registered artifact"}
-    import provenance
+    from vqlab.records import provenance
     try:
         rec = provenance.load(path)
     except FileNotFoundError:
@@ -105,7 +104,7 @@ def api_provenance(q):
 
 
 def api_fits(q):
-    import fitstore
+    from vqlab.core import fitstore
     roots = fitstore.roots()
     recs = {}
     for r in roots:
@@ -170,7 +169,7 @@ def api_runs(q):
         ms = importlib.import_module("vqlab.agents.mcp_server")
         gpu = ms.t_gpu_state()
         mcp = ms.t_list_runs(40).get("runs", [])
-    except Exception as e:                       # noqa: BLE001
+    except Exception as e:
         gpu = {"error": f"{type(e).__name__}: {e}"}
     return {"runs": list(reversed(runs)), "mcp": mcp, "gpu": gpu}
 
@@ -316,7 +315,7 @@ class Handler(BaseHTTPRequestHandler):
             body = json.loads(self.rfile.read(n) or b"{}")
             data = fn(body if isinstance(body, dict) else {})
             code = 200 if data.get("ok", True) else 400
-        except Exception as e:                   # noqa: BLE001
+        except Exception as e:
             data, code = {"ok": False, "error": f"{type(e).__name__}: {e}"}, 500
         self._send(code, json.dumps(data, default=str).encode(), "application/json")
 
@@ -337,7 +336,7 @@ class Handler(BaseHTTPRequestHandler):
         try:
             data = fn(urllib.parse.parse_qs(u.query))
             code = 200
-        except Exception as e:                   # noqa: BLE001
+        except Exception as e:
             data, code = {"error": f"{type(e).__name__}: {e}"}, 500
         self._send(code, json.dumps(data, default=str).encode(), "application/json")
 

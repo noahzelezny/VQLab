@@ -146,7 +146,7 @@ if args.pack_unaligned and not args.pack:
     raise SystemExit("--pack-unaligned needs --pack")
 # Disk preflight: every base shard not yet written is rewritten; codes for
 # K > 256 are written unpacked (uint16, ~2x) unless --pack.
-from vqlab import config as _cfg  # noqa: E402
+from vqlab import config as _cfg
 _cfg.require_free(args.out, int(sum(
     os.path.getsize(f) for f in glob.glob(os.path.join(args.base, "*.safetensors"))
     if not os.path.exists(os.path.join(args.out, os.path.basename(f))))
@@ -281,7 +281,7 @@ def is_vq_target(name):
                                   and q.get("mode") == "mxfp4")
 
 
-from vqlab.fit.kmeans import kmeans, kmeanspp_init_mx as kmeanspp_init  # noqa: E402,F401
+from vqlab.fit.kmeans import kmeans, kmeanspp_init_mx as kmeanspp_init  # noqa: F401
 
 
 _staged = {}
@@ -611,14 +611,14 @@ for m in targets:
 new_cfg["model_file"] = "model.py"
 new_cfg["vq_modules"] = vq_modules
 
-from vqlab.core.artifact import write_index  # noqa: E402
+from vqlab.core.artifact import write_index
 write_index(OUT, out_map)          # total_size = tensor bytes of the shards written
 tsz = sum(shard_sizes.values())    # on-disk bytes, for the closing summary line
 json.dump(new_cfg, open(OUT / "config.json", "w"), indent=1)
 
 # ---- model.py: vq_switch runtime + loader shim, one self-contained file ---
 runtime = _layout.runtime_file("vq_switch.py").read_text()
-from vqlab.arch_resolve import PRELUDE as _ARCH_PRELUDE
+from vqlab.runtime.arch_resolve import PRELUDE as _ARCH_PRELUDE
 shim = '''
 
 # ---------------------------------------------------------------------------

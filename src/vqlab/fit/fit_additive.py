@@ -40,7 +40,7 @@ import numpy as np
 
 
 # The k-means steps live in fit/kmeans.py (one home); old names kept.
-from vqlab.fit.kmeans import (  # noqa: E402,F401
+from vqlab.fit.kmeans import (  # noqa: F401
     assign as _assign,
     assign_mx_np as _assign_mx,
     kmeanspp_init as _kmeanspp,

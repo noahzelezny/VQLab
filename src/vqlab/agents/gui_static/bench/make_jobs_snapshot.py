@@ -14,7 +14,7 @@ import re
 import sys
 
 HERE = pathlib.Path(__file__).resolve().parent
-from vqlab.agents import gui  # noqa: E402
+from vqlab.agents import gui
 
 HEAD = ('<!doctype html><html><head><meta charset="utf-8">'
         '<meta name="viewport" content="width=device-width,initial-scale=1">')
@@ -25,7 +25,7 @@ def main():
     ap.add_argument("--n", type=int, default=40)
     n = ap.parse_args().n
     runs = gui.queues_snapshot(n)
-    scrub = lambda t: re.sub(r"/(?:Users|Volumes|private|home)/[^:)]*/([^/:)\s]+)", r"\1", t)  # noqa: E731
+    scrub = lambda t: re.sub(r"/(?:Users|Volumes|private|home)/[^:)]*/([^/:)\s]+)", r"\1", t)
     for r in runs:
         r.pop("host", None)
         if r.get("source"):
@@ -41,7 +41,7 @@ def main():
         g = importlib.import_module("vqlab.agents.mcp_server").t_gpu_state()
         h = g.get("lease_holder")
         gpu = {"held": bool(h), "by": (h.get("holder") or h.get("cmd") or "unknown") if h else None}
-    except Exception:  # noqa: BLE001
+    except Exception:
         pass
     snap = {"snapshot": datetime.datetime.now().isoformat(timespec="seconds"), "gpu": gpu, "queues": runs}
     (HERE / "jobs.json").write_text(json.dumps(snap, indent=1) + "\n")

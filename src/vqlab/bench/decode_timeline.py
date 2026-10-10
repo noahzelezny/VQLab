@@ -71,10 +71,9 @@ import time
 import mlx.core as mx
 import mlx.nn as nn
 
-from vqlab import _layout  # noqa: E402,F401  one module object per name
-from vqlab import runtime_load  # noqa: E402
-from vqlab.bench.power import gpu_watts  # noqa: E402,F401  (old name kept)
-from vqlab.bench.timeline_common import layer_kind as _kind, trunk as _trunk  # noqa: E402
+from vqlab.core import runtime_load
+from vqlab.bench.power import gpu_watts
+from vqlab.bench.timeline_common import layer_kind as _kind, trunk as _trunk
 
 
 class _ZeroMLP(nn.Module):

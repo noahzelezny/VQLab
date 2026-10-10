@@ -156,7 +156,7 @@ def _maybe_install_glm5_shim(spec) -> bool:
     """
     if spec.name not in _GLM5_FAMILIES:
         return False
-    from vqlab import glm5_shim
+    from vqlab.runtime import glm5_shim
 
     installed = glm5_shim.install()
     if installed:

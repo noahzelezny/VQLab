@@ -38,7 +38,7 @@ import pathlib
 import shutil
 import subprocess
 import sys
-from vqlab.util.hashing import sha256_file  # noqa: E402
+from vqlab.util.hashing import sha256_file
 
 SCHEMA = "vqlab.pin/1"
 MARKER = "vqlab_pin.json"

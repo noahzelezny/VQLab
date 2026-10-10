@@ -25,7 +25,7 @@ import pathlib
 import re
 import statistics
 import time
-from vqlab.util.clock import slug  # noqa: E402
+from vqlab.util.clock import slug
 
 _FIT = re.compile(r"^\[(\d+)/(\d+)\]\s+\S+\s+\((\d+(?:\.\d+)?)s\)\s*$", re.M)
 _KL_CELL = re.compile(r"^[ \t]+KL[ \t]", re.M)

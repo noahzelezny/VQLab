@@ -52,11 +52,11 @@ from datetime import date, datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from vqlab import config  # noqa: E402
-from vqlab import commands as _commands  # noqa: E402
-from vqlab.agents import queue_eta as _queue_eta  # noqa: E402
-from vqlab.agents import reserve as _resv  # noqa: E402
-from vqlab.util.fs import dir_bytes  # noqa: E402
+from vqlab import config
+from vqlab import commands as _commands
+from vqlab.agents import queue_eta as _queue_eta
+from vqlab.agents import reserve as _resv
+from vqlab.util.fs import dir_bytes
 
 PROTOCOL_VERSION = "2024-11-05"
 SERVER_NAME = "vqlab"
@@ -120,7 +120,7 @@ def lab_state_path() -> Path:
 def _lab_state() -> Dict[str, Any]:
     try:
         return json.loads(lab_state_path().read_text())
-    except Exception:  # noqa: BLE001 — no record ⇒ no rule in force
+    except Exception:  # no record ⇒ no rule in force
         return {}
 
 
@@ -194,7 +194,7 @@ def _exo_instances() -> Optional[List[str]]:
     try:
         with urllib.request.urlopen(exo_api() + "/state", timeout=3) as r:
             st = json.load(r)
-    except Exception:  # noqa: BLE001 — exo down means nothing is placed here
+    except Exception:  # exo down means nothing is placed here
         return None
     inst = st.get("instances") or {}
     return list(inst.keys()) if isinstance(inst, dict) else [str(i) for i in inst]
@@ -212,7 +212,7 @@ def _lease_holder() -> Optional[Dict[str, Any]]:
             if exc.errno in (errno.EAGAIN, errno.EACCES, errno.EWOULDBLOCK):
                 try:
                     return json.loads(Path(p).read_text() or "{}")
-                except Exception:  # noqa: BLE001
+                except Exception:
                     return {"holder": "unknown"}
             raise
         fcntl.flock(fd, fcntl.LOCK_UN)
@@ -224,7 +224,7 @@ def _lease_holder() -> Optional[Dict[str, Any]]:
 def _read_meta(run_dir: Path) -> Dict[str, Any]:
     try:
         return json.loads((run_dir / "meta.json").read_text())
-    except Exception:  # noqa: BLE001
+    except Exception:
         return {}
 
 
@@ -282,7 +282,7 @@ def t_where_is(name: str, kind: str = "any", max_depth: int = 3) -> Dict[str, An
                              "teacher": c["teacher"], "corpus": c.get("corpus"),
                              "tokens": c.get("tokens"), "full_vocab": c.get("full_vocab"),
                              "exists": Path(c["path"]).is_dir()})
-    except Exception:  # noqa: BLE001  the registry is a bonus, never a failure
+    except Exception:  # the registry is a bonus, never a failure
         pass
     if not hits:
         return {"found": False, "status": "NOT_FOUND", "name": name,
@@ -503,7 +503,7 @@ def t_queue_status(name: Optional[str] = None, n: int = 5) -> Dict[str, Any]:
         live = st in ("running", "created")
         try:
             eta = _queue_eta.queue_eta(q, _queues_dir())
-        except Exception as e:  # noqa: BLE001 -- an ETA must never hide the state
+        except Exception as e:  # an ETA must never hide the state
             eta = {"steps": [{"eta_s": None, "basis": f"eta failed: {e}"}] * len(s["steps"]),
                    "eta_s": None, "finish": None}
         out.append({"queue": str(q), "status": st, "terminal": st in (
@@ -549,7 +549,7 @@ def _box_state(name: str, b: Dict[str, Any]) -> Dict[str, Any]:
                            capture_output=True, text=True, timeout=30)
         return json.loads(r.stdout.strip().splitlines()[-1]) if r.returncode == 0 else \
             {"error": (r.stderr or r.stdout).strip()[-300:]}
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:
         return {"error": str(e)[:300]}
 
 
@@ -560,7 +560,7 @@ def t_gpu_state(boxes: bool = True) -> Dict[str, Any]:
     try:   # every box's reservation (`vqlab reserve`), from the shared file
         out["reservations"] = [dict(r, text=_resv.describe(r)) for r in _resv.active()]
         out["reservations_file"] = str(_resv.shared_path())
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:
         out["reservations"] = {"error": str(e)[:300]}
     if boxes and config.boxes():
         out["boxes"] = {n: _box_state(n, b) for n, b in config.boxes().items()}
@@ -759,10 +759,10 @@ def _schema(props: Dict[str, Any], required: List[str]) -> Dict[str, Any]:
     return {"type": "object", "properties": props, "required": required}
 
 
-S = lambda d="": {"type": "string", "description": d}  # noqa: E731
-I = lambda d="": {"type": "integer", "description": d}  # noqa: E731
-B = lambda d="": {"type": "boolean", "description": d}  # noqa: E731
-L = lambda d="": {"type": "array", "items": {"type": "string"}, "description": d}  # noqa: E731
+S = lambda d="": {"type": "string", "description": d}
+I = lambda d="": {"type": "integer", "description": d}
+B = lambda d="": {"type": "boolean", "description": d}
+L = lambda d="": {"type": "array", "items": {"type": "string"}, "description": d}
 
 TOOLS: Dict[str, Dict[str, Any]] = {
     "where_is": {
@@ -901,7 +901,7 @@ def call_tool(name: str, arguments: Optional[Dict[str, Any]]) -> Dict[str, Any]:
     except TypeError as exc:  # bad/missing arguments
         return {"isError": True, "content": [{"type": "text", "text": json.dumps(
             {"error": "INVALID_ARG", "message": str(exc), "schema": t["schema"]})}]}
-    except Exception as exc:  # noqa: BLE001 — surface, never crash the server
+    except Exception as exc:  # surface, never crash the server
         return {"isError": True, "content": [{"type": "text", "text": json.dumps(
             {"error": "INTERNAL", "message": f"{type(exc).__name__}: {exc}"})}]}
 
@@ -953,7 +953,7 @@ def serve(inp=None, out=None) -> int:
         else:
             try:
                 resp = handle(msg)
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 resp = {"jsonrpc": "2.0", "id": msg.get("id"),
                         "error": {"code": -32603, "message": f"{type(exc).__name__}: {exc}"}}
         if resp is not None:
@@ -1041,7 +1041,7 @@ def supervise(run_dir: Path) -> int:
                     try:
                         proc.terminate()
                         proc.wait(30)
-                    except Exception:  # noqa: BLE001
+                    except Exception:
                         pass
                     rc = -15
                     break

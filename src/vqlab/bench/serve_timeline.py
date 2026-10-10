@@ -47,7 +47,7 @@ import pathlib
 import statistics
 import sys
 
-from vqlab.bench.speed_pair_knurlogic import _post, _prompt  # noqa: E402
+from vqlab.bench.speed_pair_knurlogic import _post, _prompt
 
 TTFT_SIDE = ("http_build", "queue", "tokenize", "admit_memory", "cache_fetch",
              "admit_other", "prefill_waiting", "prefill_gap", "prefill_forward",

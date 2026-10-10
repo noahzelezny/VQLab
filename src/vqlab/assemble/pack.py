@@ -118,18 +118,18 @@ def _packable(art):
     return out
 
 
-from vqlab.core.artifact import Artifact as _Artifact  # noqa: E402
+from vqlab.core.artifact import Artifact as _Artifact
 if not _packable(_Artifact.open(SRC)):
     raise SystemExit(f"REFUSED: nothing in {SRC} to pack (every VQ module is already packed, "
                      "byte-aligned (K256/K65536), or NSUB-unaligned without --pack-unaligned); "
                      "nothing written")
-from vqlab import config as _cfg  # noqa: E402
+from vqlab import config as _cfg
 _cfg.require_free(OUT, sum(p.stat().st_size for p in SRC.glob("*.safetensors")
                            if not (OUT / p.name).exists()), "pack")
 OUT.mkdir(parents=True, exist_ok=True)
 
 idx_path = SRC / "model.safetensors.index.json"
-from vqlab.core.artifact import Artifact  # noqa: E402
+from vqlab.core.artifact import Artifact
 _art = Artifact.open(SRC)
 weight_map = _art.index
 shards = _art.shards
@@ -215,7 +215,7 @@ for si, sh in enumerate(shards, 1):
 # found with sufficient memory" — and any downloader would be misled the same
 # way. Recomputed below from the packed shards' own headers.
 _idx = json.load(open(idx_path))
-from vqlab.core.artifact import tensor_bytes, write_index  # noqa: E402
+from vqlab.core.artifact import tensor_bytes, write_index
 _total = tensor_bytes(OUT, _idx["weight_map"].values())
 write_index(OUT, _idx["weight_map"], total_size=_total, metadata=_idx.get("metadata"))
 print(f"index total_size recomputed from packed shards: {_total} "
@@ -262,7 +262,7 @@ for mod, meta in vq_meta.items():
 cfg["vq_modules"] = merged
 json.dump(cfg, open(OUT / "config.json", "w"), indent=1)
 
-from vqlab._layout import find as _find  # noqa: E402
+from vqlab._layout import find as _find
 subprocess.run([sys.executable, str(_find("add_model_file.py")),
                 "--artifact", str(OUT), "--group", str(args.group)], check=True)
 

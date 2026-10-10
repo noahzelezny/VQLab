@@ -21,7 +21,7 @@ import shutil
 import sys
 
 from vqlab import config as _config
-from vqlab.util.hashing import sha256_file  # noqa: E402
+from vqlab.util.hashing import sha256_file
 
 
 # Disk: writers refuse below their own margins; say so before they do

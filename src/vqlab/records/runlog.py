@@ -20,7 +20,7 @@ import os
 import pathlib
 import time
 import uuid
-from vqlab.util.clock import now_iso  # noqa: E402
+from vqlab.util.clock import now_iso
 
 _T0 = {}
 
@@ -54,7 +54,7 @@ def start(cmd, argv):
     os.environ["VQLAB_RUN_ID"] = run_id          # children + build records
     _T0[run_id] = time.time()
     try:
-        import provenance
+        from vqlab.records import provenance
         rec = {"event": "start", "run_id": run_id, "parent_run_id": parent,
                "time": _now(), "cmd": cmd,
                "argv": list(argv), "cwd": os.getcwd(), "pid": os.getpid(),

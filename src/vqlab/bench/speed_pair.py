@@ -31,7 +31,7 @@ import statistics
 import subprocess
 import sys
 
-from vqlab import _layout  # noqa: E402
+from vqlab import _layout
 
 
 def child(path, prompt_tokens, gen_tokens, corpus):

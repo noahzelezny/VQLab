@@ -47,12 +47,10 @@ It does NOT mean the artifact is correct or that it can serve.
 from __future__ import annotations
 
 import argparse
-import pathlib
 import subprocess
 import sys
 
-HERE = pathlib.Path(__file__).parent
-from vqlab._layout import find as _find  # noqa: E402
+from vqlab._layout import find as _find
 # (gate name, script, how it takes the artifact). vision-smoke predates this
 # composite and takes a POSITIONAL artifact; the others take --artifact.
 # Encoded per-gate rather than normalised, so adding a gate never silently

@@ -31,8 +31,7 @@ import pathlib
 import subprocess
 import sys
 
-HERE = pathlib.Path(__file__).resolve().parent
-from vqlab._layout import find as _find  # noqa: E402
+from vqlab._layout import find as _find
 
 
 def _digest(p: pathlib.Path) -> str:

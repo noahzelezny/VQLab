@@ -37,7 +37,7 @@ import sys
 
 from vqlab import config as C
 from vqlab.records import provenance
-from vqlab.util.fs import dir_bytes  # noqa: E402
+from vqlab.util.fs import dir_bytes
 
 GIB = 2 ** 30
 # tool name in a build record -> the input role that names what it packed
@@ -114,7 +114,7 @@ def reclaimable(roots, full=False):
     kept [{path, packed, reason}]."""
     roots = [pathlib.Path(r) for r in roots]
     rroots = [os.path.realpath(r) for r in roots]
-    under = lambda p: any(p == r or p.startswith(r + os.sep) for r in rroots)  # noqa: E731
+    under = lambda p: any(p == r or p.startswith(r + os.sep) for r in rroots)
     cands, kept, claimed = [], [], set()
     for art in _artifacts(roots):
         try:
