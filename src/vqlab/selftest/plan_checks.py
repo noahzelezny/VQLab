@@ -44,7 +44,10 @@ def check_paper_tables(ctx):
     from vqlab import _layout as L
     from vqlab import config as _cfg
     paper = L.SRC.parent / "research" / "paper"
-    if not (_cfg.scratch() / "paper_rev").exists():
+    if not paper.is_dir():
+        skip("paper v5 tables regenerate",
+             "an installed package carries no research/paper; checked in the checkout")
+    elif not (_cfg.scratch() / "paper_rev").exists():
         skip("paper v5 tables regenerate", "per-position arrays not on this machine")
     else:
         p = subprocess.run([PY, "make_results.py"], cwd=paper, capture_output=True,
