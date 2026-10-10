@@ -29,8 +29,7 @@ import struct
 import subprocess
 import sys
 
-HERE = pathlib.Path(__file__).resolve().parent
-from vqlab._layout import find as _find  # noqa: E402
+from vqlab._layout import find as _find
 
 ap = argparse.ArgumentParser()
 ap.add_argument("--artifact", required=True)
@@ -637,7 +636,7 @@ elif _n_tower and args.no_smoke:
 _prov_note = ""
 try:
     from vqlab import _layout as _pl  # noqa: F401
-    import provenance as _prov
+    from vqlab.records import provenance as _prov
     try:
         _rec = _prov.load(A)
     except FileNotFoundError:
@@ -661,7 +660,7 @@ except Exception as _e:  # the gate must report, not crash
 # spelling on a card is fixed before release, not in a later revision.
 # `vqlab spelling --fix <artifact>/README.md` rewrites it.
 try:
-    import us_spelling as _sp
+    from vqlab.gate import us_spelling as _sp
     _card = A / "README.md"
     if _card.exists():
         _hits = _sp.scan(_card.read_text())

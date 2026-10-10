@@ -10,13 +10,12 @@ Run at multiple shapes, unpacked and packed.
 """
 import sys
 import mlx.core as mx
-from vqlab import _layout  # noqa: E402,F401  one module object per name
-import vq_switch, vq_pack
+from vqlab.runtime import vq_switch, vq_pack
 
 mx.random.seed(0)
 
 
-from vqlab.gate.kernel_reference import reference  # noqa: E402
+from vqlab.gate.kernel_reference import reference
 
 
 def make(E, OUT, IN, K, G=64, D=4):

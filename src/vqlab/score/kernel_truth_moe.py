@@ -24,7 +24,6 @@ import sys
 import numpy as np
 import mlx.core as mx
 
-from vqlab import _layout  # noqa: F401  one module object per name
 from vqlab.runtime import vq_pack
 from vqlab.runtime import vq_switch as VS
 
