@@ -52,6 +52,7 @@ SHAPES = [
 ]
 
 
+@pytest.mark.gpu
 @pytest.mark.parametrize("N", [1, 8, 32])
 @pytest.mark.parametrize("shape", SHAPES)
 def test_d2_walk_bit_exact(monkeypatch, shape, N):
@@ -62,12 +63,14 @@ def test_d2_walk_bit_exact(monkeypatch, shape, N):
                           _run(monkeypatch, True, args, BITS))
 
 
+@pytest.mark.gpu
 def test_d2_walk_bit_exact_large_skewed(monkeypatch):
     args = _args(8, 512, 2048, 1024, 10, 4096, skew=True, seed=3)
     assert np.array_equal(_run(monkeypatch, False, args, 10),
                           _run(monkeypatch, True, args, 10))
 
 
+@pytest.mark.gpu
 def test_d2_walk_dispatches(monkeypatch):
     monkeypatch.setattr(V, "_D2_WALK", True)
     V._fused(*_args(2, 256, 2048, 1024, 10, 1), pack_bits=10)

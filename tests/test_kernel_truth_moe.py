@@ -1,10 +1,12 @@
 """kernel-truth-moe: the float64 reference reconstructs a packed expert
 exactly, and both MoE paths land close to it on a tiny module."""
 import numpy as np
+import pytest
 
 from vqlab.score import kernel_truth_moe as KT
 
 
+@pytest.mark.gpu
 def test_reference_and_paths():
     mod = KT.synthetic(16, 4, IN=256, OUT=64, E=4)
     W = KT._weights(mod, [1])[1]

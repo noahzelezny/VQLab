@@ -45,17 +45,30 @@ GIB = 2 ** 30
 TODO = "TODO(card)"
 SLOTS = ("intro", "changelog", "notes", "hardware", "speed", "verification", "limitations")
 REQUIRED = ("intro", "changelog", "limitations")      # TODO when absent
-SPONSOR = """## Support this work
+def sponsor_block(card_cfg: dict | None = None) -> str:
+    """The "Support this work" section from the [card] config table
+    (vqlab.config.card()); "" when none of its keys is set."""
+    if card_cfg is None:
+        from vqlab import config
+        card_cfg = config.card()
+    url, contact = card_cfg.get("sponsor_url"), card_cfg.get("contact")
+    blurb, contract = card_cfg.get("blurb"), card_cfg.get("contract")
+    if not (url or contact or blurb or contract):
+        return ""
+    L = ["## Support this work", ""]
+    if blurb:
+        L += [blurb.strip(), ""]
+    if url:
+        L.append(f"- **Sponsor:** [{re.sub(r'^https?://', '', url)}]({url})")
+    if contract or contact:
+        line = "- **Contract work:** " + (contract.strip() if contract else "")
+        if contact:
+            href = contact if "://" in contact else f"mailto:{contact}"
+            line += (" " if contract else "") + f"Contact: [{contact}]({href})"
+        L.append(line)
+    return "\n".join(L).rstrip()
 
-VQLab and these artifacts are built and released independently — the fits,
-the measurement harness and the published rungs are one person's compute and
-time. If they are useful to you:
 
-- **Sponsor:** [github.com/sponsors/noahzelezny](https://github.com/sponsors/noahzelezny)
-- **Contract work:** available for quantization and on-device inference work
-  on Apple silicon — custom rungs, per-layer allocation for your model, or
-  getting a checkpoint to run well on a Mac.
-  Contact: [hello@thedrainflorist.com](mailto:hello@thedrainflorist.com)"""
 PAPER = """## Paper
 
 The method, the full model ladder, the negative results, and the measurement
@@ -351,7 +364,8 @@ def build(a) -> str:
                                      "not measured (task benchmarks, absolute speed)."), ""]
     for k, v in loose.items():
         L += [f"## {k}", "", v, ""]
-    L += [PAPER, "", SPONSOR, "", "## Provenance", ""]
+    sp = sponsor_block()
+    L += [PAPER, ""] + ([sp, ""] if sp else []) + ["## Provenance", ""]
     if base:
         L.append(f"Base model: [{base}](https://huggingface.co/{base})"
                  + (f" — **{lic.upper() if lic == 'mit' else lic}**." if lic else ".")

@@ -66,6 +66,7 @@ def test_d2_tg_fits_matches_the_kernels_allocation():
 OVERSIZED = (2, 128, 16384, 4096, 64)
 
 
+@pytest.mark.gpu
 @pytest.mark.parametrize("packed", [0, 12])   # K=4096 needs 12-bit codes
 def test_oversized_d2_does_not_crash_the_kernel_loader(packed):
     E, OUT, IN, K, G = OVERSIZED
@@ -77,6 +78,7 @@ def test_oversized_d2_does_not_crash_the_kernel_loader(packed):
     assert bool(mx.all(mx.isfinite(y)))
 
 
+@pytest.mark.gpu
 @pytest.mark.parametrize("packed", [0, 12])
 def test_oversized_d2_fallback_agrees_with_decode(packed):
     # The fallback IS the decode path, so this pins that _fused routes there
@@ -88,6 +90,7 @@ def test_oversized_d2_fallback_agrees_with_decode(packed):
     assert np.array_equal(got, want)
 
 
+@pytest.mark.gpu
 @pytest.mark.parametrize("packed", [0, 11])
 def test_under_cap_d2_still_takes_the_fused_kernel(packed):
     # Guard against an over-broad fits check quietly demoting every d2 call:

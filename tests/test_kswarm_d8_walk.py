@@ -48,6 +48,7 @@ SHAPES = [
 ]
 
 
+@pytest.mark.gpu
 @pytest.mark.parametrize("N", [1, 8, 21, 64])
 @pytest.mark.parametrize("shape", SHAPES)
 def test_d8_walk_bit_exact(monkeypatch, shape, N):
@@ -57,12 +58,14 @@ def test_d8_walk_bit_exact(monkeypatch, shape, N):
                           _run(monkeypatch, True, args, BITS, simd))
 
 
+@pytest.mark.gpu
 def test_d8_walk_bit_exact_large_skewed(monkeypatch):
     args = _args(8, 1024, 4096, 16384, 14, 2048, skew=True, seed=3)
     assert np.array_equal(_run(monkeypatch, False, args, 14, False),
                           _run(monkeypatch, True, args, 14, False))
 
 
+@pytest.mark.gpu
 def test_d8_walk_matches_reference(monkeypatch):
     # independent anchor: unpacked codes decoded in numpy, fp32 matmul
     E, OUT, IN, K, BITS, N = 2, 64, 1024, 16384, 14, 3
@@ -78,6 +81,7 @@ def test_d8_walk_matches_reference(monkeypatch):
         assert np.allclose(y[t], ref, rtol=2e-2, atol=2e-2)
 
 
+@pytest.mark.gpu
 def test_d8_walk_dispatches(monkeypatch):
     monkeypatch.setattr(V, "_D8_WALK", True)
     V._fused(*_args(2, 256, 1024, 16384, 14, 1), pack_bits=14)
@@ -85,6 +89,7 @@ def test_d8_walk_dispatches(monkeypatch):
     assert "vq_fused_packed14_d8_walk" in names
 
 
+@pytest.mark.gpu
 def test_simd_arm_untouched(monkeypatch):
     # N<=simd max at NGRP>=32 must still take the devx_ss kernel with the flag on
     monkeypatch.setattr(V, "_D8_WALK", True)

@@ -88,6 +88,7 @@ GEOMS = [("packed11", 4, 2048, True, 512, 96), ("packed8", 4, 256, True, 512, 96
 @pytest.mark.parametrize("name,D,K,packed,IN,OUT", GEOMS)
 @pytest.mark.parametrize("T,top", [(1, 8), (1, 10), (2, 10), (3, 10), (52, 10),
                                    (100, 8), (300, 10), (700, 8)])
+@pytest.mark.gpu
 def test_sz_byte_equal_to_expanded(name, D, K, packed, IN, OUT, T, top):
     # N = 8 / 10 / 20 (d8 simd), 30 (d8 walk), 520 / 800 / 3000 (gemmseg2 at
     # the default cutoff 512, the walk at legacy 4096), 5600 (gemmseg2 both)
@@ -105,6 +106,7 @@ def test_sz_byte_equal_to_expanded(name, D, K, packed, IN, OUT, T, top):
     assert np.array_equal(_bits(a), _bits(b)), name
 
 
+@pytest.mark.gpu
 @pytest.mark.parametrize("dead_frac", [0.0, 0.95])
 @pytest.mark.parametrize("T,top", [(1, 10), (3, 10), (60, 10), (450, 10)])
 def test_sz_d8_extremes(dead_frac, T, top):
@@ -127,6 +129,7 @@ D2_GEOMS = [(K, IN, OUT) for K in (256, 512, 1024, 2048)
             for IN, OUT in ((2048, 97), (512, 129))]
 
 
+@pytest.mark.gpu
 @pytest.mark.parametrize("K,IN,OUT", D2_GEOMS)
 @pytest.mark.parametrize("dead_frac", [0.0, 0.4, 0.95])
 @pytest.mark.parametrize("T,top", [(1, 1), (1, 8), (2, 10), (3, 10), (80, 10), (700, 8)])

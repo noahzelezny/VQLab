@@ -163,6 +163,17 @@ def test_read_doc_is_confined():
         m.t_read_doc("src/vqlab/../../AGENTS.md/CONTEXT.md")
 
 
+def test_read_doc_without_checkout_points_online(tmp_path, monkeypatch):
+    # A wheel install: REPO is site-packages' parent, with no docs/ beside it.
+    monkeypatch.setattr(m, "REPO", tmp_path)
+    with pytest.raises(m.ToolError) as e:
+        m.t_read_doc("docs/FINDINGS.md")
+    assert e.value.code == "NO_CHECKOUT"
+    assert e.value.extra["url"] == m.DOCS_URL + "/docs/FINDINGS.md"
+    # stage contracts ship in the package and still resolve
+    assert m.t_read_doc("src/vqlab/fit/CONTEXT.md", 1, 2)["end"] == 2
+
+
 def test_call_tool_never_raises():
     r = m.call_tool("where_is", {"bogus": 1})
     assert r["isError"] and _text(r)["error"] == "INVALID_ARG"

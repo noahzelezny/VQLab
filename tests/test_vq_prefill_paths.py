@@ -63,6 +63,7 @@ def setup():
     return mod, x, idx
 
 
+@pytest.mark.gpu
 def test_prefill_reached(setup):
     mod, x, idx = setup
     # the test must exercise _prefill, not the fused small-N kernel
@@ -76,6 +77,7 @@ def test_prefill_reached(setup):
         VS.VQ_FUSED_MAX_N = old
 
 
+@pytest.mark.gpu
 def test_fused_gather_bit_identical(setup):
     mod, x, idx = setup
     old = VS.VQ_FUSED_MAX_N
@@ -90,6 +92,7 @@ def test_fused_gather_bit_identical(setup):
         "fused gather changed bits — it must gather identical rows"
 
 
+@pytest.mark.gpu
 def test_fused_gather_bit_identical_across_chunks(setup):
     mod, x, idx = setup
     old = VS.VQ_FUSED_MAX_N
@@ -103,6 +106,7 @@ def test_fused_gather_bit_identical_across_chunks(setup):
         VS.VQ_FUSED_MAX_N = old
 
 
+@pytest.mark.gpu
 def test_exact_gemm_numerically_close_and_opt_in(setup):
     mod, x, idx = setup
     assert VS._EXACT_GEMM is False or \
@@ -122,6 +126,7 @@ def test_exact_gemm_numerically_close_and_opt_in(setup):
         VS.VQ_FUSED_MAX_N = old
 
 
+@pytest.mark.gpu
 def test_fused_gather_sorted_indices_path(setup):
     mod, x, idx = setup
     old = VS.VQ_FUSED_MAX_N
@@ -144,6 +149,7 @@ def test_fused_gather_sorted_indices_path(setup):
         VS.VQ_FUSED_MAX_N = old
 
 
+@pytest.mark.gpu
 def test_vector_decode_bit_identical(setup):
     """VQ_DECODE_VEC pairs stores/reads but keeps per-element fp32
     arithmetic — must be bit-identical to the scalar decode kernel."""
@@ -181,6 +187,7 @@ def _mk_packed(E=16, OUT=48, IN=128, K=64, seed=0, D=2):
 
 @pytest.mark.parametrize("D,K,IN", [(2, 64, 128), (4, 64, 256),
                                     (4, 2048, 256)])
+@pytest.mark.gpu
 def test_gemmseg_numeric_gate_d2_d4(D, K, IN):
     """d2 and d4 (incl. K=2048, the tight 28KB threadgroup budget):
     fused vs legacy within rel<1e-3 on skewed routing."""
@@ -203,6 +210,7 @@ def test_gemmseg_numeric_gate_d2_d4(D, K, IN):
     assert rel < 1e-3, f"d{D} K{K} fused diverged: rel {rel}"
 
 
+@pytest.mark.gpu
 @pytest.mark.parametrize("D,K,IN", [(2, 256, 128), (4, 256, 256)])
 def test_gemmseg_unpacked_bits0(D, K, IN):
     """BITS=0 arm: plain uint8/uint16 codes. The packed row stride
@@ -272,6 +280,7 @@ def test_gemmseg_d8_armed_by_default():
 
 @pytest.mark.parametrize("D,K,IN", [(4, 8192, 256), (2, 8192, 128),
                                     (8, 16384, 512), (8, 4096, 512)])
+@pytest.mark.gpu
 def test_gemmseg_cbdev_numeric(D, K, IN):
     """Device-codebook arm (armed explicitly): same numeric gate. K here
     is over the threadgroup cap, so this also proves the kernel LOADS —
@@ -309,6 +318,7 @@ def test_gemmseg_cbdev_numeric(D, K, IN):
 
 @pytest.mark.parametrize("D,K,IN", [(4, 8192, 256), (8, 16384, 512),
                                     (8, 16384, 640)])
+@pytest.mark.gpu
 def test_gemmseg_rtile64_numeric(D, K, IN):
     """RTILE=64 (paired token tiles) vs the shipped RTILE=32.
 
@@ -354,6 +364,7 @@ def test_gemmseg_rtile64_numeric(D, K, IN):
     assert rel < 1e-3, f"RTILE=64 d{D} K{K} IN{IN} diverged: rel {rel}"
 
 
+@pytest.mark.gpu
 def test_gemmseg_cbdev_vs_threadgroup_equivalent():
     """d4-K2048: both codebook arms are legal, and they must agree.
 
@@ -395,6 +406,7 @@ def test_gemmseg_cbdev_vs_threadgroup_equivalent():
     assert rel < 1e-3, f"cbdev/threadgroup arms disagree: rel {rel}"
 
 
+@pytest.mark.gpu
 def test_gemmseg_ragged_nsub_numeric():
     """NSUB=80 ragged tail: the EXACT Flash-2.1 geometry (d8, K16384,
     in=640, bits=14) that gemmseg_fits used to refuse.
@@ -448,6 +460,7 @@ def test_gemmseg_ragged_nsub_numeric():
     assert rel < 1e-3, f"ragged NSUB={NSUB} diverged: rel {rel}"
 
 
+@pytest.mark.gpu
 def test_gemmseg_numeric_gate():
     """Fused segmented VQ-GEMM vs legacy _prefill: max rel error < 1e-3
     on skewed routing (fp32 in-tile accumulation; NOT bit-gated — the

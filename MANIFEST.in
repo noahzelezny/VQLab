@@ -1,0 +1,4 @@
+# The /bench/ GUI mockup carries lab measurements; it stays in the repo only.
+prune src/vqlab/agents/gui_static/bench
+# The private notebook never ships.
+prune lab

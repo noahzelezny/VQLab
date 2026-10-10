@@ -89,6 +89,7 @@ def test_other_runtime_files_differ_only_in_comments(rev):
     assert _code_tokens(old) == _code_tokens(new)
 
 
+@pytest.mark.gpu
 @pytest.mark.parametrize("rev", SWITCH, ids=lambda r: r["sha256"][:12])
 def test_current_runtime_byte_equal_to_certified_revision(rev):
     old = _old(rev)

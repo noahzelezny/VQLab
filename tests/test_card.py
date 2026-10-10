@@ -70,6 +70,13 @@ def _extra(tmp_path, body):
     return p
 
 
+@pytest.fixture(autouse=True)
+def _no_real_config(tmp_path, monkeypatch):
+    """Never read the developer's own config: a card's support block comes
+    from [card] in it."""
+    monkeypatch.setenv("VQLAB_CONFIG", str(tmp_path / "absent.toml"))
+
+
 FULL = "A tiny build.\n\n## Changelog\n\n2026-10-03: first.\n\n## Limitations\n\n- Small.\n"
 
 
@@ -93,7 +100,29 @@ def test_numbers_come_from_sources(tmp_path, capsys):
     assert "license: mit" in out and "base_model: org/Tiny" in out
     assert "hf download TheDrainFlorist/Tiny-VQ-3.0bpw" in out
     assert "TODO" not in out
-    assert "## Support this work" in out
+    assert "## Support this work" not in out           # no [card] table: no block
+
+
+def test_support_block_from_config(tmp_path, monkeypatch, capsys):
+    cfg = tmp_path / "vqlab.toml"
+    cfg.write_text('[card]\nsponsor_url = "https://sponsor.example/fake"\n'
+                   'contact = "fake@example.com"\nblurb = "Fake blurb."\n')
+    monkeypatch.setenv("VQLAB_CONFIG", str(cfg))
+    art = _artifact(tmp_path)
+    j = _kl(tmp_path, art, fp=provenance.shard_fingerprint(art))
+    assert C.main(["--artifact", str(art), "--kl", str(j), "--this", "cand",
+                   "--base-model", "org/Tiny", "--extra-md", str(_extra(tmp_path, FULL))]) == 0
+    out = capsys.readouterr().out
+    assert "## Support this work" in out and "Fake blurb." in out
+    assert "(https://sponsor.example/fake)" in out
+    assert "[fake@example.com](mailto:fake@example.com)" in out
+
+
+def test_support_block_partial_and_empty():
+    assert C.sponsor_block({}) == ""
+    only = C.sponsor_block({"contact": "https://contact.example/form"})
+    assert "Contact: [https://contact.example/form](https://contact.example/form)" in only
+    assert "Sponsor" not in only
 
 
 def test_todo_refuses_unless_draft(tmp_path, capsys):

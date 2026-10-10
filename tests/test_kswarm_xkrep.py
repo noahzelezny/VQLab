@@ -53,6 +53,7 @@ def _run(mod, x, idx, on, monkeypatch):
     return np.array(y.view(mx.uint16))
 
 
+@pytest.mark.gpu
 @pytest.mark.parametrize("route", ROUTES)
 @pytest.mark.parametrize("dtype", [mx.bfloat16, mx.float16])
 @pytest.mark.parametrize("geom", GEOMS, ids=[g[0] for g in GEOMS])

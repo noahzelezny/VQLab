@@ -260,7 +260,8 @@ def _help():
     print("`vqlab fit moe`; `vqlab pack` is `vqlab build pack`) and behaves identically.")
     print("`vqlab <namespace>` lists one namespace;")
     print("`vqlab <namespace> <command> --help` shows each command's full surface.")
-    print("Read METHODOLOGY.md before publishing any number.")
+    print("Read METHODOLOGY.md before publishing any number")
+    print("(https://github.com/noahzelezny/VQLab/blob/master/METHODOLOGY.md).")
 
 
 # Build tools whose output is an ARTIFACT: after a clean exit the CLI writes

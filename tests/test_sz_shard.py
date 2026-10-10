@@ -83,6 +83,7 @@ def _xi(T, top, E, IN, seed):
     return x, idx
 
 
+@pytest.mark.gpu
 @pytest.mark.parametrize("D", [2, 4, 8])
 @pytest.mark.parametrize("leaf", ["gate_proj", "up_proj"])
 @pytest.mark.parametrize("OUT,n", [(96, 2), (96, 4), (102, 2), (64, 1)])
@@ -111,6 +112,7 @@ def test_row_split_concat_byte_equal(D, leaf, OUT, n, T, top):
     assert np.array_equal(_bits(ref), _bits(got))
 
 
+@pytest.mark.gpu
 @pytest.mark.parametrize("D", [2, 4, 8])
 @pytest.mark.parametrize("n", [2, 4])
 @pytest.mark.parametrize("T,top", [(1, 8), (3, 10), (80, 10), (600, 8)])
@@ -227,6 +229,7 @@ def _tiny_artifact(root):
     return json.loads((root / "config.json").read_text())
 
 
+@pytest.mark.gpu
 def test_shim_loads_rank_shards(tmp_path):
     utils = pytest.importorskip("mlx_lm.utils")
     cfg = _tiny_artifact(tmp_path)

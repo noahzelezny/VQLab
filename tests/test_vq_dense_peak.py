@@ -66,6 +66,7 @@ def _at(mb, m, x):
 BIG_N = 256
 
 
+@pytest.mark.gpu
 @pytest.mark.parametrize("bits", [0, 12])
 def test_default_path_is_bit_identical(bits):
     """The SHIPPED arm: forced eval, no row split. Must be exact.
@@ -87,6 +88,7 @@ def test_default_path_is_bit_identical(bits):
     assert np.array_equal(ref, got), "the forced eval changed the bits"
 
 
+@pytest.mark.gpu
 @pytest.mark.parametrize("bits", [0, 12])
 @pytest.mark.parametrize("mb", [512, 1])
 def test_single_tile_budgets_are_bit_identical(bits, mb):
@@ -98,6 +100,7 @@ def test_single_tile_budgets_are_bit_identical(bits, mb):
     assert np.array_equal(_at(0, m, x), _at(mb, m, x))
 
 
+@pytest.mark.gpu
 def test_row_tiling_is_not_bit_identical_in_general():
     """THE REFUTATION, pinned so nobody re-derives the wrong claim.
 
@@ -129,6 +132,7 @@ def test_defaults():
     assert m._DENSE_DECODE_TILE_MB == 0
 
 
+@pytest.mark.gpu
 def test_tiling_actually_tiles_and_covers_every_row():
     """A budget of one row's worth must produce OUT tiles, all rows correct.
 

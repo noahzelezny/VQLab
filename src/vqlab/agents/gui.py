@@ -21,7 +21,8 @@ already keeps -- nothing here computes a number of its own:
   Scratch    /api/scratch: top-level scratch folders with sizes, and
              /api/scratch/reclaimable: `vqlab scratch reclaimable` with its
              rm lines -- shown, never run
-  Bench      /bench/ serves gui_static/bench/ (the Library/Recipe/Jobs page)
+  Bench      /bench/ serves gui_static/bench/ (the Library/Recipe/Jobs design mockup;
+             source checkout only, excluded from the wheel)
              on the same origin, so its Jobs page reads /api/queues live
 
 Stdlib only; reads index files and small JSON, never a tensor, so it is safe
@@ -284,6 +285,10 @@ class Handler(BaseHTTPRequestHandler):
 
     def _bench(self, rel):
         root = (STATIC / "bench").resolve()
+        if not root.is_dir():   # a design mockup: in the repo, not in the wheel
+            return self._send(404, b'{"error":"/bench/ is a design mockup that ships only '
+                              b'in a source checkout of VQLab, not in the wheel"}',
+                              "application/json")
         f = (root / urllib.parse.unquote(rel)).resolve()
         ctype = BENCH_TYPES.get(f.suffix)
         if root not in f.parents or ctype is None or not f.is_file():
