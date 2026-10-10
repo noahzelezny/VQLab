@@ -12,7 +12,35 @@ Bytes Below 5 Bits*, doi:[10.5281/zenodo.22119017](https://doi.org/10.5281/zenod
 Artifacts: [TheDrainFlorist](https://huggingface.co/TheDrainFlorist) on
 Hugging Face.
 
-## Using vqlab as a library
+## Using vqlab as a library / from an MCP server
+
+`vqlab.api` is the stable surface: one module, every function keyword-only,
+returning a dataclass or a dict of JSON types. Read `src/vqlab/api.py` to see
+everything vqlab can do; every other module is internal. Long GPU jobs return
+a `RunHandle` at once (the same launcher, allowlist, GPU lease and exo
+refusal as the MCP `run` tool); cheap work runs in-process. `import
+vqlab.api` loads no mlx. `publish` is deliberately absent: it is a human's
+action.
+
+```python
+from dataclasses import asdict
+from vqlab import api
+
+api.where_is(name="397B")                        # deterministic lookup, a dict
+api.artifact_size(path=art)                      # text / +tower / +MTP, from headers
+asdict(api.gate(check="bundle", artifact=art))   # GateResult(ok, status, failures, report)
+h = api.score(kind="kl-ladder", opts={"cache": cache, "rung": [ref, art]})
+api.run_status(run_id=h.run_id)["status"]        # never blocks; poll
+api.kl_pair(per_pos_dir=d, arm="b", ref="a", corpora=["prose", "code", "lit"])
+try:
+    api.run(command="publish")
+except api.ApiError as e:                        # e.code == "NOT_ALLOWED"
+    print(e.as_dict())
+```
+
+An MCP tool is then `return api.to_json(api.X(**params))`.
+
+## Loading models through vqlab
 
 `import vqlab` has no side effects on other packages. To load deepseek_v4 or
 qwen4_exp (which stock mlx-lm lacks) or Knurlogic's edited qwen3_5 / gemma4 /

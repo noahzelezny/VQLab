@@ -16,6 +16,16 @@ Commands are grouped by stage: `vqlab <namespace> <cmd>` (`vqlab fit moe`).
 flat name still works unchanged (`vqlab fit-moe` is `vqlab fit moe`, and queue
 files may use either); `vqlab --help` shows each flat alias that differs.
 
+## The stable surface: `vqlab.api`
+
+For code (an MCP server, a notebook, another tool) the public API is ONE
+module, `src/vqlab/api.py`: keyword-only functions returning dataclasses or
+JSON dicts, never printing or exiting. GPU jobs return a `RunHandle` through
+the MCP launcher (allowlist, GPU lease, exo refusal; no `publish`); header
+reads, records, static gates and paired KL run in-process. Everything else
+under `src/vqlab/` is internal and may move. The CLI below is the same
+operations for humans and queues.
+
 ## Pipeline stages
 
 Stages run in the order listed; each stage is a CLI namespace. Every stage reads an artifact directory or a
