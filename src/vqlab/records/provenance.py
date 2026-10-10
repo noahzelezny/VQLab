@@ -326,6 +326,21 @@ def summary(art, rec) -> str:
     return "\n".join(L)
 
 
+def records(art) -> tuple:
+    """(records oldest first, recipe record or None) from the build record
+    and its history file."""
+    recs = []
+    art = pathlib.Path(art)
+    h = art / HISTORY
+    if h.exists():
+        recs += [json.loads(x) for x in h.read_text().splitlines() if x.strip()]
+    if (art / RECORD).exists():
+        recs.append(load(art))
+    recipe = next((r for r in recs if r["tool"]["name"].split()[0] in
+                   ("fit-moe", "geo-build", "mix", "build-dense-vq", "fit-dense")), None)
+    return recs, recipe
+
+
 def lineage(art, depth=0, seen=None):
     seen = seen if seen is not None else set()
     try:

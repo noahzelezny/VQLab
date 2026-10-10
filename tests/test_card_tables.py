@@ -1,7 +1,7 @@
 """card-tables renders exactly what the scorer's JSON says."""
 import json
 
-from vqlab.records import card_tables as CT
+from vqlab.ship import card_tables as CT
 
 
 def test_render(tmp_path, capsys):

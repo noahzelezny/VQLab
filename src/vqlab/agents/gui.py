@@ -244,7 +244,7 @@ def api_scratch(_q):
 def api_scratch_reclaimable(_q):
     import shlex
 
-    from vqlab.records import scratch_cmd
+    from vqlab.agents import scratch as scratch_cmd
     cands, kept = scratch_cmd.reclaimable([config.scratch()])
     return {"root": str(config.scratch()), "reclaimable": cands, "kept": kept,
             "total_bytes": sum(c["bytes"] for c in cands),

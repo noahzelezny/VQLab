@@ -58,7 +58,7 @@ def _artifact(root, total_size="right", tower=False):
 
 @pytest.mark.parametrize("ts,state", [("right", "ok"), (None, "missing"), ("double", "stale")])
 def test_index_total_size(tmp_path, ts, state):
-    from vqlab.records.size_cmd import index_total_size
+    from vqlab.core.artifact_size import index_total_size
     have, want, got = index_total_size(_artifact(tmp_path, ts))
     assert got.startswith(state)
     assert want == 64

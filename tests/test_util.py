@@ -77,7 +77,8 @@ def test_dir_bytes(tmp_path):
 
 def test_old_names_still_answer(tmp_path):
     from vqlab.agents import mcp_server, queue_eta, reserve, run_queue
-    from vqlab.records import runlog, scratch_cmd
+    from vqlab.agents import scratch as scratch_cmd
+    from vqlab.records import runlog
     from vqlab.ship import release_prep
     assert run_queue._slug("a b") == queue_eta._slug("a b") == "a_b"
     assert isinstance(reserve._now(), dt.datetime)

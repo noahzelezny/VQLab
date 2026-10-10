@@ -406,7 +406,7 @@ def test_total_size_is_tensor_bytes(fx, name):
 
 def test_size_fix_index(fx, tmp_path):
     import shutil
-    from vqlab.records import size_cmd
+    from vqlab.ship import size as size_cmd
     d = tmp_path / "stale"
     shutil.copytree(fx["vq16"], d)
     p = d / "model.safetensors.index.json"

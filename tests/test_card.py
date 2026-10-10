@@ -6,8 +6,8 @@ import struct
 import pytest
 
 from vqlab.core.artifact import sizes
-from vqlab.records import card as C
-from vqlab.records import card_tables as CT
+from vqlab.ship import card as C
+from vqlab.ship import card_tables as CT
 from vqlab.records import provenance
 
 GIB = 2 ** 30
@@ -175,7 +175,7 @@ def test_mtp_sidecar_with_unprefixed_keys_is_not_text(tmp_path):
     outside the index and named mtp-head*, it is a sidecar, not text."""
     import json
     import mlx.core as mx
-    from vqlab.records import card
+    from vqlab.ship import card
     mx.save_safetensors(str(tmp_path / "model.safetensors"), {"model.norm.weight": mx.ones((4,))})
     (tmp_path / "model.safetensors.index.json").write_text(
         json.dumps({"weight_map": {"model.norm.weight": "model.safetensors"}}))

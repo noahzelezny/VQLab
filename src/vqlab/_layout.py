@@ -51,7 +51,10 @@ RENAMED = {"vq_397b_codes": "fit_moe", "pack_artifact": "pack",
            # 2026-10-10: experiment numbers out of file names
            "e134_accept": "kernel_accept", "verify_e134_devcb": "verify_dev_codebook",
            # untangle step 10: stem matches command `build-dense`
-           "build_dense_vq": "build_dense"}
+           "build_dense_vq": "build_dense",
+           # untangle step 11: stems match commands `spelling` / `size` / `scratch`
+           "us_spelling": "spelling", "size_cmd": "size",
+           "scratch_cmd": "scratch"}
 
 # Packages RENAMED (untangle step 10, 2026-10-10): assemble/ became build/ to
 # match its CLI namespace. {old package: new package}. The old package and
@@ -81,6 +84,21 @@ ALIASES = {
     "vqlab.plan.onboard": "vqlab.agents.onboard",
     "vqlab.assemble.codepack": "vqlab.core.codepack",
 }
+
+# Modules MOVED in untangle step 11 (2026-10-10): the model card and the
+# CLI `size` are release work (ship/; the index check it shares with
+# check-release is core/artifact_size.py, below gate), us_spelling is renamed
+# to its command name in place (gate imports it, so it cannot sit in ship),
+# `scratch` is lab housekeeping (agents/). Importing an old dotted name emits
+# a DeprecationWarning. Kept for one release.
+MOVED = {
+    "vqlab.records.card": "vqlab.ship.card",
+    "vqlab.records.card_tables": "vqlab.ship.card_tables",
+    "vqlab.gate.us_spelling": "vqlab.gate.spelling",
+    "vqlab.records.size_cmd": "vqlab.ship.size",
+    "vqlab.records.scratch_cmd": "vqlab.agents.scratch",
+}
+ALIASES.update(MOVED)
 
 
 def stage_dirs():
@@ -216,6 +234,9 @@ class _Alias(importlib.abc.MetaPathFinder, importlib.abc.Loader):
                 warnings.warn(f"{fullname} is deprecated ({old} is now {pkg}); "
                               f"import {new}",
                               DeprecationWarning, stacklevel=2)
+        if fullname in MOVED:
+            warnings.warn(f"{fullname} is deprecated; import {new}",
+                          DeprecationWarning, stacklevel=2)
         t = importlib.util.find_spec(new)
         return importlib.util.spec_from_loader(
             fullname, self, origin=t.origin if t else f"alias of {new}")
