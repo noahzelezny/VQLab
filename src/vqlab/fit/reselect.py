@@ -501,74 +501,6 @@ def cmd_apply(a):
     return 0
 
 
-# ================================================================= selftest
-def selftest(root=None):
-    """Synthetic, CPU-only: a random 2-expert module, a codebook, a Gram
-    with a planted anisotropic structure. Checks (1) re-selection never
-    raises and on the whole lowers the training block-diagonal error vs
-    nearest-neighbour (k-means) codes; (2) `apply` writes a NEW dir with a
-    build record and leaves the base untouched. Returns the out dir."""
-    import mlx.core as mx
-    mx.set_default_device(mx.cpu)
-    rng = np.random.default_rng(1234)
-    root = root or os.path.join(config.scratch(), "reselect_selftest",
-                                time.strftime("%Y%m%d-%H%M%S"))
-    E, OUT, IN, D, K, group = 2, 16, 64, 4, 16, 32
-    nsub = IN // D
-    name = "language_model.model.layers.0.mlp.switch_mlp.gate_proj"
-    W = rng.standard_normal((E, OUT, IN)).astype(np.float32)
-    Wn, scl = normalize(W, group)
-    cb = rng.standard_normal((K, D)).astype(np.float32) * 0.5
-    km = np.argmin(((Wn.reshape(-1, nsub, 1, D) - cb) ** 2).sum(-1), -1)   # k-means assign
-    A = rng.standard_normal((IN, IN)).astype(np.float32)
-    A[:, ::D] *= 8.0                                   # planted high-energy directions
-    G = (A.T @ A / IN).astype(np.float32)
-    blocks = gram_blocks(G, D)
-    new = reselect_codes(Wn, cb, blocks)
-    e_km = blockdiag_error(Wn, km, cb, blocks)
-    e_new = blockdiag_error(Wn, new, cb, blocks)
-    assert np.all(e_new <= e_km + 1e-5 * np.abs(e_km)), "re-selection raised error"
-    assert e_new.sum() < 0.99 * e_km.sum(), (e_new.sum(), e_km.sum())
-
-    art, tgt, bank = (os.path.join(root, x) for x in ("base", "teacher", "bank"))
-    for d in (art, tgt, os.path.join(bank, "grams")):
-        os.makedirs(d)
-    bits = vq_pack.bits_for_k(K)
-    vqm = {name: {"experts": E, "out": OUT, "in": IN, "k": K, "dim": D,
-                  "group": group, "pack_bits": bits}}
-    json.dump({"model_type": "synthetic", "vq_modules": vqm},
-              open(os.path.join(art, "config.json"), "w"))
-    json.dump({"model_type": "synthetic"}, open(os.path.join(tgt, "config.json"), "w"))
-    mx.save_safetensors(os.path.join(art, "model.safetensors"), {
-        name + ".codes": mx.array(vq_pack.pack(km.reshape(E, OUT, nsub), bits)),
-        name + ".codebook": mx.array(cb).astype(mx.float16),
-        name + ".vq_scales": mx.array(scl).astype(mx.float16)})
-    cb = np.array(mx.array(cb).astype(mx.float16).astype(mx.float32))  # as stored
-    mx.save_safetensors(os.path.join(tgt, "model.safetensors"),
-                        {name + ".weight": mx.array(W)})
-    mx.save_safetensors(os.path.join(bank, "grams", _fname(name)), {"gram": mx.array(G)})
-    json.dump({"schema": SCHEMA, "modules": [name], "seed": 1234, "tokens": 0,
-               "model": "synthetic"}, open(os.path.join(bank, MANIFEST), "w"))
-    base_before = _sha256(os.path.join(art, "model.safetensors"))
-    out = os.path.join(root, "out")
-    rc = main(["apply", "--artifact", art, "--grams", bank, "--target", tgt,
-               "--out", out, "--device", "cpu"])
-    assert rc == 0
-    assert _sha256(os.path.join(art, "model.safetensors")) == base_before, "base edited"
-    rec = provenance.load(out)
-    assert rec["tool"]["name"] == "reselect"
-    assert rec["method"]["calibration_manifest_sha256"] == _sha256(os.path.join(bank, MANIFEST))
-    r = rec["modules"][name]
-    assert r["J_train_new"] <= r["J_train_base_codes"] and r["J_train_gain"] > 0.01, r
-    got = vq_pack.unpack(np.array(mx.load(os.path.join(out, "model.safetensors"))[name + ".codes"]),
-                         nsub, bits).reshape(-1, nsub)
-    assert np.array_equal(got, reselect_codes(Wn, cb, blocks)), "stored codes != re-selected"
-    print(f"SELFTEST OK: J_train {e_km.sum():.3f} -> {e_new.sum():.3f} "
-          f"({100 * (1 - e_new.sum() / e_km.sum()):.1f}% lower); apply gain "
-          f"{100 * r['J_train_gain']:.1f}%; new dir {out}")
-    return out
-
-
 # ===================================================================== main
 def main(argv=None):
     ap = argparse.ArgumentParser(prog="vqlab reselect",
@@ -601,8 +533,10 @@ def main(argv=None):
         return cmd_calibrate(a)
     if a.cmd == "apply":
         return cmd_apply(a)
-    selftest(a.dir)
-    return 0
+    # moved to vqlab.selftest (untangle step 14); `vqlab reselect selftest`
+    # is routed there by the CLI (commands.SELFTEST_ROUTES)
+    sys.exit("reselect's self-check lives in vqlab.selftest.reselect_fixture: "
+             "run `vqlab reselect selftest`")
 
 
 if __name__ == "__main__":

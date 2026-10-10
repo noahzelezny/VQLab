@@ -112,6 +112,10 @@ MOVED = {
     "vqlab.agents.reserve": "vqlab.queue.reserve",
     "vqlab.reserve": "vqlab.queue.reserve",
     "reserve": "vqlab.queue.reserve",
+    # untangle step 14: the whole-pipeline self-test is its own package,
+    # vqlab.selftest (L12), split one module per stage it checks.
+    "vqlab.gate.selftest": "vqlab.selftest",
+    "selftest": "vqlab.selftest",
 }
 ALIASES.update(MOVED)
 assert "queue" not in ALIASES and "vqlab.queue" not in ALIASES   # stdlib `queue` stays the stdlib's

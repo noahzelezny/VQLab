@@ -24,29 +24,12 @@ PKG = Path(__file__).parent
 # The registry is vqlab/commands.py (pure data, shared with the MCP server
 # and the queue). These names are its views, kept for existing callers.
 from vqlab import commands as _registry
-from vqlab.commands import NAMESPACES, SPELLING, resolve
+from vqlab.commands import NAMESPACES, SPELLING, resolve, routed  # noqa: F401 (routed: old home)
 
 # Old shape, {flat name: (pre-split filename, help)}: kept for one release.
 COMMANDS = {c.name: (c.file, c.help) for c in _registry.COMMANDS.values()}
 assert sorted(SPELLING) == sorted(COMMANDS) and len(SPELLING) == sum(
     len(subs) for _, subs in NAMESPACES.values()), "every command in exactly one namespace"
-
-
-def routed(text):
-    """Flat names of the commands a Markdown text routes to: every `code`
-    span read as a command line, namespaced (`fit moe ...`) or flat
-    (`fit-moe ...`), with or without a leading `vqlab`. The selftest's
-    CONTEXT.md check and its test share this, so both spellings count."""
-    import re
-    out = set()
-    for span in re.findall(r"`([^`]+)`", text):
-        words = span.split()
-        if words and words[0] == "vqlab":
-            words = words[1:]
-        flat, _ = resolve(words)
-        if flat:
-            out.add(flat)
-    return out
 
 
 def _namespace_help(ns):
@@ -184,7 +167,7 @@ def main() -> int:
     if not any(a in ("-h", "--help") for a in rest):
         from vqlab.bench import box_quiet   # timed commands refuse a busy Mac (rule III)
         box_quiet.guard(cmd)
-    module = _registry.COMMANDS[cmd].module
+    module = _registry.selftest_route(cmd, rest) or _registry.COMMANDS[cmd].module
     import importlib.util
     script = importlib.util.find_spec(module).origin
     from vqlab import config as _cfg   # <teachers>/X -> this box's teachers root (a local copy on a box with one)
