@@ -28,3 +28,14 @@ adapter, and a developer's own would be built the same way.
   and `_FLOCK_DIR`, ...), never a re-export; always point `FINDINGS_LOG` and
   `_FLOCK_DIR` at a temp dir -- the defaults are the real lab record.
 - Nothing here prints or exits; a refusal is a `LabError` with a stable code.
+
+## Files
+- `box.py`: gpu_state: lease holder, placed exo instances, every box's reservation
+- `docs.py`: read_doc: a slice of a lab document (CONTEXT.md, family data, docs, law book)
+- `errors.py`: `LabError`: the one refusal type (api.ApiError, MCP ToolError)
+- `findings.py`: the findings log: next_f_number (reserve / release), findings_tail, findings_append
+- `queues.py`: queue_status: queue runs on this box, from their state.json
+- `roots.py`: the configured storage roots and the path guards every operation shares
+- `runs.py`: launch (allowlisted, detached, under the GPU lease), status, stop, list_runs
+- `storage.py`: read-only storage: where_is, list_artifacts, artifact_config, disk_free
+- `supervisor.py`: the detached process `runs.launch` starts: lease, run, retry, record

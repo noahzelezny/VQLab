@@ -38,9 +38,9 @@ grep -rli "<the concept>" src/vqlab/ docs/
 | is this thing bandwidth-bound? how many bytes does a token cost? | `vqlab active-bytes` — bills every tensor by how a DECODE STEP reads it (dense / routed top-k / gathered rows). **Never quote an effective-bandwidth number without it**: F22 counted the expert stack alone, understated Flash's traffic ~9x, and its "large fixed cost" was the missing denominator (F130) | counting the quantized tensors and calling it the model |
 | where does the decode time GO, stage by stage? | `vqlab decode-timeline` — the plain measurement the lab never had: every stage of one decode token, in order, timed, **summing to the whole**. Deletion arms give upper bounds that do NOT sum; you cannot rank what you have not partitioned. It measures CUMULATIVE PREFIXES (one real eval each), never per-op `mx.eval` — that is F133, which reported parts summing to 1667 us against a 410 us whole. It REFUSES to rank unless the deltas add up AND no delta is negative | timing each module with its own `mx.eval` and adding them up |
 | which COMPONENT owns the decode time? | `vqlab decode-ladder` — per-component deletion arms with an output checksum beside every timing | a fresh deletion script that seeds `cache.keys` and crashes on Flash's ArraysCache/QSAKVCache |
-| how much damage does this artifact carry? | `vqlab score` / `kl_damage.py` | ad-hoc KL scripts |
+| how much damage does this artifact carry? | `vqlab score kl-ladder` (the gate) / `vqlab score kl` (`src/vqlab/score/kl_damage.py`) | ad-hoc KL scripts |
 | ppl on the house corpora | `scripts/score_ppl_resident.py` + the THREE corpora in `src/vqlab/score/referee/` (prose / code-public / literary) | your own corpus files |
-| task benchmarks | `vqlab tasks` (src/vqlab/score/score_tasks_streaming.py; layer-streamed, scores models larger than RAM) | a new eval harness |
+| task benchmarks | `vqlab score tasks` (src/vqlab/score/score_tasks_streaming.py; layer-streamed, scores models larger than RAM) | a new eval harness |
 | is this artifact releasable? | `vqlab check-release` / `check-bundle` / `selftest` | eyeballing |
 | fit a mixed-geometry rung | `vqlab fit-moe --vq-layers` (scatter fits) | bespoke build scripts |
 | rebuild an artifact at a new per-layer geometry | `vqlab geo-build` (diff-style: named modules refit from the bf16 teacher, everything else keeps shipped bytes; REFUSES ragged nsub, sets pack_bits, verifies fit reuse by codebook shape) | hand-rolled build scripts in scratch |
@@ -192,7 +192,7 @@ distilled — the file itself is authoritative:
 * **A comparison row must name the ARTIFACT and the INSTRUMENT that produced
   it.** A number older than the artifact it faces gets RE-MEASURED, not
   cited. Never compare a real artifact against a proxy score.
-* Comparators must pass `check_comparator.py` before their row is believed —
+* Comparators must pass `vqlab gate check-comparator` (`src/vqlab/gate/check_comparator.py`) before their row is believed —
   a comparator that loads short scores worse and FLATTERS us.
 * Speed: n>=3 with scatter, prompt length stated, one process per arm, never
   on a contended box. **Quote a RATIO between arms from the same session,
@@ -206,7 +206,7 @@ distilled — the file itself is authoritative:
   d2 to K4096; K4096@d4 fails ON the cap). Compute `K*dim*2` FIRST.
   `XPC_ERROR_CONNECTION_INTERRUPTED` is how Metal reports this
   over-allocation — it is NOT a compiler-service fault.
-* **Dense and MoE are DIFFERENT RUNTIMES** — `vq_dense.py`'s fused path is
+* **Dense and MoE are DIFFERENT RUNTIMES** — `runtime/vq_dense.py`'s fused path is
   gated on `codebook.shape[1] == 2`. A smoke on one path says NOTHING about
   the other.
 * Load under `with mx.stream(mx.cpu):` with `mx.eval` INSIDE the block — a

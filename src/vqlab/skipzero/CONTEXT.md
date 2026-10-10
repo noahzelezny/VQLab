@@ -78,3 +78,11 @@ resident; dead rows read no code bytes and output exact zeros.
   cost 0.14 GiB of tables, so they are a net LOSS.
 - The 397B bundle has no `_reach_vq`; the hook passes `globals().get("_reach_vq")`
   and swap_modules falls back to `sz_resident.reach` (the same walk).
+
+## Files
+- `skipzero_load.py`: load-time expansion shim (stage 1)
+- `sz_bitexact.py`: `gate sz-bitexact`: byte-equality gate for stage 2
+- `sz_check.py`: `gate sz-check`: prove a vq-skipzero artifact expands back exactly
+- `sz_pack.py`: `build sz-pack`: write a vq-skipzero copy of a VQ MoE artifact
+- `sz_resident.py`: stage 2: keep the compact form resident (`install_resident`)
+- `sz_resident_build.py`: `build sz-resident`: a stage-1 pack -> a stage-2 artifact (new dir)

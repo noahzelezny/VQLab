@@ -16,3 +16,15 @@ Per-position arrays and JSON records. kl-ladder resumes from them.
 - The KL gate does not exercise the decode kernels (F137, F164). Say which path a number describes.
 - Corpora moved here from `src/vqlab/referee/`. Paths recorded before the move resolve through `_layout.legacy_path`.
 - `check_pin` lives in `core/pin_record.py` (still importable from `gate.pin`); ClampCounter/corpus_ids live in `core/clamps.py` (re-exported from `act_stats`). score imports neither gate nor bench.
+
+## Files
+- `act_stats.py`: `score act-stats`: how often each clamp in a family's parity list fires
+- `kernel_truth.py`: `score kernel-truth`: which dense VQ path is closer to exact float64
+- `kernel_truth_moe.py`: `score kernel-truth-moe`: the MoE twin of kernel-truth
+- `kl_damage.py`: `score kl`: quantization damage as KL from the model's own bf16 output
+- `kl_ladder.py`: `score kl-ladder`: rank rungs by KL against per-corpus teacher caches (the release gate)
+- `kl_pair.py`: `score kl-pair`: paired KL between two arms scored in separate runs
+- `referee/score_streaming.py`: `score ppl`: the single-box streaming ppl referee over the house corpora
+- `runtime_equiv.py`: `score runtime-equiv`: one model slice through two interpreters, bitwise or not
+- `score_tasks_streaming.py`: `score tasks`: layer-streamed task benchmarks for models larger than RAM
+- `stream_score.py`: `score stream-score`: the layer-streamed scorer kl-ladder runs; builds teacher caches

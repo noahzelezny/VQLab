@@ -43,7 +43,16 @@ teacher, writes a new directory (never in place), and leaves a record.
 | 5 | **gate** | Is it loadable, correct, and releasable? | `gate check`, `gate check-release`, `gate check-bundle`, `gate bundle-accept`, `gate verify`, `gate smoke`, `gate vision-smoke`, `gate check-comparator`, `gate parity` (a family's checklist of reference-inference behaviours, each with its test; F195), `gate selftest`, `gate validate` (overnight queue), `gate pin` (freeze + smoke a copy before measuring), `gate mtp-smoke-head`, `gate spelling` (US spelling in released text) |
 | 6 | **score** | How much damage does it carry? | `score kl-ladder` (the release gate), `score kl-pair` (pair two runs after the fact, zero GPU), `score kl`, `score ppl` (ppl, printed, not gated), `score stream-score` (the layer-streamed scorer kl-ladder runs; also builds teacher caches), `score tasks` (task benchmarks), `score kernel-truth`, `score kernel-truth-moe`, `score act-stats` (how often each clamp in a family's parity checklist fires on the house corpora), `score runtime-equiv` (two interpreters, same slice: bitwise or not) |
 | 7 | **bench** | How fast is it, and where does the time go? | `bench decode-timeline`, `bench prefill-timeline`, `bench decode-ladder`, `bench active-bytes`, `bench stage-bandwidth` (GB/s per decode stage, time above the roofline), `bench serve-timeline` (a Knurlogic-served request, partitioned), `bench gpu-capture` (one decode step as an Xcode GPU trace: per-kernel counters), `bench lut-bench` (decode expert kernel with the codebook read rewritten: what a free or structured LUT would buy), `bench gdn-chunk-truth` (gated-delta scan paths vs a float64 reference, plus scan-alone timing), `bench prefill-bench`, `bench coverage`, `bench host-attrib`, `bench hc-micro`, `bench mtp-bench`, `bench mtp-accept`, `bench speed-pair` (two arms, fresh process each, ratio), `bench speed-pair-knurlogic` (same, served by Knurlogic: one Mac or a pipeline split) |
-| 8 | **ship** | Publish or serve it | `ship publish` (a human action), `ship serve`, `ship mtp-generate` |
+| 8 | **ship** | Publish or serve it | `ship publish` (a human action), `ship serve`, `ship mtp-generate`, `ship release-prep`, `ship size`, `ship card`, `ship card-tables` |
+| - | **lab** | The lab itself (not a pipeline stage) | `lab doctor`, `lab config`, `lab runs`, `lab provenance`, `lab manifest`, `lab registry`, `lab scratch`, `lab queue`, `lab reserve`, `lab mcp`, `lab gui` |
+
+A namespace is where a command is FOUND; its code sits in the folder of the
+layer it belongs to (`commands.py` names the module). The ones that differ:
+`plan onboard`, `lab doctor` / `config` / `scratch` / `mcp` / `gui` are in
+`agents/`; `plan loo-bands` in `build/`; `build mtp-arms` in `bench/`;
+`gate validate`, `lab queue` / `reserve` in `queue/`; `gate selftest` is
+`selftest/`; `lab runs` / `provenance` / `manifest` / `registry` are in
+`records/`; the `sz-*` commands are in `skipzero/`.
 
 Skip-zero, `src/vqlab/skipzero/` (a shipped format since 2026-09-29, served natively by the runtime): `build sz-pack` / `gate sz-check` / `build sz-resident` / `gate sz-bitexact` (vq-skipzero: fully-dead VQ rows dropped on disk; 397B -10.8% disk / -11.1% resident at identical KL; docs/SKIPZERO.md).
 
@@ -80,31 +89,40 @@ Design: `docs/PROVENANCE.md`.
 
 ## Code layout (`src/vqlab/`)
 
-One folder per stage, each with a `CONTEXT.md` contract (Inputs / Process /
-Outputs / Rules that bite). Read the one for your stage and skip the rest.
+Every package folder has a `CONTEXT.md` contract (Inputs / Process /
+Outputs / Rules that bite, then a `Files` list: one line per module). Read
+the one for your folder and skip the rest. `tests/test_context_docs.py`
+keeps those lists complete; `tests/test_layering.py` enforces the import
+direction (a package imports only from the rows ABOVE it here).
 
 ```
 src/vqlab/
-  commands.py   THE command registry (pure data): name, module, stage, mcp, gpu, help; CLI, MCP allowlist and queue all read it
-  cli.py        dispatcher: argv -> commands.py -> runpy.run_module (python -m vqlab.cli <cmd>)
-  _layout.py    stage folders on sys.path, runtime_file()/find(), pre-split import aliases (install_import_aliases())
-  util/         stdlib-only helpers: hashing (sha256_file, fingerprint), clock, log, fs. Import from here; never write a private _sha/_log/_now
-  runtime/      SHIPPED code, spliced verbatim into every model.py
-  core/         shared libraries (source loaders, Knurlogic arch finder, GPU lease + exo check, stamp field compare/print, artifact_size: the index total_size check shared by `size` and check-release); imports nothing from family/
-  plan/  fit/  build/  bundle/  gate/  score/  bench/    the pipeline, in order
-  records/      run log + build records + score stamps + artifact registry + tamper stamp
-  ship/         publish (a human action) + serve + the model card (card, card_tables, card_checks) + `size`
-  queue/        the job queue (`queue`, `reserve`, `validate`): launches commands BY NAME from pinned code; never a bare `queue` (stdlib)
-  ops/          the lab operations on THIS box, as a library below vqlab.api: runs (launch/status/stop/list) + supervisor, storage (where_is, list_artifacts, artifact_config, disk_free), docs (read_doc), box (gpu_state), queues (queue_status), findings (F-numbers, reservations, tail, append); one error type, LabError (= api.ApiError)
-  api.py        THE stable library surface (consumes ops/ and the stages)
-  agents/       MCP server (package agents/mcp/: thin adapters over vqlab.api / vqlab.ops), read-only GUI, scratch housekeeping (`vqlab scratch`)
-  mtp/          MTP speculative-decoding LIBRARY (vqlab.mtp); its tools live in the stages
-  family/       the family registry (registry.py), family-aware loading (model_loader.py) and version stamping (version_stamp.py), and model families as plugins, one file each (fit layout, streamed scorer, tokenizer hook); deepseek_v4 first
-  skipzero/     the vq-skipzero pack/check tools (the runtime switch itself lives in runtime/)
+  util/         stdlib-only helpers: hashing, clock, log, fs. Import from here; never write a private _sha/_log/_now
+  vqlab/config.py     machine-local storage locations (scratch, models, teachers, fit store, records), from env then ~/.config/vqlab/config.toml
+  vqlab/commands.py   THE command registry (pure data): name, module, stage, mcp, gpu, help; the CLI, MCP allowlist and queue all read it
+  runtime/      SHIPPED code, spliced verbatim into every model.py (the one hard boundary)
+  core/         shared libraries every stage may use (source loaders, fit store, Knurlogic arch finder, GPU lease, code packing rule, pin record, Hub diff); imports nothing from family/
+  records/      run log, build records (provenance), score stamps, artifact registry, tamper manifest, step verdicts
+  family/       the family registry, family-aware loading, version stamps, and one plugin file per model family
+  mtp/          the MTP speculative-decoding LIBRARY (vqlab.mtp); its tools live in the stage folders
+  plan/  fit/  skipzero/    what to build, the fitters, the vq-skipzero tools
+  build/        codes -> an artifact that loads (pack, splice, convert, graft, mix, draft heads)
+  bundle/       put the runtime inside the artifact (model.py)
+  gate/  score/ pass/fail gates; KL / ppl / task scoring
+  bench/        speed, and where the time goes
+  ship/         publish (a human action), serve, the model card, `size`
+  queue/        the job queue (`lab queue`, `lab reserve`, `gate validate`): launches commands BY NAME from pinned code; never a bare `queue` (stdlib)
+  ops/          the lab operations on THIS box, below vqlab.api: runs + supervisor, storage, docs, box, queues, findings; one error type, LabError
+  vqlab/api.py        THE stable library surface (over ops/ and the stages); read this one file to see what vqlab can do
+  agents/       consumers of the api: the MCP server (agents/mcp/), the read-only GUI, doctor / config / scratch / onboard
+  selftest/     `gate selftest`: the real pipeline on a tiny synthetic model, one module per stage it checks
+  vqlab/cli.py        dispatcher: argv -> commands.py -> runpy.run_module (python -m vqlab.cli <cmd>)
+  vqlab/_layout.py    the explicit alias table for OLD module names (PERMANENT: runtime stems, published names; DEPRECATED: one release, warns) + find() / runtime_file() / corpus()
 ```
 
-Tools are standalone scripts that import siblings by bare name (`import
-vq_pack`); `_layout` makes that work across folders. Old dotted names
-(`vqlab.vq_switch`, `vqlab.geo_build`, ...) still import, because published
-runtime text uses them. **`runtime/` is the one hard boundary**: editing it
-changes what `gate check-bundle` compares every published artifact against.
+Import modules by their canonical dotted name (`from vqlab.runtime import
+vq_pack`). Old spellings (`vqlab.vq_switch`, bare `vq_pack`, `vqlab.geo_build`,
+`vqlab.assemble.*`) resolve through `_layout`'s two tables to the SAME module
+object; every one that is not PERMANENT warns. **`runtime/` is the one hard
+boundary**: editing it changes what `gate check-bundle` compares every
+published artifact against.

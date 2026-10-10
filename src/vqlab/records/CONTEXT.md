@@ -14,3 +14,10 @@ JSONL run log (per user), `vqlab_provenance.json` (per artifact), `registry/arti
 - The run log never breaks a run: logging errors are swallowed.
 - Design and rollout: `docs/PROVENANCE.md`.
 - (`scratch` now lives in agents/.) Deletion is a human's action: `scratch reclaimable` only PRINTS `rm` lines, and a dir is listed only when the packed record links it by provenance id and shard fingerprint and nothing symlinks into it.
+
+## Files
+- `artifact_manifest.py`: `lab manifest`: tamper stamp, written outside the artifact
+- `provenance.py`: `lab provenance`: the build record an artifact carries; `code_state()`
+- `registry.py`: `lab registry`: one queryable index of every artifact, and Hub drift
+- `runlog.py`: `lab runs`: one JSONL line when any `vqlab <cmd>` starts, one when it ends
+- `step_verdict.py`: did a queue step succeed? one rule, for every runner

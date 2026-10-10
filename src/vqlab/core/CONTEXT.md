@@ -15,3 +15,20 @@ Imported as `vqlab.core.<module>`.
 - core imports NOTHING from `vqlab.family` (layer rule, tests/test_layering.py), directly or through an indirection. A core module that needs a family lookup is in the wrong package: move it up.
 - Old names `vqlab.core.families`, `vqlab.core.numerics`, `vqlab.core.version_stamp`, `vqlab.core.runtime_load` (and bare `families` / `numerics` / `version_stamp` / `runtime_load`) `vqlab.family.arch` and `vqlab.assemble.codepack` are aliases for one release (`_layout.DEPRECATED`): same module object.
 - Depth and geometry laws are family-local. Never inherit an allocation across families.
+
+## Files
+- `arch_finder.py`: the Knurlogic architecture meta-path finder behind `vqlab.use_knurlogic_arch()`
+- `artifact.py`: how an artifact directory is laid out: index, shards, config (`write_index`, ...)
+- `artifact_size.py`: an index's total_size checked against its shards' tensor bytes
+- `clamps.py`: clamp counting for act-stats: `ClampCounter`, house-corpus ids
+- `codepack.py`: the one packing decision for MoE expert codes (`vqlab pack` and `fit-moe --pack`)
+- `exo.py`: the exo cluster's HTTP API as the GPU gate reads it: is an instance placed?
+- `expert_src.py`: every reader of MoE source weights: the expert-stack loader, all layouts
+- `fitstore.py`: the fit store: layout, index, census, content-based teacher naming
+- `gpu_lease.py`: the GPU lease file every GPU tenant flocks in turn
+- `hub.py`: Hugging Face Hub comparisons: what a local artifact holds vs its repo
+- `knurlogic_client.py`: Knurlogic HTTP/job client helpers (bench and gate arms)
+- `mem_budget.py`: per-block eager-eval budget for the streamed probes
+- `pin_record.py`: the `vqlab_pin.json` format and `check_pin`, read by every scorer
+- `ple_stream.py`: make qwen4_exp's PLE n-gram tables stream instead of going resident
+- `stamp_fields.py`: what a numerics build stamp holds; compare and print two

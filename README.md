@@ -240,12 +240,18 @@ as SKIPPED with the reason.
   non-deterministic.
 - New family: read [docs/ONBOARDING.md](https://github.com/noahzelezny/VQLab/blob/master/docs/ONBOARDING.md) first.
 
-## Layout
+## Where things live
 
-- `src/vqlab/` — the toolkit, one folder per pipeline stage (fit, build,
-  bundle, gate, score, bench, ...); `CONTEXT.md` maps a question to its
-  command. `core/artifact.py` is the one place that knows an artifact's
-  layout.
+- [CONTEXT.md](https://github.com/noahzelezny/VQLab/blob/master/CONTEXT.md)
+  is the map: which command answers which question, and one line per
+  package folder. Every folder under `src/vqlab/` (plan, fit, build, bundle,
+  gate, score, bench, ship, queue, ops, core, family, ...) carries its own
+  `CONTEXT.md` with one line per file, so a folder and file name are
+  enough to find anything.
+- [src/vqlab/api.py](https://github.com/noahzelezny/VQLab/blob/master/src/vqlab/api.py)
+  is the stable library surface: read that one file to see what vqlab can
+  do from code. Everything else under `src/vqlab/` is internal and may move.
+- `src/vqlab/commands.py` lists every CLI command and the module it runs.
 - `docs/` — start at [docs/INDEX.md](https://github.com/noahzelezny/VQLab/blob/master/docs/INDEX.md), which says what each
   doc is for and whether it still holds.
 - `families/` — per-family profiles: what the toolkit knows about each

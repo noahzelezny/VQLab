@@ -17,3 +17,15 @@ A recipe or geomap for `fit/`, and printed cost/value curves.
 - Rank layers by the JUMP in `traj_rel`, not by `local_rel`. Isolation probes are anti-signal (F95).
 - Escape the cheapest width broadly before enriching narrowly (FINDINGS I.3).
 - Price a rung before fitting it, and stamp every size pre- or post-vision-graft.
+
+## Files
+- `alloc_sweep.py`: `plan alloc-sweep`: the per-layer allocation frontier for a rung
+- `family_profile.py`: `plan family-profile`: size up a teacher from its headers, before any fit
+- `init_sweep.py`: `plan probe-init`: on what fraction of tensors does ++ seeding sell the tail?
+- `layer_leverage.py`: `plan layer-leverage`: which layers' quantization damage matters most
+- `mtp_probe_qwen35.py`: `plan mtp-probe35`: MTP acceptance probe for qwen3_5 / qwen3_5_moe
+- `mtp_probe_qwen4_exp.py`: `plan mtp-probe`: MTP acceptance probe for qwen4_exp
+- `preflight_disk.py`: `plan preflight-disk`: refuse a build whose output volume lacks the space
+- `preflight_ram.py`: `plan preflight-ram`: refuse a resident load of a model bigger than RAM
+- `price.py`: `plan price`: size-target a VQ build before fitting it
+- `zero_groups.py`: `plan zero-groups`: code bytes that encode nothing, sized from scales alone
