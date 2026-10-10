@@ -18,31 +18,37 @@ import pathlib
 import subprocess
 import sys
 
-ap = argparse.ArgumentParser()
-ap.add_argument("artifact")
-ap.add_argument("--headroom", type=float, default=0.90,
-                help="fraction of physical RAM the artifact may occupy. mlx's "
-                     "own recommended max is ~0.875 of RAM; 0.90 is already "
-                     "generous and a smoke needs the KV cache on top.")
-a = ap.parse_args()
+def main(argv=None) -> int:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("artifact")
+    ap.add_argument("--headroom", type=float, default=0.90,
+                    help="fraction of physical RAM the artifact may occupy. mlx's "
+                         "own recommended max is ~0.875 of RAM; 0.90 is already "
+                         "generous and a smoke needs the KV cache on top.")
+    a = ap.parse_args(argv)
 
-P = pathlib.Path(a.artifact)
-if not P.is_dir():
-    sys.exit(f"PREFLIGHT FAIL: {P} is not a directory")
+    P = pathlib.Path(a.artifact)
+    if not P.is_dir():
+        sys.exit(f"PREFLIGHT FAIL: {P} is not a directory")
 
-art = sum(f.stat().st_size for f in P.glob("*.safetensors"))
-ram = int(subprocess.run(["sysctl", "-n", "hw.memsize"],
-                         capture_output=True, text=True).stdout.strip())
-bar = ram * a.headroom
-G = 2 ** 30
-ok = art <= bar
+    art = sum(f.stat().st_size for f in P.glob("*.safetensors"))
+    ram = int(subprocess.run(["sysctl", "-n", "hw.memsize"],
+                             capture_output=True, text=True).stdout.strip())
+    bar = ram * a.headroom
+    G = 2 ** 30
+    ok = art <= bar
 
-print(f"PREFLIGHT  artifact {art/G:.3f} GiB   box RAM {ram/G:.0f} GiB   "
-      f"bar {bar/G:.1f} GiB ({a.headroom:.0%})   -> {'OK' if ok else 'FAIL'}")
-if not ok:
-    print(f"PREFLIGHT FAIL: {P.name} needs {art/G:.3f} GiB resident and this "
-          f"box has {ram/G:.0f} GiB. A generation smoke or speed test CANNOT "
-          f"run here — it will thrash swap and produce no verdict.")
-    print("  Run it on a box with more RAM. Scoring is exempt: the streaming "
-          "referee streams by design.")
-    sys.exit(2)
+    print(f"PREFLIGHT  artifact {art/G:.3f} GiB   box RAM {ram/G:.0f} GiB   "
+          f"bar {bar/G:.1f} GiB ({a.headroom:.0%})   -> {'OK' if ok else 'FAIL'}")
+    if not ok:
+        print(f"PREFLIGHT FAIL: {P.name} needs {art/G:.3f} GiB resident and this "
+              f"box has {ram/G:.0f} GiB. A generation smoke or speed test CANNOT "
+              f"run here — it will thrash swap and produce no verdict.")
+        print("  Run it on a box with more RAM. Scoring is exempt: the streaming "
+              "referee streams by design.")
+        return 2
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

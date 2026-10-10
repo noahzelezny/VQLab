@@ -21,11 +21,11 @@ waiting on the last.
 from __future__ import annotations
 
 import argparse
+import sys
 import time
 
 
 import mlx.core as mx
-mx.random.seed(1234)  # lab default: nothing random unless asked
 import mlx.nn as nn
 
 from vqlab.bench.power import gpu_watts
@@ -85,7 +85,8 @@ def bench(fn, x, chain: int, reps: int) -> float:
     return best / chain * 1e6
 
 
-def main() -> int:
+def main(argv=None) -> int:
+    mx.random.seed(1234)  # lab default: nothing random unless asked
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--batch", type=int, nargs="+", default=[1, 512, 4096],
                     help="rows per call: 1 is decode, the rest are prefill")
@@ -102,7 +103,7 @@ def main() -> int:
                          "arm absorb allocator/page-in warmup and produced a "
                          "5.7x swing on bf16 at batch 1 between runs -- larger "
                          "than every effect being measured.")
-    a = ap.parse_args()
+    a = ap.parse_args(argv)
 
     # CONTENTION GATE. This bench times ~5 ms of work per rep, which makes it
     # far more fragile than a 10 s model run: a foreign GPU job moved bf16 at
@@ -155,4 +156,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    sys.exit(main())

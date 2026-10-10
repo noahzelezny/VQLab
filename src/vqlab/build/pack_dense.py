@@ -11,6 +11,7 @@ self-contained.
     ./pack_dense.py --src <unpacked artifact> --out <packed artifact>
 """
 import argparse
+import sys
 import json
 import pathlib
 import shutil
@@ -20,94 +21,102 @@ import numpy as np
 
 from vqlab.runtime import vq_pack
 
-ap = argparse.ArgumentParser()
-ap.add_argument("--src", required=True)
-ap.add_argument("--out", required=True)
-args = ap.parse_args()
-SRC, OUT = pathlib.Path(args.src), pathlib.Path(args.out)
-
-cfg = json.load(open(SRC / "config.json"))
-vq_l, vq_e = cfg.get("vq_linear", {}), cfg.get("vq_embed", {})
-
-
 def _packs(meta):
     """Would the loop below pack this module? (decided from config alone)"""
     return (not meta.get("pack_bits") and (meta["in"] // meta["dim"]) % 32 == 0
             and int(meta["k"] - 1).bit_length() % 8 != 0)
 
 
-if not any(_packs(m) for m in list(vq_l.values()) + list(vq_e.values())):
-    raise SystemExit(f"REFUSED: nothing in {SRC} to pack (no vq_linear/vq_embed module, "
-                     "or every one is already packed, byte-aligned or NSUB-unaligned); "
-                     "nothing written")
-OUT.mkdir(parents=True, exist_ok=True)
-idx = json.load(open(SRC / "model.safetensors.index.json"))["weight_map"]
-targets = {m + ".codes": m for m in list(vq_l) + list(vq_e)}
 
-new_map, shard_no = {}, 0
-packed_n = skipped = 0
-for sh in sorted(set(idx.values())):
-    # MATERIALISE ON THE CPU STREAM (FINDINGS IV.1). mx.load is LAZY, and
-    # every tensor that is NOT packed below passes through still-lazy — its
-    # read is then paid inside a GPU command buffer when save_safetensors
-    # forces evaluation, which can silently yield ZEROS. That is the exact
-    # mechanism confirmed in E123 (fitter, read returned zeros to one consumer
-    # and correct bytes to the next) and the cause of the L60 zeroed splice in
-    # build_dense_vq (013d2bb); pack had the same defect. This is the
-    # THIRD file in the family, found 2026-08-21 before its first use on a
-    # real dense rung. Do NOT remove the eval.
-    with mx.stream(mx.cpu):
-        data = dict(mx.load(str(SRC / sh)))
-        mx.eval(list(data.values()))
-    for k in list(data):
-        m = targets.get(k)
-        if m is None:
-            continue
-        meta = vq_l.get(m) or vq_e.get(m)
-        if meta.get("pack_bits"):
-            continue                      # already packed: never pack twice
-        K = meta["k"]
-        bits = int(K - 1).bit_length()
-        nsub = meta["in"] // meta["dim"]
-        if nsub % 32:
-            print(f"  SKIP {m}: NSUB={nsub} not %32");  skipped += 1
-            continue
-        if bits % 8 == 0:
-            # byte-aligned: packing saves zero bytes and costs bit-field
-            # extraction at decode (E70-era finding on the 397B). Copy through.
-            continue
-        codes = np.array(data[k]).astype(np.uint16)
-        data[k] = mx.array(vq_pack.pack(codes[None], bits)[0])
-        meta["pack_bits"] = bits
-        packed_n += 1
-    shard_no += 1
-    name = f"model-{shard_no:05d}.safetensors"
-    mx.save_safetensors(str(OUT / name), data)
-    # Read back what we just wrote and refuse all-zero tensors. The write-side
-    # twin of the assertion above; build_dense_vq carries the same check.
-    with mx.stream(mx.cpu):
-        back = mx.load(str(OUT / name))
-        mx.eval(list(back.values()))
-    zeroed = [k for k, v in back.items()
-              if v.size and bool(mx.all(v == 0))]
-    if zeroed:
-        raise SystemExit(f"FATAL: {name} has {len(zeroed)} all-zero tensor(s) "
-                         f"after write, first={zeroed[0]} — do not ship this "
-                         f"artifact.")
-    del back
-    for k in data:
-        new_map[k] = name
-    del data
-    mx.clear_cache()
+def main(argv=None) -> int:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--src", required=True)
+    ap.add_argument("--out", required=True)
+    args = ap.parse_args(argv)
+    SRC, OUT = pathlib.Path(args.src), pathlib.Path(args.out)
 
-json.dump({"metadata": {}, "weight_map": new_map},
-          open(OUT / "model.safetensors.index.json", "w"), indent=1)
-json.dump(cfg, open(OUT / "config.json", "w"), indent=1)
-for f in SRC.iterdir():
-    if f.suffix in (".jinja",) or f.name.endswith(("tokenizer.json",
-            "tokenizer_config.json", "generation_config.json",
-            "processor_config.json", "preprocessor_config.json", "model.py")):
-        shutil.copy(f, OUT / f.name)
-tot = sum(p.stat().st_size for p in OUT.glob("*.safetensors"))
-print(f"packed {packed_n} code tensors ({skipped} skipped) -> {OUT}")
-print(f"  {tot/2**30:.2f} GiB of tensors")
+    cfg = json.load(open(SRC / "config.json"))
+    vq_l, vq_e = cfg.get("vq_linear", {}), cfg.get("vq_embed", {})
+
+
+
+    if not any(_packs(m) for m in list(vq_l.values()) + list(vq_e.values())):
+        raise SystemExit(f"REFUSED: nothing in {SRC} to pack (no vq_linear/vq_embed module, "
+                         "or every one is already packed, byte-aligned or NSUB-unaligned); "
+                         "nothing written")
+    OUT.mkdir(parents=True, exist_ok=True)
+    idx = json.load(open(SRC / "model.safetensors.index.json"))["weight_map"]
+    targets = {m + ".codes": m for m in list(vq_l) + list(vq_e)}
+
+    new_map, shard_no = {}, 0
+    packed_n = skipped = 0
+    for sh in sorted(set(idx.values())):
+        # MATERIALISE ON THE CPU STREAM (FINDINGS IV.1). mx.load is LAZY, and
+        # every tensor that is NOT packed below passes through still-lazy — its
+        # read is then paid inside a GPU command buffer when save_safetensors
+        # forces evaluation, which can silently yield ZEROS. That is the exact
+        # mechanism confirmed in E123 (fitter, read returned zeros to one consumer
+        # and correct bytes to the next) and the cause of the L60 zeroed splice in
+        # build_dense_vq (013d2bb); pack had the same defect. This is the
+        # THIRD file in the family, found 2026-08-21 before its first use on a
+        # real dense rung. Do NOT remove the eval.
+        with mx.stream(mx.cpu):
+            data = dict(mx.load(str(SRC / sh)))
+            mx.eval(list(data.values()))
+        for k in list(data):
+            m = targets.get(k)
+            if m is None:
+                continue
+            meta = vq_l.get(m) or vq_e.get(m)
+            if meta.get("pack_bits"):
+                continue                      # already packed: never pack twice
+            K = meta["k"]
+            bits = int(K - 1).bit_length()
+            nsub = meta["in"] // meta["dim"]
+            if nsub % 32:
+                print(f"  SKIP {m}: NSUB={nsub} not %32");  skipped += 1
+                continue
+            if bits % 8 == 0:
+                # byte-aligned: packing saves zero bytes and costs bit-field
+                # extraction at decode (E70-era finding on the 397B). Copy through.
+                continue
+            codes = np.array(data[k]).astype(np.uint16)
+            data[k] = mx.array(vq_pack.pack(codes[None], bits)[0])
+            meta["pack_bits"] = bits
+            packed_n += 1
+        shard_no += 1
+        name = f"model-{shard_no:05d}.safetensors"
+        mx.save_safetensors(str(OUT / name), data)
+        # Read back what we just wrote and refuse all-zero tensors. The write-side
+        # twin of the assertion above; build_dense_vq carries the same check.
+        with mx.stream(mx.cpu):
+            back = mx.load(str(OUT / name))
+            mx.eval(list(back.values()))
+        zeroed = [k for k, v in back.items()
+                  if v.size and bool(mx.all(v == 0))]
+        if zeroed:
+            raise SystemExit(f"FATAL: {name} has {len(zeroed)} all-zero tensor(s) "
+                             f"after write, first={zeroed[0]} — do not ship this "
+                             f"artifact.")
+        del back
+        for k in data:
+            new_map[k] = name
+        del data
+        mx.clear_cache()
+
+    json.dump({"metadata": {}, "weight_map": new_map},
+              open(OUT / "model.safetensors.index.json", "w"), indent=1)
+    json.dump(cfg, open(OUT / "config.json", "w"), indent=1)
+    for f in SRC.iterdir():
+        if f.suffix in (".jinja",) or f.name.endswith(("tokenizer.json",
+                "tokenizer_config.json", "generation_config.json",
+                "processor_config.json", "preprocessor_config.json", "model.py")):
+            shutil.copy(f, OUT / f.name)
+    tot = sum(p.stat().st_size for p in OUT.glob("*.safetensors"))
+    print(f"packed {packed_n} code tensors ({skipped} skipped) -> {OUT}")
+    print(f"  {tot/2**30:.2f} GiB of tensors")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

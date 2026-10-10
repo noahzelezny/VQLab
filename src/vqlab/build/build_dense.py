@@ -24,6 +24,7 @@ except a strict load failure at score time. FIT_TO_BASE below is the map, and
 bytes are written.
 """
 import argparse
+import sys
 import json
 import pathlib
 import shutil
@@ -36,177 +37,183 @@ from vqlab.family.registry import DENSE_REMAP as FAMILIES  # shared registry
 
 PROJS = ("gate_proj", "up_proj", "down_proj")
 
-ap = argparse.ArgumentParser()
-ap.add_argument("--family", required=True, choices=sorted(FAMILIES))
-ap.add_argument("--base", required=True,
-                help="quantized incumbent to splice into; its non-MLP bytes "
-                     "are carried through UNCHANGED and define what the "
-                     "comparison means")
-ap.add_argument("--mlp", required=True, help="fit_dense_vq.py output dir")
-ap.add_argument("--out", required=True)
-ap.add_argument("--dry-run", action="store_true",
-                help="validate the name remap and print the plan; write nothing")
-args = ap.parse_args()
+def main(argv=None) -> int:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--family", required=True, choices=sorted(FAMILIES))
+    ap.add_argument("--base", required=True,
+                    help="quantized incumbent to splice into; its non-MLP bytes "
+                         "are carried through UNCHANGED and define what the "
+                         "comparison means")
+    ap.add_argument("--mlp", required=True, help="fit_dense_vq.py output dir")
+    ap.add_argument("--out", required=True)
+    ap.add_argument("--dry-run", action="store_true",
+                    help="validate the name remap and print the plan; write nothing")
+    args = ap.parse_args(argv)
 
-FIT_TMPL, BASE_TMPL = FAMILIES[args.family]
-BASE, MLP = pathlib.Path(args.base), pathlib.Path(args.mlp)
-OUT = pathlib.Path(args.out)
+    FIT_TMPL, BASE_TMPL = FAMILIES[args.family]
+    BASE, MLP = pathlib.Path(args.base), pathlib.Path(args.mlp)
+    OUT = pathlib.Path(args.out)
 
-base_idx = json.load(open(BASE / "model.safetensors.index.json"))["weight_map"]
-mlp_cfg = json.load(open(MLP / "config.json"))["vq_modules"]
-base_mods = {k.rsplit(".", 1)[0] for k in base_idx}
+    base_idx = json.load(open(BASE / "model.safetensors.index.json"))["weight_map"]
+    mlp_cfg = json.load(open(MLP / "config.json"))["vq_modules"]
+    base_mods = {k.rsplit(".", 1)[0] for k in base_idx}
 
-# ---- build the fit->base remap and PROVE it lands, before touching bytes
-FIT_TO_BASE, missing = {}, []
-for fit_mod in mlp_cfg:
-    li = int(fit_mod.split("layers.")[1].split(".")[0])
-    key = fit_mod.rsplit(".", 1)[-1]
-    base_mod = BASE_TMPL.format(li=li, key=key)
-    if fit_mod != FIT_TMPL.format(li=li, key=key):
-        raise SystemExit(f"FAIL: fitted module {fit_mod} does not match the "
-                         f"{args.family} fitter template — wrong --family?")
-    if base_mod not in base_mods:
-        missing.append((fit_mod, base_mod))
-    FIT_TO_BASE[fit_mod] = base_mod
+    # ---- build the fit->base remap and PROVE it lands, before touching bytes
+    FIT_TO_BASE, missing = {}, []
+    for fit_mod in mlp_cfg:
+        li = int(fit_mod.split("layers.")[1].split(".")[0])
+        key = fit_mod.rsplit(".", 1)[-1]
+        base_mod = BASE_TMPL.format(li=li, key=key)
+        if fit_mod != FIT_TMPL.format(li=li, key=key):
+            raise SystemExit(f"FAIL: fitted module {fit_mod} does not match the "
+                             f"{args.family} fitter template — wrong --family?")
+        if base_mod not in base_mods:
+            missing.append((fit_mod, base_mod))
+        FIT_TO_BASE[fit_mod] = base_mod
 
-if missing:
-    print(f"FAIL: {len(missing)} fitted modules have no counterpart in the base.")
-    for f, b in missing[:5]:
-        print(f"    {f}\n      -> {b}   NOT IN BASE")
-    raise SystemExit(2)
-print(f"remap OK: {len(FIT_TO_BASE)}/{len(mlp_cfg)} fitted modules land on real "
-      f"base modules")
+    if missing:
+        print(f"FAIL: {len(missing)} fitted modules have no counterpart in the base.")
+        for f, b in missing[:5]:
+            print(f"    {f}\n      -> {b}   NOT IN BASE")
+        raise SystemExit(2)
+    print(f"remap OK: {len(FIT_TO_BASE)}/{len(mlp_cfg)} fitted modules land on real "
+          f"base modules")
 
-DROP = {f"{b}." for b in FIT_TO_BASE.values()}
-
-
-def is_dropped(k):
-    return any(k.startswith(d) for d in DROP)
+    DROP = {f"{b}." for b in FIT_TO_BASE.values()}
 
 
-dropped = [k for k in base_idx if is_dropped(k)]
-print(f"will drop {len(dropped)} affine tensors from the base "
-      f"({len(dropped)//len(FIT_TO_BASE)} per module), carry "
-      f"{len(base_idx)-len(dropped)}")
+    def is_dropped(k):
+        return any(k.startswith(d) for d in DROP)
 
-if args.dry_run:
-    print("\nDRY RUN — nothing written.")
-    raise SystemExit(0)
 
-OUT.mkdir(parents=True, exist_ok=True)
-# CPU-STREAM EAGER LOAD, per FINDINGS IV.1. This read used to stay LAZY from
-# here until save_safetensors() forced it ~1300 tensors later, across the
-# whole base-carry loop and its mx.clear_cache() — i.e. the deferred read was
-# paid inside a GPU command buffer under memory pressure. On 2026-08-21 that
-# produced an artifact whose L60 up_proj codes/scales/codebook were ALL ZERO
-# while the source file was provably clean (every one of its 576 tensors
-# verified non-zero when read eagerly), and a rebuild from identical inputs
-# came out correct — the signature of a transient deferred read, not of a bad
-# disk. Same disease the fitter hits on SMB sources. eval INSIDE the block:
-# creation-binding alone is measured-insufficient [E70 add. 5-6].
-with mx.stream(mx.cpu):
-    mlp_w = mx.load(str(MLP / "model-00001-of-00001.safetensors"))
-    mx.eval(list(mlp_w.values()))
-# Post-read assertion: a silently-zeroed read must fail HERE, loudly, not
-# reach disk and wait for the post-hoc gate to notice.
-_dead = [k for k, v in mlp_w.items()
-         if float(mx.max(mx.abs(v.astype(mx.float32))).item()) == 0.0]
-if _dead:
-    raise SystemExit(f"FAIL: {len(_dead)} tensors read as ALL ZERO from "
-                     f"{MLP.name} (e.g. {_dead[:3]}). Deferred-read fault or "
-                     f"a corrupt fit output — do not write an artifact.")
+    dropped = [k for k in base_idx if is_dropped(k)]
+    print(f"will drop {len(dropped)} affine tensors from the base "
+          f"({len(dropped)//len(FIT_TO_BASE)} per module), carry "
+          f"{len(base_idx)-len(dropped)}")
 
-# ---- carry through everything we are NOT replacing, shard by shard
-new_map, shard_no, carried = {}, 0, 0
-for sh in sorted(set(base_idx.values())):
-    data = mx.load(str(BASE / sh))
-    keep = {k: v for k, v in data.items() if not is_dropped(k)}
-    carried += len(keep)
-    if keep:
-        shard_no += 1
-        name = f"model-{shard_no:05d}.safetensors"
-        mx.save_safetensors(str(OUT / name), keep)
-        for k in keep:
-            new_map[k] = name
-    del data, keep
-    mx.clear_cache()
-print(f"carried {carried} tensors from the base")
+    if args.dry_run:
+        print("\nDRY RUN — nothing written.")
+        raise SystemExit(0)
 
-# ---- splice VQ mlp, renaming fitter -> base convention.
-# Codes/scales are written [1, OUT, *] so verify_artifact (expert format) can
-# read them; a DENSE module wants 2D, and 2D also keeps the venv's
-# expert-shaped VQ hook off them — squeeze here, same as build_e4b_vq.py.
-mlp_2d = {}
-for k, v in mlp_w.items():
-    mod, leaf = k.rsplit(".", 1)
-    nk = f"{FIT_TO_BASE[mod]}.{leaf}"
-    t = v[0] if (leaf in ("codes", "vq_scales") and v.ndim == 3) else v
-    # Defensive width fix: the runtime shim allocates uint8 for K<=256, so a
-    # uint16 codes tensor both doubles the bytes on disk and mismatches the
-    # dtype the loader expects. fit_dense_vq.py hardcoded uint16 until
-    # 2026-08-21; narrow here so artifacts built from OLD fit outputs are still
-    # correct. Only narrows when it is provably lossless.
-    if leaf == "codes":
-        want = mx.uint8 if mlp_cfg[mod]["k"] <= 256 else mx.uint16
-        if t.dtype != want:
-            hi = int(mx.max(t).item())
-            if want == mx.uint8 and hi > 255:
-                raise SystemExit(f"FAIL: {mod} codes reach {hi} but k<=256 "
-                                 f"implies uint8 — codebook/codes disagree.")
-            print(f"  narrowing {mod} codes {t.dtype} -> {want}")
-            t = t.astype(want)
-    mlp_2d[nk] = t
-shard_no += 1
-name = f"model-{shard_no:05d}.safetensors"
-mx.save_safetensors(str(OUT / name), mlp_2d)
-# READ-BACK ZERO SCAN. The gate catches this later, but the gate is a
-# separate invocation someone can forget; this makes the builder itself
-# refuse to emit a zeroed splice.
-_rb = mx.load(str(OUT / name))
-_bad = [k for k, v in _rb.items()
-        if float(mx.max(mx.abs(v.astype(mx.float32))).item()) == 0.0]
-if _bad:
-    raise SystemExit(f"FAIL: {len(_bad)} tensors are ALL ZERO in the shard "
-                     f"just written (e.g. {_bad[:3]}). Write-side fault — "
-                     f"artifact is incomplete, do not gate or score it.")
-del _rb
-for k in mlp_2d:
-    new_map[k] = name
-print(f"spliced {len(mlp_2d)} VQ mlp tensors (renamed to base convention, "
-      f"codes squeezed to 2D)")
+    OUT.mkdir(parents=True, exist_ok=True)
+    # CPU-STREAM EAGER LOAD, per FINDINGS IV.1. This read used to stay LAZY from
+    # here until save_safetensors() forced it ~1300 tensors later, across the
+    # whole base-carry loop and its mx.clear_cache() — i.e. the deferred read was
+    # paid inside a GPU command buffer under memory pressure. On 2026-08-21 that
+    # produced an artifact whose L60 up_proj codes/scales/codebook were ALL ZERO
+    # while the source file was provably clean (every one of its 576 tensors
+    # verified non-zero when read eagerly), and a rebuild from identical inputs
+    # came out correct — the signature of a transient deferred read, not of a bad
+    # disk. Same disease the fitter hits on SMB sources. eval INSIDE the block:
+    # creation-binding alone is measured-insufficient [E70 add. 5-6].
+    with mx.stream(mx.cpu):
+        mlp_w = mx.load(str(MLP / "model-00001-of-00001.safetensors"))
+        mx.eval(list(mlp_w.values()))
+    # Post-read assertion: a silently-zeroed read must fail HERE, loudly, not
+    # reach disk and wait for the post-hoc gate to notice.
+    _dead = [k for k, v in mlp_w.items()
+             if float(mx.max(mx.abs(v.astype(mx.float32))).item()) == 0.0]
+    if _dead:
+        raise SystemExit(f"FAIL: {len(_dead)} tensors read as ALL ZERO from "
+                         f"{MLP.name} (e.g. {_dead[:3]}). Deferred-read fault or "
+                         f"a corrupt fit output — do not write an artifact.")
 
-json.dump({"metadata": {}, "weight_map": new_map},
-          open(OUT / "model.safetensors.index.json", "w"), indent=1)
+    # ---- carry through everything we are NOT replacing, shard by shard
+    new_map, shard_no, carried = {}, 0, 0
+    for sh in sorted(set(base_idx.values())):
+        data = mx.load(str(BASE / sh))
+        keep = {k: v for k, v in data.items() if not is_dropped(k)}
+        carried += len(keep)
+        if keep:
+            shard_no += 1
+            name = f"model-{shard_no:05d}.safetensors"
+            mx.save_safetensors(str(OUT / name), keep)
+            for k in keep:
+                new_map[k] = name
+        del data, keep
+        mx.clear_cache()
+    print(f"carried {carried} tensors from the base")
 
-cfg = json.load(open(BASE / "config.json"))
-cfg["vq_linear"] = {FIT_TO_BASE[m]: dict(v) for m, v in mlp_cfg.items()}
-cfg["vq_embed"] = {}
-cfg["model_file"] = "model.py"
-json.dump(cfg, open(OUT / "config.json", "w"), indent=1)
+    # ---- splice VQ mlp, renaming fitter -> base convention.
+    # Codes/scales are written [1, OUT, *] so verify_artifact (expert format) can
+    # read them; a DENSE module wants 2D, and 2D also keeps the venv's
+    # expert-shaped VQ hook off them — squeeze here, same as build_e4b_vq.py.
+    mlp_2d = {}
+    for k, v in mlp_w.items():
+        mod, leaf = k.rsplit(".", 1)
+        nk = f"{FIT_TO_BASE[mod]}.{leaf}"
+        t = v[0] if (leaf in ("codes", "vq_scales") and v.ndim == 3) else v
+        # Defensive width fix: the runtime shim allocates uint8 for K<=256, so a
+        # uint16 codes tensor both doubles the bytes on disk and mismatches the
+        # dtype the loader expects. fit_dense_vq.py hardcoded uint16 until
+        # 2026-08-21; narrow here so artifacts built from OLD fit outputs are still
+        # correct. Only narrows when it is provably lossless.
+        if leaf == "codes":
+            want = mx.uint8 if mlp_cfg[mod]["k"] <= 256 else mx.uint16
+            if t.dtype != want:
+                hi = int(mx.max(t).item())
+                if want == mx.uint8 and hi > 255:
+                    raise SystemExit(f"FAIL: {mod} codes reach {hi} but k<=256 "
+                                     f"implies uint8 — codebook/codes disagree.")
+                print(f"  narrowing {mod} codes {t.dtype} -> {want}")
+                t = t.astype(want)
+        mlp_2d[nk] = t
+    shard_no += 1
+    name = f"model-{shard_no:05d}.safetensors"
+    mx.save_safetensors(str(OUT / name), mlp_2d)
+    # READ-BACK ZERO SCAN. The gate catches this later, but the gate is a
+    # separate invocation someone can forget; this makes the builder itself
+    # refuse to emit a zeroed splice.
+    _rb = mx.load(str(OUT / name))
+    _bad = [k for k, v in _rb.items()
+            if float(mx.max(mx.abs(v.astype(mx.float32))).item()) == 0.0]
+    if _bad:
+        raise SystemExit(f"FAIL: {len(_bad)} tensors are ALL ZERO in the shard "
+                         f"just written (e.g. {_bad[:3]}). Write-side fault — "
+                         f"artifact is incomplete, do not gate or score it.")
+    del _rb
+    for k in mlp_2d:
+        new_map[k] = name
+    print(f"spliced {len(mlp_2d)} VQ mlp tensors (renamed to base convention, "
+          f"codes squeezed to 2D)")
 
-# BUNDLE = both runtimes + the loader shim, in that order.
-# vq_dense's fused path needs _dense_fused/_fused, which live in
-# vq_switch.py. Historically the bundle carried vq_dense ONLY and reached
-# into `mlx_lm.models.vq_switch` at call time, so a dense artifact's fast
-# path required a VQ-PATCHED mlx-lm and raised ModuleNotFoundError on a
-# stock install — the artifact scored fine and could not serve, which is
-# exactly the failure class III.11 exists for. Concatenating both puts
-# _dense_fused in the bundle's own globals (verified: the two modules share
-# zero top-level names), and vq_dense prefers that copy over the import.
-_here = pathlib.Path(__file__).parent
-SHIM = __import__("dense_shim").SHIM
-if "class Model" not in SHIM or "VQLinear" not in SHIM:
-    raise SystemExit("FAIL: shim is missing class Model / VQLinear.")
-model_py = (_layout.runtime_file("vq_switch.py").read_text()
-            + _layout.runtime_file("vq_dense.py").read_text() + SHIM)
-compile(model_py, "model.py", "exec")   # never ship a model.py that cannot parse
-(OUT / "model.py").write_text(model_py)
+    json.dump({"metadata": {}, "weight_map": new_map},
+              open(OUT / "model.safetensors.index.json", "w"), indent=1)
 
-for f in ("tokenizer.json", "tokenizer_config.json", "chat_template.jinja",
-          "generation_config.json", "processor_config.json",
-          "preprocessor_config.json"):
-    if (BASE / f).exists():
-        shutil.copy(BASE / f, OUT / f)
+    cfg = json.load(open(BASE / "config.json"))
+    cfg["vq_linear"] = {FIT_TO_BASE[m]: dict(v) for m, v in mlp_cfg.items()}
+    cfg["vq_embed"] = {}
+    cfg["model_file"] = "model.py"
+    json.dump(cfg, open(OUT / "config.json", "w"), indent=1)
 
-tot = sum(p.stat().st_size for p in OUT.glob("*.safetensors"))
-print(f"\nartifact -> {OUT}\n  {tot/2**30:.2f} GiB of tensors")
+    # BUNDLE = both runtimes + the loader shim, in that order.
+    # vq_dense's fused path needs _dense_fused/_fused, which live in
+    # vq_switch.py. Historically the bundle carried vq_dense ONLY and reached
+    # into `mlx_lm.models.vq_switch` at call time, so a dense artifact's fast
+    # path required a VQ-PATCHED mlx-lm and raised ModuleNotFoundError on a
+    # stock install — the artifact scored fine and could not serve, which is
+    # exactly the failure class III.11 exists for. Concatenating both puts
+    # _dense_fused in the bundle's own globals (verified: the two modules share
+    # zero top-level names), and vq_dense prefers that copy over the import.
+    _here = pathlib.Path(__file__).parent
+    SHIM = __import__("dense_shim").SHIM
+    if "class Model" not in SHIM or "VQLinear" not in SHIM:
+        raise SystemExit("FAIL: shim is missing class Model / VQLinear.")
+    model_py = (_layout.runtime_file("vq_switch.py").read_text()
+                + _layout.runtime_file("vq_dense.py").read_text() + SHIM)
+    compile(model_py, "model.py", "exec")   # never ship a model.py that cannot parse
+    (OUT / "model.py").write_text(model_py)
+
+    for f in ("tokenizer.json", "tokenizer_config.json", "chat_template.jinja",
+              "generation_config.json", "processor_config.json",
+              "preprocessor_config.json"):
+        if (BASE / f).exists():
+            shutil.copy(BASE / f, OUT / f)
+
+    tot = sum(p.stat().st_size for p in OUT.glob("*.safetensors"))
+    print(f"\nartifact -> {OUT}\n  {tot/2**30:.2f} GiB of tensors")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
