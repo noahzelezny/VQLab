@@ -1,7 +1,6 @@
 {
  "_doc": "Known import-rule violations (tests/test_layering.py). Shrinks only.",
  "violations": [
-  "_layout.py::sys.path.append",
   "bench/speed_pair_knurlogic.py::sys.path.insert",
   "gate/check_release.py::sys.path.insert",
   "gate/vision_smoke.py::sys.path.insert"

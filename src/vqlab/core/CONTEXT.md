@@ -13,5 +13,5 @@ Imported as `vqlab.core.<module>`.
 
 ## Rules that bite
 - core imports NOTHING from `vqlab.family` (layer rule, tests/test_layering.py), directly or through an indirection. A core module that needs a family lookup is in the wrong package: move it up.
-- Old names `vqlab.core.families`, `vqlab.core.numerics`, `vqlab.core.version_stamp`, `vqlab.core.runtime_load` (and bare `families` / `numerics` / `version_stamp` / `runtime_load`) `vqlab.family.arch` and `vqlab.assemble.codepack` are aliases for one release (`_layout.ALIASES`): same module object.
+- Old names `vqlab.core.families`, `vqlab.core.numerics`, `vqlab.core.version_stamp`, `vqlab.core.runtime_load` (and bare `families` / `numerics` / `version_stamp` / `runtime_load`) `vqlab.family.arch` and `vqlab.assemble.codepack` are aliases for one release (`_layout.DEPRECATED`): same module object.
 - Depth and geometry laws are family-local. Never inherit an allocation across families.

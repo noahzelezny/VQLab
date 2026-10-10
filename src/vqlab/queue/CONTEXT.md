@@ -46,4 +46,4 @@ steps/NN-name/{cmd,stdout,stderr,verdict.json}, tree/ while running).
   files / report / remote; patch names where they are USED, not there),
   `vqlab.agents.queue_eta` / bare `queue_eta`, `vqlab.gate.validate_queue` /
   bare `validate_queue`, `vqlab.agents.reserve` / bare `reserve`
-  (`_layout.MOVED`). CLI command names are unchanged.
+  (`_layout.DEPRECATED`). CLI command names are unchanged.
