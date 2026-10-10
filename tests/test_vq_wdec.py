@@ -117,6 +117,7 @@ def test_t5_kernel_sig_binds_wdec_buffers():
     (256, 1024, 4096, 4, 64, 12),   # 3.9bpw class: K4096/bits12/d4
     (96, 2560, 512, 2, 64, 9),      # non-power-of-two rows, 27B-ish IN/G
 ])
+@pytest.mark.gpu
 def test_t2_bit_identical_to_graph_arm(OUT, IN, K, D, G, bits):
     packed, codes, cbk, sc = _layer(OUT, IN, K, D, G, bits, seed=OUT)
     ref = _graph_w(codes, cbk, sc, G, OUT, IN)
@@ -128,6 +129,7 @@ def test_t2_bit_identical_to_graph_arm(OUT, IN, K, D, G, bits):
 # T3 — the row-sliced launch (the tiled arm's shape) matches its graph slice
 # --------------------------------------------------------------------------- #
 
+@pytest.mark.gpu
 def test_t3_row_slices_match_graph_slices():
     OUT, IN, K, D, G, bits = 200, 1024, 512, 2, 64, 9
     packed, codes, cbk, sc = _layer(OUT, IN, K, D, G, bits, seed=3)
@@ -142,6 +144,7 @@ def test_t3_row_slices_match_graph_slices():
 # T4 — adversarial values: subnormal codebook, inf/nan scales
 # --------------------------------------------------------------------------- #
 
+@pytest.mark.gpu
 def test_t4_subnormal_codebook_and_nonfinite_scales():
     OUT, IN, K, D, G, bits = 64, 512, 512, 2, 64, 9
     rng = np.random.default_rng(11)
@@ -162,6 +165,7 @@ def test_t4_subnormal_codebook_and_nonfinite_scales():
 # T6 — straddle sweep: every bits width against the graph unpack
 # --------------------------------------------------------------------------- #
 
+@pytest.mark.gpu
 @pytest.mark.parametrize("bits", list(range(2, 17)))
 def test_t6_all_bit_widths_match(bits):
     K = min(512, 1 << bits)
@@ -194,6 +198,7 @@ def test_t10_env_escape_hatch_disables_gate(monkeypatch):
 # End-to-end: _decode_matmul via VQLinear agrees across FUSE arms
 # --------------------------------------------------------------------------- #
 
+@pytest.mark.gpu
 def test_e2e_decode_matmul_fuse_arms_bit_identical(monkeypatch):
     OUT, IN, K, D, G, bits = 128, 1024, 512, 2, 64, 9
     packed, codes, cbk, sc = _layer(OUT, IN, K, D, G, bits, seed=42)

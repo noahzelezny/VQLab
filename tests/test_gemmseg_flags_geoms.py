@@ -93,6 +93,7 @@ CASES = [(g, p, dist) for g in GEOMS for p in (512, 8192) for dist in ("normal",
 
 @pytest.mark.parametrize("geom,pairs,dist", CASES,
                          ids=[f"d{g[0]}K{g[1]}{'p' if g[2] else 'u'}-N{p}-{dd}" for g, p, dd in CASES])
+@pytest.mark.gpu
 def test_gemmseg_flags(geom, pairs, dist):
     m = measure(geom, pairs, dist)
     assert m["cvec_exact"], (geom, pairs, dist, "CVEC not bit-exact")

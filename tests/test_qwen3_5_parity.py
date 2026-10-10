@@ -582,6 +582,7 @@ def test_maker_stored_layout(mt):
         assert h[pre + "mlp.experts.down_proj"]["shape"] == [E, D, I]
 
 
+@pytest.mark.gpu
 @pytest.mark.parametrize("dtype", ["float32", "bfloat16"])
 def test_gdn_metal_kernel_matches_ops(dtype):
     """The fused Metal gated-delta kernel (what the GPU runs at serving and

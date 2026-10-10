@@ -84,6 +84,7 @@ SHAPES = [
 ]
 
 
+@pytest.mark.gpu
 @pytest.mark.parametrize("OUT,IN,K,D,G,bits", SHAPES)
 @pytest.mark.parametrize("N", [1, 3, 20])
 def test_devx_bit_identical(OUT, IN, K, D, G, bits, N):
@@ -96,6 +97,7 @@ def test_devx_bit_identical(OUT, IN, K, D, G, bits, N):
     assert np.array_equal(off, on), "dense devx is not bit-identical"
 
 
+@pytest.mark.gpu
 @pytest.mark.parametrize("tiled", [True, False])
 def test_devx_bit_identical_both_d2_kernels(tiled):
     """d2 has a tiled AND an untiled kernel, with different barrier shapes.
@@ -112,6 +114,7 @@ def test_devx_bit_identical_both_d2_kernels(tiled):
     assert np.array_equal(off, on)
 
 
+@pytest.mark.gpu
 @pytest.mark.parametrize("dtype", [mx.float16, mx.bfloat16, mx.float32])
 def test_devx_narrowing_cast_holds_at_every_dtype(dtype):
     """The staged path narrowed T to half; the twin must narrow identically.
@@ -217,6 +220,7 @@ def test_kernel_sig_gives_dense_kernels_no_eidx():
     assert "eidx" in inp
 
 
+@pytest.mark.gpu
 def test_dense_spec_kernel_path_is_bit_identical():
     """The specialized (no `template=`) dense kernel must match the generic
     one exactly -- same generated Metal, values baked in as #defines."""

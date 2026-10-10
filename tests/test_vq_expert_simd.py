@@ -67,6 +67,7 @@ D4_SHAPES = [
 ]
 
 
+@pytest.mark.gpu
 @pytest.mark.parametrize("N", [1, 2, 5, 8])
 @pytest.mark.parametrize("shape", D8_SHAPES)
 def test_d8_simd_bit_exact(shape, N):
@@ -77,6 +78,7 @@ def test_d8_simd_bit_exact(shape, N):
     assert np.array_equal(base, simd)
 
 
+@pytest.mark.gpu
 @pytest.mark.parametrize("N", [1, 8])
 @pytest.mark.parametrize("bits", [12, 14])
 @pytest.mark.parametrize("shape", D8_SHAPES)
@@ -96,6 +98,7 @@ def test_d8_packed_simd_bit_exact(shape, bits, N, monkeypatch):
     assert np.array_equal(base, simd)
 
 
+@pytest.mark.gpu
 @pytest.mark.parametrize("N", [1, 8])
 @pytest.mark.parametrize("shape", D4_SHAPES)
 def test_d4_devcb_simd_bit_exact(shape, N):
@@ -115,6 +118,7 @@ def _dispatched(pack_bits, simd, **kw):
     return new  # empty if the kernel was already compiled by an earlier test
 
 
+@pytest.mark.gpu
 @pytest.mark.parametrize("bits", [0, 14])
 def test_ngrp_gate_selects_the_layout(bits):
     """The NGRP >= 32 gate is the whole dispatch rule: at NGRP=64 the simd
@@ -131,6 +135,7 @@ def test_ngrp_gate_selects_the_layout(bits):
     V._KERNELS.clear()
 
 
+@pytest.mark.gpu
 def test_packed_d4_has_no_simd_path():
     """The 35B-A3B geometry (d=4, K=8192, pack_bits=13) intentionally has NO
     simd variant: the packed thread-per-row kernel measured 0.94-1.07x at
@@ -146,6 +151,7 @@ def test_packed_d4_has_no_simd_path():
                           np.array(V._fused(*args, pack_bits=13, simd=True)))
 
 
+@pytest.mark.gpu
 def test_d4_simd_declined_below_32_groups():
     """NGRP < 32 starves lanes and measured 0.70-0.89x, so the dispatcher must
     stay on the thread-per-row d4 kernel there -- and still be correct."""
@@ -156,6 +162,7 @@ def test_d4_simd_declined_below_32_groups():
                           np.array(V._fused(*args, simd=True)))
 
 
+@pytest.mark.gpu
 def test_large_n_declines_simd():
     """End-to-end, seq>=3 on the 397B measured 13.6% SLOWER with the simd
     layout even though the isolated microbench says it wins at the same N --
@@ -199,6 +206,7 @@ D2_SHAPES = [
 ]
 
 
+@pytest.mark.gpu
 @pytest.mark.parametrize("N", [1, 2, 5, 8, 10, 20])
 @pytest.mark.parametrize("shape", D2_SHAPES)
 def test_d2_u32_bit_exact(shape, N):
@@ -209,6 +217,7 @@ def test_d2_u32_bit_exact(shape, N):
     assert np.array_equal(base, u32)
 
 
+@pytest.mark.gpu
 @pytest.mark.parametrize("N", [1, 8])
 @pytest.mark.parametrize("shape", D2_SHAPES)
 def test_d2_simd_bit_exact(shape, N):
@@ -232,6 +241,7 @@ def test_d2_simd_bit_exact(shape, N):
     assert np.array_equal(base, np.array(y))
 
 
+@pytest.mark.gpu
 def test_d2_u32_is_the_default_and_dispatches():
     """Unpacked uint8 d2 codes must take the uint32 kernel by default."""
     assert V._D2_U32 is True
@@ -267,6 +277,7 @@ def test_ple_byte_codes_skips_the_identity_unpack():
 
 # --- register-buffering arc (2026-09-02) -----------------------------------
 
+@pytest.mark.gpu
 @pytest.mark.parametrize("N", [1, 8])
 @pytest.mark.parametrize("shape", [s for s in D8_SHAPES if s[2] // s[5] >= 32])
 def test_d8_regbuf_bit_exact(shape, N, monkeypatch):
@@ -333,6 +344,7 @@ def test_packed_d8_simd_rows_per_threadgroup():
     assert V._EXPERT_ROWS_TG == 32
 
 
+@pytest.mark.gpu
 @pytest.mark.parametrize("rows", [4, 8, 32])
 def test_rows_per_threadgroup_is_bit_neutral(rows, monkeypatch):
     """Changing rows/threadgroup must not move a single bit: the reduction is
@@ -367,6 +379,7 @@ def test_simdsum_default_policy():
     assert "barrier" not in V._SRC_FUSED_PACKED_D8_SIMD_DEVX_SS
 
 
+@pytest.mark.gpu
 @pytest.mark.parametrize("N", [1, 10, 20])
 def test_default_devx_ss_within_one_ulp(N, monkeypatch):
     """The shipping default (devx+ss) vs the legacy-identical path
@@ -388,6 +401,7 @@ def test_default_devx_ss_within_one_ulp(N, monkeypatch):
     assert np.mean(ref != got) < 0.02
 
 
+@pytest.mark.gpu
 @pytest.mark.parametrize("N", [1, 10, 20])
 def test_simdsum_matches_within_one_ulp(N, monkeypatch):
     """It is NOT bit-identical -- that is the whole reason it is off -- but it
@@ -421,6 +435,7 @@ def test_spec_kernels_on_by_default():
     assert V._SPEC_KERNELS is True
 
 
+@pytest.mark.gpu
 @pytest.mark.parametrize("shape", D8_SHAPES)
 @pytest.mark.parametrize("N", [1, 8])
 def test_spec_kernels_bit_identical(shape, N, monkeypatch):
@@ -435,6 +450,7 @@ def test_spec_kernels_bit_identical(shape, N, monkeypatch):
     assert np.array_equal(ref, got)
 
 
+@pytest.mark.gpu
 def test_spec_kernels_bit_identical_unpacked_d4_and_d2(monkeypatch):
     """The non-packed dispatch branches go through the same specialization."""
     for (E, OUT, IN, K, d, G) in ((4, 128, 512, 512, 4, 64),
@@ -447,6 +463,7 @@ def test_spec_kernels_bit_identical_unpacked_d4_and_d2(monkeypatch):
         assert np.array_equal(ref, got)
 
 
+@pytest.mark.gpu
 def test_plan_memo_respects_flag_flips(monkeypatch):
     """The plan memo keys on the module-level kernel flags, so a bench
     script's V._D8_SIMDSUM flip must reach the dispatcher on the NEXT call,
@@ -464,6 +481,7 @@ def test_plan_memo_respects_flag_flips(monkeypatch):
     V._KERNELS.clear()
 
 
+@pytest.mark.gpu
 def test_plan_memo_is_invalidated_by_kernel_clear():
     """Plans live inside _KERNELS under ("plan", ...) keys precisely so the
     existing clear() used across this suite wipes them too."""
@@ -487,6 +505,7 @@ def test_devx_on_by_default():
     assert V._D8_DEVX is True
 
 
+@pytest.mark.gpu
 @pytest.mark.parametrize("shape", [s for s in D8_SHAPES if s[2] // s[5] >= 32])
 @pytest.mark.parametrize("N", [1, 8])
 def test_devx_bit_identical_to_staged(shape, N, monkeypatch):

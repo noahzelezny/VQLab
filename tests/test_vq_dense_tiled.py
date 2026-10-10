@@ -61,6 +61,7 @@ def _run(tiled, *args, packed=0, in_features=None):
     (64, 5120, 512, 64),
     (96, 2048, 256, 64),
 ])
+@pytest.mark.gpu
 def test_tiled_is_bit_identical_to_untiled(OUT, IN, K, G):
     x, codes, cb, sc = _rand_layer(OUT, IN, K, G)
     assert V._dense_tg_bytes(K, IN // 2) <= V._TG_CAP, "shape must fit untiled"
@@ -72,6 +73,7 @@ def test_tiled_is_bit_identical_to_untiled(OUT, IN, K, G):
         f"{np.abs(a.astype(np.float32) - b.astype(np.float32)).max()}")
 
 
+@pytest.mark.gpu
 def test_tiled_is_bit_identical_packed():
     OUT, IN, K, G, BITS = 64, 5120, 512, 64, 9
     x, codes, cb, sc = _rand_layer(OUT, IN, K, G, packed=BITS)
@@ -82,6 +84,7 @@ def test_tiled_is_bit_identical_packed():
 
 # The shape this whole change exists for: the 27B mlp width, where the untiled
 # kernel cannot be built at all.
+@pytest.mark.gpu
 @pytest.mark.parametrize("K,packed", [(256, 0), (512, 0), (512, 9), (4096, 0)])
 def test_wide_layer_runs_tiled_and_matches_reference(K, packed):
     OUT, IN, G = 64, 17408, 64
@@ -118,6 +121,7 @@ def test_dense_fits_reports_the_shapes_that_motivated_this():
     assert not V.dense_fits(1024, 17408, 64, d=8)
 
 
+@pytest.mark.gpu
 def test_fused_is_more_accurate_than_the_decode_fallback():
     """The wide layers had no kernel before, only the decode fallback, so
     "bit-exact against what shipped" is not the right question for them --
@@ -177,6 +181,7 @@ def _rand_d4(OUT, IN, K, G, seed=0):
 
 @pytest.mark.parametrize("OUT,IN,K,G", [(64, 2048, 256, 64),
                                         (32, 4096, 1024, 64)])
+@pytest.mark.gpu
 def test_dense_d4_matches_expert_kernel_bit_for_bit(OUT, IN, K, G):
     """Where the d4 EXPERT kernel can still run (small K, narrow layer), the
     dense one must agree with it exactly -- same contract the d2 pair has."""
@@ -191,6 +196,7 @@ def test_dense_d4_matches_expert_kernel_bit_for_bit(OUT, IN, K, G):
         f"{np.abs(a.astype(np.float32) - b.astype(np.float32)).max()}")
 
 
+@pytest.mark.gpu
 def test_dense_d4_runs_at_the_3_9bpw_shape_and_is_accurate():
     """The shape that motivated it: 27B mlp width at K=4096, where the
     codebook is 64 KB and cannot be staged at all."""
@@ -208,12 +214,14 @@ def test_dense_d4_runs_at_the_3_9bpw_shape_and_is_accurate():
     assert err < 1e-3, f"dense d4 wide-layer rel err {err:.3e}"
 
 
+@pytest.mark.gpu
 def test_dense_d4_rejects_shapes_its_unroll_cannot_serve():
     x, codes, cb, sc = _rand_d4(32, 2048, 256, 32)   # G=32 -> SPG=8, ok
     V._dense_fused(x, codes, cb, sc)                  # must not raise
     assert not V.dense_fits(256, 2048, 24, 4)         # G % 16 != 0
 
 
+@pytest.mark.gpu
 def test_dense_packed_d4_matches_its_expert_twin():
     """The 3.9bpw geometry exactly: d=4, packed codes, device codebook. Must
     agree bit-for-bit with the expert kernel it was derived from."""
@@ -236,6 +244,7 @@ def test_dense_packed_d4_matches_its_expert_twin():
         f"{np.abs(a.astype(np.float32) - b.astype(np.float32)).max()}")
 
 
+@pytest.mark.gpu
 def test_dense_packed_d4_at_the_3_9bpw_width():
     OUT, IN, K, G, BITS = 64, 17408, 4096, 64, 12
     rng = np.random.default_rng(13)

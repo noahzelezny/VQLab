@@ -74,11 +74,13 @@ pythonpath = ["src"]
 testpaths = ["tests"]
 markers = [
     "integration: needs a real artifact; set VQLAB_MTP_MODEL",
+    "gpu: needs a Metal GPU (custom Metal kernels or the GPU default device); `pytest -m \"not gpu\"` on a CPU-only machine",
     "lab: reads real lab artifacts or lab-only storage; deselected by default, run with `pytest -m lab`",
 ]
 # The default run is what a fresh clone (and scripts/ci.sh) can answer. A later
 # -m on the command line replaces this one: `pytest -m lab` runs only the lab
-# tests, `pytest -m "lab or not lab"` runs everything.
+# tests, `pytest -m "lab or not lab"` runs everything, and a CPU-only machine runs
+# `pytest -m "not gpu and not lab"`.
 addopts = '-m "not lab"'
 
 [tool.ruff]

@@ -71,6 +71,7 @@ CASES = [(g, p, dd) for g in SZ_GEOMS for p in (512, 8192) for dd in ("normal", 
 @pytest.mark.parametrize("geom,pairs,dist", CASES,
                          ids=[f"d{g[0]}K{g[1]}{'p' if g[2] else 'u'}I{g[3]}-N{p}-{dd}"
                               for g, p, dd in CASES])
+@pytest.mark.gpu
 def test_sz_accs(geom, pairs, dist):
     m = measure(geom, pairs, dist)
     assert m["eq_expanded"], (geom, pairs, dist, "sz+ACCS != expanded+ACCS")

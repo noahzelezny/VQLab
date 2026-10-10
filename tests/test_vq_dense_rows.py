@@ -29,6 +29,7 @@ def _layer(OUT, IN, K, D, packed, N, seed=1234):
             mx.array(rng.normal(0, 0.05, (OUT, IN // 64)).astype(np.float16)))
 
 
+@pytest.mark.gpu
 @pytest.mark.parametrize("D,K,packed", CASES)
 @pytest.mark.parametrize("devx,tiled", list(itertools.product([0, 1], ["0", "1"])))
 def test_dense_output_independent_of_rows_per_threadgroup(D, K, packed, devx, tiled,

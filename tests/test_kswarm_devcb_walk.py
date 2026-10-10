@@ -52,6 +52,7 @@ SHAPES = [
 ]
 
 
+@pytest.mark.gpu
 @pytest.mark.parametrize("N", [1, 8, 32])
 @pytest.mark.parametrize("shape", SHAPES)
 def test_devcb_walk_bit_exact(monkeypatch, shape, N):
@@ -62,12 +63,14 @@ def test_devcb_walk_bit_exact(monkeypatch, shape, N):
                           _run(monkeypatch, True, args, BITS))
 
 
+@pytest.mark.gpu
 def test_devcb_walk_bit_exact_large_skewed(monkeypatch):
     args = _args(8, 512, 2048, 8192, 13, 4096, skew=True, seed=3)
     assert np.array_equal(_run(monkeypatch, False, args, 13),
                           _run(monkeypatch, True, args, 13))
 
 
+@pytest.mark.gpu
 def test_devcb_walk_dispatches(monkeypatch):
     monkeypatch.setattr(V, "_D4_DEVCB_WALK", True)
     V._fused(*_args(2, 256, 2048, 8192, 13, 1), pack_bits=13)
