@@ -18,7 +18,6 @@
   "agents/run_queue.py::bare:step_verdict",
   "agents/run_queue.py::parents[2]",
   "agents/run_queue.py::sys.path.insert",
-  "agents/run_queue.py::upward:agents->cli",
   "assemble/build_dense_vq.py::bare:families",
   "assemble/build_dense_vq.py::parents[2]",
   "assemble/build_dense_vq.py::sys.path.insert",

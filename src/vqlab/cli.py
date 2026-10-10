@@ -1,6 +1,6 @@
 """vqlab — one CLI over the standalone pipeline scripts.
 
-The underlying scripts are deliberately standalone (each is a complete,
+The command table is vqlab/commands.py (pure data). The underlying scripts are deliberately standalone (each is a complete,
 auditable tool with its own argparse surface, and several run at module
 scope). This dispatcher sets sys.argv and executes the chosen script in
 its own right, so `vqlab fit-moe --help` shows the script's full surface
@@ -21,204 +21,15 @@ from pathlib import Path
 
 PKG = Path(__file__).parent
 
-COMMANDS = {
-    # plan/
-    "onboard": ("onboard.py", "sequence a new teacher through ONBOARDING.md: profile, loader, cache determinism, init sweep (resumable; --launch runs GPU steps under the lease)"),
-    "family-profile": ("family_profile.py", "size up a teacher from headers only: arch, bytes per bit, legal (d,K), module signatures"),
-    "preflight-ram": ("preflight_ram.py", "refuse resident-memory ops on models bigger than RAM"),
-    "preflight-disk": ("preflight_disk.py", "refuse builds whose output volume lacks the space"),
-    "price": ("price.py", "price a size-targeted build before fitting it"),
-    "zero-groups": ("zero_groups.py", "headers + vq_scales only, no GPU: code GiB a skip-zero-groups format would save, per layer / per fit"),
-    "layer-leverage": ("layer_leverage.py", "per-layer damage probe: which layers earn bigger K"),
-    "alloc-sweep": ("alloc_sweep.py", "cost/value curves for per-layer allocation -> the iso-byte frontier"),
-    "probe-init": ("probe_init_sweep.py", "per-family k-means++ vs random init sweep"),
-    "mtp-probe": ("mtp_probe.py", "MTP head draft-acceptance probe (qwen4_exp)"),
-    "mtp-probe35": ("mtp_probe35.py", "MTP wiring sweep + acceptance probe (qwen3_5 / qwen3_5_moe)"),
-    "doctor": ("doctor.py", "which interpreter, mlx / mlx-lm / arch files, storage roots and HF token this run would use (no GPU)"),
-    "config": ("config_cmd.py", "show where vqlab reads/writes (and why), or `config init` a starter config"),
-    # fit/
-    "fits": ("fits.py", "the fit store: index / list / file fitted modules by family, teacher, layer, geometry"),
-    "fit-moe": ("fit_moe.py", "fit VQ codebooks for MoE expert tensors (per --family)"),
-    "fit-dense": ("fit_dense_vq.py", "fit VQ codebooks for a dense MLP trio"),
-    "fit-ple": ("fit_ple.py", "fit per-tensor VQ codebooks for PLE ngram banks"),
-    "geo-build": ("geo_build.py", "rebuild an artifact under a new per-layer geometry map (diff-style)"),
-    "reselect": ("reselect.py", "activation-aware code re-selection: calibrate (self-gen Gram bank) / apply (new artifact, codes only)"),
-    "fit-additive": ("additive_vq.py", "additive VQ: two small codebooks per module, expanded to one d4-K(K1*K2) fit for zero-kernel KL tests"),
-    "harvest-parts": ("harvest_parts.py", "extract a shipped rung's VQ fits into a geo-build --reuse parts dir"),
-    # assemble/
-    "pack": ("pack.py", "pack MoE codes to true bit-width; recompute sizes"),
-    "pack-ple": ("pack_ple.py", "pack PLE codes row-aligned to true bit-width"),
-    "stream-convert": ("stream_convert.py", "streaming affine convert / struct base for models bigger than RAM"),
-    "sanitize-stream": ("sanitize_stream.py", "exact runtime-layout teacher, one layer at a time through Model.sanitize (DeepSeek-V4)"),
-    "loo-bands": ("loo_bands.py", "leave-one-out band hybrids of a VQ build (exact experts restored per band) + their kl-ladder queue: the damage map"),
-    "minibase": ("minibase.py", "a fit base of one layer band's shards (symlinks), so a band fit writes only those"),
-    "mix": ("mix.py", "assemble an artifact from per-layer-band sources, shard by shard; config maps follow the bytes"),
-    "release-prep": ("release_prep.py", "everything before an upload: sizes, junk, provenance, check-release, Hub diff; prints the publish line"),
-    "card": ("card.py", "a full model card from config + KL JSON + build record + sizes; TODO blocks for human prose, refuses a KL fingerprint mismatch or mixed builds"),
-    "card-tables": ("card_tables.py", "a model card's KL table and paired deltas as Markdown, from kl-ladder JSON + each rung's own headers"),
-    "slice": ("slice_teacher.py", "a small REAL slice of any teacher (--layers 0-3: those layers + embeddings/norm/head, config adjusted) for preflighting a writer in minutes"),
-    "size": ("size_cmd.py", "an artifact's size three ways (text / +tower / +MTP) and the full download, from its headers"),
-    "teacher-prep": ("teacher_prep.py", "official release -> exact MLX teacher: cache guard, F8_E8M0 relabel, disk preflight, sanitize-stream"),
-    "graft-extras": ("graft_extras.py", "byte-copy a release's extra tensors (vision tower, image tokens, image-routing biases) into a text VQ artifact under the runtime's names; identity-probed"),
-    "splice-ple": ("splice_ple.py", "splice VQ PLE codes into a packed artifact"),
-    "pack-dense": ("pack_dense.py", "pack a dense VQ artifact"),
-    "unpack-dense": ("unpack_dense.py", "diagnostic twin with PLAIN codes: isolates PACKING from every other variable (F141)"),
-    "build-dense": ("build_dense_vq.py", "splice dense VQ fits into a quantized base -> runnable artifact"),
-    "reskeleton": ("reskeleton.py", "put a VQ build's expert tensors on another build's skeleton (matched-skeleton comparisons)"),
-    "graft": ("graft_vision.py", "graft the bf16 vision tower into an artifact"),
-    "ple-swap": ("ple_swap.py", "swap an artifact's PLE tables for another rung's (symlinks; prices PLE bytes on KL)"),
-    "mtp-extract": ("mtp_extract.py", "pull a model's MTP head out of its source checkpoint into a graft"),
-    "mtp-head-ds4": ("mtp_head_ds4.py", "DeepSeek-V4-Flash draft head for a VQ trunk: exact mtp.0 via the runtime sanitize, VQ experts at trunk geometry, affine dense (the shipped q6 recipe)"),
-    "mtp-pack": ("mtp_pack.py", "pack a bf16 MTP graft into a quantized drafting sidecar"),
-    "mtp-graft": ("mtp_graft.py", "emit the MTP head in a native runtime's layout (language_model.mtp.*)"),
-    # bundle/
-    "bundle": ("add_model_file.py", "(re)write the self-contained model.py bundle (MoE)"),
-    "patch-arch": ("patch_arch.py", "surgical loader-aware arch fix on a published bundle, runtime untouched"),
-    "vision-layout": ("vision_layout.py", "check/repair a grafted tower's patch-embed memory layout"),
-    "rebundle-dense": ("rebundle_dense.py", "re-splice a DENSE artifact's model.py from the current runtime, in place"),
-    # gate/
-    "vision-smoke": ("vision_smoke.py", "vision arm of III.11: put an IMAGE through the shipping runtime"),
-    "check": ("check_all.py", "run the release gates that need no source model"),
-    "smoke": ("smoke.py", "generate one token through the runtime the artifact ships"),
-    "spelling": ("us_spelling.py", "fail on British spellings in released text (paper, cards); --fix rewrites to US"),
-    "parity": ("parity.py", "a family's checklist of REFERENCE inference behaviours (clamps, eps, routing) and the test for each; exits 1 if a required one is untested"),
-    "pin": ("pin.py", "freeze an artifact for measurement (symlinked weights, optional --runtime re-bake), smoke it, write vqlab_pin.json"),
-    "verify": ("verify_artifact.py", "outlier gate: decode artifact bytes vs bf16 source"),
-    "validate": ("validate_queue.py", "overnight validation queue: drain artifacts through the gates, never publish"),
-    "check-release": ("check_release.py", "release gate: files exist and function"),
-    "check-bundle": ("check_bundle.py", "bundle gate: shipped runtime matches repo runtime"),
-    "check-comparator": ("check_comparator.py", "comparator gate: tensor-set parity vs teacher"),
-    "bundle-accept": ("bundle_accept.py", "kernel acceptance on the runtime lifted FROM the artifact"),
-    "selftest": ("selftest.py", "run the real pipeline on a tiny synthetic model"),
-    "mtp-smoke-head": ("mtp_smoke_head.py", "head-alone load + T=1/T=2 forward timing (no trunk)"),
-    # score/
-    "tasks": ("score_tasks_streaming.py", "task benchmarks (HellaSwag/PIQA/WinoGrande via lm-eval), layer-streamed: scores models larger than RAM"),
-    "score": ("referee/score_streaming.py", "streaming referee perplexity (models may exceed RAM)"),
-    "stream-score": ("stream_score.py", "layer-streamed ppl / teacher top-k cache / KL-to-teacher: the KL gate's instrument (kl-ladder runs it per rung)"),
-    "kl": ("kl_damage.py", "KL-to-bf16 damage vs a cached teacher (cache/score)"),
-    "kernel-truth": ("kernel_truth.py", "fused vs fallback: which is closer to an EXACT float64 reference? (F146)"),
-    "kernel-truth-moe": ("kernel_truth_moe.py", "MoE twin of kernel-truth: decode (small-N fused) vs prefill (gemmseg2) expert kernels against an exact float64 reference"),
-    "act-stats": ("act_stats.py", "how often each clamp/limit in a family's parity checklist fires on the house corpora (GPU, streamed teacher)"),
-    "kl-pair": ("kl_pair.py", "paired KL between two arms scored in SEPARATE runs (env-var arms)"),
-    "runtime-equiv": ("runtime_equiv.py", "same model slice through two interpreters: bitwise equal, or max |logit diff| (F194; run whenever an env moves)"),
-    "kl-ladder": ("kl_ladder.py", "rank rungs by KL against per-corpus teacher caches, with error bars"),
-    # bench/
-    "speed-pair": ("speed_pair.py", "decode/prefill speed of TWO artifacts as a per-pair ratio (fresh process per arm, alternating, n>=3)"),
-    "speed-pair-knurlogic": ("speed_pair_knurlogic.py", "speed-pair for models Knurlogic serves (one Mac or a pipeline split): arms by model NAME, refuses identity collapse / non-bundled runtime"),
-    "host-attrib": ("host_attrib.py", "profile the VQ module's HOST cost (F41's unattributed 12-13%)"),
-    "prefill-bench": ("prefill_bench.py", "time prefill on one artifact under BOTH codebook arms (ratio, n>=3)"),
-    "active-bytes": ("active_bytes.py", "weight bytes read per decode token, by component (the roofline denominator)"),
-    "coverage": ("kernel_coverage.py", "per-module report: which prefill kernel path each geometry takes"),
-    "hc-micro": ("hc_micro.py", "single GatedResidual micro-bench: is mx.compile inert on this chain? (split half invalid, see F133)"),
-    "decode-timeline": ("decode_timeline.py", "every stage of one decode token, in order, timed, summing to the whole"),
-    "stage-bandwidth": ("stage_bandwidth.py", "achieved GB/s and time above the roofline for EVERY decode stage (decode-timeline JSON + active-bytes billing; no GPU)"),
-    "gpu-capture": ("gpu_capture.py", "record ONE decode step's Metal work as an Xcode .gputrace (per-kernel counters: occupancy, bandwidth, limiters); needs MTL_CAPTURE_ENABLED=1"),
-    "serve-timeline": ("serve_timeline.py", "where a request SERVED by Knurlogic spends its time: its own partition (http, queue, admission, prefill/decode steps), n requests, median per bucket"),
-    "prefill-timeline": ("prefill_timeline.py", "every stage of one prefill (attention / MLP half of each layer), timed, summing to the whole; any arch"),
-    "lut-bench": ("lut_bench.py", "decode expert kernel with the codebook LUT read rewritten (free / rank-r / outer / two-level residual) vs stock: R3-5/R3-6 falsifier, arm per process"),
-    "gdn-chunk-truth": ("gdn_chunk_truth.py", "chunked vs sequential gated-delta scan: error vs an fp64 reference + scan microbench (R3-3)"),
-    "decode-ladder": ("decode_ladder.py", "per-component decode deletion arms (GDN / attn / VQ), Flash-aware"),
-    "mtp-accept": ("mtp_accept.py", "paired draft-acceptance across prompts (the reliable instrument)"),
-    "mtp-bench": ("mtp_bench.py", "measure the MTP speedup, acceptance and numerics control"),
-    "mtp-arms": ("mtp_arms.py", "one pinned, servable arm per draft head (symlinks; the release is never touched) for a head A/B via speed-pair-knurlogic --draft"),
-    # records/
-    "manifest": ("artifact_manifest.py", "tamper stamp: were these shard bytes rewritten? (outside the artifact)"),
-    "runs": ("runlog.py", "the run log: every vqlab invocation, argv, commit, exit code"),
-    "provenance": ("provenance.py", "build record: how an artifact was made (tool, fitter, inputs, runtime, lineage)"),
-    "scratch": ("scratch_cmd.py", "scratch reclaimable: unpacked dirs whose verified pack exists, sizes + total, and the rm lines for a human (never deletes)"),
-    "registry": ("registry.py", "index of every artifact from provable facts; Hub drift check (metadata only)"),
-    # ship/
-    "publish": ("publish.py", "upload to the Hub, gated on check-release passing"),
-    "mtp-generate": ("mtp_run.py", "generate with MTP speculative drafting"),
-    "serve": ("serve.py", "serve an artifact over an OpenAI-compatible API (mlx-lm server + MTP decode)"),
-    # agents/
-    "mcp": ("mcp_server.py", "serve the lab to agents over MCP (stdio); one server per box"),
-    "gui": ("gui.py", "a local, read-only window onto the lab (127.0.0.1:8781)"),
-    # skipzero/ -- the vq-skipzero format (shipped in released artifacts since 2026-09-29)
-    "sz-pack": ("skipzero/sz_pack.py", "vq-skipzero: drop fully-dead VQ rows on disk (live rows + row mask), expanded at load; --dry-run prices it"),
-    "sz-check": ("skipzero/sz_check.py", "numpy check that a vq-skipzero artifact expands to the original (live rows byte-identical, dead rows zero); --selftest"),
-    "sz-resident": ("skipzero/sz_resident_build.py", "stage 2: stage-1 pack -> compact-RESIDENT artifact (row table, new dir)"),
-    "sz-bitexact": ("skipzero/sz_bitexact.py", "byte-equality gate, resident vs reference (modules N=1/8/4096/4097, logits, 9k prefill, greedy); --synthetic, --selftest"),
-    "queue": ("run_queue.py", "run a list of steps from PINNED code (git worktree), under the GPU lease, failing loudly; --preflight"),
-    "reserve": ("reserve.py", "say who has a box until when (`reserve m4 --for X --until +3h`, --list, --release); queue run refuses a box reserved for someone else"),
-}
+# The registry is vqlab/commands.py (pure data, shared with the MCP server
+# and the queue). These names are its views, kept for existing callers.
+from vqlab import commands as _registry  # noqa: E402
+from vqlab.commands import NAMESPACES, SPELLING, resolve  # noqa: E402,F401
 
-# Namespaces, in pipeline order: namespace -> (what it is for, {sub: flat}).
-# A sub drops the namespace's own prefix (fit-moe -> fit moe) and otherwise
-# keeps the flat name, so nothing has to be relearned twice. Every COMMANDS
-# key sits in exactly one namespace (asserted below).
-NAMESPACES = {
-    "plan": ("what will it cost, where should the bits go, what IS this model", {
-        "onboard": "onboard", "family-profile": "family-profile", "price": "price",
-        "zero-groups": "zero-groups", "layer-leverage": "layer-leverage",
-        "loo-bands": "loo-bands", "alloc-sweep": "alloc-sweep", "probe-init": "probe-init",
-        "preflight-ram": "preflight-ram", "preflight-disk": "preflight-disk",
-        "mtp-probe": "mtp-probe", "mtp-probe35": "mtp-probe35"}),
-    "fit": ("teacher weights -> codebooks + codes", {
-        "fits": "fits", "moe": "fit-moe", "dense": "fit-dense", "ple": "fit-ple",
-        "additive": "fit-additive", "geo-build": "geo-build", "reselect": "reselect",
-        "harvest-parts": "harvest-parts"}),
-    "build": ("codes -> an artifact that loads (the assemble/ stage)", {
-        "pack": "pack", "pack-dense": "pack-dense", "pack-ple": "pack-ple",
-        "splice-ple": "splice-ple", "ple-swap": "ple-swap", "unpack-dense": "unpack-dense",
-        "dense": "build-dense", "reskeleton": "reskeleton", "slice": "slice",
-        "minibase": "minibase", "mix": "mix", "stream-convert": "stream-convert",
-        "sanitize-stream": "sanitize-stream", "teacher-prep": "teacher-prep",
-        "graft": "graft", "graft-extras": "graft-extras", "mtp-extract": "mtp-extract",
-        "mtp-pack": "mtp-pack", "mtp-graft": "mtp-graft", "mtp-head-ds4": "mtp-head-ds4",
-        "mtp-arms": "mtp-arms", "sz-pack": "sz-pack", "sz-resident": "sz-resident"}),
-    "bundle": ("ship the runtime inside the artifact", {
-        "moe": "bundle", "dense": "rebundle-dense", "patch-arch": "patch-arch",
-        "vision-layout": "vision-layout"}),
-    "gate": ("is it loadable, correct and releasable", {
-        "check": "check", "check-release": "check-release", "check-bundle": "check-bundle",
-        "check-comparator": "check-comparator", "bundle-accept": "bundle-accept",
-        "verify": "verify", "smoke": "smoke", "vision-smoke": "vision-smoke",
-        "parity": "parity", "selftest": "selftest", "validate": "validate", "pin": "pin",
-        "mtp-smoke-head": "mtp-smoke-head", "spelling": "spelling",
-        "sz-check": "sz-check", "sz-bitexact": "sz-bitexact"}),
-    "score": ("how much damage does it carry", {
-        "kl-ladder": "kl-ladder", "kl-pair": "kl-pair", "kl": "kl", "ppl": "score",
-        "stream-score": "stream-score", "tasks": "tasks", "kernel-truth": "kernel-truth",
-        "kernel-truth-moe": "kernel-truth-moe", "act-stats": "act-stats",
-        "runtime-equiv": "runtime-equiv"}),
-    "bench": ("how fast is it, and where does the time go", {
-        "decode-timeline": "decode-timeline", "prefill-timeline": "prefill-timeline",
-        "decode-ladder": "decode-ladder", "gdn-chunk-truth": "gdn-chunk-truth", "lut-bench": "lut-bench", "active-bytes": "active-bytes",
-        "stage-bandwidth": "stage-bandwidth", "serve-timeline": "serve-timeline",
-        "gpu-capture": "gpu-capture",
-        "prefill-bench": "prefill-bench", "coverage": "coverage", "host-attrib": "host-attrib",
-        "hc-micro": "hc-micro", "mtp-bench": "mtp-bench", "mtp-accept": "mtp-accept",
-        "speed-pair": "speed-pair", "speed-pair-knurlogic": "speed-pair-knurlogic"}),
-    "ship": ("publish or serve it", {
-        "release-prep": "release-prep", "size": "size", "card": "card", "card-tables": "card-tables",
-        "publish": "publish", "serve": "serve", "mtp-generate": "mtp-generate"}),
-    "lab": ("the lab around the pipeline: records, queues, boxes, agents", {
-        "doctor": "doctor", "config": "config", "runs": "runs", "provenance": "provenance",
-        "manifest": "manifest", "registry": "registry", "scratch": "scratch",
-        "queue": "queue", "reserve": "reserve", "mcp": "mcp", "gui": "gui"}),
-}
-
-# flat name -> its namespaced spelling, for help and error text
-SPELLING = {flat: f"{ns} {sub}" for ns, (_, subs) in NAMESPACES.items()
-            for sub, flat in subs.items()}
+# Old shape, {flat name: (pre-split filename, help)}: kept for one release.
+COMMANDS = {c.name: (c.file, c.help) for c in _registry.COMMANDS.values()}
 assert sorted(SPELLING) == sorted(COMMANDS) and len(SPELLING) == sum(
     len(subs) for _, subs in NAMESPACES.values()), "every command in exactly one namespace"
-
-
-def resolve(argv):
-    """(flat command, rest) for a namespaced or flat argv; (None, argv) if
-    argv names neither. A namespace that is ALSO a flat command (`score`,
-    `bundle`) is namespaced only when its next word is one of its subs:
-    `vqlab score --corpus x` is still the flat referee scorer."""
-    if not argv:
-        return None, argv
-    head = argv[0]
-    if head in NAMESPACES and len(argv) > 1 and argv[1] in NAMESPACES[head][1]:
-        return NAMESPACES[head][1][argv[1]], argv[2:]
-    if head in COMMANDS:
-        return head, argv[1:]
-    return None, argv
 
 
 def routed(text):
@@ -368,13 +179,15 @@ def main() -> int:
         else:
             print(f"unknown command: {argv[0]}", file=sys.stderr)
         return 2
-    from vqlab import _layout   # stage dirs on sys.path; old dotted names aliased
+    from vqlab import _layout  # noqa: F401  bare tool imports + old dotted names aliased
     import vqlab
     vqlab.use_knurlogic_arch()  # every command loads Knurlogic's archs (VQLAB_VENDORED_ARCH=0: stock)
     if not any(a in ("-h", "--help") for a in rest):
         from vqlab.bench import box_quiet   # timed commands refuse a busy Mac (rule III)
         box_quiet.guard(cmd)
-    script = _layout.find(COMMANDS[cmd][0])
+    module = _registry.COMMANDS[cmd].module
+    import importlib.util
+    script = importlib.util.find_spec(module).origin
     from vqlab import config as _cfg   # <teachers>/X -> this box's teachers root (a local copy on a box with one)
     rest = [_cfg.expand(a) for a in rest]
     sys.argv = [str(script), *rest]
@@ -382,7 +195,9 @@ def main() -> int:
     run = runlog.start(cmd, rest)
     rc = 0
     try:
-        runpy.run_path(str(script), run_name="__main__")
+        # By module name, not file path: no file lookup, and relative and
+        # absolute imports inside the tool resolve as in any import.
+        runpy.run_module(module, run_name="__main__", alter_sys=True)
     except SystemExit as e:
         rc = e.code if isinstance(e.code, int) else (0 if e.code is None else 1)
         raise

@@ -23,9 +23,9 @@ def seen(monkeypatch):
     stubbed out; record what each would have been handed."""
     got = {}
 
-    def run_path(path, run_name):
-        got["script"], got["argv"] = path, list(sys.argv)
-    monkeypatch.setattr(cli.runpy, "run_path", run_path)
+    def run_module(module, run_name, alter_sys):
+        got["script"], got["argv"] = module, list(sys.argv)
+    monkeypatch.setattr(cli.runpy, "run_module", run_module)
     monkeypatch.setattr(runlog, "start", lambda cmd, rest: got.setdefault("log", (cmd, rest)))
     monkeypatch.setattr(runlog, "end", lambda run, rc: None)
     monkeypatch.setattr(box_quiet, "guard", lambda cmd: got.setdefault("guard", cmd))

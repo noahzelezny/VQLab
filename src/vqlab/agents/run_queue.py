@@ -156,8 +156,8 @@ def validate(q) -> list[str]:
         if isinstance(st.get("cmd"), str) and st["cmd"]:
             # `fit moe` and `fit-moe` are one command; the queue (SCORING,
             # GPU_FREE, RESUMABLE, the saved queue.json) speaks the flat name
-            from vqlab import cli as _cli
-            flat, extra = _cli.resolve(st["cmd"].split())
+            from vqlab.commands import resolve
+            flat, extra = resolve(st["cmd"].split())
             if flat is None or extra:
                 errs.append(f"{tag}: unknown command {st['cmd']!r}")
             else:
