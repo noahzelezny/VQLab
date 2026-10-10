@@ -62,7 +62,7 @@ G = args.group
 cfg = json.load(open(ART / "config.json"))
 vq_modules = cfg.get("vq_modules", {})
 if not vq_modules:
-    # DENSE artifacts (build_dense_vq.py / build_e4b_vq.py) record their
+    # DENSE artifacts (build_dense.py / build_e4b_vq.py) record their
     # modules under "vq_linear", not "vq_modules" — the runtime shim reads
     # vq_linear/vq_embed. Without this the gate exits "not a VQ artifact" on a
     # perfectly good dense artifact, which is the same shape as the 35B family
@@ -113,7 +113,7 @@ for mod in mods:
                                         meta["pack_bits"]).astype(np.uint32))
     if codes.ndim == 2:
         # DENSE artifacts store codes/scales as 2D [OUT, NSUB]; the expert
-        # format this loop speaks is 3D [E, OUT, NSUB]. build_dense_vq.py
+        # format this loop speaks is 3D [E, OUT, NSUB]. build_dense.py
         # squeezes them deliberately (a dense module wants 2D, and 2D keeps
         # the venv's expert-shaped VQ hook off them). Add the E=1 axis back
         # here, mirroring what the source path already does for 2D tensors.

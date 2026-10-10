@@ -5,7 +5,7 @@
 artifacts — it would drop vq_dense.py and leave a runtime that cannot
 serve. `build-dense` rewrites a whole artifact from a base + fits, which
 is the wrong tool when only the runtime moved. This is the missing
-middle: same concatenation build_dense_vq.py ends with (vq_switch.py +
+middle: same concatenation build_dense.py ends with (vq_switch.py +
 vq_dense.py + the loader shim), written over an existing artifact, with
 a backup and a compile check.
 
@@ -55,7 +55,7 @@ def main() -> int:
     for line in report:
         print(line)
     model_py = runtime + SHIM
-    # never ship a model.py that cannot parse (build_dense_vq's own rule)
+    # never ship a model.py that cannot parse (build_dense's own rule)
     compile(model_py, "model.py", "exec")
 
     dst = art / "model.py"

@@ -10,7 +10,7 @@ A family name or a checkpoint's `model_type`; the checked-in `families/<family>/
 - `__init__.py` defines `FamilyPlugin` and discovers one plugin per module (`deepseek_v4.py`, `qwen4_exp.py`, `qwen3_5.py`, `gemma4.py`, `glm5_next.py`): fit layout, streamed scorer, tokenizer hook, reference parity items.
 
 ## Outputs
-`vqlab.family.registry.FAMILY` and friends, read by fit/, assemble/, plan/, gate/, score/, bench/; `vqlab.family.plugins()`.
+`vqlab.family.registry.FAMILY` and friends, read by fit/, build/, plan/, gate/, score/, bench/; `vqlab.family.plugins()`.
 
 ## Rules that bite
 - A new family is ONE entry: a plugin module here, or a `families/<name>/entry.json` data file. Don't fork a copy of the table into a tool. A code entry always wins over a data entry of the same name.

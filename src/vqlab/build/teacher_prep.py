@@ -23,7 +23,7 @@ import shutil
 import struct
 import sys
 
-from vqlab.assemble import sanitize_stream
+from vqlab.build import sanitize_stream
 
 
 def relabel_e8m0(src: pathlib.Path) -> int:

@@ -144,7 +144,7 @@ def test_renamed_modules_keep_old_names():
     assert _layout.find("pack_artifact.py") == _layout.find("pack.py")
     m = _layout._names()
     assert m["vq_397b_codes"] == m["vqlab.vq_397b_codes"] == "vqlab.fit.fit_moe"
-    assert m["pack_artifact"] == m["vqlab.assemble.pack_artifact"] == "vqlab.assemble.pack"
+    assert m["pack_artifact"] == m["vqlab.assemble.pack_artifact"] == "vqlab.build.pack"
     assert cli.COMMANDS["fit-moe"][0] == "fit_moe.py" and cli.COMMANDS["pack"][0] == "pack.py"
 
 
@@ -155,3 +155,29 @@ def test_sidecar_writers_never_stamp_the_model_they_read():
     from vqlab import cli
     for c in ("mtp-pack", "mtp-graft"):
         assert "--model" not in cli.BUILD_OUTPUTS[c]
+
+
+def test_assemble_package_is_a_deprecated_alias_of_build():
+    import importlib
+    import sys
+    import warnings
+    for n in [k for k in sys.modules if k.startswith("vqlab.assemble")]:
+        del sys.modules[n]
+    import vqlab.build.mix as new_mix
+    with warnings.catch_warnings(record=True) as w:
+        warnings.simplefilter("always")
+        old_pkg = importlib.import_module("vqlab.assemble")
+        old_mix = importlib.import_module("vqlab.assemble.mix")
+    assert old_pkg is importlib.import_module("vqlab.build")
+    assert old_mix is new_mix
+    m = _layout._names()     # script modules (pack, build_dense) run at import
+    assert (m["vqlab.assemble.build_dense_vq"] == m["build_dense_vq"]
+            == m["vqlab.build_dense_vq"] == "vqlab.build.build_dense")
+    assert m["vqlab.assemble.pack"] == "vqlab.build.pack"
+    assert _layout.find("build_dense_vq.py") == _layout.find("build_dense.py")
+    msgs = [str(x.message) for x in w if issubclass(x.category, DeprecationWarning)]
+    assert any("vqlab.build.mix" in m for m in msgs)
+    assert not (_layout.PKG / "assemble").exists()
+    from vqlab.build import mix, graft_extras, reskeleton
+    assert mix.plan is mix.plan_mix and graft_extras.plan is graft_extras.plan_graft
+    assert reskeleton.plan is reskeleton.plan_reskeleton

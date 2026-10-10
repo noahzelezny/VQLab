@@ -29,7 +29,7 @@ from vqlab.core.artifact import (Artifact, copy_other_files, merge_maps, module_
                                  place, write_config, write_index)
 
 
-def plan(base, bands):
+def plan_mix(base, bands):
     """shard -> source Artifact. A band takes a shard when every VQ module
     layer in that shard lies inside the band; only VQ modules count (the rest
     of a shard is skeleton, identical across sources, checked by header)."""
@@ -81,7 +81,7 @@ def build(out, base, bands, copy=False, files_from=None):
     teacher that carries no VQ runtime: e.g. base=teacher, bands = the fitted
     halves, files_from = one fitted half."""
     out = pathlib.Path(out)
-    pick, _ = plan(base, bands)
+    pick, _ = plan_mix(base, bands)
     base = Artifact.open(base)
     ff = Artifact.open(files_from) if files_from else base
     for src in {a.dir: a for a in pick.values()}.values():
@@ -128,6 +128,9 @@ def _band(s):
     return pathlib.Path(src), lo, hi
 
 
+plan = plan_mix  # old name, kept for one release
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(prog="vqlab mix", description=__doc__.split("\n")[0])
     ap.add_argument("--out", required=True)
@@ -141,7 +144,7 @@ def main(argv=None):
     a = ap.parse_args(argv)
     base = pathlib.Path(a.base)
     if a.plan:
-        pick, layers = plan(base, a.band)
+        pick, layers = plan_mix(base, a.band)
         for f in sorted(layers):
             print(f"{f:40s} layers {sorted(layers[f])}  <- {pick[f].dir}")
         return 0

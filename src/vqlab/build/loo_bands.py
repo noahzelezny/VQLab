@@ -25,7 +25,7 @@ import json
 import pathlib
 import sys
 
-from vqlab.assemble import mix
+from vqlab.build import mix
 
 
 def main(argv=None):

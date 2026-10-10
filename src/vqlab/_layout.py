@@ -28,6 +28,7 @@ import importlib.machinery
 import importlib.util
 import pathlib
 import sys
+import warnings
 
 PKG = pathlib.Path(__file__).resolve().parent
 SRC = PKG.parent
@@ -36,7 +37,7 @@ SRC = PKG.parent
 # by bare name. `mtp` is NOT a stage: it is the MTP speculative-decoding
 # LIBRARY (vqlab.mtp: loop, registry, heads), imported by the MTP tools that
 # live in the stage folders like every other tool.
-STAGES = ("runtime", "core", "plan", "fit", "assemble", "bundle", "gate",
+STAGES = ("runtime", "core", "plan", "fit", "build", "bundle", "gate",
           "score", "bench", "records", "ship", "agents")
 SEARCH = STAGES + ("mtp", "score/referee")
 
@@ -48,7 +49,16 @@ SEARCH = STAGES + ("mtp", "score/referee")
 # shell chains and old ledger entries name the old files.
 RENAMED = {"vq_397b_codes": "fit_moe", "pack_artifact": "pack",
            # 2026-10-10: experiment numbers out of file names
-           "e134_accept": "kernel_accept", "verify_e134_devcb": "verify_dev_codebook"}
+           "e134_accept": "kernel_accept", "verify_e134_devcb": "verify_dev_codebook",
+           # untangle step 10: stem matches command `build-dense`
+           "build_dense_vq": "build_dense"}
+
+# Packages RENAMED (untangle step 10, 2026-10-10): assemble/ became build/ to
+# match its CLI namespace. {old package: new package}. The old package and
+# every submodule under it resolve to the SAME module objects as the new
+# names, and importing through the old name emits a DeprecationWarning.
+# Kept for one release.
+RENAMED_PACKAGES = {"vqlab.assemble": "vqlab.build"}
 
 # Modules MOVED between packages (untangle step 9a, 2026-10-10: the core <->
 # family cycle). {old dotted or bare name: new canonical dotted name}. Kept
@@ -161,6 +171,12 @@ def _names():
         canon = out[new]
         out[old] = out[f"vqlab.{old}"] = canon
         out[f"{canon.rsplit('.', 1)[0]}.{old}"] = canon
+    for old, new in RENAMED_PACKAGES.items():
+        out[old] = new
+        for name, canon in list(out.items()):
+            for n in (name, canon):     # canonical names and renamed stems
+                if n.startswith(new + "."):
+                    out[old + n[len(new):]] = canon
     out.update(ALIASES)
     # MTP heads lived at vqlab.mtp_head* before the split. Dotted alias only:
     # the vqlab.mtp library's own module names (runtime, loop, ...) are too
@@ -195,6 +211,11 @@ class _Alias(importlib.abc.MetaPathFinder, importlib.abc.Loader):
         new = self._canon(fullname)
         if new is None or new == fullname:
             return None
+        for old, pkg in RENAMED_PACKAGES.items():
+            if fullname == old or fullname.startswith(old + "."):
+                warnings.warn(f"{fullname} is deprecated ({old} is now {pkg}); "
+                              f"import {new}",
+                              DeprecationWarning, stacklevel=2)
         t = importlib.util.find_spec(new)
         return importlib.util.spec_from_loader(
             fullname, self, origin=t.origin if t else f"alias of {new}")

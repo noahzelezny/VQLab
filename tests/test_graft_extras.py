@@ -6,7 +6,7 @@ import struct
 import numpy as np
 import pytest
 
-from vqlab.assemble import graft_extras as GE
+from vqlab.build import graft_extras as GE
 from vqlab.core.artifact import Artifact
 
 

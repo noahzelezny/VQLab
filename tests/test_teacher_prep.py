@@ -7,8 +7,8 @@ import struct
 import numpy as np
 import pytest
 
-from vqlab.assemble import teacher_prep as TP
-from vqlab.assemble import sanitize_stream as SS
+from vqlab.build import teacher_prep as TP
+from vqlab.build import sanitize_stream as SS
 
 
 def _st(path, tensors):

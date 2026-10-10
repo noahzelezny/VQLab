@@ -38,7 +38,7 @@ LAYER = {
     "family": 3,
     "mtp": 4,
     "plan": 5, "fit": 5, "skipzero": 5,
-    "build": 6, "assemble": 6,
+    "build": 6,
     "bundle": 7,
     "gate": 8, "score": 8,
     "bench": 9,
