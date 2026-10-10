@@ -53,44 +53,49 @@ def snapshot(d):
     return out
 
 
-ap = argparse.ArgumentParser()
-ap.add_argument("mode", choices=("write", "check"))
-ap.add_argument("dirs", nargs="+")
-a = ap.parse_args()
-MAN.mkdir(exist_ok=True)
-rc = 0
+def main(argv=None) -> int:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("mode", choices=("write", "check"))
+    ap.add_argument("dirs", nargs="+")
+    a = ap.parse_args(argv)
+    MAN.mkdir(exist_ok=True)
+    rc = 0
 
-for dd in a.dirs:
-    d = pathlib.Path(dd)
-    if not d.is_dir():
-        print(f"SKIP {dd}: not a directory"); continue
-    mf = MAN / (d.name + ".json")
-    cur = snapshot(d)
-    if a.mode == "write":
-        mf.write_text(json.dumps({"artifact": str(d), "shards": cur}, indent=1))
-        print(f"STAMPED {d.name}: {len(cur)} shards -> {mf.name}")
-        continue
-    if not mf.exists():
-        print(f"NO MANIFEST {d.name} — cannot verify; stamp it now if these "
-              f"bytes are the ones you mean to keep")
-        rc = max(rc, 1); continue
-    old = json.load(open(mf))["shards"]
-    added = sorted(set(cur) - set(old))
-    gone = sorted(set(old) - set(cur))
-    moved = [k for k in sorted(set(cur) & set(old))
-             if cur[k]["bytes"] != old[k]["bytes"]
-             or cur[k]["head_sha256"] != old[k]["head_sha256"]]
-    touched = [k for k in sorted(set(cur) & set(old))
-               if k not in moved and cur[k]["mtime"] != old[k]["mtime"]]
-    if added or gone or moved:
-        print(f"CHANGED {d.name}: {len(moved)} rewritten, {len(added)} added, "
-              f"{len(gone)} removed")
-        for k in (moved + added + gone)[:5]:
-            print(f"    {k}")
-        rc = 2
-    elif touched:
-        print(f"ok {d.name}: bytes identical, {len(touched)} shard mtimes moved "
-              f"(a copy or touch, not a rewrite)")
-    else:
-        print(f"ok {d.name}: {len(cur)} shards unchanged")
-sys.exit(rc)
+    for dd in a.dirs:
+        d = pathlib.Path(dd)
+        if not d.is_dir():
+            print(f"SKIP {dd}: not a directory"); continue
+        mf = MAN / (d.name + ".json")
+        cur = snapshot(d)
+        if a.mode == "write":
+            mf.write_text(json.dumps({"artifact": str(d), "shards": cur}, indent=1))
+            print(f"STAMPED {d.name}: {len(cur)} shards -> {mf.name}")
+            continue
+        if not mf.exists():
+            print(f"NO MANIFEST {d.name} — cannot verify; stamp it now if these "
+                  f"bytes are the ones you mean to keep")
+            rc = max(rc, 1); continue
+        old = json.load(open(mf))["shards"]
+        added = sorted(set(cur) - set(old))
+        gone = sorted(set(old) - set(cur))
+        moved = [k for k in sorted(set(cur) & set(old))
+                 if cur[k]["bytes"] != old[k]["bytes"]
+                 or cur[k]["head_sha256"] != old[k]["head_sha256"]]
+        touched = [k for k in sorted(set(cur) & set(old))
+                   if k not in moved and cur[k]["mtime"] != old[k]["mtime"]]
+        if added or gone or moved:
+            print(f"CHANGED {d.name}: {len(moved)} rewritten, {len(added)} added, "
+                  f"{len(gone)} removed")
+            for k in (moved + added + gone)[:5]:
+                print(f"    {k}")
+            rc = 2
+        elif touched:
+            print(f"ok {d.name}: bytes identical, {len(touched)} shard mtimes moved "
+                  f"(a copy or touch, not a rewrite)")
+        else:
+            print(f"ok {d.name}: {len(cur)} shards unchanged")
+    return rc
+
+
+if __name__ == "__main__":
+    sys.exit(main())
