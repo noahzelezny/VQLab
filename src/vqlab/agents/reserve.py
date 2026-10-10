@@ -37,7 +37,6 @@ import re
 import socket
 import sys
 
-sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))  # src/
 from vqlab import config  # noqa: E402
 from vqlab.util.clock import now  # noqa: E402
 

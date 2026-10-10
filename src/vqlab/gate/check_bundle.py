@@ -84,7 +84,6 @@ def main() -> int:
     ap.add_argument("--strict", action="store_true",
                     help="exit 2 on STALE (default: STALE exits 0; it is a to-do, not a defect)")
     a = ap.parse_args()
-    sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))  # src/
     from vqlab._layout import runtime_file
     art = pathlib.Path(a.artifact)
 

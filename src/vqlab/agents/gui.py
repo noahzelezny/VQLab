@@ -45,7 +45,6 @@ import urllib.parse
 import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))  # src/
 from vqlab import _layout  # noqa: E402,F401  one module object per name
 
 from vqlab import config  # noqa: E402

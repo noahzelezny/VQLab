@@ -14,7 +14,6 @@ import re
 import sys
 
 HERE = pathlib.Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE.parents[3]))  # src/
 from vqlab.agents import gui  # noqa: E402
 
 HEAD = ('<!doctype html><html><head><meta charset="utf-8">'

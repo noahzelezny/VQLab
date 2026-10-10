@@ -40,11 +40,9 @@ import argparse
 import importlib
 import json
 import pathlib
-import sys
 
 import mlx.core as mx
 
-sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))  # src/
 from vqlab import _layout  # noqa: E402,F401  one module object per name
 from vqlab.core.artifact import tensor_class  # noqa: E402
 from vqlab.mtp.mtp_head import MTPHead

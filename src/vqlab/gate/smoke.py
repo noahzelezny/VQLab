@@ -42,7 +42,6 @@ import subprocess
 import sys
 
 HERE = pathlib.Path(__file__).parent
-sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))  # src/
 from vqlab._layout import find as _find  # noqa: E402
 
 

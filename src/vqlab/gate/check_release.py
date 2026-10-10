@@ -30,7 +30,6 @@ import subprocess
 import sys
 
 HERE = pathlib.Path(__file__).resolve().parent
-sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))  # src/
 from vqlab._layout import find as _find  # noqa: E402
 
 ap = argparse.ArgumentParser()
@@ -637,7 +636,6 @@ elif _n_tower and args.no_smoke:
 # tracker VL4.8), and failing them would block the fleet on bookkeeping.
 _prov_note = ""
 try:
-    sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))
     from vqlab import _layout as _pl  # noqa: F401
     import provenance as _prov
     try:

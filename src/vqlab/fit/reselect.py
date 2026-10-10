@@ -84,14 +84,12 @@ import argparse
 import glob
 import json
 import os
-import pathlib
 import shutil
 import sys
 import time
 
 import numpy as np
 
-sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))  # src/
 from vqlab import _layout  # noqa: E402,F401  one module object per name
 from vqlab import config  # noqa: E402
 import vq_pack  # noqa: E402

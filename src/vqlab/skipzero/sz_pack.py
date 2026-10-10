@@ -29,7 +29,6 @@ import sys
 import numpy as np
 
 HERE = pathlib.Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE.parents[1]))  # src/
 from vqlab import _layout  # noqa: E402,F401
 from vqlab import config  # noqa: E402
 from vqlab.util.log import make_log  # noqa: E402
@@ -37,8 +36,7 @@ import fitstore  # noqa: E402
 import registry  # noqa: E402
 import provenance  # noqa: E402
 
-sys.path.insert(0, str(HERE))
-import skipzero_load  # noqa: E402
+from vqlab.skipzero import skipzero_load  # noqa: E402
 
 TINY = 6.2e-5                       # same threshold as plan/zero_groups.py
 GIB = 2 ** 30

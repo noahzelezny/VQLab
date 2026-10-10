@@ -26,12 +26,10 @@ import tempfile
 import numpy as np
 
 HERE = pathlib.Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE.parents[1]))  # src/
 from vqlab import _layout  # noqa: E402,F401
 import fitstore  # noqa: E402
 
-sys.path.insert(0, str(HERE))
-import sz_pack  # noqa: E402
+from vqlab.skipzero import sz_pack  # noqa: E402
 
 GIB = 2 ** 30
 

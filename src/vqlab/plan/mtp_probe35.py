@@ -26,12 +26,10 @@ The instrument is cheap: ONE trunk forward, then one head forward per wiring.
 import argparse
 import json
 import pathlib
-import sys
 
 import mlx.core as mx
 from mlx.utils import tree_map
 
-sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))  # src/
 from vqlab import _layout  # noqa: E402,F401  one module object per name
 from vqlab.mtp import registry
 from vqlab.mtp.capture import capture_input

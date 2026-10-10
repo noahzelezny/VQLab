@@ -36,7 +36,6 @@ import os
 import pathlib
 import sys
 
-sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))  # src/
 from vqlab import _layout  # noqa: E402,F401  one module object per name
 from geo_build import part_name  # noqa: E402
 

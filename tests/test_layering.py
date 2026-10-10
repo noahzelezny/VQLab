@@ -122,7 +122,7 @@ def violations() -> set[str]:
                 f = node.func
                 if (isinstance(f, ast.Attribute) and f.attr in ("insert", "append")
                         and isinstance(f.value, ast.Attribute) and f.value.attr == "path"
-                        and isinstance(f.value.value, ast.Name) and f.value.value.id == "sys"):
+                        and isinstance(f.value.value, ast.Name) and f.value.value.id in ("sys", "_sys")):
                     found.add(f"{rel}::sys.path.{f.attr}")
             if not isinstance(node, (ast.Import, ast.ImportFrom)):
                 continue

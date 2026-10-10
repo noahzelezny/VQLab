@@ -39,7 +39,6 @@ import os
 import pathlib
 import sys
 
-sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))  # src/
 
 # A synthetic probe beats a checked-in JPEG: no binary in the repo, no license
 # question, and the content is known exactly, so the printed caption is worth
