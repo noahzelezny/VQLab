@@ -37,7 +37,9 @@ def test_no_bare_queue_alias():
     names = _layout._names()
     assert "queue" not in names and "vqlab.queue" not in names
     assert not any(v == "vqlab.queue" for v in names.values())
-    assert "queue" not in _layout.STAGES        # its stems are too generic to be bare names
+    # queue/'s stems are too generic to be bare names
+    assert not any(v.startswith("vqlab.queue.") and "." not in k for k, v in names.items()
+                   if k not in ("queue_eta", "validate_queue", "reserve"))
     import queue
     assert queue.__name__ == "queue" and not hasattr(queue, "runner")
 

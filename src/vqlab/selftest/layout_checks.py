@@ -20,22 +20,22 @@ def check_corpus_locator(ctx):
 
 def check_layout(ctx):
     print("[6b/7] layout")
-    # A stage module whose bare name is also a stdlib or installed
-    # package gets shadowed (or shadows it) on sys.path. bench/coverage.py
-    # was renamed kernel_coverage.py for exactly this (pytest-cov).
-    # Search only OUTSIDE this repo (site-packages, stdlib); find_spec
-    # would also report modules we have already imported ourselves.
+    # A bare alias that is also a stdlib or installed module name would
+    # shadow it (_Alias sits first on sys.meta_path). bench/coverage.py was
+    # renamed kernel_coverage.py for exactly this (pytest-cov). Search only
+    # OUTSIDE this repo (site-packages, stdlib); find_spec would also report
+    # modules we have already imported ourselves.
     repo = str(L.SRC.parent)
     outside = [p for p in sys.path if p and not p.startswith(repo)]
-    clash = sorted(f.stem for d in L.stage_dirs() for f in d.glob("*.py")
-                   if f.stem != "__init__" and (
-                       f.stem in sys.stdlib_module_names
-                       or _im.PathFinder.find_spec(f.stem, outside) is not None))
+    clash = sorted(n for n in L._names() if "." not in n and (
+                   n in sys.stdlib_module_names
+                   or _im.PathFinder.find_spec(n, outside) is not None))
     _check_one_module_object()
     _check_context_routing()
-    _nodoc = sorted(s_ for s_ in L.STAGES if not (L.PKG / s_ / "CONTEXT.md").exists())
-    check("every stage folder has its CONTEXT.md contract", not _nodoc, ", ".join(_nodoc))
-    check("no stage module name collides with stdlib / site-packages",
+    _nodoc = sorted(d.name for d in L.PKG.iterdir()
+                    if (d / "__init__.py").exists() and not (d / "CONTEXT.md").exists())
+    check("every package folder has its CONTEXT.md contract", not _nodoc, ", ".join(_nodoc))
+    check("no bare alias collides with stdlib / site-packages",
           not clash, ", ".join(clash))
     p = subprocess.run([PY, "-m", "vqlab.price", "--help"], capture_output=True,
                        text=True, env={**os.environ, "PYTHONPATH": str(L.SRC)})

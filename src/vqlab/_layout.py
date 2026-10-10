@@ -1,24 +1,34 @@
-"""Where every vqlab module lives, and the two import conventions that span it.
+"""Old module names, and the locators that find a module as a FILE.
 
-The package is split into stage folders (see CONTEXT.md at the repo root and
-the CONTEXT.md inside each folder). The tools inside them are STANDALONE
-SCRIPTS by design -- `vqlab <cmd>` runs each one as a file -- and they import
-their siblings by bare name (`import vq_pack`, `from families import FAMILY`).
-Importing this module makes both conventions work from anywhere:
+Every module has ONE canonical dotted name: its path under src/vqlab
+(`vqlab.runtime.vq_switch`, `vqlab.fit.fit_moe`). This file answers for the
+other spellings, from two explicit tables -- nothing is globbed, so every
+name it resolves is greppable here:
 
-  * bare sibling imports (`import vq_pack`) resolve across folders, to the
-    SAME module object as the dotted name -- one module, one copy;
-  * every pre-split dotted name (`vqlab.vq_switch`, `vqlab.geo_build`,
-    `vqlab.mtp_head`, ...) is aliased to its new home. This is not only for
-    old callers: the SHIPPED runtime text (vq_dense.py's _resolve_kernel,
-    dense_shim.py) names `vqlab.vq_switch` / `vqlab.arch_resolve`, and that
-    text must stay byte-identical to what published bundles carry, or
-    check-bundle reports drift on every artifact.
+  PERMANENT   names shipped text depends on, kept forever:
+                * every runtime/*.py stem, as `vqlab.<stem>` AND bare
+                  `<stem>`: the SHIPPED runtime text (vq_dense.py's
+                  _resolve_kernel, dense_shim.py) and published model.py
+                  files name them, and inside a bundle the files sit flat
+                  beside model.py. Must stay byte-identical, so the names
+                  must stay too;
+                * the public pre-split names: `vqlab.mtp_head*`,
+                  `vqlab.mcp_server`, and `vq_397b_codes` / `pack_artifact`
+                  (queue files and ledgers name them).
+  DEPRECATED  every other old spelling (pre-split `vqlab.<stem>`, bare tool
+              stems, modules moved or renamed in the 2026-10 untangle,
+              `vqlab.assemble.*`). Importing one emits a DeprecationWarning
+              naming the canonical module. Kept for one release.
 
-Locators, for code that reads a sibling as a FILE rather than importing it:
+Whatever name is used, the result is the SAME module object (_Alias): two
+copies of vq_switch would mean two kernel caches and two sets of flag
+globals. To add an alias, add a line to a table; there is no other source.
 
-    find("smoke.py")               -> path of any tool, wherever it lives
+Locators, for code that reads a module as a FILE rather than importing it:
+
+    find("smoke.py")               -> path of any tool (old filenames too)
     runtime_file("vq_switch.py")   -> the repo runtime a bundle is spliced from
+    corpus("prose")                -> a house referee corpus
 """
 from __future__ import annotations
 
@@ -33,122 +43,404 @@ import warnings
 PKG = pathlib.Path(__file__).resolve().parent
 SRC = PKG.parent
 
-# Stage folders, in pipeline order. Each holds that stage's tools, importable
-# by bare name. `mtp` is NOT a stage: it is the MTP speculative-decoding
-# LIBRARY (vqlab.mtp: loop, registry, heads), imported by the MTP tools that
-# live in the stage folders like every other tool.
-STAGES = ("runtime", "core", "plan", "fit", "build", "bundle", "gate",
-          "score", "bench", "records", "ship", "agents")
-SEARCH = STAGES + ("mtp", "score/referee")
-
-
-# Modules renamed to their command names (2026-10-03). The OLD names keep
-# working everywhere a name is looked up: find("vq_397b_codes.py"), a bare
-# `import pack_artifact`, `vqlab.vq_397b_codes` and the dotted stage name
-# all reach the renamed module, ONE module object (see _Alias). Queue files,
-# shell chains and old ledger entries name the old files.
-RENAMED = {"vq_397b_codes": "fit_moe", "pack_artifact": "pack",
-           # 2026-10-10: experiment numbers out of file names
-           "e134_accept": "kernel_accept", "verify_e134_devcb": "verify_dev_codebook",
-           # untangle step 10: stem matches command `build-dense`
-           "build_dense_vq": "build_dense",
-           # untangle step 11: stems match commands `spelling` / `size` / `scratch`
-           "us_spelling": "spelling", "size_cmd": "size",
-           "scratch_cmd": "scratch",
-           # untangle step 15: names say what the module does
-           "probe_init_sweep": "init_sweep",
-           "mtp_probe": "mtp_probe_qwen4_exp",
-           "mtp_probe35": "mtp_probe_qwen35",
-           # the command `fit-additive` takes its own name; the additive-VQ
-           # LIBRARY that used to be fit_additive.py is additive_codebooks.py,
-           # and `fit_additive` / `vqlab.fit.fit_additive` now mean the
-           # COMMAND module (CHANGELOG, Unreleased)
-           "additive_vq": "fit_additive"}
-
-# Packages RENAMED (untangle step 10, 2026-10-10): assemble/ became build/ to
-# match its CLI namespace. {old package: new package}. The old package and
-# every submodule under it resolve to the SAME module objects as the new
-# names, and importing through the old name emits a DeprecationWarning.
-# Kept for one release.
-RENAMED_PACKAGES = {"vqlab.assemble": "vqlab.build"}
-
-# Modules MOVED between packages (untangle step 9a, 2026-10-10: the core <->
-# family cycle). {old dotted or bare name: new canonical dotted name}. Kept
-# for one release; one module object under either name (_Alias).
-ALIASES = {
-    "vqlab.core.families": "vqlab.family.registry",
-    "vqlab.families": "vqlab.family.registry",
-    "families": "vqlab.family.registry",
-    "vqlab.core.numerics": "vqlab.family.version_stamp",
-    "vqlab.numerics": "vqlab.family.version_stamp",
-    "numerics": "vqlab.family.version_stamp",
-    "vqlab.core.version_stamp": "vqlab.family.version_stamp",
-    "vqlab.version_stamp": "vqlab.family.version_stamp",
-    "version_stamp": "vqlab.family.version_stamp",
-    "vqlab.core.runtime_load": "vqlab.family.model_loader",
-    "vqlab.runtime_load": "vqlab.family.model_loader",
-    "runtime_load": "vqlab.family.model_loader",
-    "vqlab.family.arch": "vqlab.core.arch_finder",
-    # step 9b: wrong-direction edges
-    "vqlab.plan.onboard": "vqlab.agents.onboard",
-    "vqlab.assemble.codepack": "vqlab.core.codepack",
+PERMANENT = {
+    'arch_resolve': 'vqlab.runtime.arch_resolve',
+    'dense_shim': 'vqlab.runtime.dense_shim',
+    'gated_delta_chunked': 'vqlab.runtime.gated_delta_chunked',
+    'glm5_shim': 'vqlab.runtime.glm5_shim',
+    'pack_artifact': 'vqlab.build.pack',
+    'runtime_profile': 'vqlab.runtime.runtime_profile',
+    'vq_397b_codes': 'vqlab.fit.fit_moe',
+    'vq_dense': 'vqlab.runtime.vq_dense',
+    'vq_pack': 'vqlab.runtime.vq_pack',
+    'vq_switch': 'vqlab.runtime.vq_switch',
+    'vqlab.arch_resolve': 'vqlab.runtime.arch_resolve',
+    'vqlab.build.pack_artifact': 'vqlab.build.pack',
+    'vqlab.dense_shim': 'vqlab.runtime.dense_shim',
+    'vqlab.fit.vq_397b_codes': 'vqlab.fit.fit_moe',
+    'vqlab.gated_delta_chunked': 'vqlab.runtime.gated_delta_chunked',
+    'vqlab.glm5_shim': 'vqlab.runtime.glm5_shim',
+    'vqlab.mcp_server': 'vqlab.agents.mcp_server',
+    'vqlab.mtp_head': 'vqlab.mtp.mtp_head',
+    'vqlab.mtp_head_ds4': 'vqlab.build.mtp_head_ds4',
+    'vqlab.mtp_head_glm5': 'vqlab.mtp.mtp_head_glm5',
+    'vqlab.mtp_head_qwen35': 'vqlab.mtp.mtp_head_qwen35',
+    'vqlab.pack_artifact': 'vqlab.build.pack',
+    'vqlab.runtime_profile': 'vqlab.runtime.runtime_profile',
+    'vqlab.vq_397b_codes': 'vqlab.fit.fit_moe',
+    'vqlab.vq_dense': 'vqlab.runtime.vq_dense',
+    'vqlab.vq_pack': 'vqlab.runtime.vq_pack',
+    'vqlab.vq_switch': 'vqlab.runtime.vq_switch',
 }
 
-# Modules MOVED in untangle step 11 (2026-10-10): the model card and the
-# CLI `size` are release work (ship/; the index check it shares with
-# check-release is core/artifact_size.py, below gate), us_spelling is renamed
-# to its command name in place (gate imports it, so it cannot sit in ship),
-# `scratch` is lab housekeeping (agents/). Importing an old dotted name emits
-# a DeprecationWarning. Kept for one release.
-MOVED = {
-    "vqlab.records.card": "vqlab.ship.card",
-    "vqlab.records.card_tables": "vqlab.ship.card_tables",
-    "vqlab.gate.us_spelling": "vqlab.gate.spelling",
-    "vqlab.records.size_cmd": "vqlab.ship.size",
-    "vqlab.records.scratch_cmd": "vqlab.agents.scratch",
-    # untangle step 12: the job queue is its own package, vqlab.queue (L11).
-    # queue/ is NOT a stage folder: its stems (runner, steps, files, eta,
-    # validate, ...) are too generic to answer for as bare names, and no
-    # bare `queue` alias may ever exist (it would shadow the stdlib queue).
-    # agents/run_queue.py stays as a deprecated re-export module, since its
-    # names are split across queue/{runner,steps,files,report,remote}.py.
-    "vqlab.agents.queue_eta": "vqlab.queue.eta",
-    "vqlab.queue_eta": "vqlab.queue.eta",
-    "queue_eta": "vqlab.queue.eta",
-    "vqlab.gate.validate_queue": "vqlab.queue.validate",
-    "vqlab.validate_queue": "vqlab.queue.validate",
-    "validate_queue": "vqlab.queue.validate",
-    "vqlab.agents.reserve": "vqlab.queue.reserve",
-    "vqlab.reserve": "vqlab.queue.reserve",
-    "reserve": "vqlab.queue.reserve",
-    # untangle step 14: the whole-pipeline self-test is its own package,
-    # vqlab.selftest (L12), split one module per stage it checks.
-    "vqlab.gate.selftest": "vqlab.selftest",
-    "selftest": "vqlab.selftest",
-    # untangle step 15: the DeepSeek draft head is BUILT (beside
-    # mtp_extract/pack/graft), not fitted.
-    "vqlab.fit.mtp_head_ds4": "vqlab.build.mtp_head_ds4",
+DEPRECATED = {
+    'act_stats': 'vqlab.score.act_stats',
+    'active_bytes': 'vqlab.bench.active_bytes',
+    'add_model_file': 'vqlab.bundle.add_model_file',
+    'additive_codebooks': 'vqlab.fit.additive_codebooks',
+    'additive_vq': 'vqlab.fit.fit_additive',
+    'alloc_sweep': 'vqlab.plan.alloc_sweep',
+    'arch_finder': 'vqlab.core.arch_finder',
+    'artifact': 'vqlab.core.artifact',
+    'artifact_manifest': 'vqlab.records.artifact_manifest',
+    'artifact_size': 'vqlab.core.artifact_size',
+    'box_quiet': 'vqlab.bench.box_quiet',
+    'build_dense': 'vqlab.build.build_dense',
+    'build_dense_vq': 'vqlab.build.build_dense',
+    'bundle_accept': 'vqlab.gate.bundle_accept',
+    'card': 'vqlab.ship.card',
+    'card_checks': 'vqlab.ship.card_checks',
+    'card_tables': 'vqlab.ship.card_tables',
+    'check_all': 'vqlab.gate.check_all',
+    'check_bundle': 'vqlab.gate.check_bundle',
+    'check_comparator': 'vqlab.gate.check_comparator',
+    'check_release': 'vqlab.gate.check_release',
+    'clamps': 'vqlab.core.clamps',
+    'codepack': 'vqlab.core.codepack',
+    'config_cmd': 'vqlab.agents.config_cmd',
+    'decode_ladder': 'vqlab.bench.decode_ladder',
+    'decode_timeline': 'vqlab.bench.decode_timeline',
+    'doctor': 'vqlab.agents.doctor',
+    'e134_accept': 'vqlab.gate.kernel_accept',
+    'exo': 'vqlab.core.exo',
+    'expert_src': 'vqlab.core.expert_src',
+    'families': 'vqlab.family.registry',
+    'family_profile': 'vqlab.plan.family_profile',
+    'fit_additive': 'vqlab.fit.fit_additive',
+    'fit_dense_vq': 'vqlab.fit.fit_dense_vq',
+    'fit_moe': 'vqlab.fit.fit_moe',
+    'fit_ple': 'vqlab.fit.fit_ple',
+    'fits': 'vqlab.fit.fits',
+    'fitstore': 'vqlab.core.fitstore',
+    'gdn_chunk_truth': 'vqlab.bench.gdn_chunk_truth',
+    'geo_build': 'vqlab.fit.geo_build',
+    'gpu_capture': 'vqlab.bench.gpu_capture',
+    'gpu_lease': 'vqlab.core.gpu_lease',
+    'graft_extras': 'vqlab.build.graft_extras',
+    'graft_vision': 'vqlab.build.graft_vision',
+    'gui': 'vqlab.agents.gui',
+    'harvest_parts': 'vqlab.fit.harvest_parts',
+    'hc_micro': 'vqlab.bench.hc_micro',
+    'host_attrib': 'vqlab.bench.host_attrib',
+    'hub': 'vqlab.core.hub',
+    'init_sweep': 'vqlab.plan.init_sweep',
+    'kernel_accept': 'vqlab.gate.kernel_accept',
+    'kernel_coverage': 'vqlab.bench.kernel_coverage',
+    'kernel_reference': 'vqlab.gate.kernel_reference',
+    'kernel_truth': 'vqlab.score.kernel_truth',
+    'kernel_truth_moe': 'vqlab.score.kernel_truth_moe',
+    'kl_damage': 'vqlab.score.kl_damage',
+    'kl_ladder': 'vqlab.score.kl_ladder',
+    'kl_pair': 'vqlab.score.kl_pair',
+    'kmeans': 'vqlab.fit.kmeans',
+    'knurlogic_client': 'vqlab.core.knurlogic_client',
+    'layer_leverage': 'vqlab.plan.layer_leverage',
+    'loo_bands': 'vqlab.build.loo_bands',
+    'lut_bench': 'vqlab.bench.lut_bench',
+    'mcp_server': 'vqlab.agents.mcp_server',
+    'mem_budget': 'vqlab.core.mem_budget',
+    'minibase': 'vqlab.build.minibase',
+    'mix': 'vqlab.build.mix',
+    'mtp_accept': 'vqlab.bench.mtp_accept',
+    'mtp_arms': 'vqlab.bench.mtp_arms',
+    'mtp_bench': 'vqlab.bench.mtp_bench',
+    'mtp_extract': 'vqlab.build.mtp_extract',
+    'mtp_graft': 'vqlab.build.mtp_graft',
+    'mtp_head_ds4': 'vqlab.build.mtp_head_ds4',
+    'mtp_pack': 'vqlab.build.mtp_pack',
+    'mtp_probe': 'vqlab.plan.mtp_probe_qwen4_exp',
+    'mtp_probe35': 'vqlab.plan.mtp_probe_qwen35',
+    'mtp_probe_qwen35': 'vqlab.plan.mtp_probe_qwen35',
+    'mtp_probe_qwen4_exp': 'vqlab.plan.mtp_probe_qwen4_exp',
+    'mtp_run': 'vqlab.ship.mtp_run',
+    'mtp_smoke_head': 'vqlab.gate.mtp_smoke_head',
+    'numerics': 'vqlab.family.version_stamp',
+    'onboard': 'vqlab.agents.onboard',
+    'pack': 'vqlab.build.pack',
+    'pack_dense': 'vqlab.build.pack_dense',
+    'pack_ple': 'vqlab.build.pack_ple',
+    'parity': 'vqlab.gate.parity',
+    'patch_arch': 'vqlab.bundle.patch_arch',
+    'pin': 'vqlab.gate.pin',
+    'pin_record': 'vqlab.core.pin_record',
+    'ple_stream': 'vqlab.core.ple_stream',
+    'ple_swap': 'vqlab.build.ple_swap',
+    'power': 'vqlab.bench.power',
+    'prefill_bench': 'vqlab.bench.prefill_bench',
+    'prefill_timeline': 'vqlab.bench.prefill_timeline',
+    'preflight_disk': 'vqlab.plan.preflight_disk',
+    'preflight_ram': 'vqlab.plan.preflight_ram',
+    'price': 'vqlab.plan.price',
+    'probe_init_sweep': 'vqlab.plan.init_sweep',
+    'provenance': 'vqlab.records.provenance',
+    'publish': 'vqlab.ship.publish',
+    'queue_eta': 'vqlab.queue.eta',
+    'rebundle_dense': 'vqlab.bundle.rebundle_dense',
+    'registry': 'vqlab.records.registry',
+    'release_prep': 'vqlab.ship.release_prep',
+    'reselect': 'vqlab.fit.reselect',
+    'reserve': 'vqlab.queue.reserve',
+    'reskeleton': 'vqlab.build.reskeleton',
+    'run_queue': 'vqlab.agents.run_queue',
+    'runlog': 'vqlab.records.runlog',
+    'runtime_equiv': 'vqlab.score.runtime_equiv',
+    'runtime_load': 'vqlab.family.model_loader',
+    'sanitize_stream': 'vqlab.build.sanitize_stream',
+    'score_tasks_streaming': 'vqlab.score.score_tasks_streaming',
+    'scratch': 'vqlab.agents.scratch',
+    'scratch_cmd': 'vqlab.agents.scratch',
+    'selftest': 'vqlab.selftest',
+    'serve': 'vqlab.ship.serve',
+    'serve_timeline': 'vqlab.bench.serve_timeline',
+    'settings': 'vqlab.agents.settings',
+    'size': 'vqlab.ship.size',
+    'size_cmd': 'vqlab.ship.size',
+    'slice_teacher': 'vqlab.build.slice_teacher',
+    'smoke': 'vqlab.gate.smoke',
+    'speed_pair': 'vqlab.bench.speed_pair',
+    'speed_pair_knurlogic': 'vqlab.bench.speed_pair_knurlogic',
+    'spelling': 'vqlab.gate.spelling',
+    'splice_ple': 'vqlab.build.splice_ple',
+    'stage_bandwidth': 'vqlab.bench.stage_bandwidth',
+    'stamp_fields': 'vqlab.core.stamp_fields',
+    'step_verdict': 'vqlab.records.step_verdict',
+    'stream_convert': 'vqlab.build.stream_convert',
+    'stream_score': 'vqlab.score.stream_score',
+    'teacher_prep': 'vqlab.build.teacher_prep',
+    'timeline_common': 'vqlab.bench.timeline_common',
+    'unpack_dense': 'vqlab.build.unpack_dense',
+    'us_spelling': 'vqlab.gate.spelling',
+    'validate_queue': 'vqlab.queue.validate',
+    'verify_artifact': 'vqlab.gate.verify_artifact',
+    'verify_dev_codebook': 'vqlab.gate.verify_dev_codebook',
+    'verify_e134_devcb': 'vqlab.gate.verify_dev_codebook',
+    'version_stamp': 'vqlab.family.version_stamp',
+    'vision_layout': 'vqlab.bundle.vision_layout',
+    'vision_smoke': 'vqlab.gate.vision_smoke',
+    'vqlab.act_stats': 'vqlab.score.act_stats',
+    'vqlab.active_bytes': 'vqlab.bench.active_bytes',
+    'vqlab.add_model_file': 'vqlab.bundle.add_model_file',
+    'vqlab.additive_codebooks': 'vqlab.fit.additive_codebooks',
+    'vqlab.additive_vq': 'vqlab.fit.fit_additive',
+    'vqlab.agents.queue_eta': 'vqlab.queue.eta',
+    'vqlab.agents.reserve': 'vqlab.queue.reserve',
+    'vqlab.agents.scratch_cmd': 'vqlab.agents.scratch',
+    'vqlab.alloc_sweep': 'vqlab.plan.alloc_sweep',
+    'vqlab.arch_finder': 'vqlab.core.arch_finder',
+    'vqlab.artifact': 'vqlab.core.artifact',
+    'vqlab.artifact_manifest': 'vqlab.records.artifact_manifest',
+    'vqlab.artifact_size': 'vqlab.core.artifact_size',
+    'vqlab.assemble': 'vqlab.build',
+    'vqlab.assemble.build_dense': 'vqlab.build.build_dense',
+    'vqlab.assemble.build_dense_vq': 'vqlab.build.build_dense',
+    'vqlab.assemble.codepack': 'vqlab.core.codepack',
+    'vqlab.assemble.graft_extras': 'vqlab.build.graft_extras',
+    'vqlab.assemble.graft_vision': 'vqlab.build.graft_vision',
+    'vqlab.assemble.loo_bands': 'vqlab.build.loo_bands',
+    'vqlab.assemble.minibase': 'vqlab.build.minibase',
+    'vqlab.assemble.mix': 'vqlab.build.mix',
+    'vqlab.assemble.mtp_extract': 'vqlab.build.mtp_extract',
+    'vqlab.assemble.mtp_graft': 'vqlab.build.mtp_graft',
+    'vqlab.assemble.mtp_head_ds4': 'vqlab.build.mtp_head_ds4',
+    'vqlab.assemble.mtp_pack': 'vqlab.build.mtp_pack',
+    'vqlab.assemble.pack': 'vqlab.build.pack',
+    'vqlab.assemble.pack_artifact': 'vqlab.build.pack',
+    'vqlab.assemble.pack_dense': 'vqlab.build.pack_dense',
+    'vqlab.assemble.pack_ple': 'vqlab.build.pack_ple',
+    'vqlab.assemble.ple_swap': 'vqlab.build.ple_swap',
+    'vqlab.assemble.reskeleton': 'vqlab.build.reskeleton',
+    'vqlab.assemble.sanitize_stream': 'vqlab.build.sanitize_stream',
+    'vqlab.assemble.slice_teacher': 'vqlab.build.slice_teacher',
+    'vqlab.assemble.splice_ple': 'vqlab.build.splice_ple',
+    'vqlab.assemble.stream_convert': 'vqlab.build.stream_convert',
+    'vqlab.assemble.teacher_prep': 'vqlab.build.teacher_prep',
+    'vqlab.assemble.unpack_dense': 'vqlab.build.unpack_dense',
+    'vqlab.box_quiet': 'vqlab.bench.box_quiet',
+    'vqlab.build.build_dense_vq': 'vqlab.build.build_dense',
+    'vqlab.build_dense': 'vqlab.build.build_dense',
+    'vqlab.build_dense_vq': 'vqlab.build.build_dense',
+    'vqlab.bundle_accept': 'vqlab.gate.bundle_accept',
+    'vqlab.card': 'vqlab.ship.card',
+    'vqlab.card_checks': 'vqlab.ship.card_checks',
+    'vqlab.card_tables': 'vqlab.ship.card_tables',
+    'vqlab.check_all': 'vqlab.gate.check_all',
+    'vqlab.check_bundle': 'vqlab.gate.check_bundle',
+    'vqlab.check_comparator': 'vqlab.gate.check_comparator',
+    'vqlab.check_release': 'vqlab.gate.check_release',
+    'vqlab.clamps': 'vqlab.core.clamps',
+    'vqlab.codepack': 'vqlab.core.codepack',
+    'vqlab.config_cmd': 'vqlab.agents.config_cmd',
+    'vqlab.core.families': 'vqlab.family.registry',
+    'vqlab.core.numerics': 'vqlab.family.version_stamp',
+    'vqlab.core.runtime_load': 'vqlab.family.model_loader',
+    'vqlab.core.version_stamp': 'vqlab.family.version_stamp',
+    'vqlab.decode_ladder': 'vqlab.bench.decode_ladder',
+    'vqlab.decode_timeline': 'vqlab.bench.decode_timeline',
+    'vqlab.doctor': 'vqlab.agents.doctor',
+    'vqlab.e134_accept': 'vqlab.gate.kernel_accept',
+    'vqlab.exo': 'vqlab.core.exo',
+    'vqlab.expert_src': 'vqlab.core.expert_src',
+    'vqlab.families': 'vqlab.family.registry',
+    'vqlab.family.arch': 'vqlab.core.arch_finder',
+    'vqlab.family_profile': 'vqlab.plan.family_profile',
+    'vqlab.fit.additive_vq': 'vqlab.fit.fit_additive',
+    'vqlab.fit.mtp_head_ds4': 'vqlab.build.mtp_head_ds4',
+    'vqlab.fit_additive': 'vqlab.fit.fit_additive',
+    'vqlab.fit_dense_vq': 'vqlab.fit.fit_dense_vq',
+    'vqlab.fit_moe': 'vqlab.fit.fit_moe',
+    'vqlab.fit_ple': 'vqlab.fit.fit_ple',
+    'vqlab.fits': 'vqlab.fit.fits',
+    'vqlab.fitstore': 'vqlab.core.fitstore',
+    'vqlab.gate.e134_accept': 'vqlab.gate.kernel_accept',
+    'vqlab.gate.selftest': 'vqlab.selftest',
+    'vqlab.gate.us_spelling': 'vqlab.gate.spelling',
+    'vqlab.gate.validate_queue': 'vqlab.queue.validate',
+    'vqlab.gate.verify_e134_devcb': 'vqlab.gate.verify_dev_codebook',
+    'vqlab.gdn_chunk_truth': 'vqlab.bench.gdn_chunk_truth',
+    'vqlab.geo_build': 'vqlab.fit.geo_build',
+    'vqlab.gpu_capture': 'vqlab.bench.gpu_capture',
+    'vqlab.gpu_lease': 'vqlab.core.gpu_lease',
+    'vqlab.graft_extras': 'vqlab.build.graft_extras',
+    'vqlab.graft_vision': 'vqlab.build.graft_vision',
+    'vqlab.gui': 'vqlab.agents.gui',
+    'vqlab.harvest_parts': 'vqlab.fit.harvest_parts',
+    'vqlab.hc_micro': 'vqlab.bench.hc_micro',
+    'vqlab.host_attrib': 'vqlab.bench.host_attrib',
+    'vqlab.hub': 'vqlab.core.hub',
+    'vqlab.init_sweep': 'vqlab.plan.init_sweep',
+    'vqlab.kernel_accept': 'vqlab.gate.kernel_accept',
+    'vqlab.kernel_coverage': 'vqlab.bench.kernel_coverage',
+    'vqlab.kernel_reference': 'vqlab.gate.kernel_reference',
+    'vqlab.kernel_truth': 'vqlab.score.kernel_truth',
+    'vqlab.kernel_truth_moe': 'vqlab.score.kernel_truth_moe',
+    'vqlab.kl_damage': 'vqlab.score.kl_damage',
+    'vqlab.kl_ladder': 'vqlab.score.kl_ladder',
+    'vqlab.kl_pair': 'vqlab.score.kl_pair',
+    'vqlab.kmeans': 'vqlab.fit.kmeans',
+    'vqlab.knurlogic_client': 'vqlab.core.knurlogic_client',
+    'vqlab.layer_leverage': 'vqlab.plan.layer_leverage',
+    'vqlab.loo_bands': 'vqlab.build.loo_bands',
+    'vqlab.lut_bench': 'vqlab.bench.lut_bench',
+    'vqlab.mem_budget': 'vqlab.core.mem_budget',
+    'vqlab.minibase': 'vqlab.build.minibase',
+    'vqlab.mix': 'vqlab.build.mix',
+    'vqlab.mtp_accept': 'vqlab.bench.mtp_accept',
+    'vqlab.mtp_arms': 'vqlab.bench.mtp_arms',
+    'vqlab.mtp_bench': 'vqlab.bench.mtp_bench',
+    'vqlab.mtp_extract': 'vqlab.build.mtp_extract',
+    'vqlab.mtp_graft': 'vqlab.build.mtp_graft',
+    'vqlab.mtp_pack': 'vqlab.build.mtp_pack',
+    'vqlab.mtp_probe': 'vqlab.plan.mtp_probe_qwen4_exp',
+    'vqlab.mtp_probe35': 'vqlab.plan.mtp_probe_qwen35',
+    'vqlab.mtp_probe_qwen35': 'vqlab.plan.mtp_probe_qwen35',
+    'vqlab.mtp_probe_qwen4_exp': 'vqlab.plan.mtp_probe_qwen4_exp',
+    'vqlab.mtp_run': 'vqlab.ship.mtp_run',
+    'vqlab.mtp_smoke_head': 'vqlab.gate.mtp_smoke_head',
+    'vqlab.numerics': 'vqlab.family.version_stamp',
+    'vqlab.onboard': 'vqlab.agents.onboard',
+    'vqlab.pack': 'vqlab.build.pack',
+    'vqlab.pack_dense': 'vqlab.build.pack_dense',
+    'vqlab.pack_ple': 'vqlab.build.pack_ple',
+    'vqlab.parity': 'vqlab.gate.parity',
+    'vqlab.patch_arch': 'vqlab.bundle.patch_arch',
+    'vqlab.pin': 'vqlab.gate.pin',
+    'vqlab.pin_record': 'vqlab.core.pin_record',
+    'vqlab.plan.mtp_probe': 'vqlab.plan.mtp_probe_qwen4_exp',
+    'vqlab.plan.mtp_probe35': 'vqlab.plan.mtp_probe_qwen35',
+    'vqlab.plan.onboard': 'vqlab.agents.onboard',
+    'vqlab.plan.probe_init_sweep': 'vqlab.plan.init_sweep',
+    'vqlab.ple_stream': 'vqlab.core.ple_stream',
+    'vqlab.ple_swap': 'vqlab.build.ple_swap',
+    'vqlab.power': 'vqlab.bench.power',
+    'vqlab.prefill_bench': 'vqlab.bench.prefill_bench',
+    'vqlab.prefill_timeline': 'vqlab.bench.prefill_timeline',
+    'vqlab.preflight_disk': 'vqlab.plan.preflight_disk',
+    'vqlab.preflight_ram': 'vqlab.plan.preflight_ram',
+    'vqlab.price': 'vqlab.plan.price',
+    'vqlab.probe_init_sweep': 'vqlab.plan.init_sweep',
+    'vqlab.provenance': 'vqlab.records.provenance',
+    'vqlab.publish': 'vqlab.ship.publish',
+    'vqlab.queue_eta': 'vqlab.queue.eta',
+    'vqlab.rebundle_dense': 'vqlab.bundle.rebundle_dense',
+    'vqlab.records.card': 'vqlab.ship.card',
+    'vqlab.records.card_tables': 'vqlab.ship.card_tables',
+    'vqlab.records.scratch_cmd': 'vqlab.agents.scratch',
+    'vqlab.records.size_cmd': 'vqlab.ship.size',
+    'vqlab.registry': 'vqlab.records.registry',
+    'vqlab.release_prep': 'vqlab.ship.release_prep',
+    'vqlab.reselect': 'vqlab.fit.reselect',
+    'vqlab.reserve': 'vqlab.queue.reserve',
+    'vqlab.reskeleton': 'vqlab.build.reskeleton',
+    'vqlab.run_queue': 'vqlab.agents.run_queue',
+    'vqlab.runlog': 'vqlab.records.runlog',
+    'vqlab.runtime_equiv': 'vqlab.score.runtime_equiv',
+    'vqlab.runtime_load': 'vqlab.family.model_loader',
+    'vqlab.sanitize_stream': 'vqlab.build.sanitize_stream',
+    'vqlab.score_tasks_streaming': 'vqlab.score.score_tasks_streaming',
+    'vqlab.scratch': 'vqlab.agents.scratch',
+    'vqlab.scratch_cmd': 'vqlab.agents.scratch',
+    'vqlab.serve': 'vqlab.ship.serve',
+    'vqlab.serve_timeline': 'vqlab.bench.serve_timeline',
+    'vqlab.settings': 'vqlab.agents.settings',
+    'vqlab.ship.size_cmd': 'vqlab.ship.size',
+    'vqlab.size': 'vqlab.ship.size',
+    'vqlab.size_cmd': 'vqlab.ship.size',
+    'vqlab.slice_teacher': 'vqlab.build.slice_teacher',
+    'vqlab.smoke': 'vqlab.gate.smoke',
+    'vqlab.speed_pair': 'vqlab.bench.speed_pair',
+    'vqlab.speed_pair_knurlogic': 'vqlab.bench.speed_pair_knurlogic',
+    'vqlab.spelling': 'vqlab.gate.spelling',
+    'vqlab.splice_ple': 'vqlab.build.splice_ple',
+    'vqlab.stage_bandwidth': 'vqlab.bench.stage_bandwidth',
+    'vqlab.stamp_fields': 'vqlab.core.stamp_fields',
+    'vqlab.step_verdict': 'vqlab.records.step_verdict',
+    'vqlab.stream_convert': 'vqlab.build.stream_convert',
+    'vqlab.stream_score': 'vqlab.score.stream_score',
+    'vqlab.teacher_prep': 'vqlab.build.teacher_prep',
+    'vqlab.timeline_common': 'vqlab.bench.timeline_common',
+    'vqlab.unpack_dense': 'vqlab.build.unpack_dense',
+    'vqlab.us_spelling': 'vqlab.gate.spelling',
+    'vqlab.validate_queue': 'vqlab.queue.validate',
+    'vqlab.verify_artifact': 'vqlab.gate.verify_artifact',
+    'vqlab.verify_dev_codebook': 'vqlab.gate.verify_dev_codebook',
+    'vqlab.verify_e134_devcb': 'vqlab.gate.verify_dev_codebook',
+    'vqlab.version_stamp': 'vqlab.family.version_stamp',
+    'vqlab.vision_layout': 'vqlab.bundle.vision_layout',
+    'vqlab.vision_smoke': 'vqlab.gate.vision_smoke',
+    'vqlab.zero_groups': 'vqlab.plan.zero_groups',
+    'zero_groups': 'vqlab.plan.zero_groups',
 }
-ALIASES.update(MOVED)
-assert "queue" not in ALIASES and "vqlab.queue" not in ALIASES   # stdlib `queue` stays the stdlib's
+
+assert not {"queue", "vqlab.queue"} & (set(PERMANENT) | set(DEPRECATED))   # stdlib `queue` stays the stdlib's
+assert not set(PERMANENT) & set(DEPRECATED)
 
 
-def stage_dirs():
-    return [PKG / s for s in STAGES]
+def _names():
+    """{importable alias: canonical dotted name}, both tables."""
+    return {**PERMANENT, **DEPRECATED}
+
+
+# Folders find() searches, in order (it locates FILES, by old filename too).
+_FIND_DIRS = ("", "runtime", "core", "family", "plan", "fit", "build", "bundle",
+              "gate", "score", "bench", "records", "ship", "agents", "mtp",
+              "queue", "selftest", "skipzero", "ops", "util", "score/referee")
 
 
 def find(name: str) -> pathlib.Path:
-    """Path of a module FILE by its (pre-split) filename or relative path."""
+    """Path of a module FILE by its filename or relative path. Old filenames
+    (in old queue files and shell chains) resolve through the alias tables."""
     stem, dot, ext = name.rpartition("/")[2].partition(".")
-    if stem in RENAMED:
-        name = name[:len(name) - len(stem + dot + ext)] + RENAMED[stem] + dot + ext
-    for d in (PKG, *(PKG / s for s in SEARCH)):
-        p = d / name
+    canon = _names().get(stem)
+    if canon and ext == "py":
+        new = canon.rsplit(".", 1)[1]
+        name = name[:len(name) - len(stem + dot + ext)] + new + dot + ext
+    for d in _FIND_DIRS:
+        p = PKG / d / name
         if p.exists():
             return p
     if name.startswith("referee/"):                 # old relative spelling
         return find(name.split("/", 1)[1])
-    raise FileNotFoundError(f"vqlab: no module file {name!r} in {SEARCH}")
+    raise FileNotFoundError(f"vqlab: no module file {name!r} under {PKG}")
 
 
 def runtime_file(name: str) -> pathlib.Path:
@@ -202,40 +494,6 @@ def legacy_path(p):
     return p
 
 
-def _names():
-    """{importable name: canonical dotted name} for every stage module.
-
-    Two spellings map onto each canonical module:
-      * the BARE name the standalone scripts use (`import vq_pack`), and
-      * the pre-split dotted name (`vqlab.vq_switch`), which the SHIPPED
-        runtime text itself uses and therefore can never be edited away.
-    """
-    out = {}
-    for s in STAGES:
-        for f in (PKG / s).glob("*.py"):
-            if f.stem != "__init__":
-                canon = f"vqlab.{s}.{f.stem}"
-                out[f.stem] = canon
-                out[f"vqlab.{f.stem}"] = canon
-    for old, new in RENAMED.items():
-        canon = out[new]
-        out[old] = out[f"vqlab.{old}"] = canon
-        out[f"{canon.rsplit('.', 1)[0]}.{old}"] = canon
-    for old, new in RENAMED_PACKAGES.items():
-        out[old] = new
-        for name, canon in list(out.items()):
-            for n in (name, canon):     # canonical names and renamed stems
-                if n.startswith(new + "."):
-                    out[old + n[len(new):]] = canon
-    out.update(ALIASES)
-    # MTP heads lived at vqlab.mtp_head* before the split. Dotted alias only:
-    # the vqlab.mtp library's own module names (runtime, loop, ...) are too
-    # generic to answer for as bare names.
-    for f in (PKG / "mtp").glob("mtp_*.py"):
-        out[f"vqlab.{f.stem}"] = f"vqlab.mtp.{f.stem}"
-    return out
-
-
 class _Alias(importlib.abc.MetaPathFinder, importlib.abc.Loader):
     """ONE module object per module, whatever name it is imported by.
 
@@ -244,29 +502,21 @@ class _Alias(importlib.abc.MetaPathFinder, importlib.abc.Loader):
     that reloads one name silently leaves the other untouched. Sits FIRST on
     sys.meta_path so it wins over the ordinary path search -- including a
     script's own directory, which Python puts on sys.path[0]. It only
-    answers for names in _names(), so nothing else is affected, and no stage
-    folder has to go on sys.path (which is what made `coverage` shadowable).
+    answers for names in the two tables, so nothing else is affected.
     """
 
     def __init__(self):
-        self.map = None
+        self.map = _names()
         self._fresh = set()     # ids of modules create_module just imported
 
     def _canon(self, fullname):
-        if self.map is None:
-            self.map = _names()
         return self.map.get(fullname)
 
     def find_spec(self, fullname, path=None, target=None):
         new = self._canon(fullname)
         if new is None or new == fullname:
             return None
-        for old, pkg in RENAMED_PACKAGES.items():
-            if fullname == old or fullname.startswith(old + "."):
-                warnings.warn(f"{fullname} is deprecated ({old} is now {pkg}); "
-                              f"import {new}",
-                              DeprecationWarning, stacklevel=2)
-        if fullname in MOVED:
+        if fullname in DEPRECATED:
             warnings.warn(f"{fullname} is deprecated; import {new}",
                           DeprecationWarning, stacklevel=2)
         t = importlib.util.find_spec(new)
@@ -318,8 +568,6 @@ class _Alias(importlib.abc.MetaPathFinder, importlib.abc.Loader):
 
 
 def install_import_aliases():
-    if str(SRC) not in sys.path:
-        sys.path.append(str(SRC))
     if not any(isinstance(f, _Alias) for f in sys.meta_path):
         sys.meta_path.insert(0, _Alias())
 

@@ -29,6 +29,7 @@ import mlx.core as mx
 from vqlab.core import fitstore
 from vqlab.family.registry import DENSE_FAMILIES
 from vqlab.fit.kmeans import assign_mx as assign
+from vqlab.records import provenance
 from vqlab.records.provenance import write_build_record
 
 
@@ -237,7 +238,7 @@ def main(argv=None) -> int:
     # family / teacher / layer / geometry, and never paid for twice.
     _teacher = fitstore.teacher_slug(SRC)
     _recipe = {"origin": "fit", "tool": "fit-dense", "run_id": os.environ.get("VQLAB_RUN_ID"),
-               "commit": __import__("provenance").code_state()["commit"],
+               "commit": provenance.code_state()["commit"],
                "fitter": {"init": "kmeans++", "init_cap": args.init_cap,
                           "lloyd_iters": args.iters, "alternation": False,
                           "scales": "max-abs per group",

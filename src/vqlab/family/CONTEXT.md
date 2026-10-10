@@ -18,3 +18,13 @@ A family name or a checkpoint's `model_type`; the checked-in `families/<family>/
 - Renaming or moving code must not change a stamped value (tests/test_version_stamp_identity.py).
 - `vqlab.core.families`, `vqlab.core.numerics`, `vqlab.core.version_stamp` and `vqlab.core.runtime_load` are pre-2026-10-10 names, aliased for one release.
 - Depth and geometry laws are family-local. Never inherit an allocation across families.
+
+## Files
+- `registry.py`: the model-family registry: the single source of truth for every family
+- `model_loader.py`: which library (mlx_lm / mlx_vlm) loads a family's models
+- `version_stamp.py`: the numerics build a number was computed under, and the check that two match
+- `deepseek_v4.py`: DeepSeek-V4-Flash as one plugin (fit layout, streamed scorer, tokenizer hook)
+- `gemma4.py`: gemma4: the reference behaviours VQLab checks
+- `glm5_next.py`: glm5_next (GLM-5.3-Flash): the reference behaviours VQLab checks
+- `qwen3_5.py`: qwen3_5 / qwen3_5_moe: the reference behaviours VQLab checks
+- `qwen4_exp.py`: qwen4_exp (Flash-Next): the reference behaviours VQLab checks

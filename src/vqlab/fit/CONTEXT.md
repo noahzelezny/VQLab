@@ -21,3 +21,15 @@ A new directory (never in place) carrying `vqlab_provenance.json`: the fitter se
 - `--relerr-abort` scales with K (K2048 ~0.19, K256 ~0.31, K128 ~0.46). Set it per geometry.
 - Fitted parts go to the fit store (`vqlab.config.fit_store`). Never refit what was already paid for.
 - Load source tensors on the CPU stream with `mx.eval` INSIDE the block (FINDINGS IV.1).
+
+## Files
+- `additive_codebooks.py`: additive (residual) VQ library: M small codebooks whose sum replaces one large one
+- `fit_additive.py`: `fit additive`: two small codebooks per module, expanded to one big one
+- `fit_dense_vq.py`: `fit dense`: VQ-fit a dense MLP trio from a bf16 source
+- `fit_moe.py`: `fit moe`: fused VQ-fit + assemble a MoE codes artifact (settings in a `FitRun`)
+- `fit_ple.py`: `fit ple`: VQ-fit per-layer-embedding (PLE) tables
+- `fits.py`: `fit fits`: find, index and file fitted VQ modules (over core/fitstore.py)
+- `geo_build.py`: `fit geo-build`: rebuild an artifact with a new per-layer geometry map
+- `harvest_parts.py`: `fit harvest-parts`: VQ fits out of a shipped artifact into a geo-build parts dir
+- `kmeans.py`: every fitter's k-means: seeding, assignment, Lloyd updates (golden-pinned)
+- `reselect.py`: `fit reselect`: activation-aware code re-selection on a fixed codebook

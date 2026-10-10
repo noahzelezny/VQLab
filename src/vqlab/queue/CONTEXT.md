@@ -38,12 +38,22 @@ A queue file (JSON: `name`, `commit`, `python`, `steps` of `cmd`|`script`,
 steps/NN-name/{cmd,stdout,stderr,verdict.json}, tree/ while running).
 
 ## Rules that bite
-- Never a bare `queue` alias, and `queue/` is not an `_layout.STAGES`
-  folder: `import queue` is the stdlib's in every vqlab process
+- Never a bare `queue` alias, and no bare alias for queue/'s generic
+  stems (`_layout` asserts it): `import queue` is the stdlib's in every vqlab process
   (tests/test_queue_package.py). Always `vqlab.queue.<module>`.
 - Old names, deprecated for one release: `vqlab.agents.run_queue` (a
   re-export module of every old name, since it split into runner / steps /
   files / report / remote; patch names where they are USED, not there),
   `vqlab.agents.queue_eta` / bare `queue_eta`, `vqlab.gate.validate_queue` /
   bare `validate_queue`, `vqlab.agents.reserve` / bare `reserve`
-  (`_layout.MOVED`). CLI command names are unchanged.
+  (`_layout.DEPRECATED`). CLI command names are unchanged.
+
+## Files
+- `eta.py`: ETAs for `queue status` / MCP queue_status, from the data
+- `files.py`: queue files on disk: where queues live, state.json, creating one
+- `remote.py`: `queue run --on BOX`: launch on another box after checking every path reads there
+- `report.py`: `queue status | list | wait`: read queue state, never change it
+- `reserve.py`: `lab reserve`: who has a box until when, visible to every box
+- `runner.py`: `lab queue`: run a list of steps from pinned code, under the GPU lease, failing loudly
+- `steps.py`: queue steps: the schema, the arguments a step really runs with, pre-run checks
+- `validate.py`: `gate validate`: drain artifacts through the release gates overnight; never publish

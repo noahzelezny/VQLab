@@ -196,7 +196,7 @@ def main(argv=None) -> int:
     # _dense_fused in the bundle's own globals (verified: the two modules share
     # zero top-level names), and vq_dense prefers that copy over the import.
     _here = pathlib.Path(__file__).parent
-    SHIM = __import__("dense_shim").SHIM
+    from vqlab.runtime.dense_shim import SHIM
     if "class Model" not in SHIM or "VQLinear" not in SHIM:
         raise SystemExit("FAIL: shim is missing class Model / VQLinear.")
     model_py = (_layout.runtime_file("vq_switch.py").read_text()

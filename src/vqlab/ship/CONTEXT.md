@@ -14,5 +14,15 @@ A Hub revision, or a running server.
 ## Rules that bite
 - Generate one token through the shipping runtime before calling anything releasable (III.11).
 - Pull the published `model.py` from HF before a rebundle; local copies drift.
-- Old names `vqlab.records.card`, `vqlab.records.card_tables` and `vqlab.records.size_cmd` (bare `size_cmd`) are deprecated aliases for one release (`_layout.MOVED`/`RENAMED`): same module object. The CLI is unchanged (`card`, `card-tables`, `size`).
+- Old names `vqlab.records.card`, `vqlab.records.card_tables` and `vqlab.records.size_cmd` (bare `size_cmd`) are deprecated aliases for one release (`_layout.DEPRECATED`): same module object. The CLI is unchanged (`card`, `card-tables`, `size`).
 - `release_prep.hub_diff` is `core/hub.hub_diff` (re-exported). `mtp_run` takes `add_sampling_args`/`load_all`/`prompt_ids` from `mtp/cli_common.py` (re-exported).
+
+## Files
+- `card.py`: `ship card`: a model card from its sources, not typed by hand
+- `card_checks.py`: the refusals behind `card`: no number that was not measured on this artifact
+- `card_tables.py`: `ship card-tables`: a card's measured tables, generated
+- `mtp_run.py`: `ship mtp-generate`: generate with MTP speculative drafting
+- `publish.py`: `ship publish`: upload to the Hub, refusing if the release gate fails (a human action)
+- `release_prep.py`: `ship release-prep`: everything before an upload, ending in the upload line
+- `serve.py`: `ship serve`: an OpenAI-compatible API with MTP drafting
+- `size.py`: `ship size`: an artifact's size three ways, from its own headers
