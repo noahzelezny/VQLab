@@ -213,7 +213,7 @@ as SKIPPED with the reason.
 
 ## Layout
 
-- `src/vqlab/` — the toolkit, one folder per pipeline stage (fit, assemble,
+- `src/vqlab/` — the toolkit, one folder per pipeline stage (fit, build,
   bundle, gate, score, bench, ...); `CONTEXT.md` maps a question to its
   command. `core/artifact.py` is the one place that knows an artifact's
   layout.

@@ -70,7 +70,7 @@ def _hdr(path):
     return h, 8 + n
 
 
-def plan(art: Artifact, src: pathlib.Path, preset: dict):
+def plan_graft(art: Artifact, src: pathlib.Path, preset: dict):
     sw = json.load(open(src / "model.safetensors.index.json"))["weight_map"]
     pick = {}
     for k in sw:
@@ -88,6 +88,9 @@ def plan(art: Artifact, src: pathlib.Path, preset: dict):
     return sw, pick, probe
 
 
+plan = plan_graft  # old name, kept for one release
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(prog="vqlab graft-extras", description=__doc__.split("\n")[0])
     ap.add_argument("--artifact", required=True)
@@ -96,7 +99,7 @@ def main(argv=None):
     ap.add_argument("--dry-run", action="store_true")
     a = ap.parse_args(argv)
     art, src, preset = Artifact.open(a.artifact), pathlib.Path(a.src), PRESETS[a.preset]
-    sw, pick, probe = plan(art, src, preset)
+    sw, pick, probe = plan_graft(art, src, preset)
     if not pick:
         raise SystemExit(f"{src}: nothing matches preset {a.preset}")
     if len(probe) < 3:

@@ -128,7 +128,7 @@ def test_fused_table_lives_in_plugin():
     assert "model.layers.3.attn.wqkv_a" not in skel
     with pytest.raises(ValueError, match="different widths"):
         alias_fused({"l.attn.wq_a": q8, "l.attn.wkv": {"bits": 4, "group_size": 64}}, t)
-    src = (ROOT / "src/vqlab/assemble/stream_convert.py").read_text()
+    src = (ROOT / "src/vqlab/build/stream_convert.py").read_text()
     assert "fused_projections(a.family)" in src and "wqkv_a\")" not in src
 
 

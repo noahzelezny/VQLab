@@ -1,4 +1,4 @@
-# assemble/ — Assemble: codes -> an artifact that loads
+# build/ — Build: codes -> an artifact that loads
 
 ## Inputs
 Fit outputs, a quantized base / struct skeleton.
@@ -15,3 +15,4 @@ A new artifact directory with shards, `config.json` (`vq_modules` + `pack_bits`)
 - Ragged packing (nsub not a multiple of 32) wastes bytes; `geo-build` refuses it.
 - Preflight every new writer on a `vqlab slice` of the teacher first; a 4-layer slice caught two stream-convert bugs in minutes (OPERATOR-NOTES-2026-10-03 sec 4).
 - The MoE code packing rule is `core/codepack.py` (fit-moe --pack shares it); `vqlab.assemble.codepack` is an alias for one release.
+- This folder was `assemble/` until 2026-10-10 (renamed to match `vqlab build ...`). `vqlab.assemble` and every `vqlab.assemble.<mod>` (incl. `build_dense_vq`, now `build_dense`) are deprecated aliases for one release: same module objects, with a DeprecationWarning. The generic `plan()` in mix / graft_extras / reskeleton is now `plan_mix` / `plan_graft` / `plan_reskeleton` (`plan` kept as an alias).

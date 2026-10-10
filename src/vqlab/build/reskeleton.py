@@ -61,7 +61,7 @@ def _module(key):
     return key
 
 
-def plan(vq: pathlib.Path, sk: pathlib.Path):
+def plan_reskeleton(vq: pathlib.Path, sk: pathlib.Path):
     """(sources {key: (dir, file)}, new quantization map, report). Raises on mismatch."""
     va, sa = Artifact.open(vq), Artifact.open(sk)
     vcfg, scfg, vidx, sidx = va.config, sa.config, va.index, sa.index
@@ -155,6 +155,9 @@ def write(vq, sk, out, src, qmap, vcfg):
     return len(index), total
 
 
+plan = plan_reskeleton  # old name, kept for one release
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(prog="vqlab reskeleton", description=__doc__.split("\n")[0])
     ap.add_argument("--vq", required=True, help="VQ artifact (supplies experts + runtime)")
@@ -165,7 +168,7 @@ def main(argv=None) -> int:
     vq, sk, out = pathlib.Path(a.vq), pathlib.Path(a.skeleton), pathlib.Path(a.out)
     if out.exists() and not a.dry_run:
         raise SystemExit(f"FAIL: {out} exists; reskeleton never overwrites")
-    src, qmap, vcfg, rep = plan(vq, sk)
+    src, qmap, vcfg, rep = plan_reskeleton(vq, sk)
     print(f"reskeleton plan: {rep}")
     if a.dry_run:
         return 0

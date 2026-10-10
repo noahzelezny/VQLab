@@ -6,7 +6,7 @@ import struct
 
 import pytest
 
-from vqlab.assemble import mix
+from vqlab.build import mix
 
 
 def _shard(p, keys):
@@ -60,7 +60,7 @@ def test_runtime_mismatch_refused(tmp_path):
 
 
 def test_minibase(tmp_path):
-    from vqlab.assemble import minibase
+    from vqlab.build import minibase
     base = _art(tmp_path / "base", 256, {"a.safetensors": [0, 1], "b.safetensors": [2, 3]})
     minibase.main(["--base", str(base), "--layers", "2-3", "--out", str(tmp_path / "mb")])
     wm = json.load(open(tmp_path / "mb" / "model.safetensors.index.json"))["weight_map"]
@@ -69,7 +69,7 @@ def test_minibase(tmp_path):
 
 
 def test_loo_bands(tmp_path):
-    from vqlab.assemble import loo_bands
+    from vqlab.build import loo_bands
     lay = {"a.safetensors": [0, 1], "b.safetensors": [2, 3]}
     vq = _art(tmp_path / "vq", 256, lay)
     ex = _art(tmp_path / "ex", 256, lay)

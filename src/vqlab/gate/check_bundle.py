@@ -13,7 +13,7 @@ contained verbatim in the bundle.
 
 Dense artifacts (config declares vq_linear/vq_embed): the runtime is
 vq_dense.py, whose fused path needs _dense_fused/_fused from vq_switch.py,
-so a correct dense bundle carries BOTH files' text (build_dense_vq.py
+so a correct dense bundle carries BOTH files' text (build_dense.py
 writes them in that order, followed by the loader shim). Dense bundles that
 carry vq_dense.py ALONE reach into `mlx_lm.models.vq_switch` at call time
 and therefore require a VQ-patched mlx-lm: measured, such an artifact

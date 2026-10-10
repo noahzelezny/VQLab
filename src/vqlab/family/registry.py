@@ -95,7 +95,7 @@ FAMILY = {
         # ([OUT, IN]) rather than [E, OUT, IN] — verify_artifact adds the E=1
         # axis for dense families. Source is the HF-format bf16 checkpoint,
         # whose prefix is model.language_model.* (the ARTIFACT uses
-        # language_model.model.*; build_dense_vq.py owns that remap).
+        # language_model.model.*; build_dense.py owns that remap).
         "target_substr": "mlp",
         "src_key": "model.language_model.layers.{li}.mlp.{key}.weight",
         "proj": {"gate_proj": ("gate_proj", None),
@@ -130,7 +130,7 @@ DENSE_FAMILIES = {
 # template). The fitter names modules with the SOURCE checkpoint's
 # convention because that is what it read; the mlx base uses another. These
 # are different strings and nothing downstream catches a mismatch except a
-# strict load failure at score time, so build_dense_vq --dry-run asserts
+# strict load failure at score time, so build_dense --dry-run asserts
 # every fitted module lands on a real base module before bytes are written.
 DENSE_REMAP = {
     "qwen3_8_dense": ("model.language_model.layers.{li}.mlp.{key}",
