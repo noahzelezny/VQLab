@@ -46,7 +46,9 @@ SEARCH = STAGES + ("mtp", "score/referee")
 # `import pack_artifact`, `vqlab.vq_397b_codes` and the dotted stage name
 # all reach the renamed module, ONE module object (see _Alias). Queue files,
 # shell chains and old ledger entries name the old files.
-RENAMED = {"vq_397b_codes": "fit_moe", "pack_artifact": "pack"}
+RENAMED = {"vq_397b_codes": "fit_moe", "pack_artifact": "pack",
+           # 2026-10-10: experiment numbers out of file names
+           "e134_accept": "kernel_accept", "verify_e134_devcb": "verify_dev_codebook"}
 
 
 def stage_dirs():

@@ -1,4 +1,6 @@
-"""E134 acceptance: device-memory d4 codebook kernels.
+"""Kernel acceptance (E134): device-memory d4 codebook kernels, repo runtime.
+
+Was gate/e134_accept.py; that name still imports (_layout.RENAMED).
 
 Bar (set with the paper + M3 sessions BEFORE the fix existed):
   1. bit-identical to the VERIFIED threadgroup kernels wherever both load
@@ -16,18 +18,7 @@ import vq_switch, vq_pack
 mx.random.seed(0)
 
 
-def reference(x, eidx, codes, codebook, scales, D, G):
-    """Ground truth: reconstruct W from codes and matmul in float32."""
-    E, OUT, NSUB = codes.shape
-    IN = NSUB * D
-    outs = []
-    for t in range(x.shape[0]):
-        e = int(eidx[t])
-        cb = codebook.astype(mx.float32)
-        w = cb[codes[e].reshape(-1).astype(mx.int32)].reshape(OUT, NSUB, D)
-        w = w.reshape(OUT, IN // G, G) * scales[e].astype(mx.float32)[:, :, None]
-        outs.append((x[t].astype(mx.float32)[None, :] @ w.reshape(OUT, IN).T)[0])
-    return mx.stack(outs)
+from vqlab.gate.kernel_reference import reference  # noqa: E402
 
 
 def make(E, OUT, IN, K, G=64, D=4):

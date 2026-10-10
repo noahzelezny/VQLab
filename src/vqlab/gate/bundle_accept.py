@@ -41,17 +41,7 @@ print("has cap guard:", hasattr(bvq, "_d4_tg_fits"))
 
 mx.random.seed(0)
 
-def reference(x, eidx, codes, codebook, scales, D, G):
-    E, OUT, NSUB = codes.shape
-    IN = NSUB * D
-    outs = []
-    for t in range(x.shape[0]):
-        e = int(eidx[t])
-        cb = codebook.astype(mx.float32)
-        w = cb[codes[e].reshape(-1).astype(mx.int32)].reshape(OUT, NSUB, D)
-        w = w.reshape(OUT, IN // G, G) * scales[e].astype(mx.float32)[:, :, None]
-        outs.append((x[t].astype(mx.float32)[None, :] @ w.reshape(OUT, IN).T)[0])
-    return mx.stack(outs)
+from vqlab.gate.kernel_reference import reference  # noqa: E402
 
 fails = 0
 for (E, OUT, IN) in [(4, 512, 2048), (2, 256, 1024)]:
