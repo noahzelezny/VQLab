@@ -1,8 +1,15 @@
 # Changelog
 
-## 0.1.0 (unreleased)
+## 0.1.0 (2026-10-10)
 
-First release. (A `v0.1.0` git tag from 2026-08-26 marked the paper
+First release. VQLab fits size-targeted, data-free vector-quantization
+codebooks for large language models on Apple Silicon (MLX), assembles and
+bundles the quantized artifacts with their Metal runtime, and scores them
+against their bf16 teachers (paired KL on three corpora, perplexity, task
+benchmarks) before release. One `vqlab` CLI covers plan, fit, build, bundle,
+gate, score, bench and ship; `vqlab mcp` exposes the lab to agents.
+
+(A `v0.1.0` git tag from 2026-08-26 marked the paper
 snapshot; it was never a release, and moves to this commit when this ships.)
 
 ### Since the first draft of these notes (2026-10-03)
