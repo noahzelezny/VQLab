@@ -9,6 +9,10 @@ Nothing in vqlab assumes a disk layout: each location resolves from its
 environment variable, then the config file, then a default under ~/.vqlab
 (src/vqlab/config.py). Large models do not belong on a small system disk, so
 point these at a big volume before the first fit.
+
+An optional [card] table sets the support block `vqlab card` appends to model
+cards (keys: sponsor_url, contact, blurb, contract; unset = no block). See
+src/vqlab/config.py for an example.
 """
 from __future__ import annotations
 
@@ -47,6 +51,10 @@ def show():
                                    f"[boxes.{name}] to use a local copy there)"))
     print(f"  this box: {C.this_box() or 'home (no [boxes.*] entry matches)'}"
           f"  [$VQLAB_BOX, else hostname vs box name / `hostname`]")
+    card = C.card()
+    print("  card      " + (", ".join(f"{k}={v!r}" for k, v in card.items()) if card else
+                            "no [card] table: model cards get no support block "
+                            "(keys: sponsor_url, contact, blurb, contract)"))
     return 0
 
 
@@ -78,7 +86,8 @@ def init(a):
 
 
 def main(argv=None):
-    ap = argparse.ArgumentParser(prog="vqlab config", description=__doc__.split("\n")[0])
+    ap = argparse.ArgumentParser(prog="vqlab config", description=__doc__,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd")
     pi = sub.add_parser("init", help="write a starter config file")
     pi.add_argument("--root", help="one directory holding scratch/ models/ teachers/ fits/")

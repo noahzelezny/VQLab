@@ -20,6 +20,16 @@ Example config::
 
 Large outputs belong on the volumes named here: `require_storage` refuses a
 write path that is not under one of them.
+
+Optional ``[card]`` table, read by `vqlab card` (see `card()`): a support /
+contact block appended to every generated model card. Unset keys print
+nothing; with no table the card has no support section::
+
+    [card]
+    sponsor_url = "https://github.com/sponsors/<you>"
+    contact     = "you@example.com"          # email or URL
+    blurb       = "One paragraph shown above the links."
+    contract    = "One line on paid work you take, if any."
 """
 from __future__ import annotations
 
@@ -88,6 +98,11 @@ def _file_table(path: str, table: str) -> dict:
         return {}
     with p.open("rb") as f:
         return tomllib.load(f).get(table, {})
+
+
+def card() -> dict:
+    """The [card] table (sponsor_url, contact, blurb, contract); {} when unset."""
+    return dict(_file_table(str(config_file()), "card"))
 
 
 def boxes() -> dict:
