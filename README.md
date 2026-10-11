@@ -12,6 +12,19 @@ Bytes Below 5 Bits*, doi:[10.5281/zenodo.22119017](https://doi.org/10.5281/zenod
 Artifacts: [TheDrainFlorist](https://huggingface.co/TheDrainFlorist) on
 Hugging Face.
 
+## Quick start
+
+```bash
+pipx install vqlab      # or: uv tool install vqlab
+vqlab gui --open        # the VQ Lab GUI: Library, Recipe, Jobs, Storage
+```
+
+The first `vqlab` command sets up `~/VQLab/` (models, teachers, scratch,
+fits, records) and a config file naming it. To keep models on a bigger drive,
+change the lab folder in the GUI's Storage page or with
+`vqlab lab config set lab <big-drive>/VQLab`; any one location can also be
+set on its own.
+
 ## Using vqlab as a library / from an MCP server
 
 `vqlab.api` is the stable surface: one module, every function keyword-only,
@@ -60,8 +73,9 @@ model, tok = load(path, trust_remote_code=True)
 
 Every `vqlab` CLI command does this for you; `VQLAB_VENDORED_ARCH=0` turns it
 off. Storage locations (scratch, models, teachers, fit store, and `records`
-for the findings log, registry, families and queue records) are set with
-`vqlab lab config set KEY PATH` or `vqlab lab config init`.
+for the findings log, registry, families and queue records) default under the
+lab folder (`lab`, `~/VQLab`); set any of them with
+`vqlab lab config set KEY PATH`.
 
 ## Published models
 
@@ -162,9 +176,9 @@ fit → verify (outlier gate) → pack → graft (vision) → release checks
 python3 -m venv .venv && . .venv/bin/activate
 pip install "vqlab[score]"      # or, from a checkout: pip install -e ".[score,test]"
 
-# Where models, teachers, fits and scratch live. Nothing large belongs on a
-# small system disk; point this at a big volume once per machine.
-vqlab lab config init --root /Volumes/Big/vqlab
+# Where models, teachers, fits and scratch live: the first command creates
+# ~/VQLab. Nothing large belongs on a small system disk; move it once per machine.
+vqlab lab config set lab <big-drive>/VQLab
 vqlab lab config                    # shows every location and where it came from
 
 vqlab gate selftest        # real pipeline on a tiny synthetic model (<1 min, uses the GPU)

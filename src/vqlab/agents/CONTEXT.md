@@ -31,6 +31,7 @@ Detached runs under the MCP runs dir, FINDINGS-LOG entries; queues under `<recor
 ## Files
 - `config_cmd.py`: `vqlab lab config`: show, set or initialise storage locations (over settings.py)
 - `doctor.py`: `vqlab lab doctor`: which interpreter, packages, storage and credentials a run would use
+- `first_run.py`: on a new install (no config, no location env, no older data) the first `vqlab` command creates `~/VQLab/{models,teachers,scratch,fits,records}` and a config naming it, and says so once; `$VQLAB_NO_SETUP=1` skips it
 - `gui.py`: `vqlab lab gui`: serves the VQ Lab GUI (Library · Recipe · Jobs, gui_static/bench/index.html) and the JSON it reads
 - `gui_static/bench/make_jobs_snapshot.py`: regenerates the GUI's embedded jobs snapshot (bench.html / index.html)
 - `mcp/server.py`: `vqlab lab mcp`: the stdio JSON-RPC loop and the tool table (name -> fn, schema)
