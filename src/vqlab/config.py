@@ -129,6 +129,8 @@ def boxes() -> dict:
         config    = "/Volumes/Shared/m4-config.toml" # that box's own [paths]
         queue_dir = "/Volumes/Shared/queues-m4"      # shared, so this box can `queue wait` on it
         teachers  = "/Volumes/Local/teachers"     # optional: that box's LOCAL teacher copies
+        models    = "/path/to/models"             # optional: that box's served-artifacts root
+                                                    # (check-release --cluster-peer reads it)
         hostname  = "box-b"                         # optional: its short hostname, if not NAME
                                                     # (vision-smoke --knurlogic NAME needs it)
 
@@ -161,6 +163,21 @@ def box_teachers(name: str | None = None) -> pathlib.Path | None:
     b = boxes().get(name if name is not None else (this_box() or ""))
     v = (b or {}).get("teachers")
     return pathlib.Path(v).expanduser() if v else None
+
+
+def box_models(peer: str) -> str | None:
+    """The `models` root of the [boxes.NAME] whose NAME, `ssh` or `hostname`
+    is PEER (as given to --cluster-peer), or None. Returned as the string the
+    config holds: it names a path on THAT box, so it is not expanded here."""
+    host = peer.split("@")[-1].lower()
+    for name, b in boxes().items():
+        remote = str(b.get("ssh", "")).lower()
+        keys = {name.lower(), remote, remote.split("@")[-1],
+                str(b.get("hostname", "")).lower()}
+        if peer.lower() in keys or host in keys:
+            v = b.get("models")
+            return str(v) if v else None
+    return None
 
 
 def scratch() -> pathlib.Path:

@@ -282,3 +282,15 @@ def test_status_prints_eta(tmp_path, monkeypatch, capsys):
     assert "ETA unknown" in capsys.readouterr().out
     q = ms.t_queue_status()
     assert q["queues"][0]["eta"] == "ETA unknown" and q["queues"][0]["eta_s"] is None
+
+
+def test_box_models_resolves_peer_root(cfg):
+    """check-release --cluster-peer reads a peer's models root from its
+    [boxes.NAME] `models`; no built-in default."""
+    assert C.box_models("u@m4") is None                 # key unset: no guess
+    f = cfg / "config.toml"
+    f.write_text(f.read_text() + 'models = "/peer/models"\n')
+    C._file_table.cache_clear()
+    assert C.box_models("u@m4") == "/peer/models"
+    assert C.box_models("m4") == "/peer/models"
+    assert C.box_models("other@elsewhere") is None
