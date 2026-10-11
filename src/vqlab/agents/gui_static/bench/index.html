@@ -404,6 +404,14 @@ details.adv .kv{margin-top:8px}
 .sscroll td{padding:4px 8px;border-top:1px solid var(--line);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:0}
 .sscroll td.num{max-width:none}.sscroll th.num{width:9em}
 .stabs{display:flex;gap:6px;margin:10px 0 8px}
+.strt{display:flex;flex-direction:column;gap:10px;min-width:0}
+.fhd{display:flex;justify-content:space-between;align-items:center;gap:8px}.fhd .mini{min-width:7em;text-align:center}
+.fmod{overflow:auto;margin-top:8px}.fmod table{width:100%;table-layout:fixed;border-collapse:collapse;font-size:.88em}
+.fmod td{padding:4px 8px;border-top:1px solid var(--line);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:0}
+.fmod td.num{text-align:right;font-variant-numeric:tabular-nums;max-width:none;width:6.5em}.fmod td.fmt{width:10em;color:var(--dim)}.fmod td.src{width:9em;color:var(--dim)}.fmod td.use{width:6.5em;max-width:none}
+.fmod tr.sum td{color:var(--faint)}.fmod .nos{color:var(--faint);font-size:.85em}
+.utag{font-size:.72em;letter-spacing:.08em;padding:0 5px;border:1px solid var(--line);color:var(--dim);border-radius:var(--r)}.utag.ok{color:var(--ok);border-color:color-mix(in oklch,var(--ok) 40%,transparent)}
+.otag{font-size:.72em;letter-spacing:.08em;padding:0 5px;border:1px solid color-mix(in oklch,var(--ok) 40%,transparent);color:var(--ok);border-radius:var(--r);margin-left:6px}
 .stabs .mini[aria-pressed=true]{color:var(--acc);border-color:var(--acc)}
 .rmblk{max-height:9em;overflow:auto;user-select:all}
 </style>
@@ -954,9 +962,11 @@ function renderPicker(){
   if(pickFam==='hf'){
     renderHub();return}
   const list=all.filter(t=>(pickFam==='all'||creator(t)===pickFam)&&(pickKind==='all'||t.kind.toLowerCase().startsWith(pickKind))&&(!q||(t.n+t.short).toLowerCase().includes(q)));
+  const also=(()=>{const x=fndOrig().filter(m=>m.family!=null&&!all.some(t=>t.n&&baseKey(t.n)===baseKey(m.name))&&(!q||m.name.toLowerCase().includes(q)));
+    return x.length?`<div class="psect no">Also on this Mac ${INFO('Onboarding profiles the model so a recipe can price it.')}</div>`+x.map(m=>`<button class="prow no" tabindex="-1" style="cursor:default"><span class="n">${esc(m.name)}</span><span class="m">needs onboarding</span><span class="d">${esc(m.format)} · ${gib(m.bytes)}</span></button>`).join(''):''})();
   const row=t=>t.draft?`<button class="prow no"><span class="n">${esc(t.short)}</span><span class="m">${esc(t.kind)} · not onboarded</span><span class="d">onboard runs profile, loader, cache determinism and the init sweep · about two hours</span></button>`
-    :`<button class="prow" aria-current="${t.id===(page===0?libFam:draft.teacher)}" data-pt="${t.id}"><span class="n">${esc(t.short)}</span><span class="m">${esc(t.kind)}</span><span class="d">${t.rows.filter(r=>r.kind==='vq').length} shipped · ${t.scored.length} builds measured · ${t.fits} fits in store${t.note?' · '+t.note:''}${t.judge?' · <span style="color:var(--warn)">judged blind against bf16</span>':''}</span></button>`;
-  $('#prows').innerHTML=`<div class="pkind"><div class="seg small" style="width:14em">${[['all','all'],['dense','dense'],['moe','MoE']].map(([v,n])=>`<button aria-pressed="${pickKind===v}" data-pk="${v}">${n}</button>`).join('')}</div></div>`+(list.map(row).join('')||'<div class="psect no">nothing matches</div>');
+    :`<button class="prow" aria-current="${t.id===(page===0?libFam:draft.teacher)}" data-pt="${t.id}"><span class="n">${esc(t.short)}${fndFor(t)?'<span class="otag" title="found on this Mac">on this Mac</span>':''}</span><span class="m">${esc(t.kind)}</span><span class="d">${t.rows.filter(r=>r.kind==='vq').length} shipped · ${t.scored.length} builds measured · ${t.fits} fits in store${t.note?' · '+t.note:''}${t.judge?' · <span style="color:var(--warn)">judged blind against bf16</span>':''}</span></button>`;
+  $('#prows').innerHTML=`<div class="pkind"><div class="seg small" style="width:14em">${[['all','all'],['dense','dense'],['moe','MoE']].map(([v,n])=>`<button aria-pressed="${pickKind===v}" data-pk="${v}">${n}</button>`).join('')}</div></div>`+(list.map(row).join('')||'<div class="psect no">nothing matches</div>')+also;
   $('#pfams').querySelectorAll('[data-pf]').forEach(b=>b.onclick=()=>{pickFam=b.dataset.pf;renderPicker()});
   $('#prows').querySelectorAll('[data-pk]').forEach(b=>b.onclick=()=>{pickKind=b.dataset.pk;renderPicker()});
   $('#prows').querySelectorAll('[data-pt]').forEach(b=>b.onclick=()=>{if(page===0){libFam=b.dataset.pt;render();return}draft=newRecipe();draft.teacher=b.dataset.pt;initWidths(draft);const t=TE(b.dataset.pt);resolveAt(t,draft,(t.xr[0]+t.xr[1])/2);render()});
@@ -1080,6 +1090,31 @@ async function stLoad(which){if(location.protocol==='file:')return;
     Promise.all([fetch('/api/scratch'),fetch('/api/scratch/reclaimable')]).then(async([a,b])=>{if(!a.ok||!b.ok)throw 0;ST.scr=await a.json();ST.rec=await b.json();ST.serr=''}).catch(()=>{ST.serr='scratch unavailable'}).then(redo)])}
 const STCOL={models:'var(--acc)',scratch:'var(--teal)',teachers:'var(--mix)',fit_store:'var(--pink)',records:'var(--ok)'};
 const stCol=k=>STCOL[k]||'var(--g2)';
+const FOUND={models:[],scanning:false,loaded:false,timer:0};
+const baseKey=n=>String(n||'').split('/').pop().toLowerCase().replace(/-bf16$/,'');
+const fndOrig=()=>FOUND.models.filter(m=>m.use==='original');
+const fndFor=t=>fndOrig().find(m=>baseKey(m.name)===baseKey(t.n));
+function fndRedraw(){if(page===3)render();if($('#picker')&&!$('#picker').classList.contains('hidden')&&pickFam!=='hf')renderPicker()}
+async function fndLoad(){if(location.protocol==='file:')return;
+  try{const r=await fetch('/api/models/found');if(!r.ok)throw 0;const j=await r.json();FOUND.models=j.models||[];FOUND.scanning=!!j.scanning;FOUND.loaded=true}catch{FOUND.scanning=false}
+  fndRedraw();clearTimeout(FOUND.timer);if(FOUND.scanning)FOUND.timer=setTimeout(fndLoad,2000)}
+async function fndScan(){if(FOUND.scanning)return;FOUND.scanning=true;fndRedraw();
+  try{const r=await fetch('/api/models/scan',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});if(!r.ok)throw 0}catch{FOUND.scanning=false;fndRedraw();return}
+  clearTimeout(FOUND.timer);FOUND.timer=setTimeout(fndLoad,1000)}
+function fndCard(){
+  const M=FOUND.models,o=M.filter(m=>m.use==='original'),q=M.filter(m=>m.use==='quantized'),inc=M.filter(m=>m.use==='incomplete');
+  const ro=(l,v)=>`<div class="readout"><small>${l}</small><b>${v}</b></div>`,L=FOUND.loaded;
+  const big=(a,b)=>(b.bytes||0)-(a.bytes||0);
+  const row=m=>`<tr><td title="${esc(m.path)}">${esc(m.name)}${m.family==null?` <span class="nos" title="vqlab cannot build from this architecture yet">not supported yet</span>`:''}</td><td class="src" title="${esc(m.source)}">${esc(m.source)}</td><td class="use"><span class="utag ${m.use==='original'?'ok':''}">${m.use}</span></td><td class="fmt" title="${esc(m.format)}">${esc(m.format)}</td><td class="num">${gib(m.bytes)}</td></tr>`;
+  const sum=(t)=>`<tr class="sum"><td colspan="5">${esc(t)}</td></tr>`;
+  const sums=[];
+  if(inc.length)sums.push(sum(inc.length+' incomplete downloads'));
+  const unr={};M.filter(m=>m.use==='unreadable').forEach(m=>{(unr[m.source]=unr[m.source]||[]).push(m)});
+  for(const [src,a] of Object.entries(unr)){const n=a.reduce((x,m)=>x+(m.count||1),0);sums.push(sum(src+': '+n+' model'+(n===1?'':'s')+(a.some(m=>m.format==='GGUF')?' (GGUF, not readable)':' (not readable)')))}
+  const body=L?[...o.sort(big),...q.sort(big)].map(row).join('')+sums.join(''):'';
+  return `<div class="cart"><div class="fhd"><div class="ro">Models on this Mac ${INFO('Found in the Hugging Face cache, LM Studio, exo and Ollama. Nothing is copied or linked; builds read originals where they are.')}</div><button class="mini" id="fscan"${FOUND.scanning?' disabled':''}>${FOUND.scanning?'scanning…':'Rescan'}</button></div>
+    <div class="readouts" style="grid-template-columns:repeat(3,1fr);margin-top:8px">${ro('originals',L?o.length:'&nbsp;')}${ro('quantized',L?q.length:'&nbsp;')}${ro('total',L?gib(o.concat(q).reduce((a,m)=>a+(m.bytes||0),0)):'&nbsp;')}</div>
+    <div class="fmod" id="fmod"><table><colgroup><col><col style="width:8.5em"><col style="width:6.5em"><col style="width:9em"><col style="width:6.5em"></colgroup><tbody>${body}</tbody></table></div></div>`}
 const stAdv=()=>{try{return localStorage.getItem('vq.stadv')==='1'}catch{return false}};
 function stSrc(l){const s=l.source||'';return !s?'':(ST.cfg&&s===ST.cfg.config_file)||/\.toml$/.test(s)?'config file':s}
 const stLoc=k=>ST.cfg&&ST.cfg.locations.find(x=>x.key===k);
@@ -1140,9 +1175,11 @@ function pgStorage(){
     <div class="cart"><div class="ro">Disks</div><div class="disks">${disks}</div></div>
     <div class="cart"><div class="ro">Locations ${INFO('Where each kind of data lives.')}</div>${locs}
       <div class="advh" data-sadv="1">${open?'▾':'▸'} Advanced</div>${open?`<div class="advb">${adv.map(l=>stRow(l,lab)).join('')}</div>`:''}${c?`<div class="sfile">${esc(c.config_file)}${c.config_exists?'':' (not created)'}</div>`:''}</div></div>
-    <div class="cart"><div class="ro">Work in progress ${INFO('Builds and run outputs live here. Nothing on this page deletes anything.')}</div>${right}</div></div></section>`}
+    <div class="strt">${fndCard()}<div class="cart"><div class="ro">Work in progress ${INFO('Builds and run outputs live here. Nothing on this page deletes anything.')}</div>${right}</div></div></div></section>`}
 function wireStorage(){
-  const fit=()=>{const e=$('#sscroll');if(e)e.style.maxHeight=Math.max(160,innerHeight-e.getBoundingClientRect().top-90)+'px'};fit();
+  const fit=()=>{const m=$('#fmod'),e=$('#sscroll');if(m){const av=innerHeight-m.getBoundingClientRect().top-90;m.style.height=Math.max(120,Math.round(av*.4))+'px'}
+    if(e)e.style.maxHeight=Math.max(120,innerHeight-e.getBoundingClientRect().top-90)+'px'};fit();
+  {const b=$('#fscan');if(b)b.onclick=fndScan}
   if(!ST.started){ST.started=true;stLoad()}
   document.querySelectorAll('[data-sadv]').forEach(b=>b.onclick=()=>{try{localStorage.setItem('vq.stadv',stAdv()?'0':'1')}catch{}render()});
   document.querySelectorAll('[data-ssort]').forEach(h=>h.onclick=()=>{const k=h.dataset.ssort;ST.sort=ST.sort.k===k?{k,d:-ST.sort.d}:{k,d:k==='name'?1:-1};render()});
@@ -1199,5 +1236,5 @@ function render(){
 }
 let rz;addEventListener('resize',()=>{clearTimeout(rz);rz=setTimeout(render,120)});
 $('#homebtn').onclick=()=>{page=0;render()};
-render();
+render();fndLoad();
 </script>
