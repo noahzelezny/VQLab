@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Write bench/jobs.json (the /api/queues shape + snapshot time + gpu) and
 refresh the `const JOBS_SNAPSHOT=...;` line in bench.html, then regenerate
-index.html. Public repo: `source` is reduced to its basename and the
+../index.html. Public repo: `source` is reduced to its basename and the
 host name is dropped.
 
     python src/vqlab/agents/gui_static/bench/make_jobs_snapshot.py [--n 40]
@@ -51,8 +51,8 @@ def main():
     if not k:
         sys.exit("bench.html has no `const JOBS_SNAPSHOT=...;` line")
     (HERE / "bench.html").write_text(html)
-    (HERE / "index.html").write_text(HEAD + html)
-    print(f"{len(runs)} queues -> jobs.json, bench.html, index.html")
+    (HERE.parent / "index.html").write_text(HEAD + html)
+    print(f"{len(runs)} queues -> jobs.json, bench.html, ../index.html")
 
 
 if __name__ == "__main__":

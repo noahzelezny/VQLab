@@ -59,14 +59,14 @@ vqlab = "vqlab.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
-# gui_static/ is a data-only package: the GUI is bench/index.html, served at /.
-# bench/ is data, not a package; its snapshot script and source JSON stay in the repo.
+# gui_static/ is data only: the GUI page, index.html, served at /. Its
+# source, bench/ (bench.html, build script, JSON), is never packaged.
 exclude = ["vqlab.agents.gui_static.bench*"]
 
 [tool.setuptools.package-data]
 vqlab = ["score/referee/*.txt", "score/referee/*.json", "score/referee/*.py", "*/CONTEXT.md", "*/*/CONTEXT.md",
          "runtime/*.json", "runtime/equivalent/*.txt", "family/*.json"]
-"vqlab.agents.gui_static" = ["bench/index.html"]
+"vqlab.agents.gui_static" = ["index.html"]
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]

@@ -3,7 +3,7 @@
 
     vqlab gui [--port 8781] [--open]
 
-Serves gui_static/bench/index.html at / on 127.0.0.1 (never another
+Serves gui_static/index.html at / on 127.0.0.1 (never another
 interface), plus the JSON it reads, over data the lab already keeps --
 nothing here computes a number of its own:
 
@@ -43,7 +43,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 
 from vqlab import config
-PAGE = pathlib.Path(__file__).resolve().parent / "gui_static" / "bench" / "index.html"
+PAGE = pathlib.Path(__file__).resolve().parent / "gui_static" / "index.html"
 
 
 def _jsonl(p, limit=None):

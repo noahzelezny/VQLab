@@ -1,5 +1,5 @@
-# The GUI ships as bench/index.html only; its build script and source JSON stay in the repo.
+# The GUI ships as gui_static/index.html; its source (bench/: bench.html, build
+# script, source JSON) stays in the repo.
 prune src/vqlab/agents/gui_static/bench
-include src/vqlab/agents/gui_static/bench/index.html
 # The private notebook never ships.
 prune lab

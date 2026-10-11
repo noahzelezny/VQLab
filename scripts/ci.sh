@@ -62,15 +62,14 @@ import json
 
 pkg = r.files("vqlab")
 need = ["score/referee/referee_corpus.txt", "runtime/equivalent_revisions.json",
-        "agents/gui_static/bench/index.html"]
+        "agents/gui_static/index.html"]
 reg = json.loads((pkg / "runtime/equivalent_revisions.json").read_text())
 need += ["runtime/" + rev["file"] for rev in reg["revisions"]]
 missing = [n for n in need if not (pkg / n).is_file()]
 if missing:
     raise SystemExit(f"wheel is missing package data: {missing}")
-extra = sorted(p.name for p in (pkg / "agents/gui_static/bench").glob("*") if p.name != "index.html")
-if extra:
-    raise SystemExit(f"wheel ships GUI build files: {extra}")
+if (pkg / "agents/gui_static/bench").exists():
+    raise SystemExit("wheel ships the GUI source folder (gui_static/bench)")
 print(f"wheel carries all {len(need)} required data files")
 EOF
 )
