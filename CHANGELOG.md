@@ -1,13 +1,6 @@
 # Changelog
 
-## 0.1.0 (2026-10-11)
-
-First release. VQLab fits size-targeted, data-free vector-quantization
-codebooks for large language models on Apple Silicon (MLX), assembles and
-bundles the quantized artifacts with their Metal runtime, and scores them
-against their bf16 teachers (paired KL on three corpora, perplexity, task
-benchmarks) before release. One `vqlab` CLI covers plan, fit, build, bundle,
-gate, score, bench and ship; `vqlab mcp` exposes the lab to agents.
+## Unreleased
 
 ### Release gates
 - `check-release` fails an artifact whose tokenizer does not tokenize like its base model's (pre_tokenizer, normalizer, decoder and a multilingual sample), or whose files name the machine that built it. `vqlab publish` refuses the same leaks; `release-prep --hub-scan` checks a published repo.
@@ -159,3 +152,12 @@ snapshot; it was never a release, and moves to this commit when this ships.)
 ### Tests
 - Writer contracts: every artifact writer pinned to golden outputs on a
   multi-shard fixture (tests/test_writer_contracts.py).
+
+## 0.1.0 (unreleased)
+
+First release. VQLab fits size-targeted, data-free vector-quantization
+codebooks for large language models on Apple Silicon (MLX), assembles and
+bundles the quantized artifacts with their Metal runtime, and scores them
+against their bf16 teachers (paired KL on three corpora, perplexity, task
+benchmarks) before release. One `vqlab` CLI covers plan, fit, build, bundle,
+gate, score, bench and ship; `vqlab mcp` exposes the lab to agents.
