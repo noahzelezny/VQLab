@@ -369,6 +369,22 @@ details.adv .kv{margin-top:8px}
 .stor{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:1.4em;align-items:start}
 @media(max-width:1100px){.stor{grid-template-columns:minmax(0,1fr)}}
 .stor .cart{font-size:.9em}
+.stl{display:flex;flex-direction:column;gap:10px;min-width:0}
+.stpage .stor .cart{margin:0}.stpage h2{color:var(--fg)}
+.labp{display:flex;align-items:center;gap:10px;min-height:1.8em}.labp .big{flex:1;min-width:0;font-size:1.1em;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.labp .stag,.srow>.stag{color:var(--faint);font-size:.75em;letter-spacing:.08em;text-transform:uppercase;white-space:nowrap}
+.stpage .srow{grid-template-columns:9.5em minmax(0,1fr) 7.5em auto;align-items:center;padding:6px 0}.stpage .srow>.stag{grid-column:auto}.stpage .srow .acts{min-width:3em}.stpage .srow .k{white-space:nowrap}
+.disks{display:flex;flex-direction:column;gap:12px;min-height:10em}
+.dh{display:flex;align-items:center;gap:8px;min-height:1.7em}.dh b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dbar{display:flex;height:14px;background:var(--panel);border:1px solid var(--line);border-radius:var(--r);overflow:hidden;margin:4px 0}.dbar i{display:block;height:100%}
+.dleg{display:flex;flex-wrap:wrap;gap:2px 14px;color:var(--dim);font-size:.85em;min-height:2.9em;align-content:flex-start}
+.dleg .sw{display:inline-block;width:.7em;height:.7em;border-radius:2px;margin-right:5px}.dleg .fr{color:var(--faint);margin-left:auto}
+.advh{margin-top:10px;color:var(--dim);cursor:pointer;font-size:.85em;letter-spacing:.1em;text-transform:uppercase;border-top:1px solid var(--line);padding-top:8px}
+.advb{max-height:3.6em;overflow:auto}.warnl{color:var(--warn);font-size:.85em;min-height:1.5em}
+.cart>.ed{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.cart>.ed input[type=text]{flex:1;min-width:12em;background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:var(--r);padding:3px 8px;font:inherit;font-size:.9em}
+.cart .err{color:var(--bad);font-size:.85em}
+.stpage .srow .ed,.stpage .srow .err{grid-column:1 / 5}
+
 .srow{display:grid;grid-template-columns:7.5em minmax(0,1fr) auto;gap:4px 12px;align-items:start;padding:8px 0;border-top:1px solid var(--line)}
 .srow:first-of-type{border-top:0;padding-top:0}
 .srow .k{display:flex;align-items:center;gap:6px;color:var(--fg)}
@@ -1050,59 +1066,95 @@ function pgJobs(){
 // ================================================================ wiring
 function wirePicker(){$('#pick').onclick=()=>{$('#picker').classList.remove('hidden');renderPicker();$('#psearch').focus()};
   $('#pclose').onclick=()=>$('#picker').classList.add('hidden');$('#picker').onclick=e=>{if(e.target.id==='picker')$('#picker').classList.add('hidden')};
-  $('#psearch').oninput=()=>{if(pickFam!=='hf')return renderPicker();clearTimeout(HF.timer);HF.res=null;HF.err='';HF.open='';renderHub();HF.timer=setTimeout(()=>{HF.timer=0;hubSearch($('#psearch').value.trim())},250)};document.onkeydown=e=>{if(e.key==='Escape')$('#picker').classList.add('hidden')}}
+  $('#psearch').oninput=()=>{if(pickFam!=='hf')return renderPicker();clearTimeout(HF.timer);HF.res=null;HF.err='';HF.open='';renderHub();HF.timer=setTimeout(()=>{HF.timer=0;hubSearch($('#psearch').value.trim())},250)};document.onkeydown=e=>{if(e.key==='Escape')$('#picker')?.classList.add('hidden')}}
 
 // ================================================================ storage
-const ST={cfg:null,scr:null,rec:null,err:'',serr:'',edit:null,sort:{k:'bytes',d:-1},tab:'folders',copied:false,started:false};
+const ST={use:null,uerr:'',cfg:null,scr:null,rec:null,err:'',serr:'',edit:null,sort:{k:'bytes',d:-1},tab:'folders',copied:false,started:false};
 const gib=b=>b==null?'':b>=2**40?(b/2**40).toFixed(2)+' TiB':b>=2**30?(b/2**30).toFixed(1)+' GiB':(b/2**20).toFixed(1)+' MiB';
 async function stLoad(which){if(location.protocol==='file:')return;
-  const redo=()=>{if(page===3&&!(ST.edit&&ST.edit.busy)&&!document.activeElement?.closest?.('.srow .ed'))render()};
-  if(which!=='scratch'){try{const r=await fetch('/api/settings');if(!r.ok)throw 0;ST.cfg=await r.json();ST.err=''}catch{ST.err='settings unavailable'}redo()}
-  if(which!=='settings'){try{const [a,b]=await Promise.all([fetch('/api/scratch'),fetch('/api/scratch/reclaimable')]);if(!a.ok||!b.ok)throw 0;ST.scr=await a.json();ST.rec=await b.json();ST.serr=''}catch{ST.serr='scratch unavailable'}redo()}}
+  const redo=()=>{if(page===3&&!(ST.edit&&ST.edit.busy)&&!document.activeElement?.closest?.('.srow .ed,.cart>.ed'))render()};
+  const get=async(u,f)=>{try{const r=await fetch(u);if(!r.ok)throw 0;await f(await r.json())}catch{return 1}};
+  await Promise.all([
+    get('/api/settings',j=>{ST.cfg=j;ST.err=''}).then(e=>{if(e)ST.err='settings unavailable';redo()}),
+    get('/api/storage/usage',j=>{ST.use=j;ST.uerr=''}).then(e=>{if(e)ST.uerr='disk usage unavailable';redo()}),
+    Promise.all([fetch('/api/scratch'),fetch('/api/scratch/reclaimable')]).then(async([a,b])=>{if(!a.ok||!b.ok)throw 0;ST.scr=await a.json();ST.rec=await b.json();ST.serr=''}).catch(()=>{ST.serr='scratch unavailable'}).then(redo)])}
+const STCOL={models:'var(--acc)',scratch:'var(--teal)',teachers:'var(--mix)',fit_store:'var(--pink)',records:'var(--ok)'};
+const stCol=k=>STCOL[k]||'var(--g2)';
+const stAdv=()=>{try{return localStorage.getItem('vq.stadv')==='1'}catch{return false}};
 function stSrc(l){const s=l.source||'';return !s?'':(ST.cfg&&s===ST.cfg.config_file)||/\.toml$/.test(s)?'config file':s}
-function stRow(l){const ed=ST.edit&&ST.edit.key===l.key,one=l.paths.length===1;
+const stLoc=k=>ST.cfg&&ST.cfg.locations.find(x=>x.key===k);
+function stEd(){const E=ST.edit;return `<div class="ed"><input type="text" id="sin" value="${esc(E.value)}" spellcheck="false"><label><input type="checkbox" id="scr"${E.create?' checked':''}> create if missing</label>
+  <button class="mini pri" id="ssave"${E.busy?' disabled':''}>Save</button><button class="mini" id="scancel">Cancel</button></div>${E.error?`<div class="err">${esc(E.error)}</div>`:''}`}
+function stRow(l,lab){const ed=ST.edit&&ST.edit.key===l.key,one=l.paths.length===1,p0=l.paths[0]||'';
+  const own=one&&lab?(p0.slice(0,p0.lastIndexOf('/'))===lab?'in lab folder':'set on its own'):stSrc(l);
   const paths=l.paths.map((p,i)=>`<div title="${esc(p)}">${esc(p)}${l.exists&&l.exists[i]===false?' <span style="color:var(--warn)">missing</span>':''}</div>`).join('');
-  const free=l.paths.map((p,i)=>l.free_bytes&&l.free_bytes[i]!=null?`<div>${gib(l.free_bytes[i])} free</div>`:'<div>&nbsp;</div>').join('');
-  return `<div class="srow"><span class="k">${esc(l.key)} ${INFO(esc(l.description))}</span>
-    <div class="p">${paths}<div class="stag">${esc(stSrc(l))}</div></div>
-    <div class="acts"><span class="fr">${free}</span>${one&&!ed?`<button class="mini" data-sedit="${esc(l.key)}">edit</button>`:''}</div>
-    ${ed?`<div class="ed"><input type="text" id="sin" value="${esc(ST.edit.value)}" spellcheck="false"><label><input type="checkbox" id="scr"${ST.edit.create?' checked':''}> create if missing</label>
-      <button class="mini pri" id="ssave"${ST.edit.busy?' disabled':''}>Save</button><button class="mini" id="scancel">Cancel</button></div>`:''}
-    ${ed&&ST.edit.error?`<div class="err">${esc(ST.edit.error)}</div>`:''}</div>`}
+  const nm=(ST.use&&ST.use.volumes.flatMap(v=>v.locations).find(x=>x.key===l.key)||{}).label||l.key;
+  return `<div class="srow"><span class="k">${esc(nm)} ${INFO(esc(l.description))}</span>
+    <div class="p">${paths}</div>
+    <div class="stag" title="${esc(l.source||'')}">${esc(own)}</div>
+    <div class="acts">${one&&!ed?`<button class="mini" data-sedit="${esc(l.key)}">edit</button>`:''}</div>${ed?stEd():''}</div>`}
+function stDisk(v,i){const t=v.total||1,pc=n=>Math.max(0,Math.min(100,n/t*100));
+  const named=v.locations.reduce((a,l)=>a+(l.bytes||0),0),other=Math.max(0,v.used-named);
+  const segs=v.locations.filter(l=>l.bytes).map(l=>`<i style="width:${pc(l.bytes).toFixed(2)}%;min-width:3px;background:${stCol(l.key)}" title="${esc(l.label)} ${gib(l.bytes)}"></i>`).join('')+(other?`<i style="width:${pc(other).toFixed(2)}%;background:var(--faint);opacity:.5" title="other ${gib(other)}"></i>`:'');
+  const low=v.free<.1*v.total||v.free<100*2**30;
+  const leg=v.locations.map(l=>`<span><i class="sw" style="background:${stCol(l.key)}"></i>${esc(l.label)} ${l.bytes==null?'—':gib(l.bytes)}</span>`).join('')+`<span class="fr">${gib(v.free)} free of ${gib(v.total)}</span>`;
+  return `<div class="disk"><div class="dh"><b title="${esc(v.mount)}">${v.system?'System disk':esc(v.mount.replace(/\/+$/,'').split('/').pop()||v.mount)}</b>${low?'<span class="pill warn">low space</span>':''}</div>
+    <div class="dbar">${segs}</div><div class="dleg">${leg}</div></div>`}
+function stSetup(){const u=ST.use,c=stLoc('lab'),p=u.lab;
+  const vols=[...u.volumes].sort((a,b)=>b.mount.length-a.mount.length),v=vols.find(x=>p===x.mount||p.startsWith(x.mount.replace(/\/+$/,'')+'/'));
+  const free=v?v.free:(c&&c.free_bytes&&c.free_bytes[0]);
+  const warn=v&&v.system&&v.free<500*2**30;
+  const E=ST.edit&&ST.edit.key==='lab'?ST.edit:(ST.edit={key:'lab',value:p,create:true,error:'',busy:false});
+  return `<div class="cart"><div class="ro">Choose where VQ Lab keeps models ${INFO('Everything vqlab stores goes in folders inside this one, unless a location is set on its own.')}</div>
+    <div class="ed"><input type="text" id="sin" value="${esc(E.value)}" spellcheck="false"><button class="mini pri" id="ssave"${E.busy?' disabled':''}>Save</button></div>
+    <div class="ro" style="margin:8px 0 0">${free!=null?gib(free)+' free on this disk':'&nbsp;'}</div>
+    <div class="warnl">${warn?'This is the system disk with under 500 GiB free. Teachers are 50–750 GiB each.':'&nbsp;'}</div>
+    <div class="err" style="min-height:1.5em">${esc(E.error||'')}</div></div>`}
 function pgStorage(){
   if(location.protocol==='file:')return `<section class="panel"><h2>Storage</h2><div class="ro">open with <b>vqlab gui</b> to see storage</div></section>`;
-  const c=ST.cfg,sc=ST.scr,rc=ST.rec;
-  const locs=c?c.locations.map(stRow).join(''):`<div class="ro">${esc(ST.err||'loading…')}</div>`;
+  const c=ST.cfg,sc=ST.scr,rc=ST.rec,u=ST.use,labL=c&&stLoc('lab'),lab=u?u.lab:(labL&&labL.paths[0])||'';
+  let top;
+  if(u&&u.configured===false)top=stSetup();
+  else{const ed=ST.edit&&ST.edit.key==='lab';
+    top=`<div class="cart"><div class="ro">Lab folder ${INFO('Everything vqlab stores goes in folders inside this one, unless a location below is set on its own.')}</div>
+      <div class="labp"><span class="big" title="${esc(lab)}">${esc(lab)||'&nbsp;'}</span><span class="stag">${esc(u?u.lab_source:'')}</span>${!ed&&labL?'<button class="mini" data-sedit="lab">edit</button>':''}</div>${ed?`<div class="srow" style="display:block;border:0;padding:6px 0 0">${stEd()}</div>`:''}</div>`}
+  const disks=u?u.volumes.map(stDisk).join(''):`<div class="ro">${esc(ST.uerr||'sizing disks…')}</div>`;
+  const rows=c?c.locations.filter(l=>l.key!=='lab'&&l.key!=='roots'&&l.key!=='gpu_lease'):[];
+  const adv=c?c.locations.filter(l=>l.key==='roots'||l.key==='gpu_lease'):[],open=stAdv();
+  const locs=c?rows.map(l=>stRow(l,lab)).join(''):`<div class="ro">${esc(ST.err||'loading…')}</div>`;
   let right;
-  if(!sc)right=`<div class="ro">${esc(ST.serr||'sizing scratch…')}</div>`;
+  if(!sc)right=`<div class="ro">${esc(ST.serr||'sizing work in progress…')}</div>`;
   else{const col={name:f=>f.name,bytes:f=>f.bytes,mtime:f=>f.mtime},d=ST.sort.d,k=ST.sort.k;
-    const rows=[...sc.folders].sort((a,b)=>{const x=col[k](a),y=col[k](b);return (x>y?1:x<y?-1:0)*d});
+    const rws=[...sc.folders].sort((a,b)=>{const x=col[k](a),y=col[k](b);return (x>y?1:x<y?-1:0)*d});
     const th=(key,lab,cl)=>`<th class="${cl||''}" data-ssort="${key}">${lab}${ST.sort.k===key?(d>0?' ▲':' ▼'):''}</th>`;
     const tot=sc.folders.reduce((a,f)=>a+f.bytes,0);
     const ro=(l,v)=>`<div class="readout"><small>${l}</small><b>${v}</b></div>`;
     const tbl=ST.tab==='folders'
-      ?`<div class="sscroll" id="sscroll"><table><thead><tr>${th('name','name')}${th('bytes','size','num')}${th('mtime','modified','num')}</tr></thead><tbody>${rows.map(f=>`<tr><td title="${esc(f.path)}">${esc(f.name)}</td><td class="num">${gib(f.bytes)}</td><td class="num">${esc(new Date(f.mtime*1000).toLocaleDateString([],{month:'short',day:'numeric'}))}</td></tr>`).join('')}</tbody></table></div>`
+      ?`<div class="sscroll" id="sscroll"><table><thead><tr>${th('name','name')}${th('bytes','size','num')}${th('mtime','modified','num')}</tr></thead><tbody>${rws.map(f=>`<tr><td title="${esc(f.path)}">${esc(f.name)}</td><td class="num">${gib(f.bytes)}</td><td class="num">${esc(new Date(f.mtime*1000).toLocaleDateString([],{month:'short',day:'numeric'}))}</td></tr>`).join('')}</tbody></table></div>`
       :`<div class="sscroll" id="sscroll"><table><thead><tr><th>path</th><th class="num">size</th></tr></thead><tbody>${(rc.reclaimable||[]).map(r=>`<tr><td title="${esc(r.path)}">${esc(r.path)}</td><td class="num">${gib(r.bytes)}</td></tr>`).join('')||'<tr><td>nothing reclaimable</td><td></td></tr>'}</tbody></table></div>
         <div class="ro" style="margin:10px 0 4px;display:flex;justify-content:space-between;align-items:center"><span>reclaimable ${gib(rc.total_bytes)}</span><button class="mini" id="scopy">${ST.copied?'Copied':'Copy'}</button></div>
         <div class="cmd rmblk">${esc((rc.rm_lines||[]).join('\n'))||'&nbsp;'}</div>`;
     right=`<div class="readouts" style="grid-template-columns:repeat(3,1fr)">${ro('folders',sc.folders.length)}${ro('total',gib(tot))}${ro('reclaimable',rc?gib(rc.total_bytes):'')}</div>
       <div class="stabs"><button class="mini" aria-pressed="${ST.tab==='folders'}" data-stab="folders">Folders</button><button class="mini" aria-pressed="${ST.tab==='recl'}" data-stab="recl">Reclaimable</button></div>${tbl}`}
-  return `<section class="panel"><h2>Storage</h2><div class="stor">
-    <div class="cart"><div class="ro">Locations</div>${locs}${c?`<div class="sfile">${esc(c.config_file)}${c.config_exists?'':' (not created)'}</div>`:''}</div>
-    <div class="cart"><div class="ro">Scratch ${INFO(esc(sc?sc.root:'')||'sizing')}</div>${right}</div></div></section>`}
+  return `<section class="panel stpage"><h2>Storage</h2><div class="stor"><div class="stl">${top}
+    <div class="cart"><div class="ro">Disks</div><div class="disks">${disks}</div></div>
+    <div class="cart"><div class="ro">Locations ${INFO('Where each kind of data lives.')}</div>${locs}
+      <div class="advh" data-sadv="1">${open?'▾':'▸'} Advanced</div>${open?`<div class="advb">${adv.map(l=>stRow(l,lab)).join('')}</div>`:''}${c?`<div class="sfile">${esc(c.config_file)}${c.config_exists?'':' (not created)'}</div>`:''}</div></div>
+    <div class="cart"><div class="ro">Work in progress ${INFO('Builds and run outputs live here. Nothing on this page deletes anything.')}</div>${right}</div></div></section>`}
 function wireStorage(){
   const fit=()=>{const e=$('#sscroll');if(e)e.style.maxHeight=Math.max(160,innerHeight-e.getBoundingClientRect().top-90)+'px'};fit();
   if(!ST.started){ST.started=true;stLoad()}
+  document.querySelectorAll('[data-sadv]').forEach(b=>b.onclick=()=>{try{localStorage.setItem('vq.stadv',stAdv()?'0':'1')}catch{}render()});
   document.querySelectorAll('[data-ssort]').forEach(h=>h.onclick=()=>{const k=h.dataset.ssort;ST.sort=ST.sort.k===k?{k,d:-ST.sort.d}:{k,d:k==='name'?1:-1};render()});
   document.querySelectorAll('[data-stab]').forEach(b=>b.onclick=()=>{ST.tab=b.dataset.stab;render()});
   document.querySelectorAll('[data-sedit]').forEach(b=>b.onclick=()=>{const l=ST.cfg.locations.find(x=>x.key===b.dataset.sedit);ST.edit={key:l.key,value:l.paths[0],create:false,error:'',busy:false};render();const i=$('#sin');if(i)i.focus()});
-  const sin=$('#sin');if(sin){sin.oninput=()=>ST.edit.value=sin.value;$('#scr').onchange=e=>ST.edit.create=e.target.checked;
-    sin.onkeydown=e=>{if(e.key==='Enter')$('#ssave').click();if(e.key==='Escape'){e.stopPropagation();$('#scancel').click()}};
-    $('#scancel').onclick=()=>{ST.edit=null;render()};
+  const sin=$('#sin');if(sin){sin.oninput=()=>ST.edit.value=sin.value;const cr=$('#scr');if(cr)cr.onchange=e=>ST.edit.create=e.target.checked;
+    sin.onkeydown=e=>{if(e.key==='Enter')$('#ssave').click();if(e.key==='Escape'&&$('#scancel')){e.stopPropagation();$('#scancel').click()}};
+    const cn=$('#scancel');if(cn)cn.onclick=()=>{ST.edit=null;render()};
     $('#ssave').onclick=async()=>{const E=ST.edit;E.busy=true;E.error='';render();
       try{const r=await fetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({key:E.key,path:E.value,create:E.create})});
         let j={};try{j=await r.json()}catch{}
-        if(r.ok&&j.ok){ST.edit=null;await stLoad();if(page===3)render();stLoad('scratch');return}
+        if(r.ok&&j.ok){ST.edit=null;await stLoad();if(page===3)render();return}
         E.error=j.error||('request failed ('+r.status+')')}catch{E.error='request failed'}
       E.busy=false;render();const i=$('#sin');if(i)i.focus()}}
   const cp=$('#scopy');if(cp)cp.onclick=async()=>{try{await navigator.clipboard.writeText((ST.rec.rm_lines||[]).join('\n'));ST.copied=true}catch{const t=$('.rmblk');if(t){const r=document.createRange();r.selectNodeContents(t);getSelection().removeAllRanges();getSelection().addRange(r);try{document.execCommand('copy');ST.copied=true}catch{}}}
