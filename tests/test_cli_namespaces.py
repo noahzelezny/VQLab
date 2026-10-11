@@ -143,8 +143,8 @@ def test_renamed_modules_keep_old_names():
     assert _layout.find("vq_397b_codes.py") == _layout.find("fit_moe.py")
     assert _layout.find("pack_artifact.py") == _layout.find("pack.py")
     m = _layout._names()
-    assert m["vq_397b_codes"] == m["vqlab.vq_397b_codes"] == "vqlab.fit.fit_moe"
-    assert m["pack_artifact"] == m["vqlab.assemble.pack_artifact"] == "vqlab.build.pack"
+    assert _layout.FILE_ALIASES["vq_397b_codes"] == m["vqlab.vq_397b_codes"] == "vqlab.fit.fit_moe"
+    assert _layout.FILE_ALIASES["pack_artifact"] == m["vqlab.assemble.pack_artifact"] == "vqlab.build.pack"
     assert cli.COMMANDS["fit-moe"][0] == "fit_moe.py" and cli.COMMANDS["pack"][0] == "pack.py"
 
 
@@ -171,7 +171,7 @@ def test_assemble_package_is_a_deprecated_alias_of_build():
     assert old_pkg is importlib.import_module("vqlab.build")
     assert old_mix is new_mix
     m = _layout._names()     # script modules (pack, build_dense) run at import
-    assert (m["vqlab.assemble.build_dense_vq"] == m["build_dense_vq"]
+    assert (m["vqlab.assemble.build_dense_vq"] == _layout.FILE_ALIASES["build_dense_vq"]
             == m["vqlab.build_dense_vq"] == "vqlab.build.build_dense")
     assert m["vqlab.assemble.pack"] == "vqlab.build.pack"
     assert _layout.find("build_dense_vq.py") == _layout.find("build_dense.py")

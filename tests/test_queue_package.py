@@ -47,9 +47,7 @@ def test_no_bare_queue_alias():
 def test_moved_names_are_one_module_and_warn():
     for old, new in (("vqlab.agents.queue_eta", "vqlab.queue.eta"),
                      ("vqlab.gate.validate_queue", "vqlab.queue.validate"),
-                     ("vqlab.agents.reserve", "vqlab.queue.reserve"),
-                     ("queue_eta", "vqlab.queue.eta"),
-                     ("validate_queue", "vqlab.queue.validate")):
+                     ("vqlab.agents.reserve", "vqlab.queue.reserve")):
         sys.modules.pop(old, None)
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")

@@ -43,7 +43,11 @@ An MCP tool is then `return api.to_json(api.X(**params))`.
 
 ## Loading models through vqlab
 
-`import vqlab` has no side effects on other packages. To load deepseek_v4 or
+`import vqlab` has no side effects on other packages. The only names it
+answers for outside `vqlab.*` are the eight bare runtime stems a bundle's
+runtime text uses (`vq_switch`, `vq_pack`, `vq_dense`, `dense_shim`,
+`glm5_shim`, `arch_resolve`, `runtime_profile`, `gated_delta_chunked`),
+each the same module object as `vqlab.runtime.<stem>`. To load deepseek_v4 or
 qwen4_exp (which stock mlx-lm lacks) or Knurlogic's edited qwen3_5 / gemma4 /
 glm5_next, opt in before loading:
 

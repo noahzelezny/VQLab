@@ -11,7 +11,8 @@ from vqlab import _layout
                                      ("verify_e134_devcb", "verify_dev_codebook")])
 def test_old_gate_names_resolve(old, new):
     names = _layout._names()
-    for spelling in (old, f"vqlab.{old}", f"vqlab.gate.{old}"):
+    assert importlib.util.find_spec(old) is None      # bare tool names: gone (R1)
+    for spelling in (f"vqlab.{old}", f"vqlab.gate.{old}"):
         assert names[spelling] == f"vqlab.gate.{new}"
         assert importlib.util.find_spec(spelling) is not None
     assert _layout.find(f"{old}.py").name == f"{new}.py"
