@@ -4,18 +4,18 @@
 from __future__ import annotations
 
 import json
-import os
 import socket
 from pathlib import Path
 from typing import Any, Dict, Optional
 
+from vqlab import config
 from vqlab.core.box.gpu_lease import pid_alive as _pid_alive
 from vqlab.queue import eta as _queue_eta
 
 
 def _queues_dir() -> Path:
-    # same resolution as vqlab.queue.files.queues_dir
-    return Path(os.environ.get("VQLAB_QUEUE_DIR") or Path.home() / ".vqlab" / "queues")
+    # the one resolution: $VQLAB_QUEUE_DIR, else <records>/queues
+    return config.queues_dir()
 
 
 def queue_status(name: Optional[str] = None, n: int = 5) -> Dict[str, Any]:
