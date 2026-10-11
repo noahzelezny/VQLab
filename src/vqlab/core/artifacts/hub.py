@@ -9,7 +9,18 @@ Both need HF auth for private repos (HF_HOME / HF_TOKEN as for `hf`).
 """
 from __future__ import annotations
 
+import re
+
 from vqlab.util.hashing import git_blob_sha1, sha256_file
+
+# local backups (model.py.pre-rt-*, *.bak, *.tmp) are not part of the
+# artifact: not diffed, not offered for upload (publish refuses them too)
+_BACKUP = re.compile(r"(\.pre-|\.bak$|\.tmp$|\.orig$)")
+
+
+def is_backup(name: str) -> bool:
+    return bool(_BACKUP.search(name))
+
 
 LFS_MIN = 10 << 20          # files above this are LFS on the Hub
 
@@ -33,7 +44,7 @@ def hub_diff(art, repo, deep=False):
     local = [p for p in sorted(art.rglob("*")) if p.is_file()
              and p.relative_to(art).as_posix() not in ()
              and not any(part == "__pycache__" or part.startswith(".") for part in p.relative_to(art).parts)
-             and not p.name.endswith(".pyc")]
+             and not p.name.endswith(".pyc") and not is_backup(p.name)]
     changed = []
     for p in local:
         rel = p.relative_to(art).as_posix()

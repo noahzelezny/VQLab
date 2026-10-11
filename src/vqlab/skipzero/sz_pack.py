@@ -322,7 +322,7 @@ def main(argv=None):
         merged["saved_bytes"] = prior_sz.get("saved_bytes", 0) + summary["saved_bytes"]
         merged["incremental"] = (prior_sz.get("incremental", []) +
                                  [{"layers": a.layers, "modules": len(allm),
-                                   "saved_bytes": summary["saved_bytes"], "source": str(src)}])
+                                   "saved_bytes": summary["saved_bytes"], "source": config.portable(src)}])
         cfg["vq_skipzero"] = merged
     else:
         cfg["vq_skipzero"] = {
@@ -330,7 +330,7 @@ def main(argv=None):
             "experimental": True,
             "note": "EXPERIMENTAL, not a shipped format. Dead VQ rows dropped on disk; "
                     "skipzero_load.py re-expands at load. RAM is unchanged (stage 1).",
-            "tiny": a.tiny, "layers": a.layers, "source": str(src),
+            "tiny": a.tiny, "layers": a.layers, "source": config.portable(src),
             "source_model_py_bytes": len(src_model),
             "modules": {p: {"experts": m["E"], "out": m["OUT"], "live_rows": m["live_rows"],
                             "dead_rows": m["dead_rows"]} for p, m in sorted(allm.items())},
