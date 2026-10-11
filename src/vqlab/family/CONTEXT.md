@@ -7,6 +7,7 @@ A family name or a checkpoint's `model_type`; the checked-in `families/<family>/
 - `registry.py` is the single family registry: `FAMILY` (MoE/verify source layouts and projection maps), `DENSE_FAMILIES` / `DENSE_REMAP`, `teacher_caches()` (registered KL teacher caches), `scorer_variant(model_type)`.
 - `model_loader.py`: which library (mlx-lm or mlx-vlm) loads a family, and `load_for_family()`, the one place models are loaded by family. checks: `pytest tests/test_model_loader.py`.
 - `version_stamp.py`: where versions are stamped. `build()` records the numerics build a number was computed under (mlx, mlx-lm, knurlogic, arch file sha, scorer variant); `check_cache` / `pairing_problems` refuse a mismatch. `python -m vqlab.family.version_stamp --model <dir>`. The stamp's pure field logic (`COMPARED`, `diff`, `describe`) is `core/artifacts/stamp_fields.py`, re-exported here.
+- `arch_equivalence.json`: arch files whose bytes differ but whose output was measured bit-identical on a real model. `check_cache` / `pairing_problems` accept a stamp pair whose ONLY difference is an arch_sha256 pair listed there for that model_type (status `arch-equivalent`, a printed note); any other difference still refuses. An entry needs a bit-exact comparison on a real artifact.
 - `__init__.py` defines `FamilyPlugin` and discovers one plugin per module (`deepseek_v4.py`, `qwen4_exp.py`, `qwen3_5.py`, `gemma4.py`, `glm5_next.py`): fit layout, streamed scorer, tokenizer hook, reference parity items.
 
 ## Outputs

@@ -1,0 +1,23 @@
+{
+ "about": "Architecture files whose bytes differ but whose output is bit-identical, measured on a real model. check_cache / pairing_problems accept a stamp pair whose ONLY difference is an arch_sha256 pair listed here for that model_type; any other difference still refuses. An entry needs a bit-exact comparison on a real artifact, never a tiny model alone. (runtime/equivalent_revisions.json is the same idea for the VQ runtime.)",
+ "entries": [
+  {
+   "model_type": "qwen3_5",
+   "old_sha256": "01392a3f8a072ea9fdb774cf58ec84385c7ac1fb1c272cfc36bee8d03eeddfe4",
+   "new_sha256": "b21d99030d7d139b3a798f863f96beb6cd1fcdd5fdae4b90320a1792bb03e3c5",
+   "old_source": "knurlogic v0.1.3-v0.1.5 engine/families/qwen/architecture/qwen3_5.py (last changed in bd08786f)",
+   "new_source": "knurlogic v0.1.6 (1e7a0cab) same path: vendored edit 9, GatedDeltaNet conv/silu/split/q-k norm and gated output norm under mx.compile (KNURLOGIC_GDN_COMPILE, on by default)",
+   "evidence": "Qwen3.6-35B-A3B VQ-3.8bpw (pinned copy), three fresh processes: the old file registered as mlx_lm.models.qwen3_5, the new file with KNURLOGIC_GDN_COMPILE=on, and =off. Prose, code and literary house corpora, first 512 tokens each, full-vocab bf16 logits at every prefill position plus 16 greedy decode steps: 393,338,880 logits per arm compared as uint16 bit patterns, 0 differ in any pair; greedy tokens identical.",
+   "date": "2026-10-10"
+  },
+  {
+   "model_type": "qwen3_5",
+   "old_sha256": "466528c8098e8a2c03fd32ffcd0ebea86984095dd834124d4c90faa87724784e",
+   "new_sha256": "b21d99030d7d139b3a798f863f96beb6cd1fcdd5fdae4b90320a1792bb03e3c5",
+   "old_source": "knurlogic 0bd344d6 (unreleased, first gdn-compile commit) same path",
+   "new_source": "knurlogic v0.1.6 (1e7a0cab) same path",
+   "evidence": "The files differ by one comment line (the measured decode speedup); no code differs. The new file is bit-identical to the pre-compile file on the 35B (entry above).",
+   "date": "2026-10-10"
+  }
+ ]
+}

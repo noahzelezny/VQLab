@@ -65,7 +65,7 @@ exclude = ["vqlab.agents.gui_static.bench*"]
 
 [tool.setuptools.package-data]
 vqlab = ["score/referee/*.txt", "score/referee/*.json", "score/referee/*.py", "*/CONTEXT.md", "*/*/CONTEXT.md",
-         "runtime/*.json", "runtime/equivalent/*.txt"]
+         "runtime/*.json", "runtime/equivalent/*.txt", "family/*.json"]
 "vqlab.agents.gui_static" = ["*.html"]
 
 # gui_static/bench/ is a design mockup carrying lab measurements: it stays in

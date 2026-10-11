@@ -151,6 +151,38 @@ def build(model_type: str | None = None, *, family: str | None = None,
     return out
 
 
+ARCH_EQUIVALENCE = pathlib.Path(__file__).with_name("arch_equivalence.json")
+
+
+def arch_equivalence(a: dict | None, b: dict | None, bad: list, path=None):
+    """The arch_equivalence.json entry that excuses `bad`, else None.
+
+    Only when the ONLY differing compared field is arch_sha256, both stamps
+    name the same model_type, and that (sha, sha) pair is listed for it --
+    content-addressed, either direction. Anything else stays a mismatch."""
+    if len(bad) != 1 or bad[0][0] != "arch_sha256":
+        return None
+    _, x, y = bad[0]
+    mt = (a or {}).get("model_type")
+    if not x or not y or not mt or mt != (b or {}).get("model_type"):
+        return None
+    try:
+        reg = json.loads(pathlib.Path(path or ARCH_EQUIVALENCE).read_text())
+    except (OSError, ValueError):
+        return None
+    for e in reg.get("entries", []):
+        if e.get("model_type") == mt and {e.get("old_sha256"), e.get("new_sha256")} == {x, y}:
+            return e
+    return None
+
+
+def _note_equivalence(e: dict, what: str) -> None:
+    print(f"NOTE: the {what}'s arch file differs from this run's only by an entry in "
+          f"{ARCH_EQUIVALENCE.name} ({e['model_type']}: {e['old_sha256'][:12]} == "
+          f"{e['new_sha256'][:12]}, {e.get('date')}): bit-identical output, accepted.",
+          flush=True)
+
+
 def check_cache(meta: dict, run: dict, allow: bool = False, what: str = "teacher cache") -> dict:
     """Refuse when a cache's build differs from this run's; return the record.
 
@@ -170,6 +202,12 @@ def check_cache(meta: dict, run: dict, allow: bool = False, what: str = "teacher
     else:
         bad = diff(cached, run)
         status = "match"
+        eq = arch_equivalence(cached, run, bad)
+        if eq is not None:
+            _note_equivalence(eq, what)
+            return {"status": "arch-equivalent", "mismatches": [list(x) for x in bad],
+                    "equivalence": {k: eq.get(k) for k in
+                                    ("model_type", "old_sha256", "new_sha256", "date")}}
     if bad:
         lines = "; ".join(f"{k}: cache {c!r} vs run {r!r}" for k, c, r in bad)
         if not allow:
@@ -223,7 +261,12 @@ def pairing_problems(a: dict | None, b: dict | None) -> list:
     if not na or not nb:
         probs.append("a sidecar carries no numerics build stamp")
     else:
-        probs += [f"different build: {k} {x!r} vs {y!r}" for k, x, y in diff(na, nb)]
+        bad = diff(na, nb)
+        eq = arch_equivalence(na, nb, bad)
+        if eq is not None:
+            _note_equivalence(eq, "per-position array")
+        else:
+            probs += [f"different build: {k} {x!r} vs {y!r}" for k, x, y in bad]
     if a.get("kl_positions") != b.get("kl_positions"):
         probs.append(f"different position count {a.get('kl_positions')} vs {b.get('kl_positions')}")
     return probs
