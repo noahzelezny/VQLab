@@ -11,10 +11,24 @@ from __future__ import annotations
 COMPARED = ("mlx", "mlx_lm", "arch_sha256", "scorer_variant")
 
 
+# The arch hash over the arch file AND the arch modules it imports. When both
+# stamps carry it, it is compared in arch_sha256's place (it covers that file);
+# a stamp written before it existed is compared on arch_sha256 alone.
+TREE = "arch_tree_sha256"
+
+
+def tree_compared(a: dict | None, b: dict | None) -> bool:
+    """True when both stamps carry arch_tree_sha256 (so it is what is compared)."""
+    return TREE in (a or {}) and TREE in (b or {})
+
+
 def diff(a: dict | None, b: dict | None) -> list:
-    """[(field, a, b)] for every COMPARED field that differs."""
+    """[(field, a, b)] for every COMPARED field that differs (arch_sha256 is
+    replaced by arch_tree_sha256 when both stamps carry it)."""
+    tree = tree_compared(a, b)
     a, b = a or {}, b or {}
-    return [(k, a.get(k), b.get(k)) for k in COMPARED if a.get(k) != b.get(k)]
+    keys = [TREE if (k == "arch_sha256" and tree) else k for k in COMPARED]
+    return [(k, a.get(k), b.get(k)) for k in keys if a.get(k) != b.get(k)]
 
 
 def describe(st: dict | None) -> str:
