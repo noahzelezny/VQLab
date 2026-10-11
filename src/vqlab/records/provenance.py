@@ -37,6 +37,8 @@ rebundle underneath it.
     vqlab provenance <artifact> --json      # the record
     vqlab provenance <artifact> --verify    # re-hash outputs against it (rc 2 on drift)
     vqlab provenance <artifact> --lineage   # walk parents that carry records
+    vqlab provenance <artifact> --portable [--dry-run]
+                                            # strip local paths from old records
 """
 from __future__ import annotations
 
@@ -47,9 +49,11 @@ import json
 import os
 import pathlib
 import platform
+import re
 import subprocess
 import sys
-from vqlab import _layout
+from vqlab import _layout, config
+from vqlab.core.artifacts.hub import is_backup  # local backups (.bak, .pre-*) are not outputs
 from vqlab.util.hashing import fingerprint as _fingerprint, sha256_file
 
 RECORD = "vqlab_provenance.json"
@@ -117,10 +121,22 @@ def _git(*a):
         return ""
 
 
+def _version():
+    try:
+        import vqlab
+        return vqlab.__version__
+    except Exception:
+        return None
+
+
 def code_state(script=None) -> dict:
     dirty = [l[3:] for l in _git("status", "--porcelain", "--", "src").splitlines()]
-    out = {"repo": str(REPO), "commit": _git("rev-parse", "HEAD") or None,
-           "dirty": bool(dirty), "dirty_files": dirty}
+    # Code IDENTITY only (commit, dirty flag, package version): never the
+    # checkout's path, which names one machine's disk and ships with the
+    # artifact.
+    out = {"commit": _git("rev-parse", "HEAD") or None,
+           "dirty": bool(dirty), "dirty_files": dirty,
+           "version": _version()}
     if script:
         out["script"] = os.path.basename(script)
         out["script_sha256"] = _sha(script)
@@ -128,8 +144,10 @@ def code_state(script=None) -> dict:
 
 
 def env_state() -> dict:
-    out = {"python": platform.python_version(), "host": platform.node(),
-           "platform": platform.platform()}
+    # no hostname: the record ships with the artifact, and a machine name is
+    # as private as its paths (records before 2026-10-10 carry `host`;
+    # `--portable` removes it)
+    out = {"python": platform.python_version(), "platform": platform.platform()}
     for mod in ("mlx", "mlx_lm", "numpy"):
         try:
             if mod == "mlx":
@@ -213,7 +231,7 @@ def runtime_state(art: pathlib.Path):
 
 # ----------------------------------------------------------------- writing
 def _canon(rec):
-    return json.dumps({k: v for k, v in rec.items() if k != "id"},
+    return json.dumps({k: v for k, v in rec.items() if k not in ("id", "portable_id")},
                       sort_keys=True, separators=(",", ":"), default=str)
 
 
@@ -251,14 +269,18 @@ def write_build_record(out, *, tool, script=None, ap=None, args=None,
         old = json.loads(prior.read_text())
         rec["previous"] = old.get("id")
         with open(out / HISTORY, "a") as h:
-            h.write(json.dumps(old, sort_keys=True) + "\n")
+            h.write(json.dumps(portable_record(old), sort_keys=True) + "\n")
     outs = {}
     for f in sorted(out.iterdir()):
-        if f.name in NOT_OUTPUTS + JUNK or f.name.startswith("._") or f.is_dir():
+        if f.name in NOT_OUTPUTS + JUNK or is_backup(f.name) or f.name.startswith("._") or f.is_dir():
             continue
         full = (f.name in full_hash) if full_hash is not None else True
         outs[f.name] = file_record(f, full=full)
     rec["outputs"] = outs
+    # every recorded path in its portable form (config.portable_text): the
+    # record ships with the artifact, so it must not carry this box's disk
+    # layout, home directory or checkout location.
+    rec = config.portable_obj(rec)
     rec["id"] = hashlib.sha256(_canon(rec).encode()).hexdigest()
     (out / RECORD).write_text(json.dumps(rec, indent=1, default=str))
     print(f"PROVENANCE {rec['id'][:12]} -> {out / RECORD}", flush=True)
@@ -266,6 +288,175 @@ def write_build_record(out, *, tool, script=None, ap=None, args=None,
 
 
 # ----------------------------------------------------------------- reading
+def id_ok(rec) -> bool:
+    """The record's content still hashes to its `id` -- or, for a record
+    whose paths were made portable after it was written (`--portable`),
+    to its `portable_id`. `id` is never rewritten: children and history
+    name their parents by it."""
+    h = hashlib.sha256(_canon(rec).encode()).hexdigest()
+    return h == rec.get("id") or (rec.get("portable_id") is not None
+                                  and h == rec["portable_id"])
+
+
+def portable_record(rec: dict, prefixes=None) -> dict:
+    """`rec` with every path string in portable form. Hash-bearing values
+    (id, previous, fingerprints, sha256s) are hex, never paths, so they pass
+    through untouched. If anything changed, `id` is KEPT (it is what other
+    records link by) and `portable_id` names the rewritten content."""
+    # an older record names its checkout in code.repo (the lab's checkout,
+    # or a queue's pinned worktree): that path and everything under it is
+    # the CODE, which the commit already identifies.
+    repo = (rec.get("code") or {}).get("repo")
+    if isinstance(repo, str) and repo.startswith("/"):
+        prefixes = sorted([(repo.rstrip("/"), config.CHECKOUT_LABEL),
+                           *(prefixes if prefixes is not None else config.private_prefixes())],
+                          key=lambda x: -len(x[0]))
+    new = config.portable_obj(rec, prefixes)
+    if isinstance(new.get("env"), dict) and "host" in new["env"]:
+        new["env"] = {k: v for k, v in new["env"].items() if k != "host"}
+    if new == rec:
+        return rec
+    new["id"] = rec.get("id")
+    if "id" in rec:
+        new["portable_id"] = hashlib.sha256(_canon(new).encode()).hexdigest()
+    return new
+
+
+def _portable_config_text(text: str, prefixes) -> str:
+    """config.json with its `vq_skipzero` source fields (top level and each
+    `incremental[*]`, written by skipzero/sz_pack.py) made portable. Edited
+    as TEXT, one string literal at a time, so every other byte -- key order,
+    indentation, number spelling -- stays as written."""
+    cfg = json.loads(text)
+    sz = cfg.get("vq_skipzero") if isinstance(cfg, dict) else None
+    if not isinstance(sz, dict):
+        return text
+    vals = [sz.get("source")] + [i.get("source") for i in sz.get("incremental") or []
+                                 if isinstance(i, dict)]
+    for v in {v for v in vals if isinstance(v, str)}:
+        new = config.portable_text(v, prefixes)
+        if new != v:
+            lit, nlit = json.dumps(v), json.dumps(new)
+            text = re.sub(r'("source"\s*:\s*)' + re.escape(lit),
+                          lambda m: m.group(1) + nlit, text)
+    return text
+
+
+SANITIZE_NOTE = "sanitized: config.json vq_skipzero.source made portable (paths only)"
+
+
+def _record_config_sanitize(art, changes, cfg_after: str) -> None:
+    """config.json's bytes change, so its recorded hash must too -- as an
+    AMENDMENT, never a silent edit: the (portable) record that described the
+    old bytes goes to history, and a new record, identical but for that one
+    output entry, says what was done and links to it by id. No other hash
+    changes. Edits the pending (file, before, after) entries in place."""
+    by = {p.name: i for i, (p, _, _) in enumerate(changes)}
+    rp, hp = art / RECORD, art / HISTORY
+    if not rp.exists():
+        return
+    cur = json.loads(changes[by[RECORD]][2] if RECORD in by else rp.read_text())
+    outs = cur.get("outputs") or {}
+    if "config.json" not in outs:
+        return
+    data = cfg_after.encode()
+    new = {k: v for k, v in cur.items() if k != "portable_id"}
+    ent = dict(outs["config.json"])
+    ent["bytes"] = len(data)
+    if "sha256" in ent:
+        ent["sha256"] = hashlib.sha256(data).hexdigest()
+    if "head_sha256" in ent:
+        ent["head_sha256"] = hashlib.sha256(data[:HEAD]).hexdigest()
+    new["outputs"] = {**outs, "config.json": ent}
+    new["previous"] = cur["id"]
+    new["created"] = datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds")
+    new["tool"] = {"name": "provenance --portable", "note": SANITIZE_NOTE,
+                   "argv": ["vqlab", "provenance", "--portable"],
+                   "run_id": os.environ.get("VQLAB_RUN_ID")}
+    new["id"] = hashlib.sha256(_canon(new).encode()).hexdigest()
+    rec_before = changes[by[RECORD]][1] if RECORD in by else rp.read_text()
+    rec_entry = (rp, rec_before, json.dumps(new, indent=1, default=str))
+    if RECORD in by:
+        changes[by[RECORD]] = rec_entry
+    else:
+        changes.append(rec_entry)
+    line = json.dumps(cur, sort_keys=True) + "\n"
+    if HISTORY in by:
+        hp_, hb, ha = changes[by[HISTORY]]
+        changes[by[HISTORY]] = (hp_, hb, ha + ("" if not ha or ha.endswith("\n") else "\n") + line)
+    else:
+        hb = hp.read_text() if hp.exists() else ""
+        changes.append((hp, hb, hb + ("" if not hb or hb.endswith("\n") else "\n") + line))
+
+
+def make_portable(art, dry_run=False, prefixes=None) -> list:
+    """Rewrite <art>'s record, history and config.json `vq_skipzero`
+    source fields so no absolute local path remains
+    (paths only; every other byte as written). Returns [(file, before_text,
+    after_text)] for each file that changes. Writes `<file>.bak` first.
+    Refuses (ValueError) a file whose JSON does not re-serialise to its own
+    bytes, since then 'paths only' could not be promised."""
+    art = pathlib.Path(art)
+    prefixes = prefixes if prefixes is not None else config.private_prefixes()
+    # every checkout any record in this artifact names (code.repo) is a
+    # checkout in all of them: a later record's cwd may sit in an earlier
+    # record's queue worktree
+    repos = set()
+    for f in (art / RECORD, art / HISTORY):
+        if f.exists():
+            for ln in f.read_text().splitlines() if f.name == HISTORY else [f.read_text()]:
+                if ln.strip():
+                    r = (json.loads(ln).get("code") or {}).get("repo")
+                    if isinstance(r, str) and r.startswith("/"):
+                        repos.add(r.rstrip("/"))
+    if repos:
+        prefixes = sorted([*((r, config.CHECKOUT_LABEL) for r in repos), *prefixes],
+                          key=lambda x: -len(x[0]))
+    changes = []
+    rp = art / RECORD
+    if rp.exists():
+        before = rp.read_text()
+        rec = json.loads(before)
+        if json.dumps(rec, indent=1, default=str) != before:
+            raise ValueError(f"{rp}: not in the writer's format; refusing to rewrite")
+        new = portable_record(rec, prefixes)
+        after = json.dumps(new, indent=1, default=str)
+        if after != before:
+            changes.append((rp, before, after))
+    hp = art / HISTORY
+    if hp.exists():
+        before = hp.read_text()
+        lines = []
+        for ln in before.splitlines(keepends=True):
+            body = ln.rstrip("\n")
+            if not body.strip():
+                lines.append(ln)
+                continue
+            r = json.loads(body)
+            if json.dumps(r, sort_keys=True) != body:
+                raise ValueError(f"{hp}: a line is not in the writer's format; refusing to rewrite")
+            lines.append(json.dumps(portable_record(r, prefixes), sort_keys=True)
+                         + ln[len(body):])
+        after = "".join(lines)
+        if after != before:
+            changes.append((hp, before, after))
+    cp = art / "config.json"
+    if cp.exists():
+        before = cp.read_text()
+        after = _portable_config_text(before, prefixes)
+        if after != before:
+            changes.append((cp, before, after))
+            _record_config_sanitize(art, changes, after)
+    if not dry_run:
+        for p, before, after in changes:
+            bak = p.with_name(p.name + ".bak")
+            bak.write_text(before)
+            tmp = p.with_name(p.name + ".tmp")
+            tmp.write_text(after)
+            os.replace(tmp, p)
+    return changes
+
+
 def load(art) -> dict:
     p = pathlib.Path(art) / RECORD
     if not p.exists():
@@ -277,9 +468,9 @@ def verify(art, rec) -> list:
     """[(file, problem)] -- empty means the outputs still match the record."""
     art = pathlib.Path(art)
     bad = []
-    if hashlib.sha256(_canon(rec).encode()).hexdigest() != rec.get("id"):
+    if not id_ok(rec):
         bad.append((RECORD, "record edited after it was written (id mismatch)"))
-    now = {f.name for f in art.iterdir() if f.is_file() and f.name not in NOT_OUTPUTS + JUNK
+    now = {f.name for f in art.iterdir() if f.is_file() and f.name not in NOT_OUTPUTS + JUNK and not is_backup(f.name)
            and not f.name.startswith("._")}
     for name in sorted(now - set(rec["outputs"])):
         bad.append((name, "added after build"))
@@ -386,7 +577,31 @@ def lineage(art, depth=0, seen=None):
         if i["role"] == "teacher":
             print("  " * (depth + 1) + f"teacher {i['path']}")
             continue
-        lineage(i["realpath"], depth + 1, seen)
+        # records written since 2026-10-10 hold <models>/X; older ones an
+        # absolute path. Both resolve.
+        lineage(config.resolve_recorded(i["realpath"]), depth + 1, seen)
+
+
+def _portable_main(art, dry_run) -> int:
+    import difflib
+    try:
+        changes = make_portable(art, dry_run=dry_run)
+    except ValueError as e:
+        print(f"REFUSED: {e}")
+        return 1
+    if not changes:
+        print(f"ok {art}: no absolute local paths in its build records")
+        return 0
+    for p, before, after in changes:
+        diff = [l for l in difflib.unified_diff(before.splitlines(), after.splitlines(),
+                                               str(p), str(p) + " (portable)", n=0, lineterm="")]
+        nchg = sum(1 for l in diff if l.startswith("-") and not l.startswith("---"))
+        print(f"== {p.name}: {nchg} line(s) change")
+        for l in diff:
+            print(l if len(l) < 240 else l[:237] + "...")
+    print(f"{'DRY RUN, nothing written' if dry_run else 'REWRITTEN (.bak kept)'}: "
+          f"{len(changes)} file(s) in {art}")
+    return 0
 
 
 def main(argv=None) -> int:
@@ -397,7 +612,14 @@ def main(argv=None) -> int:
     g.add_argument("--json", action="store_true")
     g.add_argument("--verify", action="store_true")
     g.add_argument("--lineage", action="store_true")
+    g.add_argument("--portable", action="store_true",
+                   help="rewrite the record + history so no absolute local path "
+                        "remains (paths only; .bak written first)")
+    ap.add_argument("--dry-run", action="store_true",
+                    help="with --portable: print the diff, write nothing")
     a = ap.parse_args(argv)
+    if a.portable:
+        return _portable_main(a.artifact, a.dry_run)
     try:
         rec = load(a.artifact)
     except FileNotFoundError:

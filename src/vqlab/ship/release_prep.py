@@ -3,6 +3,7 @@
 exact upload line for a human to run (structural feedback #6).
 
     vqlab release-prep <artifact> --repo owner/name [--no-smoke] [--hash]
+    vqlab release-prep <artifact> --repo owner/name --hub-scan   # read-only leak scan
 
 1. sizes three ways (`vqlab size`): the numbers the card must quote
 2. junk files that must not ship (.DS_Store, ._*, __pycache__, *.pyc)
@@ -30,6 +31,7 @@ import sys
 
 from vqlab.core.artifacts.artifact import sizes
 from vqlab.core.artifacts.hub import LFS_MIN, hub_diff  # noqa: F401  (re-exported)
+from vqlab.ship import leak_guard
 from vqlab.util.hashing import git_blob_sha1, sha256_file
 
 _git_blob = git_blob_sha1   # old private names, kept for callers/tests
@@ -74,7 +76,16 @@ def main(argv=None):
     ap.add_argument("--hash", action="store_true", help="compare weight files by sha256, not size")
     ap.add_argument("--skip-gate", action="store_true",
                     help="diff and sizes only (publish runs the gate anyway)")
+    ap.add_argument("--hub-scan", action="store_true",
+                    help="read-only: scan the Hub repo's CURRENT text files for "
+                         "machine-specific text (local paths, LAN addresses) and stop")
     a = ap.parse_args(argv)
+    if a.hub_scan:
+        hits, n = leak_guard.scan_hub(a.repo)
+        print(f"== Hub scan {a.repo}: {n} text file(s), {len(hits)} leaking line(s)")
+        for f, ln, what in hits:
+            print(f"   {f}:{ln}: {what}")
+        return 1 if hits else 0
     art = pathlib.Path(a.artifact)
     problems = []
 
@@ -86,6 +97,16 @@ def main(argv=None):
     junk = _junk(art)
     print(f"== junk: {len(junk)} local-only file(s), never uploaded (publish names files explicitly)"
           + ("" if not junk else ": " + ", ".join(os.path.relpath(j, art) for j in junk[:5])))
+
+    files = [p for p in sorted(art.rglob("*")) if p.is_file()
+             and not leak_guard.is_backup(p.name)
+             and not any(x == "__pycache__" or x.startswith(".")
+                         for x in p.relative_to(art).parts)]
+    leaks = leak_guard.scan(files, art)
+    print(f"== machine-specific text: {len(leaks)} line(s)")
+    if leaks:
+        print(leak_guard.report(leaks, art))
+        problems.append("files carry local paths or LAN addresses (publish refuses them)")
 
     if not a.skip_gate:
         print("== provenance --verify", flush=True)

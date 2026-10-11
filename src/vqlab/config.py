@@ -349,6 +349,85 @@ def portable(path) -> str:
     return str(p)
 
 
+CHECKOUT_LABEL = "<checkout>"
+
+
+def checkout_dir() -> pathlib.Path | None:
+    """The git checkout this package runs from, or None for a wheel install."""
+    repo = _layout.SRC.parent
+    return repo if (repo / ".git").exists() and (repo / "src" / "vqlab").is_dir() else None
+
+
+def private_prefixes() -> list[tuple[str, str]]:
+    """[(absolute prefix, placeholder)], longest prefix first: every local
+    path that must not leave this machine in a record or a published file,
+    and what a record writes instead. Both the configured spelling and its
+    realpath are listed (a root may be a symlink)."""
+    pairs = []
+    co = checkout_dir()
+    if co is not None:
+        pairs.append((co, CHECKOUT_LABEL))
+    pairs += [(teachers(), "<teachers>"), (models(), "<models>"),
+              (scratch(), "<scratch>")]
+    pairs += [(p, "<fits>") for p in fit_store()]
+    pairs += [(p, "<root>") for p in _many("roots")]
+    pairs.append((pathlib.Path.home(), "~"))
+    out, seen = [], set()
+    for p, label in pairs:
+        for s in (str(p), os.path.realpath(p)):
+            s = s.rstrip("/")
+            if s and s != "/" and s not in seen:
+                seen.add(s)
+                out.append((s, label))
+    out.sort(key=lambda x: -len(x[0]))
+    return out
+
+
+def portable_text(s: str, prefixes=None) -> str:
+    """Every absolute local path inside `s` (an argv element, a cwd, a
+    ``--src=/x`` pair, a message) rewritten to its portable form: Hugging
+    Face cache snapshots to ``hf://org/name@rev``, paths under configured
+    roots to ``<models>/X`` etc., the checkout to ``<checkout>``, anything
+    else under the home directory to ``~/X``. Text with no such path comes
+    back unchanged (the same object)."""
+    if "/" not in s:
+        return s
+    s2 = re.sub(r"/[^\s\"']*?/models--([^/\s\"']+)--([^/\s\"']+)/snapshots/([0-9a-f]{12})[0-9a-f]*",
+                lambda m: f"hf://{m.group(1)}/{m.group(2)}@{m.group(3)}", s)
+    for pre, label in (prefixes if prefixes is not None else private_prefixes()):
+        s2 = re.sub(re.escape(pre) + r"(?=/|$|[\s\"',:;)\]])", lambda _m, lab=label: lab, s2)
+    return s if s2 == s else s2
+
+
+def portable_obj(o, prefixes=None):
+    """`portable_text` applied to every string in a JSON-shaped value
+    (dict keys and values, lists). Numbers, bools and None pass through."""
+    prefixes = prefixes if prefixes is not None else private_prefixes()
+    if isinstance(o, str):
+        return portable_text(o, prefixes)
+    if isinstance(o, dict):
+        return {portable_obj(k, prefixes): portable_obj(v, prefixes) for k, v in o.items()}
+    if isinstance(o, (list, tuple)):
+        return [portable_obj(v, prefixes) for v in o]
+    if isinstance(o, pathlib.PurePath):
+        return portable_text(str(o), prefixes)
+    return o
+
+
+def resolve_recorded(path: str) -> str:
+    """A path as a record holds it -> a local path to open: placeholders
+    (``<models>/X``, ``<fits>/X``, ``<checkout>/X``, ``~/X``) are expanded on
+    this box; an absolute path from an older record is returned as is."""
+    if path.startswith("~/") or path == "~":
+        return os.path.expanduser(path)
+    if path.startswith(CHECKOUT_LABEL):
+        co = checkout_dir()
+        return str(co) + path[len(CHECKOUT_LABEL):] if co is not None else path
+    if path.startswith("<fits>"):
+        return str(fit_store()[0]) + path[len("<fits>"):]
+    return expand(path)
+
+
 _PLACEHOLDER = re.compile(r"(^|=)<(teachers|models|scratch)>(?=/|$)")
 
 

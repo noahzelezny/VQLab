@@ -32,6 +32,7 @@ import subprocess
 import sys
 
 from vqlab._layout import find as _find
+from vqlab.ship import leak_guard
 
 
 def _digest(p: pathlib.Path) -> str:
@@ -82,7 +83,7 @@ def main(argv=None) -> int:
         n = p.name
         if n in (".DS_Store", ".gitignore") or n.endswith((".pyc", ".tmp")):
             return False
-        if ".pre-" in n or n.endswith((".bak", ".orig")):  # local backups
+        if leak_guard.is_backup(n):  # local backups: *.pre-*, *.bak, *.tmp
             return False
         return True
 
@@ -108,6 +109,9 @@ def main(argv=None) -> int:
                 print(f"FAIL: {r} points outside the artifact directory")
                 return 1
             p = pathlib.Path(joined)
+            if leak_guard.is_backup(p.name):
+                print(f"FAIL: {r} is a local backup (*.pre-*, *.bak, *.tmp); backups never ship")
+                return 1
             if not p.is_file():
                 print(f"FAIL: {r} does not exist in {art}")
                 return 1
@@ -120,6 +124,15 @@ def main(argv=None) -> int:
         print(f"   {p.relative_to(art)}  ({p.stat().st_size} bytes)")
     if len(targets) > 12:
         print(f"   ... and {len(targets) - 12} more")
+
+    # Text that names this machine (home dir, storage roots, checkout, a LAN
+    # address) never ships. Checked before the gate: it is cheap, and no gate
+    # result makes a leaked path acceptable.
+    leaks = leak_guard.scan(targets, art)
+    if leaks:
+        print("\nREFUSING TO UPLOAD: these files carry machine-specific text:")
+        print(leak_guard.report(leaks, art))
+        return 1
 
     before = {p: _digest(p) for p in targets}
 
