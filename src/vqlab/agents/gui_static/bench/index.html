@@ -364,6 +364,32 @@ details.adv .kv{margin-top:8px}
 .linkbtn.hid{visibility:hidden}
 .qsteps{display:flex;flex-direction:column}.qstep{display:grid;grid-template-columns:20px var(--nw,44ch) repeat(3,minmax(0,1fr));gap:0 24px;align-items:baseline;text-align:left;padding:7px 4px;border-top:1px solid var(--line);color:var(--dim);font-size:.9em}.qstep:first-child{border-top:0}.qstep:not([disabled]):hover{background:color-mix(in oklch,var(--fg) 4%,transparent)}.qstep[disabled]{cursor:default;opacity:1}.qstep .m{width:9px;height:9px;border-radius:50%;background:var(--med);align-self:center;justify-self:center}.qstep.ok .m{background:var(--ok)}.qstep.bad .m{background:var(--bad)}.qstep.run .m{background:var(--warn);animation:pulse 1.6s infinite}.qstep .c{color:var(--fg);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.qstep .du{font-variant-numeric:tabular-nums}.qstep .s,.qstep .du,.qstep .ex{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.qstep.bad .s,.qstep.bad .ex{color:var(--bad)}.qstep .nt{color:var(--faint);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.qstep.open{background:color-mix(in oklch,var(--acc) 7%,transparent)}.qmore{margin:0 4px 8px 42px;padding:8px 10px;border:1px solid var(--line);border-radius:var(--r);background:var(--bg);font-size:.82em}.qmore pre{margin:0;white-space:pre-wrap;word-break:break-word;color:var(--fg)}.qcmd{margin-top:6px;color:var(--faint);word-break:break-all}
 .qhead{color:var(--faint);cursor:default;padding-top:10px}.qhead>span{font-size:.8em;letter-spacing:.1em;text-transform:uppercase}.qhead:hover{background:none!important}
+
+/* ---------- storage page ---------- */
+.stor{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:1.4em;align-items:start}
+@media(max-width:1100px){.stor{grid-template-columns:minmax(0,1fr)}}
+.stor .cart{font-size:.9em}
+.srow{display:grid;grid-template-columns:7.5em minmax(0,1fr) auto;gap:4px 12px;align-items:start;padding:8px 0;border-top:1px solid var(--line)}
+.srow:first-of-type{border-top:0;padding-top:0}
+.srow .k{display:flex;align-items:center;gap:6px;color:var(--fg)}
+.srow .p{min-width:0;word-break:break-all}.srow .p div{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.srow .fr{color:var(--dim);font-size:.85em;font-variant-numeric:tabular-nums;white-space:nowrap}
+.srow .stag{color:var(--faint);font-size:.75em;letter-spacing:.08em;text-transform:uppercase;white-space:nowrap}
+.srow .acts{display:flex;flex-direction:column;align-items:flex-end;gap:4px;min-height:1.6em}
+.srow .ed{grid-column:2 / 4;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.srow .ed input[type=text]{flex:1;min-width:12em;background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:var(--r);padding:3px 8px;font:inherit;font-size:.9em}
+.srow .ed label{color:var(--dim);font-size:.82em;white-space:nowrap}
+.srow .err{grid-column:2 / 4;color:var(--bad);font-size:.85em;word-break:break-word}
+.sfile{margin-top:10px;color:var(--faint);font-size:.78em;word-break:break-all}
+.sscroll{overflow:auto}
+.sscroll table{width:100%;table-layout:fixed;border-collapse:collapse;font-size:.88em}
+.sscroll th{position:sticky;top:0;background:var(--bg);text-align:left;color:var(--faint);font-weight:400;font-size:.8em;letter-spacing:.06em;padding:4px 8px;cursor:pointer;user-select:none;white-space:nowrap}
+.sscroll th:hover{color:var(--fg)}.sscroll th.num,.sscroll td.num{text-align:right;font-variant-numeric:tabular-nums}
+.sscroll td{padding:4px 8px;border-top:1px solid var(--line);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:0}
+.sscroll td.num{max-width:none}.sscroll th.num{width:9em}
+.stabs{display:flex;gap:6px;margin:10px 0 8px}
+.stabs .mini[aria-pressed=true]{color:var(--acc);border-color:var(--acc)}
+.rmblk{max-height:9em;overflow:auto;user-select:all}
 </style>
 
 <header>
@@ -576,8 +602,8 @@ function allocation(t,r){
 const JOBS_SNAPSHOT={"snapshot":null,"gpu":{"held":false,"by":null},"queues":[]};
 let JDRAFTS=[];  // client-side draft jobs; nothing here runs anything
 const LIVE={on:false,queues:JOBS_SNAPSHOT.queues,gpu:JOBS_SNAPSHOT.gpu,at:JOBS_SNAPSHOT.snapshot};
-const PAGES=[{k:'library',n:'Library'},{k:'recipe',n:'Recipe'},{k:'jobs',n:'Jobs'}];
-const ICON={library:'<svg viewBox="0 0 24 24"><path d="M4 19V5M10 19V9M16 19v-6M22 19H2"/></svg>',recipe:'<svg viewBox="0 0 24 24"><path d="M3 18C8 18 8 6 13 6s5 12 8 12"/><circle cx="13" cy="6" r="2"/></svg>',jobs:'<svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h10M4 18h13"/><circle cx="19" cy="12" r="2"/></svg>'};
+const PAGES=[{k:'library',n:'Library'},{k:'recipe',n:'Recipe'},{k:'jobs',n:'Jobs'},{k:'storage',n:'Storage'}];
+const ICON={library:'<svg viewBox="0 0 24 24"><path d="M4 19V5M10 19V9M16 19v-6M22 19H2"/></svg>',recipe:'<svg viewBox="0 0 24 24"><path d="M3 18C8 18 8 6 13 6s5 12 8 12"/><circle cx="13" cy="6" r="2"/></svg>',jobs:'<svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h10M4 18h13"/><circle cx="19" cy="12" r="2"/></svg>',storage:'<svg viewBox="0 0 24 24"><ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6v12c0 1.7 3.6 3 8 3s8-1.3 8-3V6M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></svg>'};
 let libCols={kl:false,bpw:false};
 let stepOpen='';let page=0, draft=newRecipe(), libFam='q35', jobSel='',showPre=false, show={d4:true,d2:true,d8:true,mixed:true,affine:true,'affine-sk':false,vq:true,lab:false};
 try{const st=JSON.parse(localStorage.getItem('vq.v18')||'{}');if(st.draft){draft=st.draft;draft.skel=false}if(st.page!=null)page=st.page;if(st.libFam)libFam=st.libFam;if(st.jobSel)jobSel=st.jobSel;if(Array.isArray(st.drafts))JDRAFTS=st.drafts;if(st.showPre)showPre=true;if(st.show)show=st.show;if(st.libCols)libCols={kl:!!st.libCols.kl,bpw:!!st.libCols.bpw}}catch{}
@@ -1014,7 +1040,64 @@ function pgJobs(){
 function wirePicker(){$('#pick').onclick=()=>{$('#picker').classList.remove('hidden');renderPicker();$('#psearch').focus()};
   $('#pclose').onclick=()=>$('#picker').classList.add('hidden');$('#picker').onclick=e=>{if(e.target.id==='picker')$('#picker').classList.add('hidden')};
   $('#psearch').oninput=()=>{if(pickFam!=='hf')return renderPicker();clearTimeout(HF.timer);HF.res=null;HF.err='';HF.open='';renderHub();HF.timer=setTimeout(()=>{HF.timer=0;hubSearch($('#psearch').value.trim())},250)};document.onkeydown=e=>{if(e.key==='Escape')$('#picker').classList.add('hidden')}}
-const PG=[pgLibrary,pgRecipe,pgJobs];
+
+// ================================================================ storage
+const ST={cfg:null,scr:null,rec:null,err:'',serr:'',edit:null,sort:{k:'bytes',d:-1},tab:'folders',copied:false,started:false};
+const gib=b=>b==null?'':b>=2**40?(b/2**40).toFixed(2)+' TiB':b>=2**30?(b/2**30).toFixed(1)+' GiB':(b/2**20).toFixed(1)+' MiB';
+async function stLoad(which){if(location.protocol==='file:')return;
+  const redo=()=>{if(page===3&&!(ST.edit&&ST.edit.busy)&&!document.activeElement?.closest?.('.srow .ed'))render()};
+  if(which!=='scratch'){try{const r=await fetch('/api/settings');if(!r.ok)throw 0;ST.cfg=await r.json();ST.err=''}catch{ST.err='settings unavailable'}redo()}
+  if(which!=='settings'){try{const [a,b]=await Promise.all([fetch('/api/scratch'),fetch('/api/scratch/reclaimable')]);if(!a.ok||!b.ok)throw 0;ST.scr=await a.json();ST.rec=await b.json();ST.serr=''}catch{ST.serr='scratch unavailable'}redo()}}
+function stSrc(l){const s=l.source||'';return !s?'':(ST.cfg&&s===ST.cfg.config_file)||/\.toml$/.test(s)?'config file':s}
+function stRow(l){const ed=ST.edit&&ST.edit.key===l.key,one=l.paths.length===1;
+  const paths=l.paths.map((p,i)=>`<div title="${esc(p)}">${esc(p)}${l.exists&&l.exists[i]===false?' <span style="color:var(--warn)">missing</span>':''}</div>`).join('');
+  const free=l.paths.map((p,i)=>l.free_bytes&&l.free_bytes[i]!=null?`<div>${gib(l.free_bytes[i])} free</div>`:'<div>&nbsp;</div>').join('');
+  return `<div class="srow"><span class="k">${esc(l.key)} ${INFO(esc(l.description))}</span>
+    <div class="p">${paths}<div class="stag">${esc(stSrc(l))}</div></div>
+    <div class="acts"><span class="fr">${free}</span>${one&&!ed?`<button class="mini" data-sedit="${esc(l.key)}">edit</button>`:''}</div>
+    ${ed?`<div class="ed"><input type="text" id="sin" value="${esc(ST.edit.value)}" spellcheck="false"><label><input type="checkbox" id="scr"${ST.edit.create?' checked':''}> create if missing</label>
+      <button class="mini pri" id="ssave"${ST.edit.busy?' disabled':''}>Save</button><button class="mini" id="scancel">Cancel</button></div>`:''}
+    ${ed&&ST.edit.error?`<div class="err">${esc(ST.edit.error)}</div>`:''}</div>`}
+function pgStorage(){
+  if(location.protocol==='file:')return `<section class="panel"><h2>Storage</h2><div class="ro">open with <b>vqlab gui</b> to see storage</div></section>`;
+  const c=ST.cfg,sc=ST.scr,rc=ST.rec;
+  const locs=c?c.locations.map(stRow).join(''):`<div class="ro">${esc(ST.err||'loading…')}</div>`;
+  let right;
+  if(!sc)right=`<div class="ro">${esc(ST.serr||'sizing scratch…')}</div>`;
+  else{const col={name:f=>f.name,bytes:f=>f.bytes,mtime:f=>f.mtime},d=ST.sort.d,k=ST.sort.k;
+    const rows=[...sc.folders].sort((a,b)=>{const x=col[k](a),y=col[k](b);return (x>y?1:x<y?-1:0)*d});
+    const th=(key,lab,cl)=>`<th class="${cl||''}" data-ssort="${key}">${lab}${ST.sort.k===key?(d>0?' ▲':' ▼'):''}</th>`;
+    const tot=sc.folders.reduce((a,f)=>a+f.bytes,0);
+    const ro=(l,v)=>`<div class="readout"><small>${l}</small><b>${v}</b></div>`;
+    const tbl=ST.tab==='folders'
+      ?`<div class="sscroll" id="sscroll"><table><thead><tr>${th('name','name')}${th('bytes','size','num')}${th('mtime','modified','num')}</tr></thead><tbody>${rows.map(f=>`<tr><td title="${esc(f.path)}">${esc(f.name)}</td><td class="num">${gib(f.bytes)}</td><td class="num">${esc(new Date(f.mtime*1000).toLocaleDateString([],{month:'short',day:'numeric'}))}</td></tr>`).join('')}</tbody></table></div>`
+      :`<div class="sscroll" id="sscroll"><table><thead><tr><th>path</th><th class="num">size</th></tr></thead><tbody>${(rc.reclaimable||[]).map(r=>`<tr><td title="${esc(r.path)}">${esc(r.path)}</td><td class="num">${gib(r.bytes)}</td></tr>`).join('')||'<tr><td>nothing reclaimable</td><td></td></tr>'}</tbody></table></div>
+        <div class="ro" style="margin:10px 0 4px;display:flex;justify-content:space-between;align-items:center"><span>reclaimable ${gib(rc.total_bytes)}</span><button class="mini" id="scopy">${ST.copied?'Copied':'Copy'}</button></div>
+        <div class="cmd rmblk">${esc((rc.rm_lines||[]).join('\n'))||'&nbsp;'}</div>`;
+    right=`<div class="readouts" style="grid-template-columns:repeat(3,1fr)">${ro('folders',sc.folders.length)}${ro('total',gib(tot))}${ro('reclaimable',rc?gib(rc.total_bytes):'')}</div>
+      <div class="stabs"><button class="mini" aria-pressed="${ST.tab==='folders'}" data-stab="folders">Folders</button><button class="mini" aria-pressed="${ST.tab==='recl'}" data-stab="recl">Reclaimable</button></div>${tbl}`}
+  return `<section class="panel"><h2>Storage</h2><div class="stor">
+    <div class="cart"><div class="ro">Locations</div>${locs}${c?`<div class="sfile">${esc(c.config_file)}${c.config_exists?'':' (not created)'}</div>`:''}</div>
+    <div class="cart"><div class="ro">Scratch ${INFO(esc(sc?sc.root:'')||'sizing')}</div>${right}</div></div></section>`}
+function wireStorage(){
+  const fit=()=>{const e=$('#sscroll');if(e)e.style.maxHeight=Math.max(160,innerHeight-e.getBoundingClientRect().top-90)+'px'};fit();
+  if(!ST.started){ST.started=true;stLoad()}
+  document.querySelectorAll('[data-ssort]').forEach(h=>h.onclick=()=>{const k=h.dataset.ssort;ST.sort=ST.sort.k===k?{k,d:-ST.sort.d}:{k,d:k==='name'?1:-1};render()});
+  document.querySelectorAll('[data-stab]').forEach(b=>b.onclick=()=>{ST.tab=b.dataset.stab;render()});
+  document.querySelectorAll('[data-sedit]').forEach(b=>b.onclick=()=>{const l=ST.cfg.locations.find(x=>x.key===b.dataset.sedit);ST.edit={key:l.key,value:l.paths[0],create:false,error:'',busy:false};render();const i=$('#sin');if(i)i.focus()});
+  const sin=$('#sin');if(sin){sin.oninput=()=>ST.edit.value=sin.value;$('#scr').onchange=e=>ST.edit.create=e.target.checked;
+    sin.onkeydown=e=>{if(e.key==='Enter')$('#ssave').click();if(e.key==='Escape'){e.stopPropagation();$('#scancel').click()}};
+    $('#scancel').onclick=()=>{ST.edit=null;render()};
+    $('#ssave').onclick=async()=>{const E=ST.edit;E.busy=true;E.error='';render();
+      try{const r=await fetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({key:E.key,path:E.value,create:E.create})});
+        let j={};try{j=await r.json()}catch{}
+        if(r.ok&&j.ok){ST.edit=null;await stLoad();if(page===3)render();stLoad('scratch');return}
+        E.error=j.error||('request failed ('+r.status+')')}catch{E.error='request failed'}
+      E.busy=false;render();const i=$('#sin');if(i)i.focus()}}
+  const cp=$('#scopy');if(cp)cp.onclick=async()=>{try{await navigator.clipboard.writeText((ST.rec.rm_lines||[]).join('\n'));ST.copied=true}catch{const t=$('.rmblk');if(t){const r=document.createRange();r.selectNodeContents(t);getSelection().removeAllRanges();getSelection().addRange(r);try{document.execCommand('copy');ST.copied=true}catch{}}}
+    render();setTimeout(()=>{ST.copied=false;if(page===3)render()},1500)};
+}
+const PG=[pgLibrary,pgRecipe,pgJobs,pgStorage];
 function fitLadder(){
   const tb=document.querySelector('table.ladder');if(!tb)return;const w=tb.parentElement;
   const cols=[...tb.querySelectorAll('col[data-w]')],bc=tb.querySelector('col[data-build]');
@@ -1047,6 +1130,7 @@ function render(){
       if(a==='start')j.cli=true;
       else{JDRAFTS.splice(i,1);jobSel='';if(a==='edit'){draft={...j.recipe};const S=skelOf(draft.teacher);for(const q of ['pAttn','pEmb','pRouter'])if(draft[q]==null)draft[q]=draft.mode==='vq'?S[q]:AFFW[q];page=1}}
       render()})}
+  if(page===3)wireStorage();
   document.querySelectorAll('[data-save]').forEach(b=>b.onclick=()=>{const j=b.dataset.save==='draft'?{name:TE(draft.teacher).short.toLowerCase().replace(/[^a-z0-9]+/g,'-'),kind:'build',recipe:draft}:JDRAFTS.find(x=>x.id===b.dataset.save);if(!j)return;
     const u=URL.createObjectURL(new Blob([JSON.stringify({name:j.name,kind:j.kind||'build',recipe:j.recipe},null,1)],{type:'application/json'})),a=document.createElement('a');a.href=u;a.download='recipe.json';a.click();URL.revokeObjectURL(u)});
 }
