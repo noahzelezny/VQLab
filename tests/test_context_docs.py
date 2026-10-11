@@ -53,7 +53,7 @@ def test_every_module_is_named_in_its_context(path):
 
 
 def _contexts():
-    return [ROOT / "CONTEXT.md", *sorted(PKG.glob("*/CONTEXT.md"))]
+    return [ROOT / "CONTEXT.md", *sorted(PKG.rglob("CONTEXT.md"))]
 
 
 @pytest.mark.parametrize("ctx", _contexts(), ids=lambda p: p.relative_to(ROOT).as_posix())

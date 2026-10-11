@@ -36,7 +36,7 @@ hides it (quantlab E12 on GLM/affine; F93-F95 on Flash/VQ). Pass --leverage
 more than once to average several corpora (they agree closely — r=0.931
 prose vs code on Flash-2.1 — so one is usually enough).
 
-Scoring uses the house three corpora through scripts/score_ppl_resident.py
+Scoring uses the house three corpora through vqlab.score.ppl_resident
 at --score-tokens (default 2048, the published cards' instrument). Ppl is
 the GATE; rank with KL if you want a ranking instrument (quantlab III).
 """
@@ -50,7 +50,6 @@ import pathlib
 import subprocess
 import sys
 
-REPO = str(pathlib.Path(__file__).resolve().parents[3])
 from vqlab import _layout
 REF = str(_layout.PKG / "score" / "referee")
 CORPORA = dict(_layout.CORPORA)
@@ -217,7 +216,7 @@ def main():
                "restore": nw, "layers": hs}
         for tag, fn in CORPORA.items():
             r = subprocess.run(
-                [sys.executable, os.path.join(REPO, "scripts", "score_ppl_resident.py"),
+                [sys.executable, "-m", "vqlab.score.ppl_resident",
                  "--model", art, "--corpus", os.path.join(REF, fn),
                  "--max-tokens", str(a.score_tokens)],
                 capture_output=True, text=True)

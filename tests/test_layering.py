@@ -4,7 +4,7 @@ A package may import only from LOWER layers; peers in one layer may not
 import each other. Every import counts, including ones inside function
 bodies (a lazy import is still an edge). The same walk also refuses new
 `sys.path` edits, new bare imports of vqlab module stems (`import vq_pack`
-instead of `from vqlab.runtime import vq_pack`), and new `parents[2]`
+instead of `from vqlab.runtime import vq_pack`), and new `parents[N]` (N>=2)
 repo-relative path arithmetic.
 
 Today's tree breaks these rules in known places; those are listed in
@@ -21,6 +21,7 @@ from __future__ import annotations
 import ast
 import json
 import pathlib
+import re
 import sys
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
@@ -117,8 +118,9 @@ def violations() -> set[str]:
         if me is not None and me.endswith(".py"):
             me = me[:-3]
         is_pkg = path.name == "__init__.py"
-        if "parents[2]" in src:
-            found.add(f"{rel}::parents[2]")
+        for m in re.finditer(r"parents\[\s*(\d+)\s*\]", src):
+            if int(m.group(1)) >= 2:      # any repo-relative climb out of the package
+                found.add(f"{rel}::parents[{m.group(1)}]")
         for node in ast.walk(tree):
             if isinstance(node, ast.Call):
                 f = node.func
@@ -173,6 +175,16 @@ def test_every_package_has_a_layer():
     pkgs |= {p.stem for p in PKG.glob("*.py") if p.stem not in ("__init__",)}
     missing = sorted(pkgs - set(LAYER) - EXEMPT)
     assert not missing, f"give these a layer in LAYER: {missing}"
+
+
+def test_every_code_folder_is_a_package_with_its_context():
+    """Nested sub-packages too (core/artifacts/ once had neither file):
+    every folder with .py files has __init__.py, and every top-level package
+    or routed sub-package (`<name>/CONTEXT.md` named by its parent) has a
+    CONTEXT.md. Same rule the selftest runs."""
+    from vqlab.selftest.layout_checks import packages_missing_context
+    bad = packages_missing_context(PKG)
+    assert not bad, f"add __init__.py / CONTEXT.md: {bad}"
 
 
 # Tests whose PURPOSE is the old (bare / pre-split) names: they check that

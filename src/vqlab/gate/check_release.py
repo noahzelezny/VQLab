@@ -92,11 +92,19 @@ def _cluster_smoke(args, A) -> list[str]:
                      "rank's copy must be identity-checked, not assumed")
         return probs
     for peer in peers:
-        # peer syntax: user@host[:models-root]; default root is the exo
-        # convention "$HOME/Exo Models". A peer whose root lives elsewhere
-        # (a box that keeps models on an external volume) names it explicitly.
+        # peer syntax: user@host[:models-root]. Without an explicit root it
+        # comes from the config: the `models` key of the [boxes.NAME] whose
+        # name / ssh / hostname is this peer. No built-in default: where a
+        # peer keeps its models is a fact about that machine.
         host, _, root = peer.partition(":")
-        root = root or "$HOME/Exo Models"
+        if not root:
+            from vqlab import config
+            root = config.box_models(host)
+        if not root:
+            probs.append(f"peer {peer}: no models root: pass USER@HOST:<models-root> "
+                         "or set `models` under that box's [boxes.NAME] in the "
+                         "vqlab config")
+            continue
         script = ("cd \"" + root + "/" + dirname + "\" && "
                   "shasum -a 256 " + " ".join(local_hashes) + " && "
                   "stat -f '%N %z' " + " ".join(shard_sizes))

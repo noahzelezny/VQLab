@@ -24,6 +24,7 @@ Per-position arrays and JSON records. kl-ladder resumes from them.
 - `kl_damage.py`: `score kl`: quantization damage as KL from the model's own bf16 output
 - `kl_ladder.py`: `score kl-ladder`: rank rungs by KL against per-corpus teacher caches (the release gate)
 - `kl_pair.py`: `score kl-pair`: paired KL between two arms scored in separate runs
+- `ppl_resident.py`: resident referee ppl through the runtime the artifact ships (`python -m vqlab.score.ppl_resident`; alloc-sweep scores with it; `scripts/score_ppl_resident.py` is a wrapper)
 - `referee/score_streaming.py`: `score ppl`: the single-box streaming ppl referee over the house corpora
 - `runtime_equiv.py`: `score runtime-equiv`: one model slice through two interpreters, bitwise or not
 - `score_tasks_streaming.py`: `score tasks`: layer-streamed task benchmarks for models larger than RAM

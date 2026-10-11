@@ -32,8 +32,7 @@ def check_layout(ctx):
                    or _im.PathFinder.find_spec(n, outside) is not None))
     _check_one_module_object()
     _check_context_routing()
-    _nodoc = sorted(d.name for d in L.PKG.iterdir()
-                    if (d / "__init__.py").exists() and not (d / "CONTEXT.md").exists())
+    _nodoc = packages_missing_context(L.PKG)
     check("every package folder has its CONTEXT.md contract", not _nodoc, ", ".join(_nodoc))
     check("no bare alias collides with stdlib / site-packages",
           not clash, ", ".join(clash))
@@ -41,6 +40,31 @@ def check_layout(ctx):
                        text=True, env={**os.environ, "PYTHONPATH": str(L.SRC)})
     check("pre-split `python -m vqlab.<name>` still runs", p.returncode == 0,
           p.stderr.strip().splitlines()[-1] if p.returncode else "")
+
+
+# Folders that carry .py files as DATA (scored/served, never imported).
+DATA_DIRS = {"score/referee", "agents/gui_static/bench"}
+
+
+def packages_missing_context(pkg):
+    """Every top-level package folder, and every nested package its parent's
+    CONTEXT.md routes to (`<name>/CONTEXT.md`), carries a CONTEXT.md; a
+    nested folder holding .py files is a real package (__init__.py), so an
+    implicit namespace folder cannot slip past the check."""
+    bad = []
+    for d in sorted(pkg.rglob("*")):
+        if not d.is_dir() or "__pycache__" in d.parts:
+            continue
+        rel = d.relative_to(pkg).as_posix()
+        if not (d / "__init__.py").exists():
+            if any(d.glob("*.py")) and rel not in DATA_DIRS:
+                bad.append(f"{rel} (no __init__.py)")
+            continue
+        parent_ctx = d.parent / "CONTEXT.md"
+        routed = parent_ctx.exists() and f"{d.name}/CONTEXT.md" in parent_ctx.read_text()
+        if (d.parent == pkg or routed) and not (d / "CONTEXT.md").exists():
+            bad.append(rel)
+    return bad
 
 
 def _check_one_module_object():

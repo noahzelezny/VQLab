@@ -97,7 +97,10 @@ def main(argv=None) -> int:
                     help="repo root the test paths resolve against (default: this checkout)")
     a = ap.parse_args(argv)
     from vqlab.family import get, plugins
-    root = pathlib.Path(a.root) if a.root else pathlib.Path(__file__).resolve().parents[3]
+    from vqlab import _layout
+    # default: the checkout this package runs from (src/.. -- the folder that
+    # holds src/vqlab); a wheel install has none, and the tests/ check refuses
+    root = pathlib.Path(a.root) if a.root else _layout.SRC.parent
     if a.all:
         ps = list(plugins().values())
     elif a.family:

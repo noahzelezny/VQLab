@@ -101,7 +101,11 @@ def _check_vintage_forks():
     ok = True
     names = ["_SRC_FUSED_PACKED", "_SRC_FUSED_PACKED_D4_WALK", "_SRC_GEMMSEG2"]
     for label, path, want in (("walk runtime (frozen)", WALK_FROZEN, "walk"),
-                              ("397B bundle model.py", pathlib.Path(U8_MODEL_PY), "u8")):
+                              ("397B bundle model.py", U8_MODEL_PY, "u8")):
+        if path is None:
+            print(f"[selftest] {label}: none named (set VQLAB_SZ_U8_MODEL_PY): SKIPPED")
+            continue
+        path = pathlib.Path(path)
         if not path.exists():
             if want == "u8":   # a local artifact, not package data
                 print(f"[selftest] {label}: {path} not on this machine: SKIPPED")

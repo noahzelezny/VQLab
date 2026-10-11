@@ -51,8 +51,10 @@ from vqlab.util.log import make_log
 SEED = 1234
 # The last runtime/vq_switch.py without the native SZ switch, shipped as package data
 WALK_FROZEN = SRC / "vqlab" / "runtime" / "equivalent" / "vq_switch.40870875499d.py.txt"
-# A u8-vintage bundle (the published 397B 2.4bpw runtime), under config.models()
-U8_MODEL_PY = config.models() / "TheDrainFlorist--Qwen3.5-397B-A17B-VQ-2.4bpw" / "model.py"
+# A u8-vintage bundle's model.py (e.g. a published 397B skip-zero rung's
+# runtime). A local artifact, not package data: --u8-model-py, else
+# $VQLAB_SZ_U8_MODEL_PY, else None (the u8 legs refuse / the selftest skips).
+U8_MODEL_PY = os.environ.get("VQLAB_SZ_U8_MODEL_PY") or None
 NCASES = {1: (1, 1), 8: (1, 8), 4096: (512, 8), 4097: (4097, 1)}   # N: (T, k)
 CORPUS = SRC / "vqlab" / "score" / "referee" / "referee_corpus.txt"
 
@@ -381,6 +383,10 @@ def synthetic(outdir, which="both", u8_model_py=U8_MODEL_PY):
                                      pack_bits=BITS, in_features=IN, row_table=mx.array(tbl))
             fails += _synthetic_cases(name, ref, cmp_, rng, live, E, IN, vs.VQ_FUSED_MAX_N, lines)
     if which in ("u8", "both", "all"):
+        if not u8_model_py:
+            sys.exit("--vintage u8/both/all needs a u8-vintage bundle model.py: pass "
+                     "--u8-model-py <artifact>/model.py (or set VQLAB_SZ_U8_MODEL_PY), "
+                     "or run --vintage walk / native")
         ns = load_u8_runtime(u8_model_py)
         SZ = sz_resident.install_resident(ns)
         assert SZ.vintage == "u8", SZ.vintage
@@ -521,7 +527,8 @@ def main(argv=None):
     ap.add_argument("--vintage", choices=("walk", "u8", "both", "native", "all"), default="both",
                     help="--synthetic: which runtime vintage(s) to stress")
     ap.add_argument("--u8-model-py", default=U8_MODEL_PY,
-                    help="--synthetic: the u8-vintage bundle model.py (read only)")
+                    help="--synthetic: the u8-vintage bundle model.py (read only; "
+                         "default $VQLAB_SZ_U8_MODEL_PY; required for --vintage u8/both/all)")
     ap.add_argument("--worker", nargs=3, metavar=("ART", "ROLE", "EXPERTS_JSON"),
                     help=argparse.SUPPRESS)
     ap.add_argument("--mem-only", action="store_true", help=argparse.SUPPRESS)
