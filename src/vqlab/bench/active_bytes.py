@@ -24,7 +24,7 @@ import struct
 import sys
 from pathlib import Path
 
-from vqlab.core.artifact import tensor_class
+from vqlab.core.artifacts.artifact import tensor_class
 
 # dtype -> bytes/element, as safetensors spells them
 _ITEMSIZE = {

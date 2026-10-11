@@ -42,11 +42,11 @@ def runtime_for(family: str) -> str:
     rt = entry.get("runtime", "mlx_lm")
     # Knurlogic serves some architectures that used to exist only in mlx_vlm
     # (glm5_next) under mlx_lm.models, and VQLab loads Knurlogic's files
-    # (vqlab.core.arch_finder). When it serves this family's model_type, load
+    # (vqlab.core.box.arch_finder). When it serves this family's model_type, load
     # through mlx_lm: that is the arithmetic users run, and a VQLab env has
     # no mlx_vlm (2026-10-03: GLM could not load in ~/.venvs/vqlab at all).
     if rt == "mlx_vlm" and entry.get("model_type"):
-        from vqlab.core import arch_finder as arch
+        from vqlab.core.box import arch_finder as arch
         if arch.enabled() and entry["model_type"] in arch.available():
             rt = "mlx_lm"
     if rt not in RUNTIMES:

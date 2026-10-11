@@ -22,7 +22,7 @@ See README.md and METHODOLOGY.md.
 __version__ = "0.1.0"
 
 from . import _layout  # noqa: F401  stage folders + pre-split import names
-from .core import arch_finder as _arch
+from .core.box import arch_finder as _arch
 
 
 def use_knurlogic_arch() -> bool:

@@ -82,7 +82,7 @@ def _sha(a):
 
 def dead_experts(art):
     """{module: experts ordered by dead-row count desc} from the resident pack."""
-    from vqlab.core import fitstore
+    from vqlab.core.source import fit_store as fitstore
     cfg = json.loads((pathlib.Path(art) / "config.json").read_text())
     mods = cfg["vq_skipzero"]["modules"]
     out = {}
@@ -421,7 +421,7 @@ def partial(resident, stage1, layers, outdir, original=None):
     --original adds the ORIGINAL rung's modules as information only."""
     import importlib.util
     import mlx.core as mx
-    from vqlab.core import fitstore
+    from vqlab.core.source import fit_store as fitstore
     res, st1 = pathlib.Path(resident), pathlib.Path(stage1)
     cfg = json.loads((res / "config.json").read_text())
     sz = cfg["vq_skipzero"]

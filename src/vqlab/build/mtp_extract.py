@@ -28,9 +28,9 @@ from collections import defaultdict
 
 import mlx.core as mx
 
-from vqlab.core.artifact import tensor_class
+from vqlab.core.artifacts.artifact import tensor_class
 
-# Default matcher: core.artifact.tensor_class (the one classifier); Qwen/
+# Default matcher: core.artifacts.artifact.tensor_class (the one classifier); Qwen/
 # DeepSeek-style checkpoints name the head mtp.* / nextn.*. NOT every family
 # does: GLM-5.3 stores its MTP layer as plain
 # `...layers.<num_hidden_layers>.*` (index 45 on Flash — eh_proj/enorm/

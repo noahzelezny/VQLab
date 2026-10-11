@@ -26,7 +26,7 @@ import time
 
 import mlx.core as mx
 
-from vqlab.core import fitstore
+from vqlab.core.source import fit_store as fitstore
 from vqlab.family.registry import DENSE_FAMILIES
 from vqlab.fit.kmeans import assign_mx as assign
 from vqlab.records import provenance
@@ -234,7 +234,7 @@ def main(argv=None) -> int:
                 "worst_relerr": round(max(report), 6)},
         inputs=[("source", SRC)],
         modules={m: {**v, "origin": "fit"} for m, v in vq_modules.items()})
-    # File every module's fit in the fit store (core/fitstore.py): findable by
+    # File every module's fit in the fit store (core/source/fit_store.py): findable by
     # family / teacher / layer / geometry, and never paid for twice.
     _teacher = fitstore.teacher_slug(SRC)
     _recipe = {"origin": "fit", "tool": "fit-dense", "run_id": os.environ.get("VQLAB_RUN_ID"),

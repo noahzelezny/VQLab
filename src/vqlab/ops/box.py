@@ -11,16 +11,18 @@ import subprocess
 from typing import Any, Dict
 
 from vqlab import config
-from vqlab.core.exo import exo_instances as _exo_instances
-from vqlab.core.gpu_lease import lease_holder as _lease_holder
-from vqlab.core.gpu_lease import lease_path
+from vqlab.core.box.exo import exo_instances as _exo_instances
+from vqlab.core.box.gpu_lease import lease_holder as _lease_holder
+from vqlab.core.box.gpu_lease import lease_path
 from vqlab.ops.runs import _lab_state, _this_host
 from vqlab.queue import reserve as _resv
 
 
 def _box_state(name: str, b: Dict[str, Any]) -> Dict[str, Any]:
     """Another box's lease holder and GPU-heavy processes, over ssh, from its
-    own clone and config (the [boxes.NAME] table). Never raises."""
+    own clone and config (the [boxes.NAME] table). Never raises. The remote
+    snippet keeps the pre-split spelling vqlab.core.gpu_lease: the peer's
+    clone may predate core/box/, and the alias answers on newer clones."""
     remote = (f"cd {shlex.quote(b['repo'])} && VQLAB_CONFIG={shlex.quote(b['config'])} "
               f"PYTHONPATH=src {shlex.quote(b['python'])} -c "
               + shlex.quote("import json; from vqlab.core.gpu_lease import lease_holder; "

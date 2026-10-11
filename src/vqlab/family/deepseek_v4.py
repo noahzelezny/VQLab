@@ -134,7 +134,7 @@ def _apply_variant(core):
 
 
 def _budgeted(blk, lazy_over_gb):
-    from vqlab.core.mem_budget import eval_params_budgeted
+    from vqlab.core.source.mem_budget import eval_params_budgeted
     return eval_params_budgeted(blk, lazy_over_gb)
 
 
@@ -232,7 +232,7 @@ def act_stats(model_dir, corpora, tokens, args):
     from mlx_lm.utils import load_tokenizer
 
     from vqlab.family import model_loader as runtime_load
-    from vqlab.core.clamps import ClampCounter, corpus_ids
+    from vqlab.core.source.clamps import ClampCounter, corpus_ids
 
     tok = load_tokenizer(pathlib.Path(model_dir))
     counters = {}

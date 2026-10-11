@@ -153,7 +153,7 @@ def test_parity_checklist():
 
 
 def test_clamp_counter():
-    from vqlab.core.clamps import ClampCounter
+    from vqlab.core.source.clamps import ClampCounter
     c = ClampCounter(10.0)
     c.add(mx.array([[11.0, -20.0, 1.0]]), mx.array([[0.0, -11.0, 10.0]]))
     r = c.result()

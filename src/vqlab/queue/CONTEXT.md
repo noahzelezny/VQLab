@@ -3,7 +3,7 @@
 Layer L11 (tests/test_layering.py). It launches commands BY NAME through
 `vqlab.commands` (`python -m vqlab.cli <cmd>`) and never imports a tool
 module, agents/, selftest or cli. The GPU lease and the exo check it shares
-with the MCP server live below it, in `core/gpu_lease.py` and `core/exo.py`.
+with the MCP server live below it, in `core/box/gpu_lease.py` and `core/box/exo.py`.
 
 ## Inputs
 A queue file (JSON: `name`, `commit`, `python`, `steps` of `cmd`|`script`,

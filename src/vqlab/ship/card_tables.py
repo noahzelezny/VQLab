@@ -22,7 +22,7 @@ import argparse
 import json
 import sys
 
-from vqlab.core.artifact import sizes
+from vqlab.core.artifacts.artifact import sizes
 
 CORPORA = ("prose", "code", "lit")
 GIB = 2 ** 30
@@ -53,7 +53,7 @@ def measured_with(builds) -> str:
     """One line naming the numerics build behind the numbers (F194: a KL
     number is only meaningful for the build that produced it). Every
     distinct build is named; a mixed table says so."""
-    from vqlab.core.stamp_fields import describe
+    from vqlab.core.artifacts.stamp_fields import describe
     seen = []
     for b in builds:
         line = describe(b)

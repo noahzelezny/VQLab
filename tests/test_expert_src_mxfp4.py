@@ -13,7 +13,7 @@ import numpy as np
 import mlx.core as mx
 import pytest
 
-from vqlab.core import expert_src as ES
+from vqlab.core.source import expert_src as ES
 from vqlab.family.registry import FAMILY
 
 FAM = FAMILY["deepseek_v4"]

@@ -90,8 +90,8 @@ import sys
 import time
 
 from vqlab import config as _config
-from vqlab.core import exo
-from vqlab.core import gpu_lease
+from vqlab.core.box import exo
+from vqlab.core.box import gpu_lease
 from vqlab.queue import report
 from vqlab.queue import reserve as resv
 from vqlab.queue import steps as _steps

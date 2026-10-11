@@ -44,7 +44,7 @@ import sys
 from pathlib import Path
 
 from vqlab.bench.active_bytes import GATHERED, ROUTED, _component, _routing, _tensors
-from vqlab.core.artifact import tensor_class
+from vqlab.core.artifacts.artifact import tensor_class
 
 _LAYER = re.compile(r"(?:^|\.)layers\.(\d+)\.")
 # the MLP half of a layer: dense MLP, MoE router, routed and shared experts,

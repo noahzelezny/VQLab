@@ -81,6 +81,24 @@ def test_reload_by_bare_name_keeps_identity():
     assert importlib.reload(bare) is canon and canon.__name__ == "vqlab.runtime.vq_switch"
 
 
+CORE_SPLIT = sorted(k for k, v in _layout.DEPRECATED.items()
+                    if v.startswith(("vqlab.core.artifacts.", "vqlab.core.source.",
+                                      "vqlab.core.box.")))
+
+
+@pytest.mark.parametrize("old", CORE_SPLIT)
+def test_core_split_old_names_are_one_module(old):
+    """Every pre-split spelling of a core module (flat vqlab.core.<mod>, bare
+    and vqlab.<mod> stems) is the SAME object as its sub-package home, and
+    a first import by the old name warns."""
+    new = _layout.DEPRECATED[old]
+    canon = importlib.import_module(new)
+    sys.modules.pop(old, None)
+    with pytest.warns(DeprecationWarning, match=new):
+        assert importlib.import_module(old) is canon
+    assert canon.__name__ == new
+
+
 def test_no_command_disappears(snap):
     gone = sorted(set(snap["commands"]) - set(cli.COMMANDS))
     assert not gone, f"CLI commands removed: {gone}"

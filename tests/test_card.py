@@ -5,7 +5,7 @@ import struct
 
 import pytest
 
-from vqlab.core.artifact import sizes
+from vqlab.core.artifacts.artifact import sizes
 from vqlab.ship import card as C
 from vqlab.ship import card_tables as CT
 from vqlab.records import provenance

@@ -21,7 +21,7 @@ import collections
 import pathlib
 import sys
 
-from vqlab.core import fitstore as fs
+from vqlab.core.source import fit_store as fs
 
 FAMILIES = fs._families_dir()   # honours VQLAB_FAMILIES_DIR
 

@@ -13,7 +13,7 @@ Exit codes and printed verdicts.
 - Every gate must FAIL a known-bad input and PASS a known-good one before its pass means anything (III.5).
 - A gate that never ran the code reports on the gate, not the artifact. Confirm the path was traversed.
 - Measuring? Pin (symlink the shards + ONE model.py), then smoke, then measure.
-- The Knurlogic client helpers the check-release / vision-smoke arms use are `core/knurlogic_client.py`; gate never imports bench. `pin.py` writes the record whose format and check are `core/pin_record.py`.
+- The Knurlogic client helpers the check-release / vision-smoke arms use are `core/box/knurlogic_client.py`; gate never imports bench. `pin.py` writes the record whose format and check are `core/artifacts/pin_record.py`.
 
 ## Files
 - `bundle_accept.py`: `gate bundle-accept`: kernel acceptance against the bundled copy a downloader runs

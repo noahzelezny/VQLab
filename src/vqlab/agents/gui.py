@@ -104,7 +104,7 @@ def api_provenance(q):
 
 
 def api_fits(q):
-    from vqlab.core import fitstore
+    from vqlab.core.source import fit_store as fitstore
     roots = fitstore.roots()
     recs = {}
     for r in roots:
@@ -195,8 +195,8 @@ def _step_files(sd):
 
 def queues_snapshot(n=40):
     """Most recent queue runs, newest first. `live` reuses the runner-alive
-    check `vqlab queue status` makes (core.gpu_lease.pid_alive on state.pid)."""
-    from vqlab.core.gpu_lease import pid_alive
+    check `vqlab queue status` makes (core.box.gpu_lease.pid_alive on state.pid)."""
+    from vqlab.core.box.gpu_lease import pid_alive
     from vqlab.queue import files as rq
     dirs = sorted((p for p in rq.queues_dir().glob("*") if (p / "state.json").exists()),
                   key=lambda p: p.name, reverse=True)[:max(1, n)]

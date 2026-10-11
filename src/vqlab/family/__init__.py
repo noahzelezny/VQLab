@@ -1,7 +1,7 @@
 """Model families as plugins: one file per family (structural feedback #2).
 
 Onboarding DeepSeek-V4-Flash touched six places: family/registry.py (source
-layout), core/expert_src.py (FP4 reader), score/stream_score.py (scorer),
+layout), core/source/expert_src.py (FP4 reader), score/stream_score.py (scorer),
 gate/check_release.py (tokenizer registration), the MTP head scripts and a
 fitter guard. A plugin module here declares a family's pieces in one place:
 

@@ -27,7 +27,7 @@ import shutil
 
 import mlx.core as mx
 
-from vqlab.core.artifact import tensor_class
+from vqlab.core.artifacts.artifact import tensor_class
 
 # A 5-D conv weight is channels-last iff its LAST axis is a channel count.
 # Real images give 1, 3 or 4; a patch grid never does.

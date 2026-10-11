@@ -16,7 +16,7 @@ def index_total_size(path) -> tuple:
     Shared by `size --check-index` and `check-release`, so both gates read
     the same number the same way."""
     import pathlib
-    from vqlab.core.artifact import Artifact, tensor_bytes
+    from vqlab.core.artifacts.artifact import Artifact, tensor_bytes
     art = Artifact.open(path)
     doc = json.loads((pathlib.Path(path) / "model.safetensors.index.json").read_text())
     have = (doc.get("metadata") or {}).get("total_size")

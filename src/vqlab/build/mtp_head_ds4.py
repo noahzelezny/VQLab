@@ -35,7 +35,7 @@ import time
 import mlx.core as mx
 import numpy as np
 
-from vqlab.core import expert_src as ES
+from vqlab.core.source import expert_src as ES
 
 DENSE = (".attn.wq", ".attn.wo", "e_proj", "h_proj", "shared_experts")
 

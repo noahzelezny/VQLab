@@ -35,11 +35,11 @@ import sys
 
 import mlx.core as mx
 
-from vqlab.core.artifact import Artifact, tensor_class, write_index
+from vqlab.core.artifacts.artifact import Artifact, tensor_class, write_index
 
 def _text(key):
     """A text-model tensor: the skeleton is every text tensor that is not an
-    expert. Vision towers and MTP heads (core.artifact.tensor_class) stay
+    expert. Vision towers and MTP heads (core.artifacts.artifact.tensor_class) stay
     with the VQ artifact. This was a `language_model.` prefix test, which is
     true for no tensor of an HF-layout (`model.language_model.*`) or
     DeepSeek (`model.layers.*`) artifact: reskeleton then copied the VQ

@@ -48,12 +48,12 @@ import mlx.core as mx
 
 from vqlab import _layout
 from vqlab.family.registry import FAMILY  # shared registry (family/registry.py)
-from vqlab.core import expert_src  # shared source-layout loader (incl. unfused)
-from vqlab.core import codepack  # --pack: the same packing rule as `vqlab pack`
+from vqlab.core.source import expert_src  # shared source-layout loader (incl. unfused)
+from vqlab.core.artifacts import codepack  # --pack: the same packing rule as `vqlab pack`
 from vqlab import config as _cfg
-from vqlab.core import fitstore
+from vqlab.core.source import fit_store as fitstore
 from vqlab.records import provenance
-from vqlab.core.artifact import write_index
+from vqlab.core.artifacts.artifact import write_index
 
 
 @dataclass

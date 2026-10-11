@@ -187,7 +187,7 @@ def test_step15_install_names_alias():
     """untangle step 15: generic install()/plan() say what they install; the
     old names stay as aliases for one release."""
     from vqlab import _layout
-    from vqlab.core import ple_stream
+    from vqlab.core.source import ple_stream
     from vqlab.skipzero import sz_resident, sz_resident_build
     assert _layout.install is _layout.install_import_aliases
     assert ple_stream.install is ple_stream.install_ple_stream

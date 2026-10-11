@@ -1,4 +1,4 @@
-"""vqlab.core.arch_finder loads Knurlogic's architectures as mlx_lm.models.<name>
+"""vqlab.core.box.arch_finder loads Knurlogic's architectures as mlx_lm.models.<name>
 (one copy: VQLab depends on knurlogic), including the ones stock mlx-lm
 lacks, once vqlab.use_knurlogic_arch() is called; VQLAB_VENDORED_ARCH=0 turns it off."""
 import os

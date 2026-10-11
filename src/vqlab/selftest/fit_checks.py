@@ -70,7 +70,7 @@ def check_fit_moe(ctx):
         check("fit-moe build record: method + module origin",
               mrec["tool"]["name"] == "fit-moe" and mrec["method"]["seed"] == 1234
               and mrec["modules"][bm]["origin"] == "fit")
-        from vqlab.core import fitstore as fs_
+        from vqlab.core.source import fit_store as fs_
         got = [r for r in fs_.read_index(tmp / "fitstore").values()
                if r["module"] == bm and r["recipe"]["tool"] == "fit-moe"]
         check("fit-moe files its fit in the store with its recipe",

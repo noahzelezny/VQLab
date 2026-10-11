@@ -163,7 +163,7 @@ def test_import_leaves_meta_path_unchanged():
 
 def test_use_knurlogic_arch_installs_one_finder(monkeypatch):
     import vqlab
-    from vqlab.core import arch_finder as arch
+    from vqlab.core.box import arch_finder as arch
 
     class _Reg:
         def available(self):

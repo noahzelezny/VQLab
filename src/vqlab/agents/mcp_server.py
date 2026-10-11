@@ -34,7 +34,7 @@ from vqlab.agents.mcp.tools_runs import (DEFAULT_RETRIES, GPU_FREE, HEAVY,  # no
 from vqlab.agents.mcp.tools_storage import (DOC_ALLOW, t_artifact_config,  # noqa: F401
                                             t_disk_free, t_list_artifacts, t_read_doc,
                                             t_where_is)
-from vqlab.core.exo import exo_api  # noqa: F401  (was defined here; kept for callers)
+from vqlab.core.box.exo import exo_api  # noqa: F401  (was defined here; kept for callers)
 from vqlab.util.fs import dir_bytes  # noqa: F401
 
 if __name__ == "__main__":

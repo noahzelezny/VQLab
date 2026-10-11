@@ -7,7 +7,7 @@ import numpy as np
 import pytest
 
 from vqlab.build import graft_extras as GE
-from vqlab.core.artifact import Artifact
+from vqlab.core.artifacts.artifact import Artifact
 
 
 def _st(path, t):

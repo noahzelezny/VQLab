@@ -9,7 +9,7 @@ import socket
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-from vqlab.core.gpu_lease import pid_alive as _pid_alive
+from vqlab.core.box.gpu_lease import pid_alive as _pid_alive
 from vqlab.queue import eta as _queue_eta
 
 

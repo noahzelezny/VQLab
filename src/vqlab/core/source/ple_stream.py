@@ -36,7 +36,7 @@ is the runtime our artifacts BUNDLE (TWO-RUNTIMES.md, F31), so it is
 installed at RUNTIME on a loaded model, per process, and never edited into
 the venv or into a shipped model.py.
 
-    from vqlab.core.ple_stream import install_ple_stream
+    from vqlab.core.source.ple_stream import install_ple_stream
     n = install_ple_stream(model, model_path)     # -> number of shard modules bounded
 """
 import json

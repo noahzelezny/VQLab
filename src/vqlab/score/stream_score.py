@@ -35,7 +35,7 @@ import time
 import mlx.core as mx
 
 from vqlab.family import model_loader as runtime_load
-from vqlab.core.mem_budget import eval_params_budgeted
+from vqlab.core.source.mem_budget import eval_params_budgeted
 
 
 def score_qwen4_exp(model, ids_list, args):
@@ -492,7 +492,7 @@ def main():
         cpu_stream=entry.get("cpu_stream_load", False))
     print(runtime_load.resolved_runtime_note(model), flush=True)
     if a.stream_ple:
-        from vqlab.core import ple_stream
+        from vqlab.core.source import ple_stream
         if not ple_stream.install_ple_stream(model, str(mp)):
             print("[ple_stream] no sharded n-gram tables found", flush=True)
     tok = load_tokenizer(mp)
@@ -633,7 +633,7 @@ def main():
             rec["mean_kl_top64_millinats"] = round(
                 float(mx.mean(kl_top).item()) * 1000.0, 4)
     if a.stream_ple:
-        from vqlab.core import ple_stream as _ps
+        from vqlab.core.source import ple_stream as _ps
         st = _ps.STATS
         print(f"[ple_stream] {st['calls']} calls, {st['rows']} rows, "
               f"{st['secs']:.1f}s in the gather", flush=True)

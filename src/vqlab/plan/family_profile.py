@@ -16,7 +16,7 @@ table:
   bytes       every tensor classified (experts / carry / embed / vision /
               mtp) at its source dtype, and expert bytes PER LAYER
   modules     one row per expert projection: (E, OUT, IN) -- the shape
-              signature fit parts are attributed by (core/fitstore.py)
+              signature fit parts are attributed by (core/source/fit_store.py)
   geometries  per projection, which (d, K) are LEGAL: exact packing
               (nsub % 32 == 0, F97) and the fused-kernel threadgroup ceiling
               (K*d*2 < 32768, FINDINGS IV) -- and their exact packed GiB
@@ -47,9 +47,9 @@ import sys
 
 from vqlab import config as _config
 from vqlab import config
-from vqlab.core.artifact import tensor_class
+from vqlab.core.artifacts.artifact import tensor_class
 from vqlab.family.registry import DENSE_FAMILIES, FAMILY
-from vqlab.core import fitstore
+from vqlab.core.source import fit_store as fitstore
 from vqlab.records import provenance
 
 GSZ = 64                       # scale group, every shipped geometry
@@ -108,7 +108,7 @@ def dense_rows(tmpl, shapes, n_layers):
 
 def classify(key: str, expert_rx) -> str:
     k = key.lower()
-    cls = tensor_class(key)              # the one classifier (core.artifact)
+    cls = tensor_class(key)              # the one classifier (core.artifacts.artifact)
     if cls == "tower":
         return "vision"
     if cls == "mtp":

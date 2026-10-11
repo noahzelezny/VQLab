@@ -78,7 +78,7 @@ def text_match(artifact: pathlib.Path, want: str):
     return those file names. Else None. A file holding any text tensor is
     never dropped, so a changed weight still refuses."""
     from itertools import combinations
-    from vqlab.core.artifact import read_header, tensor_class
+    from vqlab.core.artifacts.artifact import read_header, tensor_class
     files = sorted(artifact.glob("*.safetensors"))
     try:
         listed = set(json.load(open(artifact / "model.safetensors.index.json"))["weight_map"].values())

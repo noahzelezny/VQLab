@@ -41,7 +41,7 @@ def state() -> dict:
     holder = None
     if not os.environ.get("VQLAB_QUEUE"):        # a queue running US holds the lease
         try:
-            from vqlab.core.gpu_lease import lease_holder
+            from vqlab.core.box.gpu_lease import lease_holder
             holder = lease_holder()
         except Exception:
             holder = None

@@ -38,7 +38,7 @@ import pathlib
 import shutil
 import subprocess
 import sys
-from vqlab.core.pin_record import (  # noqa: F401  (re-exported)
+from vqlab.core.artifacts.pin_record import (  # noqa: F401  (re-exported)
     MARKER, SCHEMA, SMOKE_LOG, _sha, check_pin)
 
 _SKIP = {"__pycache__", MARKER, SMOKE_LOG, ".DS_Store"}

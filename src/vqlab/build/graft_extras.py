@@ -27,7 +27,7 @@ import re
 import struct
 import sys
 
-from vqlab.core.artifact import Artifact, write_index
+from vqlab.core.artifacts.artifact import Artifact, write_index
 
 SHARD = "model-extras-graft.safetensors"
 

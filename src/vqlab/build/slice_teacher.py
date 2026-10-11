@@ -10,7 +10,7 @@ slice a tool for every family: run the new step on the slice first.
 
 The slice holds the chosen layers' tensors plus every top-level TEXT tensor
 (embeddings, final norm, head, DeepSeek's hc_head), renumbered 0..n-1, with
-an index written by `core.artifact.write_index` and a config whose
+an index written by `core.artifacts.artifact.write_index` and a config whose
 `num_hidden_layers` (top level and `text_config`) is n. Per-layer config
 lists (DeepSeek `compress_ratios`, Qwen `layer_types`, ...) keep the chosen
 entries, plus any trailing entries past num_hidden_layers (an MTP layer's);
@@ -39,7 +39,7 @@ import struct
 import sys
 
 from vqlab import config as C
-from vqlab.core.artifact import (Artifact, CONFIG, layer_of, place, read_header,
+from vqlab.core.artifacts.artifact import (Artifact, CONFIG, layer_of, place, read_header,
                                  tensor_class, write_config, write_index)
 
 _LAYER_RX = re.compile(r"((?:^|\.)layers\.)(\d+)(\.)")

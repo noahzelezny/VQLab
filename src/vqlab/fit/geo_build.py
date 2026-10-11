@@ -56,7 +56,7 @@ import mlx.core as mx
 
 from vqlab.family.registry import FAMILY
 from vqlab.records import provenance
-from vqlab.core import fitstore
+from vqlab.core.source import fit_store as fitstore
 from vqlab.util.log import make_log
 # Packing is the shipped runtime's (runtime/vq_pack.py): one packer.
 from vqlab.runtime.vq_pack import pack, words_per_row
@@ -586,7 +586,7 @@ def main():
     # the affine tensors they supersede, and REWRITE the index, because the
     # key set changes. The VQ tensors go into the shard that held the
     # affine ones so the module's bytes stay co-located.
-    from vqlab.core.artifact import Artifact, write_index
+    from vqlab.core.artifacts.artifact import Artifact, write_index
     a_wm = dict(Artifact.open(a.artifact).index)
     restored = [n for n in geo if (n + ".codes") not in a_wm]
     drop, add_to = set(), {}

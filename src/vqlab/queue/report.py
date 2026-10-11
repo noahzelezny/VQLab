@@ -9,7 +9,7 @@ import pathlib
 import socket
 import time
 
-from vqlab.core.gpu_lease import pid_alive
+from vqlab.core.box.gpu_lease import pid_alive
 from vqlab.queue import eta as queue_eta
 from vqlab.queue.files import _now, latest, load_state, queue_dirs, queues_dir
 

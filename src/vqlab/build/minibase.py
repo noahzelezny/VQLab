@@ -16,7 +16,7 @@ import os
 import pathlib
 import sys
 
-from vqlab.core.artifact import Artifact, copy_other_files, layer_of, write_index
+from vqlab.core.artifacts.artifact import Artifact, copy_other_files, layer_of, write_index
 
 
 def main(argv=None):

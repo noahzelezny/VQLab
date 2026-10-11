@@ -149,7 +149,7 @@ def _knurlogic_smoke(args, A) -> list[str]:
     not looping, and (with an MTP head) that drafting accepted tokens."""
     import os
     import time
-    from vqlab.core import knurlogic_client as SPK
+    from vqlab.core.box import knurlogic_client as SPK
     ksrc = os.environ.get("KNURLOGIC_SRC", "")
     if ksrc:
         sys.path.insert(0, ksrc)
@@ -384,7 +384,7 @@ def main(argv=None) -> int:
         # function as `vqlab size --check-index`, so the two cannot disagree.
         if not any(f.startswith("index names missing shard") for f in fails):
             try:
-                from vqlab.core.artifact_size import index_total_size
+                from vqlab.core.artifacts.artifact_size import index_total_size
                 _have, _want, _state = index_total_size(A)
                 if _state != "ok":
                     fails.append(f"index metadata.total_size {_have} vs tensor bytes "
@@ -393,7 +393,7 @@ def main(argv=None) -> int:
                 fails.append(f"index total_size check crashed: {type(_e).__name__}: {_e}")
         # A grafted tower is only proven wired by an image through the runtime
         # (graft-extras proves the bytes; generation proves the wiring).
-        from vqlab.core.artifact import tensor_class as _tc
+        from vqlab.core.artifacts.artifact import tensor_class as _tc
         _n_tower = sum(_tc(k) == "tower" for k in wm)
     else:
         _n_tower = 0
@@ -599,7 +599,7 @@ def main(argv=None) -> int:
     elif args.no_smoke:
         print("NOTE: --no-smoke; static checks only, generation NOT verified.")
 
-    # IMAGE SMOKE. Any tower tensor (core.artifact.tensor_class == "tower") makes
+    # IMAGE SMOKE. Any tower tensor (core.artifacts.artifact.tensor_class == "tower") makes
     # an image through the serving runtime part of the gate, on the same arm the
     # text smoke used. DeepSeek-V4 Vision-Exp has no vision_config (flat vision_*
     # keys), so this keys on the tensors, not the config.

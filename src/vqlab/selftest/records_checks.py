@@ -83,7 +83,7 @@ def _check_geo_build_record(ctx):
     r2 = json.load(open(out2 / "vqlab_provenance.json"))
     check("origin survives a resume (ledger, not guesswork)",
           r2["modules"][g["module"]]["origin"] == "fit")
-    from vqlab.core import fitstore as fs_
+    from vqlab.core.source import fit_store as fs_
     stored = fs_.read_index(ctx.tmp / "fitstore")
     geo_fits = [r for r in stored.values() if r["module"] == g["module"]]
     check("geo-build files its fit in the store, recipe attached",

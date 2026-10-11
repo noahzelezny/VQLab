@@ -56,7 +56,7 @@ def check_onboard(ctx):
 
 def check_teacher_naming(ctx):
     print("[6a35/7] teacher naming by content (VL4.11)")
-    from vqlab.core import fitstore as FS
+    from vqlab.core.source import fit_store as FS
     tmp, psrc = ctx.tmp, ctx.psrc
     tfam = tmp / "fam_ident"
     tprof = tfam / "fx" / "teachers" / "Org--Real-Teacher"

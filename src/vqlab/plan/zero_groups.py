@@ -33,7 +33,7 @@ import sys
 
 import numpy as np
 
-from vqlab.core import fitstore
+from vqlab.core.source import fit_store as fitstore
 from vqlab.records import registry
 
 TINY = 6.2e-5          # fp16 smallest normal is 6.10e-5
