@@ -16,6 +16,7 @@ nothing here computes a number of its own:
   /api/settings     storage locations; POST sets one (agents/settings.py)
   /api/scratch      scratch folders; /reclaimable adds rm lines, never run
   /api/storage/usage  per volume: total/used/free, what each vqlab location holds
+  POST /api/pick-folder  the native macOS folder chooser -> {ok, path}
   /api/models/found   models already on this machine (vqlab lab scan; rescanned at
                     launch and by POST /api/models/scan)
 
@@ -299,6 +300,29 @@ def post_models_scan(_body):
     return {"ok": True, "scanning": True}
 
 
+def post_pick_folder(body):
+    """The native macOS folder chooser, starting at body['start'] when it
+    exists. Returns {ok, path} or {ok: False, cancelled|error}. The server
+    listens on 127.0.0.1 only, so the dialog opens for the person at this Mac."""
+    import subprocess
+    if sys.platform != "darwin":
+        return {"ok": False, "error": "folder chooser needs macOS; type the path"}
+    start = pathlib.Path(str(body.get("start") or "")).expanduser()
+    while start != start.parent and not start.is_dir():
+        start = start.parent
+    loc = f' default location (POSIX file "{start}")' if start.is_dir() and start != start.parent else ""
+    script = (f'set p to POSIX path of (choose folder with prompt "Choose a folder for VQ Lab"{loc})\n'
+              'return p')
+    try:
+        r = subprocess.run(["osascript", "-e", script], capture_output=True, text=True,
+                           timeout=600)
+    except (OSError, subprocess.TimeoutExpired) as e:
+        return {"ok": False, "error": f"{type(e).__name__}: {e}"}
+    if r.returncode != 0:
+        return {"ok": False, "cancelled": True}
+    return {"ok": True, "path": r.stdout.strip().rstrip("/") or "/"}
+
+
 def api_storage_usage(_q):
     from vqlab.agents import settings
     return settings.usage()
@@ -330,7 +354,8 @@ ROUTES = {"/api/fleet": api_fleet, "/api/provenance": api_provenance,
           "/api/queues": api_queues, "/api/settings": api_settings,
           "/api/scratch": api_scratch, "/api/storage/usage": api_storage_usage,
           "/api/models/found": api_models_found, "/api/scratch/reclaimable": api_scratch_reclaimable}
-POSTS = {"/api/settings": post_settings, "/api/models/scan": post_models_scan}
+POSTS = {"/api/settings": post_settings, "/api/models/scan": post_models_scan,
+         "/api/pick-folder": post_pick_folder}
 
 
 BENCH_TYPES = {".html": "text/html; charset=utf-8", ".json": "application/json",

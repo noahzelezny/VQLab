@@ -18,3 +18,21 @@ def test_families_merge_checkout_and_user(tmp_path, monkeypatch):
     assert set(fams) == {"fam_a", "fam_b"}
     t1 = fams["fam_a"]["teachers"][0]
     assert t1["profile"] == {"x": 1} and t1["research"] == ["LEDGER.md"]
+
+
+def test_pick_folder_runs_the_native_chooser(tmp_path, monkeypatch):
+    import subprocess
+    import sys
+    calls = []
+
+    class R:
+        returncode, stdout = 0, str(tmp_path / "pick") + "/\n"
+    monkeypatch.setattr(sys, "platform", "darwin")
+    monkeypatch.setattr(subprocess, "run", lambda argv, **k: calls.append(argv) or R())
+    r = gui.post_pick_folder({"start": str(tmp_path / "missing" / "deeper")})
+    assert r == {"ok": True, "path": str(tmp_path / "pick")}
+    assert calls[0][0] == "osascript" and str(tmp_path) in calls[0][2]   # nearest existing start
+    R.returncode = 1
+    assert gui.post_pick_folder({})["cancelled"]
+    monkeypatch.setattr(sys, "platform", "linux")
+    assert not gui.post_pick_folder({})["ok"]
