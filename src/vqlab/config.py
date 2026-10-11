@@ -8,7 +8,9 @@ order, from:
    ``~/.config/vqlab/config.toml``),
 3. a default under the LAB FOLDER: ``lab`` (``$VQLAB_HOME``, ``[paths] lab``,
    default ``~/VQLab``), one visible folder holding ``models/``,
-   ``teachers/``, ``scratch/``, ``fits/`` and ``records/``. A single-disk
+   ``scratch/``, ``fits/`` and ``records/``. bf16 teachers default to the
+   models folder (most people keep one); set ``teachers`` to keep them apart,
+   e.g. on a larger external drive. A single-disk
    user sets nothing, or just ``lab``; a multi-disk setup overrides any
    location on its own.
 
@@ -85,6 +87,8 @@ def _legacy_home_used() -> bool:
 
 
 def _default(key: str) -> pathlib.Path:
+    if key == "teachers" and not (not _raw("lab") and _legacy_home_used()):
+        return models()                          # most people keep one models folder
     if key == "records" and not _raw("lab") and _XDG_RECORDS.is_dir():
         return _XDG_RECORDS                       # records from before the lab folder
     if not _raw("lab") and key != "records" and _legacy_home_used():

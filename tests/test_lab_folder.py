@@ -23,7 +23,7 @@ def test_fresh_install_puts_everything_under_the_lab_folder(home):
     lab = home / "VQLab"
     assert C.lab() == lab
     assert (C.scratch(), C.models(), C.teachers(), C.fit_store(), C.records()) == \
-        (lab / "scratch", lab / "models", lab / "teachers", [lab / "fits"], lab / "records")
+        (lab / "scratch", lab / "models", lab / "models", [lab / "fits"], lab / "records")
 
 
 def test_setting_lab_moves_every_default(home, monkeypatch):
@@ -36,11 +36,13 @@ def test_setting_lab_moves_every_default(home, monkeypatch):
 def test_lab_from_config_file(home):
     (home / "c.toml").write_text(f'[paths]\nlab = "{home / "L"}"\n')
     S._reset()
-    assert C.lab() == home / "L" and C.teachers() == home / "L" / "teachers"
+    assert C.lab() == home / "L" and C.teachers() == home / "L" / "models"
+    assert S.source("teachers") == "same as models"
 
 
 def test_pre_lab_setups_keep_their_data(home):
     (home / ".vqlab" / "models" / "m").mkdir(parents=True)
+    assert C.teachers() == home / ".vqlab" / "teachers"
     (home / "xdg" / "vqlab").mkdir(parents=True)
     assert C.models() == home / ".vqlab" / "models"
     assert C.scratch() == home / ".vqlab" / "scratch"
@@ -54,6 +56,9 @@ def test_usage_groups_locations_by_volume(home, monkeypatch):
     u = S.usage()
     assert u["lab"] == str(home / "VQLab")
     locs = {l["key"]: l for v in u["volumes"] for l in v["locations"]}
-    assert set(locs) == {"models", "teachers", "scratch", "fit_store", "records"}
-    assert locs["models"]["bytes"] >= 8192 and locs["teachers"]["bytes"] == 0
+    assert set(locs) == {"models", "scratch", "fit_store", "records"}   # teachers share models/
+    assert locs["models"]["bytes"] >= 8192
+    monkeypatch.setenv("VQLAB_TEACHERS_DIR", str(home / "ext"))
+    locs = {l["key"]: l for v in S.usage()["volumes"] for l in v["locations"]}
+    assert locs["teachers"]["label"] == "bf16 teachers" and locs["teachers"]["bytes"] == 0
     assert all({"mount", "total", "free", "system"} <= set(v) for v in u["volumes"])

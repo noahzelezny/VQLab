@@ -22,7 +22,7 @@ DESCRIPTIONS = {
     "lab": "one folder every location below defaults under",
     "scratch": "builds, pins and run outputs (large)",
     "models": "served or candidate artifacts (large)",
-    "teachers": "bf16 teacher checkpoints (large)",
+    "teachers": "bf16 teachers, the full-precision models builds start from; the models folder unless kept apart (large)",
     "fit_store": "fit archive; the first entry receives new fits",
     "roots": "where lookups may search (default: the four above)",
     "gpu_lease": "lock FILE every GPU job on this machine takes",
@@ -60,6 +60,8 @@ def source(key: str) -> str:
         return f"[boxes.{C.this_box()}] teachers"
     if C._file_paths(str(C.config_file())).get(key):
         return str(C.config_file())
+    if key == "teachers" and C.teachers() == C.models():
+        return "same as models"
     return "default"
 
 
@@ -113,7 +115,7 @@ def campaign_sizes(root=None, timeout: float = 20.0, budget: float = 120.0) -> l
 
 
 # what each location holds, in the words the GUI shows
-LABELS = {"models": "models", "teachers": "originals", "scratch": "work in progress",
+LABELS = {"models": "models", "teachers": "bf16 teachers", "scratch": "work in progress",
           "fit_store": "fit cache", "records": "lab notes"}
 
 
@@ -135,11 +137,14 @@ def usage(timeout: float = 30.0) -> dict:
     out of time). `system` marks the volume holding the home directory --
     a lab on it competes with the OS for space."""
     home_dev = pathlib.Path.home().stat().st_dev
-    vols = {}
+    vols, seen = {}, set()
     for key, label in LABELS.items():
         v = _value(key)
         for path in (v if isinstance(v, list) else [v]):
             path = pathlib.Path(path)
+            if path.resolve() in seen:          # bf16 teachers sharing the models folder
+                continue
+            seen.add(path.resolve())
             dev, mount = _volume(path)
             if dev is None:
                 continue

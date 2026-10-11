@@ -3,7 +3,8 @@
 `pip install` cannot run anything, so the first `vqlab` command does it:
 when there is no config file, no location set in the environment and no
 data from an older install, it creates the lab folder (``~/VQLab``) with
-``models/``, ``teachers/``, ``scratch/``, ``fits/`` and ``records/``,
+``models/``, ``scratch/``, ``fits/`` and ``records/`` (bf16 teachers share
+``models/`` until set apart),
 writes a config file naming it, and says so once. Moving it later is
 `vqlab config set lab PATH` or the GUI's Storage page.
 
@@ -18,7 +19,7 @@ import sys
 from vqlab import config as C
 from vqlab.agents import settings as S
 
-SUBFOLDERS = ("models", "teachers", "scratch", "fits", "records")
+SUBFOLDERS = ("models", "scratch", "fits", "records")   # teachers default to models/
 LOW_SYSTEM_FREE = 500 * 2**30      # teachers are 50-750 GiB each
 
 

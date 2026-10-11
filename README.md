@@ -19,7 +19,7 @@ pipx install vqlab      # or: uv tool install vqlab
 vqlab gui --open        # the VQ Lab GUI: Library, Recipe, Jobs, Storage
 ```
 
-The first `vqlab` command sets up `~/VQLab/` (models, teachers, scratch,
+The first `vqlab` command sets up `~/VQLab/` (models, scratch,
 fits, records) and a config file naming it. To keep models on a bigger drive,
 change the lab folder in the GUI's Storage page or with
 `vqlab lab config set lab <big-drive>/VQLab`; any one location can also be
