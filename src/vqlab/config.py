@@ -6,11 +6,20 @@ order, from:
 1. its environment variable,
 2. the ``[paths]`` table of the config file (``$VQLAB_CONFIG``, default
    ``~/.config/vqlab/config.toml``),
-3. a default under ``~/.vqlab``.
+3. a default under the LAB FOLDER: ``lab`` (``$VQLAB_HOME``, ``[paths] lab``,
+   default ``~/VQLab``), one visible folder holding ``models/``,
+   ``teachers/``, ``scratch/``, ``fits/`` and ``records/``. A single-disk
+   user sets nothing, or just ``lab``; a multi-disk setup overrides any
+   location on its own.
+
+A setup made before the lab folder existed keeps resolving where it did:
+with no ``lab`` set, data already under ``~/.vqlab`` (and records under
+``~/.local/share/vqlab``) stay the defaults.
 
 Example config::
 
     [paths]
+    lab       = "~/VQLab"                         # one folder for everything below
     scratch   = "/Volumes/Fast/vqlab-scratch"     # builds, pins, run outputs
     models    = "/Volumes/Fast/models"            # served artifacts
     teachers  = "/Volumes/Archive/teachers"       # bf16 teacher checkpoints
@@ -48,9 +57,14 @@ import tomllib
 
 from vqlab import _layout
 
+# Small per-user state (run log, reservations). Large data defaults to lab().
 HOME = pathlib.Path.home() / ".vqlab"
+LAB_DEFAULT = pathlib.Path.home() / "VQLab"
+_XDG_RECORDS = pathlib.Path(os.environ.get("XDG_DATA_HOME")
+                            or pathlib.Path.home() / ".local" / "share") / "vqlab"
 
 _ENV = {
+    "lab": "VQLAB_HOME",
     "scratch": "VQLAB_SCRATCH",
     "models": "VQLAB_MODELS_DIR",
     "teachers": "VQLAB_TEACHERS_DIR",
@@ -59,16 +73,26 @@ _ENV = {
     "gpu_lease": "VQLAB_GPU_LEASE",
     "records": "VQLAB_RECORDS",
 }
-_DEFAULT = {
-    "scratch": HOME / "scratch",
-    "models": HOME / "models",
-    "teachers": HOME / "teachers",
-    "fit_store": HOME / "fits",
-    "gpu_lease": HOME / "gpu.lease",
-    "records": pathlib.Path(os.environ.get("XDG_DATA_HOME")
-                            or pathlib.Path.home() / ".local" / "share") / "vqlab",
-}
-KEYS = ("scratch", "models", "teachers", "fit_store", "roots", "gpu_lease", "records")
+# subfolder of the lab folder each location defaults to
+_SUB = {"scratch": "scratch", "models": "models", "teachers": "teachers",
+        "fit_store": "fits", "gpu_lease": "gpu.lease", "records": "records"}
+
+
+def _legacy_home_used() -> bool:
+    """Data from before the lab folder: any of ~/.vqlab/{scratch,models,teachers,fits}."""
+    return any((HOME / d).is_dir() and any((HOME / d).iterdir())
+               for d in ("scratch", "models", "teachers", "fits"))
+
+
+def _default(key: str) -> pathlib.Path:
+    if key == "records" and not _raw("lab") and _XDG_RECORDS.is_dir():
+        return _XDG_RECORDS                       # records from before the lab folder
+    if not _raw("lab") and key != "records" and _legacy_home_used():
+        return HOME / _SUB[key]                   # data from before the lab folder
+    return lab() / _SUB[key]
+
+
+KEYS = ("lab", "scratch", "models", "teachers", "fit_store", "roots", "gpu_lease", "records")
 MULTI = ("fit_store", "roots")
 
 
@@ -95,7 +119,7 @@ def _raw(key: str):
 
 def _one(key: str) -> pathlib.Path:
     v = _raw(key)
-    return pathlib.Path(v).expanduser() if v else _DEFAULT[key]
+    return pathlib.Path(v).expanduser() if v else _default(key)
 
 
 def _many(key: str) -> list[pathlib.Path]:
@@ -180,6 +204,13 @@ def box_models(peer: str) -> str | None:
     return None
 
 
+def lab() -> pathlib.Path:
+    """The lab folder every other location defaults under: $VQLAB_HOME,
+    [paths] lab, else ~/VQLab."""
+    v = _raw("lab")
+    return pathlib.Path(v).expanduser() if v else LAB_DEFAULT
+
+
 def scratch() -> pathlib.Path:
     """Builds, pins and run outputs."""
     return _one("scratch")
@@ -202,7 +233,7 @@ def teachers() -> pathlib.Path:
 
 def fit_store() -> list[pathlib.Path]:
     """Fit archive roots; the first receives new fits."""
-    return _many("fit_store") or [_DEFAULT["fit_store"]]
+    return _many("fit_store") or [_default("fit_store")]
 
 
 def gpu_lease() -> pathlib.Path:
@@ -212,7 +243,8 @@ def gpu_lease() -> pathlib.Path:
 
 def records() -> pathlib.Path:
     """User-written state that is not an artifact ($VQLAB_RECORDS, [paths]
-    records, else ~/.local/share/vqlab or $XDG_DATA_HOME/vqlab)."""
+    records, else <lab>/records; an existing ~/.local/share/vqlab is kept
+    while no lab folder is set)."""
     return _one("records")
 
 

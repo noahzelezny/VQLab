@@ -1,0 +1,59 @@
+"""The lab folder: every location defaults under one visible folder, and a
+setup from before it keeps resolving where it did."""
+import pytest
+
+from vqlab import config as C
+from vqlab.agents import settings as S
+
+
+@pytest.fixture
+def home(tmp_path, monkeypatch):
+    for v in C._ENV.values():
+        monkeypatch.delenv(v, raising=False)
+    monkeypatch.setenv("VQLAB_CONFIG", str(tmp_path / "c.toml"))
+    monkeypatch.setattr(C, "HOME", tmp_path / ".vqlab")
+    monkeypatch.setattr(C, "LAB_DEFAULT", tmp_path / "VQLab")
+    monkeypatch.setattr(C, "_XDG_RECORDS", tmp_path / "xdg" / "vqlab")
+    S._reset()
+    yield tmp_path
+    S._reset()
+
+
+def test_fresh_install_puts_everything_under_the_lab_folder(home):
+    lab = home / "VQLab"
+    assert C.lab() == lab
+    assert (C.scratch(), C.models(), C.teachers(), C.fit_store(), C.records()) == \
+        (lab / "scratch", lab / "models", lab / "teachers", [lab / "fits"], lab / "records")
+
+
+def test_setting_lab_moves_every_default(home, monkeypatch):
+    monkeypatch.setenv("VQLAB_HOME", str(home / "big"))
+    assert C.models() == home / "big" / "models" and C.records() == home / "big" / "records"
+    monkeypatch.setenv("VQLAB_MODELS_DIR", str(home / "fast"))
+    assert C.models() == home / "fast" and C.scratch() == home / "big" / "scratch"
+
+
+def test_lab_from_config_file(home):
+    (home / "c.toml").write_text(f'[paths]\nlab = "{home / "L"}"\n')
+    S._reset()
+    assert C.lab() == home / "L" and C.teachers() == home / "L" / "teachers"
+
+
+def test_pre_lab_setups_keep_their_data(home):
+    (home / ".vqlab" / "models" / "m").mkdir(parents=True)
+    (home / "xdg" / "vqlab").mkdir(parents=True)
+    assert C.models() == home / ".vqlab" / "models"
+    assert C.scratch() == home / ".vqlab" / "scratch"
+    assert C.records() == home / "xdg" / "vqlab"
+
+
+def test_usage_groups_locations_by_volume(home, monkeypatch):
+    monkeypatch.setenv("VQLAB_HOME", str(home / "VQLab"))
+    (home / "VQLab" / "models").mkdir(parents=True)
+    (home / "VQLab" / "models" / "w.bin").write_bytes(b"x" * 8192)
+    u = S.usage()
+    assert u["lab"] == str(home / "VQLab")
+    locs = {l["key"]: l for v in u["volumes"] for l in v["locations"]}
+    assert set(locs) == {"models", "teachers", "scratch", "fit_store", "records"}
+    assert locs["models"]["bytes"] >= 8192 and locs["teachers"]["bytes"] == 0
+    assert all({"mount", "total", "free", "system"} <= set(v) for v in u["volumes"])

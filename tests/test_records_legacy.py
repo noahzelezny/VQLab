@@ -18,7 +18,9 @@ def env(tmp_path, monkeypatch):
     home.mkdir()
     monkeypatch.setenv("HOME", str(home))
     monkeypatch.setenv("VQLAB_CONFIG", str(tmp_path / "c.toml"))
-    monkeypatch.setitem(C._DEFAULT, "records", home / ".local" / "share" / "vqlab")
+    monkeypatch.setattr(C, "HOME", home / ".vqlab")
+    monkeypatch.setattr(C, "LAB_DEFAULT", home / "VQLab")
+    monkeypatch.setattr(C, "_XDG_RECORDS", home / ".local" / "share" / "vqlab")
     co = tmp_path / "checkout"
     co.mkdir()
     (co / "pyproject.toml").write_text("")

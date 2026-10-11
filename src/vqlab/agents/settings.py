@@ -19,6 +19,7 @@ import tempfile
 from vqlab import config as C
 
 DESCRIPTIONS = {
+    "lab": "one folder every location below defaults under",
     "scratch": "builds, pins and run outputs (large)",
     "models": "served or candidate artifacts (large)",
     "teachers": "bf16 teacher checkpoints (large)",
@@ -63,7 +64,7 @@ def source(key: str) -> str:
 
 
 def _value(key):
-    return {"scratch": C.scratch, "models": C.models, "teachers": C.teachers,
+    return {"lab": C.lab, "scratch": C.scratch, "models": C.models, "teachers": C.teachers,
             "fit_store": C.fit_store, "roots": C.roots, "gpu_lease": C.gpu_lease,
             "records": C.records}[key]()
 
@@ -109,6 +110,48 @@ def campaign_sizes(root=None, timeout: float = 20.0, budget: float = 120.0) -> l
                     "bytes": None if kib is None else kib * 1024,
                     "mtime": e.stat(follow_symlinks=False).st_mtime})
     return out
+
+
+# what each location holds, in the words the GUI shows
+LABELS = {"models": "models", "teachers": "originals", "scratch": "work in progress",
+          "fit_store": "fit cache", "records": "lab notes"}
+
+
+def _volume(p: pathlib.Path):
+    """(device id, mount point) of the volume holding `p` (or its nearest
+    existing ancestor)."""
+    e = _existing(p)
+    if e is None:
+        return None, None
+    dev, m = e.stat().st_dev, e.resolve()
+    while m != m.parent and m.parent.stat().st_dev == dev:
+        m = m.parent
+    return dev, str(m)
+
+
+def usage(timeout: float = 30.0) -> dict:
+    """Per volume: total / used / free, which vqlab locations live there and
+    how much each holds (`du`, capped at `timeout` s each; None when it runs
+    out of time). `system` marks the volume holding the home directory --
+    a lab on it competes with the OS for space."""
+    home_dev = pathlib.Path.home().stat().st_dev
+    vols = {}
+    for key, label in LABELS.items():
+        v = _value(key)
+        for path in (v if isinstance(v, list) else [v]):
+            path = pathlib.Path(path)
+            dev, mount = _volume(path)
+            if dev is None:
+                continue
+            if dev not in vols:
+                du = shutil.disk_usage(mount)
+                vols[dev] = {"mount": mount, "total": du.total, "used": du.used,
+                             "free": du.free, "system": dev == home_dev, "locations": []}
+            kib = _du_kib(path, timeout) if path.exists() else 0
+            vols[dev]["locations"].append({"key": key, "label": label, "path": str(path),
+                                           "bytes": None if kib is None else kib * 1024})
+    return {"lab": str(C.lab()), "lab_source": source("lab"),
+            "configured": C.config_file().exists(), "volumes": list(vols.values())}
 
 
 def validate(key: str, path: str, create: bool = False) -> dict:

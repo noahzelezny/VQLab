@@ -26,11 +26,11 @@ def cfg(tmp_path, monkeypatch):
 
 
 def test_records_accessors_default_and_env(cfg, tmp_path, monkeypatch):
-    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "xdg"))
-    # the default is computed at import; the env var is read per call
-    monkeypatch.setitem(C._DEFAULT, "records", tmp_path / "xdg" / "vqlab")
+    monkeypatch.setattr(C, "HOME", tmp_path / ".vqlab")
+    monkeypatch.setattr(C, "_XDG_RECORDS", tmp_path / "xdg" / "vqlab")
+    monkeypatch.setenv("VQLAB_HOME", str(tmp_path / "VQLab"))
     r = C.records()
-    assert r == tmp_path / "xdg" / "vqlab"
+    assert r == tmp_path / "VQLab" / "records"
     assert C.findings_log() == r / "FINDINGS-LOG.md"
     assert C.registry_dir() == r / "registry"
     assert C.families_dir() == r / "families"
@@ -47,7 +47,7 @@ def test_records_accessors_default_and_env(cfg, tmp_path, monkeypatch):
 
 def test_records_default_is_outside_package():
     pkg = pathlib.Path(C.__file__).resolve().parent
-    d = C._DEFAULT["records"].resolve()
+    d = C._default("records").resolve()
     assert pkg not in d.parents and d != pkg
     assert SRC.parent not in d.parents
 
