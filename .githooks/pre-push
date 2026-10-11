@@ -2,7 +2,8 @@
 # 1. Refuses a push carrying any commit that is AI-attributed: authored or
 #    committed as an AI agent, or a message with an AI co-author trailer or
 #    naming an AI model as its author or reviewer (ai_identity.sh).
-# 2. Runs the CI suite on this machine; a failure blocks the push.
+# 2. Refuses a push that adds machine-specific strings (no-machine-names).
+# 3. Runs the CI suite on this machine; a failure blocks the push.
 # Enable once per clone: git config core.hooksPath .githooks
 # Skip in an emergency: git push --no-verify
 . "$(dirname "$0")/ai_identity.sh"
@@ -22,6 +23,11 @@ while read lref lsha rref rsha; do
     if [ "${hits:-0}" -gt 0 ]; then
         echo "pre-push: $lref has AI attribution in a commit message; not pushing" >&2
         bad=1
+    fi
+    # machine-specific strings in anything published, tags and side branches
+    # included (the scanner is per-user; without it this step does nothing)
+    if command -v no-machine-names >/dev/null 2>&1; then
+        no-machine-names --range "$range" || { echo "pre-push: $lref adds machine-specific strings; not pushing" >&2; bad=1; }
     fi
 done
 [ "$bad" = 0 ] || exit 1
