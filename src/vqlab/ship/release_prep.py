@@ -31,7 +31,7 @@ import sys
 
 from vqlab.core.artifacts.artifact import sizes
 from vqlab.core.artifacts.hub import LFS_MIN, hub_diff  # noqa: F401  (re-exported)
-from vqlab.ship import leak_guard
+from vqlab.gate import leak_guard
 from vqlab.util.hashing import git_blob_sha1, sha256_file
 
 _git_blob = git_blob_sha1   # old private names, kept for callers/tests

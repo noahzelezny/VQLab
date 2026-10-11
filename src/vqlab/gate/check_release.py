@@ -229,6 +229,9 @@ def main(argv=None) -> int:
                          "can produce a token on a machine that is not ours -- "
                          "which is exactly how three broken rungs shipped.")
     ap.add_argument("--max-tokens", type=int, default=4)
+    ap.add_argument("--tokenizer-ref", default=None, metavar="FILE",
+                    help="the base model's tokenizer.json (default: the card's "
+                         "base_model, fetched from the Hub)")
     ap.add_argument("--no-prefill-smoke", action="store_true",
                     help="skip the LARGE-N prefill smoke. The 4-token smoke only "
                          "exercises the fused (small-N) path; the entire 35B "
@@ -679,6 +682,40 @@ def main(argv=None) -> int:
                              + f"); run `vqlab spelling --fix {_card}`")
     except Exception as _e:  # the gate must report, not crash
         fails.append(f"spelling check crashed: {type(_e).__name__}: {_e}")
+
+    # TOKENIZER MATCHES THE BASE (2026-10-10: three families shipped another
+    # model's pre_tokenizer; an English probe cannot see it). A base that
+    # cannot be reached is a WARNING: the gate must work offline.
+    try:
+        from vqlab.gate import tokenizer_match as _tm
+        try:
+            _tref = _tm.reference(A, args.tokenizer_ref)
+        except Exception as _e:
+            print(f"WARNING: tokenizer not compared with the base model "
+                  f"({type(_e).__name__}: {_e}); pass --tokenizer-ref")
+        else:
+            _tp = _tm.compare(A, _tref)
+            if _tp:
+                fails.append("tokenizer does not match the base model: "
+                             + "; ".join(_tp[:5]))
+    except Exception as _e:  # the gate must report, not crash
+        fails.append(f"tokenizer match check crashed: {type(_e).__name__}: {_e}")
+
+    # NO MACHINE PATHS (2026-10-10: 23 of 24 published repos carried home
+    # paths and storage roots in provenance files). Same scan `vqlab publish`
+    # refuses on; `vqlab provenance <art> --portable` fixes records.
+    try:
+        from vqlab.gate import leak_guard as _lg
+        from vqlab.core.artifacts import hub as _hub
+        _files = [f for f in sorted(A.rglob("*")) if f.is_file()
+                  and not _hub.is_backup(f.name) and "__pycache__" not in f.parts]
+        _hits = _lg.scan(_files, A)
+        if _hits:
+            fails.append(f"{len(_hits)} machine-specific line(s) would ship: "
+                         + "; ".join(f"{n}:{l} {w}" for n, l, w in _hits[:5])
+                         + f" -- run `vqlab provenance {A} --portable`")
+    except Exception as _e:
+        fails.append(f"machine-path check crashed: {type(_e).__name__}: {_e}")
 
     # LOCAL JUNK. Finder writes .DS_Store into every folder it opens, Python
     # writes __pycache__ beside model.py on every load, and `hf upload` sends all

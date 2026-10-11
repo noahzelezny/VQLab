@@ -32,7 +32,7 @@ import subprocess
 import sys
 
 from vqlab._layout import find as _find
-from vqlab.ship import leak_guard
+from vqlab.gate import leak_guard
 
 
 def _digest(p: pathlib.Path) -> str:

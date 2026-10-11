@@ -21,7 +21,6 @@ A Hub revision, or a running server.
 - `card.py`: `ship card`: a model card from its sources, not typed by hand
 - `card_checks.py`: the refusals behind `card`: no number that was not measured on this artifact
 - `card_tables.py`: `ship card-tables`: a card's measured tables, generated
-- `leak_guard.py`: the publish refusal for text naming this machine (home dir, storage roots, checkout, LAN IPs); backups never ship
 - `mtp_run.py`: `ship mtp-generate`: generate with MTP speculative drafting
 - `publish.py`: `ship publish`: upload to the Hub, refusing if the release gate fails (a human action)
 - `release_prep.py`: `ship release-prep`: everything before an upload, ending in the upload line

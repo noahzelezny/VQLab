@@ -21,6 +21,8 @@ Exit codes and printed verdicts.
 - `check_bundle.py`: `gate check-bundle`: the bundled model.py carries the current repo runtime
 - `check_comparator.py`: `gate check-comparator`: a comparator holds the same core tensors as the teacher
 - `check_release.py`: `gate check-release`: every file a user needs exists and functions
+- `tokenizer_match.py`: check-release's tokenizer gate: pre_tokenizer/normalizer/decoder and a multilingual sample must match the base model's tokenizer.json (card `base_model`, or `--tokenizer-ref`)
+- `leak_guard.py`: the publish and check-release refusal for text naming this machine (home dir, storage roots, checkout, LAN IPs); backups never ship
 - `kernel_accept.py`: frozen E134 acceptance: device-codebook d4 kernels vs threadgroup + float32 reference
 - `kernel_reference.py`: the exact dequant-matmul `reference()` the kernel checks score against
 - `mtp_smoke_head.py`: `gate mtp-smoke-head`: a packed draft sidecar loads and forwards; draft step cost

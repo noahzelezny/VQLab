@@ -11,7 +11,8 @@ import pytest
 
 from vqlab import config
 from vqlab.records import provenance
-from vqlab.ship import leak_guard, publish
+from vqlab.gate import leak_guard
+from vqlab.ship import publish
 
 # an RFC 1918 address, assembled so no literal address sits in the source
 LAN = ".".join(["192", "168", "0", "9"])
