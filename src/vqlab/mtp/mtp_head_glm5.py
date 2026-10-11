@@ -60,11 +60,14 @@ class MTPHeadGlm5:
         self.tie = cfg.tie_word_embeddings
         self.lm_head = None if self.tie else lang.lm_head
 
-        # The block's halves, straight from the arch module. DeepseekV32MoE
-        # is imported into the glm5_next language module's namespace, which
-        # keeps this resolution version-proof against mlx_vlm reshuffles.
+        # The block's halves, straight from the arch module. The MoE half is
+        # the one the trunk's MoE layers use: Knurlogic's Glm5NextMoE carries
+        # the SwiGLU clamp at swiglu_limit and the float32 router; the stock
+        # arch only has DeepseekV32MoE, imported into the glm5_next language
+        # module's namespace (version-proof against mlx_vlm reshuffles).
         self.self_attn = arch.Glm5NextSparseAttention(cfg)
-        self.mlp = arch.DeepseekV32MoE(cfg)
+        moe = getattr(arch, "Glm5NextMoE", None) or arch.DeepseekV32MoE
+        self.mlp = moe(cfg)
         self.input_layernorm = nn.RMSNorm(self.D, eps=self.eps)
         self.post_attention_layernorm = nn.RMSNorm(self.D, eps=self.eps)
 
