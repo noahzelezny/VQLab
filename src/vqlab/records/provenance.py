@@ -471,11 +471,11 @@ def verify(art, rec) -> list:
     if not id_ok(rec):
         bad.append((RECORD, "record edited after it was written (id mismatch)"))
     now = {f.name for f in art.iterdir() if f.is_file() and f.name not in NOT_OUTPUTS + JUNK and not is_backup(f.name)
-           and not f.name.startswith("._")}
+           and not f.name.startswith(".")}
     for name in sorted(now - set(rec["outputs"])):
         bad.append((name, "added after build"))
     for name, want in rec["outputs"].items():
-        if name in JUNK or name.startswith("._"):
+        if name in JUNK or name.startswith(".") or is_backup(name):
             continue                       # recorded by an older build; not an output
         f = art / name
         if not f.exists():
@@ -582,6 +582,37 @@ def lineage(art, depth=0, seen=None):
         lineage(config.resolve_recorded(i["realpath"]), depth + 1, seen)
 
 
+def amend(art, names, note) -> dict:
+    """Re-record the CURRENT bytes of `names` after an edit made outside a
+    vqlab tool (a tokenizer swap, a config restored from the Hub), as an
+    amendment: the old record goes to history, the new one says what changed
+    and why (`note`, required) and links back by id. Other hashes untouched;
+    backup names recorded by older builds are dropped. Returns the new record."""
+    art = pathlib.Path(art)
+    if not note:
+        raise ValueError("an amendment needs a --note saying what changed and why")
+    cur = load(art)
+    outs = {k: v for k, v in cur["outputs"].items() if not is_backup(k)}
+    for n in names:
+        f = art / n
+        if not f.is_file():
+            raise FileNotFoundError(f"{n}: not in {art}")
+        outs[n] = file_record(f, full="sha256" in outs.get(n, {"sha256": 1}))
+    new = {k: v for k, v in cur.items() if k != "portable_id"}
+    new["outputs"] = outs
+    new["previous"] = cur["id"]
+    new["created"] = datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds")
+    new["tool"] = {"name": "provenance --amend", "note": note,
+                   "argv": ["vqlab", "provenance", "--amend", *names],
+                   "run_id": os.environ.get("VQLAB_RUN_ID")}
+    new["id"] = hashlib.sha256(_canon(new).encode()).hexdigest()
+    hp = art / HISTORY
+    hb = hp.read_text() if hp.exists() else ""
+    hp.write_text(hb + ("" if not hb or hb.endswith("\n") else "\n") + json.dumps(cur, sort_keys=True) + "\n")
+    (art / RECORD).write_text(json.dumps(new, indent=1, default=str))
+    return new
+
+
 def _portable_main(art, dry_run) -> int:
     import difflib
     try:
@@ -615,11 +646,26 @@ def main(argv=None) -> int:
     g.add_argument("--portable", action="store_true",
                    help="rewrite the record + history so no absolute local path "
                         "remains (paths only; .bak written first)")
+    g.add_argument("--amend", nargs="+", metavar="FILE",
+                   help="re-record these files' current bytes as an amendment "
+                        "(requires --note)")
+    ap.add_argument("--note", default="", help="with --amend: what changed and why")
     ap.add_argument("--dry-run", action="store_true",
                     help="with --portable: print the diff, write nothing")
     a = ap.parse_args(argv)
     if a.portable:
         return _portable_main(a.artifact, a.dry_run)
+    if a.amend:
+        try:
+            new = amend(a.artifact, a.amend, a.note)
+        except (ValueError, FileNotFoundError) as e:
+            print(f"REFUSED: {e}")
+            return 1
+        print(f"amended {a.artifact}: {new['id'][:12]} (was {new['previous'][:12]})")
+        bad = verify(a.artifact, new)
+        for n, why in bad:
+            print(f"  DRIFT  {n}: {why}")
+        return 2 if bad else 0
     try:
         rec = load(a.artifact)
     except FileNotFoundError:

@@ -179,3 +179,17 @@ def test_publish_refuses_leaks_before_gate(roots, monkeypatch, capsys):
     assert "README.md:1" in out and "provenance --portable" in out and not ran
     assert publish.main(["--artifact", str(a), "--repo", "o/n", "--files", "model.py.pre-x"]) == 1
     assert "backup" in capsys.readouterr().out
+
+
+def test_amend_rerecords_named_files(tmp_path):
+    a = tmp_path / "art"; a.mkdir()
+    (a / "config.json").write_text("{}")
+    (a / "tokenizer.json").write_text("old")
+    provenance.write_build_record(a, tool="t")
+    (a / "tokenizer.json").write_text("new tokenizer")
+    assert provenance.verify(a, provenance.load(a))
+    with pytest.raises(ValueError):
+        provenance.amend(a, ["tokenizer.json"], "")
+    new = provenance.amend(a, ["tokenizer.json"], "official pre_tokenizer")
+    assert provenance.verify(a, new) == [] and provenance.id_ok(new)
+    assert new["previous"] and (a / provenance.HISTORY).read_text().count("\n") == 1
