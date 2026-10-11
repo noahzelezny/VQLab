@@ -52,7 +52,10 @@
     "VQ_GEMMSEG_ACCS": true,
     "VQ_GEMMSEG_CVEC": true
    },
-   "gains": "none for bundles without vq_skipzero (this is the 2026-10-09 fleet rebundle, F200-F205 defaults baked); skipzero bundles gain F206: gemmseg2 _sz prefill takes ACCS and the 512 fused cutoff"
+   "gains": "none for bundles without vq_skipzero (this is the 2026-10-09 fleet rebundle, F200-F205 defaults baked); skipzero bundles gain F206: gemmseg2 _sz prefill takes ACCS and the 512 fused cutoff",
+   "gains_only_for": [
+    "vq_skipzero"
+   ]
   }
  ]
 }

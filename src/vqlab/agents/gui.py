@@ -71,7 +71,39 @@ def api_fleet(_q):
     for e in arts:
         e["hub"] = hub.get(e.get("hf_repo") or "")
         e["same_bytes_as"] = [n for n in twins[e["fingerprint"]] if n != e["name"]]
+        e["bundle"] = _bundle_verdict(e["path"])
     return {"artifacts": arts}
+
+
+def _bundle_verdict(path):
+    """check-bundle's verdict on the artifact as it is NOW: PASS (current
+    runtime), STALE (an earlier certified runtime: slower, same numbers),
+    FAIL, or MISSING. Reads model.py text only."""
+    if not pathlib.Path(path, "model.py").exists():
+        return {"verdict": "MISSING", "note": "no model.py"}
+    from vqlab.gate import check_bundle
+    try:
+        with contextlib.redirect_stdout(io.StringIO()):
+            rc, lines = check_bundle.check(path, strict=True)
+    except Exception:
+        return {"verdict": "FAIL", "note": "check-bundle crashed"}
+    verdict = {0: "PASS", 1: "FAIL", 2: "STALE"}.get(rc, "FAIL")
+    note = ""
+    if verdict == "STALE":
+        # A certified revision whose gains apply only to features this
+        # artifact does not use is current in effect: a rebundle changes nothing.
+        text = "\n".join(map(str, lines))
+        reg = json.loads((pathlib.Path(check_bundle.__file__).parents[1]
+                          / "runtime" / "equivalent_revisions.json").read_text())
+        cfg = json.loads(pathlib.Path(path, "config.json").read_text())
+        for rev in reg["revisions"]:
+            if rev["sha256"][:12] in text:
+                note = rev.get("gains", "")
+                only = rev.get("gains_only_for")
+                if only is not None and not any(cfg.get(k) for k in only):
+                    verdict = "CURRENT"
+                break
+    return {"verdict": verdict, "note": note}
 
 
 def api_provenance(q):
