@@ -59,6 +59,9 @@ vqlab = "vqlab.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+# gui_static/ holds no importable code: its index.html ships as package data
+# of vqlab, and bench/ (incl. its snapshot script) never ships.
+exclude = ["vqlab.agents.gui_static*"]
 
 [tool.setuptools.package-data]
 vqlab = ["score/referee/*.txt", "score/referee/*.json", "score/referee/*.py", "*/CONTEXT.md", "agents/gui_static/*.html",
