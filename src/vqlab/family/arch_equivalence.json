@@ -1,5 +1,5 @@
 {
- "about": "Architecture files whose bytes differ but whose output is bit-identical, measured on a real model. check_cache / pairing_problems accept a stamp pair whose ONLY difference is an arch_sha256 pair listed here for that model_type; any other difference still refuses. An entry needs a bit-exact comparison on a real artifact, never a tiny model alone. (runtime/equivalent_revisions.json is the same idea for the VQ runtime.)",
+ "about": "Architecture files whose bytes differ but whose output is bit-identical, measured on a real model. check_cache / pairing_problems accept a stamp pair whose ONLY difference is an arch hash pair listed here for that model_type (field: arch_sha256 by default, or arch_tree_sha256, the hash over the arch file and the arch modules it imports, compared when both stamps carry it); any other difference still refuses. An entry needs a bit-exact comparison on a real artifact, never a tiny model alone. (runtime/equivalent_revisions.json is the same idea for the VQ runtime.)",
  "entries": [
   {
    "model_type": "qwen3_5",
@@ -17,6 +17,16 @@
    "old_source": "knurlogic 0bd344d6 (unreleased, first gdn-compile commit) same path",
    "new_source": "knurlogic v0.1.6 (1e7a0cab) same path",
    "evidence": "The files differ by one comment line (the measured decode speedup); no code differs. The new file is bit-identical to the pre-compile file on the 35B (entry above).",
+   "date": "2026-10-10"
+  },
+  {
+   "model_type": "qwen3_5_moe",
+   "field": "arch_tree_sha256",
+   "old_sha256": "0c160c2c0bacd311e8a65b66fd6079f88a2136bcf7b9d28d2db8e1b945a465b2",
+   "new_sha256": "187b6c198877e60285cfccddd4a228594b96799aa1a136ee2108c85df4972c72",
+   "old_source": "arch tree of qwen3_5_moe with knurlogic v0.1.3-v0.1.5: qwen3_5_moe ef9e8e1f6a5c (knurlogic, unchanged in v0.1.6), qwen3_5 01392a3f8a07 (knurlogic, pre-compile), and mlx-lm 0.32.0's activations 6f7d756897de, base b782b2ac0f55, cache c96cb169fd5e, gated_delta f69e837ea686, pipeline 5897f414f550, qwen3_next 67ca08a4d08c, rope_utils 06466d57dfe1, switch_layers b33bf172034d",
+   "new_source": "the same tree with knurlogic v0.1.6 (1e7a0cab): only qwen3_5 differs, b21d99030d7d",
+   "evidence": "Derived from the qwen3_5 entry above, not a new measurement. The two trees differ in exactly one file, the base qwen3_5.py (01392a3f -> b21d9903); the MoE subclass file and every other module in the tree are byte-identical (knurlogic v0.1.5..v0.1.6 changed only qwen3_5.py and qwen4_exp.py under engine/families). That base-file pair was proven bit-identical on the real Qwen3.6-35B-A3B MoE model (model_type qwen3_5_moe) with exactly this tree: the old file was registered as mlx_lm.models.qwen3_5 beside the unchanged subclass and the same mlx-lm 0.32.0 modules. 393,338,880 logits per arm, 0 differ; greedy tokens identical.",
    "date": "2026-10-10"
   }
  ]

@@ -16,6 +16,16 @@ carries this stamp:
                     load time
     arch_sha256     its sha256
     scorer_variant  the family plugin's scorer variant (None without one)
+    arch_files      {module: sha256} for the arch file AND every module of the
+                    runtime's models package it imports, transitively (static
+                    AST walk; each module resolved the way the import resolves
+                    it here, so a vendored sibling wins). A MoE subclass file
+                    imports its base file, and the base holds the attention /
+                    GatedDeltaNet code; arch_sha256 alone never saw it
+    arch_tree_sha256  sha256 over arch_files. check_cache / pairing compare it
+                    in place of arch_sha256 when BOTH stamps carry it; an older
+                    stamp without it is compared on arch_sha256, with a note
+                    that its imported files are not covered
 
 The ARCH file, not the artifact's bundled model.py, is what is compared: a
 teacher and its VQ student load different model.py files by design (the
@@ -31,13 +41,15 @@ Reads files and package metadata only; never touches the GPU.
 from __future__ import annotations
 
 import argparse
+import ast
 import hashlib
 import importlib.metadata
 import importlib.util
 import json
 import pathlib
 import sys
-from vqlab.core.artifacts.stamp_fields import COMPARED, describe, diff  # noqa: F401  (re-exported)
+from vqlab.core.artifacts.stamp_fields import (  # noqa: F401  (re-exported)
+    COMPARED, describe, diff, tree_compared)
 from vqlab.util.hashing import sha256_file
 
 _UNSET = object()
@@ -99,12 +111,14 @@ def _runtime_for(family: str | None) -> str:
         return "mlx_lm"
 
 
-def arch_file(model_type: str | None, runtime: str = "mlx_lm") -> str | None:
-    """Path of the architecture module this interpreter resolves for model_type."""
+def arch_file(model_type: str | None, runtime: str = "mlx_lm", *,
+              remap: bool = True) -> str | None:
+    """Path of the architecture module this interpreter resolves for model_type.
+    `remap=False` resolves a module NAME (an imported sibling), not a model_type."""
     if not model_type:
         return None
     mt = model_type
-    if runtime == "mlx_lm":
+    if runtime == "mlx_lm" and remap:
         try:
             from mlx_lm.utils import MODEL_REMAPPING
             mt = MODEL_REMAPPING.get(mt, mt)
@@ -119,6 +133,99 @@ def arch_file(model_type: str | None, runtime: str = "mlx_lm") -> str | None:
     except (ImportError, ValueError):
         return None
     return spec.origin if spec else None
+
+
+def _resolve_module(dotted: str, runtime: str) -> str | None:
+    """File serving `dotted`, resolved as its import would be: sys.modules
+    first; a top-level module of <runtime>.models through the import system
+    (so a vendored sibling wins, as at load time); anything deeper on disk
+    inside its parent package's dir. Never imports outside <runtime>.models."""
+    mod = sys.modules.get(dotted)
+    if mod is not None:
+        return getattr(mod, "__file__", None)
+    prefix = f"{runtime}.models."
+    if dotted.startswith(prefix) and "." not in dotted[len(prefix):]:
+        return arch_file(dotted[len(prefix):], runtime, remap=False)
+    if "." not in dotted:
+        return None
+    parent, last = dotted.rsplit(".", 1)
+    pf = _resolve_module(parent, runtime)
+    if not pf or pathlib.Path(pf).name != "__init__.py":
+        return None
+    d = pathlib.Path(pf).parent
+    for cand in (d / f"{last}.py", d / last / "__init__.py"):
+        if cand.is_file():
+            return str(cand)
+    return None
+
+
+def _imported_modules(path: str, dotted: str) -> set:
+    """Candidate module names the file imports, relative imports made absolute
+    against `dotted` (`from .x import Y` yields x and x.Y; a name that is not a
+    module resolves to no file later and drops out)."""
+    try:
+        tree = ast.parse(pathlib.Path(path).read_bytes())
+    except (OSError, SyntaxError, ValueError):
+        return set()
+    package = dotted if pathlib.Path(path).name == "__init__.py" else dotted.rsplit(".", 1)[0]
+    out = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            out |= {a.name for a in node.names}
+        elif isinstance(node, ast.ImportFrom):
+            if node.level:
+                parts = package.split(".")
+                if node.level - 1 >= len(parts):
+                    continue
+                base = ".".join(parts[:len(parts) - (node.level - 1)])
+                base = f"{base}.{node.module}" if node.module else base
+            else:
+                base = node.module or ""
+            if node.module:      # `from . import x` names x, not the package
+                out.add(base)
+            out |={f"{base}.{a.name}" for a in node.names if a.name != "*"}
+    out.discard(dotted)
+    return out
+
+
+def arch_files(model_type: str | None, runtime: str = "mlx_lm") -> dict:
+    """{module: sha256} for the model_type's arch file and every arch module it
+    imports, transitively: modules of <runtime>.models (keyed relative to it),
+    and modules under the arch file's own directory reached by an absolute
+    import (a vendored package importing its private copy; keyed by full
+    name). Anything else (mlx, numpy, transformers) is outside the stamp."""
+    af = arch_file(model_type, runtime)
+    if not af:
+        return {}
+    p = pathlib.Path(af)
+    pkg = p.name == "__init__.py"
+    home = (p.parent.parent if pkg else p.parent).resolve()
+    prefix = f"{runtime}.models."
+    root = prefix + (p.parent.name if pkg else p.stem)
+    files, todo, seen = {}, [(root, af)], {root}
+    while todo:
+        dotted, path = todo.pop()
+        key = dotted[len(prefix):] if dotted.startswith(prefix) else dotted
+        files[key] = _sha(path)
+        for m in sorted(_imported_modules(path, dotted)):
+            if m in seen:
+                continue
+            seen.add(m)
+            f = _resolve_module(m, runtime)
+            if not f or not f.endswith(".py"):
+                continue
+            if not m.startswith(prefix) and home not in pathlib.Path(f).resolve().parents:
+                continue
+            todo.append((m, f))
+    return dict(sorted(files.items()))
+
+
+def tree_sha256(files: dict) -> str | None:
+    """sha256 over {module: sha256} as canonical JSON (sorted keys, compact)."""
+    if not files:
+        return None
+    blob = json.dumps(files, sort_keys=True, separators=(",", ":")).encode()
+    return hashlib.sha256(blob).hexdigest()
 
 
 def scorer_variant(model_type: str | None):
@@ -143,6 +250,8 @@ def build(model_type: str | None = None, *, family: str | None = None,
     out = {**versions(), "model_type": model_type, "runtime": runtime,
            "arch_file": af, "arch_sha256": _sha(af) if af else None,
            "scorer_variant": scorer_variant(model_type) if variant is _UNSET else variant}
+    files = arch_files(model_type, runtime) if af else {}
+    out["arch_files"], out["arch_tree_sha256"] = files, tree_sha256(files)
     if model is not None:
         mod = sys.modules.get(type(model).__module__)
         lf = getattr(mod, "__file__", None)
@@ -157,12 +266,14 @@ ARCH_EQUIVALENCE = pathlib.Path(__file__).with_name("arch_equivalence.json")
 def arch_equivalence(a: dict | None, b: dict | None, bad: list, path=None):
     """The arch_equivalence.json entry that excuses `bad`, else None.
 
-    Only when the ONLY differing compared field is arch_sha256, both stamps
-    name the same model_type, and that (sha, sha) pair is listed for it --
-    content-addressed, either direction. Anything else stays a mismatch."""
-    if len(bad) != 1 or bad[0][0] != "arch_sha256":
+    Only when the ONLY differing compared field is the arch hash (arch_sha256,
+    or arch_tree_sha256 when both stamps carry it), both stamps name the same
+    model_type, and that (sha, sha) pair is listed for it under that field
+    (an entry's `field`, default arch_sha256) -- content-addressed, either
+    direction. Anything else stays a mismatch."""
+    if len(bad) != 1 or bad[0][0] not in ("arch_sha256", "arch_tree_sha256"):
         return None
-    _, x, y = bad[0]
+    field, x, y = bad[0]
     mt = (a or {}).get("model_type")
     if not x or not y or not mt or mt != (b or {}).get("model_type"):
         return None
@@ -171,16 +282,28 @@ def arch_equivalence(a: dict | None, b: dict | None, bad: list, path=None):
     except (OSError, ValueError):
         return None
     for e in reg.get("entries", []):
-        if e.get("model_type") == mt and {e.get("old_sha256"), e.get("new_sha256")} == {x, y}:
+        if (e.get("model_type") == mt and e.get("field", "arch_sha256") == field
+                and {e.get("old_sha256"), e.get("new_sha256")} == {x, y}):
             return e
     return None
 
 
 def _note_equivalence(e: dict, what: str) -> None:
     print(f"NOTE: the {what}'s arch file differs from this run's only by an entry in "
-          f"{ARCH_EQUIVALENCE.name} ({e['model_type']}: {e['old_sha256'][:12]} == "
+          f"{ARCH_EQUIVALENCE.name} ({e['model_type']} {e.get('field', 'arch_sha256')}: "
+          f"{e['old_sha256'][:12]} == "
           f"{e['new_sha256'][:12]}, {e.get('date')}): bit-identical output, accepted.",
           flush=True)
+
+
+def _note_tree_coverage(a: dict | None, b: dict | None, what: str) -> None:
+    """An older stamp has no arch_tree_sha256: say what was not compared."""
+    if tree_compared(a, b):
+        return
+    print(f"NOTE: the {what} or this run predates arch_tree_sha256; compared on "
+          f"arch_sha256 (the model_type's own arch file) only. Whether the arch "
+          f"modules it imports (e.g. a MoE subclass's base file) match is UNKNOWN "
+          f"for this {what}.", flush=True)
 
 
 def check_cache(meta: dict, run: dict, allow: bool = False, what: str = "teacher cache") -> dict:
@@ -201,6 +324,7 @@ def check_cache(meta: dict, run: dict, allow: bool = False, what: str = "teacher
         status = "unstamped-cache"
     else:
         bad = diff(cached, run)
+        _note_tree_coverage(cached, run, what)
         status = "match"
         eq = arch_equivalence(cached, run, bad)
         if eq is not None:
@@ -262,6 +386,7 @@ def pairing_problems(a: dict | None, b: dict | None) -> list:
         probs.append("a sidecar carries no numerics build stamp")
     else:
         bad = diff(na, nb)
+        _note_tree_coverage(na, nb, "per-position array")
         eq = arch_equivalence(na, nb, bad)
         if eq is not None:
             _note_equivalence(eq, "per-position array")
