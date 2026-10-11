@@ -272,7 +272,9 @@ measurements, the artifacts and every published claim are the author's.
 
 ## License
 
-Apache-2.0 for code. Corpus data files carry their own terms
+Code: GNU Affero General Public License v3.0 or later (AGPL-3.0-or-later,
+see [LICENSE](LICENSE)). Releases up to and including the 2026-10 GitHub
+snapshots were Apache-2.0. Corpus data files carry their own terms
 (CC BY-SA for the WikiText prose corpus, public domain for the literary
 corpus); see [docs/CORPORA.md](https://github.com/noahzelezny/VQLab/blob/master/docs/CORPORA.md). If you use VQLab or its
 artifacts in published work, cite the companion paper.

@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+### License
+- The code is now licensed AGPL-3.0-or-later (was Apache-2.0). Copies obtained under Apache-2.0 keep that license. Model artifacts follow their base models' licenses and are unchanged.
+
 ### Migration: records moved
 - User-written records now default under the `records` location
   (`$VQLAB_RECORDS`, `[paths] records`, else `~/.local/share/vqlab`):

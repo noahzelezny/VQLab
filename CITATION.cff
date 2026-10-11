@@ -5,7 +5,7 @@ authors:
   - family-names: Zelezny
     given-names: Noah
 version: 0.1.0
-license: Apache-2.0
+license: AGPL-3.0-or-later
 repository-code: "https://github.com/noahzelezny/VQLab"
 preferred-citation:
   type: article
