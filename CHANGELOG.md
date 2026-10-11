@@ -1,6 +1,17 @@
 # Changelog
 
-## Unreleased
+## 0.1.0 (2026-10-11)
+
+First release. VQLab fits size-targeted, data-free vector-quantization
+codebooks for large language models on Apple Silicon (MLX), assembles and
+bundles the quantized artifacts with their Metal runtime, and scores them
+against their bf16 teachers (paired KL on three corpora, perplexity, task
+benchmarks) before release. One `vqlab` CLI covers plan, fit, build, bundle,
+gate, score, bench and ship; `vqlab mcp` exposes the lab to agents.
+
+### Release gates
+- `check-release` fails an artifact whose tokenizer does not tokenize like its base model's (pre_tokenizer, normalizer, decoder and a multilingual sample), or whose files name the machine that built it. `vqlab publish` refuses the same leaks; `release-prep --hub-scan` checks a published repo.
+- Build records are portable (`<models>/...`, no hostname); `vqlab provenance <art> --portable` sanitizes old ones and `--amend` records an edit made outside a vqlab tool.
 
 ### License
 - The code is now licensed AGPL-3.0-or-later (was Apache-2.0). Copies obtained under Apache-2.0 keep that license. Model artifacts follow their base models' licenses and are unchanged.
@@ -50,15 +61,6 @@
   `sz_resident.install_resident`, `serve.install_serving` (`install` kept as
   an alias). `runtime/glm5_shim.install` is shipped text and keeps its name.
   `sz_resident_build.plan` is `plan_resident` (`plan` kept as an alias).
-
-## 0.1.0 (2026-10-10)
-
-First release. VQLab fits size-targeted, data-free vector-quantization
-codebooks for large language models on Apple Silicon (MLX), assembles and
-bundles the quantized artifacts with their Metal runtime, and scores them
-against their bf16 teachers (paired KL on three corpora, perplexity, task
-benchmarks) before release. One `vqlab` CLI covers plan, fit, build, bundle,
-gate, score, bench and ship; `vqlab mcp` exposes the lab to agents.
 
 (A `v0.1.0` git tag from 2026-08-26 marked the paper
 snapshot; it was never a release, and moves to this commit when this ships.)
