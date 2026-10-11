@@ -38,6 +38,8 @@ def test_lab_from_config_file(home):
     S._reset()
     assert C.lab() == home / "L" and C.teachers() == home / "L" / "models"
     assert S.source("teachers") == "same as models"
+    rows = {r["key"]: r for r in S.locations()}
+    assert rows["teachers"]["shared_with"] == "models" and rows["models"]["shared_with"] is None
 
 
 def test_pre_lab_setups_keep_their_data(home):

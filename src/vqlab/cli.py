@@ -162,12 +162,13 @@ def main() -> int:
         else:
             print(f"unknown command: {argv[0]}", file=sys.stderr)
         return 2
-    if not any(a in ("-h", "--help") for a in rest):
+    helping = any(a in ("-h", "--help") for a in rest)
+    if not helping:
         from vqlab.agents import first_run   # a new install gets its standard locations
         first_run.run()
     import vqlab
     vqlab.use_knurlogic_arch()  # every command loads Knurlogic's archs (VQLAB_VENDORED_ARCH=0: stock)
-    if not any(a in ("-h", "--help") for a in rest):
+    if not helping:
         from vqlab.bench import box_quiet   # timed commands refuse a busy Mac (rule III)
         box_quiet.guard(cmd)
     module = _registry.selftest_route(cmd, rest) or _registry.COMMANDS[cmd].module

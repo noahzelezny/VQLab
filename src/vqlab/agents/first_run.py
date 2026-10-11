@@ -4,8 +4,8 @@
 when there is no config file, no location set in the environment and no
 data from an older install, it creates the lab folder (``~/VQLab``) with
 ``models/``, ``scratch/``, ``fits/`` and ``records/`` (bf16 teachers share
-``models/`` until set apart),
-writes a config file naming it, and says so once. Moving it later is
+``models/`` until set apart), writes a config file naming it, scans for
+models already on the machine, and says so once. Moving it later is
 `vqlab config set lab PATH` or the GUI's Storage page.
 
 ``$VQLAB_NO_SETUP=1`` skips it (the test suite sets it).
@@ -63,8 +63,9 @@ def run(out=sys.stderr) -> pathlib.Path | None:
         n = sum(1 for r in rows if r.get("use") in ("original", "quantized"))
         if n:
             print(f"       Found {n} model(s) already on this machine (`vqlab lab scan`).", file=out)
-    except Exception:
-        pass
+    except Exception as e:                 # setup is done; a failed scan is only reported
+        print(f"       (model scan failed: {type(e).__name__}: {e}; `vqlab lab scan` retries)",
+              file=out)
     if free < LOW_SYSTEM_FREE and lab.stat().st_dev == pathlib.Path.home().stat().st_dev:
         print("       This is the system disk with under 500 GiB free; teacher models are "
               "50-750 GiB each. Consider a larger drive.", file=out)

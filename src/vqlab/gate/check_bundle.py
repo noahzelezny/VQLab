@@ -125,10 +125,11 @@ def _stale_as(bundle: str, name: str, rp):
     return None, near
 
 
-def check(artifact, strict=False):
+def check(artifact, strict=False, stale_revs=None):
     """(exit code, report lines) for one artifact's bundle: 0 PASS (or STALE
     without strict), 1 FAIL, 2 STALE under strict. main() prints the lines;
-    vqlab.api.gate returns them."""
+    vqlab.api.gate returns them. On STALE, the certified revisions the bundle
+    carries are appended to `stale_revs` when one is given."""
     lines = []
     _out = lines.append
     from vqlab._layout import runtime_file
@@ -201,6 +202,8 @@ def check(artifact, strict=False):
                     break
                 stale[name] = rev
             else:
+                if stale_revs is not None:
+                    stale_revs.extend(stale.values())
                 _out("STALE (dense artifact): the bundle carries an earlier runtime "
                       "whose output is byte-identical to the current one; rebundle "
                       "to pick up:")
@@ -295,6 +298,8 @@ def check(artifact, strict=False):
     rev, near = (None, []) if cfg.get("vq_skipzero") else \
         _stale_as(bundle, "vq_switch.py", runtime_profile)
     if rev is not None:
+        if stale_revs is not None:
+            stale_revs.append(rev)
         fl = ", ".join(f"{k}={int(v)}" for k, v in _certified_flags(rev).items())
         if rev.get("flags"):
             # Certified at its OWN baked prefill defaults, which this bundle
@@ -326,6 +331,32 @@ def check(artifact, strict=False):
           "publishing any claim.")
     return 1, lines
 
+
+
+def verdict(artifact) -> dict:
+    """check-bundle in one word, for the GUI: PASS (current runtime), CURRENT
+    (an earlier certified revision whose gains apply only to features this
+    artifact does not use, so a rebundle changes nothing), STALE (a rebundle
+    is worth doing), FAIL, or MISSING (no model.py). `note` carries the
+    revisions' `gains`."""
+    art = pathlib.Path(artifact)
+    if not (art / "model.py").exists():
+        return {"verdict": "MISSING", "note": "no model.py"}
+    revs = []
+    try:
+        rc, lines = check(art, strict=True, stale_revs=revs)
+    except Exception as e:  # a crash is a failed check, reported, not raised
+        return {"verdict": "FAIL", "note": f"check-bundle crashed: {type(e).__name__}: {e}"}
+    word = {0: "PASS", 2: "STALE"}.get(rc, "FAIL")
+    if word == "FAIL":
+        return {"verdict": word, "note": next((l for l in lines if "FAIL" in l), "")}
+    note = "; ".join(r.get("gains", "") for r in revs)
+    if word == "STALE":
+        cfg = json.loads((art / "config.json").read_text())
+        if revs and all(r.get("gains_only_for") is not None
+                        and not any(cfg.get(k) for k in r["gains_only_for"]) for r in revs):
+            word = "CURRENT"
+    return {"verdict": word, "note": note}
 
 
 def main(argv=None) -> int:

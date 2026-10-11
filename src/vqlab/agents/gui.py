@@ -21,10 +21,10 @@ nothing here computes a number of its own:
                     launch and by POST /api/models/scan)
 
 Stdlib only; reads index files and small JSON, never a tensor, so it is safe
-on a box that is mid-experiment. Every endpoint is a GET except one POST
-that writes one key of the user's config file (same-origin JSON only; the
-server listens on 127.0.0.1). There is no way to launch or delete anything
-from the page. Launching stays with the CLI and MCP `run`, where the GPU
+on a box that is mid-experiment. Three POSTs, same-origin JSON only, on
+127.0.0.1: /api/settings writes one key of the user's config file,
+/api/models/scan rescans, /api/pick-folder opens the folder chooser. There
+is no way to launch or delete anything from the page. Launching stays with the CLI and MCP `run`, where the GPU
 lease and exo gates live.
 """
 from __future__ import annotations
@@ -36,13 +36,14 @@ import json
 import os
 import pathlib
 import sys
+import threading
 import urllib.parse
 import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 
 from vqlab import config
-STATIC = pathlib.Path(__file__).resolve().parent / "gui_static"
+PAGE = pathlib.Path(__file__).resolve().parent / "gui_static" / "bench" / "index.html"
 
 
 def _jsonl(p, limit=None):
@@ -67,6 +68,7 @@ def _families_dir():
 
 # ---------------------------------------------------------------- endpoints
 def api_fleet(_q):
+    from vqlab.gate import check_bundle
     arts = _jsonl(config.registry_dir() / "artifacts.jsonl")
     hub = {h["repo"]: h for h in _jsonl(config.registry_dir() / "hub.jsonl")}
     twins = {}
@@ -75,39 +77,8 @@ def api_fleet(_q):
     for e in arts:
         e["hub"] = hub.get(e.get("hf_repo") or "")
         e["same_bytes_as"] = [n for n in twins[e["fingerprint"]] if n != e["name"]]
-        e["bundle"] = _bundle_verdict(e["path"])
+        e["bundle"] = check_bundle.verdict(e["path"])
     return {"artifacts": arts}
-
-
-def _bundle_verdict(path):
-    """check-bundle's verdict on the artifact as it is NOW: PASS (current
-    runtime), STALE (an earlier certified runtime: slower, same numbers),
-    FAIL, or MISSING. Reads model.py text only."""
-    if not pathlib.Path(path, "model.py").exists():
-        return {"verdict": "MISSING", "note": "no model.py"}
-    from vqlab.gate import check_bundle
-    try:
-        with contextlib.redirect_stdout(io.StringIO()):
-            rc, lines = check_bundle.check(path, strict=True)
-    except Exception:
-        return {"verdict": "FAIL", "note": "check-bundle crashed"}
-    verdict = {0: "PASS", 1: "FAIL", 2: "STALE"}.get(rc, "FAIL")
-    note = ""
-    if verdict == "STALE":
-        # A certified revision whose gains apply only to features this
-        # artifact does not use is current in effect: a rebundle changes nothing.
-        text = "\n".join(map(str, lines))
-        reg = json.loads((pathlib.Path(check_bundle.__file__).parents[1]
-                          / "runtime" / "equivalent_revisions.json").read_text())
-        cfg = json.loads(pathlib.Path(path, "config.json").read_text())
-        for rev in reg["revisions"]:
-            if rev["sha256"][:12] in text:
-                note = rev.get("gains", "")
-                only = rev.get("gains_only_for")
-                if only is not None and not any(cfg.get(k) for k in only):
-                    verdict = "CURRENT"
-                break
-    return {"verdict": verdict, "note": note}
 
 
 def api_provenance(q):
@@ -270,28 +241,27 @@ def api_settings(_q):
 def api_models_found(_q):
     from vqlab.agents import model_scan
     rows = model_scan.load()
-    return {"models": rows, "scanning": _SCAN["running"],
+    return {"models": rows, "scanning": _SCAN_LOCK.locked(),
             "scanned": rows[0].get("scanned") if rows else None}
 
 
-_SCAN = {"running": False}
+_SCAN_LOCK = threading.Lock()      # held while a scan runs
 
 
 def _scan_in_background():
-    """Scan for models without holding up the page (launch and Rescan)."""
-    import threading
-    if _SCAN["running"]:
+    """Scan for models without holding up the page (launch and Rescan); a
+    scan already running is not started twice."""
+    if not _SCAN_LOCK.acquire(blocking=False):
         return
 
     def go():
         from vqlab.agents import model_scan
         try:
             model_scan.refresh()
-        except Exception:
-            pass
+        except Exception as e:  # report, never kill the server
+            print(f"vqlab gui: model scan failed: {type(e).__name__}: {e}", file=sys.stderr)
         finally:
-            _SCAN["running"] = False
-    _SCAN["running"] = True
+            _SCAN_LOCK.release()
     threading.Thread(target=go, daemon=True).start()
 
 
@@ -300,32 +270,39 @@ def post_models_scan(_body):
     return {"ok": True, "scanning": True}
 
 
+_PROMPT = "Choose a folder for VQ Lab"
+# Each chooser gets the start folder as an ARGUMENT (argv / env), never
+# spliced into its script text, so no path can break or inject into it.
+_OSA_PICK = ("on run argv\n"
+             f'  set p to "{_PROMPT}"\n'
+             "  if (count of argv) > 0 then\n"
+             "    return POSIX path of (choose folder with prompt p"
+             " default location (POSIX file (item 1 of argv)))\n"
+             "  end if\n"
+             "  return POSIX path of (choose folder with prompt p)\n"
+             "end run")
+_PS_PICK = ("Add-Type -AssemblyName System.Windows.Forms;"
+            "$d=New-Object System.Windows.Forms.FolderBrowserDialog;"
+            "$d.SelectedPath=$env:VQLAB_PICK_START;"
+            "if($d.ShowDialog() -eq 'OK'){$d.SelectedPath}")
 _TK_PICK = ("import sys, tkinter as t, tkinter.filedialog as f\n"
             "r = t.Tk(); r.withdraw(); r.attributes('-topmost', True)\n"
-            "p = f.askdirectory(initialdir=sys.argv[1] or None, mustexist=False,"
-            " title='Choose a folder for VQ Lab')\n"
-            "print(p or '')")
+            f"print(f.askdirectory(initialdir=sys.argv[1] or None, title={_PROMPT!r}) or '')")
 
 
 def _pick_commands(start: str) -> list[list[str]]:
     """Folder-chooser commands for this OS, best first. Each prints the
-    chosen path (empty or nonzero exit = cancelled)."""
+    chosen path; an empty result or a cancel message means cancelled."""
     import shutil
     if sys.platform == "darwin":
-        loc = f' default location (POSIX file "{start}")' if start else ""
-        return [["osascript", "-e",
-                 f'POSIX path of (choose folder with prompt "Choose a folder for VQ Lab"{loc})']]
+        return [["osascript", "-e", _OSA_PICK, *([start] if start else [])]]
     out = []
     if sys.platform.startswith("win"):
-        ps = ("Add-Type -AssemblyName System.Windows.Forms;"
-              "$d=New-Object System.Windows.Forms.FolderBrowserDialog;"
-              f"$d.SelectedPath='{start}';"
-              "if($d.ShowDialog() -eq 'OK'){$d.SelectedPath}")
-        out.append(["powershell", "-NoProfile", "-STA", "-Command", ps])
+        out.append(["powershell", "-NoProfile", "-STA", "-Command", _PS_PICK])
     else:
         if shutil.which("zenity"):
-            out.append(["zenity", "--file-selection", "--directory",
-                        "--title=Choose a folder for VQ Lab", f"--filename={start}/"])
+            out.append(["zenity", "--file-selection", "--directory", f"--title={_PROMPT}",
+                        f"--filename={start}/"])
         if shutil.which("kdialog"):
             out.append(["kdialog", "--getexistingdirectory", start or "."])
     out.append([sys.executable, "-c", _TK_PICK, start])      # Tk: any OS with a display
@@ -346,7 +323,8 @@ def post_pick_folder(body):
     errors = []
     for cmd in _pick_commands(s):
         try:
-            r = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
+            r = subprocess.run(cmd, capture_output=True, text=True, timeout=600,
+                               env={**os.environ, "VQLAB_PICK_START": s})
         except FileNotFoundError:
             continue                                  # not installed: try the next
         except (OSError, subprocess.TimeoutExpired) as e:
@@ -398,11 +376,6 @@ POSTS = {"/api/settings": post_settings, "/api/models/scan": post_models_scan,
          "/api/pick-folder": post_pick_folder}
 
 
-BENCH_TYPES = {".html": "text/html; charset=utf-8", ".json": "application/json",
-               ".css": "text/css", ".js": "text/javascript", ".svg": "image/svg+xml",
-               ".png": "image/png"}
-
-
 class Handler(BaseHTTPRequestHandler):
     def log_message(self, *_a):
         pass
@@ -414,14 +387,6 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Cache-Control", "no-store")
         self.end_headers()
         self.wfile.write(body)
-
-    def _bench(self, rel):
-        root = (STATIC / "bench").resolve()
-        f = (root / urllib.parse.unquote(rel)).resolve()
-        ctype = BENCH_TYPES.get(f.suffix)
-        if root not in f.parents or ctype is None or not f.is_file():
-            return self._send(404, b'{"error":"not found"}', "application/json")
-        self._send(200, f.read_bytes(), ctype)
 
     def _same_origin(self) -> bool:
         """A POST must come from this page: a JSON body, and an Origin (when
@@ -452,7 +417,7 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         u = urllib.parse.urlparse(self.path)
         if u.path in ("/", "/index.html"):            # the GUI: Library / Recipe / Jobs
-            return self._bench("index.html")
+            return self._send(200, PAGE.read_bytes(), "text/html; charset=utf-8")
         if u.path in ("/bench", "/bench/"):           # old address of the same page
             self.send_response(301)
             self.send_header("Location", "/")

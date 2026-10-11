@@ -71,3 +71,16 @@ def test_legacy_revision_is_stale_at_legacy_flags(tmp_path):
 def test_baked_bool_parse(raw, want):
     text = f'os.environ.get("VQ_GEMMSEG_ACCS", "{raw}")'
     assert cb._baked_prefill_flags(text, _rp())["VQ_GEMMSEG_ACCS"] is want
+
+
+def test_verdict_words(tmp_path):
+    """verdict(): the flagged revision gains only for vq_skipzero, so a
+    non-skipzero bundle on it is CURRENT (a rebundle changes nothing); the
+    legacy revision gains for everyone, so it stays STALE."""
+    assert FLAGGED.get("gains_only_for") == ["vq_skipzero"]
+    v = cb.verdict(_bundle(tmp_path / "a", FLAGGED))
+    assert v["verdict"] == "CURRENT" and v["note"] == FLAGGED["gains"]
+    assert cb.verdict(_bundle(tmp_path / "b", LEGACY))["verdict"] == "STALE"
+    bad = _bundle(tmp_path / "c", FLAGGED, {"VQ_GEMMSEG_CVEC": "0"})
+    assert cb.verdict(bad)["verdict"] == "FAIL"
+    assert cb.verdict(tmp_path / "nothing")["verdict"] == "MISSING"

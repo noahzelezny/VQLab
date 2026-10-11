@@ -87,12 +87,17 @@ def _legacy_home_used() -> bool:
 
 
 def _default(key: str) -> pathlib.Path:
-    if key == "teachers" and not (not _raw("lab") and _legacy_home_used()):
-        return models()                          # most people keep one models folder
-    if key == "records" and not _raw("lab") and _XDG_RECORDS.is_dir():
-        return _XDG_RECORDS                       # records from before the lab folder
-    if not _raw("lab") and key != "records" and _legacy_home_used():
-        return HOME / _SUB[key]                   # data from before the lab folder
+    """Where `key` lives when nothing sets it. An install from before the lab
+    folder (no `lab` set, data under ~/.vqlab or ~/.local/share/vqlab) keeps
+    resolving there; otherwise everything goes under lab(), with bf16
+    teachers sharing the models folder."""
+    legacy = not _raw("lab") and _legacy_home_used()
+    if key == "records":
+        return _XDG_RECORDS if not _raw("lab") and _XDG_RECORDS.is_dir() else lab() / "records"
+    if legacy:
+        return HOME / _SUB[key]
+    if key == "teachers":
+        return models()
     return lab() / _SUB[key]
 
 

@@ -27,17 +27,26 @@ def test_pick_folder_uses_the_system_chooser(tmp_path, monkeypatch):
 
     class R:
         returncode, stdout, stderr = 0, str(tmp_path / "pick") + "/\n", ""
-    monkeypatch.setattr(subprocess, "run", lambda argv, **k: calls.append(argv) or R())
+
+    def run(argv, **k):
+        calls.append((argv, k.get("env", {})))
+        return R()
+    monkeypatch.setattr(subprocess, "run", run)
+    odd = tmp_path / 'it\'s "quoted"'                # a path that would break a script
+    odd.mkdir()
     for plat, first in (("darwin", "osascript"), ("win32", "powershell")):
         monkeypatch.setattr(sys, "platform", plat)
         calls.clear()
-        r = gui.post_pick_folder({"start": str(tmp_path / "missing" / "deeper")})
+        r = gui.post_pick_folder({"start": str(odd / "missing" / "deeper")})
         assert r == {"ok": True, "path": str(tmp_path / "pick")}
-        assert calls[0][0] == first and any(str(tmp_path) in a for a in calls[0])
+        argv, env = calls[0]
+        assert argv[0] == first
+        assert str(odd) not in " ".join(argv[:-1])           # never inside script text
+        assert str(odd) in (argv[-1], env.get("VQLAB_PICK_START"))
     monkeypatch.setattr(sys, "platform", "linux")
     calls.clear()
     gui.post_pick_folder({})
-    assert calls[-1][0] == sys.executable                     # Tk works anywhere
+    assert calls[-1][0][0] == sys.executable                  # Tk works anywhere
     R.returncode, R.stdout, R.stderr = 1, "", "execution error: User canceled. (-128)"
     assert gui.post_pick_folder({})["cancelled"]
 
@@ -46,3 +55,20 @@ def test_pick_folder_uses_the_system_chooser(tmp_path, monkeypatch):
     monkeypatch.setattr(subprocess, "run", missing)
     r = gui.post_pick_folder({})
     assert not r["ok"] and "type the path" in r["error"]
+
+
+def test_scan_never_runs_twice(monkeypatch):
+    import threading
+    started = []
+    gate = threading.Event()
+    from vqlab.agents import model_scan
+    monkeypatch.setattr(model_scan, "refresh", lambda: started.append(1) or gate.wait(5))
+    gui._scan_in_background()
+    gui._scan_in_background()                     # still running: ignored
+    assert gui.api_models_found({})["scanning"]
+    gate.set()
+    for _ in range(100):
+        if not gui._SCAN_LOCK.locked():
+            break
+        threading.Event().wait(0.01)
+    assert started == [1] and not gui._SCAN_LOCK.locked()

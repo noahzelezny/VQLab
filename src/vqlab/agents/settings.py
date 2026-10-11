@@ -77,7 +77,9 @@ def locations() -> list[dict]:
     for k in C.KEYS:
         v = _value(k)
         paths = [pathlib.Path(p) for p in (v if isinstance(v, list) else [v])]
+        shared = k == "teachers" and C.teachers() == C.models()
         rows.append({"key": k, "paths": [str(p) for p in paths], "source": source(k),
+                     "shared_with": "models" if shared else None,
                      "exists": [p.exists() for p in paths],
                      "free_bytes": [free_bytes(p) for p in paths],
                      "description": DESCRIPTIONS[k]})
