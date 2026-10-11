@@ -299,7 +299,7 @@ details.adv .kv{margin-top:8px}
 .hpick{font-size:1.25em;letter-spacing:.02em;text-transform:none;color:var(--fg);font-weight:700;padding:0 4px;border-bottom:1px dashed var(--line)}
 .hpick:hover{color:var(--acc);border-bottom-color:var(--acc)}.hpick span{color:var(--faint);font-size:.8em}
 /* one screen: tighter vertical budget on the recipe page */
-.readouts{margin-bottom:8px}.readout{padding:6px 10px}.readout b{font-size:1.3em}
+.readouts{margin-bottom:8px}.readout{padding:6px 10px}.readout b{font-size:1.3em}.readouts.r3{grid-template-columns:repeat(3,1fr)}
 .kbox{font-size:.84em;gap:3px 10px;margin:6px 0 8px;padding:8px 10px}
 .kseg button{padding:6px 4px}
 .strip{height:18px}
@@ -349,7 +349,7 @@ details.adv .kv{margin-top:8px}
 #libchart .pt{cursor:pointer}
 .insp{font-size:.92em;padding:16px 18px}.insp .ro{margin:14px 0 6px}
 .ihead{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}.iname{font-weight:700;font-size:1.1em;color:var(--fg);word-break:break-all}
-.pills{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}.pill{border:1px solid var(--line);border-radius:999px;padding:2px 10px;font-size:.85em;color:var(--dim)}.pill.ok{color:var(--ok);border-color:color-mix(in oklch,var(--ok) 40%,transparent)}.pill.bad{color:var(--bad,#e5484d);border-color:color-mix(in oklch,var(--bad,#e5484d) 40%,transparent)}.pill.warn{color:var(--warn);border-color:color-mix(in oklch,var(--warn) 40%,transparent)}
+.pills{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}.pill{border:1px solid var(--line);border-radius:999px;padding:2px 10px;font-size:.85em;color:var(--dim)}.pill.ok{color:var(--ok);border-color:color-mix(in oklch,var(--ok) 40%,transparent)}.pill.bad{color:var(--bad);border-color:color-mix(in oklch,var(--bad) 40%,transparent)}.pill.warn{color:var(--warn);border-color:color-mix(in oklch,var(--warn) 40%,transparent)}
 .kbar{display:grid;grid-template-columns:6.5em 1fr 8.5em;align-items:center;gap:10px;margin:4px 0}.kbar span{color:var(--dim)}.kbar i{height:8px;background:var(--line);border-radius:4px;overflow:hidden;display:block}.kbar i b{display:block;height:100%}.kbar em{font-style:normal;text-align:right;color:var(--fg)}
 .kv2{display:flex;justify-content:space-between;padding:3px 0;color:var(--dim)}.kv2 b{color:var(--fg);font-weight:400}
 .compbar{display:flex;height:12px;border-radius:3px;overflow:hidden;gap:1px}.insp .key{margin-top:6px}
@@ -378,12 +378,12 @@ details.adv .kv{margin-top:8px}
 .dleg .sw{display:inline-block;width:.7em;height:.7em;border-radius:2px;margin-right:5px}.dleg .fr{color:var(--faint);margin-left:auto}
 .advh{margin-top:10px;color:var(--dim);cursor:pointer;font-size:.85em;letter-spacing:.1em;text-transform:uppercase;border-top:1px solid var(--line);padding-top:8px}
 .advb{max-height:none}.lscroll{overflow:auto;min-height:0}.warnl{color:var(--warn);font-size:.85em;min-height:1.5em}
-.cart .err{color:var(--bad);font-size:.85em;word-break:break-word}
+.cart .err,.srow .err{color:var(--bad);font-size:.85em;word-break:break-word}
 
 .srow{display:grid;grid-template-columns:7.5em minmax(0,1fr) auto;gap:4px 12px;align-items:start;padding:8px 0;border-top:1px solid var(--line)}
 .srow:first-of-type{border-top:0;padding-top:0}
 .srow .k{display:flex;align-items:center;gap:6px;color:var(--fg)}
-.srow .err{grid-column:2;color:var(--bad);font-size:.85em;word-break:break-word}.srow .err .mini{margin-left:6px}
+.srow .err{grid-column:2}.srow .err .mini{margin-left:6px}
 .fw{display:flex;gap:6px;align-items:center;min-width:0}
 .fld{flex:1;min-width:0;height:28px;box-sizing:border-box;padding:0 9px;background:oklch(.19 0 0);color:var(--fg);border:1px solid oklch(.08 0 0);border-bottom-color:oklch(.3 0 0);border-radius:.25rem;box-shadow:inset 1px 2px 3px oklch(0 0 0/.65),inset 0 1px 0 oklch(0 0 0/.4);font:inherit;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.85em;line-height:26px;text-overflow:ellipsis;white-space:nowrap;overflow:hidden;outline:0}
 input.fld:focus{text-overflow:clip;box-shadow:inset 1px 2px 3px oklch(0 0 0/.65),0 0 0 1px var(--acc);border-color:var(--acc)}
@@ -391,18 +391,17 @@ input.fld:focus{text-overflow:clip;box-shadow:inset 1px 2px 3px oklch(0 0 0/.65)
 .fbtn{flex:none;width:28px;height:28px;padding:0;display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--line);border-radius:var(--r);color:var(--dim);background:transparent}
 .fbtn:hover:not([disabled]){border-color:var(--acc);color:var(--acc)}.fbtn svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
 .fbtn[disabled]{cursor:default}.fbtn.busy{color:var(--acc);border-color:var(--acc);animation:fbp 1.1s ease-in-out infinite}@keyframes fbp{50%{opacity:.35}}
-.sscroll{overflow:auto}
-.sscroll table{width:100%;table-layout:fixed;border-collapse:collapse;font-size:.88em}
+.stbl{overflow:auto}
+.stbl table{width:100%;table-layout:fixed;border-collapse:collapse;font-size:.88em}
+.stbl td{padding:4px 8px;border-top:1px solid var(--line);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:0}
+.stbl td.num{max-width:none}
 .sscroll th{position:sticky;top:0;background:var(--bg);text-align:left;color:var(--faint);font-weight:400;font-size:.8em;letter-spacing:.06em;padding:4px 8px;cursor:pointer;user-select:none;white-space:nowrap}
-.sscroll th:hover{color:var(--fg)}.sscroll th.num,.sscroll td.num{text-align:right;font-variant-numeric:tabular-nums}
-.sscroll td{padding:4px 8px;border-top:1px solid var(--line);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:0}
-.sscroll td.num{max-width:none}.sscroll th.num{width:9em}
+.sscroll th:hover{color:var(--fg)}.sscroll th.num,.stbl td.num{text-align:right;font-variant-numeric:tabular-nums}.sscroll th.num{width:9em}
 .stabs{display:flex;gap:6px;margin:10px 0 8px}
 .strt{display:flex;flex-direction:column;gap:10px;min-width:0}
 .fhd{display:flex;justify-content:space-between;align-items:center;gap:8px}.fhd .mini{min-width:7em;text-align:center}
-.fmod{overflow:auto;margin-top:8px}.fmod table{width:100%;table-layout:fixed;border-collapse:collapse;font-size:.88em}
-.fmod td{padding:4px 8px;border-top:1px solid var(--line);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:0}
-.fmod td.num{text-align:right;font-variant-numeric:tabular-nums;max-width:none;width:6.5em}.fmod td.fmt{width:10em;color:var(--dim)}.fmod td.src{width:9em;color:var(--dim)}.fmod td.use{width:6.5em;max-width:none}
+.fmod{margin-top:8px}
+.fmod td.num{width:6.5em}.fmod td.fmt{width:10em;color:var(--dim)}.fmod td.src{width:9em;color:var(--dim)}.fmod td.use{width:6.5em;max-width:none}
 .fmod tr.multi{cursor:pointer}.fmod tr.multi:hover td{background:var(--med)}
 .ctag{font-size:.72em;letter-spacing:.06em;margin-left:6px;padding:0 5px;border:1px solid var(--line);border-radius:var(--r);color:var(--faint)}
 .fmod tr.cps td{white-space:normal;max-width:none;padding:2px 8px 6px 22px;color:var(--dim);font-size:.92em}
@@ -439,17 +438,19 @@ const SHIPS={"TheDrainFlorist/Qwen3.5-397B-A17B-VQ-2.2bpw": "tower+mtp", "TheDra
 for(const h of ['spicyneuron/Qwen3.5-397B-A17B-MLX-2.6bit','spicyneuron/Qwen3.5-397B-A17B-MLX-3.5bit','mlx-community/gemma-4-e4b-it-8bit','TheDrainFlorist/gemma-4-e4b-it-VQ-PLE'])SHIPS[h]='';
 const shipTower=r=>/tower/.test(SHIPS[r.hf]||''),shipMtp=r=>/mtp/.test(SHIPS[r.hf]||'');
 const REG={"TheDrainFlorist/GLM-5.3-Flash-VQ-2.7bpw": {"geo": {"d4-K2048": 24, "d4-K512": 102}, "text": 108.024, "profile": "v1.5", "shards": 20, "drift": ["README.md", "model.py"], "checked": "2026-09-26", "rev": "5d0c8e1", "scanned": "2026-09-28"}, "TheDrainFlorist/GLM-5.3-Flash-VQ-3.1bpw": {"geo": {"d4-K2048": 24, "d4-K512": 51, "d4-K8192": 51}, "text": 122.371, "profile": "v2", "shards": 20, "drift": ["README.md", "model.py"], "checked": "2026-09-26", "rev": "848da0c", "scanned": "2026-09-28"}, "TheDrainFlorist/GLM-5.3-Flash-VQ-3.6bpw": {"geo": {"d4-K16384": 15, "d4-K8192": 111}, "text": 141.149, "profile": "v2", "shards": 20, "drift": ["README.md", "model.py"], "checked": "2026-09-26", "rev": "161c770", "scanned": "2026-09-28"}, "TheDrainFlorist/Qwen3.5-397B-A17B-VQ-2.2bpw": {"geo": {"d4-K2048": 9, "d4-K256": 20, "d8-K16384": 151}, "text": 106.267, "profile": "v1.5", "shards": 29, "drift": [], "checked": "2026-09-26", "rev": "7a5129f", "scanned": "2026-09-28"}, "TheDrainFlorist/Qwen3.5-397B-A17B-VQ-2.4bpw": {"geo": {"d4-K256": 180}, "text": 114.217, "profile": "v1.5", "shards": 29, "drift": [], "checked": "2026-09-26", "rev": "bb4887a", "scanned": "2026-09-28"}, "TheDrainFlorist/Qwen3.5-397B-A17B-VQ-2.6bpw": {"geo": {"d4-K512": 180}, "text": 125.467, "profile": "v1.5", "shards": 29, "drift": [], "checked": "2026-09-26", "rev": "ea58bf2", "scanned": "2026-09-28"}, "TheDrainFlorist/Qwen3.5-397B-A17B-VQ-3.1bpw": {"geo": {"d4-K2048": 180}, "text": 147.969, "profile": "v1.5", "shards": 29, "drift": [], "checked": "2026-09-26", "rev": "f2c22ab", "scanned": "2026-09-28"}, "TheDrainFlorist/Qwen3.6-35B-A3B-VQ-3.4bpw": {"geo": {"d4-K2048": 120}, "text": 13.79, "profile": "v1.5", "shards": 4, "drift": ["README.md", "qwen36_ladder.png"], "checked": "2026-09-26", "rev": "c19d1e5", "scanned": "2026-09-28"}, "TheDrainFlorist/Qwen3.6-35B-A3B-VQ-3.8bpw": {"geo": {"d4-K8192": 120}, "text": 15.67, "profile": "v2", "shards": 4, "drift": ["README.md"], "checked": "2026-09-26", "rev": "73a8b39", "scanned": "2026-09-28"}, "TheDrainFlorist/Qwen3.6-35B-A3B-VQ-4.6bpw": {"geo": {"d2-K512": 90, "d4-K2048": 30}, "text": 18.71, "profile": "v2", "shards": 4, "drift": ["README.md", "qwen36_ladder.png"], "checked": "2026-09-26", "rev": "2f5ee21", "scanned": "2026-09-28"}, "TheDrainFlorist/Qwen3.6-35B-A3B-VQ-5.4bpw": {"geo": {"d2-K1024": 120}, "text": 22.226, "profile": "v2", "shards": 4, "drift": ["README.md"], "checked": "2026-09-26", "rev": "7f86f33", "scanned": "2026-09-28"}, "TheDrainFlorist/Qwen3.8-27B-VQ-3.9bpw": {"geo": {"d4-K4096": 192}, "text": 12.468, "profile": "v1.5", "shards": 5, "drift": ["README.md"], "checked": "2026-09-26", "rev": "30c2147", "scanned": "2026-09-28"}, "TheDrainFlorist/Qwen3.8-27B-VQ-4.5bpw": {"geo": {"d2-K256": 192}, "text": 14.454, "profile": "v1.5", "shards": 5, "drift": ["README.md"], "checked": "2026-09-26", "rev": "f1805e6", "scanned": "2026-09-28"}, "TheDrainFlorist/Qwen3.8-27B-VQ-4.8bpw": {"geo": {"d2-K512": 192}, "text": 15.45, "profile": "v1.5", "shards": 5, "drift": ["README.md"], "checked": "2026-09-26", "rev": "f85736b", "scanned": "2026-09-28"}, "TheDrainFlorist/Qwen3.8-Flash-Next-VQ-2.1bpw": {"geo": {"d2-K256": 6, "d4-K256": 46, "d8-K16384": 92, "ple:d8-K256": 128}, "text": 47.46, "profile": "v2", "shards": 139, "drift": ["README.md", "config.json", "model-00016.safetensors", "model-00017.safetensors", "model-00019.safetensors"], "checked": "2026-09-26", "rev": "8684640", "scanned": "2026-09-28"}, "TheDrainFlorist/Qwen3.8-Flash-Next-VQ-3.2bpw": {"geo": {"d2-K256": 18, "d4-K2048": 126, "ple:d4-K2048": 128}, "text": 71.69, "profile": "v1.5", "shards": 139, "drift": ["README.md", "config.json", "model-00012.safetensors", "model-00017.safetensors", "model-00019.safetensors"], "checked": "2026-09-26", "rev": "3f95390", "scanned": "2026-09-28"}, "TheDrainFlorist/Qwen3.8-Flash-Next-VQ-4.4bpw": {"geo": {"d2-K1024": 21, "d2-K256": 123, "ple:d2-K256": 128}, "text": 96.568, "profile": "v1.5", "shards": 139, "drift": ["README.md", "config.json", "model-00012.safetensors", "model-00014.safetensors", "model-00015.safetensors", "model-00017.safetensors"], "checked": "2026-09-26", "rev": "1989563", "scanned": "2026-09-28"}, "TheDrainFlorist/Qwen3.8-Flash-Next-VQ-5.5bpw": {"geo": {"d2-K1024": 144, "ple:d2-K1024": 128}, "text": 114.541, "profile": "v1.5", "shards": 139, "drift": ["README.md"], "checked": "2026-09-26", "rev": "82b6c98", "scanned": "2026-09-28"}, "TheDrainFlorist/gemma-4-26b-a4b-it-VQ-6.2bpw": {"geo": {"d2-K2048": 90}, "text": 18.735, "profile": "v1.5", "shards": 3, "drift": ["README.md"], "checked": "2026-09-26", "rev": "6cdd2c9", "scanned": "2026-09-28"}, "TheDrainFlorist/gemma-4-e4b-it-VQ-PLE": {"geo": {"d2-K2048": 1}, "text": 7.393, "profile": "v1.5", "shards": 3, "drift": ["README.md"], "checked": "2026-09-26", "rev": "dfa0a65", "scanned": "2026-09-28"}};
-const REG_EMB=JSON.parse(JSON.stringify(REG));
-// live fleet (vqlab gui): rebuild REG from /api/fleet; the embedded copy above is the file-mode fallback
-async function loadFleet(){if(location.protocol==='file:')return;
-  try{const r=await fetch('/api/fleet');if(!r.ok)throw 0;const a=(await r.json()).artifacts;if(!Array.isArray(a))throw 0;
+// live fleet (vqlab gui): rebuild REG from /api/fleet; the embedded REG above is the file-mode fallback and the fallback when this load fails
+let fleetAt=0,fleetWarned=false;
+async function loadFleet(){if(location.protocol==='file:')return;fleetAt=Date.now();
+  const r=await api('/api/fleet');
+  try{const a=r.ok&&r.j&&r.j.artifacts;if(!Array.isArray(a))throw new Error('fleet unavailable ('+r.status+')');
     const by={};for(const x of a){if(!x.hf_repo)continue;const own=x.hf_repo.split('/')[0]+'--',inRoot=(x.name||'').startsWith(own),k=x.hf_repo,c=by[k];
       if(!c||(inRoot&&!c.inRoot)||(inRoot===c.inRoot&&(x.scanned||'')>(c.x.scanned||'')))by[k]={x,inRoot}}
     const n={};for(const k in by){const x=by[k].x,h=x.hub,b=x.bundle||{};
       n[k]={geo:x.geometry||{},text:x.text_gib,profile:x.runtime&&x.runtime.profile,shards:x.shards,drift:h?(h.drift||[]).filter(d=>d.state!=='same').map(d=>d.file):null,checked:h&&h.checked?h.checked.slice(0,10):'',rev:h&&h.revision?h.revision.slice(0,7):'',scanned:x.scanned,verdict:b.verdict||'',note:b.note||''}}
-    if(!Object.keys(n).length)throw 0;
+    if(!Object.keys(n).length)throw new Error('no artifacts in fleet');
     if(JSON.stringify(n)===JSON.stringify(REG))return;
-    for(const k of Object.keys(REG))delete REG[k];Object.assign(REG,n);if(page===0)render()}catch{}}
+    for(const k of Object.keys(REG))delete REG[k];Object.assign(REG,n);if(page===0)render()}
+  catch(e){if(!fleetWarned){fleetWarned=true;console.warn('fleet load failed, keeping embedded data:',e)}}}
 const SPEED={"schema":1,"finding":"F190","measured":"2026-09-30/2026-10-01","instrument":{"stage1":"vqlab speed-pair, one box (M3 Ultra 96 GiB), fresh process per arm, alternating, n=3, prompt 2048, gen 128, runtime @ 6d77ffa (VQ arms re-baked --runtime at shipped profile)","stage3":"vqlab speed-pair-knurlogic, pipeline split M3 + M4 over tcp (Thunderbolt), MTP off, KNURLOGIC_PREFILL_CHUNK=2048, n=3, prompt 2048, gen 128, different-prompt warm-up; runtime @ 9efb7e9 / cd0c953 (tool fixes only)"},"note":"Ratios are B/A per alternating pair against the family reference IN THE SAME SETUP; never compare across setups. Local Flash-Next VQ 2.1/3.2/4.4 are lab candidates (config differs from Hub). 35B VQ-5.4 pair was bimodal (reference dropped 60->49 tok/s mid-pair): not quotable. active_gb_per_tok from vqlab active-bytes; GLM omitted (tool counts every expert as dense until the n_routed_experts fix lands). 35B re-paired against mlx-community 8-bit on 2026-10-01 (VQ-5.4 pair bimodal again: reference 54.8/68.3/72.9 tok/s). Flash split rebased to the 8-bit: each ratio = (build/4-bit)/(8-bit/4-bit), both pairs from the same session ('via').","families":{"qwen3.8-27b":{"setup":"stage1","reference":"Qwen--Qwen3.8-27B-8bit","builds":{"Qwen--Qwen3.8-27B-8bit":{"decode_x":1.0,"prefill_x":1.0,"decode_tok_s":23.0,"reference":true,"active_gb_per_tok":27.23,"effective_gb_s":626.3},"comparator_27b_q4":{"decode_x":1.637,"decode_range":[1.634,1.643],"prefill_x":1.021,"prefill_range":[1.016,1.023],"decode_tok_s":37.71,"peak_gb":18.15,"active_gb_per_tok":14.42,"effective_gb_s":543.8},"TheDrainFlorist--Qwen3.8-27B-VQ-3.9bpw":{"decode_x":1.277,"decode_range":[1.275,1.279],"prefill_x":0.964,"prefill_range":[0.961,0.966],"decode_tok_s":29.48,"peak_gb":15.33,"active_gb_per_tok":11.75,"effective_gb_s":346.4},"TheDrainFlorist--Qwen3.8-27B-VQ-4.5bpw":{"decode_x":1.23,"decode_range":[1.218,1.243],"prefill_x":0.958,"prefill_range":[0.956,0.963],"decode_tok_s":28.34,"peak_gb":17.47,"active_gb_per_tok":13.88,"effective_gb_s":393.4},"TheDrainFlorist--Qwen3.8-27B-VQ-4.8bpw":{"decode_x":1.315,"decode_range":[1.31,1.316],"prefill_x":0.961,"prefill_range":[0.951,0.963],"decode_tok_s":30.32,"peak_gb":18.54,"active_gb_per_tok":14.95,"effective_gb_s":453.3}}},"qwen3.6-35b":{"setup":"stage1","reference":"mlx-community--Qwen3.6-35B-A3B-8bit","builds":{"mlx-community--Qwen3.6-35B-A3B-8bit":{"decode_x":1.0,"prefill_x":1.0,"decode_tok_s":55.94,"reference":true,"peak_gb":38.75},"TheDrainFlorist--Qwen3.6-35B-A3B-VQ-3.4bpw":{"decode_x":1.035,"decode_range":[1.02,1.099],"prefill_x":0.846,"prefill_range":[0.838,0.848],"decode_tok_s":60.35,"peak_gb":15.59,"active_gb_per_tok":1.8},"TheDrainFlorist--Qwen3.6-35B-A3B-VQ-3.8bpw":{"decode_x":1.114,"decode_range":[1.067,1.131],"prefill_x":0.849,"prefill_range":[0.845,0.859],"decode_tok_s":60.46,"peak_gb":17.51,"active_gb_per_tok":1.86},"TheDrainFlorist--Qwen3.6-35B-A3B-VQ-4.6bpw":{"decode_x":1.082,"decode_range":[1.066,1.117],"prefill_x":0.804,"prefill_range":[0.798,0.812],"decode_tok_s":60.16,"peak_gb":20.78,"active_gb_per_tok":1.96},"TheDrainFlorist--Qwen3.6-35B-A3B-VQ-5.4bpw":{"decode_x":0.868,"decode_range":[0.805,0.918],"prefill_x":0.845,"prefill_range":[0.823,0.86],"decode_tok_s":58.68,"peak_gb":24.55,"active_gb_per_tok":2.08,"quotable":false}}},"gemma-4-e4b":{"setup":"stage1","reference":"mlx-community--gemma-4-e4b-it-8bit","builds":{"mlx-community--gemma-4-e4b-it-8bit":{"decode_x":1.0,"prefill_x":1.0,"decode_tok_s":78.63,"reference":true,"active_gb_per_tok":4.84,"effective_gb_s":380.6},"TheDrainFlorist--gemma-4-e4b-it-VQ-PLE":{"decode_x":0.972,"decode_range":[0.972,0.999],"prefill_x":0.991,"prefill_range":[0.989,1.222],"decode_tok_s":77.39,"peak_gb":7.82,"active_gb_per_tok":4.86,"effective_gb_s":376.1}}},"qwen3.8-flash-next/one-box":{"setup":"stage1","reference":"Qwen--Qwen3.8-Flash-Next-3bit","builds":{"Qwen--Qwen3.8-Flash-Next-3bit":{"decode_x":1.0,"prefill_x":1.0,"decode_tok_s":22.19,"reference":true,"active_gb_per_tok":3.02,"effective_gb_s":67.0},"TheDrainFlorist--Qwen3.8-Flash-Next-VQ-2.1bpw":{"decode_x":0.819,"decode_range":[0.808,0.822],"prefill_x":0.93,"prefill_range":[0.909,1.051],"decode_tok_s":18.17,"peak_gb":50.65,"active_gb_per_tok":5.28,"effective_gb_s":95.9},"TheDrainFlorist--Qwen3.8-Flash-Next-VQ-3.2bpw":{"decode_x":0.725,"decode_range":[0.72,0.739],"prefill_x":0.852,"prefill_range":[0.785,0.916],"decode_tok_s":16.26,"peak_gb":76.75,"active_gb_per_tok":5.57,"effective_gb_s":90.6}}},"qwen3.8-flash-next/split":{"setup":"stage3","reference":"Qwen--Qwen3.8-Flash-Next-8bit","builds":{"Qwen--Qwen3.8-Flash-Next-4bit":{"decode_x":1.391,"prefill_x":1.431,"active_gb_per_tok":3.85,"via":"Qwen--Qwen3.8-Flash-Next-4bit"},"Qwen--Qwen3.8-Flash-Next-3bit":{"decode_x":1.416,"decode_range":[1.406,1.481],"prefill_x":1.425,"prefill_range":[1.197,1.488],"active_gb_per_tok":3.02,"via":"Qwen--Qwen3.8-Flash-Next-4bit"},"Qwen--Qwen3.8-Flash-Next-5bit":{"decode_x":1.32,"decode_range":[1.257,1.335],"prefill_x":1.318,"prefill_range":[1.213,1.777],"active_gb_per_tok":4.67,"via":"Qwen--Qwen3.8-Flash-Next-4bit"},"Qwen--Qwen3.8-Flash-Next-6bit":{"decode_x":1.018,"decode_range":[1.003,1.021],"prefill_x":1.202,"prefill_range":[1.156,1.75],"active_gb_per_tok":5.5,"via":"Qwen--Qwen3.8-Flash-Next-4bit"},"TheDrainFlorist--Qwen3.8-Flash-Next-VQ-4.4bpw":{"decode_x":0.947,"decode_range":[0.939,0.969],"prefill_x":1.249,"prefill_range":[1.12,1.265],"active_gb_per_tok":5.94,"via":"Qwen--Qwen3.8-Flash-Next-4bit"},"TheDrainFlorist--Qwen3.8-Flash-Next-VQ-5.5bpw":{"decode_x":0.887,"decode_range":[0.883,0.962],"prefill_x":1.092,"prefill_range":[0.844,1.107],"active_gb_per_tok":6.19,"via":"Qwen--Qwen3.8-Flash-Next-4bit"},"Qwen--Qwen3.8-Flash-Next-8bit":{"decode_x":1.0,"prefill_x":1.0,"active_gb_per_tok":7.15,"reference":true}}},"qwen3.5-397b/split":{"setup":"stage3","reference":"spicyneuron--Qwen3.5-397B-A17B-MLX-2.6bit","builds":{"spicyneuron--Qwen3.5-397B-A17B-MLX-2.6bit":{"decode_x":1.0,"prefill_x":1.0,"reference":true,"active_gb_per_tok":9.95},"TheDrainFlorist--Qwen3.5-397B-A17B-VQ-2.2bpw":{"decode_x":0.862,"decode_range":[0.856,0.868],"prefill_x":0.955,"prefill_range":[0.858,0.97],"active_gb_per_tok":8.33},"TheDrainFlorist--Qwen3.5-397B-A17B-VQ-2.4bpw":{"decode_x":0.89,"decode_range":[0.89,0.895],"prefill_x":0.928,"prefill_range":[0.864,1.001],"active_gb_per_tok":8.5},"TheDrainFlorist--Qwen3.5-397B-A17B-VQ-2.6bpw":{"decode_x":0.831,"decode_range":[0.823,0.843],"prefill_x":0.88,"prefill_range":[0.867,0.934],"active_gb_per_tok":8.73},"TheDrainFlorist--Qwen3.5-397B-A17B-VQ-3.1bpw":{"decode_x":0.771,"decode_range":[0.759,0.776],"prefill_x":0.832,"prefill_range":[0.761,0.852],"active_gb_per_tok":9.2}}},"glm-5.3-flash/split":{"setup":"stage3","reference":"zai-org--GLM-5.3-Flash-4bit","builds":{"zai-org--GLM-5.3-Flash-4bit":{"decode_x":1.0,"prefill_x":1.0,"reference":true},"zai-org--GLM-5.3-Flash-3bit":{"decode_x":1.077,"decode_range":[1.073,1.077],"prefill_x":1.119,"prefill_range":[1.103,1.153]},"TheDrainFlorist--GLM-5.3-Flash-VQ-2.7bpw":{"decode_x":0.81,"decode_range":[0.804,0.811],"prefill_x":1.104,"prefill_range":[1.061,1.115]},"TheDrainFlorist--GLM-5.3-Flash-VQ-3.1bpw":{"decode_x":0.758,"decode_range":[0.756,0.759],"prefill_x":0.923,"prefill_range":[0.899,1.037]},"TheDrainFlorist--GLM-5.3-Flash-VQ-3.6bpw":{"decode_x":0.696,"decode_range":[0.695,0.697],"prefill_x":0.964,"prefill_range":[0.948,1.019]}}}},"comparator_rule":"affine 8-bit where it runs in the setup; otherwise the largest affine that does (Flash one-box 3-bit, 397B spicyneuron 2.6-bit, GLM 4-bit)"};
 // ---- measured speed (F190): ratios vs each family's reference build, same setup
 const SPEED_FAM={q27:'qwen3.8-27b',q35:'qwen3.6-35b',g4b:'gemma-4-e4b',fn:'qwen3.8-flash-next/split',glm:'glm-5.3-flash/split',q397:'qwen3.5-397b/split'};
@@ -498,6 +499,10 @@ const usable=gb=>gb-osReserve(gb)-ctxReserve(gb);
 const mean=k=>{const v=k.filter(x=>x!=null);return v.reduce((a,b)=>a+b,0)/v.length};
 const $=q=>document.querySelector(q);
 const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+// one fetch helper: never throws; POST with a JSON body when one is given
+const api=async(u,body)=>{try{const r=await fetch(u,body===undefined?undefined:{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});let j=null;try{j=await r.json()}catch{}return{ok:r.ok,status:r.status,j}}catch{return{ok:false,status:0,j:null}}};
+// one size formatter; hub=true is the Hub/Downloads style (always GiB, '--' when unknown)
+const gib=(b,hub)=>hub?(Number.isFinite(b)?(b/2**30).toFixed(1)+' GiB':'--'):b==null?'':b>=2**40?(b/2**40).toFixed(2)+' TiB':b>=2**30?(b/2**30).toFixed(1)+' GiB':(b/2**20).toFixed(1)+' MiB';
 const f1=x=>x.toFixed(1);
 const fmtT=m=>m<60?m.toFixed(0)+' min':(m/60).toFixed(1)+' h';
 const TE=id=>TEACHERS.find(t=>t.id===id);
@@ -637,19 +642,19 @@ const LIVE={on:false,queues:JOBS_SNAPSHOT.queues,gpu:JOBS_SNAPSHOT.gpu,at:JOBS_S
 const PAGES=[{k:'library',n:'Library'},{k:'recipe',n:'Recipe'},{k:'jobs',n:'Jobs'},{k:'storage',n:'Storage'}];
 const ICON={library:'<svg viewBox="0 0 24 24"><path d="M4 19V5M10 19V9M16 19v-6M22 19H2"/></svg>',recipe:'<svg viewBox="0 0 24 24"><path d="M3 18C8 18 8 6 13 6s5 12 8 12"/><circle cx="13" cy="6" r="2"/></svg>',jobs:'<svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h10M4 18h13"/><circle cx="19" cy="12" r="2"/></svg>',storage:'<svg viewBox="0 0 24 24"><ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6v12c0 1.7 3.6 3 8 3s8-1.3 8-3V6M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></svg>'};
 let libCols={kl:false,bpw:false};
-let stepOpen='';let page=0, draft=newRecipe(), libFam='q35', jobSel='',showPre=false, show={d4:true,d2:true,d8:true,mixed:true,affine:true,'affine-sk':false,vq:true,lab:false};
-try{const st=JSON.parse(localStorage.getItem('vq.v18')||'{}');if(st.draft){draft=st.draft;draft.skel=false}if(st.page!=null)page=st.page;if(st.libFam)libFam=st.libFam;if(st.jobSel)jobSel=st.jobSel;if(Array.isArray(st.drafts))JDRAFTS=st.drafts;if(st.showPre)showPre=true;if(st.show)show=st.show;if(st.libCols)libCols={kl:!!st.libCols.kl,bpw:!!st.libCols.bpw}}catch{}
-function save(){try{localStorage.setItem('vq.v18',JSON.stringify({draft,page,libFam,jobSel,show,libCols,drafts:JDRAFTS,showPre}))}catch{}}
+let stepOpen='',stAdv=false;let page=0, draft=newRecipe(), libFam='q35', jobSel='',showPre=false, show={d4:true,d2:true,d8:true,mixed:true,affine:true,'affine-sk':false,vq:true,lab:false};
+try{const st=JSON.parse(localStorage.getItem('vq.v18')||'{}');if(st.draft){draft=st.draft;draft.skel=false}if(st.page!=null)page=st.page;if(st.libFam)libFam=st.libFam;if(st.jobSel)jobSel=st.jobSel;if(Array.isArray(st.drafts))JDRAFTS=st.drafts;if(st.showPre)showPre=true;if(st.stAdv)stAdv=true;if(st.show)show=st.show;if(st.libCols)libCols={kl:!!st.libCols.kl,bpw:!!st.libCols.bpw}}catch{}
+function save(){try{localStorage.setItem('vq.v18',JSON.stringify({draft,page,libFam,jobSel,show,libCols,drafts:JDRAFTS,showPre,stAdv}))}catch{}}
 if(!draft.size){const t=TE(draft.teacher);resolveAt(t,draft,(t.xr[0]+t.xr[1])/2)}
 
 // ================================================================ header
 const when=iso=>{const d=new Date(iso);return isNaN(d)?'':d.toLocaleString([],{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit',hour12:false})};
 async function poll(){if(location.protocol==='file:')return;
-  try{const [qr,rr]=await Promise.all([fetch('/api/queues?n=40'),fetch('/api/runs?n=1')]);if(!qr.ok||!rr.ok)throw 0;
-    const q=await qr.json(),r=await rr.json();if(!Array.isArray(q))throw 0;
-    const h=r.gpu&&r.gpu.lease_holder,g=r.gpu&&!r.gpu.error?{held:!!h,by:h?(h.holder||h.cmd||h.name||'unknown'):null}:null;
-    const ch=JSON.stringify([q,g])!==JSON.stringify([LIVE.queues,LIVE.gpu])||!LIVE.on;
-    LIVE.on=true;LIVE.queues=q;LIVE.gpu=g;if(ch&&page===2)render()}catch{}}
+  const [qr,rr]=await Promise.all([api('/api/queues?n=40'),api('/api/runs?n=1')]);
+  if(!qr.ok||!rr.ok||!rr.j||!Array.isArray(qr.j))return;
+  const q=qr.j,r=rr.j,h=r.gpu&&r.gpu.lease_holder,g=r.gpu&&!r.gpu.error?{held:!!h,by:h?(h.holder||h.cmd||h.name||'unknown'):null}:null;
+  const ch=JSON.stringify([q,g])!==JSON.stringify([LIVE.queues,LIVE.gpu])||!LIVE.on;
+  LIVE.on=true;LIVE.queues=q;LIVE.gpu=g;if(ch&&page===2)render()}
 loadFleet();poll();setInterval(()=>{if(page===2||!LIVE.on)poll()},10000);
 function renderFlow(){
   const DL='<button class="st" id="dlnav"><svg viewBox="0 0 24 24"><path d="M12 4v11M7 11l5 5 5-5M5 20h14"/></svg><span class="n">Downloads</span><span class="badge" id="dlbadge" hidden></span></button>';
@@ -759,7 +764,7 @@ function inspector(t,r){
   const kl=r.one?bar('mean',mean(r.kl))+tbar(r.top1):r.lit?bar('literary',r.kl[2]):['prose','code','literary'].map((c,i)=>bar(c,r.kl[i])).join('')+bar('mean',mean(r.kl))+tbar(r.top1);
   const comp=g?Object.entries(g.geo).sort((a,b)=>b[1]-a[1]):null,tot=comp?comp.reduce((a,c)=>a+c[1],0):0;
   const PAL=['var(--acc)','var(--teal)','var(--warn)','var(--g1)','var(--dim)'];const col=k=>PAL[comp.findIndex(c=>c[0]===k)%PAL.length];
-  const drift=g&&g.drift&&g.drift.length,stale=g&&g.verdict==='STALE',bad=g&&(g.verdict==='FAIL'||g.verdict==='MISSING'),hubd=g&&g.drift&&g.drift.length;
+  const drift=g&&g.drift&&g.drift.length,stale=g&&g.verdict==='STALE',bad=g&&(g.verdict==='FAIL'||g.verdict==='MISSING');
   const mac=MACHINES.find(([gb])=>usable(gb)>=r.gib+(shipTower(r)?vis:0));
   const sd=speedOf(t,r),sk=speedKey(t,r),dm=v=>`<b style="color:var(--dim)">${v}</b>`;
   const sinfo=sd?INFO(`Tokens/s relative to ${esc(sd.ref)}, timed back to back in the same setup. ${SETUP_TXT[sd.setup]}. Prompt 2048 tokens, 128 generated, n=3 alternating pairs, latest runtime (F190).${sd.via?` The ratio is chained through ${esc(sd.via)}, timed in the same session.`:''}`):INFO('Tokens/s relative to the family reference build, timed back to back in the same setup. Prompt 2048 tokens, 128 generated, n=3 alternating pairs, latest runtime (F190). This build has not been timed.');
@@ -872,7 +877,6 @@ let pickFam='all',pickKind='all';
 // model_types VQ Lab has a family profile for: families/*/teachers/*/profile.json
 // (model_type + text_model_type), plus the gemma4 teachers already in TEACHERS.
 const VQ_TYPES=new Set(['qwen3_5','qwen3_5_text','qwen3_5_moe','qwen3_5_moe_text','qwen4_exp','qwen4_exp_text','glm5_next','glm5_next_text','gemma4','gemma4_text']);
-const GIB=2**30, gbs=b=>Number.isFinite(b)?(b/GIB).toFixed(1)+' GiB':'--';
 const HF={q:null,res:null,err:'',open:'',timer:0,seq:0};
 let DLS=[],DLCONF='';
 const dlOf=id=>DLS.find(d=>d.id===id);
@@ -904,7 +908,7 @@ function hubDialog(){
   const line=local?'already a local teacher':busy?'downloading…':r.why?r.why:r.gated?'gated — needs access on your Hub account':'';
   const can=!r.why&&!local&&!busy;
   const el=document.createElement('div');el.className='hfdlg';
-  el.innerHTML=`<div class="hfbox"><div class="hfttl">${esc(id)}</div><div class="hfsz">${r.why?esc(r.dtype||''):esc(r.dtype||'bf16')+' teacher'}</div><div class="hfsz">${gbs(r.size)}</div><div class="vs hfnote">${esc(line)}</div><div class="hfbtns"><button class="mini" data-c>Cancel</button><button class="mini pri" data-d${can?'':' disabled'}>Download</button></div></div>`;
+  el.innerHTML=`<div class="hfbox"><div class="hfttl">${esc(id)}</div><div class="hfsz">${r.why?esc(r.dtype||''):esc(r.dtype||'bf16')+' teacher'}</div><div class="hfsz">${gib(r.size,1)}</div><div class="vs hfnote">${esc(line)}</div><div class="hfbtns"><button class="mini" data-c>Cancel</button><button class="mini pri" data-d${can?'':' disabled'}>Download</button></div></div>`;
   const esc_=e=>{if(e.key==='Escape'){e.stopPropagation();close()}};
   const close=()=>{removeEventListener('keydown',esc_,true);HF.open='';el.remove();renderHub()};
   HF.esc=esc_;addEventListener('keydown',esc_,true);
@@ -915,7 +919,7 @@ function hubDialog(){
 }
 function renderHub(){
   const loc=new Set(TEACHERS.map(t=>t.n));
-  const row=r=>`<div class="hfrow${r.why&&!loc.has(r.id)?' no':''}"><button class="prow" aria-current="${HF.open===r.id}" data-hf="${esc(r.id)}"><span class="n">${esc(r.id)}${r.gated?' <span class="tag">GATED</span>':''}</span><span class="m">${gbs(r.size)}</span><span class="d">${r.downloads.toLocaleString()} downloads${r.why?' · '+esc(r.why):loc.has(r.id)?' · already a local teacher':''}</span></button></div>`;
+  const row=r=>`<div class="hfrow${r.why&&!loc.has(r.id)?' no':''}"><button class="prow" aria-current="${HF.open===r.id}" data-hf="${esc(r.id)}"><span class="n">${esc(r.id)}${r.gated?' <span class="tag">GATED</span>':''}</span><span class="m">${gib(r.size,1)}</span><span class="d">${r.downloads.toLocaleString()} downloads${r.why?' · '+esc(r.why):loc.has(r.id)?' · already a local teacher':''}</span></button></div>`;
   $('#prows').innerHTML=HF.err?`<div class="psect no">${esc(HF.err)}</div>`:HF.res===null?'<div class="psect no">searching…</div>':HF.res.length?HF.res.map(row).join(''):'<div class="psect no">nothing matches</div>';
   $('#prows').querySelectorAll('[data-hf]').forEach(v=>v.onclick=()=>{HF.open=v.dataset.hf;hubDialog()});
   hubDialog();
@@ -931,10 +935,10 @@ function dlRender(){
   const el=$('#dllist');if(!el||$('#dlov').classList.contains('hidden'))return;
   el.innerHTML=DLS.length?DLS.map(D=>{
     const pct=D.total?Math.min(100,Math.round(100*D.bytes/D.total)):0,run=D.state==='downloading',id=esc(D.id);
-    const st=run?`${pct}% · ${gbs(D.bytes)} of ${gbs(D.total)}`:D.state==='done'?'done':`stopped · ${gbs(D.bytes)} of ${gbs(D.total)}`;
+    const st=run?`${pct}% · ${gib(D.bytes,1)} of ${gib(D.total,1)}`:D.state==='done'?'done':`stopped · ${gib(D.bytes,1)} of ${gib(D.total,1)}`;
     const btn=(k,t)=>`<button class="mini" data-${k}="${id}" title="${t}" aria-label="${t}">${DLICON[k]||'×'}</button>`;
     const acts=run?btn('stop','stop'):D.state==='done'?`<button class="mini pri" data-onb="${id}">Onboard →</button>`+btn('clear','clear')
-      :DLCONF===D.id?`<span class="dlconf">delete ${gbs(D.bytes)}? <button class="mini danger" data-yes="${id}">delete</button> <button class="mini" data-no="${id}">keep</button></span>`
+      :DLCONF===D.id?`<span class="dlconf">delete ${gib(D.bytes,1)}? <button class="mini danger" data-yes="${id}">delete</button> <button class="mini" data-no="${id}">keep</button></span>`
       :btn('resume','resume')+btn('trash','delete files');
     return `<div class="dlrow ${D.state}"><div class="dlhd"><span class="vn">${id}</span><span class="vs">${esc(st)}</span>${acts}</div>${run?`<div class="lbar"><i style="width:${pct}%"></i></div>`:''}</div>`}).join(''):'<div class="psect no">no downloads</div>';
   const on=(k,fn)=>el.querySelectorAll(`[data-${k}]`).forEach(x=>x.onclick=()=>{fn(x.dataset[k]);dlRender()});
@@ -957,7 +961,7 @@ function renderPicker(){
   if(pickFam==='hf'){
     renderHub();return}
   const list=all.filter(t=>(pickFam==='all'||creator(t)===pickFam)&&(pickKind==='all'||t.kind.toLowerCase().startsWith(pickKind))&&(!q||(t.n+t.short).toLowerCase().includes(q)));
-  const also=(()=>{const x=fndOrig().filter(m=>m.family!=null&&!all.some(t=>t.n&&baseKey(t.n)===baseKey(m.name))&&(!q||m.name.toLowerCase().includes(q)));
+  const also=(()=>{const x=FOUND.orig.filter(m=>m.family!=null&&!all.some(t=>t.n&&baseKey(t.n)===baseKey(m.name))&&(!q||m.name.toLowerCase().includes(q)));
     return x.length?`<div class="psect no">Also on this Mac ${INFO('Onboarding profiles the model so a recipe can price it.')}</div>`+x.map(m=>`<button class="prow no" tabindex="-1" style="cursor:default"><span class="n">${esc(m.name)}</span><span class="m">needs onboarding</span><span class="d">${esc(m.format)} · ${gib(m.bytes)}</span></button>`).join(''):''})();
   const row=t=>t.draft?`<button class="prow no"><span class="n">${esc(t.short)}</span><span class="m">${esc(t.kind)} · not onboarded</span><span class="d">onboard runs profile, loader, cache determinism and the init sweep · about two hours</span></button>`
     :`<button class="prow" aria-current="${t.id===(page===0?libFam:draft.teacher)}" data-pt="${t.id}"><span class="n">${esc(t.short)}${fndFor(t)?'<span class="otag" title="found on this Mac">on this Mac</span>':''}</span><span class="m">${esc(t.kind)}</span><span class="d">${t.rows.filter(r=>r.kind==='vq').length} shipped · ${t.scored.length} builds measured · ${t.fits} fits in store${t.note?' · '+t.note:''}${t.judge?' · <span style="color:var(--warn)">judged blind against bf16</span>':''}</span></button>`;
@@ -1074,56 +1078,64 @@ function wirePicker(){$('#pick').onclick=()=>{$('#picker').classList.remove('hid
   $('#psearch').oninput=()=>{if(pickFam!=='hf')return renderPicker();clearTimeout(HF.timer);HF.res=null;HF.err='';HF.open='';renderHub();HF.timer=setTimeout(()=>{HF.timer=0;hubSearch($('#psearch').value.trim())},250)};document.onkeydown=e=>{if(e.key==='Escape')$('#picker')?.classList.add('hidden')}}
 
 // ================================================================ storage
-const ST={use:null,uerr:'',cfg:null,scr:null,rec:null,err:'',serr:'',edit:null,ed:{},sort:{k:'bytes',d:-1},tab:'folders',copied:false,started:false};
-const gib=b=>b==null?'':b>=2**40?(b/2**40).toFixed(2)+' TiB':b>=2**30?(b/2**30).toFixed(1)+' GiB':(b/2**20).toFixed(1)+' MiB';
-async function stLoad(which){if(location.protocol==='file:')return;
-  const redo=()=>{if(page===3&&!Object.values(ST.ed).some(e=>e.busy||e.picking)&&!document.activeElement?.classList?.contains('fld'))render()};
-  const get=async(u,f)=>{try{const r=await fetch(u);if(!r.ok)throw 0;await f(await r.json())}catch{return 1}};
-  await Promise.all([
-    get('/api/settings',j=>{ST.cfg=j;ST.err=''}).then(e=>{if(e)ST.err='settings unavailable';redo()}),
-    get('/api/storage/usage',j=>{ST.use=j;ST.uerr=''}).then(e=>{if(e)ST.uerr='disk usage unavailable';redo()}),
-    Promise.all([fetch('/api/scratch'),fetch('/api/scratch/reclaimable')]).then(async([a,b])=>{if(!a.ok||!b.ok)throw 0;ST.scr=await a.json();ST.rec=await b.json();ST.serr=''}).catch(()=>{ST.serr='scratch unavailable'}).then(redo)])}
+const ST={use:null,uerr:'',cfg:null,scr:null,rec:null,err:'',serr:'',ed:{},seq:0,sort:{k:'bytes',d:-1},tab:'folders',copied:false,started:false};
+async function stLoad(){if(location.protocol==='file:')return;
+  const n=++ST.seq;
+  const [a,u,[sc,rc]]=await Promise.all([api('/api/settings'),api('/api/storage/usage'),Promise.all([api('/api/scratch'),api('/api/scratch/reclaimable')])]);
+  if(n!==ST.seq)return;
+  if(a.ok&&a.j){ST.cfg=a.j;ST.err=''}else ST.err='settings unavailable';
+  if(u.ok&&u.j){ST.use=u.j;ST.uerr='';if(u.j.configured===false&&!ST.ed.lab)ST.ed.lab={value:u.j.lab,create:true,seed:true,error:'',needCreate:false}}else ST.uerr='disk usage unavailable';
+  if(sc.ok&&rc.ok&&sc.j&&rc.j){ST.scr=sc.j;ST.rec=rc.j;ST.serr=''}else ST.serr='scratch unavailable';
+  if(page===3&&!Object.values(ST.ed).some(e=>e.busy||e.picking)&&!document.activeElement?.classList?.contains('fld'))render()}
+// leaving Storage drops unsaved edits (the first-run default goes back to its seed)
+function stRevert(k){const E=ST.ed[k];if(!E)return;if(E.seed&&ST.use)Object.assign(E,{value:ST.use.lab,error:'',needCreate:false});else delete ST.ed[k]}
+function stDrop(){for(const k in ST.ed)if(!ST.ed[k].busy&&!ST.ed[k].picking)stRevert(k)}
 const STCOL={models:'var(--acc)',scratch:'var(--teal)',teachers:'var(--mix)',fit_store:'var(--pink)',records:'var(--ok)'};
 const stCol=k=>STCOL[k]||'var(--g2)';
-const FOUND={open:new Set(),models:[],scanning:false,loaded:false,timer:0};
+const FOUND={open:new Set(),models:[],orig:[],quant:[],have:new Set(),total:0,scanning:false,loaded:false,err:'',timer:0,seq:0,inflight:0};
 const baseKey=n=>String(n||'').split('/').pop().toLowerCase().replace(/-bf16$/,'');
 function fndGroup(list){const g=new Map();for(const m of list){const k=String(m.name||'').toLowerCase()+'||'+m.use;if(g.has(k))g.get(k).copies.push(m);else g.set(k,Object.assign({},m,{gk:k,copies:[m]}))}return[...g.values()]}
-const fndOrig=()=>fndGroup(FOUND.models.filter(m=>m.use==='original'));
-const fndFor=t=>fndOrig().find(m=>baseKey(m.name)===baseKey(t.n));
+const fndFor=t=>FOUND.have.has(baseKey(t.n));
 function fndRedraw(){if(page===3)render();if($('#picker')&&!$('#picker').classList.contains('hidden')&&pickFam!=='hf')renderPicker()}
+// poll again only while a scan runs and the user is on Storage; wireStorage resumes it on return
+function fndNext(ms){clearTimeout(FOUND.timer);FOUND.timer=0;if(FOUND.scanning&&page===3)FOUND.timer=setTimeout(()=>{FOUND.timer=0;fndLoad()},ms)}
 async function fndLoad(){if(location.protocol==='file:')return;
-  try{const r=await fetch('/api/models/found');if(!r.ok)throw 0;const j=await r.json();FOUND.models=j.models||[];FOUND.scanning=!!j.scanning;FOUND.loaded=true}catch{FOUND.scanning=false}
-  fndRedraw();clearTimeout(FOUND.timer);if(FOUND.scanning)FOUND.timer=setTimeout(fndLoad,2000)}
-async function fndScan(){if(FOUND.scanning)return;FOUND.scanning=true;fndRedraw();
-  try{const r=await fetch('/api/models/scan',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});if(!r.ok)throw 0}catch{FOUND.scanning=false;fndRedraw();return}
-  clearTimeout(FOUND.timer);FOUND.timer=setTimeout(fndLoad,1000)}
+  const n=++FOUND.seq;FOUND.inflight++;const r=await api('/api/models/found');FOUND.inflight--;
+  if(n!==FOUND.seq)return;
+  if(r.ok&&r.j){const M=FOUND.models=r.j.models||[];FOUND.orig=fndGroup(M.filter(m=>m.use==='original'));FOUND.quant=fndGroup(M.filter(m=>m.use==='quantized'));
+    FOUND.have=new Set(FOUND.orig.map(m=>baseKey(m.name)));FOUND.total=FOUND.orig.concat(FOUND.quant).reduce((a,m)=>a+m.copies.reduce((x,c)=>x+(c.bytes||0),0),0);
+    FOUND.scanning=!!r.j.scanning;FOUND.loaded=true;FOUND.err=''}
+  else{FOUND.scanning=false;FOUND.err='model list unavailable'}
+  fndNext(2000);fndRedraw()}
+async function fndScan(){if(FOUND.scanning)return;FOUND.scanning=true;FOUND.err='';++FOUND.seq;FOUND.inflight++;fndRedraw();
+  const r=await api('/api/models/scan',{});FOUND.inflight--;
+  ++FOUND.seq;
+  if(!r.ok){FOUND.scanning=false;FOUND.err='could not start the scan';fndRedraw();return}
+  fndNext(1000)}
 function fndCard(){
-  const M=FOUND.models,o=fndGroup(M.filter(m=>m.use==='original')),q=fndGroup(M.filter(m=>m.use==='quantized')),inc=M.filter(m=>m.use==='incomplete');
+  const M=FOUND.models,o=FOUND.orig,q=FOUND.quant,inc=M.filter(m=>m.use==='incomplete');
   const ro=(l,v)=>`<div class="readout"><small>${l}</small><b>${v}</b></div>`,L=FOUND.loaded;
   const big=(a,b)=>(b.bytes||0)-(a.bytes||0);
   const row=m=>{const n=m.copies.length,open=n>1&&FOUND.open.has(m.gk);
     const more=open?`<tr class="cps"><td colspan="5">${m.copies.map(c=>`<div title="${esc(c.path)}"><span>${esc(c.path)}</span><i>${esc(c.source)} · ${gib(c.bytes)}</i></div>`).join('')}</td></tr>`:'';
-    return `<tr${n>1?` class="multi" data-gk="${esc(m.gk)}" aria-expanded="${open}"`:''}><td title="${esc(m.copies.map(c=>c.path).join('\n'))}">${esc(m.name)}${m.family==null?` <span class="nos" title="vqlab cannot build from this architecture yet">not supported yet</span>`:''}</td><td class="src" title="${esc(m.source)}">${esc(m.source)}${n>1?`<span class="ctag">+${n-1} cop${n===2?'y':'ies'}</span>`:''}</td><td class="use"><span class="utag ${m.use==='original'?'ok':''}">${m.use}</span></td><td class="fmt" title="${esc(m.format)}">${esc(m.format)}</td><td class="num">${gib(m.bytes)}</td></tr>${more}`};
+    return `<tr${n>1?` class="multi" data-gk="${esc(m.gk)}" aria-expanded="${open}"`:''}><td title="${esc(m.copies.map(c=>c.path).join('\n'))}">${esc(m.name)}${m.family==null?` <span class="nos" title="vqlab cannot build from this architecture yet">not supported yet</span>`:''}</td><td class="src" title="${esc(m.source)}">${esc(m.source)}${n>1?`<span class="ctag">+${n-1} cop${n===2?'y':'ies'}</span>`:''}</td><td class="use"><span class="utag ${m.use==='original'?'ok':''}">${esc(m.use)}</span></td><td class="fmt" title="${esc(m.format)}">${esc(m.format)}</td><td class="num">${gib(m.bytes)}</td></tr>${more}`};
   const sum=(t)=>`<tr class="sum"><td colspan="5">${esc(t)}</td></tr>`;
   const sums=[];
   if(inc.length)sums.push(sum(inc.length+' incomplete downloads'));
   const unr={};M.filter(m=>m.use==='unreadable').forEach(m=>{(unr[m.source]=unr[m.source]||[]).push(m)});
   for(const [src,a] of Object.entries(unr)){const n=a.reduce((x,m)=>x+(m.count||1),0);sums.push(sum(src+': '+n+' model'+(n===1?'':'s')+(a.some(m=>m.format==='GGUF')?' (GGUF, not readable)':' (not readable)')))}
-  const body=L?[...o.sort(big),...q.sort(big)].map(row).join('')+sums.join(''):'';
-  return `<div class="cart"><div class="fhd"><div class="ro">Models on this Mac ${INFO('Found in the Hugging Face cache, LM Studio, exo and Ollama. Nothing is copied or linked; builds read originals where they are.')}</div><button class="mini" id="fscan"${FOUND.scanning?' disabled':''}>${FOUND.scanning?'scanning…':'Rescan'}</button></div>
-    <div class="readouts" style="grid-template-columns:repeat(3,1fr);margin-top:8px">${ro('originals',L?o.length:'&nbsp;')}${ro('quantized',L?q.length:'&nbsp;')}${ro('total',L?gib(o.concat(q).reduce((a,m)=>a+m.copies.reduce((x,c)=>x+(c.bytes||0),0),0)):'&nbsp;')}</div>
-    <div class="fmod" id="fmod"><table><colgroup><col><col style="width:12em"><col style="width:6.5em"><col style="width:9em"><col style="width:6.5em"></colgroup><tbody>${body}</tbody></table></div></div>`}
-const stAdv=()=>{try{return localStorage.getItem('vq.stadv')==='1'}catch{return false}};
-function stSrc(l){const s=l.source||'';return !s?'':(ST.cfg&&s===ST.cfg.config_file)||/\.toml$/.test(s)?'config file':s}
+  const body=L?[...o].sort(big).concat([...q].sort(big)).map(row).join('')+sums.join(''):'';
+  return `<div class="cart"><div class="fhd"><div class="ro">Models on this Mac ${INFO('Found in the Hugging Face cache, LM Studio, exo and Ollama. Nothing is copied or linked; builds read originals where they are.')}</div><button class="mini" id="fscan"${FOUND.scanning?' disabled':''}>${FOUND.scanning?'scanning…':'Rescan'}</button></div>${FOUND.err?`<div class="err">${esc(FOUND.err)}</div>`:''}
+    <div class="readouts r3" style="margin-top:8px">${ro('originals',L?o.length:'&nbsp;')}${ro('quantized',L?q.length:'&nbsp;')}${ro('total',L?gib(FOUND.total):'&nbsp;')}</div>
+    <div class="fmod stbl" id="fmod"><table><colgroup><col><col style="width:12em"><col style="width:6.5em"><col style="width:9em"><col style="width:6.5em"></colgroup><tbody>${body}</tbody></table></div></div>`}
 const stLoc=k=>ST.cfg&&ST.cfg.locations.find(x=>x.key===k);
 const FOLDER='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>';
-ST.ed={};
 const stOrig=k=>k==='lab'?(ST.use?ST.use.lab:''):((stLoc(k)||{paths:[]}).paths[0]||'');
 function stFld(k,o,opt){const E=ST.ed[k],v=E?E.value:o,off=E&&(E.picking||E.busy);
   return `<div class="fw"><input class="fld${opt.faint&&!E?' faint':''}" type="text" data-fk="${esc(k)}" value="${esc(v)}" title="${esc(v)}" spellcheck="false" aria-label="${esc(opt.label||k)}">${opt.pick?`<button class="fbtn${E&&E.picking?' busy':''}" data-fpick="${esc(k)}" title="Choose folder" aria-label="Choose folder"${off?' disabled':''}>${FOLDER}</button>`:''}${opt.save?`<button class="mini pri" data-fsave="${esc(k)}"${off?' disabled':''}>Save</button>`:''}</div>`}
-const stErr=(k,cls)=>{const E=ST.ed[k];return E&&E.error?`<div class="err">${esc(E.error)}${E.needCreate?`<button class="mini" data-fcreate="${esc(k)}">create it</button>`:''}</div>`:''};
+const stErr=k=>{const E=ST.ed[k];return E&&E.error?`<div class="err">${esc(E.error)}${E.needCreate?`<button class="mini" data-fcreate="${esc(k)}">create it</button>`:''}</div>`:''};
 function stRow(l){const one=l.paths.length===1,p0=l.paths[0]||'';
-  const mp=(stLoc('models')||{paths:[]}).paths[0],shared=l.key==='teachers'&&one&&(l.source==='same as models'||(!!mp&&p0===mp));
+  const shared=one&&!!l.shared_with;
   const desc=shared?'Full-precision models that builds start from. They live with your models unless you keep them on another drive.':l.description;
   const nm=(ST.use&&ST.use.volumes.flatMap(v=>v.locations).find(x=>x.key===l.key)||{}).label||(l.key==='teachers'?'bf16 teachers':l.key);
   const fld=one?stFld(l.key,p0,{faint:shared,pick:l.key!=='gpu_lease',label:nm}):`<div>${l.paths.map(p=>`<div class="fld ro" title="${esc(p)}">${esc(p)}</div>`).join('')}</div>`;
@@ -1139,7 +1151,6 @@ function stSetup(){const u=ST.use,c=stLoc('lab'),p=u.lab;
   const vols=[...u.volumes].sort((a,b)=>b.mount.length-a.mount.length),v=vols.find(x=>p===x.mount||p.startsWith(x.mount.replace(/\/+$/,'')+'/'));
   const free=v?v.free:(c&&c.free_bytes&&c.free_bytes[0]);
   const warn=v&&v.system&&v.free<500*2**30;
-  if(!ST.ed.lab)ST.ed.lab={value:p,create:true,error:'',needCreate:false};
   return `<div class="cart"><div class="ro">Choose where VQ Lab keeps models ${INFO('Everything vqlab stores goes in folders inside this one, unless a location is set on its own.')}</div>
     <div style="margin-top:6px">${stFld('lab',p,{pick:true,save:true,label:'Lab folder'})}</div>
     <div class="ro" style="margin:8px 0 0">${free!=null?gib(free)+' free on this disk':'&nbsp;'}</div>
@@ -1154,7 +1165,7 @@ function pgStorage(){
       <div style="margin-top:6px">${stFld('lab',lab,{pick:!!labL,label:'Lab folder'})}</div>${stErr('lab')}</div>`;
   const disks=u?u.volumes.map(stDisk).join(''):`<div class="ro">${esc(ST.uerr||'sizing disks…')}</div>`;
   const ORD=['models','teachers','scratch','fit_store','records'],rows=c?c.locations.filter(l=>ORD.includes(l.key)).sort((a,b)=>ORD.indexOf(a.key)-ORD.indexOf(b.key)):[];
-  const adv=c?c.locations.filter(l=>l.key==='roots'||l.key==='gpu_lease'):[],open=stAdv();
+  const adv=c?c.locations.filter(l=>l.key==='roots'||l.key==='gpu_lease'):[],open=stAdv;
   const locs=c?rows.map(stRow).join(''):`<div class="ro">${esc(ST.err||'loading…')}</div>`;
   let right;
   if(!sc)right=`<div class="ro">${esc(ST.serr||'sizing work in progress…')}</div>`;
@@ -1164,49 +1175,59 @@ function pgStorage(){
     const tot=sc.folders.reduce((a,f)=>a+f.bytes,0);
     const ro=(l,v)=>`<div class="readout"><small>${l}</small><b>${v}</b></div>`;
     const tbl=ST.tab==='folders'
-      ?`<div class="sscroll" id="sscroll"><table><thead><tr>${th('name','name')}${th('bytes','size','num')}${th('mtime','modified','num')}</tr></thead><tbody>${rws.map(f=>`<tr><td title="${esc(f.path)}">${esc(f.name)}</td><td class="num">${gib(f.bytes)}</td><td class="num">${esc(new Date(f.mtime*1000).toLocaleDateString([],{month:'short',day:'numeric'}))}</td></tr>`).join('')}</tbody></table></div>`
-      :`<div class="sscroll" id="sscroll"><table><thead><tr><th>path</th><th class="num">size</th></tr></thead><tbody>${(rc.reclaimable||[]).map(r=>`<tr><td title="${esc(r.path)}">${esc(r.path)}</td><td class="num">${gib(r.bytes)}</td></tr>`).join('')||'<tr><td>nothing reclaimable</td><td></td></tr>'}</tbody></table></div>
+      ?`<div class="sscroll stbl" id="sscroll"><table><thead><tr>${th('name','name')}${th('bytes','size','num')}${th('mtime','modified','num')}</tr></thead><tbody>${rws.map(f=>`<tr><td title="${esc(f.path)}">${esc(f.name)}</td><td class="num">${gib(f.bytes)}</td><td class="num">${esc(new Date(f.mtime*1000).toLocaleDateString([],{month:'short',day:'numeric'}))}</td></tr>`).join('')}</tbody></table></div>`
+      :`<div class="sscroll stbl" id="sscroll"><table><thead><tr><th>path</th><th class="num">size</th></tr></thead><tbody>${(rc.reclaimable||[]).map(r=>`<tr><td title="${esc(r.path)}">${esc(r.path)}</td><td class="num">${gib(r.bytes)}</td></tr>`).join('')||'<tr><td>nothing reclaimable</td><td></td></tr>'}</tbody></table></div>
         <div class="ro" style="margin:10px 0 4px;display:flex;justify-content:space-between;align-items:center"><span>reclaimable ${gib(rc.total_bytes)}</span><button class="mini" id="scopy">${ST.copied?'Copied':'Copy'}</button></div>
         <div class="cmd rmblk">${esc((rc.rm_lines||[]).join('\n'))||'&nbsp;'}</div>`;
-    right=`<div class="readouts" style="grid-template-columns:repeat(3,1fr)">${ro('folders',sc.folders.length)}${ro('total',gib(tot))}${ro('reclaimable',rc?gib(rc.total_bytes):'')}</div>
+    right=`<div class="readouts r3">${ro('folders',sc.folders.length)}${ro('total',gib(tot))}${ro('reclaimable',rc?gib(rc.total_bytes):'')}</div>
       <div class="stabs"><button class="mini" aria-pressed="${ST.tab==='folders'}" data-stab="folders">Folders</button><button class="mini" aria-pressed="${ST.tab==='recl'}" data-stab="recl">Reclaimable</button></div>${tbl}`}
   return `<section class="panel stpage"><h2>Storage</h2><div class="stor"><div class="stl">${top}
     <div class="cart"><div class="ro">Disks</div><div class="disks">${disks}</div></div>
     <div class="cart"><div class="ro">Locations</div><div class="lscroll" id="lscroll">${locs}
       <div class="advh" data-sadv="1">${open?'▾':'▸'} Advanced</div>${open?`<div class="advb">${adv.map(stRow).join('')}</div>`:''}</div></div></div>
     <div class="strt">${fndCard()}<div class="cart"><div class="ro">Work in progress ${INFO('Builds and run outputs live here. Nothing on this page deletes anything.')}</div>${right}</div></div></div></section>`}
+// Storage helpers (top level): selectors from API keys are escaped
+const fldEl=k=>document.querySelector(`.fld[data-fk="${CSS.escape(k)}"]`);
+const refocus=k=>{const i=fldEl(k);if(i){i.focus();i.setSelectionRange(i.value.length,i.value.length)}};
+// size the three scrolling panes: read every rect first, then write
+function stFit(){const m=$('#fmod'),L=$('#lscroll'),e=$('#sscroll'),h=innerHeight;
+  const tm=m&&m.getBoundingClientRect(),tl=L&&L.getBoundingClientRect().top,te=e&&e.getBoundingClientRect().top;
+  const mh=m&&Math.max(120,Math.round((h-tm.top-90)*.4));
+  if(m)m.style.height=mh+'px';
+  if(L)L.style.maxHeight=Math.max(120,h-tl-90)+'px';
+  if(e)e.style.maxHeight=Math.max(120,h-(m?te+mh-tm.height:te)-90)+'px'}
+async function stSave(k,create){const E=ST.ed[k];if(!E||E.busy||E.value===stOrig(k)&&!E.create)return;
+  E.busy=true;E.error='';E.needCreate=false;render();
+  const r=await api('/api/settings',{key:k,path:E.value,create:!!(create||E.create)}),j=r.j||{};
+  if(r.ok&&j.ok){delete ST.ed[k];document.activeElement?.blur?.();await stLoad();return}
+  E.error=r.status?j.error||('request failed ('+r.status+')'):'request failed';E.needCreate=!!r.status&&/exist|no such|not found/i.test(E.error)&&!E.create;
+  E.busy=false;if(page===3){render();refocus(k)}}
+let pickSeq=0;
+async function stPick(k){const E=ST.ed[k]||(ST.ed[k]={value:stOrig(k),error:'',needCreate:false}),tok=E.tok=++pickSeq;
+  E.picking=true;
+  const r=await api('/api/pick-folder',{start:E.value||stOrig(k)});let j=r.j||{};
+  if(!r.status)j={ok:false,error:'folder chooser unavailable'};else if(!r.ok&&!j.error&&!j.cancelled)j={ok:false,error:'folder chooser failed ('+r.status+')'};
+  if(ST.ed[k]!==E||E.tok!==tok)return;
+  E.picking=false;
+  if(j.ok&&j.path){E.value=j.path;E.error='';await stSave(k);return}
+  if(!j.cancelled&&j.error)E.error=j.error;
+  if(E.value===stOrig(k)&&!E.error&&!E.create)delete ST.ed[k];
+  if(page===3)render()}
 function wireStorage(){
-  const fit=()=>{const m=$('#fmod'),e=$('#sscroll');if(m){const av=innerHeight-m.getBoundingClientRect().top-90;m.style.height=Math.max(120,Math.round(av*.4))+'px'}
-    {const L=$('#lscroll');if(L){const t=L.getBoundingClientRect().top;L.style.maxHeight=Math.max(120,innerHeight-t-90)+'px'}}
-    if(e)e.style.maxHeight=Math.max(120,innerHeight-e.getBoundingClientRect().top-90)+'px'};fit();
+  stFit();
   {const b=$('#fscan');if(b)b.onclick=fndScan;document.querySelectorAll('#fmod tr.multi').forEach(r=>r.onclick=()=>{const k=r.dataset.gk;FOUND.open.has(k)?FOUND.open.delete(k):FOUND.open.add(k);render()})}
   if(!ST.started){ST.started=true;stLoad()}
-  document.querySelectorAll('[data-sadv]').forEach(b=>b.onclick=()=>{try{localStorage.setItem('vq.stadv',stAdv()?'0':'1')}catch{}render()});
+  if(FOUND.scanning&&!FOUND.timer&&!FOUND.inflight)fndLoad();
+  document.querySelectorAll('[data-sadv]').forEach(b=>b.onclick=()=>{stAdv=!stAdv;render()});
   document.querySelectorAll('[data-ssort]').forEach(h=>h.onclick=()=>{const k=h.dataset.ssort;ST.sort=ST.sort.k===k?{k,d:-ST.sort.d}:{k,d:k==='name'?1:-1};render()});
   document.querySelectorAll('[data-stab]').forEach(b=>b.onclick=()=>{ST.tab=b.dataset.stab;render()});
-  const refocus=k=>{const i=document.querySelector(`.fld[data-fk="${k}"]`);if(i){i.focus();i.setSelectionRange(i.value.length,i.value.length)}};
-  async function stSave(k,create){const E=ST.ed[k];if(!E||E.busy||E.value===stOrig(k)&&!E.create)return;
-    E.busy=true;E.error='';E.needCreate=false;render();
-    try{const r=await fetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({key:k,path:E.value,create:!!(create||E.create)})});
-      let j={};try{j=await r.json()}catch{}
-      if(r.ok&&j.ok){delete ST.ed[k];await stLoad();if(page===3)render();return}
-      E.error=j.error||('request failed ('+r.status+')');E.needCreate=/exist|no such|not found/i.test(E.error)&&!E.create}catch{E.error='request failed'}
-    E.busy=false;if(page===3){render();refocus(k)}}
   document.querySelectorAll('input.fld[data-fk]').forEach(f=>{const k=f.dataset.fk,o=stOrig(k);
     f.oninput=()=>{const E=ST.ed[k]||(ST.ed[k]={value:o,error:'',needCreate:false});E.value=f.value;f.classList.remove('faint');f.title=f.value};
-    f.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();stSave(k)}else if(e.key==='Escape'){e.stopPropagation();if(ST.ed[k]&&!ST.ed[k].busy){delete ST.ed[k];render();const i=document.querySelector(`.fld[data-fk="${k}"]`);if(i)i.blur()}}};
+    f.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();stSave(k)}else if(e.key==='Escape'){e.stopPropagation();if(ST.ed[k]&&!ST.ed[k].busy){stRevert(k);render();const i=fldEl(k);if(i)i.blur()}}};
     f.onblur=()=>{const E=ST.ed[k];if(E&&E.value===o&&!E.error&&!E.busy&&!E.picking&&!E.create)delete ST.ed[k]}});
   document.querySelectorAll('[data-fsave]').forEach(b=>b.onclick=()=>stSave(b.dataset.fsave));
   document.querySelectorAll('[data-fcreate]').forEach(b=>b.onclick=()=>stSave(b.dataset.fcreate,true));
-  document.querySelectorAll('[data-fpick]').forEach(b=>b.onclick=async()=>{const k=b.dataset.fpick,E=ST.ed[k]||(ST.ed[k]={value:stOrig(k),error:'',needCreate:false});
-    E.picking=true;b.disabled=true;b.classList.add('busy');let j={};
-    try{const r=await fetch('/api/pick-folder',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({start:E.value||stOrig(k)})});
-      try{j=await r.json()}catch{}if(!r.ok&&!j.error&&!j.cancelled)j={ok:false,error:'folder chooser failed ('+r.status+')'}}catch{j={ok:false,error:'folder chooser unavailable'}}
-    E.picking=false;
-    if(j.ok&&j.path){E.value=j.path;E.error='';await stSave(k);return}
-    if(!j.cancelled&&j.error)E.error=j.error;
-    if(E.value===stOrig(k)&&!E.error&&!E.create)delete ST.ed[k];
-    if(page===3)render()});
+  document.querySelectorAll('[data-fpick]').forEach(b=>b.onclick=()=>{b.disabled=true;b.classList.add('busy');stPick(b.dataset.fpick)});
   const cp=$('#scopy');if(cp)cp.onclick=async()=>{try{await navigator.clipboard.writeText((ST.rec.rm_lines||[]).join('\n'));ST.copied=true}catch{const t=$('.rmblk');if(t){const r=document.createRange();r.selectNodeContents(t);getSelection().removeAllRanges();getSelection().addRange(r);try{document.execCommand('copy');ST.copied=true}catch{}}}
     render();setTimeout(()=>{ST.copied=false;if(page===3)render()},1500)};
 }
@@ -1220,6 +1241,8 @@ function fitLadder(){
 // Jobs panes: each scrolls inside the window, measured from its own top (the panel's bottom padding stays visible)
 function fitJobs(){const pad=parseFloat(getComputedStyle(document.querySelector('.panel')).paddingBottom)+28;for(const el of document.querySelectorAll('.jobsel,.jdet'))el.style.maxHeight=Math.max(160,innerHeight-el.getBoundingClientRect().top-pad)+'px'}
 function render(){
+  if(page!==3)stDrop();
+  if(page===0&&Date.now()-fleetAt>6e4)loadFleet();
   renderFlow();$('#page').innerHTML=PG[page]();save();
   if(page===0){drawLib();wirePicker();fitLadder();
     document.querySelectorAll('[data-k]').forEach(b=>b.onclick=()=>{show[b.dataset.k]=!show[b.dataset.k];render()});document.querySelectorAll('tr[data-sel]').forEach(tr=>tr.onclick=e=>{if(e.target.closest('a'))return;libSel=tr.dataset.sel;render()});
@@ -1247,7 +1270,7 @@ function render(){
   document.querySelectorAll('[data-save]').forEach(b=>b.onclick=()=>{const j=b.dataset.save==='draft'?{name:TE(draft.teacher).short.toLowerCase().replace(/[^a-z0-9]+/g,'-'),kind:'build',recipe:draft}:JDRAFTS.find(x=>x.id===b.dataset.save);if(!j)return;
     const u=URL.createObjectURL(new Blob([JSON.stringify({name:j.name,kind:j.kind||'build',recipe:j.recipe},null,1)],{type:'application/json'})),a=document.createElement('a');a.href=u;a.download='recipe.json';a.click();URL.revokeObjectURL(u)});
 }
-let rz;addEventListener('resize',()=>{clearTimeout(rz);rz=setTimeout(render,120)});
+let rz;addEventListener('resize',()=>{clearTimeout(rz);rz=setTimeout(page===3?stFit:render,120)});
 $('#homebtn').onclick=()=>{page=0;render()};
 render();fndLoad();
 </script>
