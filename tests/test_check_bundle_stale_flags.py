@@ -84,3 +84,16 @@ def test_verdict_words(tmp_path):
     bad = _bundle(tmp_path / "c", FLAGGED, {"VQ_GEMMSEG_CVEC": "0"})
     assert cb.verdict(bad)["verdict"] == "FAIL"
     assert cb.verdict(tmp_path / "nothing")["verdict"] == "MISSING"
+
+
+def test_verdict_never_raises_and_caches(tmp_path, monkeypatch):
+    art = _bundle(tmp_path / "a", FLAGGED)
+    (art / "config.json").write_text("{not json")
+    assert cb.verdict(art)["verdict"] == "FAIL"                  # one row, not a 500
+    calls = []
+    good = _bundle(tmp_path / "b", FLAGGED)
+    real = cb.check
+    monkeypatch.setattr(cb, "check", lambda *a, **k: calls.append(1) or real(*a, **k))
+    cb.verdict(good)
+    cb.verdict(good)
+    assert len(calls) == 1                                       # cached until a file changes

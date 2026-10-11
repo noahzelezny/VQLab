@@ -255,8 +255,8 @@ def _scan_in_background():
         return
 
     def go():
-        from vqlab.agents import model_scan
         try:
+            from vqlab.agents import model_scan
             model_scan.refresh()
         except Exception as e:  # report, never kill the server
             print(f"vqlab gui: model scan failed: {type(e).__name__}: {e}", file=sys.stderr)
@@ -334,8 +334,12 @@ def post_pick_folder(body):
         if r.returncode == 0 and path:
             return {"ok": True, "path": path.rstrip("/\\") or path}
         err = r.stderr.strip()
-        if r.returncode in (0, 1) and (not err or "cancel" in err.lower() or "-128" in err):
-            return {"ok": False, "cancelled": True}   # the user closed the dialog
+        # Closing a chooser: an empty result with exit 0 or 1 (zenity and
+        # kdialog print unrelated toolkit warnings to stderr, so stderr alone
+        # does not mean failure), or osascript's "User canceled (-128)".
+        if r.returncode in (0, 1) and (cmd[0] in ("zenity", "kdialog") or not err
+                                       or "cancel" in err.lower() or "-128" in err):
+            return {"ok": False, "cancelled": True}
         errors.append(err[:200])
     return {"ok": False, "error": "no folder chooser available here; type the path"
             + (f" ({errors[-1]})" if errors else "")}
@@ -388,6 +392,21 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def _local_host(self) -> bool:
+        """The Host header must name this machine at the bound port. Without
+        this, DNS rebinding (a site whose name resolves to 127.0.0.1) is
+        "same origin" with itself and could read every endpoint and POST."""
+        port = self.server.server_address[1]
+        return (self.headers.get("Host") or "").lower() in {
+            f"{h}:{port}" for h in ("127.0.0.1", "localhost", "[::1]")}
+
+    def _refuse_foreign_host(self) -> bool:
+        if self._local_host():
+            return False
+        self._send(403, b'{"error":"requests must address this machine (127.0.0.1)"}',
+                   "application/json")
+        return True
+
     def _same_origin(self) -> bool:
         """A POST must come from this page: a JSON body, and an Origin (when
         the browser sends one) naming this server's own host:port."""
@@ -398,6 +417,8 @@ class Handler(BaseHTTPRequestHandler):
         return origin is None or origin == f"http://{host}"
 
     def do_POST(self):
+        if self._refuse_foreign_host():
+            return
         u = urllib.parse.urlparse(self.path)
         fn = POSTS.get(u.path)
         if fn is None:
@@ -415,6 +436,8 @@ class Handler(BaseHTTPRequestHandler):
         self._send(code, json.dumps(data, default=str).encode(), "application/json")
 
     def do_GET(self):
+        if self._refuse_foreign_host():
+            return
         u = urllib.parse.urlparse(self.path)
         if u.path in ("/", "/index.html"):            # the GUI: Library / Recipe / Jobs
             return self._send(200, PAGE.read_bytes(), "text/html; charset=utf-8")

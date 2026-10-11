@@ -382,12 +382,22 @@ def portable(path) -> str:
     m = _HF_SNAPSHOT.search(str(p))
     if m:
         return f"hf://{m.group(1)}/{m.group(2)}@{m.group(3)[:12]}"
-    for label, root in (("teachers", teachers()), ("models", models()),
-                        ("scratch", scratch())):
-        r = pathlib.Path(os.path.realpath(root))
+    for label, r in _labelled_roots():
         if r in p.parents:
             return f"<{label}>/{p.relative_to(r)}"
     return str(p)
+
+
+def _labelled_roots() -> list[tuple[str, pathlib.Path]]:
+    """[(label, realpath)] of the roots records name, most specific first.
+    bf16 teachers that share the models folder (the default) are recorded
+    as <models>: the label must say where a path lives, not what it holds,
+    or setting teachers apart later would orphan every record."""
+    roots = {"models": models(), "scratch": scratch()}
+    if os.path.realpath(teachers()) != os.path.realpath(models()):
+        roots["teachers"] = teachers()
+    pairs = [(label, pathlib.Path(os.path.realpath(r))) for label, r in roots.items()]
+    return sorted(pairs, key=lambda x: -len(str(x[1])))
 
 
 CHECKOUT_LABEL = "<checkout>"
@@ -408,8 +418,9 @@ def private_prefixes() -> list[tuple[str, str]]:
     co = checkout_dir()
     if co is not None:
         pairs.append((co, CHECKOUT_LABEL))
-    pairs += [(teachers(), "<teachers>"), (models(), "<models>"),
-              (scratch(), "<scratch>")]
+    pairs += [(models(), "<models>"), (scratch(), "<scratch>")]
+    if os.path.realpath(teachers()) != os.path.realpath(models()):
+        pairs.append((teachers(), "<teachers>"))   # shared with models: <models>
     pairs += [(p, "<fits>") for p in fit_store()]
     pairs += [(p, "<root>") for p in _many("roots")]
     pairs.append((pathlib.Path.home(), "~"))

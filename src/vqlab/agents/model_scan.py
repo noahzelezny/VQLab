@@ -76,20 +76,41 @@ def places(extra=()) -> list[tuple[str, pathlib.Path, str]]:
     return out
 
 
+def _listdir(d: pathlib.Path) -> list[pathlib.Path]:
+    """d's entries, or [] when d cannot be read: one unreadable folder costs
+    that folder, never the rest of the place."""
+    try:
+        return sorted(d.iterdir())
+    except OSError:
+        return []
+
+
+def _mtime(p: pathlib.Path) -> float:
+    try:
+        return p.stat().st_mtime
+    except OSError:
+        return 0.0
+
+
+def _is_model(d: pathlib.Path) -> bool:
+    return any(f.name == "config.json" or f.suffix == ".gguf" for f in _listdir(d))
+
+
 def _model_dirs(root: pathlib.Path, layout: str):
     """(display name, model folder) under one place."""
     if layout == "hf":
-        for repo in sorted(root.glob("models--*")):
-            snaps = sorted((repo / "snapshots").glob("*"), key=lambda p: p.stat().st_mtime)
+        for repo in (p for p in _listdir(root) if p.name.startswith("models--")):
+            snaps = [s for s in _listdir(repo / "snapshots") if s.is_dir()]
             if snaps:
-                yield repo.name[len("models--"):].replace("--", "/", 1), snaps[-1]
+                latest = max(snaps, key=_mtime)
+                yield repo.name[len("models--"):].replace("--", "/", 1), latest
         return
-    for d in sorted(p for p in root.iterdir() if p.is_dir() and not p.name.startswith(".")):
-        if (d / "config.json").exists() or any(d.glob("*.gguf")):
+    for d in (p for p in _listdir(root) if p.is_dir() and not p.name.startswith(".")):
+        if _is_model(d):
             yield d.name.replace("--", "/", 1), d
         else:                                       # publisher/repo (LM Studio)
-            for sub in sorted(p for p in d.iterdir() if p.is_dir()):
-                if (sub / "config.json").exists() or any(sub.glob("*.gguf")):
+            for sub in (p for p in _listdir(d) if p.is_dir()):
+                if _is_model(sub):
                     yield f"{d.name}/{sub.name}", sub
 
 
@@ -116,6 +137,8 @@ def classify(d: pathlib.Path) -> dict:
         cfg = json.loads((d / "config.json").read_text())
     except (OSError, ValueError):
         return {"use": "unreadable", "format": "safetensors without a readable config.json"}
+    if not isinstance(cfg, dict):
+        return {"use": "unreadable", "format": "config.json is not an object"}
     text = cfg.get("text_config") or {}
     q = cfg.get("quantization") or cfg.get("quantization_config") or {}
     mt = cfg.get("model_type")
@@ -172,9 +195,9 @@ def scan(extra=()) -> list[dict]:
                 try:
                     row = {"source": source, "name": name, "path": str(d),
                            **classify(d), "bytes": _size(d)}
-                except OSError as e:
+                except Exception as e:  # classification is best effort: one odd model, one row
                     row = {"source": source, "name": name, "path": str(d),
-                           "use": "unreadable", "format": f"unreadable ({e.strerror})"}
+                           "use": "unreadable", "format": f"unreadable ({type(e).__name__})"}
                 rows.append(row)
         except OSError:
             continue

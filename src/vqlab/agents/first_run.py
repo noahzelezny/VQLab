@@ -2,11 +2,12 @@
 
 `pip install` cannot run anything, so the first `vqlab` command does it:
 when there is no config file, no location set in the environment and no
-data from an older install, it creates the lab folder (``~/VQLab``) with
+data from an older install (``~/.vqlab``, ``~/.local/share/vqlab``), it creates the lab folder (``~/VQLab``) with
 ``models/``, ``scratch/``, ``fits/`` and ``records/`` (bf16 teachers share
 ``models/`` until set apart), writes a config file naming it, scans for
-models already on the machine, and says so once. Moving it later is
-`vqlab config set lab PATH` or the GUI's Storage page.
+models already on the machine, and says so once. Pointing it elsewhere is
+`vqlab lab config set lab PATH` or the GUI's Storage page (files already in
+the old folder stay there).
 
 ``$VQLAB_NO_SETUP=1`` skips it (the test suite sets it).
 """
@@ -30,7 +31,9 @@ def needed() -> bool:
         return False
     if any(os.environ.get(v) for v in C._ENV.values()):
         return False
-    return not C._legacy_home_used()
+    # an older install keeps resolving where it did: writing `lab` would
+    # move its defaults (records in ~/.local/share/vqlab included)
+    return not (C._legacy_home_used() or C._XDG_RECORDS.is_dir())
 
 
 def run(out=sys.stderr) -> pathlib.Path | None:
@@ -49,13 +52,14 @@ def run(out=sys.stderr) -> pathlib.Path | None:
                       f'[paths]\nlab = "{lab}"\n')
     except OSError as e:
         print(f"vqlab: could not set up {lab} ({e}); set a location with "
-              f"`vqlab config set lab PATH`", file=out)
+              f"`vqlab lab config set lab PATH`", file=out)
         return None
     S._reset()
     free = S.free_bytes(lab) or 0
     print(f"vqlab: first run. Models, teachers and work in progress go in {lab}\n"
           f"       ({free / 2**30:,.0f} GiB free there). Config: {C.config_file()}\n"
-          f"       Move it any time: `vqlab config set lab PATH`, or `vqlab gui` -> Storage.",
+          f"       To use another folder: `vqlab lab config set lab PATH`, or `vqlab gui` -> Storage\n"
+          f"       (files already here stay here; move them yourself).",
           file=out)
     try:                                   # the models already on this machine
         from vqlab.agents import model_scan

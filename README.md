@@ -21,9 +21,9 @@ vqlab gui --open        # the VQ Lab GUI: Library, Recipe, Jobs, Storage
 
 The first `vqlab` command sets up `~/VQLab/` (models, scratch,
 fits, records) and a config file naming it. To keep models on a bigger drive,
-change the lab folder in the GUI's Storage page or with
-`vqlab lab config set lab <big-drive>/VQLab`; any one location can also be
-set on its own.
+point the lab folder there in the GUI's Storage page or with
+`vqlab lab config set lab <big-drive>/VQLab` (files already in the old folder
+stay there; move them yourself); any one location can also be set on its own.
 
 ## Using vqlab as a library / from an MCP server
 

@@ -333,30 +333,47 @@ def check(artifact, strict=False, stale_revs=None):
 
 
 
+_VERDICTS: dict = {}   # artifact + runtime file mtimes -> verdict
+_RUNTIME_INPUTS = ("vq_switch.py", "vq_dense.py", "equivalent_revisions.json")
+
+
 def verdict(artifact) -> dict:
     """check-bundle in one word, for the GUI: PASS (current runtime), CURRENT
     (an earlier certified revision whose gains apply only to features this
     artifact does not use, so a rebundle changes nothing), STALE (a rebundle
     is worth doing), FAIL, or MISSING (no model.py). `note` carries the
-    revisions' `gains`."""
+    revisions' `gains`, or why it failed. Never raises; cached until the
+    artifact's model.py / config.json or the runtime it is compared with
+    changes."""
+    from vqlab._layout import runtime_file
     art = pathlib.Path(artifact)
-    if not (art / "model.py").exists():
-        return {"verdict": "MISSING", "note": "no model.py"}
+    try:
+        key = (str(art), (art / "model.py").stat().st_mtime_ns,
+               (art / "config.json").stat().st_mtime_ns,
+               *(runtime_file(n).stat().st_mtime_ns for n in _RUNTIME_INPUTS))
+    except OSError:
+        return {"verdict": "MISSING", "note": "no model.py or config.json"}
+    if key not in _VERDICTS:
+        _VERDICTS[key] = _verdict(art)
+    return _VERDICTS[key]
+
+
+def _verdict(art: pathlib.Path) -> dict:
     revs = []
     try:
         rc, lines = check(art, strict=True, stale_revs=revs)
-    except Exception as e:  # a crash is a failed check, reported, not raised
-        return {"verdict": "FAIL", "note": f"check-bundle crashed: {type(e).__name__}: {e}"}
-    word = {0: "PASS", 2: "STALE"}.get(rc, "FAIL")
-    if word == "FAIL":
-        return {"verdict": word, "note": next((l for l in lines if "FAIL" in l), "")}
-    note = "; ".join(r.get("gains", "") for r in revs)
-    if word == "STALE":
-        cfg = json.loads((art / "config.json").read_text())
-        if revs and all(r.get("gains_only_for") is not None
-                        and not any(cfg.get(k) for k in r["gains_only_for"]) for r in revs):
-            word = "CURRENT"
-    return {"verdict": word, "note": note}
+        word = {0: "PASS", 2: "STALE"}.get(rc, "FAIL")
+        if word == "FAIL":
+            return {"verdict": word, "note": next((l for l in lines if "FAIL" in l), "")}
+        note = "; ".join(r.get("gains", "") for r in revs)
+        if word == "STALE":
+            cfg = json.loads((art / "config.json").read_text())
+            if revs and all(r.get("gains_only_for") is not None
+                            and not any(cfg.get(k) for k in r["gains_only_for"]) for r in revs):
+                word = "CURRENT"
+        return {"verdict": word, "note": note}
+    except Exception as e:  # one bad artifact is one FAIL row, never a failed page
+        return {"verdict": "FAIL", "note": f"check-bundle could not run: {type(e).__name__}: {e}"}
 
 
 def main(argv=None) -> int:

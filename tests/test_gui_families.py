@@ -72,3 +72,26 @@ def test_scan_never_runs_twice(monkeypatch):
             break
         threading.Event().wait(0.01)
     assert started == [1] and not gui._SCAN_LOCK.locked()
+
+
+def test_foreign_host_is_refused():
+    """DNS rebinding: a request addressed to another name is refused before
+    routing, GET and POST alike."""
+    import http.client
+    import threading
+    from http.server import ThreadingHTTPServer
+    srv = ThreadingHTTPServer(("127.0.0.1", 0), gui.Handler)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    port = srv.server_address[1]
+    try:
+        def req(method, host, body=None):
+            c = http.client.HTTPConnection("127.0.0.1", port, timeout=5)
+            c.request(method, "/api/settings", body=body,
+                      headers={"Host": host, "Content-Type": "application/json"})
+            return c.getresponse().status
+        assert req("GET", f"evil.example:{port}") == 403
+        assert req("POST", f"evil.example:{port}", "{}") == 403
+        assert req("GET", f"127.0.0.1:{port}") == 200
+        assert req("GET", f"localhost:{port}") == 200
+    finally:
+        srv.shutdown()

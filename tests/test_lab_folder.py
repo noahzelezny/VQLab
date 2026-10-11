@@ -64,3 +64,18 @@ def test_usage_groups_locations_by_volume(home, monkeypatch):
     locs = {l["key"]: l for v in S.usage()["volumes"] for l in v["locations"]}
     assert locs["teachers"]["label"] == "bf16 teachers" and locs["teachers"]["bytes"] == 0
     assert all({"mount", "total", "free", "system"} <= set(v) for v in u["volumes"])
+
+
+def test_records_name_shared_teachers_as_models(home, monkeypatch):
+    """bf16 teachers in the models folder are recorded as <models>/..., so a
+    record stays right after teachers are set apart."""
+    monkeypatch.setenv("VQLAB_HOME", str(home / "L"))
+    art = home / "L" / "models" / "Art-1"
+    art.mkdir(parents=True)
+    assert C.portable(art) == "<models>/Art-1"
+    assert dict((lab, p) for p, lab in C.private_prefixes()).get("<models>")
+    assert "<teachers>" not in {lab for _, lab in C.private_prefixes()}
+    monkeypatch.setenv("VQLAB_TEACHERS_DIR", str(home / "ext"))
+    (home / "ext" / "T").mkdir(parents=True)
+    assert C.portable(home / "ext" / "T") == "<teachers>/T"
+    assert C.portable(art) == "<models>/Art-1"

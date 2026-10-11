@@ -69,3 +69,20 @@ def test_symlinked_copy_listed_once(box):
     (home / ".exo" / "models").symlink_to(tmp / "models")
     rows = [r for r in M.scan() if r["name"] == "a/B"]
     assert len(rows) == 1 and rows[0]["source"] == "vqlab models" and real.exists()
+
+
+def test_odd_folders_cost_one_row_not_the_scan(box):
+    import os
+    tmp, home = box
+    _model(tmp / "models" / "a--List", ["not", "an", "object"])
+    locked = tmp / "models" / "locked"
+    locked.mkdir()
+    (locked / "inner").mkdir()
+    _model(tmp / "models" / "zz--Last", {"model_type": "qwen3_5", "torch_dtype": "bfloat16"})
+    os.chmod(locked, 0)
+    try:
+        rows = {r["name"]: r for r in M.scan()}
+    finally:
+        os.chmod(locked, 0o755)
+    assert rows["a/List"]["use"] == "unreadable"
+    assert rows["zz/Last"]["use"] == "original"              # after the unreadable folder
