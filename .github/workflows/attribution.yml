@@ -4,8 +4,10 @@ name: attribution
 # guard a clone that enabled them; this runs on every push and pull request,
 # whoever made it (another clone, a cloud session, a web merge), and fails on
 # any commit authored or committed by an AI identity, or whose message carries
-# an AI co-author trailer or names an AI model as author or reviewer. Patterns:
-# .githooks/ai_identity.sh. Make it a required status check on master.
+# an AI co-author trailer or names an AI model as author or reviewer, or that
+# is authored or committed under anything but a GitHub noreply address. Patterns:
+# .githooks/ai_identity.sh. It alerts (a failed run emails the pusher); the
+# master ruleset blocks force pushes and deletion, so history can't be rewritten.
 on:
   push:
   pull_request:
@@ -37,4 +39,7 @@ jobs:
           if [ -n "$who" ]; then echo "AI identity in $range:"; echo "$who" | head -20; bad=1; fi
           msg=$(git log --format='%h %s%n%b' "$range" | grep -iE "$AI_NAMED" || true)
           if [ -n "$msg" ]; then echo "AI attribution in messages of $range:"; echo "$msg" | head -20; bad=1; fi
+          # commits must carry a GitHub noreply address, never a personal one
+          mail=$(git log --format='%h %ae / %ce' "$range" | grep -viE '^[0-9a-f]+ [^ ]*@users\.noreply\.github\.com / [^ ]*@users\.noreply\.github\.com$' || true)
+          if [ -n "$mail" ]; then echo "non-noreply author or committer in $range:"; echo "$mail" | head -20; bad=1; fi
           exit $bad
