@@ -129,23 +129,29 @@ def api_fits(q):
 
 
 def api_families(_q):
+    """Families from BOTH places the registry reads (the checkout's
+    families/ and the user's families_dir()), merged per family and teacher;
+    a teacher's profile or onboard state from either place counts."""
+    fams = {}
+    for root in (config.checkout_families_dir(), _families_dir()):
+        for fam in sorted(p for p in root.iterdir() if p.is_dir()) if root.is_dir() else []:
+            f = fams.setdefault(fam.name, {"family": fam.name, "data_entry": False,
+                                           "teachers": {}, "docs": set()})
+            f["data_entry"] |= (fam / "entry.json").exists()
+            f["docs"] |= {d.name for d in fam.glob("*.md") if d.name != "CONTEXT.md"}
+            for t in sorted((fam / "teachers").glob("*")) if (fam / "teachers").is_dir() else []:
+                e = f["teachers"].setdefault(t.name, {"teacher": t.name, "profile": None,
+                                                      "onboard": None, "research": set()})
+                for key, fn in (("profile", "profile.json"), ("onboard", "onboard.json")):
+                    if e[key] is None and (t / fn).exists():
+                        e[key] = json.loads((t / fn).read_text())
+                if (t / "research").is_dir():
+                    e["research"] |= {r.name for r in (t / "research").glob("*")}
     out = []
-    root = _families_dir()
-    for fam in sorted(p for p in root.iterdir() if p.is_dir()) if root.is_dir() else []:
-        entry = fam / "entry.json"
-        teachers = []
-        for t in sorted((fam / "teachers").glob("*")) if (fam / "teachers").is_dir() else []:
-            prof = t / "profile.json"
-            onb = t / "onboard.json"
-            teachers.append({
-                "teacher": t.name,
-                "profile": json.loads(prof.read_text()) if prof.exists() else None,
-                "onboard": json.loads(onb.read_text()) if onb.exists() else None,
-                "research": sorted(f.name for f in (t / "research").glob("*"))
-                if (t / "research").is_dir() else []})
-        out.append({"family": fam.name, "data_entry": entry.exists(), "teachers": teachers,
-                    "docs": sorted(f.name for f in fam.glob("*.md"))})
-    return {"families": out}
+    for f in fams.values():
+        teachers = [dict(t, research=sorted(t["research"])) for t in f["teachers"].values()]
+        out.append(dict(f, teachers=teachers, docs=sorted(f["docs"])))
+    return {"families": sorted(out, key=lambda f: f["family"])}
 
 
 def api_runs(q):
