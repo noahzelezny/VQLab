@@ -39,7 +39,7 @@ grep -rli "<the concept>" src/vqlab/ docs/
 | where does the decode time GO, stage by stage? | `vqlab decode-timeline` — the plain measurement the lab never had: every stage of one decode token, in order, timed, **summing to the whole**. Deletion arms give upper bounds that do NOT sum; you cannot rank what you have not partitioned. It measures CUMULATIVE PREFIXES (one real eval each), never per-op `mx.eval` — that is F133, which reported parts summing to 1667 us against a 410 us whole. It REFUSES to rank unless the deltas add up AND no delta is negative | timing each module with its own `mx.eval` and adding them up |
 | which COMPONENT owns the decode time? | `vqlab decode-ladder` — per-component deletion arms with an output checksum beside every timing | a fresh deletion script that seeds `cache.keys` and crashes on Flash's ArraysCache/QSAKVCache |
 | how much damage does this artifact carry? | `vqlab score kl-ladder` (the gate) / `vqlab score kl` (`src/vqlab/score/kl_damage.py`) | ad-hoc KL scripts |
-| ppl on the house corpora | `scripts/score_ppl_resident.py` + the THREE corpora in `src/vqlab/score/referee/` (prose / code-public / literary) | your own corpus files |
+| ppl on the house corpora | `python -m vqlab.score.ppl_resident` (was `scripts/score_ppl_resident.py`) + the THREE corpora in `src/vqlab/score/referee/` (prose / code-public / literary) | your own corpus files |
 | task benchmarks | `vqlab score tasks` (src/vqlab/score/score_tasks_streaming.py; layer-streamed, scores models larger than RAM) | a new eval harness |
 | is this artifact releasable? | `vqlab check-release` / `check-bundle` / `selftest` | eyeballing |
 | fit a mixed-geometry rung | `vqlab fit-moe --vq-layers` (scatter fits) | bespoke build scripts |

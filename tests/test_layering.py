@@ -4,7 +4,7 @@ A package may import only from LOWER layers; peers in one layer may not
 import each other. Every import counts, including ones inside function
 bodies (a lazy import is still an edge). The same walk also refuses new
 `sys.path` edits, new bare imports of vqlab module stems (`import vq_pack`
-instead of `from vqlab.runtime import vq_pack`), and new `parents[2]`
+instead of `from vqlab.runtime import vq_pack`), and new `parents[N]` (N>=2)
 repo-relative path arithmetic.
 
 Today's tree breaks these rules in known places; those are listed in
@@ -21,6 +21,7 @@ from __future__ import annotations
 import ast
 import json
 import pathlib
+import re
 import sys
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
@@ -117,8 +118,9 @@ def violations() -> set[str]:
         if me is not None and me.endswith(".py"):
             me = me[:-3]
         is_pkg = path.name == "__init__.py"
-        if "parents[2]" in src:
-            found.add(f"{rel}::parents[2]")
+        for m in re.finditer(r"parents\[\s*(\d+)\s*\]", src):
+            if int(m.group(1)) >= 2:      # any repo-relative climb out of the package
+                found.add(f"{rel}::parents[{m.group(1)}]")
         for node in ast.walk(tree):
             if isinstance(node, ast.Call):
                 f = node.func

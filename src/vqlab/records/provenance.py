@@ -49,6 +49,7 @@ import pathlib
 import platform
 import subprocess
 import sys
+from vqlab import _layout
 from vqlab.util.hashing import fingerprint as _fingerprint, sha256_file
 
 RECORD = "vqlab_provenance.json"
@@ -67,7 +68,9 @@ HEAD = 1 << 20
 # artifact_manifest.py already uses). Overridable because a 400 GiB teacher
 # is not worth the wall time, but a 5 GiB rewritten shard is.
 FULL_MAX = int(os.environ.get("VQLAB_PROV_FULL_HASH_MAX", str(8 << 30)))
-REPO = pathlib.Path(__file__).resolve().parents[3]
+# The checkout this package runs from (the folder holding src/vqlab); a
+# wheel install has none, and git is then never asked.
+REPO = _layout.SRC.parent
 
 
 # ---------------------------------------------------------------- hashing
@@ -98,7 +101,15 @@ def fingerprint(d) -> dict:
 
 
 # ------------------------------------------------------------- environment
+def _in_checkout() -> bool:
+    return (REPO / ".git").exists() and (REPO / "src" / "vqlab").is_dir()
+
+
 def _git(*a):
+    """git's stdout in the checkout, or "" (a wheel install: no checkout, no
+    subprocess)."""
+    if not _in_checkout():
+        return ""
     try:
         return subprocess.run(["git", "-C", str(REPO), *a], capture_output=True,
                               text=True, timeout=10).stdout.strip("\n")

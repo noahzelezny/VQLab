@@ -10,7 +10,8 @@ in a subprocess with output captured to a per-entry log. The morning
 summary is one file. Publishing stays a human command — for every entry
 that passes, the summary prints the `vqlab publish` line to review.
 
-State lives in caches/validate/ (gitignored):
+State lives in <records>/validate/ (`vqlab.config.records()`; user-written
+state, not a build output, so it is not under scratch):
     queue.jsonl          one entry per line: artifact, gates, status
     <name>-<ts>.log      full gate output per run
     MORNING.md           summary of the latest `run` (overwritten)
@@ -38,9 +39,21 @@ import subprocess
 import sys
 import time
 
-ROOT = pathlib.Path(__file__).resolve().parents[3]   # repo root (queue/ -> vqlab/ -> src/ -> repo)
-STATE = ROOT / "caches" / "validate"
-QUEUE = STATE / "queue.jsonl"
+from vqlab import _layout, config
+
+# The folder that holds the vqlab package (src/ in a checkout, site-packages
+# in a wheel) and the directory gate commands run in (the repo root in a
+# checkout, as before).
+PKG_PARENT = _layout.SRC
+RUN_CWD = _layout.SRC.parent
+
+
+def _state() -> pathlib.Path:
+    return config.records() / "validate"
+
+
+def _queue() -> pathlib.Path:
+    return _state() / "queue.jsonl"
 DEFAULT_GATES = "check,check-release,bundle-accept"
 
 # the gates predate the queue and their artifact-arg spellings differ;
@@ -56,16 +69,18 @@ _GATE_CMD = {
 
 
 def _load():
-    if not QUEUE.exists():
+    queue = _queue()
+    if not queue.exists():
         return []
-    return [json.loads(ln) for ln in QUEUE.read_text().splitlines() if ln.strip()]
+    return [json.loads(ln) for ln in queue.read_text().splitlines() if ln.strip()]
 
 
 def _save(entries):
-    STATE.mkdir(parents=True, exist_ok=True)
-    tmp = QUEUE.with_suffix(".jsonl.tmp")
+    queue = _queue()
+    queue.parent.mkdir(parents=True, exist_ok=True)
+    tmp = queue.with_suffix(".jsonl.tmp")
     tmp.write_text("".join(json.dumps(e) + "\n" for e in entries))
-    tmp.replace(QUEUE)
+    tmp.replace(queue)
 
 
 def cmd_add(a):
@@ -125,7 +140,7 @@ def cmd_clear_done(_a):
 def _run_entry(e, log_path, timeout_s):
     """Run each gate command; stop at the first failure. Returns (ok, ran)."""
     env = dict(os.environ)
-    env["PYTHONPATH"] = str(ROOT / "src") + (
+    env["PYTHONPATH"] = str(PKG_PARENT) + (
         os.pathsep + env["PYTHONPATH"] if env.get("PYTHONPATH") else "")
     with open(log_path, "a") as log:
         for cmd in e["cmds"]:
@@ -136,7 +151,7 @@ def _run_entry(e, log_path, timeout_s):
             log.flush()
             try:
                 rc = subprocess.run(argv, stdout=log, stderr=subprocess.STDOUT,
-                                    timeout=timeout_s, cwd=ROOT).returncode
+                                    timeout=timeout_s, cwd=RUN_CWD).returncode
             except subprocess.TimeoutExpired:
                 log.write(f"\n*** TIMEOUT after {timeout_s}s\n")
                 return False, cmd
@@ -152,11 +167,12 @@ def cmd_run(a):
     if not pending:
         print("nothing pending")
         return
-    STATE.mkdir(parents=True, exist_ok=True)
+    state = _state()
+    state.mkdir(parents=True, exist_ok=True)
     ts = dt.datetime.now().strftime("%Y%m%d-%H%M")
     lines = [f"# Validation run {ts}", ""]
     for e in pending:
-        log_path = STATE / f"{e['name']}-{ts}.log"
+        log_path = state / f"{e['name']}-{ts}.log"
         print(f"validating {e['name']} ... ", end="", flush=True)
         t0 = time.time()
         ok, failed_cmd = _run_entry(e, log_path, a.timeout_min * 60)
@@ -180,8 +196,8 @@ def cmd_run(a):
         else:
             lines.append(f"- failed at: `{failed_cmd}`")
         lines.append("")
-    (STATE / "MORNING.md").write_text("\n".join(lines))
-    print(f"\nsummary: {STATE / 'MORNING.md'}")
+    (state / "MORNING.md").write_text("\n".join(lines))
+    print(f"\nsummary: {state / 'MORNING.md'}")
 
 
 def main():
