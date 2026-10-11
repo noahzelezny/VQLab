@@ -369,6 +369,7 @@ details.adv .kv{margin-top:8px}
 .stor .cart{font-size:.9em}
 .stl{display:flex;flex-direction:column;gap:10px;min-width:0}
 .stpage .stor .cart{margin:0}.stpage h2{color:var(--fg)}
+.stpage .cart>.ro{font-size:.867em;letter-spacing:.16em;color:var(--fg);font-weight:inherit;margin:0 0 8px}
 .stpage .srow{grid-template-columns:12.5em minmax(0,1fr);align-items:center;padding:6px 0}.stpage .srow .k{white-space:nowrap}
 .disks{display:flex;flex-direction:column;gap:12px;min-height:10em}
 .dh{display:flex;align-items:center;gap:8px;min-height:1.7em}.dh b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -1171,7 +1172,7 @@ function pgStorage(){
       <div class="stabs"><button class="mini" aria-pressed="${ST.tab==='folders'}" data-stab="folders">Folders</button><button class="mini" aria-pressed="${ST.tab==='recl'}" data-stab="recl">Reclaimable</button></div>${tbl}`}
   return `<section class="panel stpage"><h2>Storage</h2><div class="stor"><div class="stl">${top}
     <div class="cart"><div class="ro">Disks</div><div class="disks">${disks}</div></div>
-    <div class="cart"><div class="ro">Locations ${INFO('Where each kind of data lives.')}</div><div class="lscroll" id="lscroll">${locs}
+    <div class="cart"><div class="ro">Locations</div><div class="lscroll" id="lscroll">${locs}
       <div class="advh" data-sadv="1">${open?'▾':'▸'} Advanced</div>${open?`<div class="advb">${adv.map(stRow).join('')}</div>`:''}</div></div></div>
     <div class="strt">${fndCard()}<div class="cart"><div class="ro">Work in progress ${INFO('Builds and run outputs live here. Nothing on this page deletes anything.')}</div>${right}</div></div></div></section>`}
 function wireStorage(){
