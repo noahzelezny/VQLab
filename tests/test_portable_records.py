@@ -72,6 +72,7 @@ def _old_record(roots, a, parent):
     repo = str(roots["home"] / "src" / "lab")
     rec["tool"]["argv"] = ["t", str(a), f"--src={parent}"]
     rec["tool"]["cwd"] = repo
+    rec["env"]["host"] = "builder-box"
     rec["code"]["repo"] = repo
     rec["inputs"] = [{"role": "base", "path": str(parent), "realpath": str(parent),
                       "shards": {"m.safetensors": [1, "ab" * 32]}}]
@@ -98,11 +99,20 @@ def test_make_portable_paths_only(roots):
     provenance.make_portable(a)
     new = provenance.load(a)
     assert (a / (provenance.RECORD + ".bak")).exists()
-    assert new["id"] == old["id"] and "portable_id" in new
-    assert provenance.id_ok(new)
-    assert new["code"]["repo"] == config.CHECKOUT_LABEL and new["tool"]["cwd"] == config.CHECKOUT_LABEL
+    # config.json changed, so the record is AMENDED: new id, previous -> the
+    # (portable) old record, which is in history; only config.json's hash moved
+    assert new["previous"] == old["id"] and new["tool"]["note"] == provenance.SANITIZE_NOTE
+    assert provenance.verify(a, new) == []
+    hist = [json.loads(x) for x in (a / provenance.HISTORY).read_text().splitlines()]
+    prior = hist[-1]
+    assert prior["id"] == old["id"] and provenance.id_ok(prior) and "portable_id" in prior
+    assert "host" not in prior["env"] and "host" not in hist[0]["env"]
+    assert prior["code"]["repo"] == config.CHECKOUT_LABEL
+    assert prior["tool"]["cwd"] == config.CHECKOUT_LABEL
     assert new["inputs"][0]["shards"] == old["inputs"][0]["shards"]
-    assert new["outputs"] == old["outputs"]
+    assert {k: v for k, v in new["outputs"].items() if k != "config.json"} == \
+        {k: v for k, v in old["outputs"].items() if k != "config.json"}
+    assert new["outputs"]["config.json"]["sha256"] != old["outputs"]["config.json"]["sha256"]
     hits = leak_guard.scan([a / provenance.RECORD, a / provenance.HISTORY, a / "config.json"], a)
     assert hits == []
     cfg = (a / "config.json").read_text()
@@ -114,9 +124,11 @@ def test_make_portable_paths_only(roots):
 
 def test_tampered_portable_record_fails(roots):
     a = _art(roots)
-    _old_record(roots, a, roots["models"])
+    old = _old_record(roots, a, roots["models"])
     provenance.make_portable(a)
     rec = provenance.load(a)
+    assert rec["id"] == old["id"] and provenance.id_ok(rec)   # no config change: id kept
+    assert "host" not in rec["env"]
     rec["method"] = {"edited": True}
     assert not provenance.id_ok(rec)
 
@@ -131,6 +143,20 @@ def test_leak_guard(roots, tmp_path):
     (d / "bin.safetensors").write_bytes(str(roots["home"]).encode())
     hits = {(f, n) for f, n, _ in leak_guard.scan(sorted(d.iterdir()), d)}
     assert hits == {("home.json", 1), ("root.txt", 2), ("lan.py", 1)}
+
+
+def test_leak_guard_hosts(roots, tmp_path, monkeypatch):
+    monkeypatch.setattr(leak_guard, "host_names", lambda: {"box-a"})
+    d = tmp_path / "pub"
+    d.mkdir()
+    (d / "a.md").write_text("ran on box-a today\nbox-ab is fine\n")
+    (d / "vqlab_provenance.json").write_text('{\n "host": "renamed-box"\n}\n')
+    hits = {(f, n) for f, n, _ in leak_guard.scan(sorted(d.iterdir()), d)}
+    assert hits == {("a.md", 1), ("vqlab_provenance.json", 2)}
+
+
+def test_new_record_has_no_host():
+    assert "host" not in provenance.env_state()
 
 
 def test_backups_excluded():

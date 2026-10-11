@@ -53,6 +53,7 @@ import re
 import subprocess
 import sys
 from vqlab import _layout, config
+from vqlab.core.artifacts.hub import is_backup  # local backups (.bak, .pre-*) are not outputs
 from vqlab.util.hashing import fingerprint as _fingerprint, sha256_file
 
 RECORD = "vqlab_provenance.json"
@@ -143,8 +144,10 @@ def code_state(script=None) -> dict:
 
 
 def env_state() -> dict:
-    out = {"python": platform.python_version(), "host": platform.node(),
-           "platform": platform.platform()}
+    # no hostname: the record ships with the artifact, and a machine name is
+    # as private as its paths (records before 2026-10-10 carry `host`;
+    # `--portable` removes it)
+    out = {"python": platform.python_version(), "platform": platform.platform()}
     for mod in ("mlx", "mlx_lm", "numpy"):
         try:
             if mod == "mlx":
@@ -269,7 +272,7 @@ def write_build_record(out, *, tool, script=None, ap=None, args=None,
             h.write(json.dumps(portable_record(old), sort_keys=True) + "\n")
     outs = {}
     for f in sorted(out.iterdir()):
-        if f.name in NOT_OUTPUTS + JUNK or f.name.startswith("._") or f.is_dir():
+        if f.name in NOT_OUTPUTS + JUNK or is_backup(f.name) or f.name.startswith("._") or f.is_dir():
             continue
         full = (f.name in full_hash) if full_hash is not None else True
         outs[f.name] = file_record(f, full=full)
@@ -309,6 +312,8 @@ def portable_record(rec: dict, prefixes=None) -> dict:
                            *(prefixes if prefixes is not None else config.private_prefixes())],
                           key=lambda x: -len(x[0]))
     new = config.portable_obj(rec, prefixes)
+    if isinstance(new.get("env"), dict) and "host" in new["env"]:
+        new["env"] = {k: v for k, v in new["env"].items() if k != "host"}
     if new == rec:
         return rec
     new["id"] = rec.get("id")
@@ -335,6 +340,53 @@ def _portable_config_text(text: str, prefixes) -> str:
             text = re.sub(r'("source"\s*:\s*)' + re.escape(lit),
                           lambda m: m.group(1) + nlit, text)
     return text
+
+
+SANITIZE_NOTE = "sanitized: config.json vq_skipzero.source made portable (paths only)"
+
+
+def _record_config_sanitize(art, changes, cfg_after: str) -> None:
+    """config.json's bytes change, so its recorded hash must too -- as an
+    AMENDMENT, never a silent edit: the (portable) record that described the
+    old bytes goes to history, and a new record, identical but for that one
+    output entry, says what was done and links to it by id. No other hash
+    changes. Edits the pending (file, before, after) entries in place."""
+    by = {p.name: i for i, (p, _, _) in enumerate(changes)}
+    rp, hp = art / RECORD, art / HISTORY
+    if not rp.exists():
+        return
+    cur = json.loads(changes[by[RECORD]][2] if RECORD in by else rp.read_text())
+    outs = cur.get("outputs") or {}
+    if "config.json" not in outs:
+        return
+    data = cfg_after.encode()
+    new = {k: v for k, v in cur.items() if k != "portable_id"}
+    ent = dict(outs["config.json"])
+    ent["bytes"] = len(data)
+    if "sha256" in ent:
+        ent["sha256"] = hashlib.sha256(data).hexdigest()
+    if "head_sha256" in ent:
+        ent["head_sha256"] = hashlib.sha256(data[:HEAD]).hexdigest()
+    new["outputs"] = {**outs, "config.json": ent}
+    new["previous"] = cur["id"]
+    new["created"] = datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds")
+    new["tool"] = {"name": "provenance --portable", "note": SANITIZE_NOTE,
+                   "argv": ["vqlab", "provenance", "--portable"],
+                   "run_id": os.environ.get("VQLAB_RUN_ID")}
+    new["id"] = hashlib.sha256(_canon(new).encode()).hexdigest()
+    rec_before = changes[by[RECORD]][1] if RECORD in by else rp.read_text()
+    rec_entry = (rp, rec_before, json.dumps(new, indent=1, default=str))
+    if RECORD in by:
+        changes[by[RECORD]] = rec_entry
+    else:
+        changes.append(rec_entry)
+    line = json.dumps(cur, sort_keys=True) + "\n"
+    if HISTORY in by:
+        hp_, hb, ha = changes[by[HISTORY]]
+        changes[by[HISTORY]] = (hp_, hb, ha + ("" if not ha or ha.endswith("\n") else "\n") + line)
+    else:
+        hb = hp.read_text() if hp.exists() else ""
+        changes.append((hp, hb, hb + ("" if not hb or hb.endswith("\n") else "\n") + line))
 
 
 def make_portable(art, dry_run=False, prefixes=None) -> list:
@@ -390,10 +442,11 @@ def make_portable(art, dry_run=False, prefixes=None) -> list:
             changes.append((hp, before, after))
     cp = art / "config.json"
     if cp.exists():
-        after = _portable_config_text(cp.read_text(), prefixes)
         before = cp.read_text()
+        after = _portable_config_text(before, prefixes)
         if after != before:
             changes.append((cp, before, after))
+            _record_config_sanitize(art, changes, after)
     if not dry_run:
         for p, before, after in changes:
             bak = p.with_name(p.name + ".bak")
@@ -417,7 +470,7 @@ def verify(art, rec) -> list:
     bad = []
     if not id_ok(rec):
         bad.append((RECORD, "record edited after it was written (id mismatch)"))
-    now = {f.name for f in art.iterdir() if f.is_file() and f.name not in NOT_OUTPUTS + JUNK
+    now = {f.name for f in art.iterdir() if f.is_file() and f.name not in NOT_OUTPUTS + JUNK and not is_backup(f.name)
            and not f.name.startswith("._")}
     for name in sorted(now - set(rec["outputs"])):
         bad.append((name, "added after build"))
