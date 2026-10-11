@@ -175,6 +175,16 @@ def test_every_package_has_a_layer():
     assert not missing, f"give these a layer in LAYER: {missing}"
 
 
+def test_every_code_folder_is_a_package_with_its_context():
+    """Nested sub-packages too (core/artifacts/ once had neither file):
+    every folder with .py files has __init__.py, and every top-level package
+    or routed sub-package (`<name>/CONTEXT.md` named by its parent) has a
+    CONTEXT.md. Same rule the selftest runs."""
+    from vqlab.selftest.layout_checks import packages_missing_context
+    bad = packages_missing_context(PKG)
+    assert not bad, f"add __init__.py / CONTEXT.md: {bad}"
+
+
 # Tests whose PURPOSE is the old (bare / pre-split) names: they check that
 # the alias finder hands back the canonical module object.
 TESTS_ALIAS_ALLOWED = {"test_public_imports.py"}
