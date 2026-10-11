@@ -16,7 +16,7 @@ nothing here computes a number of its own:
   /api/settings     storage locations; POST sets one (agents/settings.py)
   /api/scratch      scratch folders; /reclaimable adds rm lines, never run
   /api/storage/usage  per volume: total/used/free, what each vqlab location holds
-  POST /api/pick-folder  the native macOS folder chooser -> {ok, path}
+  POST /api/pick-folder  the system's own folder chooser -> {ok, path}
   /api/models/found   models already on this machine (vqlab lab scan; rescanned at
                     launch and by POST /api/models/scan)
 
@@ -300,27 +300,67 @@ def post_models_scan(_body):
     return {"ok": True, "scanning": True}
 
 
+_TK_PICK = ("import sys, tkinter as t, tkinter.filedialog as f\n"
+            "r = t.Tk(); r.withdraw(); r.attributes('-topmost', True)\n"
+            "p = f.askdirectory(initialdir=sys.argv[1] or None, mustexist=False,"
+            " title='Choose a folder for VQ Lab')\n"
+            "print(p or '')")
+
+
+def _pick_commands(start: str) -> list[list[str]]:
+    """Folder-chooser commands for this OS, best first. Each prints the
+    chosen path (empty or nonzero exit = cancelled)."""
+    import shutil
+    if sys.platform == "darwin":
+        loc = f' default location (POSIX file "{start}")' if start else ""
+        return [["osascript", "-e",
+                 f'POSIX path of (choose folder with prompt "Choose a folder for VQ Lab"{loc})']]
+    out = []
+    if sys.platform.startswith("win"):
+        ps = ("Add-Type -AssemblyName System.Windows.Forms;"
+              "$d=New-Object System.Windows.Forms.FolderBrowserDialog;"
+              f"$d.SelectedPath='{start}';"
+              "if($d.ShowDialog() -eq 'OK'){$d.SelectedPath}")
+        out.append(["powershell", "-NoProfile", "-STA", "-Command", ps])
+    else:
+        if shutil.which("zenity"):
+            out.append(["zenity", "--file-selection", "--directory",
+                        "--title=Choose a folder for VQ Lab", f"--filename={start}/"])
+        if shutil.which("kdialog"):
+            out.append(["kdialog", "--getexistingdirectory", start or "."])
+    out.append([sys.executable, "-c", _TK_PICK, start])      # Tk: any OS with a display
+    return out
+
+
 def post_pick_folder(body):
-    """The native macOS folder chooser, starting at body['start'] when it
-    exists. Returns {ok, path} or {ok: False, cancelled|error}. The server
-    listens on 127.0.0.1 only, so the dialog opens for the person at this Mac."""
+    """The system's own folder chooser (macOS chooser, zenity / kdialog,
+    Windows' dialog, else Tk), starting at body['start'] or its nearest
+    existing parent. Returns {ok, path} or {ok: False, cancelled|error}. The
+    server listens on 127.0.0.1 only, so the dialog opens for the person at
+    this machine."""
     import subprocess
-    if sys.platform != "darwin":
-        return {"ok": False, "error": "folder chooser needs macOS; type the path"}
     start = pathlib.Path(str(body.get("start") or "")).expanduser()
     while start != start.parent and not start.is_dir():
         start = start.parent
-    loc = f' default location (POSIX file "{start}")' if start.is_dir() and start != start.parent else ""
-    script = (f'set p to POSIX path of (choose folder with prompt "Choose a folder for VQ Lab"{loc})\n'
-              'return p')
-    try:
-        r = subprocess.run(["osascript", "-e", script], capture_output=True, text=True,
-                           timeout=600)
-    except (OSError, subprocess.TimeoutExpired) as e:
-        return {"ok": False, "error": f"{type(e).__name__}: {e}"}
-    if r.returncode != 0:
-        return {"ok": False, "cancelled": True}
-    return {"ok": True, "path": r.stdout.strip().rstrip("/") or "/"}
+    s = str(start) if start.is_dir() and start != start.parent else ""
+    errors = []
+    for cmd in _pick_commands(s):
+        try:
+            r = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
+        except FileNotFoundError:
+            continue                                  # not installed: try the next
+        except (OSError, subprocess.TimeoutExpired) as e:
+            errors.append(f"{type(e).__name__}: {e}")
+            continue
+        path = r.stdout.strip()
+        if r.returncode == 0 and path:
+            return {"ok": True, "path": path.rstrip("/\\") or path}
+        err = r.stderr.strip()
+        if r.returncode in (0, 1) and (not err or "cancel" in err.lower() or "-128" in err):
+            return {"ok": False, "cancelled": True}   # the user closed the dialog
+        errors.append(err[:200])
+    return {"ok": False, "error": "no folder chooser available here; type the path"
+            + (f" ({errors[-1]})" if errors else "")}
 
 
 def api_storage_usage(_q):
