@@ -1,4 +1,5 @@
-# The /bench/ GUI mockup carries lab measurements; it stays in the repo only.
+# The GUI ships as bench/index.html only; its build script and source JSON stay in the repo.
 prune src/vqlab/agents/gui_static/bench
+include src/vqlab/agents/gui_static/bench/index.html
 # The private notebook never ships.
 prune lab

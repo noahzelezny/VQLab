@@ -31,8 +31,8 @@ Detached runs under the MCP runs dir, FINDINGS-LOG entries; queues under `<recor
 ## Files
 - `config_cmd.py`: `vqlab lab config`: show, set or initialise storage locations (over settings.py)
 - `doctor.py`: `vqlab lab doctor`: which interpreter, packages, storage and credentials a run would use
-- `gui.py`: `vqlab lab gui`: a local window onto the lab (read-only except storage settings)
-- `gui_static/bench/make_jobs_snapshot.py`: regenerates the GUI mockup's jobs snapshot (bench.html / index.html)
+- `gui.py`: `vqlab lab gui`: serves the VQ Lab GUI (Library · Recipe · Jobs, gui_static/bench/index.html) and the JSON it reads
+- `gui_static/bench/make_jobs_snapshot.py`: regenerates the GUI's embedded jobs snapshot (bench.html / index.html)
 - `mcp/server.py`: `vqlab lab mcp`: the stdio JSON-RPC loop and the tool table (name -> fn, schema)
 - `mcp/common.py`: `ToolError` (= `vqlab.ops.errors.LabError`) and old helper names, re-exported
 - `mcp/tools_storage.py`: adapters: where_is, list_artifacts, artifact_config, read_doc, disk_free

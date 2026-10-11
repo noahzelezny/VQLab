@@ -240,7 +240,7 @@ COMMANDS: dict[str, Command] = {c.name: c for c in (
     _C('mcp', 'vqlab.agents.mcp.server', 'mcp/server.py', 'lab', False, True,
        'serve the lab to agents over MCP (stdio); one server per box'),
     _C('gui', 'vqlab.agents.gui', 'gui.py', 'lab', False, True,
-       'a local, read-only window onto the lab (127.0.0.1:8781)'),
+       'the VQ Lab GUI: Library, Recipe, Jobs (127.0.0.1:8781)'),
     _C('sz-pack', 'vqlab.skipzero.sz_pack', 'skipzero/sz_pack.py', 'build', False, True,
        'vq-skipzero: drop fully-dead VQ rows on disk (live rows + row mask), expanded at load; --dry-run prices it'),
     _C('sz-check', 'vqlab.skipzero.sz_check', 'skipzero/sz_check.py', 'gate', False, True,

@@ -1,29 +1,20 @@
 #!/usr/bin/env python3
-"""vqlab gui — a local window onto the lab (read-only except storage settings).
+"""vqlab gui — the VQ Lab GUI: Library · Recipe · Jobs.
 
     vqlab gui [--port 8781] [--open]
 
-Serves one page on 127.0.0.1 (never another interface) over data the lab
-already keeps -- nothing here computes a number of its own:
+Serves gui_static/bench/index.html at / on 127.0.0.1 (never another
+interface), plus the JSON it reads, over data the lab already keeps --
+nothing here computes a number of its own:
 
-  Fleet      <records>/registry/{artifacts,hub}.jsonl (runtime profile,
-             geometry mix, size, Hub drift, build record), lineage on click
-  Fit store  <store>/index.jsonl: per teacher, a layer x projection grid of
-             which (d, K) are already fitted -- what a mixed-codebook build
-             can be assembled from without paying for a k-means
-  Families   <families>/*/teachers/*/{profile,onboard}.json
-  Runs       ~/.vqlab/runs.jsonl, the MCP run dirs, and who holds the GPU
-  Queues     /api/queues: recent `vqlab queue` runs (state.json per run, with
-             `live` = the runner pid is alive, the check `queue status` uses)
-  Settings   /api/settings: every storage location, its source and free
-             space; POST /api/settings sets one (agents/settings.py, the same
-             validation `vqlab config set` runs)
-  Scratch    /api/scratch: top-level scratch folders with sizes, and
-             /api/scratch/reclaimable: `vqlab scratch reclaimable` with its
-             rm lines -- shown, never run
-  Bench      /bench/ serves gui_static/bench/ (the Library/Recipe/Jobs design mockup;
-             source checkout only, excluded from the wheel)
-             on the same origin, so its Jobs page reads /api/queues live
+  /api/fleet        <records>/registry/{artifacts,hub}.jsonl
+  /api/provenance   build record + lineage of a registered artifact
+  /api/fits         <store>/index.jsonl: which (d, K) are fitted per layer
+  /api/families     families/ + <families>: profile and onboard state
+  /api/runs         ~/.vqlab/runs.jsonl, the MCP run dirs, the GPU holder
+  /api/queues       recent `vqlab queue` runs
+  /api/settings     storage locations; POST sets one (agents/settings.py)
+  /api/scratch      scratch folders; /reclaimable adds rm lines, never run
 
 Stdlib only; reads index files and small JSON, never a tensor, so it is safe
 on a box that is mid-experiment. Every endpoint is a GET except one POST
@@ -287,10 +278,6 @@ class Handler(BaseHTTPRequestHandler):
 
     def _bench(self, rel):
         root = (STATIC / "bench").resolve()
-        if not root.is_dir():   # a design mockup: in the repo, not in the wheel
-            return self._send(404, b'{"error":"/bench/ is a design mockup that ships only '
-                              b'in a source checkout of VQLab, not in the wheel"}',
-                              "application/json")
         f = (root / urllib.parse.unquote(rel)).resolve()
         ctype = BENCH_TYPES.get(f.suffix)
         if root not in f.parents or ctype is None or not f.is_file():
@@ -325,15 +312,13 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         u = urllib.parse.urlparse(self.path)
-        if u.path in ("/", "/index.html"):
-            return self._send(200, (STATIC / "index.html").read_bytes(), "text/html; charset=utf-8")
-        if u.path == "/bench":
+        if u.path in ("/", "/index.html"):            # the GUI: Library / Recipe / Jobs
+            return self._bench("index.html")
+        if u.path in ("/bench", "/bench/"):           # old address of the same page
             self.send_response(301)
-            self.send_header("Location", "/bench/")
+            self.send_header("Location", "/")
             self.end_headers()
             return
-        if u.path.startswith("/bench/"):
-            return self._bench(u.path[len("/bench/"):] or "index.html")
         fn = ROUTES.get(u.path)
         if fn is None:
             return self._send(404, b'{"error":"not found"}', "application/json")
