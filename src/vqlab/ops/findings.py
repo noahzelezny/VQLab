@@ -22,6 +22,22 @@ VERDICTS = ("CONFIRMED", "FALSIFIED", "VOID", "CORRECTS", "NULL")
 _F_HEAD = re.compile(r"^## F(\d+)\b")
 
 
+def _refuse_moved_log() -> None:
+    """Refuse to number from an empty log while the old one sits in a checkout:
+    the records default moved (2026-10), and handing out F1 would restart
+    the lab's numbering silently."""
+    if FINDINGS_LOG.exists():
+        return
+    old = config.legacy_findings_log()
+    if old:
+        raise LabError(
+            "RECORDS_MOVED",
+            f"the findings log {FINDINGS_LOG} does not exist, but the old one does at {old} "
+            f"(records moved to the `records` location). Keep using it: "
+            f"`vqlab lab config set records {old.parent}` or export VQLAB_FINDINGS_LOG={old}. "
+            f"Refusing to start numbering at F1.")
+
+
 def _findings_entries(path: Optional[Path] = None) -> List[Dict[str, Any]]:
     path = path or FINDINGS_LOG  # resolved at call time (tests redirect it)
     out = []
@@ -90,6 +106,7 @@ def next_f_number(reserve: bool = False, owner: str = "") -> Dict[str, Any]:
     reserve=False stays the default so a plain "what number am I on?" costs
     nothing and burns nothing.
     """
+    _refuse_moved_log()
     ents = _findings_entries()
     top = max((e["f"] for e in ents), default=0)
     pub = set(e["f"] for e in ents)
@@ -131,6 +148,7 @@ def release_f_number(n: int) -> Dict[str, Any]:
 
 
 def findings_tail(n: int = 10) -> Dict[str, Any]:
+    _refuse_moved_log()
     ents = _findings_entries()
     ents.sort(key=lambda e: e["f"])
     return {"count": len(ents), "entries": ents[-max(1, n):], "log": str(FINDINGS_LOG)}
@@ -155,6 +173,7 @@ def findings_append(headline: str, artifact: str, instrument: str, prediction: s
     both the log and the lock mark the number taken, but it meant the
     held-reservations list filled with numbers that were already published.
     """
+    _refuse_moved_log()
     missing = [k for k, v in dict(headline=headline, artifact=artifact, instrument=instrument,
                                   prediction=prediction, measured=measured).items() if not str(v).strip()]
     if missing:

@@ -60,22 +60,69 @@ def _undefined_anchors(name: str, bundle: str) -> list:
             if not re.search(rf"^(?:def|class)\s+{re.escape(a)}\b", bundle, re.M)]
 
 
+# What a registry entry without `flags` was certified at (and what every
+# revision older than the knobs bakes, since an absent knob runs these).
+LEGACY_FLAGS = {"VQ_FUSED_MAX_N": 4096, "VQ_GEMMSEG_ACCS": False, "VQ_GEMMSEG_CVEC": False}
+
+
+def _baked_prefill_flags(bundle: str, rp) -> dict:
+    """The bundle's baked values of the certification flags, typed like the
+    registry (int / bool); a knob the text does not have runs its legacy value."""
+    have = rp.flags_of(bundle)
+    out = {}
+    for k, legacy in LEGACY_FLAGS.items():
+        v = have.get(k)
+        if v is None:
+            out[k] = legacy
+        elif isinstance(legacy, bool):
+            out[k] = v.strip().lower() not in ("", "0", "false", "off", "no")
+        else:
+            try:
+                out[k] = int(v)
+            except ValueError:
+                out[k] = v
+    return out
+
+
+def _certified_flags(rev) -> dict:
+    return {k: type(LEGACY_FLAGS[k])(v)
+            for k, v in dict(LEGACY_FLAGS, **rev.get("flags", {})).items()}
+
+
 def _stale_as(bundle: str, name: str, rp):
-    """The certified-equivalent revision `bundle` carries for runtime file
-    `name` (runtime/equivalent_revisions.json), or None. Certified = its
-    OUTPUT is byte-identical to the current runtime's for every artifact
-    without vq_skipzero (tests/test_runtime_equivalence.py), so a bundle on
-    it is STALE -- slower, same numbers -- not broken."""
+    """(rev, near) for runtime file `name` (runtime/equivalent_revisions.json).
+
+    rev is the certified-equivalent revision `bundle` carries AT THE FLAGS IT
+    WAS CERTIFIED AT (its `flags`, legacy 4096/off/off when absent), else
+    None. Certified = its OUTPUT is byte-identical to the current runtime's
+    for every artifact without vq_skipzero (tests/test_runtime_equivalence.py),
+    so a bundle on it is STALE -- slower, same numbers -- not broken.
+
+    The CODE match is modulo VQ_* defaults (a rebundle preserves the shipped
+    ones), so the flags are compared separately: the certification holds at
+    one flag set, and a bundle baking others is not covered by it. When the
+    code matches a revision whose certified flags differ from the bundle's
+    baked ones, near lists [(revision sha, {flag: (bundle, certified)})]."""
     from vqlab._layout import runtime_file
     reg_path = runtime_file("equivalent_revisions.json")
     reg = json.loads(reg_path.read_text())
+    baked = _baked_prefill_flags(bundle, rp)
+    near = []
     for rev in reg.get("revisions", []):
         if pathlib.PurePath(rev["path"]).name != name:
             continue
         old = (reg_path.parent / rev["file"]).read_text()
-        if rp.matches_any_profile(bundle, old)[0] or rp.matches_modulo_flags(bundle, old)[0]:
-            return rev
-    return None
+        if not (rp.matches_any_profile(bundle, old)[0] or rp.matches_modulo_flags(bundle, old)[0]):
+            continue
+        cert = _certified_flags(rev)
+        # the certification flags are vq_switch's prefill knobs; a vq_dense
+        # revision is certified independent of them
+        deltas = {k: (baked[k], cert[k]) for k in cert
+                  if name == "vq_switch.py" and baked[k] != cert[k]}
+        if not deltas:
+            return rev, []
+        near.append((rev["sha256"], deltas))
+    return None, near
 
 
 def check(artifact, strict=False):
@@ -143,8 +190,14 @@ def check(artifact, strict=False):
                 return 0, lines
             stale = {}
             for name, _u in drifted:
-                rev = _stale_as(bundle, name, _rp)
+                rev, near = _stale_as(bundle, name, _rp)
                 if rev is None:
+                    for sha, deltas in near:
+                        _out(f"not STALE: {name} matches certified runtime @ {sha[:12]}, "
+                              f"but the bundle bakes defaults that certification does "
+                              f"not cover:")
+                        for flag, (have, cert) in sorted(deltas.items()):
+                            _out(f"    {flag:26s} bundle={have!r}  certified={cert!r}")
                     break
                 stale[name] = rev
             else:
@@ -239,28 +292,34 @@ def check(artifact, strict=False):
         _out("  These are the values the artifact SHIPPED with and were "
               "preserved deliberately. Any runtime claim must name them.")
         return 0, lines
-    rev = None if cfg.get("vq_skipzero") else _stale_as(bundle, "vq_switch.py", runtime_profile)
+    rev, near = (None, []) if cfg.get("vq_skipzero") else \
+        _stale_as(bundle, "vq_switch.py", runtime_profile)
     if rev is not None:
+        fl = ", ".join(f"{k}={int(v)}" for k, v in _certified_flags(rev).items())
         if rev.get("flags"):
-            # Certified at its OWN baked prefill defaults, which match the
-            # current runtime's (tests/test_runtime_equivalence.py).
-            fl = ", ".join(f"{k}={int(v)}" for k, v in rev["flags"].items())
-            _out(f"STALE: bundle carries runtime @ {rev['sha256'][:12]}, whose output is "
-                  f"byte-identical to the current runtime at its baked defaults ({fl}; "
-                  f"tests/test_runtime_equivalence.py). A rebundle adds: {rev['gains']}")
+            # Certified at its OWN baked prefill defaults, which this bundle
+            # also bakes (checked in _stale_as).
+            _out(f"STALE: bundle carries runtime @ {rev['sha256'][:12]} baking {fl}, whose "
+                  f"output at those defaults is byte-identical to the current runtime's "
+                  f"(tests/test_runtime_equivalence.py). A rebundle adds: {rev['gains']}")
             return (2 if strict else 0), lines
         # Legacy entries are certified at the LEGACY prefill defaults
-        # (VQ_FUSED_MAX_N=4096, ACCS/CVEC off): since the F200-F204 flip, the
-        # current runtime takes gemmseg2+ACCS for 512 < N <= 4096 pairs, so
-        # "byte-identical to the current runtime" is no longer true for those
-        # prompts. Still STALE (not broken), but say so.
-        _out(f"STALE: bundle carries runtime @ {rev['sha256'][:12]}, whose output is "
-              f"byte-identical to the current runtime run at the LEGACY prefill defaults "
-              f"(VQ_FUSED_MAX_N=4096, VQ_GEMMSEG_ACCS=0, VQ_GEMMSEG_CVEC=0; "
-              f"tests/test_runtime_equivalence.py). At the current defaults, prompts of "
-              f"512..4096 (token, expert) pairs differ: a rebundle adds the faster, "
-              f"ACCS-corrected short-prompt prefill (F200-F204) and {rev['gains']}")
+        # (VQ_FUSED_MAX_N=4096, ACCS/CVEC off), which this bundle bakes: since
+        # the F200-F204 flip, the current runtime takes gemmseg2+ACCS for
+        # 512 < N <= 4096 pairs, so "byte-identical to the current runtime" is
+        # no longer true for those prompts. Still STALE (not broken), but say so.
+        _out(f"STALE: bundle carries runtime @ {rev['sha256'][:12]} baking the LEGACY "
+              f"prefill defaults ({fl}); its output is byte-identical to the current "
+              f"runtime run at those defaults (tests/test_runtime_equivalence.py). At the "
+              f"current defaults, prompts of 512..4096 (token, expert) pairs differ: a "
+              f"rebundle adds the faster, ACCS-corrected short-prompt prefill (F200-F204) "
+              f"and {rev['gains']}")
         return (2 if strict else 0), lines
+    for sha, deltas in near:
+        _out(f"not STALE: the code matches certified runtime @ {sha[:12]}, but the bundle "
+              f"bakes defaults that certification does not cover:")
+        for flag, (have, cert) in sorted(deltas.items()):
+            _out(f"    {flag:26s} bundle={have!r}  certified={cert!r}")
     _out(f"FAIL: bundled model.py ({len(bundle.splitlines())} lines) does not "
           f"contain the current runtime ({len(runtime.splitlines())} lines). "
           "Downloaders run different code than the benches. Re-splice before "
