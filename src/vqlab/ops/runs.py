@@ -19,10 +19,10 @@ from typing import Any, Dict, List, Optional
 
 from vqlab import commands as _commands
 from vqlab import config
-from vqlab.core.exo import exo_instances as _exo_instances
-from vqlab.core.gpu_lease import lease_holder as _lease_holder
-from vqlab.core.gpu_lease import lease_path
-from vqlab.core.gpu_lease import pid_alive as _pid_alive
+from vqlab.core.box.exo import exo_instances as _exo_instances
+from vqlab.core.box.gpu_lease import lease_holder as _lease_holder
+from vqlab.core.box.gpu_lease import lease_path
+from vqlab.core.box.gpu_lease import pid_alive as _pid_alive
 from vqlab.ops.errors import LabError
 from vqlab.ops.roots import REPO, _under, lab_roots
 

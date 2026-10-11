@@ -17,7 +17,7 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional
 
 from vqlab import api
-from vqlab.core.gpu_lease import acquire_lease, release_lease  # noqa: F401
+from vqlab.core.box.gpu_lease import acquire_lease, release_lease  # noqa: F401
 from vqlab.ops import queues, runs
 from vqlab.ops.box import _box_state  # noqa: F401
 from vqlab.ops.queues import _queues_dir  # noqa: F401

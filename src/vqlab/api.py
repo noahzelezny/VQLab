@@ -309,8 +309,8 @@ def artifact_size(*, path: str) -> JSONDict:
     _need(path=path)
     if not Path(path).is_dir():
         raise ApiError("NOT_FOUND", f"no artifact directory at {path}")
-    from vqlab.core.artifact import sizes
-    from vqlab.core.artifact_size import index_total_size
+    from vqlab.core.artifacts.artifact import sizes
+    from vqlab.core.artifacts.artifact_size import index_total_size
     s = dict(_call(sizes, path))
     s["mtp_total"] = s["mtp"] + s["mtp_sidecar"]
     s["text_plus_tower"] = s["text"] + s["tower"]
@@ -541,7 +541,7 @@ def fits(*, family: Optional[str] = None, teacher: Optional[str] = None,
     """Fitted modules in the fit store's index (``vqlab fits list``),
     filtered; ``teacher`` matches as a substring. ``root`` defaults to the
     first configured fit-store root. Reads the index only; no GPU."""
-    from vqlab.core import fitstore as fs
+    from vqlab.core.source import fit_store as fs
     if root:
         r = Path(root)
     else:

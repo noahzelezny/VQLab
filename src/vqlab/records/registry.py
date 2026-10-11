@@ -34,7 +34,7 @@ import re
 import socket
 import sys
 
-from vqlab.core.hub import git_blob_sha1, remote_files
+from vqlab.core.artifacts.hub import git_blob_sha1, remote_files
 from vqlab.records import provenance
 from vqlab.runtime import runtime_profile
 

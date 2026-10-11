@@ -33,7 +33,7 @@ import sys
 import mlx.core as mx
 
 from vqlab.runtime import vq_pack
-from vqlab.core import codepack  # the packing rule fit-moe --pack shares
+from vqlab.core.artifacts import codepack  # the packing rule fit-moe --pack shares
 
 def _assert_tower_belongs(src_cfg, art_cfg, src_name, art_name):
     """Refuse a vision tower that cannot project into THIS model.
@@ -121,7 +121,7 @@ def main(argv=None) -> int:
 
 
 
-    from vqlab.core.artifact import Artifact as _Artifact
+    from vqlab.core.artifacts.artifact import Artifact as _Artifact
     if not _packable(_Artifact.open(SRC), args.pack_unaligned):
         raise SystemExit(f"REFUSED: nothing in {SRC} to pack (every VQ module is already packed, "
                          "byte-aligned (K256/K65536), or NSUB-unaligned without --pack-unaligned); "
@@ -132,7 +132,7 @@ def main(argv=None) -> int:
     OUT.mkdir(parents=True, exist_ok=True)
 
     idx_path = SRC / "model.safetensors.index.json"
-    from vqlab.core.artifact import Artifact
+    from vqlab.core.artifacts.artifact import Artifact
     _art = Artifact.open(SRC)
     shards = _art.shards
     _vqm = _art.map("vq_modules")
@@ -217,7 +217,7 @@ def main(argv=None) -> int:
     # found with sufficient memory" — and any downloader would be misled the same
     # way. Recomputed below from the packed shards' own headers.
     _idx = json.load(open(idx_path))
-    from vqlab.core.artifact import tensor_bytes, write_index
+    from vqlab.core.artifacts.artifact import tensor_bytes, write_index
     _total = tensor_bytes(OUT, _idx["weight_map"].values())
     write_index(OUT, _idx["weight_map"], total_size=_total, metadata=_idx.get("metadata"))
     print(f"index total_size recomputed from packed shards: {_total} "

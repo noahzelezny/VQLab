@@ -101,7 +101,7 @@ src/vqlab/
   vqlab/config.py     machine-local storage locations (scratch, models, teachers, fit store, records), from env then ~/.config/vqlab/config.toml
   vqlab/commands.py   THE command registry (pure data): name, module, stage, mcp, gpu, help; the CLI, MCP allowlist and queue all read it
   runtime/      SHIPPED code, spliced verbatim into every model.py (the one hard boundary)
-  core/         shared libraries every stage may use (source loaders, fit store, Knurlogic arch finder, GPU lease, code packing rule, pin record, Hub diff); imports nothing from family/
+  core/         shared libraries every stage may use, in three groups: artifacts/ (layout, size, code packing rule, pin record, stamp fields, Hub diff), source/ (source loaders, fit store), box/ (GPU lease, exo, Knurlogic client and arch finder); imports nothing from family/
   records/      run log, build records (provenance), score stamps, artifact registry, tamper manifest, step verdicts
   family/       the family registry, family-aware loading, version stamps, and one plugin file per model family
   mtp/          the MTP speculative-decoding LIBRARY (vqlab.mtp); its tools live in the stage folders

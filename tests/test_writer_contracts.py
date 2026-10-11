@@ -379,7 +379,7 @@ def test_geo_build(fx):
 
 
 def test_sizes_three_ways(fx, tmp_path):
-    from vqlab.core.artifact import sizes
+    from vqlab.core.artifacts.artifact import sizes
     d = tmp_path / "sized"
     _art(d, {"a.safetensors": {"model.layers.0.w": np.zeros(256, np.uint8),
                                "model.visual.blocks.0.w": np.zeros(64, np.uint8),
@@ -394,7 +394,7 @@ def test_sizes_three_ways(fx, tmp_path):
 def test_total_size_is_tensor_bytes(fx, name):
     """Every writer's index total_size is the sum of its shards' tensor bytes
     (HF's definition), measured from the output, never copied from a parent."""
-    from vqlab.core.artifact import Artifact, tensor_bytes
+    from vqlab.core.artifacts.artifact import Artifact, tensor_bytes
     d = {"mix": "mix", "pack": "packed", "reskeleton": "resk", "geo": "geo", "fitmoe": "fitmoe"}[name]
     out = fx["root"] / d
     if not out.exists():
@@ -446,7 +446,7 @@ def test_tensor_class(key, cls):
     """The one classifier (operator notes 2026-10-03, 1.5): every spelling the
     fleet uses, including DeepSeek Vision-Exp's tower, image tokens and the
     per-layer image-routing bias."""
-    from vqlab.core.artifact import tensor_class
+    from vqlab.core.artifacts.artifact import tensor_class
     assert tensor_class(key) == cls
 
 

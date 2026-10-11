@@ -24,7 +24,7 @@ import sys
 
 import numpy as np
 
-from vqlab.core import fitstore
+from vqlab.core.source import fit_store as fitstore
 
 from vqlab.skipzero import sz_pack
 

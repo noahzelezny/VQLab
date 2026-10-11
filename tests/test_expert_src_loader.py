@@ -1,4 +1,4 @@
-"""core.expert_src's loader on synthetic checkpoints (CPU only, no GPU).
+"""core.source.expert_src's loader on synthetic checkpoints (CPU only, no GPU).
 
 Moved here from expert_src._selftest (untangle step 9a): it is the only
 place expert_src read the FAMILY table, and core may not import family.
@@ -13,7 +13,7 @@ import pytest
 
 mx = pytest.importorskip("mlx.core")
 
-from vqlab.core.expert_src import count_experts, load_expert_stack  # noqa: E402
+from vqlab.core.source.expert_src import count_experts, load_expert_stack  # noqa: E402
 from vqlab.family.registry import FAMILY  # noqa: E402
 
 E, OUT, IN = 5, 8, 16

@@ -37,7 +37,7 @@ import sys
 import time
 
 from vqlab import _layout
-from vqlab.core.knurlogic_client import (  # noqa: F401  (re-exported)
+from vqlab.core.box.knurlogic_client import (  # noqa: F401  (re-exported)
     BUNDLED, VENDORED, drafting as _drafting, entry as _entry, post as _post,
     rank_logs as _rank_logs, ready as _ready)
 

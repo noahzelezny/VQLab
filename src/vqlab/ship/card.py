@@ -10,7 +10,7 @@ Fills the house template (front matter, headline sizes, measured results,
 geometry, run it, methodology, paper, support, provenance). Every number
 has one source:
 
-  sizes            core.artifact.sizes()  -- the `vqlab size` numbers
+  sizes            core.artifacts.artifact.sizes()  -- the `vqlab size` numbers
   KL table, paired card_tables.render()   -- the `vqlab card-tables` output
   "Measured with"  card_tables.measured_with() over the KL JSON's stamps
   geometry         config.json vq_modules (+ quantization for the skeleton)
@@ -38,7 +38,7 @@ import pathlib
 import re
 import sys
 
-from vqlab.core.artifact import sizes
+from vqlab.core.artifacts.artifact import sizes
 from vqlab.records import provenance
 from vqlab.ship import card_tables
 from vqlab.ship.card_checks import Refuse, _fp, check_kl, text_match  # noqa: F401  (re-exported)

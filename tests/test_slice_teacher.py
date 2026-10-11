@@ -17,7 +17,7 @@ import sys
 import numpy as np
 import pytest
 
-from vqlab.core.artifact import read_header
+from vqlab.core.artifacts.artifact import read_header
 
 SRC = pathlib.Path(__file__).resolve().parents[1] / "src"
 N = 6

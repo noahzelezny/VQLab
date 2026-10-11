@@ -31,7 +31,7 @@ import numpy as np
 HERE = pathlib.Path(__file__).resolve().parent
 from vqlab import config
 from vqlab.util.log import make_log
-from vqlab.core import fitstore
+from vqlab.core.source import fit_store as fitstore
 from vqlab.records import provenance
 
 from vqlab.skipzero import skipzero_load

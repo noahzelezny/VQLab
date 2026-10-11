@@ -11,7 +11,7 @@ Copy this list into the campaign's notes and tick it there.
       determinism, init sweep. ONBOARDING.md says why each step exists.
 - [ ] Family entry in `family/registry.py` (with `model_type`, so
       artifact-only tools resolve it); the CPU loader gate passes:
-      `python src/vqlab/core/expert_src.py --selftest`.
+      `python src/vqlab/core/source/expert_src.py --selftest`.
 - [ ] Teacher archived in configured storage, never re-downloaded
       (`vqlab config`, `where_is`).
 - [ ] Depth law MEASURED for this family (`layer-leverage`, ranked by the

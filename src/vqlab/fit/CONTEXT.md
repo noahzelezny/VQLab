@@ -28,7 +28,7 @@ A new directory (never in place) carrying `vqlab_provenance.json`: the fitter se
 - `fit_dense_vq.py`: `fit dense`: VQ-fit a dense MLP trio from a bf16 source
 - `fit_moe.py`: `fit moe`: fused VQ-fit + assemble a MoE codes artifact (settings in a `FitRun`)
 - `fit_ple.py`: `fit ple`: VQ-fit per-layer-embedding (PLE) tables
-- `fits.py`: `fit fits`: find, index and file fitted VQ modules (over core/fitstore.py)
+- `fits.py`: `fit fits`: find, index and file fitted VQ modules (over core/source/fit_store.py)
 - `geo_build.py`: `fit geo-build`: rebuild an artifact with a new per-layer geometry map
 - `harvest_parts.py`: `fit harvest-parts`: VQ fits out of a shipped artifact into a geo-build parts dir
 - `kmeans.py`: every fitter's k-means: seeding, assignment, Lloyd updates (golden-pinned)

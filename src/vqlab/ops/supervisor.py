@@ -16,7 +16,7 @@ import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from vqlab.core.gpu_lease import acquire_lease, lease_path, release_lease
+from vqlab.core.box.gpu_lease import acquire_lease, lease_path, release_lease
 from vqlab.ops.roots import REPO
 from vqlab.ops.runs import GPU_FREE, _read_meta
 

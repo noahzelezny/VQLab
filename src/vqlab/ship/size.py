@@ -13,8 +13,8 @@ import argparse
 import json
 import sys
 
-from vqlab.core.artifact import sizes
-from vqlab.core.artifact_size import GIB, index_total_size  # noqa: F401  (re-exported)
+from vqlab.core.artifacts.artifact import sizes
+from vqlab.core.artifacts.artifact_size import GIB, index_total_size  # noqa: F401  (re-exported)
 
 
 def main(argv=None):
@@ -30,7 +30,7 @@ def main(argv=None):
     a = ap.parse_args(argv)
     if a.check_index or a.fix_index:
         import pathlib
-        from vqlab.core.artifact import Artifact, write_index
+        from vqlab.core.artifacts.artifact import Artifact, write_index
         art = Artifact.open(a.artifact)
         p = pathlib.Path(a.artifact) / "model.safetensors.index.json"
         doc = json.loads(p.read_text())

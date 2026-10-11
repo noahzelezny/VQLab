@@ -31,7 +31,7 @@ import numpy as np
 HERE = pathlib.Path(__file__).resolve().parent
 from vqlab import config
 from vqlab.util.log import make_log
-from vqlab.core import fitstore
+from vqlab.core.source import fit_store as fitstore
 from vqlab.records import registry
 from vqlab.records import provenance
 
@@ -230,7 +230,7 @@ def main(argv=None):
     # A module whose tensors straddle a shard boundary is planned per shard,
     # so no single shard holds all of it and it is never packed. Say so: a
     # silent skip reads as "no dead rows here" (writer contracts, 2026-10-02).
-    from vqlab.core.artifact import Artifact
+    from vqlab.core.artifacts.artifact import Artifact
     straddle = (sorted(m for m in Artifact.open(src).straddling() if m in specs)
                 if (src / "model.safetensors.index.json").exists() else [])
     if straddle:

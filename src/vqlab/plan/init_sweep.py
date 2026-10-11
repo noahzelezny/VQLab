@@ -20,7 +20,7 @@ import mlx.core as mx
 import numpy as np
 
 from vqlab.family.registry import FAMILY
-from vqlab.core import expert_src
+from vqlab.core.source import expert_src
 
 def lloyd(X, C, iters):
     for _ in range(iters):

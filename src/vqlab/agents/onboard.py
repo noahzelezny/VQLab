@@ -43,7 +43,7 @@ import sys
 
 from vqlab import _layout
 from vqlab import config as _config
-from vqlab.core import fitstore
+from vqlab.core.source import fit_store as fitstore
 
 PY = sys.executable
 STEPS = ("profile", "loader", "cache_a", "cache_b", "determinism", "init_sweep")
@@ -97,7 +97,7 @@ def step_loader(ctx):
     fam = families.FAMILY.get(ctx["family"])
     if fam is None:                       # dense families read by key template
         return "done", {"note": "dense family: key template checked by the profile"}
-    from vqlab.core import expert_src
+    from vqlab.core.source import expert_src
     T = ctx["teacher"]
     ip = T / "model.safetensors.index.json"
     if ip.exists():

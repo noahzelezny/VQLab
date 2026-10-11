@@ -245,7 +245,7 @@ def main(argv=None) -> int:
         if m not in prev:
             raise SystemExit(f"{m}: skipzero module has no vq_modules geometry")
         vq_modules[m] = dict(prev[m])
-    from vqlab.core.artifact import Artifact
+    from vqlab.core.artifacts.artifact import Artifact
     _art = Artifact.open(ART)
     for sh, mods in sorted(by_shard.items()):
         data = mx.load(str(ART / sh))

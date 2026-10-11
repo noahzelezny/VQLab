@@ -26,7 +26,7 @@ import pathlib
 
 import mlx.core as mx
 
-from vqlab.core.artifact import tensor_bytes, tensor_class
+from vqlab.core.artifacts.artifact import tensor_bytes, tensor_class
 
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser()
@@ -78,7 +78,7 @@ def main(argv=None) -> int:
     # Qwen keeps the whole tower under one prefix; gemma-4 splits it across
     # vision_tower.* AND embed_vision.* (356 tensors total), so a single-prefix
     # filter silently grafts an incomplete tower. The default asks the one
-    # classifier (core.artifact.tensor_class), which knows both halves; an
+    # classifier (core.artifacts.artifact.tensor_class), which knows both halves; an
     # explicit --prefixes still restricts the graft to exactly those.
     _PREFIXES = tuple(p for p in args.prefixes.split(",") if p)
 

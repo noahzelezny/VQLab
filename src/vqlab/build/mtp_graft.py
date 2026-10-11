@@ -43,7 +43,7 @@ import pathlib
 
 import mlx.core as mx
 
-from vqlab.core.artifact import tensor_class
+from vqlab.core.artifacts.artifact import tensor_class
 from vqlab.mtp.mtp_head import MTPHead
 
 PREFIX = "language_model.mtp."

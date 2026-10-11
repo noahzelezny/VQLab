@@ -34,7 +34,7 @@ from vqlab.runtime import vq_pack
 
 
 from vqlab.family.registry import FAMILY  # shared registry (family/registry.py)
-from vqlab.core import expert_src            # shared source-layout loader (incl. unfused)
+from vqlab.core.source import expert_src            # shared source-layout loader (incl. unfused)
 
 def src_tensor(src, src_map, fam, li, proj, cache):
     # expert_src handles every source layout (fused half-slice, pre-stacked,

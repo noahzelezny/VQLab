@@ -37,7 +37,7 @@ import importlib.util
 import json
 import pathlib
 import sys
-from vqlab.core.stamp_fields import COMPARED, describe, diff  # noqa: F401  (re-exported)
+from vqlab.core.artifacts.stamp_fields import COMPARED, describe, diff  # noqa: F401  (re-exported)
 from vqlab.util.hashing import sha256_file
 
 _UNSET = object()

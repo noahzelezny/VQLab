@@ -23,7 +23,7 @@ def test_declared_mlx_vlm_family(monkeypatch):
     # glm5_next declares mlx_vlm; it loads through mlx_lm only when
     # Knurlogic's arch files serve its model_type. The old _selftest asserted
     # mlx_vlm unconditionally, so it FAILED on any box where they do.
-    from vqlab.core import arch_finder
+    from vqlab.core.box import arch_finder
     monkeypatch.setattr(arch_finder, "enabled", lambda: False)
     assert ML.runtime_for("glm5_next") == "mlx_vlm"
     monkeypatch.setattr(arch_finder, "enabled", lambda: True)

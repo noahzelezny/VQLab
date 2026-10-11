@@ -21,7 +21,7 @@ import argparse
 import json
 import sys
 
-from vqlab.core.clamps import ClampCounter, corpus_ids  # noqa: F401  (re-export)
+from vqlab.core.source.clamps import ClampCounter, corpus_ids  # noqa: F401  (re-export)
 
 CORPORA = ("prose", "code", "lit")
 

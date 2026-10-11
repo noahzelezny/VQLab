@@ -25,7 +25,7 @@ import filecmp
 import pathlib
 import sys
 
-from vqlab.core.artifact import (Artifact, copy_other_files, merge_maps, module_of,
+from vqlab.core.artifacts.artifact import (Artifact, copy_other_files, merge_maps, module_of,
                                  place, write_config, write_index)
 
 

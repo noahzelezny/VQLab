@@ -30,7 +30,7 @@ MOVED = {
     "vqlab.core.runtime_load": "vqlab.family.model_loader",
     "vqlab.runtime_load": "vqlab.family.model_loader",
     "runtime_load": "vqlab.family.model_loader",
-    "vqlab.family.arch": "vqlab.core.arch_finder",
+    "vqlab.family.arch": "vqlab.core.box.arch_finder",
 }
 
 
@@ -40,13 +40,13 @@ def test_old_name_is_same_module(old, new):
 
 
 def test_old_attribute_names_still_answer():
-    import vqlab.core.arch_finder as A
+    import vqlab.core.box.arch_finder as A
     import vqlab.core.numerics as N
     import vqlab.family.registry as R
     from vqlab.family import model_loader as runtime_load
     assert A.install is A.install_arch_finder
     assert runtime_load.FAMILY is R.FAMILY
-    import vqlab.core.stamp_fields as F
+    import vqlab.core.artifacts.stamp_fields as F
     assert (N.describe, N.diff, N.COMPARED) == (F.describe, F.diff, F.COMPARED)
     assert N.scorer_variant("deepseek_v4") == R.scorer_variant("deepseek_v4")
 

@@ -151,7 +151,7 @@ def _knurlogic(art, a, K=None, SPK=None, ready_timeout=1800, poll=10,
     import time
     sleep = sleep or time.sleep
     if SPK is None:
-        from vqlab.core import knurlogic_client as SPK
+        from vqlab.core.box import knurlogic_client as SPK
     if K is None:
         ksrc = os.environ.get("KNURLOGIC_SRC", "")
         if ksrc:
@@ -198,12 +198,12 @@ def _knurlogic(art, a, K=None, SPK=None, ready_timeout=1800, poll=10,
 
 
 def _n_tower_tensors(art):
-    """Tower tensors in the index, by core.artifact.tensor_class -- the same
+    """Tower tensors in the index, by core.artifacts.artifact.tensor_class -- the same
     classifier `size` and `check-release` use."""
     idx = art / "model.safetensors.index.json"
     if not idx.exists():
         return 0
-    from vqlab.core.artifact import tensor_class
+    from vqlab.core.artifacts.artifact import tensor_class
     wm = json.loads(idx.read_text())["weight_map"]
     return sum(tensor_class(k) == "tower" for k in wm)
 
@@ -441,14 +441,14 @@ def main() -> int:
     idx = art / "model.safetensors.index.json"
     if idx.exists():
         wm = json.loads(idx.read_text())["weight_map"]
-        # core.artifact.tensor_class, the one classifier: it matches any
+        # core.artifacts.artifact.tensor_class, the one classifier: it matches any
         # path SEGMENT naming vision/visual, not only a prefix list. The
         # families in this fleet already use four different spellings --
         # vision_tower (gemma, qwen3_5*), vision_model (glm5_next),
         # model.visual (qwen HF layout) and embed_vision -- and the first cut
         # of this gate listed three of them and reported the GLM rungs as
         # having ZERO vision tensors (F153's brittleness).
-        from vqlab.core.artifact import tensor_class
+        from vqlab.core.artifacts.artifact import tensor_class
         n_vis = sum(tensor_class(k) == "tower" for k in wm)
         print(f"vision tensors   : {n_vis}")
         if not n_vis:
