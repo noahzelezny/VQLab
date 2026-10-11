@@ -378,7 +378,7 @@ details.adv .kv{margin-top:8px}
 .dleg{display:flex;flex-wrap:wrap;gap:2px 14px;color:var(--dim);font-size:.85em;min-height:2.9em;align-content:flex-start}
 .dleg .sw{display:inline-block;width:.7em;height:.7em;border-radius:2px;margin-right:5px}.dleg .fr{color:var(--faint);margin-left:auto}
 .advh{margin-top:10px;color:var(--dim);cursor:pointer;font-size:.85em;letter-spacing:.1em;text-transform:uppercase;border-top:1px solid var(--line);padding-top:8px}
-.advb{max-height:3.6em;overflow:auto}.warnl{color:var(--warn);font-size:.85em;min-height:1.5em}
+.advb{max-height:none}.lscroll{overflow:auto;min-height:0}.srow.shared .p,.srow.shared .k{opacity:.5}.srow.shared .stag{opacity:.6}.warnl{color:var(--warn);font-size:.85em;min-height:1.5em}
 .cart>.ed{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.cart>.ed input[type=text]{flex:1;min-width:12em;background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:var(--r);padding:3px 8px;font:inherit;font-size:.9em}
 .cart .err{color:var(--bad);font-size:.85em}
 .stpage .srow .ed,.stpage .srow .err{grid-column:1 / 5}
@@ -1123,10 +1123,12 @@ const stLoc=k=>ST.cfg&&ST.cfg.locations.find(x=>x.key===k);
 function stEd(){const E=ST.edit;return `<div class="ed"><input type="text" id="sin" value="${esc(E.value)}" spellcheck="false"><label><input type="checkbox" id="scr"${E.create?' checked':''}> create if missing</label>
   <button class="mini pri" id="ssave"${E.busy?' disabled':''}>Save</button><button class="mini" id="scancel">Cancel</button></div>${E.error?`<div class="err">${esc(E.error)}</div>`:''}`}
 function stRow(l,lab){const ed=ST.edit&&ST.edit.key===l.key,one=l.paths.length===1,p0=l.paths[0]||'';
-  const own=one&&lab?(p0.slice(0,p0.lastIndexOf('/'))===lab?'in lab folder':'set on its own'):stSrc(l);
+  const mp=(stLoc('models')||{paths:[]}).paths[0],shared=l.key==='teachers'&&one&&(l.source==='same as models'||(!!mp&&p0===mp));
+  const own=shared?'same as models':one&&lab?(p0.slice(0,p0.lastIndexOf('/'))===lab?'in lab folder':'set on its own'):stSrc(l);
+  const desc=shared?'Full-precision models that builds start from. They live with your models unless you keep them on another drive.':l.description;
   const paths=l.paths.map((p,i)=>`<div title="${esc(p)}">${esc(p)}${l.exists&&l.exists[i]===false?' <span style="color:var(--warn)">missing</span>':''}</div>`).join('');
-  const nm=(ST.use&&ST.use.volumes.flatMap(v=>v.locations).find(x=>x.key===l.key)||{}).label||l.key;
-  return `<div class="srow"><span class="k">${esc(nm)} ${INFO(esc(l.description))}</span>
+  const nm=(ST.use&&ST.use.volumes.flatMap(v=>v.locations).find(x=>x.key===l.key)||{}).label||(l.key==='teachers'?'bf16 teachers':l.key);
+  return `<div class="srow${shared?' shared':''}"><span class="k">${esc(nm)} ${INFO(esc(desc))}</span>
     <div class="p">${paths}</div>
     <div class="stag" title="${esc(l.source||'')}">${esc(own)}</div>
     <div class="acts">${one&&!ed?`<button class="mini" data-sedit="${esc(l.key)}">edit</button>`:''}</div>${ed?stEd():''}</div>`}
@@ -1156,7 +1158,7 @@ function pgStorage(){
     top=`<div class="cart"><div class="ro">Lab folder ${INFO('Everything vqlab stores goes in folders inside this one, unless a location below is set on its own.')}</div>
       <div class="labp"><span class="big" title="${esc(lab)}">${esc(lab)||'&nbsp;'}</span><span class="stag">${esc(u?u.lab_source:'')}</span>${!ed&&labL?'<button class="mini" data-sedit="lab">edit</button>':''}</div>${ed?`<div class="srow" style="display:block;border:0;padding:6px 0 0">${stEd()}</div>`:''}</div>`}
   const disks=u?u.volumes.map(stDisk).join(''):`<div class="ro">${esc(ST.uerr||'sizing disks…')}</div>`;
-  const rows=c?c.locations.filter(l=>l.key!=='lab'&&l.key!=='roots'&&l.key!=='gpu_lease'):[];
+  const ORD=['models','teachers','scratch','fit_store','records'],rows=c?c.locations.filter(l=>ORD.includes(l.key)).sort((a,b)=>ORD.indexOf(a.key)-ORD.indexOf(b.key)):[];
   const adv=c?c.locations.filter(l=>l.key==='roots'||l.key==='gpu_lease'):[],open=stAdv();
   const locs=c?rows.map(l=>stRow(l,lab)).join(''):`<div class="ro">${esc(ST.err||'loading…')}</div>`;
   let right;
@@ -1175,11 +1177,12 @@ function pgStorage(){
       <div class="stabs"><button class="mini" aria-pressed="${ST.tab==='folders'}" data-stab="folders">Folders</button><button class="mini" aria-pressed="${ST.tab==='recl'}" data-stab="recl">Reclaimable</button></div>${tbl}`}
   return `<section class="panel stpage"><h2>Storage</h2><div class="stor"><div class="stl">${top}
     <div class="cart"><div class="ro">Disks</div><div class="disks">${disks}</div></div>
-    <div class="cart"><div class="ro">Locations ${INFO('Where each kind of data lives.')}</div>${locs}
-      <div class="advh" data-sadv="1">${open?'▾':'▸'} Advanced</div>${open?`<div class="advb">${adv.map(l=>stRow(l,lab)).join('')}</div>`:''}${c?`<div class="sfile">${esc(c.config_file)}${c.config_exists?'':' (not created)'}</div>`:''}</div></div>
+    <div class="cart"><div class="ro">Locations ${INFO('Where each kind of data lives.')}</div><div class="lscroll" id="lscroll">${locs}
+      <div class="advh" data-sadv="1">${open?'▾':'▸'} Advanced</div>${open?`<div class="advb">${adv.map(l=>stRow(l,lab)).join('')}</div>`:''}</div>${c?`<div class="sfile">${esc(c.config_file)}${c.config_exists?'':' (not created)'}</div>`:''}</div></div>
     <div class="strt">${fndCard()}<div class="cart"><div class="ro">Work in progress ${INFO('Builds and run outputs live here. Nothing on this page deletes anything.')}</div>${right}</div></div></div></section>`}
 function wireStorage(){
   const fit=()=>{const m=$('#fmod'),e=$('#sscroll');if(m){const av=innerHeight-m.getBoundingClientRect().top-90;m.style.height=Math.max(120,Math.round(av*.4))+'px'}
+    {const L=$('#lscroll');if(L){const t=L.getBoundingClientRect().top;L.style.maxHeight=Math.max(120,innerHeight-t-90-($('.sfile')?$('.sfile').offsetHeight+10:0))+'px'}}
     if(e)e.style.maxHeight=Math.max(120,innerHeight-e.getBoundingClientRect().top-90)+'px'};fit();
   {const b=$('#fscan');if(b)b.onclick=fndScan;document.querySelectorAll('#fmod tr.multi').forEach(r=>r.onclick=()=>{const k=r.dataset.gk;FOUND.open.has(k)?FOUND.open.delete(k):FOUND.open.add(k);render()})}
   if(!ST.started){ST.started=true;stLoad()}
