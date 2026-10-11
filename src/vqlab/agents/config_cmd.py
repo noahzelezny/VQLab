@@ -38,6 +38,8 @@ def show(sizes=False):
             print(f"  {k:10s} {p:60s} {state:30s} {'[' + r['source'] + ']' if i == 0 else ''}")
     print(f"  records holds: findings log {C.findings_log()}, registry/, "
           f"families {C.families_dir()}, research/, queues {C.queues_dir()}")
+    for w in C.legacy_warnings():
+        print(f"  WARNING: {w}")
     for name, b in C.boxes().items():
         print(f"  box {name}: ssh {b.get('ssh')}, repo {b.get('repo')}")
         print("      teachers " + (f"{b['teachers']}  (local copy; used when running on {name})"

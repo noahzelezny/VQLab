@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+### Migration: records moved
+- User-written records now default under the `records` location
+  (`$VQLAB_RECORDS`, `[paths] records`, else `~/.local/share/vqlab`):
+  findings log `<records>/FINDINGS-LOG.md` (was a checkout's
+  `lab/FINDINGS-LOG.md`), registry `<records>/registry/*.jsonl` (was a
+  checkout's `registry/`), queue records `<records>/queues` (was
+  `~/.vqlab/queues`). The defaults stay; to keep old data, run
+  `vqlab lab config set records <checkout>/lab` (or export
+  `VQLAB_FINDINGS_LOG`), copy old `registry/*.jsonl` into
+  `<records>/registry/`, and export `VQLAB_QUEUE_DIR=~/.vqlab/queues`.
+  `vqlab lab doctor` and `vqlab lab config` warn, with the exact line, while
+  `records` is unset and data sits at an old place; `next_f_number`,
+  `findings_tail` and `findings_append` refuse (RECORDS_MOVED) rather than
+  restart numbering at F1 when the log is missing but a checkout log exists.
+- MCP `queue_status` read `~/.vqlab/queues` while `vqlab queue` wrote
+  `<records>/queues`; every reader now uses `config.queues_dir()`.
+
 ### Removed
 - Bare imports of tool modules (`import pack`, `import settings`,
   `import registry`, ...) no longer resolve; use `vqlab.<pkg>.<mod>`.

@@ -46,6 +46,8 @@ import pathlib
 import re
 import tomllib
 
+from vqlab import _layout
+
 HOME = pathlib.Path.home() / ".vqlab"
 
 _ENV = {
@@ -234,6 +236,60 @@ def queues_dir() -> pathlib.Path:
     """Queue run records: $VQLAB_QUEUE_DIR, else <records>/queues."""
     env = os.environ.get("VQLAB_QUEUE_DIR")
     return pathlib.Path(env).expanduser() if env else records() / "queues"
+
+
+# Where records lived before they moved under `records` (2026-10): a checkout's
+# lab/FINDINGS-LOG.md and registry/*.jsonl, and ~/.vqlab/queues. Read only, to
+# warn; nothing here moves or reads the data.
+CHECKOUT = _layout.SRC.parent
+
+
+def _is_checkout() -> bool:
+    return (CHECKOUT / "pyproject.toml").is_file()
+
+
+def legacy_findings_log() -> pathlib.Path | None:
+    """A checkout's old lab/FINDINGS-LOG.md, when it exists and is not the
+    log this config resolves to."""
+    p = CHECKOUT / "lab" / "FINDINGS-LOG.md"
+    if not (_is_checkout() and p.is_file()):
+        return None
+    try:
+        if p.resolve() == findings_log().resolve():
+            return None
+    except OSError:
+        pass
+    return p
+
+
+def legacy_records() -> list[dict]:
+    """Old-location records that the current resolution no longer reads:
+    [{what, path, fix}], only while `records` (and the per-kind override) is
+    unset. Empty when nothing was left behind."""
+    if source("records") != "default":
+        return []
+    out = []
+    log = legacy_findings_log()
+    if log and not os.environ.get("VQLAB_FINDINGS_LOG"):
+        out.append({"what": "findings log", "path": str(log),
+                    "fix": f"vqlab lab config set records {log.parent}   "
+                           f"(or export VQLAB_FINDINGS_LOG={log})"})
+    reg = CHECKOUT / "registry"
+    if _is_checkout() and any(f.stat().st_size for f in reg.glob("*.jsonl")):
+        out.append({"what": "artifact registry", "path": str(reg),
+                    "fix": f"vqlab lab config set records <dir>, then copy {reg}/*.jsonl "
+                           f"into <dir>/registry/ (default now {registry_dir()})"})
+    q = pathlib.Path.home() / ".vqlab" / "queues"
+    if not os.environ.get("VQLAB_QUEUE_DIR") and q.is_dir() and any(q.iterdir()):
+        out.append({"what": "queue records", "path": str(q),
+                    "fix": f"export VQLAB_QUEUE_DIR={q}"})
+    return out
+
+
+def legacy_warnings() -> list[str]:
+    return [f"records moved: {r['what']} at {r['path']} is no longer read (records now "
+            f"default to {records()}). To keep using it: {r['fix']}"
+            for r in legacy_records()]
 
 
 def source(key: str) -> str:

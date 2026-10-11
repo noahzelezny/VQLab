@@ -154,6 +154,8 @@ def report():
                                  f"run `vqlab lab scratch reclaimable`")
         elif free < LOW_FREE_WARN_GIB:
             r["notes"].append(f"{key} volume has {free:.0f} GiB free (under {LOW_FREE_WARN_GIB})")
+    for w in C.legacy_warnings():
+        r["notes"].append("WARNING: " + w)
     r["stale_scratch"] = stale_scratch(C.scratch())
     if r["stale_scratch"]:
         names = ", ".join(f"{d['name']} ({d['age_days']}d)" for d in r["stale_scratch"][:8])
