@@ -239,6 +239,8 @@ COMMANDS: dict[str, Command] = {c.name: c for c in (
        'serve an artifact over an OpenAI-compatible API (mlx-lm server + MTP decode)'),
     _C('mcp', 'vqlab.agents.mcp.server', 'mcp/server.py', 'lab', False, True,
        'serve the lab to agents over MCP (stdio); one server per box'),
+    _C('model-scan', 'vqlab.agents.model_scan', 'model_scan.py', 'lab', False, False,
+       'find models already on this machine (HF cache, LM Studio, exo, Ollama) for the GUI'),
     _C('gui', 'vqlab.agents.gui', 'gui.py', 'lab', False, True,
        'the VQ Lab GUI: Library, Recipe, Jobs (127.0.0.1:8781)'),
     _C('sz-pack', 'vqlab.skipzero.sz_pack', 'skipzero/sz_pack.py', 'build', False, True,
@@ -385,6 +387,7 @@ NAMESPACES: dict[str, tuple[str, dict[str, str]]] = {
         'reserve': 'reserve',
         'mcp': 'mcp',
         'gui': 'gui',
+        'scan': 'model-scan',
     }),
 }
 

@@ -31,6 +31,7 @@ Detached runs under the MCP runs dir, FINDINGS-LOG entries; queues under `<recor
 ## Files
 - `config_cmd.py`: `vqlab lab config`: show, set or initialise storage locations (over settings.py)
 - `doctor.py`: `vqlab lab doctor`: which interpreter, packages, storage and credentials a run would use
+- `model_scan.py`: `vqlab lab scan`: models already on this machine (vqlab's own roots, the Hugging Face cache, LM Studio, exo, Ollama, `[scan] extra`), tagged original / quantized / incomplete / unreadable with their vqlab family, into `<records>/registry/found.jsonl`; reads config.json and file lists only. The GUI rescans at launch and on Rescan; first run scans once
 - `first_run.py`: on a new install (no config, no location env, no older data) the first `vqlab` command creates `~/VQLab/{models,teachers,scratch,fits,records}` and a config naming it, and says so once; `$VQLAB_NO_SETUP=1` skips it
 - `gui.py`: `vqlab lab gui`: serves the VQ Lab GUI (Library · Recipe · Jobs, gui_static/bench/index.html) and the JSON it reads
 - `gui_static/bench/make_jobs_snapshot.py`: regenerates the GUI's embedded jobs snapshot (bench.html / index.html)

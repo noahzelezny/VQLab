@@ -56,6 +56,14 @@ def run(out=sys.stderr) -> pathlib.Path | None:
           f"       ({free / 2**30:,.0f} GiB free there). Config: {C.config_file()}\n"
           f"       Move it any time: `vqlab config set lab PATH`, or `vqlab gui` -> Storage.",
           file=out)
+    try:                                   # the models already on this machine
+        from vqlab.agents import model_scan
+        rows = model_scan.refresh()
+        n = sum(1 for r in rows if r.get("use") in ("original", "quantized"))
+        if n:
+            print(f"       Found {n} model(s) already on this machine (`vqlab lab scan`).", file=out)
+    except Exception:
+        pass
     if free < LOW_SYSTEM_FREE and lab.stat().st_dev == pathlib.Path.home().stat().st_dev:
         print("       This is the system disk with under 500 GiB free; teacher models are "
               "50-750 GiB each. Consider a larger drive.", file=out)

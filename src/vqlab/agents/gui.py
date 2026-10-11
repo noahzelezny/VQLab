@@ -16,6 +16,8 @@ nothing here computes a number of its own:
   /api/settings     storage locations; POST sets one (agents/settings.py)
   /api/scratch      scratch folders; /reclaimable adds rm lines, never run
   /api/storage/usage  per volume: total/used/free, what each vqlab location holds
+  /api/models/found   models already on this machine (vqlab lab scan; rescanned at
+                    launch and by POST /api/models/scan)
 
 Stdlib only; reads index files and small JSON, never a tensor, so it is safe
 on a box that is mid-experiment. Every endpoint is a GET except one POST
@@ -264,6 +266,39 @@ def api_settings(_q):
                         "queues": str(config.queues_dir())}}
 
 
+def api_models_found(_q):
+    from vqlab.agents import model_scan
+    rows = model_scan.load()
+    return {"models": rows, "scanning": _SCAN["running"],
+            "scanned": rows[0].get("scanned") if rows else None}
+
+
+_SCAN = {"running": False}
+
+
+def _scan_in_background():
+    """Scan for models without holding up the page (launch and Rescan)."""
+    import threading
+    if _SCAN["running"]:
+        return
+
+    def go():
+        from vqlab.agents import model_scan
+        try:
+            model_scan.refresh()
+        except Exception:
+            pass
+        finally:
+            _SCAN["running"] = False
+    _SCAN["running"] = True
+    threading.Thread(target=go, daemon=True).start()
+
+
+def post_models_scan(_body):
+    _scan_in_background()
+    return {"ok": True, "scanning": True}
+
+
 def api_storage_usage(_q):
     from vqlab.agents import settings
     return settings.usage()
@@ -293,8 +328,9 @@ def post_settings(body):
 ROUTES = {"/api/fleet": api_fleet, "/api/provenance": api_provenance,
           "/api/fits": api_fits, "/api/families": api_families, "/api/runs": api_runs,
           "/api/queues": api_queues, "/api/settings": api_settings,
-          "/api/scratch": api_scratch, "/api/storage/usage": api_storage_usage, "/api/scratch/reclaimable": api_scratch_reclaimable}
-POSTS = {"/api/settings": post_settings}
+          "/api/scratch": api_scratch, "/api/storage/usage": api_storage_usage,
+          "/api/models/found": api_models_found, "/api/scratch/reclaimable": api_scratch_reclaimable}
+POSTS = {"/api/settings": post_settings, "/api/models/scan": post_models_scan}
 
 
 BENCH_TYPES = {".html": "text/html; charset=utf-8", ".json": "application/json",
@@ -374,6 +410,7 @@ def main(argv=None) -> int:
     ap.add_argument("--open", action="store_true", help="open it in the default browser")
     a = ap.parse_args(argv)
     srv = ThreadingHTTPServer(("127.0.0.1", a.port), Handler)
+    _scan_in_background()          # models already on this machine (vqlab lab scan)
     url = f"http://127.0.0.1:{a.port}/"
     print(f"vqlab gui on {url}  (ctrl-c to stop)", flush=True)
     if a.open:
