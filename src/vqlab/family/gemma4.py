@@ -6,7 +6,7 @@ plus the maker checkpoints' config.json. Runtime: knurlogic's vendored
 `engine/families/gemma4/architecture/gemma4_text.py` (gt:<line>), served as
 mlx_lm.models.gemma4_text by vqlab.core.box.arch_finder, and its vision tower
 `engine/families/gemma4/vision/{vision.py,__init__.py}`. Line numbers are
-knurlogic 9595650 (6a2ab49 before the 2026-10-09 history rewrite).
+knurlogic 28bc67af (originally 6a2ab49; renamed by the 2026-10 history rewrites).
 
 Not here: the FAMILY fit entry (family/registry.py "gemma4" / "gemma4_e4b")
 and audio (knurlogic serves no audio tower; the reference's audio path is
