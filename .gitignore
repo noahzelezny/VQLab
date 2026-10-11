@@ -8,10 +8,10 @@ dist/
 venv/
 
 # Outputs (artifacts live under vqlab.config storage, never in the checkout)
-manifests/
-fits/
-artifacts/
-caches/
+/manifests/
+/fits/
+/artifacts/
+/caches/
 *.log
 
 # Machine-local state written by the tools
