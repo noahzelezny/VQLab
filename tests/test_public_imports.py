@@ -1,9 +1,11 @@
 """The names other code depends on, frozen while the package is reorganized.
 
 Snapshot (tests/fixtures/public_names.json) of what exists today:
-  * every import name _layout answers for (bare stems, pre-split dotted
-    names, RENAMED old names): shipped runtime text, published model.py
-    files, queue files and tests all spell modules these ways;
+  * every import name _layout answers for (the bare RUNTIME stems, pre-split
+    dotted `vqlab.*` names, RENAMED old names): shipped runtime text and
+    tests spell modules these ways;
+  * every old FILE name _layout.find() maps (queue files and shell chains
+    name files such as vq_397b_codes.py); these are not import names;
   * every CLI command;
   * the MCP `run` allowlist and its GPU-free subset.
 
@@ -22,6 +24,7 @@ import os
 import pathlib
 import subprocess
 import sys
+import tempfile
 from concurrent.futures import ThreadPoolExecutor
 
 import pytest
@@ -45,6 +48,7 @@ def _mcp():
 def _current():
     m = _mcp()
     return {"import_names": sorted(_layout._names()),
+            "file_names": sorted(_layout.FILE_ALIASES),
             "commands": sorted(cli.COMMANDS),
             "mcp_run_allowlist": sorted(m.RUN_ALLOWLIST),
             "mcp_gpu_free": sorted(m.GPU_FREE)}
@@ -63,6 +67,55 @@ def test_no_import_name_disappears(snap):
 def test_every_import_name_resolves(snap):
     missing = [n for n in snap["import_names"] if importlib.util.find_spec(n) is None]
     assert not missing, missing
+
+
+def test_no_old_file_name_disappears(snap):
+    gone = sorted(set(snap["file_names"]) - set(_layout.FILE_ALIASES))
+    assert not gone, f"old file names no longer mapped: {gone}"
+    for stem in snap["file_names"]:
+        canon = _layout.FILE_ALIASES[stem]
+        if importlib.util.find_spec(canon).submodule_search_locations:
+            continue                    # a package (selftest/): no single file
+        assert _layout.find(f"{stem}.py").is_file(), stem
+
+
+# Bare names an app might own. `import vqlab` must not answer for any of them
+# (R1: `import settings` after `import vqlab` gave vqlab's module).
+FOREIGN_BARE = [
+    "settings", "registry", "hub", "exo", "power", "pin", "mix", "pack",
+    "card", "size", "price", "doctor", "gui", "parity", "scratch", "serve",
+    "publish", "fits", "artifact", "smoke", "families", "provenance",
+    "kmeans", "config", "commands", "api", "ops", "queue", "util", "core",
+    "build", "fit", "plan", "score", "bench", "gate", "ship", "records",
+    "agents", "family", "mtp", "selftest", "skipzero", "bundle", "runtime",
+]
+
+
+def test_import_vqlab_answers_for_no_foreign_bare_name():
+    code = (
+        "import importlib, importlib.util, json, pathlib, vqlab, vqlab.api\n"
+        "pkg = pathlib.Path(vqlab.__file__).resolve().parent\n"
+        "bad = []\n"
+        f"for n in {FOREIGN_BARE!r}:\n"
+        "    s = importlib.util.find_spec(n)\n"
+        "    o = s and s.origin and pathlib.Path(s.origin).resolve()\n"
+        "    if s is not None and (not o or pkg in o.parents):\n"
+        "        bad.append(n)\n"
+        f"stems = {RUNTIME_STEMS!r}\n"
+        "ok = [importlib.import_module(s) is importlib.import_module('vqlab.runtime.' + s)\n"
+        "      for s in stems]\n"
+        "print(json.dumps({'bad': bad, 'ok': all(ok)}))\n")
+    with tempfile.TemporaryDirectory() as d:   # cwd holds no stray modules
+        r = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True,
+                           cwd=d, env=dict(os.environ, PYTHONPATH=str(ROOT / "src")))
+    assert r.returncode == 0, r.stderr
+    out = json.loads(r.stdout.strip().splitlines()[-1])
+    assert out == {"bad": [], "ok": True}, out
+
+
+def test_bare_names_are_only_runtime_stems():
+    bare = {k for k in _layout._names() if "." not in k}
+    assert bare == set(RUNTIME_STEMS), sorted(bare ^ set(RUNTIME_STEMS))
 
 
 @pytest.mark.parametrize("stem", RUNTIME_STEMS)

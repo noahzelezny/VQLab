@@ -10,7 +10,9 @@ Silicon (MLX), and MTP speculative decoding over stock mlx-lm.
     head, _ = load_mtp_head(model, model_path=path)
     print(mtp_generate(model, tok, "Explain VQ.", head, temp=0.7))
 
-`import vqlab` changes nothing outside vqlab. `use_knurlogic_arch()` is the
+`import vqlab` changes nothing outside vqlab: the only bare import names
+it answers for are the runtime stems (vq_switch, vq_dense, ...), aliases of
+vqlab.runtime.<stem>. `use_knurlogic_arch()` is the
 opt-in: it puts a finder on sys.meta_path so `mlx_lm.models.<name>` resolves
 to Knurlogic's vendored architectures (needed to load deepseek_v4 and
 qwen4_exp, which stock mlx-lm lacks). It is idempotent, and

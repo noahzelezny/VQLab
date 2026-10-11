@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+### Removed
+- Bare imports of tool modules (`import pack`, `import settings`,
+  `import registry`, ...) no longer resolve; use `vqlab.<pkg>.<mod>`.
+  `import vqlab` answered for ~150 bare names, so an app's own `settings`
+  or `registry` module got vqlab's. Only the runtime stems (`vq_switch`,
+  `vq_pack`, `vq_dense`, `dense_shim`, `glm5_shim`, `arch_resolve`,
+  `runtime_profile`, `gated_delta_chunked`) stay bare. Old FILE names in
+  queue files (`vq_397b_codes.py`, `pack_artifact.py`, ...) still map
+  through `_layout.find()`. Deprecated `vqlab.*` spellings now warn at the
+  import line, and `importlib.util.find_spec` probes no longer warn.
+
 ### Renamed (untangle step 15; old names import for one release)
 - `plan/probe_init_sweep.py` is `plan/init_sweep.py`, `plan/mtp_probe.py` is
   `plan/mtp_probe_qwen4_exp.py`, `plan/mtp_probe35.py` is
