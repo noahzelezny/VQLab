@@ -132,8 +132,10 @@ _BACKUP = re.compile(r"\.(pre[-_][\w-]+|published|rows8|[\w-]*bak)$")
 def hub_diff(art: pathlib.Path, repo: str, deep=False):
     info, remote = remote_files(repo)
     rows = []
-    local = {f.name: f for f in art.iterdir() if f.is_file()
-             and f.name not in provenance.NOT_OUTPUTS and not f.name.startswith(".")}
+    # the build record and its history ship with the artifact, so they are
+    # compared like any other file (they are not outputs of the build, which
+    # is why provenance.NOT_OUTPUTS lists them, but they are published)
+    local = {f.name: f for f in art.iterdir() if f.is_file() and not f.name.startswith(".")}
     for name in sorted(set(local) | set(remote)):
         l, r = local.get(name), remote.get(name)
         if name == ".gitattributes" and r is not None and l is None:
