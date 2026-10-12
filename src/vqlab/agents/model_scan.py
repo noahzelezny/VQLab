@@ -58,9 +58,8 @@ def places(extra=()) -> list[tuple[str, pathlib.Path, str]]:
     layout: 'flat' (one folder per model, maybe nested one level as
     org/name), 'hf' (models--org--name/snapshots/<rev>), 'ollama'."""
     h = _home()
-    hf = os.environ.get("HF_HUB_CACHE") or (
-        str(pathlib.Path(os.environ["HF_HOME"]) / "hub") if os.environ.get("HF_HOME")
-        else str(h / ".cache" / "huggingface" / "hub"))
+    hf = str(config.hf_cache()) if os.environ.get("HF_HUB_CACHE") or os.environ.get("HF_HOME") \
+        else str(h / ".cache" / "huggingface" / "hub")      # _home(): the test hook
     exo = pathlib.Path(os.environ["EXO_HOME"]) / "models" if os.environ.get("EXO_HOME") \
         else h / ".exo" / "models"
     out = [("vqlab models", config.models(), "flat"),

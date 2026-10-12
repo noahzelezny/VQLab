@@ -21,6 +21,7 @@ nothing here computes a number of its own:
                     launch and by POST /api/models/scan)
 
   /api/jobs/files    queue files the Jobs page can start (<records>/queue-files)
+  POST /api/jobs/recipe  a Recipe -> a queue file (plan/recipe_queue.py)
   POST /api/jobs/plan|start|stop|resume  a queue run (agents/jobs.py)
 
 Stdlib only; reads index files and small JSON, never a tensor, so it is safe
@@ -393,7 +394,8 @@ ROUTES = {"/api/fleet": api_fleet, "/api/provenance": api_provenance,
           "/api/jobs/files": api_jobs_files, "/api/scratch/reclaimable": api_scratch_reclaimable}
 POSTS = {"/api/settings": post_settings, "/api/models/scan": post_models_scan,
          "/api/pick-folder": post_pick_folder, "/api/jobs/plan": jobs.plan,
-         "/api/jobs/start": jobs.start, "/api/jobs/stop": jobs.stop, "/api/jobs/resume": jobs.resume}
+         "/api/jobs/start": jobs.start, "/api/jobs/stop": jobs.stop, "/api/jobs/resume": jobs.resume,
+         "/api/jobs/recipe": jobs.write_recipe}
 
 
 class Handler(BaseHTTPRequestHandler):

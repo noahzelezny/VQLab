@@ -35,7 +35,7 @@ def _preflight_problem(st) -> str | None:
     pfk = [k for k in (pf or {}) if k != "writes_gib"]
     if pf is not None and not (isinstance(pf, dict) and len(pfk) == 1
                                and pfk[0] in ("args", "append", "skip", "full")
-                               and ("writes_gib" not in pf or "full" in pf)):
+                               and ("writes_gib" not in pf or "skip" not in pf)):
         return "preflight must be one of {args}, {append}, {skip}, {full}"
     if pf and (pf.get("append") == [] or pf.get("args") == st.get("args")):
         # a "preflight" identical to the real step is a full-size run
@@ -86,6 +86,8 @@ def needs_gpu(st) -> bool:
 
 
 def retries(st, preflight) -> int:
+    if preflight:          # a small run that fails says so at once; a retry hides nothing
+        return 0
     n = st.get("retries")
     if n is None:
         n = _commands.DEFAULT_RETRIES if st.get("cmd") in _commands.RESUMABLE and not preflight else 0
@@ -100,8 +102,9 @@ def expect(st, tree: pathlib.Path, preflight) -> dict:
         # something, not that it produced the full run's lines/files
         exp = {"stdout_nonempty": True,
                **({"allow_traceback": True} if exp.get("allow_traceback") else {})}
+    files = [_config.expand(str(f)) for f in exp.get("files", ())]
     exp["files"] = [str(f if pathlib.Path(f).is_absolute() else tree / f)
-                    for f in exp.get("files", ())] if not preflight else []
+                    for f in files] if not preflight else []
     return exp
 
 
@@ -268,10 +271,11 @@ def preflight_args(st, args, state, outmap) -> tuple[list[str] | None, dict | No
     pfdir = preflight_root() / pathlib.Path(state["qdir"]).name / slug(st["name"])
     pfdir.mkdir(parents=True, exist_ok=True)
     args = redirect_outs(args, pfdir, outmap if outmap is not None else {})
-    need = 0
-    if "full" in pf:                   # what it writes: stated, else its input size
-        need = (float(pf["writes_gib"]) * 2**30 if "writes_gib" in pf
-                else input_bytes(args, pathlib.Path(state["tree"])))
+    need = 0                           # what it writes: stated, else (full size) its input size
+    if "writes_gib" in pf:
+        need = float(pf["writes_gib"]) * 2**30
+    elif "full" in pf:
+        need = input_bytes(args, pathlib.Path(state["tree"]))
     free = shutil.disk_usage(pfdir).free
     if free - need < PREFLIGHT_MARGIN:
         return None, {"verdict": "fail", "reasons": [

@@ -6,7 +6,7 @@ Byte budget, a shipped rung, and a teacher (for leverage probes).
 ## Process
 New teacher? `vqlab onboard --teacher <dir>` sequences the whole characterisation pass and resumes (its code is `agents/onboard.py`: it launches GPU steps through the MCP server, so it lives in agents; `vqlab.plan.onboard` is an alias for one release). Otherwise:
 `vqlab family-profile --teacher <dir>` FIRST for any teacher: headers only, seconds, writes `families/<family>/teachers/<teacher>/profile.json` (legal geometries, exact bytes, GiB per bit). Then:
-`vqlab price`, `layer-leverage`, `alloc-sweep`, `probe-init` (`init_sweep.py`); MTP draft probes `mtp-probe` (`mtp_probe_qwen4_exp.py`) and `mtp-probe35` (`mtp_probe_qwen35.py`); hard guards `preflight-ram` / `preflight-disk`.
+`vqlab price`, `recipe compile` (recipe -> queue file), `layer-leverage`, `alloc-sweep`, `probe-init` (`init_sweep.py`); MTP draft probes `mtp-probe` (`mtp_probe_qwen4_exp.py`) and `mtp-probe35` (`mtp_probe_qwen35.py`); hard guards `preflight-ram` / `preflight-disk`.
 
 - `vqlab zero-groups <artifact|--fits>` prices a skip-zero-groups format: counts vq_scales==0 and |s|<6.2e-5 groups and the code GiB they hold (397B rungs ~10% of text bytes, concentrated in L0-L4).
 
@@ -28,4 +28,5 @@ A recipe or geomap for `fit/`, and printed cost/value curves.
 - `preflight_disk.py`: `plan preflight-disk`: refuse a build whose output volume lacks the space
 - `preflight_ram.py`: `plan preflight-ram`: refuse a resident load of a model bigger than RAM
 - `price.py`: `plan price`: size-target a VQ build before fitting it
+- `recipe_queue.py`: `plan recipe compile`: a build recipe -> a `vqlab queue` file, qwen3_5 MoE, qwen3_8_dense and affine chains from steps that have each run, proven by their preflight; the GUI's Recipe writes through it
 - `zero_groups.py`: `plan zero-groups`: code bytes that encode nothing, sized from scales alone

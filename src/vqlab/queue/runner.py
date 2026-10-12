@@ -61,7 +61,8 @@ the exo env. `preflight` is {"args": [...]} (replace), {"append": [...]} or
 {"skip": "reason"}, or {"full": "reason"} to run the real step full-size on
 purpose (checked against free scratch first -- its input size, or the
 "writes_gib" it declares, e.g. 0 for a pin; an identical {"append": []} is
-refused). A passing preflight deletes its outputs unless --keep-preflight. geo-build and kl-ladder take `--preflight` (first
+refused). Any non-skip preflight may declare "writes_gib" (a one-layer
+fit-moe still rewrites every base shard), and scratch is checked against it. A passing preflight deletes its outputs unless --keep-preflight. geo-build and kl-ladder take `--preflight` (first
 module / first cache x rung), so {"append": ["--preflight"]} is their block. In preflight, every OUTPUT flag's value (--out,
 --out-dir, ...) is redirected to <scratch SSD>/queue-preflight/<queue>/<step>/<name>, so a
 preflight never writes into a real step's output; and a later step that names

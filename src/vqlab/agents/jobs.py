@@ -54,6 +54,29 @@ def queue_files() -> list[dict]:
     return [{"file": p.name, "name": _name(p)} for p in sorted(d.glob("*.json"))] if d.is_dir() else []
 
 
+def write_recipe(body: dict) -> dict:
+    """A recipe from the Recipe page -> <records>/queue-files/<name>.json
+    (plan/recipe_queue.py), which the Jobs page then offers to Start. A
+    file of that name is never overwritten."""
+    from vqlab.plan.recipe_queue import RecipeError, compile_recipe
+    try:
+        q, warns = compile_recipe(body.get("recipe") or {})
+    except RecipeError as e:
+        return {"ok": False, "error": str(e)}
+    errs = qsteps.validate(q)
+    if errs:
+        return {"ok": False, "error": "compiled queue invalid: " + "; ".join(errs)}
+    d = files_dir()
+    d.mkdir(parents=True, exist_ok=True)
+    p = d / f"{q['name']}.json"
+    try:
+        with open(p, "x") as f:
+            json.dump(q, f, indent=1)
+    except FileExistsError:
+        return {"ok": False, "error": f"a queue file named {p.name} already exists; pick another name"}
+    return {"ok": True, "file": p.name, "warnings": warns}
+
+
 def _name(p: pathlib.Path) -> str:
     try:
         return json.loads(p.read_text()).get("name") or p.stem

@@ -483,9 +483,30 @@ def resolve_recorded(path: str) -> str:
 _PLACEHOLDER = re.compile(r"(^|=)<(teachers|models|scratch)>(?=/|$)")
 
 
+_HF_REF = re.compile(r"(^|=)hf://([^/@\s]+)/([^/@\s]+)@([0-9a-f]+)(?=/|$)")
+
+
+def hf_cache() -> pathlib.Path:
+    """The Hugging Face hub cache: $HF_HUB_CACHE, $HF_HOME/hub, else ~/.cache/huggingface/hub."""
+    env = os.environ.get("HF_HUB_CACHE")
+    if env:
+        return pathlib.Path(env).expanduser()
+    home = os.environ.get("HF_HOME")
+    return (pathlib.Path(home).expanduser() if home else pathlib.Path.home() / ".cache" / "huggingface") / "hub"
+
+
+def hf_snapshot(org: str, name: str, rev: str) -> pathlib.Path | None:
+    """The cached snapshot folder `portable` recorded as hf://org/name@rev
+    (rev is a commit prefix), or None when this machine does not hold it."""
+    snaps = hf_cache() / f"models--{org}--{name}" / "snapshots"
+    hits = sorted(snaps.glob(f"{rev}*")) if snaps.is_dir() else []
+    return hits[0] if len(hits) == 1 else None
+
+
 def expand(arg: str, box: str | None = None) -> str:
     """``<teachers>/X`` (the form `portable` records) -> this box's teachers
-    root + /X; likewise ``<models>`` and ``<scratch>``. Also after an ``=``
+    root + /X; likewise ``<models>`` and ``<scratch>``; ``hf://org/name@rev``
+    -> this machine's cached snapshot (left as is when it holds none). Also after an ``=``
     (``--src=<teachers>/X``, ``prose=<scratch>/c``). `vqlab <cmd>` applies it
     to every argument, so a queue step naming ``<teachers>/DeepSeek-V4`` reads
     that box's local copy on a box with a `teachers` override and the shared [paths] teachers elsewhere. `box` resolves for
@@ -497,7 +518,10 @@ def expand(arg: str, box: str | None = None) -> str:
         else:
             root = {"teachers": teachers, "models": models, "scratch": scratch}[key]()
         return m.group(1) + str(root)
-    return _PLACEHOLDER.sub(sub, arg, count=1)
+    def hf(m):
+        snap = hf_snapshot(m.group(2), m.group(3), m.group(4))
+        return m.group(1) + str(snap) if snap else m.group(0)
+    return _HF_REF.sub(hf, _PLACEHOLDER.sub(sub, arg, count=1), count=1)
 
 
 def require_free(path, need_bytes: int, what: str, margin_gib: float = 5.0) -> None:
