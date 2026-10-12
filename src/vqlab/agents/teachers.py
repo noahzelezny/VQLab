@@ -27,6 +27,7 @@ from vqlab.plan import recipe_queue
 from vqlab.queue import files as qf
 
 _PROFILING: set[str] = set()
+_PROFILE_ERRORS: dict[str, str] = {}     # realpath -> why its last profile failed
 _LOCK = threading.Lock()
 
 
@@ -34,7 +35,7 @@ def _profiles():
     """(family, teacher, profile) for every profile; the checkout's first,
     the user's overriding (as the registry reads them)."""
     seen = {}
-    for root in registry._family_dirs():
+    for root in registry.family_dirs():
         for p in sorted(pathlib.Path(root).glob("*/teachers/*/profile.json")):
             try:
                 seen[(p.parent.parent.parent.name, p.parent.name)] = json.loads(p.read_text())
@@ -125,7 +126,7 @@ def teachers() -> dict:
         have.add(real)
         found.append({"name": r.get("name"), "path": r["path"], "family": r.get("family"),
                       "model_type": r.get("model_type"), "bytes": r.get("bytes"),
-                      "profiling": real in _PROFILING})
+                      "profiling": real in _PROFILING, "profile_error": _PROFILE_ERRORS.get(real)})
     return {"teachers": out, "unprofiled": found}
 
 
@@ -135,7 +136,11 @@ def profile(body: dict) -> dict:
     Only a path the model scan found is accepted."""
     path = str(body.get("path") or "")
     from vqlab.agents import model_scan
-    known = {os.path.realpath(r["path"]) for r in model_scan.load() if r.get("path")}
+    try:
+        rows = model_scan.load()
+    except (OSError, ValueError):
+        rows = []
+    known = {os.path.realpath(r["path"]) for r in rows if r.get("path")}
     real = os.path.realpath(path)
     if not path or real not in known:
         return {"ok": False, "error": "not a model the scan found; rescan in Storage first"}
@@ -143,14 +148,25 @@ def profile(body: dict) -> dict:
         if real in _PROFILING:
             return {"ok": True, "running": True}
         _PROFILING.add(real)
+        _PROFILE_ERRORS.pop(real, None)
 
     def go():
+        err = None
         try:
             pre, env, cwd = qf.cli_launch()
-            subprocess.run([*pre, "family-profile", "--teacher", path], env=env, cwd=cwd,
-                           capture_output=True, text=True, timeout=1800)
+            r = subprocess.run([*pre, "family-profile", "--teacher", path], env=env, cwd=cwd,
+                               capture_output=True, text=True, timeout=1800)
+            if r.returncode:
+                tail = " | ".join((r.stderr or "").strip().splitlines()[-3:])
+                err = f"family-profile exited {r.returncode}" + (f": {tail}" if tail else "")
+        except subprocess.TimeoutExpired:
+            err = "family-profile timed out after 30 min"
+        except Exception as exc:         # a launch failure must still clear _PROFILING
+            err = f"could not run family-profile: {exc}"
         finally:
             with _LOCK:
                 _PROFILING.discard(real)
+                if err:
+                    _PROFILE_ERRORS[real] = err
     threading.Thread(target=go, daemon=True).start()
     return {"ok": True, "running": True}

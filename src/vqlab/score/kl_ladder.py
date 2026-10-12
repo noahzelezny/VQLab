@@ -107,6 +107,28 @@ def _preflight_builds(python, rungs, meta, caches, allow):
     return run
 
 
+def index_cells(table, before, changed, meta) -> None:
+    """Every cell of every rung that did not change during the run goes to
+    the scores index, resumed ones included (a crashed campaign's cells were
+    scored, just not by this process); a cell already indexed with the same
+    bytes, runtime, cache and number is not written again."""
+    from vqlab.records import scores
+    try:
+        seen = {scores.key(r) for r in scores.read()}
+    except Exception as exc:
+        print(f"[kl-ladder] WARNING: cannot read the scores index ({exc}); not recording", flush=True)
+        return
+    for rname, cells in table.items():
+        if rname in changed:
+            continue
+        for cname, rec in cells.items():
+            try:
+                scores.append(before[rname], cname, meta[cname], rec, seen)
+            except Exception as exc:  # the index is a convenience; the campaign's numbers are not
+                print(f"[kl-ladder] WARNING: could not record {rname} x {cname} in the scores "
+                      f"index: {type(exc).__name__}: {exc}", flush=True)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--cache", action="append", required=True,
@@ -173,7 +195,6 @@ def main():
     # What each rung IS, stamped before the first GPU minute and re-checked
     # after the last: another session rebundling a rung mid-campaign (F151)
     # is a filesystem write no power gate can see.
-    from vqlab.records import scores
     from vqlab.records.provenance import measured
     before = {r: measured(d) for r, d in rungs.items()}
 
@@ -211,8 +232,6 @@ def main():
                 with open(rj + ".tmp", "w") as f:
                     json.dump(rec, f)
                 os.replace(rj + ".tmp", rj)
-                if not a.preflight:          # a preflight cell is not a result
-                    scores.append(before[rname], cname, cm, rec)
             table[rname][cname] = rec
             print(f"    KL {rec['mean_kl_millinats']:.3f} "
                   f"+/- {rec.get('kl_sem_millinats', float('nan')):.3f} "
@@ -275,6 +294,10 @@ def main():
         print(f"\nWARNING: rung(s) CHANGED during this run (runtime or bytes): "
               f"{', '.join(changed)} -- their numbers describe no single artifact (F151)",
               flush=True)
+        print("WARNING: NOT recorded in the scores index: "
+              f"{', '.join(changed)}", flush=True)
+    if not a.preflight:              # a preflight cell is not a result
+        index_cells(table, before, changed, meta)
     if a.out:
         pathlib.Path(a.out).write_text(json.dumps(
             {"measured": before, "changed_during_run": changed,

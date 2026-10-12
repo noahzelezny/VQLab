@@ -37,6 +37,24 @@ from vqlab.family.registry import DENSE_REMAP as FAMILIES  # shared registry
 
 PROJS = ("gate_proj", "up_proj", "down_proj")
 
+def drop_replaced_quantization(cfg: dict) -> None:
+    """A base quantized per module (stream-convert writes one entry per
+    module) names the MLPs just replaced; the loader would then try to
+    affine-quantize a VQLinear ("Unable to quantize model of type
+    VQLinear"). Those entries describe bytes this artifact no longer has."""
+    for key in ("quantization", "quantization_config"):
+        if isinstance(cfg.get(key), dict):
+            for mod in cfg["vq_linear"]:
+                cfg[key].pop(mod, None)
+            # an entry under a replaced module would still reach the loader
+            left = sorted(q for q in cfg[key] for mod in cfg["vq_linear"]
+                          if q == mod or q.startswith(mod + "."))
+            if left:
+                raise SystemExit(f"FAIL: {key} still names {len(left)} entr(y/ies) under VQ "
+                                 f"modules (first: {left[0]}); the loader would affine-"
+                                 "quantize a VQLinear")
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--family", required=True, choices=sorted(FAMILIES))
@@ -184,14 +202,7 @@ def main(argv=None) -> int:
 
     cfg = json.load(open(BASE / "config.json"))
     cfg["vq_linear"] = {FIT_TO_BASE[m]: dict(v) for m, v in mlp_cfg.items()}
-    # A base quantized per module (stream-convert writes one entry per
-    # module) names the MLPs just replaced; the loader would then try to
-    # affine-quantize a VQLinear ("Unable to quantize model of type
-    # VQLinear"). Those entries describe bytes this artifact no longer has.
-    for key in ("quantization", "quantization_config"):
-        if isinstance(cfg.get(key), dict):
-            for mod in cfg["vq_linear"]:
-                cfg[key].pop(mod, None)
+    drop_replaced_quantization(cfg)
     cfg["vq_embed"] = {}
     cfg["model_file"] = "model.py"
     json.dump(cfg, open(OUT / "config.json", "w"), indent=1)

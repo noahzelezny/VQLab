@@ -38,6 +38,7 @@ import json
 import os
 import pathlib
 import sys
+import tempfile
 
 
 # A synthetic probe beats a checked-in JPEG: no binary in the repo, no license
@@ -259,31 +260,39 @@ def _load_bundle_module(art):
     return mod
 
 
-def _load_full(art, mod):
+def _load_full(art, mod, cfg, view):
     """Load the whole model through mlx_vlm as a server does: with the
     artifact's own model.py as the model class (stock mlx_vlm would build its
     plain arch, which has no VQ layers: "Received N parameters not in model"
-    on every VQ dense rung), and from a view holding only the files the index
-    names, so a sidecar shard (mtp-head-q6.safetensors) is not read as model
-    weights."""
-    import tempfile
-
-    import mlx_vlm.utils as vlm
-    wm = json.loads((art / "model.safetensors.index.json").read_text())["weight_map"] \
-        if (art / "model.safetensors.index.json").exists() else None
-    view = pathlib.Path(tempfile.mkdtemp(prefix="vision-smoke-"))
+    on every VQ dense rung), and from `view` (an empty dir the caller owns)
+    holding links to only the files the index names, so a sidecar shard
+    (mtp-head-q6.safetensors) is not read as model weights. MLX reads the
+    weights lazily through those links, so the caller keeps `view` until
+    the last forward pass is done."""
+    try:
+        import mlx_vlm.utils as vlm
+    except ImportError:
+        raise SystemExit("FAIL: the image smoke needs mlx-vlm: pip install 'vqlab[vision]'")
+    own = all(hasattr(mod, n) for n in ("Model", "ModelConfig"))
+    if not own and (cfg.get("vq_linear") or cfg.get("vq_modules")):
+        raise SystemExit("FAIL: a VQ artifact whose model.py has no Model/ModelConfig -- "
+                         "stock mlx_vlm cannot build its VQ layers, so nothing here would "
+                         "be the shipping runtime.")
+    idx = art / "model.safetensors.index.json"
+    named = set(json.loads(idx.read_text())["weight_map"].values()) if idx.exists() else None
     for f in art.iterdir():
-        if f.suffix == ".safetensors" and wm is not None and f.name not in set(wm.values()):
+        if f.suffix == ".safetensors" and named is not None and f.name not in named:
             continue
         (view / f.name).symlink_to(f.resolve())
-    if all(hasattr(mod, n) for n in ("Model", "ModelConfig")):
-        stock = vlm.get_model_and_args
-        vlm.get_model_and_args = lambda config: (mod, config.get("model_type"))
-        try:
-            return vlm.load(str(view))
-        finally:
-            vlm.get_model_and_args = stock
-    return vlm.load(str(view))
+    print(f"loader           : {'the artifact model.py' if own else 'stock mlx_vlm'}")
+    if not own:
+        return vlm.load(str(view))
+    stock = vlm.get_model_and_args
+    vlm.get_model_and_args = lambda config: (mod, config.get("model_type"))
+    try:
+        return vlm.load(str(view))
+    finally:
+        vlm.get_model_and_args = stock
 
 
 def _tower_only(art, mod, cfg, a):
@@ -492,11 +501,19 @@ def main() -> int:
     if a.tower_only:
         return _tower_only(art, mod, cfg, a)
 
+    # the weight view outlives generation: MLX reads lazily through it
+    with tempfile.TemporaryDirectory(prefix="vision-smoke-") as tmp:
+        return _full(art, mod, cfg, a, pathlib.Path(tmp))
+
+
+def _full(art, mod, cfg, a, tmp):
+    """Load, wire check and caption, with the weight view in `tmp`."""
     # ---- 2. LOAD ----------------------------------------------------------
     import mlx.core as mx
     from mlx_vlm.prompt_utils import apply_chat_template
 
-    model, processor = _load_full(art, mod)
+    (tmp / "view").mkdir()
+    model, processor = _load_full(art, mod, cfg, tmp / "view")
     tower = next((getattr(model, n) for n in
                   ("vision_tower", "visual", "vision_model")
                   if getattr(model, n, None) is not None), None)
@@ -505,8 +522,7 @@ def main() -> int:
                          "module -- config key without a graph.")
     print(f"loaded tower     : {type(tower).__name__}")
 
-    img = a.image or _probe_image(
-        pathlib.Path(__import__("tempfile").mkdtemp()) / "probe.png")
+    img = a.image or _probe_image(tmp / "probe.png")
 
     # ---- 3. GRAPH ---------------------------------------------------------
     # The check that cannot be satisfied by configuration alone.
@@ -548,7 +564,8 @@ def main() -> int:
         # mlx_vlm's BPE streaming detokenizer decodes a token's bytes alone
         # and raises on a character split across tokens. The caption is for
         # the human; the gate is the logit response above, which passed.
-        cap = f"(not shown: mlx_vlm's streaming detokenizer failed on a split character: {exc})"
+        cap = ("(caption skipped, NOT a failure: mlx_vlm's streaming detokenizer "
+               f"could not decode a character split across tokens: {exc})")
     print(f"\nprobe is {PROBE_DESC}\nmodel says: {cap.strip()}")
     print("\nPASS: an image reached the graph through the artifact's own "
           "shipping runtime and changed the output. (The caption is printed "

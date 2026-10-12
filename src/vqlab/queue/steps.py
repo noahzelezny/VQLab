@@ -36,7 +36,8 @@ def _preflight_problem(st) -> str | None:
     if pf is not None and not (isinstance(pf, dict) and len(pfk) == 1
                                and pfk[0] in ("args", "append", "skip", "full")
                                and ("writes_gib" not in pf or "skip" not in pf)):
-        return "preflight must be one of {args}, {append}, {skip}, {full}"
+        return ("preflight must be one of {args}, {append}, {skip}, {full}; "
+                "writes_gib may be added to any of them but skip")
     if pf and (pf.get("append") == [] or pf.get("args") == st.get("args")):
         # a "preflight" identical to the real step is a full-size run
         # into scratch (2026-09-27: two stream-converts left 201 GiB in
@@ -90,7 +91,7 @@ def retries(st, preflight) -> int:
         return 0
     n = st.get("retries")
     if n is None:
-        n = _commands.DEFAULT_RETRIES if st.get("cmd") in _commands.RESUMABLE and not preflight else 0
+        n = _commands.DEFAULT_RETRIES if st.get("cmd") in _commands.RESUMABLE else 0
     return n
 
 

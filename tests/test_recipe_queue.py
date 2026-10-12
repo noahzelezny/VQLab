@@ -32,7 +32,7 @@ def fams(tmp_path, monkeypatch):
             "bytes": {"by_class_gib": {"carry": 1.0, "embed": 1.0, "vq_target": 16.0, "vision": vision}},
             "geometries": _geos([(2, 512), (4, 64), (4, 128), (4, 256), (4, 512), (8, 4096)])}))
         return d
-    monkeypatch.setattr(rq.registry, "_family_dirs", lambda: [root])
+    monkeypatch.setattr(rq.registry, "family_dirs", lambda: [root])
     monkeypatch.setattr(rq.registry, "teacher_caches", lambda t=None: [])
     return add
 
@@ -148,6 +148,10 @@ def test_score_only_with_registered_caches(fams, monkeypatch):
     ({"teacher": "missing"}, "no profile"),
     ({"tail": {"from": 0, "geo": "d4-K512"}}, "tail.from"),
     ({"family": "qwen3_8_dense"}, "no profile"),
+    ({"tail": "30"}, "tail is"),
+    ({"tail": {"from": "x", "geo": "d4-K512"}}, "tail.from must be an integer"),
+    ({"protect_bits": [8]}, "protect_bits must be an integer"),
+    ({"bits": True}, "bits must be an integer"),
 ])
 def test_refusals(fams, recipe, why):
     fams("qwen3_5", "T", "moe", 40)
@@ -158,17 +162,17 @@ def test_refusals(fams, recipe, why):
 
 def test_hf_cache_teacher_stays_portable(fams, monkeypatch, tmp_path):
     d = fams("qwen3_5", "H", "moe", 4)
-    snap = tmp_path / "hub" / "models--org--m" / "snapshots" / ("ab12" + "0" * 36)
+    snap = tmp_path / "hub" / "models--org--m" / "snapshots" / ("ab12cd3" + "0" * 33)
     snap.mkdir(parents=True)
     (snap / "model.safetensors.index.json").write_text(json.dumps({"weight_map": {}}))
     prof = json.loads((d / "profile.json").read_text())
-    prof["identity"]["path"] = "hf://org/m@ab12"
+    prof["identity"]["path"] = "hf://org/m@ab12cd3"
     (d / "profile.json").write_text(json.dumps(prof))
     monkeypatch.setenv("HF_HUB_CACHE", str(tmp_path / "hub"))
-    assert config.expand("--src=hf://org/m@ab12") == f"--src={snap}"
+    assert config.expand("--src=hf://org/m@ab12cd3") == f"--src={snap}"
     q, _ = rq.compile_recipe({"name": "a", "family": "qwen3_5", "teacher": "H", "geo": "d4-K256",
                               "vision": True})
-    assert "hf://org/m@ab12" in _args(q, "fit")
+    assert "hf://org/m@ab12cd3" in _args(q, "fit")
     monkeypatch.setenv("HF_HUB_CACHE", str(tmp_path / "elsewhere"))
     with pytest.raises(rq.RecipeError, match="not on this machine"):
         rq.compile_recipe({"name": "a", "family": "qwen3_5", "teacher": "H", "geo": "d4-K256"})
@@ -185,3 +189,73 @@ def test_kind_must_match_family(fams):
     fams("qwen3_5", "D", "dense", 4)
     with pytest.raises(rq.RecipeError, match="is dense"):
         rq.compile_recipe({"name": "a", "family": "qwen3_5", "teacher": "D", "geo": "d4-K256"})
+
+
+def test_malformed_inputs_are_recipe_errors(fams):
+    with pytest.raises(rq.RecipeError, match="JSON object"):
+        rq.compile_recipe(["not", "a", "recipe"])
+    d = fams("qwen3_5", "T", "moe", 40)
+    prof = json.loads((d / "profile.json").read_text())
+    del prof["bytes"]
+    (d / "profile.json").write_text(json.dumps(prof))
+    with pytest.raises(rq.RecipeError, match="malformed"):
+        rq.compile_recipe({"name": "a", "family": "qwen3_5", "teacher": "T", "geo": "d4-K256"})
+
+
+def test_non_contiguous_vq_layers_are_passed_exactly(fams):
+    d = fams("qwen3_5", "T", "moe", 40)
+    prof = json.loads((d / "profile.json").read_text())
+    prof["arch"]["vq_layers"] = [0, 1, 2, 5, 6, 7]
+    (d / "profile.json").write_text(json.dumps(prof))
+    q, _ = rq.compile_recipe({"name": "a", "family": "qwen3_5", "teacher": "T", "geo": "d4-K256",
+                              "tail": {"from": 6, "geo": "d4-K512"}})
+    fit = _args(q, "fit")
+    assert fit[fit.index("--vq-layers") + 1] == "0,1,2,5,6,7"
+    with pytest.raises(rq.RecipeError, match="tail.from"):         # 4 is not a VQ layer
+        rq.compile_recipe({"name": "a", "family": "qwen3_5", "teacher": "T", "geo": "d4-K256",
+                           "tail": {"from": 4, "geo": "d4-K512"}})
+
+
+def _st(pf, **kw):
+    return {"name": "s", "cmd": "fit-moe", "args": ["--out", "x"], "preflight": pf, **kw}
+
+
+def test_writes_gib_rides_on_any_preflight_but_skip():
+    assert steps.validate({"steps": [_st({"args": ["--small"], "writes_gib": 3})]}) == []
+    [err] = steps.validate({"steps": [_st({"skip": "why", "writes_gib": 3})]})
+    assert "any of them but skip" in err
+
+
+def test_a_preflight_never_retries():
+    assert steps.retries(_st({"skip": "t"}, retries=3), True) == 0
+    assert steps.retries(_st({"skip": "t"}, retries=3), False) == 3
+
+
+def test_scratch_placeholder_in_expected_files(monkeypatch, tmp_path):
+    monkeypatch.setenv("VQLAB_SCRATCH", str(tmp_path / "scratch"))
+    st = _st({"skip": "t"}, expect={"files": ["<scratch>/x"]})
+    assert steps.expect(st, pathlib.Path("/tree"), False)["files"] == [str(tmp_path / "scratch" / "x")]
+
+
+def test_preflight_writes_gib_beyond_free_space_is_refused(monkeypatch, tmp_path):
+    monkeypatch.setenv("VQLAB_SCRATCH", str(tmp_path / "scratch"))
+    monkeypatch.setattr(steps.shutil, "disk_usage", lambda p: type("U", (), {"free": 50 << 30})())
+    st = _st({"args": ["--small"], "writes_gib": 100})
+    args, verdict = steps.preflight_args(st, st["args"], {"qdir": str(tmp_path / "q")}, {})
+    assert args is None and verdict["verdict"] == "fail" and "not enough scratch" in verdict["reasons"][0]
+    st = _st({"args": ["--small"], "writes_gib": 1})
+    args, verdict = steps.preflight_args(st, st["args"], {"qdir": str(tmp_path / "q")}, {})
+    assert verdict is None and args[0] == "--small"
+
+
+def test_a_short_hf_rev_is_not_a_reference():
+    assert config.expand("hf://org/m@ab12") == "hf://org/m@ab12"
+
+
+def test_a_bad_value_in_the_profile_is_a_recipe_error(fams):
+    d = fams("qwen3_5", "T", "moe", 40)
+    prof = json.loads((d / "profile.json").read_text())
+    prof["bytes"]["by_class_gib"]["carry"] = "lots"
+    (d / "profile.json").write_text(json.dumps(prof))
+    with pytest.raises(rq.RecipeError, match="malformed"):
+        rq.compile_recipe({"name": "a", "family": "qwen3_5", "teacher": "T", "geo": "d4-K256"})

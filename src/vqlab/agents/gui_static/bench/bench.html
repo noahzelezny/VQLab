@@ -293,7 +293,6 @@ details.adv .kv{margin-top:8px}
 .dlrow{padding:8px 0;border-bottom:1px solid var(--line)}
 .dlhd{display:flex;align-items:center;gap:10px}.dlhd .vn{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .dlhd .mini svg{width:13px;height:13px;display:block}
-.dlconf{display:flex;align-items:center;gap:8px;color:var(--warn)}
 .lbar{height:3px;background:var(--line);border-radius:2px;margin:5px 0 3px;overflow:hidden}.lbar i{display:block;height:100%;background:var(--acc);transition:width .4s}
 
 .cart .big{font-size:1.05em;font-weight:700;color:var(--fg);margin-top:2px}
@@ -388,7 +387,7 @@ details.adv .kv{margin-top:8px}
 .fw{display:flex;gap:6px;align-items:center;min-width:0}
 .fld{flex:1;min-width:0;height:28px;box-sizing:border-box;padding:0 9px;background:oklch(.19 0 0);color:var(--fg);border:1px solid oklch(.08 0 0);border-bottom-color:oklch(.3 0 0);border-radius:.25rem;box-shadow:inset 1px 2px 3px oklch(0 0 0/.65),inset 0 1px 0 oklch(0 0 0/.4);font:inherit;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.85em;line-height:26px;text-overflow:ellipsis;white-space:nowrap;overflow:hidden;outline:0}
 input.fld:focus{text-overflow:clip;box-shadow:inset 1px 2px 3px oklch(0 0 0/.65),0 0 0 1px var(--acc);border-color:var(--acc)}
-.fld.faint{color:var(--faint)}.fld.ro{cursor:default}div.fld+div.fld{margin-top:4px}
+input.fld.bad{border-color:var(--bad)}.fld.faint{color:var(--faint)}.fld.ro{cursor:default}div.fld+div.fld{margin-top:4px}
 .fbtn{flex:none;width:28px;height:28px;padding:0;display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--line);border-radius:var(--r);color:var(--dim);background:transparent}
 .fbtn:hover:not([disabled]){border-color:var(--acc);color:var(--acc)}.fbtn svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
 .fbtn[disabled]{cursor:default}.fbtn.busy{color:var(--acc);border-color:var(--acc);animation:fbp 1.1s ease-in-out infinite}@keyframes fbp{50%{opacity:.35}}
@@ -452,11 +451,11 @@ async function loadFleet(){if(location.protocol==='file:')return;fleetAt=Date.no
     if(JSON.stringify(n)===JSON.stringify(REG))return;
     for(const k of Object.keys(REG))delete REG[k];Object.assign(REG,n);if(page===0)render()}
   catch(e){if(!fleetWarned){fleetWarned=true;console.warn('fleet load failed, keeping embedded data:',e)}}}
-const SPEED={"schema":1,"finding":"F190","measured":"2026-09-30/2026-10-01","instrument":{"stage1":"vqlab speed-pair, one box (M3 Ultra 96 GiB), fresh process per arm, alternating, n=3, prompt 2048, gen 128, runtime @ 6d77ffa (VQ arms re-baked --runtime at shipped profile)","stage3":"vqlab speed-pair-knurlogic, pipeline split M3 + M4 over tcp (Thunderbolt), MTP off, KNURLOGIC_PREFILL_CHUNK=2048, n=3, prompt 2048, gen 128, different-prompt warm-up; runtime @ 9efb7e9 / cd0c953 (tool fixes only)"},"note":"Ratios are B/A per alternating pair against the family reference IN THE SAME SETUP; never compare across setups. Local Flash-Next VQ 2.1/3.2/4.4 are lab candidates (config differs from Hub). 35B VQ-5.4 pair was bimodal (reference dropped 60->49 tok/s mid-pair): not quotable. active_gb_per_tok from vqlab active-bytes; GLM omitted (tool counts every expert as dense until the n_routed_experts fix lands). 35B re-paired against mlx-community 8-bit on 2026-10-01 (VQ-5.4 pair bimodal again: reference 54.8/68.3/72.9 tok/s). Flash split rebased to the 8-bit: each ratio = (build/4-bit)/(8-bit/4-bit), both pairs from the same session ('via').","families":{"qwen3.8-27b":{"setup":"stage1","reference":"Qwen--Qwen3.8-27B-8bit","builds":{"Qwen--Qwen3.8-27B-8bit":{"decode_x":1.0,"prefill_x":1.0,"decode_tok_s":23.0,"reference":true,"active_gb_per_tok":27.23,"effective_gb_s":626.3},"comparator_27b_q4":{"decode_x":1.637,"decode_range":[1.634,1.643],"prefill_x":1.021,"prefill_range":[1.016,1.023],"decode_tok_s":37.71,"peak_gb":18.15,"active_gb_per_tok":14.42,"effective_gb_s":543.8},"TheDrainFlorist--Qwen3.8-27B-VQ-3.9bpw":{"decode_x":1.277,"decode_range":[1.275,1.279],"prefill_x":0.964,"prefill_range":[0.961,0.966],"decode_tok_s":29.48,"peak_gb":15.33,"active_gb_per_tok":11.75,"effective_gb_s":346.4},"TheDrainFlorist--Qwen3.8-27B-VQ-4.5bpw":{"decode_x":1.23,"decode_range":[1.218,1.243],"prefill_x":0.958,"prefill_range":[0.956,0.963],"decode_tok_s":28.34,"peak_gb":17.47,"active_gb_per_tok":13.88,"effective_gb_s":393.4},"TheDrainFlorist--Qwen3.8-27B-VQ-4.8bpw":{"decode_x":1.315,"decode_range":[1.31,1.316],"prefill_x":0.961,"prefill_range":[0.951,0.963],"decode_tok_s":30.32,"peak_gb":18.54,"active_gb_per_tok":14.95,"effective_gb_s":453.3}}},"qwen3.6-35b":{"setup":"stage1","reference":"mlx-community--Qwen3.6-35B-A3B-8bit","builds":{"mlx-community--Qwen3.6-35B-A3B-8bit":{"decode_x":1.0,"prefill_x":1.0,"decode_tok_s":55.94,"reference":true,"peak_gb":38.75},"TheDrainFlorist--Qwen3.6-35B-A3B-VQ-3.4bpw":{"decode_x":1.035,"decode_range":[1.02,1.099],"prefill_x":0.846,"prefill_range":[0.838,0.848],"decode_tok_s":60.35,"peak_gb":15.59,"active_gb_per_tok":1.8},"TheDrainFlorist--Qwen3.6-35B-A3B-VQ-3.8bpw":{"decode_x":1.114,"decode_range":[1.067,1.131],"prefill_x":0.849,"prefill_range":[0.845,0.859],"decode_tok_s":60.46,"peak_gb":17.51,"active_gb_per_tok":1.86},"TheDrainFlorist--Qwen3.6-35B-A3B-VQ-4.6bpw":{"decode_x":1.082,"decode_range":[1.066,1.117],"prefill_x":0.804,"prefill_range":[0.798,0.812],"decode_tok_s":60.16,"peak_gb":20.78,"active_gb_per_tok":1.96},"TheDrainFlorist--Qwen3.6-35B-A3B-VQ-5.4bpw":{"decode_x":0.868,"decode_range":[0.805,0.918],"prefill_x":0.845,"prefill_range":[0.823,0.86],"decode_tok_s":58.68,"peak_gb":24.55,"active_gb_per_tok":2.08,"quotable":false}}},"gemma-4-e4b":{"setup":"stage1","reference":"mlx-community--gemma-4-e4b-it-8bit","builds":{"mlx-community--gemma-4-e4b-it-8bit":{"decode_x":1.0,"prefill_x":1.0,"decode_tok_s":78.63,"reference":true,"active_gb_per_tok":4.84,"effective_gb_s":380.6},"TheDrainFlorist--gemma-4-e4b-it-VQ-PLE":{"decode_x":0.972,"decode_range":[0.972,0.999],"prefill_x":0.991,"prefill_range":[0.989,1.222],"decode_tok_s":77.39,"peak_gb":7.82,"active_gb_per_tok":4.86,"effective_gb_s":376.1}}},"qwen3.8-flash-next/one-box":{"setup":"stage1","reference":"Qwen--Qwen3.8-Flash-Next-3bit","builds":{"Qwen--Qwen3.8-Flash-Next-3bit":{"decode_x":1.0,"prefill_x":1.0,"decode_tok_s":22.19,"reference":true,"active_gb_per_tok":3.02,"effective_gb_s":67.0},"TheDrainFlorist--Qwen3.8-Flash-Next-VQ-2.1bpw":{"decode_x":0.819,"decode_range":[0.808,0.822],"prefill_x":0.93,"prefill_range":[0.909,1.051],"decode_tok_s":18.17,"peak_gb":50.65,"active_gb_per_tok":5.28,"effective_gb_s":95.9},"TheDrainFlorist--Qwen3.8-Flash-Next-VQ-3.2bpw":{"decode_x":0.725,"decode_range":[0.72,0.739],"prefill_x":0.852,"prefill_range":[0.785,0.916],"decode_tok_s":16.26,"peak_gb":76.75,"active_gb_per_tok":5.57,"effective_gb_s":90.6}}},"qwen3.8-flash-next/split":{"setup":"stage3","reference":"Qwen--Qwen3.8-Flash-Next-8bit","builds":{"Qwen--Qwen3.8-Flash-Next-4bit":{"decode_x":1.391,"prefill_x":1.431,"active_gb_per_tok":3.85,"via":"Qwen--Qwen3.8-Flash-Next-4bit"},"Qwen--Qwen3.8-Flash-Next-3bit":{"decode_x":1.416,"decode_range":[1.406,1.481],"prefill_x":1.425,"prefill_range":[1.197,1.488],"active_gb_per_tok":3.02,"via":"Qwen--Qwen3.8-Flash-Next-4bit"},"Qwen--Qwen3.8-Flash-Next-5bit":{"decode_x":1.32,"decode_range":[1.257,1.335],"prefill_x":1.318,"prefill_range":[1.213,1.777],"active_gb_per_tok":4.67,"via":"Qwen--Qwen3.8-Flash-Next-4bit"},"Qwen--Qwen3.8-Flash-Next-6bit":{"decode_x":1.018,"decode_range":[1.003,1.021],"prefill_x":1.202,"prefill_range":[1.156,1.75],"active_gb_per_tok":5.5,"via":"Qwen--Qwen3.8-Flash-Next-4bit"},"TheDrainFlorist--Qwen3.8-Flash-Next-VQ-4.4bpw":{"decode_x":0.947,"decode_range":[0.939,0.969],"prefill_x":1.249,"prefill_range":[1.12,1.265],"active_gb_per_tok":5.94,"via":"Qwen--Qwen3.8-Flash-Next-4bit"},"TheDrainFlorist--Qwen3.8-Flash-Next-VQ-5.5bpw":{"decode_x":0.887,"decode_range":[0.883,0.962],"prefill_x":1.092,"prefill_range":[0.844,1.107],"active_gb_per_tok":6.19,"via":"Qwen--Qwen3.8-Flash-Next-4bit"},"Qwen--Qwen3.8-Flash-Next-8bit":{"decode_x":1.0,"prefill_x":1.0,"active_gb_per_tok":7.15,"reference":true}}},"qwen3.5-397b/split":{"setup":"stage3","reference":"spicyneuron--Qwen3.5-397B-A17B-MLX-2.6bit","builds":{"spicyneuron--Qwen3.5-397B-A17B-MLX-2.6bit":{"decode_x":1.0,"prefill_x":1.0,"reference":true,"active_gb_per_tok":9.95},"TheDrainFlorist--Qwen3.5-397B-A17B-VQ-2.2bpw":{"decode_x":0.862,"decode_range":[0.856,0.868],"prefill_x":0.955,"prefill_range":[0.858,0.97],"active_gb_per_tok":8.33},"TheDrainFlorist--Qwen3.5-397B-A17B-VQ-2.4bpw":{"decode_x":0.89,"decode_range":[0.89,0.895],"prefill_x":0.928,"prefill_range":[0.864,1.001],"active_gb_per_tok":8.5},"TheDrainFlorist--Qwen3.5-397B-A17B-VQ-2.6bpw":{"decode_x":0.831,"decode_range":[0.823,0.843],"prefill_x":0.88,"prefill_range":[0.867,0.934],"active_gb_per_tok":8.73},"TheDrainFlorist--Qwen3.5-397B-A17B-VQ-3.1bpw":{"decode_x":0.771,"decode_range":[0.759,0.776],"prefill_x":0.832,"prefill_range":[0.761,0.852],"active_gb_per_tok":9.2}}},"glm-5.3-flash/split":{"setup":"stage3","reference":"zai-org--GLM-5.3-Flash-4bit","builds":{"zai-org--GLM-5.3-Flash-4bit":{"decode_x":1.0,"prefill_x":1.0,"reference":true},"zai-org--GLM-5.3-Flash-3bit":{"decode_x":1.077,"decode_range":[1.073,1.077],"prefill_x":1.119,"prefill_range":[1.103,1.153]},"TheDrainFlorist--GLM-5.3-Flash-VQ-2.7bpw":{"decode_x":0.81,"decode_range":[0.804,0.811],"prefill_x":1.104,"prefill_range":[1.061,1.115]},"TheDrainFlorist--GLM-5.3-Flash-VQ-3.1bpw":{"decode_x":0.758,"decode_range":[0.756,0.759],"prefill_x":0.923,"prefill_range":[0.899,1.037]},"TheDrainFlorist--GLM-5.3-Flash-VQ-3.6bpw":{"decode_x":0.696,"decode_range":[0.695,0.697],"prefill_x":0.964,"prefill_range":[0.948,1.019]}}}},"comparator_rule":"affine 8-bit where it runs in the setup; otherwise the largest affine that does (Flash one-box 3-bit, 397B spicyneuron 2.6-bit, GLM 4-bit)"};
+const SPEED={"schema":1,"finding":"F190","measured":"2026-09-30/2026-10-01","instrument":{"stage1":"vqlab speed-pair, one box, 96 GiB, fresh process per arm, alternating, n=3, prompt 2048, gen 128, runtime @ 6d77ffa (VQ arms re-baked --runtime at shipped profile)","stage3":"vqlab speed-pair-knurlogic, two-box pipeline split over tcp, MTP off, KNURLOGIC_PREFILL_CHUNK=2048, n=3, prompt 2048, gen 128, different-prompt warm-up; runtime @ 9efb7e9 / cd0c953 (tool fixes only)"},"note":"Ratios are B/A per alternating pair against the family reference IN THE SAME SETUP; never compare across setups. Local Flash-Next VQ 2.1/3.2/4.4 are lab candidates (config differs from Hub). 35B VQ-5.4 pair was bimodal (reference dropped 60->49 tok/s mid-pair): not quotable. active_gb_per_tok from vqlab active-bytes; GLM omitted (tool counts every expert as dense until the n_routed_experts fix lands). 35B re-paired against mlx-community 8-bit on 2026-10-01 (VQ-5.4 pair bimodal again: reference 54.8/68.3/72.9 tok/s). Flash split rebased to the 8-bit: each ratio = (build/4-bit)/(8-bit/4-bit), both pairs from the same session ('via').","families":{"qwen3.8-27b":{"setup":"stage1","reference":"Qwen--Qwen3.8-27B-8bit","builds":{"Qwen--Qwen3.8-27B-8bit":{"decode_x":1.0,"prefill_x":1.0,"decode_tok_s":23.0,"reference":true,"active_gb_per_tok":27.23,"effective_gb_s":626.3},"comparator_27b_q4":{"decode_x":1.637,"decode_range":[1.634,1.643],"prefill_x":1.021,"prefill_range":[1.016,1.023],"decode_tok_s":37.71,"peak_gb":18.15,"active_gb_per_tok":14.42,"effective_gb_s":543.8},"TheDrainFlorist--Qwen3.8-27B-VQ-3.9bpw":{"decode_x":1.277,"decode_range":[1.275,1.279],"prefill_x":0.964,"prefill_range":[0.961,0.966],"decode_tok_s":29.48,"peak_gb":15.33,"active_gb_per_tok":11.75,"effective_gb_s":346.4},"TheDrainFlorist--Qwen3.8-27B-VQ-4.5bpw":{"decode_x":1.23,"decode_range":[1.218,1.243],"prefill_x":0.958,"prefill_range":[0.956,0.963],"decode_tok_s":28.34,"peak_gb":17.47,"active_gb_per_tok":13.88,"effective_gb_s":393.4},"TheDrainFlorist--Qwen3.8-27B-VQ-4.8bpw":{"decode_x":1.315,"decode_range":[1.31,1.316],"prefill_x":0.961,"prefill_range":[0.951,0.963],"decode_tok_s":30.32,"peak_gb":18.54,"active_gb_per_tok":14.95,"effective_gb_s":453.3}}},"qwen3.6-35b":{"setup":"stage1","reference":"mlx-community--Qwen3.6-35B-A3B-8bit","builds":{"mlx-community--Qwen3.6-35B-A3B-8bit":{"decode_x":1.0,"prefill_x":1.0,"decode_tok_s":55.94,"reference":true,"peak_gb":38.75},"TheDrainFlorist--Qwen3.6-35B-A3B-VQ-3.4bpw":{"decode_x":1.035,"decode_range":[1.02,1.099],"prefill_x":0.846,"prefill_range":[0.838,0.848],"decode_tok_s":60.35,"peak_gb":15.59,"active_gb_per_tok":1.8},"TheDrainFlorist--Qwen3.6-35B-A3B-VQ-3.8bpw":{"decode_x":1.114,"decode_range":[1.067,1.131],"prefill_x":0.849,"prefill_range":[0.845,0.859],"decode_tok_s":60.46,"peak_gb":17.51,"active_gb_per_tok":1.86},"TheDrainFlorist--Qwen3.6-35B-A3B-VQ-4.6bpw":{"decode_x":1.082,"decode_range":[1.066,1.117],"prefill_x":0.804,"prefill_range":[0.798,0.812],"decode_tok_s":60.16,"peak_gb":20.78,"active_gb_per_tok":1.96},"TheDrainFlorist--Qwen3.6-35B-A3B-VQ-5.4bpw":{"decode_x":0.868,"decode_range":[0.805,0.918],"prefill_x":0.845,"prefill_range":[0.823,0.86],"decode_tok_s":58.68,"peak_gb":24.55,"active_gb_per_tok":2.08,"quotable":false}}},"gemma-4-e4b":{"setup":"stage1","reference":"mlx-community--gemma-4-e4b-it-8bit","builds":{"mlx-community--gemma-4-e4b-it-8bit":{"decode_x":1.0,"prefill_x":1.0,"decode_tok_s":78.63,"reference":true,"active_gb_per_tok":4.84,"effective_gb_s":380.6},"TheDrainFlorist--gemma-4-e4b-it-VQ-PLE":{"decode_x":0.972,"decode_range":[0.972,0.999],"prefill_x":0.991,"prefill_range":[0.989,1.222],"decode_tok_s":77.39,"peak_gb":7.82,"active_gb_per_tok":4.86,"effective_gb_s":376.1}}},"qwen3.8-flash-next/one-box":{"setup":"stage1","reference":"Qwen--Qwen3.8-Flash-Next-3bit","builds":{"Qwen--Qwen3.8-Flash-Next-3bit":{"decode_x":1.0,"prefill_x":1.0,"decode_tok_s":22.19,"reference":true,"active_gb_per_tok":3.02,"effective_gb_s":67.0},"TheDrainFlorist--Qwen3.8-Flash-Next-VQ-2.1bpw":{"decode_x":0.819,"decode_range":[0.808,0.822],"prefill_x":0.93,"prefill_range":[0.909,1.051],"decode_tok_s":18.17,"peak_gb":50.65,"active_gb_per_tok":5.28,"effective_gb_s":95.9},"TheDrainFlorist--Qwen3.8-Flash-Next-VQ-3.2bpw":{"decode_x":0.725,"decode_range":[0.72,0.739],"prefill_x":0.852,"prefill_range":[0.785,0.916],"decode_tok_s":16.26,"peak_gb":76.75,"active_gb_per_tok":5.57,"effective_gb_s":90.6}}},"qwen3.8-flash-next/split":{"setup":"stage3","reference":"Qwen--Qwen3.8-Flash-Next-8bit","builds":{"Qwen--Qwen3.8-Flash-Next-4bit":{"decode_x":1.391,"prefill_x":1.431,"active_gb_per_tok":3.85,"via":"Qwen--Qwen3.8-Flash-Next-4bit"},"Qwen--Qwen3.8-Flash-Next-3bit":{"decode_x":1.416,"decode_range":[1.406,1.481],"prefill_x":1.425,"prefill_range":[1.197,1.488],"active_gb_per_tok":3.02,"via":"Qwen--Qwen3.8-Flash-Next-4bit"},"Qwen--Qwen3.8-Flash-Next-5bit":{"decode_x":1.32,"decode_range":[1.257,1.335],"prefill_x":1.318,"prefill_range":[1.213,1.777],"active_gb_per_tok":4.67,"via":"Qwen--Qwen3.8-Flash-Next-4bit"},"Qwen--Qwen3.8-Flash-Next-6bit":{"decode_x":1.018,"decode_range":[1.003,1.021],"prefill_x":1.202,"prefill_range":[1.156,1.75],"active_gb_per_tok":5.5,"via":"Qwen--Qwen3.8-Flash-Next-4bit"},"TheDrainFlorist--Qwen3.8-Flash-Next-VQ-4.4bpw":{"decode_x":0.947,"decode_range":[0.939,0.969],"prefill_x":1.249,"prefill_range":[1.12,1.265],"active_gb_per_tok":5.94,"via":"Qwen--Qwen3.8-Flash-Next-4bit"},"TheDrainFlorist--Qwen3.8-Flash-Next-VQ-5.5bpw":{"decode_x":0.887,"decode_range":[0.883,0.962],"prefill_x":1.092,"prefill_range":[0.844,1.107],"active_gb_per_tok":6.19,"via":"Qwen--Qwen3.8-Flash-Next-4bit"},"Qwen--Qwen3.8-Flash-Next-8bit":{"decode_x":1.0,"prefill_x":1.0,"active_gb_per_tok":7.15,"reference":true}}},"qwen3.5-397b/split":{"setup":"stage3","reference":"spicyneuron--Qwen3.5-397B-A17B-MLX-2.6bit","builds":{"spicyneuron--Qwen3.5-397B-A17B-MLX-2.6bit":{"decode_x":1.0,"prefill_x":1.0,"reference":true,"active_gb_per_tok":9.95},"TheDrainFlorist--Qwen3.5-397B-A17B-VQ-2.2bpw":{"decode_x":0.862,"decode_range":[0.856,0.868],"prefill_x":0.955,"prefill_range":[0.858,0.97],"active_gb_per_tok":8.33},"TheDrainFlorist--Qwen3.5-397B-A17B-VQ-2.4bpw":{"decode_x":0.89,"decode_range":[0.89,0.895],"prefill_x":0.928,"prefill_range":[0.864,1.001],"active_gb_per_tok":8.5},"TheDrainFlorist--Qwen3.5-397B-A17B-VQ-2.6bpw":{"decode_x":0.831,"decode_range":[0.823,0.843],"prefill_x":0.88,"prefill_range":[0.867,0.934],"active_gb_per_tok":8.73},"TheDrainFlorist--Qwen3.5-397B-A17B-VQ-3.1bpw":{"decode_x":0.771,"decode_range":[0.759,0.776],"prefill_x":0.832,"prefill_range":[0.761,0.852],"active_gb_per_tok":9.2}}},"glm-5.3-flash/split":{"setup":"stage3","reference":"zai-org--GLM-5.3-Flash-4bit","builds":{"zai-org--GLM-5.3-Flash-4bit":{"decode_x":1.0,"prefill_x":1.0,"reference":true},"zai-org--GLM-5.3-Flash-3bit":{"decode_x":1.077,"decode_range":[1.073,1.077],"prefill_x":1.119,"prefill_range":[1.103,1.153]},"TheDrainFlorist--GLM-5.3-Flash-VQ-2.7bpw":{"decode_x":0.81,"decode_range":[0.804,0.811],"prefill_x":1.104,"prefill_range":[1.061,1.115]},"TheDrainFlorist--GLM-5.3-Flash-VQ-3.1bpw":{"decode_x":0.758,"decode_range":[0.756,0.759],"prefill_x":0.923,"prefill_range":[0.899,1.037]},"TheDrainFlorist--GLM-5.3-Flash-VQ-3.6bpw":{"decode_x":0.696,"decode_range":[0.695,0.697],"prefill_x":0.964,"prefill_range":[0.948,1.019]}}}},"comparator_rule":"affine 8-bit where it runs in the setup; otherwise the largest affine that does (Flash one-box 3-bit, 397B spicyneuron 2.6-bit, GLM 4-bit)"};
 // ---- measured speed (F190): ratios vs each family's reference build, same setup
 const SPEED_FAM={q27:'qwen3.8-27b',q35:'qwen3.6-35b',g4b:'gemma-4-e4b',fn:'qwen3.8-flash-next/split',glm:'glm-5.3-flash/split',q397:'qwen3.5-397b/split'};
 const SPEED_ALT={fn:'qwen3.8-flash-next/one-box'};
-const SETUP_TXT={stage1:'One Mac (M3 Ultra, 96 GiB)',stage3:'Pipeline split across M3 + M4 over Thunderbolt, MTP off'};
+const SETUP_TXT={stage1:'One box, 96 GiB',stage3:'Two-box pipeline split, MTP off'};
 function speedKey(t,r){
   if(r.hf)return r.hf.replace('/','--');
   const m=/^q(\d)$/.exec(r.id);if(!m||r.kind!=='affine')return null;const b=m[1];
@@ -476,7 +475,8 @@ function speedOf(t,r,fk){
   return null}
 // per-build widths read from each build's config.json quantization map + weight index (most common width per module class; 16 = bf16, 'vq' = VQ-coded PLE; x = affine expert bits+32/group). Builds not listed have no local config: shown as —
 const WIDTHS={"TheDrainFlorist/Qwen3.5-397B-A17B-VQ-2.2bpw":{"attn":6,"embed":4,"router":16,"ple":null},"TheDrainFlorist/Qwen3.5-397B-A17B-VQ-2.4bpw":{"attn":6,"embed":6,"router":16,"ple":null},"TheDrainFlorist/Qwen3.5-397B-A17B-VQ-2.6bpw":{"attn":6,"embed":6,"router":16,"ple":null},"TheDrainFlorist/Qwen3.5-397B-A17B-VQ-3.1bpw":{"attn":6,"embed":6,"router":16,"ple":null},"TheDrainFlorist/Qwen3.6-35B-A3B-VQ-3.4bpw":{"attn":6,"embed":6,"router":16,"ple":null},"TheDrainFlorist/Qwen3.6-35B-A3B-VQ-3.8bpw":{"attn":6,"embed":6,"router":16,"ple":null},"TheDrainFlorist/Qwen3.6-35B-A3B-VQ-5.4bpw":{"attn":6,"embed":6,"router":16,"ple":null},"TheDrainFlorist/Qwen3.8-27B-VQ-3.9bpw":{"attn":4,"embed":4,"router":null,"ple":null},"TheDrainFlorist/Qwen3.8-27B-VQ-4.5bpw":{"attn":4,"embed":4,"router":null,"ple":null},"TheDrainFlorist/Qwen3.8-27B-VQ-4.8bpw":{"attn":4,"embed":4,"router":null,"ple":null},"TheDrainFlorist/Qwen3.8-Flash-Next-VQ-5.5bpw":{"attn":8,"embed":8,"router":16,"ple":"vq"},"TheDrainFlorist/gemma-4-26b-a4b-it-VQ-6.2bpw":{"attn":8,"embed":8,"router":16,"ple":null},"TheDrainFlorist/gemma-4-e4b-it-VQ-PLE":{"attn":8,"embed":8,"router":null,"ple":"vq","x":8.5},"TheDrainFlorist/GLM-5.3-Flash-VQ-2.7bpw":{"attn":8,"embed":8,"router":16,"ple":null},"TheDrainFlorist/GLM-5.3-Flash-VQ-3.1bpw":{"attn":8,"embed":8,"router":16,"ple":null},"TheDrainFlorist/GLM-5.3-Flash-VQ-3.6bpw":{"attn":8,"embed":8,"router":16,"ple":null},"TheDrainFlorist/Qwen3.8-Flash-Next-VQ-2.1bpw":{"attn":8,"embed":8,"router":16,"ple":"vq"},"TheDrainFlorist/Qwen3.8-Flash-Next-VQ-3.2bpw":{"attn":8,"embed":8,"router":16,"ple":"vq"},"TheDrainFlorist/Qwen3.8-Flash-Next-VQ-4.4bpw":{"attn":8,"embed":8,"router":16,"ple":"vq"},"spicyneuron/Qwen3.5-397B-A17B-MLX-2.6bit":{"attn":8,"embed":8,"router":16,"ple":null,"x":2.5},"q35:q4":{"attn":4,"embed":4,"router":8,"ple":null,"x":4.5},"q35:q8":{"attn":8,"embed":8,"router":8,"ple":null,"x":8.5},"q27:q8":{"attn":8,"embed":8,"router":null,"ple":null,"x":8.5},"fn:q4":{"attn":4,"embed":4,"router":16,"ple":4,"x":4.5},"mlx-community/gemma-4-e4b-it-8bit":{"attn":8,"embed":8,"router":null,"ple":8,"x":8.5},"spicyneuron/Qwen3.5-397B-A17B-MLX-3.5bit":{"attn":8,"embed":8,"router":16,"ple":null,"x":3.5},"q35:q6":{"attn":6,"embed":6,"router":8,"ple":null,"x":6.5},"q27:q4":{"attn":4,"embed":4,"router":null,"ple":null,"x":4.5},"g26:q8":{"attn":8,"embed":8,"router":8,"ple":null,"x":8.5},"q35:q3":{"attn":3,"embed":3,"router":8,"ple":null,"x":3.5,"inf":true},"q27:q2":{"attn":2,"embed":2,"router":null,"ple":null,"x":2.5,"inf":true},"q27:q3":{"attn":3,"embed":3,"router":null,"ple":null,"x":3.5,"inf":true},"q27:q6":{"attn":6,"embed":6,"router":null,"ple":null,"x":6.5,"inf":true}};
-const TEACHERS=[
+// Library only: these rows (and RESULTS/REG/SPEED/WIDTHS above) are embedded lab data; a scores index replaces them.
+const LIB_ROWS=[
  {id:'q35',res:'35B',n:'Qwen/Qwen3.6-35B-A3B-bf16',short:'Qwen3.6-35B-A3B',fam:'qwen3_5',kind:'MoE · 40 layers · 256 experts',onb:'2026-09-26',fits:1099,layers:40,topk:8,modules:120,bytes:{mtp:1.573,vision:0.832},fitStore:{'d2-K16':121,'d2-K256':240,'d2-K1024':120,'d2-K4096':240,'d4-K2048':240,'d4-K16384':138}},
  {id:'q397',res:'397B',n:'Qwen/Qwen3.5-397B-A17B-bf16',short:'Qwen3.5-397B-A17B',fam:'qwen3_5',kind:'MoE · 60 layers · 512 experts',onb:'2026-09-10',fits:0,layers:60,topk:10,modules:180,bytes:{mtp:2.1,vision:0.849},fitStore:{},note:'751 GB · Exo Models'},
  {id:'q27',res:'27B',n:'Qwen/Qwen3.8-27B',short:'Qwen3.8-27B',fam:'qwen3_8_dense',kind:'dense · 64 layers',onb:'2026-09-21',fits:969,layers:64,topk:1,modules:192,bytes:{mtp:0,vision:0},fitStore:{'d2-K64':201,'d2-K256':192,'d2-K4096':192,'d4-K256':192,'d4-K1024':192}},
@@ -489,10 +489,9 @@ const TEACHERS=[
  {id:'glm',n:'zai-org/GLM-5.3-Flash-BF16',short:'GLM-5.3-Flash',fam:'glm5_next',kind:'MoE · 42 layers',onb:'2026-09-12',fits:0,layers:42,topk:8,modules:126,bytes:{mtp:6.094,vision:0},fitStore:{},
   rows:[{id:'r27',what:'VQ-2.7bpw',kind:'vq',geo:'d4-K512',gib:108.0,bpw:2.7,kl:[190,66,120],top1:86.0,hf:'TheDrainFlorist/GLM-5.3-Flash-VQ-2.7bpw'},{id:'r31',what:'VQ-3.1bpw (mixed)',kind:'vq',mixed:true,gib:122.4,bpw:3.1,kl:[120,41,62],top1:89.2,hf:'TheDrainFlorist/GLM-5.3-Flash-VQ-3.1bpw'},{id:'r36',what:'VQ-3.6bpw (mixed)',kind:'vq',mixed:true,gib:141.1,bpw:3.6,kl:[70,24,30],top1:92.0,hf:'TheDrainFlorist/GLM-5.3-Flash-VQ-3.6bpw'}]},
 ];
-TEACHERS.forEach(t=>{if(t.res){t.rows=RESULTS[t.res];t.real=true}else t.real=false});
+LIB_ROWS.forEach(t=>{if(t.res){t.rows=RESULTS[t.res];t.real=true}else t.real=false});
 const TYPE={d4:['VQ d4','var(--acc)'],d2:['VQ d2','var(--g4)'],d8:['VQ d8','var(--g1)'],mixed:['VQ mixed','var(--teal)'],affine:['affine, published','var(--bad)'],['affine-sk']:['affine on VQ skeleton','var(--warn)']};
 const TCOL=r=>TYPE[r.type]?TYPE[r.type][1]:'var(--dim)';
-const GEOCOL={'d4-K128':'var(--g1)','d4-K256':'var(--g1)','d4-K512':'var(--g1)','d4-K1024':'var(--g2)','d4-K2048':'var(--g2)','d4-K4096':'var(--g3)','d4-K8192':'var(--g3)','d4-K16384':'var(--g4)','d2-K16':'var(--g1)','d2-K64':'var(--g1)','d2-K256':'var(--g2)','d2-K512':'var(--g3)','d2-K1024':'var(--g4)','d2-K4096':'var(--g4)','d8-K16384':'var(--g1)'};
 const MACHINES=[[16,'16'],[24,'24'],[32,'32'],[36,'36'],[48,'48'],[64,'64'],[96,'96'],[128,'128'],[192,'192'],[256,'256'],[512,'512']];
 const osReserve=gb=>gb<=36?5:8;
 const ctxReserve=gb=>Math.round(Math.max(2,Math.min(8,gb*0.05)));
@@ -505,16 +504,14 @@ const api=async(u,body)=>{try{const r=await fetch(u,body===undefined?undefined:{
 // one size formatter; hub=true is the Hub/Downloads style (always GiB, '--' when unknown)
 const gib=(b,hub)=>hub?(Number.isFinite(b)?(b/2**30).toFixed(1)+' GiB':'--'):b==null?'':b>=2**40?(b/2**40).toFixed(2)+' TiB':b>=2**30?(b/2**30).toFixed(1)+' GiB':(b/2**20).toFixed(1)+' MiB';
 const f1=x=>x.toFixed(1);
-const fmtT=m=>m<60?m.toFixed(0)+' min':(m/60).toFixed(1)+' h';
-const TE=id=>TEACHERS.find(t=>t.id===id);
-const creator=t=>({'Qwen':'Qwen','zai-org':'Z.ai','deepseek-ai':'DeepSeek','google':'Gemma'}[t.n.split('/')[0]]||t.n.split('/')[0]);
-const DRAFTS=[{n:'deepseek-ai/DeepSeek-V4',short:'DeepSeek-V4',fam:'deepseek_v4',kind:'MoE',draft:true}];
+const TE=id=>LIB_ROWS.find(t=>t.id===id);
+const creator=t=>{const o=(t.n||t.name||'').split('/')[0];return {'Qwen':'Qwen','zai-org':'Z.ai','deepseek-ai':'DeepSeek','google':'Gemma'}[o]||o||'other'};
 
 // ---- per-teacher models, all derived from the measured rows at load
 function lsq(pts){const n=pts.length,mx=pts.reduce((a,p)=>a+p[0],0)/n,my=pts.reduce((a,p)=>a+p[1],0)/n;const b=pts.reduce((a,p)=>a+(p[0]-mx)*(p[1]-my),0)/(pts.reduce((a,p)=>a+(p[0]-mx)**2,0)||1);return [my-b*mx,b]}
 function derive(t){
   const R=t.rows.filter(r=>r.kl);t.scored=R;
-  if(!R.length){t.g0=0;t.g1=t.rows[0].gib/t.rows[0].bpw;t.bpw=g=>g/t.g1;t.klFlat=g=>NaN;t.klAff=null;t.klSk=null;t.spanVQ=null;t.spanAff=null;t.hasMixed=false;t.mixedF=1;t.flatFitted=false;t.notches=t.rows.map(r=>({geo:r.geo,gib:r.gib,shipped:true}));t.affNotches=[];t.xr=[t.rows[0].gib*0.6,t.rows[t.rows.length-1].gib*1.5];t.rows.forEach(r=>r.type=r.geo?r.geo.split('-')[0]:'vq');return}
+  if(!R.length){t.g0=0;t.g1=t.rows[0].gib/t.rows[0].bpw;t.bpw=g=>g/t.g1;t.klFlat=g=>NaN;t.klAff=null;t.xr=[t.rows[0].gib*0.6,t.rows[t.rows.length-1].gib*1.5];return}
   // bytes <-> bpw is linear per family; the intercept is the non-quantized carry
   [t.g0,t.g1]=lsq(R.map(r=>[r.bpw,r.gib]));
   t.bpw=g=>(g-t.g0)/t.g1;
@@ -526,127 +523,131 @@ function derive(t){
       const [a,b]=lsq(pts);const res=rows.reduce((acc,r)=>acc+(r.kind==='vq'?2:1)*(Math.log(Math.exp(a+b*r.bpw)+f)-Math.log(mean(r.kl)))**2,0);if(!best||res<best.res)best={res,a,b,f}}
     return g=>Math.exp(best.a+best.b*t.bpw(g))+best.f}
   const flat=R.filter(r=>(r.kind==='vq'||r.kind==='lab')&&!r.mixed),allvq=R.filter(r=>r.kind==='vq'||r.kind==='lab');
-  t.flatFitted=flat.length>=3;
-  t.klFlat=(t.flatFitted?fitExp(flat):fitExp(allvq))||(g=>{const r=allvq[0];return mean(r.kl)*Math.exp(-0.9*(t.bpw(g)-r.bpw))});
-  const mixedRows=R.filter(r=>r.mixed);
-  t.mixedF=t.flatFitted?(mixedRows.length?Math.min(...mixedRows.map(r=>mean(r.kl)/t.klFlat(r.gib))):0.8):1;
+  t.klFlat=(flat.length>=3?fitExp(flat):fitExp(allvq))||(g=>{const r=allvq[0];return mean(r.kl)*Math.exp(-0.9*(t.bpw(g)-r.bpw))});
   t.klAff=fitExp(R.filter(r=>r.kind==='affine'));
-  // measured span of each fitted curve: outside it the curve is an extrapolation
-  const spanOf=rows=>rows.length?[Math.min(...rows.map(r=>r.gib)),Math.max(...rows.map(r=>r.gib))]:null;
-  t.spanVQ=spanOf(allvq);t.spanAff=spanOf(R.filter(r=>r.kind==='affine'));t.hasMixed=mixedRows.length>0;
-  t.klSk=fitExp(R.filter(r=>r.kind==='affine-sk'));
-  // row TYPE for slicing: the geometry family, not just who built it
-  R.forEach(r=>{r.type=r.kind==='affine'?'affine':r.kind==='affine-sk'?'affine-sk':r.mixed?'mixed':r.geo?r.geo.split('-')[0]:'vq'});
-  t.notches=[];const seen=new Set();for(const r of R)if((r.kind==='vq'||r.kind==='lab')&&r.geo&&!seen.has(r.geo)){seen.add(r.geo);t.notches.push({geo:r.geo,gib:r.gib,shipped:r.kind==='vq'})}
-  t.notches.sort((a,b)=>a.gib-b.gib);
-  t.affNotches=R.filter(r=>r.kind==='affine'&&/^q\d$/.test(r.id)).map(r=>({bits:+r.id[1],gib:r.gib,kl:mean(r.kl)})).sort((a,b)=>a.gib-b.gib);
   const gs=R.map(r=>r.gib);t.xr=[Math.min(...gs)*0.85,Math.max(...gs)*1.12];
 }
-TEACHERS.forEach(derive);
-const KLF={flat:1,mixed:null,measured:null};
-const klVQ=(t,r,g)=>t.klFlat(g)*(r.strat==='flat'?1:t.mixedF);
-// affine estimate: the published-recipe curve at the expert size; protected
-// modules at 8-bit take ~15% off (F168/F169 direction); the VQ skeleton
-// variant follows its own fitted curve, which floors early.
-// affine size: measured q row when one exists at this bits and group 64, else
-// bits + 32/group (bf16 scale and bias per group) through the family's byte line.
-// Protected classes at 8-bit add back a share of the carried bytes; the KL
-// factors are placeholders until such rows are scored.
-// bf16 GiB by tensor class, from families/*/teachers/*/profile.json (bytes.by_class_gib):
-// per = expert GiB per bit of width, carry = attention/shared/routers/norms, embed = embeddings+head
-const PROF={glm:{per:36.2812,carry:14.598,embed:2.363},q397:{per:45.0,carry:14.464,embed:3.789},q35:{per:3.75,carry:2.666,embed:1.895},q27:{per:1.9922,carry:13.486,embed:4.736},fn:{per:14.0625,carry:102.216,embed:2.368}};
-// affine bytes: each class at its own width, group scale+bias adds 32/group bits per weight (none at bf16)
-const affClass=(bf,bits,g)=>bf*(bits>=16?16:bits+32/g)/16;
-const affSize=(t,r)=>{const P=PROF[t.id];if(!P)return affBase(t,r)+affExtra(t,r);return P.per*(r.bits+32/r.group)+affClass(P.carry,r.pAttn,r.group)+affClass(P.embed,r.pEmb,r.group)};
-const affBase=(t,r)=>{const q=t.affNotches.find(n=>n.bits===r.bits);return (q&&r.group===64)?q.gib:t.g0+t.g1*(r.bits+32/r.group)};
-// the published q rows keep non-expert tensors at their default (8-bit attention and
-// embeddings, bf16 routers); byte and damage deltas are taken from that baseline
-const affExtra=(t,r)=>t.g0*0.35*(0.55*(r.pAttn-8)/8+0.35*(r.pEmb-8)/8+0.02*(r.pRouter-16)/16);
-const affFactor=r=>Math.pow(0.93,(r.pAttn-8)/2)*Math.pow(0.97,(r.pEmb-8)/2)*Math.pow(0.985,(r.pRouter-16)/2)*(r.group===32?0.92:r.group===128?1.08:1);
-// trunk curve T(w): additive KL of the trunk at width w relative to the skeleton width, from matched affine builds
-// (affine q rows: every linear at q; affine-sk rows: experts at q, trunk at the skeleton). Only families that carry both.
-const trunkCurve=t=>{if(t._tc!==undefined)return t._tc;const S=skelOf(t.id),by=(k,b)=>t.rows.find(q=>q.id===k+b&&q.kl),pts={};pts[S.pAttn]=0;
-  for(const w of [4,6,8]){if(w===S.pAttn)continue;const a=by('q',w),b=by('s',w);if(a&&b&&b.kind==='affine-sk')pts[w]=mean(a.kl)-mean(b.kl)}
-  const q8=by('q',8),ws=Object.keys(pts).map(Number).sort((a,b)=>a-b);
-  return t._tc=(ws.length>=3&&q8)?{pts,ws,s8:mean(by('s',8).kl)}:null};
-const trunkT=(t,w)=>{const c=trunkCurve(t);if(!c)return null;const assumed=w>8;if(assumed)w=8;const ws=c.ws;
-  if(w<=ws[0])return {T:c.pts[ws[0]],assumed};if(w>=ws[ws.length-1])return {T:c.pts[ws[ws.length-1]],assumed};
-  for(let i=1;i<ws.length;i++)if(w<=ws[i]){const f=(w-ws[i-1])/(ws[i]-ws[i-1]);return {T:c.pts[ws[i-1]]*(1-f)+c.pts[ws[i]]*f,assumed}}};
-// absolute trunk floor F(w)=mean(s8)+T(w); the expert part E=max(k-F(skeleton),0) rides on top of it
-const trunkAdj=(t,r,k)=>{const x=trunkT(t,r.pAttn);return x?Math.max(k-trunkCurve(t).s8,0)+trunkCurve(t).s8+x.T:k};
-const trunkBelow=(t,r)=>{const g=sizeOf(t,r);return !!trunkCurve(t)&&klVQ(t,r,g-vqDelta(t,r))<trunkCurve(t).s8};
-const klOf=(t,r,g)=>r.mode==='affine'?(t.klAff?t.klAff(g):t.klFlat(g)*1.6)*affFactor(r):trunkAdj(t,r,klVQ(t,r,g-vqDelta(t,r)));
-// release skeleton widths per family, read from the shipped artifacts' config.json quantization blocks on 2026-09-30
-const SKEL={q35:{pAttn:6,pEmb:6,pRouter:16},q397:{pAttn:6,pEmb:6,pRouter:16},q27:{pAttn:4,pEmb:4,pRouter:16},fn:{pAttn:8,pEmb:8,pRouter:8},glm:{pAttn:8,pEmb:8,pRouter:16}};
-const AFFW={pAttn:8,pEmb:8,pRouter:16};
-const skelOf=id=>SKEL[id]||AFFW;
-const initWidths=r=>Object.assign(r,r.mode==='vq'?skelOf(r.teacher):AFFW);
-const skDiff=r=>{const S=skelOf(r.teacher);return r.pAttn!==S.pAttn||r.pEmb!==S.pEmb||r.pRouter!==S.pRouter};
-// a recipe cannot exceed its bf16 text teacher
-// ceiling: the family's affine q8 size (g64 everywhere). Nothing above 8 bits is worth building.
-const bf16Of=t=>{const P=PROF[t.id];return P?P.per*(8+32/64)+affClass(P.carry,8,64)+affClass(P.embed,8,64):Infinity};
-// VQ: the dragged point is the release-skeleton size; attention/embedding widths off the release add their byte delta
-const vqDelta=(t,r)=>{const P=PROF[t.id];if(!P||r.mode==='affine')return 0;const S=skelOf(r.teacher);return affClass(P.carry,r.pAttn,64)+affClass(P.embed,r.pEmb,64)-affClass(P.carry,S.pAttn,64)-affClass(P.embed,S.pEmb,64)};
-const newRecipe=()=>({teacher:'q35',mode:'vq',widthPick:'auto',strat:'mixed',width:'d4',size:0,geo:null,bits:4,group:64,pAttn:6,pEmb:6,pRouter:16,skel:false,resel:false,tower:true,mtp:true,auto:true});
-const widthOf=geo=>geo?geo.split('-')[0]:'d4';
-const sizeOf=(t,r)=>r.mode==='affine'?affSize(t,r):Math.min(bf16Of(t),(r.strat==='flat'?(t.notches.find(n=>n.geo===r.geo)||t.notches[0]).gib:r.size)+vqDelta(t,r));
-function openRecipe(id,at){draft=newRecipe();draft.teacher=id;initWidths(draft);const t=TE(id);resolveAt(t,draft,at??(t.xr[0]+t.xr[1])/2);page=1;render()}
-function resolveAt(t,r,g){
-  if(r.mode==='affine')return;
-  g=Math.min(g,bf16Of(t))-vqDelta(t,r);
-  const pool=r.widthPick&&r.widthPick!=='auto'?t.notches.filter(n=>widthOf(n.geo)===r.widthPick):t.notches;
-  const near=pool.reduce((a,c)=>Math.abs(c.gib-g)<Math.abs(a.gib-g)?c:a);
-  if(r.strat==='flat'){r.geo=near.geo;r.width=widthOf(near.geo)}
-  else{r.size=Math.round(g*10)/10;r.geo=near.geo;r.width=widthOf(near.geo)}
-  r.resel=r.strat==='measured';
+LIB_ROWS.forEach(derive);
+// ---- Recipe: live teachers (GET /api/teachers) and exact size arithmetic from the family profile
+const TEACH={list:[],unp:[],err:'',loaded:false,seq:0,sig:'',at:0,timer:0,pend:new Map(),perr:{}};
+const NAME_RE=/^[a-z0-9][a-z0-9._-]{0,79}$/;  // same rule as the recipe compiler
+const newRecipe=()=>({v:2,teacher:'',mode:'vq',geo:'',tailOn:false,tailGeo:'',tailFrom:0,bits:4,group:64,protect:8,tower:false,mtp:false,score:false,name:'',nameSet:false});
+const curT=()=>TEACH.list.find(x=>x.id===draft.teacher)||null;
+const selectable=t=>t.on_disk&&t.buildable;
+const isMoe=t=>t.kind==='moe';
+const fitGeos=t=>(t.geometries||[]).filter(g=>g.fit).sort((a,b)=>a.gib-b.gib);
+const geoOf=(t,geo)=>(t.geometries||[]).find(g=>g.geo===geo);
+const ntail=(t,r)=>Math.max(0,Math.min(t.vq_layers,t.first_vq+t.vq_layers-r.tailFrom));
+// the size of a recipe: carried bytes at the base width plus the geometry's exact stack, never a fit to past rungs
+function sizeOf(t,r){
+  const B=t.gib||{},skel=(B.carry||0)+(B.embed||0),vis=r.tower?(B.vision||0):0;
+  if(r.mode==='affine'){const bpw=r.bits+32/r.group;return {gib:(skel+(B.vq_target||0))*bpw/16+vis,bpw}}
+  const g=geoOf(t,r.geo);if(!g)return null;
+  if(!isMoe(t))return {gib:skel*(r.bits+32/r.group)/16+g.gib+vis,bpw:g.bpw};
+  const base=skel*(r.protect+0.5)/16;
+  if(!r.tailOn)return {gib:base+g.gib+vis,bpw:g.bpw};
+  const tg=geoOf(t,r.tailGeo);if(!tg)return null;
+  const n=t.vq_layers,nt=ntail(t,r),w=(a,b)=>a==null||b==null?null:(a*(n-nt)+b*nt)/n;
+  return {gib:base+(g.gib*(n-nt)+tg.gib*nt)/n+vis,bpw:w(g.bpw,tg.bpw)};
 }
-function plan(t,r){
-  const out=[],sc=Math.sqrt(t.modules/120);r.reuse=null;
-  if(r.mode==='affine'){out.push(['stream-convert',12*sc,`round-to-nearest ${r.bits}-bit experts, group ${r.group}; attention ${r.pAttn===16?'bf16':r.pAttn+'-bit'}, embeddings ${r.pEmb===16?'bf16':r.pEmb+'-bit'}, routers ${r.pRouter===16?'bf16':r.pRouter+'-bit'}`])}
-  else if(r.strat==='flat'){const have=t.fitStore[r.geo]||0;const need=Math.max(0,t.modules-Math.min(have,t.modules));const per={'K128':.3,'K256':.3,'K512':.5,'K1024':.8,'K2048':1.2,'K4096':2.5,'K8192':4.5,'K16384':9}[r.geo.split('-')[1]]||1;r.reuse=[t.modules-need,t.modules];out.push(['fit',need*per,`${need} of ${t.modules} modules at ${r.geo}; ${t.modules-need} reused from the fit store`])}
-  else{const m=mixPlan(t,r),nm=t.layers*3,hm=m.nhi*3,cnt=g=>Math.min(t.fitStore[g]||0,nm);const per=g=>({'K128':.3,'K256':.3,'K512':.5,'K1024':.8,'K2048':1.2,'K4096':2.5,'K8192':4.5,'K16384':9}[g.split('-')[1]]||1);const needLo=m.nhi<t.layers?Math.max(0,(nm-hm)-cnt(m.lo)):0,needHi=hm?Math.max(0,hm-cnt(m.hi)):0;r.reuse=[nm-needLo-needHi,nm];out.push(['fit',(needLo*per(m.lo)+needHi*per(m.hi))*sc+(needHi?6:0),`${needHi} modules at ${m.hi} (back ${m.nhi} layers), ${needLo} at ${m.lo} (front); rest reused from the fit store`])}
-  if(r.mode==='vq'&&r.strat==='measured')out.push(['leverage + alloc-sweep',175*sc,'per-layer damage trajectory, then cost and value curves on this teacher']);
-  if(r.mode==='vq'&&r.resel)out.push(['reselect',95,'self-generated Gram bank, codes re-picked activation-aware']);
-  if(r.mode==='vq'){const K=+(r.geo||'d4-K2048').split('K')[1];const rich=r.strat==='flat'?K:+mixPlan(t,r).hi.split('K')[1];out.push(['geo-build · pack · bundle',(14+Math.log2(rich)*1.1)*sc,`diff-style rebuild, true bit-width; packing and bundling scale with K (${rich})`])}
-  if(r.tower&&t.bytes.vision)out.push(['graft tower',3,'bf16 vision tower']);
-  if(r.mtp&&t.bytes.mtp)out.push(['mtp-pack',6,'quantized drafting sidecar']);
-  out.push(['smoke · vision · check-release',12,'one token and one image through the shipped runtime; files exist and function']);
-  out.push(t.judge?['blind judge',30*sc,'60 literary continuations judged blind against bf16; exact sign test']:['kl-ladder',40*sc,'paired against the teacher, three corpora at 12288']);
-  return out;
+function sanitize(t){
+  if(!t)return;const r=draft,fg=fitGeos(t).map(g=>g.geo),lo=t.first_vq+1,hi=t.first_vq+t.vq_layers-1;
+  if(!fg.length)r.mode='affine';
+  if(!fg.includes(r.geo))r.geo=fg[0]||'';
+  if(!isMoe(t)||hi<lo||!fg.length)r.tailOn=false;
+  if(!fg.includes(r.tailGeo))r.tailGeo=r.geo;
+  if(!r.tailFrom)r.tailFrom=t.first_vq+Math.floor(t.vq_layers/2);
+  r.tailFrom=Math.max(lo,Math.min(hi,r.tailFrom));
+  if(!(t.gib||{}).vision)r.tower=false;if(!(t.gib||{}).mtp)r.mtp=false;if(!t.scored)r.score=false;
+  r.protect=Math.max(2,Math.min(8,r.protect|0||8));
 }
-const geoBpw=geo=>{const m=/^d(\d+)-K(\d+)$/.exec(geo);return m?Math.log2(+m[2])/+m[1]:NaN};
-const LADDER={d2:[16,4096],d4:[128,16384],d8:[1024,16384]};
-function mixPlan(t,r){
-  const L=t.layers,gib=Math.min(sizeOf(t,r),bf16Of(t))-vqDelta(t,r);
-  const w=r.widthPick&&r.widthPick!=='auto'?r.widthPick:widthOf(r.geo);
-  // t.bpw is total bits/weight (codebooks, scales); remove the overhead measured at the nearest same-width notch to get CODE bpw
-  const nn=t.notches.filter(n=>widthOf(n.geo)===w),nt=nn.length?nn.reduce((a,c)=>Math.abs(c.gib-gib)<Math.abs(a.gib-gib)?c:a):null,b0=t.bpw(gib)-(nt?t.bpw(nt.gib)-geoBpw(nt.geo):0);
-  const R=LADDER[w]||LADDER.d4,c=[];
-  for(let k=R[0];k<=R[1];k*=2)c.push(`${w}-K${k}`);
-  const sn=c.find(g=>Math.abs(geoBpw(g)-b0)<.01),b=sn?geoBpw(sn):b0; // snap to a candidate within 0.01 bpw (size is rounded to 0.1 GiB)
-  const lo=c.filter(g=>geoBpw(g)<b-1e-6).pop(),hi=c.find(g=>geoBpw(g)>b+1e-6);
-  if(!lo||!hi||isNaN(b)){const near=c.reduce((x,y)=>Math.abs(geoBpw(y)-b)<Math.abs(geoBpw(x)-b)?y:x);return{lo:near,hi:near,nhi:0,b}}
-  const f=(b-geoBpw(lo))/(geoBpw(hi)-geoBpw(lo)),nhi=Math.round(f*L);
-  const tot=(L-nhi)*geoBpw(lo)+nhi*geoBpw(hi);if(Math.abs(tot-b*L)/(b*L)>.015)console.warn('mixed allocation off budget',tot/L,b);
-  return{lo,hi,nhi,b};
+const shortOf=t=>t.teacher.split('--').pop().toLowerCase().replace(/-bf16$/,'').replace(/[^a-z0-9._-]+/g,'-').replace(/^[-._]+|-+$/g,'');
+const geoS=g=>g.toLowerCase().replace('-','');
+function defName(t,r){
+  const s=shortOf(t);
+  return (r.mode==='affine'?`${s}-q${r.bits}g${r.group}`:r.tailOn?`${s}-${geoS(r.geo)}-${geoS(r.tailGeo)}-t${r.tailFrom}`:`${s}-${geoS(r.geo)}`).slice(0,80);
 }
-function allocation(t,r){
-  const L=t.layers;if(r.mode==='affine')return Array(L).fill('q'+r.bits+' g'+r.group);
-  if(r.strat==='flat')return Array(L).fill(r.geo);
-  const m=mixPlan(t,r);return Array.from({length:L},(_,l)=>l<L-m.nhi?m.lo:m.hi);
+function ensureName(){const t=curT();if(t&&!draft.nameSet)draft.name=defName(t,draft)}
+// the recipe JSON the backend compiles (plan/recipe_queue.py)
+function recipeOf(t,r){
+  const o={name:r.name,family:t.family,teacher:t.teacher,mode:r.mode,vision:!!r.tower,mtp:!!r.mtp,score:!!r.score};
+  if(r.mode==='vq'){o.geo=r.geo;if(isMoe(t)){if(r.tailOn)o.tail={from:r.tailFrom,geo:r.tailGeo};o.protect_bits=r.protect}else{o.bits=r.bits;o.group=r.group}}
+  else{o.bits=r.bits;o.group=r.group}
+  return o;
+}
+function setTeacher(id){
+  const t=TEACH.list.find(x=>x.id===id);if(!t)return;const fg=fitGeos(t);
+  draft=Object.assign(newRecipe(),{teacher:id,mode:fg.length?'vq':'affine',geo:fg.length?fg[Math.floor((fg.length-1)/2)].geo:'',tower:!!(t.gib||{}).vision,score:!!t.scored});
+  sanitize(t);ensureName();pvKick();
+}
+// a Library teacher is buildable only when the same model is a live, buildable teacher
+const liveFor=lt=>TEACH.list.find(x=>selectable(x)&&baseKey(x.name)===baseKey(lt.n))||null;
+function openRecipe(id,geo){
+  setTeacher(id);const t=curT();
+  if(t&&geo&&fitGeos(t).some(g=>g.geo===geo)){draft.geo=geo;sanitize(t);ensureName();pvKick()}
+  page=1;render();
+}
+// live teachers: loaded at start, when Recipe opens (if stale), when the picker opens and while a profile runs
+async function loadTeachers(){
+  const n=++TEACH.seq;
+  if(location.protocol==='file:'){TEACH.err='Recipe needs the live server: run vqlab gui';return}
+  const r=await api('/api/teachers');if(n!==TEACH.seq)return;
+  const ok=r.ok&&r.j&&Array.isArray(r.j.teachers),was=TEACH.err;let changed=false;
+  if(!ok){TEACH.err='teachers unavailable ('+(r.status||'no response')+')';changed=TEACH.err!==was}
+  else{changed=!!was;TEACH.err='';TEACH.at=Date.now();TEACH.loaded=true;
+    const sig=JSON.stringify(r.j);
+    if(sig!==TEACH.sig){changed=true;TEACH.sig=sig;TEACH.list=r.j.teachers;TEACH.unp=r.j.unprofiled||[];
+      const t=curT();if(!t||!selectable(t)){const s=TEACH.list.find(selectable);if(s)setTeacher(s.id);else draft=newRecipe()}else{sanitize(t);ensureName();pvKick()}}
+    for(const [p,e] of [...TEACH.pend]){const u=TEACH.unp.find(x=>x.path===p);
+      if(!u){TEACH.pend.delete(p);changed=true}
+      else if(u.profiling)e.seen=true;
+      else if(e.seen||Date.now()-e.t0>20000){TEACH.pend.delete(p);TEACH.perr[p]='profiling finished without a profile';changed=true}}}
+  TEACH.timer&&clearTimeout(TEACH.timer);TEACH.timer=0;if(TEACH.pend.size)TEACH.timer=setTimeout(loadTeachers,3000);
+  const open=$('#picker')&&!$('#picker').classList.contains('hidden');
+  if(changed){if(page===1){if(open)renderPicker();else render()}else if(page===0)render()}
+}
+async function profileStart(path){
+  TEACH.pend.set(path,{t0:Date.now(),seen:false});delete TEACH.perr[path];renderPicker();
+  const r=await api('/api/teachers/profile',{path});
+  if(!(r.ok&&r.j&&r.j.ok)){TEACH.pend.delete(path);TEACH.perr[path]=(r.j&&r.j.error)||'request failed ('+r.status+')';renderPicker();return}
+  clearTimeout(TEACH.timer);TEACH.timer=setTimeout(loadTeachers,3000);
+}
+// the plan: POST /api/jobs/preview, debounced, newest answer wins
+const PV={seq:0,timer:0,res:null,err:'',busy:false,key:'',resKey:''};
+const RB={busy:false,err:''};
+function pvKick(){
+  const t=curT();
+  if(!t){clearTimeout(PV.timer);++PV.seq;PV.res=null;PV.err='';PV.busy=false;PV.key='';PV.resKey='';return}
+  const b=recipeOf(t,{...draft,name:NAME_RE.test(draft.name)?draft.name:'preview'}),key=JSON.stringify(b);
+  if(key===PV.resKey&&!PV.busy)return;
+  if(key===PV.key&&PV.busy)return;
+  clearTimeout(PV.timer);++PV.seq;PV.key=key;PV.busy=true;PV.timer=setTimeout(()=>pvRun(b,key),300);
+}
+async function pvRun(b,key){
+  const n=++PV.seq;const r=await api('/api/jobs/preview',{recipe:b});if(n!==PV.seq||key!==PV.key)return;
+  PV.busy=false;PV.resKey=key;
+  if(r.ok&&r.j&&r.j.ok){PV.res=r.j;PV.err=''}else{PV.res=null;PV.err=(r.j&&r.j.error)||'preview unavailable ('+(r.status||'no response')+')'}
+  if(page===1&&curT()){drawReadouts();drawPlan()}
+}
+async function reviewBuild(){
+  const t=curT();if(!t||RB.busy||!NAME_RE.test(draft.name))return;
+  RB.busy=true;RB.err='';render();
+  const r=await api('/api/jobs/recipe',{recipe:recipeOf(t,draft)});RB.busy=false;
+  if(r.ok&&r.j&&r.j.ok){await poll();
+    if(!LIVE.files.some(f=>f.file===r.j.file)){RB.err=r.j.file+' was written but the queue-file list does not show it; check the Jobs page';render();return}
+    jobSel='f:'+r.j.file;JNOTE={id:jobSel,warnings:r.j.warnings||[]};page=2;render()}
+  else{RB.err=(r.j&&r.j.error)||'request failed ('+(r.status||'no response')+')';render()}
 }
 
 // ================================================================ state
 const JOBS_SNAPSHOT={"snapshot":null,"gpu":{"held":false,"by":null},"queues":[]};
-let JDRAFTS=[];  // client-side draft jobs; nothing here runs anything
-const LIVE={on:false,files:[],ferr:'',queues:JOBS_SNAPSHOT.queues,gpu:JOBS_SNAPSHOT.gpu,at:JOBS_SNAPSHOT.snapshot};
+const LIVE={on:false,files:[],ferr:'',err:'',queues:JOBS_SNAPSHOT.queues,gpu:JOBS_SNAPSHOT.gpu,at:JOBS_SNAPSHOT.snapshot};
 const PAGES=[{k:'library',n:'Library'},{k:'recipe',n:'Recipe'},{k:'jobs',n:'Jobs'},{k:'storage',n:'Storage'}];
 const ICON={library:'<svg viewBox="0 0 24 24"><path d="M4 19V5M10 19V9M16 19v-6M22 19H2"/></svg>',recipe:'<svg viewBox="0 0 24 24"><path d="M3 18C8 18 8 6 13 6s5 12 8 12"/><circle cx="13" cy="6" r="2"/></svg>',jobs:'<svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h10M4 18h13"/><circle cx="19" cy="12" r="2"/></svg>',storage:'<svg viewBox="0 0 24 24"><ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6v12c0 1.7 3.6 3 8 3s8-1.3 8-3V6M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></svg>'};
 let libCols={kl:false,bpw:false};
-let stepOpen='',stAdv=false;let page=0, draft=newRecipe(), libFam='q35', jobSel='',showPre=false, show={d4:true,d2:true,d8:true,mixed:true,affine:true,'affine-sk':false,vq:true,lab:false};
-try{const st=JSON.parse(localStorage.getItem('vq.v18')||'{}');if(st.draft){draft=st.draft;draft.skel=false}if(st.page!=null)page=st.page;if(st.libFam)libFam=st.libFam;if(st.jobSel)jobSel=st.jobSel;if(Array.isArray(st.drafts))JDRAFTS=st.drafts;if(st.showPre)showPre=true;if(st.stAdv)stAdv=true;if(st.show)show=st.show;if(st.libCols)libCols={kl:!!st.libCols.kl,bpw:!!st.libCols.bpw}}catch{}
-function save(){try{localStorage.setItem('vq.v18',JSON.stringify({draft,page,libFam,jobSel,show,libCols,drafts:JDRAFTS,showPre,stAdv}))}catch{}}
-if(!draft.size){const t=TE(draft.teacher);resolveAt(t,draft,(t.xr[0]+t.xr[1])/2)}
+let stepOpen='',stAdv=false,JNOTE=null;let page=0, draft=newRecipe(), libFam='q35', jobSel='',showPre=false, show={d4:true,d2:true,d8:true,mixed:true,affine:true,'affine-sk':false,vq:true,lab:false};
+try{const st=JSON.parse(localStorage.getItem('vq.v18')||'{}');if(st.draft&&st.draft.v===2)draft=st.draft;if(st.page!=null)page=Math.min(Math.max(+st.page|0,0),PAGES.length-1);if(st.libFam)libFam=st.libFam;if(st.jobSel)jobSel=st.jobSel;if(st.showPre)showPre=true;if(st.stAdv)stAdv=true;if(st.show)show=st.show;if(st.libCols)libCols={kl:!!st.libCols.kl,bpw:!!st.libCols.bpw}}catch{}
+function save(){try{localStorage.setItem('vq.v18',JSON.stringify({draft,page,libFam,jobSel,show,libCols,showPre,stAdv}))}catch{}}
 
 // ================================================================ header
 const when=iso=>{const d=new Date(iso);return isNaN(d)?'':d.toLocaleString([],{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit',hour12:false})};
@@ -655,16 +656,16 @@ async function poll(){if(location.protocol==='file:')return;
   const my=++pollSeq,[qr,rr,fr]=await Promise.all([api('/api/queues?n=40'),api('/api/runs?n=1'),api('/api/jobs/files')]);
   if(my!==pollSeq)return;
   const fok=fr.ok&&Array.isArray(fr.j),ferr=fok?'':'queue files not loaded ('+(fr.status||'no response')+')';
-  if(!qr.ok||!rr.ok||!rr.j||!Array.isArray(qr.j))return;
+  if(!qr.ok||!rr.ok||!rr.j||!Array.isArray(qr.j)){const e='queue runs not loaded ('+((!qr.ok?qr.status:rr.status)||'no response')+')';if(e!==LIVE.err){LIVE.err=e;if(page===2)render()}return}
+  const hadErr=!!LIVE.err;LIVE.err='';
   const q=qr.j,r=rr.j,h=r.gpu&&r.gpu.lease_holder,g=r.gpu&&!r.gpu.error?{held:!!h,by:h?(h.holder||h.cmd||h.name||'unknown'):null}:null;
-  const ch=JSON.stringify([q,g,fok?fr.j:LIVE.files,ferr])!==JSON.stringify([LIVE.queues,LIVE.gpu,LIVE.files,LIVE.ferr])||!LIVE.on;
+  const ch=JSON.stringify([q,g,fok?fr.j:LIVE.files,ferr])!==JSON.stringify([LIVE.queues,LIVE.gpu,LIVE.files,LIVE.ferr])||!LIVE.on||hadErr;
   LIVE.on=true;if(fok)LIVE.files=fr.j;LIVE.ferr=ferr;LIVE.queues=q;LIVE.gpu=g;if(ch&&page===2)render()}
-loadFleet();poll();setInterval(()=>{if(page===2||!LIVE.on)poll()},10000);
+loadFleet();poll();loadTeachers();setInterval(()=>{if(page===2||!LIVE.on)poll()},10000);
 function renderFlow(){
   const DL='<button class="st" id="dlnav"><svg viewBox="0 0 24 24"><path d="M12 4v11M7 11l5 5 5-5M5 20h14"/></svg><span class="n">Downloads</span><span class="badge" id="dlbadge" hidden></span></button>';
   $('#flow').innerHTML=PAGES.map((p,i)=>(p.k==='storage'?DL:'')+`<button class="st" aria-current="${i===page}" data-i="${i}">${ICON[p.k]}<span class="n">${p.n}</span>${p.k==='jobs'?'<i style="background:var(--warn)"></i>':''}</button>`).join('');
-  $('#flow').querySelectorAll('.st[data-i]').forEach(b=>b.onclick=()=>{page=+b.dataset.i;render()});
-  $('#dlnav').onclick=dlOpen;dlRender();
+  $('#flow').querySelectorAll('.st[data-i]').forEach(b=>b.onclick=()=>{page=+b.dataset.i;if(page===1){if(Date.now()-TEACH.at>3e4)loadTeachers();pvKick()}render()});
   $('#dlnav').onclick=dlOpen;dlRender();
 }
 // Charts draw at true pixel size (viewBox = rendered box), so labels are
@@ -694,22 +695,6 @@ const curve=(c,fn,cls,span,allExt)=>{const st=(c.xmax-c.xmin)/100,seg={s:'',e:''
 
 // ================================================================ Library
 let libBox=128;
-function libAnswer(t){
-  const vis=t.bytes.vision||0,fits=r=>r.gib+vis<=usable(libBox);
-  const vq=t.rows.filter(r=>r.kind==='vq'&&r.kl),af=t.rows.filter(r=>r.kind==='affine'&&r.kl);
-  const bestOf=a=>a.filter(fits).sort((x,y)=>mean(x.kl)-mean(y.kl))[0];
-  const bv=bestOf(vq),ba=bestOf(af);
-  const boxes=[32,64,96,128,192,256,512];
-  let ans;
-  if(!vq.length)ans=`<div class="seghelp">nothing shipped for this model yet</div>`;
-  else if(!bv)ans=`<div class="big">none fit</div><div class="seghelp">the smallest shipped build needs ${f1(Math.min(...vq.map(r=>r.gib))+vis)} GiB</div>`;
-  else{const top=ba&&mean(ba.kl)<mean(bv.kl)?ba:bv,other=top===bv?ba:bv;const d=other?Math.abs(100*(1-mean(top.kl)/mean(other.kl))).toFixed(0):null;
-    const link=top.hf?`https://huggingface.co/${esc(top.hf)}`:top.kind==='affine'?`https://huggingface.co/mlx-community?search_models=${encodeURIComponent(t.short)}`:null;
-    ans=`<div class="big">${esc(top.id)}</div><div class="seghelp">${top.kind==='affine'?'affine':'VQ'} · ${f1(top.gib)} GiB · ${f1(mean(top.kl))} mnats${other?` · ${d}% less damage than ${esc(other.id)}, the best ${other.kind==='affine'?'affine':'VQ'} that fits`:''}</div>
-    ${link?`<a class="btn" style="margin-top:8px" href="${link}" target="_blank" rel="noopener">Download ↗</a>`:'<div class="seghelp">lab build, not on the Hub</div>'}`}
-  return `<div class="cart"><div class="ro">best for your Mac</div>
-    <div class="kseg small" style="margin:6px 0 10px">${boxes.map(b=>`<button aria-pressed="${libBox===b}" data-box="${b}">${b}</button>`).join('')}</div>${ans}<div class="seghelp" style="margin-top:10px">${libBox} GB less ${osReserve(libBox)} for macOS and ${ctxReserve(libBox)} for context leaves ${f1(usable(libBox))} GB for weights</div></div>`;
-}
 let libSort={k:'gib',d:1};
 const LGEO=k=>{const m=/d(\d+)-K(\d+)/.exec(k);return m?Math.log2(+m[2])/+m[1]:null};
 const wavg=es=>{const n=es.reduce((a,e)=>a+e[1],0);return n?es.reduce((a,e)=>a+LGEO(e[0])*e[1],0)/n:null};
@@ -776,11 +761,8 @@ function inspector(t,r){
    :!sd.quotable?`<div class="kv2"><span>decode</span>${dm('noisy, re-run')}</div><div class="kv2"><span>prefill</span>${dm('noisy, re-run')}</div>`
    :sk===sd.ref?`<div class="kv2"><span>decode</span><b>1.00× reference</b></div><div class="kv2"><span>prefill</span><b>1.00× reference</b></div>`
    :`<div class="kv2"><span>decode</span><b>${sd.x.toFixed(2)}× <span class="faint">vs ${esc(speedShort(sd.ref))}</span></b></div><div class="kv2"><span>prefill</span><b>${sd.prefill_x.toFixed(2)}×</b></div>`);
-  const acts=[];
-  if(r.kind==='vq')acts.push(`<button class="btn go" data-fork="${esc(r.id)}">Fork recipe →</button>`);else acts.push(`<button class="btn go" data-fork="${esc(r.id)}">VQ build at this size →</button>`);
-  if(stale)acts.push(`<button class="btn" data-act="rebundle">Rebundle</button>`);
-  if(drift)acts.push(`<button class="btn" data-act="pull">Pull Hub revision</button>`);
-  if(!t.real&&!t.judge)acts.push(`<button class="btn" data-act="score">Score on shared instrument</button>`);
+  const acts=[],lv=liveFor(t);
+  if(lv)acts.push(`<button class="btn go" data-fork="${esc(r.id)}">${r.kind==='vq'?'Fork recipe →':'VQ build at this size →'}</button>`);
   return `<div class="cart insp">
     
     <div class="ihead"><div><div class="iname">${esc(r.hf?r.hf.split('/')[1]:r.what)}</div><div class="faint">${r.kind==='affine'?'affine · published comparator':(r.mixed||(comp&&comp.length>1)?'VQ · mixed':'VQ · flat')}${r.hf?' · '+esc(r.hf.split('/')[0]):''}</div></div>${r.hf?`<a class="btn" href="https://huggingface.co/${esc(r.hf)}" target="_blank" rel="noopener">Hub ↗</a>`:''}</div>
@@ -826,64 +808,60 @@ function drawLib(){
   const pad=$('.libpage').getBoundingClientRect().bottom-$('.lib3').getBoundingClientRect().bottom;const spare=innerHeight-24-pad-$('.libmain').getBoundingClientRect().bottom;fit(Math.max(200,240+spare));
 }
 // ================================================================ Recipe
-const STRAT={
- flat:{n:'Flat',s:'fastest',one:'One geometry on every layer, from fits already in the store.',trades:'Build time for quality: one geometry everywhere, from fits already in the store. Size steps between notches.',changes:'No allocation pass; the nearest notch sets d and K for every layer.',pick:'A quick rung, a comparator, or a notch already on the budget.'},
- mixed:{n:'Mixed',s:'default',one:'Cheap codebooks in front, rich ones in the back. The standard build.',trades:'A few more codebooks for the position law: cheap width in front, big books in the back. Size is continuous.',changes:'Front layers take the floor, the back the richest geometry; the split follows the size.',pick:'Every release build; the lab\'s standard practice.'},
- measured:{n:'Measured',s:'+ leverage',one:'Measures this model first (~3 GPU h), then allocates from that.',trades:'About three GPU hours before fitting, for an allocation this teacher earned rather than the law\'s guess.',changes:'layer-leverage ranks layers, alloc-sweep prices cost and value, codes are re-picked activation-aware.',pick:'A new family, or a rung headed for a paper.'}};
 function pgRecipe(){
-  const r=draft,t=TE(r.teacher),S=STRAT[r.strat];
-  const vqSide=()=>`<div class="ro" style="margin-bottom:6px">strategy</div>
-    <div class="kseg">${['flat','mixed','measured'].map(k=>`<button aria-pressed="${r.strat===k}" data-g="strat" data-v="${k}">${STRAT[k].n}<small>${STRAT[k].s}</small></button>`).join('')}</div>
-    <div class="kline">${S.one}</div>
-    <div class="ro" style="margin-bottom:6px">width</div>
-    <div class="kseg small">${[['auto','auto'],['d2','d2'],['d4','d4'],['d8','d8']].map(([v,n])=>`<button aria-pressed="${(r.widthPick||'auto')===v}" data-g="widthPick" data-v="${v}" ${v!=='auto'&&!t.notches.some(n=>widthOf(n.geo)===v)?'disabled title="no measured notch at this width for this teacher"':''}>${n}</button>`).join('')}</div>
-    <div class="seghelp">auto follows the notch nearest the point; a fixed width keeps the point on that ladder.</div>
-    ${nonexp}`;
-  const I=INFO;
-  const sk=false;const bitrow=(k,label,off)=>`<div class="bitrow ${off||sk?'off':''}"><span>${label}</span><div class="kseg small">${[4,6,8,16].map(b=>`<button aria-pressed="${r[k]===b}" data-bits="${k}" data-v="${b}" ${off||sk?'disabled':''}>${b===16?'bf16':'q'+b}</button>`).join('')}</div></div>`;
-  const nonTxt=(()=>{const c=trunkCurve(t);if(!c)return 'The KL estimate does not model these widths yet: no matched builds on this family. On 27B and 35B the trunk width moves KL as much as the experts do.';
-    const S=skelOf(t.id),w=S.pAttn===4?6:S.pAttn===6?4:4,lo=S.pAttn,hi=8,by=(k,b)=>t.rows.find(q=>q.id===k+b),m=x=>Math.round(mean(x.kl));
-    return `The KL estimate moves with attention width, from affine builds that differ only in trunk width (${t.res}: ${lo}-bit trunk → ${hi}-bit cuts mean KL from ${m(by('s',hi))} to ${m(by('q',hi))} at ${hi}-bit experts). Embeddings and routers are not modeled separately.`})();
-  const nonexp=`<div class="ro nonexp"><span>non-expert tensors ${I(nonTxt)}</span><button class="linkbtn ${skDiff(r)?'':'hid'}" id="skreset">reset</button></div>
-    ${bitrow('pAttn','attention')}${bitrow('pEmb','embeddings · head')}${bitrow('pRouter','routers',t.topk<=1)}`;
-  const affSide=`<div class="ro">experts ${I('Round-to-nearest affine quantization of the expert (or MLP) weights. Bits and group size fix the size exactly, so the point does not drag.')}</div>
-    <div class="kseg small">${[2,3,4,5,6,8].map(b=>`<button aria-pressed="${r.bits===b}" data-g="bits" data-v="${b}">q${b}</button>`).join('')}</div>
-    <div class="ro" style="margin-top:8px">group size ${I('Weights per scale-and-bias group. Smaller groups cost bytes (bf16 scale and bias per group: +32/group bits per weight) and take damage off. 64 is the published mlx-community recipe and lands on a measured row where one exists.')}</div>
-    <div class="kseg small">${[32,64,128].map(gs=>`<button aria-pressed="${r.group===gs}" data-g="group" data-v="${gs}">${gs}</button>`).join('')}</div>
-    <div class="ro" style="margin-top:8px">non-expert tensors ${I('stream-convert --protect-bits. Attention, embeddings and routers are a small share of the bytes and a large share of the damage; keeping them wider is cheap. Factors are estimates until such a row is scored.')}</div>
-    ${bitrow('pAttn','attention')}${bitrow('pEmb','embeddings · head')}${bitrow('pRouter','routers',t.topk<=1)}`;
-  return `<section class="panel"><h2><span style="display:flex;align-items:baseline;gap:14px">Recipe <button class="hpick" id="pick">${esc(t.short)} <span>▾</span></button></span><small>drag the point along the curve; notches are measured builds and Apple silicon boxes</small></h2>
+  const t=curT(),I=INFO,head=`<span style="display:flex;align-items:baseline;gap:14px">Recipe <button class="hpick" id="pick">${t?esc(t.name.split('/').pop()):TEACH.loaded?'pick a teacher':'loading…'} <span>▾</span></button></span>`;
+  if(!t)return `<section class="panel"><h2>${head}</h2>
+  <div class="${TEACH.err?'jdbad':'ro'}">${esc(TEACH.err||(TEACH.loaded?'no teacher here can be built yet; profile an original from the picker':'loading teachers…'))}</div>${PICKER()}</section>`;
+  const r=draft,moe=isMoe(t),fg=fitGeos(t).map(g=>g.geo),B=t.gib||{};
+  const qrow=(label,k,vals,info)=>`<div class="bitrow"><span>${label}${info?' '+I(info):''}</span><div class="kseg small">${vals.map(b=>`<button aria-pressed="${r[k]===b}" data-g="${k}" data-v="${b}">${k==='group'?b:'q'+b}</button>`).join('')}</div></div>`;
+  const step=(label,nav,val,btns,info)=>`<div class="bitrow"><span>${label}${info?' '+I(info):''}</span><div class="kseg small">${btns.map(([c,d,off])=>d===0?`<button aria-pressed="true" tabindex="-1" style="flex:2;cursor:default">${esc(val)}</button>`:`<button data-nav="${nav}" data-d="${d}" ${off?'disabled':''} aria-label="${nav} ${d}">${c}</button>`).join('')}</div></div>`;
+  const gi=fg.indexOf(r.geo),ti=fg.indexOf(r.tailGeo),lo=t.first_vq+1,hi=t.first_vq+t.vq_layers-1;
+  const geoStep=(label,nav,i,info)=>step(label,nav,fg[i],[['‹',-1,i<=0],['',0],['›',1,i>=fg.length-1]],info);
+  const bits=[2,3,4,5,6,8];
+  const vqSide=()=>`<div class="ro">strategy ${I('Flat puts one geometry on every VQ layer. Tail gives the layers from the chosen one on a second, richer geometry: the back of the network is where extra bits pay (position law). The size is exact either way.')}</div>
+    <div class="kseg">${[['flat','Flat','one geometry'],['tail','Tail','rich back']].map(([k,n,s])=>`<button aria-pressed="${(k==='tail')===r.tailOn}" data-g="strat" data-v="${k}" ${k==='tail'&&(!moe||hi<lo)?'disabled':''}>${n}<small>${s}</small></button>`).join('')}</div>
+    <div class="ro">geometry ${I('Only geometries a fit can be compiled at are offered: legal on every projection of this teacher and with a measured healthy relerr for the fit abort threshold.')}</div>
+    ${geoStep(r.tailOn?'body':'geometry','geo',gi)}
+    ${r.tailOn?geoStep('tail','tailGeo',ti)+step('from layer','tfrom','L'+r.tailFrom,[['«',-4,r.tailFrom-4<lo],['‹',-1,r.tailFrom<=lo],['',0],['›',1,r.tailFrom>=hi],['»',4,r.tailFrom+4>hi]],`Layers ${lo}-${hi} can start the tail; ${ntail(t,r)} of ${t.vq_layers} VQ layers take the tail geometry.`):''}
+    ${moe?qrow('protect','protect',bits,'stream-convert --protect-bits: width of attention, embeddings and shared modules. They are a small share of the bytes and a large share of the damage.'):qrow('base bits','bits',bits,'Width of the affine base the VQ layers are spliced into (attention, embeddings, norms).')+qrow('group','group',[32,64,128],'Weights per scale-and-bias group of the base: +32/group bits per weight.')}`;
+  const affSide=`<div class="ro">experts ${I('Round-to-nearest affine quantization of every linear. Bits and group size fix the size exactly, so the point does not drag.')}</div>
+    ${qrow('bits','bits',bits)}${qrow('group','group',[32,64,128],'Weights per scale-and-bias group: +32/group bits per weight.')}`;
+  const ok=NAME_RE.test(r.name);
+  return `<section class="panel"><h2>${head}${I('Drag the point to a geometry; notches are the geometries a fit can be compiled at, lines are Apple silicon boxes after macOS and context. Everything here is exact arithmetic from the teacher\'s profile.')}</h2>
   <div class="readouts" id="readouts"></div>
   <div class="recipe">
   <div>
-    <svg class="chart" id="chart" role="img" aria-label="estimated quality against size; drag to set"></svg>
-    <div class="legend"><span><i style="border-color:var(--acc)"></i>this recipe</span><span><i style="border-color:var(--dim)"></i>flat VQ, fitted</span><span><i style="border-color:var(--bad)"></i>affine, fitted</span><span>● measured build</span><span><i style="border-color:var(--teal)"></i>boxes, after OS and context</span></div>
+    <svg class="chart" id="chart" role="img" aria-label="size of this recipe against geometry; drag to set"></svg>
+    <div class="legend"><span><i style="border-color:var(--acc)"></i>this recipe</span><span><i style="border-color:var(--dim)"></i>${r.mode==='vq'?'geometry':'affine bits'}</span><span><i style="border-color:var(--teal)"></i>boxes, after OS and context</span></div>
     <div id="strip"></div>
+    <div id="plan"></div>
   </div>
   <div class="cart">
-    <div class="seg modeseg">${[['vq','VQ'],['affine','Affine']].map(([v,n])=>`<button aria-pressed="${r.mode===v}" data-g="mode" data-v="${v}">${n}</button>`).join('')}</div>
+    <div class="seg modeseg">${[['vq','VQ'],['affine','Affine']].map(([v,n])=>`<button aria-pressed="${r.mode===v}" data-g="mode" data-v="${v}" ${v==='vq'&&!fg.length?'disabled':''}>${n}</button>`).join('')}</div>
     ${r.mode==='vq'?vqSide():affSide}
-    <div class="ro">include</div>
-    ${t.bytes.vision?`<button class="addon" aria-pressed="${!!r.tower}" data-g="tower"><i></i><span class="n">vision tower</span><span class="t">+${f1(t.bytes.vision)} GiB</span></button>`:''}
-    ${t.bytes.mtp?`<button class="addon" aria-pressed="${!!r.mtp}" data-g="mtp"><i></i><span class="n">MTP drafting</span><span class="t">+${f1(t.bytes.mtp)} GiB · faster decode</span></button>`:''}
+    <div class="ro">include ${I('KL score runs the score step after the build, and needs KL caches registered for this teacher. MTP drafting is not compiled: choose its wiring by hand after the build.')}</div>
+    ${B.vision?`<button class="addon" aria-pressed="${!!r.tower}" data-g="tower"><i></i><span class="n">vision tower</span><span class="t">+${f1(B.vision)} GiB</span></button>`:''}
+    ${B.mtp?`<button class="addon" aria-pressed="${!!r.mtp}" data-g="mtp"><i></i><span class="n">MTP drafting</span><span class="t">+${f1(B.mtp)} GiB</span></button>`:''}
+    <button class="addon" aria-pressed="${!!r.score}" data-g="score" ${t.scored?'':'disabled'}><i></i><span class="n">KL score</span></button>
   </div>
   </div>
-  <div class="foot"><span class="hint">nothing is built until you start it. Preflight runs every step on one module first.</span><button class="btn" data-save="draft">Save recipe.json</button><button class="btn go" id="queue">Review build →</button></div>
+  <div class="foot"><div class="fw" style="margin-right:auto;flex:1;max-width:30em"><input class="fld${ok?'':' bad'}" id="rname" value="${esc(r.name)}" spellcheck="false" aria-label="queue file name">${I('The queue file this recipe is written to. Lowercase letters, digits, . _ -, starting with a letter or digit, at most 80. An existing file of that name is never overwritten.')}</div><button class="btn" id="savejson" ${ok?'':'disabled'}>Save recipe.json</button><button class="btn go" id="queue" ${ok&&!RB.busy?'':'disabled'}>${RB.busy?'Writing…':'Review build →'}</button></div>
   ${PICKER()}
   </section>`;
 }
 const PICKER=()=>`<div class="modal hidden" id="picker"><div class="box">
-    <div class="pickhd"><input id="psearch" placeholder="model or Hub repo" aria-label="search teachers"><span class="ro">${TEACHERS.length} local teachers</span><button class="x" id="pclose" aria-label="close">×</button></div>
+    <div class="pickhd"><input id="psearch" placeholder="model or Hub repo" aria-label="search teachers"><span class="ro" id="pcount"></span><button class="x" id="pclose" aria-label="close">×</button></div>
     <div class="pickbody"><div class="pfams" id="pfams"></div><div class="prows" id="prows"></div></div>
   </div></div>`;
 let pickFam='all',pickKind='all';
+const localNames=()=>new Set([...LIB_ROWS.map(t=>t.n),...TEACH.list.filter(t=>t.on_disk).map(t=>t.name)]);
 // --- Hugging Face (port of knurlogic's picker HUB section) -----------------
 // model_types VQ Lab has a family profile for: families/*/teachers/*/profile.json
-// (model_type + text_model_type), plus the gemma4 teachers already in TEACHERS.
+// (model_type + text_model_type), plus the gemma4 teachers already in LIB_ROWS.
 const VQ_TYPES=new Set(['qwen3_5','qwen3_5_text','qwen3_5_moe','qwen3_5_moe_text','qwen4_exp','qwen4_exp_text','glm5_next','glm5_next_text','gemma4','gemma4_text']);
 const HF={q:null,res:null,err:'',open:'',timer:0,seq:0};
-let DLS=[],DLCONF='';
-const dlOf=id=>DLS.find(d=>d.id===id);
+let DLS=[];const DLERR={};
+const dlOf=id=>DLS.find(d=>d.repo===id);
 // VQ Lab's repo(): decided per row from the expanded listing, no extra request
 function hfRow(m){
   const c=m.config||{},st=m.safetensors,pp=(st&&st.parameters)||{},tot=(st&&st.total)||Object.values(pp).reduce((a,b)=>a+b,0);
@@ -908,7 +886,7 @@ function hubDialog(){
   box.querySelector('.hfdlg')?.remove();removeEventListener('keydown',HF.esc,true);
   const id=HF.open;if(!id)return;
   const r=(HF.res||[]).find(x=>x.id===id);if(!r)return;
-  const dl=dlOf(id),local=TEACHERS.some(t=>t.n===id),busy=dl&&dl.state==='downloading';
+  const dl=dlOf(id),local=localNames().has(id),busy=dl&&dl.status==='downloading';
   const line=local?'already a local teacher':busy?'downloading…':r.why?r.why:r.gated?'gated — needs access on your Hub account':'';
   const can=!r.why&&!local&&!busy;
   const el=document.createElement('div');el.className='hfdlg';
@@ -918,131 +896,156 @@ function hubDialog(){
   HF.esc=esc_;addEventListener('keydown',esc_,true);
   el.onmousedown=e=>{if(e.target===el)close()};
   el.querySelector('[data-c]').onclick=close;
-  el.querySelector('[data-d]').onclick=()=>{close();dlStart(id,r.size)};
+  el.querySelector('[data-d]').onclick=async()=>{const x=await dlAct('start',id);if(x.ok)close();else el.querySelector('.hfnote').textContent=x.msg};
   box.appendChild(el);
 }
 function renderHub(){
-  const loc=new Set(TEACHERS.map(t=>t.n));
+  const loc=localNames();
   const row=r=>`<div class="hfrow${r.why&&!loc.has(r.id)?' no':''}"><button class="prow" aria-current="${HF.open===r.id}" data-hf="${esc(r.id)}"><span class="n">${esc(r.id)}${r.gated?' <span class="tag">GATED</span>':''}</span><span class="m">${gib(r.size,1)}</span><span class="d">${r.downloads.toLocaleString()} downloads${r.why?' · '+esc(r.why):loc.has(r.id)?' · already a local teacher':''}</span></button></div>`;
   $('#prows').innerHTML=HF.err?`<div class="psect no">${esc(HF.err)}</div>`:HF.res===null?'<div class="psect no">searching…</div>':HF.res.length?HF.res.map(row).join(''):'<div class="psect no">nothing matches</div>';
   $('#prows').querySelectorAll('[data-hf]').forEach(v=>v.onclick=()=>{HF.open=v.dataset.hf;hubDialog()});
   hubDialog();
   if(HF.res===null&&!HF.timer&&HF.q===null)hubSearch($('#psearch').value.trim());
 }
-// --- Downloads overlay (port of knurlogic downloads.js; progress is simulated)
+// --- Downloads overlay (server-side state: /api/downloads)
 const SVGI=p=>`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${p}</svg>`;
-const DLICON={resume:SVGI('<path d="M21 12a9 9 0 0 1-15.5 6.2L3 16"/><path d="M3 21v-5h5"/><path d="M3 12a9 9 0 0 1 15.5-6.2L21 8"/><path d="M21 3v5h-5"/>'),trash:SVGI('<path d="M3 6h18"/><path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/>')};
-function dlStart(id,size){const d=dlOf(id);if(d){d.state='downloading'}else DLS.push({id,bytes:0,total:size,state:'downloading'});dlRender()}
-setInterval(()=>{let ch=0;DLS.forEach(d=>{if(d.state==='downloading'){d.bytes=Math.min(d.total,d.bytes+400e6*.5);if(d.bytes>=d.total)d.state='done';ch=1}});if(ch)dlRender()},500);
-function dlRender(){
-  const n=DLS.filter(d=>d.state==='downloading').length,b=$('#dlbadge');if(b){b.hidden=!n;b.textContent=n}
-  const el=$('#dllist');if(!el||$('#dlov').classList.contains('hidden'))return;
-  el.innerHTML=DLS.length?DLS.map(D=>{
-    const pct=D.total?Math.min(100,Math.round(100*D.bytes/D.total)):0,run=D.state==='downloading',id=esc(D.id);
-    const st=run?`${pct}% · ${gib(D.bytes,1)} of ${gib(D.total,1)}`:D.state==='done'?'done':`stopped · ${gib(D.bytes,1)} of ${gib(D.total,1)}`;
-    const btn=(k,t)=>`<button class="mini" data-${k}="${id}" title="${t}" aria-label="${t}">${DLICON[k]||'×'}</button>`;
-    const acts=run?btn('stop','stop'):D.state==='done'?`<button class="mini pri" data-onb="${id}">Onboard →</button>`+btn('clear','clear')
-      :DLCONF===D.id?`<span class="dlconf">delete ${gib(D.bytes,1)}? <button class="mini danger" data-yes="${id}">delete</button> <button class="mini" data-no="${id}">keep</button></span>`
-      :btn('resume','resume')+btn('trash','delete files');
-    return `<div class="dlrow ${D.state}"><div class="dlhd"><span class="vn">${id}</span><span class="vs">${esc(st)}</span>${acts}</div>${run?`<div class="lbar"><i style="width:${pct}%"></i></div>`:''}</div>`}).join(''):'<div class="psect no">no downloads</div>';
-  const on=(k,fn)=>el.querySelectorAll(`[data-${k}]`).forEach(x=>x.onclick=()=>{fn(x.dataset[k]);dlRender()});
-  on('stop',id=>{dlOf(id).state='stopped'});on('clear',id=>{DLS=DLS.filter(d=>d.id!==id)});on('resume',id=>{dlOf(id).state='downloading'});
-  on('trash',id=>{DLCONF=id});on('no',()=>{DLCONF=''});on('yes',id=>{DLCONF='';DLS=DLS.filter(d=>d.id!==id)});
-  on('onb',()=>{dlClose()});
+const DLICON={resume:SVGI('<path d="M21 12a9 9 0 0 1-15.5 6.2L3 16"/><path d="M3 21v-5h5"/><path d="M3 12a9 9 0 0 1 15.5-6.2L21 8"/><path d="M21 3v5h-5"/>')};
+const ONB=new Map(),DLBUSY=new Set();let dlOnbP=null;
+let dlSeq=0,dlTimer=0;
+const dlOpenNow=()=>{const o=$('#dlov');return !!o&&!o.classList.contains('hidden')};
+async function dlLoad(){
+  if(location.protocol==='file:')return;
+  const n=++dlSeq,r=await api('/api/downloads');if(n!==dlSeq)return;
+  if(r.ok&&Array.isArray(r.j)){DLS=r.j;DLERR._list=''}else DLERR._list='downloads unavailable ('+(r.status||'no response')+')';
+  dlRender();await dlOnb();dlNext();
 }
-function dlOpen(){$('#dlov').classList.remove('hidden');dlRender()}
-function dlClose(){$('#dlov').classList.add('hidden')}
+function dlNext(){clearTimeout(dlTimer);dlTimer=0;if(dlOpenNow()||ONB.size||DLS.some(d=>d.status==='downloading'))dlTimer=setTimeout(dlLoad,2000)}
+async function dlAct(kind,repo){
+  DLBUSY.add(repo);dlRender();
+  const r=await api('/api/downloads/'+kind,{repo});DLBUSY.delete(repo);
+  if(r.ok&&r.j&&r.j.ok!==false){delete DLERR[repo];await dlLoad();return {ok:true}}
+  const msg=(r.j&&r.j.error)||'request failed ('+(r.status||'no response')+')';DLERR[repo]=msg;dlRender();return {ok:false,msg};
+}
+// a finished download: the server rescans, so find its row among the unprofiled originals and profile it
+function dlOnb(){
+  // assigned before the body runs: an async body with nothing to await
+  // finishes synchronously, and its finally would clear dlOnbP too early
+  if(dlOnbP)return dlOnbP;dlOnbP=(async()=>{await null;try{
+    for(const repo of [...ONB.keys()]){
+      await loadTeachers();if(!ONB.has(repo))continue;
+      if(TEACH.list.some(t=>t.name===repo)){ONB.delete(repo);continue}
+      const u=TEACH.unp.find(x=>x.name===repo);
+      if(u){ONB.delete(repo);profileStart(u.path)}
+      else if(Date.now()-ONB.get(repo)>60000){ONB.delete(repo);DLERR[repo]='not found by the model scan; rescan in Storage'}
+    }}finally{dlOnbP=null}dlRender()})();return dlOnbP;
+}
+function dlRender(){
+  const n=DLS.filter(d=>d.status==='downloading').length,b=$('#dlbadge');if(b){b.hidden=!n;b.textContent=n}
+  const el=$('#dllist');if(!el||!dlOpenNow())return;
+  el.innerHTML=(DLERR._list?`<div class="psect no">${esc(DLERR._list)}</div>`:'')+(DLS.length?DLS.map(D=>{
+    const pct=D.total?Math.min(100,Math.round(100*D.bytes/D.total)):0,run=D.status==='downloading',id=esc(D.repo),sc=D.status==='failed'?' style="color:var(--bad)"':'';
+    const st=run?`${pct}% · ${gib(D.bytes,1)} of ${gib(D.total,1)}`:D.status==='done'?(ONB.has(D.repo)?'scanning…':'done'):`${D.status} · ${gib(D.bytes,1)} of ${gib(D.total,1)}`;
+    const bz=DLBUSY.has(D.repo),btn=(k,t)=>`<button class="mini" data-${k}="${id}" title="${t}" aria-label="${t}"${bz?' disabled':''}>${DLICON[k]||'×'}</button>`;
+    const acts=run?btn('stop','stop'):D.status==='done'?`<button class="mini pri" data-onb="${id}"${ONB.has(D.repo)||bz?' disabled':''}>Onboard →</button>`:btn('resume','resume');
+    return `<div class="dlrow ${D.status}"><div class="dlhd"><span class="vn">${id}</span><span class="vs"${sc}>${esc(st)}</span>${acts}</div>${run?`<div class="lbar"><i style="width:${pct}%"></i></div>`:''}${DLERR[D.repo]?`<div class="jdbad">${esc(DLERR[D.repo])}</div>`:''}</div>`}).join(''):'<div class="psect no">no downloads</div>');
+  const on=(k,fn)=>el.querySelectorAll(`[data-${k}]`).forEach(x=>x.onclick=()=>fn(x.dataset[k]));
+  on('stop',id=>dlAct('stop',id));on('resume',id=>dlAct('start',id));
+  on('onb',id=>{ONB.set(id,Date.now());dlRender();dlOnb().then(dlNext)});
+}
+function dlOpen(){$('#dlov').classList.remove('hidden');dlRender();dlLoad()}
+function dlClose(){$('#dlov').classList.add('hidden');dlNext()}
 document.body.insertAdjacentHTML('beforeend','<div class="modal hidden" id="dlov"><div class="box dlbox"><div class="pickhd"><span class="ro">Downloads</span><span style="flex:1"></span><button class="x" id="dlx" aria-label="close">×</button></div><div class="dlbody" id="dllist"></div></div></div>');
 $('#dlx').onclick=dlClose;$('#dlov').onclick=e=>{if(e.target.id==='dlov')dlClose()};
 addEventListener('keydown',e=>{if(e.key==='Escape')dlClose()});
 function renderPicker(){
-  const q=($('#psearch').value||'').toLowerCase();
+  if(!$('#psearch'))return;
+  const q=($('#psearch').value||'').toLowerCase(),rec=page===1;
   $('#psearch').placeholder=pickFam==='hf'?'Search Hugging Face (bf16 teachers)':'model or Hub repo';
-  const all=[...TEACHERS,...JDRAFTS];
+  const all=rec?[...TEACH.list,...TEACH.unp]:LIB_ROWS,nm=t=>t.n||t.name||'';
+  $('#pcount').textContent=rec?`${TEACH.list.length} teachers`:`${LIB_ROWS.length} local teachers`;
   const creators=[...new Set(all.map(creator))];
   $('#pfams').innerHTML=`<button class="pfam" aria-current="${pickFam==='hf'}" data-pf="hf">Hugging Face<i>↗</i></button><div class="pfsep"></div>`+[['all','All'],...creators.map(c=>[c,c])].map(([k,l])=>`<button class="pfam" aria-current="${pickFam===k}" data-pf="${k}">${esc(l)}<i>${k==='all'?all.length:all.filter(t=>creator(t)===k).length}</i></button>`).join('');
   $('#pfams').querySelectorAll('[data-pf]').forEach(b=>b.onclick=()=>{pickFam=b.dataset.pf;renderPicker()});
   if(pickFam==='hf'){
     renderHub();return}
-  const list=all.filter(t=>(pickFam==='all'||creator(t)===pickFam)&&(pickKind==='all'||t.kind.toLowerCase().startsWith(pickKind))&&(!q||(t.n+t.short).toLowerCase().includes(q)));
-  const also=(()=>{const x=FOUND.orig.filter(m=>m.family!=null&&!all.some(t=>t.n&&baseKey(t.n)===baseKey(m.name))&&(!q||m.name.toLowerCase().includes(q)));
-    return x.length?`<div class="psect no">Also on this Mac ${INFO('Onboarding profiles the model so a recipe can price it.')}</div>`+x.map(m=>`<button class="prow no" tabindex="-1" style="cursor:default"><span class="n">${esc(m.name)}</span><span class="m">needs onboarding</span><span class="d">${esc(m.format)} · ${gib(m.bytes)}</span></button>`).join(''):''})();
-  const row=t=>t.draft?`<button class="prow no"><span class="n">${esc(t.short)}</span><span class="m">${esc(t.kind)} · not onboarded</span><span class="d">onboard runs profile, loader, cache determinism and the init sweep · about two hours</span></button>`
-    :`<button class="prow" aria-current="${t.id===(page===0?libFam:draft.teacher)}" data-pt="${t.id}"><span class="n">${esc(t.short)}${fndFor(t)?'<span class="otag" title="found on this Mac">on this Mac</span>':''}</span><span class="m">${esc(t.kind)}</span><span class="d">${t.rows.filter(r=>r.kind==='vq').length} shipped · ${t.scored.length} builds measured · ${t.fits} fits in store${t.note?' · '+t.note:''}${t.judge?' · <span style="color:var(--warn)">judged blind against bf16</span>':''}</span></button>`;
-  $('#prows').innerHTML=`<div class="pkind"><div class="seg small" style="width:14em">${[['all','all'],['dense','dense'],['moe','MoE']].map(([v,n])=>`<button aria-pressed="${pickKind===v}" data-pk="${v}">${n}</button>`).join('')}</div></div>`+(list.map(row).join('')||'<div class="psect no">nothing matches</div>')+also;
-  $('#pfams').querySelectorAll('[data-pf]').forEach(b=>b.onclick=()=>{pickFam=b.dataset.pf;renderPicker()});
+  const list=all.filter(t=>(pickFam==='all'||creator(t)===pickFam)&&(pickKind==='all'||(t.kind||'').toLowerCase().startsWith(pickKind))&&(!q||(nm(t)+(t.short||'')).toLowerCase().includes(q)));
+  const kinds=`<div class="pkind"><div class="seg small" style="width:14em">${[['all','all'],['dense','dense'],['moe','MoE']].map(([v,n])=>`<button aria-pressed="${pickKind===v}" data-pk="${v}">${n}</button>`).join('')}</div></div>`;
+  let body;
+  if(rec){
+    const row=t=>{const why=!t.buildable?`no build chain for ${t.family} yet`:!t.on_disk?'the original is not on this machine':'',nfit=Object.values(t.fits||{}).reduce((a,b)=>a+b,0);
+      return `<div class="prow${why?' no':''}" role="button" tabindex="0" ${why?'':`data-pt="${esc(t.id)}" style="cursor:pointer"`} aria-current="${t.id===draft.teacher}"><span class="n">${esc(t.name)}${why?' '+INFO(esc(why)):''}</span><span class="m">${esc(t.kind||'')}${t.layers?' · '+t.layers+' layers':''}</span><span class="d">${nfit} fitted modules in the store · ${t.scored?'KL caches registered':'no KL caches'}</span></div>`};
+    const urow=u=>{const busy=u.profiling||TEACH.pend.has(u.path);
+      return `<div class="prow"><span class="n">${esc(u.name||u.path)}</span><span class="m"><button class="mini pri" data-prof="${esc(u.path)}"${busy?' disabled':''}>${busy?'profiling…':'Profile'}</button></span><span class="d">${esc(u.family||'')}${u.bytes!=null?' · '+gib(u.bytes):''}${TEACH.perr[u.path]?' · '+esc(TEACH.perr[u.path]):''}</span></div>`};
+    const ps=list.filter(t=>!t.path&&t.id),us=pickKind==='all'?list.filter(t=>t.path):[];
+    body=(TEACH.err?`<div class="psect no">${esc(TEACH.err)}</div>`:'')+(ps.map(row).join('')||(TEACH.loaded?'<div class="psect no">nothing matches</div>':''))
+      +(us.length?`<div class="psect no">On this Mac, not profiled ${INFO('Profiling reads the model headers only (seconds); the teacher then appears above and can be built from.')}</div>`+us.map(urow).join(''):'');
+  }else{
+    const also=(()=>{const x=FOUND.orig.filter(m=>m.family!=null&&!all.some(t=>t.n&&baseKey(t.n)===baseKey(m.name))&&(!q||m.name.toLowerCase().includes(q)));
+      return x.length?`<div class="psect no">Also on this Mac ${INFO('Onboarding profiles the model so a recipe can price it.')}</div>`+x.map(m=>`<button class="prow no" tabindex="-1" style="cursor:default"><span class="n">${esc(m.name)}</span><span class="m">needs onboarding</span><span class="d">${esc(m.format)} · ${gib(m.bytes)}</span></button>`).join(''):''})();
+    const row=t=>`<button class="prow" aria-current="${t.id===libFam}" data-pt="${t.id}"><span class="n">${esc(t.short)}${fndFor(t)?'<span class="otag" title="found on this Mac">on this Mac</span>':''}</span><span class="m">${esc(t.kind)}</span><span class="d">${t.rows.filter(r=>r.kind==='vq').length} shipped · ${t.scored.length} builds measured · ${t.fits} fits in store${t.note?' · '+t.note:''}${t.judge?' · <span style="color:var(--warn)">judged blind against bf16</span>':''}</span></button>`;
+    body=list.map(row).join('')||'<div class="psect no">nothing matches</div>';
+    body+=also;
+  }
+  $('#prows').innerHTML=kinds+body;
   $('#prows').querySelectorAll('[data-pk]').forEach(b=>b.onclick=()=>{pickKind=b.dataset.pk;renderPicker()});
-  $('#prows').querySelectorAll('[data-pt]').forEach(b=>b.onclick=()=>{if(page===0){libFam=b.dataset.pt;render();return}draft=newRecipe();draft.teacher=b.dataset.pt;initWidths(draft);const t=TE(b.dataset.pt);resolveAt(t,draft,(t.xr[0]+t.xr[1])/2);render()});
+  $('#prows').querySelectorAll('[data-prof]').forEach(b=>b.onclick=()=>profileStart(b.dataset.prof));
+  $('#prows').querySelectorAll('[data-pt]').forEach(b=>{const go=()=>{if(page===0){libFam=b.dataset.pt;render();return}setTeacher(b.dataset.pt);render()};b.onclick=go;b.onkeydown=e=>{if(e.key==='Enter')go()}});
 }
 function drawReadouts(){
-  const r=draft,t=TE(r.teacher),P=plan(t,r),tot=P.reduce((a,p)=>a+p[1],0),g=sizeOf(t,r),k=klOf(t,r,g),disk=g+(r.tower?t.bytes.vision:0)+(r.mtp?t.bytes.mtp:0);
-  const box=MACHINES.find(([gb])=>usable(gb)>=disk);
-  const ship=t.rows.filter(q=>q.kind==='vq');const near=ship.reduce((a,q)=>Math.abs(q.gib-g)<Math.abs(a.gib-g)?q:a);const vs=100*(1-k/mean(near.kl));
-  // estimate provenance: a note replaces the sub-line and the vs readouts go neutral
-  const gb=g-vqDelta(t,r),span=r.mode==='affine'?t.spanAff:t.spanVQ;
-  const tc=r.mode==='vq'&&trunkCurve(t),Sk=skelOf(r.teacher),tn=tc&&trunkT(t,r.pAttn);
-  const est=tc&&(skDiff(r)||trunkBelow(t,r))?[trunkBelow(t,r)?'below trunk floor':'',r.pAttn!==Sk.pAttn?'trunk from affine pairs'+(tn.assumed?', bf16 assumed':''):'',r.pEmb!==r.pAttn?'embeddings not modeled':'',r.pRouter!==Sk.pRouter?'routers not modeled':''].filter(Boolean).join(' · '):r.mode==='vq'&&skDiff(r)?'skeleton change not modeled':r.mode==='vq'&&r.strat!=='flat'&&!t.hasMixed?'assumed mix gain':(!span||gb<span[0]-0.05||gb>span[1]+0.05)?'extrapolated':'';
-  const aff=t.affNotches.length?t.affNotches.reduce((a,q)=>Math.abs(q.gib-g)<Math.abs(a.gib-g)?q:a):null;
+  const r=draft,t=curT(),s=sizeOf(t,r),box=s&&MACHINES.find(([gb])=>usable(gb)>=s.gib),P=PV.res;
+  const klInfo=INFO('No estimate exists for an unmeasured build, so none is shown. KL to the teacher is measured after the build, by the score step.'+(t.scored?'':' This teacher has no registered KL caches, so this build will not be scored.'));
   $('#readouts').innerHTML=`
-    <div class="readout acc"><small>size</small><b>${f1(g)} GiB</b><span class="sub">${f1(disk)} on disk · ${t.bpw(g).toFixed(2)} bpw</span></div>
-    <div class="readout ${box?'ok':'bad'}"><small>runs on</small><b>${box?box[1]+' GB':'no box'}</b><span class="sub">${box?ctxReserve(box[0])+' GB kept for context':'over every listed box'}</span></div>
-    ${t.judge?`<div class="readout warn"><small>quality</small><b>judge gate</b><span class="sub">blind vs bf16 after the build</span></div>`:`<div class="readout acc"><small>est. KL ${INFO(r.mode==='vq'&&r.strat==='measured'?'The measured search includes the mixed split, so it is no worse than mixed but may come back the same.':'Mean KL to the teacher over three corpora, in millinats, from the fitted curve at this size.')}</small><b>${r.mode==='vq'&&r.strat==='measured'?'≤ ':'~'}${k.toFixed(0)}</b><span class="sub">${est||'mnats, mean of three corpora'}</span></div>`}
-    ${aff&&!isNaN(k)?`<div class="readout ${est?'':k<aff.kl?'ok':'warn'}"><small>vs affine q${aff.bits}</small><b>${(k<aff.kl?'−':'+')+(100*Math.abs(1-k/aff.kl)).toFixed(0)}%</b><span class="sub">${est||'damage at '+(g>aff.gib?'+':'')+f1(g-aff.gib)+' GiB'}</span></div>`:`<div class="readout"><small>vs affine</small><b>—</b><span class="sub">no affine row yet</span></div>`}
-    <div class="readout acc"><small>time</small><b>${fmtT(tot)}</b><span class="sub">${r.reuse?`${r.reuse[0]}/${r.reuse[1]} fits from the store · `:''}starts ~19:05</span></div>`;
-  const ap=$('#approach');if(ap)ap.textContent={flat:`${r.geo} on all ${t.modules} modules, the measured notch nearest the point.`,mixed:(m=>m.nhi?`${m.lo} × ${t.layers-m.nhi} layers in front, ${m.hi} × ${m.nhi} in the back, same bytes as the flat size.`:`${m.lo} on all layers (no bracketing geometry at this width).`)(mixPlan(t,r)),measured:'after leverage and alloc-sweep run on this teacher; the strip is a placeholder until then.'}[r.strat];
+    <div class="readout acc"><small>size</small><b>${s?f1(s.gib)+' GiB':'—'}</b><span class="sub">${s&&s.bpw!=null?s.bpw.toFixed(2)+(r.mode==='affine'?' bpw':isMoe(t)?' bpw experts':' bpw MLP'):'&nbsp;'}</span></div>
+    <div class="readout ${box?'ok':s?'bad':''}"><small>runs on</small><b>${box?box[1]+' GB':s?'no box':'—'}</b><span class="sub">${box?ctxReserve(box[0])+' GB kept for context':s?'over every listed box':'&nbsp;'}</span></div>
+    <div class="readout"><small>est. KL ${klInfo}</small><b>—</b><span class="sub">&nbsp;</span></div>
+    <div class="readout"><small>scratch</small><b>${P?gib(P.writes):'—'}</b><span class="sub">${P?'artifact '+f1(P.artifact_gib)+' GiB':PV.busy?'planning…':'&nbsp;'}</span></div>
+    <div class="readout acc"><small>time</small><b>${P?(P.eta_s==null?'unknown':fmtS(P.eta_s)):'—'}</b><span class="sub">${PV.busy?'planning…':PV.err?'see plan':P?P.steps.length+' steps, full run':'&nbsp;'}</span></div>`;
+}
+function drawPlan(){
+  const el=$('#plan');if(!el)return;const P=PV.res;
+  const line=(c,t)=>`<div title="${esc(t)}" style="font-size:.85em;color:${c};overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(t)}</div>`;
+  const notes=[...(PV.err?[line('var(--bad)',PV.err)]:[]),...(RB.err?[line('var(--bad)',RB.err)]:[]),...(P?P.warnings.map(w=>line('var(--dim)',w)):[])],more=notes.length>3;
+  el.innerHTML=`<div class="ro" style="margin:12px 0 2px;display:flex;justify-content:space-between"><span>plan ${INFO('The steps a queue run would execute, compiled by the server from this recipe. Times come from past runs of the same step and are unknown where there is none. Nothing is written until Review build.')}</span><span>${PV.busy?'planning…':P?P.steps.length+' steps':''}${more?' · '+notes.length+' notes':''}</span></div>
+   <div class="jdsteps" style="height:8.5em;max-height:none"><div class="jstep ro"><span>step</span><span>command</span><span>GPU</span><span class="t">full run</span></div>${P?P.steps.map(x=>`<div class="jstep"><span title="${esc(x.name)}">${esc(x.name)}</span><span class="m" title="${esc(x.cmd)}">${esc(x.cmd)}</span><span>${x.gpu?'GPU':''}</span><span class="t">${x.eta_s==null?'unknown':fmtS(x.eta_s)}</span></div>`).join(''):''}</div>
+   <div style="height:4.6em;overflow:hidden">${notes.slice(0,3).join('')}</div>`;
 }
 function drawRecipe(){
-  const r=draft,t=TE(r.teacher),svg=$('#chart');
-  const pv=t.rows.filter(q=>q.kl&&(q.kind==='vq'||q.kind==='lab'||q.kind==='affine')).map(q=>mean(q.kl));[0,.5,1].forEach(f=>{const g0=t.xr[0]+f*(t.xr[1]-t.xr[0]);pv.push(t.klFlat(g0));if(t.klAff)pv.push(t.klAff(g0))});
-  // the chart always includes the recipe's own point
-  const g0=sizeOf(t,r),cap=bf16Of(t),xr=[Math.min(t.xr[0],g0*0.93),Math.max(Math.min(cap*1.03,Math.max(t.xr[1],g0*1.07)),g0*1.02)];const k0=klOf(t,r,g0);if(isFinite(k0))pv.push(k0);
-  const c=chartFrame(svg,xr,330,yRange(pv));let s=c.s;const {X,Y,L,W,Rm,Tp,H,B,xmin,xmax}=c;
-  const g=sizeOf(t,r),extra=(r.tower?t.bytes.vision:0)+(r.mtp?t.bytes.mtp:0);
-  MACHINES.forEach(([gb,l])=>{const u=usable(gb)-extra;if(u>xmin&&u<xmax){const near=Math.abs(u-g)<(xmax-xmin)*0.01;s+=`<g class="box ${near?'near':''}"><line x1="${X(u)}" x2="${X(u)}" y1="${Tp}" y2="${H-B}"/><text x="${X(u)+4}" y="${Tp+14}">${l} GB</text></g>`}});
-  if(isFinite(cap)&&cap<=xmax+1e-6)s+=`<g class="bf16"><line x1="${X(cap)}" x2="${X(cap)}" y1="${Tp}" y2="${H-B}"/><text x="${X(cap)-4}" y="${Tp+28}" text-anchor="end">q8 ceiling</text></g>`;
-  const dl=vqDelta(t,r),sh=t.spanVQ?[t.spanVQ[0]+dl,t.spanVQ[1]+dl]:null;
-  if(t.scored.length)s+=curve(c,x=>trunkAdj(t,r,t.klFlat(x-dl)),'flat '+(r.mode==='vq'&&r.strat==='flat'?'':'dimmed'),sh);
-  if(t.klAff)s+=curve(c,t.klAff,'aff '+(r.mode==='affine'?'':'dimmed'),t.spanAff);
-  if(r.mode==='vq'&&r.strat!=='flat'&&t.scored.length)s+=curve(c,x=>trunkAdj(t,r,klVQ(t,r,x-dl)),'mixed',sh,!t.hasMixed);
-  t.rows.filter(q=>q.kl&&(q.kind==='vq'||(q.kind==='affine'&&r.mode==='affine'))).forEach(q=>s+=`<g class="rung"><circle cx="${X(q.gib)}" cy="${Y(mean(q.kl))}" r="4"/><text x="${X(q.gib)+7}" y="${Y(mean(q.kl))+14}">${esc(q.id)}</text></g>`);
-  if(r.mode==='vq')t.notches.forEach(n=>{const y=isNaN(t.klFlat(n.gib))?Y(100):Y(t.klFlat(n.gib));s+=`<g class="notch ${(r.widthPick&&r.widthPick!=='auto'&&widthOf(n.geo)!==r.widthPick)?'dimmed':''}"><line x1="${X(n.gib)}" x2="${X(n.gib)}" y1="${y-7}" y2="${y+7}"/><text x="${X(n.gib)}" y="${y+20}" text-anchor="middle">${n.geo}</text></g>`});
-  else [2,3,4,5,6,8].forEach(b=>{const rr={...r,bits:b};const gx=sizeOf(t,rr);if(gx<xmin||gx>xmax)return;const kk=klOf(t,rr,gx),y=isNaN(kk)?Y(100):Y(kk);s+=`<g class="notch ${b===r.bits?'':'dimmed'}"><line x1="${X(gx)}" x2="${X(gx)}" y1="${y-7}" y2="${y+7}"/><text x="${X(gx)}" y="${y+20}" text-anchor="middle">q${b}</text></g>`});
-  if(false)t.affNotches.forEach(n=>{const y=Y(n.kl);s+=`<g class="notch"><line x1="${X(n.gib)}" x2="${X(n.gib)}" y1="${y-7}" y2="${y+7}"/><text x="${X(n.gib)}" y="${y+20}" text-anchor="middle">q${n.bits}</text></g>`});
-  const k=klOf(t,r,g),ky=isNaN(k)?Y(100):Y(k);
-  if(t.judge)s+=`<text x="${L+8}" y="${Tp+30}" style="fill:var(--warn)">sizes are exact; KL points are card figures, the gate is a blind judge against bf16</text>`;
-  s+=`<g class="pick"><line x1="${X(g)}" x2="${X(g)}" y1="${ky}" y2="${H-B}"/><circle cx="${X(g)}" cy="${ky}" r="6.5"/><text x="${X(g)+11}" y="${ky-8}">${f1(g)} GiB${isNaN(k)?'':' · ~'+k.toFixed(0)}</text></g>`;
-  svg.innerHTML=s;svg.style.cursor=r.mode==='affine'?'default':'';
-  if(r.mode==='affine'){svg.onpointerdown=svg.onpointermove=svg.onpointerup=null;return}
+  const r=draft,t=curT(),svg=$('#chart'),vq=r.mode==='vq';
+  const N=vq?fitGeos(t).map(g=>({k:g.geo,x:sizeOf(t,{...r,tailOn:false,geo:g.geo}).gib})):[2,3,4,5,6,8].map(b=>({k:'q'+b,x:sizeOf(t,{...r,bits:b}).gib}));
+  const cur=sizeOf(t,r),xs=N.map(n=>n.x).concat(cur?[cur.gib]:[]);
+  const lo=Math.min(...xs),hi=Math.max(...xs),pad=Math.max((hi-lo)*0.08,0.5),xmin=lo-pad,xmax=hi+pad,span=xmax-xmin;
+  const H=170,W=Math.max(320,Math.round(svg.getBoundingClientRect().width||1000)),L=16,Rm=16,Tp=10,B=26,base=H-B;
+  svg.setAttribute('viewBox',`0 0 ${W} ${H}`);svg.style.height=H+'px';
+  const X=v=>L+(v-xmin)/span*(W-L-Rm);
+  let s='';const stp=span>120?40:span>60?20:span>25?5:span>8?2:1;
+  for(let v=Math.ceil(xmin/stp)*stp;v<=xmax;v+=stp)s+=`<line class="gridl" x1="${X(v)}" x2="${X(v)}" y1="${Tp}" y2="${base}"/><text x="${X(v)}" y="${H-B+14}" text-anchor="middle">${v}</text>`;
+  s+=`<line class="axis" x1="${L}" x2="${W-Rm}" y1="${base}" y2="${base}"/><text class="atitle" x="${W-Rm}" y="${base-6}" text-anchor="end">GiB →</text>`;
+  MACHINES.forEach(([gb,l])=>{const u=usable(gb);if(u>xmin&&u<xmax){const near=cur&&Math.abs(u-cur.gib)<span*0.01;s+=`<g class="box ${near?'near':''}"><line x1="${X(u)}" x2="${X(u)}" y1="${Tp}" y2="${base}"/><text x="${X(u)+4}" y="${Tp+14}">${l} GB</text></g>`}});
+  const sel=vq?r.geo:'q'+r.bits;
+  const lab=new Set(),sx=n=>X(n.x),mark=n=>lab.add(n.k);
+  mark(N[0]);mark(N[N.length-1]);N.forEach(n=>{if(n.k===sel)mark(n)});
+  N.forEach(n=>{if(!lab.has(n.k)&&N.every(m=>!lab.has(m.k)||Math.abs(sx(m)-sx(n))>=64))mark(n)});
+  N.forEach(n=>{const on=lab.has(n.k);s+=`<g class="notch ${n.k===sel?'':'dimmed'}"><title>${esc(n.k)} · ${f1(n.x)} GiB</title><line x1="${X(n.x)}" x2="${X(n.x)}" y1="${base-8}" y2="${base}"/>${on?`<text x="${X(n.x)}" y="${base-14}" text-anchor="middle">${esc(n.k)}</text>`:''}</g>`});
+  if(cur){const x=X(cur.gib),left=x>W-90;s+=`<g class="pick"><line x1="${x}" x2="${x}" y1="${Tp}" y2="${base}"/><circle cx="${x}" cy="${H/2-10}" r="6.5"/><text x="${left?x-11:x+11}" y="${H/2-18}" text-anchor="${left?'end':'start'}">${f1(cur.gib)} GiB</text></g>`}
+  svg.innerHTML=s;svg.style.cursor=vq?'':'default';
+  if(!vq){svg.onpointerdown=svg.onpointermove=svg.onpointerup=svg.onpointercancel=null;return}
   svg.onpointerdown=e=>{e.preventDefault();svg.classList.add('drag');svg.setPointerCapture(e.pointerId);move(e)};
   svg.onpointermove=e=>{if(svg.classList.contains('drag'))move(e)};
-  svg.onpointerup=svg.onpointercancel=()=>{svg.classList.remove('drag');save();render()};
-  function move(e){const b=svg.getBoundingClientRect();let gx=xmin+((e.clientX-b.left)/b.width*W-L)/(W-L-Rm)*(xmax-xmin);
-    const snaps=[];MACHINES.forEach(([gb])=>{const u=usable(gb)-extra;if(u>xmin&&u<xmax)snaps.push(u)});(r.mode==='affine'?t.affNotches:t.notches).forEach(n=>snaps.push(n.gib+vqDelta(t,r)));
-    const px=(xmax-xmin)/(W-L-Rm)*8;const sn=snaps.find(v=>Math.abs(v-gx)<px);if(sn!=null)gx=sn;
-    gx=Math.max(xmin+0.2,Math.min(xmax-0.2,cap,gx));
-    resolveAt(t,r,gx);
-    drawRecipe();drawStrip();drawReadouts()}
+  svg.onpointerup=svg.onpointercancel=()=>{svg.classList.remove('drag');ensureName();sanitize(t);pvKick();save();render()};
+  function move(e){const b=svg.getBoundingClientRect();const gx=xmin+((e.clientX-b.left)/b.width*W-L)/(W-L-Rm)*span;
+    const near=N.reduce((a,c)=>Math.abs(c.x-gx)<Math.abs(a.x-gx)?c:a);
+    if(near.k!==r.geo){r.geo=near.k;ensureName();drawRecipe();drawStrip();drawReadouts()}}
 }
 function drawStrip(){
-  const r=draft,t=TE(r.teacher),a=allocation(t,r),geos=[...new Set(a)],col=g=>GEOCOL[g]||(g.startsWith('q')?'var(--bad)':'var(--dim)');
-  $('#strip').innerHTML=`<div class="ro" style="margin:12px 0 2px;display:flex;justify-content:space-between"><span>allocation by layer · ${t.layers} layers · ${t.modules} modules</span><span>${r.mode==='affine'?'uniform affine':{measured:'from leverage and alloc-sweep',mixed:'position law: enrich the back',flat:'flat'}[r.strat]}</span></div>
-   <div class="strip" style="grid-template-columns:repeat(${t.layers},1fr)">${a.map((g,l)=>`<i style="background:${col(g)}" title="L${l} ${g}"></i>`).join('')}</div>
-   <div class="striplab"><span>L0</span><span>L${t.layers-1}</span></div>
-   <div class="key">${geos.map(g=>`<span><em style="background:${col(g)}"></em>${g} × ${a.filter(x=>x===g).length*3}</span>`).join('')}</div>`;
+  const r=draft,t=curT(),lo=t.first_vq,hi=t.first_vq+t.vq_layers-1;
+  const pal=['var(--g2)','var(--acc)'],cells=Array.from({length:t.layers},(_,l)=>r.mode==='affine'?`q${r.bits} g${r.group}`:l<lo||l>hi?'':(r.tailOn&&l>=r.tailFrom?r.tailGeo:r.geo));
+  const geos=[...new Set(cells.filter(Boolean))],col=g=>!g?'var(--line)':pal[geos.indexOf(g)%pal.length];
+  $('#strip').innerHTML=`<div class="ro" style="margin:12px 0 2px;display:flex;justify-content:space-between"><span>allocation by layer · ${esc(t.layers)} layers${t.modules?' · '+esc(t.modules)+' modules':''}</span><span>${r.mode==='affine'?'uniform affine':r.tailOn?'tail from L'+r.tailFrom:'flat'}</span></div>
+   <div class="strip" style="grid-template-columns:repeat(${+t.layers},1fr)">${cells.map((g,l)=>`<i style="background:${col(g)}" title="L${l} ${esc(g||'not VQ')}"></i>`).join('')}</div>
+   <div class="striplab"><span>L0</span><span>L${+t.layers-1}</span></div>
+   <div class="key">${geos.map(g=>`<span><em style="background:${col(g)}"></em>${esc(g)} × ${cells.filter(x=>x===g).length}</span>`).join('')}</div>`;
 }
 // ================================================================ Jobs
-const STEPS=['fit','geo-build','pack','bundle','graft','mtp-pack','smoke','check-release','kl-ladder','verdict','publish'];
-const KIND={build:'build',rebundle:'rebundle',pull:'pull Hub revision',score:'score'};
-const KSTEPS={rebundle:['bundle','smoke','check-release'],pull:['check-release','smoke'],score:['kl-ladder','verdict']};
-function review(j,t,g,k){
-  const kd=j.kind||'build',r=j.recipe,run=KSTEPS[kd]||STEPS,tm=kd==='build'?fmtT(plan(t,r).reduce((a,p)=>a+p[1],0)):{rebundle:'~20 min',pull:'~10 min',score:'~2 h'}[kd];
-  const kv=(a,b)=>`<div class="kv2"><span>${a}</span><b>${b}</b></div>`;
-  return `<div class="ro">checkout review</div>${kv('teacher',esc(t.short))}${kv('kind',KIND[kd])}
-  ${kd==='build'?kv('mode',r.mode==='affine'?'affine':'VQ')+kv(r.mode==='affine'?'bits':'strategy',r.mode==='affine'?'q'+r.bits:esc(r.strat))+kv('size',f1(g)+' GiB')+(t.judge||isNaN(k)?'':kv('est. KL','~'+k.toFixed(0)+' mnats')):''}
-  ${kv('estimated time',tm)}
-  <div class="ro" style="margin-top:10px">steps that will run</div>
-  <ul class="timeline">${STEPS.filter(x=>run.includes(x)).map(x=>`<li class="wait"><span class="m"></span><span class="c">${x}</span><span class="d"></span><span class="t"></span></li>`).join('')}</ul>`;
-}
 const QCLS={passed:'ready',running:'building',failed:'failed',stopped:'stopped',deferred:'queued',created:'queued',lost:'failed'};
 const qState=q=>q.status==='running'&&!q.live?'lost':q.status;
 const SCLS=x=>x==='pass'?'ok':x==='running'?'run':x==='pending'||x==='skipped'||!x?'':'bad';
@@ -1079,29 +1082,22 @@ addEventListener('keydown',e=>{if(e.key==='Escape'&&JD&&!JD.busy){JD=null;jdDraw
 $('#jdlg').onclick=e=>{if((e.target.id==='jdlg'||e.target.dataset.jd==='cancel')&&JD&&!JD.busy){JD=null;jdDraw()}else if(e.target.dataset.jd==='ok')jdOk()};
 function pgJobs(){
   const qs=LIVE.queues.filter(q=>showPre||!q.preflight),npre=LIVE.queues.filter(q=>q.preflight).length;
-  const qf=LIVE.files.map(f=>({id:'f:'+f.file,name:f.name,file:f.file})),sel=JDRAFTS.find(x=>x.id===jobSel)||qf.find(x=>x.id===jobSel)||qs.find(x=>x.id===jobSel)||JDRAFTS[0]||qf[0]||qs[0];
-  const drow=jb=>`<button class="row" aria-selected="${sel&&jb.id===sel.id}" data-job="${jb.id}"><span class="n">${esc(jb.name)}</span><span class="act"><span class="state draft">draft</span></span>
-    <span class="d">${esc(TE(jb.recipe.teacher).short)} · ${jb.recipe.mode==='affine'?'affine q'+jb.recipe.bits:jb.recipe.strat} · ${f1(sizeOf(TE(jb.recipe.teacher),jb.recipe))} GiB</span>
-    <span class="stepbar">${(KSTEPS[jb.kind]||STEPS).map(()=>'<i></i>').join('')}</span></button>`;
+  const qf=LIVE.files.map(f=>({id:'f:'+f.file,name:f.name,file:f.file})),sel=qf.find(x=>x.id===jobSel)||qs.find(x=>x.id===jobSel)||qf[0]||qs[0];
   const frow=f=>`<button class="row" aria-selected="${sel&&f.id===sel.id}" data-job="${esc(f.id)}"><span class="n">${esc(f.name)}</span><span class="act"><span class="state ready">ready</span></span><span class="d">${esc(f.file)}</span></button>`;
   const qrow=q=>{const n=q.steps.length,ok=q.steps.filter(x=>x.status==='pass').length;return `<button class="row" aria-selected="${sel&&q.id===sel.id}" data-job="${esc(q.id)}"><span class="n">${esc(q.name)}${q.preflight?' · preflight':''}</span><span class="act"><span class="state ${QCLS[qState(q)]||'queued'}">${esc(qState(q))}</span></span>
     <span class="d">${esc(when(q.created))} · ${ok} / ${n} steps</span>
     <span class="stepbar">${q.steps.map(x=>`<i class="${SCLS(x.status)}" title="${esc(x.name)}: ${esc(x.status)}"></i>`).join('')}</span></button>`};
-  const rows=(LIVE.ferr?`<div class="jdbad">${esc(LIVE.ferr)}</div>`:'')+JDRAFTS.map(drow).join('')+qf.map(frow).join('')+qs.map(qrow).join('')||'<div class="ro">no queue runs</div>';
+  const items=qf.map(frow).join('')+qs.map(qrow).join(''),rows=(LIVE.err?`<div class="jdbad">${esc(LIVE.err)}</div>`:'')+(LIVE.ferr?`<div class="jdbad">${esc(LIVE.ferr)}</div>`:'')+(items||'<div class="ro">no queue runs</div>');
   let det='';
-  if(sel&&sel.recipe){const j=sel,t=TE(j.recipe.teacher),g=sizeOf(t,j.recipe),k=klOf(t,j.recipe,g);
-    det=`<div class="jobline" style="margin:0 0 10px"><span class="j">${esc(j.name)}</span><span class="state draft">draft</span></div>${review(j,t,g,k)}
-      <div class="cmd" style="visibility:${j.cli?'visible':'hidden'}">vqlab queue run recipe.json --preflight\nvqlab queue run recipe.json --detach</div>
-      <div class="foot"><button class="btn go" data-jact="start">Start</button><button class="btn" data-save="${j.id}">Save recipe.json</button><button class="btn" data-jact="discard">Discard</button>${(j.kind||'build')==='build'?'<button class="btn" data-jact="edit">Edit recipe</button>':''}</div>`}
-  else if(sel&&sel.file)det=`<div class="jobline" style="margin:0 0 10px"><span class="j">${esc(sel.name)}</span><span class="state ready">ready</span></div><div class="qmeta">${esc(sel.file)}</div>
+  if(sel&&sel.file)det=`<div class="jobline" style="margin:0 0 10px"><span class="j">${esc(sel.name)}</span><span class="state ready">ready</span></div><div class="qmeta">${esc(sel.file)}</div>${JNOTE&&JNOTE.id===sel.id?JNOTE.warnings.map(w=>`<div class="jdwarn">${esc(w)}</div>`).join(''):''}
       <div class="foot"><button class="btn go" data-qact="start-file" data-file="${esc(sel.file)}">Start</button></div>`;
   else if(sel){const q=sel,kv=(a,b)=>`<div class="kv2"><span>${a}</span><b>${b}</b></div>`;
     det=`<div class="jobline" style="margin:0 0 10px"><span class="j">${esc(q.name)}</span><span class="state ${QCLS[qState(q)]||'queued'}">${esc(qState(q))}</span></div>
       <div class="qmeta">${[esc((q.source||'').split('/').pop()),esc((q.commit||'').slice(0,10)),esc(when(q.created)),q.host?esc(q.host):'',q.preflight?'preflight':'',q.live&&q.eta&&q.eta.eta_s!=null?'ETA '+fmtS(q.eta.eta_s)+(q.eta.finish?', done '+esc(when(q.eta.finish)):''):''].filter(Boolean).join(' · ')}</div>
       ${qActs(q)}
-      <div class="qsteps" style="--nw:${Math.min(64,Math.max(...q.steps.map(x=>x.name.length),10))+1}ch"><div class="qstep qhead"><span></span><span>step</span><span>status</span><span>duration</span><span>exit</span></div>${q.steps.map((x,ix)=>{const nt=[...(x.reasons||[]),...(x.warnings||[])].filter(n=>!/^exit code -?\d+$/.test(n)),open=stepOpen===q.id+':'+ix,more=(x.tail&&x.tail.length)||x.cmd;return `<button class="qstep ${SCLS(x.status)||'wait'}${open?' open':''}" data-step="${q.id}:${ix}" ${more?'':'disabled'}><span class="m"></span><span class="c">${esc(x.name)}</span><span class="s">${esc(x.status)}</span><span class="du">${x.seconds!=null?fmtS(x.seconds):''}</span><span class="ex" title="${esc(nt.join(' · '))}">${[x.rc!=null&&x.rc!==0?'exit '+x.rc:'',x.attempts>1?x.attempts+' tries':'',esc(nt.join(' · '))].filter(Boolean).join(' · ')}</span></button>${open?`<div class="qmore">${x.tail&&x.tail.length?`<pre>${esc(x.tail.join('\n'))}</pre>`:''}${x.cmd?`<div class="qcmd">${esc(x.cmd)}</div>`:''}</div>`:''}`}).join('')}</div>`}
+      <div class="qsteps" style="--nw:${Math.min(64,Math.max(...q.steps.map(x=>x.name.length),10))+1}ch"><div class="qstep qhead"><span></span><span>step</span><span>status</span><span>duration</span><span>exit</span></div>${q.steps.map((x,ix)=>{const nt=[...(x.reasons||[]),...(x.warnings||[])].filter(n=>!/^exit code -?\d+$/.test(n)),open=stepOpen===q.id+':'+ix,more=(x.tail&&x.tail.length)||x.cmd;return `<button class="qstep ${SCLS(x.status)||'wait'}${open?' open':''}" data-step="${esc(q.id)}:${ix}" ${more?'':'disabled'}><span class="m"></span><span class="c">${esc(x.name)}</span><span class="s">${esc(x.status)}</span><span class="du">${x.seconds!=null?fmtS(x.seconds):''}</span><span class="ex" title="${esc(nt.join(' · '))}">${[x.rc!=null&&x.rc!==0?'exit '+x.rc:'',x.attempts>1?x.attempts+' tries':'',esc(nt.join(' · '))].filter(Boolean).join(' · ')}</span></button>${open?`<div class="qmore">${x.tail&&x.tail.length?`<pre>${esc(x.tail.join('\n'))}</pre>`:''}${x.cmd?`<div class="qcmd">${esc(x.cmd)}</div>`:''}</div>`:''}`}).join('')}</div>`}
   else det='<div class="ro">nothing selected</div>';
-  return `<section class="panel"><h2>Jobs ${INFO('Queue runs are read from the vqlab queues folder; one segment per step. Queue files come from the queue-files folder in the lab notes folder. Start shows what will run and asks first. Publish, push and delete are never done here. Drafts live in this browser only and run nothing.')}</h2>
+  return `<section class="panel"><h2>Jobs ${INFO('Queue runs are read from the vqlab queues folder; one segment per step. Queue files come from the queue-files folder in the lab notes folder. Start shows what will run and asks first. Publish, push and delete are never done here. A recipe reviewed on the Recipe page appears here as a queue file.')}</h2>
   <div class="jobs2">
     <div><div class="ro" style="display:flex;justify-content:space-between;margin-bottom:6px"><span>queue runs</span><button class="linkbtn" data-pre="1">${showPre?'☑':'☐'} preflight (${npre})</button></div><div class="jobsel">${rows}</div></div>
     <div class="jdet">${det}</div>
@@ -1109,7 +1105,7 @@ function pgJobs(){
 }
 
 // ================================================================ wiring
-function wirePicker(){$('#pick').onclick=()=>{$('#picker').classList.remove('hidden');renderPicker();$('#psearch').focus()};
+function wirePicker(){$('#pick').onclick=()=>{$('#picker').classList.remove('hidden');renderPicker();$('#psearch').focus();if(page===1)loadTeachers()};
   $('#pclose').onclick=()=>$('#picker').classList.add('hidden');$('#picker').onclick=e=>{if(e.target.id==='picker')$('#picker').classList.add('hidden')};
   $('#psearch').oninput=()=>{if(pickFam!=='hf')return renderPicker();clearTimeout(HF.timer);HF.res=null;HF.err='';HF.open='';renderHub();HF.timer=setTimeout(()=>{HF.timer=0;hubSearch($('#psearch').value.trim())},250)};document.onkeydown=e=>{if(e.key==='Escape')$('#picker')?.classList.add('hidden')}}
 
@@ -1282,34 +1278,31 @@ function render(){
   renderFlow();$('#page').innerHTML=PG[page]();save();
   if(page===0){drawLib();wirePicker();fitLadder();
     document.querySelectorAll('[data-k]').forEach(b=>b.onclick=()=>{show[b.dataset.k]=!show[b.dataset.k];render()});document.querySelectorAll('tr[data-sel]').forEach(tr=>tr.onclick=e=>{if(e.target.closest('a'))return;libSel=tr.dataset.sel;render()});
-    document.querySelectorAll('[data-fork]').forEach(b=>b.onclick=()=>{const t=TE(libFam),r=t.rows.find(q=>q.id===b.dataset.fork);openRecipe(t.id,r.gib);if(r.geo){draft.widthPick=r.geo.split('-')[0];draft.strat=r.mixed?'mixed':'flat';resolveAt(t,draft,r.gib);render()}});
-    document.querySelectorAll('[data-act]').forEach(b=>b.onclick=()=>{const t=TE(libFam),r=t.rows.find(q=>q.id===libSel);const a=b.dataset.act;JDRAFTS.unshift({id:'d'+Date.now(),name:(r.hf?r.hf.split('/')[1]:r.id).toLowerCase()+'-'+a,state:'draft',kind:a,recipe:{...newRecipe(),teacher:t.id,size:r.gib}});jobSel=JDRAFTS[0].id;page=2;render()});
+    document.querySelectorAll('[data-fork]').forEach(b=>b.onclick=()=>{const t=TE(libFam),r=t.rows.find(q=>q.id===b.dataset.fork),lv=liveFor(t);if(lv)openRecipe(lv.id,r.geo)});
     document.querySelectorAll('.gtog').forEach(b=>b.onclick=e=>{e.stopPropagation();const g=b.dataset.grp;libCols[g]=!libCols[g];if(!libCols[g]&&(g==='kl'?['p','c','l']:['bx','ba','be','br']).includes(libSort.k))libSort={k:g==='kl'?'m':'b',d:1};render()});
-    document.querySelectorAll('[data-sort]').forEach(h=>h.onclick=()=>{const k=h.dataset.sort;libSort=libSort.k===k?{k,d:-libSort.d}:{k,d:1};render()});
-    document.querySelectorAll('[data-recipe]').forEach(b=>b.onclick=()=>openRecipe(b.dataset.recipe,b.dataset.at?+b.dataset.at:undefined))}
-  if(page===1){const t=TE(draft.teacher);if(draft.auto)resolveAt(t,draft,sizeOf(t,draft));drawRecipe();drawStrip();drawReadouts();
-    document.querySelectorAll('.seg button,.kseg button').forEach(b=>b.onclick=()=>{const g=b.dataset.g,v=b.dataset.v;const t=TE(draft.teacher);
-      if(g==='mode'){{const was=draft.mode==='vq'?skelOf(draft.teacher):AFFW,same=['pAttn','pEmb','pRouter'].every(q=>draft[q]===was[q]);draft.mode=v;if(same)initWidths(draft)}}else if(g==='bits'){draft.bits=+v}else if(g==='group'){draft.group=+v}else if(g==='strat'){draft.strat=v}else if(g==='widthPick'){draft.widthPick=v}
-      resolveAt(t,draft,sizeOf(t,draft));render()});
-    wirePicker();
-    document.querySelectorAll('.addon').forEach(b=>b.onclick=()=>{draft[b.dataset.g]=!draft[b.dataset.g];render()});
-    {const rb=$('#skreset');if(rb)rb.onclick=()=>{initWidths(draft);render()}}
-    document.querySelectorAll('[data-bits]').forEach(b=>b.onclick=()=>{draft[b.dataset.bits]=+b.dataset.v;render()});
-    $('#queue').onclick=()=>{const t=TE(draft.teacher);JDRAFTS.unshift({id:'d'+Date.now(),name:t.short.toLowerCase().replace(/[^a-z0-9]+/g,'-')+'-'+(draft.mode==='affine'?'q'+draft.bits:f1(sizeOf(t,draft))),state:'draft',kind:'build',recipe:{...draft}});jobSel=JDRAFTS[0].id;draft=newRecipe();resolveAt(t,draft,(t.xr[0]+t.xr[1])/2);page=2;render()}}
-  if(page===2){fitJobs();document.querySelectorAll('[data-step]').forEach(b=>b.onclick=()=>{const d=$('.jdet'),y=d&&d.scrollTop;stepOpen=stepOpen===b.dataset.step?'':b.dataset.step;render();const e=$('.jdet');if(e)e.scrollTop=y});document.querySelectorAll('[data-job]').forEach(b=>b.onclick=()=>{jobSel=b.dataset.job;render()});
+    document.querySelectorAll('[data-sort]').forEach(h=>h.onclick=()=>{const k=h.dataset.sort;libSort=libSort.k===k?{k,d:-libSort.d}:{k,d:1};render()})}
+  if(page===1){const t=curT();wirePicker();
+    if(t){drawRecipe();drawStrip();drawReadouts();drawPlan();
+      const chg=fn=>{fn();sanitize(t);ensureName();pvKick();save();render()};
+      document.querySelectorAll('.seg button[data-g],.kseg button[data-g]').forEach(b=>b.onclick=()=>{const g=b.dataset.g,v=b.dataset.v;chg(()=>{
+        if(g==='mode')draft.mode=v;
+        else if(g==='strat'){draft.tailOn=v==='tail';if(draft.tailOn){const fg=fitGeos(t).map(x=>x.geo);draft.tailGeo=fg[Math.min(fg.length-1,fg.indexOf(draft.geo)+1)]}}
+        else draft[g]=+v})});
+      document.querySelectorAll('[data-nav]').forEach(b=>b.onclick=()=>chg(()=>{const d=+b.dataset.d,k=b.dataset.nav;
+        if(k==='tfrom')draft.tailFrom+=d;
+        else{const fg=fitGeos(t).map(x=>x.geo);draft[k]=fg[Math.max(0,Math.min(fg.length-1,fg.indexOf(draft[k])+d))]}}));
+      document.querySelectorAll('.addon[data-g]').forEach(b=>b.onclick=()=>chg(()=>{draft[b.dataset.g]=!draft[b.dataset.g]}));
+      const nm=$('#rname');nm.oninput=()=>{draft.name=nm.value;draft.nameSet=true;const ok=NAME_RE.test(draft.name);nm.classList.toggle('bad',!ok);$('#queue').disabled=!ok||RB.busy;$('#savejson').disabled=!ok;pvKick();save();drawReadouts();drawPlan()};
+      $('#queue').onclick=reviewBuild;
+      $('#savejson').onclick=()=>{const u=URL.createObjectURL(new Blob([JSON.stringify(recipeOf(t,draft),null,1)],{type:'application/json'})),a=document.createElement('a');a.href=u;a.download='recipe.json';a.click();URL.revokeObjectURL(u)}}}
+  if(page===2){fitJobs();document.querySelectorAll('[data-step]').forEach(b=>b.onclick=()=>{const d=$('.jdet'),y=d&&d.scrollTop;stepOpen=stepOpen===b.dataset.step?'':b.dataset.step;render();const e=$('.jdet');if(e)e.scrollTop=y});document.querySelectorAll('[data-job]').forEach(b=>b.onclick=()=>{jobSel=b.dataset.job;JNOTE=null;render()});
     document.querySelectorAll('[data-pre]').forEach(b=>b.onclick=()=>{showPre=!showPre;render()});
     document.querySelectorAll('[data-qact]').forEach(b=>b.onclick=()=>{const a=b.dataset.qact,q=LIVE.queues.find(x=>x.id===b.dataset.qid);
       if(a==='start-file')jdOpen({kind:'start',body:{file:b.dataset.file},plan:null,err:'',busy:false});
-      else if(q)jdOpen({kind:a==='full'?'start':a,name:q.name,body:{id:q.id},plan:null,err:'',busy:false})});
-    document.querySelectorAll('[data-jact]').forEach(b=>b.onclick=()=>{const i=JDRAFTS.findIndex(x=>x.id===jobSel),j=JDRAFTS[i],a=b.dataset.jact;if(!j)return;
-      if(a==='start')j.cli=true;
-      else{JDRAFTS.splice(i,1);jobSel='';if(a==='edit'){draft={...j.recipe};const S=skelOf(draft.teacher);for(const q of ['pAttn','pEmb','pRouter'])if(draft[q]==null)draft[q]=draft.mode==='vq'?S[q]:AFFW[q];page=1}}
-      render()})}
+      else if(q)jdOpen({kind:a==='full'?'start':a,name:q.name,body:{id:q.id},plan:null,err:'',busy:false})});}
   if(page===3)wireStorage();
-  document.querySelectorAll('[data-save]').forEach(b=>b.onclick=()=>{const j=b.dataset.save==='draft'?{name:TE(draft.teacher).short.toLowerCase().replace(/[^a-z0-9]+/g,'-'),kind:'build',recipe:draft}:JDRAFTS.find(x=>x.id===b.dataset.save);if(!j)return;
-    const u=URL.createObjectURL(new Blob([JSON.stringify({name:j.name,kind:j.kind||'build',recipe:j.recipe},null,1)],{type:'application/json'})),a=document.createElement('a');a.href=u;a.download='recipe.json';a.click();URL.revokeObjectURL(u)});
 }
 let rz;addEventListener('resize',()=>{clearTimeout(rz);rz=setTimeout(page===3?stFit:render,120)});
 $('#homebtn').onclick=()=>{page=0;render()};
-render();fndLoad();
+render();fndLoad();dlLoad();
 </script>

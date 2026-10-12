@@ -409,11 +409,14 @@ ROUTES = {"/api/fleet": api_fleet, "/api/provenance": api_provenance,
           "/api/queues": api_queues, "/api/settings": api_settings,
           "/api/scratch": api_scratch, "/api/storage/usage": api_storage_usage,
           "/api/models/found": api_models_found,
-          "/api/jobs/files": api_jobs_files, "/api/teachers": api_teachers, "/api/downloads": api_downloads, "/api/scores": api_scores, "/api/scratch/reclaimable": api_scratch_reclaimable}
+          "/api/jobs/files": api_jobs_files, "/api/teachers": api_teachers,
+          "/api/downloads": api_downloads, "/api/scores": api_scores,
+          "/api/scratch/reclaimable": api_scratch_reclaimable}
 POSTS = {"/api/settings": post_settings, "/api/models/scan": post_models_scan,
          "/api/pick-folder": post_pick_folder, "/api/jobs/plan": jobs.plan,
          "/api/jobs/start": jobs.start, "/api/jobs/stop": jobs.stop, "/api/jobs/resume": jobs.resume,
-         "/api/jobs/recipe": jobs.write_recipe, "/api/jobs/preview": jobs.preview, "/api/teachers/profile": teachers.profile,
+         "/api/jobs/recipe": jobs.write_recipe, "/api/jobs/preview": jobs.preview,
+         "/api/teachers/profile": teachers.profile,
          "/api/downloads/start": downloads.start, "/api/downloads/stop": downloads.stop}
 
 

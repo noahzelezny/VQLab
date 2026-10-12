@@ -157,7 +157,8 @@ DENSE_REMAP = {
 # "LO-HI", "remap": [fit_tmpl, base_tmpl]}. A code entry above always wins
 # over a data entry of the same name, so a data file cannot silently
 # redefine a published family.
-def _family_dirs():
+def family_dirs():
+    """The family folders, checkout first, the user's overriding."""
     from vqlab import config
     return [config.checkout_families_dir(), config.families_dir()]
 
@@ -165,7 +166,7 @@ def _family_dirs():
 def _load_data_entries():
     import json
     loaded = {}
-    for d in _family_dirs():
+    for d in family_dirs():
         for f in sorted(d.glob("*/entry.json")) if d.is_dir() else ():
             name = f.parent.name
             if name in FAMILY or name in DENSE_FAMILIES or name in loaded:
@@ -196,7 +197,7 @@ def teacher_caches(teacher=None):
     on 2026-09-26 for exactly that reason."""
     import json
     out = []
-    for d in _family_dirs():
+    for d in family_dirs():
         for f in sorted(d.glob("*/teachers/*/teacher_caches.json")) if d.is_dir() else ():
             t = f.parent.name
             if teacher and teacher.lower() not in t.lower():

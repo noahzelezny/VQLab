@@ -63,10 +63,16 @@ class RecipeError(ValueError):
 
 def profile(family: str, teacher: str) -> dict:
     """The teacher's family profile (checkout families/, then the user's)."""
-    for d in registry._family_dirs():
+    for d in registry.family_dirs():
         p = pathlib.Path(d) / family / "teachers" / teacher / "profile.json"
         if p.is_file():
-            return json.loads(p.read_text())
+            try:
+                prof = json.loads(p.read_text())
+            except (OSError, ValueError) as e:
+                raise RecipeError(f"{family}/{teacher}'s profile is unreadable: {e}")
+            if not isinstance(prof, dict):
+                raise RecipeError(f"{family}/{teacher}'s profile is not a JSON object")
+            return prof
     raise RecipeError(f"{family}/{teacher} has no profile: run `vqlab family-profile --teacher <dir>` first")
 
 
@@ -153,15 +159,40 @@ def _graft_flags(src: str) -> list[str]:
     return []
 
 
-def _layers(prof: dict) -> tuple[int, int]:
-    vq = prof["arch"].get("vq_layers") or []
+def _int(v, what: str) -> int:
+    if isinstance(v, bool) or not isinstance(v, (int, str)):
+        raise RecipeError(f"{what} must be an integer, not {v!r}")
+    try:
+        return int(v)
+    except ValueError:
+        raise RecipeError(f"{what} must be an integer, not {v!r}")
+
+
+def _layers(prof: dict) -> tuple[list[int], str]:
+    """(the VQ layers, sorted; fit-moe's --vq-layers for exactly them: "a-b"
+    when contiguous, else the comma list it also accepts)."""
+    vq = sorted({_int(i, "a profile vq_layers entry") for i in prof["arch"].get("vq_layers") or []})
     if not vq:
         raise RecipeError("the profile lists no VQ layers")
-    return min(vq), max(vq)
+    if vq == list(range(vq[0], vq[-1] + 1)):
+        return vq, f"{vq[0]}-{vq[-1]}"
+    return vq, ",".join(map(str, vq))
 
 
 def compile_recipe(r: dict) -> tuple[dict, list[str]]:
-    """-> (queue file dict, warnings). Raises RecipeError."""
+    """-> (queue file dict, warnings). Raises RecipeError, and only that:
+    a recipe or profile missing a key it needs is refused, not a crash."""
+    if not isinstance(r, dict):
+        raise RecipeError("a recipe is a JSON object")
+    try:
+        return _compile(r)
+    except RecipeError:
+        raise
+    except (KeyError, TypeError, AttributeError, ValueError) as e:
+        raise RecipeError(f"the recipe or the teacher's profile is malformed ({type(e).__name__}: {e})")
+
+
+def _compile(r: dict) -> tuple[dict, list[str]]:
     name, family, teacher = r.get("name", ""), r.get("family", ""), r.get("teacher", "")
     if not NAME.match(name):
         raise RecipeError("name: lowercase letters, digits, '.', '_' or '-', at most 80")
@@ -180,7 +211,7 @@ def compile_recipe(r: dict) -> tuple[dict, list[str]]:
     by = prof["bytes"]["by_class_gib"]
     work = f"<scratch>/{name}"
     out = f"{work}/{name}"
-    bits, group = int(r.get("bits", 4)), int(r.get("group", 64))
+    bits, group = _int(r.get("bits", 4), "bits"), _int(r.get("group", 64), "group")
     steps, warns = [], []
 
     vis = by.get("vision", 0.0) if r.get("vision") else 0.0
@@ -195,9 +226,10 @@ def compile_recipe(r: dict) -> tuple[dict, list[str]]:
     elif family in MOE:
         d, k = geometry(r.get("geo"))
         _legal(prof, d, k)
-        lo, hi = _layers(prof)
+        vq, spec = _layers(prof)
+        lo, hi = vq[0], vq[-1]
         struct = f"{work}/struct"
-        pb = int(r.get("protect_bits", 8))
+        pb = _int(r.get("protect_bits", 8), "protect_bits")
         if not 2 <= pb <= 8:
             raise RecipeError("protect_bits (attention, embeddings, shared modules) must be 2-8")
         skel_gib = (by["carry"] + by["embed"]) * (pb + 0.5) / 16      # affine, group 64
@@ -207,30 +239,33 @@ def compile_recipe(r: dict) -> tuple[dict, list[str]]:
                             "--family", family],
                            {"full": "the fit needs the whole struct base", "writes_gib": struct_gib},
                            retries=1, timeout_s=6 * 3600, expect={"files": [f"{struct}/config.json"]}))
-        args = ["--base", struct, "--src", src, "--out", out, "--vq-layers", f"{lo}-{hi}",
+        args = ["--base", struct, "--src", src, "--out", out, "--vq-layers", spec,
                 "--dim", d, "--k", k, "--family", family, "--seed", 1234, "--pack"]
         abort = relerr_abort(d, k)
         tail = r.get("tail")
+        if tail is not None and not isinstance(tail, dict):
+            raise RecipeError('tail is {"from": layer, "geo": "dD-KK"}')
+        frm = None
         if tail:
             td, tk = geometry(tail.get("geo"))
             _legal(prof, td, tk)
-            frm = int(tail.get("from", -1))
-            if not lo < frm <= hi:
-                raise RecipeError(f"tail.from {frm} must be inside layers {lo + 1}-{hi}")
+            frm = _int(tail.get("from", -1), "tail.from")
+            if not lo < frm <= hi or frm not in vq:
+                raise RecipeError(f"tail.from {frm} must be a VQ layer in {lo + 1}-{hi}")
             args += ["--tail-from", frm, "--tail-geom", f"d{td}k{tk}"]
             if relerr_abort(td, tk) != abort:
                 warns.append(f"fit-moe takes one --relerr-abort: the looser of the two geometries' "
                              f"({max(abort, relerr_abort(td, tk))}) applies to every layer")
             abort = max(abort, relerr_abort(td, tk))
         args += ["--relerr-abort", abort]
-        n = len(prof["arch"]["vq_layers"])
-        ntail = (hi - tail["from"] + 1) if tail else 0
+        n = len(vq)
+        ntail = sum(i >= frm for i in vq) if tail else 0
         stack = _stack_gib(prof, d, k) * (n - ntail) / n
         if tail:
-            stack += _stack_gib(prof, *geometry(tail["geo"])) * ntail / n
+            stack += _stack_gib(prof, td, tk) * ntail / n
         art_gib = skel_gib + stack + vis
         scratch_gib = struct_gib + art_gib
-        one = f"{lo},{tail['from']}" if tail else f"{lo}"
+        one = f"{lo},{frm}" if tail else f"{lo}"
         i = args.index("--vq-layers")
         steps.append(_step("fit", "fit-moe", args,
                            {"args": [*args[:i], "--vq-layers", one, *args[i + 2:]],
@@ -240,7 +275,11 @@ def compile_recipe(r: dict) -> tuple[dict, list[str]]:
     else:
         d, k = geometry(r.get("geo"))
         _legal(prof, d, k)
-        lo, hi = _layers(prof)
+        vq, spec = _layers(prof)
+        lo, hi = vq[0], vq[-1]
+        if "," in spec:          # fit-dense --layers takes a range only
+            raise RecipeError(f"the profile's VQ layers are not contiguous ({spec}); "
+                              "fit-dense takes one range")
         fit, build = f"{work}/fit", f"{work}/build"
         base_gib = (by["carry"] + by["embed"]) * (bits + 32 / group) / 16
         art_gib = base_gib + _stack_gib(prof, d, k) + vis

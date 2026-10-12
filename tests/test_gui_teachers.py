@@ -29,7 +29,7 @@ def lab(tmp_path, monkeypatch):
     u = fam / "odd" / "teachers" / "X"
     u.mkdir(parents=True)
     (u / "profile.json").write_text(json.dumps({"unknown_family": True}))
-    monkeypatch.setattr(T.registry, "_family_dirs", lambda: [fam])
+    monkeypatch.setattr(T.registry, "family_dirs", lambda: [fam])
     monkeypatch.setattr(T.registry, "teacher_caches", lambda t=None: [{"teacher": "Org--Moe"}])
     monkeypatch.setattr(T, "_fits", lambda: {("qwen3_5", "Org--Moe"): {"d4-K256": 12}})
     from vqlab.agents import model_scan
@@ -65,3 +65,33 @@ def test_profile_accepts_only_scanned_paths(lab, monkeypatch):
     assert T.profile({"path": "/etc"})["ok"] is False and started == []
     r = T.profile({"path": str(lab / "models" / "Org--Other")})
     assert r["ok"] and len(started) == 1
+
+
+@pytest.mark.parametrize("outcome, want", [
+    ("rc", "family-profile exited 2: trace | bad header"),
+    ("timeout", "family-profile timed out after 30 min"),
+    ("ok", None)])
+def test_a_failed_profile_is_shown_on_its_row(lab, monkeypatch, outcome, want):
+    import subprocess
+    monkeypatch.setattr(T, "_PROFILE_ERRORS", {})
+    monkeypatch.setattr(T.qf, "cli_launch", lambda: (["vqlab"], {}, None))
+
+    def run(argv, **k):
+        if outcome == "timeout":
+            raise subprocess.TimeoutExpired(argv, 1800)
+        return subprocess.CompletedProcess(argv, 2 if outcome == "rc" else 0, "", "trace\nbad header\n")
+    monkeypatch.setattr(T.subprocess, "run", run)
+    monkeypatch.setattr(T.threading, "Thread", lambda target, daemon: type(
+        "Th", (), {"start": lambda self: target()})())
+    assert T.profile({"path": str(lab / "models" / "Org--Other")})["ok"]
+    [u] = T.teachers()["unprofiled"]
+    assert u["profile_error"] == want and u["profiling"] is False
+
+
+def test_profile_survives_an_unreadable_scan(lab, monkeypatch):
+    from vqlab.agents import model_scan
+
+    def broken():
+        raise ValueError("bad json")
+    monkeypatch.setattr(model_scan, "load", broken)
+    assert T.profile({"path": str(lab / "models" / "Org--Other")})["ok"] is False

@@ -31,3 +31,35 @@ def test_a_pin_is_recorded_as_its_source(tmp_path, monkeypatch):
 def test_no_index_is_empty(tmp_path, monkeypatch):
     monkeypatch.setenv("VQLAB_RECORDS", str(tmp_path))
     assert scores.latest() == []
+
+
+def test_unidentified_bytes_are_not_a_score(tmp_path, monkeypatch):
+    monkeypatch.setenv("VQLAB_RECORDS", str(tmp_path))
+    cache = {"dir": str(tmp_path / "c")}
+    for fp in (None, "", "unreadable: no index", "f1"):
+        scores.append(_m("/a", fp=fp), "prose", cache, {"mean_kl_millinats": 1.0})
+    assert [r["fingerprint"] for r in scores.latest()] == ["f1"]
+
+
+def test_kl_ladder_indexes_resumed_cells_once_and_skips_changed_rungs(tmp_path, monkeypatch):
+    from vqlab.score import kl_ladder
+    monkeypatch.setenv("VQLAB_RECORDS", str(tmp_path))
+    meta = {"prose": {"dir": str(tmp_path / "c-prose")}, "code": {"dir": str(tmp_path / "c-code")}}
+    table = {"a": {"prose": {"mean_kl_millinats": 5.0}, "code": {"mean_kl_millinats": 6.0}},
+             "b": {"prose": {"mean_kl_millinats": 7.0}}}
+    before = {"a": _m("/a", fp="fa"), "b": _m("/b", fp="fb")}
+    kl_ladder.index_cells(table, before, ["b"], meta)
+    kl_ladder.index_cells(table, before, ["b"], meta)          # a resumed rerun: nothing new
+    rows = scores.read()
+    assert sorted((r["fingerprint"], r["corpus"]) for r in rows) == [("fa", "code"), ("fa", "prose")]
+
+
+def test_kl_ladder_index_failure_only_warns(tmp_path, monkeypatch, capsys):
+    from vqlab.score import kl_ladder
+    monkeypatch.setenv("VQLAB_RECORDS", str(tmp_path))
+
+    def boom(*a, **k):
+        raise OSError("disk full")
+    monkeypatch.setattr(scores, "append", boom)
+    kl_ladder.index_cells({"a": {"prose": {}}}, {"a": _m("/a")}, [], {"prose": {"dir": "c"}})
+    assert "disk full" in capsys.readouterr().out

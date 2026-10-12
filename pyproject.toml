@@ -35,6 +35,8 @@ dependencies = [
     "mlx-lm>=0.31.0,<0.33",
     "numpy>=2.0",
     "safetensors>=0.4",
+    # Hub downloads and HF-cache teachers (the GUI's Downloads, recipe sources)
+    "huggingface_hub>=0.23",
     # the architecture files (deepseek_v4, qwen4_exp, ...) and the runtime the
     # artifacts are served by: one copy, vqlab.family.arch loads them
     "knurlogic>=0.1.3",
@@ -43,6 +45,8 @@ dependencies = [
 [project.optional-dependencies]
 # kl/ppl scoring and check-release's tokenizer round-trip
 score = ["transformers>=4.57"]
+# the image smoke (vision-smoke, check-release on an artifact with a tower)
+vision = ["mlx-vlm>=0.5", "transformers>=4.57", "pillow"]
 test = ["pytest", "ruff", "build"]
 
 [project.urls]

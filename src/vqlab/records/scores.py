@@ -23,10 +23,17 @@ def path() -> pathlib.Path:
     return config.registry_dir() / "scores.jsonl"
 
 
-def append(measured: dict, corpus: str, cache: dict, rec: dict) -> None:
+def key(line: dict) -> tuple:
+    """What makes two lines the same measurement: bytes, runtime, instrument
+    and the number itself."""
+    return (line.get("fingerprint"), line.get("runtime"), line.get("cache"), line.get("kl_mnats"))
+
+
+def append(measured: dict, corpus: str, cache: dict, rec: dict, seen: set | None = None) -> bool:
     """One scored cell. `measured` is provenance.measured(rung dir); `corpus`
     the cache's name (prose / code / lit); `cache` the kl-ladder cache meta;
-    `rec` the scorer's record."""
+    `rec` the scorer's record. With `seen` (keys of lines already indexed),
+    a cell already there is not written twice; returns whether it was."""
     line = {
         "time": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
         "artifact": config.portable(measured.get("pin", {}).get("source") or measured["path"]),
@@ -40,10 +47,15 @@ def append(measured: dict, corpus: str, cache: dict, rec: dict) -> None:
         "kl_mnats": rec.get("mean_kl_millinats"), "kl_sem_mnats": rec.get("kl_sem_millinats"),
         "ppl": rec.get("ppl"), "top1": rec.get("top1_agreement"),
     }
+    if seen is not None:
+        if key(line) in seen:
+            return False
+        seen.add(key(line))
     p = path()
     p.parent.mkdir(parents=True, exist_ok=True)
     with open(p, "a") as f:
         f.write(json.dumps(line) + "\n")
+    return True
 
 
 def read() -> list[dict]:
@@ -62,8 +74,12 @@ def read() -> list[dict]:
 
 def latest() -> list[dict]:
     """The newest line per (fingerprint, runtime, cache): a rescore of the
-    same bytes on the same instrument replaces the older number."""
+    same bytes on the same instrument replaces the older number. A line
+    whose bytes were never identified names no artifact, so it is skipped."""
     keep = {}
     for r in read():
+        fp = r.get("fingerprint")
+        if not fp or str(fp).startswith("unreadable"):
+            continue
         keep[(r.get("fingerprint"), r.get("runtime"), r.get("cache"))] = r
     return list(keep.values())

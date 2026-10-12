@@ -483,7 +483,7 @@ def resolve_recorded(path: str) -> str:
 _PLACEHOLDER = re.compile(r"(^|=)<(teachers|models|scratch)>(?=/|$)")
 
 
-_HF_REF = re.compile(r"(^|=)hf://([^/@\s]+)/([^/@\s]+)@([0-9a-f]+)(?=/|$)")
+_HF_REF = re.compile(r"(^|=)hf://([^/@\s]+)/([^/@\s]+)@([0-9a-f]{7,})(?=/|$)")
 
 
 def hf_cache() -> pathlib.Path:
