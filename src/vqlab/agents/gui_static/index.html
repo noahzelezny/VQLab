@@ -287,6 +287,7 @@ details.adv .kv{margin-top:8px}
 .mini.pri{color:var(--acc);border-color:var(--acc)}.mini.danger{color:var(--bad);border-color:var(--bad)}
 .tag{font-size:.72em;letter-spacing:.08em;padding:0 5px;border:1px solid var(--warn);color:var(--warn);border-radius:var(--r)}
 .badge{margin-left:6px;padding:0 5px;border-radius:8px;background:var(--acc);color:var(--accfg);font-size:.8em}.badge[hidden]{display:none}
+.jdbox{width:min(640px,100%);max-height:90vh;min-height:0}.jdsteps{overflow:auto;max-height:28vh;min-height:4em}.jstep{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.6fr) 3em 6em;gap:10px;padding:3px 0;border-top:1px solid var(--line);font-size:.85em}.jstep>*{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.jstep .m{color:var(--faint)}.jstep .t{text-align:right}.jdwarn{color:var(--warn)}.jdbad{color:var(--bad);overflow-wrap:anywhere}
 .dlbox{width:min(560px,100%)!important;height:min(420px,70vh)!important}
 .dlbody{flex:1;overflow:auto;padding:8px 14px}
 .dlrow{padding:8px 0;border-bottom:1px solid var(--line)}
@@ -638,7 +639,7 @@ function allocation(t,r){
 // ================================================================ state
 const JOBS_SNAPSHOT={"snapshot":null,"gpu":{"held":false,"by":null},"queues":[]};
 let JDRAFTS=[];  // client-side draft jobs; nothing here runs anything
-const LIVE={on:false,queues:JOBS_SNAPSHOT.queues,gpu:JOBS_SNAPSHOT.gpu,at:JOBS_SNAPSHOT.snapshot};
+const LIVE={on:false,files:[],ferr:'',queues:JOBS_SNAPSHOT.queues,gpu:JOBS_SNAPSHOT.gpu,at:JOBS_SNAPSHOT.snapshot};
 const PAGES=[{k:'library',n:'Library'},{k:'recipe',n:'Recipe'},{k:'jobs',n:'Jobs'},{k:'storage',n:'Storage'}];
 const ICON={library:'<svg viewBox="0 0 24 24"><path d="M4 19V5M10 19V9M16 19v-6M22 19H2"/></svg>',recipe:'<svg viewBox="0 0 24 24"><path d="M3 18C8 18 8 6 13 6s5 12 8 12"/><circle cx="13" cy="6" r="2"/></svg>',jobs:'<svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h10M4 18h13"/><circle cx="19" cy="12" r="2"/></svg>',storage:'<svg viewBox="0 0 24 24"><ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6v12c0 1.7 3.6 3 8 3s8-1.3 8-3V6M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></svg>'};
 let libCols={kl:false,bpw:false};
@@ -649,12 +650,15 @@ if(!draft.size){const t=TE(draft.teacher);resolveAt(t,draft,(t.xr[0]+t.xr[1])/2)
 
 // ================================================================ header
 const when=iso=>{const d=new Date(iso);return isNaN(d)?'':d.toLocaleString([],{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit',hour12:false})};
+let pollSeq=0;
 async function poll(){if(location.protocol==='file:')return;
-  const [qr,rr]=await Promise.all([api('/api/queues?n=40'),api('/api/runs?n=1')]);
+  const my=++pollSeq,[qr,rr,fr]=await Promise.all([api('/api/queues?n=40'),api('/api/runs?n=1'),api('/api/jobs/files')]);
+  if(my!==pollSeq)return;
+  const fok=fr.ok&&Array.isArray(fr.j),ferr=fok?'':'queue files not loaded ('+(fr.status||'no response')+')';
   if(!qr.ok||!rr.ok||!rr.j||!Array.isArray(qr.j))return;
   const q=qr.j,r=rr.j,h=r.gpu&&r.gpu.lease_holder,g=r.gpu&&!r.gpu.error?{held:!!h,by:h?(h.holder||h.cmd||h.name||'unknown'):null}:null;
-  const ch=JSON.stringify([q,g])!==JSON.stringify([LIVE.queues,LIVE.gpu])||!LIVE.on;
-  LIVE.on=true;LIVE.queues=q;LIVE.gpu=g;if(ch&&page===2)render()}
+  const ch=JSON.stringify([q,g,fok?fr.j:LIVE.files,ferr])!==JSON.stringify([LIVE.queues,LIVE.gpu,LIVE.files,LIVE.ferr])||!LIVE.on;
+  LIVE.on=true;if(fok)LIVE.files=fr.j;LIVE.ferr=ferr;LIVE.queues=q;LIVE.gpu=g;if(ch&&page===2)render()}
 loadFleet();poll();setInterval(()=>{if(page===2||!LIVE.on)poll()},10000);
 function renderFlow(){
   const DL='<button class="st" id="dlnav"><svg viewBox="0 0 24 24"><path d="M12 4v11M7 11l5 5 5-5M5 20h14"/></svg><span class="n">Downloads</span><span class="badge" id="dlbadge" hidden></span></button>';
@@ -1044,28 +1048,60 @@ const qState=q=>q.status==='running'&&!q.live?'lost':q.status;
 const SCLS=x=>x==='pass'?'ok':x==='running'?'run':x==='pending'||x==='skipped'||!x?'':'bad';
 const fmtS=s=>s==null?'':s<90?Math.round(s)+' s':s<5400?(s/60).toFixed(1)+' min':(s/3600).toFixed(1)+' h';
 const CLI=(j,pre)=>`vqlab queue run ${esc(j.name)}.json${pre?' --preflight':' --detach'}`;
+const qActs=q=>{const b=q.preflight&&q.status==='passed'?['go','full','Start full run']:q.live&&q.status==='running'?['','stop','Stop']:!q.live&&['stopped','failed','deferred','running'].includes(q.status)?['go','resume','Resume']:null;
+  return b?`<div class="foot"><button class="btn ${b[0]}" data-qact="${b[1]}" data-qid="${esc(q.id)}">${b[2]}</button></div>`:''};
+// start/stop/resume confirmation: JD is the open dialog (null = closed); handlers set state, jdDraw only paints
+let JD=null;
+const jdGo=async(u,body)=>{const r=await api(u,body);return{ok:r.ok&&r.j&&r.j.ok!==false,j:r.j,msg:(r.j&&(r.j.error||r.j.output))||'request failed ('+r.status+')'}};
+function jdDraw(){const m=$('#jdlg'),d=JD;m.classList.toggle('hidden',!d);if(!d)return;
+  const kv=(a,b)=>`<div class="kv2"><span>${a}</span><b>${b}</b></div>`,p=d.plan,bad=p?p.problems.length:0;
+  let h;
+  if(d.kind!=='start')h=`<div class="hfttl">${d.kind==='stop'?'Stop':'Resume'} ${esc(d.name)}</div><div class="hfnote">${d.kind==='stop'?'Stops the running step; the queue can be resumed.':'Resumes from the step that did not pass.'}</div>`;
+  else if(!p)h=`<div class="hfttl">${d.planFailed?'Cannot plan':'Planning...'}</div>`;
+  else h=`<div class="hfttl">${esc(p.name)}</div>${kv('run',p.preflight?'preflight: each step, small real version':'full run')}
+    <div class="jdsteps"><div class="jstep ro"><span>step</span><span>command</span><span>GPU</span><span class="t">full run</span></div>${p.steps.map(x=>`<div class="jstep"><span title="${esc(x.name)}">${esc(x.name)}</span><span class="m" title="${esc(x.cmd)}">${esc(x.cmd)}</span><span>${x.gpu?'GPU':''}</span><span class="t">${x.eta_s==null?'unknown':fmtS(x.eta_s)}</span></div>`).join('')}</div>
+    ${kv('estimated time (full run)',p.eta_s==null?'unknown':fmtS(p.eta_s))}${kv('disk written',p.writes?gib(p.writes):p.preflight?'small':gib(0))}${kv('scratch free',p.scratch_free==null?'unknown':gib(p.scratch_free))}
+    ${p.gpu_held_by?`<div class="jdwarn">GPU held by ${esc(p.gpu_held_by.holder||p.gpu_held_by.cmd||p.gpu_held_by.name||'another process')}</div>`:''}${p.exo_placed.length?`<div class="jdwarn">exo has ${p.exo_placed.length} placed instance${p.exo_placed.length>1?'s':''}</div>`:''}
+    ${p.problems.map(x=>`<div class="jdbad">${esc(x)}</div>`).join('')}`;
+  const lbl=d.kind==='stop'?'Stop':d.kind==='resume'?'Resume':p&&p.preflight?'Start preflight':'Start full run';
+  const keep=!d.busy&&(d.kind!=='start'||p&&!bad);m.innerHTML=`<div class="hfbox jdbox">${h}${d.err?`<div class="jdbad">${esc(d.err)}</div>`:''}<div class="hfbtns"><button class="btn" data-jd="cancel" ${d.busy?'disabled':''}>Cancel</button><button class="btn go" data-jd="ok" ${d.busy||bad||(d.kind==='start'&&!p)?'disabled':''}>${lbl}</button></div></div>`;m.querySelector(keep?'[data-jd=ok]':'[data-jd=cancel]')?.focus()}
+async function jdPlan(d){const r=await jdGo('/api/jobs/plan',d.body);if(JD!==d)return;
+  if(r.ok)d.plan=r.j;else{d.planFailed=true;d.err=r.msg}jdDraw()}
+async function jdOpen(d){JD=d;jdDraw();if(d.kind==='start')await jdPlan(d)}
+async function jdOk(){const d=JD;if(!d||d.busy)return;d.busy=true;d.err='';jdDraw();
+  const r=d.kind==='start'?await jdGo('/api/jobs/start',{...d.body,token:d.plan.token}):await jdGo('/api/jobs/'+d.kind,{id:d.body.id});
+  if(JD!==d)return;d.busy=false;
+  if(!r.ok){d.err=r.msg;if(d.kind==='start'){d.plan=null;d.planFailed=false;jdDraw();await jdPlan(d)}else jdDraw();return}
+  JD=null;jdDraw();if(r.j.id)jobSel=r.j.id;await poll();
+  if(r.j.id&&LIVE.queues.some(x=>x.id===r.j.id&&x.preflight))showPre=true;render()}
+document.body.insertAdjacentHTML('beforeend','<div class="modal hidden" id="jdlg"></div>');
+addEventListener('keydown',e=>{if(e.key==='Escape'&&JD&&!JD.busy){JD=null;jdDraw()}});
+$('#jdlg').onclick=e=>{if((e.target.id==='jdlg'||e.target.dataset.jd==='cancel')&&JD&&!JD.busy){JD=null;jdDraw()}else if(e.target.dataset.jd==='ok')jdOk()};
 function pgJobs(){
   const qs=LIVE.queues.filter(q=>showPre||!q.preflight),npre=LIVE.queues.filter(q=>q.preflight).length;
-  const sel=JDRAFTS.find(x=>x.id===jobSel)||qs.find(x=>x.id===jobSel)||JDRAFTS[0]||qs[0];
+  const qf=LIVE.files.map(f=>({id:'f:'+f.file,name:f.name,file:f.file})),sel=JDRAFTS.find(x=>x.id===jobSel)||qf.find(x=>x.id===jobSel)||qs.find(x=>x.id===jobSel)||JDRAFTS[0]||qf[0]||qs[0];
   const drow=jb=>`<button class="row" aria-selected="${sel&&jb.id===sel.id}" data-job="${jb.id}"><span class="n">${esc(jb.name)}</span><span class="act"><span class="state draft">draft</span></span>
     <span class="d">${esc(TE(jb.recipe.teacher).short)} · ${jb.recipe.mode==='affine'?'affine q'+jb.recipe.bits:jb.recipe.strat} · ${f1(sizeOf(TE(jb.recipe.teacher),jb.recipe))} GiB</span>
     <span class="stepbar">${(KSTEPS[jb.kind]||STEPS).map(()=>'<i></i>').join('')}</span></button>`;
+  const frow=f=>`<button class="row" aria-selected="${sel&&f.id===sel.id}" data-job="${esc(f.id)}"><span class="n">${esc(f.name)}</span><span class="act"><span class="state ready">ready</span></span><span class="d">${esc(f.file)}</span></button>`;
   const qrow=q=>{const n=q.steps.length,ok=q.steps.filter(x=>x.status==='pass').length;return `<button class="row" aria-selected="${sel&&q.id===sel.id}" data-job="${esc(q.id)}"><span class="n">${esc(q.name)}${q.preflight?' · preflight':''}</span><span class="act"><span class="state ${QCLS[qState(q)]||'queued'}">${esc(qState(q))}</span></span>
     <span class="d">${esc(when(q.created))} · ${ok} / ${n} steps</span>
     <span class="stepbar">${q.steps.map(x=>`<i class="${SCLS(x.status)}" title="${esc(x.name)}: ${esc(x.status)}"></i>`).join('')}</span></button>`};
-  const rows=JDRAFTS.map(drow).join('')+qs.map(qrow).join('')||'<div class="ro">no queue runs</div>';
+  const rows=(LIVE.ferr?`<div class="jdbad">${esc(LIVE.ferr)}</div>`:'')+JDRAFTS.map(drow).join('')+qf.map(frow).join('')+qs.map(qrow).join('')||'<div class="ro">no queue runs</div>';
   let det='';
   if(sel&&sel.recipe){const j=sel,t=TE(j.recipe.teacher),g=sizeOf(t,j.recipe),k=klOf(t,j.recipe,g);
     det=`<div class="jobline" style="margin:0 0 10px"><span class="j">${esc(j.name)}</span><span class="state draft">draft</span></div>${review(j,t,g,k)}
       <div class="cmd" style="visibility:${j.cli?'visible':'hidden'}">vqlab queue run recipe.json --preflight\nvqlab queue run recipe.json --detach</div>
       <div class="foot"><button class="btn go" data-jact="start">Start</button><button class="btn" data-save="${j.id}">Save recipe.json</button><button class="btn" data-jact="discard">Discard</button>${(j.kind||'build')==='build'?'<button class="btn" data-jact="edit">Edit recipe</button>':''}</div>`}
+  else if(sel&&sel.file)det=`<div class="jobline" style="margin:0 0 10px"><span class="j">${esc(sel.name)}</span><span class="state ready">ready</span></div><div class="qmeta">${esc(sel.file)}</div>
+      <div class="foot"><button class="btn go" data-qact="start-file" data-file="${esc(sel.file)}">Start</button></div>`;
   else if(sel){const q=sel,kv=(a,b)=>`<div class="kv2"><span>${a}</span><b>${b}</b></div>`;
     det=`<div class="jobline" style="margin:0 0 10px"><span class="j">${esc(q.name)}</span><span class="state ${QCLS[qState(q)]||'queued'}">${esc(qState(q))}</span></div>
-      <div class="qmeta">${[esc((q.source||'').split('/').pop()),esc((q.commit||'').slice(0,10)),esc(when(q.created)),q.host?esc(q.host):'',q.preflight?'preflight':''].filter(Boolean).join(' · ')}</div>
-      
+      <div class="qmeta">${[esc((q.source||'').split('/').pop()),esc((q.commit||'').slice(0,10)),esc(when(q.created)),q.host?esc(q.host):'',q.preflight?'preflight':'',q.live&&q.eta&&q.eta.eta_s!=null?'ETA '+fmtS(q.eta.eta_s)+(q.eta.finish?', done '+esc(when(q.eta.finish)):''):''].filter(Boolean).join(' · ')}</div>
+      ${qActs(q)}
       <div class="qsteps" style="--nw:${Math.min(64,Math.max(...q.steps.map(x=>x.name.length),10))+1}ch"><div class="qstep qhead"><span></span><span>step</span><span>status</span><span>duration</span><span>exit</span></div>${q.steps.map((x,ix)=>{const nt=[...(x.reasons||[]),...(x.warnings||[])].filter(n=>!/^exit code -?\d+$/.test(n)),open=stepOpen===q.id+':'+ix,more=(x.tail&&x.tail.length)||x.cmd;return `<button class="qstep ${SCLS(x.status)||'wait'}${open?' open':''}" data-step="${q.id}:${ix}" ${more?'':'disabled'}><span class="m"></span><span class="c">${esc(x.name)}</span><span class="s">${esc(x.status)}</span><span class="du">${x.seconds!=null?fmtS(x.seconds):''}</span><span class="ex" title="${esc(nt.join(' · '))}">${[x.rc!=null&&x.rc!==0?'exit '+x.rc:'',x.attempts>1?x.attempts+' tries':'',esc(nt.join(' · '))].filter(Boolean).join(' · ')}</span></button>${open?`<div class="qmore">${x.tail&&x.tail.length?`<pre>${esc(x.tail.join('\n'))}</pre>`:''}${x.cmd?`<div class="qcmd">${esc(x.cmd)}</div>`:''}</div>`:''}`}).join('')}</div>`}
   else det='<div class="ro">nothing selected</div>';
-  return `<section class="panel"><h2>Jobs ${INFO('Queue runs are read from ~/.vqlab/queues (vqlab queue); one segment per step. Drafts live in this browser only and run nothing: Start shows the commands, they are launched from the CLI.')}</h2>
+  return `<section class="panel"><h2>Jobs ${INFO('Queue runs are read from the vqlab queues folder; one segment per step. Queue files come from the queue-files folder in the lab notes folder. Start shows what will run and asks first. Publish, push and delete are never done here. Drafts live in this browser only and run nothing.')}</h2>
   <div class="jobs2">
     <div><div class="ro" style="display:flex;justify-content:space-between;margin-bottom:6px"><span>queue runs</span><button class="linkbtn" data-pre="1">${showPre?'☑':'☐'} preflight (${npre})</button></div><div class="jobsel">${rows}</div></div>
     <div class="jdet">${det}</div>
@@ -1262,6 +1298,9 @@ function render(){
     $('#queue').onclick=()=>{const t=TE(draft.teacher);JDRAFTS.unshift({id:'d'+Date.now(),name:t.short.toLowerCase().replace(/[^a-z0-9]+/g,'-')+'-'+(draft.mode==='affine'?'q'+draft.bits:f1(sizeOf(t,draft))),state:'draft',kind:'build',recipe:{...draft}});jobSel=JDRAFTS[0].id;draft=newRecipe();resolveAt(t,draft,(t.xr[0]+t.xr[1])/2);page=2;render()}}
   if(page===2){fitJobs();document.querySelectorAll('[data-step]').forEach(b=>b.onclick=()=>{const d=$('.jdet'),y=d&&d.scrollTop;stepOpen=stepOpen===b.dataset.step?'':b.dataset.step;render();const e=$('.jdet');if(e)e.scrollTop=y});document.querySelectorAll('[data-job]').forEach(b=>b.onclick=()=>{jobSel=b.dataset.job;render()});
     document.querySelectorAll('[data-pre]').forEach(b=>b.onclick=()=>{showPre=!showPre;render()});
+    document.querySelectorAll('[data-qact]').forEach(b=>b.onclick=()=>{const a=b.dataset.qact,q=LIVE.queues.find(x=>x.id===b.dataset.qid);
+      if(a==='start-file')jdOpen({kind:'start',body:{file:b.dataset.file},plan:null,err:'',busy:false});
+      else if(q)jdOpen({kind:a==='full'?'start':a,name:q.name,body:{id:q.id},plan:null,err:'',busy:false})});
     document.querySelectorAll('[data-jact]').forEach(b=>b.onclick=()=>{const i=JDRAFTS.findIndex(x=>x.id===jobSel),j=JDRAFTS[i],a=b.dataset.jact;if(!j)return;
       if(a==='start')j.cli=true;
       else{JDRAFTS.splice(i,1);jobSel='';if(a==='edit'){draft={...j.recipe};const S=skelOf(draft.teacher);for(const q of ['pAttn','pEmb','pRouter'])if(draft[q]==null)draft[q]=draft.mode==='vq'?S[q]:AFFW[q];page=1}}

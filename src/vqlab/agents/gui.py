@@ -20,12 +20,17 @@ nothing here computes a number of its own:
   /api/models/found   models already on this machine (vqlab lab scan; rescanned at
                     launch and by POST /api/models/scan)
 
+  /api/jobs/files    queue files the Jobs page can start (<records>/queue-files)
+  POST /api/jobs/plan|start|stop|resume  a queue run (agents/jobs.py)
+
 Stdlib only; reads index files and small JSON, never a tensor, so it is safe
-on a box that is mid-experiment. Three POSTs, same-origin JSON only, on
+on a box that is mid-experiment. POSTs are same-origin JSON only, on
 127.0.0.1: /api/settings writes one key of the user's config file,
-/api/models/scan rescans, /api/pick-folder opens the folder chooser. There
-is no way to launch or delete anything from the page. Launching stays with the CLI and MCP `run`, where the GPU
-lease and exo gates live.
+/api/models/scan rescans, /api/pick-folder opens the folder chooser, and
+/api/jobs/* start, stop or resume a queue through `vqlab queue run` (so its
+pinned tree, GPU lease and exo gate apply); a start needs the token of the
+plan the operator confirmed. Nothing on the page publishes, pushes or
+deletes.
 """
 from __future__ import annotations
 
@@ -43,6 +48,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 
 from vqlab import config
+from vqlab.agents import jobs
+
 PAGE = pathlib.Path(__file__).resolve().parent / "gui_static" / "index.html"
 
 
@@ -201,6 +208,7 @@ def queues_snapshot(n=40):
     """Most recent queue runs, newest first. `live` reuses the runner-alive
     check `vqlab queue status` makes (core.box.gpu_lease.pid_alive on state.pid)."""
     from vqlab.core.box.gpu_lease import pid_alive
+    from vqlab.queue import eta as queue_eta
     from vqlab.queue import files as rq
     dirs = sorted((p for p in rq.queues_dir().glob("*") if (p / "state.json").exists()),
                   key=lambda p: p.name, reverse=True)[:max(1, n)]
@@ -211,8 +219,10 @@ def queues_snapshot(n=40):
         except ValueError:
             continue
         sdirs = {p.name.split("-", 1)[0]: p for p in (d / "steps").glob("*") if p.is_dir()}
-        out.append({"id": d.name, "name": s.get("name"), "status": s.get("status"),
-                    "live": bool(pid_alive(s.get("pid"))), "preflight": bool(s.get("preflight")),
+        live = bool(pid_alive(s.get("pid")))
+        out.append({"id": d.name, "name": s.get("name"), "status": s.get("status"), "live": live,
+                    "eta": queue_eta.queue_eta(d, rq.queues_dir()) if live else None,
+                    "preflight": bool(s.get("preflight")),
                     "created": s.get("created"), "host": s.get("host"), "commit": s.get("commit"),
                     "source": s.get("source"),
                     "steps": [dict({k: r.get(k) for k in ("name", "status", "seconds", "started", "finished",
@@ -224,6 +234,10 @@ def queues_snapshot(n=40):
 
 def api_queues(q):
     return queues_snapshot(int(q.get("n", ["40"])[0]))
+
+
+def api_jobs_files(_q):
+    return jobs.queue_files()
 
 
 def api_settings(_q):
@@ -375,9 +389,11 @@ ROUTES = {"/api/fleet": api_fleet, "/api/provenance": api_provenance,
           "/api/fits": api_fits, "/api/families": api_families, "/api/runs": api_runs,
           "/api/queues": api_queues, "/api/settings": api_settings,
           "/api/scratch": api_scratch, "/api/storage/usage": api_storage_usage,
-          "/api/models/found": api_models_found, "/api/scratch/reclaimable": api_scratch_reclaimable}
+          "/api/models/found": api_models_found,
+          "/api/jobs/files": api_jobs_files, "/api/scratch/reclaimable": api_scratch_reclaimable}
 POSTS = {"/api/settings": post_settings, "/api/models/scan": post_models_scan,
-         "/api/pick-folder": post_pick_folder}
+         "/api/pick-folder": post_pick_folder, "/api/jobs/plan": jobs.plan,
+         "/api/jobs/start": jobs.start, "/api/jobs/stop": jobs.stop, "/api/jobs/resume": jobs.resume}
 
 
 class Handler(BaseHTTPRequestHandler):

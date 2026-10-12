@@ -95,7 +95,7 @@ from vqlab.core.box import gpu_lease
 from vqlab.queue import report
 from vqlab.queue import reserve as resv
 from vqlab.queue import steps as _steps
-from vqlab.queue.files import (REPO, _now, create, git, load_queue, load_state,
+from vqlab.queue.files import (REPO, _now, cli_launch, create, git, load_queue, load_state,
                                package_hash, save_state)
 from vqlab.queue.remote import run_on
 from vqlab.records import step_verdict as sv
@@ -359,15 +359,12 @@ def _record_override(qdir, held):
 
 def _detach(qdir, a) -> int:
     """Re-launch this queue as `queue run --resume` in its own session."""
-    cmd = [sys.executable, "-m", "vqlab.cli", "queue", "run", "--resume", str(qdir),
-           "--lease-wait", str(a.lease_wait)] + (["--force"] if a.force else []) \
+    pre, env, cwd = cli_launch()
+    cmd = pre + ["queue", "run", "--resume", str(qdir), "--lease-wait", str(a.lease_wait)] \
+        + (["--force"] if a.force else []) \
         + (["--override-reservation"] if a.override_reservation else []) \
         + (["--keep-preflight"] if a.keep_preflight else [])
-    env = dict(os.environ)
-    checkout = (REPO / "src" / "vqlab").is_dir()      # a checkout; an installed wheel needs no path
-    if checkout:
-        env["PYTHONPATH"] = str(REPO / "src") + (os.pathsep + env["PYTHONPATH"] if env.get("PYTHONPATH") else "")
-    p = subprocess.Popen(cmd, cwd=str(REPO if checkout else pathlib.Path.cwd()), env=env,
+    p = subprocess.Popen(cmd, cwd=cwd, env=env,
                          stdin=subprocess.DEVNULL, stdout=open(qdir / "queue.log", "ab"),
                          stderr=subprocess.STDOUT, start_new_session=True)
     print(f"detached (pid {p.pid}); vqlab queue status {qdir}")

@@ -68,6 +68,20 @@ def installed() -> bool:
     return not (REPO / ".git").exists()
 
 
+def cli_launch() -> tuple[list[str], dict, str]:
+    """(argv prefix, env, cwd) to run `vqlab` as this process does: from a
+    source tree, its src/ on PYTHONPATH and the tree as cwd; installed, the
+    package needs no path and runs where it was asked from."""
+    import os
+    import sys
+    env = dict(os.environ)
+    src = str(REPO / "src")
+    if not (REPO / "src" / "vqlab").is_dir():
+        return [sys.executable, "-m", "vqlab.cli"], env, str(pathlib.Path.cwd())
+    env["PYTHONPATH"] = src + (os.pathsep + env["PYTHONPATH"] if env.get("PYTHONPATH") else "")
+    return [sys.executable, "-m", "vqlab.cli"], env, str(REPO)
+
+
 def package_hash() -> str:
     import hashlib
     h = hashlib.sha256()

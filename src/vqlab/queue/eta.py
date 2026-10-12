@@ -48,11 +48,13 @@ def _key(st):
             tuple(str(a) for a in st.get("args", [])))
 
 
-def history(qroot: pathlib.Path, st: dict, exclude: pathlib.Path | None = None) -> list[float]:
-    """Seconds of every passed, non-preflight past run of the same step."""
-    want, out = _key(st), []
+def past_runs(qroot: pathlib.Path, exclude: pathlib.Path | None = None) -> dict:
+    """{step key: [seconds, ...]} of every passed step of every non-preflight
+    queue under qroot: one read of the queues dir for any number of steps."""
+    out: dict = {}
+    skip = pathlib.Path(exclude).resolve() if exclude is not None else None
     for q in sorted(pathlib.Path(qroot).glob("*")):
-        if exclude is not None and q.resolve() == pathlib.Path(exclude).resolve():
+        if skip is not None and q.resolve() == skip:
             continue
         try:
             s = json.loads((q / "state.json").read_text())
@@ -62,9 +64,20 @@ def history(qroot: pathlib.Path, st: dict, exclude: pathlib.Path | None = None) 
         if s.get("preflight"):
             continue
         for sd, rec in zip(qd.get("steps", []), s.get("steps", [])):
-            if rec.get("status") == "pass" and rec.get("seconds") and _key(sd) == want:
-                out.append(float(rec["seconds"]))
+            if rec.get("status") == "pass" and rec.get("seconds"):
+                out.setdefault(_key(sd), []).append(float(rec["seconds"]))
     return out
+
+
+def history(qroot: pathlib.Path, st: dict, exclude: pathlib.Path | None = None) -> list[float]:
+    """Seconds of every passed, non-preflight past run of the same step."""
+    return past_runs(qroot, exclude).get(_key(st), [])
+
+
+def median_past(past: dict, st: dict) -> float | None:
+    """The median seconds of a step's past runs in a past_runs() index, or None."""
+    runs = past.get(_key(st))
+    return statistics.median(runs) if runs else None
 
 
 def _from_progress(st, stdout: pathlib.Path, started, now):
@@ -98,7 +111,8 @@ def _from_progress(st, stdout: pathlib.Path, started, now):
 
 
 def step_eta(st: dict, rec: dict, sdir: pathlib.Path, qroot: pathlib.Path,
-             qdir: pathlib.Path | None = None, now: float | None = None) -> dict:
+             qdir: pathlib.Path | None = None, now: float | None = None,
+             past: dict | None = None) -> dict:
     """{'eta_s': float | None, 'basis': str} for one step."""
     now = time.time() if now is None else now
     status = rec.get("status")
@@ -114,7 +128,7 @@ def step_eta(st: dict, rec: dict, sdir: pathlib.Path, qroot: pathlib.Path,
         got = _from_progress(st, stdout, started, now)
         if got:
             return {"eta_s": round(got[0]), "basis": got[1]}
-    past = history(qroot, st, exclude=qdir)
+    past = (past_runs(qroot, exclude=qdir) if past is None else past).get(_key(st), [])
     if past:
         med = statistics.median(past)
         elapsed = (now - started) if (status == "running" and started) else 0.0
@@ -135,9 +149,10 @@ def queue_eta(qdir: pathlib.Path, qroot: pathlib.Path, now: float | None = None)
         q = json.loads((qdir / "queue.json").read_text())
     except (OSError, ValueError):
         q = {"steps": [{"name": r["name"]} for r in s["steps"]]}
-    steps, total = [], 0.0
+    steps, total, past = [], 0.0, past_runs(qroot, exclude=qdir)
     for i, (st, rec) in enumerate(zip(q["steps"], s["steps"])):
-        e = step_eta(st, rec, qdir / "steps" / f"{i:02d}-{_slug(st.get('name', ''))}", qroot, qdir, now)
+        e = step_eta(st, rec, qdir / "steps" / f"{i:02d}-{_slug(st.get('name', ''))}", qroot, qdir, now,
+                     past)
         steps.append(e)
         if rec.get("status") in ("running", "pending"):
             total = None if (total is None or e["eta_s"] is None) else total + e["eta_s"]
