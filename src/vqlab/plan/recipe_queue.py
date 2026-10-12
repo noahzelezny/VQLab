@@ -253,10 +253,7 @@ def compile_recipe(r: dict) -> tuple[dict, list[str]]:
             steps.append(_step("vision", "graft", ["--artifact", out, "--src", src, *_graft_flags(src)],
                                {"full": "grafts the tower in place", "writes_gib": round(by["vision"] + 0.5, 1)},
                                retries=0, timeout_s=3600))
-            # --tower-only: vision-smoke's full path loads through stock
-            # mlx_vlm, which cannot load a VQ dense artifact (it fails the
-            # shipped Qwen3.5-2B the same way); the tower path uses the bundle
-            steps.append(_step("vision-smoke", "vision-smoke", [out, "--tower-only"],
+            steps.append(_step("vision-smoke", "vision-smoke", [out, "--max-tokens", 8],
                                {"full": "reads the artifact, writes nothing", "writes_gib": 0},
                                retries=0, timeout_s=3600))
         else:
@@ -271,8 +268,7 @@ def compile_recipe(r: dict) -> tuple[dict, list[str]]:
     steps.append(_step("runtime-check", "check-bundle", ["--artifact", out, "--strict"],
                        {"full": "a read-only check", "writes_gib": 0}, retries=0, timeout_s=600))
     steps.append(_step("release-check", "check-release",
-                       ["--artifact", out, "--tokenizer-ref", f"{src}/tokenizer.json",
-                        *(["--no-vision-smoke"] if r.get("vision") and by.get("vision") else [])],
+                       ["--artifact", out, "--tokenizer-ref", f"{src}/tokenizer.json"],
                        {"full": "reads the artifact; its smokes are short", "writes_gib": 0},
                        retries=0, timeout_s=2 * 3600))
     if r.get("score"):

@@ -259,6 +259,33 @@ def _load_bundle_module(art):
     return mod
 
 
+def _load_full(art, mod):
+    """Load the whole model through mlx_vlm as a server does: with the
+    artifact's own model.py as the model class (stock mlx_vlm would build its
+    plain arch, which has no VQ layers: "Received N parameters not in model"
+    on every VQ dense rung), and from a view holding only the files the index
+    names, so a sidecar shard (mtp-head-q6.safetensors) is not read as model
+    weights."""
+    import tempfile
+
+    import mlx_vlm.utils as vlm
+    wm = json.loads((art / "model.safetensors.index.json").read_text())["weight_map"] \
+        if (art / "model.safetensors.index.json").exists() else None
+    view = pathlib.Path(tempfile.mkdtemp(prefix="vision-smoke-"))
+    for f in art.iterdir():
+        if f.suffix == ".safetensors" and wm is not None and f.name not in set(wm.values()):
+            continue
+        (view / f.name).symlink_to(f.resolve())
+    if all(hasattr(mod, n) for n in ("Model", "ModelConfig")):
+        stock = vlm.get_model_and_args
+        vlm.get_model_and_args = lambda config: (mod, config.get("model_type"))
+        try:
+            return vlm.load(str(view))
+        finally:
+            vlm.get_model_and_args = stock
+    return vlm.load(str(view))
+
+
 def _tower_only(art, mod, cfg, a):
     """Run the probe image through the artifact's OWN vision tower weights."""
     import mlx.core as mx
@@ -467,10 +494,9 @@ def main() -> int:
 
     # ---- 2. LOAD ----------------------------------------------------------
     import mlx.core as mx
-    from mlx_vlm import load
     from mlx_vlm.prompt_utils import apply_chat_template
 
-    model, processor = load(str(art))
+    model, processor = _load_full(art, mod)
     tower = next((getattr(model, n) for n in
                   ("vision_tower", "visual", "vision_model")
                   if getattr(model, n, None) is not None), None)
@@ -514,9 +540,15 @@ def main() -> int:
 
     # ---- caption, for the human -------------------------------------------
     from mlx_vlm import generate
-    out = generate(model, processor, formatted, [str(img)],
-                   max_tokens=a.max_tokens, verbose=False)
-    cap = out if isinstance(out, str) else getattr(out, "text", str(out))
+    try:
+        out = generate(model, processor, formatted, [str(img)],
+                       max_tokens=a.max_tokens, verbose=False)
+        cap = out if isinstance(out, str) else getattr(out, "text", str(out))
+    except UnicodeDecodeError as exc:
+        # mlx_vlm's BPE streaming detokenizer decodes a token's bytes alone
+        # and raises on a character split across tokens. The caption is for
+        # the human; the gate is the logit response above, which passed.
+        cap = f"(not shown: mlx_vlm's streaming detokenizer failed on a split character: {exc})"
     print(f"\nprobe is {PROBE_DESC}\nmodel says: {cap.strip()}")
     print("\nPASS: an image reached the graph through the artifact's own "
           "shipping runtime and changed the output. (The caption is printed "
