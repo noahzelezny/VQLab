@@ -5,28 +5,52 @@ machine's teachers folder.
     POST /api/downloads/start {repo}     start, or resume a stopped one
     POST /api/downloads/stop {repo}      stop (what is on disk stays; start resumes)
 
-Each download is its own process (`huggingface_hub.snapshot_download` into
-<teachers>/<org>--<name>, the folder layout the model scan and
-`family-profile` read), so the server never blocks and Stop is a signal.
-Progress is the bytes on disk against the repo's file sizes from the Hub,
-never a guess. A finished download triggers a model scan; profiling it is
-the Recipe page's Profile action. Nothing here deletes: removing a model's
-files is the operator's own action.
+Each download is its own process (agents/_fetch.py: `snapshot_download`
+into <teachers>/<org>--<name>, the folder layout the model scan and
+`family-profile` read), so the server never blocks and Stop is a signal to
+its process group. Progress is the bytes on disk against the repo's file
+sizes from the Hub, never a guess. A finished download starts a model scan
+(one at a time, shared with the GUI's Rescan); profiling it is the Recipe
+page's Profile action. Nothing here deletes: removing a model's files is the
+operator's own action.
 """
 from __future__ import annotations
 
 import fcntl
+import importlib
 import json
 import os
 import pathlib
 import re
 import signal
 import subprocess
-import sys
 import threading
 import time
+from fnmatch import fnmatch
+
+from huggingface_hub import HfApi, hf_hub_download
+from huggingface_hub.errors import HfHubHTTPError
 
 from vqlab import config
+from vqlab.agents import model_scan
+from vqlab.util.errors import UserError
+from vqlab.queue import files as qf
+from vqlab.util.fs import dir_bytes, write_json_atomic
+
+def _transport_errors() -> tuple[type[BaseException], ...]:
+    """The hub client's network-error base: httpx under huggingface_hub 1.x,
+    requests under 0.x. Either may be absent, so neither is imported eagerly."""
+    out = []
+    for mod, name in (("httpx", "HTTPError"), ("requests", "RequestException")):
+        try:
+            out.append(getattr(importlib.import_module(mod), name))
+        except ImportError:
+            continue
+    return tuple(out)
+
+
+# a repo the Hub refuses, gates or cannot reach; an index that is not one
+HUB_ERRORS = (HfHubHTTPError, *_transport_errors(), OSError, ValueError, KeyError)
 
 REPO = re.compile(r"^[A-Za-z0-9][\w.-]{0,95}/[\w.-]{1,95}$")
 _LOCK = threading.Lock()
@@ -35,27 +59,10 @@ _PROCS: dict[str, subprocess.Popen] = {}     # this server's children, reaped by
 # (gguf, onnx, pt copies). Weights are allowed by exact name (_plan).
 PATTERNS = ["*.json", "*.jinja", "*.txt", "*.model", "*.tiktoken", "*.vocab", "*.bpe", "*.py", "*.md"]
 INDEX = "model.safetensors.index.json"
+# the fetch's lock (its liveness) and exit-code files, in the download's folder
 LOCKFILE = ".vqlab-download.lock"
-# The child holds a flock on LOCKFILE for its whole life, with its pid in it:
-# a recorded pid is only ever signalled while that lock says it is still ours
-# (a pid alone can be reused by an unrelated process after a restart). It
-# records how it ended: 0 done, 1 failed (its log says why); a stopped child
-# (SIGTERM) records nothing.
-_FETCH = """\
-import fcntl, os, pathlib, sys
-from huggingface_hub import snapshot_download
-d, rc = pathlib.Path(sys.argv[2]), 1
-lk = open(d / ".vqlab-download.lock", "a+")
-lk.truncate(0)
-lk.write(str(os.getpid()))
-lk.flush()
-try:
-    fcntl.flock(lk, fcntl.LOCK_EX)
-    snapshot_download(sys.argv[1], local_dir=d, allow_patterns=sys.argv[3:])
-    rc = 0
-finally:
-    (d / ".vqlab-download-rc").write_text(str(rc))
-"""
+RCFILE = ".vqlab-download-rc"
+LOGFILE = ".vqlab-download.log"
 
 
 def _state_path() -> pathlib.Path:
@@ -70,23 +77,11 @@ def _load() -> dict:
 
 
 def _save(state: dict) -> None:
-    p = _state_path()
-    p.parent.mkdir(parents=True, exist_ok=True)
-    tmp = p.with_suffix(".tmp")
-    tmp.write_text(json.dumps(state, indent=1))
-    tmp.replace(p)
+    write_json_atomic(_state_path(), state)
 
 
 def dest(repo: str) -> pathlib.Path:
     return config.teachers() / repo.replace("/", "--", 1)
-
-
-def _on_disk(d: pathlib.Path) -> int:
-    """Bytes of the repo's files under d, finished or partial (the hub keeps
-    a partial file under .cache/huggingface/download as *.incomplete)."""
-    if not d.is_dir():
-        return 0
-    return sum(f.stat().st_size for f in d.rglob("*") if f.is_file() and not f.is_symlink())
 
 
 def _plan(repo: str) -> tuple[list[str], int]:
@@ -96,9 +91,6 @@ def _plan(repo: str) -> tuple[list[str], int]:
     *.safetensors; never a subfolder's copies. The total is summed over the
     same allow list the fetch uses. The index goes to the hub cache, so a
     refused repo leaves nothing in <teachers>."""
-    from fnmatch import fnmatch
-
-    from huggingface_hub import HfApi, hf_hub_download
     info = HfApi().model_info(repo, files_metadata=True)
     names = {s.rfilename for s in info.siblings}
     if INDEX in names:
@@ -153,39 +145,36 @@ def downloads() -> list[dict]:
         if changed:
             _save(state)
     return [{"repo": r, "dest": config.portable(e["dest"]), "status": e.get("status", "stopped"),
-             "bytes": _on_disk(pathlib.Path(e["dest"])), "total": e.get("total"),
+             # finished or partial: the hub keeps a partial file under
+             # .cache/huggingface/download as *.incomplete
+             "bytes": dir_bytes(e["dest"]), "total": e.get("total"),
              "started": e.get("started")} for r, e in sorted(state.items())]
 
 
 def _ended(e: dict) -> None:
     """Settle an entry whose process is gone: its exit file says done or
     failed; none = stopped. A finished one triggers a model scan."""
-    rc = pathlib.Path(e["dest"]) / ".vqlab-download-rc"
+    rc = pathlib.Path(e["dest"]) / RCFILE
     code = rc.read_text().strip() if rc.is_file() else None
     e["status"] = {"0": "done", None: "stopped"}.get(code, "failed")
     e.pop("pid", None)
     if e["status"] == "done":
-        _rescan()
-
-
-def _rescan() -> None:
-    from vqlab.agents import model_scan
-    threading.Thread(target=model_scan.refresh, daemon=True).start()
+        model_scan.refresh_in_background()
 
 
 def start(body: dict) -> dict:
     repo = str(body.get("repo") or "")
     if not REPO.match(repo):
-        return {"ok": False, "error": "a Hugging Face model id is org/name"}
+        raise UserError("a Hugging Face model id is org/name")
     with _LOCK:
         e = _load().get(repo)
         if e and _alive(repo, e):
             return {"ok": True, "status": "downloading"}
     try:                                         # network: never under _LOCK
         allow, total = _plan(repo)
-    except Exception as exc:                     # not found, gated, offline
+    except HUB_ERRORS as exc:                    # not found, gated, offline
         first = str(exc).strip().splitlines()[0] if str(exc).strip() else type(exc).__name__
-        return {"ok": False, "error": f"cannot read {repo} on the Hub: {first}"}
+        raise UserError(f"cannot read {repo} on the Hub: {first}") from exc
     d = dest(repo)
     d.mkdir(parents=True, exist_ok=True)
     with _LOCK:
@@ -193,9 +182,11 @@ def start(body: dict) -> dict:
         e = state.get(repo)
         if e and _alive(repo, e):                # started by another request meanwhile
             return {"ok": True, "status": "downloading"}
-        (d / ".vqlab-download-rc").unlink(missing_ok=True)
-        with open(d / ".vqlab-download.log", "ab") as log:     # the child keeps its own copy
-            p = subprocess.Popen([sys.executable, "-c", _FETCH, repo, str(d), *allow],
+        (d / RCFILE).unlink(missing_ok=True)
+        pre, env, cwd = qf.cli_launch()          # the interpreter and import path vqlab runs with
+        with open(d / LOGFILE, "ab") as log:     # the child keeps its own copy
+            p = subprocess.Popen([pre[0], "-m", "vqlab.agents._fetch", repo, str(d), LOCKFILE, RCFILE,
+                                  *allow], env=env, cwd=cwd,
                                  stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
                                  stderr=log, start_new_session=True)
         _PROCS[repo] = p
@@ -211,7 +202,7 @@ def stop(body: dict) -> dict:
         state = _load()
         e = state.get(repo)
         if not e or e.get("status") != "downloading":
-            return {"ok": False, "error": "that download is not running"}
+            raise UserError("that download is not running")
         if not _alive(repo, e):
             # ended, or a stale pid nobody holds the lock for: never signal it
             _ended(e)
@@ -220,7 +211,7 @@ def stop(body: dict) -> dict:
         try:
             os.killpg(int(e["pid"]), signal.SIGTERM)    # the fetch and its worker threads
         except (ProcessLookupError, PermissionError) as exc:
-            return {"ok": False, "error": f"could not stop it: {exc}"}
+            raise UserError(f"could not stop it: {exc}") from exc
         e["status"] = "stopped"
         e.pop("pid", None)
         _save(state)

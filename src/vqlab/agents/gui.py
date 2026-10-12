@@ -29,14 +29,18 @@ nothing here computes a number of its own:
                     the steps it would compile to, written nowhere
   POST /api/jobs/plan|start|stop|resume  a queue run (agents/jobs.py)
 
-Stdlib only; reads index files and small JSON, never a tensor, so it is safe
-on a box that is mid-experiment. POSTs are same-origin JSON only, on
-127.0.0.1: /api/settings writes one key of the user's config file,
-/api/models/scan rescans, /api/pick-folder opens the folder chooser, and
-/api/jobs/* start, stop or resume a queue through `vqlab queue run` (so its
-pinned tree, GPU lease and exo gate apply); a start needs the token of the
-plan the operator confirmed. Nothing on the page publishes, pushes or
-deletes.
+Stdlib only, on 127.0.0.1 (never another interface). GETs read index files
+and small JSON, never a tensor. POSTs are same-origin JSON only, and none
+runs lab work in this process: /api/settings writes one key of the user's
+config file; /api/models/scan rescans (agents/model_scan.py, one scan at a
+time); /api/pick-folder opens the folder chooser; /api/teachers/profile runs
+`vqlab family-profile` through the CLI; /api/downloads/* start a Hub fetch
+process or signal it; /api/jobs/* start or resume a queue through `vqlab
+queue run` (so its pinned tree, GPU lease and exo gate apply; a start needs
+the token of the plan the operator confirmed) or SIGTERM its runner. A
+handler that refuses a request raises util/errors.UserError, answered 400
+{ok: false, error}; any other exception is a 500. Nothing on the page
+publishes, pushes or deletes.
 """
 from __future__ import annotations
 
@@ -47,43 +51,30 @@ import json
 import os
 import pathlib
 import sys
-import threading
 import urllib.parse
 import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-
 from vqlab import config
-from vqlab.agents import downloads, jobs, teachers
+from vqlab.agents import downloads, jobs, model_scan, teachers
+from vqlab.util.errors import UserError
+from vqlab.core.source import fit_store
+from vqlab.family import registry
+from vqlab.plan.recipe_queue import geo_key
+from vqlab.queue import eta as queue_eta
+from vqlab.queue import files as qfiles
+from vqlab.queue import report as queue_report
+from vqlab.records import scores
+from vqlab.util.fs import read_jsonl
 
 PAGE = pathlib.Path(__file__).resolve().parent / "gui_static" / "index.html"
-
-
-def _jsonl(p, limit=None):
-    p = pathlib.Path(p)
-    if not p.exists():
-        return []
-    lines = p.read_text().splitlines()
-    if limit:
-        lines = lines[-limit:]
-    out = []
-    for line in lines:
-        try:
-            out.append(json.loads(line))
-        except ValueError:
-            pass
-    return out
-
-
-def _families_dir():
-    return config.families_dir()
 
 
 # ---------------------------------------------------------------- endpoints
 def api_fleet(_q):
     from vqlab.gate import check_bundle
-    arts = _jsonl(config.registry_dir() / "artifacts.jsonl")
-    hub = {h["repo"]: h for h in _jsonl(config.registry_dir() / "hub.jsonl")}
+    arts = read_jsonl(config.registry_dir() / "artifacts.jsonl")
+    hub = {h["repo"]: h for h in read_jsonl(config.registry_dir() / "hub.jsonl")}
     twins = {}
     for e in arts:
         twins.setdefault(e["fingerprint"], []).append(e["name"])
@@ -98,7 +89,7 @@ def api_provenance(q):
     """Build record + lineage for a REGISTERED artifact only: the page can
     never be used to read an arbitrary path."""
     path = q.get("path", [""])[0]
-    known = {e["path"] for e in _jsonl(config.registry_dir() / "artifacts.jsonl")}
+    known = {e["path"] for e in read_jsonl(config.registry_dir() / "artifacts.jsonl")}
     if path not in known:
         return {"error": "not a registered artifact"}
     from vqlab.records import provenance
@@ -115,18 +106,17 @@ def api_provenance(q):
 
 
 def api_fits(q):
-    from vqlab.core.source import fit_store as fitstore
-    roots = fitstore.roots()
+    roots = fit_store.roots()
     recs = {}
     for r in roots:
-        recs.update(fitstore.read_index(r))
+        recs.update(fit_store.read_index(r))
     fam, teacher = q.get("family", [None])[0], q.get("teacher", [None])[0]
     if not fam:                                  # summary: which teachers exist
         tree = {}
         for r in recs.values():
             t = tree.setdefault(r["family"], {}).setdefault(r["teacher"], {"fits": 0, "geoms": {}})
             t["fits"] += 1
-            g = f"d{r['d']}-K{r['K']}"
+            g = geo_key(r["d"], r["K"])
             t["geoms"][g] = t["geoms"].get(g, 0) + 1
         return {"roots": [str(r) for r in roots], "total": len(recs), "tree": tree}
     rows = [r for r in recs.values() if r["family"] == fam and r["teacher"] == teacher]
@@ -134,9 +124,8 @@ def api_fits(q):
              "d": r["d"], "K": r["K"], "bytes": r["bytes"], "module": r["module"],
              "run_dir": r.get("source", {}).get("run_dir"),
              "recipe": r.get("recipe"), "location": r.get("location")} for r in rows]
-    prof = _families_dir() / fam / "teachers" / teacher / "profile.json"
-    layers = json.loads(prof.read_text())["arch"]["vq_layers"] if prof.exists() else None
-    return {"fits": slim, "layers": layers}
+    prof = registry.teacher_profile(fam, teacher or "")
+    return {"fits": slim, "layers": prof["arch"]["vq_layers"] if prof else None}
 
 
 def api_families(_q):
@@ -144,7 +133,7 @@ def api_families(_q):
     families/ and the user's families_dir()), merged per family and teacher;
     a teacher's profile or onboard state from either place counts."""
     fams = {}
-    for root in (config.checkout_families_dir(), _families_dir()):
+    for root in registry.family_dirs():
         for fam in sorted(p for p in root.iterdir() if p.is_dir()) if root.is_dir() else []:
             f = fams.setdefault(fam.name, {"family": fam.name, "data_entry": False,
                                            "teachers": {}, "docs": set()})
@@ -169,7 +158,7 @@ def api_runs(q):
     n = int(q.get("n", ["200"])[0])
     log = pathlib.Path(os.environ.get("VQLAB_LOG_DIR", pathlib.Path.home() / ".vqlab")) / "runs.jsonl"
     starts, ends = {}, {}
-    for r in _jsonl(log, limit=n * 3):
+    for r in read_jsonl(log, limit=n * 3):
         (starts if r.get("event") == "start" else ends)[r.get("run_id")] = r
     runs = []
     for rid, s in list(starts.items())[-n:]:
@@ -211,13 +200,10 @@ def _step_files(sd):
 
 
 def queues_snapshot(n=40):
-    """Most recent queue runs, newest first. `live` reuses the runner-alive
-    check `vqlab queue status` makes (core.box.gpu_lease.pid_alive on state.pid)."""
-    from vqlab.core.box.gpu_lease import pid_alive
-    from vqlab.queue import eta as queue_eta
-    from vqlab.queue import files as rq
-    dirs = sorted((p for p in rq.queues_dir().glob("*") if (p / "state.json").exists()),
-                  key=lambda p: p.name, reverse=True)[:max(1, n)]
+    """Most recent queue runs, newest first. `live`: a `queue run` process of
+    this machine still owns the queue (queue/report.py runner_pid, the check
+    `vqlab queue status` and the Jobs page's Resume make)."""
+    dirs = sorted(qfiles.queue_dirs(), key=lambda p: p.name, reverse=True)[:max(1, n)]
     out = []
     for d in dirs:
         try:
@@ -225,9 +211,9 @@ def queues_snapshot(n=40):
         except ValueError:
             continue
         sdirs = {p.name.split("-", 1)[0]: p for p in (d / "steps").glob("*") if p.is_dir()}
-        live = bool(pid_alive(s.get("pid")))
+        live = queue_report.runner_pid(d, s, strict=False) is not None
         out.append({"id": d.name, "name": s.get("name"), "status": s.get("status"), "live": live,
-                    "eta": queue_eta.queue_eta(d, rq.queues_dir()) if live else None,
+                    "eta": queue_eta.queue_eta(d, qfiles.queues_dir()) if live else None,
                     "preflight": bool(s.get("preflight")),
                     "created": s.get("created"), "host": s.get("host"), "commit": s.get("commit"),
                     "source": s.get("source"),
@@ -243,7 +229,6 @@ def api_queues(q):
 
 
 def api_scores(_q):
-    from vqlab.records import scores
     return scores.latest()
 
 
@@ -272,34 +257,13 @@ def api_settings(_q):
 
 
 def api_models_found(_q):
-    from vqlab.agents import model_scan
     rows = model_scan.load()
-    return {"models": rows, "scanning": _SCAN_LOCK.locked(),
+    return {"models": rows, "scanning": model_scan.scanning(),
             "scanned": rows[0].get("scanned") if rows else None}
 
 
-_SCAN_LOCK = threading.Lock()      # held while a scan runs
-
-
-def _scan_in_background():
-    """Scan for models without holding up the page (launch and Rescan); a
-    scan already running is not started twice."""
-    if not _SCAN_LOCK.acquire(blocking=False):
-        return
-
-    def go():
-        try:
-            from vqlab.agents import model_scan
-            model_scan.refresh()
-        except Exception as e:  # report, never kill the server
-            print(f"vqlab gui: model scan failed: {type(e).__name__}: {e}", file=sys.stderr)
-        finally:
-            _SCAN_LOCK.release()
-    threading.Thread(target=go, daemon=True).start()
-
-
 def post_models_scan(_body):
-    _scan_in_background()
+    model_scan.refresh_in_background()
     return {"ok": True, "scanning": True}
 
 
@@ -469,8 +433,14 @@ class Handler(BaseHTTPRequestHandler):
         try:
             n = min(int(self.headers.get("Content-Length") or 0), 65536)
             body = json.loads(self.rfile.read(n) or b"{}")
+        except ValueError:
+            return self._send(400, b'{"ok":false,"error":"the request body is not JSON"}',
+                              "application/json")
+        try:
             data = fn(body if isinstance(body, dict) else {})
-            code = 200 if data.get("ok", True) else 400
+            code = 200 if data.get("ok", True) else 400    # an outcome the page branches on
+        except UserError as e:                           # a refused request (util/errors.py)
+            data, code = {"ok": False, "error": str(e)}, 400
         except Exception as e:
             data, code = {"ok": False, "error": f"{type(e).__name__}: {e}"}, 500
         self._send(code, json.dumps(data, default=str).encode(), "application/json")
@@ -503,7 +473,7 @@ def main(argv=None) -> int:
     ap.add_argument("--open", action="store_true", help="open it in the default browser")
     a = ap.parse_args(argv)
     srv = ThreadingHTTPServer(("127.0.0.1", a.port), Handler)
-    _scan_in_background()          # models already on this machine (vqlab lab scan)
+    model_scan.refresh_in_background()     # models already on this machine (vqlab lab scan)
     url = f"http://127.0.0.1:{a.port}/"
     print(f"vqlab gui on {url}  (ctrl-c to stop)", flush=True)
     if a.open:

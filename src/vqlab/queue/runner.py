@@ -382,7 +382,7 @@ def _cmd_run(ap, a) -> int:
     why = resv.refusal("here", a.override_reservation)
     if why:
         raise SystemExit(why)
-    held = resv.get("here") or resv.get(resv._host())
+    held = resv.get("here") or resv.get_by_host()
     qdir = pathlib.Path(a.resume) if a.resume else create(a.file, a.commit, a.allow_dirty, a.preflight)
     if a.override_reservation and held and held.get("for") != resv.who():
         _record_override(qdir, held)

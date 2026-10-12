@@ -6,14 +6,61 @@ verdict.json), never from log wording.
 from __future__ import annotations
 
 import pathlib
-import socket
+import re
 import time
 
-from vqlab.core.box.gpu_lease import pid_alive
+from vqlab import config
+from vqlab.core.box.gpu_lease import pid_alive, pid_cmdline
 from vqlab.queue import eta as queue_eta
 from vqlab.queue.files import _now, latest, load_state, queue_dirs, queues_dir
 
 TERMINAL = ("passed", "failed", "stopped", "deferred")
+
+
+def ran_here(state: dict) -> bool:
+    """A pid is only meaningful on the box that wrote it; a state without a
+    host predates the field and was written here."""
+    return "host" not in state or config.is_this_host(state["host"])
+
+
+def _names_qdir(cmd: str, qdir, state: dict) -> bool:
+    """Whether a command line runs exactly this queue dir: `--resume DIR`
+    (as `--detach` relaunches it) with DIR as written or resolved, never a
+    name that merely starts the same (X vs X-preflight)."""
+    forms = {str(qdir), str(pathlib.Path(qdir).resolve())}
+    if state.get("qdir"):
+        forms.add(str(state["qdir"]))
+    return any(re.search(r"(?:^|\s)--resume[\s=]" + re.escape(f) + r"(?:\s|$)", cmd) for f in forms)
+
+
+def runner_pid(qdir, state: dict, *, strict: bool) -> int | None:
+    """The pid of a live runner of this queue on this machine, else None (a
+    dead runner's pid can be reused by anything, so a live pid alone is not
+    enough). strict: its command line runs this queue dir, as a `--detach`
+    or `--resume` runner's does -- the only kind safe to signal; a command
+    line `ps` could not read is not. Loose: any `queue run` process, which
+    includes a foreground `queue run FILE` (its command line names the file,
+    not the dir), and a live pid whose command line `ps` could not read --
+    loose is the safe side for "may it still be running"."""
+    pid = state.get("pid")
+    if not (ran_here(state) and pid_alive(pid)):
+        return None
+    cmd = pid_cmdline(pid)
+    if cmd is None:
+        return None if strict else int(pid)
+    if "queue run" not in cmd or (strict and not _names_qdir(cmd, qdir, state)):
+        return None
+    return int(pid)
+
+
+def live_status(qdir, state: dict) -> str:
+    """state.json's status, except a `running` queue of this machine whose
+    runner is gone is `died`: its pid is dead, or `ps` read its command line
+    and it is not a `queue run` (another box's queue is judged by its state)."""
+    st = state["status"]
+    if st == "running" and ran_here(state) and runner_pid(qdir, state, strict=False) is None:
+        return "died"
+    return st
 
 
 def list_queues() -> int:
@@ -38,7 +85,7 @@ def status(qdir) -> int:
         print(f"no queues under {queues_dir()}")
         return 1
     s = load_state(qdir)
-    alive = pid_alive(s.get("pid"))
+    alive = runner_pid(qdir, s, strict=False) is not None
     eta = queue_eta.queue_eta(qdir, queues_dir())
     print(f"{s['name']}  {s['status']}{' (runner alive)' if alive else ''}  "
           f"@ {s['commit'][:10]}  {qdir}")
@@ -55,16 +102,6 @@ def status(qdir) -> int:
     return 0
 
 
-def _live_status(q: pathlib.Path, s: dict) -> str:
-    st = s["status"]
-    # a pid is only meaningful on the box that wrote it: a queue run
-    # --on another box is judged by its state.json alone
-    here = socket.gethostname().split(".")[0]
-    if st == "running" and s.get("host", here) == here and not pid_alive(s.get("pid")):
-        st = "died"
-    return st
-
-
 def wait(qdirs, timeout=None, poll=15.0) -> int:
     """Block until every queue reaches a terminal state. A runner that died
     mid-queue is terminal too. Exit 0 only if every queue passed; 4 if any
@@ -75,7 +112,7 @@ def wait(qdirs, timeout=None, poll=15.0) -> int:
         states = {}
         for q in qdirs:
             s = load_state(q)
-            st = states[q] = _live_status(q, s)
+            st = states[q] = live_status(q, s)
             if seen.get(q) != st:
                 n = sum(r["status"] == "pass" for r in s["steps"])
                 print(f"{_now()}  {q.name}: {st} ({n}/{len(s['steps'])} passed)", flush=True)

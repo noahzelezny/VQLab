@@ -6,17 +6,20 @@ from a git checkout, tree/ (the detached worktree every step runs from).
 """
 from __future__ import annotations
 
+import hashlib
 import json
+import os
 import pathlib
 import re
-import socket
 import subprocess
+import sys
 import time
 
 from vqlab import _layout
 from vqlab import config as _config
 from vqlab.queue import steps as _steps
 from vqlab.util.clock import now_iso, slug
+from vqlab.util.fs import write_json_atomic
 
 REPO = _layout.SRC.parent
 SCHEMA = "vqlab.queue/1"          # data written into every state.json; never rename
@@ -45,10 +48,7 @@ def load_queue(qdir) -> dict:
 
 
 def save_state(qdir, state):
-    qdir = pathlib.Path(qdir)
-    tmp = qdir / "state.json.tmp"
-    tmp.write_text(json.dumps(state, indent=1))
-    tmp.replace(qdir / "state.json")
+    write_json_atomic(pathlib.Path(qdir) / "state.json", state)
 
 
 def queue_dirs() -> list[pathlib.Path]:
@@ -72,8 +72,6 @@ def cli_launch() -> tuple[list[str], dict, str]:
     """(argv prefix, env, cwd) to run `vqlab` as this process does: from a
     source tree, its src/ on PYTHONPATH and the tree as cwd; installed, the
     package needs no path and runs where it was asked from."""
-    import os
-    import sys
     env = dict(os.environ)
     src = str(REPO / "src")
     if not (REPO / "src" / "vqlab").is_dir():
@@ -82,8 +80,21 @@ def cli_launch() -> tuple[list[str], dict, str]:
     return [sys.executable, "-m", "vqlab.cli"], env, str(REPO)
 
 
+def run_cli(*args: str, timeout: float) -> subprocess.CompletedProcess:
+    """Run `vqlab ARGS...` as this process would (cli_launch), capturing its
+    output. Raises subprocess.TimeoutExpired past `timeout` seconds."""
+    pre, env, cwd = cli_launch()
+    return subprocess.run([*pre, *args], capture_output=True, text=True, env=env, cwd=cwd,
+                          timeout=timeout)
+
+
+def output_tail(r: subprocess.CompletedProcess, n: int) -> str:
+    """The last `n` non-blank lines of a run's stdout then stderr."""
+    lines = [ln for ln in f"{r.stdout or ''}\n{r.stderr or ''}".splitlines() if ln.strip()]
+    return "\n".join(lines[-n:])
+
+
 def package_hash() -> str:
-    import hashlib
     h = hashlib.sha256()
     pkg = _layout.SRC / "vqlab"
     for f in sorted(pkg.rglob("*.py")):
@@ -103,7 +114,7 @@ def _new_qdir(q, qfile, preflight) -> pathlib.Path:
 
 def _new_state(q, qfile, preflight, **pin) -> dict:
     return {"schema": SCHEMA, "name": q.get("name"), "source": str(pathlib.Path(qfile).resolve()),
-            **pin, "host": socket.gethostname().split(".")[0], "preflight": preflight,
+            **pin, "host": _config.short_host(), "preflight": preflight,
             "created": _now(), "status": "created", "queue_run_id": None,
             "steps": [{"name": st["name"], "status": "pending"} for st in q["steps"]]}
 

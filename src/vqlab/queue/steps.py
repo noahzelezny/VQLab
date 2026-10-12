@@ -17,6 +17,7 @@ from vqlab import commands as _commands
 from vqlab import config as _config
 from vqlab.gate import pin as pinmod
 from vqlab.util.clock import slug
+from vqlab.util.fs import GIB
 
 SCORING = {"score", "kl", "kl-ladder", "kl-pair", "tasks", "decode-timeline",
            "decode-ladder", "active-bytes"}
@@ -272,18 +273,27 @@ def preflight_args(st, args, state, outmap) -> tuple[list[str] | None, dict | No
     pfdir = preflight_root() / pathlib.Path(state["qdir"]).name / slug(st["name"])
     pfdir.mkdir(parents=True, exist_ok=True)
     args = redirect_outs(args, pfdir, outmap if outmap is not None else {})
-    need = 0                           # what it writes: stated, else (full size) its input size
-    if "writes_gib" in pf:
-        need = float(pf["writes_gib"]) * 2**30
-    elif "full" in pf:
-        need = input_bytes(args, pathlib.Path(state["tree"]))
+    need = preflight_writes(st, args, state.get("tree"), preflight=True)
     free = shutil.disk_usage(pfdir).free
     if free - need < PREFLIGHT_MARGIN:
         return None, {"verdict": "fail", "reasons": [
-            f"not enough scratch for this preflight on {pfdir}: {free / 2**30:.0f} GiB "
-            f"free, full-size step may write ~{need / 2**30:.0f} GiB, margin "
-            f"{PREFLIGHT_MARGIN / 2**30:.0f} GiB"]}
+            f"not enough scratch for this preflight on {pfdir}: {free / GIB:.0f} GiB "
+            f"free, full-size step may write ~{need / GIB:.0f} GiB, margin "
+            f"{PREFLIGHT_MARGIN / GIB:.0f} GiB"]}
     return args, None
+
+
+def preflight_writes(st, args, tree, preflight: bool) -> int:
+    """Bytes a step writes to scratch: its preflight block's writes_gib when
+    stated; else a preflight run that is not full-size writes little and is
+    not measured (0); else the full-size step's input size (input_bytes).
+    `args` are the args that run: the preflight's for a preflight."""
+    pf = st.get("preflight") or {}
+    if "writes_gib" in pf:
+        return int(float(pf["writes_gib"]) * GIB)
+    if preflight and "full" not in pf:
+        return 0
+    return input_bytes(args, pathlib.Path(tree))
 
 
 # ------------------------------------------------------------------ launch

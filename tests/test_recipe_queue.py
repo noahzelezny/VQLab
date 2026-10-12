@@ -16,9 +16,8 @@ def _geos(rows):
 
 
 @pytest.fixture
-def fams(tmp_path, monkeypatch):
-    root = tmp_path / "families"
-    teach = tmp_path / "teachers"
+def fams(lab_dirs, monkeypatch):
+    root, teach = lab_dirs.families, lab_dirs.teachers
 
     def add(family, teacher, kind, layers, vision=0.8, visual_keys=True):
         src = teach / teacher
@@ -61,9 +60,8 @@ def test_moe_flat(fams):
     assert q["estimate"]["artifact_gib"] > 0
 
 
-def test_expected_files_expand_where_the_step_runs(fams, monkeypatch, tmp_path):
+def test_expected_files_expand_where_the_step_runs(fams, tmp_path):
     fams("qwen3_5", "T", "moe", 4)
-    monkeypatch.setenv("VQLAB_SCRATCH", str(tmp_path / "scratch"))
     q, _ = rq.compile_recipe({"name": "a", "family": "qwen3_5", "teacher": "T", "geo": "d4-K256"})
     fit = next(s for s in q["steps"] if s["name"] == "fit")
     assert steps.expect(fit, pathlib.Path("/tree"), False)["files"] == [
@@ -231,14 +229,12 @@ def test_a_preflight_never_retries():
     assert steps.retries(_st({"skip": "t"}, retries=3), False) == 3
 
 
-def test_scratch_placeholder_in_expected_files(monkeypatch, tmp_path):
-    monkeypatch.setenv("VQLAB_SCRATCH", str(tmp_path / "scratch"))
+def test_scratch_placeholder_in_expected_files(lab_dirs, tmp_path):
     st = _st({"skip": "t"}, expect={"files": ["<scratch>/x"]})
     assert steps.expect(st, pathlib.Path("/tree"), False)["files"] == [str(tmp_path / "scratch" / "x")]
 
 
-def test_preflight_writes_gib_beyond_free_space_is_refused(monkeypatch, tmp_path):
-    monkeypatch.setenv("VQLAB_SCRATCH", str(tmp_path / "scratch"))
+def test_preflight_writes_gib_beyond_free_space_is_refused(lab_dirs, monkeypatch, tmp_path):
     monkeypatch.setattr(steps.shutil, "disk_usage", lambda p: type("U", (), {"free": 50 << 30})())
     st = _st({"args": ["--small"], "writes_gib": 100})
     args, verdict = steps.preflight_args(st, st["args"], {"qdir": str(tmp_path / "q")}, {})
@@ -259,3 +255,32 @@ def test_a_bad_value_in_the_profile_is_a_recipe_error(fams):
     (d / "profile.json").write_text(json.dumps(prof))
     with pytest.raises(rq.RecipeError, match="malformed"):
         rq.compile_recipe({"name": "a", "family": "qwen3_5", "teacher": "T", "geo": "d4-K256"})
+
+
+GOLDEN = pathlib.Path(__file__).parent / "fixtures" / "recipe_golden.json"
+_GOLDEN_RECIPES = {
+    "moe": ("qwen3_5", "T", {"geo": "d4-K256", "vision": True, "protect_bits": 6}),
+    "moe-tail": ("qwen3_5", "T", {"geo": "d4-K256", "tail": {"from": 30, "geo": "d4-K512"}}),
+    "moe-d8": ("qwen3_5", "T", {"geo": "d8-K4096", "mtp": True}),
+    "moe-affine": ("qwen3_5", "T", {"mode": "affine", "bits": 3, "group": 32, "vision": True}),
+    "dense": ("qwen3_8_dense", "D", {"geo": "d2-K512", "bits": 4, "vision": True}),
+    "dense-score": ("qwen3_8_dense", "D", {"geo": "d4-K256", "score": True}),
+}
+
+
+def _golden_outputs(fams, tmp_path, monkeypatch):
+    fams("qwen3_5", "T", "moe", 40)
+    fams("qwen3_8_dense", "D", "dense", 24, vision=0)
+    monkeypatch.setattr(rq.registry, "teacher_caches", lambda t=None: [
+        {"teacher": "D", "corpus": "prose", "path": "/c/prose"}])
+    out = {}
+    for key, (family, teacher, extra) in _GOLDEN_RECIPES.items():
+        q, warns = rq.compile_recipe({"name": key, "family": family, "teacher": teacher, **extra})
+        out[key] = json.loads(json.dumps([q, warns]).replace(str(tmp_path), "<tmp>"))
+    return out
+
+
+def test_compiled_queues_are_unchanged(fams, tmp_path, monkeypatch):
+    """A refactor of the compiler must not move one byte of its output."""
+    # compared as text, so a reordered key is a change too
+    assert json.dumps(_golden_outputs(fams, tmp_path, monkeypatch)) == json.dumps(json.loads(GOLDEN.read_text()))

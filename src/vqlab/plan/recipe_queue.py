@@ -8,12 +8,14 @@ Every step is a vqlab command with the flags the lab's queues of record ran
 it with; a chain is offered only for families whose pieces have each run:
 
   MoE (qwen3_5):  stream-convert --struct -> fit-moe --pack [--tail-from/
-                  --tail-geom: a mixed build] -> [graft -> vision-smoke] -> pin
-                  -> check-bundle --strict -> check-release -> [kl-ladder]
+                  --tail-geom: a mixed build]
   dense (qwen3_8_dense):  [stream-convert --bits: the base, unless an
                   incumbent is given] -> fit-dense -> build-dense --dry-run ->
-                  build-dense -> pack-dense -> pin -> checks -> [kl-ladder]
-  affine (either):  stream-convert --bits -> pin -> checks -> [kl-ladder]
+                  build-dense -> pack-dense
+  affine (either):  stream-convert --bits
+
+and every chain, whatever its mode, ends the same way: [graft ->
+vision-smoke] -> pin -> check-bundle --strict -> check-release -> [kl-ladder].
 
 A compiled chain is proven by its PREFLIGHT, which runs every step small
 and real (the fit on one layer, plus the tail's first layer for a mixed
@@ -43,6 +45,7 @@ machine; each step expands them where it runs.
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import json
 import pathlib
 import re
@@ -50,6 +53,8 @@ import sys
 
 from vqlab import config
 from vqlab.family import registry
+from vqlab.util.errors import UserError
+from vqlab.util.geo import geo_key
 
 MOE = {"qwen3_5"}
 DENSE = {"qwen3_8_dense"}
@@ -57,23 +62,28 @@ GEO = re.compile(r"^d(\d+)-?[kK](\d+)$")
 NAME = re.compile(r"^[a-z0-9][a-z0-9._-]{0,79}$")
 
 
-class RecipeError(ValueError):
+class RecipeError(UserError):
     """A recipe that cannot be compiled; the message says why."""
 
 
-def profile(family: str, teacher: str) -> dict:
-    """The teacher's family profile (checkout families/, then the user's)."""
-    for d in registry.family_dirs():
-        p = pathlib.Path(d) / family / "teachers" / teacher / "profile.json"
-        if p.is_file():
-            try:
-                prof = json.loads(p.read_text())
-            except (OSError, ValueError) as e:
-                raise RecipeError(f"{family}/{teacher}'s profile is unreadable: {e}")
-            if not isinstance(prof, dict):
-                raise RecipeError(f"{family}/{teacher}'s profile is not a JSON object")
-            return prof
-    raise RecipeError(f"{family}/{teacher} has no profile: run `vqlab family-profile --teacher <dir>` first")
+@dataclasses.dataclass(frozen=True)
+class Geometry:
+    """One (d, K) the profile marks legal: the expert/MLP stack's exact GiB at
+    it, summed over projections, and its bits per weight."""
+    d: int
+    K: int
+    gib: float
+    bpw: float | None
+
+
+def load_profile(family: str, teacher: str) -> dict:
+    """The teacher's family profile (registry.teacher_profile: the user's
+    over the checkout's)."""
+    prof = registry.teacher_profile(family, teacher)
+    if prof is None:
+        raise RecipeError(f"{family}/{teacher} has no profile (or none readable): run "
+                          "`vqlab family-profile --teacher <dir>` first")
+    return prof
 
 
 def source_path(path: str) -> str:
@@ -108,24 +118,53 @@ def relerr_abort(d: int, k: int) -> float:
         return 0.6
     if d == 2 and k >= 256:
         return 0.35
-    raise RecipeError(f"d{d}-K{k} has no measured healthy relerr to set the fit's abort "
+    raise RecipeError(f"{geo_key(d, k)} has no measured healthy relerr to set the fit's abort "
                       "threshold; fit it by hand first (`vqlab fit-moe --relerr-abort`)")
 
 
-def _legal(prof: dict, d: int, k: int) -> None:
-    """Refuse a geometry the profile does not mark legal (exact packing and
-    the fused kernel's 32 KiB codebook ceiling, FINDINGS IV, are folded in)."""
-    for proj, rows in prof.get("geometries", {}).items():
-        row = next((r for r in rows if r["d"] == d and r["K"] == k), None)
-        if row is None or not row.get("legal") or not row.get("fused_kernel_ok", True):
-            raise RecipeError(f"d{d}-K{k} is not a legal geometry for {proj} on this teacher")
+def has_relerr(d: int, k: int) -> bool:
+    """Whether a fit at (d, K) can be compiled (relerr_abort has a threshold)."""
+    try:
+        relerr_abort(d, k)
+    except RecipeError:
+        return False
+    return True
 
 
-def _stack_gib(prof: dict, d: int, k: int) -> float:
-    """The expert/MLP stack at (d, K), summed over projections: the profile's
-    exact bytes for that geometry."""
-    return sum(next(r for r in rows if r["d"] == d and r["K"] == k).get("stack_gib", 0.0)
-               for rows in prof["geometries"].values())
+def legal_geometries(prof: dict) -> list[Geometry]:
+    """Every (d, K) the profile marks legal on ALL projections (exact packing
+    and the fused kernel's 32 KiB codebook ceiling, FINDINGS IV, are folded
+    into its table), sorted."""
+    tables = prof.get("geometries") or {}
+    rows: dict = {}
+    for entries in tables.values():
+        for e in entries:
+            r = rows.setdefault((e["d"], e["K"]), {"gib": 0.0, "n": 0, "legal": True,
+                                                  "bpw": e.get("bits_per_weight")})
+            r["gib"] += e.get("stack_gib", 0.0)
+            r["n"] += 1
+            r["legal"] = r["legal"] and bool(e.get("legal")) and bool(e.get("fused_kernel_ok", True))
+    return [Geometry(d, k, r["gib"], r["bpw"]) for (d, k), r in sorted(rows.items())
+            if r["n"] == len(tables) and r["legal"]]
+
+
+def _legal(prof: dict, d: int, k: int) -> Geometry:
+    """The profile's legal geometry (d, K), or refused."""
+    for g in legal_geometries(prof):
+        if (g.d, g.K) == (d, k):
+            return g
+    raise RecipeError(f"{geo_key(d, k)} is not a legal geometry on every projection of this teacher")
+
+
+def _affine_gib(gib: float, bits: int, group: int) -> float:
+    """`gib` of bf16 weights as mlx affine: bits per weight plus a 16-bit
+    scale and bias per group."""
+    return gib * (bits + 32 / group) / 16
+
+
+def _convert_writes_gib(by: dict, bits: int) -> float:
+    """What a stream-convert at `bits` writes, as its preflight states it."""
+    return round(by["carry"] + by["embed"] + by["vq_target"] * bits / 16, 1)
 
 
 def _caches(teacher: str) -> list[str]:
@@ -179,141 +218,167 @@ def _layers(prof: dict) -> tuple[list[int], str]:
     return vq, ",".join(map(str, vq))
 
 
-def compile_recipe(r: dict) -> tuple[dict, list[str]]:
-    """-> (queue file dict, warnings). Raises RecipeError, and only that:
-    a recipe or profile missing a key it needs is refused, not a crash."""
-    if not isinstance(r, dict):
-        raise RecipeError("a recipe is a JSON object")
-    try:
-        return _compile(r)
-    except RecipeError:
-        raise
-    except (KeyError, TypeError, AttributeError, ValueError) as e:
-        raise RecipeError(f"the recipe or the teacher's profile is malformed ({type(e).__name__}: {e})")
+@dataclasses.dataclass(frozen=True)
+class Recipe:
+    """A recipe, validated as far as it can be without the teacher's profile
+    (which geometry is legal, which layers exist: the compile checks those)."""
+    raw: dict                       # as given; recorded in the queue file
+    name: str
+    family: str
+    teacher: str
+    mode: str                       # vq | affine
+    bits: int
+    group: int
+    geo: tuple[int, int] | None     # vq only
+    tail: tuple[int, int, int] | None   # MoE vq only: (from layer, d, K)
+    protect_bits: int               # MoE vq only
+    base: str | None                # dense: the quantized incumbent
+    vision: bool
+    score: bool
+    mtp: bool
+
+    @property
+    def work(self) -> str:
+        return f"<scratch>/{self.name}"
+
+    @property
+    def out(self) -> str:
+        return f"{self.work}/{self.name}"
+
+    @classmethod
+    def from_json(cls, r) -> "Recipe":
+        if not isinstance(r, dict):
+            raise RecipeError("a recipe is a JSON object")
+        name, family, teacher = r.get("name", ""), r.get("family", ""), r.get("teacher", "")
+        if not NAME.match(name):
+            raise RecipeError("name: lowercase letters, digits, '.', '_' or '-', at most 80")
+        mode = r.get("mode", "vq")
+        if mode not in ("vq", "affine"):
+            raise RecipeError(f"mode {mode!r}: vq or affine")
+        if family not in MOE | DENSE:
+            raise RecipeError(f"no build of family {family!r} has run through a queue yet; "
+                              f"compiled families: {', '.join(sorted(MOE | DENSE))}")
+        bits, group = _int(r.get("bits", 4), "bits"), _int(r.get("group", 64), "group")
+        geo = geometry(r.get("geo")) if mode == "vq" else None
+        tail, pb = None, 8
+        if mode == "vq" and family in MOE:
+            pb = _int(r.get("protect_bits", 8), "protect_bits")
+            if not 2 <= pb <= 8:
+                raise RecipeError("protect_bits (attention, embeddings, shared modules) must be 2-8")
+            t = r.get("tail")
+            if t is not None and not isinstance(t, dict):
+                raise RecipeError('tail is {"from": layer, "geo": "dD-KK"}')
+            if t:
+                tail = (_int(t.get("from", -1), "tail.from"), *geometry(t.get("geo")))
+        return cls(raw=r, name=name, family=family, teacher=teacher, mode=mode, bits=bits,
+                   group=group, geo=geo, tail=tail, protect_bits=pb, base=r.get("base") or None,
+                   vision=bool(r.get("vision")), score=bool(r.get("score")), mtp=bool(r.get("mtp")))
 
 
-def _compile(r: dict) -> tuple[dict, list[str]]:
-    name, family, teacher = r.get("name", ""), r.get("family", ""), r.get("teacher", "")
-    if not NAME.match(name):
-        raise RecipeError("name: lowercase letters, digits, '.', '_' or '-', at most 80")
-    mode = r.get("mode", "vq")
-    if mode not in ("vq", "affine"):
-        raise RecipeError(f"mode {mode!r}: vq or affine")
-    if family not in MOE | DENSE:
-        raise RecipeError(f"no build of family {family!r} has run through a queue yet; "
-                          f"compiled families: {', '.join(sorted(MOE | DENSE))}")
-    prof = profile(family, teacher)
-    src = source_path(prof["identity"]["path"])
-    kind = prof["arch"].get("kind")
-    if (family in MOE) != (kind == "moe"):
-        raise RecipeError(f"{teacher} is {kind}, but {family} builds are compiled as "
-                          f"{'moe' if family in MOE else 'dense'}")
-    by = prof["bytes"]["by_class_gib"]
-    work = f"<scratch>/{name}"
-    out = f"{work}/{name}"
-    bits, group = _int(r.get("bits", 4), "bits"), _int(r.get("group", 64), "group")
+# Each chain builder -> (steps, artifact GiB, scratch GiB, warnings); `vis` is
+# the vision tower's GiB when the recipe grafts one, else 0.
+def _affine_steps(r: Recipe, prof: dict, src: str, by: dict, vis: float):
+    art_gib = _affine_gib(by["carry"] + by["embed"] + by["vq_target"], r.bits, r.group) + vis
+    steps = [_step("convert", "stream-convert",
+                   ["--src", src, "--out", r.out, "--bits", r.bits, "--family", r.family],
+                   {"full": "stream-convert has no partial mode",
+                    "writes_gib": _convert_writes_gib(by, r.bits)},
+                   retries=1, timeout_s=6 * 3600, expect={"files": [f"{r.out}/config.json"]})]
+    return steps, art_gib, art_gib, []
+
+
+def _moe_steps(r: Recipe, prof: dict, src: str, by: dict, vis: float):
+    d, k = r.geo
+    g = _legal(prof, d, k)
+    vq, spec = _layers(prof)
+    lo, hi = vq[0], vq[-1]
+    struct = f"{r.work}/struct"
+    skel_gib = _affine_gib(by["carry"] + by["embed"], r.protect_bits, 64)
+    struct_gib = round(skel_gib + _affine_gib(by["vq_target"], 2, 64), 1)   # experts: 2-bit markers
     steps, warns = [], []
+    steps.append(_step("struct-base", "stream-convert",
+                       ["--src", src, "--out", struct, "--struct", "--protect-bits", r.protect_bits,
+                        "--family", r.family],
+                       {"full": "the fit needs the whole struct base", "writes_gib": struct_gib},
+                       retries=1, timeout_s=6 * 3600, expect={"files": [f"{struct}/config.json"]}))
+    args = ["--base", struct, "--src", src, "--out", r.out, "--vq-layers", spec,
+            "--dim", d, "--k", k, "--family", r.family, "--seed", 1234, "--pack"]
+    abort = relerr_abort(d, k)
+    tg, ntail = None, 0
+    if r.tail:
+        frm, td, tk = r.tail
+        tg = _legal(prof, td, tk)
+        if not lo < frm <= hi or frm not in vq:
+            raise RecipeError(f"tail.from {frm} must be a VQ layer in {lo + 1}-{hi}")
+        args += ["--tail-from", frm, "--tail-geom", f"d{td}k{tk}"]     # fit-moe's own spelling
+        if relerr_abort(td, tk) != abort:
+            warns.append(f"fit-moe takes one --relerr-abort: the looser of the two geometries' "
+                         f"({max(abort, relerr_abort(td, tk))}) applies to every layer")
+        abort = max(abort, relerr_abort(td, tk))
+        ntail = sum(i >= frm for i in vq)
+    n = len(vq)
+    stack = g.gib * (n - ntail) / n + (tg.gib * ntail / n if tg else 0)
+    args += ["--relerr-abort", abort]
+    art_gib = skel_gib + stack + vis
+    one = f"{lo},{r.tail[0]}" if r.tail else f"{lo}"
+    i = args.index("--vq-layers")
+    steps.append(_step("fit", "fit-moe", args,
+                       {"args": [*args[:i], "--vq-layers", one, *args[i + 2:]],
+                        # fit-moe rewrites every base shard, whatever --vq-layers says
+                        "writes_gib": struct_gib},
+                       retries=3, timeout_s=48 * 3600, expect={"files": [f"{r.out}/config.json"]}))
+    return steps, art_gib, struct_gib + art_gib, warns
 
-    vis = by.get("vision", 0.0) if r.get("vision") else 0.0
-    if mode == "affine":
-        art_gib = (by["carry"] + by["embed"] + by["vq_target"]) * (bits + 32 / group) / 16 + vis
-        scratch_gib = art_gib
-        steps.append(_step("convert", "stream-convert",
-                           ["--src", src, "--out", out, "--bits", bits, "--family", family],
-                           {"full": "stream-convert has no partial mode",
-                            "writes_gib": round(by["carry"] + by["embed"] + by["vq_target"] * bits / 16, 1)},
-                           retries=1, timeout_s=6 * 3600, expect={"files": [f"{out}/config.json"]}))
-    elif family in MOE:
-        d, k = geometry(r.get("geo"))
-        _legal(prof, d, k)
-        vq, spec = _layers(prof)
-        lo, hi = vq[0], vq[-1]
-        struct = f"{work}/struct"
-        pb = _int(r.get("protect_bits", 8), "protect_bits")
-        if not 2 <= pb <= 8:
-            raise RecipeError("protect_bits (attention, embeddings, shared modules) must be 2-8")
-        skel_gib = (by["carry"] + by["embed"]) * (pb + 0.5) / 16      # affine, group 64
-        struct_gib = round(skel_gib + by["vq_target"] * 2.5 / 16, 1)   # experts: 2-bit markers
-        steps.append(_step("struct-base", "stream-convert",
-                           ["--src", src, "--out", struct, "--struct", "--protect-bits", pb,
-                            "--family", family],
-                           {"full": "the fit needs the whole struct base", "writes_gib": struct_gib},
-                           retries=1, timeout_s=6 * 3600, expect={"files": [f"{struct}/config.json"]}))
-        args = ["--base", struct, "--src", src, "--out", out, "--vq-layers", spec,
-                "--dim", d, "--k", k, "--family", family, "--seed", 1234, "--pack"]
-        abort = relerr_abort(d, k)
-        tail = r.get("tail")
-        if tail is not None and not isinstance(tail, dict):
-            raise RecipeError('tail is {"from": layer, "geo": "dD-KK"}')
-        frm = None
-        if tail:
-            td, tk = geometry(tail.get("geo"))
-            _legal(prof, td, tk)
-            frm = _int(tail.get("from", -1), "tail.from")
-            if not lo < frm <= hi or frm not in vq:
-                raise RecipeError(f"tail.from {frm} must be a VQ layer in {lo + 1}-{hi}")
-            args += ["--tail-from", frm, "--tail-geom", f"d{td}k{tk}"]
-            if relerr_abort(td, tk) != abort:
-                warns.append(f"fit-moe takes one --relerr-abort: the looser of the two geometries' "
-                             f"({max(abort, relerr_abort(td, tk))}) applies to every layer")
-            abort = max(abort, relerr_abort(td, tk))
-        args += ["--relerr-abort", abort]
-        n = len(vq)
-        ntail = sum(i >= frm for i in vq) if tail else 0
-        stack = _stack_gib(prof, d, k) * (n - ntail) / n
-        if tail:
-            stack += _stack_gib(prof, td, tk) * ntail / n
-        art_gib = skel_gib + stack + vis
-        scratch_gib = struct_gib + art_gib
-        one = f"{lo},{frm}" if tail else f"{lo}"
-        i = args.index("--vq-layers")
-        steps.append(_step("fit", "fit-moe", args,
-                           {"args": [*args[:i], "--vq-layers", one, *args[i + 2:]],
-                            # fit-moe rewrites every base shard, whatever --vq-layers says
-                            "writes_gib": struct_gib},
-                           retries=3, timeout_s=48 * 3600, expect={"files": [f"{out}/config.json"]}))
+
+def _dense_steps(r: Recipe, prof: dict, src: str, by: dict, vis: float):
+    d, k = r.geo
+    g = _legal(prof, d, k)
+    vq, spec = _layers(prof)
+    lo, hi = vq[0], vq[-1]
+    if "," in spec:          # fit-dense --layers takes a range only
+        raise RecipeError(f"the profile's VQ layers are not contiguous ({spec}); "
+                          "fit-dense takes one range")
+    fit, build = f"{r.work}/fit", f"{r.work}/build"
+    base_gib = _affine_gib(by["carry"] + by["embed"], r.bits, r.group)
+    art_gib = base_gib + g.gib + vis
+    scratch_gib = 2 * art_gib + (0 if r.base else base_gib + _affine_gib(by["vq_target"], r.bits, r.group))
+    steps, warns = [], []
+    if r.base:               # the quantized incumbent, as the shipped dense build used
+        base = source_path(r.base)
     else:
-        d, k = geometry(r.get("geo"))
-        _legal(prof, d, k)
-        vq, spec = _layers(prof)
-        lo, hi = vq[0], vq[-1]
-        if "," in spec:          # fit-dense --layers takes a range only
-            raise RecipeError(f"the profile's VQ layers are not contiguous ({spec}); "
-                              "fit-dense takes one range")
-        fit, build = f"{work}/fit", f"{work}/build"
-        base_gib = (by["carry"] + by["embed"]) * (bits + 32 / group) / 16
-        art_gib = base_gib + _stack_gib(prof, d, k) + vis
-        scratch_gib = 2 * art_gib + (0 if r.get("base") else base_gib + by["vq_target"] * (bits + 32 / group) / 16)
-        if r.get("base"):            # the quantized incumbent, as the shipped dense build used
-            base = source_path(r["base"])
-        else:
-            base = f"{work}/base-q{bits}"
-            steps.append(_step("base", "stream-convert",
-                               ["--src", src, "--out", base, "--bits", bits, "--family", family],
-                               {"full": "the build splices into the whole base",
-                                "writes_gib": round(by["carry"] + by["embed"] + by["vq_target"] * bits / 16, 1)},
-                               retries=1, timeout_s=6 * 3600, expect={"files": [f"{base}/config.json"]}))
-            warns.append("no incumbent base given: the base is made by stream-convert, and the "
-                         "build checks every fitted module lands on it (build-dense --dry-run)")
-        fargs = ["--src", src, "--out", fit, "--family", family, "--layers", f"{lo}-{hi}",
-                 "--dim", d, "--k", k, "--group", group, "--seed", 1234]
-        steps.append(_step("fit", "fit-dense", fargs,
-                           {"args": [*fargs[:fargs.index("--layers")], "--layers", f"{lo}-{lo}",
-                                     *fargs[fargs.index("--layers") + 2:]]},
-                           retries=3, timeout_s=24 * 3600))
-        steps.append(_step("remap-check", "build-dense",
-                           ["--family", family, "--base", base, "--mlp", fit, "--out", build, "--dry-run"],
-                           {"full": "validates names only, writes nothing", "writes_gib": 0},
-                           retries=0, timeout_s=1800, gpu=False))
-        steps.append(_step("build", "build-dense",
-                           ["--family", family, "--base", base, "--mlp", fit, "--out", build],
-                           {"full": "assembles what the fit wrote", "writes_gib": round(sum(by.values()), 1)},
-                           retries=1, timeout_s=3 * 3600))
-        steps.append(_step("pack", "pack-dense", ["--src", build, "--out", out],
-                           {"full": "packs what the build wrote", "writes_gib": round(sum(by.values()), 1)},
-                           retries=1, timeout_s=3 * 3600, expect={"files": [f"{out}/config.json"]}))
+        base = f"{r.work}/base-q{r.bits}"
+        steps.append(_step("base", "stream-convert",
+                           ["--src", src, "--out", base, "--bits", r.bits, "--family", r.family],
+                           {"full": "the build splices into the whole base",
+                            "writes_gib": _convert_writes_gib(by, r.bits)},
+                           retries=1, timeout_s=6 * 3600, expect={"files": [f"{base}/config.json"]}))
+        warns.append("no incumbent base given: the base is made by stream-convert, and the "
+                     "build checks every fitted module lands on it (build-dense --dry-run)")
+    fargs = ["--src", src, "--out", fit, "--family", r.family, "--layers", f"{lo}-{hi}",
+             "--dim", d, "--k", k, "--group", r.group, "--seed", 1234]
+    i = fargs.index("--layers")
+    steps.append(_step("fit", "fit-dense", fargs,
+                       {"args": [*fargs[:i], "--layers", f"{lo}-{lo}", *fargs[i + 2:]]},
+                       retries=3, timeout_s=24 * 3600))
+    steps.append(_step("remap-check", "build-dense",
+                       ["--family", r.family, "--base", base, "--mlp", fit, "--out", build, "--dry-run"],
+                       {"full": "validates names only, writes nothing", "writes_gib": 0},
+                       retries=0, timeout_s=1800, gpu=False))
+    steps.append(_step("build", "build-dense",
+                       ["--family", r.family, "--base", base, "--mlp", fit, "--out", build],
+                       {"full": "assembles what the fit wrote", "writes_gib": round(sum(by.values()), 1)},
+                       retries=1, timeout_s=3 * 3600))
+    steps.append(_step("pack", "pack-dense", ["--src", build, "--out", r.out],
+                       {"full": "packs what the build wrote", "writes_gib": round(sum(by.values()), 1)},
+                       retries=1, timeout_s=3 * 3600, expect={"files": [f"{r.out}/config.json"]}))
+    return steps, art_gib, scratch_gib, warns
 
-    if r.get("vision"):
+
+def _tail_steps(r: Recipe, src: str, by: dict):
+    """What every chain ends with: [vision graft + smoke], the pin's smoke,
+    the bundle and release checks, [kl-ladder] -> (steps, warnings)."""
+    out, steps, warns = r.out, [], []
+    if r.vision:
         if by.get("vision"):
             steps.append(_step("vision", "graft", ["--artifact", out, "--src", src, *_graft_flags(src)],
                                {"full": "grafts the tower in place", "writes_gib": round(by["vision"] + 0.5, 1)},
@@ -323,10 +388,10 @@ def _compile(r: dict) -> tuple[dict, list[str]]:
                                retries=0, timeout_s=3600))
         else:
             warns.append("this teacher has no vision tower; nothing to graft")
-    if mode == "vq" and r.get("mtp"):
+    if r.mode == "vq" and r.mtp:
         warns.append("the MTP head is not compiled: choose its wiring with `vqlab mtp-probe35`, "
                      "then `vqlab mtp-pack` by hand")
-    pin = f"{work}/pin"
+    pin = f"{r.work}/pin"
     steps.append(_step("smoke", "pin", [out, "--out", pin, "--max-tokens", 8],
                        {"full": "a pin is symlinks plus an 8-token smoke", "writes_gib": 0},
                        retries=0, timeout_s=3600))
@@ -336,26 +401,53 @@ def _compile(r: dict) -> tuple[dict, list[str]]:
                        ["--artifact", out, "--tokenizer-ref", f"{src}/tokenizer.json"],
                        {"full": "reads the artifact; its smokes are short", "writes_gib": 0},
                        retries=0, timeout_s=2 * 3600))
-    if r.get("score"):
-        caches = _caches(teacher)
+    if r.score:
+        caches = _caches(r.teacher)
         if caches:
             kl = [a for c in caches for a in ("--cache", c)] + [
-                "--rung", f"{name}={pin}", "--per-pos-dir", f"{work}/kl-per-pos",
-                "--out", f"{work}/kl.json", "--lazy-over-gb", 16]
+                "--rung", f"{r.name}={pin}", "--per-pos-dir", f"{r.work}/kl-per-pos",
+                "--out", f"{r.work}/kl.json", "--lazy-over-gb", 16]
             warns.append("the score is this build's absolute KL against the teacher; the release "
                          "gate is a PAIRED kl-ladder against the incumbent rung (FINDINGS: KL is the gate)")
             steps.append(_step("score", "kl-ladder", kl, {"append": ["--preflight"]},
                                retries=1, timeout_s=12 * 3600,
-                               expect={"stdout_regex": "KL", "files": [f"{work}/kl.json"]}))
+                               expect={"stdout_regex": "KL", "files": [f"{r.work}/kl.json"]}))
         else:
-            warns.append(f"no KL caches are registered for {teacher}: not scored "
+            warns.append(f"no KL caches are registered for {r.teacher}: not scored "
                          "(build them with `vqlab stream-score`, then register them)")
-    return {"name": name, "commit": "HEAD", "recipe": r,
+    return steps, warns
+
+
+def compile_recipe(r: dict) -> tuple[dict, list[str]]:
+    """-> (queue file dict, warnings). Raises RecipeError, and only that:
+    a recipe or profile missing a key it needs is refused, not a crash."""
+    try:
+        return _compile(r)
+    except RecipeError:
+        raise
+    except (KeyError, TypeError, AttributeError, ValueError) as e:
+        raise RecipeError(f"the recipe or the teacher's profile is malformed ({type(e).__name__}: {e})")
+
+
+def _compile(raw: dict) -> tuple[dict, list[str]]:
+    r = Recipe.from_json(raw)
+    prof = load_profile(r.family, r.teacher)
+    src = source_path(prof["identity"]["path"])
+    kind = prof["arch"].get("kind")
+    if (r.family in MOE) != (kind == "moe"):
+        raise RecipeError(f"{r.teacher} is {kind}, but {r.family} builds are compiled as "
+                          f"{'moe' if r.family in MOE else 'dense'}")
+    by = prof["bytes"]["by_class_gib"]
+    vis = by.get("vision", 0.0) if r.vision else 0.0
+    chain = _affine_steps if r.mode == "affine" else _moe_steps if r.family in MOE else _dense_steps
+    steps, art_gib, scratch_gib, warns = chain(r, prof, src, by, vis)
+    tail, tail_warns = _tail_steps(r, src, by)
+    return {"name": r.name, "commit": "HEAD", "recipe": r.raw,
             # estimates for the confirmation, not measurements: the artifact
             # from the profile's exact per-geometry bytes, scratch = every
             # intermediate the chain leaves (struct base, unpacked build)
             "estimate": {"artifact_gib": round(art_gib, 2), "scratch_gib": round(scratch_gib, 1)},
-            "steps": steps}, warns
+            "steps": steps + tail}, warns + tail_warns
 
 
 def main(argv=None) -> int:

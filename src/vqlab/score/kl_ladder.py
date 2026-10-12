@@ -115,7 +115,7 @@ def index_cells(table, before, changed, meta) -> None:
     from vqlab.records import scores
     try:
         seen = {scores.key(r) for r in scores.read()}
-    except Exception as exc:
+    except (OSError, ValueError) as exc:
         print(f"[kl-ladder] WARNING: cannot read the scores index ({exc}); not recording", flush=True)
         return
     for rname, cells in table.items():

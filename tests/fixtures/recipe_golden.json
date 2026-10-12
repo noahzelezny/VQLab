@@ -1,0 +1,1067 @@
+{
+ "moe": [
+  {
+   "name": "moe",
+   "commit": "HEAD",
+   "recipe": {
+    "name": "moe",
+    "family": "qwen3_5",
+    "teacher": "T",
+    "geo": "d4-K256",
+    "vision": true,
+    "protect_bits": 6
+   },
+   "estimate": {
+    "artifact_gib": 1.61,
+    "scratch_gib": 4.9
+   },
+   "steps": [
+    {
+     "name": "struct-base",
+     "cmd": "stream-convert",
+     "args": [
+      "--src",
+      "<tmp>/teachers/T",
+      "--out",
+      "<scratch>/moe/struct",
+      "--struct",
+      "--protect-bits",
+      "6",
+      "--family",
+      "qwen3_5"
+     ],
+     "preflight": {
+      "full": "the fit needs the whole struct base",
+      "writes_gib": 3.3
+     },
+     "retries": 1,
+     "timeout_s": 21600,
+     "expect": {
+      "files": [
+       "<scratch>/moe/struct/config.json"
+      ]
+     }
+    },
+    {
+     "name": "fit",
+     "cmd": "fit-moe",
+     "args": [
+      "--base",
+      "<scratch>/moe/struct",
+      "--src",
+      "<tmp>/teachers/T",
+      "--out",
+      "<scratch>/moe/moe",
+      "--vq-layers",
+      "0-39",
+      "--dim",
+      "4",
+      "--k",
+      "256",
+      "--family",
+      "qwen3_5",
+      "--seed",
+      "1234",
+      "--pack",
+      "--relerr-abort",
+      "0.45"
+     ],
+     "preflight": {
+      "args": [
+       "--base",
+       "<scratch>/moe/struct",
+       "--src",
+       "<tmp>/teachers/T",
+       "--out",
+       "<scratch>/moe/moe",
+       "--vq-layers",
+       "0",
+       "--dim",
+       "4",
+       "--k",
+       "256",
+       "--family",
+       "qwen3_5",
+       "--seed",
+       "1234",
+       "--pack",
+       "--relerr-abort",
+       "0.45"
+      ],
+      "writes_gib": 3.3
+     },
+     "retries": 3,
+     "timeout_s": 172800,
+     "expect": {
+      "files": [
+       "<scratch>/moe/moe/config.json"
+      ]
+     }
+    },
+    {
+     "name": "vision",
+     "cmd": "graft",
+     "args": [
+      "--artifact",
+      "<scratch>/moe/moe",
+      "--src",
+      "<tmp>/teachers/T",
+      "--dest-prefix",
+      "vision_tower",
+      "--permute-conv5"
+     ],
+     "preflight": {
+      "full": "grafts the tower in place",
+      "writes_gib": 1.3
+     },
+     "retries": 0,
+     "timeout_s": 3600
+    },
+    {
+     "name": "vision-smoke",
+     "cmd": "vision-smoke",
+     "args": [
+      "<scratch>/moe/moe",
+      "--max-tokens",
+      "8"
+     ],
+     "preflight": {
+      "full": "reads the artifact, writes nothing",
+      "writes_gib": 0
+     },
+     "retries": 0,
+     "timeout_s": 3600
+    },
+    {
+     "name": "smoke",
+     "cmd": "pin",
+     "args": [
+      "<scratch>/moe/moe",
+      "--out",
+      "<scratch>/moe/pin",
+      "--max-tokens",
+      "8"
+     ],
+     "preflight": {
+      "full": "a pin is symlinks plus an 8-token smoke",
+      "writes_gib": 0
+     },
+     "retries": 0,
+     "timeout_s": 3600
+    },
+    {
+     "name": "runtime-check",
+     "cmd": "check-bundle",
+     "args": [
+      "--artifact",
+      "<scratch>/moe/moe",
+      "--strict"
+     ],
+     "preflight": {
+      "full": "a read-only check",
+      "writes_gib": 0
+     },
+     "retries": 0,
+     "timeout_s": 600
+    },
+    {
+     "name": "release-check",
+     "cmd": "check-release",
+     "args": [
+      "--artifact",
+      "<scratch>/moe/moe",
+      "--tokenizer-ref",
+      "<tmp>/teachers/T/tokenizer.json"
+     ],
+     "preflight": {
+      "full": "reads the artifact; its smokes are short",
+      "writes_gib": 0
+     },
+     "retries": 0,
+     "timeout_s": 7200
+    }
+   ]
+  },
+  []
+ ],
+ "moe-tail": [
+  {
+   "name": "moe-tail",
+   "commit": "HEAD",
+   "recipe": {
+    "name": "moe-tail",
+    "family": "qwen3_5",
+    "teacher": "T",
+    "geo": "d4-K256",
+    "tail": {
+     "from": 30,
+     "geo": "d4-K512"
+    }
+   },
+   "estimate": {
+    "artifact_gib": 1.06,
+    "scratch_gib": 4.7
+   },
+   "steps": [
+    {
+     "name": "struct-base",
+     "cmd": "stream-convert",
+     "args": [
+      "--src",
+      "<tmp>/teachers/T",
+      "--out",
+      "<scratch>/moe-tail/struct",
+      "--struct",
+      "--protect-bits",
+      "8",
+      "--family",
+      "qwen3_5"
+     ],
+     "preflight": {
+      "full": "the fit needs the whole struct base",
+      "writes_gib": 3.6
+     },
+     "retries": 1,
+     "timeout_s": 21600,
+     "expect": {
+      "files": [
+       "<scratch>/moe-tail/struct/config.json"
+      ]
+     }
+    },
+    {
+     "name": "fit",
+     "cmd": "fit-moe",
+     "args": [
+      "--base",
+      "<scratch>/moe-tail/struct",
+      "--src",
+      "<tmp>/teachers/T",
+      "--out",
+      "<scratch>/moe-tail/moe-tail",
+      "--vq-layers",
+      "0-39",
+      "--dim",
+      "4",
+      "--k",
+      "256",
+      "--family",
+      "qwen3_5",
+      "--seed",
+      "1234",
+      "--pack",
+      "--tail-from",
+      "30",
+      "--tail-geom",
+      "d4k512",
+      "--relerr-abort",
+      "0.45"
+     ],
+     "preflight": {
+      "args": [
+       "--base",
+       "<scratch>/moe-tail/struct",
+       "--src",
+       "<tmp>/teachers/T",
+       "--out",
+       "<scratch>/moe-tail/moe-tail",
+       "--vq-layers",
+       "0,30",
+       "--dim",
+       "4",
+       "--k",
+       "256",
+       "--family",
+       "qwen3_5",
+       "--seed",
+       "1234",
+       "--pack",
+       "--tail-from",
+       "30",
+       "--tail-geom",
+       "d4k512",
+       "--relerr-abort",
+       "0.45"
+      ],
+      "writes_gib": 3.6
+     },
+     "retries": 3,
+     "timeout_s": 172800,
+     "expect": {
+      "files": [
+       "<scratch>/moe-tail/moe-tail/config.json"
+      ]
+     }
+    },
+    {
+     "name": "smoke",
+     "cmd": "pin",
+     "args": [
+      "<scratch>/moe-tail/moe-tail",
+      "--out",
+      "<scratch>/moe-tail/pin",
+      "--max-tokens",
+      "8"
+     ],
+     "preflight": {
+      "full": "a pin is symlinks plus an 8-token smoke",
+      "writes_gib": 0
+     },
+     "retries": 0,
+     "timeout_s": 3600
+    },
+    {
+     "name": "runtime-check",
+     "cmd": "check-bundle",
+     "args": [
+      "--artifact",
+      "<scratch>/moe-tail/moe-tail",
+      "--strict"
+     ],
+     "preflight": {
+      "full": "a read-only check",
+      "writes_gib": 0
+     },
+     "retries": 0,
+     "timeout_s": 600
+    },
+    {
+     "name": "release-check",
+     "cmd": "check-release",
+     "args": [
+      "--artifact",
+      "<scratch>/moe-tail/moe-tail",
+      "--tokenizer-ref",
+      "<tmp>/teachers/T/tokenizer.json"
+     ],
+     "preflight": {
+      "full": "reads the artifact; its smokes are short",
+      "writes_gib": 0
+     },
+     "retries": 0,
+     "timeout_s": 7200
+    }
+   ]
+  },
+  [
+   "fit-moe takes one --relerr-abort: the looser of the two geometries' (0.45) applies to every layer"
+  ]
+ ],
+ "moe-d8": [
+  {
+   "name": "moe-d8",
+   "commit": "HEAD",
+   "recipe": {
+    "name": "moe-d8",
+    "family": "qwen3_5",
+    "teacher": "T",
+    "geo": "d8-K4096",
+    "mtp": true
+   },
+   "estimate": {
+    "artifact_gib": 1.06,
+    "scratch_gib": 4.7
+   },
+   "steps": [
+    {
+     "name": "struct-base",
+     "cmd": "stream-convert",
+     "args": [
+      "--src",
+      "<tmp>/teachers/T",
+      "--out",
+      "<scratch>/moe-d8/struct",
+      "--struct",
+      "--protect-bits",
+      "8",
+      "--family",
+      "qwen3_5"
+     ],
+     "preflight": {
+      "full": "the fit needs the whole struct base",
+      "writes_gib": 3.6
+     },
+     "retries": 1,
+     "timeout_s": 21600,
+     "expect": {
+      "files": [
+       "<scratch>/moe-d8/struct/config.json"
+      ]
+     }
+    },
+    {
+     "name": "fit",
+     "cmd": "fit-moe",
+     "args": [
+      "--base",
+      "<scratch>/moe-d8/struct",
+      "--src",
+      "<tmp>/teachers/T",
+      "--out",
+      "<scratch>/moe-d8/moe-d8",
+      "--vq-layers",
+      "0-39",
+      "--dim",
+      "8",
+      "--k",
+      "4096",
+      "--family",
+      "qwen3_5",
+      "--seed",
+      "1234",
+      "--pack",
+      "--relerr-abort",
+      "0.45"
+     ],
+     "preflight": {
+      "args": [
+       "--base",
+       "<scratch>/moe-d8/struct",
+       "--src",
+       "<tmp>/teachers/T",
+       "--out",
+       "<scratch>/moe-d8/moe-d8",
+       "--vq-layers",
+       "0",
+       "--dim",
+       "8",
+       "--k",
+       "4096",
+       "--family",
+       "qwen3_5",
+       "--seed",
+       "1234",
+       "--pack",
+       "--relerr-abort",
+       "0.45"
+      ],
+      "writes_gib": 3.6
+     },
+     "retries": 3,
+     "timeout_s": 172800,
+     "expect": {
+      "files": [
+       "<scratch>/moe-d8/moe-d8/config.json"
+      ]
+     }
+    },
+    {
+     "name": "smoke",
+     "cmd": "pin",
+     "args": [
+      "<scratch>/moe-d8/moe-d8",
+      "--out",
+      "<scratch>/moe-d8/pin",
+      "--max-tokens",
+      "8"
+     ],
+     "preflight": {
+      "full": "a pin is symlinks plus an 8-token smoke",
+      "writes_gib": 0
+     },
+     "retries": 0,
+     "timeout_s": 3600
+    },
+    {
+     "name": "runtime-check",
+     "cmd": "check-bundle",
+     "args": [
+      "--artifact",
+      "<scratch>/moe-d8/moe-d8",
+      "--strict"
+     ],
+     "preflight": {
+      "full": "a read-only check",
+      "writes_gib": 0
+     },
+     "retries": 0,
+     "timeout_s": 600
+    },
+    {
+     "name": "release-check",
+     "cmd": "check-release",
+     "args": [
+      "--artifact",
+      "<scratch>/moe-d8/moe-d8",
+      "--tokenizer-ref",
+      "<tmp>/teachers/T/tokenizer.json"
+     ],
+     "preflight": {
+      "full": "reads the artifact; its smokes are short",
+      "writes_gib": 0
+     },
+     "retries": 0,
+     "timeout_s": 7200
+    }
+   ]
+  },
+  [
+   "the MTP head is not compiled: choose its wiring with `vqlab mtp-probe35`, then `vqlab mtp-pack` by hand"
+  ]
+ ],
+ "moe-affine": [
+  {
+   "name": "moe-affine",
+   "commit": "HEAD",
+   "recipe": {
+    "name": "moe-affine",
+    "family": "qwen3_5",
+    "teacher": "T",
+    "mode": "affine",
+    "bits": 3,
+    "group": 32,
+    "vision": true
+   },
+   "estimate": {
+    "artifact_gib": 5.3,
+    "scratch_gib": 5.3
+   },
+   "steps": [
+    {
+     "name": "convert",
+     "cmd": "stream-convert",
+     "args": [
+      "--src",
+      "<tmp>/teachers/T",
+      "--out",
+      "<scratch>/moe-affine/moe-affine",
+      "--bits",
+      "3",
+      "--family",
+      "qwen3_5"
+     ],
+     "preflight": {
+      "full": "stream-convert has no partial mode",
+      "writes_gib": 5.0
+     },
+     "retries": 1,
+     "timeout_s": 21600,
+     "expect": {
+      "files": [
+       "<scratch>/moe-affine/moe-affine/config.json"
+      ]
+     }
+    },
+    {
+     "name": "vision",
+     "cmd": "graft",
+     "args": [
+      "--artifact",
+      "<scratch>/moe-affine/moe-affine",
+      "--src",
+      "<tmp>/teachers/T",
+      "--dest-prefix",
+      "vision_tower",
+      "--permute-conv5"
+     ],
+     "preflight": {
+      "full": "grafts the tower in place",
+      "writes_gib": 1.3
+     },
+     "retries": 0,
+     "timeout_s": 3600
+    },
+    {
+     "name": "vision-smoke",
+     "cmd": "vision-smoke",
+     "args": [
+      "<scratch>/moe-affine/moe-affine",
+      "--max-tokens",
+      "8"
+     ],
+     "preflight": {
+      "full": "reads the artifact, writes nothing",
+      "writes_gib": 0
+     },
+     "retries": 0,
+     "timeout_s": 3600
+    },
+    {
+     "name": "smoke",
+     "cmd": "pin",
+     "args": [
+      "<scratch>/moe-affine/moe-affine",
+      "--out",
+      "<scratch>/moe-affine/pin",
+      "--max-tokens",
+      "8"
+     ],
+     "preflight": {
+      "full": "a pin is symlinks plus an 8-token smoke",
+      "writes_gib": 0
+     },
+     "retries": 0,
+     "timeout_s": 3600
+    },
+    {
+     "name": "runtime-check",
+     "cmd": "check-bundle",
+     "args": [
+      "--artifact",
+      "<scratch>/moe-affine/moe-affine",
+      "--strict"
+     ],
+     "preflight": {
+      "full": "a read-only check",
+      "writes_gib": 0
+     },
+     "retries": 0,
+     "timeout_s": 600
+    },
+    {
+     "name": "release-check",
+     "cmd": "check-release",
+     "args": [
+      "--artifact",
+      "<scratch>/moe-affine/moe-affine",
+      "--tokenizer-ref",
+      "<tmp>/teachers/T/tokenizer.json"
+     ],
+     "preflight": {
+      "full": "reads the artifact; its smokes are short",
+      "writes_gib": 0
+     },
+     "retries": 0,
+     "timeout_s": 7200
+    }
+   ]
+  },
+  []
+ ],
+ "dense": [
+  {
+   "name": "dense",
+   "commit": "HEAD",
+   "recipe": {
+    "name": "dense",
+    "family": "qwen3_8_dense",
+    "teacher": "D",
+    "geo": "d2-K512",
+    "bits": 4,
+    "vision": true
+   },
+   "estimate": {
+    "artifact_gib": 0.56,
+    "scratch_gib": 6.2
+   },
+   "steps": [
+    {
+     "name": "base",
+     "cmd": "stream-convert",
+     "args": [
+      "--src",
+      "<tmp>/teachers/D",
+      "--out",
+      "<scratch>/dense/base-q4",
+      "--bits",
+      "4",
+      "--family",
+      "qwen3_8_dense"
+     ],
+     "preflight": {
+      "full": "the build splices into the whole base",
+      "writes_gib": 6.0
+     },
+     "retries": 1,
+     "timeout_s": 21600,
+     "expect": {
+      "files": [
+       "<scratch>/dense/base-q4/config.json"
+      ]
+     }
+    },
+    {
+     "name": "fit",
+     "cmd": "fit-dense",
+     "args": [
+      "--src",
+      "<tmp>/teachers/D",
+      "--out",
+      "<scratch>/dense/fit",
+      "--family",
+      "qwen3_8_dense",
+      "--layers",
+      "0-23",
+      "--dim",
+      "2",
+      "--k",
+      "512",
+      "--group",
+      "64",
+      "--seed",
+      "1234"
+     ],
+     "preflight": {
+      "args": [
+       "--src",
+       "<tmp>/teachers/D",
+       "--out",
+       "<scratch>/dense/fit",
+       "--family",
+       "qwen3_8_dense",
+       "--layers",
+       "0-0",
+       "--dim",
+       "2",
+       "--k",
+       "512",
+       "--group",
+       "64",
+       "--seed",
+       "1234"
+      ]
+     },
+     "retries": 3,
+     "timeout_s": 86400
+    },
+    {
+     "name": "remap-check",
+     "cmd": "build-dense",
+     "args": [
+      "--family",
+      "qwen3_8_dense",
+      "--base",
+      "<scratch>/dense/base-q4",
+      "--mlp",
+      "<scratch>/dense/fit",
+      "--out",
+      "<scratch>/dense/build",
+      "--dry-run"
+     ],
+     "preflight": {
+      "full": "validates names only, writes nothing",
+      "writes_gib": 0
+     },
+     "retries": 0,
+     "timeout_s": 1800,
+     "gpu": false
+    },
+    {
+     "name": "build",
+     "cmd": "build-dense",
+     "args": [
+      "--family",
+      "qwen3_8_dense",
+      "--base",
+      "<scratch>/dense/base-q4",
+      "--mlp",
+      "<scratch>/dense/fit",
+      "--out",
+      "<scratch>/dense/build"
+     ],
+     "preflight": {
+      "full": "assembles what the fit wrote",
+      "writes_gib": 18.0
+     },
+     "retries": 1,
+     "timeout_s": 10800
+    },
+    {
+     "name": "pack",
+     "cmd": "pack-dense",
+     "args": [
+      "--src",
+      "<scratch>/dense/build",
+      "--out",
+      "<scratch>/dense/dense"
+     ],
+     "preflight": {
+      "full": "packs what the build wrote",
+      "writes_gib": 18.0
+     },
+     "retries": 1,
+     "timeout_s": 10800,
+     "expect": {
+      "files": [
+       "<scratch>/dense/dense/config.json"
+      ]
+     }
+    },
+    {
+     "name": "smoke",
+     "cmd": "pin",
+     "args": [
+      "<scratch>/dense/dense",
+      "--out",
+      "<scratch>/dense/pin",
+      "--max-tokens",
+      "8"
+     ],
+     "preflight": {
+      "full": "a pin is symlinks plus an 8-token smoke",
+      "writes_gib": 0
+     },
+     "retries": 0,
+     "timeout_s": 3600
+    },
+    {
+     "name": "runtime-check",
+     "cmd": "check-bundle",
+     "args": [
+      "--artifact",
+      "<scratch>/dense/dense",
+      "--strict"
+     ],
+     "preflight": {
+      "full": "a read-only check",
+      "writes_gib": 0
+     },
+     "retries": 0,
+     "timeout_s": 600
+    },
+    {
+     "name": "release-check",
+     "cmd": "check-release",
+     "args": [
+      "--artifact",
+      "<scratch>/dense/dense",
+      "--tokenizer-ref",
+      "<tmp>/teachers/D/tokenizer.json"
+     ],
+     "preflight": {
+      "full": "reads the artifact; its smokes are short",
+      "writes_gib": 0
+     },
+     "retries": 0,
+     "timeout_s": 7200
+    }
+   ]
+  },
+  [
+   "no incumbent base given: the base is made by stream-convert, and the build checks every fitted module lands on it (build-dense --dry-run)",
+   "this teacher has no vision tower; nothing to graft"
+  ]
+ ],
+ "dense-score": [
+  {
+   "name": "dense-score",
+   "commit": "HEAD",
+   "recipe": {
+    "name": "dense-score",
+    "family": "qwen3_8_dense",
+    "teacher": "D",
+    "geo": "d4-K256",
+    "score": true
+   },
+   "estimate": {
+    "artifact_gib": 0.56,
+    "scratch_gib": 6.2
+   },
+   "steps": [
+    {
+     "name": "base",
+     "cmd": "stream-convert",
+     "args": [
+      "--src",
+      "<tmp>/teachers/D",
+      "--out",
+      "<scratch>/dense-score/base-q4",
+      "--bits",
+      "4",
+      "--family",
+      "qwen3_8_dense"
+     ],
+     "preflight": {
+      "full": "the build splices into the whole base",
+      "writes_gib": 6.0
+     },
+     "retries": 1,
+     "timeout_s": 21600,
+     "expect": {
+      "files": [
+       "<scratch>/dense-score/base-q4/config.json"
+      ]
+     }
+    },
+    {
+     "name": "fit",
+     "cmd": "fit-dense",
+     "args": [
+      "--src",
+      "<tmp>/teachers/D",
+      "--out",
+      "<scratch>/dense-score/fit",
+      "--family",
+      "qwen3_8_dense",
+      "--layers",
+      "0-23",
+      "--dim",
+      "4",
+      "--k",
+      "256",
+      "--group",
+      "64",
+      "--seed",
+      "1234"
+     ],
+     "preflight": {
+      "args": [
+       "--src",
+       "<tmp>/teachers/D",
+       "--out",
+       "<scratch>/dense-score/fit",
+       "--family",
+       "qwen3_8_dense",
+       "--layers",
+       "0-0",
+       "--dim",
+       "4",
+       "--k",
+       "256",
+       "--group",
+       "64",
+       "--seed",
+       "1234"
+      ]
+     },
+     "retries": 3,
+     "timeout_s": 86400
+    },
+    {
+     "name": "remap-check",
+     "cmd": "build-dense",
+     "args": [
+      "--family",
+      "qwen3_8_dense",
+      "--base",
+      "<scratch>/dense-score/base-q4",
+      "--mlp",
+      "<scratch>/dense-score/fit",
+      "--out",
+      "<scratch>/dense-score/build",
+      "--dry-run"
+     ],
+     "preflight": {
+      "full": "validates names only, writes nothing",
+      "writes_gib": 0
+     },
+     "retries": 0,
+     "timeout_s": 1800,
+     "gpu": false
+    },
+    {
+     "name": "build",
+     "cmd": "build-dense",
+     "args": [
+      "--family",
+      "qwen3_8_dense",
+      "--base",
+      "<scratch>/dense-score/base-q4",
+      "--mlp",
+      "<scratch>/dense-score/fit",
+      "--out",
+      "<scratch>/dense-score/build"
+     ],
+     "preflight": {
+      "full": "assembles what the fit wrote",
+      "writes_gib": 18.0
+     },
+     "retries": 1,
+     "timeout_s": 10800
+    },
+    {
+     "name": "pack",
+     "cmd": "pack-dense",
+     "args": [
+      "--src",
+      "<scratch>/dense-score/build",
+      "--out",
+      "<scratch>/dense-score/dense-score"
+     ],
+     "preflight": {
+      "full": "packs what the build wrote",
+      "writes_gib": 18.0
+     },
+     "retries": 1,
+     "timeout_s": 10800,
+     "expect": {
+      "files": [
+       "<scratch>/dense-score/dense-score/config.json"
+      ]
+     }
+    },
+    {
+     "name": "smoke",
+     "cmd": "pin",
+     "args": [
+      "<scratch>/dense-score/dense-score",
+      "--out",
+      "<scratch>/dense-score/pin",
+      "--max-tokens",
+      "8"
+     ],
+     "preflight": {
+      "full": "a pin is symlinks plus an 8-token smoke",
+      "writes_gib": 0
+     },
+     "retries": 0,
+     "timeout_s": 3600
+    },
+    {
+     "name": "runtime-check",
+     "cmd": "check-bundle",
+     "args": [
+      "--artifact",
+      "<scratch>/dense-score/dense-score",
+      "--strict"
+     ],
+     "preflight": {
+      "full": "a read-only check",
+      "writes_gib": 0
+     },
+     "retries": 0,
+     "timeout_s": 600
+    },
+    {
+     "name": "release-check",
+     "cmd": "check-release",
+     "args": [
+      "--artifact",
+      "<scratch>/dense-score/dense-score",
+      "--tokenizer-ref",
+      "<tmp>/teachers/D/tokenizer.json"
+     ],
+     "preflight": {
+      "full": "reads the artifact; its smokes are short",
+      "writes_gib": 0
+     },
+     "retries": 0,
+     "timeout_s": 7200
+    },
+    {
+     "name": "score",
+     "cmd": "kl-ladder",
+     "args": [
+      "--cache",
+      "prose=/c/prose",
+      "--rung",
+      "dense-score=<scratch>/dense-score/pin",
+      "--per-pos-dir",
+      "<scratch>/dense-score/kl-per-pos",
+      "--out",
+      "<scratch>/dense-score/kl.json",
+      "--lazy-over-gb",
+      "16"
+     ],
+     "preflight": {
+      "append": [
+       "--preflight"
+      ]
+     },
+     "retries": 1,
+     "timeout_s": 43200,
+     "expect": {
+      "stdout_regex": "KL",
+      "files": [
+       "<scratch>/dense-score/kl.json"
+      ]
+     }
+    }
+   ]
+  },
+  [
+   "no incumbent base given: the base is made by stream-convert, and the build checks every fitted module lands on it (build-dense --dry-run)",
+   "the score is this build's absolute KL against the teacher; the release gate is a PAIRED kl-ladder against the incumbent rung (FINDINGS: KL is the gate)"
+  ]
+ ]
+}

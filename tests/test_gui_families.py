@@ -13,7 +13,7 @@ def test_families_merge_checkout_and_user(tmp_path, monkeypatch):
     (user / "fam_a/teachers/T1/research/LEDGER.md").write_text("")
     (user / "fam_b/teachers/T2").mkdir(parents=True)
     monkeypatch.setattr(config, "checkout_families_dir", lambda: co)
-    monkeypatch.setattr(gui, "_families_dir", lambda: user)
+    monkeypatch.setenv("VQLAB_FAMILIES_DIR", str(user))
     fams = {f["family"]: f for f in gui.api_families({})["families"]}
     assert set(fams) == {"fam_a", "fam_b"}
     t1 = fams["fam_a"]["teachers"][0]
@@ -63,15 +63,15 @@ def test_scan_never_runs_twice(monkeypatch):
     gate = threading.Event()
     from vqlab.agents import model_scan
     monkeypatch.setattr(model_scan, "refresh", lambda: started.append(1) or gate.wait(5))
-    gui._scan_in_background()
-    gui._scan_in_background()                     # still running: ignored
+    assert model_scan.refresh_in_background() is True
+    assert model_scan.refresh_in_background() is False     # still running: ignored
     assert gui.api_models_found({})["scanning"]
     gate.set()
     for _ in range(100):
-        if not gui._SCAN_LOCK.locked():
+        if not model_scan.scanning():
             break
         threading.Event().wait(0.01)
-    assert started == [1] and not gui._SCAN_LOCK.locked()
+    assert started == [1] and not model_scan.scanning()
 
 
 def test_foreign_host_is_refused():

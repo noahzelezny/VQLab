@@ -22,6 +22,7 @@ import pathlib
 import sys
 
 from vqlab.core.source import fit_store as fs
+from vqlab.util.geo import geo_key
 
 FAMILIES = fs._families_dir()   # honours VQLAB_FAMILIES_DIR
 
@@ -70,7 +71,7 @@ def _census(root, recs, a):
     agg = collections.defaultdict(list)
     for r in picked:
         c = done[r["fit_id"]]
-        agg[(r["family"], f"d{r['d']}-K{r['K']}")].append(c)
+        agg[(r["family"], geo_key(r['d'], r['K']))].append(c)
     print("\nby family x geometry (mean over fits read):")
     for (fam, geo), cs in sorted(agg.items()):
         m = lambda k: sum(c[k] for c in cs) / len(cs)
@@ -161,7 +162,7 @@ def main(argv=None) -> int:
 
     if a.cmd == "stats":
         c = collections.Counter((r["family"], r["teacher"]) for r in recs.values())
-        g = collections.Counter((r["family"], f"d{r['d']}-K{r['K']}") for r in recs.values())
+        g = collections.Counter((r["family"], geo_key(r['d'], r['K'])) for r in recs.values())
         filed = sum(1 for r in recs.values() if r.get("sha256"))
         known = sum(1 for r in recs.values() if r.get("recipe"))
         print(f"{len(recs)} fits in {fs.index_path(root)}: {filed} filed in the "
@@ -187,7 +188,7 @@ def main(argv=None) -> int:
                    f"{' seed=' + str((rc.get('fitter') or {}).get('seed')) if rc.get('fitter') else ''}"
                    if rc else f"recipe? ({r['source']['run_dir']})")
             print(f"{r['family']}/{r['teacher']}  L{r.get('layer')} {r['proj']:10s} "
-                  f"d{r['d']}-K{r['K']}  {r['fit_id']}  {how}"
+                  f"{geo_key(r['d'], r['K'])}  {r['fit_id']}  {how}"
                   + (f"\n    {r['location']}" if a.paths else ""))
         print(f"{len(hits)} fits")
         return 0

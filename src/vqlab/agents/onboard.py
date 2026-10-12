@@ -44,6 +44,7 @@ import sys
 from vqlab import _layout
 from vqlab import config as _config
 from vqlab.core.source import fit_store as fitstore
+from vqlab.util.geo import geo_key
 
 PY = sys.executable
 STEPS = ("profile", "loader", "cache_a", "cache_b", "determinism", "init_sweep")
@@ -329,7 +330,7 @@ def main(argv=None) -> int:
         for proj, gs in prof["geometries"].items():
             ok = [g for g in gs if g["legal"]]
             print(f"  {proj}: " + ", ".join(
-                f"d{g['d']}-K{g['K']} {g['stack_gib']}GiB" for g in ok[:8]))
+                f"{geo_key(g['d'], g['K'])} {g['stack_gib']}GiB" for g in ok[:8]))
         print("  price it (vqlab price), fit it (fit-moe / fit-dense, which file into "
               "the store), then vqlab layer-leverage against the teacher.")
     return 0 if state["steps"]["profile"]["status"] == "done" else 1

@@ -38,8 +38,11 @@ import math
 import os
 import pathlib
 import re
-import shutil
 import struct
+
+from vqlab.core.source.teacher_profiles import profiles_in
+from vqlab.util.fs import atomic_path, copy_atomic, write_text_atomic
+from vqlab.util.geo import geo_key
 
 GSZ = 64
 _MOD_RX = re.compile(r"layers\.(\d+)\..*?([A-Za-z0-9_]+)$")
@@ -95,10 +98,10 @@ def teacher_slug(teacher_dir, families_dir=None) -> str:
     if cfg.is_file():
         csha = hashlib.sha256(cfg.read_bytes()).hexdigest()
         cands = []
-        for prof in sorted(fam.glob("*/teachers/*/profile.json")):
-            ident = json.loads(prof.read_text()).get("identity") or {}
+        for (_, teacher), prof in sorted(profiles_in([fam]).items()):
+            ident = prof.get("identity") or {}
             if ident.get("config_sha256") == csha and ident.get("shard_fingerprint"):
-                cands.append((prof.parent.name, ident["shard_fingerprint"]))
+                cands.append((teacher, ident["shard_fingerprint"]))
         if cands:                                   # config matches: prove the weights
             shard_fp = teacher_identity(rp)[1]
             hits = sorted({t for t, f in cands if f == shard_fp})
@@ -138,7 +141,7 @@ def retag(root, old, new, family=None, apply=False):
             r2["location"] = str(dst.with_suffix(".safetensors"))
         r2.setdefault("retagged", []).append(
             {"from": old, "at": datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds")})
-        dst.with_suffix(".json").write_text(json.dumps(r2, indent=1, sort_keys=True))
+        write_text_atomic(dst.with_suffix(".json"), json.dumps(r2, indent=1, sort_keys=True))
         recs[r["fit_id"]] = r2
     if apply and moves:
         write_index(root, recs)
@@ -265,8 +268,7 @@ def read_census(root):
 def load_signatures(families_dir):
     """{(proj, E, OUT, IN): [(family, teacher), ...]} from every profile."""
     sig = {}
-    for prof in pathlib.Path(families_dir).glob("*/teachers/*/profile.json"):
-        pj = json.loads(prof.read_text())
+    for pj in profiles_in([families_dir]).values():
         for proj, ss in (pj.get("modules", {}).get("signatures") or {}).items():
             for E, OUT, IN in ss:
                 sig.setdefault((proj, E, OUT, IN), []).append(
@@ -284,7 +286,7 @@ def attribute(rec, sig):
 def rel_path(rec):
     L = f"L{rec['layer']:03d}" if rec.get("layer") is not None else "L___"
     return pathlib.Path("fits", rec["family"], rec["teacher"], L, rec["proj"],
-                        f"d{rec['d']}-K{rec['K']}", rec["fit_id"])
+                        geo_key(rec['d'], rec['K']), rec["fit_id"])
 
 
 # ------------------------------------------------------------------- index
@@ -346,13 +348,11 @@ def read_index(root):
 
 
 def write_index(root, recs):
-    p = index_path(root)
-    tmp = p.with_suffix(".jsonl.tmp")
-    tmp.write_text("".join(json.dumps(r, sort_keys=True) + "\n"
-                           for r in sorted(recs.values(), key=lambda r: (
-                               r["family"], r["teacher"], r.get("layer") or -1,
-                               r["proj"], r["d"], r["K"], r["fit_id"]))))
-    os.replace(tmp, p)
+    write_text_atomic(index_path(root), "".join(
+        json.dumps(r, sort_keys=True) + "\n"
+        for r in sorted(recs.values(), key=lambda r: (
+            r["family"], r["teacher"], r.get("layer") or -1,
+            r["proj"], r["d"], r["K"], r["fit_id"]))))
 
 
 def recipe_for(part_file, module):
@@ -398,10 +398,10 @@ def file_fit(root, rec, move=False):
     if not dst.exists():
         h, base = read_header(src)
         if len(modules_in(h)) == 1 and set(h) == {rec["module"] + s for s in _SUFFIXES}:
-            shutil.copyfile(src, dst.with_suffix(".tmp"))
+            copy_atomic(src, dst)
         else:
-            _extract(src, h, base, rec["module"], dst.with_suffix(".tmp"))
-        os.replace(dst.with_suffix(".tmp"), dst)
+            with atomic_path(dst) as tmp:     # the store is shared between boxes
+                _extract(src, h, base, rec["module"], tmp)
     h2, base2 = read_header(dst)
     again = describe(dst, h2, base2, rec["module"])
     if again["fit_id"] != rec["fit_id"]:
@@ -413,7 +413,7 @@ def file_fit(root, rec, move=False):
             full.update(blk)
     rec = {**rec, "location": str(dst), "sha256": full.hexdigest(),
            "filed": datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds")}
-    rp.with_suffix(".json").write_text(json.dumps(rec, indent=1, sort_keys=True))
+    write_text_atomic(rp.with_suffix(".json"), json.dumps(rec, indent=1, sort_keys=True))
     return rec
 
 

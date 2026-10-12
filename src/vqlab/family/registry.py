@@ -7,6 +7,7 @@ lived inline in fit_moe.py, was text-scraped-and-exec'd by
 verify_artifact.py, and was duplicated (with a diverged name) in
 fit_dense_vq.py; one table, imported everywhere, ends that.
 """
+from vqlab.core.source.teacher_profiles import profiles_in, read_profile
 
 FAMILY = {
     "qwen3_5": {
@@ -161,6 +162,25 @@ def family_dirs():
     """The family folders, checkout first, the user's overriding."""
     from vqlab import config
     return [config.checkout_families_dir(), config.families_dir()]
+
+
+def iter_profiles():
+    """{(family, teacher): profile} for every readable teacher profile: the
+    checkout's first, the user's overriding (core/source/teacher_profiles)."""
+    return profiles_in(family_dirs())
+
+
+def teacher_profile(family, teacher):
+    """One teacher's profile, by the same precedence as iter_profiles (the
+    user's over the checkout's), or None when no readable one exists. A
+    name is a folder name, never a path."""
+    if any(not n or "/" in n or "\\" in n or n.startswith(".") for n in (family, teacher)):
+        return None
+    for d in reversed(family_dirs()):
+        prof = read_profile(d / family / "teachers" / teacher / "profile.json")
+        if prof is not None:
+            return prof
+    return None
 
 
 def _load_data_entries():

@@ -6,7 +6,6 @@ from __future__ import annotations
 
 import json
 import shlex
-import socket
 import subprocess
 from typing import Any, Dict
 
@@ -39,7 +38,7 @@ def _box_state(name: str, b: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def gpu_state(boxes: bool = True) -> Dict[str, Any]:
-    out = {"host": socket.gethostname().split(".")[0], "lease": str(lease_path()),
+    out = {"host": config.short_host(), "lease": str(lease_path()),
            "lease_holder": _lease_holder(), "exo_instances": _exo_instances(),
            "lab_state": _lab_state(), "this_host": _this_host()}
     try:   # every box's reservation (`vqlab reserve`), from the shared file

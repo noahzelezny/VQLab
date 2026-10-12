@@ -34,23 +34,19 @@ import json
 import os
 import pathlib
 import re
-import socket
 import sys
 
 from vqlab import config
 from vqlab.util.clock import now
+from vqlab.util.fs import write_json_atomic
 
 FILE = "vqlab-reservations.json"
-
-
-def _host() -> str:
-    return socket.gethostname().split(".")[0]
 
 
 def here() -> str:
     """This box's name: its [boxes.NAME] entry when it has one, else the
     short hostname."""
-    return config.this_box() or _host()
+    return config.this_box() or config.short_host()
 
 
 def who() -> str:
@@ -135,6 +131,12 @@ def get(box: str) -> dict | None:
     return next((r for r in active() if r.get("box") == box), None)
 
 
+def get_by_host() -> dict | None:
+    """A reservation made by this machine's hostname (from a box with no
+    [boxes] name for it); hostnames compare case-insensitively."""
+    return next((r for r in active() if config.is_this_host(r.get("box"))), None)
+
+
 def _writable_store() -> tuple[pathlib.Path, bool]:
     """(path, shared?) -- the shared file when its directory is reachable."""
     p = shared_path()
@@ -164,9 +166,7 @@ def _locked(p: pathlib.Path):
 
 
 def _write(p: pathlib.Path, rs: list) -> None:
-    tmp = p.with_name(p.name + f".tmp{os.getpid()}")
-    tmp.write_text(json.dumps({"schema": "vqlab.reservations/1", "reservations": rs}, indent=1))
-    tmp.replace(p)
+    write_json_atomic(p, {"schema": "vqlab.reservations/1", "reservations": rs})
 
 
 def reserve(box: str, for_: str, until: str, note: str = "", force: bool = False) -> dict:
@@ -181,13 +181,13 @@ def reserve(box: str, for_: str, until: str, note: str = "", force: bool = False
                          + "; --force to replace it, or ask them")
     p, shared = _writable_store()
     rec = {"box": box, "for": for_, "until": t.isoformat(timespec="seconds"),
-           "note": note, "by": f"{who()}@{_host()}", "created": _now().isoformat(timespec="seconds")}
+           "note": note, "by": f"{who()}@{config.short_host()}", "created": _now().isoformat(timespec="seconds")}
     with _locked(p):
         rs = [r for r in _active(_read(p)) if r.get("box") != box] + [rec]
         _write(p, rs)
     if not shared:
         print(f"WARNING: {shared_path().parent} is not reachable; this reservation is in "
-              f"{p} and visible ONLY on {_host()}", file=sys.stderr)
+              f"{p} and visible ONLY on {config.short_host()}", file=sys.stderr)
     return dict(rec, store=str(p))
 
 
@@ -229,7 +229,7 @@ def refusal(box: str, override: bool = False) -> str | None:
     A reservation for the caller ($VQLAB_WHO / login) is not a refusal."""
     r = get(box)
     if r is None and box in (None, "", "here"):
-        r = get(_host())              # reserved by hostname from a box that has no name for this one
+        r = get_by_host()             # reserved by hostname from a box that has no name for this one
     if not r or r.get("for") == who() or override:
         return None
     return (f"REFUSED: {describe(r)}. You are {who()} ($VQLAB_WHO). Ask them, wait, or pass "

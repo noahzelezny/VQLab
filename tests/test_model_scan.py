@@ -22,6 +22,7 @@ def box(tmp_path, monkeypatch):
     for v in (*C._ENV.values(), "HF_HOME", "HF_HUB_CACHE", "EXO_HOME"):
         monkeypatch.delenv(v, raising=False)
     monkeypatch.setattr(M, "_home", lambda: home)
+    monkeypatch.setenv("HF_HOME", str(home / ".cache" / "huggingface"))   # config.hf_cache()
     monkeypatch.setenv("VQLAB_CONFIG", str(tmp_path / "c.toml"))
     monkeypatch.setenv("VQLAB_MODELS_DIR", str(tmp_path / "models"))
     monkeypatch.setenv("VQLAB_TEACHERS_DIR", str(tmp_path / "teachers"))
@@ -86,3 +87,10 @@ def test_odd_folders_cost_one_row_not_the_scan(box):
         os.chmod(locked, 0o755)
     assert rows["a/List"]["use"] == "unreadable"
     assert rows["zz/Last"]["use"] == "original"              # after the unreadable folder
+
+
+def test_a_torn_index_line_costs_one_row(box):
+    M.write([{"name": "a"}, {"name": "b"}])
+    p = M.index_path()
+    p.write_text(p.read_text() + '{"name": "c", "trunc\n')
+    assert [r["name"] for r in M.load()] == ["a", "b"]

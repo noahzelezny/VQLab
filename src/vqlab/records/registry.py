@@ -31,7 +31,6 @@ import json
 import os
 import pathlib
 import re
-import socket
 import sys
 
 from vqlab.core.artifacts.hub import git_blob_sha1, remote_files
@@ -39,6 +38,8 @@ from vqlab.records import provenance
 from vqlab.runtime import runtime_profile
 
 from vqlab import config as _config
+from vqlab.util.fs import read_jsonl
+from vqlab.util.geo import geo_key
 
 REG = _config.registry_dir() / "artifacts.jsonl"   # <records>/registry (vqlab.config)
 HUB = _config.registry_dir() / "hub.jsonl"         # latest Hub comparison per repo
@@ -77,7 +78,7 @@ def vq_specs(cfg):
 def geometry_mix(cfg):
     specs = vq_specs(cfg)
     c = collections.Counter(("ple:" if s["kind"] == "ple" else "")
-                            + f"d{s.get('dim')}-K{s.get('k')}" for s in specs.values())
+                            + geo_key(s.get('dim'), s.get('k')) for s in specs.values())
     return dict(sorted(c.items())), len(specs)
 
 
@@ -94,7 +95,7 @@ def entry(d: pathlib.Path) -> dict:
     name = d.name
     hf = name.replace(HF_OWNER_SEP, "/", 1) if HF_OWNER_SEP in name else None
     return {
-        "name": name, "path": str(d), "host": socket.gethostname().split(".")[0],
+        "name": name, "path": str(d), "host": _config.short_host(),
         "hf_repo": hf, "model_type": cfg.get("model_type"),
         "vq_modules": n, "geometry": geo,
         "text_gib": round(text_bytes / 2 ** 30, 3), "shards": len(shards),
@@ -109,13 +110,9 @@ def entry(d: pathlib.Path) -> dict:
 
 
 def read_reg():
-    out = {}
-    if REG.exists():
-        for line in REG.read_text().splitlines():
-            if line.strip():
-                e = json.loads(line)
-                out[(e["host"], e["path"])] = e
-    return out
+    # strict: write_reg rewrites the file from this, so a torn line must stop
+    # the rewrite rather than be dropped from it
+    return {(e["host"], e["path"]): e for e in read_jsonl(REG, strict=True)}
 
 
 def write_reg(reg):
@@ -167,12 +164,7 @@ def hub_diff(art: pathlib.Path, repo: str, deep=False):
 
 def _save_hub(repo, rev, art, rows, deep):
     """Keep the LATEST comparison per repo (the GUI and `list` read it)."""
-    hub = {}
-    if HUB.exists():
-        for line in HUB.read_text().splitlines():
-            if line.strip():
-                h = json.loads(line)
-                hub[h["repo"]] = h
+    hub = {h["repo"]: h for h in read_jsonl(HUB, strict=True)}     # rewritten below: strict
     hub[repo] = {"repo": repo, "revision": rev, "local": art, "deep": deep,
                  "checked": datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds"),
                  "drift": [{"file": n, "state": s_, "note": nt} for n, s_, nt in rows

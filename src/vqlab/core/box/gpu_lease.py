@@ -9,6 +9,7 @@ import errno
 import fcntl
 import json
 import os
+import subprocess
 import time
 from pathlib import Path
 from typing import Any, Dict, Optional
@@ -89,3 +90,20 @@ def pid_alive(pid: Optional[int]) -> bool:
         return True
     except OSError:
         return False
+
+
+def pid_cmdline(pid: Optional[int]) -> Optional[str]:
+    """The command line of process PID on this machine: "" when there is no
+    such process, None when `ps` itself could not say (so a caller never
+    reads a failed lookup as a dead process). A live pid alone may have been
+    reused; its command line says whose it is now."""
+    if not pid:
+        return ""
+    try:
+        r = subprocess.run(["ps", "-o", "command=", "-p", str(int(pid))],
+                           capture_output=True, text=True, timeout=10)
+    except (OSError, ValueError, subprocess.TimeoutExpired):
+        return None
+    if r.returncode and r.stderr.strip():
+        return None                 # ps failed; "no such pid" is rc 1 with nothing printed
+    return r.stdout.strip()

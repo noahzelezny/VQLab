@@ -276,6 +276,8 @@ def test_eta_from_history_and_unknown(tmp_path):
 
 def test_status_prints_eta(tmp_path, monkeypatch, capsys):
     monkeypatch.setenv("VQLAB_QUEUE_DIR", str(tmp_path))
+    # the state's pid is this test process: let it pass for the queue's runner
+    monkeypatch.setattr(report, "pid_cmdline", lambda pid: "python -m vqlab.cli queue run q.json")
     st = {"name": "s", "cmd": "smoke", "args": []}
     d = _queue(tmp_path, "20261003-a", [st], [{"name": "s", "status": "pending"}])
     report.status(d)

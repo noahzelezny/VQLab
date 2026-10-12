@@ -55,6 +55,7 @@ import functools
 import os
 import pathlib
 import re
+import socket
 import tomllib
 
 from vqlab import _layout
@@ -176,6 +177,18 @@ def boxes() -> dict:
     return _file_table(str(config_file()), "boxes")
 
 
+def short_host() -> str:
+    """This machine's short hostname, as recorded in queue state, reservations
+    and the registry (case as the system reports it)."""
+    return socket.gethostname().split(".")[0]
+
+
+def is_this_host(name: str | None) -> bool:
+    """Whether a recorded host NAME is this machine. Hostnames are
+    case-insensitive, and records written before a rename of case stay ours."""
+    return bool(name) and name.lower() == short_host().lower()
+
+
 def this_box() -> str | None:
     """The [boxes.NAME] this process runs on: $VQLAB_BOX (`queue run --on`
     sets it on the remote), else the box whose NAME or `hostname` is this
@@ -183,8 +196,7 @@ def this_box() -> str | None:
     env = os.environ.get("VQLAB_BOX")
     if env:
         return env
-    import socket
-    host = socket.gethostname().split(".")[0].lower()
+    host = short_host().lower()
     for name, b in boxes().items():
         if host in (name.lower(), str(b.get("hostname", "")).lower()):
             return name
@@ -294,6 +306,12 @@ def queues_dir() -> pathlib.Path:
     """Queue run records: $VQLAB_QUEUE_DIR, else <records>/queues."""
     env = os.environ.get("VQLAB_QUEUE_DIR")
     return pathlib.Path(env).expanduser() if env else records() / "queues"
+
+
+def queue_files_dir() -> pathlib.Path:
+    """Queue files the GUI offers to start (a compiled Recipe lands here):
+    <records>/queue-files."""
+    return records() / "queue-files"
 
 
 # Where records lived before they moved under `records` (2026-10): a checkout's

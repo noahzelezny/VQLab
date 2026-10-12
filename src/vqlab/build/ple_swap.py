@@ -19,6 +19,8 @@ import pathlib
 import shutil
 import sys
 
+from vqlab.util.geo import geo_key
+
 
 def _ple_key(k):
     return ".ngram_embedding." in k
@@ -109,7 +111,7 @@ def main():
     json.dump(cfg, open(out / "config.json", "w"), indent=1)
     g = dcfg["vq_ple"]["geometry"]
     print(f"ple-swap: {len(dkeys)} PLE keys from {donor.name} "
-          f"(d{g['dim']}-K{g['k']}, {g.get('row_bytes')} B/row) onto "
+          f"({geo_key(g['dim'], g['k'])}, {g.get('row_bytes')} B/row) onto "
           f"{base.name}; {linked} symlinks, "
           f"{bi['metadata']['total_size']/2**30:.2f} GiB -> {out}")
 

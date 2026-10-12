@@ -37,6 +37,7 @@ import pathlib
 import sys
 
 from vqlab.fit.geo_build import part_name
+from vqlab.util.geo import geo_key
 
 TRIPLE = ("codebook", "codes", "vq_scales")
 
@@ -99,7 +100,7 @@ def main():
         for k in keys:
             tensors[k] = shard(wmap[k])[k]
         K, d = tensors[f"{m}.codebook"].shape
-        geom = f"d{d}-K{K}"
+        geom = geo_key(d, K)
         if a.geometry and geom != a.geometry:
             skipped += 1
             continue

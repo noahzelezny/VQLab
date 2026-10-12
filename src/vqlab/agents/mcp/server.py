@@ -35,11 +35,11 @@ pip-installed into them.
 from __future__ import annotations
 
 import json
-import socket
 import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from vqlab import config
 from vqlab.agents.mcp.common import ToolError
 from vqlab.agents.mcp.tools_findings import (VERDICTS, t_findings_append, t_findings_tail,
                                              t_next_f_number, t_release_f_number)
@@ -217,7 +217,7 @@ def handle(msg: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         return _ok(mid, {"protocolVersion": PROTOCOL_VERSION,
                          "capabilities": {"tools": {"listChanged": False}},
                          "serverInfo": {"name": SERVER_NAME, "version": SERVER_VERSION,
-                                        "host": socket.gethostname().split(".")[0]},
+                                        "host": config.short_host()},
                          "instructions": ("vqlab lab server for THIS box. Use where_is before claiming "
                                           "anything is missing. Read the law book (read_doc "
                                           "docs/FINDINGS.md) before proposing an experiment. "

@@ -30,9 +30,17 @@ def test_dead_runner_is_terminal(tmp_path):
     assert rq.wait([d], poll=0.01) == 4
 
 
-def test_running_times_out(tmp_path):
+def test_running_times_out(tmp_path, monkeypatch):
     d = _q(tmp_path, "d", "running", pid=os.getpid())
+    monkeypatch.setattr(rq, "pid_cmdline", lambda pid: f"python -m vqlab.cli queue run --resume {d}")
     assert rq.wait([d], timeout=0.05, poll=0.01) == 2
+
+
+def test_a_reused_pid_is_not_the_runner(tmp_path, monkeypatch):
+    d = _q(tmp_path, "e", "running", pid=os.getpid())     # alive, but not a queue runner
+    monkeypatch.setattr(rq, "pid_cmdline", lambda pid: "python -m pytest")
+    assert rq.wait([d], poll=0.01) == 4
+    assert rq.runner_pid(d, json.loads((d / "state.json").read_text()), strict=False) is None
 
 
 def test_mcp_queue_status(tmp_path, monkeypatch):
@@ -57,3 +65,45 @@ def test_written_paths_are_outputs():
     assert "--save-topk" not in steps.OUT_FLAGS
     for f in ("--kl-per-position", "--keep-dir"):
         assert f in steps.OUT_FLAGS
+
+
+def test_a_failed_ps_never_reads_as_a_dead_runner(tmp_path, monkeypatch):
+    d = _q(tmp_path, "f", "running", pid=os.getpid())
+    s = json.loads((d / "state.json").read_text())
+    monkeypatch.setattr(rq, "pid_cmdline", lambda pid: None)      # ps timed out / failed
+    assert rq.live_status(d, s) == "running"
+    assert rq.runner_pid(d, s, strict=False) == os.getpid()
+    assert rq.runner_pid(d, s, strict=True) is None               # never signal on a guess
+
+
+def test_strict_match_is_the_whole_queue_dir(tmp_path, monkeypatch):
+    d = _q(tmp_path, "x", "running", pid=os.getpid())
+    s = json.loads((d / "state.json").read_text())
+    monkeypatch.setattr(rq, "pid_cmdline", lambda pid: f"python -m vqlab.cli queue run --resume {d}-preflight")
+    assert rq.runner_pid(d, s, strict=True) is None
+    monkeypatch.setattr(rq, "pid_cmdline", lambda pid: f"python -m vqlab.cli queue run --resume {d} --force")
+    assert rq.runner_pid(d, s, strict=True) == os.getpid()
+
+
+def test_pid_cmdline_tells_no_process_from_a_failed_ps(monkeypatch):
+    from vqlab.core.box import gpu_lease
+    assert gpu_lease.pid_cmdline(os.getpid()) != ""
+    gone = next(p for p in range(99990, 30000, -1) if not gpu_lease.pid_alive(p))
+    assert gpu_lease.pid_cmdline(gone) == ""
+
+    def broken(*a, **k):
+        raise OSError("no ps")
+    monkeypatch.setattr(gpu_lease.subprocess, "run", broken)
+    assert gpu_lease.pid_cmdline(os.getpid()) is None
+
+
+def test_a_host_reservation_matches_in_any_case(tmp_path, monkeypatch):
+    from vqlab import config
+    from vqlab.queue import reserve
+    monkeypatch.setenv("VQLAB_RESERVATIONS", str(tmp_path / "r.json"))
+    monkeypatch.setattr(reserve, "local_path", lambda: tmp_path / "local.json")
+    monkeypatch.setattr(config, "this_box", lambda: None)
+    monkeypatch.setattr(reserve, "who", lambda: "me")
+    reserve.reserve(config.short_host().swapcase(), "someone", "+1h")
+    assert reserve.get_by_host()["for"] == "someone"
+    assert reserve.refusal("here") is not None

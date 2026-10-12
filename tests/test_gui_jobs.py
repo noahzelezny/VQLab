@@ -3,45 +3,38 @@ through `vqlab queue run`, once, with the token of the plan the operator
 confirmed."""
 import json
 import signal
-import socket
 import subprocess
 
 import pytest
 
+from vqlab import config
 from vqlab.agents import gui, jobs
+from vqlab.util.errors import UserError
+from vqlab.queue import report as qreport
 
 STEP = {"name": "s1", "cmd": "smoke", "args": ["--max-tokens", "8"],
         "preflight": {"args": ["--max-tokens", "1"]}}
-HERE = socket.gethostname().split(".")[0]
+HERE = config.short_host()
 
 
 @pytest.fixture
-def lab(tmp_path, monkeypatch):
-    monkeypatch.setenv("VQLAB_RECORDS", str(tmp_path / "records"))
-    monkeypatch.setenv("VQLAB_QUEUE_DIR", str(tmp_path / "queues"))
-    monkeypatch.setenv("VQLAB_SCRATCH", str(tmp_path / "scratch"))
-    (tmp_path / "scratch").mkdir()
-    (tmp_path / "queues").mkdir()
-    files = tmp_path / "records" / "queue-files"
+def lab(lab_dirs, monkeypatch):
+    files = config.queue_files_dir()
     files.mkdir(parents=True)
     (files / "night.json").write_text(json.dumps({"name": "night", "steps": [STEP]}))
     monkeypatch.setattr(jobs.exo, "exo_instances", lambda: None)
     monkeypatch.setattr(jobs, "lease_holder", lambda: None)
-    monkeypatch.setattr(jobs, "_TOKENS", {})
+    monkeypatch.setattr(jobs, "_TOKENS", jobs.ConfirmTokens())
     calls = []
 
-    class R:
-        returncode, stderr = 0, ""
-        stdout = f"detached (pid 1); vqlab queue status {tmp_path}/queues/20260101-000000-night"
-
-    def run(argv, **k):
-        if argv[0] == "ps":
-            return type("P", (), {"stdout": runner_cmd[0]})()
-        calls.append(argv)
-        return R()
+    def run_cli(*args, timeout):
+        calls.append(list(args))
+        out = f"detached (pid 1); vqlab queue status {lab_dirs.queues}/20260101-000000-night\n"
+        return subprocess.CompletedProcess(args, 0, out, "")
+    monkeypatch.setattr(jobs.qf, "run_cli", run_cli)
     runner_cmd = [""]
-    monkeypatch.setattr(jobs.subprocess, "run", run)
-    return tmp_path, calls, runner_cmd
+    monkeypatch.setattr(qreport, "pid_cmdline", lambda pid: runner_cmd[0])
+    return lab_dirs.root, calls, runner_cmd
 
 
 def _queue(root, name, **state):
@@ -66,11 +59,15 @@ def test_start_needs_the_confirmed_token_once(lab):
     p = jobs.plan({"file": "night.json"})
     assert p["preflight"] is True and [s["name"] for s in p["steps"]] == ["s1"]
     assert p["problems"] == [] and p["eta_s"] is None          # no past run: unknown, not 0
-    assert jobs.start({"file": "night.json", "token": "nope"})["ok"] is False and calls == []
+    assert p["writes"] == 0                                    # a small preflight: not measured
+    with pytest.raises(UserError, match="not confirmed"):
+        jobs.start({"file": "night.json", "token": "nope"})
+    assert calls == []
     r = jobs.start({"file": "night.json", "token": p["token"]})
     assert r["ok"] is True and r["id"] == "20260101-000000-night"
     assert _run_args(calls[0]) == [str(jobs._queue_file("night.json")), "--preflight", "--detach"]
-    assert jobs.start({"file": "night.json", "token": p["token"]})["ok"] is False   # spent
+    with pytest.raises(UserError):                             # spent
+        jobs.start({"file": "night.json", "token": p["token"]})
     assert len(calls) == 1
 
 
@@ -78,7 +75,9 @@ def test_an_edited_file_must_be_confirmed_again(lab):
     root, calls, _ = lab
     tok = jobs.plan({"file": "night.json"})["token"]
     (root / "records/queue-files/night.json").write_text(json.dumps({"name": "night", "steps": [STEP, STEP]}))
-    assert jobs.start({"file": "night.json", "token": tok})["ok"] is False and calls == []
+    with pytest.raises(UserError):
+        jobs.start({"file": "night.json", "token": tok})
+    assert calls == []
 
 
 def test_plan_sums_past_runs(lab):
@@ -89,10 +88,20 @@ def test_plan_sums_past_runs(lab):
     assert p["eta_s"] == 500 and p["steps"][0]["eta_s"] == 500
 
 
+def test_a_full_run_of_a_compiled_recipe_writes_its_estimate(lab):
+    root, _, _ = lab
+    q = {"name": "night", "estimate": {"artifact_gib": 1.0, "scratch_gib": 2.5},
+         "steps": [{**STEP, "preflight": {"args": ["--max-tokens", "1"], "writes_gib": 1}}]}
+    d = _queue(root, "e-preflight", preflight=True, status="passed")
+    (d / "queue.json").write_text(json.dumps(q))
+    assert jobs.plan({"file": "night.json"})["writes"] == 0
+    assert jobs.plan({"id": "e-preflight"})["writes"] == int(2.5 * 2**30)
+
+
 def test_full_run_once_from_a_passed_preflight_at_its_commit(lab):
     root, calls, _ = lab
     _queue(root, "a-preflight", preflight=True, status="failed")
-    with pytest.raises(ValueError):
+    with pytest.raises(UserError):
         jobs.plan({"id": "a-preflight"})
     d = _queue(root, "b-preflight", preflight=True, status="passed")
     p = jobs.plan({"id": "b-preflight"})
@@ -100,53 +109,83 @@ def test_full_run_once_from_a_passed_preflight_at_its_commit(lab):
     assert jobs.start({"id": "b-preflight", "token": p["token"]})["ok"] is True
     assert _run_args(calls[0]) == [str(d / "queue.json"), "--commit", "c0ffee", "--detach"]
     _queue(root, "c-full", status="running", source=str((d / "queue.json").resolve()))
-    with pytest.raises(ValueError, match="already started"):
+    with pytest.raises(UserError, match="already started"):
         jobs.plan({"id": "b-preflight"})
 
 
-def test_cli_timeout_is_reported_not_raised(lab, monkeypatch):
-    def slow(argv, **k):
-        raise subprocess.TimeoutExpired(argv, 120)
-    monkeypatch.setattr(jobs.subprocess, "run", slow)
+def test_cli_timeout_is_a_plain_refusal(lab, monkeypatch):
+    def slow(*args, timeout):
+        raise subprocess.TimeoutExpired(args, timeout)
+    monkeypatch.setattr(jobs.qf, "run_cli", slow)
     tok = jobs.plan({"file": "night.json"})["token"]
-    r = jobs.start({"file": "night.json", "token": tok})
-    assert r["ok"] is False and "queue list" in r["error"]
+    with pytest.raises(UserError, match="queue list"):
+        jobs.start({"file": "night.json", "token": tok})
 
 
 def test_paths_outside_the_lab_are_refused(lab):
-    for body in ({"file": "../queues/x.json"}, {"id": ".."}, {"id": "/etc"}):
-        with pytest.raises(ValueError):
+    for body in ({"file": "../queues/x.json"}, {"file": "night.txt"}, {"id": ".."}, {"id": "/etc"},
+                 {"id": ""}):
+        with pytest.raises(UserError):
             jobs.plan(body)
+
+
+def test_child_stays_in_its_root(tmp_path):
+    (tmp_path / "a.json").write_text("{}")
+    assert jobs._child(tmp_path, "a.json", ".json") == (tmp_path / "a.json").resolve()
+    assert jobs._child(tmp_path, "a.json", ".txt") is None
+    for name in ("..", "", "../x", "/etc", "a/../../x"):
+        assert jobs._child(tmp_path, name) is None
 
 
 def test_stop_signals_only_this_queues_runner(lab, monkeypatch):
     root, _, runner_cmd = lab
     sent = []
     monkeypatch.setattr(jobs.os, "kill", lambda pid, sig: sent.append((pid, sig)))
-    monkeypatch.setattr(jobs, "pid_alive", lambda pid: True)
+    monkeypatch.setattr(qreport, "pid_alive", lambda pid: True)
     _queue(root, "far", status="running", pid=42, host="elsewhere")
-    assert jobs.stop({"id": "far"})["ok"] is False
+    with pytest.raises(UserError):
+        jobs.stop({"id": "far"})
     _queue(root, "here", status="running", pid=42)
     runner_cmd[0] = "python -m some.other.thing"           # the pid was reused
-    assert jobs.stop({"id": "here"})["ok"] is False and sent == []
+    with pytest.raises(UserError):
+        jobs.stop({"id": "here"})
+    runner_cmd[0] = "python -m vqlab.cli queue run night.json"    # foreground: names no dir
+    with pytest.raises(UserError):
+        jobs.stop({"id": "here"})
+    assert sent == []
     runner_cmd[0] = f"python -m vqlab.cli queue run --resume {root}/queues/here"
     assert jobs.stop({"id": "here"})["ok"] is True and sent == [(42, signal.SIGTERM)]
 
     def gone(pid, sig):
         raise ProcessLookupError(pid)
     monkeypatch.setattr(jobs.os, "kill", gone)
-    assert jobs.stop({"id": "here"})["ok"] is False
+    with pytest.raises(UserError, match="could not stop"):
+        jobs.stop({"id": "here"})
 
 
-def test_resume_only_a_halted_queue_of_this_machine(lab):
-    root, calls, _ = lab
+def test_resume_only_a_halted_queue_of_this_machine(lab, monkeypatch):
+    root, calls, runner_cmd = lab
     _queue(root, "done", status="passed")
     _queue(root, "theirs", status="stopped", host="elsewhere")
-    assert jobs.resume({"id": "done"})["ok"] is False
-    assert jobs.resume({"id": "theirs"})["ok"] is False and calls == []
+    with pytest.raises(UserError):
+        jobs.resume({"id": "done"})
+    with pytest.raises(UserError, match="ran on elsewhere"):
+        jobs.resume({"id": "theirs"})
+    assert calls == []
+    _queue(root, "fg", status="running", pid=42)
+    monkeypatch.setattr(qreport, "pid_alive", lambda pid: pid == 42)
+    runner_cmd[0] = "python -m vqlab.cli queue run night.json"      # a foreground runner owns it
+    with pytest.raises(UserError):
+        jobs.resume({"id": "fg"})
     d = _queue(root, "lost", status="running", pid=None)     # runner died
     assert jobs.resume({"id": "lost"})["ok"] is True
     assert _run_args(calls[0]) == ["--resume", str(d), "--detach"]
+
+
+def test_a_host_recorded_in_another_case_is_this_machine(lab):
+    root, calls, _ = lab
+    _queue(root, "cased", status="stopped", host=HERE.swapcase())
+    assert jobs.resume({"id": "cased"})["ok"] is True
 
 
 def test_routes_are_wired():
@@ -158,7 +197,7 @@ def test_routes_are_wired():
 def test_a_preflight_without_a_commit_is_refused_plainly(lab):
     root, _, _ = lab
     _queue(root, "p-preflight", preflight=True, status="passed", commit="")
-    with pytest.raises(ValueError, match="no recorded commit"):
+    with pytest.raises(UserError, match="no recorded commit"):
         jobs.plan({"id": "p-preflight"})
 
 
@@ -167,4 +206,71 @@ def test_tokens_expire(lab, monkeypatch):
     tok = jobs.plan({"file": "night.json"})["token"]
     later = jobs.time.time() + jobs.TOKEN_TTL + 1
     monkeypatch.setattr(jobs.time, "time", lambda: later)
-    assert jobs.start({"file": "night.json", "token": tok})["ok"] is False and calls == []
+    with pytest.raises(UserError):
+        jobs.start({"file": "night.json", "token": tok})
+    assert calls == []
+
+
+def test_confirm_tokens_are_single_use_and_bound():
+    t = jobs.ConfirmTokens(ttl=60)
+    a = t.issue("digest-a")
+    assert t.spend(a, "digest-b") is False                # wrong digest: spent anyway
+    assert t.spend(a, "digest-a") is False
+    b = t.issue("digest-a")
+    assert t.spend(b, "digest-a") is True and t.spend(b, "digest-a") is False
+
+
+def test_preview_compiles_without_writing(lab, monkeypatch):
+    q = {"name": "r", "estimate": {"artifact_gib": 3.25, "scratch_gib": 7.5}, "steps": [STEP]}
+    monkeypatch.setattr(jobs.recipe_queue, "compile_recipe", lambda r: (q, ["a note"]))
+    p = jobs.preview({"recipe": {"name": "r"}})
+    assert p == {"ok": True, "steps": [{"name": "s1", "cmd": "smoke", "gpu": p["steps"][0]["gpu"],
+                                        "eta_s": None, "writes": 0}],
+                 "eta_s": None, "writes": int(7.5 * 2**30), "artifact_gib": 3.25, "warnings": ["a note"]}
+    assert list(config.queue_files_dir().glob("r.json")) == []
+
+
+def test_preview_refuses_a_bad_recipe(lab):
+    with pytest.raises(jobs.recipe_queue.RecipeError):
+        jobs.preview({"recipe": {"name": "Bad Name"}})
+
+
+def test_write_recipe_never_overwrites(lab, monkeypatch):
+    q = {"name": "r", "estimate": {"artifact_gib": 1.0, "scratch_gib": 1.0}, "steps": [STEP]}
+    monkeypatch.setattr(jobs.recipe_queue, "compile_recipe", lambda r: (q, []))
+    assert jobs.write_recipe({"recipe": {}}) == {"ok": True, "file": "r.json", "warnings": []}
+    with pytest.raises(UserError, match="already exists"):
+        jobs.write_recipe({"recipe": {}})
+
+
+def test_preview_over_http(lab, monkeypatch):
+    """One real round trip through gui.Handler: the Host check, a refused
+    request as 400 {ok: false, error}, a good one as 200."""
+    import http.client
+    import threading
+    from http.server import ThreadingHTTPServer
+    srv = ThreadingHTTPServer(("127.0.0.1", 0), gui.Handler)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    port = srv.server_address[1]
+
+    def post(host, body):
+        c = http.client.HTTPConnection("127.0.0.1", port, timeout=5)
+        c.request("POST", "/api/jobs/preview", body=body,
+                  headers={"Host": host, "Content-Type": "application/json"})
+        r = c.getresponse()
+        return r.status, json.loads(r.read() or b"null")
+    try:
+        assert post(f"evil.example:{port}", "{}")[0] == 403
+        code, body = post(f"127.0.0.1:{port}", json.dumps({"recipe": {"name": "Bad Name"}}))
+        assert code == 400 and body["ok"] is False and body["error"].startswith("name:")
+        assert post(f"127.0.0.1:{port}", "{not json")[0] == 400
+        def bug(r):
+            raise ValueError("a server bug, not a refusal")
+        monkeypatch.setattr(jobs.recipe_queue, "compile_recipe", bug)
+        assert post(f"127.0.0.1:{port}", json.dumps({"recipe": {}}))[0] == 500
+        q = {"name": "r", "estimate": {"artifact_gib": 1.0, "scratch_gib": 1.0}, "steps": [STEP]}
+        monkeypatch.setattr(jobs.recipe_queue, "compile_recipe", lambda r: (q, []))
+        code, body = post(f"127.0.0.1:{port}", json.dumps({"recipe": {"name": "r"}}))
+        assert code == 200 and body["ok"] is True and body["steps"][0]["name"] == "s1"
+    finally:
+        srv.shutdown()

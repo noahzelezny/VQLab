@@ -17,6 +17,7 @@ import pathlib
 import time
 
 from vqlab import config
+from vqlab.util.fs import read_jsonl
 
 
 def path() -> pathlib.Path:
@@ -59,17 +60,14 @@ def append(measured: dict, corpus: str, cache: dict, rec: dict, seen: set | None
 
 
 def read() -> list[dict]:
+    """Every line of the index. An unreadable index reads as empty and a torn
+    or non-object line is skipped: the index is a convenience, the
+    campaigns' own outputs are the record."""
     try:
-        lines = path().read_text().splitlines()
+        rows = read_jsonl(path())
     except OSError:
         return []
-    out = []
-    for ln in lines:
-        try:
-            out.append(json.loads(ln))
-        except ValueError:
-            continue
-    return out
+    return [r for r in rows if isinstance(r, dict)]
 
 
 def latest() -> list[dict]:

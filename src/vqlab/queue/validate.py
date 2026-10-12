@@ -40,6 +40,7 @@ import sys
 import time
 
 from vqlab import _layout, config
+from vqlab.util.fs import write_text_atomic
 
 # The folder that holds the vqlab package (src/ in a checkout, site-packages
 # in a wheel) and the directory gate commands run in (the repo root in a
@@ -76,11 +77,7 @@ def _load():
 
 
 def _save(entries):
-    queue = _queue()
-    queue.parent.mkdir(parents=True, exist_ok=True)
-    tmp = queue.with_suffix(".jsonl.tmp")
-    tmp.write_text("".join(json.dumps(e) + "\n" for e in entries))
-    tmp.replace(queue)
+    write_text_atomic(_queue(), "".join(json.dumps(e) + "\n" for e in entries))
 
 
 def cmd_add(a):

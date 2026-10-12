@@ -54,6 +54,8 @@ import subprocess
 import sys
 from vqlab import _layout, config
 from vqlab.core.artifacts.hub import is_backup  # local backups (.bak, .pre-*) are not outputs
+from vqlab.util.fs import read_jsonl, write_text_atomic
+from vqlab.util.geo import geo_key
 from vqlab.util.hashing import fingerprint as _fingerprint, sha256_file
 
 RECORD = "vqlab_provenance.json"
@@ -451,9 +453,7 @@ def make_portable(art, dry_run=False, prefixes=None) -> list:
         for p, before, after in changes:
             bak = p.with_name(p.name + ".bak")
             bak.write_text(before)
-            tmp = p.with_name(p.name + ".tmp")
-            tmp.write_text(after)
-            os.replace(tmp, p)
+            write_text_atomic(p, after)
     return changes
 
 
@@ -514,7 +514,7 @@ def summary(art, rec) -> str:
     if mods:
         by = {}
         for v in mods.values():
-            key = (v.get("origin"), f"d{v.get('dim')}-K{v.get('k')}")
+            key = (v.get("origin"), geo_key(v.get('dim'), v.get('k')))
             by[key] = by.get(key, 0) + 1
         L.append("  modules   " + ", ".join(f"{n} {o} {g}" for (o, g), n in sorted(by.items())))
     r = rec.get("runtime")
@@ -554,12 +554,8 @@ def lineage(art, depth=0, seen=None):
     if rec["id"] in seen:
         return
     seen.add(rec["id"])
-    hist = {}
-    hp = pathlib.Path(art) / HISTORY
-    if hp.exists():
-        for line in hp.read_text().splitlines():
-            h = json.loads(line)
-            hist[h["id"]] = h
+    # strict: a torn history line is a damaged record, said, not skipped
+    hist = {h["id"]: h for h in read_jsonl(pathlib.Path(art) / HISTORY, strict=True)}
     prev, d = rec.get("previous"), depth + 1
     chain = [rec]
     while prev:                            # in-place amendments, newest first

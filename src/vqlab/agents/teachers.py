@@ -15,13 +15,14 @@ to past rungs.
 """
 from __future__ import annotations
 
-import json
 import os
-import pathlib
 import subprocess
 import threading
 
 from vqlab import config
+from vqlab.agents import model_scan
+from vqlab.util.errors import UserError
+from vqlab.core.source import fit_store
 from vqlab.family import registry
 from vqlab.plan import recipe_queue
 from vqlab.queue import files as qf
@@ -31,55 +32,31 @@ _PROFILE_ERRORS: dict[str, str] = {}     # realpath -> why its last profile fail
 _LOCK = threading.Lock()
 
 
-def _profiles():
-    """(family, teacher, profile) for every profile; the checkout's first,
-    the user's overriding (as the registry reads them)."""
-    seen = {}
-    for root in registry.family_dirs():
-        for p in sorted(pathlib.Path(root).glob("*/teachers/*/profile.json")):
-            try:
-                seen[(p.parent.parent.parent.name, p.parent.name)] = json.loads(p.read_text())
-            except (OSError, ValueError):
-                continue
-    return seen
-
-
 def _fits() -> dict:
     """{(family, teacher): {"dD-KK": modules fitted}} from every fit store."""
-    from vqlab.core.source import fit_store
     out: dict = {}
     for root in fit_store.roots():
         for r in fit_store.read_index(root).values():
             g = out.setdefault((r["family"], r["teacher"]), {})
-            key = f"d{r['d']}-K{r['K']}"
+            key = recipe_queue.geo_key(r["d"], r["K"])
             g[key] = g.get(key, 0) + 1
     return out
 
 
 def _geometries(prof: dict) -> list[dict]:
     """Every (d, K) legal on ALL projections, with the expert stack's exact
-    GiB summed over them and whether a fit can be compiled at it."""
-    tables = prof.get("geometries") or {}
-    rows = {}
-    for proj, entries in tables.items():
-        for e in entries:
-            r = rows.setdefault((e["d"], e["K"]), {"d": e["d"], "K": e["K"], "gib": 0.0, "n": 0,
-                                                  "bpw": e.get("bits_per_weight"), "legal": True})
-            r["gib"] += e.get("stack_gib", 0.0)
-            r["n"] += 1
-            r["legal"] &= bool(e.get("legal")) and e.get("fused_kernel_ok", True) is not False
-    out = []
-    for (d, k), r in sorted(rows.items()):
-        if r["n"] != len(tables) or not r["legal"]:
-            continue
-        try:
-            recipe_queue.relerr_abort(d, k)
-            fit = True
-        except recipe_queue.RecipeError:
-            fit = False
-        out.append({"geo": f"d{d}-K{k}", "d": d, "K": k, "bpw": r["bpw"],
-                    "gib": round(r["gib"], 3), "fit": fit})
-    return out
+    GiB and whether a fit can be compiled at it (plan/recipe_queue.py)."""
+    return [{"geo": recipe_queue.geo_key(g.d, g.K), "d": g.d, "K": g.K, "bpw": g.bpw,
+             "gib": round(g.gib, 3), "fit": recipe_queue.has_relerr(g.d, g.K)}
+            for g in recipe_queue.legal_geometries(prof)]
+
+
+def _scanned() -> list[dict]:
+    """The model scan's rows; an unreadable index reads as no models."""
+    try:
+        return model_scan.load()
+    except OSError:
+        return []
 
 
 def _local(path: str) -> str | None:
@@ -91,7 +68,7 @@ def teachers() -> dict:
     fits = _fits()
     caches = {c["teacher"] for c in registry.teacher_caches()}
     out, have, names = [], set(), set()
-    for (family, teacher), prof in sorted(_profiles().items()):
+    for (family, teacher), prof in sorted(registry.iter_profiles().items()):
         if prof.get("unknown_family"):
             continue
         arch, by = prof.get("arch") or {}, (prof.get("bytes") or {})
@@ -111,12 +88,7 @@ def teachers() -> dict:
             "on_disk": local is not None, "buildable": family in recipe_queue.MOE | recipe_queue.DENSE,
             "scored": teacher in caches, "profiled": prof.get("created")})
     found = []
-    try:
-        from vqlab.agents import model_scan
-        rows = model_scan.load()
-    except (OSError, ValueError):
-        rows = []
-    for r in rows:
+    for r in _scanned():
         if r.get("use") != "original" or not r.get("path") or not r.get("family"):
             continue                 # quantized, or not a model family vqlab builds
         real = os.path.realpath(r["path"])
@@ -135,15 +107,10 @@ def profile(body: dict) -> dict:
     --teacher PATH` reads headers only and writes the user's families folder.
     Only a path the model scan found is accepted."""
     path = str(body.get("path") or "")
-    from vqlab.agents import model_scan
-    try:
-        rows = model_scan.load()
-    except (OSError, ValueError):
-        rows = []
-    known = {os.path.realpath(r["path"]) for r in rows if r.get("path")}
+    known = {os.path.realpath(r["path"]) for r in _scanned() if r.get("path")}
     real = os.path.realpath(path)
     if not path or real not in known:
-        return {"ok": False, "error": "not a model the scan found; rescan in Storage first"}
+        raise UserError("not a model the scan found; rescan in Storage first")
     with _LOCK:
         if real in _PROFILING:
             return {"ok": True, "running": True}
@@ -153,17 +120,15 @@ def profile(body: dict) -> dict:
     def go():
         err = None
         try:
-            pre, env, cwd = qf.cli_launch()
-            r = subprocess.run([*pre, "family-profile", "--teacher", path], env=env, cwd=cwd,
-                               capture_output=True, text=True, timeout=1800)
+            r = qf.run_cli("family-profile", "--teacher", path, timeout=1800)
             if r.returncode:
-                tail = " | ".join((r.stderr or "").strip().splitlines()[-3:])
+                tail = qf.output_tail(r, 3).replace("\n", " | ")
                 err = f"family-profile exited {r.returncode}" + (f": {tail}" if tail else "")
         except subprocess.TimeoutExpired:
             err = "family-profile timed out after 30 min"
-        except Exception as exc:         # a launch failure must still clear _PROFILING
+        except OSError as exc:
             err = f"could not run family-profile: {exc}"
-        finally:
+        finally:                         # whatever happened, the row stops saying "profiling"
             with _LOCK:
                 _PROFILING.discard(real)
                 if err:

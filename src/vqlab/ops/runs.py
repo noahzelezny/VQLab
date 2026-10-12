@@ -10,7 +10,6 @@ import os
 import re
 import shlex
 import signal
-import socket
 import subprocess
 import sys
 import time
@@ -49,7 +48,7 @@ def runs_dir() -> Path:
     env = os.environ.get("VQLAB_RUNS_DIR")
     if env:
         return Path(env)
-    return config.scratch() / "mcp-runs" / socket.gethostname().split(".")[0]
+    return config.scratch() / "mcp-runs" / config.short_host()
 
 
 def lab_state_path() -> Path:
@@ -65,7 +64,7 @@ def _lab_state() -> Dict[str, Any]:
 
 
 def _this_host() -> str:
-    return os.environ.get("VQLAB_HOSTNAME") or socket.gethostname().split(".")[0]
+    return os.environ.get("VQLAB_HOSTNAME") or config.short_host()
 
 
 def _read_meta(run_dir: Path) -> Dict[str, Any]:
@@ -136,7 +135,7 @@ def launch(cmd: str, args: Optional[List[str]] = None, tag: str = "",
     if cmd not in RESUMABLE:
         n_retries = 0
     meta = {"run_id": run_id, "cmd": cmd, "args": args, "tag": tag,
-            "host": socket.gethostname().split(".")[0], "python": sys.executable,
+            "host": config.short_host(), "python": sys.executable,
             "repo": str(REPO), "retries": n_retries, "status": "launching",
             "created": time.strftime("%Y-%m-%dT%H:%M:%S")}
     (rd / "meta.json").write_text(json.dumps(meta, indent=1))
@@ -198,7 +197,7 @@ def stop(run_id: str) -> Dict[str, Any]:
 def list_runs(n: int = 20) -> Dict[str, Any]:
     base = runs_dir()
     if not base.is_dir():
-        return {"host": socket.gethostname().split(".")[0], "runs": [], "runs_dir": str(base)}
+        return {"host": config.short_host(), "runs": [], "runs_dir": str(base)}
     dirs = sorted((d for d in base.iterdir() if d.is_dir()), reverse=True)[:max(1, n)]
     runs = []
     for d in dirs:
@@ -206,4 +205,4 @@ def list_runs(n: int = 20) -> Dict[str, Any]:
         if m.get("status") == "running" and not _pid_alive(m.get("supervisor_pid")):
             m["status"] = "lost"
         runs.append({k: m.get(k) for k in ("run_id", "cmd", "status", "exit_code", "created", "finished", "tag")})
-    return {"host": socket.gethostname().split(".")[0], "runs": runs, "runs_dir": str(base)}
+    return {"host": config.short_host(), "runs": runs, "runs_dir": str(base)}

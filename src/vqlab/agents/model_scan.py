@@ -39,8 +39,10 @@ import json
 import os
 import pathlib
 import sys
+import threading
 
 from vqlab import config
+from vqlab.util.fs import read_jsonl, write_text_atomic
 
 FULL = {"bfloat16", "float16", "float32", "bf16", "fp16", "fp32"}
 
@@ -58,13 +60,11 @@ def places(extra=()) -> list[tuple[str, pathlib.Path, str]]:
     layout: 'flat' (one folder per model, maybe nested one level as
     org/name), 'hf' (models--org--name/snapshots/<rev>), 'ollama'."""
     h = _home()
-    hf = str(config.hf_cache()) if os.environ.get("HF_HUB_CACHE") or os.environ.get("HF_HOME") \
-        else str(h / ".cache" / "huggingface" / "hub")      # _home(): the test hook
     exo = pathlib.Path(os.environ["EXO_HOME"]) / "models" if os.environ.get("EXO_HOME") \
         else h / ".exo" / "models"
     out = [("vqlab models", config.models(), "flat"),
            ("vqlab teachers", config.teachers(), "flat"),
-           ("Hugging Face cache", pathlib.Path(hf).expanduser(), "hf"),
+           ("Hugging Face cache", config.hf_cache(), "hf"),
            ("LM Studio", h / ".lmstudio" / "models", "flat"),
            ("LM Studio", h / ".cache" / "lm-studio" / "models", "flat"),
            ("exo", exo, "flat"),
@@ -204,26 +204,45 @@ def scan(extra=()) -> list[dict]:
 
 
 def write(rows) -> pathlib.Path:
-    p = index_path()
-    p.parent.mkdir(parents=True, exist_ok=True)
     stamp = datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds")
-    tmp = p.with_suffix(".tmp")
-    tmp.write_text("".join(json.dumps({**r, "scanned": stamp}) + "\n" for r in rows))
-    tmp.replace(p)
-    return p
+    return write_text_atomic(index_path(), "".join(json.dumps({**r, "scanned": stamp}) + "\n"
+                                                   for r in rows))
 
 
 def load() -> list[dict]:
-    p = index_path()
-    if not p.exists():
-        return []
-    return [json.loads(line) for line in p.read_text().splitlines() if line.strip()]
+    """The last scan's rows ([] before the first); a torn line costs that row."""
+    return read_jsonl(index_path())
 
 
 def refresh(extra=()) -> list[dict]:
     rows = scan(extra)
     write(rows)
     return rows
+
+
+_SCAN_LOCK = threading.Lock()      # held while a background scan runs
+
+
+def scanning() -> bool:
+    return _SCAN_LOCK.locked()
+
+
+def refresh_in_background() -> bool:
+    """Rescan on a daemon thread, without holding up the caller (the GUI at
+    launch, Rescan, a finished download). A scan already running is not
+    started twice; returns whether this call started one."""
+    if not _SCAN_LOCK.acquire(blocking=False):
+        return False
+
+    def go():
+        try:
+            refresh()
+        except Exception as e:  # report, never kill the server that asked
+            print(f"vqlab lab scan: background scan failed: {type(e).__name__}: {e}", file=sys.stderr)
+        finally:
+            _SCAN_LOCK.release()
+    threading.Thread(target=go, daemon=True).start()
+    return True
 
 
 def main(argv=None) -> int:

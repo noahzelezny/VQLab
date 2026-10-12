@@ -51,6 +51,7 @@ from vqlab.core.artifacts.artifact import tensor_class
 from vqlab.family.registry import DENSE_FAMILIES, FAMILY
 from vqlab.core.source import fit_store as fitstore
 from vqlab.records import provenance
+from vqlab.util.geo import geo_key
 
 GSZ = 64                       # scale group, every shipped geometry
 TG_BYTES = 32768               # threadgroup codebook cache ceiling
@@ -323,7 +324,7 @@ def main(argv=None) -> int:
     print("  source GiB: " + ", ".join(f"{k} {v}" for k, v in bc.items()))
     print(f"  VQ target: {prof['bytes']['vq_target_gib_per_bit']} GiB per bit per weight")
     for proj, gs in geos.items():
-        ok = [f"d{g['d']}-K{g['K']}" for g in gs if g["legal"]]
+        ok = [geo_key(g['d'], g['K']) for g in gs if g["legal"]]
         print(f"  {proj:10s} {sigs[proj]}  legal: {len(ok)} "
               f"({', '.join(ok[:6])}{', ...' if len(ok) > 6 else ''})")
     if not rows:

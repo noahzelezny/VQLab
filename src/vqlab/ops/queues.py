@@ -4,13 +4,12 @@
 from __future__ import annotations
 
 import json
-import socket
 from pathlib import Path
 from typing import Any, Dict, Optional
 
 from vqlab import config
-from vqlab.core.box.gpu_lease import pid_alive as _pid_alive
 from vqlab.queue import eta as _queue_eta
+from vqlab.queue.report import live_status
 
 
 def _queues_dir() -> Path:
@@ -19,18 +18,15 @@ def _queues_dir() -> Path:
 
 
 def queue_status(name: Optional[str] = None, n: int = 5) -> Dict[str, Any]:
-    """Queue state from state.json. A 'running' queue whose runner pid is gone
-    is 'died'."""
+    """Queue state from state.json. A 'running' queue of this machine whose
+    runner is gone is 'died' (queue/report.py live_status)."""
     qs = sorted(p for p in _queues_dir().glob("*") if (p / "state.json").exists())
     if name:
         qs = [p for p in qs if name in p.name]
     out = []
     for q in qs[-max(1, int(n)):]:
         s = json.loads((q / "state.json").read_text())
-        st = s["status"]
-        here = socket.gethostname().split(".")[0]
-        if st == "running" and s.get("host", here) == here and not _pid_alive(s.get("pid")):
-            st = "died"
+        st = live_status(q, s)
         live = st in ("running", "created")
         try:
             eta = _queue_eta.queue_eta(q, _queues_dir())
