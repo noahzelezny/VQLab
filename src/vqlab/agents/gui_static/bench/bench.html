@@ -138,11 +138,11 @@ svg.chart{width:100%;display:block;background:var(--bg);border:1px solid var(--l
 .kseg.small button{padding:5px 4px;font-size:.76em}
 /* readouts above the chart */
 .readouts{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:8px}
-.readout{background:var(--bg);border:1px solid var(--line);border-radius:var(--r);padding:6px 10px;min-width:0}
-.readout b{display:block;font-size:1.3em;line-height:1.15;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.readout{background:var(--bg);border:1px solid var(--line);border-radius:var(--r);padding:4px 9px;min-width:0}
+.readout b{display:block;font-size:1.05em;line-height:1.15;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .readout.acc b{color:var(--acc);text-shadow:var(--glow)}.readout.ok b{color:var(--ok)}.readout.bad b{color:var(--bad)}.readout.warn b{color:var(--warn)}
-.readout small{color:var(--faint);font-size:.72em;letter-spacing:.1em;text-transform:uppercase;display:block;white-space:nowrap}
-.readout .sub{color:var(--dim);font-size:.78em;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.readout small{color:var(--faint);font-size:.66em;letter-spacing:.1em;text-transform:uppercase;display:block;white-space:nowrap}
+.readout .sub{color:var(--dim);font-size:.72em;margin-top:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 @media(max-width:1100px){.readouts{grid-template-columns:repeat(3,1fr)}}
 /* teacher button + picker overlay, after knurlogic's model picker */
 .modal{position:fixed;inset:0;z-index:50;background:oklch(0 0 0/.6);display:flex;align-items:center;justify-content:center;padding:40px 24px}
@@ -186,6 +186,7 @@ svg.chart{width:100%;display:block;background:var(--bg);border:1px solid var(--l
 /* one screen: tighter vertical budget on the recipe page */
 .readouts.r3{grid-template-columns:repeat(3,1fr)}
 .recipe .legend{margin-top:6px}
+.rl .rohd.mid{font-size:.68em;margin:8px 0 2px}.recipe .cart .ro{font-size:.68em}.rl .readouts{margin-bottom:8px}
 .pkind{padding:8px 14px;border-bottom:1px solid var(--line)}
 
 /* (i): ported from Knurlogic page.css (.info/.bub) + ui/overlay.js placeInfo */
@@ -215,13 +216,12 @@ svg.chart{width:100%;display:block;background:var(--bg);border:1px solid var(--l
 .libpage h2{align-items:center}
 .ladder tbody tr{cursor:pointer}.ladder tbody tr:hover td{background:color-mix(in oklch,var(--fg) 4%,transparent)}.ladder tr.sel td{background:color-mix(in oklch,var(--acc) 12%,transparent)}
 #libchart .pt{cursor:pointer}
-.insp{font-size:.92em;padding:16px 18px}.insp .ro{margin:14px 0 6px}
-.ihead{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}.iname{font-weight:700;font-size:1.1em;color:var(--fg);word-break:break-all}
+.insp{font-size:.92em;padding:12px 16px}.insp .ro{margin:9px 0 4px}
+.ihead{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}.iact{display:flex;gap:6px;margin-left:auto;flex:none}.iact .btn{padding:5px 10px}.iname{font-weight:700;font-size:1.1em;color:var(--fg);word-break:break-all}
 .pills{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}.pill{border:1px solid var(--line);border-radius:999px;padding:2px 10px;font-size:.85em;color:var(--dim)}.pill.ok{color:var(--ok);border-color:color-mix(in oklch,var(--ok) 40%,transparent)}.pill.bad{color:var(--bad);border-color:color-mix(in oklch,var(--bad) 40%,transparent)}.pill.warn{color:var(--warn);border-color:color-mix(in oklch,var(--warn) 40%,transparent)}
-.kbar{display:grid;grid-template-columns:6.5em 1fr 8.5em;align-items:center;gap:10px;margin:4px 0}.kbar span{color:var(--dim)}.kbar i{height:8px;background:var(--line);border-radius:4px;overflow:hidden;display:block}.kbar i b{display:block;height:100%}.kbar em{font-style:normal;text-align:right;color:var(--fg)}
+.kbar{display:grid;grid-template-columns:6.5em 1fr 8.5em;align-items:center;gap:10px;margin:3px 0}.kbar span{color:var(--dim)}.kbar i{height:8px;background:var(--line);border-radius:4px;overflow:hidden;display:block}.kbar i b{display:block;height:100%}.kbar em{font-style:normal;text-align:right;color:var(--fg)}
 .kv2{display:flex;justify-content:space-between;padding:3px 0;color:var(--dim)}.kv2 b{color:var(--fg);font-weight:400}
 .compbar{display:flex;height:12px;border-radius:3px;overflow:hidden;gap:1px}.insp .key{margin-top:6px}
-.iacts{display:flex;flex-wrap:wrap;gap:8px;margin-top:16px;padding-top:12px;border-top:1px solid var(--line)}
 .libmain .legend{display:flex;gap:18px;margin-top:6px;font-size:.85em;color:var(--dim)}.libmain .legend>.info{margin-left:-10px;align-self:center}.libmain .legend .dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px}
 .chart .cu.aff:not(.ext){stroke-dasharray:none}.chart .cu.ext{stroke-dasharray:4 4;opacity:.6}
 .linkbtn{background:none;border:0;color:var(--acc);font:inherit;font-size:.9em;letter-spacing:0;text-transform:none;cursor:pointer;padding:0 2px}
@@ -296,7 +296,7 @@ input.fld.bad{border-color:var(--bad)}.fld.faint{color:var(--faint)}.fld.ro{curs
 .fldrow{margin-top:6px}.errslot{min-height:1.5em}
 .cart .ro.free{margin:8px 0 0}
 .readouts.r3.lead{margin-top:8px}
-.insp .pills{margin-top:14px}
+.insp .pills{margin-top:8px}
 .sp{flex:1}
 .st i.on{background:var(--warn)}
 .dbar i.other{background:var(--faint);opacity:.5}
@@ -312,6 +312,10 @@ input.fld.bad{border-color:var(--bad)}.fld.faint{color:var(--faint)}.fld.ro{curs
 #libchart .ownpt{fill:none;stroke:var(--mix);stroke-width:1.5}
 .libmain{display:flex;flex-direction:column;min-width:0}
 .libscroll{overflow:auto}
+.ltabs{display:flex;align-items:center;gap:4px;margin:10px 0 0;border-bottom:1px solid var(--line)}
+.ltabs button{padding:5px 12px;margin-bottom:-1px;font-size:.82em;letter-spacing:.08em;text-transform:uppercase;color:var(--dim);border:1px solid transparent;border-bottom:0;border-radius:var(--r) var(--r) 0 0}
+.ltabs button span{color:var(--faint)}.ltabs button:hover{color:var(--fg)}
+.ltabs button[aria-selected=true]{color:var(--acc);border-color:var(--line);background:var(--panel)}.ltabs .info{margin-left:auto}
 .stbl{flex:1;min-height:0}
 
 /* ---------- one screen: the shell fills the viewport; long content scrolls inside its own card */
@@ -324,6 +328,8 @@ input.fld.bad{border-color:var(--bad)}.fld.faint{color:var(--faint)}.fld.ro{curs
   .libmain,.jcol,.stl,.strt{min-height:0}
   .libscroll{flex:1;min-height:0}
   .lib3>.insp,.recipe>*,.jdet{min-height:0;overflow:auto}
+  .recipe>.rl{overflow:hidden;display:flex;flex-direction:column}.rl>*{flex:none}
+  .rl>#plan{flex:1;min-height:0;display:flex;flex-direction:column}.rl #plan .jdsteps.plan{flex:1;height:auto;max-height:none;min-height:3em}.rl #plan .pnotes{flex:none}
   .jcol{display:flex;flex-direction:column}.jobsel{flex:1;min-height:0}
   .stl>.cart:last-child{flex:1;min-height:0;display:flex;flex-direction:column}.lscroll{flex:1}
   .strt>.cart{display:flex;flex-direction:column;min-height:0;overflow:hidden}
@@ -438,6 +444,8 @@ const isMixed=r=>!!(r.mixed||(r.hf&&REG[r.hf]&&Object.keys(REG[r.hf].geo).filter
 const vqCol=r=>r.kind==='affine'?'var(--bad)':isMixed(r)?'var(--teal)':'var(--acc)';
 const SHIPS={"TheDrainFlorist/Qwen3.5-397B-A17B-VQ-2.2bpw": "tower+mtp", "TheDrainFlorist/Qwen3.5-397B-A17B-VQ-2.4bpw": "tower+mtp", "TheDrainFlorist/Qwen3.5-397B-A17B-VQ-2.6bpw": "tower+mtp", "TheDrainFlorist/Qwen3.5-397B-A17B-VQ-3.1bpw": "tower+mtp", "TheDrainFlorist/Qwen3.8-Flash-Next-VQ-2.1bpw": "tower+mtp", "TheDrainFlorist/Qwen3.8-Flash-Next-VQ-3.2bpw": "tower+mtp", "TheDrainFlorist/Qwen3.8-Flash-Next-VQ-4.4bpw": "tower+mtp", "TheDrainFlorist/Qwen3.8-Flash-Next-VQ-5.5bpw": "tower+mtp", "TheDrainFlorist/Qwen3.6-35B-A3B-VQ-3.4bpw": "tower", "TheDrainFlorist/Qwen3.6-35B-A3B-VQ-3.8bpw": "tower", "TheDrainFlorist/Qwen3.6-35B-A3B-VQ-4.6bpw": "tower", "TheDrainFlorist/Qwen3.6-35B-A3B-VQ-5.4bpw": "tower", "TheDrainFlorist/Qwen3.8-27B-VQ-3.9bpw": "tower", "TheDrainFlorist/Qwen3.8-27B-VQ-4.5bpw": "tower", "TheDrainFlorist/Qwen3.8-27B-VQ-4.8bpw": "tower", "TheDrainFlorist/gemma-4-26b-a4b-it-VQ-6.2bpw": "tower", "TheDrainFlorist/GLM-5.3-Flash-VQ-2.7bpw": "mtp", "TheDrainFlorist/GLM-5.3-Flash-VQ-3.1bpw": "mtp", "TheDrainFlorist/GLM-5.3-Flash-VQ-3.6bpw": "mtp"};
 for(const h of ['spicyneuron/Qwen3.5-397B-A17B-MLX-2.6bit','spicyneuron/Qwen3.5-397B-A17B-MLX-3.5bit','mlx-community/gemma-4-e4b-it-8bit','TheDrainFlorist/gemma-4-e4b-it-VQ-PLE'])SHIPS[h]='';
+// what the card-sourced repos ship (their README 'Also ships' lines)
+Object.assign(SHIPS,{'TheDrainFlorist/Qwen3.5-397B-A17B-VQ-3.5bpw':'tower+mtp','TheDrainFlorist/DeepSeek-V4-Flash-VQ-3.2bpw':'mtp','TheDrainFlorist/DeepSeek-V4-Flash-Vision-Exp-VQ-3.2bpw':'tower+mtp'});
 const shipTower=r=>/tower/.test(SHIPS[r.hf]||''),shipMtp=r=>/mtp/.test(SHIPS[r.hf]||'');
 const REG={};  // published repos' registry facts, rebuilt from /api/fleet by loadFleet (never an embedded snapshot)
 const SPEED={"schema":1,"finding":"F190","measured":"2026-09-30/2026-10-01","instrument":{"stage1":"vqlab speed-pair, one box, 96 GiB, fresh process per arm, alternating, n=3, prompt 2048, gen 128, runtime @ 6d77ffa (VQ arms re-baked --runtime at shipped profile)","stage3":"vqlab speed-pair-knurlogic, two-box pipeline split over tcp, MTP off, KNURLOGIC_PREFILL_CHUNK=2048, n=3, prompt 2048, gen 128, different-prompt warm-up; runtime @ 9efb7e9 / cd0c953 (tool fixes only)"},"note":"Ratios are B/A per alternating pair against the family reference IN THE SAME SETUP; never compare across setups. Local Flash-Next VQ 2.1/3.2/4.4 are lab candidates (config differs from Hub). 35B VQ-5.4 pair was bimodal (reference dropped 60->49 tok/s mid-pair): not quotable. active_gb_per_tok from vqlab active-bytes; GLM omitted (tool counts every expert as dense until the n_routed_experts fix lands). 35B re-paired against mlx-community 8-bit on 2026-10-01 (VQ-5.4 pair bimodal again: reference 54.8/68.3/72.9 tok/s). Flash split rebased to the 8-bit: each ratio = (build/4-bit)/(8-bit/4-bit), both pairs from the same session ('via').","families":{"qwen3.8-27b":{"setup":"stage1","reference":"Qwen--Qwen3.8-27B-8bit","builds":{"Qwen--Qwen3.8-27B-8bit":{"decode_x":1.0,"prefill_x":1.0,"decode_tok_s":23.0,"reference":true,"active_gb_per_tok":27.23,"effective_gb_s":626.3},"comparator_27b_q4":{"decode_x":1.637,"decode_range":[1.634,1.643],"prefill_x":1.021,"prefill_range":[1.016,1.023],"decode_tok_s":37.71,"peak_gb":18.15,"active_gb_per_tok":14.42,"effective_gb_s":543.8},"TheDrainFlorist--Qwen3.8-27B-VQ-3.9bpw":{"decode_x":1.277,"decode_range":[1.275,1.279],"prefill_x":0.964,"prefill_range":[0.961,0.966],"decode_tok_s":29.48,"peak_gb":15.33,"active_gb_per_tok":11.75,"effective_gb_s":346.4},"TheDrainFlorist--Qwen3.8-27B-VQ-4.5bpw":{"decode_x":1.23,"decode_range":[1.218,1.243],"prefill_x":0.958,"prefill_range":[0.956,0.963],"decode_tok_s":28.34,"peak_gb":17.47,"active_gb_per_tok":13.88,"effective_gb_s":393.4},"TheDrainFlorist--Qwen3.8-27B-VQ-4.8bpw":{"decode_x":1.315,"decode_range":[1.31,1.316],"prefill_x":0.961,"prefill_range":[0.951,0.963],"decode_tok_s":30.32,"peak_gb":18.54,"active_gb_per_tok":14.95,"effective_gb_s":453.3}}},"qwen3.6-35b":{"setup":"stage1","reference":"mlx-community--Qwen3.6-35B-A3B-8bit","builds":{"mlx-community--Qwen3.6-35B-A3B-8bit":{"decode_x":1.0,"prefill_x":1.0,"decode_tok_s":55.94,"reference":true,"peak_gb":38.75},"TheDrainFlorist--Qwen3.6-35B-A3B-VQ-3.4bpw":{"decode_x":1.035,"decode_range":[1.02,1.099],"prefill_x":0.846,"prefill_range":[0.838,0.848],"decode_tok_s":60.35,"peak_gb":15.59,"active_gb_per_tok":1.8},"TheDrainFlorist--Qwen3.6-35B-A3B-VQ-3.8bpw":{"decode_x":1.114,"decode_range":[1.067,1.131],"prefill_x":0.849,"prefill_range":[0.845,0.859],"decode_tok_s":60.46,"peak_gb":17.51,"active_gb_per_tok":1.86},"TheDrainFlorist--Qwen3.6-35B-A3B-VQ-4.6bpw":{"decode_x":1.082,"decode_range":[1.066,1.117],"prefill_x":0.804,"prefill_range":[0.798,0.812],"decode_tok_s":60.16,"peak_gb":20.78,"active_gb_per_tok":1.96},"TheDrainFlorist--Qwen3.6-35B-A3B-VQ-5.4bpw":{"decode_x":0.868,"decode_range":[0.805,0.918],"prefill_x":0.845,"prefill_range":[0.823,0.86],"decode_tok_s":58.68,"peak_gb":24.55,"active_gb_per_tok":2.08,"quotable":false}}},"gemma-4-e4b":{"setup":"stage1","reference":"mlx-community--gemma-4-e4b-it-8bit","builds":{"mlx-community--gemma-4-e4b-it-8bit":{"decode_x":1.0,"prefill_x":1.0,"decode_tok_s":78.63,"reference":true,"active_gb_per_tok":4.84,"effective_gb_s":380.6},"TheDrainFlorist--gemma-4-e4b-it-VQ-PLE":{"decode_x":0.972,"decode_range":[0.972,0.999],"prefill_x":0.991,"prefill_range":[0.989,1.222],"decode_tok_s":77.39,"peak_gb":7.82,"active_gb_per_tok":4.86,"effective_gb_s":376.1}}},"qwen3.8-flash-next/one-box":{"setup":"stage1","reference":"Qwen--Qwen3.8-Flash-Next-3bit","builds":{"Qwen--Qwen3.8-Flash-Next-3bit":{"decode_x":1.0,"prefill_x":1.0,"decode_tok_s":22.19,"reference":true,"active_gb_per_tok":3.02,"effective_gb_s":67.0},"TheDrainFlorist--Qwen3.8-Flash-Next-VQ-2.1bpw":{"decode_x":0.819,"decode_range":[0.808,0.822],"prefill_x":0.93,"prefill_range":[0.909,1.051],"decode_tok_s":18.17,"peak_gb":50.65,"active_gb_per_tok":5.28,"effective_gb_s":95.9},"TheDrainFlorist--Qwen3.8-Flash-Next-VQ-3.2bpw":{"decode_x":0.725,"decode_range":[0.72,0.739],"prefill_x":0.852,"prefill_range":[0.785,0.916],"decode_tok_s":16.26,"peak_gb":76.75,"active_gb_per_tok":5.57,"effective_gb_s":90.6}}},"qwen3.8-flash-next/split":{"setup":"stage3","reference":"Qwen--Qwen3.8-Flash-Next-8bit","builds":{"Qwen--Qwen3.8-Flash-Next-4bit":{"decode_x":1.391,"prefill_x":1.431,"active_gb_per_tok":3.85,"via":"Qwen--Qwen3.8-Flash-Next-4bit"},"Qwen--Qwen3.8-Flash-Next-3bit":{"decode_x":1.416,"decode_range":[1.406,1.481],"prefill_x":1.425,"prefill_range":[1.197,1.488],"active_gb_per_tok":3.02,"via":"Qwen--Qwen3.8-Flash-Next-4bit"},"Qwen--Qwen3.8-Flash-Next-5bit":{"decode_x":1.32,"decode_range":[1.257,1.335],"prefill_x":1.318,"prefill_range":[1.213,1.777],"active_gb_per_tok":4.67,"via":"Qwen--Qwen3.8-Flash-Next-4bit"},"Qwen--Qwen3.8-Flash-Next-6bit":{"decode_x":1.018,"decode_range":[1.003,1.021],"prefill_x":1.202,"prefill_range":[1.156,1.75],"active_gb_per_tok":5.5,"via":"Qwen--Qwen3.8-Flash-Next-4bit"},"TheDrainFlorist--Qwen3.8-Flash-Next-VQ-4.4bpw":{"decode_x":0.947,"decode_range":[0.939,0.969],"prefill_x":1.249,"prefill_range":[1.12,1.265],"active_gb_per_tok":5.94,"via":"Qwen--Qwen3.8-Flash-Next-4bit"},"TheDrainFlorist--Qwen3.8-Flash-Next-VQ-5.5bpw":{"decode_x":0.887,"decode_range":[0.883,0.962],"prefill_x":1.092,"prefill_range":[0.844,1.107],"active_gb_per_tok":6.19,"via":"Qwen--Qwen3.8-Flash-Next-4bit"},"Qwen--Qwen3.8-Flash-Next-8bit":{"decode_x":1.0,"prefill_x":1.0,"active_gb_per_tok":7.15,"reference":true}}},"qwen3.5-397b/split":{"setup":"stage3","reference":"spicyneuron--Qwen3.5-397B-A17B-MLX-2.6bit","builds":{"spicyneuron--Qwen3.5-397B-A17B-MLX-2.6bit":{"decode_x":1.0,"prefill_x":1.0,"reference":true,"active_gb_per_tok":9.95},"TheDrainFlorist--Qwen3.5-397B-A17B-VQ-2.2bpw":{"decode_x":0.862,"decode_range":[0.856,0.868],"prefill_x":0.955,"prefill_range":[0.858,0.97],"active_gb_per_tok":8.33},"TheDrainFlorist--Qwen3.5-397B-A17B-VQ-2.4bpw":{"decode_x":0.89,"decode_range":[0.89,0.895],"prefill_x":0.928,"prefill_range":[0.864,1.001],"active_gb_per_tok":8.5},"TheDrainFlorist--Qwen3.5-397B-A17B-VQ-2.6bpw":{"decode_x":0.831,"decode_range":[0.823,0.843],"prefill_x":0.88,"prefill_range":[0.867,0.934],"active_gb_per_tok":8.73},"TheDrainFlorist--Qwen3.5-397B-A17B-VQ-3.1bpw":{"decode_x":0.771,"decode_range":[0.759,0.776],"prefill_x":0.832,"prefill_range":[0.761,0.852],"active_gb_per_tok":9.2}}},"glm-5.3-flash/split":{"setup":"stage3","reference":"zai-org--GLM-5.3-Flash-4bit","builds":{"zai-org--GLM-5.3-Flash-4bit":{"decode_x":1.0,"prefill_x":1.0,"reference":true},"zai-org--GLM-5.3-Flash-3bit":{"decode_x":1.077,"decode_range":[1.073,1.077],"prefill_x":1.119,"prefill_range":[1.103,1.153]},"TheDrainFlorist--GLM-5.3-Flash-VQ-2.7bpw":{"decode_x":0.81,"decode_range":[0.804,0.811],"prefill_x":1.104,"prefill_range":[1.061,1.115]},"TheDrainFlorist--GLM-5.3-Flash-VQ-3.1bpw":{"decode_x":0.758,"decode_range":[0.756,0.759],"prefill_x":0.923,"prefill_range":[0.899,1.037]},"TheDrainFlorist--GLM-5.3-Flash-VQ-3.6bpw":{"decode_x":0.696,"decode_range":[0.695,0.697],"prefill_x":0.964,"prefill_range":[0.948,1.019]}}}},"comparator_rule":"affine 8-bit where it runs in the setup; otherwise the largest affine that does (Flash one-box 3-bit, 397B spicyneuron 2.6-bit, GLM 4-bit)"};
@@ -480,8 +488,17 @@ const LIB_ROWS=[
   rows:[{id:'ple',what:'VQ PLE tables',kind:'vq',geo:'d2-K2048',gib:7.39,bpw:7.5,kl:[null,null,7.451],lit:true,top1:95.7,hf:'TheDrainFlorist/gemma-4-e4b-it-VQ-PLE'},{id:'q8',what:'affine q8 · mlx-community',kind:'affine',gib:8.38,bpw:8.5,kl:[null,null,8.149],lit:true,top1:95.7,hf:'mlx-community/gemma-4-e4b-it-8bit'}]},
  {id:'glm',n:'zai-org/GLM-5.3-Flash-BF16',short:'GLM-5.3-Flash',fam:'glm5_next',kind:'MoE · 42 layers',bytes:{mtp:6.094,vision:0},
   rows:[{id:'r27',what:'VQ-2.7bpw',kind:'vq',geo:'d4-K512',gib:108.0,bpw:2.7,kl:[190,66,120],top1:86.0,hf:'TheDrainFlorist/GLM-5.3-Flash-VQ-2.7bpw'},{id:'r31',what:'VQ-3.1bpw (mixed)',kind:'vq',mixed:true,gib:122.4,bpw:3.1,kl:[120,41,62],top1:89.2,hf:'TheDrainFlorist/GLM-5.3-Flash-VQ-3.1bpw'},{id:'r36',what:'VQ-3.6bpw (mixed)',kind:'vq',mixed:true,gib:141.1,bpw:3.6,kl:[70,24,30],top1:92.0,hf:'TheDrainFlorist/GLM-5.3-Flash-VQ-3.6bpw'}]},
+ // the DeepSeek families come from their model cards (README.md): KL to the exact teacher, cached top-64, 12288 tokens per corpus, mnats; a field a card does not state is null
+ {id:'dsv4',n:'deepseek-ai/DeepSeek-V4-Flash',short:'DeepSeek-V4-Flash',fam:'deepseek_v4',kind:'MoE · 43 layers · 256 experts',bytes:{mtp:2.38,vision:0},
+  rows:[{id:'r32',what:'VQ-3.2bpw (mixed)',kind:'vq',mixed:true,gib:106.4,bpw:3.21,kl:[153.0,50.7,47.6],top1:null,hf:'TheDrainFlorist/DeepSeek-V4-Flash-VQ-3.2bpw',src:'card',tip:'model card: d4/K2048, d4/K4096 on layers 24-35; KL to the exact teacher (the official FP4 release), cached top-64, 12288 tokens per corpus, rescored on Knurlogic 0.1.3; top-1 not on the card'}]},
+ {id:'dsv4v',n:'deepseek-ai/DeepSeek-V4-Flash-Vision-Exp',short:'DeepSeek-V4-Flash-Vision-Exp',fam:'deepseek_v4',kind:'MoE · 43 layers · 256 experts · vision',bytes:{mtp:10.53,vision:0.87},
+  rows:[{id:'r32',what:'VQ-3.2bpw',kind:'vq',gib:106.4,bpw:3.2,kl:[150.8,22.2,106.6],top1:null,hf:'TheDrainFlorist/DeepSeek-V4-Flash-Vision-Exp-VQ-3.2bpw',src:'card',tip:'model card: KL to the exact teacher, cached top-64, 12288 tokens per corpus, scored on Knurlogic 0.1.3 (its own cache, not comparable to the DeepSeek-V4-Flash row); top-1 and geometry not on the card'}]},
 ];
-LIB_ROWS.forEach(t=>{if(t.res){t.rows=RESULTS[t.res];t.real=true}else t.real=false});
+// published rows the paper table (RESULTS) lacks, read from each build's model card (README.md); null where the card is silent
+const CARD_ROWS={
+ q397:[{id:'r35',what:'VQ-3.5bpw (mixed)',kind:'vq',mixed:true,gib:141.2,bpw:3.5,kl:[58.7,24.9,5.3],top1:null,hf:'TheDrainFlorist/Qwen3.5-397B-A17B-VQ-3.5bpw',src:'card',tip:'model card: v2 mix (layers 42-59 refitted d2/K256); KL cached top-64, 12288 tokens per corpus, scored 2026-10-02 (the card re-scores VQ-3.1 on that cache, so its figures differ slightly from the paper row); top-1 not on the card'}],
+ q35:[{id:'r46',what:'VQ-4.6bpw (mixed)',kind:'vq',mixed:true,gib:17.9,bpw:4.6,kl:[33.7,409.2,58.3],top1:92.7,hf:'TheDrainFlorist/Qwen3.6-35B-A3B-VQ-4.6bpw',src:'card',tip:'model card: d2/K512 + d4/K2048, rich layers 30-39; text-only: card\'s 18.7 GiB minus its stated +0.83 GiB tower; KL cached top-64, 12288 tokens per corpus (2026-09-17 ladder)'}]};
+LIB_ROWS.forEach(t=>{if(t.res){t.rows=[...RESULTS[t.res],...(CARD_ROWS[t.id]||[])];t.real=true}else t.real=false});
 const MACHINES=[16,24,32,36,48,64,96,128,192,256,512];  // memory sizes, GB
 const osReserve=gb=>gb<=36?5:8;
 const ctxReserve=gb=>Math.round(Math.max(2,Math.min(8,gb*0.05)));
@@ -490,7 +507,6 @@ const fitBox=g=>MACHINES.find(gb=>usable(gb)>=g);
 const TE=id=>LIB_ROWS.find(t=>t.id===id);
 const creator=t=>{const o=org(t.n||t.name||'');return {'Qwen':'Qwen','zai-org':'Z.ai','deepseek-ai':'DeepSeek','google':'Gemma'}[o]||o||'other'};
 
-// ---- per-teacher models, all derived from the measured rows at load
 // ---- per-teacher models, all derived from the measured rows at load
 function lsq(pts){const n=pts.length,mx=pts.reduce((a,p)=>a+p[0],0)/n,my=pts.reduce((a,p)=>a+p[1],0)/n;const b=pts.reduce((a,p)=>a+(p[0]-mx)*(p[1]-my),0)/(pts.reduce((a,p)=>a+(p[0]-mx)**2,0)||1);return [my-b*mx,b]}
 function derive(t){
@@ -520,7 +536,7 @@ const newRecipe=()=>({v:2,teacher:'',mode:'vq',geo:'',tailOn:false,tailGeo:'',ta
 // the page and the one persisted flag that belongs to no page
 const UI={page:P.lib,stAdv:false};
 // per-page state; resources (FLEET, SCORES, TEACH, LIVE, ...) below share {data,err,timer}
-const lib={fam:'q35',sel:null,sort:{k:'gib',d:1},cols:{kl:false,bpw:false}};
+const lib={fam:'q35',tab:'pub',sel:null,sort:{k:'gib',d:1},cols:{kl:false,bpw:false}};
 const recipe={draft:newRecipe(),pv:{data:null,err:'',busy:false,key:'',resKey:'',timer:0},rb:{busy:false,err:''}};
 const jobs={sel:'',showPre:false,stepOpen:'',note:null,dlg:null};
 const dl={data:[],err:'',errs:{},busy:new Set(),onb:new Map(),onbP:null,timer:0};
@@ -529,16 +545,17 @@ try{const st=JSON.parse(localStorage.getItem(STORE_KEY)||localStorage.getItem('v
   if(st.draft&&st.draft.v===2)recipe.draft=st.draft;
   if(st.page!=null)UI.page=Math.min(Math.max(+st.page|0,0),PAGES.length-1);
   if(st.libFam&&TE(st.libFam))lib.fam=st.libFam;
+  if(st.libTab==='own')lib.tab='own';
   if(st.libCols)lib.cols={kl:!!st.libCols.kl,bpw:!!st.libCols.bpw};
   if(st.jobSel)jobs.sel=st.jobSel;if(st.showPre)jobs.showPre=true;if(st.stAdv)UI.stAdv=true}catch{}
 // exactly what is persisted
-function save(){try{localStorage.setItem(STORE_KEY,JSON.stringify({draft:recipe.draft,page:UI.page,libFam:lib.fam,libCols:lib.cols,jobSel:jobs.sel,showPre:jobs.showPre,stAdv:UI.stAdv}))}catch{}}
+function save(){try{localStorage.setItem(STORE_KEY,JSON.stringify({draft:recipe.draft,page:UI.page,libFam:lib.fam,libTab:lib.tab,libCols:lib.cols,jobSel:jobs.sel,showPre:jobs.showPre,stAdv:UI.stAdv}))}catch{}}
 
 // ================================================================ fleet and own builds
 // live fleet (vqlab gui): /api/fleet (registered artifacts) and /api/scores (measured KL cells).
 // REG feeds the published rows' inspector; FLEET and SCORES feed the own-builds group. A failed load shows its error and leaves them empty.
 const FLEET={data:[],err:'',at:0},SCORES={data:[],err:''};
-let OWN={own:[],extras:[]};  // computed once per loadFleet
+let OWN={own:[]};  // computed once per loadFleet
 async function loadFleet(){
   if(!LIVE_SERVER)return;FLEET.at=Date.now();
   const got=await latest('fleet',()=>Promise.all([api('/api/fleet'),api('/api/scores')]));if(!got)return;
@@ -550,7 +567,7 @@ async function loadFleet(){
   for(const x of newestBy(FLEET.data,x=>x.hf_repo||null,(x,c)=>inRoot(x)!==inRoot(c)?inRoot(x):newer(x,c))){const h=x.hub,b=x.bundle||{};
     nr[x.hf_repo]={geo:x.geometry||{},text:x.text_gib,profile:x.runtime&&x.runtime.profile,shards:x.shards,drift:h?(h.drift||[]).filter(d=>d.state!=='same').map(d=>d.file):null,checked:h&&h.checked?h.checked.slice(0,10):'',rev:h&&h.revision?h.revision.slice(0,7):'',scanned:x.scanned,verdict:b.verdict||'',note:b.note||''}}
   for(const k of Object.keys(REG))delete REG[k];Object.assign(REG,nr);
-  OWN={own:ownBuildsCalc(),extras:pubExtrasCalc()};libPick();
+  OWN={own:ownBuildsCalc()};libPick();
   if(sig()!==prev&&UI.page===P.lib)render()}
 // own builds: registered artifacts that are not published catalog rows, joined to /api/scores on the weight fingerprint
 // (the line whose runtime md5 matches the artifact's, else the newest); family by name, else a unique model_type; else none ("other")
@@ -559,12 +576,7 @@ function famOf(x){
   const mt=x.model_type||'',c=LIB_ROWS.filter(t=>mt&&(t.fam===mt||mt.startsWith(t.fam)));return c.length===1?c[0].id:null}
 // orgs that publish VQ rows in the catalog (comparator orgs do not count); a fleet artifact under one of them is published
 const pubOrgs=()=>new Set(LIB_ROWS.flatMap(t=>t.rows.filter(r=>(r.kind==='vq'||r.kind==='lab')&&r.hf).map(r=>org(r.hf))));
-const pubRepos=()=>new Set(LIB_ROWS.flatMap(t=>t.rows.map(r=>r.hf).filter(Boolean)));
 const bySize=(a,b)=>(a.x.text_gib||0)-(b.x.text_gib||0);
-// published artifacts the catalog tables lack: size from the fleet, no KL
-function pubExtrasCalc(){const rp=pubRepos(),og=pubOrgs();
-  return newestBy(FLEET.data.filter(x=>x.hf_repo&&og.has(org(x.hf_repo))&&!rp.has(x.hf_repo)),x=>x.hf_repo).map(x=>({x,fam:famOf(x)})).sort(bySize)}
-const extraRow=x=>({id:repoName(x.hf_repo),what:repoName(x.hf_repo),kind:'vq',geo:null,gib:x.text_gib==null?null:x.text_gib,bpw:null,kl:[null,null,null],top1:null,hf:x.hf_repo,extra:true});
 function ownBuildsCalc(){
   const og=pubOrgs();
   return newestBy(FLEET.data.filter(x=>!(x.hf_repo&&og.has(org(x.hf_repo)))),x=>x.fingerprint??'').map(x=>{
@@ -573,15 +585,16 @@ function ownBuildsCalc(){
       const best=[...pool].sort((p,q)=>String(q.time).localeCompare(String(p.time)))[0];if(best&&best.kl_mnats!=null)cells[c]={...best,other:!!md5&&!m.length}}
     const v=Object.values(cells).map(c=>c.kl_mnats);
     return {x,cells,fam:famOf(x),kl:v.length===3?mean(v):null}}).sort(bySize)}
-function ownTable(rows,na){
+function ownTable(rows){
   const geo=x=>{const k=Object.keys(x.geometry||{});return k.length?k.length>1?'mixed':k[0]:'—'};
   const cell=(o,c)=>{const m=o.cells[c];return m?`<td class="num${m.other?' faint':''}" title="${m.other?'other runtime '+esc(String(m.runtime||'').slice(0,8))+' · ':''}${esc(m.cache||'')} · SEM ${m.kl_sem_mnats==null?'—':fmt(m.kl_sem_mnats)}">${fmt(m.kl_mnats)}</td>`:`<td class="num faint">—</td>`};
   return `<table class="rungtab"><thead><tr><th>build</th><th class="num">GiB</th><th>geometry</th><th class="num">prose</th><th class="num">code</th><th class="num">literary</th></tr></thead><tbody>${
-    rows.map(o=>{const nm=na&&o.x.hf_repo?repoName(o.x.hf_repo):o.x.name;return `<tr><td class="what" title="${esc(nm)}"><span class="dot own"></span>${esc(nm)}</td><td class="num">${o.x.text_gib==null?'—':fmt(o.x.text_gib)}</td><td title="${esc(Object.entries(o.x.geometry||{}).map(([k,n])=>k+' × '+n).join(', '))}">${esc(geo(o.x))}</td>${Object.keys(o.cells).length?cell(o,'prose')+cell(o,'code')+cell(o,'lit'):`<td class="num faint" colspan="3"${na?' title="not in the published tables"':''}>${na?'—':'unscored'}</td>`}</tr>`}).join('')||'<tr><td colspan="6" class="faint">none</td></tr>'}</tbody></table>`}
-function ownBlock(t){
-  const mine=OWN.own.filter(o=>o.fam===t.id),other=OWN.own.filter(o=>!o.fam),pe=OWN.extras.filter(o=>!o.fam);
-  const info=INFO('Artifacts registered on this machine that are not published catalog rows. KL is the newest measurement per corpus for these exact weight bytes in the scores index (the line for the same runtime when there is one). Their caches can differ from the published rows, so do not compare across the two groups. An unscored build has no number and none is estimated.');
-  return `${pe.length?`<div class="ro lead">published · not in the tables ${INFO('Released builds found on this machine that the published tables lack: their size is read from disk and no KL is shown.')}</div>${ownTable(pe.map(o=>({x:o.x,cells:{}})),true)}`:''}<div class="ro lead">own builds · ${esc(t.short)} ${info}</div>${errLine(FLEET.err)}${errLine(SCORES.err)}${ownTable(mine)}${other.length?`<div class="ro lead">own builds · other</div>${ownTable(other)}`:''}`}
+    rows.map(o=>{return `<tr><td class="what" title="${esc(o.x.name)}"><span class="dot own"></span>${esc(o.x.name)}</td><td class="num">${o.x.text_gib==null?'—':fmt(o.x.text_gib)}</td><td title="${esc(Object.entries(o.x.geometry||{}).map(([k,n])=>k+' × '+n).join(', '))}">${esc(geo(o.x))}</td>${Object.keys(o.cells).length?cell(o,'prose')+cell(o,'code')+cell(o,'lit'):`<td class="num faint" colspan="3">unscored</td>`}</tr>`}).join('')||'<tr><td colspan="6" class="faint">none</td></tr>'}</tbody></table>`}
+// the own-builds tab: this family's builds, then builds that belong to no catalog family
+const ownOf=t=>({mine:OWN.own.filter(o=>o.fam===t.id),other:OWN.own.filter(o=>!o.fam)});
+function ownPane(t){
+  const {mine,other}=ownOf(t);
+  return `${errLine(FLEET.err)}${errLine(SCORES.err)}${ownTable(mine)}${other.length?`<div class="ro lead">no catalog family</div>${ownTable(other)}`:''}`}
 
 // ================================================================ charts
 // Charts draw at true pixel size (viewBox = rendered box), so labels are
@@ -628,7 +641,7 @@ function ladder(t,ship,minMac,link){
   const wb=v=>v==null?null:v===16?'bf16':v+'-bit',bp=v=>v==null?null:String(+fmt(v,2));
   const col=(id,label,val,w)=>({id,label,val,w});
   const C=[
-   col('build','build',r=>r.what,15),col('gib','GiB',r=>r.gib,5),col('mac','runs on',r=>r.gib,6.5),col('m','mean KL',r=>r.extra?null:mean(r.kl),6.5),
+   col('build','build',r=>r.what,15),col('gib','GiB',r=>r.gib,5),col('mac','runs on',r=>r.gib,6.5),col('m','mean KL',r=>mean(r.kl),6.5),
    ...(ex.kl?[col('p','prose',r=>r.one||r.lit?null:r.kl[0],6),col('c','code',r=>r.one||r.lit?null:r.kl[1],6),col('l','literary',r=>r.one?null:r.kl[2],6)]:[]),
    col('t','top-1',r=>r.top1,5.5),col('b','bpw',r=>r.bpw,5),
    ...(ex.bpw?[col('bx','experts',r=>libW(t,r).x,5.5),col('ba','attention',r=>libW(t,r).a,5.5),col('be',hasP?'embed/PLE':'embed',r=>libW(t,r).e,hasP?9:5.5),col('br','router',r=>libW(t,r).r,5.5)]:[]),
@@ -636,7 +649,7 @@ function ladder(t,ship,minMac,link){
   const sc=C.find(c=>c.id===lib.sort.k&&c.val)||C[1];
   const rows=[...ship].sort((a,b)=>{const x=sc.val(a),y=sc.val(b);if(x==null)return 1;if(y==null)return -1;return (x>y?1:x<y?-1:0)*lib.sort.d});
   const best={};
-  const KL={p:r=>r.extra||r.one||r.lit?null:r.kl[0],c:r=>r.extra||r.one||r.lit?null:r.kl[1],l:r=>r.extra||r.one?null:r.kl[2],m:r=>r.extra?null:mean(r.kl)};
+  const KL={p:r=>r.one||r.lit?null:r.kl[0],c:r=>r.one||r.lit?null:r.kl[1],l:r=>r.one?null:r.kl[2],m:r=>mean(r.kl)};
   for(const id in KL)best[id]=Math.min(...ship.map(KL[id]).filter(v=>v!=null));
   const txt=(c,r)=>{const id=c.id,w=libW(t,r);
     if(id==='gib')return r.gib==null?null:fmt(r.gib);if(id==='mac')return r.gib==null?null:minMac(r.gib,r);if(id==='t')return r.top1!=null?r.top1+'%':null;
@@ -649,14 +662,14 @@ function ladder(t,ship,minMac,link){
     const g=id==='m'?tog('kl',ex.kl,'columns of mean KL: prose, code, literary'):id==='b'?tog('bpw',ex.bpw,'columns of bits per weight: experts, attention, embed, router'):'';
     return sortTh(lib.sort,id,c.label,id==='build'?'':'num',{extra:g})};
   const td=(c,r)=>{const id=c.id;if(id==='sp')return '<td></td>';
-    if(id==='build')return `<td class="what" title="${esc(r.what)}"><span class="dot" style="background:${vqCol(r)}"></span>${esc(r.kind==='affine'?r.what.replace(/ ·.*| \(.*\)/,''):r.what.replace(/ \(.*\)/,''))}</td>`;
+    if(id==='build')return `<td class="what" title="${esc(r.tip?r.what+' · '+r.tip:r.what)}"><span class="dot" style="background:${vqCol(r)}"></span>${esc(r.kind==='affine'?r.what.replace(/ ·.*| \(.*\)/,''):r.what.replace(/ \(.*\)/,''))}${r.src==='card'?' <span class="ctag">card</span>':''}</td>`;
     if(id==='lnk')return `<td class="lnk">${link(r)?`<a href="${link(r)}" target="_blank" rel="noopener" title="${esc(org(r.hf))}">${esc(org(r.hf))} ↗</a>`:''}</td>`;
     if(KL[id]){const v=KL[id](r);return `<td class="num ${v!=null&&v===best[id]?'best':''}">${v==null?'—':fmt(v)}</td>`}
     const v=txt(c,r),inf=['bx','ba','be','br'].includes(id)&&libW(t,r).inf;return `<td class="num${inf?' faint':''}"${inf?' title="mlx_lm.convert defaults; this build was scored but not kept"':''}>${v==null?'—':v}</td>`};
   return `<table class="rungtab ladder"><colgroup>${C.map(c=>c.id==='sp'?'<col>':`<col${c.id==='build'?' data-build':''} data-w="${c.w}" style="width:${c.w}em">`).join('')}</colgroup><thead><tr>${C.map(th).join('')}</tr></thead><tbody>
-  ${rows.map(r=>`<tr class="${r.kind} ${r.id===lib.sel?'sel':''}" data-sel="${esc(r.id)}"${r.extra?' title="not in the published tables"':''}>${C.map(c=>td(c,r)).join('')}</tr>`).join('')||`<tr><td colspan="${C.length}" class="faint">nothing shipped yet</td></tr>`}
+  ${rows.map(r=>`<tr class="${r.kind} ${r.id===lib.sel?'sel':''}" data-sel="${esc(r.id)}">${C.map(c=>td(c,r)).join('')}</tr>`).join('')||`<tr><td colspan="${C.length}" class="faint">nothing shipped yet</td></tr>`}
   </tbody></table>`}
-function libShip(t){return [...t.rows.filter(r=>(r.kind==='vq'||r.kind==='affine')&&r.kl&&(r.kind==='affine'||r.hf)),...OWN.extras.filter(o=>o.fam===t.id).map(o=>extraRow(o.x))].sort((a,b)=>(a.gib||0)-(b.gib||0))}
+function libShip(t){return [...t.rows.filter(r=>(r.kind==='vq'||r.kind==='affine')&&r.kl&&(r.kind==='affine'||r.hf))].sort((a,b)=>(a.gib||0)-(b.gib||0))}
 // keep the selection on a shipped row of the open family (called when the family or the fleet changes)
 function libPick(){const ship=libShip(TE(lib.fam));if(!ship.some(r=>r.id===lib.sel))lib.sel=(ship.find(r=>r.kind==='vq')||ship[0]||{}).id}
 function inspector(t,r){
@@ -666,7 +679,7 @@ function inspector(t,r){
   const top=lab=>{if(!q8)return 5;const i={prose:0,code:1,literary:2}[lab];const v=i==null||q8.one?mean(q8.kl):q8.kl[i];return v!=null&&v>0?v:mean(q8.kl)};
   const bar=(lab,v)=>{if(v==null)return '';const T0=Math.min(top(lab),999),f=Math.max(0,Math.min(100,(1-Math.log(Math.max(v,T0)/T0)/Math.log(1000/T0))*100));return `<div class="kbar"><span>${lab}</span><i><b style="width:${f}%;${fill}"></b></i><em>${fmt(f)}% <span class="faint">${fmt(v)}</span></em></div>`};
   const tbar=p=>p==null?'':`<div class="kbar"><span>top-1</span><i><b style="width:${p}%;${fill}"></b></i><em>${fmt(+p)}%</em></div>`;
-  const kl=r.extra?'':r.one?bar('mean',mean(r.kl))+tbar(r.top1):r.lit?bar('literary',r.kl[2]):['prose','code','literary'].map((c,i)=>bar(c,r.kl[i])).join('')+bar('mean',mean(r.kl))+tbar(r.top1);
+  const kl=r.one?bar('mean',mean(r.kl))+tbar(r.top1):r.lit?bar('literary',r.kl[2]):['prose','code','literary'].map((c,i)=>bar(c,r.kl[i])).join('')+bar('mean',mean(r.kl))+tbar(r.top1);
   const comp=g?Object.entries(g.geo).sort((a,b)=>b[1]-a[1]):null,tot=comp?comp.reduce((a,c)=>a+c[1],0):0;
   const PAL=['var(--acc)','var(--teal)','var(--warn)','var(--g1)','var(--dim)'],col=k=>PAL[comp.findIndex(c=>c[0]===k)%PAL.length];
   const drift=g&&g.drift&&g.drift.length,stale=g&&g.verdict==='STALE',bad=g&&(g.verdict==='FAIL'||g.verdict==='MISSING');
@@ -677,21 +690,19 @@ function inspector(t,r){
    :!sd.quotable?kv('decode','noisy, re-run','dim')+kv('prefill','noisy, re-run','dim')
    :sk===sd.ref?kv('decode','1.00× reference')+kv('prefill','1.00× reference')
    :kv('decode',`${fmt(sd.x,2)}× <span class="faint">vs ${esc(speedShort(sd.ref))}</span>`)+kv('prefill',fmt(sd.prefill_x,2)+'×'));
-  const acts=[],lv=liveFor(t);
-  if(lv&&!r.extra)acts.push(`<button class="btn go" data-fork="${esc(r.id)}">${r.kind==='vq'?'Fork recipe →':'VQ build at this size →'}</button>`);
+  const lv=liveFor(t),fork=lv&&r.geo?`<button class="btn go" data-fork="${esc(r.id)}">${r.kind==='vq'?'Fork recipe →':'VQ at this size →'}</button>`:'';
   const size=kv('text weights',r.gib==null?'—':fmt(r.gib)+' GiB')+(vis&&shipTower(r)?kv('+ vision tower',fmt(r.gib+vis)+' GiB'):'')+(mtp&&shipMtp(r)?kv('+ MTP drafting',fmt(r.gib+(shipTower(r)?vis:0)+mtp)+' GiB'):'')+kv('smallest Mac',r.gib==null?'—':mac?mac+' GB':'cluster');
   const books=comp?`<div class="ro">codebooks <span class="faint">${tot} modules</span></div><div class="compbar">${comp.map(([k,n])=>`<i style="flex:${n};background:${col(k)}" title="${esc(k)} × ${n}"></i>`).join('')}</div><div class="key">${comp.map(([k,n])=>`<span><em style="background:${col(k)}"></em>${esc(k)} × ${n}</span>`).join('')}</div>`:'';
   const pills=g?`<div class="pills">${g.drift?`<span class="pill ${drift?'warn':'ok'}">${drift?'local differs: '+esc(g.drift.slice(0,2).join(', '))+(g.drift.length>2?' +'+(g.drift.length-2):''):'matches Hub'}</span>`:''}${g.verdict?`<span class="pill ${bad?'bad':stale?'warn':'ok'}" title="${esc(g.note)}">${bad?'bundle fails check':stale?'older runtime · same output':'runtime current'}${g.note?' '+INFO(esc(g.note)):''}</span>`:''}${g.profile?`<span class="pill">${esc(g.profile)}</span>`:''}${g.rev?`<span class="pill">rev ${esc(g.rev)}</span>`:''}</div>`:'';
   return `<div class="cart insp">
-    <div class="ihead"><div><div class="iname">${esc(r.hf?repoName(r.hf):r.what)}</div><div class="faint">${r.kind==='affine'?'affine · published comparator':(r.mixed||(comp&&comp.length>1)?'VQ · mixed':'VQ · flat')}${r.hf?' · '+esc(org(r.hf)):''}</div></div>${r.hf?`<a class="btn" href="https://huggingface.co/${esc(r.hf)}" target="_blank" rel="noopener">Hub ↗</a>`:''}</div>
-    <div class="ro">fidelity to teacher ${INFO(`${q8?"100% is this family's affine q8, per corpus":'100% is 5 mnats; this family has no scored q8'}. 0% is 1000 mnats, one nat per token. Log scale. The faint number is the KL, in millinats.${t.real?'':' Figures from the model card, not the shared instrument.'}`)}</div>${kl}
+    <div class="ihead"><div><div class="iname">${esc(r.hf?repoName(r.hf):r.what)}</div><div class="faint">${r.kind==='affine'?'affine · published comparator':(r.mixed||(comp&&comp.length>1)?'VQ · mixed':'VQ · flat')}${r.hf?' · '+esc(org(r.hf)):''}</div></div><div class="iact">${r.hf?`<a class="btn" href="https://huggingface.co/${esc(r.hf)}" target="_blank" rel="noopener">Hub ↗</a>`:''}${fork}</div></div>
+    <div class="ro">fidelity to teacher ${INFO(`${q8?"100% is this family's affine q8, per corpus":'100% is 5 mnats; this family has no scored q8'}. 0% is 1000 mnats, one nat per token. Log scale. The faint number is the KL, in millinats.${r.src==='card'?' Figures from the model card, scored on that card\'s own cache, not the paper instrument.':t.real?'':' Figures from the model card, not the shared instrument.'}`)}</div>${kl}
     ${spd}
     <div class="ro">size</div>${size}
     ${books}${pills}
-    <div class="iacts">${acts.join('')}</div>
   </div>`}
 function pgLibrary(){
-  const t=TE(lib.fam),vis=t.bytes.vision||0,ship=libShip(t),sel=ship.find(r=>r.id===lib.sel);
+  const t=TE(lib.fam),vis=t.bytes.vision||0,ship=libShip(t),sel=ship.find(r=>r.id===lib.sel),own=OWN.own.filter(o=>o.fam===t.id||!o.fam).length;
   const minMac=(g,r)=>{const m=fitBox(g+(shipTower(r)?vis:0));return m?m+' GB':'cluster'};
   const link=r=>r.hf?`https://huggingface.co/${esc(r.hf)}`:null;
   return `<section class="panel libpage"><h2>${pickHead('Library',esc(t.short))}</h2>
@@ -699,8 +710,8 @@ function pgLibrary(){
     <div class="libmain">
       <svg class="chart" id="libchart" role="img" aria-label="shipped builds, size against mean KL"></svg>
       <div class="legend"><span><span class="dot vq"></span>VQ flat</span><span><span class="dot mixed"></span>VQ mixed</span><span><span class="dot aff"></span>affine</span><span><span class="dot own"></span>own build</span>${INFO("▸ on mean KL adds prose, code and literary; ▸ on bpw adds experts, attn, embed (embed/PLE where the family has per-layer embeddings) and router. experts: VQ code bits log2(K)/d weighted by module count, affine bits + 32/group. The other three are quantization widths read from each build's config.json (bf16 = unquantized). — means no config found locally.")}</div>
-      <div class="ro lead">published ${INFO('The published catalog: measured results shipped with this page, one row per released build. Builds you made on this machine are listed under own builds.')}</div>
-      <div class="libscroll">${ladder(t,ship,minMac,link)}${ownBlock(t)}</div>
+      <div class="ltabs" role="tablist">${[['pub','Published',ship.length],['own','Own builds',own]].map(([k,n,c])=>`<button role="tab" aria-selected="${lib.tab===k}" data-ltab="${k}">${n} <span>${c}</span></button>`).join('')}${INFO(lib.tab==='pub'?'The published catalog: one row per released build. Most rows are paper results; rows tagged card come from the build\'s model card and were scored on that card\'s own cache, so do not compare them directly with the others. Builds you made on this machine are under Own builds.':'Artifacts registered on this machine that are not published catalog rows. KL is the newest measurement per corpus for these exact weight bytes in the scores index (the line for the same runtime when there is one). Their caches can differ from the published rows, so do not compare across the two groups. An unscored build has no number and none is estimated.')}</div>
+      <div class="libscroll">${lib.tab==='pub'?ladder(t,ship,minMac,link):ownPane(t)}</div>
     </div>
     ${inspector(t,sel)}
   </div>${PICKER()}</section>`}
@@ -860,9 +871,9 @@ function pgRecipe(){
     ${qrow('bits','bits',BITS)}${qrow('group','group',GROUPS,'Weights per scale-and-bias group: +32/group bits per weight.')}`;
   const ok=NAME_RE.test(r.name),addon=(k,label,gb)=>`<button class="addon" aria-pressed="${!!r[k]}" data-g="${k}"><i></i><span class="n">${label}</span><span class="t">+${fmt(gb)} GiB</span></button>`;
   return `<section class="panel"><h2>${head}${I('Drag the point to a geometry; notches are the geometries a fit can be compiled at, lines are Apple silicon boxes after macOS and context. Everything here is exact arithmetic from the teacher\'s profile.')}</h2>
-  <div class="readouts" id="readouts"></div>
   <div class="recipe">
-  <div>
+  <div class="rl">
+    <div class="readouts" id="readouts"></div>
     <svg class="chart" id="chart" role="img" aria-label="size of this recipe against geometry; drag to set"></svg>
     <div class="legend"><span><i class="k-acc"></i>this recipe</span><span><i class="k-dim"></i>${r.mode==='vq'?'geometry':'affine bits'}</span><span><i class="k-teal"></i>boxes, after OS and context</span></div>
     <div id="strip"></div>
@@ -1313,6 +1324,7 @@ function renderFlow(){
 // Library
 on('sel',(el,e)=>{if(e.target.closest('a'))return;lib.sel=el.dataset.sel;render()});
 on('grp',el=>{const g=el.dataset.grp;lib.cols[g]=!lib.cols[g];if(!lib.cols[g]&&(g==='kl'?['p','c','l']:['bx','ba','be','br']).includes(lib.sort.k))lib.sort={k:g==='kl'?'m':'b',d:1};redraw()});
+on('ltab',el=>{lib.tab=el.dataset.ltab;redraw()});
 on('fork',el=>{const t=TE(lib.fam),r=t.rows.find(q=>q.id===el.dataset.fork),lv=liveFor(t);if(lv)openRecipe(lv.id,r.geo)});
 on('sort',el=>{const k=el.dataset.sort;
   if(UI.page===P.storage)ST.sort=toggleSort(ST.sort,k,k==='name'?1:-1);else lib.sort=toggleSort(lib.sort,k,1);
