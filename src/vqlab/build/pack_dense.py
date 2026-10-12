@@ -104,8 +104,10 @@ def main(argv=None) -> int:
         del data
         mx.clear_cache()
 
-    json.dump({"metadata": {}, "weight_map": new_map},
-              open(OUT / "model.safetensors.index.json", "w"), indent=1)
+    # metadata.total_size from the shards just written: loaders size and
+    # place a model by it, and check-release refuses an index without it
+    from vqlab.core.artifacts.artifact import write_index
+    write_index(OUT, new_map)
     json.dump(cfg, open(OUT / "config.json", "w"), indent=1)
     for f in SRC.iterdir():
         if f.suffix in (".jinja",) or f.name.endswith(("tokenizer.json",

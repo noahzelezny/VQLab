@@ -177,11 +177,21 @@ def main(argv=None) -> int:
     print(f"spliced {len(mlp_2d)} VQ mlp tensors (renamed to base convention, "
           f"codes squeezed to 2D)")
 
-    json.dump({"metadata": {}, "weight_map": new_map},
-              open(OUT / "model.safetensors.index.json", "w"), indent=1)
+    # metadata.total_size from the shards just written: loaders size and
+    # place a model by it, and check-release refuses an index without it
+    from vqlab.core.artifacts.artifact import write_index
+    write_index(OUT, new_map)
 
     cfg = json.load(open(BASE / "config.json"))
     cfg["vq_linear"] = {FIT_TO_BASE[m]: dict(v) for m, v in mlp_cfg.items()}
+    # A base quantized per module (stream-convert writes one entry per
+    # module) names the MLPs just replaced; the loader would then try to
+    # affine-quantize a VQLinear ("Unable to quantize model of type
+    # VQLinear"). Those entries describe bytes this artifact no longer has.
+    for key in ("quantization", "quantization_config"):
+        if isinstance(cfg.get(key), dict):
+            for mod in cfg["vq_linear"]:
+                cfg[key].pop(mod, None)
     cfg["vq_embed"] = {}
     cfg["model_file"] = "model.py"
     json.dump(cfg, open(OUT / "config.json", "w"), indent=1)
