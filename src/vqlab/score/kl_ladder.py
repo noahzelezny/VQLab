@@ -173,6 +173,7 @@ def main():
     # What each rung IS, stamped before the first GPU minute and re-checked
     # after the last: another session rebundling a rung mid-campaign (F151)
     # is a filesystem write no power gate can see.
+    from vqlab.records import scores
     from vqlab.records.provenance import measured
     before = {r: measured(d) for r, d in rungs.items()}
 
@@ -210,6 +211,8 @@ def main():
                 with open(rj + ".tmp", "w") as f:
                     json.dump(rec, f)
                 os.replace(rj + ".tmp", rj)
+                if not a.preflight:          # a preflight cell is not a result
+                    scores.append(before[rname], cname, cm, rec)
             table[rname][cname] = rec
             print(f"    KL {rec['mean_kl_millinats']:.3f} "
                   f"+/- {rec.get('kl_sem_millinats', float('nan')):.3f} "

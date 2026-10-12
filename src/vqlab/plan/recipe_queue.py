@@ -31,6 +31,7 @@ Recipe (JSON):
      "mode": "vq", "geo": "d4-K256",
      "tail": {"from": 30, "geo": "d4-K512"},      optional: a mixed build
      "bits": 4, "group": 64,                       affine (and the dense base)
+     "protect_bits": 8,                            MoE: attention/embeddings/shared (struct base)
      "base": "<models>/org--name-4bit",            dense: the quantized incumbent
      "vision": true, "score": true}
 
@@ -114,6 +115,13 @@ def _legal(prof: dict, d: int, k: int) -> None:
             raise RecipeError(f"d{d}-K{k} is not a legal geometry for {proj} on this teacher")
 
 
+def _stack_gib(prof: dict, d: int, k: int) -> float:
+    """The expert/MLP stack at (d, K), summed over projections: the profile's
+    exact bytes for that geometry."""
+    return sum(next(r for r in rows if r["d"] == d and r["K"] == k).get("stack_gib", 0.0)
+               for rows in prof["geometries"].values())
+
+
 def _caches(teacher: str) -> list[str]:
     """`corpus=path` for the teacher's registered KL caches, one per corpus."""
     got = {}
@@ -175,7 +183,10 @@ def compile_recipe(r: dict) -> tuple[dict, list[str]]:
     bits, group = int(r.get("bits", 4)), int(r.get("group", 64))
     steps, warns = [], []
 
+    vis = by.get("vision", 0.0) if r.get("vision") else 0.0
     if mode == "affine":
+        art_gib = (by["carry"] + by["embed"] + by["vq_target"]) * (bits + 32 / group) / 16 + vis
+        scratch_gib = art_gib
         steps.append(_step("convert", "stream-convert",
                            ["--src", src, "--out", out, "--bits", bits, "--family", family],
                            {"full": "stream-convert has no partial mode",
@@ -186,9 +197,14 @@ def compile_recipe(r: dict) -> tuple[dict, list[str]]:
         _legal(prof, d, k)
         lo, hi = _layers(prof)
         struct = f"{work}/struct"
-        struct_gib = round(by["carry"] + by["embed"] + by["vq_target"] / 8, 1)
+        pb = int(r.get("protect_bits", 8))
+        if not 2 <= pb <= 8:
+            raise RecipeError("protect_bits (attention, embeddings, shared modules) must be 2-8")
+        skel_gib = (by["carry"] + by["embed"]) * (pb + 0.5) / 16      # affine, group 64
+        struct_gib = round(skel_gib + by["vq_target"] * 2.5 / 16, 1)   # experts: 2-bit markers
         steps.append(_step("struct-base", "stream-convert",
-                           ["--src", src, "--out", struct, "--struct", "--family", family],
+                           ["--src", src, "--out", struct, "--struct", "--protect-bits", pb,
+                            "--family", family],
                            {"full": "the fit needs the whole struct base", "writes_gib": struct_gib},
                            retries=1, timeout_s=6 * 3600, expect={"files": [f"{struct}/config.json"]}))
         args = ["--base", struct, "--src", src, "--out", out, "--vq-layers", f"{lo}-{hi}",
@@ -207,6 +223,13 @@ def compile_recipe(r: dict) -> tuple[dict, list[str]]:
                              f"({max(abort, relerr_abort(td, tk))}) applies to every layer")
             abort = max(abort, relerr_abort(td, tk))
         args += ["--relerr-abort", abort]
+        n = len(prof["arch"]["vq_layers"])
+        ntail = (hi - tail["from"] + 1) if tail else 0
+        stack = _stack_gib(prof, d, k) * (n - ntail) / n
+        if tail:
+            stack += _stack_gib(prof, *geometry(tail["geo"])) * ntail / n
+        art_gib = skel_gib + stack + vis
+        scratch_gib = struct_gib + art_gib
         one = f"{lo},{tail['from']}" if tail else f"{lo}"
         i = args.index("--vq-layers")
         steps.append(_step("fit", "fit-moe", args,
@@ -219,6 +242,9 @@ def compile_recipe(r: dict) -> tuple[dict, list[str]]:
         _legal(prof, d, k)
         lo, hi = _layers(prof)
         fit, build = f"{work}/fit", f"{work}/build"
+        base_gib = (by["carry"] + by["embed"]) * (bits + 32 / group) / 16
+        art_gib = base_gib + _stack_gib(prof, d, k) + vis
+        scratch_gib = 2 * art_gib + (0 if r.get("base") else base_gib + by["vq_target"] * (bits + 32 / group) / 16)
         if r.get("base"):            # the quantized incumbent, as the shipped dense build used
             base = source_path(r["base"])
         else:
@@ -285,7 +311,12 @@ def compile_recipe(r: dict) -> tuple[dict, list[str]]:
         else:
             warns.append(f"no KL caches are registered for {teacher}: not scored "
                          "(build them with `vqlab stream-score`, then register them)")
-    return {"name": name, "commit": "HEAD", "recipe": r, "steps": steps}, warns
+    return {"name": name, "commit": "HEAD", "recipe": r,
+            # estimates for the confirmation, not measurements: the artifact
+            # from the profile's exact per-geometry bytes, scratch = every
+            # intermediate the chain leaves (struct base, unpacked build)
+            "estimate": {"artifact_gib": round(art_gib, 2), "scratch_gib": round(scratch_gib, 1)},
+            "steps": steps}, warns
 
 
 def main(argv=None) -> int:

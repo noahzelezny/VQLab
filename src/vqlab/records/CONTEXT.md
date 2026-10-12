@@ -19,5 +19,6 @@ JSONL run log (per user), `vqlab_provenance.json` (per artifact), `registry/arti
 - `artifact_manifest.py`: `lab manifest`: tamper stamp, written outside the artifact
 - `provenance.py`: `lab provenance`: the build record an artifact carries; `code_state()`
 - `registry.py`: `lab registry`: one queryable index of every artifact, and Hub drift
+- `scores.py`: the scores index (`<records>/registry/scores.jsonl`): one line per KL cell `kl-ladder` measures, naming the artifact (shard fingerprint + runtime) and the instrument (cache, corpus, tokens, chunk); the GUI Library reads `latest()`
 - `runlog.py`: `lab runs`: one JSONL line when any `vqlab <cmd>` starts, one when it ends
 - `step_verdict.py`: did a queue step succeed? one rule, for every runner

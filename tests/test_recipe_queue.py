@@ -55,7 +55,10 @@ def test_moe_flat(fams):
     assert _args(q, "smoke")[0] == fit[fit.index("--out") + 1]
     assert steps.validate(q) == [] and warns == []
     pre = next(s for s in q["steps"] if s["name"] == "fit")["preflight"]
-    assert pre["writes_gib"] == 4.0                  # carry + embed + experts at 2 bits
+    # carry + embed at protect 8 (8.5 bpw) + experts as 2-bit markers (2.5 bpw)
+    assert pre["writes_gib"] == round(2.0 * 8.5 / 16 + 16.0 * 2.5 / 16, 1)
+    assert "--protect-bits" in _args(q, "struct-base")
+    assert q["estimate"]["artifact_gib"] > 0
 
 
 def test_expected_files_expand_where_the_step_runs(fams, monkeypatch, tmp_path):

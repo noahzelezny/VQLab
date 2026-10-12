@@ -216,7 +216,7 @@ def main(argv=None) -> int:
                                  description=__doc__.split("\n")[0])
     ap.add_argument("--teacher", required=True, help="bf16 teacher dir or HF snapshot")
     ap.add_argument("--family", help="families.py name (default: from model_type)")
-    ap.add_argument("--out", help="default: <repo>/families/<family>/teachers/<teacher>/")
+    ap.add_argument("--out", help="default: <families>/<family>/teachers/<teacher>/ (vqlab.config families_dir)")
     ap.add_argument("--suggest-entry", action="store_true",
                     help="print a draft families.py entry inferred from the index")
     ap.add_argument("--print", action="store_true", help="print the profile JSON")

@@ -136,14 +136,9 @@ def _writes(st: dict, preflight: bool) -> int | None:
     return qsteps.input_bytes(args, qf.REPO) or None
 
 
-def plan(body: dict) -> dict:
-    """What a start would run, for the confirmation: steps with the FULL
-    run's ETA (queue/eta.py: past runs of the same step, never a guess; a
-    preflight's own time is not recorded), what they write, scratch free, and
-    anything that would stop it on the GPU. Issues the start's token."""
-    qfile, flags = _source(body)
-    preflight = "--preflight" in flags
-    q = json.loads(qfile.read_text())
+def _rows(q: dict, preflight: bool) -> tuple[list[dict], float | None, int]:
+    """(steps with the full run's ETA and what each writes, total ETA or None
+    when any step has no past run, bytes written)."""
     past = queue_eta.past_runs(qf.queues_dir())
     rows, total, written = [], 0.0, 0
     for st in q.get("steps", []):
@@ -154,6 +149,34 @@ def plan(body: dict) -> dict:
                      "gpu": qsteps.needs_gpu(st), "eta_s": eta, "writes": w})
         total = None if total is None or eta is None else total + eta
         written += w or 0
+    return rows, total, written
+
+
+def preview(body: dict) -> dict:
+    """What a recipe would compile to, without writing it: the Recipe page's
+    step list, notes and full-run estimate."""
+    from vqlab.plan.recipe_queue import RecipeError, compile_recipe
+    try:
+        q, warns = compile_recipe(body.get("recipe") or {})
+    except RecipeError as e:
+        return {"ok": False, "error": str(e)}
+    rows, total, _ = _rows(q, preflight=False)
+    est = q["estimate"]
+    return {"ok": True, "steps": rows, "eta_s": total, "writes": int(est["scratch_gib"] * 2**30),
+            "artifact_gib": est["artifact_gib"], "warnings": warns}
+
+
+def plan(body: dict) -> dict:
+    """What a start would run, for the confirmation: steps with the FULL
+    run's ETA (queue/eta.py: past runs of the same step, never a guess; a
+    preflight's own time is not recorded), what they write, scratch free, and
+    anything that would stop it on the GPU. Issues the start's token."""
+    qfile, flags = _source(body)
+    preflight = "--preflight" in flags
+    q = json.loads(qfile.read_text())
+    rows, total, written = _rows(q, preflight)
+    if not preflight and q.get("estimate"):      # a compiled recipe knows its own size
+        written = int(q["estimate"]["scratch_gib"] * 2**30)
     gpu = any(r["gpu"] for r in rows)
     scratch = config.scratch()
     token = secrets.token_hex(16)

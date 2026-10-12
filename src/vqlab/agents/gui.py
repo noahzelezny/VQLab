@@ -20,8 +20,13 @@ nothing here computes a number of its own:
   /api/models/found   models already on this machine (vqlab lab scan; rescanned at
                     launch and by POST /api/models/scan)
 
+  /api/teachers      profiled teachers (sizes per geometry, fits, buildable) and
+                    scanned originals not yet profiled; POST /profile profiles one
+  /api/scores        measured KL cells, newest per artifact x cache (records/scores.py)
+  /api/downloads     Hub downloads into <teachers>; POST /start, /stop (agents/downloads.py)
   /api/jobs/files    queue files the Jobs page can start (<records>/queue-files)
-  POST /api/jobs/recipe  a Recipe -> a queue file (plan/recipe_queue.py)
+  POST /api/jobs/recipe  a Recipe -> a queue file (plan/recipe_queue.py); /preview
+                    the steps it would compile to, written nowhere
   POST /api/jobs/plan|start|stop|resume  a queue run (agents/jobs.py)
 
 Stdlib only; reads index files and small JSON, never a tensor, so it is safe
@@ -49,7 +54,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 
 from vqlab import config
-from vqlab.agents import jobs
+from vqlab.agents import downloads, jobs, teachers
 
 PAGE = pathlib.Path(__file__).resolve().parent / "gui_static" / "index.html"
 
@@ -237,6 +242,19 @@ def api_queues(q):
     return queues_snapshot(int(q.get("n", ["40"])[0]))
 
 
+def api_scores(_q):
+    from vqlab.records import scores
+    return scores.latest()
+
+
+def api_downloads(_q):
+    return downloads.downloads()
+
+
+def api_teachers(_q):
+    return teachers.teachers()
+
+
 def api_jobs_files(_q):
     return jobs.queue_files()
 
@@ -391,11 +409,12 @@ ROUTES = {"/api/fleet": api_fleet, "/api/provenance": api_provenance,
           "/api/queues": api_queues, "/api/settings": api_settings,
           "/api/scratch": api_scratch, "/api/storage/usage": api_storage_usage,
           "/api/models/found": api_models_found,
-          "/api/jobs/files": api_jobs_files, "/api/scratch/reclaimable": api_scratch_reclaimable}
+          "/api/jobs/files": api_jobs_files, "/api/teachers": api_teachers, "/api/downloads": api_downloads, "/api/scores": api_scores, "/api/scratch/reclaimable": api_scratch_reclaimable}
 POSTS = {"/api/settings": post_settings, "/api/models/scan": post_models_scan,
          "/api/pick-folder": post_pick_folder, "/api/jobs/plan": jobs.plan,
          "/api/jobs/start": jobs.start, "/api/jobs/stop": jobs.stop, "/api/jobs/resume": jobs.resume,
-         "/api/jobs/recipe": jobs.write_recipe}
+         "/api/jobs/recipe": jobs.write_recipe, "/api/jobs/preview": jobs.preview, "/api/teachers/profile": teachers.profile,
+         "/api/downloads/start": downloads.start, "/api/downloads/stop": downloads.stop}
 
 
 class Handler(BaseHTTPRequestHandler):
