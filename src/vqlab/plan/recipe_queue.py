@@ -12,10 +12,19 @@ it with; a chain is offered only for families whose pieces have each run:
   dense (qwen3_8_dense):  [stream-convert --bits: the base, unless an
                   incumbent is given] -> fit-dense -> build-dense --dry-run ->
                   build-dense -> pack-dense
-  affine (either):  stream-convert --bits
+  affine (either):  stream-convert --bits [--group] [--protect-bits: MoE
+                  mixed affine, experts at bits/group, the rest at protect/64]
 
 and every chain, whatever its mode, ends the same way: [graft ->
-vision-smoke] -> pin -> check-bundle --strict -> check-release -> [kl-ladder].
+vision-smoke] -> [sz-pack -> sz-check] -> pin -> check-bundle --strict ->
+check-release -> [kl-ladder].
+
+"skipzero" (MoE VQ only) drops the teacher's dead expert rows on disk the way
+every published Qwen3.5-397B build was made (docs/SKIPZERO.md, F175): sz-pack
+of the finished, grafted artifact, then sz-check, and the pin and every check
+after it run on the packed copy. It is offered only for a teacher whose dead
+rows were measured (families/<f>/teachers/<t>/skipzero.json), and the size it
+saves comes from those counts at the recipe's geometry (skipzero_gib).
 
 A compiled chain is proven by its PREFLIGHT, which runs every step small
 and real (the fit on one layer, plus the tail's first layer for a mixed
@@ -33,9 +42,11 @@ Recipe (JSON):
      "mode": "vq", "geo": "d4-K256",
      "tail": {"from": 30, "geo": "d4-K512"},      optional: a mixed build
      "bits": 4, "group": 64,                       affine (and the dense base)
-     "protect_bits": 8,                            MoE: attention/embeddings/shared (struct base)
+     "protect_bits": 8,                            MoE: attention/embeddings/shared (struct base;
+                                                   affine: optional, absent = uniform)
      "base": "<models>/org--name-4bit",            dense: the quantized incumbent
-     "vision": true, "score": true}
+     "vision": true, "score": true,
+     "skipzero": true}                             MoE vq: dead rows dropped on disk
 
 The teacher is a profiled teacher (`vqlab family-profile`); its profile
 gives the source path and the layers. Every path in the queue is written as
@@ -60,6 +71,9 @@ MOE = {"qwen3_5"}
 DENSE = {"qwen3_8_dense"}
 GEO = re.compile(r"^d(\d+)-?[kK](\d+)$")
 NAME = re.compile(r"^[a-z0-9][a-z0-9._-]{0,79}$")
+# the codebook dims sz-pack packs (skipzero_load.SUPPORTED_DIMS, a peer layer;
+# tests/test_recipe_queue.py holds the two equal)
+SZ_DIMS = (2, 4, 8)
 
 
 class RecipeError(UserError):
@@ -218,6 +232,43 @@ def _layers(prof: dict) -> tuple[list[int], str]:
     return vq, ",".join(map(str, vq))
 
 
+def skipzero_gib(prof: dict, sz: dict, layer_geo: dict) -> float:
+    """GiB that sz-pack drops from a build whose VQ layer L sits at geometry
+    layer_geo[L] = (d, K): per module with dead rows, its dead share of rows
+    times the module's exact bytes at that geometry (the profile's table),
+    less the row mask sz-pack keeps (one bit per row). Dead rows are a
+    teacher property, so this is the measured relation, not a fit: against
+    the published 397B builds it lands within 0.005 GiB of what sz-pack
+    recorded (skipzero.json "checks")."""
+    per = {(p, e["d"], e["K"]): e.get("bytes") for p, es in (prof.get("geometries") or {}).items()
+           for e in es}
+    rows, saved = sz["rows"], 0.0
+    for layer, projs in sz["dead_rows"].items():
+        geo = layer_geo.get(int(layer))
+        if geo is None:
+            continue
+        if geo[0] not in SZ_DIMS:
+            raise RecipeError(f"sz-pack packs dims {list(SZ_DIMS)} only, not {geo_key(*geo)}")
+        for proj, dead in projs.items():
+            b = per.get((proj, *geo))
+            if not b:
+                raise RecipeError(f"the profile has no byte count for {proj} at {geo_key(*geo)}")
+            if dead:
+                saved += dead / rows[proj] * b - rows[proj] / 8
+    return saved / 2 ** 30
+
+
+def _skipzero_rows(r: "Recipe") -> dict:
+    """The teacher's measured dead rows, or refused: skipzero is compiled
+    only where they were measured."""
+    sz = registry.teacher_skipzero(r.family, r.teacher)
+    if not sz or not sz.get("dead_rows"):
+        raise RecipeError(f"no dead rows are measured for {r.teacher} "
+                          f"(families/{r.family}/teachers/{r.teacher}/skipzero.json): "
+                          "skipzero is offered only where sz-pack has run")
+    return sz
+
+
 @dataclasses.dataclass(frozen=True)
 class Recipe:
     """A recipe, validated as far as it can be without the teacher's profile
@@ -231,11 +282,12 @@ class Recipe:
     group: int
     geo: tuple[int, int] | None     # vq only
     tail: tuple[int, int, int] | None   # MoE vq only: (from layer, d, K)
-    protect_bits: int               # MoE vq only
+    protect_bits: int | None        # MoE: vq struct base (default 8); affine mixed (None = uniform)
     base: str | None                # dense: the quantized incumbent
     vision: bool
     score: bool
     mtp: bool
+    skipzero: bool                  # MoE vq only: sz-pack the finished artifact
 
     @property
     def work(self) -> str:
@@ -270,17 +322,43 @@ class Recipe:
                 raise RecipeError('tail is {"from": layer, "geo": "dD-KK"}')
             if t:
                 tail = (_int(t.get("from", -1), "tail.from"), *geometry(t.get("geo")))
+        if mode == "affine" and r.get("protect_bits") is not None:
+            if family not in MOE:
+                raise RecipeError("protect_bits on an affine build splits experts from the rest; "
+                                  f"{family} has no experts")
+            pb = _int(r["protect_bits"], "protect_bits")
+            if not 2 <= pb <= 8:
+                raise RecipeError("protect_bits (attention, embeddings, shared modules) must be 2-8")
+        elif mode == "affine":
+            pb = None
+        if mode == "affine" and group not in (32, 64, 128):
+            raise RecipeError(f"group {group}: 32, 64 or 128")
+        sz = r.get("skipzero", False)
+        if not isinstance(sz, bool):
+            raise RecipeError(f"skipzero must be true or false, not {sz!r}")
+        if sz and not (mode == "vq" and family in MOE):
+            raise RecipeError("skipzero has run only on MoE VQ builds (qwen3_5, docs/SKIPZERO.md); "
+                              f"not on a {family} {mode} build")
         return cls(raw=r, name=name, family=family, teacher=teacher, mode=mode, bits=bits,
                    group=group, geo=geo, tail=tail, protect_bits=pb, base=r.get("base") or None,
-                   vision=bool(r.get("vision")), score=bool(r.get("score")), mtp=bool(r.get("mtp")))
+                   vision=bool(r.get("vision")), score=bool(r.get("score")), mtp=bool(r.get("mtp")),
+                   skipzero=sz)
 
 
 # Each chain builder -> (steps, artifact GiB, scratch GiB, warnings); `vis` is
 # the vision tower's GiB when the recipe grafts one, else 0.
 def _affine_steps(r: Recipe, prof: dict, src: str, by: dict, vis: float):
-    art_gib = _affine_gib(by["carry"] + by["embed"] + by["vq_target"], r.bits, r.group) + vis
-    steps = [_step("convert", "stream-convert",
-                   ["--src", src, "--out", r.out, "--bits", r.bits, "--family", r.family],
+    if r.protect_bits is None:       # uniform: stream-convert's group applies everywhere
+        art_gib = _affine_gib(by["carry"] + by["embed"] + by["vq_target"], r.bits, r.group) + vis
+    else:                            # mixed: experts bits/group, the rest protect/64
+        art_gib = (_affine_gib(by["vq_target"], r.bits, r.group)
+                   + _affine_gib(by["carry"] + by["embed"], r.protect_bits, 64) + vis)
+    args = ["--src", src, "--out", r.out, "--bits", r.bits, "--family", r.family]
+    if r.group != 64:
+        args += ["--group", r.group]
+    if r.protect_bits is not None:
+        args += ["--protect-bits", r.protect_bits]
+    steps = [_step("convert", "stream-convert", args,
                    {"full": "stream-convert has no partial mode",
                     "writes_gib": _convert_writes_gib(by, r.bits)},
                    retries=1, timeout_s=6 * 3600, expect={"files": [f"{r.out}/config.json"]})]
@@ -388,6 +466,20 @@ def _tail_steps(r: Recipe, src: str, by: dict):
                                retries=0, timeout_s=3600))
         else:
             warns.append("this teacher has no vision tower; nothing to graft")
+    if r.skipzero:
+        # as the published 397B builds were made: sz-pack of the finished,
+        # grafted artifact (config vq_skipzero.source; lab/queues/
+        # 2026-09-28-skipzero-397b-full-kl.json for the step shapes)
+        sz = f"{r.work}/{r.name}-sz"
+        steps.append(_step("skipzero", "sz-pack", [out, "--out", sz],
+                           {"append": ["--layers", "0-0"]}, gpu=False,
+                           retries=0, timeout_s=6 * 3600, expect={"files": [f"{sz}/config.json"]}))
+        steps.append(_step("skipzero-check", "sz-check", [sz, out],
+                           {"full": "numpy check, reads only", "writes_gib": 0}, gpu=False,
+                           retries=0, timeout_s=3 * 3600))
+        warns.append(f"sz-pack and sz-check are EXPERIMENTAL tools; the packed copy ({sz}) "
+                     f"symlinks its unchanged shards into {out}, so keep both")
+        out = sz
     if r.mode == "vq" and r.mtp:
         warns.append("the MTP head is not compiled: choose its wiring with `vqlab mtp-probe35`, "
                      "then `vqlab mtp-pack` by hand")
@@ -441,6 +533,12 @@ def _compile(raw: dict) -> tuple[dict, list[str]]:
     vis = by.get("vision", 0.0) if r.vision else 0.0
     chain = _affine_steps if r.mode == "affine" else _moe_steps if r.family in MOE else _dense_steps
     steps, art_gib, scratch_gib, warns = chain(r, prof, src, by, vis)
+    if r.skipzero:
+        vq, _ = _layers(prof)
+        geo = {i: (r.tail[1:] if r.tail and i >= r.tail[0] else r.geo) for i in vq}
+        saved = skipzero_gib(prof, _skipzero_rows(r), geo)
+        art_gib -= saved
+        scratch_gib += art_gib      # at most: sz-pack rewrites every shard that holds a dead row
     tail, tail_warns = _tail_steps(r, src, by)
     return {"name": r.name, "commit": "HEAD", "recipe": r.raw,
             # estimates for the confirmation, not measurements: the artifact

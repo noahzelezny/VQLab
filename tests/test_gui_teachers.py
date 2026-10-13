@@ -152,3 +152,20 @@ def test_merge_dedupe_and_buildable(lab, monkeypatch):
     assert set(by) == {"qwen3_5/Org--Moe", "glm5_next/Org--Glm"}
     assert by["glm5_next/Org--Glm"]["buildable"] is False and by["glm5_next/Org--Glm"]["on_disk"] is False
     assert [u["name"] for u in out["unprofiled"]] == ["Org/Other"]
+
+
+def test_skipzero_saving_only_where_dead_rows_were_measured(lab):
+    assert T.teachers()["teachers"][0]["skipzero"] is None
+    d = lab / "families" / "qwen3_5" / "teachers" / "Org--Moe"
+    prof = json.loads((d / "profile.json").read_text())
+    for es in prof["geometries"].values():
+        for e in es:
+            e["bytes"] = 8 << 20
+    (d / "profile.json").write_text(json.dumps(prof))
+    (d / "skipzero.json").write_text(json.dumps({
+        "source": "a fake build", "findings": ["F0"], "rows": {"gate_proj": 1024},
+        "dead_rows": {"1": {"gate_proj": 512}}}))
+    z = T.teachers()["teachers"][0]["skipzero"]
+    # half of layer 1's gate rows, at 8 MiB a module, less a 1-bit-per-row mask
+    assert z["gib"]["d4-K256"] == {"1": round(((4 << 20) - 128) / 2 ** 30, 5)}
+    assert z["source"] == "a fake build" and z["findings"] == ["F0"]

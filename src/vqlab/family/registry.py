@@ -183,6 +183,24 @@ def teacher_profile(family, teacher):
     return None
 
 
+def teacher_skipzero(family, teacher):
+    """A teacher's measured dead rows (families/<f>/teachers/<t>/skipzero.json,
+    by the profile's precedence), or None when none were measured. Written
+    from what sz-pack recorded in a shipped build's config (docs/SKIPZERO.md)."""
+    import json
+    if any(not n or "/" in n or "\\" in n or n.startswith(".") for n in (family, teacher)):
+        return None
+    for d in reversed(family_dirs()):
+        f = d / family / "teachers" / teacher / "skipzero.json"
+        try:
+            return json.loads(f.read_text())
+        except FileNotFoundError:
+            continue
+        except (OSError, ValueError):
+            return None
+    return None
+
+
 def _load_data_entries():
     import json
     loaded = {}

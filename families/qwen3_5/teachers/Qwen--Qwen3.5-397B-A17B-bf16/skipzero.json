@@ -1,0 +1,306 @@
+{
+ "schema": "vqlab.skipzero/1",
+ "teacher": "Qwen--Qwen3.5-397B-A17B-bf16",
+ "what": "Dead output rows [expert, out_row] of each VQ switch module: every vq_scale below `tiny`, so sz-pack drops the row's codes and scales (docs/SKIPZERO.md). A teacher property: the count is identical on the published 2.2, 2.4 and 3.1 and within 4 rows on 2.6 and 3.5.",
+ "source": "config.json vq_skipzero.modules of TheDrainFlorist/Qwen3.5-397B-A17B-VQ-2.4bpw (sz-pack; KL gate F175)",
+ "findings": [
+  "F173",
+  "F175",
+  "F178"
+ ],
+ "tiny": 6.2e-05,
+ "rows": {
+  "down_proj": 2097152,
+  "gate_proj": 524288,
+  "up_proj": 524288
+ },
+ "relation": "saved bytes = sum over the modules with dead rows of dead_rows / rows[proj] * the module's bytes at its geometry (profile geometries[proj][].bytes), less a rows[proj]/8-byte row mask per module",
+ "checks": [
+  {
+   "build": "TheDrainFlorist/Qwen3.5-397B-A17B-VQ-2.2bpw",
+   "recorded_saved_gib": 11.286,
+   "relation_gib": 11.291
+  },
+  {
+   "build": "TheDrainFlorist/Qwen3.5-397B-A17B-VQ-2.4bpw",
+   "recorded_saved_gib": 12.299,
+   "relation_gib": 12.299
+  },
+  {
+   "build": "TheDrainFlorist/Qwen3.5-397B-A17B-VQ-2.6bpw",
+   "recorded_saved_gib": 13.667,
+   "relation_gib": 13.667
+  },
+  {
+   "build": "TheDrainFlorist/Qwen3.5-397B-A17B-VQ-3.1bpw",
+   "recorded_saved_gib": 16.403,
+   "relation_gib": 16.403
+  },
+  {
+   "build": "TheDrainFlorist/Qwen3.5-397B-A17B-VQ-3.5bpw",
+   "recorded_saved_gib": 19.839,
+   "relation_gib": 17.415,
+   "note": "the recorded figure is a merge: the 3.1 source's saving plus an incremental pack of layers 42-59, so those layers count at d4-K2048 as well as at their shipped d2-K256; the relation counts the shipped geometry only"
+  }
+ ],
+ "dead_rows": {
+  "0": {
+   "gate_proj": 454193,
+   "up_proj": 454197
+  },
+  "1": {
+   "gate_proj": 428651,
+   "up_proj": 428614
+  },
+  "2": {
+   "down_proj": 54,
+   "gate_proj": 320351,
+   "up_proj": 320352
+  },
+  "3": {
+   "down_proj": 16499,
+   "gate_proj": 343913,
+   "up_proj": 343907
+  },
+  "4": {
+   "down_proj": 20480,
+   "gate_proj": 242583,
+   "up_proj": 242585
+  },
+  "5": {
+   "down_proj": 12330,
+   "gate_proj": 215641,
+   "up_proj": 215641
+  },
+  "6": {
+   "down_proj": 8192,
+   "gate_proj": 190091,
+   "up_proj": 190090
+  },
+  "7": {
+   "down_proj": 4096,
+   "gate_proj": 204173,
+   "up_proj": 204173
+  },
+  "8": {
+   "down_proj": 8213,
+   "gate_proj": 191289,
+   "up_proj": 191288
+  },
+  "9": {
+   "gate_proj": 176234,
+   "up_proj": 176234
+  },
+  "10": {
+   "down_proj": 4096,
+   "gate_proj": 181451,
+   "up_proj": 181450
+  },
+  "11": {
+   "gate_proj": 178050,
+   "up_proj": 178050
+  },
+  "12": {
+   "down_proj": 33,
+   "gate_proj": 162448,
+   "up_proj": 162447
+  },
+  "13": {
+   "down_proj": 4096,
+   "gate_proj": 149459,
+   "up_proj": 149460
+  },
+  "14": {
+   "gate_proj": 143488,
+   "up_proj": 143490
+  },
+  "15": {
+   "gate_proj": 120562,
+   "up_proj": 120558
+  },
+  "16": {
+   "gate_proj": 105354,
+   "up_proj": 105364
+  },
+  "17": {
+   "gate_proj": 100878,
+   "up_proj": 100872
+  },
+  "18": {
+   "gate_proj": 91189,
+   "up_proj": 91184
+  },
+  "19": {
+   "gate_proj": 107644,
+   "up_proj": 107640
+  },
+  "20": {
+   "gate_proj": 90526,
+   "up_proj": 90526
+  },
+  "21": {
+   "gate_proj": 77545,
+   "up_proj": 77540
+  },
+  "22": {
+   "gate_proj": 69183,
+   "up_proj": 69179
+  },
+  "23": {
+   "gate_proj": 58915,
+   "up_proj": 58921
+  },
+  "24": {
+   "gate_proj": 57394,
+   "up_proj": 57387
+  },
+  "25": {
+   "gate_proj": 50296,
+   "up_proj": 50307
+  },
+  "26": {
+   "gate_proj": 39636,
+   "up_proj": 39644
+  },
+  "27": {
+   "gate_proj": 41457,
+   "up_proj": 41456
+  },
+  "28": {
+   "gate_proj": 31398,
+   "up_proj": 31399
+  },
+  "29": {
+   "gate_proj": 33386,
+   "up_proj": 33383
+  },
+  "30": {
+   "gate_proj": 24342,
+   "up_proj": 24344
+  },
+  "31": {
+   "gate_proj": 15340,
+   "up_proj": 15341
+  },
+  "32": {
+   "gate_proj": 16148,
+   "up_proj": 16149
+  },
+  "33": {
+   "gate_proj": 18600,
+   "up_proj": 18602
+  },
+  "34": {
+   "gate_proj": 14780,
+   "up_proj": 14781
+  },
+  "35": {
+   "gate_proj": 11624,
+   "up_proj": 11624
+  },
+  "36": {
+   "gate_proj": 18663,
+   "up_proj": 18663
+  },
+  "37": {
+   "gate_proj": 19545,
+   "up_proj": 19545
+  },
+  "38": {
+   "gate_proj": 19289,
+   "up_proj": 19289
+  },
+  "39": {
+   "gate_proj": 13650,
+   "up_proj": 13650
+  },
+  "40": {
+   "gate_proj": 21531,
+   "up_proj": 21531
+  },
+  "41": {
+   "gate_proj": 27643,
+   "up_proj": 27643
+  },
+  "42": {
+   "gate_proj": 19052,
+   "up_proj": 19052
+  },
+  "43": {
+   "gate_proj": 15680,
+   "up_proj": 15680
+  },
+  "44": {
+   "gate_proj": 23860,
+   "up_proj": 23860
+  },
+  "45": {
+   "gate_proj": 15993,
+   "up_proj": 15993
+  },
+  "46": {
+   "down_proj": 1,
+   "gate_proj": 27372,
+   "up_proj": 27372
+  },
+  "47": {
+   "gate_proj": 22766,
+   "up_proj": 22766
+  },
+  "48": {
+   "gate_proj": 27085,
+   "up_proj": 27085
+  },
+  "49": {
+   "gate_proj": 25351,
+   "up_proj": 25351
+  },
+  "50": {
+   "gate_proj": 31520,
+   "up_proj": 31520
+  },
+  "51": {
+   "down_proj": 21,
+   "gate_proj": 34038,
+   "up_proj": 34038
+  },
+  "52": {
+   "down_proj": 39,
+   "gate_proj": 37881,
+   "up_proj": 37881
+  },
+  "53": {
+   "down_proj": 66,
+   "gate_proj": 46388,
+   "up_proj": 46388
+  },
+  "54": {
+   "down_proj": 41,
+   "gate_proj": 56916,
+   "up_proj": 56916
+  },
+  "55": {
+   "down_proj": 65,
+   "gate_proj": 57901,
+   "up_proj": 57901
+  },
+  "56": {
+   "down_proj": 25,
+   "gate_proj": 68686,
+   "up_proj": 68686
+  },
+  "57": {
+   "gate_proj": 93954,
+   "up_proj": 93954
+  },
+  "58": {
+   "gate_proj": 111324,
+   "up_proj": 111324
+  },
+  "59": {
+   "down_proj": 34,
+   "gate_proj": 133128,
+   "up_proj": 133127
+  }
+ }
+}

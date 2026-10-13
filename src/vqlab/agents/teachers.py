@@ -51,6 +51,30 @@ def _geometries(prof: dict) -> list[dict]:
             for g in recipe_queue.legal_geometries(prof)]
 
 
+def _skipzero(family: str, teacher: str, prof: dict) -> dict | None:
+    """What skip-zero saves on this teacher, per VQ layer and geometry, from
+    its measured dead rows (plan/recipe_queue.skipzero_gib, the compiler's
+    own figure), with where the counts came from. None where no dead rows
+    were measured or the compiler would refuse skipzero."""
+    if family not in recipe_queue.MOE:
+        return None
+    sz = registry.teacher_skipzero(family, teacher)
+    if not sz or not sz.get("dead_rows"):
+        return None
+    gib = {}
+    for g in recipe_queue.legal_geometries(prof):
+        try:
+            per = {str(i): recipe_queue.skipzero_gib(prof, sz, {int(i): (g.d, g.K)})
+                   for i in sz["dead_rows"]}
+        except (recipe_queue.RecipeError, KeyError, TypeError, ValueError):
+            continue
+        gib[recipe_queue.geo_key(g.d, g.K)] = {i: round(v, 5) for i, v in per.items() if v}
+    if not gib:
+        return None
+    return {"gib": gib, "source": sz.get("source"), "findings": sz.get("findings") or [],
+            "checks": sz.get("checks") or []}
+
+
 def _scanned() -> list[dict]:
     """The model scan's rows; an unreadable index reads as no models."""
     try:
@@ -86,7 +110,8 @@ def teachers() -> dict:
             "gib": by.get("by_class_gib") or {}, "gib_per_bit": by.get("vq_target_gib_per_bit"),
             "geometries": _geometries(prof), "fits": fits.get((family, teacher), {}),
             "on_disk": local is not None, "buildable": family in recipe_queue.MOE | recipe_queue.DENSE,
-            "scored": teacher in caches, "profiled": prof.get("created")})
+            "scored": teacher in caches, "profiled": prof.get("created"),
+            "skipzero": _skipzero(family, teacher, prof)})
     found = []
     for r in _scanned():
         if r.get("use") != "original" or not r.get("path") or not r.get("family"):

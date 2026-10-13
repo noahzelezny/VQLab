@@ -528,7 +528,9 @@
       "--bits",
       "3",
       "--family",
-      "qwen3_5"
+      "qwen3_5",
+      "--group",
+      "32"
      ],
      "preflight": {
       "full": "stream-convert has no partial mode",
@@ -614,6 +616,198 @@
      "args": [
       "--artifact",
       "<scratch>/moe-affine/moe-affine",
+      "--tokenizer-ref",
+      "<tmp>/teachers/T/tokenizer.json"
+     ],
+     "preflight": {
+      "full": "reads the artifact; its smokes are short",
+      "writes_gib": 0
+     },
+     "retries": 0,
+     "timeout_s": 7200
+    }
+   ]
+  },
+  []
+ ],
+ "moe-affine-protect": [
+  {
+   "name": "moe-affine-protect",
+   "commit": "HEAD",
+   "recipe": {
+    "name": "moe-affine-protect",
+    "family": "qwen3_5",
+    "teacher": "T",
+    "mode": "affine",
+    "bits": 2,
+    "protect_bits": 8
+   },
+   "estimate": {
+    "artifact_gib": 3.56,
+    "scratch_gib": 3.6
+   },
+   "steps": [
+    {
+     "name": "convert",
+     "cmd": "stream-convert",
+     "args": [
+      "--src",
+      "<tmp>/teachers/T",
+      "--out",
+      "<scratch>/moe-affine-protect/moe-affine-protect",
+      "--bits",
+      "2",
+      "--family",
+      "qwen3_5",
+      "--protect-bits",
+      "8"
+     ],
+     "preflight": {
+      "full": "stream-convert has no partial mode",
+      "writes_gib": 4.0
+     },
+     "retries": 1,
+     "timeout_s": 21600,
+     "expect": {
+      "files": [
+       "<scratch>/moe-affine-protect/moe-affine-protect/config.json"
+      ]
+     }
+    },
+    {
+     "name": "smoke",
+     "cmd": "pin",
+     "args": [
+      "<scratch>/moe-affine-protect/moe-affine-protect",
+      "--out",
+      "<scratch>/moe-affine-protect/pin",
+      "--max-tokens",
+      "8"
+     ],
+     "preflight": {
+      "full": "a pin is symlinks plus an 8-token smoke",
+      "writes_gib": 0
+     },
+     "retries": 0,
+     "timeout_s": 3600
+    },
+    {
+     "name": "runtime-check",
+     "cmd": "check-bundle",
+     "args": [
+      "--artifact",
+      "<scratch>/moe-affine-protect/moe-affine-protect",
+      "--strict"
+     ],
+     "preflight": {
+      "full": "a read-only check",
+      "writes_gib": 0
+     },
+     "retries": 0,
+     "timeout_s": 600
+    },
+    {
+     "name": "release-check",
+     "cmd": "check-release",
+     "args": [
+      "--artifact",
+      "<scratch>/moe-affine-protect/moe-affine-protect",
+      "--tokenizer-ref",
+      "<tmp>/teachers/T/tokenizer.json"
+     ],
+     "preflight": {
+      "full": "reads the artifact; its smokes are short",
+      "writes_gib": 0
+     },
+     "retries": 0,
+     "timeout_s": 7200
+    }
+   ]
+  },
+  []
+ ],
+ "moe-affine-g128": [
+  {
+   "name": "moe-affine-g128",
+   "commit": "HEAD",
+   "recipe": {
+    "name": "moe-affine-g128",
+    "family": "qwen3_5",
+    "teacher": "T",
+    "mode": "affine",
+    "bits": 4,
+    "group": 128
+   },
+   "estimate": {
+    "artifact_gib": 4.78,
+    "scratch_gib": 4.8
+   },
+   "steps": [
+    {
+     "name": "convert",
+     "cmd": "stream-convert",
+     "args": [
+      "--src",
+      "<tmp>/teachers/T",
+      "--out",
+      "<scratch>/moe-affine-g128/moe-affine-g128",
+      "--bits",
+      "4",
+      "--family",
+      "qwen3_5",
+      "--group",
+      "128"
+     ],
+     "preflight": {
+      "full": "stream-convert has no partial mode",
+      "writes_gib": 6.0
+     },
+     "retries": 1,
+     "timeout_s": 21600,
+     "expect": {
+      "files": [
+       "<scratch>/moe-affine-g128/moe-affine-g128/config.json"
+      ]
+     }
+    },
+    {
+     "name": "smoke",
+     "cmd": "pin",
+     "args": [
+      "<scratch>/moe-affine-g128/moe-affine-g128",
+      "--out",
+      "<scratch>/moe-affine-g128/pin",
+      "--max-tokens",
+      "8"
+     ],
+     "preflight": {
+      "full": "a pin is symlinks plus an 8-token smoke",
+      "writes_gib": 0
+     },
+     "retries": 0,
+     "timeout_s": 3600
+    },
+    {
+     "name": "runtime-check",
+     "cmd": "check-bundle",
+     "args": [
+      "--artifact",
+      "<scratch>/moe-affine-g128/moe-affine-g128",
+      "--strict"
+     ],
+     "preflight": {
+      "full": "a read-only check",
+      "writes_gib": 0
+     },
+     "retries": 0,
+     "timeout_s": 600
+    },
+    {
+     "name": "release-check",
+     "cmd": "check-release",
+     "args": [
+      "--artifact",
+      "<scratch>/moe-affine-g128/moe-affine-g128",
       "--tokenizer-ref",
       "<tmp>/teachers/T/tokenizer.json"
      ],
@@ -1062,6 +1256,435 @@
   [
    "no incumbent base given: the base is made by stream-convert, and the build checks every fitted module lands on it (build-dense --dry-run)",
    "the score is this build's absolute KL against the teacher; the release gate is a PAIRED kl-ladder against the incumbent rung (FINDINGS: KL is the gate)"
+  ]
+ ],
+ "moe-sz": [
+  {
+   "name": "moe-sz",
+   "commit": "HEAD",
+   "recipe": {
+    "name": "moe-sz",
+    "family": "qwen3_5",
+    "teacher": "T",
+    "geo": "d4-K256",
+    "vision": true,
+    "skipzero": true
+   },
+   "estimate": {
+    "artifact_gib": 1.86,
+    "scratch_gib": 7.3
+   },
+   "steps": [
+    {
+     "name": "struct-base",
+     "cmd": "stream-convert",
+     "args": [
+      "--src",
+      "<tmp>/teachers/T",
+      "--out",
+      "<scratch>/moe-sz/struct",
+      "--struct",
+      "--protect-bits",
+      "8",
+      "--family",
+      "qwen3_5"
+     ],
+     "preflight": {
+      "full": "the fit needs the whole struct base",
+      "writes_gib": 3.6
+     },
+     "retries": 1,
+     "timeout_s": 21600,
+     "expect": {
+      "files": [
+       "<scratch>/moe-sz/struct/config.json"
+      ]
+     }
+    },
+    {
+     "name": "fit",
+     "cmd": "fit-moe",
+     "args": [
+      "--base",
+      "<scratch>/moe-sz/struct",
+      "--src",
+      "<tmp>/teachers/T",
+      "--out",
+      "<scratch>/moe-sz/moe-sz",
+      "--vq-layers",
+      "0-39",
+      "--dim",
+      "4",
+      "--k",
+      "256",
+      "--family",
+      "qwen3_5",
+      "--seed",
+      "1234",
+      "--pack",
+      "--relerr-abort",
+      "0.45"
+     ],
+     "preflight": {
+      "args": [
+       "--base",
+       "<scratch>/moe-sz/struct",
+       "--src",
+       "<tmp>/teachers/T",
+       "--out",
+       "<scratch>/moe-sz/moe-sz",
+       "--vq-layers",
+       "0",
+       "--dim",
+       "4",
+       "--k",
+       "256",
+       "--family",
+       "qwen3_5",
+       "--seed",
+       "1234",
+       "--pack",
+       "--relerr-abort",
+       "0.45"
+      ],
+      "writes_gib": 3.6
+     },
+     "retries": 3,
+     "timeout_s": 172800,
+     "expect": {
+      "files": [
+       "<scratch>/moe-sz/moe-sz/config.json"
+      ]
+     }
+    },
+    {
+     "name": "vision",
+     "cmd": "graft",
+     "args": [
+      "--artifact",
+      "<scratch>/moe-sz/moe-sz",
+      "--src",
+      "<tmp>/teachers/T",
+      "--dest-prefix",
+      "vision_tower",
+      "--permute-conv5"
+     ],
+     "preflight": {
+      "full": "grafts the tower in place",
+      "writes_gib": 1.3
+     },
+     "retries": 0,
+     "timeout_s": 3600
+    },
+    {
+     "name": "vision-smoke",
+     "cmd": "vision-smoke",
+     "args": [
+      "<scratch>/moe-sz/moe-sz",
+      "--max-tokens",
+      "8"
+     ],
+     "preflight": {
+      "full": "reads the artifact, writes nothing",
+      "writes_gib": 0
+     },
+     "retries": 0,
+     "timeout_s": 3600
+    },
+    {
+     "name": "skipzero",
+     "cmd": "sz-pack",
+     "args": [
+      "<scratch>/moe-sz/moe-sz",
+      "--out",
+      "<scratch>/moe-sz/moe-sz-sz"
+     ],
+     "preflight": {
+      "append": [
+       "--layers",
+       "0-0"
+      ]
+     },
+     "gpu": false,
+     "retries": 0,
+     "timeout_s": 21600,
+     "expect": {
+      "files": [
+       "<scratch>/moe-sz/moe-sz-sz/config.json"
+      ]
+     }
+    },
+    {
+     "name": "skipzero-check",
+     "cmd": "sz-check",
+     "args": [
+      "<scratch>/moe-sz/moe-sz-sz",
+      "<scratch>/moe-sz/moe-sz"
+     ],
+     "preflight": {
+      "full": "numpy check, reads only",
+      "writes_gib": 0
+     },
+     "gpu": false,
+     "retries": 0,
+     "timeout_s": 10800
+    },
+    {
+     "name": "smoke",
+     "cmd": "pin",
+     "args": [
+      "<scratch>/moe-sz/moe-sz-sz",
+      "--out",
+      "<scratch>/moe-sz/pin",
+      "--max-tokens",
+      "8"
+     ],
+     "preflight": {
+      "full": "a pin is symlinks plus an 8-token smoke",
+      "writes_gib": 0
+     },
+     "retries": 0,
+     "timeout_s": 3600
+    },
+    {
+     "name": "runtime-check",
+     "cmd": "check-bundle",
+     "args": [
+      "--artifact",
+      "<scratch>/moe-sz/moe-sz-sz",
+      "--strict"
+     ],
+     "preflight": {
+      "full": "a read-only check",
+      "writes_gib": 0
+     },
+     "retries": 0,
+     "timeout_s": 600
+    },
+    {
+     "name": "release-check",
+     "cmd": "check-release",
+     "args": [
+      "--artifact",
+      "<scratch>/moe-sz/moe-sz-sz",
+      "--tokenizer-ref",
+      "<tmp>/teachers/T/tokenizer.json"
+     ],
+     "preflight": {
+      "full": "reads the artifact; its smokes are short",
+      "writes_gib": 0
+     },
+     "retries": 0,
+     "timeout_s": 7200
+    }
+   ]
+  },
+  [
+   "sz-pack and sz-check are EXPERIMENTAL tools; the packed copy (<scratch>/moe-sz/moe-sz-sz) symlinks its unchanged shards into <scratch>/moe-sz/moe-sz, so keep both"
+  ]
+ ],
+ "moe-sz-tail": [
+  {
+   "name": "moe-sz-tail",
+   "commit": "HEAD",
+   "recipe": {
+    "name": "moe-sz-tail",
+    "family": "qwen3_5",
+    "teacher": "T",
+    "geo": "d4-K256",
+    "tail": {
+     "from": 30,
+     "geo": "d8-K4096"
+    },
+    "skipzero": true,
+    "score": true
+   },
+   "estimate": {
+    "artifact_gib": 1.06,
+    "scratch_gib": 5.7
+   },
+   "steps": [
+    {
+     "name": "struct-base",
+     "cmd": "stream-convert",
+     "args": [
+      "--src",
+      "<tmp>/teachers/T",
+      "--out",
+      "<scratch>/moe-sz-tail/struct",
+      "--struct",
+      "--protect-bits",
+      "8",
+      "--family",
+      "qwen3_5"
+     ],
+     "preflight": {
+      "full": "the fit needs the whole struct base",
+      "writes_gib": 3.6
+     },
+     "retries": 1,
+     "timeout_s": 21600,
+     "expect": {
+      "files": [
+       "<scratch>/moe-sz-tail/struct/config.json"
+      ]
+     }
+    },
+    {
+     "name": "fit",
+     "cmd": "fit-moe",
+     "args": [
+      "--base",
+      "<scratch>/moe-sz-tail/struct",
+      "--src",
+      "<tmp>/teachers/T",
+      "--out",
+      "<scratch>/moe-sz-tail/moe-sz-tail",
+      "--vq-layers",
+      "0-39",
+      "--dim",
+      "4",
+      "--k",
+      "256",
+      "--family",
+      "qwen3_5",
+      "--seed",
+      "1234",
+      "--pack",
+      "--tail-from",
+      "30",
+      "--tail-geom",
+      "d8k4096",
+      "--relerr-abort",
+      "0.45"
+     ],
+     "preflight": {
+      "args": [
+       "--base",
+       "<scratch>/moe-sz-tail/struct",
+       "--src",
+       "<tmp>/teachers/T",
+       "--out",
+       "<scratch>/moe-sz-tail/moe-sz-tail",
+       "--vq-layers",
+       "0,30",
+       "--dim",
+       "4",
+       "--k",
+       "256",
+       "--family",
+       "qwen3_5",
+       "--seed",
+       "1234",
+       "--pack",
+       "--tail-from",
+       "30",
+       "--tail-geom",
+       "d8k4096",
+       "--relerr-abort",
+       "0.45"
+      ],
+      "writes_gib": 3.6
+     },
+     "retries": 3,
+     "timeout_s": 172800,
+     "expect": {
+      "files": [
+       "<scratch>/moe-sz-tail/moe-sz-tail/config.json"
+      ]
+     }
+    },
+    {
+     "name": "skipzero",
+     "cmd": "sz-pack",
+     "args": [
+      "<scratch>/moe-sz-tail/moe-sz-tail",
+      "--out",
+      "<scratch>/moe-sz-tail/moe-sz-tail-sz"
+     ],
+     "preflight": {
+      "append": [
+       "--layers",
+       "0-0"
+      ]
+     },
+     "gpu": false,
+     "retries": 0,
+     "timeout_s": 21600,
+     "expect": {
+      "files": [
+       "<scratch>/moe-sz-tail/moe-sz-tail-sz/config.json"
+      ]
+     }
+    },
+    {
+     "name": "skipzero-check",
+     "cmd": "sz-check",
+     "args": [
+      "<scratch>/moe-sz-tail/moe-sz-tail-sz",
+      "<scratch>/moe-sz-tail/moe-sz-tail"
+     ],
+     "preflight": {
+      "full": "numpy check, reads only",
+      "writes_gib": 0
+     },
+     "gpu": false,
+     "retries": 0,
+     "timeout_s": 10800
+    },
+    {
+     "name": "smoke",
+     "cmd": "pin",
+     "args": [
+      "<scratch>/moe-sz-tail/moe-sz-tail-sz",
+      "--out",
+      "<scratch>/moe-sz-tail/pin",
+      "--max-tokens",
+      "8"
+     ],
+     "preflight": {
+      "full": "a pin is symlinks plus an 8-token smoke",
+      "writes_gib": 0
+     },
+     "retries": 0,
+     "timeout_s": 3600
+    },
+    {
+     "name": "runtime-check",
+     "cmd": "check-bundle",
+     "args": [
+      "--artifact",
+      "<scratch>/moe-sz-tail/moe-sz-tail-sz",
+      "--strict"
+     ],
+     "preflight": {
+      "full": "a read-only check",
+      "writes_gib": 0
+     },
+     "retries": 0,
+     "timeout_s": 600
+    },
+    {
+     "name": "release-check",
+     "cmd": "check-release",
+     "args": [
+      "--artifact",
+      "<scratch>/moe-sz-tail/moe-sz-tail-sz",
+      "--tokenizer-ref",
+      "<tmp>/teachers/T/tokenizer.json"
+     ],
+     "preflight": {
+      "full": "reads the artifact; its smokes are short",
+      "writes_gib": 0
+     },
+     "retries": 0,
+     "timeout_s": 7200
+    }
+   ]
+  },
+  [
+   "sz-pack and sz-check are EXPERIMENTAL tools; the packed copy (<scratch>/moe-sz-tail/moe-sz-tail-sz) symlinks its unchanged shards into <scratch>/moe-sz-tail/moe-sz-tail, so keep both",
+   "no KL caches are registered for T: not scored (build them with `vqlab stream-score`, then register them)"
   ]
  ]
 }

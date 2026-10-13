@@ -263,13 +263,32 @@ _GOLDEN_RECIPES = {
     "moe-tail": ("qwen3_5", "T", {"geo": "d4-K256", "tail": {"from": 30, "geo": "d4-K512"}}),
     "moe-d8": ("qwen3_5", "T", {"geo": "d8-K4096", "mtp": True}),
     "moe-affine": ("qwen3_5", "T", {"mode": "affine", "bits": 3, "group": 32, "vision": True}),
+    "moe-affine-protect": ("qwen3_5", "T", {"mode": "affine", "bits": 2, "protect_bits": 8}),
+    "moe-affine-g128": ("qwen3_5", "T", {"mode": "affine", "bits": 4, "group": 128}),
     "dense": ("qwen3_8_dense", "D", {"geo": "d2-K512", "bits": 4, "vision": True}),
     "dense-score": ("qwen3_8_dense", "D", {"geo": "d4-K256", "score": True}),
+    "moe-sz": ("qwen3_5", "T", {"geo": "d4-K256", "vision": True, "skipzero": True}),
+    "moe-sz-tail": ("qwen3_5", "T", {"geo": "d4-K256", "tail": {"from": 30, "geo": "d8-K4096"},
+                                     "skipzero": True, "score": True}),
 }
 
 
+def _measured_dead_rows(d, rows=(("gate_proj", 1024), ("up_proj", 1024), ("down_proj", 4096))):
+    """A teacher folder `d` with dead rows measured (skipzero.json) and each
+    geometry's per-module bytes in its profile: 1 MiB per 1 bit per weight."""
+    prof = json.loads((d / "profile.json").read_text())
+    for es in prof["geometries"].values():
+        for e in es:
+            e["bytes"] = (1 << 20) * (e["K"].bit_length() - 1) // e["d"]
+    (d / "profile.json").write_text(json.dumps(prof))
+    (d / "skipzero.json").write_text(json.dumps({
+        "source": "a fake build", "rows": dict(rows),
+        "dead_rows": {"0": {"gate_proj": 512, "up_proj": 256, "down_proj": 0},
+                      "35": {"down_proj": 1024}}}))
+
+
 def _golden_outputs(fams, tmp_path, monkeypatch):
-    fams("qwen3_5", "T", "moe", 40)
+    _measured_dead_rows(fams("qwen3_5", "T", "moe", 40))
     fams("qwen3_8_dense", "D", "dense", 24, vision=0)
     monkeypatch.setattr(rq.registry, "teacher_caches", lambda t=None: [
         {"teacher": "D", "corpus": "prose", "path": "/c/prose"}])
@@ -284,3 +303,75 @@ def test_compiled_queues_are_unchanged(fams, tmp_path, monkeypatch):
     """A refactor of the compiler must not move one byte of its output."""
     # compared as text, so a reordered key is a change too
     assert json.dumps(_golden_outputs(fams, tmp_path, monkeypatch)) == json.dumps(json.loads(GOLDEN.read_text()))
+
+
+def test_skipzero_packs_the_finished_artifact_and_checks_run_on_the_copy(fams):
+    _measured_dead_rows(fams("qwen3_5", "T", "moe", 40))
+    base = {"name": "a", "family": "qwen3_5", "teacher": "T", "geo": "d4-K256", "vision": True}
+    plain, _ = rq.compile_recipe(base)
+    q, warns = rq.compile_recipe({**base, "skipzero": True})
+    assert _names(q) == ["struct-base", "fit", "vision", "vision-smoke", "skipzero",
+                         "skipzero-check", "smoke", "runtime-check", "release-check"]
+    built = _args(q, "fit")[_args(q, "fit").index("--out") + 1]
+    pack = next(s for s in q["steps"] if s["name"] == "skipzero")
+    sz = pack["args"][pack["args"].index("--out") + 1]
+    assert pack["cmd"] == "sz-pack" and pack["args"][0] == built and sz.startswith("<scratch>/")
+    assert pack["preflight"] == {"append": ["--layers", "0-0"]} and pack["gpu"] is False
+    check = next(s for s in q["steps"] if s["name"] == "skipzero-check")
+    assert check["args"] == [sz, built] and check["gpu"] is False
+    assert check["preflight"]["writes_gib"] == 0
+    assert _args(q, "vision-smoke")[0] == built
+    assert _args(q, "smoke")[0] == sz and _args(q, "runtime-check")[1] == sz
+    assert _args(q, "release-check")[1] == sz
+    assert steps.validate(q) == [] and any("EXPERIMENTAL" in w for w in warns)
+    # d4-K256 = 2 bits per weight -> 2 MiB a module; minus a 1-bit-per-row mask per packed module
+    saved = (512 / 1024 + 256 / 1024 + 1024 / 4096) * (2 << 20) - (1024 + 1024 + 4096) / 8
+    assert q["estimate"]["artifact_gib"] == round(plain["estimate"]["artifact_gib"] - saved / 2 ** 30, 2)
+
+
+def test_skipzero_prices_each_layer_at_its_own_geometry(fams):
+    _measured_dead_rows(fams("qwen3_5", "T", "moe", 40))
+    prof = rq.load_profile("qwen3_5", "T")
+    sz = rq.registry.teacher_skipzero("qwen3_5", "T")
+    flat = rq.skipzero_gib(prof, sz, {i: (4, 256) for i in range(40)})
+    mixed = rq.skipzero_gib(prof, sz, {i: (4, 256) if i < 30 else (8, 4096) for i in range(40)})
+    # layer 35's dead rows are priced at d8-K4096 (1.5 bits) instead of d4-K256 (2 bits)
+    assert mixed == pytest.approx(flat - 1024 / 4096 * (0.5 * (1 << 20)) / 2 ** 30)
+
+
+@pytest.mark.parametrize("recipe, why", [
+    ({"mode": "affine"}, "only on MoE VQ"),
+    ({"skipzero": "yes"}, "true or false"),
+])
+def test_skipzero_refusals(fams, recipe, why):
+    _measured_dead_rows(fams("qwen3_5", "T", "moe", 40))
+    with pytest.raises(rq.RecipeError, match=why):
+        rq.compile_recipe({"name": "a", "family": "qwen3_5", "teacher": "T", "geo": "d4-K256",
+                           "skipzero": True, **recipe})
+
+
+def test_skipzero_needs_measured_dead_rows(fams):
+    fams("qwen3_5", "T", "moe", 40)
+    fams("qwen3_8_dense", "D", "dense", 24, vision=0)
+    with pytest.raises(rq.RecipeError, match="no dead rows are measured"):
+        rq.compile_recipe({"name": "a", "family": "qwen3_5", "teacher": "T", "geo": "d4-K256",
+                           "skipzero": True})
+    with pytest.raises(rq.RecipeError, match="only on MoE VQ"):
+        rq.compile_recipe({"name": "a", "family": "qwen3_8_dense", "teacher": "D", "geo": "d4-K256",
+                           "skipzero": True})
+
+
+def test_skipzero_dims_are_sz_packs():
+    from vqlab.skipzero import skipzero_load
+    assert rq.SZ_DIMS == skipzero_load.SUPPORTED_DIMS
+
+
+def test_affine_protect_and_group_are_validated():
+    base = {"name": "a", "teacher": "T", "mode": "affine", "bits": 2}
+    with pytest.raises(rq.RecipeError, match="no experts"):
+        rq.Recipe.from_json({**base, "family": "qwen3_8_dense", "protect_bits": 8})
+    with pytest.raises(rq.RecipeError, match="2-8"):
+        rq.Recipe.from_json({**base, "family": "qwen3_5", "protect_bits": 16})
+    with pytest.raises(rq.RecipeError, match="32, 64 or 128"):
+        rq.Recipe.from_json({**base, "family": "qwen3_5", "group": 48})
+    assert rq.Recipe.from_json({**base, "family": "qwen3_5"}).protect_bits is None
