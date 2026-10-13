@@ -77,7 +77,7 @@ button.row{cursor:pointer}button.row:hover{border-color:color-mix(in srgb,var(--
 .key em{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:5px;vertical-align:-1px;font-style:normal}
 
 /* ---------- recipe ---------- */
-.recipe{display:grid;grid-template-columns:minmax(0,1fr) 30em;gap:1.4em;align-items:start}
+.recipe{display:grid;grid-template-columns:minmax(0,1fr) 24em;gap:1.4em;align-items:start}
 .recipe .cart{font-size:.95em}
 @media(max-width:900px){.recipe{grid-template-columns:minmax(0,1fr)}}
 svg.chart{width:100%;display:block;background:var(--bg);border:1px solid var(--line);border-radius:var(--r);user-select:none;-webkit-user-select:none;touch-action:none}
@@ -140,7 +140,7 @@ svg.chart{width:100%;display:block;background:var(--bg);border:1px solid var(--l
 .readouts{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:8px}
 .readout{background:var(--bg);border:1px solid var(--line);border-radius:var(--r);padding:4px 9px;min-width:0}
 .readout b{display:block;font-size:1.05em;line-height:1.15;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.readout.acc b{color:var(--acc);text-shadow:var(--glow)}.readout.ok b{color:var(--ok)}.readout.bad b{color:var(--bad)}.readout.warn b{color:var(--warn)}
+.readout.acc b{color:var(--acc);text-shadow:var(--glow)}.readout.ok b{color:var(--ok)}.readout.box b{color:var(--teal)}.readout.bad b{color:var(--bad)}.readout.warn b{color:var(--warn)}
 .readout small{color:var(--faint);font-size:.66em;letter-spacing:.1em;text-transform:uppercase;display:block;white-space:nowrap}
 .readout .sub{color:var(--dim);font-size:.72em;margin-top:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 @media(max-width:1100px){.readouts{grid-template-columns:repeat(3,1fr)}}
@@ -292,7 +292,7 @@ input.fld.bad{border-color:var(--bad)}.fld.faint{color:var(--faint)}.fld.ro{curs
 .seg.pk{width:14em}
 .kseg button.cur{flex:2;cursor:default}
 .pnote{font-size:.85em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.pnote.bad{color:var(--bad)}.pnote.dim{color:var(--dim)}
-.pnotes{height:4.6em;overflow:hidden}
+.pnotes{height:1.5em;overflow:hidden}
 .jdsteps.plan{height:8.5em;max-height:none}
 .jdet .jobline{margin:0 0 10px}
 .fldrow{margin-top:6px}.errslot{min-height:1.5em}
@@ -321,6 +321,15 @@ input.fld.bad{border-color:var(--bad)}.fld.faint{color:var(--faint)}.fld.ro{curs
 .ltabs button span{color:var(--faint)}.ltabs button:hover{color:var(--fg)}
 .ltabs button[aria-selected=true]{color:var(--acc);border-color:var(--line);background:var(--panel)}.ltabs .info{margin-left:auto}
 .stbl{flex:1;min-height:0}
+
+/* recipe control column: compact, the chart is the work surface */
+.recipe .cart{font-size:.93em;padding:10px 12px}
+.recipe .cart .ro{margin:5px 0 2px}
+.recipe .modeseg{margin-bottom:5px}
+.recipe .cart .kseg button{padding:6px 4px;font-size:.82em}.recipe .cart .kseg button small{font-size:.72em}
+.recipe .cart .kseg.small button{padding:4px 3px;font-size:.8em}
+.recipe .bitrow{grid-template-columns:7.5em 1fr;gap:8px;padding:3px 0;font-size:.95em}
+.recipe .addon{padding:4px 0}
 
 /* ---------- one screen: the shell fills the viewport; long content scrolls inside its own card */
 @media(min-width:1101px){
@@ -570,8 +579,10 @@ LIB_ROWS.forEach(derive);
 
 // ================================================================ state
 const BITS=[2,3,4,5,6,8];
+const PBITS=[4,5,6,8];  // protect widths on offer: nothing below 4
+const APBITS=[0,...PBITS];  // affine protect: 0 is '=' (uniform, the same width as the experts)
 const NAME_RE=/^[a-z0-9][a-z0-9._-]{0,79}$/;  // same rule as the recipe compiler
-const newRecipe=()=>({v:2,teacher:'',mode:'vq',geo:'',tailOn:false,tailGeo:'',tailFrom:0,bits:4,group:64,protect:8,tower:false,mtp:false,score:false,name:'',nameSet:false});
+const newRecipe=()=>({v:2,teacher:'',mode:'vq',geo:'',tailOn:false,tailGeo:'',tailFrom:0,bits:4,group:64,protect:8,aprotect:0,tower:false,mtp:false,score:false,name:'',nameSet:false});
 // the page and the one persisted flag that belongs to no page
 const UI={page:P.lib,stAdv:false};
 // per-page state; resources (FLEET, SCORES, TEACH, LIVE, ...) below share {data,err,timer}
@@ -640,8 +651,12 @@ function ownPane(t){
 // the same size as the rest of the UI however wide the chart gets. The y axis
 // is fitted to what is plotted: bottom just under the best point, top just
 // over the worst, ticks at 1-2-5 steps (more when the span is short).
-function yRange(vals){vals=vals.filter(v=>v>0&&isFinite(v));if(!vals.length)return [5,1500];return [Math.min(...vals)/1.35,Math.max(...vals)*1.35]}
-function yTicks(lo,hi){const out=[];const steps=Math.log10(hi/lo)<1.2?[1,1.5,2,3,5,7]:[1,2,5];
+function yRange(vals){vals=vals.filter(v=>v>0&&isFinite(v));if(!vals.length)return [5,1500];return [Math.min(...vals)/1.15,Math.max(...vals)*1.15]}
+// the y range's ends snapped out to tick values, so the top and bottom of the axis always carry a label
+const NICE=[1,1.5,2,3,5,7];
+function ySnap([lo,hi]){const up=v=>{const e=10**Math.floor(Math.log10(v));return (NICE.find(m=>m*e>=v*0.999)||10)*e},
+  dn=v=>{const e=10**Math.floor(Math.log10(v));return ([...NICE].reverse().find(m=>m*e<=v*1.001)||1)*e};return [dn(lo),up(hi)]}
+function yTicks(lo,hi){const out=[];const steps=Math.log10(hi/lo)<1.2?NICE:[1,2,3,5];
   for(let e=Math.floor(Math.log10(lo));e<=Math.ceil(Math.log10(hi));e++)steps.forEach(m=>{const v=m*10**e;if(v>=lo&&v<=hi)out.push(+v.toPrecision(3))});return out}
 // the x axis (GiB) of every chart: sets the viewBox, returns the grid/axis markup and the x scale
 function xAxis(svg,xr,H,box){
@@ -653,10 +668,10 @@ function xAxis(svg,xr,H,box){
   return {s,X,W,H,L,Rm,Tp,B,base,xmin,xmax,span}}
 // x axis plus a log y axis (KL, mnats)
 function chartFrame(svg,xr,H,yr){
-  const a=xAxis(svg,xr,H,{L:44,Rm:12,Tp:10,B:26}),{W,L,Rm,Tp,base}=a,[ymin,ymax]=yr;
+  const a=xAxis(svg,xr,H,{L:44,Rm:12,Tp:10,B:26}),{W,L,Rm,Tp,base}=a,[ymin,ymax]=ySnap(yr);
   const Y=v=>Tp+(Math.log(ymax)-Math.log(Math.max(ymin,Math.min(ymax,v))))/(Math.log(ymax)-Math.log(ymin))*(base-Tp);
   let s='';yTicks(ymin,ymax).forEach(v=>s+=`<line class="gridl" x1="${L}" x2="${W-Rm}" y1="${Y(v)}" y2="${Y(v)}"/><text x="${L-6}" y="${Y(v)+4}" text-anchor="end">${v}</text>`);
-  s+=a.s+`<line class="axis" x1="${L}" x2="${L}" y1="${Tp}" y2="${base}"/><text class="atitle" x="${L+6}" y="${Tp+10}">KL, mnats ↓ better</text>`;
+  s+=a.s+`<line class="axis" x1="${L}" x2="${L}" y1="${Tp}" y2="${base}"/><text class="atitle" x="${L+6}" y="${Tp+10}">KL ↑</text>`;
   return {...a,s,Y,ymin,ymax}}
 // span: [lo,hi] in GiB where the curve was fitted; outside it (or everywhere with allExt) it draws dashed
 const curve=(c,fn,cls,span,allExt)=>{const st=(c.xmax-c.xmin)/100,seg={s:'',e:''};let prev=null,lk=null;
@@ -748,7 +763,7 @@ function pgLibrary(){
   <div class="lib3">
     <div class="libmain">
       <svg class="chart" id="libchart" role="img" aria-label="shipped builds, size against mean KL"></svg>
-      <div class="legend"><span><span class="dot vq"></span>VQ flat</span><span><span class="dot mixed"></span>VQ mixed</span><span><span class="dot aff"></span>affine</span><span><span class="dot own"></span>own build</span>${t.rows.some(isSz)?'<span><span class="dot szkey"></span>skip-zero</span>':''}${INFO("▸ on mean KL adds prose, code and literary; ▸ on bpw adds experts, attn, embed (embed/PLE where the family has per-layer embeddings) and router. experts: VQ code bits log2(K)/d weighted by module count, affine bits + 32/group. The other three are quantization widths read from each build's config.json (bf16 = unquantized). — means no config found locally.")}</div>
+      <div class="legend"><span><span class="dot vq"></span>VQ flat</span><span><span class="dot mixed"></span>VQ mixed</span><span><span class="dot aff"></span>affine</span><span><span class="dot own"></span>own build</span>${t.rows.some(isSz)?'<span><span class="dot szkey"></span>skip-zero</span>':''}</div>
       <div class="ltabs" role="tablist">${[['pub','Published',ship.length],['own','Own builds',own]].map(([k,n,c])=>`<button role="tab" aria-selected="${lib.tab===k}" data-ltab="${k}">${n} <span>${c}</span></button>`).join('')}${INFO(lib.tab==='pub'?'The published catalog: one row per released build. VQ rows (and comparators the card carries) are the newest model card\'s ladder table, all on one cache; hover a row for its card and date. Rows tagged paper are the paper\'s comparators on another cache, so do not compare them directly. sz marks skip-zero builds. bpw is the name\'s nominal value; affine rows add 0.5 (bits + 0.5). Builds you made on this machine are under Own builds.':'Artifacts registered on this machine that are not published catalog rows. KL is the newest measurement per corpus for these exact weight bytes in the scores index (the line for the same runtime when there is one). Their caches can differ from the published rows, so do not compare across the two groups. An unscored build has no number and none is estimated.')}</div>
       <div class="libscroll">${lib.tab==='pub'?ladder(t,ship,minMac,link):ownPane(t)}</div>
     </div>
@@ -786,9 +801,19 @@ const ntail=(t,r)=>Math.max(0,Math.min(t.vq_layers,t.first_vq+t.vq_layers-r.tail
 const affBpw=(bits,group)=>bits+32/group;
 // the size of a recipe: carried bytes at the base width plus the geometry's exact stack, never a fit to past rungs.
 // Instant feedback while a slider moves; the server's artifact_gib replaces it once the preview for this recipe arrives.
+// skip-zero's saving: the teacher's measured dead rows priced per VQ layer at that layer's geometry (server: recipe_queue.skipzero_gib)
+const szOn=(t,r)=>!!(t.skipzero&&r.skipzero&&r.mode==='vq'&&isMoe(t));
+function szGib(t,r){
+  if(!szOn(t,r))return 0;const G=t.skipzero.gib,body=G[r.geo]||{},tail=r.tailOn?(G[r.tailGeo]||{}):body;
+  return Object.keys(body).concat(Object.keys(tail)).filter((k,i,a)=>a.indexOf(k)===i).reduce((s,k)=>s+((r.tailOn&&+k>=r.tailFrom?tail:body)[k]||0),0);
+}
 function sizeOf(t,r){
+  const s=sizeRaw(t,r);if(s)s.gib-=szGib(t,r);return s;
+}
+function sizeRaw(t,r){
   const B=t.gib||{},skel=(B.carry||0)+(B.embed||0),vis=r.tower?(B.vision||0):0;
-  if(r.mode==='affine'){const bpw=affBpw(r.bits,r.group);return {gib:(skel+(B.vq_target||0))*bpw/16+vis,bpw}}
+  if(r.mode==='affine'){const bpw=affBpw(r.bits,r.group),p=isMoe(t)&&r.aprotect;  // mixed: experts bits/group, the rest protect/64 (recipe_queue._affine_steps)
+    return {gib:(p?skel*affBpw(p,64):skel*bpw)/16+(B.vq_target||0)*bpw/16+vis,bpw}}
   const g=geoOf(t,r.geo);if(!g)return null;
   if(!isMoe(t))return {gib:skel*affBpw(r.bits,r.group)/16+g.gib+vis,bpw:g.bpw};
   const base=skel*affBpw(r.protect,64)/16;
@@ -806,25 +831,27 @@ function sanitize(t){
   if(!r.tailFrom)r.tailFrom=t.first_vq+Math.floor(t.vq_layers/2);
   r.tailFrom=Math.max(lo,Math.min(hi,r.tailFrom));
   if(!(t.gib||{}).vision)r.tower=false;if(!(t.gib||{}).mtp)r.mtp=false;if(!t.scored)r.score=false;
-  r.protect=Math.max(2,Math.min(8,r.protect|0||8));
+  if(!t.skipzero)r.skipzero=false;else if(r.skipzero===undefined)r.skipzero=true;
+  r.protect=PBITS.find(b=>b>=(r.protect|0))||8;
+  if(!isMoe(t)||!APBITS.includes(r.aprotect))r.aprotect=0;
 }
 const shortOf=t=>baseKey(t.teacher.split('--').pop()).replace(/[^a-z0-9._-]+/g,'-').replace(/^[-._]+|-+$/g,'');
 const geoS=g=>g.toLowerCase().replace('-','');
 function defName(t,r){
   const s=shortOf(t);
-  return (r.mode==='affine'?`${s}-q${r.bits}g${r.group}`:r.tailOn?`${s}-${geoS(r.geo)}-${geoS(r.tailGeo)}-t${r.tailFrom}`:`${s}-${geoS(r.geo)}`).slice(0,80);
+  return (r.mode==='affine'?`${s}-q${r.bits}g${r.group}${r.aprotect?'p'+r.aprotect:''}`:r.tailOn?`${s}-${geoS(r.geo)}-${geoS(r.tailGeo)}-t${r.tailFrom}`:`${s}-${geoS(r.geo)}`).slice(0,80);
 }
 function ensureName(){const t=curT();if(t&&!recipe.draft.nameSet)recipe.draft.name=defName(t,recipe.draft)}
 // the recipe JSON the backend compiles (plan/recipe_queue.py)
 function recipeOf(t,r){
   const o={name:r.name,family:t.family,teacher:t.teacher,mode:r.mode,vision:!!r.tower,mtp:!!r.mtp,score:!!r.score};
-  if(r.mode==='vq'){o.geo=r.geo;if(isMoe(t)){if(r.tailOn)o.tail={from:r.tailFrom,geo:r.tailGeo};o.protect_bits=r.protect}else{o.bits=r.bits;o.group=r.group}}
-  else{o.bits=r.bits;o.group=r.group}
+  if(r.mode==='vq'){o.geo=r.geo;if(isMoe(t)){if(r.tailOn)o.tail={from:r.tailFrom,geo:r.tailGeo};o.protect_bits=r.protect;if(szOn(t,r))o.skipzero=true}else{o.bits=r.bits;o.group=r.group}}
+  else{o.bits=r.bits;o.group=r.group;if(isMoe(t)&&r.aprotect)o.protect_bits=r.aprotect}
   return o;
 }
 function setTeacher(id){
   const t=TEACH.data.find(x=>x.id===id);if(!t)return;const fg=fitGeos(t);
-  recipe.draft=Object.assign(newRecipe(),{teacher:id,mode:fg.length?'vq':'affine',geo:fg.length?fg[Math.floor((fg.length-1)/2)].geo:'',tower:!!(t.gib||{}).vision,score:!!t.scored});
+  recipe.draft=Object.assign(newRecipe(),{teacher:id,mode:fg.length?'vq':'affine',geo:fg.length?fg[Math.floor((fg.length-1)/2)].geo:'',tower:!!(t.gib||{}).vision,score:!!t.scored,skipzero:!!t.skipzero});
   sanitize(t);ensureName();pvKick();
 }
 // after the teacher list changes: keep the draft on a buildable teacher, re-clamped to that teacher's profile
@@ -898,18 +925,18 @@ function pgRecipe(){
   if(!t)return `<section class="panel"><h2>${head}</h2>
   ${TEACH.err?errLine(TEACH.err):empty(TEACH.loaded?'no teacher here can be built yet; profile an original from the picker':'loading teachers…','ro')}${PICKER()}</section>`;
   const r=recipe.draft,moe=isMoe(t),fg=fitGeos(t).map(g=>g.geo),B=t.gib||{},rb=recipe.rb;
-  const qrow=(label,k,vals,info)=>`<div class="bitrow"><span>${label}${info?' '+I(info):''}</span><div class="kseg small">${vals.map(b=>`<button aria-pressed="${r[k]===b}" data-g="${k}" data-v="${b}">${k==='group'?b:'q'+b}</button>`).join('')}</div></div>`;
+  const qrow=(label,k,vals,info)=>`<div class="bitrow"><span>${label}${info?' '+I(info):''}</span><div class="kseg small">${vals.map(b=>`<button aria-pressed="${r[k]===b}" data-g="${k}" data-v="${b}">${k==='group'?b:k==='aprotect'&&!b?'=':'q'+b}</button>`).join('')}</div></div>`;
   const step=(label,nav,val,btns,info)=>`<div class="bitrow"><span>${label}${info?' '+I(info):''}</span><div class="kseg small">${btns.map(([c,d,off])=>d===0?`<button class="cur" aria-pressed="true" tabindex="-1">${esc(val)}</button>`:`<button data-nav="${nav}" data-d="${d}" ${off?'disabled':''} aria-label="${nav} ${d}">${c}</button>`).join('')}</div></div>`;
   const gi=fg.indexOf(r.geo),ti=fg.indexOf(r.tailGeo),lo=t.first_vq+1,hi=t.first_vq+t.vq_layers-1;
   const geoStep=(label,nav,i,info)=>step(label,nav,fg[i],[['‹',-1,i<=0],['',0],['›',1,i>=fg.length-1]],info);
-  const vqSide=()=>`<div class="ro">strategy ${I('Flat puts one geometry on every VQ layer. Tail gives the layers from the chosen one on a second, richer geometry: the back of the network is where extra bits pay (position law). The size is exact either way.')}</div>
-    <div class="kseg">${[['flat','Flat','one geometry'],['tail','Tail','rich back']].map(([k,n,s])=>`<button aria-pressed="${(k==='tail')===r.tailOn}" data-g="strat" data-v="${k}" ${k==='tail'&&(!moe||hi<lo)?'disabled':''}>${n}<small>${s}</small></button>`).join('')}</div>
+  const vqSide=()=>`<div class="ro">strategy ${I('Flat puts one geometry on every VQ layer. Mixed gives the layers from the chosen one on a second (tail) geometry, usually richer: the back of the network is where extra bits pay (position law). The tail may also be equal or cheaper. The size is exact either way.')}</div>
+    <div class="kseg">${[['flat','Flat','one geometry'],['tail','Mixed','richer tail']].map(([k,n,s])=>`<button aria-pressed="${(k==='tail')===r.tailOn}" data-g="strat" data-v="${k}" ${k==='tail'&&(!moe||hi<lo)?'disabled':''}>${n}<small>${s}</small></button>`).join('')}</div>
     <div class="ro">geometry ${I('Only geometries a fit can be compiled at are offered: legal on every projection of this teacher and with a measured healthy relerr for the fit abort threshold.')}</div>
     ${geoStep(r.tailOn?'body':'geometry','geo',gi)}
-    ${r.tailOn?geoStep('tail','tailGeo',ti)+step('from layer','tfrom','L'+r.tailFrom,[['«',-4,r.tailFrom-4<lo],['‹',-1,r.tailFrom<=lo],['',0],['›',1,r.tailFrom>=hi],['»',4,r.tailFrom+4>hi]],`Layers ${lo}-${hi} can start the tail; ${ntail(t,r)} of ${t.vq_layers} VQ layers take the tail geometry.`):''}
-    ${moe?qrow('protect','protect',BITS,'stream-convert --protect-bits: width of attention, embeddings and shared modules. They are a small share of the bytes and a large share of the damage.'):qrow('base bits','bits',BITS,'Width of the affine base the VQ layers are spliced into (attention, embeddings, norms).')+qrow('group','group',GROUPS,'Weights per scale-and-bias group of the base: +32/group bits per weight.')}`;
-  const affSide=`<div class="ro">experts ${I('Round-to-nearest affine quantization of every linear. Bits and group size fix the size exactly, so the point does not drag.')}</div>
-    ${qrow('bits','bits',BITS)}${qrow('group','group',GROUPS,'Weights per scale-and-bias group: +32/group bits per weight.')}`;
+    ${r.tailOn?geoStep('tail','tailGeo',ti)+step('from layer','tfrom','L'+r.tailFrom,[['‹',-1,r.tailFrom<=lo],['',0],['›',1,r.tailFrom>=hi]],`Layers ${lo}-${hi} can start the tail; ${ntail(t,r)} of ${t.vq_layers} VQ layers take the tail geometry.`):''}
+    ${moe?qrow('protect','protect',PBITS,'stream-convert --protect-bits: width of attention, embeddings and shared modules. They are a small share of the bytes and a large share of the damage.'):qrow('base bits','bits',BITS,'Width of the affine base the VQ layers are spliced into (attention, embeddings, norms).')+qrow('group','group',GROUPS,'Weights per scale-and-bias group of the base: +32/group bits per weight.')}`;
+  const affSide=`<div class="ro">experts ${I('Round-to-nearest affine quantization of every linear. Bits and group size fix the size exactly; dragging picks the width.')}</div>
+    ${qrow('bits','bits',BITS)}${qrow('group','group',GROUPS,'Weights per scale-and-bias group: +32/group bits per weight.')}${moe?qrow('protect','aprotect',APBITS,'stream-convert --protect-bits: width of attention, embeddings and shared modules (group 64); the experts keep bits and group above. = quantizes everything at the expert width. The router stays bf16 either way.'):''}`;
   const ok=NAME_RE.test(r.name),addon=(k,label,gb)=>`<button class="addon" aria-pressed="${!!r[k]}" data-g="${k}"><i></i><span class="n">${label}</span><span class="t">+${fmt(gb)} GiB</span></button>`;
   return `<section class="panel"><h2>${head}${I('Drag the point to a geometry; notches are the geometries a fit can be compiled at, lines are Apple silicon boxes after macOS and context. Everything here is exact arithmetic from the teacher\'s profile.')}</h2>
   <div class="recipe">
@@ -920,10 +947,11 @@ function pgRecipe(){
     <div id="strip"></div>
     <div id="plan"></div>
   </div>
-  <div class="cart">
+  <div class="cart" id="rcart">
     <div class="seg modeseg">${[['vq','VQ'],['affine','Affine']].map(([v,n])=>`<button aria-pressed="${r.mode===v}" data-g="mode" data-v="${v}" ${v==='vq'&&!fg.length?'disabled':''}>${n}</button>`).join('')}</div>
     ${r.mode==='vq'?vqSide():affSide}
-    <div class="ro">include ${I('KL score runs the score step after the build, and needs KL caches registered for this teacher. MTP drafting is not compiled: choose its wiring by hand after the build.')}</div>
+    <div class="ro">include ${I('KL score runs the score step after the build, and needs KL caches registered for this teacher. MTP drafting is not compiled: choose its wiring by hand after the build.'+(t.skipzero?' Skip-zero drops this teacher\'s dead expert rows on disk (sz-pack, then sz-check), as every published build of it was made; KL unchanged (F175). The saving is its measured dead rows priced at this recipe\'s geometry per layer, from '+t.skipzero.source+'.':''))}</div>
+    ${t.skipzero&&r.mode==='vq'?`<button class="addon" aria-pressed="${!!r.skipzero}" data-g="skipzero"><i></i><span class="n">skip-zero</span><span class="t">−${fmt(szGib(t,{...r,skipzero:true}))} GiB</span></button>`:''}
     ${B.vision?addon('tower','vision tower',B.vision):''}
     ${B.mtp?addon('mtp','MTP drafting',B.mtp):''}
     <button class="addon" aria-pressed="${!!r.score}" data-g="score" ${t.scored?'':'disabled'}><i></i><span class="n">KL score</span></button>
@@ -938,20 +966,41 @@ const GROUPS=[32,64,128];
 const RBOX={L:44,Rm:12,Tp:10,B:26};  // the Library chart's frame, so both charts read alike
 // the Library catalog family of a teacher: its measured published rows are the recipe chart's reference
 const libOf=t=>LIB_ROWS.find(l=>baseKey(l.n)===baseKey(t.name))||null;
-function recipeGeom(t){
-  const r=recipe.draft,vq=r.mode==='vq';
-  const N=vq?fitGeos(t).map(g=>({k:g.geo,x:sizeOf(t,{...r,tailOn:false,geo:g.geo}).gib})):BITS.map(b=>({k:'q'+b,x:sizeOf(t,{...r,bits:b}).gib}));
-  const cur=sizeOf(t,r),xs=N.map(n=>n.x).concat(cur?[cur.gib]:[]);
-  const lo=Math.min(...xs),hi=Math.max(...xs),pad=Math.max((hi-lo)*0.08,0.5);
-  return {vq,N,cur,xr:[lo-pad,hi+pad]};
+// KL read off the gray curve (the fit through this teacher's measured published builds) at a size;
+// outside the sizes those builds span it is still read, and flagged extrapolated
+function estKL(t,r,gib){
+  const lt=libOf(t);if(!lt||lt.judge||gib==null)return null;
+  const aff=r.mode==='affine',rows=lt.scored.filter(q=>aff?q.kind==='affine':(q.kind==='vq'||q.kind==='lab')),fn=aff?lt.klAff:lt.klFlat;
+  if(!fn||rows.length<2)return null;
+  const g=gib-(r.tower?((t.gib||{}).vision||0):0),gs=rows.map(q=>q.gib);let v=fn(g);
+  // a mixed recipe: the flat curve times the mean ratio its published mixed builds measured against it
+  const mx=!aff&&r.tailOn?rows.filter(isMixed).map(q=>mean(q.kl)/fn(q.gib)).filter(x=>isFinite(x)&&x>0):[];
+  if(mx.length)v*=mx.reduce((a,b)=>a+b,0)/mx.length;
+  return isFinite(v)&&v>0?{v,extrap:g<Math.min(...gs)||g>Math.max(...gs),mixed:mx.length}:null;
 }
+// the x range: the left edge is pinned at the smallest of the notches and the published builds;
+// the right edge grows only as the point moves to larger sizes
+function recipeGeom(t){
+  const r=recipe.draft,vq=r.mode==='vq',lt=libOf(t);
+  const all=vq?fitGeos(t).map(g=>({k:g.geo,x:sizeOf(t,{...r,geo:g.geo}).gib})):BITS.map(b=>({k:'q'+b,x:sizeOf(t,{...r,bits:b}).gib}));
+  const cur=sizeOf(t,r),pub=lt?lt.rows.filter(q=>q.kl&&q.kind==='vq').map(q=>q.gib):[];
+  let xr=recipe.dragXr;const vk=r.teacher+'|'+r.mode,V=recipe.view;
+  if(!xr&&V&&V.key===vk&&cur&&cur.gib>V.xr[0]&&cur.gib<V.xr[1])xr=V.xr;
+  if(!xr){const ax=vq?fitGeos(t).map(g=>sizeOf(t,{...r,tailOn:false,geo:g.geo}).gib):all.map(n=>n.x),lo=Math.min(...ax,...pub,reach(t,r)[0]),top=Math.max(...ax,...all.map(n=>n.x));
+    const hi=Math.min(top,Math.max(...pub,cur?cur.gib*1.3:lo,lo*1.6)),pad=Math.max((hi-lo)*0.03,0.5);xr=[lo-Math.max(lo*0.02,0.5),hi+pad]}
+  if(!recipe.dragXr)recipe.view={key:vk,xr};
+  return {vq,N:all.filter(n=>n.x>=xr[0]&&n.x<=xr[1]),cur,xr};
+}
+const restHi=t=>{const r=recipe.draft,lt=libOf(t),pub=lt?lt.rows.filter(q=>q.kl&&q.kind==='vq').map(q=>q.gib):[],[lo,top]=reach(t,r);return Math.min(top,Math.max(...pub,Math.min(...pub,lo)*1.6))*1.03};
+const hitOf=(t,r)=>{const lt=libOf(t);return lt&&r.mode==='vq'&&!r.tailOn?lt.rows.find(q=>q.kl&&q.kind==='vq'&&!isMixed(q)&&q.geo===r.geo)||null:null};
 function drawRecipe(){
-  const r=recipe.draft,t=curT(),svg=$('#chart'),g=recipeGeom(t),{vq,N,cur}=g,lt=libOf(t),pts=lt?lt.rows.filter(q=>q.kl&&(q.kind==='vq'||q.kind==='affine')):[];
-  const H=Math.max(190,Math.min(300,Math.round(innerHeight*.3))),xr=pts.length?[Math.min(g.xr[0],lt.xr[0]),Math.max(g.xr[1],lt.xr[1])]:g.xr;
-  const c=chartFrame(svg,xr,H,yRange(pts.map(q=>mean(q.kl)))),{X,Y,W,Tp,base,xmin,xmax,span}=c;let s=c.s;
-  if(lt&&pts.length)s+=refCurves(c,lt);
+  const r=recipe.draft,t=curT(),svg=$('#chart'),g=recipeGeom(t),{vq,N,cur,xr}=g,lt=libOf(t),all=lt?lt.rows.filter(q=>q.kl&&(q.kind==='vq'||q.kind==='affine')):[];
+  const E=cur?estKL(t,r,cur.gib):null,est=E&&E.v,pts=all.filter(q=>q.gib>=xr[0]&&q.gib<=xr[1]);
+  const H=Math.max(200,Math.min(460,Math.round(innerHeight*.34)));
+  const c=chartFrame(svg,xr,H,yRange(all.map(q=>mean(q.kl)).concat(est?[est]:[]))),{X,Y,W,Tp,base,xmin,xmax,span}=c;let s=c.s;
+  if(lt&&all.length)s+=refCurves(c,lt);
   // a published row with this recipe's geometry on every VQ layer: its measured KL is this recipe's, to the row's instrument
-  const hit=vq&&!r.tailOn?pts.find(q=>q.kind==='vq'&&!isMixed(q)&&q.geo===r.geo):null;
+  const hit=hitOf(t,r);
   pts.forEach(q=>{const x=X(q.gib),y=Y(mean(q.kl));
     if(q.kind==='affine')s+=`<g class="rpt"><title>${esc(q.what)} · ${fmt(q.gib)} GiB · ${fmt(mean(q.kl))} mnats</title><path class="xmark" d="M${x-3} ${y-3}L${x+3} ${y+3}M${x+3} ${y-3}L${x-3} ${y+3}"/></g>`;
     else s+=`<g class="rpt"><title>${esc(q.what)} · ${fmt(q.gib)} GiB · ${fmt(mean(q.kl))} mnats</title><circle cx="${x}" cy="${y}" r="4.5" style="fill:${vqCol(q)}"/></g>`});
@@ -961,46 +1010,80 @@ function drawRecipe(){
   mark(N[0]);if(sx(N[N.length-1])<W-RBOX.Rm-60)mark(N[N.length-1]);N.forEach(n=>{if(n.k===sel)mark(n)});
   N.forEach(n=>{if(!lab.has(n.k)&&N.every(m=>!lab.has(m.k)||Math.abs(sx(m)-sx(n))>=64))mark(n)});
   N.forEach(n=>{const on=lab.has(n.k);s+=`<g class="notch ${n.k===sel?'':'dimmed'}"><title>${esc(n.k)} · ${fmt(n.x)} GiB</title><line x1="${X(n.x)}" x2="${X(n.x)}" y1="${base-8}" y2="${base}"/>${on?`<text x="${X(n.x)}" y="${base-12}" text-anchor="middle">${esc(n.k)}</text>`:''}</g>`});
-  if(cur){const szNote=hit&&hit.sz&&cur.gib>hit.gib?` · skip-zero: ${fmt(cur.gib-hit.gib)} GiB smaller on disk, KL unchanged (F175)`:'',x=X(cur.gib),left=x>W-260,tx=left?x-8:x+8,anc=left?'end':'start';
-    s+=`<g class="pick"><line x1="${x}" x2="${x}" y1="${Tp}" y2="${base}"/>${hit?`<circle cx="${X(hit.gib)}" cy="${Y(mean(hit.kl))}" r="6.5"><title>published ${esc(hit.what)}, not this recipe: KL ${fmt(mean(hit.kl))} · ${esc(hit.tip||'')}${szNote}</title></circle>`:`<circle cx="${x}" cy="${base}" r="5"/>`}<text x="${tx}" y="${Tp+12}" text-anchor="${anc}">${fmt(cur.gib)} GiB · KL ${hit?'— · published '+esc(hit.what)+': '+fmt(mean(hit.kl)):'—'}</text></g>`}
-  svg.innerHTML=s;svg.style.cursor=vq?'':'default';
+  if(cur){const szNote=hit&&hit.sz&&!szOn(t,r)&&cur.gib>hit.gib?` · skip-zero: ${fmt(cur.gib-hit.gib)} GiB smaller on disk, KL unchanged (F175)`:'',x=X(cur.gib),left=x>W-260,tx=left?x-8:x+8,anc=left?'end':'start';
+    s+=`<g class="pick"><line x1="${x}" x2="${x}" y1="${Tp}" y2="${base}"/>${hit?`<circle cx="${X(hit.gib)}" cy="${Y(mean(hit.kl))}" r="6.5"><title>published ${esc(hit.what)}, not this recipe: KL ${fmt(mean(hit.kl))} · ${esc(hit.tip||'')}${szNote}</title></circle>`:est?`<circle cx="${x}" cy="${Y(est)}" r="5"><title>${E&&E.extrap?'extrapolated':'interpolated'} from the published builds' curve, not measured</title></circle>`:`<circle cx="${x}" cy="${base}" r="5"/>`}<text x="${tx}" y="${Tp+12}" text-anchor="${anc}">${fmt(cur.gib)} GiB · KL ${hit?'— · published '+esc(hit.what)+': '+fmt(mean(hit.kl)):est?'~'+fmt(est):'—'}</text></g>`}
+  svg.innerHTML=s;
 }
 // the notch nearest to a pointer event on the chart
-function chartNearest(e){
-  const svg=$('#chart'),{N,xr}=recipeGeom(curT()),b=svg.getBoundingClientRect(),W=Math.max(320,Math.round(b.width||1000)),{L,Rm}=RBOX;
-  const gx=xr[0]+((e.clientX-b.left)/b.width*W-L)/(W-L-Rm)*(xr[1]-xr[0]);
-  return N.reduce((a,c)=>Math.abs(c.x-gx)<Math.abs(a.x-gx)?c:a);
+// the size under a pointer event on the chart, snapped to a box line within 8 px
+function chartSize(e){
+  const svg=$('#chart'),{xr}=recipeGeom(curT()),b=svg.getBoundingClientRect(),W=Math.max(320,Math.round(b.width||1000)),{L,Rm}=RBOX;
+  const per=(xr[1]-xr[0])/(W-L-Rm),gx=xr[0]+((e.clientX-b.left)/b.width*W-L)*per;
+  const box=MACHINES.map(usable).find(u=>Math.abs(u-gx)<per*8);
+  return box!=null?box:gx;
 }
+// continuous drag. Flat: the nearest geometry. Mixed: a body geometry and the next richer geometry
+// of the same width (else the next richer of any width, past the widest) as the tail, with the tail's first layer set so the build lands nearest the size
+// the chart drives the recipe: every setting that sets the size is derived from where the point is dragged.
+// Each candidate is scored by how far its size lands from the pointer, plus a small cost per setting it
+// changes, so the current settings hold until another lands clearly closer (no flicker), and at a wall
+// (q2, the cheapest geometry) the next setting starts to move (group, protect) instead of the point stopping.
+const DRAG_KEYS=['geo','tailGeo','tailFrom','protect','aprotect','bits','group'];
+function dragCands(t,r){
+  if(r.mode==='affine'){const AP=isMoe(t)?APBITS:[r.aprotect];return BITS.flatMap(bits=>GROUPS.flatMap(group=>AP.map(aprotect=>({bits,group,aprotect}))))}
+  const fg=fitGeos(t),P=isMoe(t)?PBITS:[r.protect],out=[];
+  if(!r.tailOn){fg.forEach(c=>P.forEach(protect=>out.push({geo:c.geo,protect})));return out}
+  const lo=t.first_vq+1,hi=t.first_vq+t.vq_layers-1;
+  fg.forEach((c,i)=>{const up=fg.slice(i+1).find(n=>n.d===c.d)||fg[i+1];if(!up)return;
+    P.forEach(protect=>{for(let f=lo;f<=hi;f++)out.push({geo:c.geo,tailGeo:up.geo,tailFrom:f,protect})})});
+  return out;
+}
+// candidates with their sizes; a drag prices them once at pointerdown (recipe.cands)
+const pricedCands=(t,r)=>dragCands(t,r).map(c=>({c,gib:sizeOf(t,{...r,...c}).gib}));
+function resolveAt(t,r,g,priced=pricedCands(t,r)){
+  let best=null;
+  for(const {c,gib} of priced){
+    const ch=Object.keys(c).filter(k=>c[k]!==r[k]&&k!=='tailFrom').length;
+    const d=Math.abs(gib-g)+0.3*ch;
+    if(!best||d<best.d)best={d,c}}
+  if(best)Object.assign(r,best.c);
+}
+// the size range the chart can reach, over every candidate: its ends bound the view
+function reach(t,r,priced=pricedCands(t,r)){const xs=priced.map(p=>p.gib);return [Math.min(...xs),Math.max(...xs)]}
+function drawCart(){const el=$('#rcart');if(!el)return;const tmp=document.createElement('div');tmp.innerHTML=pgRecipe();const n=tmp.querySelector('#rcart');if(n)el.innerHTML=n.innerHTML}
 function chartDrag(e){
-  const near=chartNearest(e),r=recipe.draft;
-  if(near.k!==r.geo){r.geo=near.k;ensureName();drawRecipe();drawStrip();drawReadouts()}
+  const r=recipe.draft,t=curT(),key=()=>DRAG_KEYS.map(k=>r[k]).join(),k=key(),g=chartSize(e),xr=recipe.dragXr;
+  // the scale holds still under the pointer; pushing past the right edge widens it a step at a time
+  if(xr){const sp=xr[1]-xr[0],top=recipe.reach[1]*1.02;if(g>xr[1]-sp*0.02&&xr[1]<top)recipe.dragXr=[xr[0],Math.min(top,xr[1]+sp*0.04)];else{const rest=recipe.restHi;if(xr[1]>rest&&g<xr[0]+sp*0.35)recipe.dragXr=[xr[0],Math.max(rest,xr[1]-sp*0.02)]}}
+  resolveAt(t,r,g,recipe.cands);
+  if(key()!==k||recipe.dragXr!==xr){ensureName();drawRecipe();drawStrip();drawReadouts();drawCart()}
 }
 function drawReadouts(){
   const r=recipe.draft,t=curT(),s=sizeOf(t,r),pv=recipe.pv,Pv=pv.data;
   // one size: the server's exact artifact figure once the preview for this recipe is in, the local arithmetic while it is pending
   const size=Pv&&pv.resKey===pvKey()&&Pv.artifact_gib!=null?Pv.artifact_gib:s&&s.gib,box=size!=null?fitBox(size):null;
-  const klInfo=INFO('No estimate exists for an unmeasured build, so none is shown. KL to the teacher is measured after the build, by the score step.'+(t.scored?'':' This teacher has no registered KL caches, so this build will not be scored.'));
+  const hit=hitOf(t,r),E=s?estKL(t,r,s.gib):null,est=E&&E.v,klInfo=INFO('An interpolation, not a measurement: the gray curve fitted through this teacher\'s measured published builds, read at this recipe\'s size (KL tracks total bytes, FINDINGS I.1). Outside the sizes those builds span it is extrapolated; a teacher with no measured builds has no estimate. KL to the teacher is measured after the build, by the score step.'+(t.scored?'':' This teacher has no registered KL caches, so this build will not be scored.'));
   const boxInfo=INFO('The smallest listed memory size that holds this build after the OS reserve (5 GB up to 36 GB, else 8 GB) and a context reserve (5% of memory, 2 to 8 GB). "no box" means it is larger than every listed size.');
   $('#readouts').innerHTML=
-    readout('size',size!=null?fmt(size)+' GiB':'—',s&&s.bpw!=null?fmt(s.bpw,2)+(r.mode==='affine'?' bpw':isMoe(t)?' bpw experts':' bpw MLP'):'&nbsp;','acc')
-   +readout('runs on '+boxInfo,box?box+' GB':size!=null?'no box':'—',null,box?'ok':size!=null?'bad':'')
-   +readout('est. KL '+klInfo,'—','&nbsp;')
+    readout('size',size!=null?fmt(size)+' GiB':'—',s&&s.bpw!=null?fmt(s.bpw,2)+(r.mode==='affine'&&!(isMoe(t)&&r.aprotect)?' bpw':isMoe(t)?' bpw experts':' bpw MLP'):'&nbsp;','acc')
+   +readout('runs on '+boxInfo,box?box+' GB':size!=null?'no box':'—',null,box?'box':size!=null?'bad':'')
+   +readout('est. KL '+klInfo,hit?fmt(mean(hit.kl)):est?'~'+fmt(est):'—',hit?'published build':est?(E.extrap?'extrapolated':'interpolated'):'&nbsp;')
    +readout('scratch',Pv?gib(Pv.writes):'—',pv.busy?'planning…':'&nbsp;')
    +readout('time',Pv?(Pv.eta_s==null?'unknown':fmtS(Pv.eta_s)):'—',pv.busy?'planning…':pv.err?'see plan':Pv?Pv.steps.length+' steps, full run':'&nbsp;','acc');
 }
 function drawPlan(){
   const el=$('#plan');if(!el)return;const pv=recipe.pv,Pv=pv.data,rb=recipe.rb;
   const line=(cls,t)=>`<div class="pnote ${cls}" title="${esc(t)}">${esc(t)}</div>`;
-  const notes=[...(pv.err?[line('bad',pv.err)]:[]),...(rb.err?[line('bad',rb.err)]:[]),...(Pv?Pv.warnings.map(w=>line('dim',w)):[])],more=notes.length>3;
-  el.innerHTML=`<div class="rohd mid ro"><span>plan ${INFO('The steps a queue run would execute, compiled by the server from this recipe. Times come from past runs of the same step and are unknown where there is none. Nothing is written until Review build.')}</span><span>${pv.busy?'planning…':Pv?Pv.steps.length+' steps':''}${more?' · '+notes.length+' notes':''}</span></div>
+  const errs=[...(pv.err?[line('bad',pv.err)]:[]),...(rb.err?[line('bad',rb.err)]:[])],warns=Pv?Pv.warnings:[];
+  el.innerHTML=`<div class="rohd mid ro"><span>plan ${INFO('The steps a queue run would execute, compiled by the server from this recipe. Times come from past runs of the same step and are unknown where there is none. Nothing is written until Review build.'+warns.map(w=>'<br>'+esc(w)).join(''))}</span><span>${pv.busy?'planning…':Pv?Pv.steps.length+' steps':''}${warns.length?' · '+warns.length+' notes':''}</span></div>
    ${stepsTable(Pv?Pv.steps:[],' plan')}
-   <div class="pnotes">${notes.slice(0,3).join('')}</div>`;
+   <div class="pnotes">${errs.slice(0,1).join('')}</div>`;
 }
 function drawStrip(){
   const r=recipe.draft,t=curT(),lo=t.first_vq,hi=t.first_vq+t.vq_layers-1;
   const pal=['var(--g2)','var(--acc)'],cells=Array.from({length:t.layers},(_,l)=>r.mode==='affine'?`q${r.bits} g${r.group}`:l<lo||l>hi?'':(r.tailOn&&l>=r.tailFrom?r.tailGeo:r.geo));
   const geos=[...new Set(cells.filter(Boolean))],col=g=>!g?'var(--line)':pal[geos.indexOf(g)%pal.length];
-  $('#strip').innerHTML=`<div class="rohd mid ro"><span>allocation by layer · ${esc(t.layers)} layers${t.modules?' · '+esc(t.modules)+' modules':''}</span><span>${r.mode==='affine'?'uniform affine':r.tailOn?'tail from L'+r.tailFrom:'flat'}</span></div>
+  $('#strip').innerHTML=`<div class="rohd mid ro"><span>allocation by layer · ${esc(t.layers)} layers${t.modules?' · '+esc(t.modules)+' modules':''}</span><span>${r.mode==='affine'?(isMoe(t)&&r.aprotect?'affine, rest q'+r.aprotect:'uniform affine'):r.tailOn?'tail from L'+r.tailFrom:'flat'}</span></div>
    <div class="strip" style="grid-template-columns:repeat(${+t.layers},1fr)">${cells.map((g,l)=>`<i style="background:${col(g)}" title="L${l} ${esc(g||'not VQ')}"></i>`).join('')}</div>
    <div class="striplab"><span>L0</span><span>L${+t.layers-1}</span></div>
    <div class="key">${geos.map(g=>`<span><em style="background:${col(g)}"></em>${esc(g)} × ${cells.filter(x=>x===g).length}</span>`).join('')}</div>`;
@@ -1393,7 +1476,7 @@ const chg=fn=>{const t=curT();if(!t)return;fn(t);sanitize(t);ensureName();pvKick
 on('g',el=>chg(t=>{const d=recipe.draft,g=el.dataset.g,v=el.dataset.v;
   if(v===undefined)d[g]=!d[g];
   else if(g==='mode')d.mode=v;
-  else if(g==='strat'){d.tailOn=v==='tail';if(d.tailOn){const fg=fitGeos(t).map(x=>x.geo);d.tailGeo=fg[Math.min(fg.length-1,fg.indexOf(d.geo)+1)]}}
+  else if(g==='strat'){const at=sizeOf(t,d).gib;d.tailOn=v==='tail';if(d.tailOn){const fg=fitGeos(t).map(x=>x.geo);d.tailGeo=fg[Math.min(fg.length-1,fg.indexOf(d.geo)+1)]}resolveAt(t,d,at)}
   else d[g]=+v}));
 on('nav',el=>chg(t=>{const d=+el.dataset.d,k=el.dataset.nav,r=recipe.draft;
   if(k==='tfrom')r.tailFrom+=d;
@@ -1437,11 +1520,11 @@ pageEl.addEventListener('keydown',e=>{const el=e.target;
 pageEl.addEventListener('focusout',e=>{if(isFld(e.target))stBlur(e.target.dataset.fk)});
 // dragging the recipe point along the geometry notches
 pageEl.addEventListener('pointerdown',e=>{const svg=e.target.closest&&e.target.closest('#chart');
-  if(!svg||recipe.draft.mode!=='vq'||!curT())return;
-  e.preventDefault();svg.classList.add('drag');svg.setPointerCapture(e.pointerId);chartDrag(e)});
+  if(!svg||!curT())return;
+  e.preventDefault();recipe.dragXr=recipeGeom(curT()).xr;recipe.restHi=restHi(curT());recipe.cands=pricedCands(curT(),recipe.draft);recipe.reach=reach(curT(),recipe.draft,recipe.cands);svg.classList.add('drag');svg.setPointerCapture(e.pointerId);chartDrag(e)});
 pageEl.addEventListener('pointermove',e=>{const svg=$('#chart');if(svg&&svg.classList.contains('drag'))chartDrag(e)});
 const dragEnd=()=>{const svg=$('#chart');if(!svg||!svg.classList.contains('drag'))return;
-  svg.classList.remove('drag');ensureName();sanitize(curT());pvKick();redraw()};
+  svg.classList.remove('drag');recipe.view={key:recipe.draft.teacher+'|'+recipe.draft.mode,xr:recipe.dragXr};recipe.dragXr=null;ensureName();sanitize(curT());pvKick();redraw()};
 pageEl.addEventListener('pointerup',dragEnd);pageEl.addEventListener('pointercancel',dragEnd);
 
 // ---- header, overlays, start-up
