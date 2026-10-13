@@ -36,3 +36,18 @@ def test_struct_unchanged():
     kw = dict(target=T, bits=4, group=128, protect_bits=8, struct=True)
     assert body_spec(EXP, **kw) == {"group_size": 64, "bits": 2}
     assert body_spec(ATT, **kw) == {"group_size": 64, "bits": 8}
+
+
+def test_slabbed_quantize_is_exactly_the_whole_stack(monkeypatch):
+    """An expert stack quantized a slab of experts at a time (the 397B's 4 GiB
+    stacks ran past the Metal watchdog in one kernel) is the same bytes."""
+    import mlx.core as mx
+    from vqlab.build import stream_convert as sc
+    monkeypatch.setattr(sc, "SLAB_BYTES", 3 * 64 * 128 * 2)       # 3 experts per slab
+    w = mx.random.normal((8, 64, 128), key=mx.random.key(0)).astype(mx.bfloat16)
+    want = mx.quantize(w, group_size=64, bits=2)
+    got = sc._slabbed(mx.quantize)(w, group_size=64, bits=2)
+    assert len(sc._SLABS.pop(id(got[0]))) == 3
+    for g, x in zip(got, want):
+        assert mx.array_equal(g, x).item()
+    sc._SLABS.clear()

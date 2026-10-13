@@ -73,6 +73,30 @@ def body_spec(path, *, target, bits, group=64, protect_bits=None, struct=False):
     return {"group_size": group, "bits": bits}
 
 
+# An expert stack is one 3-D tensor (397B: 512 x 1024 x 4096 bf16, 4 GiB per
+# projection), and quantizing it in one kernel ran past the Metal watchdog
+# (2026-10-13: 4.7-5.0 s per stack, then a GPU Timeout). Affine quantization
+# works per group along the last axis, so a slab of experts quantizes exactly
+# as it would in the whole stack: stacks are quantized a slab at a time, and the
+# write loop evaluates each slab in its own eval (its own command buffers)
+# before the joined result. Byte-identical to the one-kernel quantization.
+SLAB_BYTES = 512 * 2**20
+_SLABS: dict = {}            # id(joined output) -> that stack's slab outputs
+
+
+def _slabbed(quantize):
+    def q(w, *args, **kw):
+        if w.ndim != 3 or w.nbytes <= SLAB_BYTES:
+            return quantize(w, *args, **kw)
+        n = max(1, SLAB_BYTES // (w.nbytes // w.shape[0]))
+        parts = [quantize(w[i:i + n], *args, **kw) for i in range(0, w.shape[0], n)]
+        out = tuple(mx.concatenate([p[j] for p in parts], axis=0) for j in range(len(parts[0])))
+        for o in out:
+            _SLABS[id(o)] = parts
+        return out
+    return q
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(
         description=__doc__.split("\n")[0],
@@ -176,8 +200,12 @@ def main(argv=None) -> int:
     PREQ = sum(1 for n, m in model.named_modules()
                if target in n and "Quantized" in type(m).__name__)
     gbits = a.protect_bits if a.struct else a.bits
-    model, config = quantize_model(model, config, 32, gbits, mode="affine",
-                                   quant_predicate=predicate)
+    whole, mx.quantize = mx.quantize, _slabbed(mx.quantize)
+    try:
+        model, config = quantize_model(model, config, 32, gbits, mode="affine",
+                                       quant_predicate=predicate)
+    finally:
+        mx.quantize = whole
     if SKEL is not None:
         print(f"skeleton-from {a.skeleton_from}: {SKEL_HITS}"
               + (f"; {PREQ} expert modules arrived already quantized and are kept as-is" if PREQ else ""),
@@ -212,6 +240,8 @@ def main(argv=None) -> int:
                   flush=True)
             si += 1; size = 0
         prev_mod = mod
+        for part in _SLABS.pop(id(arr), ()):
+            mx.eval(part)                 # one slab of experts per eval
         mx.eval(arr)
         shard[name] = arr
         size += arr.nbytes
