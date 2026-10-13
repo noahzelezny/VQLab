@@ -47,7 +47,8 @@ def test_slabbed_quantize_is_exactly_the_whole_stack(monkeypatch):
     w = mx.random.normal((8, 64, 128), key=mx.random.key(0)).astype(mx.bfloat16)
     want = mx.quantize(w, group_size=64, bits=2)
     got = sc._slabbed(mx.quantize)(w, group_size=64, bits=2)
-    assert len(sc._SLABS.pop(id(got[0]))) == 3
+    src, parts = sc._SLABS.pop(id(got[0]))
+    assert src is w and len(parts) == 3
     for g, x in zip(got, want):
         assert mx.array_equal(g, x).item()
     sc._SLABS.clear()

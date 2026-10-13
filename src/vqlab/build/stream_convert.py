@@ -74,14 +74,16 @@ def body_spec(path, *, target, bits, group=64, protect_bits=None, struct=False):
 
 
 # An expert stack is one 3-D tensor (397B: 512 x 1024 x 4096 bf16, 4 GiB per
-# projection), and quantizing it in one kernel ran past the Metal watchdog
-# (2026-10-13: 4.7-5.0 s per stack, then a GPU Timeout). Affine quantization
-# works per group along the last axis, so a slab of experts quantizes exactly
-# as it would in the whole stack: stacks are quantized a slab at a time, and the
-# write loop evaluates each slab in its own eval (its own command buffers)
-# before the joined result. Byte-identical to the one-kernel quantization.
+# projection). Evaluated as one lazy graph, its read and quantization ran in
+# one GPU command buffer and past the Metal watchdog (2026-10-13: 4.7-5.0 s per
+# stack, then a GPU Timeout; slabs alone did not help, since slicing a lazy
+# load still reads the whole tensor inside the GPU's work). So the write loop
+# first evaluates the stack's SOURCE on its own (with --cpu-load the read is
+# bound to the CPU stream and never enters a GPU buffer), then quantizes it a
+# slab of experts per eval. Affine groups lie along the last axis, so slabs
+# are exact: byte-identical to the one-kernel quantization.
 SLAB_BYTES = 512 * 2**20
-_SLABS: dict = {}            # id(joined output) -> that stack's slab outputs
+_SLABS: dict = {}            # id(joined output) -> (source stack, its slab outputs)
 
 
 def _slabbed(quantize):
@@ -92,7 +94,7 @@ def _slabbed(quantize):
         parts = [quantize(w[i:i + n], *args, **kw) for i in range(0, w.shape[0], n)]
         out = tuple(mx.concatenate([p[j] for p in parts], axis=0) for j in range(len(parts[0])))
         for o in out:
-            _SLABS[id(o)] = parts
+            _SLABS[id(o)] = (w, parts)
         return out
     return q
 
@@ -240,8 +242,12 @@ def main(argv=None) -> int:
                   flush=True)
             si += 1; size = 0
         prev_mod = mod
-        for part in _SLABS.pop(id(arr), ()):
-            mx.eval(part)                 # one slab of experts per eval
+        src, parts = _SLABS.pop(id(arr), (None, ()))
+        if parts:
+            mx.eval(src)                  # the read alone (CPU stream with --cpu-load)
+            for part in parts:
+                mx.eval(part)             # one slab of experts per eval
+        del src, parts
         mx.eval(arr)
         shard[name] = arr
         size += arr.nbytes
