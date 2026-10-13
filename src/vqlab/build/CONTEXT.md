@@ -13,6 +13,7 @@ A new artifact directory with shards, `config.json` (`vq_modules` + `pack_bits`)
 - Outputs go under the configured storage (`vqlab.config`: scratch, models, fit store), never the repo or an arbitrary path.
 - Same recipe != same bytes: an mlx version change moved 35B skeleton scales up to 12.8%. Record `env.mlx`.
 - Ragged packing (nsub not a multiple of 32) wastes bytes; `geo-build` refuses it.
+- `stream-convert` refuses to run when knurlogic is not importable (stock mlx-lm would serve the architecture: different sanitize dtypes, e.g. qwen3_5 norms bf16 vs float32). Use the vqlab venv, or set `VQLAB_VENDORED_ARCH=0` to build on stock mlx-lm deliberately. Every model load (`family/model_loader.py`) installs Knurlogic's arch finder itself, however the tool was invoked.
 - Preflight every new writer on a `vqlab slice` of the teacher first; a 4-layer slice caught two stream-convert bugs in minutes (OPERATOR-NOTES-2026-10-03 sec 4).
 - The MoE code packing rule is `core/artifacts/codepack.py` (fit-moe --pack shares it); `vqlab.assemble.codepack` is an alias for one release.
 - This folder was `assemble/` until 2026-10-10 (renamed to match `vqlab build ...`). `vqlab.assemble` and every `vqlab.assemble.<mod>` (incl. `build_dense_vq`, now `build_dense`) are deprecated aliases for one release: same module objects, with a DeprecationWarning. The generic `plan()` in mix / graft_extras / reskeleton is now `plan_mix` / `plan_graft` / `plan_reskeleton` (`plan` kept as an alias).

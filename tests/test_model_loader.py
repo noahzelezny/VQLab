@@ -42,3 +42,28 @@ def test_bad_runtime_value_fails(monkeypatch):
     monkeypatch.setitem(FAMILY["glm5_next"], "runtime", "torch")
     with pytest.raises(ValueError):
         ML.runtime_for("glm5_next")
+
+
+def test_load_installs_the_vendored_arch_whatever_the_invocation(monkeypatch):
+    # 2026-10-13: a copy of stream_convert.py run as a script never installed
+    # the finder, loaded stock qwen3_5 and wrote bf16 norms where the CLI
+    # wrote float32. The loader installs it itself now.
+    from vqlab.core.box import arch_finder
+    calls = []
+    monkeypatch.setattr(arch_finder, "install_arch_finder",
+                        lambda: calls.append(1) or True)
+    monkeypatch.setattr("mlx_lm.utils.load_model",
+                        lambda path, **kw: ("model", {}), raising=False)
+    pytest.importorskip("mlx_lm")
+    ML._load_on_current_stream("qwen3_5", "x", "mlx_lm", True)
+    assert calls == [1]
+
+
+def test_require_vendored_arch_refuses_a_silent_stock_build(monkeypatch):
+    from vqlab.core.box import arch_finder
+    monkeypatch.delenv("VQLAB_VENDORED_ARCH", raising=False)
+    monkeypatch.setattr(arch_finder, "_register", lambda: None)   # no knurlogic
+    with pytest.raises(SystemExit, match="knurlogic is not importable"):
+        ML.require_vendored_arch()
+    monkeypatch.setenv("VQLAB_VENDORED_ARCH", "0")                # asked for
+    ML.require_vendored_arch()

@@ -104,7 +104,37 @@ def load_for_family(family: str, path, lazy: bool = True,
     return _load_on_current_stream(family, path, rt, lazy)
 
 
+def vendored_arch() -> bool:
+    """Install Knurlogic's architecture finder; True when it serves.
+
+    Every load routes through here, so which arch file serves a model
+    must not depend on how the program was invoked. vqlab/__init__ only
+    installs the finder when sys.argv names a vqlab entry point INSIDE the
+    imported package: a copy of the script (a worktree pin, a scratch
+    copy) or an interpreter without knurlogic silently loaded stock
+    mlx-lm, whose qwen3_5 sanitize folds the norms' +1 in bf16 where
+    Knurlogic's (edit 8) keeps them float32 -- the same convert wrote 61
+    norm weights in two dtypes (2026-10-13)."""
+    from vqlab.core.box import arch_finder
+    return arch_finder.install_arch_finder()
+
+
+def require_vendored_arch() -> None:
+    """Refuse to run with stock mlx-lm by accident: knurlogic missing
+    and VQLAB_VENDORED_ARCH not set to 0. A writer (stream-convert) calls
+    this; a stock build stays possible, but only when asked for."""
+    from vqlab.core.box import arch_finder
+    if arch_finder.enabled() and not vendored_arch():
+        raise SystemExit(
+            "FAIL: knurlogic is not importable in this interpreter, so stock "
+            "mlx-lm would serve the architecture and the output's arithmetic "
+            "and dtypes would differ from a vqlab-venv build. Use the vqlab "
+            "venv, or set VQLAB_VENDORED_ARCH=0 to build on stock mlx-lm "
+            "deliberately.")
+
+
 def _load_on_current_stream(family, path, rt, lazy):
+    vendored_arch()
     if rt == "mlx_lm":
         import inspect
         from mlx_lm.utils import load_model

@@ -74,7 +74,11 @@ def body_spec(path, *, target, bits, group=64, protect_bits=None, struct=False):
 
 
 def main(argv=None) -> int:
-    ap = argparse.ArgumentParser()
+    ap = argparse.ArgumentParser(
+        description=__doc__.split("\n")[0],
+        epilog="Loads the teacher through Knurlogic's architectures and refuses without them "
+               "(stock mlx-lm folds some norms differently); VQLAB_VENDORED_ARCH=0 builds on "
+               "stock mlx-lm deliberately.")
     ap.add_argument("--src", required=True)
     ap.add_argument("--out", required=True)
     ap.add_argument("--bits", type=int, default=4)
@@ -109,6 +113,7 @@ def main(argv=None) -> int:
     # mlx-lm or mlx-vlm, never fork). mlx_lm families behave exactly as before;
     # an mlx_vlm family (glm5_next) loads the WHOLE model, vision tower
     # included — see the predicate's vision branch.
+    runtime_load.require_vendored_arch()      # no stock-mlx-lm build by accident
     model, config = runtime_load.load_for_family(a.family, SRC, lazy=True)
     print(runtime_load.resolved_runtime_note(model), flush=True)   # III.13
 

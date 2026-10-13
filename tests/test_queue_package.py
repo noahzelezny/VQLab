@@ -102,3 +102,12 @@ def test_queue_never_imports_tools_or_agents():
                     if m.split(".")[:2] in (["vqlab", "agents"], ["vqlab", "cli"],
                                             ["vqlab", "selftest"], ["vqlab", "api"])]
     assert not bad, bad
+
+
+def test_status_line_for_a_step_that_never_ran():
+    """A step skipped after an earlier failure has attempts None; status must
+    still print it (it crashed on `None > 1`)."""
+    from vqlab.queue import report
+    row = {"status": "fail", "name": "vision", "seconds": None, "attempts": None}
+    line = report._step_line(2, row, {"eta_s": None, "basis": ""})
+    assert "vision" in line and "x" not in line.split("vision")[1]

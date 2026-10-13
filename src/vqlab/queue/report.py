@@ -74,7 +74,7 @@ def list_queues() -> int:
 def _step_line(i, r, e) -> str:
     return (f"  {i:2d} {r['status']:8s} {r['name'][:40]:40s} "
             f"{'' if r.get('seconds') is None else str(r['seconds']) + ' s':>10s} "
-            f"{'x' + str(r['attempts']) if r.get('attempts', 1) > 1 else ''}"
+            f"{'x' + str(r['attempts']) if (r.get('attempts') or 1) > 1 else ''}"
             + (f"  {queue_eta.fmt(e['eta_s'])} ({e['basis']})"
                if r["status"] in ("running", "pending") else ""))
 
