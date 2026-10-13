@@ -28,7 +28,8 @@
       "--protect-bits",
       "6",
       "--family",
-      "qwen3_5"
+      "qwen3_5",
+      "--cpu-load"
      ],
      "preflight": {
       "full": "the fit needs the whole struct base",
@@ -215,7 +216,8 @@
       "--protect-bits",
       "8",
       "--family",
-      "qwen3_5"
+      "qwen3_5",
+      "--cpu-load"
      ],
      "preflight": {
       "full": "the fit needs the whole struct base",
@@ -375,7 +377,8 @@
       "--protect-bits",
       "8",
       "--family",
-      "qwen3_5"
+      "qwen3_5",
+      "--cpu-load"
      ],
      "preflight": {
       "full": "the fit needs the whole struct base",
@@ -530,7 +533,8 @@
       "--family",
       "qwen3_5",
       "--group",
-      "32"
+      "32",
+      "--cpu-load"
      ],
      "preflight": {
       "full": "stream-convert has no partial mode",
@@ -660,7 +664,8 @@
       "--family",
       "qwen3_5",
       "--protect-bits",
-      "8"
+      "8",
+      "--cpu-load"
      ],
      "preflight": {
       "full": "stream-convert has no partial mode",
@@ -756,7 +761,8 @@
       "--family",
       "qwen3_5",
       "--group",
-      "128"
+      "128",
+      "--cpu-load"
      ],
      "preflight": {
       "full": "stream-convert has no partial mode",
@@ -1287,7 +1293,8 @@
       "--protect-bits",
       "8",
       "--family",
-      "qwen3_5"
+      "qwen3_5",
+      "--cpu-load"
      ],
      "preflight": {
       "full": "the fit needs the whole struct base",
@@ -1516,7 +1523,8 @@
       "--protect-bits",
       "8",
       "--family",
-      "qwen3_5"
+      "qwen3_5",
+      "--cpu-load"
      ],
      "preflight": {
       "full": "the fit needs the whole struct base",

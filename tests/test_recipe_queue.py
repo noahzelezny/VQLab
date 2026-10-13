@@ -120,7 +120,16 @@ def test_affine(fams):
     fams("qwen3_5", "T", "moe", 4)
     q, _ = rq.compile_recipe({"name": "f", "family": "qwen3_5", "teacher": "T", "mode": "affine", "bits": 3})
     assert _names(q) == ["convert", "smoke", "runtime-check", "release-check"]
-    assert _args(q, "convert")[-4:] == ["--bits", "3", "--family", "qwen3_5"]
+    assert _args(q, "convert")[-5:] == ["--bits", "3", "--family", "qwen3_5", "--cpu-load"]
+
+
+def test_moe_converts_bind_teacher_reads_to_the_cpu_stream(fams):
+    """A cold multi-GB lazy read inside a GPU command buffer trips the Metal
+    watchdog (the 397B teacher's embedding, 2026-10-13); --cpu-load is
+    byte-identical on the 35B, so every MoE convert passes it."""
+    fams("qwen3_5", "T", "moe", 4)
+    q, _ = rq.compile_recipe({"name": "a", "family": "qwen3_5", "teacher": "T", "geo": "d4-K256"})
+    assert _args(q, "struct-base")[-1] == "--cpu-load"
 
 
 def test_score_only_with_registered_caches(fams, monkeypatch):

@@ -358,6 +358,8 @@ def _affine_steps(r: Recipe, prof: dict, src: str, by: dict, vis: float):
         args += ["--group", r.group]
     if r.protect_bits is not None:
         args += ["--protect-bits", r.protect_bits]
+    if r.family in MOE:       # a cold multi-GB read in a GPU buffer trips the watchdog (397B)
+        args += ["--cpu-load"]
     steps = [_step("convert", "stream-convert", args,
                    {"full": "stream-convert has no partial mode",
                     "writes_gib": _convert_writes_gib(by, r.bits)},
@@ -376,7 +378,7 @@ def _moe_steps(r: Recipe, prof: dict, src: str, by: dict, vis: float):
     steps, warns = [], []
     steps.append(_step("struct-base", "stream-convert",
                        ["--src", src, "--out", struct, "--struct", "--protect-bits", r.protect_bits,
-                        "--family", r.family],
+                        "--family", r.family, "--cpu-load"],
                        {"full": "the fit needs the whole struct base", "writes_gib": struct_gib},
                        retries=1, timeout_s=6 * 3600, expect={"files": [f"{struct}/config.json"]}))
     args = ["--base", struct, "--src", src, "--out", r.out, "--vq-layers", spec,

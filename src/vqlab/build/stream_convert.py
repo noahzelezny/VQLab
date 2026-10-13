@@ -94,6 +94,10 @@ def main(argv=None) -> int:
                          "at --bits/--group, every other quantized module at "
                          "PROTECT/64 (mixed affine); router stays bf16")
     ap.add_argument("--shard-gib", type=float, default=5.0)
+    ap.add_argument("--cpu-load", action="store_true",
+                    help="bind the teacher's lazy reads to the CPU stream at load "
+                         "(model_loader: a cold multi-GB read inside a GPU command "
+                         "buffer trips the Metal watchdog -- the 397B teacher)")
     ap.add_argument("--skeleton-from", metavar="ARTIFACT",
                     help="MATCHED-SKELETON comparator: copy every non-expert "
                          "module's quantization (bits/group, or bf16 when the "
@@ -114,7 +118,7 @@ def main(argv=None) -> int:
     # an mlx_vlm family (glm5_next) loads the WHOLE model, vision tower
     # included — see the predicate's vision branch.
     runtime_load.require_vendored_arch()      # no stock-mlx-lm build by accident
-    model, config = runtime_load.load_for_family(a.family, SRC, lazy=True)
+    model, config = runtime_load.load_for_family(a.family, SRC, lazy=True, cpu_stream=a.cpu_load)
     print(runtime_load.resolved_runtime_note(model), flush=True)   # III.13
 
     SKEL = None
