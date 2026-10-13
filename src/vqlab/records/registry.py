@@ -98,6 +98,8 @@ def entry(d: pathlib.Path) -> dict:
         "name": name, "path": str(d), "host": _config.short_host(),
         "hf_repo": hf, "model_type": cfg.get("model_type"),
         "vq_modules": n, "geometry": geo,
+        # runtime features the bytes need (vq_skipzero: dead rows dropped, 397B)
+        "skipzero": bool(cfg.get("vq_skipzero")),
         "text_gib": round(text_bytes / 2 ** 30, 3), "shards": len(shards),
         "fingerprint": fp,
         "runtime": ({"md5": rt["model_py_md5"][:8], "profile": rt["profile"],

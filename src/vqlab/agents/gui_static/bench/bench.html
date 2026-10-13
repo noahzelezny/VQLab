@@ -280,6 +280,7 @@ input.fld.bad{border-color:var(--bad)}.fld.faint{color:var(--faint)}.fld.ro{curs
 /* ---------- shared pieces */
 .hbar{display:flex;align-items:baseline;gap:14px}
 .dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:8px}
+.dot.sz{box-shadow:0 0 0 2px var(--panel),0 0 0 3px var(--fg)}
 .dot.vq{background:var(--acc)}.dot.mixed{background:var(--teal)}.dot.aff{background:var(--bad)}.dot.own{background:var(--mix);border-radius:0}
 .legend .dot.own{transform:rotate(45deg)}
 .ro.lead{margin-top:10px}
@@ -305,9 +306,11 @@ input.fld.bad{border-color:var(--bad)}.fld.faint{color:var(--faint)}.fld.ro{curs
 .stbl col.w-src{width:12em}.stbl col.w-use{width:6.5em}.stbl col.w-fmt{width:9em}.stbl col.w-num{width:6.5em}
 .legend i.k-acc{border-color:var(--acc)}.legend i.k-dim{border-color:var(--dim)}.legend i.k-teal{border-color:var(--teal)}
 #libchart{height:clamp(200px,30vh,300px)}
+#libchart .szring{fill:none;stroke:var(--fg);stroke-width:1;stroke-dasharray:2 2;opacity:.7}
 #libchart .ring{fill:none;stroke:var(--fg);stroke-width:1.5}
-#libchart .xmark{fill:none;stroke:var(--bad);stroke-width:1.5}
+#libchart .xmark,#chart .xmark{fill:none;stroke:var(--bad);stroke-width:1.5}
 #libchart text.xlab{fill:var(--bad)}#libchart text.vlab{fill:var(--fg)}
+#chart .rpt circle{stroke:var(--bg)}
 #libchart .cmpt{fill:none;stroke:var(--faint)}
 #libchart .ownpt{fill:none;stroke:var(--mix);stroke-width:1.5}
 .libmain{display:flex;flex-direction:column;min-width:0}
@@ -433,14 +436,13 @@ const repoName=h=>h.split('/').pop();
 const baseKey=n=>repoName(String(n||'')).toLowerCase().replace(/-bf16$/,'');
 
 // ================================================================ data
-// 397B, 35B and 27B rows are research/paper/RESULTS-V5.md verbatim: exact
-// full-vocabulary KL to the bf16 teacher, 12288 positions per corpus, paired.
-// Flash-Next and GLM have no rows on that instrument yet and are flagged.
-const RESULTS={"397B":[{"id":"r22flat","what":"VQ flat d4/K128 (2.2 v1)","kind":"lab","geo":"d4-K128","gib":96.7,"bpw":2.1,"kl":[354.4,127.8,275.0],"top1":82.2},{"id":"floor_d4k128","what":"VQ flat d4/K128, second fit","kind":"lab","geo":"d4-K128","gib":96.7,"bpw":2.1,"kl":[349.4,121.5,282.6],"top1":82.3},{"id":"r22v2","what":"VQ-2.2bpw (v2 mix)","kind":"vq","geo":null,"gib":100.0,"bpw":2.17,"kl":[278.4,98.9,182.2],"top1":84.8,"hf":"TheDrainFlorist/Qwen3.5-397B-A17B-VQ-2.2bpw","mixed":true},{"id":"r24","what":"VQ-2.4bpw","kind":"vq","geo":"d4-K256","gib":107.96,"bpw":2.34,"kl":[232.7,89.0,134.1],"top1":86.4,"hf":"TheDrainFlorist/Qwen3.5-397B-A17B-VQ-2.4bpw"},{"id":"e112_A","what":"VQ d4/K256 refit (unweighted)","kind":"lab","geo":"d4-K256","gib":107.96,"bpw":2.34,"kl":[241.8,84.7,127.6],"top1":85.6},{"id":"e112_B","what":"VQ d4/K256 refit (tail-weighted)","kind":"lab","geo":"d4-K256","gib":107.96,"bpw":2.34,"kl":[279.1,84.3,171.8],"top1":84.9},{"id":"r24_sk8","what":"VQ-2.4 experts, spicyneuron skeleton","kind":"lab","geo":null,"gib":109.32,"bpw":2.37,"kl":[229.8,88.4,134.3],"top1":86.4},{"id":"r26","what":"VQ-2.6bpw","kind":"vq","geo":"d4-K512","gib":119.21,"bpw":2.58,"kl":[166.1,57.8,60.4],"top1":88.5,"hf":"TheDrainFlorist/Qwen3.5-397B-A17B-VQ-2.6bpw"},{"id":"spicy26","what":"spicyneuron 2.6-bit","kind":"affine","geo":null,"gib":120.57,"bpw":2.61,"kl":[333.9,99.2,241.1],"top1":83.5,"hf":"spicyneuron/Qwen3.5-397B-A17B-MLX-2.6bit"},{"id":"r26_sk8","what":"VQ-2.6 experts, spicyneuron skeleton","kind":"lab","geo":null,"gib":120.57,"bpw":2.61,"kl":[162.4,57.3,62.2],"top1":88.8},{"id":"r31","what":"VQ-3.1bpw","kind":"vq","geo":"d4-K2048","gib":141.71,"bpw":3.07,"kl":[93.0,33.3,16.6],"top1":91.7,"hf":"TheDrainFlorist/Qwen3.5-397B-A17B-VQ-3.1bpw"},{"id":"r31_sk8","what":"VQ-3.1 experts, spicyneuron skeleton","kind":"lab","geo":null,"gib":143.07,"bpw":3.1,"kl":[89.8,32.4,16.7],"top1":92.1},{"id":"spicy35","what":"spicyneuron 3.5-bit","kind":"affine","geo":null,"gib":165.57,"bpw":3.59,"kl":[87.7,31.0,17.0],"top1":91.8,"hf":"spicyneuron/Qwen3.5-397B-A17B-MLX-3.5bit"}],"35B":[{"id":"d2k16","what":"VQ d2/K16","kind":"lab","geo":"d2-K16","gib":10.14,"bpw":2.51,"kl":[231.9,1283.8,1095.8],"top1":81.0},{"id":"e112_A","what":"VQ d4/K256 (unweighted)","kind":"lab","geo":"d4-K256","gib":10.14,"bpw":2.51,"kl":[198.1,1070.1,953.8],"top1":83.2},{"id":"e112_B","what":"VQ d4/K256 (tail-weighted)","kind":"lab","geo":"d4-K256","gib":10.14,"bpw":2.51,"kl":[227.7,961.5,1521.8],"top1":81.7},{"id":"s2","what":"affine 2-bit experts, VQ skeleton","kind":"affine-sk","geo":null,"gib":11.08,"bpw":2.75,"kl":[255.6,1159.8,1621.0],"top1":80.5},{"id":"r34","what":"VQ-3.4bpw","kind":"vq","geo":"d4-K2048","gib":12.96,"bpw":3.21,"kl":[76.6,529.1,208.0],"top1":89.4,"hf":"TheDrainFlorist/Qwen3.6-35B-A3B-VQ-3.4bpw"},{"id":"q3","what":"affine q3 · mlx-community recipe","kind":"affine","geo":null,"gib":14.14,"bpw":3.5,"kl":[259.8,1018.3,868.4],"top1":77.6,"hf":null},{"id":"s3","what":"affine 3-bit experts, VQ skeleton","kind":"affine-sk","geo":null,"gib":14.83,"bpw":3.68,"kl":[74.5,498.5,254.3],"top1":89.2},{"id":"r38","what":"VQ-3.8bpw","kind":"vq","geo":"d4-K8192","gib":14.84,"bpw":3.68,"kl":[46.1,430.8,101.9],"top1":91.4,"hf":"TheDrainFlorist/Qwen3.6-35B-A3B-VQ-3.8bpw"},{"id":"d4k16384","what":"VQ d4/K16384","kind":"lab","geo":"d4-K16384","gib":15.78,"bpw":3.91,"kl":[39.8,393.1,80.5],"top1":92.2},{"id":"d2k256","what":"VQ d2/K256","kind":"lab","geo":"d2-K256","gib":17.64,"bpw":4.37,"kl":[31.0,361.8,52.6],"top1":93.2},{"id":"q4","what":"affine q4 · mlx-community recipe","kind":"affine","geo":null,"gib":18.17,"bpw":4.5,"kl":[65.4,647.8,105.6],"top1":88.9,"hf":null},{"id":"s4","what":"affine 4-bit experts, VQ skeleton","kind":"affine-sk","geo":null,"gib":18.58,"bpw":4.6,"kl":[33.2,372.1,61.2],"top1":92.8},{"id":"r54","what":"VQ-5.4bpw (d2/K1024)","kind":"vq","geo":"d2-K1024","gib":21.39,"bpw":5.3,"kl":[22.6,349.6,33.7],"top1":94.0,"hf":"TheDrainFlorist/Qwen3.6-35B-A3B-VQ-5.4bpw"},{"id":"floor_d2k1024","what":"VQ d2/K1024, second fit","kind":"lab","geo":"d2-K1024","gib":21.39,"bpw":5.3,"kl":[22.5,348.9,35.7],"top1":93.9},{"id":"s5","what":"affine 5-bit experts, VQ skeleton","kind":"affine-sk","geo":null,"gib":22.33,"bpw":5.53,"kl":[22.7,357.5,35.4],"top1":93.8},{"id":"d2k4096","what":"VQ d2/K4096","kind":"lab","geo":"d2-K4096","gib":25.15,"bpw":6.23,"kl":[20.8,336.4,31.7],"top1":94.2},{"id":"s6","what":"affine 6-bit experts, VQ skeleton","kind":"affine-sk","geo":null,"gib":26.08,"bpw":6.46,"kl":[20.5,334.1,27.2],"top1":94.2},{"id":"q6","what":"affine q6 · mlx-community recipe","kind":"affine","geo":null,"gib":26.23,"bpw":6.5,"kl":[9.5,244.4,16.0],"top1":96.1,"hf":null},{"id":"s8","what":"affine 8-bit experts, VQ skeleton","kind":"affine-sk","geo":null,"gib":33.58,"bpw":8.32,"kl":[20.1,327.1,28.6],"top1":94.2},{"id":"q8","what":"affine q8 · mlx-community recipe","kind":"affine","geo":null,"gib":34.3,"bpw":8.5,"kl":[5.7,175.5,10.8],"top1":97.0,"hf":null}],"27B":[{"id":"q2","what":"affine q2 · mlx-community recipe","kind":"affine","geo":null,"gib":7.83,"bpw":2.5,"kl":[1341.6,995.6,2649.0],"top1":51.2,"hf":null},{"id":"d4k256","what":"VQ d4/K256","kind":"lab","geo":"d4-K256","gib":9.61,"bpw":3.07,"kl":[372.8,135.4,1301.9],"top1":77.3},{"id":"s2","what":"affine 2-bit MLPs, VQ skeleton","kind":"affine-sk","geo":null,"gib":10.11,"bpw":3.23,"kl":[485.1,217.1,1629.2],"top1":72.5},{"id":"d4k1024","what":"VQ d4/K1024","kind":"lab","geo":"d4-K1024","gib":10.61,"bpw":3.39,"kl":[204.2,68.8,879.5],"top1":83.0},{"id":"q3","what":"affine q3 · mlx-community recipe","kind":"affine","geo":null,"gib":10.96,"bpw":3.5,"kl":[192.4,86.3,965.1],"top1":82.3,"hf":null},{"id":"d2k64","what":"VQ d2/K64","kind":"lab","geo":"d2-K64","gib":11.6,"bpw":3.71,"kl":[151.9,48.1,654.1],"top1":85.6},{"id":"r39","what":"VQ-3.9bpw (d4/K4096)","kind":"vq","geo":"d4-K4096","gib":11.61,"bpw":3.71,"kl":[146.6,41.2,584.3],"top1":86.0,"hf":"TheDrainFlorist/Qwen3.8-27B-VQ-3.9bpw"},{"id":"s3","what":"affine 3-bit MLPs, VQ skeleton","kind":"affine-sk","geo":null,"gib":12.1,"bpw":3.86,"kl":[148.2,52.7,736.0],"top1":85.4},{"id":"r45","what":"VQ-4.5bpw (d2/K256)","kind":"vq","geo":"d2-K256","gib":13.6,"bpw":4.34,"kl":[56.3,21.5,289.2],"top1":90.9,"hf":"TheDrainFlorist/Qwen3.8-27B-VQ-4.5bpw"},{"id":"floor_d2k256","what":"VQ d2/K256, second fit","kind":"lab","geo":"d2-K256","gib":13.6,"bpw":4.34,"kl":[56.2,21.0,279.7],"top1":91.0},{"id":"q4","what":"affine q4 · mlx-community recipe","kind":"affine","geo":null,"gib":14.09,"bpw":4.5,"kl":[68.5,23.7,315.6],"top1":90.5,"hf":null},{"id":"s4","what":"affine 4-bit MLPs, VQ skeleton","kind":"affine-sk","geo":null,"gib":14.09,"bpw":4.5,"kl":[68.5,23.7,315.6],"top1":90.5},{"id":"r48","what":"VQ-4.8bpw","kind":"vq","geo":"d2-K512","gib":14.59,"bpw":4.66,"kl":[61.8,16.9,208.1],"top1":91.1,"hf":"TheDrainFlorist/Qwen3.8-27B-VQ-4.8bpw"},{"id":"s5","what":"affine 5-bit MLPs, VQ skeleton","kind":"affine-sk","geo":null,"gib":16.09,"bpw":5.14,"kl":[42.3,16.1,179.0],"top1":92.1},{"id":"d2k4096","what":"VQ d2/K4096","kind":"lab","geo":"d2-K4096","gib":17.58,"bpw":5.61,"kl":[38.6,13.5,145.9],"top1":92.6},{"id":"s6","what":"affine 6-bit MLPs, VQ skeleton","kind":"affine-sk","geo":null,"gib":18.08,"bpw":5.77,"kl":[39.7,13.3,146.3],"top1":92.7},{"id":"q6","what":"affine q6 · mlx-community recipe","kind":"affine","geo":null,"gib":20.36,"bpw":6.5,"kl":[10.9,2.2,24.7],"top1":96.9,"hf":null},{"id":"s8","what":"affine 8-bit MLPs, VQ skeleton","kind":"affine-sk","geo":null,"gib":22.06,"bpw":7.04,"kl":[37.4,12.7,137.2],"top1":92.7},{"id":"q8","what":"affine q8 · mlx-community recipe","kind":"affine","geo":null,"gib":26.62,"bpw":8.5,"kl":[3.5,0.6,5.0],"top1":98.5,"hf":null}]};
 // What each published repo contains, checked against the Hub API file lists on 2026-09-30. Unlisted repos and rows with no hf ship neither.
 // a build is MIXED when its geometry varies by layer (card says mixed, or the
 // registry lists more than one codebook geometry)
-const isMixed=r=>!!(r.mixed||(r.hf&&REG[r.hf]&&Object.keys(REG[r.hf].geo).filter(k=>!k.startsWith('ple:')).length>1));
+// the shipped config's geometry when the fleet has it, else the row's own flag
+const isMixed=r=>r.hf&&REG[r.hf]?Object.keys(REG[r.hf].geo).filter(k=>!k.startsWith('ple:')).length>1:!!r.mixed;
+// skip-zero from the build's own config (registry), else the catalog row's flag
+const isSz=r=>r.hf&&REG[r.hf]&&REG[r.hf].sz!=null?!!REG[r.hf].sz:!!r.sz;
 const vqCol=r=>r.kind==='affine'?'var(--bad)':isMixed(r)?'var(--teal)':'var(--acc)';
 const SHIPS={"TheDrainFlorist/Qwen3.5-397B-A17B-VQ-2.2bpw": "tower+mtp", "TheDrainFlorist/Qwen3.5-397B-A17B-VQ-2.4bpw": "tower+mtp", "TheDrainFlorist/Qwen3.5-397B-A17B-VQ-2.6bpw": "tower+mtp", "TheDrainFlorist/Qwen3.5-397B-A17B-VQ-3.1bpw": "tower+mtp", "TheDrainFlorist/Qwen3.8-Flash-Next-VQ-2.1bpw": "tower+mtp", "TheDrainFlorist/Qwen3.8-Flash-Next-VQ-3.2bpw": "tower+mtp", "TheDrainFlorist/Qwen3.8-Flash-Next-VQ-4.4bpw": "tower+mtp", "TheDrainFlorist/Qwen3.8-Flash-Next-VQ-5.5bpw": "tower+mtp", "TheDrainFlorist/Qwen3.6-35B-A3B-VQ-3.4bpw": "tower", "TheDrainFlorist/Qwen3.6-35B-A3B-VQ-3.8bpw": "tower", "TheDrainFlorist/Qwen3.6-35B-A3B-VQ-4.6bpw": "tower", "TheDrainFlorist/Qwen3.6-35B-A3B-VQ-5.4bpw": "tower", "TheDrainFlorist/Qwen3.8-27B-VQ-3.9bpw": "tower", "TheDrainFlorist/Qwen3.8-27B-VQ-4.5bpw": "tower", "TheDrainFlorist/Qwen3.8-27B-VQ-4.8bpw": "tower", "TheDrainFlorist/gemma-4-26b-a4b-it-VQ-6.2bpw": "tower", "TheDrainFlorist/GLM-5.3-Flash-VQ-2.7bpw": "mtp", "TheDrainFlorist/GLM-5.3-Flash-VQ-3.1bpw": "mtp", "TheDrainFlorist/GLM-5.3-Flash-VQ-3.6bpw": "mtp"};
 for(const h of ['spicyneuron/Qwen3.5-397B-A17B-MLX-2.6bit','spicyneuron/Qwen3.5-397B-A17B-MLX-3.5bit','mlx-community/gemma-4-e4b-it-8bit','TheDrainFlorist/gemma-4-e4b-it-VQ-PLE'])SHIPS[h]='';
@@ -475,30 +477,66 @@ const WIDTHS={"TheDrainFlorist/Qwen3.5-397B-A17B-VQ-2.2bpw":{"attn":6,"embed":4,
 
 
 // ================================================================ the published catalog
-// The owner's released builds with their measured results (RESULTS, SPEED, WIDTHS and these rows). The Library shows it beside the own builds read from /api/fleet and /api/scores.
+// The owner's released builds with their measured results (SPEED, WIDTHS and these rows). The Library shows it beside the own builds read from /api/fleet and /api/scores.
+const fromCard=(card,inst,rows)=>rows.map(r=>({...r,src:'card',tip:`${card} card · ${inst}${r.note?' · '+r.note:''}`}));
+const fromPaper=rows=>rows.map(r=>({...r,src:'paper',tip:'paper table (RESULTS-V5): full-vocabulary KL, 12288 positions per corpus; another cache than the card rows'}));
 const LIB_ROWS=[
- {id:'q35',res:'35B',n:'Qwen/Qwen3.6-35B-A3B-bf16',short:'Qwen3.6-35B-A3B',fam:'qwen3_5',kind:'MoE · 40 layers · 256 experts',bytes:{mtp:1.573,vision:0.832}},
- {id:'q397',res:'397B',n:'Qwen/Qwen3.5-397B-A17B-bf16',short:'Qwen3.5-397B-A17B',fam:'qwen3_5',kind:'MoE · 60 layers · 512 experts',bytes:{mtp:2.1,vision:0.849}},
- {id:'q27',res:'27B',n:'Qwen/Qwen3.8-27B',short:'Qwen3.8-27B',fam:'qwen3_8_dense',kind:'dense · 64 layers',bytes:{mtp:0,vision:0}},
+ // Each family's VQ rows are its newest model card's LADDER table (README.md, Measured results: every published rung on one cache, text weights, mnats); fromCard() tags them and names the card. Comparators a card's table lacks are paper rows, tagged paper (another cache).
+ {id:'q35',n:'Qwen/Qwen3.6-35B-A3B-bf16',short:'Qwen3.6-35B-A3B',fam:'qwen3_5',kind:'MoE · 40 layers · 256 experts',bytes:{mtp:1.573,vision:0.832},
+  rows:[...fromCard('Qwen3.6-35B-A3B-VQ-5.4bpw','2026-09-17 ladder, cached top-64, 12288 tokens per corpus; GiB is the card figure minus its stated 0.83 GiB vision tower',[
+   {id:'r34',what:'VQ-3.4bpw',kind:'vq',geo:'d4-K2048',gib:12.97,bpw:3.4,kl:[73.3, 520.2, 207.5],top1:89.4,hf:'TheDrainFlorist/Qwen3.6-35B-A3B-VQ-3.4bpw'},
+   {id:'r38',what:'VQ-3.8bpw',kind:'vq',geo:'d4-K8192',gib:14.87,bpw:3.8,kl:[44.5, 423.6, 101.4],top1:91.4,hf:'TheDrainFlorist/Qwen3.6-35B-A3B-VQ-3.8bpw'},
+   {id:'r46',what:'VQ-4.6bpw (mixed)',kind:'vq',mixed:true,gib:17.87,bpw:4.6,kl:[33.7, 409.2, 58.3],top1:92.7,hf:'TheDrainFlorist/Qwen3.6-35B-A3B-VQ-4.6bpw'},
+   {id:'r54',what:'VQ-5.4bpw',kind:'vq',geo:'d2-K1024',gib:21.37,bpw:5.4,kl:[21.6, 345.1, 33.5],top1:94.0,hf:'TheDrainFlorist/Qwen3.6-35B-A3B-VQ-5.4bpw'}]),
+   ...fromPaper([{id:'q3',what:'affine q3 · stock recipe',kind:'affine',gib:14.14,bpw:3.5,kl:[259.8, 1018.3, 868.4],top1:77.6,hf:null},{id:'q4',what:'affine q4 · stock recipe',kind:'affine',gib:18.17,bpw:4.5,kl:[65.4, 647.8, 105.6],top1:88.9,hf:null},{id:'q6',what:'affine q6 · stock recipe',kind:'affine',gib:26.23,bpw:6.5,kl:[9.5, 244.4, 16.0],top1:96.1,hf:null},{id:'q8',what:'affine q8 · stock recipe',kind:'affine',gib:34.3,bpw:8.5,kl:[5.7, 175.5, 10.8],top1:97.0,hf:null}])]},
+ {id:'q397',n:'Qwen/Qwen3.5-397B-A17B-bf16',short:'Qwen3.5-397B-A17B',fam:'qwen3_5',kind:'MoE · 60 layers · 512 experts',bytes:{mtp:2.1,vision:0.849},
+  rows:fromCard('Qwen3.5-397B-A17B-VQ-3.5bpw','one cache, cached top-64, 12288 tokens per corpus',[
+   {id:'r22',what:'VQ-2.2bpw (mixed)',kind:'vq',mixed:true,sz:true,gib:88.7,bpw:2.2,kl:[276.4, 98.6, 183.1],top1:null,hf:'TheDrainFlorist/Qwen3.5-397B-A17B-VQ-2.2bpw',note:'2026-09-17 ladder'},
+   {id:'r24',what:'VQ-2.4bpw',kind:'vq',geo:'d4-K256',sz:true,gib:95.7,bpw:2.4,kl:[230.4, 87.7, 134.1],top1:null,hf:'TheDrainFlorist/Qwen3.5-397B-A17B-VQ-2.4bpw',note:'2026-09-17 ladder'},
+   {id:'r26',what:'VQ-2.6bpw',kind:'vq',geo:'d4-K512',sz:true,gib:105.5,bpw:2.6,kl:[164.1, 58.1, 60.5],top1:null,hf:'TheDrainFlorist/Qwen3.5-397B-A17B-VQ-2.6bpw',note:'2026-09-17 ladder'},
+   {id:'r31',what:'VQ-3.1bpw',kind:'vq',geo:'d4-K2048',sz:true,gib:125.3,bpw:3.1,kl:[91.2, 33.3, 16.8],top1:null,hf:'TheDrainFlorist/Qwen3.5-397B-A17B-VQ-3.1bpw',note:'re-scored 2026-10-02'},
+   {id:'r35',what:'VQ-3.5bpw (mixed)',kind:'vq',mixed:true,sz:true,gib:141.2,bpw:3.5,kl:[58.7, 24.9, 5.3],top1:null,hf:'TheDrainFlorist/Qwen3.5-397B-A17B-VQ-3.5bpw',note:'scored 2026-10-02'},
+   {id:'spicy26',what:'spicyneuron 2.6-bit',kind:'affine',gib:120.6,bpw:2.6,kl:[332.1, 98.4, 241.0],top1:null,hf:'spicyneuron/Qwen3.5-397B-A17B-MLX-2.6bit'},
+   {id:'spicy35',what:'spicyneuron 3.5-bit',kind:'affine',gib:165.6,bpw:3.5,kl:[87.0, 28.6, 16.8],top1:null,hf:'spicyneuron/Qwen3.5-397B-A17B-MLX-3.5bit'}])},
+ {id:'q27',n:'Qwen/Qwen3.8-27B',short:'Qwen3.8-27B',fam:'qwen3_8_dense',kind:'dense · 64 layers',bytes:{mtp:0,vision:0},
+  rows:fromCard('Qwen3.8-27B-VQ-4.8bpw','2026-09-17 ladder, cached top-64, 12288 tokens per corpus; GiB is the card figure minus its stated 0.859 GiB vision tower',[
+   {id:'r39',what:'VQ-3.9bpw',kind:'vq',geo:'d4-K4096',gib:11.61,bpw:3.9,kl:[140.4, 39.8, 581.7],top1:86.0,hf:'TheDrainFlorist/Qwen3.8-27B-VQ-3.9bpw'},
+   {id:'q4',what:'affine q4 · stock recipe',kind:'affine',gib:14.09,bpw:4.5,kl:[67.4, 23.2, 314.3],top1:90.5,hf:null},
+   {id:'r45',what:'VQ-4.5bpw',kind:'vq',geo:'d2-K256',gib:13.59,bpw:4.5,kl:[54.4, 20.9, 287.6],top1:90.9,hf:'TheDrainFlorist/Qwen3.8-27B-VQ-4.5bpw'},
+   {id:'r48',what:'VQ-4.8bpw',kind:'vq',geo:'d2-K512',gib:14.59,bpw:4.8,kl:[61.2, 16.5, 207.3],top1:91.1,hf:'TheDrainFlorist/Qwen3.8-27B-VQ-4.8bpw'},
+   {id:'q8',what:'affine q8 · stock recipe',kind:'affine',gib:26.62,bpw:8.5,kl:[3.2, 0.6, 4.9],top1:98.5,hf:null}])},
  {id:'fn',n:'Qwen/Qwen3.8-Flash-Next-bf16',short:'Qwen3.8-Flash-Next',fam:'qwen4_exp',kind:'MoE · 48 layers · GDN',bytes:{mtp:1.2,vision:0.849},
-  rows:[{id:'r21',what:'VQ-2.1bpw (mixed)',kind:'vq',mixed:true,gib:47.5,bpw:2.1,kl:[210,71,150],top1:85.1,hf:'TheDrainFlorist/Qwen3.8-Flash-Next-VQ-2.1bpw'},{id:'r32',what:'VQ-3.2bpw',kind:'vq',geo:'d4-K2048',gib:71.7,bpw:3.2,kl:[112,38,61],top1:89.6,hf:'TheDrainFlorist/Qwen3.8-Flash-Next-VQ-3.2bpw'},{id:'r44',what:'VQ-4.4bpw',kind:'vq',geo:'d2-K256',gib:96.6,bpw:4.4,kl:[52,17,22],top1:93.0,hf:'TheDrainFlorist/Qwen3.8-Flash-Next-VQ-4.4bpw'},{id:'r55',what:'VQ-5.5bpw',kind:'vq',geo:'d2-K1024',gib:114.5,bpw:5.5,kl:[24,8,9],top1:95.4,hf:'TheDrainFlorist/Qwen3.8-Flash-Next-VQ-5.5bpw'},{id:'q4',what:'affine q4 (mlx-community recipe)',kind:'affine',gib:112,bpw:4.5,kl:[70,24,30],top1:92.5}]},
+  rows:fromCard('Qwen3.8-Flash-Next-VQ-5.5bpw','re-measured 2026-10-04 on Knurlogic 0.1.3, cached top-64, 12288 tokens per corpus; top-1 is prose; affine bpw is bits + 0.5',[
+   {id:'r21',what:'VQ-2.1bpw (mixed)',kind:'vq',mixed:true,gib:44.5,bpw:2.1,kl:[896.8, 276.8, 783.7],top1:72.3,hf:'TheDrainFlorist/Qwen3.8-Flash-Next-VQ-2.1bpw'},
+   {id:'q3',what:'affine q3 · ours',kind:'affine',gib:75,bpw:3.5,kl:[2027.4, 730.0, 1180.0],top1:49.5,hf:null},
+   {id:'r32',what:'VQ-3.2bpw (mixed)',kind:'vq',mixed:true,gib:68.7,bpw:3.2,kl:[305.6, 81.8, 54.6],top1:86.7,hf:'TheDrainFlorist/Qwen3.8-Flash-Next-VQ-3.2bpw'},
+   {id:'q4',what:'affine q4 · ours',kind:'affine',gib:96,bpw:4.5,kl:[624.1, 169.3, 101.1],top1:77.8,hf:null},
+   {id:'r44',what:'VQ-4.4bpw (mixed)',kind:'vq',mixed:true,gib:93.6,bpw:4.4,kl:[100.0, 29.5, 13.5],top1:92.2,hf:'TheDrainFlorist/Qwen3.8-Flash-Next-VQ-4.4bpw'},
+   {id:'q5',what:'affine q5 · ours',kind:'affine',gib:116,bpw:5.5,kl:[178.4, 88.4, 25.7],top1:89.0,hf:null},
+   {id:'r55',what:'VQ-5.5bpw',kind:'vq',geo:'d2-K1024',gib:111.6,bpw:5.5,kl:[68.8, 16.5, 7.3],top1:93.7,hf:'TheDrainFlorist/Qwen3.8-Flash-Next-VQ-5.5bpw'},
+   {id:'q6',what:'affine q6 · ours',kind:'affine',gib:137,bpw:6.5,kl:[84.1, 26.9, 8.7],top1:93.4,hf:null},
+   {id:'q8',what:'affine q8 · ours',kind:'affine',gib:178,bpw:8.5,kl:[50.4, 12.1, 4.8],top1:94.8,hf:null}])},
  {id:'g26',n:'google/gemma-4-26b-a4b-it',short:'Gemma-4-26B-A4B',fam:'gemma4',kind:'MoE · 30 layers',bytes:{mtp:0,vision:0.4},judge:true,
-  rows:[{id:'d4',what:'4-bit-class d4 build',kind:'lab',geo:'d4-K256',gib:12.5,bpw:4.1,kl:[1856,1856,1856],one:true,top1:56.56},{id:'r62',what:'VQ-6.2bpw',kind:'vq',geo:'d2-K2048',gib:18.7,bpw:6.2,kl:[537,537,537],one:true,top1:77.89,hf:'TheDrainFlorist/gemma-4-26b-a4b-it-VQ-6.2bpw'},{id:'q8',what:'affine q8 reference',kind:'affine',gib:25,bpw:8.5,kl:[441,441,441],one:true,top1:79.95}]},
+  rows:fromCard('gemma-4-26b-a4b-it-VQ-6.2bpw','mean KL table, no cache stated',[{id:'d4',what:'4-bit-class d4 build',kind:'lab',geo:'d4-K256',gib:12.5,bpw:4.1,kl:[1856,1856,1856],one:true,top1:56.56},{id:'r62',what:'VQ-6.2bpw',kind:'vq',geo:'d2-K2048',gib:18.7,bpw:6.2,kl:[537,537,537],one:true,top1:77.89,hf:'TheDrainFlorist/gemma-4-26b-a4b-it-VQ-6.2bpw'},{id:'q8',what:'affine q8 reference',kind:'affine',gib:25,bpw:8.5,kl:[441,441,441],one:true,top1:79.95}])},
  {id:'g4b',n:'google/gemma-4-e4b-it',short:'Gemma-4-E4B',fam:'gemma4_e4b',kind:'dense · PLE',bytes:{mtp:0,vision:0.3},judge:true,
-  rows:[{id:'ple',what:'VQ PLE tables',kind:'vq',geo:'d2-K2048',gib:7.39,bpw:7.5,kl:[null,null,7.451],lit:true,top1:95.7,hf:'TheDrainFlorist/gemma-4-e4b-it-VQ-PLE'},{id:'q8',what:'affine q8 · mlx-community',kind:'affine',gib:8.38,bpw:8.5,kl:[null,null,8.149],lit:true,top1:95.7,hf:'mlx-community/gemma-4-e4b-it-8bit'}]},
+  rows:fromCard('gemma-4-e4b-it-VQ-PLE','KL on the literary corpus',[{id:'ple',what:'VQ PLE tables',kind:'vq',geo:'d2-K2048',gib:7.39,bpw:7.5,kl:[null,null,7.451],lit:true,top1:95.7,hf:'TheDrainFlorist/gemma-4-e4b-it-VQ-PLE'},{id:'q8',what:'affine q8 · mlx-community',kind:'affine',gib:8.38,bpw:8.5,kl:[null,null,8.149],lit:true,top1:95.7,hf:'mlx-community/gemma-4-e4b-it-8bit'}])},
  {id:'glm',n:'zai-org/GLM-5.3-Flash-BF16',short:'GLM-5.3-Flash',fam:'glm5_next',kind:'MoE · 42 layers',bytes:{mtp:6.094,vision:0},
-  rows:[{id:'r27',what:'VQ-2.7bpw',kind:'vq',geo:'d4-K512',gib:108.0,bpw:2.7,kl:[190,66,120],top1:86.0,hf:'TheDrainFlorist/GLM-5.3-Flash-VQ-2.7bpw'},{id:'r31',what:'VQ-3.1bpw (mixed)',kind:'vq',mixed:true,gib:122.4,bpw:3.1,kl:[120,41,62],top1:89.2,hf:'TheDrainFlorist/GLM-5.3-Flash-VQ-3.1bpw'},{id:'r36',what:'VQ-3.6bpw (mixed)',kind:'vq',mixed:true,gib:141.1,bpw:3.6,kl:[70,24,30],top1:92.0,hf:'TheDrainFlorist/GLM-5.3-Flash-VQ-3.6bpw'}]},
- // the DeepSeek families come from their model cards (README.md): KL to the exact teacher, cached top-64, 12288 tokens per corpus, mnats; a field a card does not state is null
+  rows:fromCard('GLM-5.3-Flash-VQ-3.6bpw','one ladder, 2048-token referee, mean KL only (shown on all three corpora)',[
+   {id:'r27',what:'VQ-2.7bpw (mixed)',kind:'vq',mixed:true,gib:101.9,bpw:2.7,kl:[293.84, 293.84, 293.84],top1:85.7,hf:'TheDrainFlorist/GLM-5.3-Flash-VQ-2.7bpw',one:true},
+   {id:'q3',what:'affine q3 · ours',kind:'affine',gib:129,bpw:3.5,kl:[377.08, 377.08, 377.08],one:true,top1:83.1,hf:null},
+   {id:'r31',what:'VQ-3.1bpw (mixed)',kind:'vq',mixed:true,gib:116.3,bpw:3.1,kl:[199.53, 199.53, 199.53],top1:88.6,hf:'TheDrainFlorist/GLM-5.3-Flash-VQ-3.1bpw',one:true},
+   {id:'q4',what:'affine q4 · ours',kind:'affine',gib:166,bpw:4.5,kl:[98.34, 98.34, 98.34],one:true,top1:91.9,hf:null},
+   {id:'r36',what:'VQ-3.6bpw (mixed)',kind:'vq',mixed:true,gib:134.0,bpw:3.6,kl:[94.54, 94.54, 94.54],top1:92.1,hf:'TheDrainFlorist/GLM-5.3-Flash-VQ-3.6bpw',one:true},
+   {id:'q6',what:'affine q6 · ours',kind:'affine',gib:239,bpw:6.5,kl:[13.47, 13.47, 13.47],one:true,top1:97.1,hf:null}])},
+ // DeepSeek: model cards (README.md); KL to the exact teacher (the official FP4 release)
  {id:'dsv4',n:'deepseek-ai/DeepSeek-V4-Flash',short:'DeepSeek-V4-Flash',fam:'deepseek_v4',kind:'MoE · 43 layers · 256 experts',bytes:{mtp:2.38,vision:0},
-  rows:[{id:'r32',what:'VQ-3.2bpw (mixed)',kind:'vq',mixed:true,gib:106.4,bpw:3.21,kl:[153.0,50.7,47.6],top1:null,hf:'TheDrainFlorist/DeepSeek-V4-Flash-VQ-3.2bpw',src:'card',tip:'model card: d4/K2048, d4/K4096 on layers 24-35; KL to the exact teacher (the official FP4 release), cached top-64, 12288 tokens per corpus, rescored on Knurlogic 0.1.3; top-1 not on the card'}]},
+  rows:fromCard('DeepSeek-V4-Flash-VQ-3.2bpw','rescored 2026-10-04 on Knurlogic 0.1.3, cached top-64, 12288 tokens per corpus',[
+   {id:'r32',what:'VQ-3.2bpw (mixed)',kind:'vq',mixed:true,gib:106.4,bpw:3.21,kl:[153.0, 50.7, 47.6],top1:null,hf:'TheDrainFlorist/DeepSeek-V4-Flash-VQ-3.2bpw'}])},
  {id:'dsv4v',n:'deepseek-ai/DeepSeek-V4-Flash-Vision-Exp',short:'DeepSeek-V4-Flash-Vision-Exp',fam:'deepseek_v4',kind:'MoE · 43 layers · 256 experts · vision',bytes:{mtp:10.53,vision:0.87},
-  rows:[{id:'r32',what:'VQ-3.2bpw',kind:'vq',gib:106.4,bpw:3.2,kl:[150.8,22.2,106.6],top1:null,hf:'TheDrainFlorist/DeepSeek-V4-Flash-Vision-Exp-VQ-3.2bpw',src:'card',tip:'model card: KL to the exact teacher, cached top-64, 12288 tokens per corpus, scored on Knurlogic 0.1.3 (its own cache, not comparable to the DeepSeek-V4-Flash row); top-1 and geometry not on the card'}]},
+  rows:fromCard('DeepSeek-V4-Flash-Vision-Exp-VQ-3.2bpw','first release 2026-10-04 on Knurlogic 0.1.3, its own cache (not comparable to the DeepSeek-V4-Flash row), cached top-64, 12288 tokens per corpus',[
+   {id:'r32',what:'VQ-3.2bpw',kind:'vq',gib:106.4,bpw:3.2,kl:[150.8, 22.2, 106.6],top1:null,hf:'TheDrainFlorist/DeepSeek-V4-Flash-Vision-Exp-VQ-3.2bpw'}])},
 ];
-// published rows the paper table (RESULTS) lacks, read from each build's model card (README.md); null where the card is silent
-const CARD_ROWS={
- q397:[{id:'r35',what:'VQ-3.5bpw (mixed)',kind:'vq',mixed:true,gib:141.2,bpw:3.5,kl:[58.7,24.9,5.3],top1:null,hf:'TheDrainFlorist/Qwen3.5-397B-A17B-VQ-3.5bpw',src:'card',tip:'model card: v2 mix (layers 42-59 refitted d2/K256); KL cached top-64, 12288 tokens per corpus, scored 2026-10-02 (the card re-scores VQ-3.1 on that cache, so its figures differ slightly from the paper row); top-1 not on the card'}],
- q35:[{id:'r46',what:'VQ-4.6bpw (mixed)',kind:'vq',mixed:true,gib:17.9,bpw:4.6,kl:[33.7,409.2,58.3],top1:92.7,hf:'TheDrainFlorist/Qwen3.6-35B-A3B-VQ-4.6bpw',src:'card',tip:'model card: d2/K512 + d4/K2048, rich layers 30-39; text-only: card\'s 18.7 GiB minus its stated +0.83 GiB tower; KL cached top-64, 12288 tokens per corpus (2026-09-17 ladder)'}]};
-LIB_ROWS.forEach(t=>{if(t.res){t.rows=[...RESULTS[t.res],...(CARD_ROWS[t.id]||[])];t.real=true}else t.real=false});
+
 const MACHINES=[16,24,32,36,48,64,96,128,192,256,512];  // memory sizes, GB
 const osReserve=gb=>gb<=36?5:8;
 const ctxReserve=gb=>Math.round(Math.max(2,Math.min(8,gb*0.05)));
@@ -565,7 +603,7 @@ async function loadFleet(){
   // per published repo, the copy under its own org's root wins, else the newest scan
   const inRoot=x=>(x.name||'').startsWith(org(x.hf_repo)+'--'),nr={};
   for(const x of newestBy(FLEET.data,x=>x.hf_repo||null,(x,c)=>inRoot(x)!==inRoot(c)?inRoot(x):newer(x,c))){const h=x.hub,b=x.bundle||{};
-    nr[x.hf_repo]={geo:x.geometry||{},text:x.text_gib,profile:x.runtime&&x.runtime.profile,shards:x.shards,drift:h?(h.drift||[]).filter(d=>d.state!=='same').map(d=>d.file):null,checked:h&&h.checked?h.checked.slice(0,10):'',rev:h&&h.revision?h.revision.slice(0,7):'',scanned:x.scanned,verdict:b.verdict||'',note:b.note||''}}
+    nr[x.hf_repo]={geo:x.geometry||{},sz:x.skipzero,text:x.text_gib,profile:x.runtime&&x.runtime.profile,shards:x.shards,drift:h?(h.drift||[]).filter(d=>d.state!=='same').map(d=>d.file):null,checked:h&&h.checked?h.checked.slice(0,10):'',rev:h&&h.revision?h.revision.slice(0,7):'',scanned:x.scanned,verdict:b.verdict||'',note:b.note||''}}
   for(const k of Object.keys(REG))delete REG[k];Object.assign(REG,nr);
   OWN={own:ownBuildsCalc()};libPick();
   if(sig()!==prev&&UI.page===P.lib)render()}
@@ -662,7 +700,7 @@ function ladder(t,ship,minMac,link){
     const g=id==='m'?tog('kl',ex.kl,'columns of mean KL: prose, code, literary'):id==='b'?tog('bpw',ex.bpw,'columns of bits per weight: experts, attention, embed, router'):'';
     return sortTh(lib.sort,id,c.label,id==='build'?'':'num',{extra:g})};
   const td=(c,r)=>{const id=c.id;if(id==='sp')return '<td></td>';
-    if(id==='build')return `<td class="what" title="${esc(r.tip?r.what+' · '+r.tip:r.what)}"><span class="dot" style="background:${vqCol(r)}"></span>${esc(r.kind==='affine'?r.what.replace(/ ·.*| \(.*\)/,''):r.what.replace(/ \(.*\)/,''))}${r.src==='card'?' <span class="ctag">card</span>':''}</td>`;
+    if(id==='build')return `<td class="what" title="${esc(r.tip?r.what+' · '+r.tip:r.what)}"><span class="dot${isSz(r)?' sz':''}" style="background:${vqCol(r)}"></span>${esc(r.kind==='affine'?r.what.replace(/ ·.*| \(.*\)/,''):r.what.replace(/ \(.*\)/,''))}${t.rows.some(q=>q.src!==r.src)?` <span class="ctag">${r.src}</span>`:''}${isSz(r)?' <span class="ctag" title="skip-zero: dead output rows dropped on disk and in memory (config vq_skipzero)">sz</span>':''}</td>`;
     if(id==='lnk')return `<td class="lnk">${link(r)?`<a href="${link(r)}" target="_blank" rel="noopener" title="${esc(org(r.hf))}">${esc(org(r.hf))} ↗</a>`:''}</td>`;
     if(KL[id]){const v=KL[id](r);return `<td class="num ${v!=null&&v===best[id]?'best':''}">${v==null?'—':fmt(v)}</td>`}
     const v=txt(c,r),inf=['bx','ba','be','br'].includes(id)&&libW(t,r).inf;return `<td class="num${inf?' faint':''}"${inf?' title="mlx_lm.convert defaults; this build was scored but not kept"':''}>${v==null?'—':v}</td>`};
@@ -696,7 +734,7 @@ function inspector(t,r){
   const pills=g?`<div class="pills">${g.drift?`<span class="pill ${drift?'warn':'ok'}">${drift?'local differs: '+esc(g.drift.slice(0,2).join(', '))+(g.drift.length>2?' +'+(g.drift.length-2):''):'matches Hub'}</span>`:''}${g.verdict?`<span class="pill ${bad?'bad':stale?'warn':'ok'}" title="${esc(g.note)}">${bad?'bundle fails check':stale?'older runtime · same output':'runtime current'}${g.note?' '+INFO(esc(g.note)):''}</span>`:''}${g.profile?`<span class="pill">${esc(g.profile)}</span>`:''}${g.rev?`<span class="pill">rev ${esc(g.rev)}</span>`:''}</div>`:'';
   return `<div class="cart insp">
     <div class="ihead"><div><div class="iname">${esc(r.hf?repoName(r.hf):r.what)}</div><div class="faint">${r.kind==='affine'?'affine · published comparator':(r.mixed||(comp&&comp.length>1)?'VQ · mixed':'VQ · flat')}${r.hf?' · '+esc(org(r.hf)):''}</div></div><div class="iact">${r.hf?`<a class="btn" href="https://huggingface.co/${esc(r.hf)}" target="_blank" rel="noopener">Hub ↗</a>`:''}${fork}</div></div>
-    <div class="ro">fidelity to teacher ${INFO(`${q8?"100% is this family's affine q8, per corpus":'100% is 5 mnats; this family has no scored q8'}. 0% is 1000 mnats, one nat per token. Log scale. The faint number is the KL, in millinats.${r.src==='card'?' Figures from the model card, scored on that card\'s own cache, not the paper instrument.':t.real?'':' Figures from the model card, not the shared instrument.'}`)}</div>${kl}
+    <div class="ro">fidelity to teacher ${INFO(`${q8?"100% is this family's affine q8, per corpus":'100% is 5 mnats; this family has no scored q8'}. 0% is 1000 mnats, one nat per token. Log scale. The faint number is the KL, in millinats.${r.tip?' Source: '+esc(r.tip)+'.':''}`)}</div>${kl}
     ${spd}
     <div class="ro">size</div>${size}
     ${books}${pills}
@@ -709,24 +747,26 @@ function pgLibrary(){
   <div class="lib3">
     <div class="libmain">
       <svg class="chart" id="libchart" role="img" aria-label="shipped builds, size against mean KL"></svg>
-      <div class="legend"><span><span class="dot vq"></span>VQ flat</span><span><span class="dot mixed"></span>VQ mixed</span><span><span class="dot aff"></span>affine</span><span><span class="dot own"></span>own build</span>${INFO("▸ on mean KL adds prose, code and literary; ▸ on bpw adds experts, attn, embed (embed/PLE where the family has per-layer embeddings) and router. experts: VQ code bits log2(K)/d weighted by module count, affine bits + 32/group. The other three are quantization widths read from each build's config.json (bf16 = unquantized). — means no config found locally.")}</div>
-      <div class="ltabs" role="tablist">${[['pub','Published',ship.length],['own','Own builds',own]].map(([k,n,c])=>`<button role="tab" aria-selected="${lib.tab===k}" data-ltab="${k}">${n} <span>${c}</span></button>`).join('')}${INFO(lib.tab==='pub'?'The published catalog: one row per released build. Most rows are paper results; rows tagged card come from the build\'s model card and were scored on that card\'s own cache, so do not compare them directly with the others. Builds you made on this machine are under Own builds.':'Artifacts registered on this machine that are not published catalog rows. KL is the newest measurement per corpus for these exact weight bytes in the scores index (the line for the same runtime when there is one). Their caches can differ from the published rows, so do not compare across the two groups. An unscored build has no number and none is estimated.')}</div>
+      <div class="legend"><span><span class="dot vq"></span>VQ flat</span><span><span class="dot mixed"></span>VQ mixed</span><span><span class="dot aff"></span>affine</span><span><span class="dot own"></span>own build</span>${t.rows.some(isSz)?'<span><span class="dot vq sz"></span>skip-zero</span>':''}${INFO("▸ on mean KL adds prose, code and literary; ▸ on bpw adds experts, attn, embed (embed/PLE where the family has per-layer embeddings) and router. experts: VQ code bits log2(K)/d weighted by module count, affine bits + 32/group. The other three are quantization widths read from each build's config.json (bf16 = unquantized). — means no config found locally.")}</div>
+      <div class="ltabs" role="tablist">${[['pub','Published',ship.length],['own','Own builds',own]].map(([k,n,c])=>`<button role="tab" aria-selected="${lib.tab===k}" data-ltab="${k}">${n} <span>${c}</span></button>`).join('')}${INFO(lib.tab==='pub'?'The published catalog: one row per released build. VQ rows (and comparators the card carries) are the newest model card\'s ladder table, all on one cache; hover a row for its card and date. Rows tagged paper are the paper\'s comparators on another cache, so do not compare them directly. sz marks skip-zero builds. bpw is the name\'s nominal value; affine rows add 0.5 (bits + 0.5). Builds you made on this machine are under Own builds.':'Artifacts registered on this machine that are not published catalog rows. KL is the newest measurement per corpus for these exact weight bytes in the scores index (the line for the same runtime when there is one). Their caches can differ from the published rows, so do not compare across the two groups. An unscored build has no number and none is estimated.')}</div>
       <div class="libscroll">${lib.tab==='pub'?ladder(t,ship,minMac,link):ownPane(t)}</div>
     </div>
     ${inspector(t,sel)}
   </div>${PICKER()}</section>`}
+// the fitted reference curves of a catalog family, drawn on a chartFrame
+function refCurves(c,t){
+  const nvq=t.scored.filter(r=>r.kind==='vq'||r.kind==='lab').length;
+  return (!t.judge&&nvq>=3?curve(c,t.klFlat,'flat'):'')+(!t.judge&&t.klAff&&t.scored.filter(r=>r.kind==='affine').length>=2?curve(c,t.klAff,'aff'):'')}
 function drawLib(){
   const t=TE(lib.fam),svg=$('#libchart'),H=Math.round(svg.getBoundingClientRect().height)||240;
   const pts=t.rows.filter(r=>r.kl&&(r.kind==='vq'||r.kind==='affine'));
   const ob=OWN.own.filter(o=>o.fam===lib.fam&&o.kl!=null&&o.x.text_gib>=t.xr[0]&&o.x.text_gib<=t.xr[1]);
   const c=chartFrame(svg,t.xr,H,yRange(pts.map(r=>mean(r.kl)).concat(ob.map(o=>o.kl))));let s=c.s;
-  const nvq=t.scored.filter(r=>r.kind==='vq'||r.kind==='lab').length;
-  if(!t.judge&&nvq>=3)s+=curve(c,t.klFlat,'flat');
-  if(!t.judge&&t.klAff&&t.scored.filter(r=>r.kind==='affine').length>=2)s+=curve(c,t.klAff,'aff');
+  s+=refCurves(c,t);
   const ring=(r,x,y)=>r.id===lib.sel?`<circle class="ring" cx="${x}" cy="${y}" r="10"/>`:'';
   pts.forEach(r=>{const x=c.X(r.gib),y=c.Y(mean(r.kl));
     if(r.kind==='affine')s+=`<g class="pt" data-sel="${esc(r.id)}">${ring(r,x,y)}<path class="xmark" d="M${x-4} ${y-4}L${x+4} ${y+4}M${x+4} ${y-4}L${x-4} ${y+4}"/><text class="xlab" x="${x+7}" y="${y+4}">${esc(r.id)}</text></g>`;
-    else if(r.kind==='vq')s+=`<g class="pt" data-sel="${esc(r.id)}">${ring(r,x,y)}<circle cx="${x}" cy="${y}" r="6" style="fill:${vqCol(r)}"/><text class="vlab" x="${x+8}" y="${y-7}">${esc(r.id.replace(/^r(\d)(\d)(v2)?$/,'$1.$2$3'))}</text></g>`;
+    else if(r.kind==='vq')s+=`<g class="pt" data-sel="${esc(r.id)}">${ring(r,x,y)}${isSz(r)?`<circle class="szring" cx="${x}" cy="${y}" r="9"/>`:''}<circle cx="${x}" cy="${y}" r="6" style="fill:${vqCol(r)}"/><text class="vlab" x="${x+8}" y="${y-7}">${esc(r.id.replace(/^r(\d)(\d)(v2)?$/,'$1.$2$3'))}</text></g>`;
     else s+=`<circle class="cmpt" cx="${x}" cy="${y}" r="3"><title>${esc(r.what)}</title></circle>`});
   ob.forEach(o=>{const x=c.X(o.x.text_gib),y=c.Y(o.kl);s+=`<path class="ownpt" d="M${x} ${y-6}L${x+6} ${y}L${x} ${y+6}L${x-6} ${y}Z"><title>${esc(o.x.name)} · ${fmt(o.kl)} mnats</title></path>`});
   svg.innerHTML=s}
@@ -875,7 +915,7 @@ function pgRecipe(){
   <div class="rl">
     <div class="readouts" id="readouts"></div>
     <svg class="chart" id="chart" role="img" aria-label="size of this recipe against geometry; drag to set"></svg>
-    <div class="legend"><span><i class="k-acc"></i>this recipe</span><span><i class="k-dim"></i>${r.mode==='vq'?'geometry':'affine bits'}</span><span><i class="k-teal"></i>boxes, after OS and context</span></div>
+    <div class="legend"><span><i class="k-acc"></i>this recipe</span><span><i class="k-dim"></i>${r.mode==='vq'?'geometry':'affine bits'}</span><span><i class="k-teal"></i>boxes, after OS and context</span><span><span class="dot vq"></span>published build, measured</span></div>
     <div id="strip"></div>
     <div id="plan"></div>
   </div>
@@ -894,7 +934,9 @@ function pgRecipe(){
 }
 const GROUPS=[32,64,128];
 // chart geometry shared by the drawing and the drag: one notch per geometry (or affine width), the current point, the x range
-const RBOX={L:16,Rm:16,Tp:10,B:26};
+const RBOX={L:44,Rm:12,Tp:10,B:26};  // the Library chart's frame, so both charts read alike
+// the Library catalog family of a teacher: its measured published rows are the recipe chart's reference
+const libOf=t=>LIB_ROWS.find(l=>baseKey(l.n)===baseKey(t.name))||null;
 function recipeGeom(t){
   const r=recipe.draft,vq=r.mode==='vq';
   const N=vq?fitGeos(t).map(g=>({k:g.geo,x:sizeOf(t,{...r,tailOn:false,geo:g.geo}).gib})):BITS.map(b=>({k:'q'+b,x:sizeOf(t,{...r,bits:b}).gib}));
@@ -903,15 +945,23 @@ function recipeGeom(t){
   return {vq,N,cur,xr:[lo-pad,hi+pad]};
 }
 function drawRecipe(){
-  const r=recipe.draft,t=curT(),svg=$('#chart'),{vq,N,cur,xr}=recipeGeom(t),H=170;
-  const a=xAxis(svg,xr,H,RBOX),{X,W,Tp,base,xmin,xmax,span}=a;let s=a.s;
-  MACHINES.forEach(gb=>{const u=usable(gb);if(u>xmin&&u<xmax){const near=cur&&Math.abs(u-cur.gib)<span*0.01;s+=`<g class="box ${near?'near':''}"><line x1="${X(u)}" x2="${X(u)}" y1="${Tp}" y2="${base}"/><text x="${X(u)+4}" y="${Tp+14}">${gb} GB</text></g>`}});
+  const r=recipe.draft,t=curT(),svg=$('#chart'),g=recipeGeom(t),{vq,N,cur}=g,lt=libOf(t),pts=lt?lt.rows.filter(q=>q.kl&&(q.kind==='vq'||q.kind==='affine')):[];
+  const H=Math.max(190,Math.min(300,Math.round(innerHeight*.3))),xr=pts.length?[Math.min(g.xr[0],lt.xr[0]),Math.max(g.xr[1],lt.xr[1])]:g.xr;
+  const c=chartFrame(svg,xr,H,yRange(pts.map(q=>mean(q.kl)))),{X,Y,W,Tp,base,xmin,xmax,span}=c;let s=c.s;
+  if(lt&&pts.length)s+=refCurves(c,lt);
+  // a published row with this recipe's geometry on every VQ layer: its measured KL is this recipe's, to the row's instrument
+  const hit=vq&&!r.tailOn?pts.find(q=>q.kind==='vq'&&!isMixed(q)&&q.geo===r.geo):null;
+  pts.forEach(q=>{const x=X(q.gib),y=Y(mean(q.kl));
+    if(q.kind==='affine')s+=`<g class="rpt"><title>${esc(q.what)} · ${fmt(q.gib)} GiB · ${fmt(mean(q.kl))} mnats</title><path class="xmark" d="M${x-3} ${y-3}L${x+3} ${y+3}M${x+3} ${y-3}L${x-3} ${y+3}"/></g>`;
+    else s+=`<g class="rpt"><title>${esc(q.what)} · ${fmt(q.gib)} GiB · ${fmt(mean(q.kl))} mnats</title><circle cx="${x}" cy="${y}" r="4.5" style="fill:${vqCol(q)}"/></g>`});
+  MACHINES.forEach(gb=>{const u=usable(gb);if(u>xmin&&u<xmax){const near=cur&&Math.abs(u-cur.gib)<span*0.01;s+=`<g class="box ${near?'near':''}"><line x1="${X(u)}" x2="${X(u)}" y1="${Tp}" y2="${base}"/><text x="${X(u)+4}" y="${base-24}">${gb} GB</text></g>`}});
   const sel=vq?r.geo:'q'+r.bits;
   const lab=new Set(),sx=n=>X(n.x),mark=n=>lab.add(n.k);
-  mark(N[0]);mark(N[N.length-1]);N.forEach(n=>{if(n.k===sel)mark(n)});
+  mark(N[0]);if(sx(N[N.length-1])<W-RBOX.Rm-60)mark(N[N.length-1]);N.forEach(n=>{if(n.k===sel)mark(n)});
   N.forEach(n=>{if(!lab.has(n.k)&&N.every(m=>!lab.has(m.k)||Math.abs(sx(m)-sx(n))>=64))mark(n)});
-  N.forEach(n=>{const on=lab.has(n.k);s+=`<g class="notch ${n.k===sel?'':'dimmed'}"><title>${esc(n.k)} · ${fmt(n.x)} GiB</title><line x1="${X(n.x)}" x2="${X(n.x)}" y1="${base-8}" y2="${base}"/>${on?`<text x="${X(n.x)}" y="${base-14}" text-anchor="middle">${esc(n.k)}</text>`:''}</g>`});
-  if(cur){const x=X(cur.gib),left=x>W-90;s+=`<g class="pick"><line x1="${x}" x2="${x}" y1="${Tp}" y2="${base}"/><circle cx="${x}" cy="${H/2-10}" r="6.5"/><text x="${left?x-11:x+11}" y="${H/2-18}" text-anchor="${left?'end':'start'}">${fmt(cur.gib)} GiB</text></g>`}
+  N.forEach(n=>{const on=lab.has(n.k);s+=`<g class="notch ${n.k===sel?'':'dimmed'}"><title>${esc(n.k)} · ${fmt(n.x)} GiB</title><line x1="${X(n.x)}" x2="${X(n.x)}" y1="${base-8}" y2="${base}"/>${on?`<text x="${X(n.x)}" y="${base-12}" text-anchor="middle">${esc(n.k)}</text>`:''}</g>`});
+  if(cur){const szNote=hit&&hit.sz&&cur.gib>hit.gib?` · skip-zero: ${fmt(cur.gib-hit.gib)} GiB smaller on disk, KL unchanged (F175)`:'',x=X(cur.gib),left=x>W-260,tx=left?x-8:x+8,anc=left?'end':'start';
+    s+=`<g class="pick"><line x1="${x}" x2="${x}" y1="${Tp}" y2="${base}"/>${hit?`<circle cx="${X(hit.gib)}" cy="${Y(mean(hit.kl))}" r="6.5"><title>published ${esc(hit.what)}, not this recipe: KL ${fmt(mean(hit.kl))} · ${esc(hit.tip||'')}${szNote}</title></circle>`:`<circle cx="${x}" cy="${base}" r="5"/>`}<text x="${tx}" y="${Tp+12}" text-anchor="${anc}">${fmt(cur.gib)} GiB · KL ${hit?'— · published '+esc(hit.what)+': '+fmt(mean(hit.kl)):'—'}</text></g>`}
   svg.innerHTML=s;svg.style.cursor=vq?'':'default';
 }
 // the notch nearest to a pointer event on the chart
