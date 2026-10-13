@@ -1,0 +1,38 @@
+"""stream-convert's per-module quantization: defaults unchanged, --group and
+default-mode --protect-bits (mixed affine) reach the predicate."""
+import pytest
+
+pytest.importorskip("mlx.core")
+pytest.importorskip("mlx_lm")
+from vqlab.build.stream_convert import body_spec  # noqa: E402
+
+T = "switch_mlp"
+EXP = "model.layers.3.mlp.switch_mlp.gate_proj"
+ATT = "model.layers.3.self_attn.q_proj"
+SHE = "model.layers.3.mlp.shared_expert.up_proj"
+
+
+def test_defaults_are_the_old_uniform_g64():
+    for p in (EXP, ATT, SHE, "model.embed_tokens", "lm_head"):
+        assert body_spec(p, target=T, bits=3) == {"group_size": 64, "bits": 3}
+    assert body_spec("model.layers.3.mlp.gate", target=T, bits=3) is False
+    assert body_spec("model.ngram_embedding", target=T, bits=3) is True
+
+
+def test_group_reaches_the_body():
+    assert body_spec(ATT, target=T, bits=4, group=128) == {"group_size": 128, "bits": 4}
+    assert body_spec(EXP, target=T, bits=4, group=32) == {"group_size": 32, "bits": 4}
+
+
+def test_protect_in_default_mode_is_mixed_affine():
+    kw = dict(target=T, bits=2, group=128, protect_bits=8)
+    assert body_spec(EXP, **kw) == {"group_size": 128, "bits": 2}
+    for p in (ATT, SHE, "model.embed_tokens", "lm_head"):
+        assert body_spec(p, **kw) == {"group_size": 64, "bits": 8}
+    assert body_spec("model.layers.3.mlp.gate", **kw) is False
+
+
+def test_struct_unchanged():
+    kw = dict(target=T, bits=4, group=128, protect_bits=8, struct=True)
+    assert body_spec(EXP, **kw) == {"group_size": 64, "bits": 2}
+    assert body_spec(ATT, **kw) == {"group_size": 64, "bits": 8}

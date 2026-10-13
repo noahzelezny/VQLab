@@ -11,7 +11,10 @@ Shard boundaries never split a module (weight/scales/biases co-located) —
 fit_moe.py's shard-oriented splice depends on it.
 
 Modes:
-  default        uniform --bits everywhere the recipe quantizes
+  default        uniform --bits/--group everywhere the recipe quantizes;
+                 with --protect-bits P, MIXED affine: experts at --bits/--group,
+                 every other quantized module at P/64 (the shape of e.g. a
+                 2-bit-experts / 8-bit-rest community build)
   --struct       STRUCT BASE for the MoE fitter: expert modules (matched by
                  the family's target_substr) marked 2-bit placeholders,
                  everything else at --protect-bits
@@ -45,6 +48,31 @@ from vqlab.family.registry import FAMILY
 from vqlab.family import model_loader as runtime_load
 from vqlab.family import alias_fused, fused_projections
 
+def body_spec(path, *, target, bits, group=64, protect_bits=None, struct=False):
+    """Quantization of one module outside --skeleton-from mode: False (bf16),
+    True (the global default), or a per-module {group_size, bits}."""
+    if path.endswith("mlp.gate"):
+        return False                                     # router bf16 (E7)
+    if "vision" in path or "visual" in path:
+        # Under an mlx_vlm runtime the tower is part of the loaded model
+        # (mlx_lm's sanitize drops it, so this branch never fires there).
+        # Keep it bf16: 1.05 GiB on glm5_next, and a bf16 tower in the
+        # struct base means graft_vision is NOT needed for this family —
+        # the tower rides through the whole pipeline. PROVISIONAL until a
+        # glm5_next struct base is actually built and its tower verified
+        # non-zero (the IV deferred-read family of faults).
+        return False
+    if struct and target in path:
+        return {"group_size": 64, "bits": 2}             # fitter marker
+    if "ngram_embedding" in path:
+        return True                                      # global (32, bits)
+    if struct:
+        return {"group_size": 64, "bits": protect_bits}
+    if protect_bits is not None and target not in path:
+        return {"group_size": 64, "bits": protect_bits}   # mixed affine
+    return {"group_size": group, "bits": bits}
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--src", required=True)
@@ -53,7 +81,14 @@ def main(argv=None) -> int:
     ap.add_argument("--struct", action="store_true",
                     help="build a fitter struct base: experts -> 2-bit markers")
     ap.add_argument("--family", default="qwen4_exp", choices=sorted(FAMILY))
-    ap.add_argument("--protect-bits", type=int, default=8)
+    ap.add_argument("--group", type=int, default=64, choices=(32, 64, 128),
+                    help="affine group size of the body (default mode; the "
+                         "expert modules when --protect-bits is given)")
+    ap.add_argument("--protect-bits", type=int, default=None,
+                    help="non-expert width. --struct: default 8. Default mode: "
+                         "only when given -- experts (the family's target_substr) "
+                         "at --bits/--group, every other quantized module at "
+                         "PROTECT/64 (mixed affine); router stays bf16")
     ap.add_argument("--shard-gib", type=float, default=5.0)
     ap.add_argument("--skeleton-from", metavar="ARTIFACT",
                     help="MATCHED-SKELETON comparator: copy every non-expert "
@@ -63,6 +98,8 @@ def main(argv=None) -> int:
                          "result differs from ARTIFACT only in how the experts are "
                          "stored -- the like-for-like comparison for a VQ build")
     a = ap.parse_args(argv)
+    if a.struct and a.protect_bits is None:
+        a.protect_bits = 8
 
     SRC, DST = pathlib.Path(a.src), pathlib.Path(a.out)
     SHARD = int(a.shard_gib * 2**30)
@@ -113,7 +150,7 @@ def main(argv=None) -> int:
                 return False
             if target in path:
                 SKEL_HITS["expert"] += 1
-                return {"group_size": 64, "bits": a.bits, "mode": "affine"}
+                return {"group_size": a.group, "bits": a.bits, "mode": "affine"}
             if path in SKEL:
                 SKEL_HITS["skeleton"] += 1
                 v = SKEL[path]
@@ -121,23 +158,8 @@ def main(argv=None) -> int:
                         "mode": v.get("mode", "affine")}
             SKEL_HITS["bf16"] += 1
             return False                     # unquantized in the reference too
-        if path.endswith("mlp.gate"):
-            return False                                     # router bf16 (E7)
-        if "vision" in path or "visual" in path:
-            # Under an mlx_vlm runtime the tower is part of the loaded model
-            # (mlx_lm's sanitize drops it, so this branch never fires there).
-            # Keep it bf16: 1.05 GiB on glm5_next, and a bf16 tower in the
-            # struct base means graft_vision is NOT needed for this family —
-            # the tower rides through the whole pipeline. PROVISIONAL until a
-            # glm5_next struct base is actually built and its tower verified
-            # non-zero (the IV deferred-read family of faults).
-            return False
-        if a.struct and target in path:
-            return {"group_size": 64, "bits": 2}             # fitter marker
-        if "ngram_embedding" in path:
-            return True                                      # global (32, bits)
-        b = a.protect_bits if a.struct else a.bits
-        return {"group_size": 64, "bits": b}
+        return body_spec(path, target=target, bits=a.bits, group=a.group,
+                         protect_bits=a.protect_bits, struct=a.struct)
 
     # Experts that ARRIVE quantized (deepseek_v4's teacher keeps the release's
     # mxfp4 experts) are never offered to the predicate by mlx's quantizer, so
