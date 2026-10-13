@@ -457,6 +457,17 @@ def main() -> int:
             "mlx_vlm arm can load this tower (DeepSeek-V4 Vision-Exp). Drive "
             "it through the serving runtime: --knurlogic fit.")
 
+    # Without mlx_vlm the bundle's shim falls back to mlx_lm's text arch, and
+    # the SURFACE check below would blame the bundle (F153) for what is this
+    # interpreter's missing `vision` extra: the 2026-10-13 397B preflight ran
+    # under a venv without mlx_vlm and was told to rebundle.
+    if importlib.util.find_spec("mlx_vlm") is None:
+        raise SystemExit(
+            f"FAIL: mlx_vlm is not installed in this interpreter ({sys.executable}), "
+            "so no artifact's vision tower can be reached from it; this says "
+            "nothing about the bundle. Install the vision extra "
+            "(pip install 'vqlab[vision]') or run under an env that has it.")
+
     # ---- 1. SURFACE -------------------------------------------------------
     mod = _load_bundle_module(art)
     arch = getattr(mod, "_arch", None)

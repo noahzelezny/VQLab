@@ -320,7 +320,8 @@ def test_skipzero_packs_the_finished_artifact_and_checks_run_on_the_copy(fams):
     plain, _ = rq.compile_recipe(base)
     q, warns = rq.compile_recipe({**base, "skipzero": True})
     assert _names(q) == ["struct-base", "fit", "vision", "vision-smoke", "skipzero",
-                         "skipzero-check", "smoke", "runtime-check", "release-check"]
+                         "skipzero-check", "skipzero-bundle", "smoke", "runtime-check",
+                         "release-check"]
     built = _args(q, "fit")[_args(q, "fit").index("--out") + 1]
     pack = next(s for s in q["steps"] if s["name"] == "skipzero")
     sz = pack["args"][pack["args"].index("--out") + 1]
@@ -328,6 +329,10 @@ def test_skipzero_packs_the_finished_artifact_and_checks_run_on_the_copy(fams):
     assert pack["preflight"] == {"append": ["--layers", "0-0"]} and pack["gpu"] is False
     check = next(s for s in q["steps"] if s["name"] == "skipzero-check")
     assert check["args"] == [sz, built] and check["gpu"] is False
+    # as the published 397B builds: sz-pack -> bundle the packed copy -> pin
+    bundle = next(s for s in q["steps"] if s["name"] == "skipzero-bundle")
+    assert bundle["cmd"] == "bundle" and bundle["args"] == ["--artifact", sz]
+    assert "--runtime" not in bundle["args"]      # keeps the profile the fit baked in
     assert check["preflight"]["writes_gib"] == 0
     assert _args(q, "vision-smoke")[0] == built
     assert _args(q, "smoke")[0] == sz and _args(q, "runtime-check")[1] == sz

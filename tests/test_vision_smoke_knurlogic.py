@@ -65,3 +65,21 @@ def test_fit_stands_alone(tmp_path):
                            knurlogic_link="", image=None, max_tokens=8)
     with pytest.raises(SystemExit, match="stands alone"):
         vs._knurlogic(tmp_path, a, K=FakeK(), SPK=types.SimpleNamespace())
+
+
+def test_missing_mlx_vlm_is_named_not_blamed_on_the_bundle(tmp_path, monkeypatch, capsys):
+    """No mlx_vlm in the interpreter: the shim falls back to the text arch,
+    and the surface check used to call that an F153 bundle fault."""
+    import json
+    import sys
+    art = tmp_path / "art"
+    art.mkdir()
+    (art / "config.json").write_text(json.dumps({"model_type": "x", "vision_config": {"depth": 1}}))
+    (art / "model.py").write_text("raise AssertionError('must not be imported')\n")
+    real = vs.importlib.util.find_spec
+    monkeypatch.setattr(vs.importlib.util, "find_spec",
+                        lambda n, *a: None if n == "mlx_vlm" else real(n, *a))
+    monkeypatch.setattr(sys, "argv", ["vision-smoke", str(art)])
+    with pytest.raises(SystemExit) as e:
+        vs.main()
+    assert "mlx_vlm is not installed" in str(e.value) and "TEXT-ONLY" not in str(e.value)

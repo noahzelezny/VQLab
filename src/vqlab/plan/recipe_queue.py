@@ -16,13 +16,14 @@ it with; a chain is offered only for families whose pieces have each run:
                   mixed affine, experts at bits/group, the rest at protect/64]
 
 and every chain, whatever its mode, ends the same way: [graft ->
-vision-smoke] -> [sz-pack -> sz-check] -> pin -> check-bundle --strict ->
+vision-smoke] -> [sz-pack -> sz-check -> bundle] -> pin -> check-bundle --strict ->
 check-release -> [kl-ladder].
 
 "skipzero" (MoE VQ only) drops the teacher's dead expert rows on disk the way
 every published Qwen3.5-397B build was made (docs/SKIPZERO.md, F175): sz-pack
-of the finished, grafted artifact, then sz-check, and the pin and every check
-after it run on the packed copy. It is offered only for a teacher whose dead
+of the finished, grafted artifact, then sz-check, then `bundle` so the runtime
+serves the packed copy, and the pin and every check after it run on that
+copy. It is offered only for a teacher whose dead
 rows were measured (families/<f>/teachers/<t>/skipzero.json), and the size it
 saves comes from those counts at the recipe's geometry (skipzero_gib).
 
@@ -479,6 +480,14 @@ def _tail_steps(r: Recipe, src: str, by: dict):
         steps.append(_step("skipzero-check", "sz-check", [sz, out],
                            {"full": "numpy check, reads only", "writes_gib": 0}, gpu=False,
                            retries=0, timeout_s=3 * 3600))
+        # sz-pack leaves the stage-1 experimental hook in model.py
+        # (vq_skipzero.loader unset); every published 397B build was then
+        # rebundled so the runtime serves it (their provenance histories:
+        # sz-pack -> bundle --artifact <the packed copy> -> pin). With no
+        # --runtime, bundle keeps the profile the fit baked in.
+        steps.append(_step("skipzero-bundle", "bundle", ["--artifact", sz],
+                           {"full": "rewrites model.py and config.json, no weights", "writes_gib": 0},
+                           retries=0, timeout_s=1800))
         warns.append(f"sz-pack and sz-check are EXPERIMENTAL tools; the packed copy ({sz}) "
                      f"symlinks its unchanged shards into {out}, so keep both")
         out = sz

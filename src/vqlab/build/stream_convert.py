@@ -44,9 +44,34 @@ from mlx.utils import tree_flatten, tree_unflatten
 # PROVISIONAL until a glm5_next struct base is built.
 from mlx_lm.utils import load_tokenizer, quantize_model, save_config
 
+from vqlab.core.artifacts.artifact import write_index
 from vqlab.family.registry import FAMILY
 from vqlab.family import model_loader as runtime_load
 from vqlab.family import alias_fused, fused_projections
+
+# The teacher's tokenizer files, copied byte for byte over what
+# load_tokenizer(...).save_pretrained writes. A re-serialization is not a copy:
+# transformers 5 rewrote the Qwen3.5 tokenizer.json's ByteLevel pre_tokenizer
+# and decoder (add_prefix_space/trim_offsets/use_regex flipped), and the
+# 2026-10-13 397B preflight's check-release failed the artifact against its own
+# teacher on exactly that; the published builds had needed a hand fix
+# (provenance --amend tokenizer.json, 2026-10-10).
+TOKENIZER_FILES = ("tokenizer.json", "tokenizer_config.json", "special_tokens_map.json",
+                   "added_tokens.json", "vocab.json", "merges.txt", "tokenizer.model",
+                   "chat_template.jinja", "chat_template.json")
+
+
+def copy_tokenizer_files(src, dst) -> list[str]:
+    """Copy every TOKENIZER_FILES entry `src` has into `dst`, verbatim
+    (replacing a re-serialized one) -> the names copied."""
+    src, dst = pathlib.Path(src), pathlib.Path(dst)
+    got = []
+    for name in TOKENIZER_FILES:
+        if (src / name).is_file():
+            shutil.copyfile(src / name, dst / name)
+            got.append(name)
+    return got
+
 
 def body_spec(path, *, target, bits, group=64, protect_bits=None, struct=False):
     """Quantization of one module outside --skeleton-from mode: False (bf16),
@@ -265,8 +290,9 @@ def main(argv=None) -> int:
         flush(si)
 
     tot = sum((DST / f).stat().st_size for f in set(index.values()))
-    (DST / "model.safetensors.index.json").write_text(json.dumps(
-        {"metadata": {"total_size": tot}, "weight_map": index}, indent=1))
+    # total_size = tensor data bytes (HF's definition), not file sizes: the
+    # affine chain ships this index as-is, and check-release reads it
+    write_index(DST, index)
     save_config(config, config_path=DST / "config.json")
     # mlx-vlm families: quantize_model/save_config can drop top-level keys the
     # VLM loader requires (vision_config, observed on glm5_next 2026-08-30 —
@@ -281,7 +307,10 @@ def main(argv=None) -> int:
         (DST / "config.json").write_text(json.dumps(_dst_cfg, indent=2))
         print(f"re-merged config keys dropped by save path: {sorted(_missing)}",
               flush=True)
+    # save_pretrained still writes what the teacher lacks (a tokenizer.json
+    # for a sentencepiece-only source); every file the teacher HAS is its own
     load_tokenizer(SRC).save_pretrained(DST)
+    copy_tokenizer_files(SRC, DST)
     for pat in ("*.py", "generation_config.json"):
         for f in glob.glob(str(SRC / pat)):
             shutil.copy(f, DST)

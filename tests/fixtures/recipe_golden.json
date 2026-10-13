@@ -1437,6 +1437,20 @@
      "timeout_s": 10800
     },
     {
+     "name": "skipzero-bundle",
+     "cmd": "bundle",
+     "args": [
+      "--artifact",
+      "<scratch>/moe-sz/moe-sz-sz"
+     ],
+     "preflight": {
+      "full": "rewrites model.py and config.json, no weights",
+      "writes_gib": 0
+     },
+     "retries": 0,
+     "timeout_s": 1800
+    },
+    {
      "name": "smoke",
      "cmd": "pin",
      "args": [
@@ -1639,6 +1653,20 @@
      "gpu": false,
      "retries": 0,
      "timeout_s": 10800
+    },
+    {
+     "name": "skipzero-bundle",
+     "cmd": "bundle",
+     "args": [
+      "--artifact",
+      "<scratch>/moe-sz-tail/moe-sz-tail-sz"
+     ],
+     "preflight": {
+      "full": "rewrites model.py and config.json, no weights",
+      "writes_gib": 0
+     },
+     "retries": 0,
+     "timeout_s": 1800
     },
     {
      "name": "smoke",

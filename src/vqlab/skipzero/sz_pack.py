@@ -230,7 +230,7 @@ def main(argv=None):
     # A module whose tensors straddle a shard boundary is planned per shard,
     # so no single shard holds all of it and it is never packed. Say so: a
     # silent skip reads as "no dead rows here" (writer contracts, 2026-10-02).
-    from vqlab.core.artifacts.artifact import Artifact
+    from vqlab.core.artifacts.artifact import Artifact, write_index
     straddle = (sorted(m for m in Artifact.open(src).straddling() if m in specs)
                 if (src / "model.safetensors.index.json").exists() else [])
     if straddle:
@@ -303,8 +303,10 @@ def main(argv=None):
                 or f.name.startswith("vqlab_provenance"):
             continue
         os.symlink(os.path.realpath(f), out / f.name)
-    json.dump({"metadata": {"total_size": text_new}, "weight_map": dict(sorted(wmap.items()))},
-              open(out / "model.safetensors.index.json", "x"), indent=2)
+    # total_size is the shards' tensor DATA bytes (HF's definition, what
+    # check-release and `size --check-index` read), not text_new: that sums
+    # file sizes, headers included, and went stale by the headers on every pack.
+    write_index(out, dict(sorted(wmap.items())))
     shutil.copyfile(HERE / "skipzero_load.py", out / "skipzero_load.py")
     mf = cfg.get("model_file") or "model.py"
     src_model = (src / mf).read_bytes()

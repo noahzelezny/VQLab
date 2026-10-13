@@ -390,12 +390,13 @@ def test_sizes_three_ways(fx, tmp_path):
     assert s["mtp_files"] == ["mtp-head-q6.safetensors"] and s["mtp_sidecar"] > 16
 
 
-@pytest.mark.parametrize("name", ["mix", "pack", "reskeleton", "geo", "fitmoe"])
+@pytest.mark.parametrize("name", ["mix", "pack", "reskeleton", "geo", "fitmoe", "sz"])
 def test_total_size_is_tensor_bytes(fx, name):
     """Every writer's index total_size is the sum of its shards' tensor bytes
     (HF's definition), measured from the output, never copied from a parent."""
     from vqlab.core.artifacts.artifact import Artifact, tensor_bytes
-    d = {"mix": "mix", "pack": "packed", "reskeleton": "resk", "geo": "geo", "fitmoe": "fitmoe"}[name]
+    d = {"mix": "mix", "pack": "packed", "reskeleton": "resk", "geo": "geo", "fitmoe": "fitmoe",
+         "sz": "sz"}[name]
     out = fx["root"] / d
     if not out.exists():
         pytest.skip(f"{d} not built in this session (run the whole file)")
