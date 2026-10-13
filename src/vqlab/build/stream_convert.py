@@ -83,7 +83,7 @@ def body_spec(path, *, target, bits, group=64, protect_bits=None, struct=False):
 # slab of experts per eval. Affine groups lie along the last axis, so slabs
 # are exact: byte-identical to the one-kernel quantization.
 SLAB_BYTES = 512 * 2**20
-_SLABS: dict = {}            # id(joined output) -> (source stack, its slab outputs)
+_SLABS: dict = {}            # id(joined output) -> (source stack, its slab outputs, every id)
 
 
 def _slabbed(quantize):
@@ -93,8 +93,9 @@ def _slabbed(quantize):
         n = max(1, SLAB_BYTES // (w.nbytes // w.shape[0]))
         parts = [quantize(w[i:i + n], *args, **kw) for i in range(0, w.shape[0], n)]
         out = tuple(mx.concatenate([p[j] for p in parts], axis=0) for j in range(len(parts[0])))
+        entry = (w, parts, [id(o) for o in out])
         for o in out:
-            _SLABS[id(o)] = (w, parts)
+            _SLABS[id(o)] = entry
         return out
     return q
 
@@ -144,6 +145,9 @@ def main(argv=None) -> int:
     # an mlx_vlm family (glm5_next) loads the WHOLE model, vision tower
     # included — see the predicate's vision branch.
     runtime_load.require_vendored_arch()      # no stock-mlx-lm build by accident
+    # Freed buffers go to MLX's cache, which grows to the device's memory by
+    # default: on the 397B that pushed tens of GiB into swap (2026-10-13).
+    mx.set_cache_limit(2 * 2**30)
     model, config = runtime_load.load_for_family(a.family, SRC, lazy=True, cpu_stream=a.cpu_load)
     print(runtime_load.resolved_runtime_note(model), flush=True)   # III.13
 
@@ -242,12 +246,17 @@ def main(argv=None) -> int:
                   flush=True)
             si += 1; size = 0
         prev_mod = mod
-        src, parts = _SLABS.pop(id(arr), (None, ()))
+        src, parts, ids = _SLABS.get(id(arr), (None, (), ()))
+        for i in ids:                     # weight, scales, biases: drop every handle at once, or
+            _SLABS.pop(i, None)           # the others keep the read stack alive (a 35B ran to 89 GiB)
         if parts:
             mx.eval(src)                  # the read alone (CPU stream with --cpu-load)
             for part in parts:
                 mx.eval(part)             # one slab of experts per eval
-        del src, parts
+            del src, parts
+            mx.clear_cache()              # a freed 4 GiB stack must not sit in MLX's cache
+        else:
+            del src, parts
         mx.eval(arr)
         shard[name] = arr
         size += arr.nbytes
