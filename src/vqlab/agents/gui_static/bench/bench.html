@@ -90,7 +90,7 @@ svg.chart{width:100%;display:block;background:var(--bg);border:1px solid var(--l
 .chart .pick{cursor:grab}.chart.drag .pick{cursor:grabbing}
 .chart .pick circle{fill:var(--bg);stroke:var(--acc);stroke-width:2.5}.chart .pick text{fill:var(--fg);font-weight:700}.chart .pick line{stroke:var(--acc);stroke-dasharray:2 3}
 .legend{display:flex;gap:16px;flex-wrap:wrap;font-size:.78em;color:var(--faint);margin:8px 2px 0}
-.legend i{display:inline-block;width:14px;border-top:2px solid;vertical-align:3px;margin-right:5px}
+.legend i:not(.info){display:inline-block;width:14px;border-top:2px solid;vertical-align:3px;margin-right:5px}
 .strip{display:grid;gap:1px;height:18px;margin:6px 0 2px}
 .strip i{display:block;border-radius:1px}
 .striplab{display:flex;justify-content:space-between;font-size:.72em;color:var(--faint)}
@@ -281,6 +281,7 @@ input.fld.bad{border-color:var(--bad)}.fld.faint{color:var(--faint)}.fld.ro{curs
 .hbar{display:flex;align-items:baseline;gap:14px}
 .dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:8px}
 .dot.sz{box-shadow:0 0 0 2px var(--panel),0 0 0 3px var(--fg)}
+.legend .dot.szkey{background:none;box-shadow:inset 0 0 0 1.5px var(--fg)}
 .dot.vq{background:var(--acc)}.dot.mixed{background:var(--teal)}.dot.aff{background:var(--bad)}.dot.own{background:var(--mix);border-radius:0}
 .legend .dot.own{transform:rotate(45deg)}
 .ro.lead{margin-top:10px}
@@ -747,7 +748,7 @@ function pgLibrary(){
   <div class="lib3">
     <div class="libmain">
       <svg class="chart" id="libchart" role="img" aria-label="shipped builds, size against mean KL"></svg>
-      <div class="legend"><span><span class="dot vq"></span>VQ flat</span><span><span class="dot mixed"></span>VQ mixed</span><span><span class="dot aff"></span>affine</span><span><span class="dot own"></span>own build</span>${t.rows.some(isSz)?'<span><span class="dot vq sz"></span>skip-zero</span>':''}${INFO("▸ on mean KL adds prose, code and literary; ▸ on bpw adds experts, attn, embed (embed/PLE where the family has per-layer embeddings) and router. experts: VQ code bits log2(K)/d weighted by module count, affine bits + 32/group. The other three are quantization widths read from each build's config.json (bf16 = unquantized). — means no config found locally.")}</div>
+      <div class="legend"><span><span class="dot vq"></span>VQ flat</span><span><span class="dot mixed"></span>VQ mixed</span><span><span class="dot aff"></span>affine</span><span><span class="dot own"></span>own build</span>${t.rows.some(isSz)?'<span><span class="dot szkey"></span>skip-zero</span>':''}${INFO("▸ on mean KL adds prose, code and literary; ▸ on bpw adds experts, attn, embed (embed/PLE where the family has per-layer embeddings) and router. experts: VQ code bits log2(K)/d weighted by module count, affine bits + 32/group. The other three are quantization widths read from each build's config.json (bf16 = unquantized). — means no config found locally.")}</div>
       <div class="ltabs" role="tablist">${[['pub','Published',ship.length],['own','Own builds',own]].map(([k,n,c])=>`<button role="tab" aria-selected="${lib.tab===k}" data-ltab="${k}">${n} <span>${c}</span></button>`).join('')}${INFO(lib.tab==='pub'?'The published catalog: one row per released build. VQ rows (and comparators the card carries) are the newest model card\'s ladder table, all on one cache; hover a row for its card and date. Rows tagged paper are the paper\'s comparators on another cache, so do not compare them directly. sz marks skip-zero builds. bpw is the name\'s nominal value; affine rows add 0.5 (bits + 0.5). Builds you made on this machine are under Own builds.':'Artifacts registered on this machine that are not published catalog rows. KL is the newest measurement per corpus for these exact weight bytes in the scores index (the line for the same runtime when there is one). Their caches can differ from the published rows, so do not compare across the two groups. An unscored build has no number and none is estimated.')}</div>
       <div class="libscroll">${lib.tab==='pub'?ladder(t,ship,minMac,link):ownPane(t)}</div>
     </div>
