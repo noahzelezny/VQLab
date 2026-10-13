@@ -96,6 +96,27 @@ def _hf_token():
     return str(home / "token") if (home / "token").exists() else None
 
 
+def cache_problems(caches=None, scratch=None) -> list:
+    """A registered KL teacher cache is reference data: the release gate's
+    numbers are measured against it. One that is missing is a broken gate, and
+    one that lives in scratch is one cleanup away from it (the 397B's
+    full-vocab caches were deleted with scratch on 2026-10-03). Keep caches
+    beside the teachers (<teachers>/caches/<teacher>/)."""
+    from vqlab.family import registry
+    caches = registry.teacher_caches() if caches is None else caches
+    s = os.path.realpath(scratch or _config.scratch())
+    out = []
+    for c in caches:
+        p = _config.expand(c.get("path") or "")
+        name = f"{c.get('teacher')} {c.get('corpus')} cache"
+        if not p or not os.path.isdir(p):
+            out.append(f"{name} is registered but missing: {p} (its KL gate cannot run)")
+        elif os.path.realpath(p) == s or os.path.realpath(p).startswith(s + os.sep):
+            out.append(f"{name} lives in scratch ({p}); move it to <teachers>/caches/ "
+                       "and update teacher_caches.json, or a cleanup can delete it")
+    return out
+
+
 def report():
     import vqlab
     from vqlab import config as C
@@ -164,6 +185,7 @@ def report():
                           f"{STALE_DAYS}+ days and named in no finding: {names}"
                           + (f" and {more} more" if more > 0 else "")
                           + ". Close them out (AGENTS.md: close a campaign's scratch)")
+    r["problems"].extend(cache_problems())
     if not r["hf_token"]:
         r["notes"].append("no Hugging Face token (HF_TOKEN or $HF_HOME/token): downloads of gated "
                           "repos and publish will fail")

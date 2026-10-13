@@ -115,3 +115,19 @@ def test_step_eta_uses_the_given_index(tmp_path):
     e = eta.step_eta(st, {"status": "pending"}, tmp_path / "none", tmp_path, past={})
     assert e["eta_s"] is None                         # an empty index is not "read the disk"
     assert eta.step_eta(st, {"status": "pass"}, tmp_path, tmp_path, past={})["eta_s"] == 0.0
+
+
+def test_doctor_flags_registered_caches_that_are_missing_or_in_scratch(tmp_path):
+    """The 397B gate caches lived in scratch and went with a cleanup
+    (2026-10-03); doctor must say so before that happens again."""
+    from vqlab.agents import doctor
+    scratch, keep = tmp_path / "scratch", tmp_path / "teachers" / "caches"
+    (scratch / "c1").mkdir(parents=True)
+    (keep / "c2").mkdir(parents=True)
+    caches = [{"teacher": "T", "corpus": "prose", "path": str(scratch / "c1")},
+              {"teacher": "T", "corpus": "code", "path": str(keep / "c2")},
+              {"teacher": "T", "corpus": "lit", "path": str(tmp_path / "gone")}]
+    probs = doctor.cache_problems(caches, scratch)
+    assert len(probs) == 2
+    assert "prose" in probs[0] and "scratch" in probs[0]
+    assert "lit" in probs[1] and "missing" in probs[1]
