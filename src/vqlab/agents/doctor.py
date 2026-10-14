@@ -53,8 +53,9 @@ def stale_scratch(root, now=None) -> list:
     now = now or time.time()
     text = _findings_text()
     out = []
+    preflight = _config.preflight_dir().name
     for d in sorted(root.iterdir()):
-        if not d.is_dir() or d.name.startswith((".", "_", "queue-preflight")):
+        if not d.is_dir() or d.name.startswith((".", "_", preflight)):
             continue
         age = (now - d.stat().st_mtime) / 86400
         if age < STALE_DAYS:

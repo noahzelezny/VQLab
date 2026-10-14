@@ -260,7 +260,7 @@ def _tidy(qdir, state, done, preflight, keep_preflight):
     pfroot = None
     if preflight:
         try:
-            pfroot = _steps.preflight_root() / qdir.name
+            pfroot = _config.preflight_dir() / qdir.name
         except SystemExit:
             pass
     if preflight and done and pfroot and pfroot.is_dir() and not keep_preflight:

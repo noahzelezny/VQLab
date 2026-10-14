@@ -32,12 +32,6 @@ from vqlab import config
 from vqlab.core.box.knurlogic_client import models_dir
 
 
-def _preflight_area() -> pathlib.Path:
-    """Where queue preflights write (queue/steps.preflight_root, which gate may not import)."""
-    env = os.environ.get("VQLAB_PREFLIGHT_DIR")
-    return pathlib.Path(env) if env else config.scratch() / "queue-preflight"
-
-
 def _replaceable(entry: pathlib.Path) -> bool:
     if not entry.is_symlink():
         return False
@@ -45,7 +39,7 @@ def _replaceable(entry: pathlib.Path) -> bool:
     if not target.exists():
         return True
     try:
-        target.relative_to(_preflight_area().resolve())
+        target.relative_to(config.preflight_dir().resolve())
         return True
     except (ValueError, OSError):
         return False

@@ -30,8 +30,8 @@ from vqlab.queue.report import TERMINAL, status, wait  # noqa: F401
 from vqlab.queue.runner import _stop, _term, main, run  # noqa: F401
 from vqlab.queue.runner import run_step as _run_step  # noqa: F401
 from vqlab.queue.steps import (OUT_FLAGS, PREFLIGHT_MARGIN, SCORING, _NAMED,  # noqa: F401
-                               _PATHLIKE, pin_check, preflight_root, static_check,
-                               validate)
+                               _PATHLIKE, pin_check, static_check, validate)
+from vqlab.config import preflight_dir as preflight_root  # noqa: F401
 from vqlab.queue.steps import argv as _argv  # noqa: F401
 from vqlab.queue.steps import env as _env  # noqa: F401
 from vqlab.queue.steps import input_bytes as _input_bytes  # noqa: F401

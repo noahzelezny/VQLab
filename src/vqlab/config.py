@@ -237,6 +237,14 @@ def scratch() -> pathlib.Path:
     return _one("scratch")
 
 
+def preflight_dir() -> pathlib.Path:
+    """Where queue preflights write: $VQLAB_PREFLIGHT_DIR, else
+    <scratch>/queue-preflight. Their outputs are artifacts (a 1-module
+    build, a pin), so they live on scratch storage."""
+    env = os.environ.get("VQLAB_PREFLIGHT_DIR")
+    return pathlib.Path(env) if env else scratch() / "queue-preflight"
+
+
 def models() -> pathlib.Path:
     """Served (published or candidate) artifacts."""
     return _one("models")

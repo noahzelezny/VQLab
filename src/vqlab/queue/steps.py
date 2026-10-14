@@ -216,13 +216,6 @@ def pin_check(st, args) -> tuple[list[str], list[str]]:
 
 
 # ------------------------------------------------------------------ preflight
-def preflight_root() -> pathlib.Path:
-    """Preflight OUTPUTS are artifacts (a 1-module build, a pin), so they go
-    to scratch storage (`vqlab.config.scratch`)."""
-    env = os.environ.get("VQLAB_PREFLIGHT_DIR")
-    if env:
-        return pathlib.Path(env)
-    return _config.scratch() / "queue-preflight"
 
 
 def redirect_outs(args, pfdir: pathlib.Path, outmap: dict):
@@ -270,7 +263,7 @@ def preflight_args(st, args, state, outmap) -> tuple[list[str] | None, dict | No
         args = [_config.expand(str(a)) for a in pf["args"]]
     elif "append" in pf:
         args = args + [_config.expand(str(a)) for a in pf["append"]]
-    pfdir = preflight_root() / pathlib.Path(state["qdir"]).name / slug(st["name"])
+    pfdir = _config.preflight_dir() / pathlib.Path(state["qdir"]).name / slug(st["name"])
     pfdir.mkdir(parents=True, exist_ok=True)
     args = redirect_outs(args, pfdir, outmap if outmap is not None else {})
     need = preflight_writes(st, args, state.get("tree"), preflight=True)
