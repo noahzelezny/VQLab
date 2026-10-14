@@ -4,7 +4,8 @@ import pytest
 
 pytest.importorskip("mlx.core")
 pytest.importorskip("mlx_lm")
-from vqlab.build.stream_convert import body_spec, copy_tokenizer_files  # noqa: E402
+from vqlab.build.stream_convert import body_spec  # noqa: E402
+from vqlab.core.artifacts.artifact import copy_tokenizer_files  # noqa: E402
 
 T = "switch_mlp"
 EXP = "model.layers.3.mlp.switch_mlp.gate_proj"

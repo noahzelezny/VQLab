@@ -44,35 +44,11 @@ from mlx.utils import tree_flatten, tree_unflatten
 # PROVISIONAL until a glm5_next struct base is built.
 from mlx_lm.utils import load_tokenizer, quantize_model, save_config
 
-from vqlab.core.artifacts.artifact import Artifact, write_index
+from vqlab.core.artifacts.artifact import Artifact, copy_tokenizer_files, write_index
 from vqlab.family.registry import FAMILY
 from vqlab.family import model_loader as runtime_load
 from vqlab.family import alias_fused, fused_projections
 from vqlab.util.fs import GIB, read_json
-
-# The teacher's tokenizer files, copied byte for byte over what
-# load_tokenizer(...).save_pretrained writes. A re-serialization is not a copy:
-# transformers 5 rewrote the Qwen3.5 tokenizer.json's ByteLevel pre_tokenizer
-# and decoder (add_prefix_space/trim_offsets/use_regex flipped), and the
-# 2026-10-13 397B preflight's check-release failed the artifact against its own
-# teacher on exactly that; the published builds had needed a hand fix
-# (provenance --amend tokenizer.json, 2026-10-10).
-TOKENIZER_FILES = ("tokenizer.json", "tokenizer_config.json", "special_tokens_map.json",
-                   "added_tokens.json", "vocab.json", "merges.txt", "tokenizer.model",
-                   "chat_template.jinja", "chat_template.json")
-
-
-def copy_tokenizer_files(src, dst) -> list[str]:
-    """Copy every TOKENIZER_FILES entry `src` has into `dst`, verbatim
-    (replacing a re-serialized one) -> the names copied."""
-    src, dst = pathlib.Path(src), pathlib.Path(dst)
-    got = []
-    for name in TOKENIZER_FILES:
-        if (src / name).is_file():
-            shutil.copyfile(src / name, dst / name)
-            got.append(name)
-    return got
-
 
 def body_spec(path, *, target, bits, group=64, protect_bits=None, struct=False):
     """Quantization of one module outside --skeleton-from mode: False (bf16),

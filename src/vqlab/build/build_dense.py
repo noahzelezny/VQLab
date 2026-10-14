@@ -35,7 +35,7 @@ import mlx.core as mx
 
 from vqlab.family.registry import DENSE_REMAP as FAMILIES  # shared registry
 from vqlab.util.fs import GIB, read_json, write_json
-from vqlab.core.artifacts.artifact import Artifact
+from vqlab.core.artifacts.artifact import Artifact, copy_tokenizer_files, write_index
 
 PROJS = ("gate_proj", "up_proj", "down_proj")
 
@@ -199,7 +199,6 @@ def main(argv=None) -> int:
 
     # metadata.total_size from the shards just written: loaders size and
     # place a model by it, and check-release refuses an index without it
-    from vqlab.core.artifacts.artifact import write_index
     write_index(OUT, new_map)
 
     cfg = read_json(BASE / "config.json")
@@ -227,9 +226,8 @@ def main(argv=None) -> int:
     compile(model_py, "model.py", "exec")   # never ship a model.py that cannot parse
     (OUT / "model.py").write_text(model_py)
 
-    for f in ("tokenizer.json", "tokenizer_config.json", "chat_template.jinja",
-              "generation_config.json", "processor_config.json",
-              "preprocessor_config.json"):
+    copy_tokenizer_files(BASE, OUT)
+    for f in ("generation_config.json", "processor_config.json", "preprocessor_config.json"):
         if (BASE / f).exists():
             shutil.copy(BASE / f, OUT / f)
 
