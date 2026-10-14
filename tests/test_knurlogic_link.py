@@ -52,7 +52,8 @@ def test_replaces_only_dangling_or_preflight_links(tmp_path, monkeypatch):
     monkeypatch.setenv("VQLAB_PREFLIGHT_DIR", str(pf))
     art = _art(tmp_path / "scratch" / "b-sz")
     (md / "b-sz").symlink_to(_art(pf / "q" / "skipzero" / "b-sz"))   # the preflight's copy
-    assert kl.link(art)[0] == 0 and _gate_accepts(md, art)
+    rc, msg = kl.link(art)
+    assert rc == 0 and msg.startswith("replaced stale link") and _gate_accepts(md, art)
     (md / "c").symlink_to(tmp_path / "gone")                        # dangling
     art2 = _art(tmp_path / "scratch" / "c")
     assert kl.link(art2)[0] == 0 and _gate_accepts(md, art2)

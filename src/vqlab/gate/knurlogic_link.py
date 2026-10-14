@@ -54,7 +54,7 @@ def link(artifact, md: pathlib.Path | None = None) -> tuple[int, str]:
     if not md.is_dir():
         return 2, (f"FAIL: the Knurlogic models dir {md} does not exist (set KNURLOGIC_MODELS "
                    "to the folder Knurlogic serves from)")
-    entry = md / art.name
+    entry, replaced = md / art.name, ""
     if entry.exists() or entry.is_symlink():
         if entry.exists() and entry.resolve() == art:
             return 0, f"OK: {entry} already resolves to {art}"
@@ -63,13 +63,12 @@ def link(artifact, md: pathlib.Path | None = None) -> tuple[int, str]:
             return 2, (f"FAIL: {entry} exists and is {what}, not this artifact ({art}). "
                        "Knurlogic would load that instead; move or remove it by hand, "
                        "or rename the build")
-        old = os.readlink(entry)
+        replaced = f"replaced stale link {entry} -> {os.readlink(entry)}\n"
         entry.unlink()          # a symlink: removes the link, never data
-        print(f"replaced stale link {entry} -> {old}")
     entry.symlink_to(art, target_is_directory=True)
     if entry.resolve() != art:
         return 2, f"FAIL: {entry} was linked but resolves to {entry.resolve()}, not {art}"
-    return 0, (f"OK: {entry} -> {art}\n"
+    return 0, (f"{replaced}OK: {entry} -> {art}\n"
                "  every Mac serving a rank must reach that path under the same name")
 
 
