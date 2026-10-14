@@ -10,7 +10,7 @@ and a ranking instrument that only sees one corpus is not much of one.
     vqlab kl-ladder --cache prose=<dir> --cache code=<dir> --cache lit=<dir> \
         --rung shipped=<dir> --rung cand=<dir> [--out table.json]
 
-Every rung is scored through `vqlab.stream_score` -- the SAME layer-streamed
+Every rung is scored through `vqlab.score.stream_score` -- the SAME layer-streamed
 path that carries the rule-5 validation -- once per cache, at the tokens and
 chunk the cache itself records. One harness, no exceptions: a cache built at
 chunk 512 scores students at chunk 512, because this family carries recurrent
@@ -44,7 +44,7 @@ def _kv(pairs, what):
 
 def score_one(python, model, cache_dir, corpus, tokens, chunk, stream_ple,
               lazy_over_gb, per_pos=None, allow_build_mismatch=False):
-    cmd = [python, "-m", "vqlab.stream_score", "--model", model,
+    cmd = [python, "-m", "vqlab.score.stream_score", "--model", model,
            "--corpus", corpus, "--tokens", str(tokens), "--chunk", str(chunk),
            "--kl-cache", cache_dir, "--lazy-over-gb", str(lazy_over_gb)]
     if per_pos:

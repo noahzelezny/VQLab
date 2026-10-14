@@ -19,6 +19,7 @@ import pathlib
 import shutil
 import sys
 
+from vqlab.core.artifacts.artifact import write_index
 from vqlab.util.geo import geo_key
 
 
@@ -100,10 +101,8 @@ def main():
             dshards[f] = nf
             linked += 1
         wm[k] = nf
-    bi["weight_map"] = wm
-    bi["metadata"]["total_size"] = sum(
-        (out / f).resolve().stat().st_size for f in set(wm.values()))
-    json.dump(bi, open(out / "model.safetensors.index.json", "w"), indent=1)
+    write_index(out, wm, metadata={k: v for k, v in bi.get("metadata", {}).items()
+                                   if k != "total_size"})
 
     cfg = json.load(open(out / "config.json"))
     dcfg = json.load(open(donor / "config.json"))
