@@ -34,6 +34,13 @@ RUFF_TARGETS = ["src", "tests", "scripts", "research/paper"]
 # Directories (any path part) that are vendored or generated: not ours to shape.
 # (pylint skips them; ruff has its own exclude list in pyproject.)
 EXCLUDE_PARTS: set[str] = set()
+# Files pylint's duplicate-code check skips. sz_resident.py is copied into a
+# skip-zero artifact and loaded by file path where vqlab is not installed, so
+# it cannot import vqlab.runtime.vq_switch; the only runtime it reaches is the
+# bundle's own model.py, which on older bundles lacks any shared helper. Its
+# copies of vq_switch's sort/inverse, kernel-template and tile-build blocks
+# are the price of running standalone.
+EXCLUDE_FILES = {"src/vqlab/skipzero/sz_resident.py"}
 MIN_SIMILARITY_LINES = 6
 
 
@@ -98,7 +105,8 @@ def ruff_counts() -> dict[str, int]:
 
 
 def duplicate_blocks() -> int:
-    ignore = ",".join(f".*/{part}/.*" for part in EXCLUDE_PARTS)
+    ignore = ",".join([f".*/{part}/.*" for part in EXCLUDE_PARTS]
+                      + [f".*/{f}" for f in EXCLUDE_FILES])
     out = _run(
         "pylint", "--disable=all", "--enable=duplicate-code",
         f"--min-similarity-lines={MIN_SIMILARITY_LINES}", "--recursive=y",
