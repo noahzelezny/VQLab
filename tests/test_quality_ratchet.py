@@ -37,10 +37,27 @@ EXCLUDE_PARTS: set[str] = set()
 MIN_SIMILARITY_LINES = 6
 
 
-def _run(*argv: str) -> str:
+def _run(*argv: str, ok: tuple[int, ...] = (0,)) -> str:
+    """Run ``python -m <tool> ...`` and return stdout.
+
+    A missing tool or a crashed run must fail loudly: empty stdout read as
+    "no hits" would report a clean tree that was never measured.
+    """
+    import importlib.util
+
+    tool = argv[0]
+    if importlib.util.find_spec(tool) is None:
+        raise AssertionError(
+            f"{tool} is not importable from {sys.executable}; install it "
+            "(it is a dev dependency) -- the ratchet cannot measure without it."
+        )
     proc = subprocess.run(
         [sys.executable, "-m", *argv], cwd=ROOT, capture_output=True, text=True, check=False
     )
+    if proc.returncode not in ok:
+        raise AssertionError(
+            f"`{tool}` exited {proc.returncode}:\n{proc.stderr.strip()[-2000:]}"
+        )
     return proc.stdout
 
 
@@ -87,6 +104,10 @@ def duplicate_blocks() -> int:
         f"--min-similarity-lines={MIN_SIMILARITY_LINES}", "--recursive=y",
         "--output-format=json", *([f"--ignore-paths={ignore}"] if ignore else []),
         str(SRC),
+        # pylint's exit code is a bit mask of message categories found
+        # (1 fatal, 2 error, 4 warning, 8 refactor, 16 convention, 32 usage
+        # error). R0801 sets 8; anything with 1 or 32 is a broken run.
+        ok=(0, 8),
     )
     return sum(1 for m in json.loads(out or "[]") if m["message-id"] == "R0801")
 
