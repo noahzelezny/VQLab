@@ -19,7 +19,7 @@ import pathlib
 import shutil
 import sys
 
-from vqlab.core.artifacts.artifact import write_index
+from vqlab.core.artifacts.artifact import tensor_bytes, write_index
 from vqlab.util.geo import geo_key
 from vqlab.util.fs import GIB, read_json, write_json
 
@@ -102,8 +102,9 @@ def main():
             dshards[f] = nf
             linked += 1
         wm[k] = nf
-    write_index(out, wm, metadata={k: v for k, v in bi.get("metadata", {}).items()
-                                   if k != "total_size"})
+    total = tensor_bytes(out, wm.values())
+    write_index(out, wm, total_size=total,
+                metadata={k: v for k, v in bi.get("metadata", {}).items() if k != "total_size"})
 
     cfg = read_json(out / "config.json")
     dcfg = read_json(donor / "config.json")
@@ -113,7 +114,7 @@ def main():
     print(f"ple-swap: {len(dkeys)} PLE keys from {donor.name} "
           f"({geo_key(g['dim'], g['k'])}, {g.get('row_bytes')} B/row) onto "
           f"{base.name}; {linked} symlinks, "
-          f"{bi['metadata']['total_size']/GIB:.2f} GiB -> {out}")
+          f"{total / GIB:.2f} GiB -> {out}")
 
 
 if __name__ == "__main__":

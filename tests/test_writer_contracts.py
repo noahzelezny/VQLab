@@ -385,13 +385,31 @@ def test_sizes_three_ways(fx, tmp_path):
     assert s["mtp_files"] == ["mtp-head-q6.safetensors"] and s["mtp_sidecar"] > 16
 
 
-@pytest.mark.parametrize("name", ["mix", "pack", "reskeleton", "geo", "fitmoe", "sz"])
+def test_ple_swap(fx):
+    """Two rungs whose PLE tables live in PLE-only shards: the swap links the
+    base's other shards and the donor's PLE shard, and takes its vq_ple."""
+    ple = "model.layers.{}.ple.ngram_embedding.codes"
+    root = fx["root"]
+    for name, n in (("ple-base", 16), ("ple-donor", 48)):
+        _art(root / name, {"model-00001.safetensors": {"model.norm.weight": np.ones(8, np.uint8)},
+                           "model-ple.safetensors": {ple.format(i): np.zeros(n, np.uint8)
+                                                     for i in range(2)}},
+             {"model_type": "qwen4_exp",
+              "vq_ple": {"geometry": {"dim": 2, "k": 256, "row_bytes": n}}})
+    out = root / "ple"
+    cli("ple-swap", "--artifact", root / "ple-base", "--donor", root / "ple-donor", "--out", out)
+    idx = json.loads((out / "model.safetensors.index.json").read_text())["weight_map"]
+    assert (out / idx[ple.format(0)]).resolve() == (root / "ple-donor" / "model-ple.safetensors").resolve()
+    assert json.loads((out / "config.json").read_text())["vq_ple"]["geometry"]["row_bytes"] == 48
+
+
+@pytest.mark.parametrize("name", ["mix", "pack", "reskeleton", "geo", "fitmoe", "sz", "ple"])
 def test_total_size_is_tensor_bytes(fx, name):
     """Every writer's index total_size is the sum of its shards' tensor bytes
     (HF's definition), measured from the output, never copied from a parent."""
     from vqlab.core.artifacts.artifact import Artifact, tensor_bytes
     d = {"mix": "mix", "pack": "packed", "reskeleton": "resk", "geo": "geo", "fitmoe": "fitmoe",
-         "sz": "sz"}[name]
+         "sz": "sz", "ple": "ple"}[name]
     out = fx["root"] / d
     if not out.exists():
         pytest.skip(f"{d} not built in this session (run the whole file)")
