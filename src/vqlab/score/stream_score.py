@@ -652,22 +652,39 @@ def main():
         C_ = max(1, int(getattr(a, "chunk", 512) or 512))
         outd = pathlib.Path(a.out or (mp.name + "_topk"))
         outd.mkdir(parents=True, exist_ok=True)
-        lp = logits - lse[:, None]
-        idx = mx.argpartition(-lp, kth=a.save_topk - 1, axis=-1)[:, : a.save_topk]
-        top = mx.take_along_axis(lp, idx, axis=-1)
-        # Captured mass = the share of the teacher's probability the stored
-        # top-k holds. KL over top-k omits the rest, so this is the number
-        # that says how much the truncation matters. kl_damage.py records it
-        # on every cache; this streamed path did not, and on 2026-09-23 it
-        # had to be reconstructed from the stored logprobs for the paper.
-        cap = mx.exp(top.astype(mx.float32)).sum(-1)
-        mx.eval(idx, top, cap)
+        # Every quantity below is per position, so it is computed C_ positions
+        # at a time: done whole, the log-probs, the top-k partition and the
+        # float32 full copy were each a [positions x vocab] array at once
+        # (12288 x 248320 on the 397B, 6-12 GB apiece) and ran a 96 GB box out
+        # of memory after the forward (2026-10-13). Row-wise, so exact.
+        idx_c, top_c, cap_c, full_c = [], [], [], []
+        for s0 in range(0, logits.shape[0], C_):
+            lp = logits[s0:s0 + C_] - lse[s0:s0 + C_, None]
+            i = mx.argpartition(-lp, kth=a.save_topk - 1, axis=-1)[:, : a.save_topk]
+            t = mx.take_along_axis(lp, i, axis=-1)
+            # Captured mass = the share of the teacher's probability the stored
+            # top-k holds. KL over top-k omits the rest, so this is the number
+            # that says how much the truncation matters. kl_damage.py records it
+            # on every cache; this streamed path did not, and on 2026-09-23 it
+            # had to be reconstructed from the stored logprobs for the paper.
+            c = mx.exp(t.astype(mx.float32)).sum(-1)
+            parts = [i.astype(mx.int32), t.astype(mx.float16), c]
+            if a.save_full:
+                parts.append(logits[s0:s0 + C_].astype(mx.float32) - lse[s0:s0 + C_, None])
+            mx.eval(*parts)
+            idx_c.append(parts[0]); top_c.append(parts[1]); cap_c.append(parts[2])
+            if a.save_full:
+                full_c.append(parts[3])
+            del lp, i, t, c, parts
+        idx, top, cap = (mx.concatenate(x, axis=0) for x in (idx_c, top_c, cap_c))
+        del idx_c, top_c, cap_c
         captured = float(cap.mean())
         mx.save_safetensors(str(outd / "teacher_topk.safetensors"),
-                            {"indices": idx[None].astype(mx.int32),
-                             "logprobs": top[None].astype(mx.float16)})
+                            {"indices": idx[None], "logprobs": top[None]})
         if a.save_full:
-            full = (logits.astype(mx.float32) - lse[:, None])[None]
+            del logits                               # the chunks hold all it is still needed for
+            full = mx.concatenate(full_c, axis=0)[None]
+            del full_c
             mx.save_safetensors(str(outd / "teacher_full.safetensors"),
                                 {"logprobs": full})
             del full
