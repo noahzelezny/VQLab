@@ -67,7 +67,7 @@ def _skipzero(family: str, teacher: str, prof: dict) -> dict | None:
         try:
             per = {str(i): recipe_queue.skipzero_gib(prof, sz, {int(i): (g.d, g.K)})
                    for i in sz["dead_rows"]}
-        except (recipe_queue.RecipeError, KeyError, TypeError, ValueError):
+        except recipe_queue.RecipeError:
             continue
         gib[geo_key(g.d, g.K)] = {i: round(v, 5) for i, v in per.items() if v}
     if not gib:
