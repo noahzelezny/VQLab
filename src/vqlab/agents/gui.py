@@ -60,7 +60,7 @@ from vqlab.agents import downloads, jobs, model_scan, teachers
 from vqlab.util.errors import UserError
 from vqlab.core.source import fit_store
 from vqlab.family import registry
-from vqlab.plan.recipe_queue import geo_key
+from vqlab.util.geo import geo_key
 from vqlab.queue import eta as queue_eta
 from vqlab.queue import files as qfiles
 from vqlab.queue import report as queue_report

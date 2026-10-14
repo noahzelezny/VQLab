@@ -26,6 +26,7 @@ from vqlab.core.source import fit_store
 from vqlab.family import registry
 from vqlab.plan import recipe_queue
 from vqlab.queue import files as qf
+from vqlab.util.geo import geo_key
 
 _PROFILING: set[str] = set()
 _PROFILE_ERRORS: dict[str, str] = {}     # realpath -> why its last profile failed
@@ -38,7 +39,7 @@ def _fits() -> dict:
     for root in fit_store.roots():
         for r in fit_store.read_index(root).values():
             g = out.setdefault((r["family"], r["teacher"]), {})
-            key = recipe_queue.geo_key(r["d"], r["K"])
+            key = geo_key(r["d"], r["K"])
             g[key] = g.get(key, 0) + 1
     return out
 
@@ -46,7 +47,7 @@ def _fits() -> dict:
 def _geometries(prof: dict) -> list[dict]:
     """Every (d, K) legal on ALL projections, with the expert stack's exact
     GiB and whether a fit can be compiled at it (plan/recipe_queue.py)."""
-    return [{"geo": recipe_queue.geo_key(g.d, g.K), "d": g.d, "K": g.K, "bpw": g.bpw,
+    return [{"geo": geo_key(g.d, g.K), "d": g.d, "K": g.K, "bpw": g.bpw,
              "gib": round(g.gib, 3), "fit": recipe_queue.has_relerr(g.d, g.K)}
             for g in recipe_queue.legal_geometries(prof)]
 
@@ -68,7 +69,7 @@ def _skipzero(family: str, teacher: str, prof: dict) -> dict | None:
                    for i in sz["dead_rows"]}
         except (recipe_queue.RecipeError, KeyError, TypeError, ValueError):
             continue
-        gib[recipe_queue.geo_key(g.d, g.K)] = {i: round(v, 5) for i, v in per.items() if v}
+        gib[geo_key(g.d, g.K)] = {i: round(v, 5) for i, v in per.items() if v}
     if not gib:
         return None
     return {"gib": gib, "source": sz.get("source"), "findings": sz.get("findings") or [],
