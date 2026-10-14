@@ -71,6 +71,7 @@ from vqlab.fit.kmeans import (
 
 from vqlab.util.fs import GIB, read_json, write_json
 from vqlab.core.artifacts.artifact import Artifact, write_index
+from vqlab.util.hashing import sha256_file
 
 GSZ = 64
 CHUNK = 1 << 18
@@ -447,7 +448,7 @@ def main():
             if os.path.exists(op):
                 src_orig = read_json(op).get(os.path.basename(f), {})
             _note(want, {"origin": "reuse", "from": os.path.realpath(f),
-                         "sha256": provenance._sha(f), "source_origin": src_orig})
+                         "sha256": sha256_file(f), "source_origin": src_orig})
             reused += 1
     for fn, why in rejected[:10]:
         _log(f"  REJECTED reuse {fn}: {why}")
@@ -490,7 +491,7 @@ def main():
                "commit": provenance.code_state()["commit"],
                "fitter": _method(a), "tail_pow": P,
                "run_id": os.environ.get("VQLAB_RUN_ID"),
-               "sha256": provenance._sha(part)}
+               "sha256": sha256_file(part)}
         _note(os.path.basename(part), rec)
         # File it in the fit store the moment it exists: a fit is the
         # expensive thing, and the store is what makes it findable later.

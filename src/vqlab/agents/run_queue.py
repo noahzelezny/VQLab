@@ -21,7 +21,7 @@ from vqlab.gate import pin as pinmod  # noqa: F401
 from vqlab.queue import eta as queue_eta  # noqa: F401
 from vqlab.queue import reserve as resv  # noqa: F401
 from vqlab.records import step_verdict as sv  # noqa: F401
-from vqlab.queue.files import (REPO, SCHEMA, _now, _slug, create, installed,  # noqa: F401
+from vqlab.queue.files import (REPO, SCHEMA, create, installed,  # noqa: F401
                                latest as _latest, package_hash as _package_hash,
                                git as _git, queues_dir, save_state as _save)
 from vqlab.queue.remote import (_REMOTE_PROBE, _mount, remote_check, remote_paths,  # noqa: F401
@@ -32,6 +32,8 @@ from vqlab.queue.runner import run_step as _run_step  # noqa: F401
 from vqlab.queue.steps import (OUT_FLAGS, PREFLIGHT_MARGIN, SCORING, _NAMED,  # noqa: F401
                                _PATHLIKE, pin_check, static_check, validate)
 from vqlab.config import preflight_dir as preflight_root  # noqa: F401
+from vqlab.util.clock import now_iso as _now  # noqa: F401
+from vqlab.util.clock import slug as _slug  # noqa: F401
 from vqlab.queue.steps import argv as _argv  # noqa: F401
 from vqlab.queue.steps import env as _env  # noqa: F401
 from vqlab.queue.steps import input_bytes as _input_bytes  # noqa: F401

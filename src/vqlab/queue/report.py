@@ -12,7 +12,8 @@ import time
 from vqlab import config
 from vqlab.core.box.gpu_lease import pid_alive, pid_cmdline
 from vqlab.queue import eta as queue_eta
-from vqlab.queue.files import _now, latest, load_state, queue_dirs, queues_dir
+from vqlab.queue.files import latest, load_state, queue_dirs, queues_dir
+from vqlab.util.clock import now_iso
 
 TERMINAL = ("passed", "failed", "stopped", "deferred")
 
@@ -115,7 +116,7 @@ def wait(qdirs, timeout=None, poll=15.0) -> int:
             st = states[q] = live_status(q, s)
             if seen.get(q) != st:
                 n = sum(r["status"] == "pass" for r in s["steps"])
-                print(f"{_now()}  {q.name}: {st} ({n}/{len(s['steps'])} passed)", flush=True)
+                print(f"{now_iso()}  {q.name}: {st} ({n}/{len(s['steps'])} passed)", flush=True)
                 seen[q] = st
         if all(v in TERMINAL + ("died",) for v in states.values()):
             return 0 if all(v == "passed" for v in states.values()) else 4

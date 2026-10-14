@@ -13,6 +13,7 @@ import mlx.core as mx
 from vqlab._layout import find as _find
 from vqlab.selftest import check, run
 from vqlab.util.fs import read_json, write_json
+from vqlab.util.hashing import sha256_file
 
 
 def check_outlier_gate(ctx):
@@ -92,7 +93,7 @@ def _check_pin(ctx):
     check("pin: never overwrites an existing directory", refused_overwrite)
     (pout / "model.py").write_text("# rebundled after the smoke\n")
     check("pin: model.py changed after pinning -> refused", not P.check_pin(pout)[0])
-    prec["state"], prec["model_py_sha256"] = "failed", P._sha(pout / "model.py")
+    prec["state"], prec["model_py_sha256"] = "failed", sha256_file(pout / "model.py")
     (pout / P.MARKER).write_text(json.dumps(prec))
     check("pin: failed smoke -> refused", not P.check_pin(pout)[0])
     check("pin: an unpinned directory is allowed unchanged", P.check_pin(psrc) == (True, ""))

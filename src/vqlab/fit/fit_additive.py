@@ -45,6 +45,7 @@ from vqlab.fit import geo_build as gb  # reuse the helpers; never copy them
 from vqlab.fit.geo_build import GSZ, NFITG, ITERS_LLOYD, _assign, _kmeanspp, _lloyd, pack
 from vqlab.util.fs import GIB, read_json, write_json
 from vqlab.core.artifacts.artifact import Artifact
+from vqlab.util.hashing import sha256_file
 
 ROUNDS = 8          # alternation rounds (joint assign -> scale -> C1 -> C2)
 BEAM = 8            # C1 candidates searched per subvector in the joint assign
@@ -209,7 +210,7 @@ def main():
                "commit": gb.provenance.code_state()["commit"],
                "fitter": rec_method, "tail_pow": 0.0,
                "run_id": os.environ.get("VQLAB_RUN_ID"),
-               "sha256": gb.provenance._sha(part)}
+               "sha256": sha256_file(part)}
         origins[os.path.basename(part)] = rec
         write_json(op, origins, indent=1)
         if not a.no_store:

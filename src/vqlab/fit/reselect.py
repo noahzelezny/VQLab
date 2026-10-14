@@ -120,7 +120,6 @@ def _require_storage(p):
     config.require_storage(p)
 
 
-_sha256 = sha256_file
 
 
 def _fname(module):
@@ -297,7 +296,7 @@ def cmd_calibrate(a):
                             {"gram": grams[n] / counts[n]},
                             metadata={"module": n, "rows": str(counts[n])})
     plan.update(seeds_used=used, rows=counts, modules=sorted(grams),
-                tokens_sha256=_sha256(os.path.join(a.out, "tokens.npy")),
+                tokens_sha256=sha256_file(os.path.join(a.out, "tokens.npy")),
                 created=time.strftime("%Y-%m-%dT%H:%M:%S"),
                 code=provenance.code_state(__file__))
     write_json(os.path.join(a.out, MANIFEST), plan, indent=1)
@@ -386,7 +385,7 @@ def cmd_apply(a):
     man_path = os.path.join(a.grams, MANIFEST)
     man = read_json(man_path)
     assert man.get("schema") == SCHEMA, man.get("schema")
-    man_sha = _sha256(man_path)
+    man_sha = sha256_file(man_path)
 
     cfg = read_json(os.path.join(a.artifact, "config.json"))
     vqm = cfg.get("vq_modules") or cfg.get("text_config", {}).get("vq_modules")

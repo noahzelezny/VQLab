@@ -80,10 +80,6 @@ REPO = _layout.SRC.parent
 
 
 # ---------------------------------------------------------------- hashing
-# One implementation in vqlab.util.hashing; `_sha` is kept for its callers.
-_sha = sha256_file
-
-
 def file_record(p: pathlib.Path, full=True):
     """bytes + hash; symlinks record their target and are head-hashed (they
     are carried-over bytes whose own record is the parent's)."""
@@ -94,9 +90,9 @@ def file_record(p: pathlib.Path, full=True):
         rec["symlink_to"] = str(rp)
         full = False
     if full and n <= FULL_MAX:
-        rec["sha256"] = _sha(rp)
+        rec["sha256"] = sha256_file(rp)
     else:
-        rec["head_sha256"] = _sha(rp, HEAD)
+        rec["head_sha256"] = sha256_file(rp, HEAD)
     return rec
 
 
@@ -141,7 +137,7 @@ def code_state(script=None) -> dict:
            "version": _version()}
     if script:
         out["script"] = os.path.basename(script)
-        out["script_sha256"] = _sha(script)
+        out["script_sha256"] = sha256_file(script)
     return out
 
 
@@ -177,7 +173,7 @@ def shard_fingerprint(d) -> str:
     d = pathlib.Path(d)
     shards = sorted(d.glob("*.safetensors"))
     return hashlib.sha256(json.dumps(
-        {f.name: [os.path.getsize(os.path.realpath(f)), _sha(os.path.realpath(f), HEAD)]
+        {f.name: [os.path.getsize(os.path.realpath(f)), sha256_file(os.path.realpath(f), HEAD)]
          for f in shards}, sort_keys=True).encode()).hexdigest()[:16]
 
 
@@ -227,7 +223,7 @@ def runtime_state(art: pathlib.Path):
         profile, flags = rpf.profile_of(txt), rpf.flags_of(txt)
     except Exception:
         profile, flags = None, {}
-    return {"model_py_sha256": _sha(mp), "model_py_md5": _sha(mp, algo="md5"),
+    return {"model_py_sha256": sha256_file(mp), "model_py_md5": sha256_file(mp, algo="md5"),
             "profile": profile or "custom", "flags": flags}
 
 
@@ -484,9 +480,9 @@ def verify(art, rec) -> list:
         rp = pathlib.Path(os.path.realpath(f))
         if rp.stat().st_size != want["bytes"]:
             bad.append((name, f"bytes {rp.stat().st_size} != {want['bytes']}"))
-        elif "sha256" in want and _sha(rp) != want["sha256"]:
+        elif "sha256" in want and sha256_file(rp) != want["sha256"]:
             bad.append((name, "sha256 differs"))
-        elif "head_sha256" in want and _sha(rp, HEAD) != want["head_sha256"]:
+        elif "head_sha256" in want and sha256_file(rp, HEAD) != want["head_sha256"]:
             bad.append((name, "head sha256 differs"))
     return bad
 

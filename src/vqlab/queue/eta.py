@@ -151,7 +151,7 @@ def queue_eta(qdir: pathlib.Path, qroot: pathlib.Path, now: float | None = None)
         q = {"steps": [{"name": r["name"]} for r in s["steps"]]}
     steps, total, past = [], 0.0, past_runs(qroot, exclude=qdir)
     for i, (st, rec) in enumerate(zip(q["steps"], s["steps"])):
-        e = step_eta(st, rec, qdir / "steps" / f"{i:02d}-{_slug(st.get('name', ''))}", qroot, qdir, now,
+        e = step_eta(st, rec, qdir / "steps" / f"{i:02d}-{slug(st.get('name', ''))}", qroot, qdir, now,
                      past)
         steps.append(e)
         if rec.get("status") in ("running", "pending"):
@@ -160,9 +160,6 @@ def queue_eta(qdir: pathlib.Path, qroot: pathlib.Path, now: float | None = None)
     return {"steps": steps, "eta_s": round(total) if open_ and total is not None else None,
             "finish": (dt.datetime.fromtimestamp(now + total).astimezone().isoformat(timespec="minutes")
                        if open_ and total is not None else None)}
-
-
-_slug = slug
 
 
 def fmt(eta_s) -> str:

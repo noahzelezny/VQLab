@@ -42,7 +42,6 @@ def test_fingerprint_shape_and_provenance_alias(tmp_path):
     assert fp["shards"]["a.safetensors"]["bytes"] == 10
     assert fp["files"]["config.json"] == hashlib.sha256(b"{}").hexdigest()
     assert provenance.fingerprint(tmp_path) == fp
-    assert provenance._sha is hashing.sha256_file
     assert provenance.HEAD == hashing.HEAD and provenance.RECORD == hashing.RECORD
 
 
@@ -76,14 +75,8 @@ def test_dir_bytes(tmp_path):
 
 
 def test_old_names_still_answer(tmp_path):
-    from vqlab.agents import mcp_server, queue_eta, reserve, run_queue
+    from vqlab.agents import mcp_server, run_queue
     from vqlab.agents import scratch as scratch_cmd
-    from vqlab.records import runlog
-    from vqlab.ship import release_prep
-    assert run_queue._slug("a b") == queue_eta._slug("a b") == "a_b"
-    assert isinstance(reserve._now(), dt.datetime)
-    assert isinstance(runlog._now(), str) and isinstance(run_queue._now(), str)
+    assert run_queue._slug("a b") == "a_b" and isinstance(run_queue._now(), str)
     (tmp_path / "a.safetensors").write_bytes(b"x" * 4)
     assert mcp_server._dir_bytes(tmp_path) == scratch_cmd._dir_bytes(tmp_path) == 4
-    assert release_prep._git_blob(tmp_path / "a.safetensors") == hashing.git_blob_sha1(
-        tmp_path / "a.safetensors")

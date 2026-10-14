@@ -24,10 +24,6 @@ from vqlab.util.fs import write_json_atomic
 REPO = _layout.SRC.parent
 SCHEMA = "vqlab.queue/1"          # data written into every state.json; never rename
 
-_now = now_iso
-_slug = slug
-
-
 def queues_dir() -> pathlib.Path:
     return _config.queues_dir()
 
@@ -115,7 +111,7 @@ def _new_qdir(q, qfile, preflight) -> pathlib.Path:
 def _new_state(q, qfile, preflight, **pin) -> dict:
     return {"schema": SCHEMA, "name": q.get("name"), "source": str(pathlib.Path(qfile).resolve()),
             **pin, "host": _config.short_host(), "preflight": preflight,
-            "created": _now(), "status": "created", "queue_run_id": None,
+            "created": now_iso(), "status": "created", "queue_run_id": None,
             "steps": [{"name": st["name"], "status": "pending"} for st in q["steps"]]}
 
 

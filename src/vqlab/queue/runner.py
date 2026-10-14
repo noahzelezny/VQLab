@@ -96,11 +96,11 @@ from vqlab.core.box import gpu_lease
 from vqlab.queue import report
 from vqlab.queue import reserve as resv
 from vqlab.queue import steps as _steps
-from vqlab.queue.files import (REPO, _now, cli_launch, create, git, load_queue, load_state,
+from vqlab.queue.files import (REPO, cli_launch, create, git, load_queue, load_state,
                                package_hash, save_state)
 from vqlab.queue.remote import run_on
 from vqlab.records import step_verdict as sv
-from vqlab.util.clock import slug
+from vqlab.util.clock import now_iso, slug
 
 _stop = {"flag": False, "proc": None}
 
@@ -169,7 +169,7 @@ def _attempts(st, rec, sdir, state, argv, expect, retries) -> dict:
         for f in ("stdout", "stderr"):
             if (sdir / f).exists():
                 (sdir / f).rename(sdir / f"{f}.attempt{attempt - 1}")
-        rec.update(status="running", attempt=attempt, started=rec.get("started") or _now())
+        rec.update(status="running", attempt=attempt, started=rec.get("started") or now_iso())
         save_state(pathlib.Path(state["qdir"]), state)
         t0 = time.time()
         rc = _spawn(argv, tree, env, sdir, st.get("timeout_s"), rec)
@@ -241,7 +241,7 @@ def _drain(qdir, q, state, todo, preflight, force) -> bool:
         v = run_step(q, st, rec, sdir, state, preflight, force, outmap)
         (sdir / "verdict.json").write_text(json.dumps(v, indent=1))
         status = {"pass": "pass"}.get(v["verdict"], v["verdict"])
-        rec.update(status=status, finished=_now(), rc=v.get("rc"),
+        rec.update(status=status, finished=now_iso(), rc=v.get("rc"),
                    seconds=v.get("seconds"), attempts=v.get("attempt"),
                    reasons=v.get("reasons", []), warnings=v.get("warnings", []))
         rec.pop("pid", None)
@@ -299,7 +299,7 @@ def run(qdir: pathlib.Path, force=False, lease_wait=1800, keep_preflight=False) 
             save_state(qdir, state)
             print(f"deferred: the GPU lease ({gpu_lease.lease_path()}) stayed held for {lease_wait} s")
             return 3
-    state.update(status="running", started=state.get("started") or _now(),
+    state.update(status="running", started=state.get("started") or now_iso(),
                  queue_run_id=os.environ.get("VQLAB_RUN_ID"), pid=os.getpid())
     save_state(qdir, state)
     print(f"queue {state['name']} @ {state['commit'][:10]}  ({qdir})"
@@ -311,7 +311,7 @@ def run(qdir: pathlib.Path, force=False, lease_wait=1800, keep_preflight=False) 
             gpu_lease.release_lease(fd)
     done = all(r["status"] in ("pass", "skipped") for r in state["steps"])
     state.update(status="stopped" if _stop["flag"] else ("passed" if done else "failed"),
-                 finished=_now())
+                 finished=now_iso())
     state.pop("pid", None)
     save_state(qdir, state)
     _tidy(qdir, state, done, preflight, keep_preflight)
@@ -355,7 +355,7 @@ def _parser() -> argparse.ArgumentParser:
 def _record_override(qdir, held):
     state = load_state(qdir)
     state["reservation_override"] = {**{k: held.get(k) for k in ("box", "for", "until", "note", "by")},
-                                     "overridden_by": resv.who(), "at": _now()}
+                                     "overridden_by": resv.who(), "at": now_iso()}
     save_state(qdir, state)
     print(f"overriding: {resv.describe(held)}", flush=True)
 

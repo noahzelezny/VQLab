@@ -16,6 +16,7 @@ from vqlab.records import provenance
 from vqlab.ship import card_tables
 from vqlab.util.fs import read_json
 from vqlab.core.artifacts.artifact import Artifact
+from vqlab.util.hashing import sha256_file
 
 
 class Refuse(SystemExit):
@@ -68,7 +69,7 @@ def _fp(files) -> str:
     import hashlib
     import os
     return hashlib.sha256(json.dumps(
-        {f.name: [os.path.getsize(os.path.realpath(f)), provenance._sha(os.path.realpath(f),
+        {f.name: [os.path.getsize(os.path.realpath(f)), sha256_file(os.path.realpath(f),
                                                                        provenance.HEAD)]
          for f in files}, sort_keys=True).encode()).hexdigest()[:16]
 

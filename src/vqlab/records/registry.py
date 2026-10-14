@@ -40,6 +40,7 @@ from vqlab.runtime import runtime_profile
 from vqlab import config as _config
 from vqlab.util.fs import GIB, read_jsonl
 from vqlab.util.geo import geo_key
+from vqlab.util.hashing import sha256_file
 
 REG = _config.registry_dir() / "artifacts.jsonl"   # <records>/registry (vqlab.config)
 HUB = _config.registry_dir() / "hub.jsonl"         # latest Hub comparison per repo
@@ -153,7 +154,7 @@ def hub_diff(art: pathlib.Path, repo: str, deep=False):
         if r.lfs:
             same = os.path.getsize(lp) == r.lfs.size
             if same and deep:
-                same = provenance._sha(lp) == r.lfs.sha256
+                same = sha256_file(lp) == r.lfs.sha256
             elif same:
                 note = "size only (--deep hashes)"
         else:

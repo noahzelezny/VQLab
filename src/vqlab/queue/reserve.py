@@ -37,7 +37,7 @@ import re
 import sys
 
 from vqlab import config
-from vqlab.util.clock import now
+from vqlab.util import clock
 from vqlab.util.fs import write_json_atomic
 
 FILE = "vqlab-reservations.json"
@@ -66,13 +66,10 @@ def _box(name: str) -> str:
     return here() if name in (None, "", "here") else name
 
 
-_now = now
-
-
 def parse_until(s: str, now: dt.datetime | None = None) -> dt.datetime:
     """'+3h', '+90m', '+2h30m', '+1d' | 'HH:MM' (local; tomorrow if already
     past) | an ISO time (local if it has no zone). Returns aware UTC."""
-    now = now or _now()
+    now = now or clock.now()
     s = s.strip()
     if s.startswith("+"):
         parts = re.findall(r"(\d+(?:\.\d+)?)([dhm])", s[1:])
@@ -104,7 +101,7 @@ def _read(p: pathlib.Path) -> list:
 
 
 def _active(rs: list, now: dt.datetime | None = None) -> list:
-    now = now or _now()
+    now = now or clock.now()
     out = []
     for r in rs:
         try:
@@ -172,7 +169,7 @@ def _write(p: pathlib.Path, rs: list) -> None:
 def reserve(box: str, for_: str, until: str, note: str = "", force: bool = False) -> dict:
     box = _box(box)
     t = parse_until(until)
-    if t <= _now():
+    if t <= clock.now():
         raise SystemExit(f"--until {until} is in the past")
     cur = get(box)
     if cur and cur.get("for") != for_ and not force:
@@ -181,7 +178,7 @@ def reserve(box: str, for_: str, until: str, note: str = "", force: bool = False
                          + "; --force to replace it, or ask them")
     p, shared = _writable_store()
     rec = {"box": box, "for": for_, "until": t.isoformat(timespec="seconds"),
-           "note": note, "by": f"{who()}@{config.short_host()}", "created": _now().isoformat(timespec="seconds")}
+           "note": note, "by": f"{who()}@{config.short_host()}", "created": clock.now().isoformat(timespec="seconds")}
     with _locked(p):
         rs = [r for r in _active(_read(p)) if r.get("box") != box] + [rec]
         _write(p, rs)
@@ -209,7 +206,7 @@ def release(box: str) -> list:
 
 def _fmt(iso: str) -> str:
     t = dt.datetime.fromisoformat(iso).astimezone()
-    left = (t - _now()).total_seconds()
+    left = (t - clock.now()).total_seconds()
     return f"{t:%Y-%m-%d %H:%M %Z} (in {_dur(left)})"
 
 

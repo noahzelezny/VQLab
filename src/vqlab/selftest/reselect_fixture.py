@@ -18,6 +18,7 @@ from vqlab.fit import reselect as R
 from vqlab.records import provenance
 from vqlab.runtime import vq_pack
 from vqlab.util.fs import write_json
+from vqlab.util.hashing import sha256_file
 
 
 def run(root=None):
@@ -66,15 +67,15 @@ def run(root=None):
     mx.save_safetensors(os.path.join(bank, "grams", R._fname(name)), {"gram": mx.array(G)})
     write_json(os.path.join(bank, R.MANIFEST), {"schema": R.SCHEMA, "modules": [name], "seed": 1234, "tokens": 0,
                "model": "synthetic"})
-    base_before = R._sha256(os.path.join(art, "model.safetensors"))
+    base_before = sha256_file(os.path.join(art, "model.safetensors"))
     out = os.path.join(root, "out")
     rc = R.main(["apply", "--artifact", art, "--grams", bank, "--target", tgt,
                "--out", out, "--device", "cpu"])
     assert rc == 0
-    assert R._sha256(os.path.join(art, "model.safetensors")) == base_before, "base edited"
+    assert sha256_file(os.path.join(art, "model.safetensors")) == base_before, "base edited"
     rec = provenance.load(out)
     assert rec["tool"]["name"] == "reselect"
-    assert rec["method"]["calibration_manifest_sha256"] == R._sha256(os.path.join(bank, R.MANIFEST))
+    assert rec["method"]["calibration_manifest_sha256"] == sha256_file(os.path.join(bank, R.MANIFEST))
     r = rec["modules"][name]
     assert r["J_train_new"] <= r["J_train_base_codes"] and r["J_train_gain"] > 0.01, r
     got = vq_pack.unpack(np.array(mx.load(os.path.join(out, "model.safetensors"))[name + ".codes"]),

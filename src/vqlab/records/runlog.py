@@ -41,9 +41,6 @@ def _append(rec) -> None:
         os.close(fd)
 
 
-_now = now_iso
-
-
 def start(cmd, argv):
     # Every invocation gets its OWN id. A nested vqlab call (a tool running
     # another tool, or selftest driving the CLI) inherits the caller's id in
@@ -56,7 +53,7 @@ def start(cmd, argv):
     try:
         from vqlab.records import provenance
         rec = {"event": "start", "run_id": run_id, "parent_run_id": parent,
-               "time": _now(), "cmd": cmd,
+               "time": now_iso(), "cmd": cmd,
                "argv": list(argv), "cwd": os.getcwd(), "pid": os.getpid(),
                "code": provenance.code_state(), "env": provenance.env_state()}
         rec["code"].pop("repo", None)
@@ -68,7 +65,7 @@ def start(cmd, argv):
 
 def end(run_id, rc):
     try:
-        _append({"event": "end", "run_id": run_id, "time": _now(), "rc": rc,
+        _append({"event": "end", "run_id": run_id, "time": now_iso(), "rc": rc,
                  "seconds": round(time.time() - _T0.pop(run_id, time.time()), 1)})
     except Exception:
         pass
