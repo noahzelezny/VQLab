@@ -47,7 +47,7 @@ dependencies = [
 score = ["transformers>=4.57"]
 # the image smoke (vision-smoke, check-release on an artifact with a tower)
 vision = ["mlx-vlm>=0.5", "transformers>=4.57", "pillow"]
-test = ["pytest", "ruff", "pylint", "build"]
+test = ["pytest", "ruff>=0.16,<0.17", "pylint", "build"]
 
 [project.urls]
 Homepage = "https://github.com/noahzelezny/VQLab"
