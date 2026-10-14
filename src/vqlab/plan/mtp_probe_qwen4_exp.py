@@ -32,6 +32,7 @@ import pathlib
 import mlx.core as mx
 
 from vqlab.family import model_loader as runtime_load
+from vqlab.mtp.graft import check_graft_slots, graft_layer_weights
 
 
 def report_norm_convention(g):
@@ -134,7 +135,6 @@ def main():
 
     # ---- shared setup ---------------------------------------------------
     import importlib
-    from mlx.utils import tree_flatten
     arch = importlib.import_module(type(core).__module__)
     args_t = core.args
     mtp_theta = getattr(args_t, "mtp", {}) or {}
@@ -173,28 +173,8 @@ def main():
         # graft keys are upstream-format: apply the same expert mapping the
         # model's sanitize applies to main layers (gate_up split, switch_mlp
         # rename), then FAIL LOUDLY on any key that finds no parameter slot.
-        layer_w = {}
-        for k, v in g.items():
-            if not k.startswith("layers.0."):
-                continue
-            k = k[len("layers.0."):]
-            if k.endswith("mlp.experts.gate_up_proj"):
-                mid = v.shape[-2] // 2
-                layer_w["mlp.switch_mlp.gate_proj.weight"] = v[..., :mid, :]
-                layer_w["mlp.switch_mlp.up_proj.weight"] = v[..., mid:, :]
-            elif k.endswith("mlp.experts.down_proj"):
-                layer_w["mlp.switch_mlp.down_proj.weight"] = v
-            else:
-                layer_w[k] = v
-        slots = {k for k, _ in tree_flatten(mblk.parameters())}
-        unmatched = sorted(set(layer_w) - slots)
-        if unmatched:
-            raise SystemExit(f"FAIL: {len(unmatched)} graft keys found no "
-                             f"parameter slot, e.g. {unmatched[:4]}")
-        missing = sorted(slots - set(layer_w))
-        if missing:
-            print(f"note: {len(missing)} module params not in graft (left "
-                  f"init), e.g. {missing[:4]}", flush=True)
+        layer_w = graft_layer_weights(g)
+        check_graft_slots(layer_w, mblk)
         mblk.load_weights(list(layer_w.items()), strict=False)
         mmixer = mmixer_cls(args_t, use_combine=False)
         mmixer.load_weights([(k[len("hyper_connection_mixer."):], v)

@@ -41,6 +41,8 @@ import mlx.core as mx
 import mlx.nn as nn
 from mlx.utils import tree_flatten, tree_unflatten
 
+from vqlab.mtp.graft import read_sidecar
+
 _GLUE = ("eh_proj", "enorm", "hnorm", "shared_head")
 
 
@@ -193,11 +195,8 @@ class MTPHeadGlm5:
 
     @classmethod
     def from_sidecar(cls, model, arch, path):
-        w = mx.load(str(path))
-        meta = mx.load(str(path), return_metadata=True)[1]
-        cfg = json.loads(meta.get("vqlab_mtp", "{}"))
+        w, cfg, bits, gs = read_sidecar(path)
         head = cls(model, arch)
-        bits, gs = cfg.get("bits"), cfg.get("group_size", 32)
         if bits:
             # Replay the exact quantization recipe before filling, or the
             # packed shapes will not line up (same trap as the qwen heads).

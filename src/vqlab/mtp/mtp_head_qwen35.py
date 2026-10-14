@@ -60,6 +60,8 @@ import mlx.core as mx
 import mlx.nn as nn
 from mlx.utils import tree_flatten, tree_unflatten
 
+from vqlab.mtp.graft import check_graft_slots, graft_layer_weights, read_sidecar
+
 SIDECAR_NAME = "mtp-head-q6.safetensors"
 
 # The MoE expert stack dominates the head's weight; the router and the
@@ -142,23 +144,8 @@ class MTPHeadQwen35:
         tensor per expert per projection (512 x 3 = 1536 tensors), where the
         trunk stores them fused; stack them into the SwitchGLU layout."""
         shift = self.norm_shift
-        layer_w = {}
         experts = {}
-        for k, v in g.items():
-            if not k.startswith("layers.0."):
-                continue
-            k = k[len("layers.0."):]
-            if k.endswith("mlp.experts.gate_up_proj"):        # fused variant
-                mid = v.shape[-2] // 2
-                layer_w["mlp.switch_mlp.gate_proj.weight"] = v[..., :mid, :]
-                layer_w["mlp.switch_mlp.up_proj.weight"] = v[..., mid:, :]
-            elif k.endswith("mlp.experts.down_proj"):
-                layer_w["mlp.switch_mlp.down_proj.weight"] = v
-            elif k.startswith("mlp.experts."):                # unfused variant
-                _, _, idx, proj, _ = k.split(".", 4)
-                experts.setdefault(proj, {})[int(idx)] = v
-            else:
-                layer_w[k] = v
+        layer_w = graft_layer_weights(g, experts)
         for proj, byidx in experts.items():
             n = max(byidx) + 1
             if len(byidx) != n:
@@ -171,15 +158,7 @@ class MTPHeadQwen35:
             if shift and any(("layers.0." + k).endswith(s) for s in _NORM_KEYS):
                 layer_w[k] = layer_w[k].astype(mx.float32) + shift
 
-        slots = {k for k, _ in tree_flatten(self.block.parameters())}
-        unmatched = sorted(set(layer_w) - slots)
-        if unmatched:
-            raise SystemExit(f"FAIL: {len(unmatched)} graft keys found no "
-                             f"parameter slot, e.g. {unmatched[:4]}")
-        missing = sorted(slots - set(layer_w))
-        if missing:
-            print(f"note: {len(missing)} module params not in graft (left "
-                  f"init), e.g. {missing[:4]}", flush=True)
+        check_graft_slots(layer_w, self.block)
         self.block.load_weights(list(layer_w.items()), strict=False)
 
         self.norm_e = self._norm(g["pre_fc_norm_embedding.weight"], shift)
@@ -224,14 +203,11 @@ class MTPHeadQwen35:
 
     @classmethod
     def from_sidecar(cls, model, arch, path):
-        w = mx.load(str(path))
-        meta = mx.load(str(path), return_metadata=True)[1]
-        cfg = json.loads(meta.get("vqlab_mtp", "{}"))
+        w, cfg, bits, gs = read_sidecar(path)
         head = cls(model, arch,
                    fc_order=cfg.get("fc_order", "eh"),
                    h_source=cfg.get("h_source", "pre_norm"),
                    norm_shift=cfg.get("norm_shift", 1.0))
-        bits, gs = cfg.get("bits"), cfg.get("group_size", 32)
         if bits:
             # Replay the recipe exactly: a mixed-bit sidecar rebuilt as
             # uniform gives every expert tensor the wrong packed shape.

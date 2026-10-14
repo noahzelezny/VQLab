@@ -26,6 +26,7 @@ Tokens. The MTP TOOLS live in the stage folders like every other tool:
 - `caches.py`: snapshot and rollback of the KV caches for one speculative step
 - `capture.py`: per-family capture of the pre-lm_head activation
 - `cli_common.py`: CLI plumbing shared by mtp-generate and mtp-bench
+- `graft.py`: graft key mapping, the slot check and the sidecar read shared by the heads and the probes
 - `loop.py`: the draft/verify loop: `mtp_generate`, `mtp_stream_generate`
 - `mtp_head.py`: the qwen4_exp MTP head: build, quantize, save, load
 - `mtp_head_glm5.py`: the glm5_next MTP head

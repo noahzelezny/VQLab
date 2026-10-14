@@ -31,6 +31,8 @@ import mlx.nn as nn
 from mlx_lm.models.base import create_attention_mask
 from mlx.utils import tree_flatten, tree_unflatten
 
+from vqlab.mtp.graft import check_graft_slots, graft_layer_weights, read_sidecar
+
 SIDECAR_NAME = "mtp-head-q6.safetensors"
 
 
@@ -105,26 +107,10 @@ class MTPHead:
 
     def load_graft(self, g):
         """Fill from an upstream bf16 `mtp.*` graft (keys already stripped)."""
-        layer_w = {}
-        for k, v in g.items():
-            if not k.startswith("layers.0."):
-                continue
-            k = k[len("layers.0."):]
-            # Upstream stacks the experts fused; apply the same split the
-            # model's own sanitize applies to trunk layers.
-            if k.endswith("mlp.experts.gate_up_proj"):
-                mid = v.shape[-2] // 2
-                layer_w["mlp.switch_mlp.gate_proj.weight"] = v[..., :mid, :]
-                layer_w["mlp.switch_mlp.up_proj.weight"] = v[..., mid:, :]
-            elif k.endswith("mlp.experts.down_proj"):
-                layer_w["mlp.switch_mlp.down_proj.weight"] = v
-            else:
-                layer_w[k] = v
-        slots = {k for k, _ in tree_flatten(self.block.parameters())}
-        unmatched = sorted(set(layer_w) - slots)
-        if unmatched:
-            raise SystemExit(f"FAIL: {len(unmatched)} graft keys found no "
-                             f"parameter slot, e.g. {unmatched[:4]}")
+        # Upstream stacks the experts fused; apply the same split the
+        # model's own sanitize applies to trunk layers.
+        layer_w = graft_layer_weights(g)
+        check_graft_slots(layer_w, self.block, note_missing=False)
         self.block.load_weights(list(layer_w.items()), strict=False)
         self.mixer.load_weights(
             [(k[len("hyper_connection_mixer."):], v) for k, v in g.items()
@@ -170,11 +156,8 @@ class MTPHead:
 
     @classmethod
     def from_sidecar(cls, model, arch, path):
-        w = mx.load(str(path))
-        meta = mx.load(str(path), return_metadata=True)[1]
-        cfg = json.loads(meta.get("vqlab_mtp", "{}"))
+        w, cfg, bits, gs = read_sidecar(path)
         head = cls(model, arch)
-        bits, gs = cfg.get("bits"), cfg.get("group_size", 32)
         if bits:
             # Build the quantized module shape first, then fill it. The recipe
             # must be replayed exactly -- a mixed-bit sidecar loaded as uniform
