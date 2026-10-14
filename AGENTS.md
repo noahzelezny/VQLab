@@ -306,3 +306,19 @@ Overnight/multi-hour work needs `nohup ... & disown` plus per-module
 checkpoints — a chain tied to the session dies with it. Geometry refits crash
 on GPU timeouts under disk contention; wrap them in a retry supervisor that
 resumes from checkpoints.
+
+## Code quality ratchets (`tests/test_quality_ratchet.py`)
+
+Two numbers only go down, measured against `tests/quality_baseline.json`:
+the ruff hit count per rule (the rules listed under
+`[tool.ruff.lint.extend-per-file-ignores]` in `pyproject.toml`, so that
+`ruff check` on the tree stays green) and the pylint `duplicate-code` block
+count across `src/vqlab`.
+`src/vqlab/runtime/**` is spliced verbatim into bundles, so only pyflakes and
+syntax errors gate it; everything else gets the full rule set.
+
+- Before writing a helper, grep `src/vqlab` for it; widen the one that exists.
+- Touching a file: clear its hits for the rules you can see.
+- Lowered a count? `python tests/test_quality_ratchet.py --write-baseline` in
+  the same commit. It refuses to raise anything; never add to a baseline or an
+  ignore list to get green.
