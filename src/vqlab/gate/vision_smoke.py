@@ -33,14 +33,20 @@ are not a deterministic instrument and III.11 does not need them to be.
     vqlab vision-smoke <artifact> --knurlogic [fit|here|peers|all|<page machine name>] [--knurlogic-split pipeline]
 """
 import argparse
+import base64
+import contextlib
 import importlib.util
 import json
 import os
 import pathlib
 import sys
 import tempfile
+import time
+import urllib.request
 
 from vqlab.core.artifacts.artifact import INDEX, Artifact, tensor_class
+from vqlab.core.box import knurlogic_client
+from vqlab.plan import preflight_ram
 
 
 # A synthetic probe beats a checked-in JPEG: no binary in the repo, no license
@@ -57,6 +63,16 @@ def _probe_image(path):
     return path
 
 
+@contextlib.contextmanager
+def _probe(a):
+    """The probe image: --image, else a generated one in a temporary
+    directory that is removed when the arm is done with it."""
+    if a.image:
+        yield a.image
+        return
+    with tempfile.TemporaryDirectory(prefix="vision-probe-") as d:
+        yield _probe_image(pathlib.Path(d) / "probe.png")
+
 
 def _image_request_check(post, mid, img, max_tokens, extra=None):
     """The HTTP image arm shared by --cluster (exo) and --knurlogic.
@@ -67,7 +83,6 @@ def _image_request_check(post, mid, img, max_tokens, extra=None):
     Returns a list of problems (empty = pass); the caption is printed, never
     asserted on.
     """
-    import base64
     b64 = base64.b64encode(pathlib.Path(img).read_bytes()).decode()
     q = "What shape and colors are in this image? Answer in one short sentence."
 
@@ -111,8 +126,6 @@ PAGE = "http://127.0.0.1:8899"
 def _wait_ready(page, name, timeout, poll, sleep, get=None):
     """Poll the page's GET /v1/models until the model reads status=ready;
     returns the id to route by."""
-    import time
-    import urllib.request
     if get is None:
         def get(u):
             with urllib.request.urlopen(u, timeout=30) as r:
@@ -150,11 +163,8 @@ def _knurlogic(art, a, K=None, SPK=None, ready_timeout=1800, poll=10,
     if "fit" in machines and len(machines) > 1:
         raise SystemExit("FAIL: --knurlogic fit stands alone; do not combine it "
                          "with other roles or machine names")
-    import os
-    import time
     sleep = sleep or time.sleep
-    if SPK is None:
-        from vqlab.core.box import knurlogic_client as SPK
+    SPK = SPK or knurlogic_client
     if K is None:
         ksrc = os.environ.get("KNURLOGIC_SRC", "")
         if ksrc:
@@ -163,36 +173,34 @@ def _knurlogic(art, a, K=None, SPK=None, ready_timeout=1800, poll=10,
             from knurlogic.interfaces import mcp as K
         except ImportError:
             raise SystemExit("FAIL: knurlogic not importable (set KNURLOGIC_SRC "
-                             "to its source tree)")
-    from vqlab.core.box.knurlogic_client import models_dir
-    md = models_dir()
+                             "to its source tree)") from None
+    md = knurlogic_client.models_dir()
     name = art.resolve().name
     if (md / name).resolve() != art.resolve():
         raise SystemExit(f"FAIL: Knurlogic models dir entry {md / name} does not "
                          f"resolve to {art.resolve()}: the smoke would load "
                          "something else")
-    img = a.image or _probe_image(
-        pathlib.Path(__import__("tempfile").mkdtemp()) / "probe.png")
-    out = K.load(artifact=name, machines=machines, split=a.knurlogic_split,
-                 link=a.knurlogic_link, sets={"KNURLOGIC_MTP": "off"})
-    job = out.get("job") or out.get("instance")
-    if not job or out.get("refused") or out.get("error"):
-        raise SystemExit(f"FAIL: Knurlogic load refused or failed: {out}")
-    try:
-        # Readiness and routing both go through THIS Mac's page: a model
-        # server binds 127.0.0.1 by design, so a probe straight at its port
-        # from the other Mac is refused (F205).
-        mid = _wait_ready(page, name, ready_timeout, poll, sleep)
-        print(f"knurlogic       : {', '.join(machines)} via {page}\n"
-              f"model_id        : {mid}")
-        probs = _image_request_check(lambda d: SPK.post(page, d), mid, img,
-                                     a.max_tokens,
-                                     extra={"reasoning_effort": "none"})
-    finally:
-        # a single-Mac load answers with an instance id (job is null in the
-        # page's rows), so unload by whichever id load returned
-        K.unload(**({"job": str(out["job"])} if out.get("job")
-                    else {"instance": str(job)}))
+    with _probe(a) as img:
+        out = K.load(artifact=name, machines=machines, split=a.knurlogic_split,
+                     link=a.knurlogic_link, sets={"KNURLOGIC_MTP": "off"})
+        job = out.get("job") or out.get("instance")
+        if not job or out.get("refused") or out.get("error"):
+            raise SystemExit(f"FAIL: Knurlogic load refused or failed: {out}")
+        try:
+            # Readiness and routing both go through THIS Mac's page: a model
+            # server binds 127.0.0.1 by design, so a probe straight at its port
+            # from the other Mac is refused (F205).
+            mid = _wait_ready(page, name, ready_timeout, poll, sleep)
+            print(f"knurlogic       : {', '.join(machines)} via {page}\n"
+                  f"model_id        : {mid}")
+            probs = _image_request_check(lambda d: SPK.post(page, d), mid, img,
+                                         a.max_tokens,
+                                         extra={"reasoning_effort": "none"})
+        finally:
+            # a single-Mac load answers with an instance id (job is null in the
+            # page's rows), so unload by whichever id load returned
+            K.unload(**({"job": str(out["job"])} if out.get("job")
+                        else {"instance": str(job)}))
     if probs:
         raise SystemExit("\nFAIL: " + "; ".join(probs))
     print("\nPASS (KNURLOGIC): the probe image went through the serving "
@@ -229,21 +237,19 @@ def _cluster(art, a):
     patch count) and that a caption came back -- a model served WITHOUT the
     image would answer the same question with a far shorter prompt.
     """
-    import json as _json, urllib.request
     mid = a.cluster_model or ("TheDrainFlorist/" + art.name.split("--", 1)[-1])
-    img = a.image or _probe_image(
-        pathlib.Path(__import__("tempfile").mkdtemp()) / "probe.png")
 
     def _post(doc):
         req = urllib.request.Request(
             a.cluster.rstrip("/") + "/v1/chat/completions",
-            data=_json.dumps(doc).encode(),
+            data=json.dumps(doc).encode(),
             headers={"Content-Type": "application/json"})
         with urllib.request.urlopen(req, timeout=a.cluster_timeout) as r:
-            return _json.load(r)
+            return json.load(r)
 
     print(f"cluster         : {a.cluster}\nmodel_id        : {mid}")
-    probs = _image_request_check(_post, mid, img, a.max_tokens)
+    with _probe(a) as img:
+        probs = _image_request_check(_post, mid, img, a.max_tokens)
     if probs:
         raise SystemExit("\nFAIL: " + "; ".join(probs) + " (no instance? "
                          "place one first -- a model CARD in /state is not "
@@ -275,7 +281,7 @@ def _load_full(A, mod, cfg, view):
     try:
         import mlx_vlm.utils as vlm
     except ImportError:
-        raise SystemExit("FAIL: the image smoke needs mlx-vlm: pip install 'vqlab[vision]'")
+        raise SystemExit("FAIL: the image smoke needs mlx-vlm: pip install 'vqlab[vision]'") from None
     own = all(hasattr(mod, n) for n in ("Model", "ModelConfig"))
     if not own and (cfg.get("vq_linear") or cfg.get("vq_modules")):
         raise SystemExit("FAIL: a VQ artifact whose model.py has no Model/ModelConfig -- "
@@ -342,15 +348,14 @@ def _tower_only(A, mod, cfg, a):
                          f"VisionModel for this config: {exc}")
     mx.eval(tower.parameters())
 
-    img = a.image or _probe_image(
-        pathlib.Path(__import__("tempfile").mkdtemp()) / "probe.png")
-
     # Use the ARTIFACT'S OWN processor, not a hand-rolled tensor. Qwen towers
     # take patch sequences plus a grid_thw describing them; inventing that
     # shape by hand tests my arithmetic, not the artifact.
     from transformers import AutoProcessor
     proc = AutoProcessor.from_pretrained(str(art), trust_remote_code=True)
-    px = proc.image_processor(images=[Image.open(img).convert("RGB")],
+    with _probe(a) as img:
+        image = Image.open(img).convert("RGB")
+    px = proc.image_processor(images=[image],
                               return_tensors="np")
     pixel_values = mx.array(px["pixel_values"])
     grid = px.get("image_grid_thw")
@@ -378,8 +383,8 @@ def _tower_only(A, mod, cfg, a):
     return 0
 
 
-def main() -> int:
-    ap = argparse.ArgumentParser()
+def main(argv=None) -> int:
+    ap = argparse.ArgumentParser(prog="vqlab vision-smoke")
     ap.add_argument("artifact")
     ap.add_argument("--prompt", default="What shape and colors do you see?")
     ap.add_argument("--image", default=None,
@@ -391,22 +396,8 @@ def main() -> int:
                          "that the graph was NOT exercised, because a static "
                          "pass is not the III.11 evidence.")
     ap.add_argument("--tower-only", action="store_true",
-                    help="load and run ONLY the vision tower (a few hundred "
-                         "MB), not the language model. A FALLBACK, not the "
-                         "gate: it does NOT test the merge into the LM and "
-                         "is NOT III.11 evidence, and says so in its own "
-                         "output. For an artifact too large for this box "
-                         "(e.g. the 397B rungs are 112-155 GiB, more "
-                         "than one box's unified memory), prefer the EXO CLUSTER: exo "
-                         "does serve images -- see "
-                         "exo/worker/engines/mlx/vision.py and the "
-                         "chat_completions adapter's image_url handling -- "
-                         "so POST a data:image/png;base64 image_url part to "
-                         "/v1/chat/completions on a placed 2-node instance "
-                         "and you get REAL image->text evidence. F176 did "
-                         "this on all three 397B flat rungs; an earlier "
-                         "version of this help text wrongly claimed it was "
-                         "impossible, and that claim was repeated as fact.")
+                    help="run ONLY the vision tower, not the language model: a fallback, "
+                         "NOT III.11 evidence. Too big for this box? Use --cluster or --knurlogic.")
     ap.add_argument("--cluster", metavar="URL",
                     help="put the image through a PLACED exo instance at "
                          "this API root (e.g. http://localhost:52415) "
@@ -432,7 +423,7 @@ def main() -> int:
     ap.add_argument("--knurlogic-split", default="", help="pipeline | tensor")
     ap.add_argument("--knurlogic-link", default="", help="tcp | rdma")
     ap.add_argument("--max-tokens", type=int, default=32)
-    a = ap.parse_args()
+    a = ap.parse_args(argv)
 
     A = Artifact.open(a.artifact)
     art, cfg = A.dir, A.config
@@ -506,14 +497,12 @@ def main() -> int:
     # A full load of an artifact bigger than RAM thrashes swap and gives no
     # verdict (a 397B preflight was about to, 2026-10-13): the same hard
     # guard every resident-memory smoke takes.
-    from vqlab.plan import preflight_ram
     ok, text = preflight_ram.report(art)
-    print(text)
     if not ok:
-        print("  --tower-only runs the tower alone here (a fallback, not III.11 "
-              "evidence); the full image smoke runs on the cluster "
-              "(check-release --knurlogic-smoke).")
-        return 2
+        raise SystemExit(text + "\n  --tower-only runs the tower alone here (a fallback, not "
+                         "III.11 evidence); the full image smoke runs on the cluster "
+                         "(check-release --knurlogic-smoke).")
+    print(text)
 
     # the weight view outlives generation: MLX reads lazily through it
     with tempfile.TemporaryDirectory(prefix="vision-smoke-") as tmp:
@@ -524,7 +513,9 @@ def _full(A, mod, cfg, a, tmp):
     """Load, wire check and caption, with the weight view in `tmp`."""
     # ---- 2. LOAD ----------------------------------------------------------
     import mlx.core as mx
+    from mlx_vlm import generate
     from mlx_vlm.prompt_utils import apply_chat_template
+    from mlx_vlm.utils import prepare_inputs
 
     (tmp / "view").mkdir()
     model, processor = _load_full(A, mod, cfg, tmp / "view")
@@ -542,7 +533,6 @@ def _full(A, mod, cfg, a, tmp):
     # The check that cannot be satisfied by configuration alone.
     cfg_obj = model.config
     formatted = apply_chat_template(processor, cfg_obj, a.prompt, num_images=1)
-    from mlx_vlm.utils import prepare_inputs
     # keyword-only: prepare_inputs' 3rd positional is `audio`, and passing the
     # prompt there sent a caption into the audio loader.
     inputs = prepare_inputs(
@@ -569,7 +559,6 @@ def _full(A, mod, cfg, a, tmp):
             "caption-only check would have called a pass.")
 
     # ---- caption, for the human -------------------------------------------
-    from mlx_vlm import generate
     try:
         out = generate(model, processor, formatted, [str(img)],
                        max_tokens=a.max_tokens, verbose=False)

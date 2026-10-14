@@ -71,7 +71,6 @@ def test_missing_mlx_vlm_is_named_not_blamed_on_the_bundle(tmp_path, monkeypatch
     """No mlx_vlm in the interpreter: the shim falls back to the text arch,
     and the surface check used to call that an F153 bundle fault."""
     import json
-    import sys
     art = tmp_path / "art"
     art.mkdir()
     (art / "config.json").write_text(json.dumps({"model_type": "x", "vision_config": {"depth": 1}}))
@@ -79,9 +78,8 @@ def test_missing_mlx_vlm_is_named_not_blamed_on_the_bundle(tmp_path, monkeypatch
     real = vs.importlib.util.find_spec
     monkeypatch.setattr(vs.importlib.util, "find_spec",
                         lambda n, *a: None if n == "mlx_vlm" else real(n, *a))
-    monkeypatch.setattr(sys, "argv", ["vision-smoke", str(art)])
     with pytest.raises(SystemExit) as e:
-        vs.main()
+        vs.main([str(art)])
     assert "mlx_vlm is not installed" in str(e.value) and "TEXT-ONLY" not in str(e.value)
 
 
