@@ -34,13 +34,10 @@ _CAMPAIGN = re.compile(r"^(F\d{2,4})\b")
 
 
 def _findings_text() -> str:
-    for p in (os.environ.get("VQLAB_FINDINGS_LOG"),
-              _config.findings_log()):
-        try:
-            return pathlib.Path(p).read_text() if p else ""
-        except OSError:
-            continue
-    return ""
+    try:
+        return _config.findings_log().read_text()
+    except OSError:
+        return ""
 
 
 def stale_scratch(root, now=None) -> list:
@@ -85,10 +82,6 @@ def _pkg(name):
     elif spec and spec.submodule_search_locations:          # namespace package (mlx)
         path = str(list(spec.submodule_search_locations)[0])
     return {"version": v, "path": path}
-
-
-def _sha(path):
-    return sha256_file(path)[:12]
 
 
 def _hf_token():
@@ -159,7 +152,7 @@ def report():
                 spec = importlib.util.find_spec(f"mlx_lm.models.{arch}")
             except Exception:
                 spec = None
-            r["arch_files"][arch] = _sha(spec.origin) if spec and spec.origin else None
+            r["arch_files"][arch] = sha256_file(spec.origin)[:12] if spec and spec.origin else None
             if r["arch_files"][arch] is None:
                 r["notes"].append(f"mlx-lm has no {arch} architecture: VQLab cannot load, score or "
                                   f"convert that family in this interpreter")
