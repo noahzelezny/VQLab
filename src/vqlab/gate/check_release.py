@@ -165,7 +165,7 @@ def _knurlogic_smoke(args, A) -> list[str]:
         from knurlogic.interfaces import mcp as K
     except ImportError:
         return ["knurlogic not importable (set KNURLOGIC_SRC to its source tree)"]
-    md = pathlib.Path(os.environ.get("KNURLOGIC_MODELS", "~/.exo/models")).expanduser()
+    md = SPK.models_dir()
     name = A.resolve().name
     if (md / name).resolve() != A.resolve():
         return [f"Knurlogic models dir entry {md / name} does not resolve to {A.resolve()}: "

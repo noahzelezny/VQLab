@@ -7,8 +7,17 @@ itself (`K`) is always passed in by the caller.
 from __future__ import annotations
 
 import json
+import os
 import pathlib
 import urllib.request
+
+
+def models_dir() -> pathlib.Path:
+    """The Knurlogic models folder the gates look a name up in: KNURLOGIC_MODELS,
+    else ~/.exo/models. check-release --knurlogic-smoke, vision-smoke --knurlogic
+    and knurlogic-link all read it here, so the entry one makes is the entry the
+    others check."""
+    return pathlib.Path(os.environ.get("KNURLOGIC_MODELS", "~/.exo/models")).expanduser()
 
 
 def post(url, doc, timeout=1800):

@@ -19,6 +19,14 @@ and every chain, whatever its mode, ends the same way: [graft ->
 vision-smoke] -> [sz-pack -> sz-check -> bundle] -> pin -> check-bundle --strict ->
 check-release -> [kl-ladder].
 
+A build whose estimated size is past THIS box's resident bar (0.90 x its RAM,
+read from the machine at compile time: preflight_ram.bar_gib) cannot be loaded
+here, so its smokes go to the cluster through Knurlogic, the way the published
+397B builds were gated: the local vision-smoke is dropped, knurlogic-link makes
+the build loadable by name (one symlink, no copy), and check-release runs with
+--knurlogic-smoke fit (text, then the image through the same runtime). Its
+preflight is full-size and real, so a cluster that is down fails it loudly.
+
 "skipzero" (MoE VQ only) drops the teacher's dead expert rows on disk the way
 every published Qwen3.5-397B build was made (docs/SKIPZERO.md, F175): sz-pack
 of the finished, grafted artifact, then sz-check, then `bundle` so the runtime
@@ -65,6 +73,7 @@ import sys
 
 from vqlab import config
 from vqlab.family import registry
+from vqlab.plan import preflight_ram
 from vqlab.util.errors import UserError
 from vqlab.util.geo import geo_key
 
@@ -455,18 +464,31 @@ def _dense_steps(r: Recipe, prof: dict, src: str, by: dict, vis: float):
     return steps, art_gib, scratch_gib, warns
 
 
-def _tail_steps(r: Recipe, src: str, by: dict):
+def _tail_steps(r: Recipe, src: str, by: dict, oversized: bool = False):
     """What every chain ends with: [vision graft + smoke], the pin's smoke,
-    the bundle and release checks, [kl-ladder] -> (steps, warnings)."""
+    the bundle and release checks, [kl-ladder] -> (steps, warnings).
+
+    `oversized`: the artifact is past this box's resident bar
+    (preflight_ram), so no load of it can run here. Its text and image smokes
+    then run on the cluster through Knurlogic, as the published 397B builds
+    were gated: knurlogic-link makes the build loadable by name (one symlink,
+    no copy), and check-release --knurlogic-smoke fit loads it where it fits,
+    generates, and puts the probe image through the same serving runtime
+    (check-release passes its Knurlogic roles to vision-smoke). The local
+    vision-smoke after the graft is dropped: it would only refuse."""
     out, steps, warns = r.out, [], []
     if r.vision:
         if by.get("vision"):
             steps.append(_step("vision", "graft", ["--artifact", out, "--src", src, *_graft_flags(src)],
                                {"full": "grafts the tower in place", "writes_gib": round(by["vision"] + 0.5, 1)},
                                retries=0, timeout_s=3600))
-            steps.append(_step("vision-smoke", "vision-smoke", [out, "--max-tokens", 8],
-                               {"full": "reads the artifact, writes nothing", "writes_gib": 0},
-                               retries=0, timeout_s=3600))
+            if oversized:
+                warns.append("the image smoke runs in check-release, through Knurlogic on the "
+                              "finished artifact: it is too large to load on this box")
+            else:
+                steps.append(_step("vision-smoke", "vision-smoke", [out, "--max-tokens", 8],
+                                   {"full": "reads the artifact, writes nothing", "writes_gib": 0},
+                                   retries=0, timeout_s=3600))
         else:
             warns.append("this teacher has no vision tower; nothing to graft")
     if r.skipzero:
@@ -500,9 +522,22 @@ def _tail_steps(r: Recipe, src: str, by: dict):
                        retries=0, timeout_s=3600))
     steps.append(_step("runtime-check", "check-bundle", ["--artifact", out, "--strict"],
                        {"full": "a read-only check", "writes_gib": 0}, retries=0, timeout_s=600))
-    steps.append(_step("release-check", "check-release",
-                       ["--artifact", out, "--tokenizer-ref", f"{src}/tokenizer.json"],
-                       {"full": "reads the artifact; its smokes are short", "writes_gib": 0},
+    release = ["--artifact", out, "--tokenizer-ref", f"{src}/tokenizer.json"]
+    release_pf = {"full": "reads the artifact; its smokes are short", "writes_gib": 0}
+    if oversized:
+        steps.append(_step("knurlogic-link", "knurlogic-link", [out],
+                           {"full": "one symlink in the Knurlogic models dir, no data", "writes_gib": 0},
+                           gpu=False, retries=0, timeout_s=600))
+        release += ["--knurlogic-smoke", "fit"]
+        # a full preflight: the smokes really load the build through Knurlogic,
+        # so a cluster that is down FAILS the step with Knurlogic's own reason
+        release_pf = {"full": "loads the artifact on the cluster through Knurlogic; "
+                              "fails if Knurlogic or the cluster is down", "writes_gib": 0}
+        warns.append("too large for this box: the pin is not smoked here, and check-release "
+                     "smokes it on the cluster through Knurlogic (--knurlogic-smoke fit: text, and an "
+                     "image when it carries a tower). Knurlogic and the peer Mac(s) must be up for "
+                     "the preflight and the run, and every serving Mac must reach the scratch path under the same name")
+    steps.append(_step("release-check", "check-release", release, release_pf,
                        retries=0, timeout_s=2 * 3600))
     if r.score:
         caches = _caches(r.teacher)
@@ -550,7 +585,9 @@ def _compile(raw: dict) -> tuple[dict, list[str]]:
         saved = skipzero_gib(prof, _skipzero_rows(r), geo)
         art_gib -= saved
         scratch_gib += art_gib      # at most: sz-pack rewrites every shard that holds a dead row
-    tail, tail_warns = _tail_steps(r, src, by)
+    # the resident bar of THIS box (0.90 x its RAM, read from the machine),
+    # the rule preflight-ram enforces at load time
+    tail, tail_warns = _tail_steps(r, src, by, oversized=art_gib > preflight_ram.bar_gib())
     return {"name": r.name, "commit": "HEAD", "recipe": r.raw,
             # estimates for the confirmation, not measurements: the artifact
             # from the profile's exact per-geometry bytes, scratch = every

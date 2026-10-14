@@ -162,7 +162,8 @@ def _knurlogic(art, a, K=None, SPK=None, ready_timeout=1800, poll=10,
         except ImportError:
             raise SystemExit("FAIL: knurlogic not importable (set KNURLOGIC_SRC "
                              "to its source tree)")
-    md = pathlib.Path(os.environ.get("KNURLOGIC_MODELS", "~/.exo/models")).expanduser()
+    from vqlab.core.box.knurlogic_client import models_dir
+    md = models_dir()
     name = art.resolve().name
     if (md / name).resolve() != art.resolve():
         raise SystemExit(f"FAIL: Knurlogic models dir entry {md / name} does not "

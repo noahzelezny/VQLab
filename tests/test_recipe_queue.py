@@ -33,6 +33,9 @@ def fams(lab_dirs, monkeypatch):
         return d
     monkeypatch.setattr(rq.registry, "family_dirs", lambda: [root])
     monkeypatch.setattr(rq.registry, "teacher_caches", lambda t=None: [])
+    # a box every fake build fits on: compiled output must not depend on the
+    # RAM of the machine the tests run on
+    monkeypatch.setattr(rq.preflight_ram, "ram_bytes", lambda: 1 << 60)
     return add
 
 
@@ -389,3 +392,78 @@ def test_affine_protect_and_group_are_validated():
     with pytest.raises(rq.RecipeError, match="32, 64 or 128"):
         rq.Recipe.from_json({**base, "family": "qwen3_5", "group": 48})
     assert rq.Recipe.from_json({**base, "family": "qwen3_5"}).protect_bits is None
+
+
+GOLDEN_OVERSIZED = pathlib.Path(__file__).parent / "fixtures" / "recipe_golden_oversized.json"
+_OVERSIZED_RECIPES = {
+    "moe-sz-big": ("qwen3_5", "T", {"geo": "d4-K256", "tail": {"from": 30, "geo": "d8-K4096"},
+                                    "vision": True, "skipzero": True, "score": True}),
+    "moe-big": ("qwen3_5", "T", {"geo": "d4-K256", "vision": True}),
+    "dense-big": ("qwen3_8_dense", "D", {"geo": "d4-K256"}),
+}
+
+
+def _small_box(monkeypatch, gib=0.5):
+    """A box whose resident bar (0.90 x RAM) is `gib`."""
+    monkeypatch.setattr(rq.preflight_ram, "ram_bytes", lambda: gib / 0.90 * 2 ** 30)
+
+
+def _oversized_outputs(fams, tmp_path, monkeypatch):
+    _measured_dead_rows(fams("qwen3_5", "T", "moe", 40))
+    fams("qwen3_8_dense", "D", "dense", 24, vision=0)
+    monkeypatch.setattr(rq.registry, "teacher_caches", lambda t=None: [
+        {"teacher": "T", "corpus": "prose", "path": "/c/prose"}])
+    _small_box(monkeypatch)
+    out = {}
+    for key, (family, teacher, extra) in _OVERSIZED_RECIPES.items():
+        q, warns = rq.compile_recipe({"name": key, "family": family, "teacher": teacher, **extra})
+        out[key] = json.loads(json.dumps([q, warns]).replace(str(tmp_path), "<tmp>"))
+    return out
+
+
+def test_oversized_queues_are_unchanged(fams, tmp_path, monkeypatch):
+    assert json.dumps(_oversized_outputs(fams, tmp_path, monkeypatch)) == \
+        json.dumps(json.loads(GOLDEN_OVERSIZED.read_text()))
+
+
+def test_an_oversized_build_is_smoked_on_the_cluster_through_knurlogic(fams, monkeypatch):
+    _measured_dead_rows(fams("qwen3_5", "T", "moe", 40))
+    base = {"name": "a", "family": "qwen3_5", "teacher": "T", "geo": "d4-K256",
+            "vision": True, "skipzero": True}
+    small, _ = rq.compile_recipe(base)
+    _small_box(monkeypatch, gib=small["estimate"]["artifact_gib"] - 0.01)
+    q, warns = rq.compile_recipe(base)
+    assert _names(q) == ["struct-base", "fit", "vision", "skipzero", "skipzero-check",
+                         "skipzero-bundle", "smoke", "runtime-check", "knurlogic-link",
+                         "release-check"]
+    sz = _args(q, "smoke")[0]
+    link = next(s for s in q["steps"] if s["name"] == "knurlogic-link")
+    assert link["cmd"] == "knurlogic-link" and link["args"] == [sz] and link["gpu"] is False
+    rel = next(s for s in q["steps"] if s["name"] == "release-check")
+    assert rel["args"][:2] == ["--artifact", sz]
+    assert rel["args"][-2:] == ["--knurlogic-smoke", "fit"]
+    # the preflight really runs it: no skip, so a cluster that is down fails it
+    assert "full" in rel["preflight"] and "skip" not in rel["preflight"]
+    assert steps.validate(q) == []
+    assert any("through Knurlogic" in w for w in warns)
+    # everything but the smoke steps is the same queue
+    keep = [s for s in small["steps"] if s["name"] not in ("vision-smoke", "release-check")]
+    assert [s for s in q["steps"] if s["name"] not in ("knurlogic-link", "release-check")] == keep
+
+
+def test_the_bar_is_the_estimate_against_this_boxs_ram(fams, monkeypatch):
+    fams("qwen3_5", "T", "moe", 40)
+    r = {"name": "a", "family": "qwen3_5", "teacher": "T", "geo": "d4-K256"}
+    est = rq.compile_recipe(r)[0]["estimate"]["artifact_gib"]
+    _small_box(monkeypatch, gib=est + 0.01)     # just fits
+    assert "knurlogic-link" not in _names(rq.compile_recipe(r)[0])
+    _small_box(monkeypatch, gib=est - 0.01)     # just does not
+    assert "knurlogic-link" in _names(rq.compile_recipe(r)[0])
+
+
+def test_the_bar_is_read_from_the_machine(monkeypatch):
+    calls = []
+    monkeypatch.setattr(rq.preflight_ram.subprocess, "run", lambda argv, **kw: calls.append(argv) or
+                        type("R", (), {"stdout": str(96 << 30)})())
+    assert rq.preflight_ram.bar_gib() == pytest.approx(96 * 0.90)
+    assert calls == [["sysctl", "-n", "hw.memsize"]]

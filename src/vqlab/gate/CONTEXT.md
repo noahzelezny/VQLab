@@ -27,6 +27,7 @@ Exit codes and printed verdicts.
 - `kernel_reference.py`: the exact dequant-matmul `reference()` the kernel checks score against
 - `mtp_smoke_head.py`: `gate mtp-smoke-head`: a packed draft sidecar loads and forwards; draft step cost
 - `parity.py`: `gate parity`: a family's checklist of reference behaviours, tested or not
+- `knurlogic_link.py`: `gate knurlogic-link`: one symlink in the Knurlogic models dir so a scratch build loads by name (check-release --knurlogic-smoke); never copies, never removes a real folder
 - `pin.py`: `gate pin`: freeze an artifact for measurement, then smoke the frozen copy
 - `smoke.py`: `gate smoke`: generate one token through the runtime the artifact ships
 - `spelling.py`: `gate spelling`: fail a release on British spellings; --fix rewrites them

@@ -18,10 +18,24 @@ import pathlib
 import subprocess
 import sys
 
+HEADROOM = 0.90
+
+
+def ram_bytes() -> int:
+    """This box's physical RAM, read from the machine (hw.memsize)."""
+    return int(subprocess.run(["sysctl", "-n", "hw.memsize"],
+                              capture_output=True, text=True).stdout.strip())
+
+
+def bar_gib(headroom: float = HEADROOM) -> float:
+    """The resident bar in GiB: the most a model may weigh to be loaded here."""
+    return ram_bytes() * headroom / 2 ** 30
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("artifact")
-    ap.add_argument("--headroom", type=float, default=0.90,
+    ap.add_argument("--headroom", type=float, default=HEADROOM,
                     help="fraction of physical RAM the artifact may occupy. mlx's "
                          "own recommended max is ~0.875 of RAM; 0.90 is already "
                          "generous and a smoke needs the KV cache on top.")
@@ -32,8 +46,7 @@ def main(argv=None) -> int:
         sys.exit(f"PREFLIGHT FAIL: {P} is not a directory")
 
     art = sum(f.stat().st_size for f in P.glob("*.safetensors"))
-    ram = int(subprocess.run(["sysctl", "-n", "hw.memsize"],
-                             capture_output=True, text=True).stdout.strip())
+    ram = ram_bytes()
     bar = ram * a.headroom
     G = 2 ** 30
     ok = art <= bar
