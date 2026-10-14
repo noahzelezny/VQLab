@@ -136,13 +136,12 @@ def pin(src, out, runtime=None, kind="auto", headroom=0.90, max_tokens=8, flags=
         with open(log, "a") as f:
             f.write(f"baked flags: {flags}\n")
 
-    from vqlab._layout import find as _find
-    p = subprocess.run([sys.executable, str(_find("preflight_ram.py")), str(out),
-                        "--headroom", str(headroom)], capture_output=True, text=True)
+    from vqlab.plan import preflight_ram
+    ok, text = preflight_ram.report(out, headroom)
     with open(log, "a") as f:
-        f.write(p.stdout + p.stderr)
-    if p.returncode != 0:
-        return finish("deferred-ram", (p.stdout.strip().splitlines() or ["preflight_ram refused"])[-1])
+        f.write(text + "\n")
+    if not ok:
+        return finish("deferred-ram", text.splitlines()[-1])
 
     p = _cli("smoke", out, "--max-tokens", max_tokens, "--headroom", headroom, log=log)
     rec["smoke_run_id"] = _child_run_id(os.environ.get("VQLAB_RUN_ID"), "smoke")

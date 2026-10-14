@@ -32,6 +32,7 @@ import subprocess
 import sys
 
 from vqlab import _layout
+from vqlab.plan import preflight_ram
 
 
 def child(path, prompt_tokens, gen_tokens, corpus):
@@ -67,10 +68,9 @@ def _gate(arm, headroom):
         print(msg)
     if not ok:
         raise SystemExit(f"FAIL: {arm} refused by its pin")
-    p = subprocess.run([sys.executable, str(_layout.find("preflight_ram.py")), str(arm),
-                        "--headroom", str(headroom)], capture_output=True, text=True)
-    if p.returncode != 0:
-        raise SystemExit(f"FAIL: {arm} cannot be resident here, a speed run would thrash:\n{p.stdout}")
+    ok, text = preflight_ram.report(arm, headroom)
+    if not ok:
+        raise SystemExit(f"FAIL: {arm} cannot be resident here, a speed run would thrash:\n{text}")
 
 
 def main(argv=None) -> int:

@@ -38,11 +38,10 @@ from __future__ import annotations
 
 import argparse
 import pathlib
-import subprocess
 import sys
 
-from vqlab._layout import find as _find
 from vqlab.util.fs import read_json
+from vqlab.plan import preflight_ram
 
 
 def main(argv=None) -> int:
@@ -74,9 +73,9 @@ def main(argv=None) -> int:
         return 1
 
     if not a.skip_preflight:
-        p = subprocess.run([sys.executable, str(_find("preflight_ram.py")),
-                            str(art), "--headroom", str(a.headroom)])
-        if p.returncode != 0:
+        ok, text = preflight_ram.report(art, a.headroom)
+        print(text)
+        if not ok:
             print("FAIL: artifact does not fit in RAM — a generation smoke "
                   "CANNOT produce a verdict here. Use a bigger box, or "
                   "--skip-preflight if you know better than the check.")

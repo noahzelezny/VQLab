@@ -463,7 +463,16 @@ def test_the_bar_is_the_estimate_against_this_boxs_ram(fams, monkeypatch):
 
 def test_the_bar_is_read_from_the_machine(monkeypatch):
     calls = []
-    monkeypatch.setattr(rq.preflight_ram.subprocess, "run", lambda argv, **kw: calls.append(argv) or
-                        type("R", (), {"stdout": str(96 << 30)})())
+    pages = {"SC_PHYS_PAGES": 96 << 18, "SC_PAGE_SIZE": 4096}
+    monkeypatch.setattr(rq.preflight_ram.os, "sysconf", lambda k: calls.append(k) or pages[k])
     assert rq.preflight_ram.bar_gib() == pytest.approx(96 * 0.90)
-    assert calls == [["sysctl", "-n", "hw.memsize"]]
+    assert sorted(calls) == ["SC_PAGE_SIZE", "SC_PHYS_PAGES"]
+
+
+def test_preflight_check_compares_shard_bytes_with_the_bar(tmp_path, monkeypatch):
+    (tmp_path / "a.safetensors").write_bytes(b"\0" * 900)
+    monkeypatch.setattr(rq.preflight_ram, "ram_bytes", lambda: 1000)
+    assert rq.preflight_ram.check(tmp_path) == (True, 900, 1000)
+    ok, text = rq.preflight_ram.report(tmp_path, headroom=0.5)
+    assert not ok and "PREFLIGHT FAIL" in text
+    assert rq.preflight_ram.main([str(tmp_path), "--headroom", "0.5"]) == 2

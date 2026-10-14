@@ -507,10 +507,12 @@ def main() -> int:
     # verdict (a 397B preflight was about to, 2026-10-13): the same hard
     # guard every resident-memory smoke takes.
     from vqlab.plan import preflight_ram
-    if preflight_ram.main([str(art)]):
-        print("FAIL: too large for a full load on this box. --tower-only runs the "
-              "tower alone here (a fallback, not III.11 evidence); the full image "
-              "smoke runs on the cluster (check-release --knurlogic-smoke).")
+    ok, text = preflight_ram.report(art)
+    print(text)
+    if not ok:
+        print("  --tower-only runs the tower alone here (a fallback, not III.11 "
+              "evidence); the full image smoke runs on the cluster "
+              "(check-release --knurlogic-smoke).")
         return 2
 
     # the weight view outlives generation: MLX reads lazily through it

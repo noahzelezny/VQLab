@@ -92,4 +92,4 @@ def test_full_smoke_checks_ram_before_loading():
     import inspect
     from vqlab.gate import vision_smoke as vs
     src = inspect.getsource(vs.main)
-    assert src.index("preflight_ram.main") < src.index("_full(")
+    assert src.index("preflight_ram.report") < src.index("_full(")
