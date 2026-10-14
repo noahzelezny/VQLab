@@ -35,7 +35,7 @@ import time
 import mlx.core as mx
 
 from vqlab.family import model_loader as runtime_load
-from vqlab.core.source.mem_budget import eval_params_budgeted
+from vqlab.core.source.mem_budget import stream_layers
 from vqlab.util.fs import GIB, read_json
 
 
@@ -88,19 +88,10 @@ def score_qwen4_exp(model, ids_list, args):
     mx.eval(h)
 
     caches = model.make_cache()
-    n = len(core.layers)
-    for i in range(n):
-        blk = core.layers[i]
-        with mx.stream(mx.cpu):
-            # Budgeted: this family's layer 1 is 100.3 GiB of PLE tables in
-            # bf16 and no eager eval of it fits (F115). See mem_budget.
-            _, skipped = eval_params_budgeted(
-                blk, getattr(args, "lazy_over_gb", 8.0))
-        if skipped:
-            print(f"  layer {i}: {skipped / GIB:.1f} GiB left lazy",
-                  flush=True)
-        t0 = time.time()
-        c = caches[i]
+
+    # Budgeted (in stream_layers): this family's layer 1 is 100.3 GiB of PLE
+    # tables in bf16 and no eager eval of it fits (F115). See mem_budget.
+    def forward(blk, c, h):
         parts = []
         for k, s0 in enumerate(range(0, S, C)):
             e0 = min(s0 + C, S)
@@ -121,15 +112,10 @@ def score_qwen4_exp(model, ids_list, args):
                                   hasattr(c, "indexer")) else None
             parts.append(blk(hc_, core.rope, mask, conv_mask, c, idx_c,
                              ids_c, pc))
-        h = mx.concatenate(parts, axis=1) if len(parts) > 1 else parts[0]
-        mx.eval(h)
-        core.layers[i] = None
-        caches[i] = None
-        del blk, parts
-        gc.collect()
-        mx.clear_cache()
-        print(f"  layer {i}/{n-1} {time.time()-t0:.1f}s "
-              f"(peak {mx.get_peak_memory()/GIB:.1f}G)", flush=True)
+        return parts
+
+    h = stream_layers(core, caches, h, getattr(args, "lazy_over_gb", 8.0),
+                      forward)
 
     mixer = core.hyper_connection_mixer
     head = model.lm_head if not model.args.text.tie_word_embeddings else None
@@ -331,34 +317,20 @@ def score_qwen3_5_moe(model, ids_list, args):
     # Built BEFORE any layer is dropped: make_cache walks lm.layers, which is
     # a property over core.layers.
     caches = lm.make_cache()
-    n = len(core.layers)
-    for i in range(n):
-        blk = core.layers[i]
-        with mx.stream(mx.cpu):
-            _, skipped = eval_params_budgeted(
-                blk, getattr(args, "lazy_over_gb", 8.0))
-        if skipped:
-            print(f"  layer {i}: {skipped / GIB:.1f} GiB left lazy",
-                  flush=True)
-        t0 = time.time()
-        c = caches[i]
+
+    # pipeline_layers is a property over core.layers, so stream_layers'
+    # dropping the entry drops the only persistent reference to the block.
+    def forward(blk, c, h):
         parts = []
         for s0 in range(0, S, C):
             hc_ = h[:, s0:min(s0 + C, S)]
             mask = (create_ssm_mask(hc_, c) if blk.is_linear
                     else create_attention_mask(hc_, c))
             parts.append(blk(hc_, mask=mask, cache=c))
-        h = mx.concatenate(parts, axis=1) if len(parts) > 1 else parts[0]
-        mx.eval(h)
-        # pipeline_layers is a property over this list, so dropping the entry
-        # here drops the only persistent reference to the block.
-        core.layers[i] = None
-        caches[i] = None
-        del blk, parts
-        gc.collect()
-        mx.clear_cache()
-        print(f"  layer {i}/{n-1} {time.time()-t0:.1f}s "
-              f"(peak {mx.get_peak_memory()/GIB:.1f}G)", flush=True)
+        return parts
+
+    h = stream_layers(core, caches, h, getattr(args, "lazy_over_gb", 8.0),
+                      forward)
 
     head = None if lm.args.tie_word_embeddings else lm.lm_head
     with mx.stream(mx.cpu):

@@ -15,6 +15,9 @@ slow layer (F115).
 A per-TENSOR guard catches none of this: every shard is only 0.75 GiB. The
 budget has to be per BLOCK.
 """
+import gc
+import time
+
 import mlx.core as mx
 import mlx.utils
 
@@ -46,3 +49,35 @@ def eval_params_budgeted(module, budget_gb):
     if keep:
         mx.eval(keep)
     return keep_bytes, skip_bytes
+
+
+def stream_layers(core, caches, h, lazy_over_gb, forward):
+    """The streamed scorers' layer walk: one block materialised at a time.
+
+    For each layer i: budgeted eval of its weights under the CPU stream,
+    `parts = forward(blk, caches[i], h)` (the family's chunk loop, one output
+    per chunk), concatenate, eval, then drop the block and its cache so its
+    memory is returned before the next one loads. Returns the final h.
+    """
+    n = len(core.layers)
+    for i in range(n):
+        blk = core.layers[i]
+        with mx.stream(mx.cpu):
+            _, skipped = eval_params_budgeted(blk, lazy_over_gb)
+        if skipped:
+            print(f"  layer {i}: {skipped / GIB:.1f} GiB left lazy",
+                  flush=True)
+        t0 = time.time()
+        parts = forward(blk, caches[i], h)
+        h = mx.concatenate(parts, axis=1) if len(parts) > 1 else parts[0]
+        mx.eval(h)
+        # The model's layer list (and any property over it) holds the only
+        # persistent reference to the block; dropping the entry frees it.
+        core.layers[i] = None
+        caches[i] = None
+        del blk, parts
+        gc.collect()
+        mx.clear_cache()
+        print(f"  layer {i}/{n-1} {time.time()-t0:.1f}s "
+              f"(peak {mx.get_peak_memory()/GIB:.1f}G)", flush=True)
+    return h

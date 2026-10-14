@@ -8,13 +8,9 @@ gate/check_release.py on 2026-10-02; the scorer body is unchanged.
 """
 from __future__ import annotations
 
-import gc
-import time
-
 import mlx.core as mx
 
 from vqlab.family import FamilyPlugin, Parity
-from vqlab.util.fs import GIB
 
 FIT = {
         # DeepSeek-V4-Flash (~280B, 6-of-256 routed + 1 shared, 43 layers).
@@ -74,30 +70,17 @@ def score_deepseek_v4(model, ids_list, args):
     mx.eval(h)
 
     caches = lm.make_cache()               # before any layer is dropped
-    n = len(core.layers)
-    for i in range(n):
-        blk = core.layers[i]
-        with mx.stream(mx.cpu):
-            _, skipped = _budgeted(
-                blk, getattr(args, "lazy_over_gb", 8.0))
-        if skipped:
-            print(f"  layer {i}: {skipped / GIB:.1f} GiB left lazy",
-                  flush=True)
-        t0 = time.time()
-        c = caches[i]
+
+    def forward(blk, c, h):
         parts = []
         for s0 in range(0, S, C):
             e0 = min(s0 + C, S)
             parts.append(blk(h[:, s0:e0], c, ids[:, s0:e0]))
-        h = mx.concatenate(parts, axis=1) if len(parts) > 1 else parts[0]
-        mx.eval(h)
-        core.layers[i] = None
-        caches[i] = None
-        del blk, parts
-        gc.collect()
-        mx.clear_cache()
-        print(f"  layer {i}/{n-1} {time.time()-t0:.1f}s "
-              f"(peak {mx.get_peak_memory()/GIB:.1f}G)", flush=True)
+        return parts
+
+    from vqlab.core.source.mem_budget import stream_layers
+    h = stream_layers(core, caches, h, getattr(args, "lazy_over_gb", 8.0),
+                      forward)
 
     with mx.stream(mx.cpu):
         mx.eval(core.hc_head.parameters(), core.norm.parameters(),
@@ -133,10 +116,6 @@ def _apply_variant(core):
         print(f"  [deepseek_v4] shared-expert SwiGLU clamped at {lim:g} on {n} layers "
               f"(reference parity, F195)", flush=True)
 
-
-def _budgeted(blk, lazy_over_gb):
-    from vqlab.core.source.mem_budget import eval_params_budgeted
-    return eval_params_budgeted(blk, lazy_over_gb)
 
 
 def _register_tokenizer(model_type: str) -> None:
