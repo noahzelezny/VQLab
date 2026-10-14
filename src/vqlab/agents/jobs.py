@@ -29,7 +29,6 @@ import hashlib
 import json
 import os
 import pathlib
-import re
 import secrets
 import shutil
 import signal
@@ -51,7 +50,6 @@ from vqlab.util.fs import GIB
 RESUMABLE = ("stopped", "failed", "deferred", "running")   # running: only once its runner is dead
 TOKEN_TTL = 15 * 60
 _START = threading.Lock()             # one start / resume at a time (they spawn the CLI)
-_QDIR = re.compile(r"vqlab queue status (\S+)")
 
 
 class ConfirmTokens:
@@ -211,15 +209,20 @@ def plan(body: dict) -> dict:
 
 
 def _cli(*args: str) -> dict:
-    """Run `vqlab queue run ... --detach`: it pins the queue and returns once
-    the runner is detached. -> {ok, output, id (the new queue dir's name)}."""
+    """Run `vqlab queue run ... --detach --json`: it pins the queue and
+    returns once the runner is detached, its last stdout line
+    {"qdir", "pid"}. -> {ok, output, id (the new queue dir's name)}."""
     try:
-        r = qf.run_cli("queue", "run", *args, "--detach", timeout=120)
+        r = qf.run_cli("queue", "run", *args, "--detach", "--json", timeout=120)
     except subprocess.TimeoutExpired:
         raise UserError("the start is still setting up; check the queue list before trying again")
-    m = _QDIR.search(f"{r.stdout}\n{r.stderr}")
+    lines = r.stdout.strip().splitlines()
+    try:
+        qdir = json.loads(lines[-1])["qdir"] if r.returncode == 0 else None
+    except (IndexError, ValueError, KeyError, TypeError):
+        qdir = None
     return {"ok": r.returncode == 0, "output": qf.output_tail(r, 40),
-            "id": pathlib.Path(m.group(1)).name if m else None}
+            "id": pathlib.Path(qdir).name if qdir else None}
 
 
 def start(body: dict) -> dict:

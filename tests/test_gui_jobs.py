@@ -29,7 +29,8 @@ def lab(lab_dirs, monkeypatch):
 
     def run_cli(*args, timeout):
         calls.append(list(args))
-        out = f"detached (pid 1); vqlab queue status {lab_dirs.queues}/20260101-000000-night\n"
+        out = "pinning...\n" + json.dumps({"qdir": f"{lab_dirs.queues}/20260101-000000-night",
+                                            "pid": 1}) + "\n"
         return subprocess.CompletedProcess(args, 0, out, "")
     monkeypatch.setattr(jobs.qf, "run_cli", run_cli)
     runner_cmd = [""]
@@ -65,7 +66,7 @@ def test_start_needs_the_confirmed_token_once(lab):
     assert calls == []
     r = jobs.start({"file": "night.json", "token": p["token"]})
     assert r["ok"] is True and r["id"] == "20260101-000000-night"
-    assert _run_args(calls[0]) == [str(jobs._queue_file("night.json")), "--preflight", "--detach"]
+    assert _run_args(calls[0]) == [str(jobs._queue_file("night.json")), "--preflight", "--detach", "--json"]
     with pytest.raises(UserError):                             # spent
         jobs.start({"file": "night.json", "token": p["token"]})
     assert len(calls) == 1
@@ -107,7 +108,7 @@ def test_full_run_once_from_a_passed_preflight_at_its_commit(lab):
     p = jobs.plan({"id": "b-preflight"})
     assert p["preflight"] is False
     assert jobs.start({"id": "b-preflight", "token": p["token"]})["ok"] is True
-    assert _run_args(calls[0]) == [str(d / "queue.json"), "--commit", "c0ffee", "--detach"]
+    assert _run_args(calls[0]) == [str(d / "queue.json"), "--commit", "c0ffee", "--detach", "--json"]
     _queue(root, "c-full", status="running", source=str((d / "queue.json").resolve()))
     with pytest.raises(UserError, match="already started"):
         jobs.plan({"id": "b-preflight"})
@@ -179,7 +180,7 @@ def test_resume_only_a_halted_queue_of_this_machine(lab, monkeypatch):
         jobs.resume({"id": "fg"})
     d = _queue(root, "lost", status="running", pid=None)     # runner died
     assert jobs.resume({"id": "lost"})["ok"] is True
-    assert _run_args(calls[0]) == ["--resume", str(d), "--detach"]
+    assert _run_args(calls[0]) == ["--resume", str(d), "--detach", "--json"]
 
 
 def test_a_host_recorded_in_another_case_is_this_machine(lab):
@@ -274,3 +275,19 @@ def test_preview_over_http(lab, monkeypatch):
         assert code == 200 and body["ok"] is True and body["steps"][0]["name"] == "s1"
     finally:
         srv.shutdown()
+
+
+def test_detach_json_is_one_parseable_line(tmp_path, monkeypatch, capsys):
+    """`queue run --detach --json` ends with {"qdir", "pid"}: the line the
+    Jobs page reads, in place of regexing the runner's prose."""
+    import argparse
+    from vqlab.queue import runner
+    monkeypatch.setattr(runner, "cli_launch", lambda: (["vqlab"], None, None))
+    monkeypatch.setattr(runner.subprocess, "Popen", lambda *a, **kw: argparse.Namespace(pid=4242))
+    a = argparse.Namespace(lease_wait=1, force=False, override_reservation=False,
+                           keep_preflight=False, json=True)
+    assert runner._detach(tmp_path, a) == 0
+    line = capsys.readouterr().out.strip().splitlines()[-1]
+    assert json.loads(line) == {"qdir": str(tmp_path), "pid": 4242}
+    with pytest.raises(SystemExit):
+        runner.main(["run", "x.json", "--json"])

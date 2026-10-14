@@ -333,6 +333,8 @@ def _parser() -> argparse.ArgumentParser:
     pr.add_argument("--preflight", action="store_true",
                     help="run every step's small REAL version, then stop")
     pr.add_argument("--detach", action="store_true", help="run in its own session; survives the shell")
+    pr.add_argument("--json", action="store_true",
+                    help='with --detach: end with one line {"qdir": ..., "pid": ...} for tools')
     pr.add_argument("--force", action="store_true", help="ignore a placed exo instance")
     pr.add_argument("--lease-wait", type=int, default=1800)
     pr.add_argument("--on", help="run on another box from [boxes.NAME] in the vqlab config")
@@ -368,13 +370,18 @@ def _detach(qdir, a) -> int:
     p = subprocess.Popen(cmd, cwd=cwd, env=env,
                          stdin=subprocess.DEVNULL, stdout=open(qdir / "queue.log", "ab"),
                          stderr=subprocess.STDOUT, start_new_session=True)
-    print(f"detached (pid {p.pid}); vqlab queue status {qdir}")
+    if a.json:
+        print(json.dumps({"qdir": str(qdir), "pid": p.pid}))
+    else:
+        print(f"detached (pid {p.pid}); vqlab queue status {qdir}")
     return 0
 
 
 def _cmd_run(ap, a) -> int:
     if bool(a.file) == bool(a.resume):
         ap.error("give a queue file, or --resume <queue dir>")
+    if a.json and not a.detach:
+        ap.error("--json reports a detached runner; give --detach")
     if a.on:
         if not a.file:
             ap.error("--on takes a queue file")
