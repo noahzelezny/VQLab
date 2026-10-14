@@ -28,7 +28,7 @@ from collections import defaultdict
 
 import mlx.core as mx
 
-from vqlab.core.artifacts.artifact import tensor_class
+from vqlab.core.artifacts.artifact import Artifact, INDEX, tensor_class
 
 # Default matcher: core.artifacts.artifact.tensor_class (the one classifier); Qwen/
 # DeepSeek-style checkpoints name the head mtp.* / nextn.*. NOT every family
@@ -41,10 +41,9 @@ from vqlab.core.artifacts.artifact import tensor_class
 
 def find_mtp_keys(src: pathlib.Path, key_re: "re.Pattern[str] | None" = None):
     """{shard: [keys]} for every MTP tensor, from the index."""
-    idx = src / "model.safetensors.index.json"
-    if not idx.exists():
-        raise SystemExit(f"no {idx.name} in {src}")
-    wm = json.loads(idx.read_text())["weight_map"]
+    if not (src / INDEX).exists():
+        raise SystemExit(f"no {INDEX} in {src}")
+    wm = Artifact(src).index
     by_shard = defaultdict(list)
     for k, shard in wm.items():
         if (key_re.search(k) if key_re is not None else tensor_class(k) == "mtp"):

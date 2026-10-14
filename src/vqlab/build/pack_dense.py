@@ -20,6 +20,8 @@ import mlx.core as mx
 import numpy as np
 
 from vqlab.runtime import vq_pack
+from vqlab.util.fs import read_json, write_json
+from vqlab.core.artifacts.artifact import Artifact
 
 def _packs(meta):
     """Would the loop below pack this module? (decided from config alone)"""
@@ -35,7 +37,7 @@ def main(argv=None) -> int:
     args = ap.parse_args(argv)
     SRC, OUT = pathlib.Path(args.src), pathlib.Path(args.out)
 
-    cfg = json.load(open(SRC / "config.json"))
+    cfg = read_json(SRC / "config.json")
     vq_l, vq_e = cfg.get("vq_linear", {}), cfg.get("vq_embed", {})
 
 
@@ -45,7 +47,7 @@ def main(argv=None) -> int:
                          "or every one is already packed, byte-aligned or NSUB-unaligned); "
                          "nothing written")
     OUT.mkdir(parents=True, exist_ok=True)
-    idx = json.load(open(SRC / "model.safetensors.index.json"))["weight_map"]
+    idx = Artifact(SRC).index
     targets = {m + ".codes": m for m in list(vq_l) + list(vq_e)}
 
     new_map, shard_no = {}, 0
@@ -108,7 +110,7 @@ def main(argv=None) -> int:
     # place a model by it, and check-release refuses an index without it
     from vqlab.core.artifacts.artifact import write_index
     write_index(OUT, new_map)
-    json.dump(cfg, open(OUT / "config.json", "w"), indent=1)
+    write_json(OUT / "config.json", cfg, indent=1)
     for f in SRC.iterdir():
         if f.suffix in (".jinja",) or f.name.endswith(("tokenizer.json",
                 "tokenizer_config.json", "generation_config.json",

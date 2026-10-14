@@ -36,12 +36,14 @@ import mlx.core as mx
 import numpy as np
 
 from vqlab.core.source import expert_src as ES
+from vqlab.util.fs import read_json
+from vqlab.core.artifacts.artifact import Artifact
 
 DENSE = (".attn.wq", ".attn.wo", "e_proj", "h_proj", "shared_experts")
 
 
 def exact_head(release: pathlib.Path) -> dict:
-    cfg = json.load(open(release / "config.json"))
+    cfg = read_json(release / "config.json")
     if cfg.get("num_nextn_predict_layers", 0) != 1 or cfg.get("dspark_block_size"):
         raise SystemExit("this release does not carry ONE classic MTP layer (num_nextn_predict_layers=1, "
                          "no DSpark); mtp-head-ds4 builds DeepSeek-V4-Flash's head only")
@@ -54,7 +56,7 @@ def exact_head(release: pathlib.Path) -> dict:
         from mlx_lm.utils import _get_classes
         mc, ac = _get_classes(cfg)
     model = mc(ac.from_dict(cfg))                 # never evaluated
-    wm = json.load(open(release / "model.safetensors.index.json"))["weight_map"]
+    wm = Artifact(release).index
     keys = [k for k in wm if k.startswith("mtp.0.")]
     if not keys:
         raise SystemExit(f"{release}: no mtp.0.* tensors")
@@ -78,7 +80,7 @@ def vq_experts(head, release, D, K):
     from vqlab.runtime import vq_pack
     fam = {"src_key": "mtp.0.ffn.experts.{e}.{key}.weight", "src_quant": "mxfp4",
            "proj": {"gate_proj": ("w1", None), "up_proj": ("w3", None), "down_proj": ("w2", None)}}
-    idx = json.load(open(release / "model.safetensors.index.json"))["weight_map"]
+    idx = Artifact(release).index
     rng = np.random.default_rng(1234)
     vq = {}
     for proj in ("gate_proj", "up_proj", "down_proj"):

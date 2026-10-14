@@ -7,7 +7,6 @@ here in untangle step 14): CPU only, no model.
 from __future__ import annotations
 
 import argparse
-import json
 import os
 import sys
 import time
@@ -18,6 +17,7 @@ from vqlab import config
 from vqlab.fit import reselect as R
 from vqlab.records import provenance
 from vqlab.runtime import vq_pack
+from vqlab.util.fs import write_json
 
 
 def run(root=None):
@@ -54,9 +54,8 @@ def run(root=None):
     bits = vq_pack.bits_for_k(K)
     vqm = {name: {"experts": E, "out": OUT, "in": IN, "k": K, "dim": D,
                   "group": group, "pack_bits": bits}}
-    json.dump({"model_type": "synthetic", "vq_modules": vqm},
-              open(os.path.join(art, "config.json"), "w"))
-    json.dump({"model_type": "synthetic"}, open(os.path.join(tgt, "config.json"), "w"))
+    write_json(os.path.join(art, "config.json"), {"model_type": "synthetic", "vq_modules": vqm})
+    write_json(os.path.join(tgt, "config.json"), {"model_type": "synthetic"})
     mx.save_safetensors(os.path.join(art, "model.safetensors"), {
         name + ".codes": mx.array(vq_pack.pack(km.reshape(E, OUT, nsub), bits)),
         name + ".codebook": mx.array(cb).astype(mx.float16),
@@ -65,8 +64,8 @@ def run(root=None):
     mx.save_safetensors(os.path.join(tgt, "model.safetensors"),
                         {name + ".weight": mx.array(W)})
     mx.save_safetensors(os.path.join(bank, "grams", R._fname(name)), {"gram": mx.array(G)})
-    json.dump({"schema": R.SCHEMA, "modules": [name], "seed": 1234, "tokens": 0,
-               "model": "synthetic"}, open(os.path.join(bank, R.MANIFEST), "w"))
+    write_json(os.path.join(bank, R.MANIFEST), {"schema": R.SCHEMA, "modules": [name], "seed": 1234, "tokens": 0,
+               "model": "synthetic"})
     base_before = R._sha256(os.path.join(art, "model.safetensors"))
     out = os.path.join(root, "out")
     rc = R.main(["apply", "--artifact", art, "--grams", bank, "--target", tgt,

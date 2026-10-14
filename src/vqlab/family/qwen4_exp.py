@@ -12,12 +12,12 @@ multipliers with the stored ones. `ple_multiplier_check` does.
 """
 from __future__ import annotations
 
-import json
 import pathlib
 import re
 
-from vqlab.core.artifacts.artifact import read_header
+from vqlab.core.artifacts.artifact import Artifact, read_header
 from vqlab.family import FamilyPlugin, Parity
+from vqlab.util.fs import read_json
 
 _KEY = re.compile(r"^model\.layers\.(\d+)\.ple\.ple_embedding\.layer_multipliers$")
 
@@ -25,7 +25,7 @@ _KEY = re.compile(r"^model\.layers\.(\d+)\.ple\.ple_embedding\.layer_multipliers
 def _stored(model_dir: pathlib.Path) -> dict:
     """{layer: [int, ...]} read raw from the shards (headers + a few bytes)."""
     import numpy as np
-    idx = json.load(open(model_dir / "model.safetensors.index.json"))["weight_map"]
+    idx = Artifact(model_dir).index
     out = {}
     for k, f in idx.items():
         m = _KEY.match(k)
@@ -52,7 +52,7 @@ def rebuilt(model_dir: pathlib.Path) -> dict:
     import importlib
     import vqlab  # noqa: F401  serves knurlogic's architecture as mlx_lm.models.qwen4_exp
     A = importlib.import_module("mlx_lm.models.qwen4_exp")
-    cfg = json.load(open(model_dir / "config.json"))
+    cfg = read_json(model_dir / "config.json")
     t = cfg.get("text_config", cfg)
     seed = t.get("seed", _default(A.TextArgs, "seed"))
     ids = t.get("ple_layer_ids", _default(A.TextArgs, "ple_layer_ids"))
@@ -78,7 +78,7 @@ def used(model_dir: pathlib.Path) -> dict:
     import mlx.core as mx
     import vqlab  # noqa: F401
     A = importlib.import_module("mlx_lm.models.qwen4_exp")
-    cfg = json.load(open(model_dir / "config.json"))
+    cfg = read_json(model_dir / "config.json")
     model = A.Model(A.ModelArgs.from_dict(cfg))
     stored = {f"model.layers.{li}.ple.ple_embedding.layer_multipliers": mx.array(v, dtype=mx.int64)
               for li, v in _stored(model_dir).items()}

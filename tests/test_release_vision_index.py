@@ -89,7 +89,7 @@ def test_check_release_notes_unverified_tower_under_no_smoke(tmp_path):
 
 def test_check_release_routes_the_image_smoke_by_arm():
     src = (GATE / "check_release.py").read_text()
-    assert 'tensor_class as _tc' in src and '_find("vision_smoke.py")' in src
+    assert 'tensor_class(k) == "tower"' in src and '_find("vision_smoke.py")' in src
     blk = src[src.index("# IMAGE SMOKE."):src.index("# BUILD RECORD")]
     assert '"--knurlogic"' in blk and '"--cluster"' in blk
 
@@ -98,8 +98,8 @@ def test_vision_smoke_counts_a_flat_deepseek_tower(tmp_path):
     vs = _vs()
     (tmp_path / "a").mkdir()
     (tmp_path / "b").mkdir()
-    assert vs._n_tower_tensors(_artifact(tmp_path / "a", tower=True)) == 1
-    assert vs._n_tower_tensors(_artifact(tmp_path / "b", tower=False)) == 0
+    assert vs._n_tower_tensors(vs.Artifact(_artifact(tmp_path / "a", tower=True))) == 1
+    assert vs._n_tower_tensors(vs.Artifact(_artifact(tmp_path / "b", tower=False))) == 0
 
 
 def _probe(tmp_path, vs):

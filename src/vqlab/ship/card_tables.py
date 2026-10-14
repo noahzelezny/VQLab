@@ -19,10 +19,10 @@ the scorer wrote and the artifact's own headers.
 from __future__ import annotations
 
 import argparse
-import json
 import sys
 
 from vqlab.core.artifacts.artifact import sizes
+from vqlab.util.fs import read_json
 
 CORPORA = ("prose", "code", "lit")
 GIB = 2 ** 30
@@ -37,7 +37,7 @@ def _gib(x: float) -> str:
 def _rows(paths):
     rows, paired, builds = {}, [], []
     for p in paths:
-        d = json.load(open(p))
+        d = read_json(p)
         for rung, per in d["table"].items():
             vals = [per[c]["mean_kl_millinats"] for c in CORPORA if c in per]
             if len(vals) != len(CORPORA):

@@ -50,7 +50,7 @@ def rank_logs(job, hosts):
             p = subprocess.run(["ssh", host, cmd], capture_output=True, text=True, timeout=60)
             out[machine] = p.stdout
         else:
-            out[machine] = "".join(open(f).read() for f in
+            out[machine] = "".join(pathlib.Path(f).read_text() for f in
                                    glob.glob(str(pathlib.Path.home() /
                                                  f".cache/knurlogic/jobs/{job}/rank*.log")))
     return out

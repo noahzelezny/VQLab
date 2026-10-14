@@ -8,7 +8,6 @@ generates) and adds config.json: model_file + vq_modules.
 """
 import argparse
 import sys
-import json
 import pathlib
 
 import mlx.core as mx
@@ -18,6 +17,8 @@ from vqlab.runtime.arch_resolve import COERCE as _ARCH_COERCE
 from vqlab.runtime.arch_resolve import PATHWALK as _ARCH_PATHWALK
 from vqlab.runtime.arch_resolve import PRELUDE as _ARCH_PRELUDE
 from vqlab.runtime.arch_resolve import VLM_SANITIZE as _ARCH_VLM_SANITIZE
+from vqlab.util.fs import read_json, write_json
+from vqlab.core.artifacts.artifact import Artifact
 
 _SHIM = '''
 
@@ -203,8 +204,9 @@ def main(argv=None) -> int:
     args = ap.parse_args(argv)
 
     ART = pathlib.Path(args.artifact)
-    idx = json.load(open(ART / "model.safetensors.index.json"))["weight_map"]
-    cfg = json.load(open(ART / "config.json"))
+    art = Artifact.open(ART)
+    idx = art.index
+    cfg = read_json(ART / "config.json")
     _cfg_before = (ART / "config.json").read_bytes()
     _py_before = (ART / "model.py").read_bytes() if (ART / "model.py").exists() else None
 
@@ -228,7 +230,7 @@ def main(argv=None) -> int:
     for k, sh in idx.items():
         if k.endswith(".codes"):
             by_shard.setdefault(sh, []).append(k[:-6])
-    prev = json.load(open(ART / "config.json")).get("vq_modules", {})
+    prev = read_json(ART / "config.json").get("vq_modules", {})
 
     # SKIPZERO (docs/SKIPZERO.md). Modules `vqlab sz-pack` compacted carry
     # {p}.sz_codes / sz_scales / sz_rowmask / sz_shape instead of {p}.codes, so
@@ -245,15 +247,13 @@ def main(argv=None) -> int:
         if m not in prev:
             raise SystemExit(f"{m}: skipzero module has no vq_modules geometry")
         vq_modules[m] = dict(prev[m])
-    from vqlab.core.artifacts.artifact import Artifact
-    _art = Artifact.open(ART)
     for sh, mods in sorted(by_shard.items()):
         data = mx.load(str(ART / sh))
         for m in mods:
             codes = data[m + ".codes"]
             # the codebook may sit in another shard (a module straddling the
             # boundary): its SHAPE is all we need, read from that shard's header
-            cb_shape = _art.header(_art.index[m + ".codebook"])[m + ".codebook"]["shape"]
+            cb_shape = art.header(idx[m + ".codebook"])[m + ".codebook"]["shape"]
             if codes.ndim == 2:
                 # PLE/embedding table (registered under config vq_ple) — not an
                 # expert module.
@@ -301,7 +301,7 @@ def main(argv=None) -> int:
         if _f.is_symlink():
             raise SystemExit(f"REFUSING: {_f} is a symlink; bundling would write "
                              "through it into another artifact")
-    json.dump(cfg, open(ART / "config.json", "w"), indent=1)
+    write_json(ART / "config.json", cfg, indent=1)
 
     from vqlab import _layout
     runtime = _layout.runtime_file("vq_switch.py").read_text()

@@ -12,6 +12,8 @@ import json, pathlib, shutil
 import sys
 import mlx.core as mx
 
+from vqlab.util.fs import read_json, write_json
+
 
 def main(argv=None) -> int:
     # Splicing is pure IO: lazy loads must never evaluate on the GPU stream —
@@ -26,8 +28,8 @@ def main(argv=None) -> int:
     _a = _ap.parse_args(argv)
     ART = pathlib.Path(_a.artifact); PLE = pathlib.Path(_a.ple_fit)
     idx_p = ART / "model.safetensors.index.json"
-    idx = json.load(open(idx_p)); wm = idx["weight_map"]
-    man = json.load(open(PLE / "ple_manifest.json"))
+    idx = read_json(idx_p); wm = idx["weight_map"]
+    man = read_json(PLE / "ple_manifest.json")
     if not man.get("tensors"):
         raise SystemExit(f"REFUSED: {PLE / 'ple_manifest.json'} lists no tensors; "
                          "nothing to splice, nothing written")
@@ -83,9 +85,9 @@ def main(argv=None) -> int:
 
     idx["metadata"]["total_size"] = sum((ART / f).stat().st_size
                                         for f in set(wm.values()))
-    json.dump(idx, open(idx_p, "w"), indent=1)
+    write_json(idx_p, idx, indent=1)
 
-    cfg_p = ART / "config.json"; cfg = json.load(open(cfg_p))
+    cfg_p = ART / "config.json"; cfg = read_json(cfg_p)
     q = cfg.get("quantization", {})
     removed = [m for m in list(q) if ".ngram_embedding." in m]
     for m in removed:
@@ -100,7 +102,7 @@ def main(argv=None) -> int:
                      "shapes": {k.replace("model.language_model.", "model.")
                                  .removesuffix(".weight"): v["shape"]
                                 for k, v in man["tensors"].items()}}
-    json.dump(cfg, open(cfg_p, "w"), indent=1)
+    write_json(cfg_p, cfg, indent=1)
     print(f"config: removed {len(removed)} affine entries, added vq_ple "
           f"({len(cfg['vq_ple']['keys'])} keys)")
     tot = sum((ART / f).stat().st_size for f in set(wm.values()))

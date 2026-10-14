@@ -27,6 +27,7 @@ import numpy as np
 from vqlab.core.source import fit_store as fitstore
 
 from vqlab.skipzero import sz_pack
+from vqlab.util.fs import write_json
 
 GIB = 2 ** 30
 
@@ -151,7 +152,7 @@ def main(argv=None):
         ap.error("packed and original are required")
     rep = check(a.packed, a.original, a.skip_passthrough)
     if a.json:
-        json.dump(rep, open(a.json, "w"), indent=1)
+        write_json(a.json, rep, indent=1)
     print(json.dumps({k: (v[:20] if k == "fails" else v) for k, v in rep.items()}, indent=1))
     print(f"sz-check {rep['verdict']}: {rep['modules']} modules, saved "
           f"{rep['saved_bytes'] / GIB:.3f} GiB ({rep['saved_pct']:.2f}%)")

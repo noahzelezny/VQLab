@@ -219,7 +219,7 @@ def acts_main(a) -> int:
     arms = [("base", {})] + [parse_arm(s) for s in a.arm]
 
     # ---- capture: one forward, every picked module records its call ------
-    text = open(a.acts_corpus, encoding="utf-8").read()
+    text = pathlib.Path(a.acts_corpus).read_text(encoding="utf-8")
     ids = tok.encode(text)[a.acts_offset:a.acts_offset + a.switch_tokens]
     cls = type(pick[0][1])
     names = {id(m): n for n, m in pick}

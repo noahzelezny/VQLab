@@ -100,11 +100,10 @@ def step_loader(ctx):
         return "done", {"note": "dense family: key template checked by the profile"}
     from vqlab.core.source import expert_src
     T = ctx["teacher"]
-    ip = T / "model.safetensors.index.json"
-    if ip.exists():
-        idx = json.loads(ip.read_text())["weight_map"]
+    from vqlab.core.artifacts.artifact import INDEX, Artifact, read_header
+    if (T / INDEX).exists():
+        idx = Artifact(T).index
     else:                                  # single-file checkpoint: no index
-        from vqlab.core.artifacts.artifact import read_header
         idx = {k: f.name for f in sorted(T.glob("*.safetensors"))
                for k in read_header(os.path.realpath(f))}
     layers = prof["arch"]["vq_layers"]

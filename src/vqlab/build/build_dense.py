@@ -34,6 +34,8 @@ from vqlab import _layout
 import mlx.core as mx
 
 from vqlab.family.registry import DENSE_REMAP as FAMILIES  # shared registry
+from vqlab.util.fs import read_json, write_json
+from vqlab.core.artifacts.artifact import Artifact
 
 PROJS = ("gate_proj", "up_proj", "down_proj")
 
@@ -72,8 +74,8 @@ def main(argv=None) -> int:
     BASE, MLP = pathlib.Path(args.base), pathlib.Path(args.mlp)
     OUT = pathlib.Path(args.out)
 
-    base_idx = json.load(open(BASE / "model.safetensors.index.json"))["weight_map"]
-    mlp_cfg = json.load(open(MLP / "config.json"))["vq_modules"]
+    base_idx = Artifact(BASE).index
+    mlp_cfg = read_json(MLP / "config.json")["vq_modules"]
     base_mods = {k.rsplit(".", 1)[0] for k in base_idx}
 
     # ---- build the fit->base remap and PROVE it lands, before touching bytes
@@ -200,12 +202,12 @@ def main(argv=None) -> int:
     from vqlab.core.artifacts.artifact import write_index
     write_index(OUT, new_map)
 
-    cfg = json.load(open(BASE / "config.json"))
+    cfg = read_json(BASE / "config.json")
     cfg["vq_linear"] = {FIT_TO_BASE[m]: dict(v) for m, v in mlp_cfg.items()}
     drop_replaced_quantization(cfg)
     cfg["vq_embed"] = {}
     cfg["model_file"] = "model.py"
-    json.dump(cfg, open(OUT / "config.json", "w"), indent=1)
+    write_json(OUT / "config.json", cfg, indent=1)
 
     # BUNDLE = both runtimes + the loader shim, in that order.
     # vq_dense's fused path needs _dense_fused/_fused, which live in

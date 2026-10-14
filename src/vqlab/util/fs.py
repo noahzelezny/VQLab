@@ -74,6 +74,18 @@ def write_json_atomic(path, obj, indent: int | None = 1) -> pathlib.Path:
     return write_text_atomic(path, json.dumps(obj, indent=indent))
 
 
+def read_json(path):
+    return json.loads(pathlib.Path(path).read_text())
+
+
+def write_json(path, obj, indent: int | None = None) -> pathlib.Path:
+    """json.dump to `path` in place (no temp file: a symlinked `path` is
+    written through, as open(path, "w") would)."""
+    path = pathlib.Path(path)
+    path.write_text(json.dumps(obj, indent=indent))
+    return path
+
+
 def read_jsonl(path, limit: int | None = None, strict: bool = False) -> list:
     """The JSON lines of `path` ([] when it does not exist), only the last
     `limit` when given. A line that is not JSON is skipped, so one torn line

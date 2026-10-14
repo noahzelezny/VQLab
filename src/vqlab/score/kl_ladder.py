@@ -30,6 +30,7 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 from vqlab import _layout
+from vqlab.util.fs import read_json
 
 
 def _kv(pairs, what):
@@ -87,7 +88,7 @@ def _preflight_builds(python, rungs, meta, caches, allow):
         return None
     bad = []
     for name, d in caches.items():
-        m = json.load(open(os.path.join(d, "meta.json")))
+        m = read_json(os.path.join(d, "meta.json"))
         cb = m.get("numerics")
         if cb is None:
             print(f"[kl-ladder] WARNING: cache {name} carries NO numerics build stamp "
@@ -157,7 +158,7 @@ def main():
     caches, rungs = _kv(a.cache, "cache"), _kv(a.rung, "rung")
     meta = {}
     for name, d in caches.items():
-        m = json.load(open(os.path.join(d, "meta.json")))
+        m = read_json(os.path.join(d, "meta.json"))
         corpus = m["corpus"]
         if "/" not in corpus:                    # a house corpus NAME (prose / code / lit)
             corpus = str(_layout.corpus(corpus))
@@ -215,7 +216,7 @@ def main():
             rj = pp + ".json"
             rec = None
             if os.path.exists(pp) and os.path.exists(rj):
-                old_rec = json.load(open(rj))
+                old_rec = read_json(rj)
                 ob = old_rec.get("numerics")
                 same_build = not (ob and run_build) or all(
                     ob.get(k) == run_build.get(k) for k in PREFLIGHT_FIELDS)

@@ -93,6 +93,8 @@ from pathlib import Path
 import mlx.core as mx
 import numpy as np
 
+from vqlab.util.fs import read_json
+
 
 # --------------------------------------------------------------------------
 def load_direct(path, allow_unmatched=False):
@@ -233,7 +235,7 @@ def cmd_cache(args):
 # --------------------------------------------------------------------------
 def cmd_score(args):
     cache = Path(args.cache_dir)
-    meta = json.load(open(cache / "meta.json"))
+    meta = read_json(cache / "meta.json")
     toks = np.array(mx.load(str(cache / "tokens.safetensors"))["tokens"])
     t = mx.load(str(cache / "teacher_topk.safetensors"))
     t_idx, t_lp = t["indices"], t["logprobs"]

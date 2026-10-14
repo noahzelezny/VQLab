@@ -24,12 +24,13 @@ own KL for exactly that reason.
 from __future__ import annotations
 
 import argparse
-import json
 import os
 import sys
 
 import numpy as np
 from safetensors.numpy import load_file
+
+from vqlab.util.fs import read_json
 
 
 def paired(fa: str, fb: str) -> dict:
@@ -59,7 +60,7 @@ def verify(fa: str, fb: str, allow: bool = False) -> list:
 
     def side(f):
         try:
-            return json.load(open(f + ".json"))
+            return read_json(f + ".json")
         except (OSError, ValueError):
             return None
     probs = pairing_problems(side(fa), side(fb))

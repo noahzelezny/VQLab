@@ -44,10 +44,11 @@ from mlx.utils import tree_flatten, tree_unflatten
 # PROVISIONAL until a glm5_next struct base is built.
 from mlx_lm.utils import load_tokenizer, quantize_model, save_config
 
-from vqlab.core.artifacts.artifact import write_index
+from vqlab.core.artifacts.artifact import Artifact, write_index
 from vqlab.family.registry import FAMILY
 from vqlab.family import model_loader as runtime_load
 from vqlab.family import alias_fused, fused_projections
+from vqlab.util.fs import read_json
 
 # The teacher's tokenizer files, copied byte for byte over what
 # load_tokenizer(...).save_pretrained writes. A re-serialization is not a copy:
@@ -179,7 +180,7 @@ def main(argv=None) -> int:
     SKEL = None
     if a.skeleton_from:
         _ref = pathlib.Path(a.skeleton_from)
-        _c = json.load(open(_ref / "config.json"))
+        _c = read_json(_ref / "config.json")
         _q = _c.get("quantization") or _c.get("text_config", {}).get("quantization") or {}
         # A module is quantized in the reference iff its .scales tensor exists
         # there; its width is the per-module entry, else the config default. (A
@@ -187,7 +188,7 @@ def main(argv=None) -> int:
         # config map alone would read every skeleton module as bf16.)
         _default = {"bits": _q.get("bits", 4), "group_size": _q.get("group_size", 64),
                     "mode": _q.get("mode", "affine")}
-        _idx = json.load(open(_ref / "model.safetensors.index.json"))["weight_map"]
+        _idx = Artifact(_ref).index
         # language_model.* in a VL checkpoint; the lazily loaded text model's
         # paths may or may not carry the prefix, so key both spellings.
         SKEL = {}
@@ -299,8 +300,8 @@ def main(argv=None) -> int:
     # load_model then dies in VisionConfig.from_dict). Re-merge anything the
     # source config carried that the written one lost; source values are never
     # overwritten onto keys the convert legitimately changed.
-    _src_cfg = json.load(open(SRC / "config.json"))
-    _dst_cfg = json.load(open(DST / "config.json"))
+    _src_cfg = read_json(SRC / "config.json")
+    _dst_cfg = read_json(DST / "config.json")
     _missing = {k: v for k, v in _src_cfg.items() if k not in _dst_cfg}
     if _missing:
         _dst_cfg.update(_missing)

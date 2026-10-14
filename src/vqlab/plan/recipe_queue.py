@@ -76,6 +76,7 @@ from vqlab.family import registry
 from vqlab.plan import preflight_ram
 from vqlab.util.errors import UserError
 from vqlab.util.geo import geo_key
+from vqlab.core.artifacts.artifact import Artifact, INDEX
 
 MOE = {"qwen3_5"}
 DENSE = {"qwen3_8_dense"}
@@ -212,11 +213,12 @@ def _graft_flags(src: str) -> list[str]:
     vision_tower.* with the patch-embed conv channels-last (graft --help:
     measured on the Qwen3.5-35B pair, 332/333 tensors identical, the conv
     permuted)."""
-    idx = pathlib.Path(config.expand(src)) / "model.safetensors.index.json"
+    teacher = Artifact(config.expand(src))
     try:
-        keys = json.loads(idx.read_text())["weight_map"]
+        keys = teacher.index
     except (OSError, ValueError, KeyError) as e:
-        raise RecipeError(f"cannot read the teacher's tensor index ({idx}): {e}")
+        raise RecipeError(f"cannot read the teacher's tensor index "
+                          f"({teacher.dir / INDEX}): {e}") from None
     if any(k.startswith("model.visual.") for k in keys):
         return ["--dest-prefix", "vision_tower", "--permute-conv5"]
     return []

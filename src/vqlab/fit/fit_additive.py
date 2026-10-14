@@ -34,7 +34,6 @@ build (the pool matches on RECIPE_KEYS).
 from __future__ import annotations
 
 import argparse
-import json
 import math
 import os
 import time
@@ -44,6 +43,8 @@ import mlx.core as mx
 
 from vqlab.fit import geo_build as gb  # reuse the helpers; never copy them
 from vqlab.fit.geo_build import GSZ, NFITG, ITERS_LLOYD, _assign, _kmeanspp, _lloyd, pack
+from vqlab.util.fs import read_json, write_json
+from vqlab.core.artifacts.artifact import Artifact
 
 ROUNDS = 8          # alternation rounds (joint assign -> scale -> C1 -> C2)
 BEAM = 8            # C1 candidates searched per subvector in the joint assign
@@ -179,7 +180,7 @@ def main():
         mx.set_memory_limit(a.memory_limit_gb * 1024 ** 3)
     K = a.k1 * a.k2
     if a.modules.endswith(".json"):
-        geo = json.load(open(a.modules))
+        geo = read_json(a.modules)
         bad = [n for n, g in geo.items() if (int(g["dim"]), int(g["k"])) != (a.dim, K)]
         if bad:
             raise SystemExit(f"geomap entries not at d{a.dim}-K{K}: {bad[:3]}")
@@ -190,8 +191,8 @@ def main():
     rec_method = method(a.k1, a.k2, a.rounds, a.seed)
     os.makedirs(a.out_parts, exist_ok=True)
     op = os.path.join(a.out_parts, "origins.json")
-    origins = json.load(open(op)) if os.path.exists(op) else {}
-    t_index = json.load(open(os.path.join(a.teacher, "model.safetensors.index.json")))["weight_map"]
+    origins = read_json(op) if os.path.exists(op) else {}
+    t_index = Artifact(a.teacher).index
     teacher = gb.fitstore.teacher_slug(a.teacher)
     for n in mods:
         part = os.path.join(a.out_parts, gb.part_name(n, a.dim, K))
@@ -210,7 +211,7 @@ def main():
                "run_id": os.environ.get("VQLAB_RUN_ID"),
                "sha256": gb.provenance._sha(part)}
         origins[os.path.basename(part)] = rec
-        json.dump(origins, open(op, "w"), indent=1)
+        write_json(op, origins, indent=1)
         if not a.no_store:
             st = gb.fitstore.put(part, n, a.family, teacher, recipe=rec)
             gb._log(f"    stored {st['fit_id']}")

@@ -31,9 +31,11 @@ import argparse
 import hashlib
 import json
 import pathlib
+import os
 import sys
 
-import os
+from vqlab.util.fs import read_json
+
 MAN = pathlib.Path(os.environ.get("VQLAB_MANIFEST_DIR", "manifests"))
 
 
@@ -75,7 +77,7 @@ def main(argv=None) -> int:
             print(f"NO MANIFEST {d.name} — cannot verify; stamp it now if these "
                   f"bytes are the ones you mean to keep")
             rc = max(rc, 1); continue
-        old = json.load(open(mf))["shards"]
+        old = read_json(mf)["shards"]
         added = sorted(set(cur) - set(old))
         gone = sorted(set(old) - set(cur))
         moved = [k for k in sorted(set(cur) & set(old))

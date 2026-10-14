@@ -14,13 +14,14 @@ experts, --reps seeds so a delta smaller than the spread is called noise.
 K=256 only: that is where the penalty lives. The K=2048 arm is 5x the cost and
 E107/E108 already showed the penalty shrinks or reverses there.
 """
-import argparse, json, pathlib
+import argparse, pathlib
 import sys
 import mlx.core as mx
 import numpy as np
 
 from vqlab.family.registry import FAMILY
 from vqlab.core.source import expert_src
+from vqlab.core.artifacts.artifact import Artifact
 
 def lloyd(X, C, iters):
     for _ in range(iters):
@@ -73,7 +74,7 @@ def main(argv=None) -> int:
     SRC = pathlib.Path(args.src)
     K, D, G = args.k, args.dim, args.group
     QS = [0, 50, 90, 99, 99.9, 100]
-    src_idx = json.load(open(SRC / "model.safetensors.index.json"))["weight_map"]
+    src_idx = Artifact(SRC).index
     FAM = FAMILY[args.family]
     _shard_cache = {}
 

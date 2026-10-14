@@ -96,7 +96,7 @@ def main():
     print(runtime_load.resolved_runtime_note(model), flush=True)
     core = model.model
 
-    ids = tok.encode(open(a.corpus).read())[: a.tokens + 2]
+    ids = tok.encode(pathlib.Path(a.corpus).read_text())[: a.tokens + 2]
     bos = getattr(tok, "bos_token_id", None)
     if bos is not None and (not ids or ids[0] != bos):
         ids = [bos] + ids[: a.tokens + 1]

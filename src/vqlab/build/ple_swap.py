@@ -21,6 +21,7 @@ import sys
 
 from vqlab.core.artifacts.artifact import write_index
 from vqlab.util.geo import geo_key
+from vqlab.util.fs import read_json, write_json
 
 
 def _ple_key(k):
@@ -36,7 +37,7 @@ def main():
     base, donor, out = (pathlib.Path(p).resolve() for p in (a.artifact, a.donor, a.out))
 
     def index(p):
-        return json.load(open(p / "model.safetensors.index.json"))
+        return read_json(p / "model.safetensors.index.json")
 
     bi, di = index(base), index(donor)
     bwm, dwm = bi["weight_map"], di["weight_map"]
@@ -104,10 +105,10 @@ def main():
     write_index(out, wm, metadata={k: v for k, v in bi.get("metadata", {}).items()
                                    if k != "total_size"})
 
-    cfg = json.load(open(out / "config.json"))
-    dcfg = json.load(open(donor / "config.json"))
+    cfg = read_json(out / "config.json")
+    dcfg = read_json(donor / "config.json")
     cfg["vq_ple"] = dcfg["vq_ple"]
-    json.dump(cfg, open(out / "config.json", "w"), indent=1)
+    write_json(out / "config.json", cfg, indent=1)
     g = dcfg["vq_ple"]["geometry"]
     print(f"ple-swap: {len(dkeys)} PLE keys from {donor.name} "
           f"({geo_key(g['dim'], g['k'])}, {g.get('row_bytes')} B/row) onto "

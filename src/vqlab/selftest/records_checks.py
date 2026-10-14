@@ -10,6 +10,7 @@ from vqlab import _layout
 from vqlab._layout import find as _find
 from vqlab.selftest import PY, check, run
 from vqlab.selftest.synthetic_model import LAYERS, PROJS, geo_fixture
+from vqlab.util.fs import read_json
 
 
 def check_manifest(ctx):
@@ -49,7 +50,7 @@ def _geo_build(ctx, out, *extra):
 
 
 def _check_fit_dense_record(ctx):
-    rec = json.load(open(ctx.f1 / "vqlab_provenance.json"))
+    rec = read_json(ctx.f1 / "vqlab_provenance.json")
     check("fit-dense writes a build record",
           rec["tool"]["name"] == "fit-dense" and rec["method"]["seed"] == 1234
           and rec["inputs"][0]["role"] == "source")
@@ -60,7 +61,7 @@ def _check_fit_dense_record(ctx):
           rec["tool"]["args"]["at_default"] and "k" not in
           rec["tool"]["args"]["at_default"])
     check("unseeded fit is recorded as unseeded",
-          json.load(open(ctx.f3 / "vqlab_provenance.json"))["method"]["seed"]
+          read_json(ctx.f3 / "vqlab_provenance.json")["method"]["seed"]
           == "unseeded")
     p = run([str(_find("provenance.py")), str(ctx.f1), "--verify"], verbose=ctx.verbose)
     check("provenance --verify PASSES untouched build", p.returncode == 0)
@@ -68,7 +69,7 @@ def _check_fit_dense_record(ctx):
 
 def _check_geo_build_record(ctx):
     g = ctx.geo
-    grec = json.load(open(g["out"] / "vqlab_provenance.json"))
+    grec = read_json(g["out"] / "vqlab_provenance.json")
     mod = grec["modules"][g["module"]]
     check("geo-build record: origin fit, alternation ON by default",
           mod["origin"] == "fit" and grec["method"]["alternation"] is True
@@ -80,7 +81,7 @@ def _check_geo_build_record(ctx):
     # module is not refit, and the ledger must still say "fit"
     out2 = ctx.tmp / "geo-out2"
     _geo_build(ctx, out2, "--parts", str(g["out"]) + "_parts")
-    r2 = json.load(open(out2 / "vqlab_provenance.json"))
+    r2 = read_json(out2 / "vqlab_provenance.json")
     check("origin survives a resume (ledger, not guesswork)",
           r2["modules"][g["module"]]["origin"] == "fit")
     from vqlab.core.source import fit_store as fs_
@@ -102,7 +103,7 @@ def _check_geo_build_pool(ctx):
     g = ctx.geo
     out3 = ctx.tmp / "geo-out3"
     _geo_build(ctx, out3, "--pool")
-    r3 = json.load(open(out3 / "vqlab_provenance.json"))["modules"][g["module"]]
+    r3 = read_json(out3 / "vqlab_provenance.json")["modules"][g["module"]]
     same = all((out3 / f.name).read_bytes() == f.read_bytes()
                for f in g["out"].glob("*.safetensors") if not f.is_symlink())
     check("--pool reuses the stored fit (no refit) and rebuilds byte-identical",
@@ -110,7 +111,7 @@ def _check_geo_build_pool(ctx):
           and same, f"origin={r3['origin']}")
     out4 = ctx.tmp / "geo-out4"
     _geo_build(ctx, out4, "--pool", "--tail-weight-pow", "1.0")
-    r4 = json.load(open(out4 / "vqlab_provenance.json"))["modules"][g["module"]]
+    r4 = read_json(out4 / "vqlab_provenance.json")["modules"][g["module"]]
     check("--pool never reuses a fit of ANOTHER recipe (plain fit, tail-weighted build)",
           r4["origin"] == "fit", f"origin={r4['origin']}")
 
@@ -121,7 +122,7 @@ def _check_lineage_and_verify(ctx):
     from vqlab.records.provenance import measured as _meas
     mo = _meas(g["out"])
     check("scores stamp what they measured: build record id + byte fingerprint",
-          mo["build_record"] == json.load(open(g["out"] / "vqlab_provenance.json"))["id"]
+          mo["build_record"] == read_json(g["out"] / "vqlab_provenance.json")["id"]
           and len(mo["fingerprint"]) == 16)
     p = run([str(prov), str(g["out"]), "--lineage"], verbose=ctx.verbose)
     check("provenance --lineage walks to the base",
@@ -144,16 +145,16 @@ def check_cli_build_records(ctx):
                                      capture_output=True, text=True, env=cenv)
     p2 = ctx.tmp / "packed-cli"
     cli("pack", "--src", str(ctx.f1), "--out", str(p2))      # a raw fit's vq_modules (see [3/7])
-    r2 = json.load(open(p2 / "vqlab_provenance.json")) if (p2 / "vqlab_provenance.json").exists() else {}
+    r2 = read_json(p2 / "vqlab_provenance.json") if (p2 / "vqlab_provenance.json").exists() else {}
     check("pack via the CLI gets a build record linked to its fit",
           r2.get("tool", {}).get("name") == "pack"
           and any(i.get("provenance_id") for i in r2.get("inputs", [])))
     if (g["out"] / "vqlab_provenance.json").exists():
-        before = json.load(open(g["out"] / "vqlab_provenance.json"))["id"]
+        before = read_json(g["out"] / "vqlab_provenance.json")["id"]
         # geo-out was corrupted by the known-bad --verify check above; the
         # amendment must still record what it was and what it is now
         cli("bundle", "--artifact", str(g["out"]), "--group", "64")
-        ra = json.load(open(g["out"] / "vqlab_provenance.json"))
+        ra = read_json(g["out"] / "vqlab_provenance.json")
         hist = (g["out"] / "vqlab_provenance.history.jsonl").read_text().splitlines()
         check("in-place bundle AMENDS: new record links the old, history kept",
               ra["tool"]["name"] == "bundle" and ra.get("previous") == before

@@ -29,7 +29,8 @@ import subprocess
 import sys
 
 from vqlab._layout import find as _find
-from vqlab.core.artifacts.artifact import read_header
+from vqlab.core.artifacts.artifact import INDEX, Artifact, read_header, tensor_class
+from vqlab.util.fs import read_json
 
 
 # CLUSTER SMOKE. Rungs larger than any single box we gate on (GLM 3.1/3.6,
@@ -77,9 +78,7 @@ def _cluster_smoke(args, A) -> list[str]:
         p = A / f
         if p.exists():
             local_hashes[f] = hashlib.sha256(p.read_bytes()).hexdigest()
-    shard_sizes = {sh: (A / sh).stat().st_size for sh in sorted(set(
-        json.load(open(A / "model.safetensors.index.json"))["weight_map"]
-        .values()))}
+    shard_sizes = {sh: (A / sh).stat().st_size for sh in sorted(set(Artifact(A).index.values()))}
     peers = [p for p in (args.cluster_peer,) if p]
     if not peers:
         probs.append("cluster smoke requires --cluster-peer: the other "
@@ -266,6 +265,7 @@ def main(argv=None) -> int:
                     help="ssh target for a remote rank's log (runtime check)")
     args = ap.parse_args(argv)
     A = pathlib.Path(args.artifact)
+    art = Artifact(A)
 
     REQUIRED = ["config.json", "model.safetensors.index.json", "tokenizer.json",
                 "tokenizer_config.json"]
@@ -273,7 +273,7 @@ def main(argv=None) -> int:
     for f in REQUIRED:
         if not (A / f).exists():
             fails.append(f"MISSING {f}")
-    cfg = json.load(open(A / "config.json")) if (A / "config.json").exists() else {}
+    cfg = read_json(A / "config.json") if (A / "config.json").exists() else {}
     if cfg.get("model_file") and not (A / cfg["model_file"]).exists():
         fails.append(f"config names model_file={cfg['model_file']} but it is absent")
 
@@ -378,8 +378,9 @@ def main(argv=None) -> int:
                   "processor config against the base.")
 
     # index integrity: every mapped shard exists
-    if (A / "model.safetensors.index.json").exists():
-        wm = json.load(open(A / "model.safetensors.index.json"))["weight_map"]
+    has_index = (A / INDEX).exists()
+    if has_index:
+        wm = art.index
         for sh in sorted(set(wm.values())):
             if not (A / sh).exists():
                 fails.append(f"index names missing shard {sh}")
@@ -398,8 +399,7 @@ def main(argv=None) -> int:
                 fails.append(f"index total_size check crashed: {type(_e).__name__}: {_e}")
         # A grafted tower is only proven wired by an image through the runtime
         # (graft-extras proves the bytes; generation proves the wiring).
-        from vqlab.core.artifacts.artifact import tensor_class as _tc
-        _n_tower = sum(_tc(k) == "tower" for k in wm)
+        _n_tower = sum(tensor_class(k) == "tower" for k in wm)
     else:
         _n_tower = 0
 
@@ -417,10 +417,9 @@ def main(argv=None) -> int:
     # class, never a fixed allowlist: this family legitimately stores 45 float32
     # `linear_attn.A_log` tensors, so a blanket "no fp32" rule would fire on
     # every correct build and be muted within a week.
-    if (A / "model.safetensors.index.json").exists() and cfg:
-        _wm = json.load(open(A / "model.safetensors.index.json"))["weight_map"]
+    if has_index and cfg:
         _dt = {}
-        for _sh in sorted(set(_wm.values())):
+        for _sh in sorted(set(wm.values())):
             if (A / _sh).exists():
                 for _k, _v in read_header(A / _sh).items():
                     _dt[_k] = _v["dtype"]
@@ -483,7 +482,7 @@ def main(argv=None) -> int:
         for _k, _d in _dt.items():
             _tail.setdefault(".".join(_k.split(".")[-2:]), set()).add(_d)
         for _f in sorted(A.glob("*.safetensors")):
-            if _f.name in set(_wm.values()):
+            if _f.name in set(wm.values()):
                 continue
             for _k, _v in read_header(_f).items():
                 _ref = _tail.get(".".join(_k.split(".")[-2:]))

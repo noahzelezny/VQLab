@@ -21,13 +21,12 @@ writing code that reads the tensor directly (anything that skips sanitize()).
     vqlab vision-layout <artifact> --fix    # rewrite to channels-last (rarely wanted)
 """
 import argparse
-import json
 import pathlib
 import shutil
 
 import mlx.core as mx
 
-from vqlab.core.artifacts.artifact import tensor_class
+from vqlab.core.artifacts.artifact import Artifact, tensor_class
 
 # A 5-D conv weight is channels-last iff its LAST axis is a channel count.
 # Real images give 1, 3 or 4; a patch grid never does.
@@ -42,8 +41,7 @@ def classify(shape):
 
 def scan(art: pathlib.Path):
     """[(key, shard, shape, verdict)] for every 5-D vision conv weight."""
-    idx = art / "model.safetensors.index.json"
-    wm = json.loads(idx.read_text())["weight_map"]
+    wm = Artifact(art).index
     vis = [k for k in wm if tensor_class(k) == "tower"]
     out = []
     for sh in sorted({wm[k] for k in vis}):

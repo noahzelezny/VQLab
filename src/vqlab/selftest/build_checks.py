@@ -1,13 +1,13 @@
 """Selftest: the packer (a raw fit's codes, bit-packed)."""
 from __future__ import annotations
 
-import json
 
 import mlx.core as mx
 
 from vqlab._layout import find as _find
 from vqlab.selftest import check, run
 from vqlab.selftest.synthetic_model import decode_all
+from vqlab.util.fs import read_json
 
 
 def check_packer(ctx):
@@ -24,7 +24,7 @@ def check_packer(ctx):
     if check("pack runs", p.returncode == 0):
         u = sum(f.stat().st_size for f in f1.glob("*.safetensors"))
         q = sum(f.stat().st_size for f in packed.glob("*.safetensors"))
-        pk = json.load(open(packed / "config.json"))["vq_modules"]
+        pk = read_json(packed / "config.json")["vq_modules"]
         check("every module packed to 4 bits (K16)",
               all(m.get("pack_bits") == 4 for m in pk.values()),
               f"{sum(bool(m.get('pack_bits')) for m in pk.values())}/{len(pk)}")

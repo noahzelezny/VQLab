@@ -36,6 +36,7 @@ from vqlab.agents import model_scan
 from vqlab.util.errors import UserError
 from vqlab.queue import files as qf
 from vqlab.util.fs import dir_bytes, write_json_atomic
+from vqlab.core.artifacts.artifact import Artifact
 
 def _transport_errors() -> tuple[type[BaseException], ...]:
     """The hub client's network-error base: httpx under huggingface_hub 1.x,
@@ -95,7 +96,7 @@ def _plan(repo: str) -> tuple[list[str], int]:
     names = {s.rfilename for s in info.siblings}
     if INDEX in names:
         idx = hf_hub_download(repo, INDEX)
-        weights = set(json.loads(pathlib.Path(idx).read_text())["weight_map"].values())
+        weights = set(Artifact(pathlib.Path(idx).parent).index.values())
     elif "model.safetensors" in names:
         weights = {"model.safetensors"}
     else:

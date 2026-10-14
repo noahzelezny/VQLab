@@ -9,13 +9,14 @@ the mlx_vlm LanguageModel (never the VLM wrapper).
 from __future__ import annotations
 
 import importlib
-import json
 import pathlib
+
+from vqlab.util.fs import read_json
 
 
 def load_trunk(model_path, lazy: bool = False):
     model_path = pathlib.Path(model_path)
-    model_type = json.load(open(model_path / "config.json")).get("model_type")
+    model_type = read_json(model_path / "config.json").get("model_type")
     try:
         importlib.import_module(f"mlx_lm.models.{model_type}")
         have_mlx_lm = True

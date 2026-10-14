@@ -34,6 +34,7 @@ import mlx.core as mx
 
 from vqlab.runtime import vq_pack
 from vqlab.core.artifacts import codepack  # the packing rule fit-moe --pack shares
+from vqlab.util.fs import read_json, write_json
 
 def _assert_tower_belongs(src_cfg, art_cfg, src_name, art_name):
     """Refuse a vision tower that cannot project into THIS model.
@@ -216,7 +217,7 @@ def main(argv=None) -> int:
     # this field to size the model and REFUSED to place the flagship — "No cycles
     # found with sufficient memory" — and any downloader would be misled the same
     # way. Recomputed below from the packed shards' own headers.
-    _idx = json.load(open(idx_path))
+    _idx = read_json(idx_path)
     from vqlab.core.artifacts.artifact import tensor_bytes, write_index
     _total = tensor_bytes(OUT, _idx["weight_map"].values())
     write_index(OUT, _idx["weight_map"], total_size=_total, metadata=_idx.get("metadata"))
@@ -225,7 +226,7 @@ def main(argv=None) -> int:
 
     # seed config with pack_bits/in so add_model_file can read them back (it
     # refuses to guess a bit width, by design)
-    cfg = json.load(open(OUT / "config.json"))
+    cfg = read_json(OUT / "config.json")
 
     # ---- vision keys.
     # The packer copies the fit output's config verbatim, and the fit output never
@@ -241,7 +242,7 @@ def main(argv=None) -> int:
     if _missing:
         _vsrc = pathlib.Path(args.vision_config_from) if args.vision_config_from else None
         if _vsrc and (_vsrc / "config.json").exists():
-            _vc = json.load(open(_vsrc / "config.json"))
+            _vc = read_json(_vsrc / "config.json")
             # CORRESPONDENCE, not presence: refuse to copy another family's
             # vision block into this artifact. Checked before any key is copied.
             _assert_tower_belongs(_vc, cfg, str(_vsrc), str(OUT))
@@ -262,7 +263,7 @@ def main(argv=None) -> int:
     for mod, meta in vq_meta.items():
         merged.setdefault(mod, {}).update(meta)
     cfg["vq_modules"] = merged
-    json.dump(cfg, open(OUT / "config.json", "w"), indent=1)
+    write_json(OUT / "config.json", cfg, indent=1)
 
     from vqlab._layout import find as _find
     subprocess.run([sys.executable, str(_find("add_model_file.py")),

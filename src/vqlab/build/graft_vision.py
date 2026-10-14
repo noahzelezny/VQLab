@@ -26,7 +26,8 @@ import pathlib
 
 import mlx.core as mx
 
-from vqlab.core.artifacts.artifact import tensor_bytes, tensor_class
+from vqlab.core.artifacts.artifact import Artifact, tensor_bytes, tensor_class
+from vqlab.util.fs import read_json, write_json
 
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser()
@@ -74,7 +75,7 @@ def main(argv=None) -> int:
     ART, SRC = pathlib.Path(args.artifact), pathlib.Path(args.src)
     GRAFT_SHARD = "model-vision-graft.safetensors"
 
-    src_map = json.load(open(SRC / "model.safetensors.index.json"))["weight_map"]
+    src_map = Artifact(SRC).index
     # Qwen keeps the whole tower under one prefix; gemma-4 splits it across
     # vision_tower.* AND embed_vision.* (356 tensors total), so a single-prefix
     # filter silently grafts an incomplete tower. The default asks the one
@@ -107,8 +108,8 @@ def main(argv=None) -> int:
     # BYTE-IDENTICAL non-vision tensor with this artifact. Norms and biases are
     # copied through the fit untouched, so the true base always matches on
     # several; a different model, release, or family matches on none.
-    _artcfg = json.load(open(ART / "config.json"))
-    src_cfg = json.load(open(SRC / "config.json"))
+    _artcfg = read_json(ART / "config.json")
+    src_cfg = read_json(SRC / "config.json")
     _th = (_artcfg.get("text_config") or _artcfg).get("hidden_size")
     _oh = (src_cfg.get("vision_config") or {}).get("out_hidden_size")
     if _th is not None and _oh is not None and _th != _oh:
@@ -118,7 +119,7 @@ def main(argv=None) -> int:
             f"THIS model's base. Nothing written. (Re-pack from the fit rather "
             f"than rewriting config keys in place.)")
 
-    _art_map0 = json.load(open(ART / "model.safetensors.index.json"))["weight_map"]
+    _art_map0 = Artifact(ART).index
 
     # CROSS-LAYOUT KEY MAPPING. HF and mlx name the same tensor differently:
     # HF `model.language_model.X` vs mlx `language_model.model.X`. A cross-layout
@@ -203,7 +204,7 @@ def main(argv=None) -> int:
           f"byte-identical to {SRC.name} (e.g. {_hits[0]})")
 
     idx_path = ART / "model.safetensors.index.json"
-    idx = json.load(open(idx_path))
+    idx = read_json(idx_path)
     art_map = idx["weight_map"]
 
     # collect from however many source shards hold vision tensors
@@ -259,9 +260,9 @@ def main(argv=None) -> int:
         # measured from the shards (HF's definition), never incremented: a re-run
         # replaces the graft shard, and += counted the tower twice
         idx["metadata"]["total_size"] = tensor_bytes(ART, art_map.values())
-    json.dump(idx, open(idx_path, "w"), indent=1)
+    write_json(idx_path, idx, indent=1)
 
-    cfg = json.load(open(ART / "config.json"))
+    cfg = read_json(ART / "config.json")
     if args.copy_config_keys:
         copied, stale = [], []
         for k in args.copy_config_keys.split(","):
@@ -284,7 +285,7 @@ def main(argv=None) -> int:
                 f"Re-run with --replace-config-keys to repair. (The graft shard "
                 f"is written and correct; only the config is unresolved.)")
         if copied:
-            json.dump(cfg, open(ART / "config.json", "w"), indent=1)
+            write_json(ART / "config.json", cfg, indent=1)
             print(f"copied config keys from source: {copied}")
     # Processor configs travel WITH the tower (2026-09-06). Grafting weights
     # without them shipped twice — all four Flash-Next rungs (fifth exhibit,

@@ -27,6 +27,7 @@ import math
 import pathlib
 
 from vqlab import _layout
+from vqlab.util.fs import write_json
 
 
 def main(argv=None):
@@ -78,7 +79,7 @@ def main(argv=None):
            "tokens": scored, "nll": total / scored, "ppl": ppl}
     print(json.dumps(res, indent=2))
     if a.out:
-        open(a.out, "w").write(json.dumps(res, indent=2))
+        write_json(a.out, res, indent=2)
     return res
 
 

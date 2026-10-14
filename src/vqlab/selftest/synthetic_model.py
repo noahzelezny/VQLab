@@ -4,10 +4,12 @@ unknown-family teacher (family-profile / onboard), and a decoder that turns
 any VQ artifact back into dense weights."""
 from __future__ import annotations
 
-import json
 import pathlib
 
 import mlx.core as mx
+
+from vqlab.util.fs import read_json, write_json
+from vqlab.core.artifacts.artifact import Artifact
 
 # tiny geometry: IN divisible by group(64) and dim; OUT small.
 LAYERS, OUT_D, IN_D, G = 2, 64, 128, 64
@@ -35,10 +37,8 @@ def make_source(d: pathlib.Path):
             wm[k] = "model-00001-of-00001.safetensors"
     d.mkdir(parents=True, exist_ok=True)
     mx.save_safetensors(str(d / "model-00001-of-00001.safetensors"), w)
-    json.dump({"metadata": {}, "weight_map": wm},
-              open(d / "model.safetensors.index.json", "w"), indent=1)
-    json.dump({"model_type": "qwen3", "quantization": {"group_size": G, "bits": 4}},
-              open(d / "config.json", "w"), indent=1)
+    write_json(d / "model.safetensors.index.json", {"metadata": {}, "weight_map": wm}, indent=1)
+    write_json(d / "config.json", {"model_type": "qwen3", "quantization": {"group_size": G, "bits": 4}}, indent=1)
 
 
 def geo_fixture(tmp: pathlib.Path):
@@ -54,21 +54,18 @@ def geo_fixture(tmp: pathlib.Path):
     tk = "model.language_model.layers.0.mlp.experts.gate_up_proj"
     mx.save_safetensors(str(teacher / "t.safetensors"),
                         {tk: (mx.random.normal((E, 2 * I, H)) * .05).astype(mx.bfloat16)})
-    json.dump({"weight_map": {tk: "t.safetensors"}},
-              open(teacher / "model.safetensors.index.json", "w"))
+    write_json(teacher / "model.safetensors.index.json", {"weight_map": {tk: "t.safetensors"}})
     mod = "model.language_model.layers.0.mlp.switch_mlp.gate_proj"
     w = {mod + ".codes": mx.zeros((E, I, H // 2), mx.uint8),
          mod + ".codebook": mx.zeros((256, 2), mx.float16),
          mod + ".vq_scales": mx.ones((E, I, H // G), mx.float16)}
     mx.save_safetensors(str(base / "model-00001-of-00001.safetensors"), w)
-    json.dump({"weight_map": {k: "model-00001-of-00001.safetensors" for k in w}},
-              open(base / "model.safetensors.index.json", "w"))
-    json.dump({"model_type": "qwen3_5_moe", "vq_modules": {mod: {
-        "experts": E, "out": I, "in": H, "group": G, "dim": 2, "k": 256}}},
-        open(base / "config.json", "w"))
+    write_json(base / "model.safetensors.index.json", {"weight_map": {k: "model-00001-of-00001.safetensors" for k in w}})
+    write_json(base / "config.json", {"model_type": "qwen3_5_moe", "vq_modules": {mod: {
+        "experts": E, "out": I, "in": H, "group": G, "dim": 2, "k": 256}}})
     brec = provenance.write_build_record(base, tool="selftest-fixture")
     gm = tmp / "geomap.json"
-    json.dump({mod: {"dim": 4, "k": 16}}, open(gm, "w"))
+    write_json(gm, {mod: {"dim": 4, "k": 16}})
     return {"teacher": teacher, "base": base, "map": gm, "module": mod,
             "out": tmp / "geo-out", "base_id": brec["id"]}
 
@@ -81,19 +78,16 @@ def moe_fixture(mt: pathlib.Path, mb: pathlib.Path):
     tk = "model.language_model.layers.0.mlp.experts.gate_up_proj"
     mx.save_safetensors(str(mt / "t.safetensors"),
                         {tk: (mx.random.normal((E_, 2 * I_, H_)) * .05).astype(mx.bfloat16)})
-    json.dump({"weight_map": {tk: "t.safetensors"}},
-              open(mt / "model.safetensors.index.json", "w"))
+    write_json(mt / "model.safetensors.index.json", {"weight_map": {tk: "t.safetensors"}})
     bm = "model.language_model.layers.0.mlp.switch_mlp.gate_proj"
     bw = {bm + ".weight": mx.zeros((E_, I_, H_ * 2 // 32), mx.uint32),
           bm + ".scales": mx.ones((E_, I_, H_ // G), mx.float16),
           bm + ".biases": mx.zeros((E_, I_, H_ // G), mx.float16)}
     mx.save_safetensors(str(mb / "model-00001-of-00001.safetensors"), bw)
-    json.dump({"weight_map": {k: "model-00001-of-00001.safetensors" for k in bw}},
-              open(mb / "model.safetensors.index.json", "w"))
-    json.dump({"model_type": "qwen3_5_moe",
+    write_json(mb / "model.safetensors.index.json", {"weight_map": {k: "model-00001-of-00001.safetensors" for k in bw}})
+    write_json(mb / "config.json", {"model_type": "qwen3_5_moe",
                "quantization": {"group_size": G, "bits": 4,
-                                bm: {"group_size": G, "bits": 2}}},
-              open(mb / "config.json", "w"))
+                                bm: {"group_size": G, "bits": 2}}})
     return bm
 
 
@@ -104,16 +98,16 @@ def novel_teacher(U: pathlib.Path):
           mx.zeros((4, 64, 128), mx.bfloat16)
           for li in range(2) for p_ in ("w1", "w2", "w3")}
     mx.save_safetensors(str(U / "model.safetensors"), wn)
-    json.dump({"model_type": "novelmoe", "num_hidden_layers": 2,
-               "num_experts": 4, "hidden_size": 128}, open(U / "config.json", "w"))
+    write_json(U / "config.json", {"model_type": "novelmoe", "num_hidden_layers": 2,
+               "num_experts": 4, "hidden_size": 128})
 
 
 def decode_all(art: pathlib.Path):
     """Decode every VQ tensor in an artifact to dense weights."""
     from vqlab.runtime import vq_pack
-    cfg = json.load(open(art / "config.json"))
+    cfg = read_json(art / "config.json")
     mods = cfg.get("vq_modules") or cfg.get("vq_linear") or {}
-    idx = json.load(open(art / "model.safetensors.index.json"))["weight_map"]
+    idx = Artifact(art).index
     out = {}
     for m, meta in mods.items():
         shard = art / idx[m + ".codes"]

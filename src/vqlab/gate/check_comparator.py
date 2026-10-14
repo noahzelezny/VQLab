@@ -11,22 +11,19 @@ is safe to run beside a live fit.
 Usage: check_comparator.py --artifact DIR --teacher DIR [--quiet]
 """
 import argparse
-import json
 import pathlib
 import re
 import sys
 
-from vqlab.core.artifacts.artifact import read_header
+from vqlab.core.artifacts.artifact import INDEX, Artifact, read_header
 
 # quantisation companions collapse back onto the weight site they belong to
 COMPANION = re.compile(r"\.(scales|biases|codes|codebook|vq_scales)$")
 
 def core_tensors(d: pathlib.Path):
     d = pathlib.Path(d)
-    idx = d / "model.safetensors.index.json"
-    shards = (sorted(set(json.load(open(idx))["weight_map"].values()))
-              if idx.exists() else
-              sorted(p.name for p in d.glob("*.safetensors")))
+    shards = (sorted(set(Artifact(d).index.values())) if (d / INDEX).exists()
+              else sorted(p.name for p in d.glob("*.safetensors")))
     return {COMPANION.sub(".weight", k) for sh in shards for k in read_header(d / sh)}
 
 def normalize(names):

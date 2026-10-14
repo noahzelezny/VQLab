@@ -39,6 +39,7 @@ import mlx.core as mx
 import numpy as np
 
 from vqlab.runtime import vq_pack
+from vqlab.util.fs import read_json, write_json
 
 
 def main() -> int:
@@ -52,7 +53,7 @@ def main() -> int:
 
     src = pathlib.Path(a.artifact).resolve()
     out = pathlib.Path(a.out).resolve()
-    cfg = json.load(open(src / "config.json"))
+    cfg = read_json(src / "config.json")
     vql = cfg.get("vq_linear")
     if not vql:
         raise SystemExit("REFUSED: no vq_linear block; this is not a dense "
@@ -70,7 +71,7 @@ def main() -> int:
             "confound this tool exists to remove")
 
     out.mkdir(parents=True, exist_ok=True)
-    index = json.load(open(src / "model.safetensors.index.json"))
+    index = read_json(src / "model.safetensors.index.json")
     wm = index["weight_map"]
 
     # by-shard so peak memory is one shard, not the model
@@ -121,7 +122,7 @@ def main() -> int:
 
     for spec in cfg["vq_linear"].values():
         spec.pop("pack_bits", None)
-    json.dump(cfg, open(out / "config.json", "w"), indent=1)
+    write_json(out / "config.json", cfg, indent=1)
     shutil.copy(src / "model.safetensors.index.json",
                 out / "model.safetensors.index.json")
     print(f"\nunpack-dense: {len(packed)} modules, pack_bits dropped -> {out}")

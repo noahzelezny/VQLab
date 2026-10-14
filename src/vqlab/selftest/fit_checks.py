@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import contextlib
 import io
-import json
 import pathlib
 import shutil
 
@@ -12,6 +11,7 @@ import mlx.core as mx
 from vqlab._layout import find as _find
 from vqlab.selftest import check, run
 from vqlab.selftest.synthetic_model import LAYERS, PROJS, decode_all, moe_fixture
+from vqlab.util.fs import read_json
 
 
 def _fit_dense(ctx, out, seed):
@@ -29,7 +29,7 @@ def check_fitter(ctx):
                  and (f1 / "config.json").exists()):
         return False
     check("fit reports SEEDED by default", "SEEDED" in p.stdout)
-    cfg = json.load(open(f1 / "config.json"))
+    cfg = read_json(f1 / "config.json")
     nmod = len(cfg.get("vq_modules", {}))
     check("every target tensor was fit", nmod == LAYERS * len(PROJS),
           f"{nmod} modules")
@@ -66,7 +66,7 @@ def check_fit_moe(ctx):
              "--relerr-abort", "1.0"], verbose=ctx.verbose)
     if check("fit-moe runs on the fixture", p.returncode == 0,
              (p.stderr or p.stdout)[-200:] if p.returncode else ""):
-        mrec = json.load(open(mo / "vqlab_provenance.json"))
+        mrec = read_json(mo / "vqlab_provenance.json")
         check("fit-moe build record: method + module origin",
               mrec["tool"]["name"] == "fit-moe" and mrec["method"]["seed"] == 1234
               and mrec["modules"][bm]["origin"] == "fit")

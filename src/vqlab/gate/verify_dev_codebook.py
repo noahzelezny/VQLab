@@ -14,8 +14,11 @@ III.10 corollary: instrument the REAL code. We do not reimplement the call.
 import json, os, sys
 import mlx.core as mx
 
+from vqlab.util.fs import read_json
+from vqlab.core.artifacts.artifact import Artifact
+
 def load_layer(art):
-    idx = json.load(open(f"{art}/model.safetensors.index.json"))["weight_map"]
+    idx = Artifact(art).index
     pref = None
     for k in idx:
         if k.endswith(".codes") and "switch_mlp" in k:
@@ -28,7 +31,7 @@ def load_layer(art):
     return (t[f"{pref}.codes"], t[f"{pref}.codebook"], t[f"{pref}.vq_scales"], pref)
 
 def pack_bits_of(art):
-    c = json.load(open(f"{art}/config.json"))
+    c = read_json(f"{art}/config.json")
     return _pb(c)
 
 def _pb(c):
@@ -49,7 +52,7 @@ def main(argv=None) -> int:
         if got is None:
             print(f"SKIP (no switch_mlp) {os.path.basename(art)}"); continue
         codes, cb, sc, pref = got
-        pb = _pb(json.load(open(f"{art}/config.json")))
+        pb = _pb(read_json(f"{art}/config.json"))
         K, D = int(cb.shape[0]), int(cb.shape[1])
         words = int(codes.shape[-1])
         NSUB = (words * 32) // pb if pb else words

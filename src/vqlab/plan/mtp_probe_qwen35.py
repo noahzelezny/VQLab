@@ -67,7 +67,7 @@ def main():
     print(f"family {spec.name}; capture {spec.capture!r}; "
           f"resident {mx.get_active_memory() / 2**30:.2f} GiB", flush=True)
 
-    ids = tok.encode(open(a.corpus).read())[: a.tokens + 2]
+    ids = tok.encode(pathlib.Path(a.corpus).read_text())[: a.tokens + 2]
     bos = getattr(tok, "bos_token_id", None)
     if bos is not None and (not ids or ids[0] != bos):
         ids = [bos] + ids[: a.tokens + 1]

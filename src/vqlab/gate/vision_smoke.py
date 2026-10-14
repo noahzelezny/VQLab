@@ -40,6 +40,8 @@ import pathlib
 import sys
 import tempfile
 
+from vqlab.core.artifacts.artifact import INDEX, Artifact, tensor_class
+
 
 # A synthetic probe beats a checked-in JPEG: no binary in the repo, no license
 # question, and the content is known exactly, so the printed caption is worth
@@ -66,7 +68,7 @@ def _image_request_check(post, mid, img, max_tokens, extra=None):
     asserted on.
     """
     import base64
-    b64 = base64.b64encode(open(img, "rb").read()).decode()
+    b64 = base64.b64encode(pathlib.Path(img).read_bytes()).decode()
     q = "What shape and colors are in this image? Answer in one short sentence."
 
     def _body(content, ntok):
@@ -199,15 +201,15 @@ def _knurlogic(art, a, K=None, SPK=None, ready_timeout=1800, poll=10,
     return 0
 
 
-def _n_tower_tensors(art):
-    """Tower tensors in the index, by core.artifacts.artifact.tensor_class -- the same
-    classifier `size` and `check-release` use."""
-    idx = art / "model.safetensors.index.json"
-    if not idx.exists():
-        return 0
-    from vqlab.core.artifacts.artifact import tensor_class
-    wm = json.loads(idx.read_text())["weight_map"]
-    return sum(tensor_class(k) == "tower" for k in wm)
+def _n_tower_tensors(A):
+    """Tower tensors in the index (None without one), by tensor_class -- the
+    one classifier `size` and `check-release` use. It matches any path
+    SEGMENT naming vision/visual: the fleet spells the tower four ways
+    (vision_tower, vision_model, model.visual, embed_vision), and the first
+    cut of this gate listed three and found ZERO on the GLM rungs (F153)."""
+    if not (A.dir / INDEX).exists():
+        return None
+    return sum(tensor_class(k) == "tower" for k in A.index)
 
 
 def _cluster(art, a):
@@ -261,7 +263,7 @@ def _load_bundle_module(art):
     return mod
 
 
-def _load_full(art, mod, cfg, view):
+def _load_full(A, mod, cfg, view):
     """Load the whole model through mlx_vlm as a server does: with the
     artifact's own model.py as the model class (stock mlx_vlm would build its
     plain arch, which has no VQ layers: "Received N parameters not in model"
@@ -279,9 +281,8 @@ def _load_full(art, mod, cfg, view):
         raise SystemExit("FAIL: a VQ artifact whose model.py has no Model/ModelConfig -- "
                          "stock mlx_vlm cannot build its VQ layers, so nothing here would "
                          "be the shipping runtime.")
-    idx = art / "model.safetensors.index.json"
-    named = set(json.loads(idx.read_text())["weight_map"].values()) if idx.exists() else None
-    for f in art.iterdir():
+    named = set(A.index.values()) if (A.dir / INDEX).exists() else None
+    for f in A.dir.iterdir():
         if f.suffix == ".safetensors" and named is not None and f.name not in named:
             continue
         (view / f.name).symlink_to(f.resolve())
@@ -297,7 +298,7 @@ def _load_full(art, mod, cfg, view):
         vlm.get_model_and_args = stock
 
 
-def _tower_only(art, mod, cfg, a):
+def _tower_only(A, mod, cfg, a):
     """Run the probe image through the artifact's OWN vision tower weights."""
     import mlx.core as mx
     from PIL import Image
@@ -306,7 +307,7 @@ def _tower_only(art, mod, cfg, a):
     tower = mod.VisionModel(vcfg)
 
     # Pull just the tower's tensors out of the shards they live in.
-    wm = json.loads((art / "model.safetensors.index.json").read_text())["weight_map"]
+    art, wm = A.dir, A.index
     keys = [k for k in wm if any("vis" in seg for seg in k.split("."))]
     shards = sorted({wm[k] for k in keys})
     print(f"tower tensors    : {len(keys)} across {len(shards)} shard(s)")
@@ -433,12 +434,12 @@ def main() -> int:
     ap.add_argument("--max-tokens", type=int, default=32)
     a = ap.parse_args()
 
-    art = pathlib.Path(a.artifact)
-    cfg = json.loads((art / "config.json").read_text())
+    A = Artifact.open(a.artifact)
+    art, cfg = A.dir, A.config
     # Tower TENSORS count too: DeepSeek-V4 Vision-Exp carries a grafted tower
     # with flat vision_* config keys and no vision_config, and a config-only
     # test SKIPPED it as text-only.
-    n_tower = _n_tower_tensors(art)
+    n_tower = _n_tower_tensors(A)
     mm = bool(cfg.get("vision_config") or cfg.get("audio_config") or n_tower)
     if not mm:
         print(f"SKIP: {art.name} is text-only (no vision_config/audio_config, "
@@ -486,21 +487,9 @@ def main() -> int:
             "modalities.")
     print("surface          : TextConfig + VisionConfig + VisionModel present")
 
-    n_vis = 0
-    idx = art / "model.safetensors.index.json"
-    if idx.exists():
-        wm = json.loads(idx.read_text())["weight_map"]
-        # core.artifacts.artifact.tensor_class, the one classifier: it matches any
-        # path SEGMENT naming vision/visual, not only a prefix list. The
-        # families in this fleet already use four different spellings --
-        # vision_tower (gemma, qwen3_5*), vision_model (glm5_next),
-        # model.visual (qwen HF layout) and embed_vision -- and the first cut
-        # of this gate listed three of them and reported the GLM rungs as
-        # having ZERO vision tensors (F153's brittleness).
-        from vqlab.core.artifacts.artifact import tensor_class
-        n_vis = sum(tensor_class(k) == "tower" for k in wm)
-        print(f"vision tensors   : {n_vis}")
-        if not n_vis:
+    if n_tower is not None:
+        print(f"vision tensors   : {n_tower}")
+        if not n_tower:
             raise SystemExit("FAIL: vision_config present but ZERO vision "
                              "tensors on disk -- the tower was never grafted.")
 
@@ -512,7 +501,7 @@ def main() -> int:
         return 0
 
     if a.tower_only:
-        return _tower_only(art, mod, cfg, a)
+        return _tower_only(A, mod, cfg, a)
 
     # A full load of an artifact bigger than RAM thrashes swap and gives no
     # verdict (a 397B preflight was about to, 2026-10-13): the same hard
@@ -526,17 +515,17 @@ def main() -> int:
 
     # the weight view outlives generation: MLX reads lazily through it
     with tempfile.TemporaryDirectory(prefix="vision-smoke-") as tmp:
-        return _full(art, mod, cfg, a, pathlib.Path(tmp))
+        return _full(A, mod, cfg, a, pathlib.Path(tmp))
 
 
-def _full(art, mod, cfg, a, tmp):
+def _full(A, mod, cfg, a, tmp):
     """Load, wire check and caption, with the weight view in `tmp`."""
     # ---- 2. LOAD ----------------------------------------------------------
     import mlx.core as mx
     from mlx_vlm.prompt_utils import apply_chat_template
 
     (tmp / "view").mkdir()
-    model, processor = _load_full(art, mod, cfg, tmp / "view")
+    model, processor = _load_full(A, mod, cfg, tmp / "view")
     tower = next((getattr(model, n) for n in
                   ("vision_tower", "visual", "vision_model")
                   if getattr(model, n, None) is not None), None)

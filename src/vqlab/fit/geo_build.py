@@ -45,7 +45,6 @@ from __future__ import annotations
 
 import argparse
 import glob
-import json
 import math
 import os
 import shutil
@@ -69,6 +68,9 @@ from vqlab.fit.kmeans import (
     lloyd_weighted as _lloyd,
     sq_dists as _dists,
 )
+
+from vqlab.util.fs import read_json, write_json
+from vqlab.core.artifacts.artifact import Artifact, write_index
 
 GSZ = 64
 CHUNK = 1 << 18
@@ -277,7 +279,7 @@ def _pool_dir(geo, family, teacher, parts, method=None, allow_unknown=False):
                              "store": str(root), "recipe": best.get("recipe"),
                              "twins": len(cands)}
             picked += 1
-    json.dump(origins, open(os.path.join(pool, "origins.json"), "w"), indent=1)
+    write_json(os.path.join(pool, "origins.json"), origins, indent=1)
     _log(f"pool: {picked}/{len(geo)} modules have a stored fit for {teacher}")
     return pool
 
@@ -349,7 +351,7 @@ def main():
     mx.set_wired_limit(0)
     mx.set_memory_limit(a.memory_limit_gb * 1024 ** 3)
     rng = np.random.default_rng(None if a.seed < 0 else a.seed)
-    geo = json.load(open(a.geomap))
+    geo = read_json(a.geomap)
     if not geo:
         # a no-op build: the output would be the shipped artifact relinked
         raise SystemExit(f"REFUSED: {a.geomap} names no module; nothing to rebuild")
@@ -368,8 +370,7 @@ def main():
     parts = a.parts or (a.out.rstrip("/") + "_parts")
     os.makedirs(parts, exist_ok=True)
 
-    t_index = json.load(open(os.path.join(
-        a.teacher, "model.safetensors.index.json")))["weight_map"]
+    t_index = Artifact(a.teacher).index
     a_index = {}
     for f in sorted(glob.glob(os.path.join(a.artifact, "*" + EXT))):
         rp = os.path.realpath(f)
@@ -396,12 +397,12 @@ def main():
     # a checkpoint that exists says nothing about whether it was fit here, by
     # which recipe, or harvested from another rung (docs/PROVENANCE.md).
     origins_path = os.path.join(parts, "origins.json")
-    origins = (json.load(open(origins_path))
+    origins = (read_json(origins_path)
                if os.path.exists(origins_path) else {})
 
     def _note(fname, rec):
         origins[fname] = rec
-        json.dump(origins, open(origins_path, "w"), indent=1)
+        write_json(origins_path, origins, indent=1)
 
     teacher = fitstore.teacher_slug(a.teacher)
     if a.pool:
@@ -444,7 +445,7 @@ def main():
             src_orig = {}
             op = os.path.join(src, "origins.json")
             if os.path.exists(op):
-                src_orig = json.load(open(op)).get(os.path.basename(f), {})
+                src_orig = read_json(op).get(os.path.basename(f), {})
             _note(want, {"origin": "reuse", "from": os.path.realpath(f),
                          "sha256": provenance._sha(f), "source_origin": src_orig})
             reused += 1
@@ -512,7 +513,7 @@ def main():
             continue
         shutil.copy(os.path.realpath(f), os.path.join(a.out, b))
     cfg_path = os.path.join(a.out, "config.json")
-    cfg = json.load(open(cfg_path))
+    cfg = read_json(cfg_path)
     vm = cfg.get("vq_modules") or cfg.get("vq_linear") or {}
     for n, g in geo.items():
         # A module ABSENT from vq_modules is the RESTORE case: it shipped
@@ -577,7 +578,7 @@ def main():
         if gone:
             _log(f"  removed {len(gone)} restored modules from the affine "
                  f"quantization map")
-    json.dump(cfg, open(cfg_path, "w"), indent=1)
+    write_json(cfg_path, cfg, indent=1)
     # ---- RESTORE bookkeeping -------------------------------------------
     # A module that shipped UNQUANTIZED has no `.codes` to swap, so the
     # plain swap loop below would write nothing for it (measured: 9 modules
@@ -586,7 +587,6 @@ def main():
     # the affine tensors they supersede, and REWRITE the index, because the
     # key set changes. The VQ tensors go into the shard that held the
     # affine ones so the module's bytes stay co-located.
-    from vqlab.core.artifacts.artifact import Artifact, write_index
     a_wm = dict(Artifact.open(a.artifact).index)
     restored = [n for n in geo if (n + ".codes") not in a_wm]
     drop, add_to = set(), {}

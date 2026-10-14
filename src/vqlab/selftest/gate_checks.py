@@ -12,6 +12,7 @@ import mlx.core as mx
 
 from vqlab._layout import find as _find
 from vqlab.selftest import check, run
+from vqlab.util.fs import read_json, write_json
 
 
 def check_outlier_gate(ctx):
@@ -50,8 +51,7 @@ def check_bundle_gate(ctx):
             ("dense-missing-switch", ["vq_dense.py"], True, 1)):
         d = ctx.tmp / ("bundle-" + nm)
         d.mkdir()
-        json.dump({"vq_linear" if dense else "vq_modules": {"x": {}}},
-                  open(d / "config.json", "w"))
+        write_json(d / "config.json", {"vq_linear" if dense else "vq_modules": {"x": {}}})
         (d / "model.py").write_text(
             "".join((_find(f)).read_text() for f in files) or "# stale\n")
         p = run([str(_find("check_bundle.py")), "--artifact", str(d)],
@@ -77,7 +77,7 @@ def _check_pin(ctx):
     pout = tmp / "pin_out"
     with contextlib.redirect_stdout(io.StringIO()):
         prc = P.pin(psrc, pout, headroom=1e-12)   # forces the RAM refusal
-    prec = json.load(open(pout / P.MARKER))
+    prec = read_json(pout / P.MARKER)
     check("pin: weights symlinked to the resolved source, metadata copied",
           (pout / "model-00001-of-00001.safetensors").is_symlink()
           and not (pout / "config.json").is_symlink())

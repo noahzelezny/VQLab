@@ -42,6 +42,7 @@ import mlx.core as mx
 import mlx.utils
 
 from vqlab.family import model_loader as runtime_load
+from vqlab.util.fs import read_json
 
 
 def _rel(a, b):
@@ -320,7 +321,7 @@ def main():
 
     from mlx_lm.utils import load_tokenizer
     sp = pathlib.Path(a.student)
-    cfg = json.load(open(sp / "config.json"))
+    cfg = read_json(sp / "config.json")
     mt = cfg.get("model_type") or cfg.get("text_config", {}).get("model_type")
     if mt not in PROBES:
         raise SystemExit(f"FAIL: no layer-leverage probe for "
@@ -355,7 +356,7 @@ def main():
                                                   lazy=True)
     print(runtime_load.resolved_runtime_note(student), flush=True)
     tok = load_tokenizer(sp)
-    ids = tok.encode(open(a.corpus).read())[: a.tokens + 1]
+    ids = tok.encode(pathlib.Path(a.corpus).read_text())[: a.tokens + 1]
     bos = getattr(tok, "bos_token_id", None)
     if bos is not None and (not ids or ids[0] != bos):
         ids = [bos] + ids[: a.tokens]

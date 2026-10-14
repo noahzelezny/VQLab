@@ -14,6 +14,8 @@ import sys
 
 from vqlab.records import provenance
 from vqlab.ship import card_tables
+from vqlab.util.fs import read_json
+from vqlab.core.artifacts.artifact import Artifact
 
 
 class Refuse(SystemExit):
@@ -28,7 +30,7 @@ def check_kl(kl_paths, this: str, artifact: pathlib.Path) -> dict:
     have = provenance.shard_fingerprint(artifact)
     stamped, found, keys, tokens = set(), False, set(), {}
     for p in kl_paths:
-        d = json.load(open(p))
+        d = read_json(p)
         if d.get("changed_during_run"):
             raise Refuse(f"{p}: the scorer recorded artifacts changing during the run: "
                          f"{d['changed_during_run']}")
@@ -81,7 +83,7 @@ def text_match(artifact: pathlib.Path, want: str):
     from vqlab.core.artifacts.artifact import read_header, tensor_class
     files = sorted(artifact.glob("*.safetensors"))
     try:
-        listed = set(json.load(open(artifact / "model.safetensors.index.json"))["weight_map"].values())
+        listed = set(Artifact(artifact).index.values())
     except (OSError, KeyError, ValueError):
         listed = set()
     # an MTP sidecar (mtp-head*.safetensors outside the index, as `size`

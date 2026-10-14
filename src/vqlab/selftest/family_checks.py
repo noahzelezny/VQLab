@@ -9,6 +9,7 @@ import subprocess
 from vqlab._layout import find as _find
 from vqlab.selftest import PY, check
 from vqlab.selftest.synthetic_model import novel_teacher
+from vqlab.util.fs import read_json
 
 
 def check_family_profile(ctx):
@@ -21,13 +22,12 @@ def check_family_profile(ctx):
            "--out", str(tmp / "novel-prof")]
     p = subprocess.run(fp_, capture_output=True, text=True, env=fenv)
     check("unknown family is reported UNKNOWN, not mis-matched (known-bad)",
-          "UNKNOWN" in p.stdout and json.load(open(
-              tmp / "novel-prof" / "profile.json")).get("unknown_family") is True,
+          "UNKNOWN" in p.stdout and read_json(tmp / "novel-prof" / "profile.json").get("unknown_family") is True,
           p.stdout.splitlines()[0] if p.stdout else p.stderr[-200:])
     p = subprocess.run(fp_ + ["--write-entry", "novelmoe"], capture_output=True,
                        text=True, env=fenv)
     p = subprocess.run(fp_, capture_output=True, text=True, env=fenv)
-    prof = json.load(open(tmp / "novel-prof" / "profile.json"))
+    prof = read_json(tmp / "novel-prof" / "profile.json")
     check("drafted data entry makes the family profile: 6 modules found",
           prof["family"] == "novelmoe" and prof["modules"]["count"] == 6,
           f"family={prof['family']} modules={prof['modules']['count']}")
@@ -40,7 +40,7 @@ def check_onboard(ctx):
     oenv = {**ctx.fenv, "VQLAB_SCRATCH": str(tmp / "scratch")}
     p = subprocess.run(ob, capture_output=True, text=True, env=oenv)
     stf = tmp / "fams" / "novelmoe" / "teachers" / "novel-teacher" / "onboard.json"
-    ost = json.load(open(stf))["steps"] if stf.exists() else {}
+    ost = read_json(stf)["steps"] if stf.exists() else {}
     check("onboard runs the CPU steps and stops at the first GPU step",
           ost.get("profile", {}).get("status") == "done"
           and ost.get("loader", {}).get("status") == "done"
@@ -48,7 +48,7 @@ def check_onboard(ctx):
           and "kl cache" in ost.get("cache_a", {}).get("result", {}).get("command", ""),
           (p.stdout or p.stderr)[-200:])
     p = subprocess.run(ob, capture_output=True, text=True, env=oenv)
-    ost2 = json.load(open(stf))["steps"]
+    ost2 = read_json(stf)["steps"]
     check("rerunning onboard resumes (profile/loader stay done, nothing launched)",
           ost2["loader"]["status"] == "done" and ost2["cache_a"]["status"] == "pending"
           and "run_id" not in ost2["cache_a"]["result"])

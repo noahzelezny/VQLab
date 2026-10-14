@@ -51,6 +51,8 @@ import subprocess
 import sys
 
 from vqlab import _layout
+from vqlab.util.fs import read_json, write_json
+
 REF = str(_layout.PKG / "score" / "referee")
 CORPORA = dict(_layout.CORPORA)
 GSZ = 64
@@ -60,7 +62,7 @@ def rank_layers(paths):
     """Average the drift-JUMP ranking across one or more leverage maps."""
     acc = {}
     for p in paths:
-        r = json.load(open(p))
+        r = read_json(p)
         rows = r.get("layers", r) if isinstance(r, dict) else r
         tr = {x["layer"]: x["traj_rel"] for x in rows}
         for L in tr:
@@ -115,7 +117,7 @@ def main():
     hd, hk = (int(x) for x in a.hot_gu.split(":"))
     wd, wk = (int(x) for x in a.hot_down.split(":"))
 
-    cfg = json.load(open(os.path.join(a.artifact, "config.json")))
+    cfg = read_json(os.path.join(a.artifact, "config.json"))
     vm = cfg.get("vq_modules") or cfg.get("vq_linear") or {}
     order, _ = rank_layers(a.leverage)
     order = [L for L in order if L not in protect]
@@ -175,12 +177,12 @@ def main():
     results = {}
     for name, nc, nh, nw, hs in points:
         gm = os.path.join(a.out, f"geomap_{name}.json")
-        json.dump(geo_for(nc, nh, nw, hs), open(gm, "w"), indent=1)
+        write_json(gm, geo_for(nc, nh, nw, hs), indent=1)
         dmb = delta_mb(nc, nh, nw, hs)
         npro = len(hs) if hs is not None else max(nh, a.hold_hot)
         print(f"{name:24} demote={nc:<3} promote={npro:<3} "
               f"restore={nw:<3} {dmb:+8.1f} MB  "
-              f"({len(json.load(open(gm)))} modules differ from shipped)",
+              f"({len(read_json(gm))} modules differ from shipped)",
               flush=True)
         if a.dry_run:
             continue
@@ -238,12 +240,11 @@ def main():
                   f"does not load. Stopping rather than sweeping blind.",
                   flush=True)
             results[name] = row
-            json.dump(results, open(os.path.join(a.out, "sweep_results.json"),
-                                    "w"), indent=1)
+            write_json(os.path.join(a.out, "sweep_results.json"), results, indent=1)
             raise SystemExit(f"FAIL: {name} produced no ppl on any corpus.")
         results[name] = row
         print(f"  -> {row}", flush=True)
-        json.dump(results, open(os.path.join(a.out, "sweep_results.json"), "w"), indent=1)
+        write_json(os.path.join(a.out, "sweep_results.json"), results, indent=1)
 
     if results:
         print("\nMARGINAL ppl per 100 MB (the frontier):")

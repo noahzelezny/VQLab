@@ -38,6 +38,7 @@ import sys
 
 from vqlab.fit.geo_build import part_name
 from vqlab.util.geo import geo_key
+from vqlab.core.artifacts.artifact import Artifact, INDEX
 
 TRIPLE = ("codebook", "codes", "vq_scales")
 
@@ -67,10 +68,10 @@ def main():
 
     import mlx.core as mx
 
-    ipath = os.path.join(a.artifact, "model.safetensors.index.json")
+    ipath = os.path.join(a.artifact, INDEX)
     if not os.path.exists(ipath):
         raise SystemExit(f"FAIL: no index at {ipath}")
-    wmap = json.load(open(ipath))["weight_map"]
+    wmap = Artifact(a.artifact).index
 
     mods = sorted({k.rsplit(".", 1)[0] for k in wmap
                    if k.rsplit(".", 1)[-1] == "codebook"})

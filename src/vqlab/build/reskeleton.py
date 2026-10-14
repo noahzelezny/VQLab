@@ -36,6 +36,7 @@ import sys
 import mlx.core as mx
 
 from vqlab.core.artifacts.artifact import Artifact, tensor_class, write_index
+from vqlab.util.fs import write_json
 
 def _text(key):
     """A text-model tensor: the skeleton is every text tensor that is not an
@@ -120,7 +121,7 @@ def write(vq, sk, out, src, qmap, vcfg):
             cfg[key] = qmap
     if "text_config" in cfg and "quantization" in cfg["text_config"]:
         cfg["text_config"] = {**cfg["text_config"], "quantization": qmap}
-    json.dump(cfg, open(out / "config.json", "w"), indent=2)
+    write_json(out / "config.json", cfg, indent=2)
 
     by_file = {}
     for k, (d, f) in src.items():

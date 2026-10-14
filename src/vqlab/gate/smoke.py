@@ -42,6 +42,7 @@ import subprocess
 import sys
 
 from vqlab._layout import find as _find
+from vqlab.util.fs import read_json
 
 
 def main(argv=None) -> int:
@@ -86,9 +87,8 @@ def main(argv=None) -> int:
     # take exactly the path this tool always took. Both runtimes honour the
     # in-checkpoint model.py bundle, so "generate through the runtime the
     # artifact SHIPS" holds under either.
-    import json as _json
     from vqlab.family import model_loader as runtime_load
-    _cfg = _json.load(open(art / "config.json"))
+    _cfg = read_json(art / "config.json")
     _mt = _cfg.get("model_type") or \
         _cfg.get("text_config", {}).get("model_type")
     _fam = runtime_load.family_for_model_type(_mt)

@@ -41,6 +41,8 @@ import subprocess
 import sys
 import time
 
+from vqlab.util.fs import write_json
+
 ARMS = ("stock", "free", "rank1", "rank2", "outer", "resid2")
 
 
@@ -242,8 +244,7 @@ def main() -> int:
         m = statistics.median(v)
         print(f"{arm:8s} {m:9.2f} {min(v):8.2f} {max(v):8.2f}  {s / m:.3f}x of stock speed")
     if a.json:
-        json.dump({"args": vars(a), "kernels": kern, "us_per_layer": res},
-                  open(a.json, "w"), indent=1)
+        write_json(a.json, {"args": vars(a), "kernels": kern, "us_per_layer": res}, indent=1)
     return 0
 
 

@@ -50,11 +50,12 @@ from vqlab import _layout
 from vqlab.family.registry import FAMILY  # shared registry (family/registry.py)
 from vqlab.core.source import expert_src  # shared source-layout loader (incl. unfused)
 from vqlab.core.artifacts import codepack  # --pack: the same packing rule as `vqlab pack`
-from vqlab.core.artifacts.artifact import read_header
+from vqlab.core.artifacts.artifact import Artifact, read_header
 from vqlab import config as _cfg
 from vqlab.core.source import fit_store as fitstore
 from vqlab.records import provenance
 from vqlab.core.artifacts.artifact import write_index
+from vqlab.util.fs import read_json, write_json
 
 
 @dataclass
@@ -404,9 +405,9 @@ def main(argv=None) -> int:
         TAIL_GEOM = (int(_d), int(_k))
 
 
-    base_idx = json.load(open(BASE / "model.safetensors.index.json"))["weight_map"]
-    src_idx = json.load(open(SRC / "model.safetensors.index.json"))["weight_map"]
-    base_cfg = json.load(open(BASE / "config.json"))
+    base_idx = Artifact(BASE).index
+    src_idx = Artifact(SRC).index
+    base_cfg = read_json(BASE / "config.json")
 
     # FAMILY TABLE. Default is qwen3_5 and is BIT-IDENTICAL to the behaviour that
     # produced the shipped 397B artifacts — the constants below are exactly what
@@ -631,7 +632,7 @@ def main(argv=None) -> int:
 
     write_index(OUT, out_map)          # total_size = tensor bytes of the shards written
     tsz = sum(shard_sizes.values())    # on-disk bytes, for the closing summary line
-    json.dump(new_cfg, open(OUT / "config.json", "w"), indent=1)
+    write_json(OUT / "config.json", new_cfg, indent=1)
 
     # ---- model.py: vq_switch runtime + loader shim, one self-contained file ---
     runtime = _layout.runtime_file("vq_switch.py").read_text()

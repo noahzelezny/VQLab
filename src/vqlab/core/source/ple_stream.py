@@ -39,22 +39,19 @@ the venv or into a shipped model.py.
     from vqlab.core.source.ple_stream import install_ple_stream
     n = install_ple_stream(model, model_path)     # -> number of shard modules bounded
 """
-import json
 import os
 import time
 
 import mlx.core as mx
 
-from vqlab.core.artifacts.artifact import read_header
+from vqlab.core.artifacts.artifact import INDEX, Artifact, read_header
 
 STATS = {"calls": 0, "rows": 0, "secs": 0.0}
 
 
 def _index(model_path):
-    p = os.path.join(model_path, "model.safetensors.index.json")
-    if not os.path.exists(p):
-        return None
-    return json.load(open(p))["weight_map"]
+    a = Artifact(model_path)
+    return a.index if (a.dir / INDEX).exists() else None
 
 
 def _find_sharded(model):

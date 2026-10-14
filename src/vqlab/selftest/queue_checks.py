@@ -13,6 +13,7 @@ from vqlab.queue import files as QF
 from vqlab.queue import runner as QR
 from vqlab.queue import steps as QS
 from vqlab.selftest import check
+from vqlab.util.fs import read_json
 
 _ENV = ("VQLAB_QUEUE_DIR", "VQLAB_GPU_LEASE", "VQLAB_PREFLIGHT_DIR")
 
@@ -49,7 +50,7 @@ def _check_run_and_pin(tmp, qdirs):
         qd = QF.create(qf, allow_dirty=True)
         qdirs.append(qd)
         qrc = QR.run(qd)
-    qs = json.load(open(qd / "state.json"))
+    qs = read_json(qd / "state.json")
     if QF.installed():
         check("queue: an installed package is pinned by version + file hash",
               qs.get("installed") and qs["commit"].startswith("installed:")
@@ -65,7 +66,7 @@ def _check_run_and_pin(tmp, qdirs):
         pd = QF.create(qf, allow_dirty=True, preflight=True)
         qdirs.append(pd)
         QR.run(pd)
-    ps_ = json.load(open(pd / "state.json"))
+    ps_ = read_json(pd / "state.json")
     check("queue --preflight: reports every step; no preflight block is a FAIL",
           [r["status"] for r in ps_["steps"]] == ["pass", "fail", "fail"]
           and "no preflight defined" in ps_["steps"][2]["reasons"][0])
@@ -96,6 +97,6 @@ def _check_preflight(tmp, qdirs):
         QR.run(pd2)
     check("queue: a PASSED preflight leaves nothing on scratch",
           not (tmp / "pf" / pd2.name).exists()
-          and json.load(open(pd2 / "state.json"))["preflight_outputs"] == "removed after pass")
+          and read_json(pd2 / "state.json")["preflight_outputs"] == "removed after pass")
     check("queue: publish can never be queued",
           any("publish" in e for e in QS.validate({"steps": [{"name": "p", "cmd": "publish"}]})))

@@ -95,6 +95,8 @@ from vqlab.runtime import vq_pack
 from vqlab.records import provenance
 from vqlab.util.hashing import sha256_file
 from vqlab.util.log import make_log
+from vqlab.util.fs import read_json, write_json
+from vqlab.core.artifacts.artifact import Artifact, INDEX
 
 SCHEMA = "vqlab.reselect.grams/1"
 MANIFEST = "manifest.json"
@@ -213,7 +215,7 @@ def _load_model(path):
 
 
 def cmd_calibrate(a):
-    cfg = json.load(open(os.path.join(a.model, "config.json")))
+    cfg = read_json(os.path.join(a.model, "config.json"))
     vqm = cfg.get("vq_modules") or cfg.get("text_config", {}).get("vq_modules") or {}
     plan = {
         "schema": SCHEMA, "model": os.path.realpath(a.model),
@@ -298,7 +300,7 @@ def cmd_calibrate(a):
                 tokens_sha256=_sha256(os.path.join(a.out, "tokens.npy")),
                 created=time.strftime("%Y-%m-%dT%H:%M:%S"),
                 code=provenance.code_state(__file__))
-    json.dump(plan, open(os.path.join(a.out, MANIFEST), "w"), indent=1)
+    write_json(os.path.join(a.out, MANIFEST), plan, indent=1)
     _log(f"CALIBRATE-DONE: {len(grams)} Grams -> {gdir}")
     return 0
 
@@ -309,10 +311,8 @@ class _Index:
 
     def __init__(self, d):
         self.d = d
-        ip = os.path.join(d, "model.safetensors.index.json")
-        if os.path.exists(ip):
-            wm = json.load(open(ip))["weight_map"]
-            self.map = {k: os.path.join(d, v) for k, v in wm.items()}
+        if os.path.exists(os.path.join(d, INDEX)):
+            self.map = {k: os.path.join(d, v) for k, v in Artifact(d).index.items()}
         else:
             import mlx.core as mx
             self.map = {}
@@ -384,13 +384,13 @@ def cmd_apply(a):
     if not a.allow_any_out:
         _require_storage(a.out)
     man_path = os.path.join(a.grams, MANIFEST)
-    man = json.load(open(man_path))
+    man = read_json(man_path)
     assert man.get("schema") == SCHEMA, man.get("schema")
     man_sha = _sha256(man_path)
 
-    cfg = json.load(open(os.path.join(a.artifact, "config.json")))
+    cfg = read_json(os.path.join(a.artifact, "config.json"))
     vqm = cfg.get("vq_modules") or cfg.get("text_config", {}).get("vq_modules")
-    tcfg = json.load(open(os.path.join(a.target, "config.json")))
+    tcfg = read_json(os.path.join(a.target, "config.json"))
     aix, tix = _Index(a.artifact), _Index(a.target)
     mods = sorted(man["modules"])
     if a.modules:
@@ -410,7 +410,7 @@ def cmd_apply(a):
         part = os.path.join(parts, _fname(n))
         rep = os.path.join(parts, _fname(n) + ".json")
         if os.path.exists(part) and os.path.exists(rep):
-            report[n] = json.load(open(rep))
+            report[n] = read_json(rep)
             continue
         cb = np.array(aix.get(n + ".codebook").astype(mx.float32))
         K, D = cb.shape
@@ -446,7 +446,7 @@ def cmd_apply(a):
         mx.save_safetensors(part, {
             n + ".codes": mx.array(new_t),
             n + ".vq_scales": mx.array(scl).astype(base_scales.dtype)})
-        json.dump(r, open(rep, "w"))
+        write_json(rep, r)
         report[n] = r
         del Wn, blocks, codes
         mx.clear_cache()
@@ -486,7 +486,7 @@ def cmd_apply(a):
                 os.symlink(os.path.realpath(f), dst)
         else:
             shutil.copy(os.path.realpath(f), dst)   # config/model.py: real copies
-    json.dump(report, open(os.path.join(a.out, "reselect_report.json"), "w"), indent=1)
+    write_json(os.path.join(a.out, "reselect_report.json"), report, indent=1)
     provenance.write_build_record(
         a.out, tool="reselect", script=__file__, ap=_AP, args=a,
         method=_method(a, man_sha, man),

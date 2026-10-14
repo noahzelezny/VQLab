@@ -28,6 +28,7 @@ import struct
 import sys
 
 from vqlab.core.artifacts.artifact import Artifact, read_header, write_index
+from vqlab.util.fs import read_json
 
 SHARD = "model-extras-graft.safetensors"
 
@@ -64,7 +65,7 @@ def _raw(path, key, hdr):
 
 
 def plan_graft(art: Artifact, src: pathlib.Path, preset: dict):
-    sw = json.load(open(src / "model.safetensors.index.json"))["weight_map"]
+    sw = Artifact(src).index
     pick = {}
     for k in sw:
         for pat, repl in preset["rules"]:
@@ -128,7 +129,7 @@ def main(argv=None):
         h, _ = hdr(src, sw[k])
         s, e = h[k]["data_offsets"]
         nbytes += e - s
-    cfg_add = {k: v for k, v in json.load(open(src / "config.json")).items()
+    cfg_add = {k: v for k, v in read_json(src / "config.json").items()
                if k in preset["config_keys"] and k not in art.config}
     print(f"{len(pick)} tensors, {nbytes / 2**30:.2f} GiB -> {SHARD}; "
           f"config keys added: {sorted(cfg_add) or 'none (already present)'}")

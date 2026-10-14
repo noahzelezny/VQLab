@@ -40,6 +40,7 @@ import time
 import mlx.core as mx
 
 from vqlab.family import model_loader as runtime_load
+from vqlab.util.fs import read_json
 
 
 ARM_ENV = {"device": "1", "threadgroup": "0", "auto": "auto"}
@@ -69,7 +70,7 @@ def main():
     a = ap.parse_args()
 
     mp = pathlib.Path(a.model)
-    cfg = json.load(open(mp / "config.json"))
+    cfg = read_json(mp / "config.json")
     mt = cfg.get("model_type") or cfg.get("text_config", {}).get("model_type")
     fam = {"qwen4_exp": "qwen4_exp", "glm5_next": "glm5_next"}.get(mt, mt)
 
@@ -103,7 +104,7 @@ def main():
         model, _ = runtime_load.load_for_family(fam, mp, lazy=False)
         from mlx_lm.utils import load_tokenizer as _lt
         tok = _lt(mp)
-        text = (open(a.corpus).read() if a.corpus
+        text = (pathlib.Path(a.corpus).read_text() if a.corpus
                 else "The quick brown fox jumps over the lazy dog. " * 4000)
         ids = mx.array([tok.encode(text)[: a.tokens]])
         mx.eval(model(ids))                       # warm-up, discarded
@@ -125,7 +126,7 @@ def main():
     model, _ = runtime_load.load_for_family(fam, mp, lazy=False)
     from mlx_lm.utils import load_tokenizer
     tok = load_tokenizer(mp)
-    text = (open(a.corpus).read() if a.corpus
+    text = (pathlib.Path(a.corpus).read_text() if a.corpus
             else "The quick brown fox jumps over the lazy dog. " * 4000)
     ids = mx.array([tok.encode(text)[: a.tokens]])
     print(f"\nprompt {ids.shape[1]} tokens, {a.reps} reps/arm "

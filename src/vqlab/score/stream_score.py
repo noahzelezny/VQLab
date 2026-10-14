@@ -36,6 +36,7 @@ import mlx.core as mx
 
 from vqlab.family import model_loader as runtime_load
 from vqlab.core.source.mem_budget import eval_params_budgeted
+from vqlab.util.fs import read_json
 
 
 def score_qwen4_exp(model, ids_list, args):
@@ -467,7 +468,7 @@ def main():
 
     from mlx_lm.utils import load_tokenizer
     mp = pathlib.Path(a.model)
-    cfg_peek = json.load(open(mp / "config.json"))
+    cfg_peek = read_json(mp / "config.json")
     mt = cfg_peek.get("model_type") or \
         cfg_peek.get("text_config", {}).get("model_type")
     if mt not in SCORERS:
@@ -497,7 +498,7 @@ def main():
             print("[ple_stream] no sharded n-gram tables found", flush=True)
     tok = load_tokenizer(mp)
     from vqlab import _layout
-    ids = tok.encode(open(_layout.corpus(a.corpus)).read())[: a.tokens + 1]
+    ids = tok.encode(pathlib.Path(_layout.corpus(a.corpus)).read_text())[: a.tokens + 1]
     bos = getattr(tok, "bos_token_id", None)
     if bos is not None and (not ids or ids[0] != bos):
         ids = [bos] + ids[: a.tokens]

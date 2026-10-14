@@ -24,7 +24,7 @@ import math
 import sys
 from pathlib import Path
 
-from vqlab.core.artifacts.artifact import read_header, tensor_class
+from vqlab.core.artifacts.artifact import INDEX, Artifact, read_header, tensor_class
 
 # dtype -> bytes/element, as safetensors spells them
 _ITEMSIZE = {
@@ -38,9 +38,8 @@ _ITEMSIZE = {
 
 def _tensors(art: Path):
     """Yield (name, nbytes) for every tensor, from headers alone."""
-    index = art / "model.safetensors.index.json"
-    files = sorted({v for v in json.loads(index.read_text())["weight_map"].values()}) \
-        if index.exists() else ["model.safetensors"]
+    files = (sorted(set(Artifact(art).index.values())) if (art / INDEX).exists()
+             else ["model.safetensors"])
     for fname in files:
         fpath = art / fname
         if not fpath.exists():

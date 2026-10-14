@@ -36,6 +36,7 @@ import time
 import mlx.core as mx
 
 from vqlab.fit.kmeans import assign_mx
+from vqlab.core.artifacts.artifact import Artifact
 
 
 def norm_block(T, D, G):
@@ -72,7 +73,7 @@ def main(argv=None) -> int:
     if a.seed >= 0:
         mx.random.seed(a.seed)
 
-    idx = json.load(open(SRC / "model.safetensors.index.json"))["weight_map"]
+    idx = Artifact(SRC).index
     keys = sorted(k for k in idx if re.search(a.key_regex, k))
     if a.limit:
         keys = keys[: a.limit]

@@ -35,7 +35,8 @@ import time
 
 import mlx.core as mx
 
-from vqlab.core.artifacts.artifact import read_header
+from vqlab.core.artifacts.artifact import Artifact, read_header
+from vqlab.util.fs import read_json
 
 def _group(key: str):
     m = re.match(r"layers\.(\d+)\.", key)
@@ -57,7 +58,7 @@ def main(argv=None):
     from mlx_lm.utils import _get_classes
     src, out = pathlib.Path(a.src), pathlib.Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
-    cfg = json.load(open(src / "config.json"))
+    cfg = read_json(src / "config.json")
     model_cls, args_cls = _get_classes(cfg)
     model = model_cls(args_cls.from_dict(cfg))   # never evaluated: params lazy
     # Keys the sanitize passes through but the runtime model has no slot for
@@ -70,7 +71,7 @@ def main(argv=None):
     model_mods = {k.rsplit(".", 1)[0] for k in model_keys}
     dropped = collections.Counter()
 
-    wmap = json.load(open(src / "model.safetensors.index.json"))["weight_map"]
+    wmap = Artifact(src).index
     groups = collections.defaultdict(list)
     for k in wmap:
         groups[_group(k)].append(k)

@@ -47,6 +47,8 @@ SRC = HERE.parents[1]
 from vqlab import config
 from vqlab.util.hashing import sha256_bytes
 from vqlab.util.log import make_log
+from vqlab.util.fs import read_json, write_json
+from vqlab.core.artifacts.artifact import Artifact
 
 SEED = 1234
 # The last runtime/vq_switch.py without the native SZ switch, shipped as package data
@@ -134,9 +136,9 @@ def worker(art, role, outdir, experts_json, mem_only):
     rep["resident_classes"] = sorted({type(m).__name__ for _, m in model.named_modules()
                                       if "Switch" in type(m).__name__})
     if mem_only:
-        json.dump(rep, open(out / "report.json", "w"), indent=1)
+        write_json(out / "report.json", rep, indent=1)
         return 0
-    order = json.load(open(experts_json))
+    order = read_json(experts_json)
     from vqlab.skipzero import sz_resident
     reach = modns.get("_reach_vq") or sz_resident.reach   # the 397B bundle has no _reach_vq
     mods = list(order)
@@ -213,14 +215,14 @@ def worker(art, role, outdir, experts_json, mem_only):
     np.save(out / "greedy32_logits.npy", np.stack(steps))
     rep["greedy32_tokens"] = toks
     rep["model_py_mtime_end"] = os.stat(pathlib.Path(art) / "model.py").st_mtime
-    json.dump(rep, open(out / "report.json", "w"), indent=1)
+    write_json(out / "report.json", rep, indent=1)
     return 0
 
 
 # ------------------------------------------------------------------ compare
 def compare(outdir, a, b, dtype="bfloat16"):
     da, db = pathlib.Path(outdir) / a, pathlib.Path(outdir) / b
-    ra, rb = json.load(open(da / "report.json")), json.load(open(db / "report.json"))
+    ra, rb = read_json(da / "report.json"), read_json(db / "report.json")
     rows, fails = {}, 0
     for f in sorted(da.glob("*.npy")):
         g = db / f.name
@@ -267,7 +269,7 @@ def mem_table(outdir, roles):
     for r in roles:
         f = pathlib.Path(outdir) / r / "report.json"
         if f.exists():
-            j = json.load(open(f))
+            j = read_json(f)
             print(f"{r:<12}{j['active_gib']:>12.4f}{j['peak_gib']:>12.4f}{j['load_s']:>9.1f}  "
                   f"{j['resident_classes']}")
 
@@ -446,7 +448,7 @@ def partial(resident, stage1, layers, outdir, original=None):
             if lo <= int(p.split(".layers.")[1].split(".")[0]) <= hi]
 
     def tensors(art, keys):
-        idx = json.loads((pathlib.Path(art) / "model.safetensors.index.json").read_text())["weight_map"]
+        idx = Artifact(art).index
         out = {}
         for k in keys:
             f = pathlib.Path(art) / idx[k]
@@ -553,7 +555,7 @@ def main(argv=None):
     out = pathlib.Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     ej = out / "experts.json"
-    json.dump(dead_experts(a.resident), open(ej, "w"))
+    write_json(ej, dead_experts(a.resident))
     jobs = [("resident", a.resident, False), ("reference", a.reference, False)]
     if a.ref2:
         jobs.append(("ref2", a.ref2, False))

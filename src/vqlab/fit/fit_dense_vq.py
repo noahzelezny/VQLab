@@ -18,7 +18,6 @@ fit quality first, runtime integration only if the numbers earn it.
     ./fit_e4b_vq.py --src <bf16 snapshot> --out <dir> [--k 2048 --dim 2]
 """
 import argparse
-import json
 import os
 import pathlib
 import sys
@@ -31,6 +30,8 @@ from vqlab.family.registry import DENSE_FAMILIES
 from vqlab.fit.kmeans import assign_mx as assign
 from vqlab.records import provenance
 from vqlab.records.provenance import write_build_record
+from vqlab.util.fs import read_json, write_json
+from vqlab.core.artifacts.artifact import Artifact
 
 
 def _assert_family_layout(src_idx, sample_key, family, registry_name):
@@ -164,7 +165,7 @@ def main(argv=None) -> int:
     KEY_TMPL, _default_layers = DENSE_FAMILIES[args.family]
     LO, HI = (int(x) for x in (args.layers or _default_layers).split("-"))
     OUT.mkdir(parents=True, exist_ok=True)
-    src_idx = json.load(open(SRC / "model.safetensors.index.json"))["weight_map"]
+    src_idx = Artifact(SRC).index
     PROJ = ["gate_proj", "up_proj", "down_proj"]
     KEY = KEY_TMPL
     _assert_family_layout(src_idx, KEY.format(li=LO, key=PROJ[0]), args.family,
@@ -217,10 +218,10 @@ def main(argv=None) -> int:
     mx.save_safetensors(str(OUT / "model-00001-of-00001.safetensors"), weights)
     idx = {"metadata": {}, "weight_map":
            {k: "model-00001-of-00001.safetensors" for k in weights}}
-    json.dump(idx, open(OUT / "model.safetensors.index.json", "w"), indent=1)
-    cfg = json.load(open(SRC / "config.json"))
+    write_json(OUT / "model.safetensors.index.json", idx, indent=1)
+    cfg = read_json(SRC / "config.json")
     cfg["vq_modules"] = vq_modules
-    json.dump(cfg, open(OUT / "config.json", "w"), indent=1)
+    write_json(OUT / "config.json", cfg, indent=1)
     # BUILD RECORD (docs/PROVENANCE.md). Last write, so it hashes the final bytes.
     write_build_record(
         OUT, tool="fit-dense", script=__file__, ap=ap, args=args,

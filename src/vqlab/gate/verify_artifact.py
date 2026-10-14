@@ -22,7 +22,6 @@ Healthy references (08-18): d4k2048 ~0.19, d2k2048 ~0.032, worst legitimate
 tensor (L00) ~0.215. Anything near 1.0 is a destroyed weight.
 """
 import argparse
-import json
 import math
 import pathlib
 import sys
@@ -35,6 +34,8 @@ from vqlab.runtime import vq_pack
 
 from vqlab.family.registry import FAMILY  # shared registry (family/registry.py)
 from vqlab.core.source import expert_src            # shared source-layout loader (incl. unfused)
+from vqlab.util.fs import read_json
+from vqlab.core.artifacts.artifact import Artifact
 
 def src_tensor(src, src_map, fam, li, proj, cache):
     # expert_src handles every source layout (fused half-slice, pre-stacked,
@@ -72,7 +73,7 @@ def main(argv=None) -> int:
     FAM = FAMILY[args.family]
     G = args.group
 
-    cfg = json.load(open(ART / "config.json"))
+    cfg = read_json(ART / "config.json")
     vq_modules = cfg.get("vq_modules", {})
     if not vq_modules:
         # DENSE artifacts (build_dense.py / build_e4b_vq.py) record their
@@ -85,8 +86,8 @@ def main(argv=None) -> int:
     if not vq_modules:
         sys.exit("config.json has neither vq_modules nor vq_linear — not a VQ artifact?")
 
-    art_map = json.load(open(ART / "model.safetensors.index.json"))["weight_map"]
-    src_map = json.load(open(SRC / "model.safetensors.index.json"))["weight_map"]
+    art_map = Artifact(ART).index
+    src_map = Artifact(SRC).index
 
     _src_cache = {}
 

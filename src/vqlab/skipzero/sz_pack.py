@@ -36,6 +36,7 @@ from vqlab.records import registry
 from vqlab.records import provenance
 
 from vqlab.skipzero import skipzero_load
+from vqlab.util.fs import write_json
 
 TINY = 6.2e-5                       # same threshold as plan/zero_groups.py
 GIB = 2 ** 30
@@ -264,9 +265,8 @@ def main(argv=None):
               file=sys.stderr)
         return 1
     if a.json:
-        json.dump({**summary, "modules": {p: {k: v for k, v in m.items() if k != "live"}
-                                          for p, m in allm.items()}},
-                  open(a.json, "w"), indent=1)
+        write_json(a.json, {**summary, "modules": {p: {k: v for k, v in m.items() if k != "live"}
+                                          for p, m in allm.items()}}, indent=1)
     if a.dry_run:
         print(json.dumps(summary, indent=1))
         return 0
