@@ -77,7 +77,7 @@ from vqlab.plan import preflight_ram
 from vqlab.util.errors import UserError
 from vqlab.util.geo import geo_key
 from vqlab.core.artifacts.artifact import Artifact, INDEX
-from vqlab.util.fs import GIB
+from vqlab.util.fs import GIB, write_text_atomic
 
 MOE = {"qwen3_5"}
 DENSE = {"qwen3_8_dense"}
@@ -231,7 +231,14 @@ def _int(v, what: str) -> int:
     try:
         return int(v)
     except ValueError:
-        raise RecipeError(f"{what} must be an integer, not {v!r}")
+        raise RecipeError(f"{what} must be an integer, not {v!r}") from None
+
+
+def _protect_bits(v) -> int:
+    pb = _int(v, "protect_bits")
+    if not 2 <= pb <= 8:
+        raise RecipeError("protect_bits (attention, embeddings, shared modules) must be 2-8")
+    return pb
 
 
 def _layers(prof: dict) -> tuple[list[int], str]:
@@ -327,9 +334,7 @@ class Recipe:
         geo = geometry(r.get("geo")) if mode == "vq" else None
         tail, pb = None, 8
         if mode == "vq" and family in MOE:
-            pb = _int(r.get("protect_bits", 8), "protect_bits")
-            if not 2 <= pb <= 8:
-                raise RecipeError("protect_bits (attention, embeddings, shared modules) must be 2-8")
+            pb = _protect_bits(r.get("protect_bits", 8))
             t = r.get("tail")
             if t is not None and not isinstance(t, dict):
                 raise RecipeError('tail is {"from": layer, "geo": "dD-KK"}')
@@ -339,9 +344,7 @@ class Recipe:
             if family not in MOE:
                 raise RecipeError("protect_bits on an affine build splits experts from the rest; "
                                   f"{family} has no experts")
-            pb = _int(r["protect_bits"], "protect_bits")
-            if not 2 <= pb <= 8:
-                raise RecipeError("protect_bits (attention, embeddings, shared modules) must be 2-8")
+            pb = _protect_bits(r["protect_bits"])
         elif mode == "affine":
             pb = None
         if mode == "affine" and group not in (32, 64, 128):
@@ -360,7 +363,7 @@ class Recipe:
 
 # Each chain builder -> (steps, artifact GiB, scratch GiB, warnings); `vis` is
 # the vision tower's GiB when the recipe grafts one, else 0.
-def _affine_steps(r: Recipe, prof: dict, src: str, by: dict, vis: float):
+def _affine_steps(r: Recipe, src: str, by: dict, vis: float):
     if r.protect_bits is None:       # uniform: stream-convert's group applies everywhere
         art_gib = _affine_gib(by["carry"] + by["embed"] + by["vq_target"], r.bits, r.group) + vis
     else:                            # mixed: experts bits/group, the rest protect/64
@@ -404,10 +407,11 @@ def _moe_steps(r: Recipe, prof: dict, src: str, by: dict, vis: float):
         if not lo < frm <= hi or frm not in vq:
             raise RecipeError(f"tail.from {frm} must be a VQ layer in {lo + 1}-{hi}")
         args += ["--tail-from", frm, "--tail-geom", f"d{td}k{tk}"]     # fit-moe's own spelling
-        if relerr_abort(td, tk) != abort:
+        tail_abort = relerr_abort(td, tk)
+        if tail_abort != abort:
             warns.append(f"fit-moe takes one --relerr-abort: the looser of the two geometries' "
-                         f"({max(abort, relerr_abort(td, tk))}) applies to every layer")
-        abort = max(abort, relerr_abort(td, tk))
+                         f"({max(abort, tail_abort)}) applies to every layer")
+        abort = max(abort, tail_abort)
         ntail = sum(i >= frm for i in vq)
     n = len(vq)
     stack = g.gib * (n - ntail) / n + (tg.gib * ntail / n if tg else 0)
@@ -559,15 +563,19 @@ def _tail_steps(r: Recipe, src: str, by: dict, oversized: bool = False):
     return steps, warns
 
 
+def queue_text(q: dict) -> str:
+    """A compiled queue as its file's text; every writer of one uses it."""
+    return json.dumps(q, indent=1) + "\n"
+
+
 def compile_recipe(r: dict) -> tuple[dict, list[str]]:
     """-> (queue file dict, warnings). Raises RecipeError, and only that:
     a recipe or profile missing a key it needs is refused, not a crash."""
     try:
         return _compile(r)
-    except RecipeError:
-        raise
-    except (KeyError, TypeError, AttributeError, ValueError) as e:
-        raise RecipeError(f"the recipe or the teacher's profile is malformed ({type(e).__name__}: {e})")
+    except KeyError as e:
+        raise RecipeError(f"the recipe or the teacher's profile is malformed "
+                          f"(missing key {e})") from None
 
 
 def _compile(raw: dict) -> tuple[dict, list[str]]:
@@ -579,9 +587,16 @@ def _compile(raw: dict) -> tuple[dict, list[str]]:
         raise RecipeError(f"{r.teacher} is {kind}, but {r.family} builds are compiled as "
                           f"{'moe' if r.family in MOE else 'dense'}")
     by = prof["bytes"]["by_class_gib"]
+    bad = {k: v for k, v in by.items() if isinstance(v, bool) or not isinstance(v, (int, float))}
+    if bad:
+        raise RecipeError(f"the teacher's profile is malformed: bytes.by_class_gib {bad} "
+                          "is not a number of GiB")
     vis = by.get("vision", 0.0) if r.vision else 0.0
-    chain = _affine_steps if r.mode == "affine" else _moe_steps if r.family in MOE else _dense_steps
-    steps, art_gib, scratch_gib, warns = chain(r, prof, src, by, vis)
+    if r.mode == "affine":
+        steps, art_gib, scratch_gib, warns = _affine_steps(r, src, by, vis)
+    else:
+        chain = _moe_steps if r.family in MOE else _dense_steps
+        steps, art_gib, scratch_gib, warns = chain(r, prof, src, by, vis)
     if r.skipzero:
         vq, _ = _layers(prof)
         geo = {i: (r.tail[1:] if r.tail and i >= r.tail[0] else r.geo) for i in vq}
@@ -612,12 +627,11 @@ def main(argv=None) -> int:
         raise SystemExit(f"recipe refused: {e}")
     for w in warns:
         print(f"note: {w}", file=sys.stderr)
-    text = json.dumps(q, indent=1)
     if a.out:
-        pathlib.Path(a.out).write_text(text + "\n")
+        write_text_atomic(a.out, queue_text(q))
         print(f"wrote {a.out}; run it with `vqlab queue run {a.out} --preflight`")
     else:
-        print(text)
+        print(queue_text(q), end="")
     return 0
 
 

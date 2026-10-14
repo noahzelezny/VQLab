@@ -99,8 +99,8 @@ def write_recipe(body: dict) -> dict:
     d.mkdir(parents=True, exist_ok=True)
     p = d / f"{q['name']}.json"
     try:
-        with open(p, "x") as f:
-            json.dump(q, f, indent=1)
+        with open(p, "x") as f:            # never overwrites a queue file of that name
+            f.write(recipe_queue.queue_text(q))
     except FileExistsError:
         raise UserError(f"a queue file named {p.name} already exists; pick another name")
     return {"ok": True, "file": p.name, "warnings": warns}
