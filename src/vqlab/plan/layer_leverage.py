@@ -39,8 +39,8 @@ import pathlib
 import time
 
 import mlx.core as mx
-import mlx.utils
 
+from vqlab.core.source.mem_budget import eval_params_budgeted
 from vqlab.family import model_loader as runtime_load
 from vqlab.util.fs import GIB, read_json
 
@@ -54,42 +54,11 @@ def _rel(a, b):
     return float((num / den).item())
 
 
-def _eval_params(module, budget_gb):
-    """Materialise a block's weights, but CAP THE EAGER EVAL AT A BUDGET.
-
-    qwen4_exp puts its PLE n-gram tables in layer 1: on Flash-Next-bf16 that
-    one "layer" is 100.3 GiB (128 shards of [2500012, 160] = 96 GiB of
-    tables, over 4.7 GiB of actual expert weights), against 4.8 GiB for an
-    ordinary layer. `mx.eval(blk.parameters())` therefore tries to
-    materialise 100 GiB on a 96 GiB box, and MLX does not raise -- it SPINS
-    in eval_impl's memory-limit check (get_memory_limit / get_active_memory
-    under a mutex, plainly visible in a `sample`), so the probe looks alive
-    and makes no progress at all. No per-tensor guard catches this: every
-    individual shard is only 0.75 GiB. The budget has to be per BLOCK.
-
-    Skipping an eager eval costs nothing but peak-memory bookkeeping. The
-    tables are a LOOKUP -- a forward gathers only the rows its token ids
-    touch -- and the lazy read ops were created under the CPU stream inside
-    load_model (see the WATCHDOG note in main), which is what binds the
-    stream. Leaving them lazy does NOT move them onto the GPU stream.
-
-    Largest tensors are skipped first, so the cheap weights still get the
-    eager treatment. Returns (evaluated_bytes, skipped_bytes).
-    """
-    budget = int(budget_gb * GIB)
-    flat = [(n, a) for n, a in mlx.utils.tree_flatten(module.parameters())
-            if isinstance(a, mx.array)]
-    flat.sort(key=lambda t: t[1].nbytes)          # cheapest first
-    keep, keep_bytes, skip_bytes = [], 0, 0
-    for _, arr in flat:
-        if keep_bytes + arr.nbytes > budget:
-            skip_bytes += arr.nbytes
-            continue
-        keep.append(arr)
-        keep_bytes += arr.nbytes
-    if keep:
-        mx.eval(keep)
-    return keep_bytes, skip_bytes
+# Probes eval each block through eval_params_budgeted: qwen4_exp's layer 1 is
+# 100.3 GiB of PLE tables in bf16 (F115); the budget
+# is per BLOCK. The tables are a LOOKUP (a forward gathers only the rows its
+# token ids touch) and their lazy reads were bound to the CPU stream inside
+# load_model (see the WATCHDOG note in main), so leaving them lazy is free.
 
 
 def probe_qwen4_exp(teacher, student, ids_list, args):
@@ -155,7 +124,7 @@ def probe_qwen4_exp(teacher, student, ids_list, args):
         # averaged together.
         if i < args.start_layer:
             with mx.stream(mx.cpu):
-                _eval_params(s_blk, args.lazy_over_gb)
+                eval_params_budgeted(s_blk, args.lazy_over_gb)
             h_s = s_blk(h_s, s_core.rope, s_mask, s_conv, None, None,
                         ids, s_prev)          # same signature as the ranked path
             mx.eval(h_s)
@@ -169,8 +138,8 @@ def probe_qwen4_exp(teacher, student, ids_list, args):
                   flush=True)
             continue
         with mx.stream(mx.cpu):
-            _, t_skip = _eval_params(t_blk, args.lazy_over_gb)
-            _, s_skip = _eval_params(s_blk, args.lazy_over_gb)
+            _, t_skip = eval_params_budgeted(t_blk, args.lazy_over_gb)
+            _, s_skip = eval_params_budgeted(s_blk, args.lazy_over_gb)
         if t_skip or s_skip:
             print(f"  layer {i}: left "
                   f"{(t_skip + s_skip) / GIB:.1f} GiB lazy "
@@ -254,8 +223,8 @@ def probe_glm5_next(teacher, student, ids_list, args):
     for i in range(n):
         t_blk, s_blk = t_core.layers[i], s_core.layers[i]
         with mx.stream(mx.cpu):
-            _, t_skip = _eval_params(t_blk, args.lazy_over_gb)
-            _, s_skip = _eval_params(s_blk, args.lazy_over_gb)
+            _, t_skip = eval_params_budgeted(t_blk, args.lazy_over_gb)
+            _, s_skip = eval_params_budgeted(s_blk, args.lazy_over_gb)
         if t_skip or s_skip:
             print(f"  layer {i}: left "
                   f"{(t_skip + s_skip) / GIB:.1f} GiB lazy "
