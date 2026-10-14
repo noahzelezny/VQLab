@@ -46,12 +46,14 @@ def test_slabbed_quantize_is_exactly_the_whole_stack(monkeypatch):
     monkeypatch.setattr(sc, "SLAB_BYTES", 3 * 64 * 128 * 2)       # 3 experts per slab
     w = mx.random.normal((8, 64, 128), key=mx.random.key(0)).astype(mx.bfloat16)
     want = mx.quantize(w, group_size=64, bits=2)
-    got = sc._slabbed(mx.quantize)(w, group_size=64, bits=2)
-    src, parts, ids = sc._SLABS[id(got[0])]
-    assert src is w and len(parts) == 3 and ids == [id(g) for g in got]
+    slabs = sc._SlabQuantizer()
+    got = slabs.wrap(mx.quantize)(w, group_size=64, bits=2)
+    src, parts = slabs.pop(got[1])
+    assert src is w and len(parts) == 3
+    assert all(slabs.pop(g) is None for g in got)      # one pop releases all three
     for g, x in zip(got, want):
         assert mx.array_equal(g, x).item()
-    sc._SLABS.clear()
+    assert slabs.pop(mx.quantize(w[:1], group_size=64, bits=2)[0]) is None
 
 
 def test_teacher_tokenizer_files_are_copied_verbatim(tmp_path):

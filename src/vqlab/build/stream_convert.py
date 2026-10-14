@@ -23,8 +23,8 @@ Recipe (measured on qwen4_exp; review per family): router (mlp.gate) bf16;
 ngram/PLE tables at the global group (32, divides 160-wide rows); body at
 group 64 via per-module override.
 
-    python -m vqlab.stream_convert --src <hf snapshot> --out <dir> --bits 4
-    python -m vqlab.stream_convert --src ... --out ... --struct --family qwen4_exp
+    vqlab stream-convert --src <hf snapshot> --out <dir> --bits 4
+    vqlab stream-convert --src ... --out ... --struct --family qwen4_exp
 """
 import argparse
 import gc
@@ -108,22 +108,48 @@ def body_spec(path, *, target, bits, group=64, protect_bits=None, struct=False):
 # bound to the CPU stream and never enters a GPU buffer), then quantizes it a
 # slab of experts per eval. Affine groups lie along the last axis, so slabs
 # are exact: byte-identical to the one-kernel quantization.
-SLAB_BYTES = 512 * 2**20
-_SLABS: dict = {}            # id(joined output) -> (source stack, its slab outputs, every id)
+SLAB_BYTES = 512 << 20
 
 
-def _slabbed(quantize):
-    def q(w, *args, **kw):
-        if w.ndim != 3 or w.nbytes <= SLAB_BYTES:
-            return quantize(w, *args, **kw)
-        n = max(1, SLAB_BYTES // (w.nbytes // w.shape[0]))
-        parts = [quantize(w[i:i + n], *args, **kw) for i in range(0, w.shape[0], n)]
-        out = tuple(mx.concatenate([p[j] for p in parts], axis=0) for j in range(len(parts[0])))
-        entry = (w, parts, [id(o) for o in out])
-        for o in out:
-            _SLABS[id(o)] = entry
-        return out
-    return q
+class _SlabQuantizer:
+    """wrap(quantize) quantizes a stack bigger than SLAB_BYTES a slab of
+    experts at a time; pop(arr) hands the write loop, for any one of a
+    stack's outputs (weight, scales, biases), the (source stack, slab
+    outputs) to evaluate first, or None. pop drops the handles of all three
+    outputs at once: one left behind keeps the read stack alive (a 35B ran
+    to 89 GiB)."""
+
+    def __init__(self):
+        self._pending = {}     # id(joined output) -> (source stack, slab outputs, every id)
+
+    def wrap(self, quantize):
+        def q(w, *args, **kw):
+            if w.ndim != 3 or w.nbytes <= SLAB_BYTES:
+                return quantize(w, *args, **kw)
+            n = max(1, SLAB_BYTES // (w.nbytes // w.shape[0]))
+            parts = [quantize(w[i:i + n], *args, **kw) for i in range(0, w.shape[0], n)]
+            out = tuple(mx.concatenate([p[j] for p in parts], axis=0)
+                        for j in range(len(parts[0])))
+            entry = (w, parts, [id(o) for o in out])
+            for o in out:
+                self._pending[id(o)] = entry
+            return out
+        return q
+
+    def pop(self, arr):
+        entry = self._pending.pop(id(arr), None)
+        if entry is None:
+            return None
+        src, parts, ids = entry
+        for i in ids:
+            self._pending.pop(i, None)
+        return src, parts
+
+
+def _eval_slabs(src, parts):
+    mx.eval(src)                  # the read alone (CPU stream with --cpu-load)
+    for part in parts:
+        mx.eval(part)             # one slab of experts per eval
 
 
 def main(argv=None) -> int:
@@ -232,7 +258,8 @@ def main(argv=None) -> int:
     PREQ = sum(1 for n, m in model.named_modules()
                if target in n and "Quantized" in type(m).__name__)
     gbits = a.protect_bits if a.struct else a.bits
-    whole, mx.quantize = mx.quantize, _slabbed(mx.quantize)
+    slabs = _SlabQuantizer()
+    whole, mx.quantize = mx.quantize, slabs.wrap(mx.quantize)
     try:
         model, config = quantize_model(model, config, 32, gbits, mode="affine",
                                        quant_predicate=predicate)
@@ -272,17 +299,11 @@ def main(argv=None) -> int:
                   flush=True)
             si += 1; size = 0
         prev_mod = mod
-        src, parts, ids = _SLABS.get(id(arr), (None, (), ()))
-        for i in ids:                     # weight, scales, biases: drop every handle at once, or
-            _SLABS.pop(i, None)           # the others keep the read stack alive (a 35B ran to 89 GiB)
-        if parts:
-            mx.eval(src)                  # the read alone (CPU stream with --cpu-load)
-            for part in parts:
-                mx.eval(part)             # one slab of experts per eval
-            del src, parts
+        slab = slabs.pop(arr)
+        if slab is not None:
+            _eval_slabs(*slab)
+            del slab
             mx.clear_cache()              # a freed 4 GiB stack must not sit in MLX's cache
-        else:
-            del src, parts
         mx.eval(arr)
         shard[name] = arr
         size += arr.nbytes
