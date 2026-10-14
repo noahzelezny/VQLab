@@ -39,6 +39,11 @@ from vqlab.core.source.mem_budget import eval_params_budgeted
 from vqlab.util.fs import GIB, read_json
 
 
+def _chunk(args) -> int:
+    """The --chunk positions per block (512 when unset or 0)."""
+    return max(1, int(getattr(args, "chunk", 512) or 512))
+
+
 def score_qwen4_exp(model, ids_list, args):
     """Streamed qwen4_exp scorer — CHUNKED, with per-layer recurrent state.
 
@@ -63,7 +68,7 @@ def score_qwen4_exp(model, ids_list, args):
     core = model.model
     ids = mx.array([ids_list[:-1]])
     S = ids.shape[1]
-    C = max(1, int(getattr(args, "chunk", 512) or 512))
+    C = _chunk(args)
     with mx.stream(mx.cpu):
         mx.eval(core.embed_tokens.parameters())
     h = core.embed_tokens(ids)
@@ -211,7 +216,7 @@ def score_glm5_next(model, ids_list, args):
     mx.eval(h)
 
     S = ids.shape[1]
-    C = max(1, int(getattr(args, "chunk", 512) or 512))
+    C = _chunk(args)
     caches = lm.make_cache() if hasattr(lm, "make_cache") else [None] * len(core.layers)
 
     n = len(core.layers)
@@ -317,7 +322,7 @@ def score_qwen3_5_moe(model, ids_list, args):
     core = lm.model
     ids = mx.array([ids_list[:-1]])
     S = ids.shape[1]
-    C = max(1, int(getattr(args, "chunk", 512) or 512))
+    C = _chunk(args)
     with mx.stream(mx.cpu):
         mx.eval(core.embed_tokens.parameters())
     h = core.embed_tokens(ids)
@@ -650,7 +655,7 @@ def main():
         side.write_text(json.dumps(rec))
 
     if a.save_topk:
-        C_ = max(1, int(getattr(a, "chunk", 512) or 512))
+        C_ = _chunk(a)
         outd = pathlib.Path(a.out or (mp.name + "_topk"))
         outd.mkdir(parents=True, exist_ok=True)
         # Every quantity below is per position, so it is computed C_ positions
