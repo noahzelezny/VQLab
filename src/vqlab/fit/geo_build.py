@@ -267,10 +267,10 @@ def _pool_dir(geo, family, teacher, parts, method=None, allow_unknown=False):
             if not cands:
                 continue
             seed = (method or {}).get("seed")
-            best = sorted(cands, key=lambda r: (
+            best = min(cands, key=lambda r: (
                 not r.get("recipe"),
                 ((r.get("recipe") or {}).get("fitter") or {}).get("seed") != seed,
-                r.get("filed") or "~", r["fit_id"]))[0]
+                r.get("filed") or "~", r["fit_id"]))
             src = best["location"].split("#", 1)[0]
             dst = os.path.join(pool, want)
             if os.path.lexists(dst):

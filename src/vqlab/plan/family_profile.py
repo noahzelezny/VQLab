@@ -259,7 +259,7 @@ def main(argv=None) -> int:
         sigs[r["proj"]].add((r["E"], r["OUT"], r["IN"]))
     geos = {}
     for proj, ss in sigs.items():
-        E, OUT, IN = sorted(ss)[0]
+        E, OUT, IN = min(ss)
         n_mod = sum(1 for r in rows if r["proj"] == proj)
         geos[proj] = [{**g, "stack_gib": round(g["bytes"] * n_mod / GIB, 3)}
                       for g in geometry_table(IN, E, OUT)]
