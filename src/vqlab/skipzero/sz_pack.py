@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import os
 import pathlib
 import re
@@ -28,15 +29,15 @@ import sys
 
 import numpy as np
 
-HERE = pathlib.Path(__file__).resolve().parent
 from vqlab import config
-from vqlab.util.log import make_log
+from vqlab.core.artifacts.artifact import Artifact, write_index
 from vqlab.core.source import fit_store as fitstore
-from vqlab.records import registry
-from vqlab.records import provenance
-
+from vqlab.records import provenance, registry
 from vqlab.skipzero import skipzero_load
 from vqlab.util.fs import GIB, write_json
+from vqlab.util.log import make_log
+
+HERE = pathlib.Path(__file__).resolve().parent
 
 TINY = 6.2e-5                       # same threshold as plan/zero_groups.py
 ESIZE = {"U8": 1, "I8": 1, "U16": 2, "I16": 2, "F16": 2, "BF16": 2,
@@ -134,10 +135,7 @@ def build_tensors(h, mods):
 
 
 def _size(dtype, shape):
-    n = ESIZE[dtype]
-    for s in shape:
-        n *= s
-    return n
+    return ESIZE[dtype] * math.prod(shape)
 
 
 def header_bytes(tensors, metadata):
@@ -230,7 +228,6 @@ def main(argv=None):
     # A module whose tensors straddle a shard boundary is planned per shard,
     # so no single shard holds all of it and it is never packed. Say so: a
     # silent skip reads as "no dead rows here" (writer contracts, 2026-10-02).
-    from vqlab.core.artifacts.artifact import Artifact, write_index
     straddle = (sorted(m for m in Artifact.open(src).straddling() if m in specs)
                 if (src / "model.safetensors.index.json").exists() else [])
     if straddle:
