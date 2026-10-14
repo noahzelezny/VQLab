@@ -6,6 +6,7 @@ import a ship tool.
 import mlx.core as mx
 
 from vqlab.mtp import load_mtp_head
+from vqlab.util.fs import GIB
 
 
 def add_sampling_args(ap):
@@ -33,7 +34,7 @@ def load_all(a):
                                family=a.family)
     mx.clear_cache()
     print(f"MTP head ({spec.name}) resident: "
-          f"{(mx.get_active_memory() - before) / 2**30:.2f} GiB", flush=True)
+          f"{(mx.get_active_memory() - before) / GIB:.2f} GiB", flush=True)
     return model, tok, head
 
 

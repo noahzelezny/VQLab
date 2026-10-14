@@ -22,6 +22,7 @@ import sys
 
 from vqlab import config as _config
 from vqlab.util.hashing import sha256_file
+from vqlab.util.fs import GIB
 
 
 # Disk: writers refuse below their own margins; say so before they do
@@ -148,7 +149,7 @@ def report():
         dev_info = getattr(mx, "device_info", None) or mx.metal.device_info
         info = dev_info() if mx.metal.is_available() else {}
         r["metal"] = {"available": mx.metal.is_available(), "device": info.get("device_name"),
-                      "memory_gib": round(info.get("memory_size", 0) / 2**30)}
+                      "memory_gib": round(info.get("memory_size", 0) / GIB)}
     except Exception as e:
         r["metal"] = {"available": False, "error": str(e)}
     mlm = r["packages"]["mlx-lm"]["path"]
@@ -165,7 +166,7 @@ def report():
     for key, fn in (("scratch", C.scratch), ("models", C.models), ("teachers", C.teachers)):
         p = fn()
         ok = p.exists()
-        free = shutil.disk_usage(p).free / 2**30 if ok else None
+        free = shutil.disk_usage(p).free / GIB if ok else None
         r["storage"][key] = {"path": str(p), "exists": ok,
                              "writable": ok and os.access(p, os.W_OK),
                              "free_gib": round(free, 1) if free is not None else None}

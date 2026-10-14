@@ -34,6 +34,8 @@ import sys
 
 import mlx.core as mx
 
+from vqlab.util.fs import GIB
+
 DEFAULT_PROMPTS = [
     "Explain why vector quantization compresses neural network weights better than scalar rounding.",
     "Write a Python function that merges two sorted lists without using sorted().",
@@ -99,7 +101,7 @@ def main():
         mx.clear_cache()
     if not heads:
         raise SystemExit("pass at least one --head label=path")
-    print(f"resident {mx.get_active_memory()/2**30:.2f} GiB | "
+    print(f"resident {mx.get_active_memory()/GIB:.2f} GiB | "
           f"{len(heads)} heads x {len(aligns)} schemes x {len(prompts)} prompts",
           flush=True)
 

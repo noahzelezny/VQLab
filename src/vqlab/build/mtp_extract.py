@@ -29,6 +29,7 @@ from collections import defaultdict
 import mlx.core as mx
 
 from vqlab.core.artifacts.artifact import Artifact, INDEX, tensor_class
+from vqlab.util.fs import GIB
 
 # Default matcher: core.artifacts.artifact.tensor_class (the one classifier); Qwen/
 # DeepSeek-style checkpoints name the head mtp.* / nextn.*. NOT every family
@@ -104,7 +105,7 @@ def main():
             total += v.nbytes
         del part, picked
         print(f"  {shard}: +{len(keys)} tensors "
-              f"({total / 2**30:.2f} GiB so far)", flush=True)
+              f"({total / GIB:.2f} GiB so far)", flush=True)
 
     # A graft of zeros yields a head with exactly 0.0 acceptance, which is
     # indistinguishable from the RMSNorm-convention bug. Refuse to write one.
@@ -121,7 +122,7 @@ def main():
         "format": "mlx", "vqlab_mtp_graft": json.dumps(
             {"source": src.name, "tensors": len(out)})})
     print(f"\nwrote {outp}")
-    print(f"  {len(out)} tensors, {outp.stat().st_size / 2**30:.2f} GiB")
+    print(f"  {len(out)} tensors, {outp.stat().st_size / GIB:.2f} GiB")
     print(f"  key prefixes: {sorted({k.split('.')[0] for k in out})}")
     print(f"  all-zero check: PASS ({len(out)} tensors carry data)")
     return 0

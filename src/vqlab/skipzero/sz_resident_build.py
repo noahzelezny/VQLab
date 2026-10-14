@@ -36,6 +36,7 @@ from vqlab.records import provenance
 
 from vqlab.skipzero import skipzero_load
 from vqlab.skipzero import sz_resident
+from vqlab.util.fs import GIB
 
 OWN = {"config.json", "model.py", "sz_resident.py", "skipzero_load.py", ".DS_Store"}
 
@@ -165,8 +166,8 @@ def main(argv=None):
         modules={p: {"origin": "skipzero-resident", "live_rows": v[4]} for p, v in shapes.items()},
         full_hash={"config.json", mf, "sz_resident.py", "skipzero_load.py"})
     _log(f"{len(shapes)} modules; rows {rows} live {live} dead {rows - live}")
-    _log(f"{len(shapes)} modules; resident saving {saved / 2**30:.4f} GiB rows - "
-         f"{row_tbl / 2**30:.4f} GiB row tables = {(saved - row_tbl) / 2**30:.4f} GiB net")
+    _log(f"{len(shapes)} modules; resident saving {saved / GIB:.4f} GiB rows - "
+         f"{row_tbl / GIB:.4f} GiB row tables = {(saved - row_tbl) / GIB:.4f} GiB net")
     _log(f"DONE -> {out}")
     return 0
 

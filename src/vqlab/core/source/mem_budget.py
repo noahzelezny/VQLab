@@ -18,6 +18,8 @@ budget has to be per BLOCK.
 import mlx.core as mx
 import mlx.utils
 
+from vqlab.util.fs import GIB
+
 
 def eval_params_budgeted(module, budget_gb):
     """Eval a block's weights up to a total budget; leave the rest lazy.
@@ -30,7 +32,7 @@ def eval_params_budgeted(module, budget_gb):
 
     Returns (evaluated_bytes, skipped_bytes).
     """
-    budget = int(budget_gb * 1024 ** 3)
+    budget = int(budget_gb * GIB)
     flat = [(n, a) for n, a in mlx.utils.tree_flatten(module.parameters())
             if isinstance(a, mx.array)]
     flat.sort(key=lambda t: t[1].nbytes)          # cheapest first

@@ -44,6 +44,8 @@ import time
 
 import mlx.core as mx
 
+from vqlab.util.fs import GIB
+
 
 def _stub(_self, x, *args, **kwargs):
     """Delete the module's work, keep its input alive. See module docstring."""
@@ -653,9 +655,8 @@ def _grid(model, tok, a) -> int:
 def _print_mem():
     # Resident cost of the arm: weights plus any load-time scratch (e.g.
     # VQ_PREFILL_EXPAND). Peak includes the transient activations.
-    gib = 1024 ** 3
-    print(f"  memory active {mx.get_active_memory() / gib:6.2f} GiB   "
-          f"peak {mx.get_peak_memory() / gib:6.2f} GiB", flush=True)
+    print(f"  memory active {mx.get_active_memory() / GIB:6.2f} GiB   "
+          f"peak {mx.get_peak_memory() / GIB:6.2f} GiB", flush=True)
 
 
 if __name__ == "__main__":

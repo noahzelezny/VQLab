@@ -36,10 +36,9 @@ from vqlab.records import registry
 from vqlab.records import provenance
 
 from vqlab.skipzero import skipzero_load
-from vqlab.util.fs import write_json
+from vqlab.util.fs import GIB, write_json
 
 TINY = 6.2e-5                       # same threshold as plan/zero_groups.py
-GIB = 2 ** 30
 ESIZE = {"U8": 1, "I8": 1, "U16": 2, "I16": 2, "F16": 2, "BF16": 2,
          "U32": 4, "I32": 4, "F32": 4, "U64": 8, "I64": 8, "F64": 8, "BOOL": 1}
 SKIP_FILES = {".DS_Store", "config.json", "model.py", "model.safetensors.index.json"}

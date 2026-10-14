@@ -21,7 +21,7 @@ import sys
 
 from vqlab.core.artifacts.artifact import write_index
 from vqlab.util.geo import geo_key
-from vqlab.util.fs import read_json, write_json
+from vqlab.util.fs import GIB, read_json, write_json
 
 
 def _ple_key(k):
@@ -113,7 +113,7 @@ def main():
     print(f"ple-swap: {len(dkeys)} PLE keys from {donor.name} "
           f"({geo_key(g['dim'], g['k'])}, {g.get('row_bytes')} B/row) onto "
           f"{base.name}; {linked} symlinks, "
-          f"{bi['metadata']['total_size']/2**30:.2f} GiB -> {out}")
+          f"{bi['metadata']['total_size']/GIB:.2f} GiB -> {out}")
 
 
 if __name__ == "__main__":

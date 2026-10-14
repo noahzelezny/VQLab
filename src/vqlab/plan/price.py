@@ -24,7 +24,7 @@ import argparse
 import sys
 from dataclasses import dataclass
 
-GIB = 1024**3
+
 
 
 @dataclass

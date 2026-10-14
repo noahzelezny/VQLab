@@ -22,10 +22,9 @@ import argparse
 import sys
 
 from vqlab.core.artifacts.artifact import sizes
-from vqlab.util.fs import read_json
+from vqlab.util.fs import GIB, read_json
 
 CORPORA = ("prose", "code", "lit")
-GIB = 2 ** 30
 
 
 def _gib(x: float) -> str:

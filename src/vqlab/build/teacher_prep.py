@@ -24,6 +24,7 @@ import sys
 
 from vqlab.build import sanitize_stream
 from vqlab.core.artifacts.artifact import read_header
+from vqlab.util.fs import GIB
 
 
 def relabel_e8m0(src: pathlib.Path) -> int:
@@ -71,8 +72,8 @@ def main(argv=None):
     out.mkdir(parents=True, exist_ok=True)
     have = shutil.disk_usage(out).free
     if have < need * 1.05:
-        raise SystemExit(f"disk preflight: {out} has {have / 2**30:.0f} GiB free, "
-                         f"needs ~{need * 1.05 / 2**30:.0f} GiB")
+        raise SystemExit(f"disk preflight: {out} has {have / GIB:.0f} GiB free, "
+                         f"needs ~{need * 1.05 / GIB:.0f} GiB")
     if not a.no_relabel:
         print(f"relabelled {relabel_e8m0(src)} F8_E8M0 tensors as U8", flush=True)
     args = ["--src", str(src), "--out", str(out)] + (

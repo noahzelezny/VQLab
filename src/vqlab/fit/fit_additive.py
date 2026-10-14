@@ -43,7 +43,7 @@ import mlx.core as mx
 
 from vqlab.fit import geo_build as gb  # reuse the helpers; never copy them
 from vqlab.fit.geo_build import GSZ, NFITG, ITERS_LLOYD, _assign, _kmeanspp, _lloyd, pack
-from vqlab.util.fs import read_json, write_json
+from vqlab.util.fs import GIB, read_json, write_json
 from vqlab.core.artifacts.artifact import Artifact
 
 ROUNDS = 8          # alternation rounds (joint assign -> scale -> C1 -> C2)
@@ -177,7 +177,7 @@ def main():
         mx.set_default_device(mx.cpu)
     else:
         mx.set_wired_limit(0)
-        mx.set_memory_limit(a.memory_limit_gb * 1024 ** 3)
+        mx.set_memory_limit(a.memory_limit_gb * GIB)
     K = a.k1 * a.k2
     if a.modules.endswith(".json"):
         geo = read_json(a.modules)

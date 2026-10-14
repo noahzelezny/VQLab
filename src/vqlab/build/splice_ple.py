@@ -12,7 +12,7 @@ import json, pathlib, shutil
 import sys
 import mlx.core as mx
 
-from vqlab.util.fs import read_json, write_json
+from vqlab.util.fs import GIB, read_json, write_json
 
 
 def main(argv=None) -> int:
@@ -106,7 +106,7 @@ def main(argv=None) -> int:
     print(f"config: removed {len(removed)} affine entries, added vq_ple "
           f"({len(cfg['vq_ple']['keys'])} keys)")
     tot = sum((ART / f).stat().st_size for f in set(wm.values()))
-    print(f"artifact now {tot/2**30:.1f} GiB")
+    print(f"artifact now {tot/GIB:.1f} GiB")
     return 0
 
 

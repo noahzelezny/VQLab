@@ -27,7 +27,7 @@ import pathlib
 import mlx.core as mx
 
 from vqlab.core.artifacts.artifact import Artifact, tensor_bytes, tensor_class
-from vqlab.util.fs import read_json, write_json
+from vqlab.util.fs import GIB, read_json, write_json
 
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser()
@@ -304,7 +304,7 @@ def main(argv=None) -> int:
                   "vision_config release gate will refuse this artifact.")
 
     missing = [k for k in ("vision_config", "image_token_id") if k not in cfg]
-    print(f"grafted {len(out)} vision tensors ({total / 1024**3:.2f} GiB) -> "
+    print(f"grafted {len(out)} vision tensors ({total / GIB:.2f} GiB) -> "
           f"{ART / GRAFT_SHARD}")
     if missing:
         print(f"WARNING: config lacks {missing} — exo will not build a "

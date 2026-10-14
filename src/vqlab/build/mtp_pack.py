@@ -22,6 +22,7 @@ import pathlib
 import mlx.core as mx
 
 from vqlab.mtp import registry
+from vqlab.util.fs import GIB
 
 SIDECAR_NAME = "mtp-head-q6.safetensors"
 
@@ -109,7 +110,7 @@ def main():
     head.quantize(bits=a.bits, group_size=a.group_size,
                   expert_bits=a.expert_bits)
     mx.clear_cache()
-    resident = (mx.get_active_memory() - before) / 2**30
+    resident = (mx.get_active_memory() - before) / GIB
 
     eb = a.bits if a.expert_bits is None else a.expert_bits
     out = pathlib.Path(a.out) if a.out else pathlib.Path(a.model)
@@ -123,7 +124,7 @@ def main():
             out = out / f"mtp-head-e{eb}q{a.bits}.safetensors"
     flat = head.save(out, bits=a.bits, group_size=a.group_size,
                      expert_bits=a.expert_bits)
-    size = out.stat().st_size / 2**30
+    size = out.stat().st_size / GIB
     print(f"wrote {out}")
     recipe = (f"{a.bits}-bit" if eb == a.bits
               else f"experts {eb}-bit / rest {a.bits}-bit")

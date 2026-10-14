@@ -19,7 +19,7 @@ import pathlib
 import mlx.core as mx
 import numpy as np
 
-from vqlab.util.fs import read_json, write_json
+from vqlab.util.fs import GIB, read_json, write_json
 
 def pack_rows(c16, bits):
     rows, n = c16.shape
@@ -105,7 +105,7 @@ def main(argv=None) -> int:
                                         for f in set(wm.values()))
     write_json(idx_p, idx, indent=1)
     tot = idx["metadata"]["total_size"]
-    print(f"row_bytes={g['row_bytes']}; artifact now {tot/2**30:.1f} GiB")
+    print(f"row_bytes={g['row_bytes']}; artifact now {tot/GIB:.1f} GiB")
     return 0
 
 

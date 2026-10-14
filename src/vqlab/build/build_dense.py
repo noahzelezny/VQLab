@@ -34,7 +34,7 @@ from vqlab import _layout
 import mlx.core as mx
 
 from vqlab.family.registry import DENSE_REMAP as FAMILIES  # shared registry
-from vqlab.util.fs import read_json, write_json
+from vqlab.util.fs import GIB, read_json, write_json
 from vqlab.core.artifacts.artifact import Artifact
 
 PROJS = ("gate_proj", "up_proj", "down_proj")
@@ -234,7 +234,7 @@ def main(argv=None) -> int:
             shutil.copy(BASE / f, OUT / f)
 
     tot = sum(p.stat().st_size for p in OUT.glob("*.safetensors"))
-    print(f"\nartifact -> {OUT}\n  {tot/2**30:.2f} GiB of tensors")
+    print(f"\nartifact -> {OUT}\n  {tot/GIB:.2f} GiB of tensors")
     return 0
 
 

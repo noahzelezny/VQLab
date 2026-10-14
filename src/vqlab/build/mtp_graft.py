@@ -45,6 +45,7 @@ import mlx.core as mx
 
 from vqlab.core.artifacts.artifact import tensor_class
 from vqlab.mtp.mtp_head import MTPHead
+from vqlab.util.fs import GIB
 
 PREFIX = "language_model.mtp."
 OUT_NAME = "model-mtp.safetensors"
@@ -133,7 +134,7 @@ def main():
     cfg.write_text(json.dumps(quant, indent=1))
 
     print(f"wrote {path}")
-    print(f"  {len(flat)} tensors, {path.stat().st_size / 2**30:.2f} GiB, "
+    print(f"  {len(flat)} tensors, {path.stat().st_size / GIB:.2f} GiB, "
           f"experts {a.expert_bits}-bit / rest {a.bits}-bit / group "
           f"{a.group_size}")
     print(f"  matches the model*.safetensors glob: "

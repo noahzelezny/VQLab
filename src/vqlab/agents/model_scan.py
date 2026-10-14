@@ -42,7 +42,7 @@ import sys
 import threading
 
 from vqlab import config
-from vqlab.util.fs import read_jsonl, write_text_atomic
+from vqlab.util.fs import GIB, read_jsonl, write_text_atomic
 
 FULL = {"bfloat16", "float16", "float32", "bf16", "fp16", "fp32"}
 
@@ -256,7 +256,7 @@ def main(argv=None) -> int:
         print(json.dumps(rows, indent=1))
         return 0
     for r in rows:
-        gib = (r.get("bytes") or 0) / 2**30
+        gib = (r.get("bytes") or 0) / GIB
         print(f"  {r['use']:10s} {r['source']:18s} {r['name'][:52]:52s} "
               f"{gib:8.1f} GiB  {r.get('format', '')}")
     by = {}

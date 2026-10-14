@@ -47,7 +47,7 @@ SRC = HERE.parents[1]
 from vqlab import config
 from vqlab.util.hashing import sha256_bytes
 from vqlab.util.log import make_log
-from vqlab.util.fs import read_json, write_json
+from vqlab.util.fs import GIB, read_json, write_json
 from vqlab.core.artifacts.artifact import Artifact
 
 SEED = 1234
@@ -130,8 +130,8 @@ def worker(art, role, outdir, experts_json, mem_only):
     model, tok = load(str(art))
     mx.eval(model.parameters())
     rep["load_s"] = time.time() - t0
-    rep["active_gib"] = mx.get_active_memory() / 2**30
-    rep["peak_gib"] = mx.get_peak_memory() / 2**30
+    rep["active_gib"] = mx.get_active_memory() / GIB
+    rep["peak_gib"] = mx.get_peak_memory() / GIB
     modns = type(model).__init__.__globals__   # mlx_lm loads model.py without registering it in sys.modules
     rep["resident_classes"] = sorted({type(m).__name__ for _, m in model.named_modules()
                                       if "Switch" in type(m).__name__})

@@ -42,7 +42,7 @@ import mlx.core as mx
 import mlx.utils
 
 from vqlab.family import model_loader as runtime_load
-from vqlab.util.fs import read_json
+from vqlab.util.fs import GIB, read_json
 
 
 def _rel(a, b):
@@ -76,7 +76,7 @@ def _eval_params(module, budget_gb):
     Largest tensors are skipped first, so the cheap weights still get the
     eager treatment. Returns (evaluated_bytes, skipped_bytes).
     """
-    budget = int(budget_gb * 1024 ** 3)
+    budget = int(budget_gb * GIB)
     flat = [(n, a) for n, a in mlx.utils.tree_flatten(module.parameters())
             if isinstance(a, mx.array)]
     flat.sort(key=lambda t: t[1].nbytes)          # cheapest first
@@ -173,7 +173,7 @@ def probe_qwen4_exp(teacher, student, ids_list, args):
             _, s_skip = _eval_params(s_blk, args.lazy_over_gb)
         if t_skip or s_skip:
             print(f"  layer {i}: left "
-                  f"{(t_skip + s_skip) / 1024 ** 3:.1f} GiB lazy "
+                  f"{(t_skip + s_skip) / GIB:.1f} GiB lazy "
                   f"(over --lazy-over-gb)", flush=True)
         t0 = time.time()
         # MEMORY (fix 2026-08-29, see docstring known-issues): the original
@@ -208,7 +208,7 @@ def probe_qwen4_exp(teacher, student, ids_list, args):
         mx.clear_cache()
         print(f"  layer {i}/{n-1}  local {local:.4f}  traj {traj:.4f}  "
               f"{time.time()-t0:.1f}s "
-              f"(peak {mx.get_peak_memory()/1024**3:.1f}G)", flush=True)
+              f"(peak {mx.get_peak_memory()/GIB:.1f}G)", flush=True)
     return rows
 
 
@@ -258,7 +258,7 @@ def probe_glm5_next(teacher, student, ids_list, args):
             _, s_skip = _eval_params(s_blk, args.lazy_over_gb)
         if t_skip or s_skip:
             print(f"  layer {i}: left "
-                  f"{(t_skip + s_skip) / 1024 ** 3:.1f} GiB lazy "
+                  f"{(t_skip + s_skip) / GIB:.1f} GiB lazy "
                   f"(over --lazy-over-gb)", flush=True)
         t0 = time.time()
         t_mask = t_ssm if t_blk.is_linear else t_attn
@@ -283,7 +283,7 @@ def probe_glm5_next(teacher, student, ids_list, args):
         mx.clear_cache()
         print(f"  layer {i}/{n-1}  local {local:.4f}  traj {traj:.4f}  "
               f"{time.time()-t0:.1f}s "
-              f"(peak {mx.get_peak_memory()/1024**3:.1f}G)", flush=True)
+              f"(peak {mx.get_peak_memory()/GIB:.1f}G)", flush=True)
     return rows
 
 

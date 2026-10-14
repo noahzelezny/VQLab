@@ -84,6 +84,8 @@ from .capture import capture_input
 from .caches import restore, snapshot
 from .sampling import make_distribution, rejection_correct
 
+from vqlab.util.fs import GIB
+
 __all__ = ["MTPResponse", "load_mtp_head", "mtp_generate", "mtp_stream_generate",
            "prefill_chunk_size", "DEFAULT_PREFILL_CHUNK"]
 
@@ -476,7 +478,7 @@ def mtp_stream_generate(
                     finish_reason=finish, steps=steps, accepted=accepted,
                     acceptance=accepted / steps, generation_tokens=len(emitted),
                     generation_tps=len(emitted) / elapsed if elapsed else 0.0,
-                    peak_memory=mx.get_peak_memory() / 2**30, logprobs=lp,
+                    peak_memory=mx.get_peak_memory() / GIB, logprobs=lp,
                 )
                 if finish is not None:
                     break
@@ -513,7 +515,7 @@ def mtp_stream_generate(
                 acceptance=accepted / max(steps, 1),
                 generation_tokens=len(emitted),
                 generation_tps=len(emitted) / elapsed if elapsed else 0.0,
-                peak_memory=mx.get_peak_memory() / 2**30,
+                peak_memory=mx.get_peak_memory() / GIB,
             )
 
 

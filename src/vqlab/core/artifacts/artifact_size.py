@@ -7,7 +7,8 @@ from __future__ import annotations
 
 import json
 
-GIB = 2 ** 30
+from vqlab.util.fs import GIB
+
 
 
 def index_total_size(path) -> tuple:

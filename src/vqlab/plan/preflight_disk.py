@@ -24,6 +24,8 @@ import os
 import pathlib
 import sys
 
+from vqlab.util.fs import GIB
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", required=True,
@@ -36,13 +38,12 @@ def main(argv=None) -> int:
     if (a.need_gib is None) == (a.like is None):
         sys.exit("PREFLIGHT FAIL: give exactly one of --need-gib / --like")
 
-    G = 2 ** 30
     if a.like:
         need = sum(f.stat().st_size for f in pathlib.Path(a.like).glob("*.safetensors"))
         if need == 0:
             sys.exit(f"PREFLIGHT FAIL: --like {a.like} has no safetensors to size from")
     else:
-        need = int(a.need_gib * G)
+        need = int(a.need_gib * GIB)
     need = int(need * a.headroom)
 
     out = pathlib.Path(a.out)
@@ -53,16 +54,16 @@ def main(argv=None) -> int:
     free = st.f_bavail * st.f_frsize
 
     boot = os.stat(probe).st_dev == os.stat("/").st_dev
-    floor = 20 * G if boot else 0
+    floor = 20 * GIB if boot else 0
     ok = free - need >= floor
 
-    print(f"PREFLIGHT  need {need/G:.1f} GiB (incl. x{a.headroom} headroom)   "
-          f"free {free/G:.1f} GiB on {probe}"
-          + (f"   [boot volume: +{floor/G:.0f} GiB floor]" if boot else ""))
+    print(f"PREFLIGHT  need {need/GIB:.1f} GiB (incl. x{a.headroom} headroom)   "
+          f"free {free/GIB:.1f} GiB on {probe}"
+          + (f"   [boot volume: +{floor/GIB:.0f} GiB floor]" if boot else ""))
     if ok:
         print("OK: fits")
         return 0
-    print(f"FAIL: short by {(need + floor - free)/G:.1f} GiB. Free space or "
+    print(f"FAIL: short by {(need + floor - free)/GIB:.1f} GiB. Free space or "
           f"choose another volume — a mid-write ENOSPC leaves a truncated "
           f"artifact that still looks like one.")
     return 2

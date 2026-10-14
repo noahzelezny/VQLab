@@ -55,7 +55,7 @@ from vqlab import config as _cfg
 from vqlab.core.source import fit_store as fitstore
 from vqlab.records import provenance
 from vqlab.core.artifacts.artifact import write_index
-from vqlab.util.fs import read_json, write_json
+from vqlab.util.fs import GIB, read_json, write_json
 
 
 @dataclass
@@ -694,7 +694,7 @@ class Model(_arch.Model):
             if f.is_file():
                 subprocess.run(["rsync", "-a", str(f), str(SHIP) + "/"], check=True)
 
-    print(f"\ndone in {time.time()-t0:.0f}s  {tsz/2**30:.1f} GiB total "
+    print(f"\ndone in {time.time()-t0:.0f}s  {tsz/GIB:.1f} GiB total "
           f"-> {SHIP or OUT}")
     print(f"VQ'd {len(errs)} tensors, mean relerr {sum(errs)/max(len(errs),1):.4f}")
     return 0

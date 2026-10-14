@@ -36,7 +36,7 @@ import mlx.core as mx
 import numpy as np
 
 from vqlab.core.source import expert_src as ES
-from vqlab.util.fs import read_json
+from vqlab.util.fs import GIB, read_json
 from vqlab.core.artifacts.artifact import Artifact
 
 DENSE = (".attn.wq", ".attn.wo", "e_proj", "h_proj", "shared_experts")
@@ -135,7 +135,7 @@ def main(argv=None):
         prec.append(f"dense projections affine {a.dense_bits}-bit group 64")
     meta["precision"] = "; ".join(prec)
     mx.save_safetensors(str(out), head, metadata=meta)
-    print(f"{out.name}: {len(head)} tensors, {os.path.getsize(out) / 2**30:.2f} GiB")
+    print(f"{out.name}: {len(head)} tensors, {os.path.getsize(out) / GIB:.2f} GiB")
     return 0
 
 

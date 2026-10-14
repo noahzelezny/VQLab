@@ -42,8 +42,8 @@ from vqlab.core.artifacts.artifact import sizes
 from vqlab.records import provenance
 from vqlab.ship import card_tables
 from vqlab.ship.card_checks import Refuse, _fp, check_kl, text_match  # noqa: F401  (re-exported)
+from vqlab.util.fs import GIB
 
-GIB = 2 ** 30
 TODO = "TODO(card)"
 SLOTS = ("intro", "changelog", "notes", "hardware", "speed", "verification", "limitations")
 REQUIRED = ("intro", "changelog", "limitations")      # TODO when absent

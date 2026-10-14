@@ -33,11 +33,11 @@ from vqlab.core.artifacts.artifact import sizes
 from vqlab.core.artifacts.hub import LFS_MIN, hub_diff  # noqa: F401  (re-exported)
 from vqlab.gate import leak_guard
 from vqlab.util.hashing import git_blob_sha1, sha256_file
+from vqlab.util.fs import GIB
 
 _git_blob = git_blob_sha1   # old private names, kept for callers/tests
 _sha256 = sha256_file
 
-GIB = 2 ** 30
 JUNK = (".DS_Store",)
 
 

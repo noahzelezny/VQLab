@@ -93,7 +93,7 @@ from pathlib import Path
 import mlx.core as mx
 import numpy as np
 
-from vqlab.util.fs import read_json
+from vqlab.util.fs import GIB, read_json
 
 
 # --------------------------------------------------------------------------
@@ -210,7 +210,7 @@ def cmd_cache(args):
         mx.clear_cache()
         print(f"  {s + args.batch_size}/{len(arr)} "
               f"({time.time() - t0:.0f}s, peak "
-              f"{mx.get_peak_memory() / 1024**3:.1f}G)", flush=True)
+              f"{mx.get_peak_memory() / GIB:.1f}G)", flush=True)
 
     idx = mx.concatenate(all_idx, axis=0)
     lp = mx.concatenate(all_lp, axis=0)

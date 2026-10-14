@@ -51,6 +51,7 @@ from vqlab.family.registry import DENSE_FAMILIES, FAMILY
 from vqlab.core.source import fit_store as fitstore
 from vqlab.records import provenance
 from vqlab.util.geo import geo_key
+from vqlab.util.fs import GIB
 
 GSZ = 64                       # scale group, every shipped geometry
 TG_BYTES = 32768               # threadgroup codebook cache ceiling
@@ -260,7 +261,7 @@ def main(argv=None) -> int:
     for proj, ss in sigs.items():
         E, OUT, IN = sorted(ss)[0]
         n_mod = sum(1 for r in rows if r["proj"] == proj)
-        geos[proj] = [{**g, "stack_gib": round(g["bytes"] * n_mod / 2 ** 30, 3)}
+        geos[proj] = [{**g, "stack_gib": round(g["bytes"] * n_mod / GIB, 3)}
                       for g in geometry_table(IN, E, OUT)]
     expert_params = sum(r["E"] * r["OUT"] * r["IN"] for r in rows)
     prof = {
@@ -285,11 +286,11 @@ def main(argv=None) -> int:
                  "vq_layers": sorted({r["layer"] for r in rows}),
                  "vision_tower": by_class.get("vision", 0) > 0,
                  "mtp_head": by_class.get("mtp", 0) > 0},
-        "bytes": {"by_class_gib": {k: round(v / 2 ** 30, 3) for k, v in sorted(by_class.items())},
-                  "vq_target_gib_per_layer": {str(k): round(v / 2 ** 30, 4)
+        "bytes": {"by_class_gib": {k: round(v / GIB, 3) for k, v in sorted(by_class.items())},
+                  "vq_target_gib_per_layer": {str(k): round(v / GIB, 4)
                                               for k, v in sorted(per_layer.items())},
                   "vq_target_params": expert_params,
-                  "vq_target_gib_per_bit": round(expert_params / 8 / 2 ** 30, 4)},
+                  "vq_target_gib_per_bit": round(expert_params / 8 / GIB, 4)},
         "modules": {"signatures": {p: sorted(list(s) for s in ss) for p, ss in sigs.items()},
                     "count": len(rows)},
         "geometries": geos,

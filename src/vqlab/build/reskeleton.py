@@ -36,7 +36,7 @@ import sys
 import mlx.core as mx
 
 from vqlab.core.artifacts.artifact import Artifact, tensor_class, write_index
-from vqlab.util.fs import write_json
+from vqlab.util.fs import GIB, write_json
 
 def _text(key):
     """A text-model tensor: the skeleton is every text tensor that is not an
@@ -48,7 +48,7 @@ def _text(key):
     return tensor_class(key) == "text"
 VQ_SUFFIX = (".codes", ".codebook", ".vq_scales")
 AFF_SUFFIX = (".weight", ".scales", ".biases")
-SHARD = 5 * 2**30
+SHARD = 5 * GIB
 
 
 def _qmap(cfg):
@@ -174,7 +174,7 @@ def main(argv=None) -> int:
     if a.dry_run:
         return 0
     n, total = write(vq, sk, out, src, qmap, vcfg)
-    print(f"wrote {n} tensors, {total / 2**30:.2f} GiB -> {out}")
+    print(f"wrote {n} tensors, {total / GIB:.2f} GiB -> {out}")
     return 0
 
 

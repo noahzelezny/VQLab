@@ -14,6 +14,7 @@ import time
 import mlx.core as mx
 
 from vqlab.family import FamilyPlugin, Parity
+from vqlab.util.fs import GIB
 
 FIT = {
         # DeepSeek-V4-Flash (~280B, 6-of-256 routed + 1 shared, 43 layers).
@@ -80,7 +81,7 @@ def score_deepseek_v4(model, ids_list, args):
             _, skipped = _budgeted(
                 blk, getattr(args, "lazy_over_gb", 8.0))
         if skipped:
-            print(f"  layer {i}: {skipped / 1024 ** 3:.1f} GiB left lazy",
+            print(f"  layer {i}: {skipped / GIB:.1f} GiB left lazy",
                   flush=True)
         t0 = time.time()
         c = caches[i]
@@ -96,7 +97,7 @@ def score_deepseek_v4(model, ids_list, args):
         gc.collect()
         mx.clear_cache()
         print(f"  layer {i}/{n-1} {time.time()-t0:.1f}s "
-              f"(peak {mx.get_peak_memory()/1024**3:.1f}G)", flush=True)
+              f"(peak {mx.get_peak_memory()/GIB:.1f}G)", flush=True)
 
     with mx.stream(mx.cpu):
         mx.eval(core.hc_head.parameters(), core.norm.parameters(),

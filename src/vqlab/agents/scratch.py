@@ -37,9 +37,8 @@ import sys
 
 from vqlab import config as C
 from vqlab.records import provenance
-from vqlab.util.fs import dir_bytes
+from vqlab.util.fs import GIB, dir_bytes
 
-GIB = 2 ** 30
 # tool name in a build record -> the input role that names what it packed
 PACKERS = {"pack": "src", "pack-dense": "src"}
 MAX_DEPTH = 4

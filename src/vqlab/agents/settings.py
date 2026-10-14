@@ -17,6 +17,7 @@ import subprocess
 import tempfile
 
 from vqlab import config as C
+from vqlab.util.fs import GIB
 
 DESCRIPTIONS = {
     "lab": "one folder every location below defaults under",
@@ -253,4 +254,4 @@ def set_value(key: str, path: str, create: bool = False) -> dict:
 
 
 def gib(n) -> str:
-    return "?" if n is None else f"{n / 2**30:.1f} GiB"
+    return "?" if n is None else f"{n / GIB:.1f} GiB"

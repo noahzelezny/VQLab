@@ -28,7 +28,7 @@ import struct
 import sys
 
 from vqlab.core.artifacts.artifact import Artifact, read_header, write_index
-from vqlab.util.fs import read_json
+from vqlab.util.fs import GIB, read_json
 
 SHARD = "model-extras-graft.safetensors"
 
@@ -131,7 +131,7 @@ def main(argv=None):
         nbytes += e - s
     cfg_add = {k: v for k, v in read_json(src / "config.json").items()
                if k in preset["config_keys"] and k not in art.config}
-    print(f"{len(pick)} tensors, {nbytes / 2**30:.2f} GiB -> {SHARD}; "
+    print(f"{len(pick)} tensors, {nbytes / GIB:.2f} GiB -> {SHARD}; "
           f"config keys added: {sorted(cfg_add) or 'none (already present)'}")
     if a.dry_run:
         return 0

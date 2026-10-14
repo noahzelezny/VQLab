@@ -36,7 +36,7 @@ import mlx.core as mx
 
 from vqlab.family import model_loader as runtime_load
 from vqlab.core.source.mem_budget import eval_params_budgeted
-from vqlab.util.fs import read_json
+from vqlab.util.fs import GIB, read_json
 
 
 def score_qwen4_exp(model, ids_list, args):
@@ -92,7 +92,7 @@ def score_qwen4_exp(model, ids_list, args):
             _, skipped = eval_params_budgeted(
                 blk, getattr(args, "lazy_over_gb", 8.0))
         if skipped:
-            print(f"  layer {i}: {skipped / 1024 ** 3:.1f} GiB left lazy",
+            print(f"  layer {i}: {skipped / GIB:.1f} GiB left lazy",
                   flush=True)
         t0 = time.time()
         c = caches[i]
@@ -124,7 +124,7 @@ def score_qwen4_exp(model, ids_list, args):
         gc.collect()
         mx.clear_cache()
         print(f"  layer {i}/{n-1} {time.time()-t0:.1f}s "
-              f"(peak {mx.get_peak_memory()/1024**3:.1f}G)", flush=True)
+              f"(peak {mx.get_peak_memory()/GIB:.1f}G)", flush=True)
 
     mixer = core.hyper_connection_mixer
     head = model.lm_head if not model.args.text.tie_word_embeddings else None
@@ -240,7 +240,7 @@ def score_glm5_next(model, ids_list, args):
         gc.collect()
         mx.clear_cache()
         print(f"  layer {i}/{n-1} {time.time()-t0:.1f}s "
-              f"(peak {mx.get_peak_memory()/1024**3:.1f}G)", flush=True)
+              f"(peak {mx.get_peak_memory()/GIB:.1f}G)", flush=True)
 
     h = h.mean(axis=2)                      # hc bookend #2
     with mx.stream(mx.cpu):
@@ -333,7 +333,7 @@ def score_qwen3_5_moe(model, ids_list, args):
             _, skipped = eval_params_budgeted(
                 blk, getattr(args, "lazy_over_gb", 8.0))
         if skipped:
-            print(f"  layer {i}: {skipped / 1024 ** 3:.1f} GiB left lazy",
+            print(f"  layer {i}: {skipped / GIB:.1f} GiB left lazy",
                   flush=True)
         t0 = time.time()
         c = caches[i]
@@ -353,7 +353,7 @@ def score_qwen3_5_moe(model, ids_list, args):
         gc.collect()
         mx.clear_cache()
         print(f"  layer {i}/{n-1} {time.time()-t0:.1f}s "
-              f"(peak {mx.get_peak_memory()/1024**3:.1f}G)", flush=True)
+              f"(peak {mx.get_peak_memory()/GIB:.1f}G)", flush=True)
 
     head = None if lm.args.tie_word_embeddings else lm.lm_head
     with mx.stream(mx.cpu):

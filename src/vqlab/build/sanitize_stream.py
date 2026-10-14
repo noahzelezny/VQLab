@@ -36,7 +36,7 @@ import time
 import mlx.core as mx
 
 from vqlab.core.artifacts.artifact import Artifact, read_header
-from vqlab.util.fs import read_json
+from vqlab.util.fs import GIB, read_json
 
 def _group(key: str):
     m = re.match(r"layers\.(\d+)\.", key)
@@ -110,7 +110,7 @@ def main(argv=None):
         tmp.rename(dst)
         index.update({k: fn for k in res})
         quant.update(_quant_from_keys(res, a))
-        gib = dst.stat().st_size / 2**30
+        gib = dst.stat().st_size / GIB
         print(f"[{gi + 1}/{len(order)}] {fn} {len(keys)} -> {len(res)} tensors, "
               f"{gib:.2f} GiB ({time.time() - t0:.0f}s)", flush=True)
         del sub, res
@@ -133,7 +133,7 @@ def main(argv=None):
         if f.is_file() and not f.name.endswith(".safetensors") and f.name not in (
                 "config.json", "model.safetensors.index.json"):
             shutil.copy(f, out)
-    print(f"saved {tot / 2**30:.1f} GiB, {len(index)} tensors, "
+    print(f"saved {tot / GIB:.1f} GiB, {len(index)} tensors, "
           f"{len(quant)} quantized modules ({time.time() - t0:.0f}s)", flush=True)
     return 0
 

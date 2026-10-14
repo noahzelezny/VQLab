@@ -30,6 +30,7 @@ import time
 import mlx.core as mx
 
 from vqlab.mtp import registry
+from vqlab.util.fs import GIB
 
 
 def _time(fn, *, warmup, iters):
@@ -60,9 +61,9 @@ def main(argv=None) -> int:
     arch = spec.arch_module(model)
     head = spec.head_cls().from_sidecar(model, arch, a.sidecar)
     print(f"family {spec.name} -> {spec.head}", flush=True)
-    print(f"  sidecar {pathlib.Path(a.sidecar).stat().st_size / 2**30:.2f} "
+    print(f"  sidecar {pathlib.Path(a.sidecar).stat().st_size / GIB:.2f} "
           f"GiB on disk, resident after load "
-          f"{mx.get_active_memory() / 2**30:.2f} GiB", flush=True)
+          f"{mx.get_active_memory() / GIB:.2f} GiB", flush=True)
 
     D = head.D
     vocab = model.language_model.args.vocab_size if hasattr(
@@ -81,7 +82,7 @@ def main(argv=None) -> int:
         print(f"  T={T}: {ms:8.2f} ms/forward  ({ms / T:6.2f} ms/position)",
               flush=True)
 
-    print(f"  peak resident {mx.get_peak_memory() / 2**30:.2f} GiB")
+    print(f"  peak resident {mx.get_peak_memory() / GIB:.2f} GiB")
     return 0
 
 

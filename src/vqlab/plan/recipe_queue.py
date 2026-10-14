@@ -77,6 +77,7 @@ from vqlab.plan import preflight_ram
 from vqlab.util.errors import UserError
 from vqlab.util.geo import geo_key
 from vqlab.core.artifacts.artifact import Artifact, INDEX
+from vqlab.util.fs import GIB
 
 MOE = {"qwen3_5"}
 DENSE = {"qwen3_8_dense"}
@@ -267,7 +268,7 @@ def skipzero_gib(prof: dict, sz: dict, layer_geo: dict) -> float:
                 raise RecipeError(f"the profile has no byte count for {proj} at {geo_key(*geo)}")
             if dead:
                 saved += dead / rows[proj] * b - rows[proj] / 8
-    return saved / 2 ** 30
+    return saved / GIB
 
 
 def _skipzero_rows(r: "Recipe") -> dict:

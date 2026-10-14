@@ -53,6 +53,8 @@ import sys
 
 import mlx.core as mx
 
+from vqlab.util.fs import GIB
+
 _HEAD = {}
 
 
@@ -253,7 +255,7 @@ def main():
                 mx.clear_cache()
                 _HEAD["head"] = head
                 print(f"MTP head ({spec.name}) bound: "
-                      f"{(mx.get_active_memory() - before) / 2**30:.2f} GiB "
+                      f"{(mx.get_active_memory() - before) / GIB:.2f} GiB "
                       f"resident; drafting enabled", flush=True)
             return out
 

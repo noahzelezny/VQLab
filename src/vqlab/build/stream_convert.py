@@ -48,7 +48,7 @@ from vqlab.core.artifacts.artifact import Artifact, write_index
 from vqlab.family.registry import FAMILY
 from vqlab.family import model_loader as runtime_load
 from vqlab.family import alias_fused, fused_projections
-from vqlab.util.fs import read_json
+from vqlab.util.fs import GIB, read_json
 
 # The teacher's tokenizer files, copied byte for byte over what
 # load_tokenizer(...).save_pretrained writes. A re-serialization is not a copy:
@@ -163,7 +163,7 @@ def main(argv=None) -> int:
         a.protect_bits = 8
 
     SRC, DST = pathlib.Path(a.src), pathlib.Path(a.out)
-    SHARD = int(a.shard_gib * 2**30)
+    SHARD = int(a.shard_gib * GIB)
     target = FAMILY[a.family]["target_substr"]
 
     # Runtime per family registry (design decision 2026-08-29: provision for either
@@ -173,7 +173,7 @@ def main(argv=None) -> int:
     runtime_load.require_vendored_arch()      # no stock-mlx-lm build by accident
     # Freed buffers go to MLX's cache, which grows to the device's memory by
     # default: on the 397B that pushed tens of GiB into swap (2026-10-13).
-    mx.set_cache_limit(2 * 2**30)
+    mx.set_cache_limit(2 * GIB)
     model, config = runtime_load.load_for_family(a.family, SRC, lazy=True, cpu_stream=a.cpu_load)
     print(runtime_load.resolved_runtime_note(model), flush=True)   # III.13
 
@@ -315,7 +315,7 @@ def main(argv=None) -> int:
     for pat in ("*.py", "generation_config.json"):
         for f in glob.glob(str(SRC / pat)):
             shutil.copy(f, DST)
-    print(f"saved {tot/2**30:.1f} GiB in {len(set(index.values()))} shards "
+    print(f"saved {tot/GIB:.1f} GiB in {len(set(index.values()))} shards "
           f"({time.time()-t0:.0f}s)", flush=True)
     return 0
 

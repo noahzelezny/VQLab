@@ -38,7 +38,7 @@ from vqlab.records import provenance
 from vqlab.runtime import runtime_profile
 
 from vqlab import config as _config
-from vqlab.util.fs import read_jsonl
+from vqlab.util.fs import GIB, read_jsonl
 from vqlab.util.geo import geo_key
 
 REG = _config.registry_dir() / "artifacts.jsonl"   # <records>/registry (vqlab.config)
@@ -100,7 +100,7 @@ def entry(d: pathlib.Path) -> dict:
         "vq_modules": n, "geometry": geo,
         # runtime features the bytes need (vq_skipzero: dead rows dropped, 397B)
         "skipzero": bool(cfg.get("vq_skipzero")),
-        "text_gib": round(text_bytes / 2 ** 30, 3), "shards": len(shards),
+        "text_gib": round(text_bytes / GIB, 3), "shards": len(shards),
         "fingerprint": fp,
         "runtime": ({"md5": rt["model_py_md5"][:8], "profile": rt["profile"],
                      "flags": rt["flags"]} if rt else None),

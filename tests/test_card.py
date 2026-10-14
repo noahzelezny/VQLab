@@ -9,8 +9,8 @@ from vqlab.core.artifacts.artifact import sizes
 from vqlab.ship import card as C
 from vqlab.ship import card_tables as CT
 from vqlab.records import provenance
+from vqlab.util.fs import GIB
 
-GIB = 2 ** 30
 CORP = ("prose", "code", "lit")
 
 

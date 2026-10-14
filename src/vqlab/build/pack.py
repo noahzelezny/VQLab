@@ -34,7 +34,7 @@ import mlx.core as mx
 
 from vqlab.runtime import vq_pack
 from vqlab.core.artifacts import codepack  # the packing rule fit-moe --pack shares
-from vqlab.util.fs import read_json, write_json
+from vqlab.util.fs import GIB, read_json, write_json
 
 def _assert_tower_belongs(src_cfg, art_cfg, src_name, art_name):
     """Refuse a vision tower that cannot project into THIS model.
@@ -222,7 +222,7 @@ def main(argv=None) -> int:
     _total = tensor_bytes(OUT, _idx["weight_map"].values())
     write_index(OUT, _idx["weight_map"], total_size=_total, metadata=_idx.get("metadata"))
     print(f"index total_size recomputed from packed shards: {_total} "
-          f"({_total / 2**30:.2f} GiB)")
+          f"({_total / GIB:.2f} GiB)")
 
     # seed config with pack_bits/in so add_model_file can read them back (it
     # refuses to guess a bit width, by design)
@@ -269,8 +269,8 @@ def main(argv=None) -> int:
     subprocess.run([sys.executable, str(_find("add_model_file.py")),
                     "--artifact", str(OUT), "--group", str(args.group)], check=True)
 
-    src_gib = sum(f.stat().st_size for f in SRC.glob("*.safetensors")) / 1024 ** 3
-    out_gib = sum(f.stat().st_size for f in OUT.glob("*.safetensors")) / 1024 ** 3
+    src_gib = sum(f.stat().st_size for f in SRC.glob("*.safetensors")) / GIB
+    out_gib = sum(f.stat().st_size for f in OUT.glob("*.safetensors")) / GIB
     print(f"\npacked {len(vq_meta)} tensors: {src_gib:.1f} -> {out_gib:.1f} GiB "
           f"({out_gib / src_gib:.3f}x)")
     if skipped:

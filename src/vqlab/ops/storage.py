@@ -10,6 +10,7 @@ from typing import Any, Dict, List, Optional
 
 from vqlab.ops.errors import LabError
 from vqlab.ops.roots import _dir_bytes, _under, _walk, lab_roots
+from vqlab.util.fs import GIB
 
 
 def _teacher_cache_hits(needle: str, kind: str, known: set) -> List[Dict[str, Any]]:
@@ -48,7 +49,7 @@ def where_is(name: str, kind: str = "any", max_depth: int = 3) -> Dict[str, Any]
         if is_dir:
             p = Path(e.path)
             rec["has_config"] = (p / "config.json").is_file()
-            rec["safetensors_gib"] = round(_dir_bytes(p) / 2**30, 3)
+            rec["safetensors_gib"] = round(_dir_bytes(p) / GIB, 3)
         else:
             try:
                 rec["bytes"] = e.stat(follow_symlinks=False).st_size
@@ -80,7 +81,7 @@ def list_artifacts(root: str = "", max_depth: int = 3) -> Dict[str, Any]:
     for r, e, _ in _walk(roots, max_depth):
         if e.is_dir(follow_symlinks=False) and (Path(e.path) / "config.json").is_file():
             p = Path(e.path)
-            out.append({"path": e.path, "safetensors_gib": round(_dir_bytes(p) / 2**30, 3),
+            out.append({"path": e.path, "safetensors_gib": round(_dir_bytes(p) / GIB, 3),
                         "has_model_py": (p / "model.py").is_file(),
                         "has_readme": (p / "README.md").is_file()})
     out.sort(key=lambda a: a["path"])
@@ -113,7 +114,7 @@ def disk_free() -> Dict[str, Any]:
         except OSError:
             continue
         key = (u.total, u.free)
-        out.append({"root": str(r), "free_gib": round(u.free / 2**30, 1),
-                    "total_gib": round(u.total / 2**30, 1), "same_volume_as_previous": key in seen})
+        out.append({"root": str(r), "free_gib": round(u.free / GIB, 1),
+                    "total_gib": round(u.total / GIB, 1), "same_volume_as_previous": key in seen})
         seen.add(key)
     return {"roots": out}

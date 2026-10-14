@@ -95,7 +95,7 @@ from vqlab.runtime import vq_pack
 from vqlab.records import provenance
 from vqlab.util.hashing import sha256_file
 from vqlab.util.log import make_log
-from vqlab.util.fs import read_json, write_json
+from vqlab.util.fs import GIB, read_json, write_json
 from vqlab.core.artifacts.artifact import Artifact, INDEX
 
 SCHEMA = "vqlab.reselect.grams/1"
@@ -238,7 +238,7 @@ def cmd_calibrate(a):
         print("DRY RUN -- nothing loaded, nothing written. Plan:")
         print(json.dumps(plan, indent=1))
         est = sum(int(v["in"]) ** 2 * 4 for v in vqm.values())
-        print(f"bank size ~{est / 2**30:.2f} GiB ({len(vqm)} Grams)")
+        print(f"bank size ~{est / GIB:.2f} GiB ({len(vqm)} Grams)")
         return 0
     _require_storage(a.out)
     os.makedirs(a.out, exist_ok=False)

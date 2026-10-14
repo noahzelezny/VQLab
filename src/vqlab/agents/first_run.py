@@ -19,9 +19,10 @@ import sys
 
 from vqlab import config as C
 from vqlab.agents import settings as S
+from vqlab.util.fs import GIB
 
 SUBFOLDERS = ("models", "scratch", "fits", "records")   # teachers default to models/
-LOW_SYSTEM_FREE = 500 * 2**30      # teachers are 50-750 GiB each
+LOW_SYSTEM_FREE = 500 * GIB      # teachers are 50-750 GiB each
 
 
 def needed() -> bool:
@@ -57,7 +58,7 @@ def run(out=sys.stderr) -> pathlib.Path | None:
     S._reset()
     free = S.free_bytes(lab) or 0
     print(f"vqlab: first run. Models, teachers and work in progress go in {lab}\n"
-          f"       ({free / 2**30:,.0f} GiB free there). Config: {C.config_file()}\n"
+          f"       ({free / GIB:,.0f} GiB free there). Config: {C.config_file()}\n"
           f"       To use another folder: `vqlab lab config set lab PATH`, or `vqlab gui` -> Storage\n"
           f"       (files already here stay here; move them yourself).",
           file=out)

@@ -54,7 +54,7 @@ import subprocess
 import sys
 from vqlab import _layout, config
 from vqlab.core.artifacts.hub import is_backup  # local backups (.bak, .pre-*) are not outputs
-from vqlab.util.fs import read_jsonl, write_text_atomic
+from vqlab.util.fs import GIB, read_jsonl, write_text_atomic
 from vqlab.util.geo import geo_key
 from vqlab.util.hashing import fingerprint as _fingerprint, sha256_file
 
@@ -523,7 +523,7 @@ def summary(art, rec) -> str:
     L.append("  runtime   " + (f"{r['profile']}  md5 {r['model_py_md5'][:8]}"
                                if r else "no model.py bundled"))
     o = rec["outputs"]
-    L.append(f"  outputs   {len(o)} files, {sum(v['bytes'] for v in o.values())/2**30:.2f} GiB, "
+    L.append(f"  outputs   {len(o)} files, {sum(v['bytes'] for v in o.values())/GIB:.2f} GiB, "
              f"{sum('symlink_to' in v for v in o.values())} carried over by symlink")
     return "\n".join(L)
 

@@ -20,7 +20,7 @@ import mlx.core as mx
 import numpy as np
 
 from vqlab.runtime import vq_pack
-from vqlab.util.fs import read_json, write_json
+from vqlab.util.fs import GIB, read_json, write_json
 from vqlab.core.artifacts.artifact import Artifact
 
 def _packs(meta):
@@ -118,7 +118,7 @@ def main(argv=None) -> int:
             shutil.copy(f, OUT / f.name)
     tot = sum(p.stat().st_size for p in OUT.glob("*.safetensors"))
     print(f"packed {packed_n} code tensors ({skipped} skipped) -> {OUT}")
-    print(f"  {tot/2**30:.2f} GiB of tensors")
+    print(f"  {tot/GIB:.2f} GiB of tensors")
     return 0
 
 

@@ -32,6 +32,7 @@ from mlx.utils import tree_map
 
 from vqlab.mtp import registry
 from vqlab.mtp.capture import capture_input
+from vqlab.util.fs import GIB
 
 
 def main():
@@ -65,7 +66,7 @@ def main():
     # `.language_model`. Same walk arch_module does.
     core = getattr(getattr(model, "language_model", model), "model")
     print(f"family {spec.name}; capture {spec.capture!r}; "
-          f"resident {mx.get_active_memory() / 2**30:.2f} GiB", flush=True)
+          f"resident {mx.get_active_memory() / GIB:.2f} GiB", flush=True)
 
     ids = tok.encode(pathlib.Path(a.corpus).read_text())[: a.tokens + 2]
     bos = getattr(tok, "bos_token_id", None)

@@ -27,6 +27,7 @@ import sys
 
 from vqlab.core.artifacts.artifact import (Artifact, copy_other_files, merge_maps, module_of,
                                  place, write_config, write_index)
+from vqlab.util.fs import GIB
 
 
 def plan_mix(base, bands):
@@ -118,7 +119,7 @@ def build(out, base, bands, copy=False, files_from=None):
     banded = sum(1 for a in pick.values() if a.dir != base.dir)
     print(f"{out.name}: {banded} of {len(pick)} shards from bands, "
           f"{len(cfg['vq_modules'])} VQ modules {dict(ks)}, "
-          f"{total / 2**30:.1f} GiB, {'copied' if copy else 'linked'}")
+          f"{total / GIB:.1f} GiB, {'copied' if copy else 'linked'}")
     return 0
 
 

@@ -27,9 +27,8 @@ import numpy as np
 from vqlab.core.source import fit_store as fitstore
 
 from vqlab.skipzero import sz_pack
-from vqlab.util.fs import write_json
+from vqlab.util.fs import GIB, write_json
 
-GIB = 2 ** 30
 
 
 def _load_shim(d):

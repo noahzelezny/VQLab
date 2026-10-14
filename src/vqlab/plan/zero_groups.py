@@ -35,9 +35,9 @@ import numpy as np
 
 from vqlab.core.source import fit_store as fitstore
 from vqlab.records import registry
+from vqlab.util.fs import GIB
 
 TINY = 6.2e-5          # fp16 smallest normal is 6.10e-5
-GIB = 2 ** 30
 _NP = {"F16": np.float16, "BF16": None, "F32": np.float32}
 
 

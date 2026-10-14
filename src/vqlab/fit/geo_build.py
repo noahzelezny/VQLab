@@ -69,7 +69,7 @@ from vqlab.fit.kmeans import (
     sq_dists as _dists,
 )
 
-from vqlab.util.fs import read_json, write_json
+from vqlab.util.fs import GIB, read_json, write_json
 from vqlab.core.artifacts.artifact import Artifact, write_index
 
 GSZ = 64
@@ -349,7 +349,7 @@ def main():
         os.path.join(a.artifact, "*.safetensors"))), "geo-build")
 
     mx.set_wired_limit(0)
-    mx.set_memory_limit(a.memory_limit_gb * 1024 ** 3)
+    mx.set_memory_limit(a.memory_limit_gb * GIB)
     rng = np.random.default_rng(None if a.seed < 0 else a.seed)
     geo = read_json(a.geomap)
     if not geo:
