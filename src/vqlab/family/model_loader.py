@@ -104,7 +104,7 @@ def load_for_family(family: str, path, lazy: bool = True,
     return _load_on_current_stream(family, path, rt, lazy)
 
 
-def vendored_arch() -> bool:
+def install_vendored_arch() -> bool:
     """Install Knurlogic's architecture finder; True when it serves.
 
     Every load routes through here, so which arch file serves a model
@@ -124,7 +124,7 @@ def require_vendored_arch() -> None:
     and VQLAB_VENDORED_ARCH not set to 0. A writer (stream-convert) calls
     this; a stock build stays possible, but only when asked for."""
     from vqlab.core.box import arch_finder
-    if arch_finder.enabled() and not vendored_arch():
+    if arch_finder.enabled() and not install_vendored_arch():
         raise SystemExit(
             "FAIL: knurlogic is not importable in this interpreter, so stock "
             "mlx-lm would serve the architecture and the output's arithmetic "
@@ -134,7 +134,7 @@ def require_vendored_arch() -> None:
 
 
 def _load_on_current_stream(family, path, rt, lazy):
-    vendored_arch()
+    install_vendored_arch()
     if rt == "mlx_lm":
         import inspect
         from mlx_lm.utils import load_model
