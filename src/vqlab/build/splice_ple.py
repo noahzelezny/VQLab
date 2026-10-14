@@ -13,6 +13,7 @@ import sys
 import mlx.core as mx
 
 from vqlab.util.fs import GIB, read_json, write_json
+from vqlab.core.artifacts.artifact import tensor_bytes, write_index
 
 
 def main(argv=None) -> int:
@@ -83,9 +84,8 @@ def main(argv=None) -> int:
             tmp.replace(ART / ("model-" + src_shard))
     print(f"added {added} vq tensors from {len(set(m['shard'] for m in man['tensors'].values()))} ple shards")
 
-    idx["metadata"]["total_size"] = sum((ART / f).stat().st_size
-                                        for f in set(wm.values()))
-    write_json(idx_p, idx, indent=1)
+    tot = tensor_bytes(ART, wm.values())
+    write_index(ART, wm, total_size=tot, metadata=idx.get("metadata"))
 
     cfg_p = ART / "config.json"; cfg = read_json(cfg_p)
     q = cfg.get("quantization", {})
@@ -105,8 +105,7 @@ def main(argv=None) -> int:
     write_json(cfg_p, cfg, indent=1)
     print(f"config: removed {len(removed)} affine entries, added vq_ple "
           f"({len(cfg['vq_ple']['keys'])} keys)")
-    tot = sum((ART / f).stat().st_size for f in set(wm.values()))
-    print(f"artifact now {tot/GIB:.1f} GiB")
+    print(f"artifact now {tot / GIB:.1f} GiB of tensors")
     return 0
 
 

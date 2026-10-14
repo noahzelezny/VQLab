@@ -20,6 +20,7 @@ import mlx.core as mx
 import numpy as np
 
 from vqlab.util.fs import GIB, read_json, write_json
+from vqlab.core.artifacts.artifact import tensor_bytes, write_index
 
 def pack_rows(c16, bits):
     rows, n = c16.shape
@@ -101,10 +102,8 @@ def main(argv=None) -> int:
     g["row_bytes"] = nsub * bits // 8
     cfg["vq_ple"]["geometry"] = g
     write_json(ART / "config.json", cfg, indent=1)
-    idx["metadata"]["total_size"] = sum((ART / f).stat().st_size
-                                        for f in set(wm.values()))
-    write_json(idx_p, idx, indent=1)
-    tot = idx["metadata"]["total_size"]
+    tot = tensor_bytes(ART, wm.values())
+    write_index(ART, wm, total_size=tot, metadata=idx.get("metadata"))
     print(f"row_bytes={g['row_bytes']}; artifact now {tot/GIB:.1f} GiB")
     return 0
 

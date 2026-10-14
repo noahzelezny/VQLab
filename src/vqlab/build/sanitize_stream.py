@@ -35,7 +35,7 @@ import time
 
 import mlx.core as mx
 
-from vqlab.core.artifacts.artifact import Artifact, read_header
+from vqlab.core.artifacts.artifact import Artifact, read_header, tensor_bytes, write_index
 from vqlab.util.fs import GIB, read_json
 
 def _group(key: str):
@@ -121,9 +121,8 @@ def main(argv=None):
               f"no parameter for:", flush=True)
         for k, n in sorted(dropped.items()):
             print(f"  {n:5d} x {k}", flush=True)
-    tot = sum((out / f).stat().st_size for f in set(index.values()))
-    (out / "model.safetensors.index.json").write_text(json.dumps(
-        {"metadata": {"total_size": tot}, "weight_map": index}, indent=1))
+    tot = tensor_bytes(out, index.values())
+    write_index(out, index, total_size=tot)
     new_cfg = dict(cfg)
     new_cfg.pop("quantization_config", None)     # the FP8 source recipe; consumed
     new_cfg["quantization"] = {"group_size": a.expert_group, "bits": a.bits,

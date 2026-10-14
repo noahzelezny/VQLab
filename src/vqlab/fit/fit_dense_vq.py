@@ -31,7 +31,7 @@ from vqlab.fit.kmeans import assign_mx as assign
 from vqlab.records import provenance
 from vqlab.records.provenance import write_build_record
 from vqlab.util.fs import read_json, write_json
-from vqlab.core.artifacts.artifact import Artifact
+from vqlab.core.artifacts.artifact import Artifact, write_index
 
 
 def _assert_family_layout(src_idx, sample_key, family, registry_name):
@@ -216,9 +216,7 @@ def main(argv=None) -> int:
             mx.clear_cache()
 
     mx.save_safetensors(str(OUT / "model-00001-of-00001.safetensors"), weights)
-    idx = {"metadata": {}, "weight_map":
-           {k: "model-00001-of-00001.safetensors" for k in weights}}
-    write_json(OUT / "model.safetensors.index.json", idx, indent=1)
+    write_index(OUT, dict.fromkeys(weights, "model-00001-of-00001.safetensors"))
     cfg = read_json(SRC / "config.json")
     cfg["vq_modules"] = vq_modules
     write_json(OUT / "config.json", cfg, indent=1)
