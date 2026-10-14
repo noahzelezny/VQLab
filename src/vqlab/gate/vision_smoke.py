@@ -288,7 +288,8 @@ def _load_full(art, mod, cfg, view):
     if not own:
         return vlm.load(str(view))
     stock = vlm.get_model_and_args
-    vlm.get_model_and_args = lambda config: (mod, config.get("model_type"))
+    # mlx_vlm >= 0.7 also passes model_path; the artifact's own model.py answers either way
+    vlm.get_model_and_args = lambda config, **_kw: (mod, config.get("model_type"))
     try:
         return vlm.load(str(view))
     finally:
@@ -511,6 +512,16 @@ def main() -> int:
 
     if a.tower_only:
         return _tower_only(art, mod, cfg, a)
+
+    # A full load of an artifact bigger than RAM thrashes swap and gives no
+    # verdict (a 397B preflight was about to, 2026-10-13): the same hard
+    # guard every resident-memory smoke takes.
+    from vqlab.plan import preflight_ram
+    if preflight_ram.main([str(art)]):
+        print("FAIL: too large for a full load on this box. --tower-only runs the "
+              "tower alone here (a fallback, not III.11 evidence); the full image "
+              "smoke runs on the cluster (check-release --knurlogic-smoke).")
+        return 2
 
     # the weight view outlives generation: MLX reads lazily through it
     with tempfile.TemporaryDirectory(prefix="vision-smoke-") as tmp:

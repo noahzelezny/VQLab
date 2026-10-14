@@ -83,3 +83,13 @@ def test_missing_mlx_vlm_is_named_not_blamed_on_the_bundle(tmp_path, monkeypatch
     with pytest.raises(SystemExit) as e:
         vs.main()
     assert "mlx_vlm is not installed" in str(e.value) and "TEXT-ONLY" not in str(e.value)
+
+
+
+def test_full_smoke_checks_ram_before_loading():
+    """A full vision smoke of a 121 GiB 397B on a 96 GiB box would thrash
+    swap; main() must run the RAM guard before it reaches the full load."""
+    import inspect
+    from vqlab.gate import vision_smoke as vs
+    src = inspect.getsource(vs.main)
+    assert src.index("preflight_ram.main") < src.index("_full(")
