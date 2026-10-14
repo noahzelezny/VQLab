@@ -476,3 +476,73 @@ def test_preflight_check_compares_shard_bytes_with_the_bar(tmp_path, monkeypatch
     ok, text = rq.preflight_ram.report(tmp_path, headroom=0.5)
     assert not ok and "PREFLIGHT FAIL" in text
     assert rq.preflight_ram.main([str(tmp_path), "--headroom", "0.5"]) == 2
+
+
+GUI = pathlib.Path(__file__).resolve().parents[1] / "src/vqlab/agents/gui_static"
+# recipe JSON -> the Recipe page's draft for the same build
+_PARITY = [
+    ("qwen3_5", {"mode": "affine", "bits": 4, "group": 64},
+     {"mode": "affine", "bits": 4, "group": 64, "aprotect": 0}),
+    ("qwen3_5", {"mode": "affine", "bits": 3, "group": 32, "protect_bits": 6, "vision": True},
+     {"mode": "affine", "bits": 3, "group": 32, "aprotect": 6, "tower": True}),
+    ("qwen3_5", {"geo": "d4-K256", "protect_bits": 6, "vision": True},
+     {"mode": "vq", "geo": "d4-K256", "protect": 6, "tower": True}),
+    ("qwen3_5", {"geo": "d4-K256", "tail": {"from": 20, "geo": "d8-K4096"}},
+     {"mode": "vq", "geo": "d4-K256", "protect": 8, "tailOn": True, "tailGeo": "d8-K4096",
+      "tailFrom": 20}),
+    ("qwen3_5", {"geo": "d4-K256", "skipzero": True},
+     {"mode": "vq", "geo": "d4-K256", "protect": 8, "skipzero": True}),
+    ("qwen3_5", {"geo": "d4-K256", "skipzero": True, "tail": {"from": 30, "geo": "d8-K4096"}},
+     {"mode": "vq", "geo": "d4-K256", "protect": 8, "skipzero": True, "tailOn": True,
+      "tailGeo": "d8-K4096", "tailFrom": 30}),
+    ("qwen3_8_dense", {"geo": "d4-K256", "bits": 6, "group": 32},
+     {"mode": "vq", "geo": "d4-K256", "bits": 6, "group": 32}),
+]
+
+
+def _page_size_js(page: pathlib.Path) -> str:
+    """The Recipe page's size arithmetic, verbatim: isMoe .. sizeRaw."""
+    src = page.read_text()
+    return src[src.index("const isMoe=t=>"):src.index("function sanitize(")]
+
+
+def test_the_recipe_page_sizes_a_build_as_the_compiler_does(fams):
+    """The live drag re-derives the compiler's artifact size in JS (instant
+    feedback before the preview returns); run that JS against
+    compile_recipe's estimate so the two cannot drift."""
+    import shutil
+    import subprocess
+    from vqlab.agents import teachers as T
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("node is not installed")
+    js = _page_size_js(GUI / "index.html")
+    assert js == _page_size_js(GUI / "bench" / "bench.html")
+    for d in (fams("qwen3_5", "T", "moe", 40), fams("qwen3_8_dense", "D", "dense", 24, vision=0)):
+        _measured_dead_rows(d)
+        prof = json.loads((d / "profile.json").read_text())
+        for es in prof["geometries"].values():       # GiB-scale stacks and dead rows, so
+            for e in es:                             # every case prices a different size
+                bits = (e["K"].bit_length() - 1) / e["d"]
+                e["bytes"] *= 64
+                e["stack_gib"] = 16 / 3 * bits / 16
+                e["bits_per_weight"] = bits
+        (d / "profile.json").write_text(json.dumps(prof))
+    cases, want = [], []
+    for family, recipe, draft in _PARITY:
+        teacher = "T" if family == "qwen3_5" else "D"
+        prof = rq.load_profile(family, teacher)
+        vq = prof["arch"]["vq_layers"]
+        t = {"kind": prof["arch"]["kind"], "gib": prof["bytes"]["by_class_gib"],
+             "geometries": T._geometries(prof), "vq_layers": len(vq), "first_vq": min(vq),
+             "skipzero": T._skipzero(family, teacher, prof)}
+        cases.append([t, draft])
+        q, _ = rq.compile_recipe({"name": "a", "family": family, "teacher": teacher, **recipe})
+        want.append(q["estimate"]["artifact_gib"])
+    run = js + "\nconst c=JSON.parse(require('fs').readFileSync(0,'utf8'));" \
+               "console.log(JSON.stringify(c.map(([t,r])=>sizeOf(t,r).gib)));"
+    out = subprocess.run([node, "-e", run], input=json.dumps(cases), capture_output=True,
+                         text=True, check=True).stdout
+    got = json.loads(out)
+    assert [round(g, 2) for g in got] == want, (got, want)
+    assert len(set(want)) == len(want)              # every case prices a different build
