@@ -41,10 +41,11 @@ the venv or into a shipped model.py.
 """
 import json
 import os
-
 import time
 
 import mlx.core as mx
+
+from vqlab.core.artifacts.artifact import read_header
 
 STATS = {"calls": 0, "rows": 0, "secs": 0.0}
 
@@ -155,14 +156,12 @@ def _bind(emb, keys, verbose, path):
     def reader(self, s_idx):
         if s_idx not in self._ps_readers:
             fpath, key = self._ps_keys[s_idx]
-            with open(fpath, "rb") as fh:
-                hlen = int.from_bytes(fh.read(8), "little")
-                hdr = json.loads(fh.read(hlen))
+            hdr, base = read_header(fpath, with_base=True)
             info = hdr[key]
             if info["dtype"] not in ("BF16", "F16"):
                 raise SystemExit(f"FAIL: {key} is {info['dtype']}; "
                                  f"ple_stream handles BF16/F16 only.")
-            start = 8 + hlen + info["data_offsets"][0]
+            start = base + info["data_offsets"][0]
             mm = np.memmap(fpath, dtype=np.uint16, mode="r", offset=start,
                            shape=tuple(info["shape"]))
             self._ps_readers[s_idx] = (mm, info["dtype"])

@@ -40,6 +40,7 @@ import pathlib
 import re
 import struct
 
+from vqlab.core.artifacts.artifact import read_header as _read_header
 from vqlab.core.source.teacher_profiles import profiles_in
 from vqlab.util.fs import atomic_path, copy_atomic, write_text_atomic
 from vqlab.util.geo import geo_key
@@ -155,11 +156,8 @@ def retag(root, old, new, family=None, apply=False):
 
 # ------------------------------------------------------------ safetensors I/O
 def read_header(p):
-    with open(p, "rb") as f:
-        n = struct.unpack("<Q", f.read(8))[0]
-        h = json.loads(f.read(n))
-    h.pop("__metadata__", None)
-    return h, 8 + n
+    """(header, base) of a fit-store part; see artifact.read_header."""
+    return _read_header(p, with_base=True)
 
 
 def read_tensor_bytes(p, h, base, key):

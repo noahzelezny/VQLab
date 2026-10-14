@@ -15,8 +15,8 @@ from __future__ import annotations
 import json
 import pathlib
 import re
-import struct
 
+from vqlab.core.artifacts.artifact import read_header
 from vqlab.family import FamilyPlugin, Parity
 
 _KEY = re.compile(r"^model\.layers\.(\d+)\.ple\.ple_embedding\.layer_multipliers$")
@@ -31,11 +31,10 @@ def _stored(model_dir: pathlib.Path) -> dict:
         m = _KEY.match(k)
         if not m:
             continue
+        h, base = read_header(model_dir / f, with_base=True)
+        a, b = h[k]["data_offsets"]
         with open(model_dir / f, "rb") as fh:
-            n = struct.unpack("<Q", fh.read(8))[0]
-            e = json.loads(fh.read(n))[k]
-            a, b = e["data_offsets"]
-            fh.seek(8 + n + a)
+            fh.seek(base + a)
             out[int(m.group(1))] = [int(x) for x in np.frombuffer(fh.read(b - a), dtype=np.int64)]
     return out
 

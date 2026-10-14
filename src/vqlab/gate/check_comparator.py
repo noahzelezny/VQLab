@@ -10,7 +10,13 @@ is safe to run beside a live fit.
 
 Usage: check_comparator.py --artifact DIR --teacher DIR [--quiet]
 """
-import argparse, json, re, struct, sys, pathlib
+import argparse
+import json
+import pathlib
+import re
+import sys
+
+from vqlab.core.artifacts.artifact import read_header
 
 # quantisation companions collapse back onto the weight site they belong to
 COMPANION = re.compile(r"\.(scales|biases|codes|codebook|vq_scales)$")
@@ -21,16 +27,7 @@ def core_tensors(d: pathlib.Path):
     shards = (sorted(set(json.load(open(idx))["weight_map"].values()))
               if idx.exists() else
               sorted(p.name for p in d.glob("*.safetensors")))
-    names = set()
-    for sh in shards:
-        with open(d / sh, "rb") as f:
-            n = struct.unpack("<Q", f.read(8))[0]
-            hdr = json.loads(f.read(n))
-        for k in hdr:
-            if k == "__metadata__":
-                continue
-            names.add(COMPANION.sub(".weight", k))
-    return names
+    return {COMPANION.sub(".weight", k) for sh in shards for k in read_header(d / sh)}
 
 def normalize(names):
     """Best-effort alignment of HF vs MLX prefix conventions."""

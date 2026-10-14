@@ -37,11 +37,10 @@ def _write(path, tensors):
 
 
 def _tensor_bytes(path, key):
-    h = read_header(path)
+    h, base = read_header(path, with_base=True)
+    a, b = h[key]["data_offsets"]
     with open(path, "rb") as f:
-        n = struct.unpack("<Q", f.read(8))[0]
-        a, b = h[key]["data_offsets"]
-        f.seek(8 + n + a)
+        f.seek(base + a)
         return f.read(b - a)
 
 

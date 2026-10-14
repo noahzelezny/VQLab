@@ -41,12 +41,17 @@ def layer_of(key: str) -> int:
     return int(m.group(1)) if m else -1
 
 
-def read_header(path) -> dict:
+def read_header(path, *, with_base: bool = False, metadata: bool = False):
+    """A safetensors file's header: {tensor: {dtype, shape, data_offsets}}.
+    The 8-byte little-endian length, then that many bytes of JSON. With
+    with_base, returns (header, base): tensor bytes start at base +
+    data_offsets[0]. `__metadata__` is dropped unless metadata=True."""
     with open(path, "rb") as fh:
         n = struct.unpack("<Q", fh.read(8))[0]
         h = json.loads(fh.read(n))
-    h.pop("__metadata__", None)
-    return h
+    if not metadata:
+        h.pop("__metadata__", None)
+    return (h, 8 + n) if with_base else h
 
 
 class Artifact:

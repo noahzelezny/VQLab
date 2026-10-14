@@ -23,7 +23,7 @@ import importlib
 import json
 import pathlib
 from vqlab import config as _cfg
-import struct
+from vqlab.core.artifacts.artifact import Artifact, read_header
 
 import numpy as np
 import pytest
@@ -522,11 +522,8 @@ def _maker(mt):
 
 def _headers(d: pathlib.Path) -> dict:
     out = {}
-    for f in sorted(set(json.load(open(d / "model.safetensors.index.json"))["weight_map"].values())):
-        with open(d / f, "rb") as fh:
-            n = struct.unpack("<Q", fh.read(8))[0]
-            out.update(json.loads(fh.read(n)))
-    out.pop("__metadata__", None)
+    for f in sorted(set(Artifact(d).index.values())):
+        out.update(read_header(d / f))
     return out
 
 

@@ -20,11 +20,11 @@ from __future__ import annotations
 
 import argparse
 import json
-import struct
+import math
 import sys
 from pathlib import Path
 
-from vqlab.core.artifacts.artifact import tensor_class
+from vqlab.core.artifacts.artifact import read_header, tensor_class
 
 # dtype -> bytes/element, as safetensors spells them
 _ITEMSIZE = {
@@ -34,12 +34,6 @@ _ITEMSIZE = {
     "U64": 8, "I64": 8, "F64": 8,
 }
 
-
-def _read_header(path: Path) -> dict:
-    """The safetensors header JSON: 8-byte LE length, then that many bytes."""
-    with path.open("rb") as fh:
-        (n,) = struct.unpack("<Q", fh.read(8))
-        return json.loads(fh.read(n))
 
 
 def _tensors(art: Path):
@@ -51,17 +45,12 @@ def _tensors(art: Path):
         fpath = art / fname
         if not fpath.exists():
             raise SystemExit(f"missing shard: {fpath}")
-        for name, meta in _read_header(fpath).items():
-            if name == "__metadata__":
-                continue
+        for name, meta in read_header(fpath).items():
             size = _ITEMSIZE.get(meta["dtype"])
             if size is None:
                 raise SystemExit(f"unknown dtype {meta['dtype']} on {name}")
             shape = meta["shape"]
-            n = 1
-            for d in shape:
-                n *= d
-            yield name, n * size, shape
+            yield name, math.prod(shape) * size, shape
 
 
 # How a tensor is READ on a decode step, which is not the same as how big

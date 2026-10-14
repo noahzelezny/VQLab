@@ -16,7 +16,7 @@ one fails again, fix the architecture, not the test.
 import json
 import pathlib
 from vqlab import config as _cfg
-import struct
+from vqlab.core.artifacts.artifact import read_header
 import sys
 import types
 
@@ -727,11 +727,6 @@ def test_decoder_layer_wiring():
 
 # ------------------------------------------------- maker checkpoint (lab)
 
-def _header(f):
-    with open(f, "rb") as fh:
-        n = struct.unpack("<Q", fh.read(8))[0]
-        return json.loads(fh.read(n))
-
 
 @pytest.mark.lab
 def test_checkpoint_config_matches_runtime():
@@ -761,4 +756,4 @@ def test_checkpoint_config_matches_runtime():
     want = {pre + "3.mlp.gate.e_score_correction_bias": "F32", pre + "0.self_attn.A_log": "F32",
             pre + "0.self_attn.dt_bias": "F32", pre + "0.hc_attn_base": "F32", pre + "0.hc_attn_scale": "F32"}
     for k, dt in want.items():
-        assert _header(TEACHER / idx[k])[k]["dtype"] == dt, k
+        assert read_header(TEACHER / idx[k])[k]["dtype"] == dt, k

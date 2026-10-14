@@ -104,9 +104,9 @@ def step_loader(ctx):
     if ip.exists():
         idx = json.loads(ip.read_text())["weight_map"]
     else:                                  # single-file checkpoint: no index
-        from vqlab.plan.family_profile import header
+        from vqlab.core.artifacts.artifact import read_header
         idx = {k: f.name for f in sorted(T.glob("*.safetensors"))
-               for k in header(os.path.realpath(f))}
+               for k in read_header(os.path.realpath(f))}
     layers = prof["arch"]["vq_layers"]
     checked = []
     for li in (layers[0], layers[-1]):

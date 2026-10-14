@@ -25,17 +25,11 @@ import collections
 import json
 import pathlib
 import re
-import struct
 import subprocess
 import sys
 
 from vqlab._layout import find as _find
-
-def _st_header(p):
-    with open(p, "rb") as fh:
-        n = struct.unpack("<Q", fh.read(8))[0]
-        return {k: v for k, v in json.loads(fh.read(n)).items()
-                if k != "__metadata__"}
+from vqlab.core.artifacts.artifact import read_header
 
 
 # CLUSTER SMOKE. Rungs larger than any single box we gate on (GLM 3.1/3.6,
@@ -428,7 +422,7 @@ def main(argv=None) -> int:
         _dt = {}
         for _sh in sorted(set(_wm.values())):
             if (A / _sh).exists():
-                for _k, _v in _st_header(A / _sh).items():
+                for _k, _v in read_header(A / _sh).items():
                     _dt[_k] = _v["dtype"]
 
         # (a) every affine module's scales/biases share one dtype, and likewise
@@ -491,7 +485,7 @@ def main(argv=None) -> int:
         for _f in sorted(A.glob("*.safetensors")):
             if _f.name in set(_wm.values()):
                 continue
-            for _k, _v in _st_header(_f).items():
+            for _k, _v in read_header(_f).items():
                 _ref = _tail.get(".".join(_k.split(".")[-2:]))
                 if _ref and len(_ref) == 1 and _v["dtype"] not in _ref:
                     fails.append(f"sidecar {_f.name}: {_k} is {_v['dtype']} but "

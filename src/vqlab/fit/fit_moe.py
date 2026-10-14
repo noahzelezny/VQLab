@@ -50,6 +50,7 @@ from vqlab import _layout
 from vqlab.family.registry import FAMILY  # shared registry (family/registry.py)
 from vqlab.core.source import expert_src  # shared source-layout loader (incl. unfused)
 from vqlab.core.artifacts import codepack  # --pack: the same packing rule as `vqlab pack`
+from vqlab.core.artifacts.artifact import read_header
 from vqlab import config as _cfg
 from vqlab.core.source import fit_store as fitstore
 from vqlab.records import provenance
@@ -469,12 +470,8 @@ def main(argv=None) -> int:
             # 3.6/8.2 GiB during a resume-copy. Same failure family as the
             # tokenizer that loaded and encoded nothing.)
             try:
-                import struct as _st
-                with open(f, "rb") as fh:
-                    n = _st.unpack("<Q", fh.read(8))[0]
-                    hdr = json.loads(fh.read(n))
-                want = 8 + n + max(v["data_offsets"][1] for k, v in hdr.items()
-                                   if k != "__metadata__")
+                hdr, base = read_header(f, with_base=True)
+                want = base + max(v["data_offsets"][1] for v in hdr.values())
                 return f.stat().st_size == want
             except Exception:
                 return False

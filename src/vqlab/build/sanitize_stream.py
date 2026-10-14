@@ -35,6 +35,7 @@ import time
 
 import mlx.core as mx
 
+from vqlab.core.artifacts.artifact import read_header
 
 def _group(key: str):
     m = re.match(r"layers\.(\d+)\.", key)
@@ -83,7 +84,7 @@ def main(argv=None):
         fn = f"model-{'top' if g < 0 else f'L{g:03d}'}.safetensors"
         dst = out / fn
         if dst.exists():                          # resumable, one file per group
-            hdr = _header(dst)
+            hdr = list(read_header(dst))
             index.update({k: fn for k in hdr})
             quant.update(_quant_from_keys(hdr, a))
             print(f"[{gi + 1}/{len(order)}] {fn} exists, skip", flush=True)
@@ -144,12 +145,6 @@ def _wanted(k, model_keys, model_mods):
     mod, leaf = k.rsplit(".", 1)
     return leaf in ("scales", "biases") and mod in model_mods
 
-
-def _header(p):
-    import struct
-    with open(p, "rb") as fh:
-        n = struct.unpack("<Q", fh.read(8))[0]
-        return [k for k in json.loads(fh.read(n)) if k != "__metadata__"]
 
 
 def _quant_from_keys(keys, a):

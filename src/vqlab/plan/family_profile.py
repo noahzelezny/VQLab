@@ -42,12 +42,11 @@ import math
 import os
 import pathlib
 import re
-import struct
 import sys
 
 from vqlab import config as _config
 from vqlab import config
-from vqlab.core.artifacts.artifact import tensor_class
+from vqlab.core.artifacts.artifact import read_header, tensor_class
 from vqlab.family.registry import DENSE_FAMILIES, FAMILY
 from vqlab.core.source import fit_store as fitstore
 from vqlab.records import provenance
@@ -60,13 +59,6 @@ DTYPE_BYTES = {"BF16": 2, "F16": 2, "F32": 4, "F8_E4M3": 1, "F8_E5M2": 1,
 DIMS = (2, 4, 8)
 KS = tuple(2 ** b for b in range(4, 17))          # K16 .. K65536
 
-
-def header(p):
-    with open(p, "rb") as f:
-        n = struct.unpack("<Q", f.read(8))[0]
-        h = json.loads(f.read(n))
-    h.pop("__metadata__", None)
-    return h
 
 
 def slug(teacher: pathlib.Path, fp: dict) -> str:
@@ -232,7 +224,7 @@ def main(argv=None) -> int:
     tc = cfg.get("text_config") or cfg
     shapes, dtypes, by_class = {}, {}, {}
     for shard in sorted(T.glob("*.safetensors")):
-        for k, v in header(os.path.realpath(shard)).items():
+        for k, v in read_header(os.path.realpath(shard)).items():
             shapes[k], dtypes[k] = v["shape"], v["dtype"]
     moe = bool(tc.get("num_experts") or tc.get("n_routed_experts"))
     dense_tmpl = None

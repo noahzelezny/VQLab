@@ -27,7 +27,7 @@ import re
 import struct
 import sys
 
-from vqlab.core.artifacts.artifact import Artifact, write_index
+from vqlab.core.artifacts.artifact import Artifact, read_header, write_index
 
 SHARD = "model-extras-graft.safetensors"
 
@@ -61,13 +61,6 @@ def _raw(path, key, hdr):
         fh.seek(start + a)
         return fh.read(b - a)
 
-
-def _hdr(path):
-    with open(path, "rb") as fh:
-        n = struct.unpack("<Q", fh.read(8))[0]
-        h = json.loads(fh.read(n))
-    h.pop("__metadata__", None)
-    return h, 8 + n
 
 
 def plan_graft(art: Artifact, src: pathlib.Path, preset: dict):
@@ -112,7 +105,7 @@ def main(argv=None):
     hdrs = {}
     def hdr(d, f):
         if (d, f) not in hdrs:
-            hdrs[(d, f)] = _hdr(d / f)
+            hdrs[(d, f)] = read_header(d / f, with_base=True)
         return hdrs[(d, f)]
     # probe: a spread of norms + routing tables, every one byte-identical
     keys = sorted(probe)

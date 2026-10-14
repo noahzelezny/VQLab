@@ -110,9 +110,7 @@ def write_subshard(src: pathlib.Path, dst: pathlib.Path, names: dict) -> int:
     """New safetensors file at `dst` holding byte copies of `names` ({old:
     new}) from `src`. Header entries (dtype, shape) are copied verbatim, so
     any dtype the source carries survives. Returns data bytes written."""
-    with open(src, "rb") as fh:
-        n = struct.unpack("<Q", fh.read(8))[0]
-        hdr = json.loads(fh.read(n))
+    hdr, base = read_header(src, with_base=True, metadata=True)
     md = hdr.pop("__metadata__", None)
     order = sorted(names, key=lambda k: hdr[k]["data_offsets"][0])
     out_hdr, off = {}, 0
@@ -131,7 +129,7 @@ def write_subshard(src: pathlib.Path, dst: pathlib.Path, names: dict) -> int:
         fo.write(blob)
         for k in order:
             a, b = hdr[k]["data_offsets"]
-            fi.seek(8 + n + a)
+            fi.seek(base + a)
             left = b - a
             while left:
                 buf = fi.read(min(CHUNK, left))

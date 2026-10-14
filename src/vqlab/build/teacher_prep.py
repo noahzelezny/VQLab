@@ -20,30 +20,29 @@ import argparse
 import json
 import pathlib
 import shutil
-import struct
 import sys
 
 from vqlab.build import sanitize_stream
+from vqlab.core.artifacts.artifact import read_header
 
 
 def relabel_e8m0(src: pathlib.Path) -> int:
     n_t = 0
     for p in sorted(src.glob("*.safetensors")):
+        h, base = read_header(p, with_base=True, metadata=True)
+        hit = [k for k, v in h.items()
+               if k != "__metadata__" and v["dtype"] == "F8_E8M0"]
+        if not hit:
+            continue
+        for k in hit:
+            h[k]["dtype"] = "U8"
+        new, n = json.dumps(h, separators=(",", ":")).encode(), base - 8
+        if len(new) > n:
+            raise SystemExit(f"{p.name}: relabelled header grew ({len(new)} > {n})")
         with open(p, "r+b") as fh:
-            n = struct.unpack("<Q", fh.read(8))[0]
-            h = json.loads(fh.read(n))
-            hit = [k for k, v in h.items()
-                   if k != "__metadata__" and v["dtype"] == "F8_E8M0"]
-            if not hit:
-                continue
-            for k in hit:
-                h[k]["dtype"] = "U8"
-            new = json.dumps(h, separators=(",", ":")).encode()
-            if len(new) > n:
-                raise SystemExit(f"{p.name}: relabelled header grew ({len(new)} > {n})")
             fh.seek(8)
             fh.write(new + b" " * (n - len(new)))
-            n_t += len(hit)
+        n_t += len(hit)
     return n_t
 
 

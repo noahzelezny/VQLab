@@ -41,6 +41,8 @@ import sys
 import numpy as np
 import pytest
 
+from vqlab.core.artifacts.artifact import read_header
+
 GOLD = pathlib.Path(__file__).parent / "golden" / "writers"
 SRC = pathlib.Path(__file__).resolve().parents[1] / "src"
 CPU_SITE = pathlib.Path(__file__).resolve().parent / "cpu_site"
@@ -189,13 +191,6 @@ def fx(tmp_path_factory):
 
 
 # ------------------------------------------------------------------ snapshot
-def _header(p):
-    with open(p, "rb") as fh:
-        n = struct.unpack("<Q", fh.read(8))[0]
-        h = json.loads(fh.read(n))
-    h.pop("__metadata__", None)
-    return h, 8 + n
-
 
 def snapshot(d, values=True):
     d = pathlib.Path(d)
@@ -203,7 +198,7 @@ def snapshot(d, values=True):
     idx = json.loads((d / "model.safetensors.index.json").read_text())["weight_map"]
     tensors = {}
     for f in sorted(set(idx.values())):
-        h, start = _header(d / f)
+        h, start = read_header(d / f, with_base=True)
         data = (d / f).read_bytes() if values else b""
         for k, v in h.items():
             e = {"shard": f, "dtype": v["dtype"], "shape": v["shape"]}
@@ -308,7 +303,7 @@ def test_pack(fx, tmp_path):
     idx = json.loads((fx["vq16"] / "model.safetensors.index.json").read_text())["weight_map"]
     shards = {}
     for k, f in idx.items():
-        h, start = _header(fx["vq16"] / f)
+        h, start = read_header(fx["vq16"] / f, with_base=True)
         a, b = h[k]["data_offsets"]
         raw = (fx["vq16"] / f).read_bytes()[start + a:start + b]
         np_dt = {"U8": np.uint8, "U16": np.uint16, "U32": np.uint32,

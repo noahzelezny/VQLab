@@ -34,6 +34,7 @@ import re
 
 import mlx.core as mx
 
+from vqlab.core.artifacts.artifact import read_header
 
 
 def is_unfused(fam: dict) -> bool:
@@ -68,19 +69,15 @@ def _raw_tensor(path: str, key: str, hdr_cache: dict) -> mx.array:
     the safetensors header + offsets. mx.load refuses a WHOLE shard that
     holds any F8_E8M0 tensor (DeepSeek-V4's FP4 scales), so the mxfp4 path
     reads its pairs this way instead."""
-    import json
-    import struct
     import numpy as np
     if path not in hdr_cache:
-        with open(path, "rb") as fh:
-            n = struct.unpack("<Q", fh.read(8))[0]
-            hdr_cache[path] = (n, json.loads(fh.read(n)))
-    n, h = hdr_cache[path]
+        hdr_cache[path] = read_header(path, with_base=True)
+    h, base = hdr_cache[path]
     m = h[key]
     if m["dtype"] not in ("I8", "U8", "F8_E8M0", "F8_E4M3"):
         raise ValueError(f"{key}: raw read is for 1-byte dtypes, got {m['dtype']}")
     a, b = m["data_offsets"]
-    arr = np.memmap(path, np.uint8, "r", offset=8 + n + a, shape=(b - a,))
+    arr = np.memmap(path, np.uint8, "r", offset=base + a, shape=(b - a,))
     return mx.array(np.asarray(arr).reshape(m["shape"]))
 
 
