@@ -22,7 +22,7 @@ wrong answer waiting to happen, so unknown model_type is a hard error.
     silently starve the PLE path. h is tiled x hc before the stack and
     resolved by hyper_connection_mixer after it; there is no final norm.
 
-    python -m vqlab.stream_score --model <dir> --corpus <txt> [--tokens N]
+    vqlab stream-score --model <dir> --corpus <txt> [--tokens N]
         [--save-topk K --out <dir>]
 """
 import argparse

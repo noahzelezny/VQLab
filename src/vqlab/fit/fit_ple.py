@@ -18,7 +18,7 @@ qwen4_exp geometry note: rows are 160 wide, so --group must divide 160 —
 the default here is 32 (NOT the body's 64). d4/K2048/g32 = 11/4 + 16/32
 = 3.25 bpw; the 51.2 GiB of tables (bf16 102.4) land at ~20.8 GiB.
 
-    python -m vqlab.fit_ple --src <bf16 dir> --out <dir> \
+    vqlab fit-ple --src <bf16 dir> --out <dir> \
         [--key-regex ngram_embedding] [--k 2048 --dim 4 --group 32] \
         [--limit N]   # fit only the first N matching tensors (validation)
 

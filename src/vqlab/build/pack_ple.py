@@ -9,7 +9,7 @@ zero padding — perfect random access for the embedding gather
 Every tensor is verified by ROUND-TRIP before its shard is swapped in:
 unpacking the packed bytes must reproduce the original codes exactly.
 
-    python -m vqlab.pack_ple --artifact <dir>
+    vqlab pack-ple --artifact <dir>
 """
 import argparse
 import sys
