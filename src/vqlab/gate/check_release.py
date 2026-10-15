@@ -30,6 +30,7 @@ import sys
 
 from vqlab._layout import find as _find
 from vqlab.core.artifacts.artifact import INDEX, Artifact, read_header, tensor_class
+from vqlab.core.box.knurlogic_client import NO_THINKING
 from vqlab.util.fs import read_json
 
 
@@ -150,6 +151,7 @@ def _knurlogic_smoke(args, A) -> list[str]:
     not looping, and (with an MTP head) that drafting accepted tokens."""
     import os
     import time
+
     from vqlab.core.box import knurlogic_client as SPK
     ksrc = os.environ.get("KNURLOGIC_SRC", "")
     if ksrc:
@@ -185,6 +187,7 @@ def _knurlogic_smoke(args, A) -> list[str]:
         url = out.get("url") or e.get("url") or e.get("where")
         d0 = SPK.drafting(url) if head else None
         r = SPK.post(url, {"model": name, "temperature": 0, "max_tokens": max(args.max_tokens, 96),
+                            **NO_THINKING,
                             "messages": [{"role": "user", "content":
                                           "Explain in three sentences why the sky is blue."}]})
         d1 = SPK.drafting(url) if head else None
@@ -698,8 +701,8 @@ def main(argv=None) -> int:
     # paths and storage roots in provenance files). Same scan `vqlab publish`
     # refuses on; `vqlab provenance <art> --portable` fixes records.
     try:
-        from vqlab.gate import leak_guard as _lg
         from vqlab.core.artifacts import hub as _hub
+        from vqlab.gate import leak_guard as _lg
         _files = [f for f in sorted(A.rglob("*")) if f.is_file()
                   and not _hub.is_backup(f.name) and "__pycache__" not in f.parts]
         _hits = _lg.scan(_files, A)

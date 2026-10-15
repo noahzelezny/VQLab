@@ -31,6 +31,10 @@ def post(url, doc, timeout=1800):
         return json.loads(r.read())
 
 
+# Request fields that keep a reasoning model's answer in `content`: thinking
+# on, a smoke's token budget goes to the reasoning channel and content is empty.
+NO_THINKING = {"reasoning_effort": "none"}
+
 BUNDLED = "ships its own runtime (model.py) and it WILL be executed"
 VENDORED = "runtime serves it instead"
 

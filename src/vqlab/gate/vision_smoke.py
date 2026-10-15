@@ -46,8 +46,8 @@ import urllib.request
 
 from vqlab.core.artifacts.artifact import INDEX, Artifact, tensor_class
 from vqlab.core.box import knurlogic_client
+from vqlab.core.box.knurlogic_client import NO_THINKING
 from vqlab.plan import preflight_ram
-
 
 # A synthetic probe beats a checked-in JPEG: no binary in the repo, no license
 # question, and the content is known exactly, so the printed caption is worth
@@ -195,7 +195,7 @@ def _knurlogic(art, a, K=None, SPK=None, ready_timeout=1800, poll=10,
                   f"model_id        : {mid}")
             probs = _image_request_check(lambda d: SPK.post(page, d), mid, img,
                                          a.max_tokens,
-                                         extra={"reasoning_effort": "none"})
+                                         extra=NO_THINKING)
         finally:
             # a single-Mac load answers with an instance id (job is null in the
             # page's rows), so unload by whichever id load returned
