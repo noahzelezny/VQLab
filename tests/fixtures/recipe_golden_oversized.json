@@ -888,6 +888,8 @@
       "<scratch>/moe-sz-mtp-big/moe-sz-mtp-big-sz",
       "--mtp",
       "<scratch>/moe-sz-mtp-big/mtp-graft.safetensors",
+      "--bits",
+      "6",
       "--fc-order",
       "eh",
       "--h-source",

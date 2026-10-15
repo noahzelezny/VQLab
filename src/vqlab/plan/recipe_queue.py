@@ -331,11 +331,11 @@ def mtp_head(family: str, teacher: str, prof: dict,
     teacher whose checkpoint has none, a model type vqlab packs no head for,
     or a recorded wiring that does not name exactly the choices its family
     leaves open."""
-    graft = prof["bytes"]["by_class_gib"].get("mtp")
+    graft = ((prof.get("bytes") or {}).get("by_class_gib") or {}).get("mtp")
     if not graft:
         raise RecipeError(f"{teacher} has no MTP head: its profile counts no "
                           "mtp.* tensors")
-    mt = prof["arch"].get("model_type")
+    mt = (prof.get("arch") or {}).get("model_type")
     spec = mtp_registry.FAMILIES.get(mt)
     if spec is None or spec.probe is None:
         raise RecipeError(f"vqlab packs no MTP head for model_type {mt!r}: no probe "
@@ -549,9 +549,7 @@ def _mtp_steps(r: Recipe, head: MtpHead, src: str, out: str, oversized: bool):
                        {"full": "the pack reads the whole head",
                         "writes_gib": round(head.graft_gib, 1)},
                        retries=1, timeout_s=2 * 3600))
-    pack = ["--model", out, "--mtp", graft]
-    if head.bits != mtp_registry.PACK_BITS:      # mtp-pack's own default is the published 6
-        pack += ["--bits", head.bits]
+    pack = ["--model", out, "--mtp", graft, "--bits", head.bits]
     pack_pf = {"full": "packs the one head", "writes_gib": round(head.gib + 0.5, 1)}
     record = f"families/{r.family}/teachers/{r.teacher}/mtp.json"
     if head.wiring:

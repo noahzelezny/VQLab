@@ -80,10 +80,11 @@ def pooled_acceptance(rows, heads, aligns) -> dict[str, float]:
     for label in heads:
         for align in aligns:
             rs = [r for r in rows if r["head"] == label and r["align"] == align]
-            out[f"{label}/{align}"] = acc = (sum(r["accepted"] for r in rs)
-                                             / sum(r["steps"] for r in rs))
+            steps = sum(r["steps"] for r in rs)
+            # no draft step at all (a few-token preflight) accepted nothing
+            out[f"{label}/{align}"] = acc = sum(r["accepted"] for r in rs) / steps if steps else 0.0
             print(f"  {label:6s} {align:9s} {acc:.4f}  "
-                  f"({sum(r['steps'] for r in rs)} steps over {len(rs)} prompts)",
+                  f"({steps} steps over {len(rs)} prompts)",
                   flush=True)
     return out
 

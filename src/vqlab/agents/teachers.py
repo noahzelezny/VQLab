@@ -85,7 +85,7 @@ def _mtp(family: str, teacher: str, prof: dict) -> dict | None:
         return None
     try:
         head = recipe_queue.mtp_head(family, teacher, prof)
-    except (recipe_queue.RecipeError, KeyError):
+    except recipe_queue.RecipeError:
         return None
     return {"graft_gib": head.graft_gib, "group": mtp_registry.PACK_GROUP,
             "bits": list(mtp_registry.PACK_BITS_CHOICES), "default": mtp_registry.PACK_BITS}

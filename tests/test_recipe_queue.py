@@ -417,8 +417,8 @@ def test_mtp_packs_the_recorded_wiring_into_the_finished_artifact(fams):
     sz = _args(q, "smoke")[0]
     side = f"{sz}/mtp-head-q6.safetensors"
     graft = _args(q, "mtp-extract")[_args(q, "mtp-extract").index("--out") + 1]
-    assert _args(q, "mtp-pack") == ["--model", sz, "--mtp", graft, "--fc-order", "eh",
-                                    "--h-source", "pre_norm", "--out", side]
+    assert _args(q, "mtp-pack") == ["--model", sz, "--mtp", graft, "--bits", "6",
+                                    "--fc-order", "eh", "--h-source", "pre_norm", "--out", side]
     assert _args(q, "mtp-smoke") == ["--model", sz, "--sidecar", side]
     acc = _args(q, "mtp-accept")
     assert f"head={side}" in acc
@@ -430,7 +430,7 @@ def test_mtp_packs_the_recorded_wiring_into_the_finished_artifact(fams):
 
 
 def test_mtp_bits_choose_the_sidecar_width(fams):
-    """A 4-bit head: mtp-pack gets --bits, the sidecar is named for it, and
+    """A 4-bit head: mtp-pack gets --bits 4 (6 spelled out too), the sidecar is named for it, and
     the artifact is smaller by the bits dropped (16-bit scale+bias per 32)."""
     _measured_dead_rows(fams("qwen3_5", "T", "moe", 40, mtp=1.5, wiring=_WIRING))
     base = {**_MOE, "skipzero": True, "mtp": True}
@@ -442,7 +442,7 @@ def test_mtp_bits_choose_the_sidecar_width(fams):
     assert pack[pack.index("--bits") + 1] == "4" and pack[-1] == side
     assert _args(q4, "mtp-smoke") == ["--model", sz, "--sidecar", side]
     assert f"head={side}" in _args(q4, "mtp-accept")
-    assert "--bits" not in _args(q6, "mtp-pack")
+    assert _args(q6, "mtp-pack")[_args(q6, "mtp-pack").index("--bits") + 1] == "6"
     drop = q6["estimate"]["artifact_gib"] - q4["estimate"]["artifact_gib"]
     assert round(drop, 2) == round(1.5 * 2 / 16, 2)
 
@@ -689,3 +689,11 @@ def test_the_recipe_page_sizes_a_build_as_the_compiler_does(fams):
     got = json.loads(out)
     assert [round(g, 2) for g in got] == want, (got, want)
     assert len(set(want)) == len(want)              # every case prices a different build
+
+
+def test_mtp_head_refuses_a_profile_without_its_sections():
+    """A profile missing bytes or arch is a refusal the GUI can show, never a
+    KeyError it would have to swallow."""
+    for prof in ({}, {"bytes": {}}, {"bytes": {"by_class_gib": {"mtp": 1.0}}}):
+        with pytest.raises(rq.RecipeError):
+            rq.mtp_head("qwen3_5", "T", prof)

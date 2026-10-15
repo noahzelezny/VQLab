@@ -120,16 +120,17 @@ def linked_name(artifact: pathlib.Path) -> str:
 
 def load(K, name: str, *, machines, split=None, link=None, sets=None,
          tries: int = 10, wait_s: float = 30, sleep=time.sleep) -> dict:
-    """K.load, retrying only refusals for room still being freed (ROOM_REFUSALS)."""
-    for attempt in range(tries):
+    """K.load, retrying only refusals for room still being freed
+    (ROOM_REFUSALS), `tries` loads in all; the last answer is returned."""
+    for _ in range(tries - 1):
         out = K.load(artifact=name, machines=machines, split=split, link=link, sets=sets)
         refused = str(out.get("refused") or "")
-        if attempt == tries - 1 or not any(r in refused for r in ROOM_REFUSALS):
+        if not any(r in refused for r in ROOM_REFUSALS):
             return out
         print(f"  {name}: placement refused ({refused}); memory still returning, "
               f"retry in {wait_s:g} s", file=sys.stderr)
         sleep(wait_s)
-    return out
+    return K.load(artifact=name, machines=machines, split=split, link=link, sets=sets)
 
 
 def unload(K, out: dict, *, polls: int = 60, wait_s: float = 5, sleep=time.sleep) -> None:
