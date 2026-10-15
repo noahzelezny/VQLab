@@ -107,12 +107,10 @@ class StreamingLM:
         unmatched tensor that IS live degrades the model in a way no
         downstream number reveals. Confirm deadness, then pass the flag.
         """
-        from mlx_lm.utils import load, load_model, load_tokenizer
+        from vqlab.family.model_loader import load_artifact
         try:
             with mx.stream(mx.cpu):
-                model, tokenizer, _ = load(
-                    self.model_path, lazy=True, return_config=True)
-            return model, tokenizer
+                return load_artifact(self.model_path, lazy=True)
         except ValueError as e:
             if "not in model" not in str(e):
                 raise
@@ -136,11 +134,8 @@ class StreamingLM:
             self._log(f"  NOTE: dropping {n} unmatched tensors "
                       f"(--allow-unmatched). Confirm they are dead for this "
                       f"checkpoint (E-series shared-KV k/v provably are).")
-            path = pathlib.Path(self.model_path)
             with mx.stream(mx.cpu):
-                model, _ = load_model(path, lazy=True, strict=False)
-                tokenizer = load_tokenizer(path)
-            return model, tokenizer
+                return load_artifact(self.model_path, lazy=True, strict=False)
 
     @property
     def tokenizer(self):

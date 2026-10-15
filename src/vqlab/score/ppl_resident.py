@@ -21,7 +21,6 @@ claim this experiment makes.
     python -m vqlab.score.ppl_resident --model DIR [--corpus F] [--max-tokens 2048]
 """
 import argparse
-import inspect
 import json
 import math
 import pathlib
@@ -34,7 +33,7 @@ def main(argv=None):
     import mlx.core as mx
     import mlx.nn as nn
     from mlx_lm.models.cache import make_prompt_cache
-    from mlx_lm.utils import load
+    from vqlab.family.model_loader import load_artifact
 
     ap = argparse.ArgumentParser()
     ap.add_argument("--model", required=True)
@@ -47,13 +46,7 @@ def main(argv=None):
     a.corpus = str(_layout.corpus(a.corpus))
 
     mx.set_cache_limit(8 << 30)
-    # mlx-lm >=0.32 refuses an in-checkpoint model.py unless trust_remote_code is
-    # passed; older releases do not accept the kwarg at all. Same bit-rot that hit
-    # runtime_load.py -- probe the signature instead of pinning a version.
-    _lk = {"lazy": False}
-    if "trust_remote_code" in inspect.signature(load).parameters:
-        _lk["trust_remote_code"] = True
-    model, tok = load(a.model, **_lk)
+    model, tok = load_artifact(a.model)
 
     text = pathlib.Path(a.corpus).read_text(errors="replace")
     ids = tok.encode(text)[: a.max_tokens + 1]

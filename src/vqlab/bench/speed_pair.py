@@ -36,13 +36,10 @@ from vqlab.plan import preflight_ram
 
 
 def child(path, prompt_tokens, gen_tokens, corpus):
-    import inspect
-    from mlx_lm import load, stream_generate
+    from mlx_lm import stream_generate
     from mlx_lm.sample_utils import make_sampler
-    if "trust_remote_code" in inspect.signature(load).parameters:
-        model, tok = load(path, trust_remote_code=True)
-    else:
-        model, tok = load(path, model_config={"trust_remote_code": True})
+    from vqlab.family.model_loader import load_artifact
+    model, tok = load_artifact(path)
     ids = tok.encode(_layout.corpus(corpus).read_text())[:prompt_tokens]
     if len(ids) < prompt_tokens:
         raise SystemExit(f"FAIL: corpus {corpus!r} has only {len(ids)} tokens")

@@ -76,11 +76,8 @@ def main():
                          "SDPA at head_dim 256 on Metal")
     a = ap.parse_args()
 
-    from mlx_lm.utils import load
-    try:
-        model, tok = load(a.model, lazy=False, trust_remote_code=True)
-    except TypeError:                    # older mlx-lm: no trust_remote_code
-        model, tok = load(a.model, lazy=False)
+    from vqlab.family.model_loader import load_artifact
+    model, tok = load_artifact(a.model)
     spec = registry.resolve(model, a.family)
     arch = spec.arch_module(model)
     # Vision-capable artifacts (the 397B's custom_model.Model) have no

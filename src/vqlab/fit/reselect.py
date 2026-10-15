@@ -196,23 +196,6 @@ def normalize(W, group, scales=None):
 
 
 # ================================================================ calibrate
-def _load_model(path):
-    from mlx_lm.utils import load
-    import inspect
-    kw = {}
-    try:
-        if "trust_remote_code" in inspect.signature(load).parameters:
-            kw["trust_remote_code"] = True
-    except (TypeError, ValueError):
-        pass
-    try:
-        return load(str(path), **kw)
-    except TypeError:
-        if not kw:
-            raise
-        return load(str(path))
-
-
 def cmd_calibrate(a):
     cfg = read_json(os.path.join(a.model, "config.json"))
     vqm = cfg.get("vq_modules") or cfg.get("text_config", {}).get("vq_modules") or {}
@@ -247,7 +230,8 @@ def cmd_calibrate(a):
     from mlx_lm.sample_utils import make_sampler
     if a.seed >= 0:
         mx.random.seed(a.seed)
-    model, tok = _load_model(a.model)
+    from vqlab.family.model_loader import load_artifact
+    model, tok = load_artifact(a.model)
     mods = [(n, m) for n, m in model.named_modules()
             if type(m).__name__ == MODULE_CLASS]
     _log(f"{len(mods)} {MODULE_CLASS} modules")

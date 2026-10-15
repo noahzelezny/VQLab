@@ -55,8 +55,8 @@ def main(argv=None) -> int:
     ap.add_argument("--warmup", type=int, default=3)
     a = ap.parse_args(argv)
 
-    from mlx_lm.utils import load
-    model, _ = load(a.model, lazy=True)
+    from vqlab.family.model_loader import load_artifact
+    model, _ = load_artifact(a.model, lazy=True)
     spec = registry.resolve(model, a.family)
     arch = spec.arch_module(model)
     head = spec.head_cls().from_sidecar(model, arch, a.sidecar)

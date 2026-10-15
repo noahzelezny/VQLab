@@ -254,7 +254,7 @@ def main():
 
     mx.set_cache_limit(8 << 30)
 
-    from mlx_lm.utils import load
+    from vqlab.family.model_loader import load_artifact
     # NOT `with mx.stream(mx.cpu)`. Running load() on the CPU stream was a
     # measured 0.15% error source: the loader does real work (sanitize,
     # casts, the bundle's own module construction), and doing it in CPU
@@ -264,7 +264,7 @@ def main():
     #     mx.cpu stream  -> 5.9247   (agrees with nothing)
     # Per-block parameter eval below stays on the CPU stream — that one was
     # measured to be value-neutral, and it is what keeps memory flat.
-    model, tokenizer, _ = load(args.model, lazy=True, return_config=True)
+    model, tokenizer = load_artifact(args.model, lazy=True)
     core = model
     for name in ("language_model", "model"):
         while hasattr(core, name):
@@ -344,7 +344,7 @@ def main():
         }), flush=True)
         if r + 1 < args.trials:
             # default stream, for the same reason as the first load
-            model2, _, _ = load(args.model, lazy=True, return_config=True)
+            model2, _ = load_artifact(args.model, lazy=True)
             core2 = model2
             for name in ("language_model", "model"):
                 while hasattr(core2, name):

@@ -65,9 +65,9 @@ def main(argv=None) -> int:
             fn, _, arg = rest.partition(":")
             getattr(m, fn)(*( [arg] if arg else []))
 
-    from mlx_lm import load
+    from vqlab.family.model_loader import load_artifact
     from mlx_lm.models.cache import make_prompt_cache
-    model, tok = load(a.art)
+    model, tok = load_artifact(a.art)
     inner = _trunk(model)
     if inner is None:
         raise SystemExit("FAIL: no trunk carrying both `layers` and `embed_tokens`")

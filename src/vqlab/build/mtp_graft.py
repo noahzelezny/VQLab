@@ -114,8 +114,8 @@ def main():
                          "index.json — key-set parity is GATED on it")
     a = ap.parse_args()
 
-    from mlx_lm.utils import load
-    model, _ = load(a.model, lazy=True, trust_remote_code=True)
+    from vqlab.family.model_loader import load_artifact
+    model, _ = load_artifact(a.model, lazy=True)
     arch = importlib.import_module(type(model.model).__module__)
 
     g = {k[len("mtp."):] if k.startswith("mtp.") else k: v

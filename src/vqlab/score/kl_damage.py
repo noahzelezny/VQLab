@@ -99,10 +99,9 @@ from vqlab.util.fs import GIB, read_json
 # --------------------------------------------------------------------------
 def load_direct(path, allow_unmatched=False):
     """Load whole (not lazy-streamed). See DIRECT FORWARD note above."""
-    from mlx_lm.utils import load, load_model, load_tokenizer
+    from vqlab.family.model_loader import load_artifact
     try:
-        model, tokenizer, _ = load(path, return_config=True)
-        return model, tokenizer
+        return load_artifact(path)
     except ValueError as e:
         if "not in model" not in str(e) or not allow_unmatched:
             # Refuse by default: a LIVE unmatched tensor degrades the model
@@ -110,8 +109,7 @@ def load_direct(path, allow_unmatched=False):
             # E-series shared-KV k/v are the known-dead exception (see the
             # E-SERIES NOTE above) — verify before assuming it elsewhere.
             raise
-        model, _ = load_model(Path(path), strict=False)
-        return model, load_tokenizer(Path(path))
+        return load_artifact(path, strict=False)
 
 
 def build_chunks(tokenizer, corpus_paths, num_samples, seq_len, chat, seed):

@@ -207,9 +207,8 @@ def acts_main(a) -> int:
                     wtT; the fused walk never rounds the product)
     A kernel arm far above sim:x16+w16 carries an error the simulation does
     not model (accumulation / matrix-unit precision)."""
-    from mlx_lm import load
     from vqlab.runtime import vq_pack
-    model, tok = load(a.artifact)
+    model, tok = runtime_load.load_artifact(a.artifact)
     want = tuple(x.strip() for x in a.switch_modules.split(",") if x.strip())
     pick = [(n, m) for n, m in model.named_modules()
             if type(m).__name__ == "VQSwitchLinear" and n.endswith(want)]
@@ -371,9 +370,8 @@ def acts_main(a) -> int:
 
 def switch_main(a) -> int:
     """OFF vs ON for one vq_switch flag, each against exact float64."""
-    from mlx_lm import load
     from vqlab.runtime import vq_pack
-    model, _ = load(a.artifact)
+    model, _ = runtime_load.load_artifact(a.artifact)
     want = tuple(x.strip() for x in a.switch_modules.split(",") if x.strip())
     pick = [(n, m) for n, m in model.named_modules()
             if type(m).__name__ == "VQSwitchLinear" and n.endswith(want)]

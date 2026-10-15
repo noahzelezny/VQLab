@@ -23,11 +23,8 @@ def load_trunk(model_path, lazy: bool = False):
     except ImportError:
         have_mlx_lm = False
     if have_mlx_lm:
-        from mlx_lm.utils import load
-        try:
-            return load(model_path, lazy=lazy, trust_remote_code=True)
-        except TypeError:  # older mlx-lm: no trust_remote_code kwarg
-            return load(model_path, lazy=lazy)
+        from vqlab.family.model_loader import load_artifact
+        return load_artifact(model_path, lazy=lazy)
     from mlx_vlm.utils import load as vlm_load
     try:
         model, processor = vlm_load(str(model_path), lazy=lazy)

@@ -133,20 +133,54 @@ def require_vendored_arch() -> None:
             "deliberately.")
 
 
+def trust_remote_code_kwargs(loader) -> dict:
+    """The keyword that lets this mlx-lm build run an artifact's bundled
+    model.py, for `loader` (mlx_lm.utils.load or load_model).
+
+    mlx-lm >= 0.32 refuses an in-checkpoint model.py unless
+    trust_remote_code=True is passed; some older builds took it through
+    model_config instead, and the grafted exo runtime takes neither (it
+    raised TypeError and broke layer-leverage, 2026-09-13). The signature
+    is probed, never the version; the one home for this check."""
+    import inspect
+    try:
+        params = inspect.signature(loader).parameters
+    except (TypeError, ValueError):
+        return {}
+    if "trust_remote_code" in params:
+        return {"trust_remote_code": True}
+    if "model_config" in params:
+        return {"model_config": {"trust_remote_code": True}}
+    return {}
+
+
+def load_artifact(path, lazy: bool = False, strict: bool = True,
+                  vendored_arch: bool = True) -> tuple:
+    """Load (model, tokenizer) from an artifact dir through mlx-lm, the way
+    the CLI tools need it: bundled model.py trusted, Knurlogic's arch
+    served.
+
+    strict=False drops checkpoint tensors the model class does not build
+    (load_model + load_tokenizer; mlx_lm.load has no such switch) -- only
+    for tensors confirmed dead. vendored_arch=False leaves the import
+    machinery alone, for an instrument that chooses its arch source itself
+    (runtime-equiv)."""
+    from mlx_lm.utils import load, load_model, load_tokenizer
+    if vendored_arch:
+        install_vendored_arch()
+    if strict:
+        return load(str(path), lazy=lazy, **trust_remote_code_kwargs(load))
+    path = pathlib.Path(path)
+    model, _ = load_model(path, lazy=lazy, strict=False,
+                          **trust_remote_code_kwargs(load_model))
+    return model, load_tokenizer(path)
+
+
 def _load_on_current_stream(family, path, rt, lazy):
     install_vendored_arch()
     if rt == "mlx_lm":
-        import inspect
         from mlx_lm.utils import load_model
-        # `trust_remote_code` was REMOVED from mlx-lm's load_model signature
-        # (present in older builds, absent in the grafted/exo runtime as of
-        # 2026-09-13, where it raised TypeError and broke layer-leverage).
-        # Pass it only when the installed build accepts it; arches the
-        # runtime implements natively (e.g. qwen4_exp) need no remote code.
-        kwargs = {"lazy": lazy}
-        if "trust_remote_code" in inspect.signature(load_model).parameters:
-            kwargs["trust_remote_code"] = True
-        return load_model(path, **kwargs)
+        return load_model(path, lazy=lazy, **trust_remote_code_kwargs(load_model))
     # mlx_vlm
     from mlx_vlm.utils import load_config, load_model
     config = load_config(path)

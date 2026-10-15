@@ -67,3 +67,71 @@ def test_require_vendored_arch_refuses_a_silent_stock_build(monkeypatch):
         ML.require_vendored_arch()
     monkeypatch.setenv("VQLAB_VENDORED_ARCH", "0")                # asked for
     ML.require_vendored_arch()
+
+
+def _no_arch(monkeypatch):
+    from vqlab.core.box import arch_finder
+    monkeypatch.setattr(arch_finder, "install_arch_finder", lambda: True)
+
+
+def test_load_artifact_trusts_remote_code_by_keyword(monkeypatch):
+    # mlx-lm >= 0.32 refuses a bundled model.py without trust_remote_code
+    pytest.importorskip("mlx_lm")
+    _no_arch(monkeypatch)
+    seen = {}
+
+    def load(path_or_hf_repo, model_config=None, lazy=False,
+             trust_remote_code=False):
+        seen.update(path=path_or_hf_repo, lazy=lazy, trust=trust_remote_code,
+                    model_config=model_config)
+        return "model", "tok"
+
+    monkeypatch.setattr("mlx_lm.utils.load", load)
+    assert ML.load_artifact("art", lazy=True) == ("model", "tok")
+    assert seen == {"path": "art", "lazy": True, "trust": True,
+                    "model_config": None}
+
+
+def test_load_artifact_trusts_remote_code_through_model_config(monkeypatch):
+    # older builds take it inside model_config instead
+    pytest.importorskip("mlx_lm")
+    _no_arch(monkeypatch)
+    seen = {}
+
+    def load(path_or_hf_repo, model_config=None, lazy=False):
+        seen.update(lazy=lazy, model_config=model_config)
+        return "model", "tok"
+
+    monkeypatch.setattr("mlx_lm.utils.load", load)
+    ML.load_artifact("art")
+    assert seen == {"lazy": False,
+                    "model_config": {"trust_remote_code": True}}
+
+
+def test_load_artifact_unstrict_trusts_remote_code(monkeypatch):
+    pytest.importorskip("mlx_lm")
+    _no_arch(monkeypatch)
+    seen = {}
+
+    def load_model(model_path, lazy=False, strict=True, trust_remote_code=False):
+        seen.update(lazy=lazy, strict=strict, trust=trust_remote_code)
+        return "model", {}
+
+    monkeypatch.setattr("mlx_lm.utils.load_model", load_model)
+    monkeypatch.setattr("mlx_lm.utils.load_tokenizer", lambda p: "tok")
+    assert ML.load_artifact("art", lazy=True, strict=False) == ("model", "tok")
+    assert seen == {"lazy": True, "strict": False, "trust": True}
+
+
+def test_family_load_trusts_remote_code(monkeypatch):
+    pytest.importorskip("mlx_lm")
+    _no_arch(monkeypatch)
+    seen = {}
+
+    def load_model(model_path, lazy=False, trust_remote_code=False):
+        seen.update(trust=trust_remote_code)
+        return "model", {}
+
+    monkeypatch.setattr("mlx_lm.utils.load_model", load_model)
+    ML._load_on_current_stream("qwen3_5", "x", "mlx_lm", True)
+    assert seen == {"trust": True}

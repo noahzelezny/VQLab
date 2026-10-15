@@ -62,8 +62,8 @@ def _random(T, dtype, seed=1234):
 
 def _capture(art, T, layer):
     import sys
-    from mlx_lm import load
-    model, tok = load(art)
+    from vqlab.family.model_loader import load_artifact
+    model, tok = load_artifact(art)
     from mlx_lm.models import gated_delta as gd
     got, count = {}, [0]
     orig = gd.gated_delta_update

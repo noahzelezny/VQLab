@@ -50,14 +50,10 @@ def main(argv=None) -> int:
     a = ap.parse_args(argv)
 
     import mlx.core as mx
-    from mlx_lm.utils import load
+    from vqlab.family.model_loader import load_artifact
 
     print(f"loading {a.artifact} ...", flush=True)
-    import inspect
-    kw = {}
-    if "trust_remote_code" in inspect.signature(load).parameters:
-        kw["trust_remote_code"] = True
-    model, tokenizer = load(a.artifact, **kw)
+    model, tokenizer = load_artifact(a.artifact)
 
     ids = mx.array([[1] * a.tokens])
 

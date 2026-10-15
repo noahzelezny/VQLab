@@ -83,11 +83,8 @@ def main():
     except ImportError:
         have_mlx_lm_class = False
     if have_mlx_lm_class:
-        from mlx_lm.utils import load
-        try:
-            model, _ = load(a.model, lazy=True, trust_remote_code=True)
-        except TypeError:  # older mlx-lm: no trust_remote_code kwarg
-            model, _ = load(a.model, lazy=True)
+        from vqlab.family.model_loader import load_artifact
+        model, _ = load_artifact(a.model, lazy=True)
     else:
         from mlx_vlm.utils import load_model
         model = load_model(pathlib.Path(a.model), lazy=True)

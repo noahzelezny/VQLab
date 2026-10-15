@@ -91,9 +91,8 @@ def main():
     ap.add_argument("--out", default=None)
     a = ap.parse_args()
 
-    from mlx_lm.utils import load
     from mlx_lm.models.qwen4_exp import create_attention_mask, create_ssm_mask
-    model, tok = load(a.model, lazy=False, trust_remote_code=True)
+    model, tok = runtime_load.load_artifact(a.model)
     print(runtime_load.resolved_runtime_note(model), flush=True)
     core = model.model
 

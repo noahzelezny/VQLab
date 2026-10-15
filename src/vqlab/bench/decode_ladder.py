@@ -428,8 +428,8 @@ def main() -> int:
                          "per arm (ms/tok, best of reps) -- the decode-unchanged check")
     a = ap.parse_args()
 
-    from mlx_lm import load
-    model, tok = load(a.art)
+    from vqlab.family.model_loader import load_artifact
+    model, tok = load_artifact(a.art)
 
     # First non-mlx.nn class in the MRO. __mro__[1] alone is right for a VQ
     # BUNDLE (whose Model subclasses the arch's Model) but reports

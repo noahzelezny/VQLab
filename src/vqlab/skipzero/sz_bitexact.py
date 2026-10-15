@@ -118,7 +118,7 @@ def module_inputs(p, i, n, IN, E, order, is_down):
 # ------------------------------------------------------------------- worker
 def worker(art, role, outdir, experts_json, mem_only):
     import mlx.core as mx
-    from mlx_lm.utils import load
+    from vqlab.family.model_loader import load_artifact
     from mlx_lm.models.cache import make_prompt_cache
     out = pathlib.Path(outdir) / role
     out.mkdir(parents=True, exist_ok=True)
@@ -127,7 +127,7 @@ def worker(art, role, outdir, experts_json, mem_only):
            "model_py_mtime": os.stat(pathlib.Path(art) / "model.py").st_mtime}
     mx.reset_peak_memory()
     t0 = time.time()
-    model, tok = load(str(art))
+    model, tok = load_artifact(art)
     mx.eval(model.parameters())
     rep["load_s"] = time.time() - t0
     rep["active_gib"] = mx.get_active_memory() / GIB
