@@ -149,26 +149,20 @@ def _knurlogic_smoke(args, A) -> list[str]:
     """Load THIS artifact through Knurlogic on the named machine(s), generate
     greedily, check the bundled runtime ran (rank logs), the text is real and
     not looping, and (with an MTP head) that drafting accepted tokens."""
-    import os
     import time
 
     from vqlab.core.box import knurlogic_client as SPK
-    ksrc = os.environ.get("KNURLOGIC_SRC", "")
-    if ksrc:
-        sys.path.insert(0, ksrc)
-    try:
-        from knurlogic.interfaces import mcp as K
-    except ImportError:
+    K = SPK.mcp()
+    if K is None:
         return ["knurlogic not importable (set KNURLOGIC_SRC to its source tree)"]
-    md = SPK.models_dir()
-    name = A.resolve().name
-    if (md / name).resolve() != A.resolve():
-        return [f"Knurlogic models dir entry {md / name} does not resolve to {A.resolve()}: "
-                "the smoke would load something else"]
+    try:
+        name = SPK.linked_name(A)
+    except ValueError as e:
+        return [str(e)]
     head = sorted(A.glob("mtp-head*.safetensors"))
     sets = {"KNURLOGIC_MTP": "on" if head else "off"}
-    out = K.load(artifact=name, machines=args.knurlogic_smoke, split=args.knurlogic_split,
-                 link=args.knurlogic_link, sets=sets)
+    out = SPK.load(K, name, machines=args.knurlogic_smoke, split=args.knurlogic_split,
+                   link=args.knurlogic_link, sets=sets)
     job = out.get("job") or out.get("instance")
     if not job or out.get("refused") or out.get("error"):
         return [f"Knurlogic load refused or failed: {out}"]
@@ -212,7 +206,7 @@ def _knurlogic_smoke(args, A) -> list[str]:
         print(f"  Knurlogic smoke ({', '.join(args.knurlogic_smoke)}"
               f"{' ' + args.knurlogic_split if args.knurlogic_split else ''}): {text.strip()[:120]!r}")
     finally:
-        K.unload(job=str(job))
+        SPK.unload(K, out)
     return probs
 
 

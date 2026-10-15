@@ -9,6 +9,8 @@ from __future__ import annotations
 import json
 import os
 import pathlib
+import sys
+import time
 import urllib.request
 
 
@@ -83,3 +85,59 @@ def drafting(url):
             return (json.loads(r.read()).get("drafting") or None)
     except Exception:
         return None
+
+
+# Refusals for room that a just-unloaded job is still handing back: a Mac
+# frees an unloaded model's memory some time AFTER its job is gone, so a load
+# right behind an unload is refused for memory about to return.
+ROOM_REFUSALS = ("cannot place", "fits on no set")
+
+
+def mcp(src: str = ""):
+    """Knurlogic's MCP module, with `src` (default $KNURLOGIC_SRC), a Knurlogic
+    source tree, first on the path when given; None when not importable."""
+    ksrc = src or os.environ.get("KNURLOGIC_SRC", "")
+    if ksrc and ksrc not in sys.path:
+        sys.path.insert(0, ksrc)
+    try:
+        from knurlogic.interfaces import mcp as K
+    except ImportError:
+        return None
+    return K
+
+
+def linked_name(artifact: pathlib.Path) -> str:
+    """The name Knurlogic loads `artifact` by. Raises ValueError when the
+    models-dir entry of that name resolves anywhere else: the smoke would load
+    something other than this artifact."""
+    name = artifact.resolve().name
+    entry_path = models_dir() / name
+    if entry_path.resolve() != artifact.resolve():
+        raise ValueError(f"Knurlogic models dir entry {entry_path} does not resolve to "
+                         f"{artifact.resolve()}: the smoke would load something else")
+    return name
+
+
+def load(K, name: str, *, machines, split=None, link=None, sets=None,
+         tries: int = 10, wait_s: float = 30, sleep=time.sleep) -> dict:
+    """K.load, retrying only refusals for room still being freed (ROOM_REFUSALS)."""
+    for attempt in range(tries):
+        out = K.load(artifact=name, machines=machines, split=split, link=link, sets=sets)
+        refused = str(out.get("refused") or "")
+        if attempt == tries - 1 or not any(r in refused for r in ROOM_REFUSALS):
+            return out
+        print(f"  {name}: placement refused ({refused}); memory still returning, "
+              f"retry in {wait_s:g} s", file=sys.stderr)
+        sleep(wait_s)
+    return out
+
+
+def unload(K, out: dict, *, polls: int = 60, wait_s: float = 5, sleep=time.sleep) -> None:
+    """Unload what load() returned (a pipeline job, or a single Mac's instance
+    when its job is null) and wait until it is gone everywhere."""
+    job = out.get("job")
+    K.unload(**({"job": str(job)} if job else {"instance": str(out.get("instance"))}))
+    for _ in range(polls):
+        if entry(K, job or out.get("instance")) is None:
+            return
+        sleep(wait_s)

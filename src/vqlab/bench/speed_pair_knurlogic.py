@@ -38,8 +38,8 @@ import time
 
 from vqlab import _layout
 from vqlab.core.box.knurlogic_client import (  # noqa: F401  (re-exported)
-    BUNDLED, VENDORED, drafting as _drafting, entry as _entry, post as _post,
-    rank_logs as _rank_logs, ready as _ready)
+    BUNDLED, VENDORED, drafting as _drafting, entry as _entry, load as _load, mcp as _mcp, post as _post,
+    rank_logs as _rank_logs, ready as _ready, unload as _unload)
 
 KSRC = os.environ.get("KNURLOGIC_SRC", "")
 
@@ -64,17 +64,7 @@ def ships_runtime(name, models_dir):
 
 
 def run_arm(K, name, a, prompt, warm):
-    # A Mac frees an unloaded model's memory some time AFTER its job is gone,
-    # so a load right behind the previous arm's unload can be refused for room
-    # that is about to come back. Retry those refusals; nothing else.
-    for attempt in range(10):
-        out = K.load(artifact=name, machines=a.machine, split=a.split, link=a.link,
-                     sets=a.sets or None)
-        if "cannot place" not in str(out.get("refused") or ""):
-            break
-        print(f"  {name}: placement refused ({out.get('refused')}); memory still returning, retry in 30 s",
-              file=sys.stderr)
-        time.sleep(30)
+    out = _load(K, name, machines=a.machine, split=a.split, link=a.link, sets=a.sets or None)
     job = out.get("job") or out.get("instance")
     if not job or out.get("refused") or out.get("error"):
         raise SystemExit(f"FAIL: load {name}: {out}")
@@ -124,11 +114,7 @@ def run_arm(K, name, a, prompt, warm):
                 rec.update(draft_steps=st, draft_accepted=ac,
                            acceptance=round(ac / st, 4) if st else None)
     finally:
-        K.unload(job=str(job))
-        for _ in range(60):                       # wait until it is gone everywhere
-            if _entry(K, job) is None:
-                break
-            time.sleep(5)
+        _unload(K, out)
     bad = []
     if served and served != name:
         bad.append(f"served as {served!r}, not {name!r} (identity collapse?)")
@@ -187,8 +173,9 @@ def main(argv=None) -> int:
         a.sets[k] = v
     remote = dict(h.split("=", 1) for h in a.host)
     a.hosts = {m: remote.get(m) for m in a.machine}
-    sys.path.insert(0, a.knurlogic_src)
-    from knurlogic.interfaces import mcp as K
+    K = _mcp(a.knurlogic_src)
+    if K is None:
+        ap.error(f"knurlogic not importable from {a.knurlogic_src}")
 
     prompt = _prompt(a.prompt_tokens)
     warm = _prompt(a.prompt_tokens, offset=a.prompt_tokens * 4)

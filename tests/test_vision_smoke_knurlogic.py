@@ -16,6 +16,9 @@ class FakeK:
         self.loaded = kw
         return {"job": "j1"}
 
+    def state(self):
+        return {"models": []}
+
     def unload(self, job):
         self.unloaded = job
 

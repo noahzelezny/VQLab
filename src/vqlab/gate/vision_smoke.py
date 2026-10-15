@@ -165,24 +165,18 @@ def _knurlogic(art, a, K=None, SPK=None, ready_timeout=1800, poll=10,
                          "with other roles or machine names")
     sleep = sleep or time.sleep
     SPK = SPK or knurlogic_client
+    K = K or knurlogic_client.mcp()
     if K is None:
-        ksrc = os.environ.get("KNURLOGIC_SRC", "")
-        if ksrc:
-            sys.path.insert(0, ksrc)
-        try:
-            from knurlogic.interfaces import mcp as K
-        except ImportError:
-            raise SystemExit("FAIL: knurlogic not importable (set KNURLOGIC_SRC "
-                             "to its source tree)") from None
-    md = knurlogic_client.models_dir()
-    name = art.resolve().name
-    if (md / name).resolve() != art.resolve():
-        raise SystemExit(f"FAIL: Knurlogic models dir entry {md / name} does not "
-                         f"resolve to {art.resolve()}: the smoke would load "
-                         "something else")
+        raise SystemExit("FAIL: knurlogic not importable (set KNURLOGIC_SRC "
+                         "to its source tree)")
+    try:
+        name = knurlogic_client.linked_name(art)
+    except ValueError as e:
+        raise SystemExit(f"FAIL: {e}") from None
     with _probe(a) as img:
-        out = K.load(artifact=name, machines=machines, split=a.knurlogic_split,
-                     link=a.knurlogic_link, sets={"KNURLOGIC_MTP": "off"})
+        out = knurlogic_client.load(K, name, machines=machines, split=a.knurlogic_split,
+                                    link=a.knurlogic_link, sets={"KNURLOGIC_MTP": "off"},
+                                    sleep=sleep)
         job = out.get("job") or out.get("instance")
         if not job or out.get("refused") or out.get("error"):
             raise SystemExit(f"FAIL: Knurlogic load refused or failed: {out}")
@@ -197,10 +191,7 @@ def _knurlogic(art, a, K=None, SPK=None, ready_timeout=1800, poll=10,
                                          a.max_tokens,
                                          extra=NO_THINKING)
         finally:
-            # a single-Mac load answers with an instance id (job is null in the
-            # page's rows), so unload by whichever id load returned
-            K.unload(**({"job": str(out["job"])} if out.get("job")
-                        else {"instance": str(job)}))
+            knurlogic_client.unload(K, out, sleep=sleep)
     if probs:
         raise SystemExit("\nFAIL: " + "; ".join(probs))
     print("\nPASS (KNURLOGIC): the probe image went through the serving "
