@@ -22,9 +22,8 @@ import pathlib
 import mlx.core as mx
 
 from vqlab.mtp import registry
+from vqlab.plan.mtp_probe_qwen35 import chosen_wiring
 from vqlab.util.fs import GIB
-
-SIDECAR_NAME = "mtp-head-q6.safetensors"
 
 
 def main():
@@ -32,7 +31,7 @@ def main():
     ap.add_argument("--model", required=True, help="artifact dir (loaded lazily; "
                     "no trunk weights are materialized)")
     ap.add_argument("--mtp", required=True, help="bf16 mtp graft safetensors")
-    ap.add_argument("--bits", type=int, default=6,
+    ap.add_argument("--bits", type=int, default=registry.PACK_BITS,
                     help="bit-width for the small modules (attention, "
                          "hyper-connections, fc, shared expert) -- 3.5%% of "
                          "the head, so protecting them is nearly free")
@@ -40,7 +39,7 @@ def main():
                     help="bit-width for the 512-expert MoE stack, which is "
                          "96.5%% of the head and therefore sets its size "
                          "(default: same as --bits)")
-    ap.add_argument("--group-size", type=int, default=32)
+    ap.add_argument("--group-size", type=int, default=registry.PACK_GROUP)
     ap.add_argument("--family", default=None,
                     help="override the family resolved from the model's "
                          "model_type (registered: see registry.py)")
@@ -58,10 +57,18 @@ def main():
                     choices=("pre_norm", "post_norm"),
                     help="qwen3_5 only: whether the head reads the trunk "
                          "hidden state before or after the trunk final norm")
+    ap.add_argument("--wiring-from", default=None, metavar="PROBE_JSON",
+                    help="qwen3_5 only: take --fc-order and --h-source from an "
+                         "`mtp-probe35 --out` record of ONE sidecar (its best "
+                         "wiring), so a queue packs what its probe measured")
     ap.add_argument("--out", default=None,
-                    help="output file, or a directory to write "
-                         f"{SIDECAR_NAME} into (default: the artifact dir)")
+                    help="output file, or a directory to write the "
+                         "family's sidecar into (default: the artifact dir)")
     a = ap.parse_args()
+    if a.wiring_from:
+        if a.fc_order or a.h_source:
+            ap.error("--wiring-from chooses --fc-order and --h-source; give one or the other")
+        a.fc_order, a.h_source = chosen_wiring(a.wiring_from)
 
     # lazy=True everywhere: we need the architecture classes and args, not
     # the weights. Families mlx-lm has no class for (glm5_next) load via
@@ -115,13 +122,7 @@ def main():
     eb = a.bits if a.expert_bits is None else a.expert_bits
     out = pathlib.Path(a.out) if a.out else pathlib.Path(a.model)
     if out.is_dir():
-        SIDECAR_NAME_ = spec.sidecar_name
-        if a.bits == 6 and eb == 6:
-            out = out / SIDECAR_NAME_
-        elif eb == a.bits:
-            out = out / f"mtp-head-q{a.bits}.safetensors"
-        else:
-            out = out / f"mtp-head-e{eb}q{a.bits}.safetensors"
+        out = out / spec.sidecar_for(a.bits, a.expert_bits)
     flat = head.save(out, bits=a.bits, group_size=a.group_size,
                      expert_bits=a.expert_bits)
     size = out.stat().st_size / GIB

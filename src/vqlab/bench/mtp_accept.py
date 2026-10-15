@@ -73,6 +73,21 @@ def paired_stats(rows, heads, aligns, n_prompts):
     return out
 
 
+def pooled_acceptance(rows, heads, aligns) -> dict[str, float]:
+    """{"head/align": acceptance pooled over prompts}, printed as it goes."""
+    print("\npooled over prompts:", flush=True)
+    out = {}
+    for label in heads:
+        for align in aligns:
+            rs = [r for r in rows if r["head"] == label and r["align"] == align]
+            out[f"{label}/{align}"] = acc = (sum(r["accepted"] for r in rs)
+                                             / sum(r["steps"] for r in rs))
+            print(f"  {label:6s} {align:9s} {acc:.4f}  "
+                  f"({sum(r['steps'] for r in rs)} steps over {len(rs)} prompts)",
+                  flush=True)
+    return out
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--model", required=True)
@@ -84,6 +99,10 @@ def main():
     ap.add_argument("--prompts", default=None,
                     help="JSON file with a list of prompt strings")
     ap.add_argument("--out", default=None)
+    ap.add_argument("--min-acceptance", type=float, default=None,
+                    help="exit 1 when any head's pooled acceptance is below "
+                         "this: a gate against a dead head (a wrong wiring "
+                         "drafts at ~0.00)")
     a = ap.parse_args()
 
     from vqlab.mtp import load_mtp_head, mtp_stream_generate
@@ -126,14 +145,7 @@ def main():
         if a.out:
             pathlib.Path(a.out).write_text(json.dumps(rows, indent=1))
 
-    print("\npooled over prompts:", flush=True)
-    for label in heads:
-        for align in aligns:
-            rs = [r for r in rows if r["head"] == label and r["align"] == align]
-            acc = sum(r["accepted"] for r in rs) / sum(r["steps"] for r in rs)
-            print(f"  {label:6s} {align:9s} {acc:.4f}  "
-                  f"({sum(r['steps'] for r in rs)} steps over {len(rs)} prompts)",
-                  flush=True)
+    pooled = pooled_acceptance(rows, heads, aligns)
 
     if len(aligns) == 2:
         print(f"\npaired {aligns[0]} - {aligns[1]}, prompts as replicates:",
@@ -144,6 +156,12 @@ def main():
                   f"better on {st['wins']}/{st['n']} prompts", flush=True)
     if a.out:
         pathlib.Path(a.out).write_text(json.dumps(rows, indent=1))
+    low = [f"{k} {acc:.4f}" for k, acc in pooled.items()
+           if a.min_acceptance is not None and acc < a.min_acceptance]
+    if low:
+        print(f"FAIL: pooled acceptance below {a.min_acceptance}: "
+              f"{', '.join(low)}", flush=True)
+        return 1
     return 0
 
 

@@ -17,6 +17,9 @@ architectures genuinely differ:
                    capture.py) rather than monkeypatching the class.
   draft_cache      the attribute on the architecture module that builds the
                    head's own KV cache.
+  probe, wiring    the command that measures the head wiring a checkpoint
+                   does not determine, and the mtp-pack options it chooses
+                   (each wrong choice drafts at chance with no error).
   cache_semantics  "reassign" or "copy" — see caches.py. qwen4_exp reassigns
                    its recurrent cache slots rather than mutating them, which
                    makes snapshots free; that is an implementation accident of
@@ -44,6 +47,11 @@ from __future__ import annotations
 import importlib
 from dataclasses import dataclass
 
+# mtp-pack's default recipe, the one every published sidecar was packed with
+# (their vqlab_mtp metadata: "bits": 6, "group_size": 32, experts not split)
+PACK_BITS = 6
+PACK_GROUP = 32
+
 
 @dataclass(frozen=True)
 class FamilySpec:
@@ -53,6 +61,19 @@ class FamilySpec:
     draft_cache: str
     sidecar_name: str = "mtp-head-q6.safetensors"
     cache_semantics: str = "copy"
+    probe: str | None = None
+    wiring: tuple[str, ...] = ()
+
+    def sidecar_for(self, bits: int = PACK_BITS, expert_bits: int | None = None) -> str:
+        """The file name mtp-pack gives a head packed at `bits` (experts at
+        `expert_bits`, default the same): the family's own name at the
+        default recipe, else one that says the recipe."""
+        eb = bits if expert_bits is None else expert_bits
+        if bits == eb == PACK_BITS:
+            return self.sidecar_name
+        if eb == bits:
+            return f"mtp-head-q{bits}.safetensors"
+        return f"mtp-head-e{eb}q{bits}.safetensors"
 
     def head_cls(self):
         mod, _, attr = self.head.partition(":")
@@ -179,6 +200,8 @@ for _qwen35_name in ("qwen3_5", "qwen3_5_moe"):
         draft_cache="KVCache",
         sidecar_name="mtp-head-q6.safetensors",
         cache_semantics="reassign",
+        probe="mtp-probe35",
+        wiring=("fc_order", "h_source"),
     ))
 
 

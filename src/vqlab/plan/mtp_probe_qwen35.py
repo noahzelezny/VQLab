@@ -2,7 +2,7 @@
 choices the checkpoint does not determine.
 
     python -m vqlab.cli mtp-probe35 --model <artifact> --sidecar <s.safetensors>
-        --corpus <txt> [--tokens 512] [--out probe.json]
+        --corpus <lit|prose|code|txt> [--tokens 512] [--out probe.json]
 
 Teacher-forced greedy proxy for speculative acceptance: run the MAIN model
 over the corpus once, capturing the hidden row h_i that feeds its final norm
@@ -30,9 +30,26 @@ import pathlib
 import mlx.core as mx
 from mlx.utils import tree_map
 
+from vqlab import _layout
 from vqlab.mtp import registry
 from vqlab.mtp.capture import capture_input
 from vqlab.util.fs import GIB
+
+# below this greedy agreement with its own corpus the trunk capture is
+# broken (a healthy trunk reads ~0.4-0.7; the 397B 2.2bpw read 0.512)
+CONTROL_MIN = 0.15
+
+
+def chosen_wiring(path: str | pathlib.Path) -> tuple[str, str]:
+    """(fc_order, h_source): the best wiring an `--out` record measured for
+    the ONE sidecar it scored; refused for a record of several, which would
+    leave the choice to whoever reads it."""
+    sidecars = json.loads(pathlib.Path(path).read_text()).get("sidecars") or {}
+    if len(sidecars) != 1:
+        raise SystemExit(f"{path} scored {len(sidecars)} sidecars; a wiring is "
+                         "read from a probe of exactly one")
+    fc_order, _, h_source = next(iter(sidecars.values()))["best"].partition("/")
+    return fc_order, h_source
 
 
 def main():
@@ -41,12 +58,17 @@ def main():
     ap.add_argument("--sidecar", required=True, nargs="+",
                     help="one or more packed sidecars; all are scored\n"
                          "against a single model load")
-    ap.add_argument("--corpus", required=True)
+    ap.add_argument("--corpus", required=True,
+                    help="a house corpus by name (lit, prose, code) or a text file")
     ap.add_argument("--tokens", type=int, default=512)
     ap.add_argument("--family", default=None)
     ap.add_argument("--fc-orders", default="eh,he")
     ap.add_argument("--h-sources", default="pre_norm,post_norm")
     ap.add_argument("--out", default=None)
+    ap.add_argument("--control-min", type=float, default=CONTROL_MIN,
+                    help="refuse below this trunk-vs-corpus agreement (a "
+                         "queue preflight, whose trunk is one fitted layer, "
+                         "passes 0)")
     ap.add_argument("--head-dtype", default="bfloat16",
                     choices=("bfloat16", "float16", "float32"),
                     help="activation dtype inside the head for this batched "
@@ -68,7 +90,7 @@ def main():
     print(f"family {spec.name}; capture {spec.capture!r}; "
           f"resident {mx.get_active_memory() / GIB:.2f} GiB", flush=True)
 
-    ids = tok.encode(pathlib.Path(a.corpus).read_text())[: a.tokens + 2]
+    ids = tok.encode(_layout.corpus(a.corpus).read_text())[: a.tokens + 2]
     bos = getattr(tok, "bos_token_id", None)
     if bos is not None and (not ids or ids[0] != bos):
         ids = [bos] + ids[: a.tokens + 1]
@@ -90,7 +112,7 @@ def main():
                           ).astype(mx.float32)).item())
     print(f"control: main greedy vs corpus next-token agreement {ctrl:.3f} "
           f"(sanity: ~0.4-0.7; ~0 means the capture is broken)", flush=True)
-    if ctrl < 0.15:
+    if ctrl < a.control_min:
         raise SystemExit("FAIL: the control says the trunk capture is wrong; "
                          "no acceptance number from this run means anything")
 
