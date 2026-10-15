@@ -148,7 +148,7 @@ def _wait_ready(page, name, timeout, poll, sleep, get=None):
         sleep(poll)
 
 
-def _knurlogic(art, a, K=None, SPK=None, ready_timeout=1800, poll=10,
+def _knurlogic(art, a, K=None, ready_timeout=1800, poll=10,
                sleep=None, page=PAGE):
     """Put the probe image through Knurlogic, the runtime we serve on.
 
@@ -156,15 +156,15 @@ def _knurlogic(art, a, K=None, SPK=None, ready_timeout=1800, poll=10,
     VisionModel (no vision_config, flat vision_* keys), so the local arms
     cannot load it, and it is too large for one box anyway. The load mirrors
     `check-release --knurlogic-smoke`: the models-dir entry must resolve to
-    THIS artifact, and the job is unloaded whatever happens. K / SPK are
-    injectable for tests.
+    THIS artifact, and the job is unloaded whatever happens. K (Knurlogic's
+    MCP module) is injectable for tests; the HTTP calls go through
+    knurlogic_client, which tests monkeypatch.
     """
     machines = list(a.knurlogic)   # role words / names pass straight to load()
     if "fit" in machines and len(machines) > 1:
         raise SystemExit("FAIL: --knurlogic fit stands alone; do not combine it "
                          "with other roles or machine names")
     sleep = sleep or time.sleep
-    SPK = SPK or knurlogic_client
     K = K or knurlogic_client.mcp()
     if K is None:
         raise SystemExit("FAIL: knurlogic not importable (set KNURLOGIC_SRC "
@@ -187,7 +187,7 @@ def _knurlogic(art, a, K=None, SPK=None, ready_timeout=1800, poll=10,
             mid = _wait_ready(page, name, ready_timeout, poll, sleep)
             print(f"knurlogic       : {', '.join(machines)} via {page}\n"
                   f"model_id        : {mid}")
-            probs = _image_request_check(lambda d: SPK.post(page, d), mid, img,
+            probs = _image_request_check(lambda d: knurlogic_client.post(page, d), mid, img,
                                          a.max_tokens,
                                          extra=NO_THINKING)
         finally:

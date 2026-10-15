@@ -53,6 +53,9 @@ PACK_BITS = 6
 PACK_GROUP = 32
 # the widths a recipe may pack the head at (mx affine); PACK_BITS is the published one
 PACK_BITS_CHOICES = (4, 5, 6, 8)
+# the qwen3_5 head wiring the checkpoint does not determine, option -> its
+# values: the fused fc's concat order and which trunk hidden state feeds it
+WIRING_CHOICES = {"fc_order": ("eh", "he"), "h_source": ("pre_norm", "post_norm")}
 
 
 @dataclass(frozen=True)
@@ -203,7 +206,7 @@ for _qwen35_name in ("qwen3_5", "qwen3_5_moe"):
         sidecar_name="mtp-head-q6.safetensors",
         cache_semantics="reassign",
         probe="mtp-probe35",
-        wiring=("fc_order", "h_source"),
+        wiring=tuple(WIRING_CHOICES),
     ))
 
 

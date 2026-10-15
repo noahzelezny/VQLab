@@ -957,7 +957,7 @@ function pgRecipe(){
     <div class="ro">include ${I('KL score runs the score step after the build, and needs KL caches registered for this teacher. MTP drafting packs the teacher\'s own draft head into the build (6-bit, the published recipe, or the width chosen under it) and fails the queue on a head that does not accept.'+(t.skipzero?' Skip-zero drops this teacher\'s dead expert rows on disk (sz-pack, then sz-check), as every published build of it was made; KL unchanged (F175). The saving is its measured dead rows priced at this recipe\'s geometry per layer, from '+t.skipzero.source+'.':''))}</div>
     ${t.skipzero&&r.mode==='vq'?`<button class="addon" aria-pressed="${!!r.skipzero}" data-g="skipzero"><i></i><span class="n">skip-zero</span><span class="t">−${fmt(szGib(t,{...r,skipzero:true}))} GiB</span></button>`:''}
     ${B.vision?addon('tower','vision tower',B.vision):''}
-    ${t.mtp?addon('mtp','MTP drafting',mtpGibAt(t,r.mtpBits||t.mtp.default)):''}
+    ${t.mtp?addon('mtp','MTP drafting',mtpGibAt(t,r.mtpBits)):''}
     ${t.mtp&&r.mtp?qrow('bits','mtpBits',t.mtp.bits,`The draft head's width (mtp-pack --bits, group ${t.mtp.group}). q${t.mtp.default} is the published recipe; fewer bits is a smaller, faster head, whose acceptance mtp-accept gates.`):''}
     <button class="addon" aria-pressed="${!!r.score}" data-g="score" ${t.scored?'':'disabled'}><i></i><span class="n">KL score</span></button>
   </div>

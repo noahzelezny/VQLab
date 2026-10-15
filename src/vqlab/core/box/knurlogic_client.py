@@ -7,11 +7,16 @@ itself (`K`) is always passed in by the caller.
 from __future__ import annotations
 
 import json
+import logging
 import os
 import pathlib
 import sys
 import time
 import urllib.request
+from collections.abc import Callable
+from types import ModuleType
+
+_log = logging.getLogger(__name__)
 
 
 def models_dir() -> pathlib.Path:
@@ -93,7 +98,7 @@ def drafting(url):
 ROOM_REFUSALS = ("cannot place", "fits on no set")
 
 
-def mcp(src: str = ""):
+def mcp(src: str = "") -> ModuleType | None:
     """Knurlogic's MCP module, with `src` (default $KNURLOGIC_SRC), a Knurlogic
     source tree, first on the path when given; None when not importable."""
     ksrc = src or os.environ.get("KNURLOGIC_SRC", "")
@@ -118,8 +123,9 @@ def linked_name(artifact: pathlib.Path) -> str:
     return name
 
 
-def load(K, name: str, *, machines, split=None, link=None, sets=None,
-         tries: int = 10, wait_s: float = 30, sleep=time.sleep) -> dict:
+def load(K: ModuleType, name: str, *, machines: list[str], split: str | None = None,
+         link: str | None = None, sets: dict[str, str] | None = None, tries: int = 10,
+         wait_s: float = 30, sleep: Callable[[float], object] = time.sleep) -> dict:
     """K.load, retrying only refusals for room still being freed
     (ROOM_REFUSALS), `tries` loads in all; the last answer is returned."""
     for _ in range(tries - 1):
@@ -127,13 +133,14 @@ def load(K, name: str, *, machines, split=None, link=None, sets=None,
         refused = str(out.get("refused") or "")
         if not any(r in refused for r in ROOM_REFUSALS):
             return out
-        print(f"  {name}: placement refused ({refused}); memory still returning, "
-              f"retry in {wait_s:g} s", file=sys.stderr)
+        _log.warning("%s: placement refused (%s); memory still returning, retry in %g s",
+                     name, refused, wait_s)
         sleep(wait_s)
     return K.load(artifact=name, machines=machines, split=split, link=link, sets=sets)
 
 
-def unload(K, out: dict, *, polls: int = 60, wait_s: float = 5, sleep=time.sleep) -> None:
+def unload(K: ModuleType, out: dict, *, polls: int = 60, wait_s: float = 5,
+           sleep: Callable[[float], object] = time.sleep) -> None:
     """Unload what load() returned (a pipeline job, or a single Mac's instance
     when its job is null) and wait until it is gone everywhere."""
     job = out.get("job")

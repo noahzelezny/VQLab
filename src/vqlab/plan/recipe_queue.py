@@ -98,6 +98,8 @@ from vqlab.util.fs import GIB, write_text_atomic
 
 MOE = {"qwen3_5"}
 DENSE = {"qwen3_8_dense"}
+# every family the compiler builds
+COMPILED = MOE | DENSE
 GEO = re.compile(r"^d(\d+)-?[kK](\d+)$")
 NAME = re.compile(r"^[a-z0-9][a-z0-9._-]{0,79}$")
 # the codebook dims sz-pack packs (skipzero_load.SUPPORTED_DIMS, a peer layer;
@@ -337,15 +339,23 @@ def mtp_head(family: str, teacher: str, prof: dict,
                           "mtp.* tensors")
     mt = (prof.get("arch") or {}).get("model_type")
     spec = mtp_registry.FAMILIES.get(mt)
-    if spec is None or spec.probe is None:
-        raise RecipeError(f"vqlab packs no MTP head for model_type {mt!r}: no probe "
-                          "for its wiring is registered (vqlab/mtp/registry.py)")
-    rec = registry.teacher_record(family, teacher, "mtp.json") or {}
-    wiring = rec.get("wiring")
-    if wiring is not None and sorted(wiring) != sorted(spec.wiring):
-        raise RecipeError(f"families/{family}/teachers/{teacher}/mtp.json: the wiring "
-                          f"must set exactly {', '.join(spec.wiring)}, "
-                          f"not {', '.join(sorted(wiring))}")
+    if spec is None:
+        raise RecipeError(f"vqlab packs no MTP head for model_type {mt!r} "
+                          "(none registered in vqlab/mtp/registry.py)")
+    if spec.probe is None:
+        raise RecipeError(f"no probe for the {mt!r} head's wiring is registered "
+                          "(vqlab/mtp/registry.py), so the compiler cannot choose it")
+    record = f"families/{family}/teachers/{teacher}/mtp.json"
+    wiring = (registry.teacher_record(family, teacher, "mtp.json") or {}).get("wiring")
+    if wiring is not None:
+        if not isinstance(wiring, dict) or sorted(wiring) != sorted(spec.wiring):
+            raise RecipeError(f"{record}: the wiring must set exactly "
+                              f"{', '.join(spec.wiring)}, not {wiring!r}")
+        bad = [f"{k}={v!r}" for k, v in wiring.items()
+               if v not in mtp_registry.WIRING_CHOICES[k]]
+        if bad:
+            raise RecipeError(f"{record}: {', '.join(bad)} is not a value mtp-pack takes "
+                              f"({mtp_registry.WIRING_CHOICES})")
     return MtpHead(spec, wiring, graft,
                    _affine_gib(graft, bits, mtp_registry.PACK_GROUP), bits)
 
@@ -389,9 +399,9 @@ class Recipe:
         mode = r.get("mode", "vq")
         if mode not in ("vq", "affine"):
             raise RecipeError(f"mode {mode!r}: vq or affine")
-        if family not in MOE | DENSE:
+        if family not in COMPILED:
             raise RecipeError(f"no build of family {family!r} has run through a queue yet; "
-                              f"compiled families: {', '.join(sorted(MOE | DENSE))}")
+                              f"compiled families: {', '.join(sorted(COMPILED))}")
         bits, group = _int(r.get("bits", 4), "bits"), _int(r.get("group", 64), "group")
         geo = geometry(r.get("geo")) if mode == "vq" else None
         tail, pb = None, 8

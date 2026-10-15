@@ -46,9 +46,12 @@ def chosen_wiring(path: str | pathlib.Path) -> tuple[str, str]:
     leave the choice to whoever reads it."""
     sidecars = json.loads(pathlib.Path(path).read_text()).get("sidecars") or {}
     if len(sidecars) != 1:
-        raise SystemExit(f"{path} scored {len(sidecars)} sidecars; a wiring is "
+        raise ValueError(f"{path} scored {len(sidecars)} sidecars; a wiring is "
                          "read from a probe of exactly one")
     fc_order, _, h_source = next(iter(sidecars.values()))["best"].partition("/")
+    if (fc_order not in registry.WIRING_CHOICES["fc_order"]
+            or h_source not in registry.WIRING_CHOICES["h_source"]):
+        raise ValueError(f"{path}: best wiring {fc_order}/{h_source} is not one mtp-pack takes")
     return fc_order, h_source
 
 
@@ -62,8 +65,8 @@ def main():
                     help="a house corpus by name (lit, prose, code) or a text file")
     ap.add_argument("--tokens", type=int, default=512)
     ap.add_argument("--family", default=None)
-    ap.add_argument("--fc-orders", default="eh,he")
-    ap.add_argument("--h-sources", default="pre_norm,post_norm")
+    ap.add_argument("--fc-orders", default=",".join(registry.WIRING_CHOICES["fc_order"]))
+    ap.add_argument("--h-sources", default=",".join(registry.WIRING_CHOICES["h_source"]))
     ap.add_argument("--out", default=None)
     ap.add_argument("--control-min", type=float, default=CONTROL_MIN,
                     help="refuse below this trunk-vs-corpus agreement (a "

@@ -158,25 +158,18 @@ class _FakeK:
         return {"job": "j1", "url": "http://fake"}
 
     def state(self):
-        return {"machines": []}
+        return {"models": []}
 
     def unload(self, job):
         self.unloaded.append(job)
 
 
-class _FakeSPK:
-    def __init__(self, post):
-        self._fn = post
-
-    def entry(self, K, job):
-        return {"phase": "ready"}
-
-    def ready(self, e):
-        return True
-
-    def post(self, url, doc, timeout=1800):
+def _fake_post(monkeypatch, vs, fn):
+    """knurlogic_client.post answered by `fn(doc)`, for the page at http://fake."""
+    def post(url, doc, timeout=1800):
         assert url == "http://fake"
-        return self._fn(doc)
+        return fn(doc)
+    monkeypatch.setattr(vs.knurlogic_client, "post", post)
 
 
 def _knurlogic_args(img):
@@ -196,8 +189,9 @@ def test_knurlogic_arm_loads_this_artifact_and_unloads(tmp_path, monkeypatch):
         link.symlink_to(art.resolve())
     monkeypatch.setenv("KNURLOGIC_MODELS", str(md))
     K, (post, sent) = _FakeK(), _server()
+    _fake_post(monkeypatch, vs, post)
     assert vs._knurlogic(art, _knurlogic_args(_probe(tmp_path, vs)), K=K,
-                         SPK=_FakeSPK(post), page="http://fake") == 0
+                         page="http://fake") == 0
     assert K.loaded[0]["machines"] == ["here", "peers"] and K.loaded[0]["split"] == "pipeline"
     assert K.unloaded == ["j1"] and len(sent) == 2
 
@@ -214,8 +208,9 @@ def test_knurlogic_arm_fails_and_still_unloads(tmp_path, monkeypatch):
         link.symlink_to(art.resolve())
     monkeypatch.setenv("KNURLOGIC_MODELS", str(md))
     K, (post, _) = _FakeK(), _server(n_img=12)
+    _fake_post(monkeypatch, vs, post)
     with pytest.raises(SystemExit, match="NO prompt tokens"):
-        vs._knurlogic(art, _knurlogic_args(_probe(tmp_path, vs)), K=K, SPK=_FakeSPK(post), page="http://fake")
+        vs._knurlogic(art, _knurlogic_args(_probe(tmp_path, vs)), K=K, page="http://fake")
     assert K.unloaded == ["j1"]
 
 
@@ -225,5 +220,5 @@ def test_knurlogic_arm_refuses_a_models_dir_pointing_elsewhere(tmp_path, monkeyp
     monkeypatch.setenv("KNURLOGIC_MODELS", str(tmp_path / "nowhere"))
     K = _FakeK()
     with pytest.raises(SystemExit, match="does not resolve"):
-        vs._knurlogic(art, _knurlogic_args("x.png"), K=K, SPK=_FakeSPK(None))
+        vs._knurlogic(art, _knurlogic_args("x.png"), K=K)
     assert K.loaded == []

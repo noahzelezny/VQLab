@@ -26,11 +26,19 @@ CPU-only checks of the dispatch logic (loads nothing):
 """
 from __future__ import annotations
 
+import os
 import pathlib
-import mlx.core as mx
 import sys
+from collections.abc import Callable
+from typing import TYPE_CHECKING
+
+import mlx.core as mx
 
 from vqlab.family.registry import FAMILY
+
+if TYPE_CHECKING:
+    from mlx import nn
+    from mlx_lm.tokenizer_utils import TokenizerWrapper
 
 RUNTIMES = ("mlx_lm", "mlx_vlm")
 
@@ -133,7 +141,7 @@ def require_vendored_arch() -> None:
             "deliberately.")
 
 
-def trust_remote_code_kwargs(loader) -> dict:
+def trust_remote_code_kwargs(loader: Callable[..., object]) -> dict[str, object]:
     """The keyword that lets this mlx-lm build run an artifact's bundled
     model.py, for `loader` (mlx_lm.utils.load or load_model).
 
@@ -154,8 +162,8 @@ def trust_remote_code_kwargs(loader) -> dict:
     return {}
 
 
-def load_artifact(path, lazy: bool = False, strict: bool = True,
-                  vendored_arch: bool = True) -> tuple:
+def load_artifact(path: str | os.PathLike, lazy: bool = False, strict: bool = True,
+                  vendored_arch: bool = True) -> tuple[nn.Module, TokenizerWrapper]:
     """Load (model, tokenizer) from an artifact dir through mlx-lm, the way
     the CLI tools need it: bundled model.py trusted, Knurlogic's arch
     served.

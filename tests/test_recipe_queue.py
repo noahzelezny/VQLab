@@ -697,3 +697,13 @@ def test_mtp_head_refuses_a_profile_without_its_sections():
     for prof in ({}, {"bytes": {}}, {"bytes": {"by_class_gib": {"mtp": 1.0}}}):
         with pytest.raises(rq.RecipeError):
             rq.mtp_head("qwen3_5", "T", prof)
+
+
+@pytest.mark.parametrize("wiring", [{"fc_order": "eh", "h_source": "post-norm"},
+                                    ["fc_order", "h_source"],
+                                    {"fc_order": "eh"}])
+def test_a_recorded_wiring_mtp_pack_cannot_take_is_refused(fams, wiring):
+    """Caught at compile time, not in the preflight's argparse."""
+    _measured_dead_rows(fams("qwen3_5", "T", "moe", 40, mtp=1.5, wiring=wiring))
+    with pytest.raises(rq.RecipeError, match=r"mtp\.json"):
+        rq.compile_recipe({**_MOE, "mtp": True})

@@ -31,6 +31,7 @@ import json
 import pathlib
 import statistics
 import sys
+from collections.abc import Sequence
 
 import mlx.core as mx
 
@@ -73,7 +74,8 @@ def paired_stats(rows, heads, aligns, n_prompts):
     return out
 
 
-def pooled_acceptance(rows, heads, aligns) -> dict[str, float]:
+def pooled_acceptance(rows: list[dict], heads: Sequence[str],
+                      aligns: Sequence[str]) -> dict[str, float]:
     """{"head/align": acceptance pooled over prompts}, printed as it goes."""
     print("\npooled over prompts:", flush=True)
     out = {}

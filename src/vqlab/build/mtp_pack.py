@@ -50,11 +50,11 @@ def main():
                          "shifting them, so the head owns the convention; "
                          "the wrong choice gives exactly 0.0 acceptance. "
                          "Default 1.0 (the head module's own default)")
-    ap.add_argument("--fc-order", default=None, choices=("he", "eh"),
+    ap.add_argument("--fc-order", default=None, choices=registry.WIRING_CHOICES["fc_order"],
                     help="qwen3_5 only: concat order into the fused fc "
                          "projection; not recoverable from the checkpoint")
     ap.add_argument("--h-source", default=None,
-                    choices=("pre_norm", "post_norm"),
+                    choices=registry.WIRING_CHOICES["h_source"],
                     help="qwen3_5 only: whether the head reads the trunk "
                          "hidden state before or after the trunk final norm")
     ap.add_argument("--wiring-from", default=None, metavar="PROBE_JSON",
@@ -68,7 +68,10 @@ def main():
     if a.wiring_from:
         if a.fc_order or a.h_source:
             ap.error("--wiring-from chooses --fc-order and --h-source; give one or the other")
-        a.fc_order, a.h_source = chosen_wiring(a.wiring_from)
+        try:
+            a.fc_order, a.h_source = chosen_wiring(a.wiring_from)
+        except ValueError as e:
+            ap.error(str(e))
 
     # lazy=True everywhere: we need the architecture classes and args, not
     # the weights. Families mlx-lm has no class for (glm5_next) load via

@@ -1,6 +1,5 @@
 """Knurlogic arm of vision-smoke: routes via the page, waits for ready, passes roles through (F205)."""
 import argparse
-import types
 
 import pytest
 
@@ -57,8 +56,8 @@ def test_routes_via_page(tmp_path, monkeypatch):
     K = FakeK()
     a = argparse.Namespace(knurlogic=["fit"], knurlogic_split="", knurlogic_link="",
                            image=str(img), max_tokens=8)
-    assert vs._knurlogic(art, a, K=K, SPK=types.SimpleNamespace(post=post),
-                         sleep=lambda s: None) == 0
+    monkeypatch.setattr(vs.knurlogic_client, "post", post)
+    assert vs._knurlogic(art, a, K=K, sleep=lambda s: None) == 0
     assert K.loaded["machines"] == ["fit"] and K.unloaded == "j1"
     assert posts and all(u == "http://127.0.0.1:8899" and m == "mdl" for u, m in posts)
 
@@ -67,7 +66,7 @@ def test_fit_stands_alone(tmp_path):
     a = argparse.Namespace(knurlogic=["fit", "peers"], knurlogic_split="",
                            knurlogic_link="", image=None, max_tokens=8)
     with pytest.raises(SystemExit, match="stands alone"):
-        vs._knurlogic(tmp_path, a, K=FakeK(), SPK=types.SimpleNamespace())
+        vs._knurlogic(tmp_path, a, K=FakeK())
 
 
 def test_missing_mlx_vlm_is_named_not_blamed_on_the_bundle(tmp_path, monkeypatch, capsys):

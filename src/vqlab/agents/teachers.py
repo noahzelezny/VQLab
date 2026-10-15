@@ -81,7 +81,7 @@ def _mtp(family: str, teacher: str, prof: dict) -> dict | None:
     """What the GUI needs to price the packed MTP sidecar at any width the
     compiler allows (the bf16 graft, the pack's group, the widths), or None
     where the compiler would refuse the head."""
-    if family not in recipe_queue.MOE | recipe_queue.DENSE:
+    if family not in recipe_queue.COMPILED:
         return None
     try:
         head = recipe_queue.mtp_head(family, teacher, prof)
@@ -125,7 +125,7 @@ def teachers() -> dict:
             "topk": arch.get("experts_per_token"), "modules": (prof.get("modules") or {}).get("count"),
             "gib": by.get("by_class_gib") or {}, "gib_per_bit": by.get("vq_target_gib_per_bit"),
             "geometries": _geometries(prof), "fits": fits.get((family, teacher), {}),
-            "on_disk": local is not None, "buildable": family in recipe_queue.MOE | recipe_queue.DENSE,
+            "on_disk": local is not None, "buildable": family in recipe_queue.COMPILED,
             "scored": teacher in caches, "profiled": prof.get("created"),
             "skipzero": _skipzero(family, teacher, prof),
             "mtp": _mtp(family, teacher, prof)})
