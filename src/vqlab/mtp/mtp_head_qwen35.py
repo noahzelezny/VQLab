@@ -61,6 +61,7 @@ import mlx.nn as nn
 from mlx.utils import tree_flatten, tree_unflatten
 
 from vqlab.mtp.graft import check_graft_slots, graft_layer_weights, read_sidecar
+from vqlab.mtp.registry import WIRING_CHOICES
 
 SIDECAR_NAME = "mtp-head-q6.safetensors"
 
@@ -101,11 +102,9 @@ class MTPHeadQwen35:
 
     def __init__(self, model, arch, *, fc_order="eh", h_source="pre_norm",
                  norm_shift=1.0):
-        if fc_order not in ("he", "eh"):
-            raise ValueError(f"fc_order must be 'he' or 'eh', got {fc_order!r}")
-        if h_source not in ("pre_norm", "post_norm"):
-            raise ValueError(f"h_source must be 'pre_norm' or 'post_norm', "
-                             f"got {h_source!r}")
+        for opt, value in (("fc_order", fc_order), ("h_source", h_source)):
+            if value not in WIRING_CHOICES[opt]:
+                raise ValueError(f"{opt} must be one of {WIRING_CHOICES[opt]}, got {value!r}")
         text = getattr(model, "language_model", model)
         self.model = model
         self.text = text
