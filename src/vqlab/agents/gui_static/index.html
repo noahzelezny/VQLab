@@ -943,7 +943,7 @@ function pgRecipe(){
   const affSide=`<div class="ro">experts ${I('Round-to-nearest affine quantization of every linear layer. Bits and group fix the size exactly; dragging the chart picks the bits.')}</div>
     ${qrow('bits','bits',BITS)}${qrow('group','group',GROUPS,'Weights per scale-and-bias group. Smaller groups follow the weights more closely and add 32 bits per group.')}${moe?qrow('protect','aprotect',APBITS,'Bits for attention, embeddings and shared modules at group 64; the experts keep the bits and group above. = uses the expert bits everywhere. The router stays bf16 either way.'):''}`;
   const ok=NAME_RE.test(r.name),addon=(k,label,gb)=>`<button class="addon" aria-pressed="${!!r[k]}" data-g="${k}"><i></i><span class="n">${label}</span><span class="t">+${fmt(gb)} GiB</span></button>`;
-  return `<section class="panel"><h2>${head}${I('Drag the point to a geometry. Notches are geometries a fit can be compiled at; lines are Apple silicon memory sizes after the OS and context reserves. Everything here is exact arithmetic from the teacher profile.')}</h2>
+  return `<section class="panel"><h2>${head}${I('Drag the point to a geometry. Notches are geometries a fit can be compiled at; lines are common memory sizes after the OS and context reserves. Everything here is exact arithmetic from the teacher profile.')}</h2>
   <div class="recipe">
   <div class="rl">
     <div class="readouts" id="readouts"></div>
@@ -1168,11 +1168,11 @@ function renderPicker(){
       return `<div class="prow"><span class="n">${esc(u.name||u.path)}</span><span class="m"><button class="mini pri" data-prof="${esc(u.path)}"${busy?' disabled':''}>${busy?'profiling…':'Profile'}</button></span><span class="d">${esc(u.family||'')}${u.bytes!=null?' · '+gib(u.bytes):''}${TEACH.perr[u.path]?' · '+esc(TEACH.perr[u.path]):''}</span></div>`};
     const ps=list.filter(t=>!t.path&&t.id),us=pickKind==='all'?list.filter(t=>t.path):[];
     body=errLine(TEACH.err,'psect no')+(ps.map(row).join('')||(TEACH.loaded?empty('nothing matches'):''))
-      +(us.length?`<div class="psect no">On this Mac, not profiled ${INFO('Profiling reads only the model headers and takes seconds. The teacher then appears above and can be built from.')}</div>`+us.map(urow).join(''):'');
+      +(us.length?`<div class="psect no">On this machine, not profiled ${INFO('Profiling reads only the model headers and takes seconds. The teacher then appears above and can be built from.')}</div>`+us.map(urow).join(''):'');
   }else{
     const also=(()=>{const x=FOUND.orig.filter(m=>m.family!=null&&!all.some(t=>t.n&&baseKey(t.n)===baseKey(m.name))&&(!q||m.name.toLowerCase().includes(q)));
-      return x.length?`<div class="psect no">Also on this Mac ${INFO('Onboarding profiles the model so a recipe can price it.')}</div>`+x.map(m=>`<button class="prow no" tabindex="-1"><span class="n">${esc(m.name)}</span><span class="m"></span><span class="d">${esc(m.format)} · ${gib(m.bytes)}</span></button>`).join(''):''})();
-    const row=t=>`<button class="prow" aria-current="${t.id===lib.fam}" data-pt="${t.id}"><span class="n">${esc(t.short)}${fndFor(t)?'<span class="otag" title="found on this Mac">on this Mac</span>':''}</span><span class="m">${esc(t.kind)}</span><span class="d">${t.rows.filter(r=>r.kind==='vq').length} shipped · ${t.scored.length} builds measured${t.judge?' · <span class="jdwarn">judged blind against bf16</span>':''}</span></button>`;
+      return x.length?`<div class="psect no">Also on this machine ${INFO('Onboarding profiles the model so a recipe can price it.')}</div>`+x.map(m=>`<button class="prow no" tabindex="-1"><span class="n">${esc(m.name)}</span><span class="m"></span><span class="d">${esc(m.format)} · ${gib(m.bytes)}</span></button>`).join(''):''})();
+    const row=t=>`<button class="prow" aria-current="${t.id===lib.fam}" data-pt="${t.id}"><span class="n">${esc(t.short)}${fndFor(t)?'<span class="otag" title="found on this machine">local</span>':''}</span><span class="m">${esc(t.kind)}</span><span class="d">${t.rows.filter(r=>r.kind==='vq').length} shipped · ${t.scored.length} builds measured${t.judge?' · <span class="jdwarn">judged blind against bf16</span>':''}</span></button>`;
     body=(list.map(row).join('')||empty('nothing matches'))+also;
   }
   $('#prows').innerHTML=kinds+body;
@@ -1341,7 +1341,7 @@ function fndCard(){
   const unr={};M.filter(m=>m.use==='unreadable').forEach(m=>{(unr[m.source]=unr[m.source]||[]).push(m)});
   for(const [src,a] of Object.entries(unr)){const n=a.reduce((x,m)=>x+(m.count||1),0);sums.push(sum(src+': '+n+' model'+(n===1?'':'s')+(a.some(m=>m.format==='GGUF')?' (GGUF, not readable)':' (not readable)')))}
   const body=L?[...o].sort(big).concat([...q].sort(big)).map(row).join('')+sums.join(''):'';
-  return `<div class="cart"><div class="fhd"><div class="ro">Models on this Mac ${INFO('Found in the Hugging Face cache, LM Studio, exo and Ollama. Nothing is copied or linked; builds read the originals where they are.')}</div><button class="mini" data-fscan${FOUND.scanning?' disabled':''}>${FOUND.scanning?'scanning…':'Rescan'}</button></div>${errLine(FOUND.err,'err')}
+  return `<div class="cart"><div class="fhd"><div class="ro">Models on this machine ${INFO('Found in the Hugging Face cache, LM Studio, exo and Ollama. Nothing is copied or linked; builds read the originals where they are.')}</div><button class="mini" data-fscan${FOUND.scanning?' disabled':''}>${FOUND.scanning?'scanning…':'Rescan'}</button></div>${errLine(FOUND.err,'err')}
     <div class="readouts r3 lead">${readout('originals',L?o.length:'&nbsp;')}${readout('quantized',L?q.length:'&nbsp;')}${readout('total',L?gib(FOUND.total):'&nbsp;')}</div>
     <div class="fmod stbl" id="fmod"><table><colgroup><col><col class="w-src"><col class="w-use"><col class="w-fmt"><col class="w-num"></colgroup><tbody>${body}</tbody></table></div></div>`}
 const stLoc=k=>ST.cfg&&ST.cfg.locations.find(x=>x.key===k);

@@ -280,7 +280,7 @@
   },
   [
    "Skip-zero is experimental. The packed copy shares its unchanged files with the unpacked build, so keep both.",
-   "Too large to test on this Mac alone. It is tested through Knurlogic, which needs enough Macs to hold it, all seeing the scratch folder at the same path, for the preflight and the run.",
+   "Too large to test on this machine. The release test runs on a machine or cluster with more memory, which must be available for the preflight and the run.",
    "The score is this build's KL to the teacher, not a paired comparison against a published build."
   ]
  ],
@@ -469,7 +469,7 @@
    ]
   },
   [
-   "Too large to test on this Mac alone. It is tested through Knurlogic, which needs enough Macs to hold it, all seeing the scratch folder at the same path, for the preflight and the run."
+   "Too large to test on this machine. The release test runs on a machine or cluster with more memory, which must be available for the preflight and the run."
   ]
  ],
  "dense-big": [
@@ -687,7 +687,7 @@
   },
   [
    "No existing base was given, so the build makes its own affine base first.",
-   "Too large to test on this Mac alone. It is tested through Knurlogic, which needs enough Macs to hold it, all seeing the scratch folder at the same path, for the preflight and the run."
+   "Too large to test on this machine. The release test runs on a machine or cluster with more memory, which must be available for the preflight and the run."
   ]
  ],
  "moe-sz-mtp-big": [
@@ -995,8 +995,8 @@
   },
   [
    "Skip-zero is experimental. The packed copy shares its unchanged files with the unpacked build, so keep both.",
-   "The draft head is checked when Knurlogic serves the build; a head that never accepts fails the queue.",
-   "Too large to test on this Mac alone. It is tested through Knurlogic, which needs enough Macs to hold it, all seeing the scratch folder at the same path, for the preflight and the run."
+   "The draft head is checked in the release test; a head that never accepts fails the queue.",
+   "Too large to test on this machine. The release test runs on a machine or cluster with more memory, which must be available for the preflight and the run."
   ]
  ]
 }

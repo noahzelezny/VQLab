@@ -481,7 +481,7 @@ def test_mtp_oversized_serves_the_sidecar_from_the_linked_folder(fams, monkeypat
     assert names.index("mtp-pack") < names.index("knurlogic-link")
     out = _args(q, "knurlogic-link")[0]
     assert _args(q, "mtp-pack")[-1] == f"{out}/mtp-head-q6.safetensors"
-    assert any("Knurlogic serves" in w for w in warns)
+    assert any("release test" in w for w in warns)
 
 
 @pytest.mark.parametrize("arch, record, why", [
@@ -576,7 +576,7 @@ def test_an_oversized_build_is_smoked_on_the_cluster_through_knurlogic(fams, mon
     # the preflight really runs it: no skip, so a cluster that is down fails it
     assert "full" in rel["preflight"] and "skip" not in rel["preflight"]
     assert steps.validate(q) == []
-    assert any("tested through Knurlogic" in w for w in warns)
+    assert any("more memory" in w for w in warns)
     # everything but the smoke steps is the same queue
     keep = [s for s in small["steps"] if s["name"] not in ("vision-smoke", "release-check")]
     assert [s for s in q["steps"] if s["name"] not in ("knurlogic-link", "release-check")] == keep

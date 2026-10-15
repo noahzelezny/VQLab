@@ -588,8 +588,8 @@ def _mtp_steps(r: Recipe, head: MtpHead, src: str, out: str, oversized: bool):
                        {"append": ["--steps", 2, "--warmup", 1]},
                        retries=0, timeout_s=1800))
     if oversized:
-        warns.append("The draft head is checked when Knurlogic serves the build; a head "
-                     "that never accepts fails the queue.")
+        warns.append("The draft head is checked in the release test; a head that never "
+                     "accepts fails the queue.")
     else:
         steps.append(_step("mtp-accept", "mtp-accept",
                            ["--model", out, "--head", f"head={sidecar}",
@@ -671,9 +671,9 @@ def _tail_steps(r: Recipe, src: str, by: dict, head: MtpHead | None,
         # so a cluster that is down FAILS the step with Knurlogic's own reason
         release_pf = {"full": "loads the artifact on the cluster through Knurlogic; "
                               "fails if Knurlogic or the cluster is down", "writes_gib": 0}
-        warns.append("Too large to test on this Mac alone. It is tested through Knurlogic, "
-                     "which needs enough Macs to hold it, all seeing the scratch folder at "
-                     "the same path, for the preflight and the run.")
+        warns.append("Too large to test on this machine. The release test runs on a machine "
+                     "or cluster with more memory, which must be available for the "
+                     "preflight and the run.")
     steps.append(_step("release-check", "check-release", release, release_pf,
                        retries=0, timeout_s=2 * 3600))
     if r.score:
