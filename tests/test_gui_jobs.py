@@ -11,6 +11,7 @@ from vqlab import config
 from vqlab.agents import gui, jobs
 from vqlab.util.errors import UserError
 from vqlab.queue import report as qreport
+from vqlab.queue import runner as qrunner
 
 STEP = {"name": "s1", "cmd": "smoke", "args": ["--max-tokens", "8"],
         "preflight": {"args": ["--max-tokens", "1"]}}
@@ -141,7 +142,7 @@ def test_child_stays_in_its_root(tmp_path):
 def test_stop_signals_only_this_queues_runner(lab, monkeypatch):
     root, _, runner_cmd = lab
     sent = []
-    monkeypatch.setattr(jobs.os, "kill", lambda pid, sig: sent.append((pid, sig)))
+    monkeypatch.setattr(qrunner.os, "kill", lambda pid, sig: sent.append((pid, sig)))
     monkeypatch.setattr(qreport, "pid_alive", lambda pid: True)
     _queue(root, "far", status="running", pid=42, host="elsewhere")
     with pytest.raises(UserError):
@@ -159,9 +160,25 @@ def test_stop_signals_only_this_queues_runner(lab, monkeypatch):
 
     def gone(pid, sig):
         raise ProcessLookupError(pid)
-    monkeypatch.setattr(jobs.os, "kill", gone)
+    monkeypatch.setattr(qrunner.os, "kill", gone)
     with pytest.raises(UserError, match="could not stop"):
         jobs.stop({"id": "here"})
+
+
+def test_queue_stop_cli_is_the_same_stop(lab, monkeypatch, capsys):
+    """`vqlab queue stop DIR` signals exactly what the Jobs page's Stop does,
+    and fails (exit 1) with nothing to stop."""
+    root, _, runner_cmd = lab
+    sent = []
+    monkeypatch.setattr(qrunner.os, "kill", lambda pid, sig: sent.append((pid, sig)))
+    monkeypatch.setattr(qreport, "pid_alive", lambda pid: True)
+    d = _queue(root, "here", status="running", pid=42)
+    runner_cmd[0] = "python -m some.other.thing"
+    assert qrunner.main(["stop", str(d)]) == 1 and sent == []
+    assert "FAIL" in capsys.readouterr().out
+    runner_cmd[0] = f"python -m vqlab.cli queue run --resume {d}"
+    assert qrunner.main(["stop", str(d)]) == 0 and sent == [(42, signal.SIGTERM)]
+    assert "--resume" in capsys.readouterr().out
 
 
 def test_resume_only_a_halted_queue_of_this_machine(lab, monkeypatch):

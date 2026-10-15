@@ -27,11 +27,9 @@ from __future__ import annotations
 
 import hashlib
 import json
-import os
 import pathlib
 import secrets
 import shutil
-import signal
 import subprocess
 import threading
 import time
@@ -44,6 +42,7 @@ from vqlab.plan import recipe_queue
 from vqlab.queue import eta as queue_eta
 from vqlab.queue import files as qf
 from vqlab.queue import report as qreport
+from vqlab.queue import runner as qrunner
 from vqlab.queue import steps as qsteps
 from vqlab.util.fs import GIB
 
@@ -237,18 +236,11 @@ def start(body: dict) -> dict:
 
 
 def stop(body: dict) -> dict:
-    """SIGTERM the runner: it stops the running step, records `stopped`, and
-    the queue resumes from the step that did not pass. Only a runner whose
-    command line names this queue is signalled (queue/report.py runner_pid)."""
-    d = _qdir(str(body.get("id") or ""))
-    pid = qreport.runner_pid(d, qf.load_state(d), strict=True)
-    if pid is None:
-        raise UserError("that queue has no runner started from here or by `--detach` "
-                        "on this machine; stop a foreground run in its terminal")
+    """The Jobs page's Stop: queue.runner.stop on the queue dir named `id`."""
     try:
-        os.kill(pid, signal.SIGTERM)
-    except (ProcessLookupError, PermissionError) as e:
-        raise UserError(f"could not stop the runner: {e}") from e
+        qrunner.stop(_qdir(str(body.get("id") or "")))
+    except ValueError as e:
+        raise UserError(str(e)) from e
     return {"ok": True}
 
 

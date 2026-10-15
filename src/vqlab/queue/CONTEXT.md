@@ -11,7 +11,7 @@ A queue file (JSON: `name`, `commit`, `python`, `steps` of `cmd`|`script`,
 `validate`'s artifact list (`caches/validate/queue.jsonl`).
 
 ## Process
-- `runner.py` — `vqlab queue run|status|list|wait` (CLI `main`); `run()` is
+- `runner.py` — `vqlab queue run|status|list|wait|stop` (CLI `main`); `run()` is
   the runner process: take the GPU lease, drain the steps, tidy preflight
   outputs and the pinned worktree. `run_step()` checks then runs one step
   with retries.

@@ -349,6 +349,9 @@ def _parser() -> argparse.ArgumentParser:
     pw.add_argument("qdirs", nargs="*")
     pw.add_argument("--timeout", type=float)
     pw.add_argument("--poll", type=float, default=15.0)
+    pst = sub.add_parser("stop", help="end a queue run's running step on this machine "
+                                      "(resumable)")
+    pst.add_argument("qdir")
     return ap
 
 
@@ -398,6 +401,23 @@ def _cmd_run(ap, a) -> int:
     return run(qdir, force=a.force, lease_wait=a.lease_wait, keep_preflight=a.keep_preflight)
 
 
+def stop(qdir: pathlib.Path) -> int:
+    """SIGTERM this queue's runner on this machine and return its pid. The
+    runner ends the running step and records `stopped`; `queue run --resume`
+    (or the Jobs page) picks up from the step that did not pass. Only a
+    runner whose command line names this queue is signalled
+    (report.runner_pid). Raises ValueError when there is none to stop."""
+    pid = report.runner_pid(qdir, load_state(qdir), strict=True)
+    if pid is None:
+        raise ValueError(f"{qdir} has no runner started from here or by `--detach` on this "
+                         "machine; stop a foreground run in its terminal")
+    try:
+        os.kill(pid, signal.SIGTERM)
+    except (ProcessLookupError, PermissionError) as e:
+        raise ValueError(f"could not stop the runner of {qdir}: {e}") from e
+    return pid
+
+
 def main(argv=None) -> int:
     ap = _parser()
     a = ap.parse_args(argv)
@@ -407,6 +427,14 @@ def main(argv=None) -> int:
         return report.status(a.qdir)
     if a.cmd == "wait":
         return report.wait(a.qdirs, a.timeout, a.poll)
+    if a.cmd == "stop":
+        try:
+            print(f"stopped the runner (pid {stop(pathlib.Path(a.qdir))}); "
+                  f"resume with `vqlab queue run --resume {a.qdir}`")
+        except ValueError as e:
+            print(f"FAIL: {e}")
+            return 1
+        return 0
     return _cmd_run(ap, a)
 
 
