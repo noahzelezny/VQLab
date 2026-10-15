@@ -328,7 +328,8 @@ input.fld.bad{border-color:var(--bad)}.fld.faint{color:var(--faint)}.fld.ro{curs
 .recipe .modeseg{margin-bottom:5px}
 .recipe .cart .kseg button{padding:6px 4px;font-size:.82em}.recipe .cart .kseg button small{font-size:.72em}
 .recipe .cart .kseg.small button{padding:4px 3px;font-size:.8em}
-.recipe .bitrow{grid-template-columns:7.5em 1fr;gap:8px;padding:3px 0;font-size:.95em}
+.recipe .bitrow{grid-template-columns:9em 1fr;gap:8px;padding:3px 0;font-size:.95em}
+.recipe .bitrow .lbl{display:flex;align-items:center;gap:4px;min-width:0;overflow:visible;text-overflow:clip}.recipe .bitrow .lt{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .recipe .addon{padding:4px 0}
 
 /* ---------- one screen: the shell fills the viewport; long content scrolls inside its own card */
@@ -739,7 +740,7 @@ function inspector(t,r){
   const drift=g&&g.drift&&g.drift.length,stale=g&&g.verdict==='STALE',bad=g&&(g.verdict==='FAIL'||g.verdict==='MISSING');
   const mac=r.gib==null?null:fitBox(r.gib+(shipTower(r)?vis:0));
   const sd=speedOf(t,r),sk=speedKey(t,r);
-  const sinfo=sd?INFO(`Tokens/s relative to ${esc(sd.ref)}, timed back to back in the same setup. ${SETUP_TXT[sd.setup]}. Prompt 2048 tokens, 128 generated, n=3 alternating pairs, latest runtime (F190).${sd.via?` The ratio is chained through ${esc(sd.via)}, timed in the same session.`:''}`):INFO('Tokens/s relative to the family reference build, timed back to back in the same setup. Prompt 2048 tokens, 128 generated, n=3 alternating pairs, latest runtime (F190). This build has not been timed.');
+  const sinfo=sd?INFO(`Tokens per second relative to ${esc(sd.ref)}, timed back to back on the same setup (${SETUP_TXT[sd.setup]}; 2048-token prompt, 128 generated, three alternating pairs).${sd.via?` Chained through ${esc(sd.via)}, timed in the same session.`:''}`):INFO('Tokens per second relative to the family reference build, timed back to back on the same setup (2048-token prompt, 128 generated, three alternating pairs). This build has not been timed.');
   const spd=`<div class="ro">speed ${sinfo}</div>`+(!sd?kv('decode','not measured','faint')+kv('prefill','not measured','faint')
    :!sd.quotable?kv('decode','noisy, re-run','dim')+kv('prefill','noisy, re-run','dim')
    :sk===sd.ref?kv('decode','1.00× reference')+kv('prefill','1.00× reference')
@@ -750,7 +751,7 @@ function inspector(t,r){
   const pills=g?`<div class="pills">${g.drift?`<span class="pill ${drift?'warn':'ok'}">${drift?'local differs: '+esc(g.drift.slice(0,2).join(', '))+(g.drift.length>2?' +'+(g.drift.length-2):''):'matches Hub'}</span>`:''}${g.verdict?`<span class="pill ${bad?'bad':stale?'warn':'ok'}" title="${esc(g.note)}">${bad?'bundle fails check':stale?'older runtime · same output':'runtime current'}${g.note?' '+INFO(esc(g.note)):''}</span>`:''}${g.profile?`<span class="pill">${esc(g.profile)}</span>`:''}${g.rev?`<span class="pill">rev ${esc(g.rev)}</span>`:''}</div>`:'';
   return `<div class="cart insp">
     <div class="ihead"><div><div class="iname">${esc(r.hf?repoName(r.hf):r.what)}</div><div class="faint">${r.kind==='affine'?'affine · published comparator':(r.mixed||(comp&&comp.length>1)?'VQ · mixed':'VQ · flat')}${r.hf?' · '+esc(org(r.hf)):''}</div></div><div class="iact">${r.hf?`<a class="btn" href="https://huggingface.co/${esc(r.hf)}" target="_blank" rel="noopener">Hub ↗</a>`:''}${fork}</div></div>
-    <div class="ro">fidelity to teacher ${INFO(`${q8?"100% is this family's affine q8, per corpus":'100% is 5 mnats; this family has no scored q8'}. 0% is 1000 mnats, one nat per token. Log scale. The faint number is the KL, in millinats.${r.tip?' Source: '+esc(r.tip)+'.':''}`)}</div>${kl}
+    <div class="ro">fidelity to teacher ${INFO(`KL to the teacher on a log scale. ${q8?"100% is this family's affine q8 build, per corpus":'100% is 5 millinats (this family has no scored q8 build)'}; 0% is 1000 millinats, one nat per token. The faint number is the KL in millinats.${r.tip?' Source: '+esc(r.tip)+'.':''}`)}</div>${kl}
     ${spd}
     <div class="ro">size</div>${size}
     ${books}${pills}
@@ -764,7 +765,7 @@ function pgLibrary(){
     <div class="libmain">
       <svg class="chart" id="libchart" role="img" aria-label="shipped builds, size against mean KL"></svg>
       <div class="legend"><span><span class="dot vq"></span>VQ flat</span><span><span class="dot mixed"></span>VQ mixed</span><span><span class="dot aff"></span>affine</span><span><span class="dot own"></span>own build</span>${t.rows.some(isSz)?'<span><span class="dot szkey"></span>skip-zero</span>':''}</div>
-      <div class="ltabs" role="tablist">${[['pub','Published',ship.length],['own','Own builds',own]].map(([k,n,c])=>`<button role="tab" aria-selected="${lib.tab===k}" data-ltab="${k}">${n} <span>${c}</span></button>`).join('')}${INFO(lib.tab==='pub'?'The published catalog: one row per released build. VQ rows (and comparators the card carries) are the newest model card\'s ladder table, all on one cache; hover a row for its card and date. Rows tagged paper are the paper\'s comparators on another cache, so do not compare them directly. sz marks skip-zero builds. bpw is the name\'s nominal value; affine rows add 0.5 (bits + 0.5). Builds you made on this machine are under Own builds.':'Artifacts registered on this machine that are not published catalog rows. KL is the newest measurement per corpus for these exact weight bytes in the scores index (the line for the same runtime when there is one). Their caches can differ from the published rows, so do not compare across the two groups. An unscored build has no number and none is estimated.')}</div>
+      <div class="ltabs" role="tablist">${[['pub','Published',ship.length],['own','Own builds',own]].map(([k,n,c])=>`<button role="tab" aria-selected="${lib.tab===k}" data-ltab="${k}">${n} <span>${c}</span></button>`).join('')}${INFO(lib.tab==='pub'?'Every released build, one per row, taken from the newest model card and scored on one shared cache. Rows tagged paper were scored on another cache, so do not compare them directly. sz marks skip-zero builds; bpw is the nominal value from the name, and affine rows add 0.5 for their scales. Hover a row for its card and date.':'Builds registered on this machine that are not in the published catalog. KL is the newest score per corpus for these exact weights, often on a different cache, so do not compare them with published rows. An unscored build shows no number.')}</div>
       <div class="libscroll">${lib.tab==='pub'?ladder(t,ship,minMac,link):ownPane(t)}</div>
     </div>
     ${inspector(t,sel)}
@@ -929,20 +930,20 @@ function pgRecipe(){
   if(!t)return `<section class="panel"><h2>${head}</h2>
   ${TEACH.err?errLine(TEACH.err):empty(TEACH.loaded?'no teacher here can be built yet; profile an original from the picker':'loading teachers…','ro')}${PICKER()}</section>`;
   const r=recipe.draft,moe=isMoe(t),fg=fitGeos(t).map(g=>g.geo),B=t.gib||{},rb=recipe.rb;
-  const qrow=(label,k,vals,info)=>`<div class="bitrow"><span>${label}${info?' '+I(info):''}</span><div class="kseg small">${vals.map(b=>`<button aria-pressed="${r[k]===b}" data-g="${k}" data-v="${b}">${k==='group'?b:k==='aprotect'&&!b?'=':'q'+b}</button>`).join('')}</div></div>`;
-  const step=(label,nav,val,btns,info)=>`<div class="bitrow"><span>${label}${info?' '+I(info):''}</span><div class="kseg small">${btns.map(([c,d,off])=>d===0?`<button class="cur" aria-pressed="true" tabindex="-1">${esc(val)}</button>`:`<button data-nav="${nav}" data-d="${d}" ${off?'disabled':''} aria-label="${nav} ${d}">${c}</button>`).join('')}</div></div>`;
+  const qrow=(label,k,vals,info)=>`<div class="bitrow"><span class="lbl"><span class="lt">${label}</span>${I(info)}</span><div class="kseg small">${vals.map(b=>`<button aria-pressed="${r[k]===b}" data-g="${k}" data-v="${b}">${k==='group'?b:k==='aprotect'&&!b?'=':'q'+b}</button>`).join('')}</div></div>`;
+  const step=(label,nav,val,btns,info)=>`<div class="bitrow"><span class="lbl"><span class="lt">${label}</span>${I(info)}</span><div class="kseg small">${btns.map(([c,d,off])=>d===0?`<button class="cur" aria-pressed="true" tabindex="-1">${esc(val)}</button>`:`<button data-nav="${nav}" data-d="${d}" ${off?'disabled':''} aria-label="${nav} ${d}">${c}</button>`).join('')}</div></div>`;
   const gi=fg.indexOf(r.geo),ti=fg.indexOf(r.tailGeo),lo=t.first_vq+1,hi=t.first_vq+t.vq_layers-1;
   const geoStep=(label,nav,i,info)=>step(label,nav,fg[i],[['‹',-1,i<=0],['',0],['›',1,i>=fg.length-1]],info);
-  const vqSide=()=>`<div class="ro">strategy ${I('Flat puts one geometry on every VQ layer. Mixed gives the layers from the chosen one on a second (tail) geometry, usually richer: the back of the network is where extra bits pay (position law). The tail may also be equal or cheaper. The size is exact either way.')}</div>
+  const vqSide=()=>`<div class="ro">strategy ${I('Flat uses one geometry on every VQ layer. Mixed switches to a second geometry from a chosen layer onward; extra bits pay most in the back of the network. Size is exact either way.')}</div>
     <div class="kseg">${[['flat','Flat','one geometry'],['tail','Mixed','richer tail']].map(([k,n,s])=>`<button aria-pressed="${(k==='tail')===r.tailOn}" data-g="strat" data-v="${k}" ${k==='tail'&&(!moe||hi<lo)?'disabled':''}>${n}<small>${s}</small></button>`).join('')}</div>
-    <div class="ro">geometry ${I('Only geometries a fit can be compiled at are offered: legal on every projection of this teacher and with a measured healthy relerr for the fit abort threshold.')}</div>
+    <div class="ro">geometry ${I('Only geometries a fit can be compiled at: legal on every projection of this teacher, with a known healthy fit error for the abort threshold.')}</div>
     ${geoStep(r.tailOn?'body':'geometry','geo',gi)}
-    ${r.tailOn?geoStep('tail','tailGeo',ti)+step('from layer','tfrom','L'+r.tailFrom,[['‹',-1,r.tailFrom<=lo],['',0],['›',1,r.tailFrom>=hi]],`Layers ${lo}-${hi} can start the tail; ${ntail(t,r)} of ${t.vq_layers} VQ layers take the tail geometry.`):''}
-    ${moe?qrow('protect','protect',PBITS,'stream-convert --protect-bits: width of attention, embeddings and shared modules. They are a small share of the bytes and a large share of the damage.'):qrow('base bits','bits',BITS,'Width of the affine base the VQ layers are spliced into (attention, embeddings, norms).')+qrow('group','group',GROUPS,'Weights per scale-and-bias group of the base: +32/group bits per weight.')}`;
-  const affSide=`<div class="ro">experts ${I('Round-to-nearest affine quantization of every linear. Bits and group size fix the size exactly; dragging picks the width.')}</div>
-    ${qrow('bits','bits',BITS)}${qrow('group','group',GROUPS,'Weights per scale-and-bias group: +32/group bits per weight.')}${moe?qrow('protect','aprotect',APBITS,'stream-convert --protect-bits: width of attention, embeddings and shared modules (group 64); the experts keep bits and group above. = quantizes everything at the expert width. The router stays bf16 either way.'):''}`;
+    ${r.tailOn?geoStep('tail','tailGeo',ti)+step('from layer','tfrom','L'+r.tailFrom,[['‹',-1,r.tailFrom<=lo],['',0],['›',1,r.tailFrom>=hi]],`Layers ${lo} to ${hi} can start the tail. ${ntail(t,r)} of ${t.vq_layers} VQ layers take the tail geometry.`):''}
+    ${moe?qrow('protect','protect',PBITS,'Bits for attention, embeddings and shared modules. They are a small share of the bytes and a large share of the damage.'):qrow('base bits','bits',BITS,'Bits of the affine base the VQ layers sit in: attention, embeddings and norms.')+qrow('group','group',GROUPS,'Weights per scale-and-bias group in the base. Smaller groups follow the weights more closely and add 32 bits per group.')}`;
+  const affSide=`<div class="ro">experts ${I('Round-to-nearest affine quantization of every linear layer. Bits and group fix the size exactly; dragging the chart picks the bits.')}</div>
+    ${qrow('bits','bits',BITS)}${qrow('group','group',GROUPS,'Weights per scale-and-bias group. Smaller groups follow the weights more closely and add 32 bits per group.')}${moe?qrow('protect','aprotect',APBITS,'Bits for attention, embeddings and shared modules at group 64; the experts keep the bits and group above. = uses the expert bits everywhere. The router stays bf16 either way.'):''}`;
   const ok=NAME_RE.test(r.name),addon=(k,label,gb)=>`<button class="addon" aria-pressed="${!!r[k]}" data-g="${k}"><i></i><span class="n">${label}</span><span class="t">+${fmt(gb)} GiB</span></button>`;
-  return `<section class="panel"><h2>${head}${I('Drag the point to a geometry; notches are the geometries a fit can be compiled at, lines are Apple silicon boxes after macOS and context. Everything here is exact arithmetic from the teacher\'s profile.')}</h2>
+  return `<section class="panel"><h2>${head}${I('Drag the point to a geometry. Notches are geometries a fit can be compiled at; lines are Apple silicon memory sizes after the OS and context reserves. Everything here is exact arithmetic from the teacher profile.')}</h2>
   <div class="recipe">
   <div class="rl">
     <div class="readouts" id="readouts"></div>
@@ -954,15 +955,15 @@ function pgRecipe(){
   <div class="cart" id="rcart">
     <div class="seg modeseg">${[['vq','VQ'],['affine','Affine']].map(([v,n])=>`<button aria-pressed="${r.mode===v}" data-g="mode" data-v="${v}" ${v==='vq'&&!fg.length?'disabled':''}>${n}</button>`).join('')}</div>
     ${r.mode==='vq'?vqSide():affSide}
-    <div class="ro">include ${I('KL score runs the score step after the build, and needs KL caches registered for this teacher. MTP drafting packs the teacher\'s own draft head into the build (6-bit, the published recipe, or the width chosen under it) and fails the queue on a head that does not accept.'+(t.skipzero?' Skip-zero drops this teacher\'s dead expert rows on disk (sz-pack, then sz-check), as every published build of it was made; KL unchanged (F175). The saving is its measured dead rows priced at this recipe\'s geometry per layer, from '+t.skipzero.source+'.':''))}</div>
+    <div class="ro">include ${I('KL score measures the build against the teacher afterwards; it needs KL caches registered for this teacher. MTP drafting packs the teacher\'s own draft head into the build at the bits chosen below, and fails the queue if the head does not accept.'+(t.skipzero?' Skip-zero drops this teacher\'s dead expert rows on disk, as every published build of it does, with no change in KL. The saving is its measured dead rows priced at this recipe\'s geometry.':''))}</div>
     ${t.skipzero&&r.mode==='vq'?`<button class="addon" aria-pressed="${!!r.skipzero}" data-g="skipzero"><i></i><span class="n">skip-zero</span><span class="t">−${fmt(szGib(t,{...r,skipzero:true}))} GiB</span></button>`:''}
     ${B.vision?addon('tower','vision tower',B.vision):''}
     ${t.mtp?addon('mtp','MTP drafting',mtpGibAt(t,r.mtpBits)):''}
-    ${t.mtp&&r.mtp?qrow('bits','mtpBits',t.mtp.bits,`The draft head's width (mtp-pack --bits, group ${t.mtp.group}). q${t.mtp.default} is the published recipe; fewer bits is a smaller, faster head, whose acceptance mtp-accept gates.`):''}
+    ${t.mtp&&r.mtp?qrow('bits','mtpBits',t.mtp.bits,`Bits of the draft head, at group ${t.mtp.group}. q${t.mtp.default} is the published recipe; fewer bits give a smaller, faster head that must still pass the acceptance check.`):''}
     <button class="addon" aria-pressed="${!!r.score}" data-g="score" ${t.scored?'':'disabled'}><i></i><span class="n">KL score</span></button>
   </div>
   </div>
-  <div class="foot"><div class="fw name"><input class="fld${ok?'':' bad'}" id="rname" value="${esc(r.name)}" spellcheck="false" aria-label="queue file name">${I('The queue file this recipe is written to. Lowercase letters, digits, . _ -, starting with a letter or digit, at most 80. An existing file of that name is never overwritten.')}</div><button class="btn" id="savejson" data-savejson ${ok?'':'disabled'}>Save recipe.json</button><button class="btn go" id="queue" data-queue ${ok&&!rb.busy?'':'disabled'}>${rb.busy?'Writing…':'Review build →'}</button></div>
+  <div class="foot"><div class="fw name"><input class="fld${ok?'':' bad'}" id="rname" value="${esc(r.name)}" spellcheck="false" aria-label="queue file name">${I('The queue file this recipe is saved as. Lowercase letters, digits, . _ and -, starting with a letter or digit, at most 80 characters. An existing file is never overwritten.')}</div><button class="btn" id="savejson" data-savejson ${ok?'':'disabled'}>Save recipe.json</button><button class="btn go" id="queue" data-queue ${ok&&!rb.busy?'':'disabled'}>${rb.busy?'Writing…':'Review build →'}</button></div>
   ${PICKER()}
   </section>`;
 }
@@ -1015,7 +1016,7 @@ function drawRecipe(){
   mark(N[0]);if(sx(N[N.length-1])<W-RBOX.Rm-60)mark(N[N.length-1]);N.forEach(n=>{if(n.k===sel)mark(n)});
   N.forEach(n=>{if(!lab.has(n.k)&&N.every(m=>!lab.has(m.k)||Math.abs(sx(m)-sx(n))>=64))mark(n)});
   N.forEach(n=>{const on=lab.has(n.k);s+=`<g class="notch ${n.k===sel?'':'dimmed'}"><title>${esc(n.k)} · ${fmt(n.x)} GiB</title><line x1="${X(n.x)}" x2="${X(n.x)}" y1="${base-8}" y2="${base}"/>${on?`<text x="${X(n.x)}" y="${base-12}" text-anchor="middle">${esc(n.k)}</text>`:''}</g>`});
-  if(cur){const szNote=hit&&hit.sz&&!szOn(t,r)&&cur.gib>hit.gib?` · skip-zero: ${fmt(cur.gib-hit.gib)} GiB smaller on disk, KL unchanged (F175)`:'',x=X(cur.gib),left=x>W-260,tx=left?x-8:x+8,anc=left?'end':'start';
+  if(cur){const szNote=hit&&hit.sz&&!szOn(t,r)&&cur.gib>hit.gib?` · skip-zero: ${fmt(cur.gib-hit.gib)} GiB smaller on disk, KL unchanged`:'',x=X(cur.gib),left=x>W-260,tx=left?x-8:x+8,anc=left?'end':'start';
     s+=`<g class="pick"><line x1="${x}" x2="${x}" y1="${Tp}" y2="${base}"/>${hit?`<circle cx="${X(hit.gib)}" cy="${Y(mean(hit.kl))}" r="6.5"><title>published ${esc(hit.what)}, not this recipe: KL ${fmt(mean(hit.kl))} · ${esc(hit.tip||'')}${szNote}</title></circle>`:est?`<circle cx="${x}" cy="${Y(est)}" r="5"><title>${E&&E.extrap?'extrapolated':'interpolated'} from the published builds' curve, not measured</title></circle>`:`<circle cx="${x}" cy="${base}" r="5"/>`}<text x="${tx}" y="${Tp+12}" text-anchor="${anc}">${fmt(cur.gib)} GiB · KL ${hit?'— · published '+esc(hit.what)+': '+fmt(mean(hit.kl)):est?'~'+fmt(est):'—'}</text></g>`}
   svg.innerHTML=s;
 }
@@ -1067,8 +1068,8 @@ function drawReadouts(){
   const r=recipe.draft,t=curT(),s=sizeOf(t,r),pv=recipe.pv,Pv=pv.data;
   // one size: the server's exact artifact figure once the preview for this recipe is in, the local arithmetic while it is pending
   const size=Pv&&pv.resKey===pvKey()&&Pv.artifact_gib!=null?Pv.artifact_gib:s&&s.gib,box=size!=null?fitBox(size):null;
-  const hit=hitOf(t,r),E=s?estKL(t,r,s.gib):null,est=E&&E.v,klInfo=INFO('An interpolation, not a measurement: the gray curve fitted through this teacher\'s measured published builds, read at this recipe\'s size (KL tracks total bytes, FINDINGS I.1). Outside the sizes those builds span it is extrapolated; a teacher with no measured builds has no estimate. KL to the teacher is measured after the build, by the score step.'+(t.scored?'':' This teacher has no registered KL caches, so this build will not be scored.'));
-  const boxInfo=INFO('The smallest listed memory size that holds this build after the OS reserve (5 GB up to 36 GB, else 8 GB) and a context reserve (5% of memory, 2 to 8 GB). "no box" means it is larger than every listed size.');
+  const hit=hitOf(t,r),E=s?estKL(t,r,s.gib):null,est=E&&E.v,klInfo=INFO('An estimate read off the gray curve through this teacher\'s measured published builds at this recipe\'s size, extrapolated beyond them. A teacher with no measured builds has no estimate; the score step measures the real KL after the build.'+(t.scored?'':' This teacher has no registered KL caches, so this build will not be scored.'));
+  const boxInfo=INFO('The smallest listed memory size that holds this build after the OS reserve (5 GB up to 36 GB, else 8 GB) and a context reserve (5% of memory, 2 to 8 GB). "no box" means no listed size holds it.');
   $('#readouts').innerHTML=
     readout('size',size!=null?fmt(size)+' GiB':'—',s&&s.bpw!=null?fmt(s.bpw,2)+(r.mode==='affine'&&!(isMoe(t)&&r.aprotect)?' bpw':isMoe(t)?' bpw experts':' bpw MLP'):'&nbsp;','acc')
    +readout('runs on '+boxInfo,box?box+' GB':size!=null?'no box':'—',null,box?'box':size!=null?'bad':'')
@@ -1080,7 +1081,7 @@ function drawPlan(){
   const el=$('#plan');if(!el)return;const pv=recipe.pv,Pv=pv.data,rb=recipe.rb;
   const line=(cls,t)=>`<div class="pnote ${cls}" title="${esc(t)}">${esc(t)}</div>`;
   const errs=[...(pv.err?[line('bad',pv.err)]:[]),...(rb.err?[line('bad',rb.err)]:[])],warns=Pv?Pv.warnings:[];
-  el.innerHTML=`<div class="rohd mid ro"><span>plan ${INFO('The steps a queue run would execute, compiled by the server from this recipe. Times come from past runs of the same step and are unknown where there is none. Nothing is written until Review build.'+warns.map(w=>'<br>'+esc(w)).join(''))}</span><span>${pv.busy?'planning…':Pv?Pv.steps.length+' steps':''}${warns.length?' · '+warns.length+' notes':''}</span></div>
+  el.innerHTML=`<div class="rohd mid ro"><span>plan ${INFO('The steps a queue run would execute, compiled from this recipe. Times come from past runs of the same step and are unknown where there are none. Nothing is written until Review build.'+warns.map(w=>'<br>'+esc(w)).join(''))}</span><span>${pv.busy?'planning…':Pv?Pv.steps.length+' steps':''}${warns.length?' · '+warns.length+' notes':''}</span></div>
    ${stepsTable(Pv?Pv.steps:[],' plan')}
    <div class="pnotes">${errs.slice(0,1).join('')}</div>`;
 }
@@ -1167,7 +1168,7 @@ function renderPicker(){
       return `<div class="prow"><span class="n">${esc(u.name||u.path)}</span><span class="m"><button class="mini pri" data-prof="${esc(u.path)}"${busy?' disabled':''}>${busy?'profiling…':'Profile'}</button></span><span class="d">${esc(u.family||'')}${u.bytes!=null?' · '+gib(u.bytes):''}${TEACH.perr[u.path]?' · '+esc(TEACH.perr[u.path]):''}</span></div>`};
     const ps=list.filter(t=>!t.path&&t.id),us=pickKind==='all'?list.filter(t=>t.path):[];
     body=errLine(TEACH.err,'psect no')+(ps.map(row).join('')||(TEACH.loaded?empty('nothing matches'):''))
-      +(us.length?`<div class="psect no">On this Mac, not profiled ${INFO('Profiling reads the model headers only (seconds); the teacher then appears above and can be built from.')}</div>`+us.map(urow).join(''):'');
+      +(us.length?`<div class="psect no">On this Mac, not profiled ${INFO('Profiling reads only the model headers and takes seconds. The teacher then appears above and can be built from.')}</div>`+us.map(urow).join(''):'');
   }else{
     const also=(()=>{const x=FOUND.orig.filter(m=>m.family!=null&&!all.some(t=>t.n&&baseKey(t.n)===baseKey(m.name))&&(!q||m.name.toLowerCase().includes(q)));
       return x.length?`<div class="psect no">Also on this Mac ${INFO('Onboarding profiles the model so a recipe can price it.')}</div>`+x.map(m=>`<button class="prow no" tabindex="-1"><span class="n">${esc(m.name)}</span><span class="m"></span><span class="d">${esc(m.format)} · ${gib(m.bytes)}</span></button>`).join(''):''})();
@@ -1248,7 +1249,7 @@ const qActs=q=>{const b=q.preflight&&q.status==='passed'?['go','full','Start ful
 function jdDraw(){const d=jobs.dlg;if(!d)return;
   const m=$('#jdlg'),p=d.plan,bad=p?p.problems.length:0;
   let h;
-  if(d.kind!=='start')h=`<div class="hfttl">${d.kind==='stop'?'Stop':'Resume'} ${esc(d.name)} ${INFO(d.kind==='stop'?'Stops the running step; the queue can be resumed.':'Resumes from the step that did not pass.')}</div>`;
+  if(d.kind!=='start')h=`<div class="hfttl">${d.kind==='stop'?'Stop':'Resume'} ${esc(d.name)} ${INFO(d.kind==='stop'?'Stops the running step. The queue can be resumed from it.':'Resumes from the step that did not pass.')}</div>`;
   else if(!p)h=`<div class="hfttl">${d.planFailed?'Cannot plan':'Planning...'}</div>`;
   else h=`<div class="hfttl">${esc(p.name)}</div>${kv('run',p.preflight?'preflight: each step, small real version':'full run')}${stepsTable(p.steps)}
     ${kv('estimated time (full run)',p.eta_s==null?'unknown':fmtS(p.eta_s))}${kv('disk written',p.writes?gib(p.writes):p.preflight?'small':gib(0))}${kv('scratch free',p.scratch_free==null?'unknown':gib(p.scratch_free))}
@@ -1285,7 +1286,7 @@ function pgJobs(){
       ${qActs(q)}
       <div class="qsteps" style="--nw:${Math.min(64,Math.max(...q.steps.map(x=>x.name.length),10))+1}ch"><div class="qstep qhead"><span></span><span>step</span><span>status</span><span>duration</span><span>exit</span></div>${q.steps.map((x,ix)=>{const nt=[...(x.reasons||[]),...(x.warnings||[])].filter(n=>!/^exit code -?\d+$/.test(n)),open=jobs.stepOpen===q.id+':'+ix,more=(x.tail&&x.tail.length)||x.cmd;return `<button class="qstep ${SCLS(x.status)||'wait'}${open?' open':''}" data-step="${esc(q.id)}:${ix}" ${more?'':'disabled'}><span class="m"></span><span class="c">${esc(x.name)}</span><span class="s">${esc(x.status)}</span><span class="du">${x.seconds!=null?fmtS(x.seconds):''}</span><span class="ex" title="${esc(nt.join(' · '))}">${[x.rc!=null&&x.rc!==0?'exit '+x.rc:'',x.attempts>1?x.attempts+' tries':'',esc(nt.join(' · '))].filter(Boolean).join(' · ')}</span></button>${open?`<div class="qmore">${x.tail&&x.tail.length?`<pre>${esc(x.tail.join('\n'))}</pre>`:''}${x.cmd?`<div class="qcmd">${esc(x.cmd)}</div>`:''}</div>`:''}`}).join('')}</div>`}
   else det=empty('nothing selected','ro');
-  return `<section class="panel"><h2>Jobs ${INFO('Queue runs are read from the vqlab queues folder; one segment per step. Queue files come from the queue-files folder in the lab notes folder. Start shows what will run and asks first. Publish, push and delete are never done here. A recipe reviewed on the Recipe page appears here as a queue file.')}</h2>
+  return `<section class="panel"><h2>Jobs ${INFO('Queue runs from the queues folder, one segment per step. A recipe reviewed on the Recipe page appears here as a queue file. Start shows what will run and asks first. Nothing here publishes, pushes or deletes.')}</h2>
   <div class="jobs2">
     <div class="jcol"><div class="rohd list ro"><span>queue runs</span><button class="linkbtn" data-pre>${jobs.showPre?'☑':'☐'} preflight (${npre})</button></div><div class="jobsel">${rows}</div></div>
     <div class="jdet">${det}</div>
@@ -1340,7 +1341,7 @@ function fndCard(){
   const unr={};M.filter(m=>m.use==='unreadable').forEach(m=>{(unr[m.source]=unr[m.source]||[]).push(m)});
   for(const [src,a] of Object.entries(unr)){const n=a.reduce((x,m)=>x+(m.count||1),0);sums.push(sum(src+': '+n+' model'+(n===1?'':'s')+(a.some(m=>m.format==='GGUF')?' (GGUF, not readable)':' (not readable)')))}
   const body=L?[...o].sort(big).concat([...q].sort(big)).map(row).join('')+sums.join(''):'';
-  return `<div class="cart"><div class="fhd"><div class="ro">Models on this Mac ${INFO('Found in the Hugging Face cache, LM Studio, exo and Ollama. Nothing is copied or linked; builds read originals where they are.')}</div><button class="mini" data-fscan${FOUND.scanning?' disabled':''}>${FOUND.scanning?'scanning…':'Rescan'}</button></div>${errLine(FOUND.err,'err')}
+  return `<div class="cart"><div class="fhd"><div class="ro">Models on this Mac ${INFO('Found in the Hugging Face cache, LM Studio, exo and Ollama. Nothing is copied or linked; builds read the originals where they are.')}</div><button class="mini" data-fscan${FOUND.scanning?' disabled':''}>${FOUND.scanning?'scanning…':'Rescan'}</button></div>${errLine(FOUND.err,'err')}
     <div class="readouts r3 lead">${readout('originals',L?o.length:'&nbsp;')}${readout('quantized',L?q.length:'&nbsp;')}${readout('total',L?gib(FOUND.total):'&nbsp;')}</div>
     <div class="fmod stbl" id="fmod"><table><colgroup><col><col class="w-src"><col class="w-use"><col class="w-fmt"><col class="w-num"></colgroup><tbody>${body}</tbody></table></div></div>`}
 const stLoc=k=>ST.cfg&&ST.cfg.locations.find(x=>x.key===k);
@@ -1365,16 +1366,16 @@ function stSetup(){const u=ST.use,c=stLoc('lab'),p=u.lab;
   const vols=[...u.volumes].sort((a,b)=>b.mount.length-a.mount.length),v=vols.find(x=>p===x.mount||p.startsWith(x.mount.replace(/\/+$/,'')+'/'));
   const free=v?v.free:(c&&c.free_bytes&&c.free_bytes[0]);
   const warn=v&&v.system&&v.free<LOW.sysDisk;
-  return `<div class="cart"><div class="ro">Choose where VQ Lab keeps models ${INFO('Everything vqlab stores goes in folders inside this one, unless a location is set on its own.')}</div>
+  return `<div class="cart"><div class="ro">Choose where VQ Lab keeps models ${INFO('Everything VQ Lab stores goes in folders inside this one, unless a location is set on its own below.')}</div>
     <div class="fldrow">${stFld('lab',p,{pick:true,save:true,label:'Lab folder'})}</div>
     <div class="ro free">${free!=null?gib(free)+' free on this disk':'&nbsp;'}</div>
-    <div class="warnl">${warn?`<span class="pill warn">low space</span>${INFO(`This is the system disk with under ${LOW.sysDisk/GIB} GiB free. Teachers are 50–750 GiB each.`)}`:'&nbsp;'}</div>
+    <div class="warnl">${warn?`<span class="pill warn">low space</span>${INFO(`This is the system disk and it has under ${LOW.sysDisk/GIB} GiB free. Teachers are 50 to 750 GiB each.`)}`:'&nbsp;'}</div>
     <div class="errslot">${stErr('lab')}</div></div>`}
 function pgStorage(){
   if(!LIVE_SERVER)return `<section class="panel"><h2>Storage</h2><div class="ro">open with <b>vqlab gui</b> to see storage</div></section>`;
   const c=ST.cfg,sc=ST.scr,rc=ST.rec,u=ST.use,labL=c&&stLoc('lab'),lab=u?u.lab:(labL&&labL.paths[0])||'';
   const top=u&&u.configured===false?stSetup()
-    :`<div class="cart"><div class="ro">Lab folder ${INFO('Everything vqlab stores goes in folders inside this one, unless a location below is set on its own.')}</div>
+    :`<div class="cart"><div class="ro">Lab folder ${INFO('Everything VQ Lab stores goes in folders inside this one, unless a location is set on its own below.')}</div>
       <div class="fldrow">${stFld('lab',lab,{pick:!!labL,label:'Lab folder'})}</div>${stErr('lab')}</div>`;
   const disks=u?u.volumes.map(stDisk).join(''):empty(ST.uerr||'sizing disks…','ro');
   const ORD=['models','teachers','scratch','fit_store','records'],rows=c?c.locations.filter(l=>ORD.includes(l.key)).sort((a,b)=>ORD.indexOf(a.key)-ORD.indexOf(b.key)):[];
@@ -1397,7 +1398,7 @@ function pgStorage(){
     <div class="cart"><div class="ro">Disks</div><div class="disks">${disks}</div></div>
     <div class="cart"><div class="ro">Locations</div><div class="lscroll" id="lscroll">${locs}
       <div class="advh" data-sadv>${open?'▾':'▸'} Advanced</div>${open?`<div class="advb">${adv.map(stRow).join('')}</div>`:''}</div></div></div>
-    <div class="strt">${fndCard()}<div class="cart"><div class="ro">Work in progress ${INFO('Builds and run outputs live here. Nothing on this page deletes anything.')}</div>${right}</div></div></div></section>`}
+    <div class="strt">${fndCard()}<div class="cart"><div class="ro">Work in progress ${INFO('Builds and run outputs are kept here. Nothing on this page deletes anything.')}</div>${right}</div></div></div></section>`}
 // selectors from API keys are escaped
 const fldEl=k=>document.querySelector(`.fld[data-fk="${CSS.escape(k)}"]`);
 const refocus=k=>{const i=fldEl(k);if(i){i.focus();i.setSelectionRange(i.value.length,i.value.length)}};
