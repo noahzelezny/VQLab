@@ -279,10 +279,10 @@
    ]
   },
   [
-   "the image smoke runs in check-release, through Knurlogic on the finished artifact: it is too large to load on this box",
-   "sz-pack and sz-check are EXPERIMENTAL tools; the packed copy (<scratch>/moe-sz-big/moe-sz-big-sz) symlinks its unchanged shards into <scratch>/moe-sz-big/moe-sz-big, so keep both",
-   "too large for this box: the pin is not smoked here, and check-release smokes it on the cluster through Knurlogic (--knurlogic-smoke fit: text, and an image when it carries a tower). Knurlogic and the peer Mac(s) must be up for the preflight and the run, and every serving Mac must reach the scratch path under the same name",
-   "the score is this build's absolute KL against the teacher; the release gate is a PAIRED kl-ladder against the incumbent rung (FINDINGS: KL is the gate)"
+   "The image test runs on the cluster, since the build is too large for this Mac.",
+   "Skip-zero is experimental. The packed copy shares its unchanged files with the unpacked build, so keep both.",
+   "Too large for this Mac, so it is tested on the cluster. Knurlogic and the other Macs must be up for the preflight and the run, and each must see the scratch folder at the same path.",
+   "The score is this build's KL to the teacher, not a paired comparison against a published build."
   ]
  ],
  "moe-big": [
@@ -470,8 +470,8 @@
    ]
   },
   [
-   "the image smoke runs in check-release, through Knurlogic on the finished artifact: it is too large to load on this box",
-   "too large for this box: the pin is not smoked here, and check-release smokes it on the cluster through Knurlogic (--knurlogic-smoke fit: text, and an image when it carries a tower). Knurlogic and the peer Mac(s) must be up for the preflight and the run, and every serving Mac must reach the scratch path under the same name"
+   "The image test runs on the cluster, since the build is too large for this Mac.",
+   "Too large for this Mac, so it is tested on the cluster. Knurlogic and the other Macs must be up for the preflight and the run, and each must see the scratch folder at the same path."
   ]
  ],
  "dense-big": [
@@ -688,8 +688,8 @@
    ]
   },
   [
-   "no incumbent base given: the base is made by stream-convert, and the build checks every fitted module lands on it (build-dense --dry-run)",
-   "too large for this box: the pin is not smoked here, and check-release smokes it on the cluster through Knurlogic (--knurlogic-smoke fit: text, and an image when it carries a tower). Knurlogic and the peer Mac(s) must be up for the preflight and the run, and every serving Mac must reach the scratch path under the same name"
+   "No existing base was given, so the build makes its own affine base first.",
+   "Too large for this Mac, so it is tested on the cluster. Knurlogic and the other Macs must be up for the preflight and the run, and each must see the scratch folder at the same path."
   ]
  ],
  "moe-sz-mtp-big": [
@@ -996,10 +996,10 @@
    ]
   },
   [
-   "the image smoke runs in check-release, through Knurlogic on the finished artifact: it is too large to load on this box",
-   "sz-pack and sz-check are EXPERIMENTAL tools; the packed copy (<scratch>/moe-sz-mtp-big/moe-sz-mtp-big-sz) symlinks its unchanged shards into <scratch>/moe-sz-mtp-big/moe-sz-mtp-big, so keep both",
-   "the MTP head's acceptance is gated by check-release: Knurlogic serves the build with drafting on, and a head that never accepts fails it",
-   "too large for this box: the pin is not smoked here, and check-release smokes it on the cluster through Knurlogic (--knurlogic-smoke fit: text, and an image when it carries a tower). Knurlogic and the peer Mac(s) must be up for the preflight and the run, and every serving Mac must reach the scratch path under the same name"
+   "The image test runs on the cluster, since the build is too large for this Mac.",
+   "Skip-zero is experimental. The packed copy shares its unchanged files with the unpacked build, so keep both.",
+   "The draft head is checked when the cluster serves the build; a head that never accepts fails the queue.",
+   "Too large for this Mac, so it is tested on the cluster. Knurlogic and the other Macs must be up for the preflight and the run, and each must see the scratch folder at the same path."
   ]
  ]
 }

@@ -486,8 +486,8 @@ def _moe_steps(r: Recipe, prof: dict, src: str, by: dict, vis: float):
         args += ["--tail-from", frm, "--tail-geom", f"d{td}k{tk}"]     # fit-moe's own spelling
         tail_abort = relerr_abort(td, tk)
         if tail_abort != abort:
-            warns.append(f"fit-moe takes one --relerr-abort: the looser of the two geometries' "
-                         f"({max(abort, tail_abort)}) applies to every layer")
+            warns.append(f"The two geometries have different fit-error limits; the looser, "
+                         f"{max(abort, tail_abort)}, applies to every layer.")
         abort = max(abort, tail_abort)
         ntail = sum(i >= frm for i in vq)
     n = len(vq)
@@ -526,8 +526,7 @@ def _dense_steps(r: Recipe, prof: dict, src: str, by: dict, vis: float):
                            {"full": "the build splices into the whole base",
                             "writes_gib": _convert_writes_gib(by, r.bits)},
                            retries=1, timeout_s=6 * 3600, expect={"files": [f"{base}/config.json"]}))
-        warns.append("no incumbent base given: the base is made by stream-convert, and the "
-                     "build checks every fitted module lands on it (build-dense --dry-run)")
+        warns.append("No existing base was given, so the build makes its own affine base first.")
     fargs = ["--src", src, "--out", fit, "--family", r.family, "--layers", f"{lo}-{hi}",
              "--dim", d, "--k", k, "--group", r.group, "--seed", 1234]
     i = fargs.index("--layers")
@@ -580,8 +579,8 @@ def _mtp_steps(r: Recipe, head: MtpHead, src: str, out: str, oversized: bool):
                            {"append": ["--tokens", 32, "--control-min", 0]},
                            retries=0, timeout_s=2 * 3600))
         pack += ["--wiring-from", probe]
-        warns.append(f"no MTP wiring is recorded for {r.teacher}: the queue's probe "
-                     f"chooses it ({probe}); record what ships in {record}")
+        warns.append("This teacher has no recorded draft-head wiring; the queue measures it "
+                     "before packing the head.")
     steps.append(_step("mtp-pack", "mtp-pack", [*pack, "--out", sidecar], pack_pf,
                        retries=0, timeout_s=3600, expect={"files": [sidecar]}))
     steps.append(_step("mtp-smoke", "mtp-smoke-head",
@@ -589,9 +588,8 @@ def _mtp_steps(r: Recipe, head: MtpHead, src: str, out: str, oversized: bool):
                        {"append": ["--steps", 2, "--warmup", 1]},
                        retries=0, timeout_s=1800))
     if oversized:
-        warns.append("the MTP head's acceptance is gated by check-release: Knurlogic "
-                     "serves the build with drafting on, and a head that never "
-                     "accepts fails it")
+        warns.append("The draft head is checked when the cluster serves the build; a head "
+                     "that never accepts fails the queue.")
     else:
         steps.append(_step("mtp-accept", "mtp-accept",
                            ["--model", out, "--head", f"head={sidecar}",
@@ -625,14 +623,14 @@ def _tail_steps(r: Recipe, src: str, by: dict, head: MtpHead | None,
                                {"full": "grafts the tower in place", "writes_gib": round(by["vision"] + 0.5, 1)},
                                retries=0, timeout_s=3600))
             if oversized:
-                warns.append("the image smoke runs in check-release, through Knurlogic on the "
-                              "finished artifact: it is too large to load on this box")
+                warns.append("The image test runs on the cluster, since the build is too large "
+                              "for this Mac.")
             else:
                 steps.append(_step("vision-smoke", "vision-smoke", [out, "--max-tokens", 8],
                                    {"full": "reads the artifact, writes nothing", "writes_gib": 0},
                                    retries=0, timeout_s=3600))
         else:
-            warns.append("this teacher has no vision tower; nothing to graft")
+            warns.append("This teacher has no vision tower to graft.")
     if r.skipzero:
         # as the published 397B builds were made: sz-pack of the finished,
         # grafted artifact (config vq_skipzero.source; lab/queues/
@@ -652,8 +650,8 @@ def _tail_steps(r: Recipe, src: str, by: dict, head: MtpHead | None,
         steps.append(_step("skipzero-bundle", "bundle", ["--artifact", sz],
                            {"full": "rewrites model.py and config.json, no weights", "writes_gib": 0},
                            retries=0, timeout_s=1800))
-        warns.append(f"sz-pack and sz-check are EXPERIMENTAL tools; the packed copy ({sz}) "
-                     f"symlinks its unchanged shards into {out}, so keep both")
+        warns.append("Skip-zero is experimental. The packed copy shares its unchanged files "
+                     "with the unpacked build, so keep both.")
         out = sz
     if head:
         mtp_steps, mtp_warns = _mtp_steps(r, head, src, out, oversized)
@@ -676,10 +674,9 @@ def _tail_steps(r: Recipe, src: str, by: dict, head: MtpHead | None,
         # so a cluster that is down FAILS the step with Knurlogic's own reason
         release_pf = {"full": "loads the artifact on the cluster through Knurlogic; "
                               "fails if Knurlogic or the cluster is down", "writes_gib": 0}
-        warns.append("too large for this box: the pin is not smoked here, and check-release "
-                     "smokes it on the cluster through Knurlogic (--knurlogic-smoke fit: text, and an "
-                     "image when it carries a tower). Knurlogic and the peer Mac(s) must be up for "
-                     "the preflight and the run, and every serving Mac must reach the scratch path under the same name")
+        warns.append("Too large for this Mac, so it is tested on the cluster. Knurlogic and the "
+                     "other Macs must be up for the preflight and the run, and each must see "
+                     "the scratch folder at the same path.")
     steps.append(_step("release-check", "check-release", release, release_pf,
                        retries=0, timeout_s=2 * 3600))
     if r.score:
@@ -688,14 +685,13 @@ def _tail_steps(r: Recipe, src: str, by: dict, head: MtpHead | None,
             kl = [a for c in caches for a in ("--cache", c)] + [
                 "--rung", f"{r.name}={pin}", "--per-pos-dir", f"{r.work}/kl-per-pos",
                 "--out", f"{r.work}/kl.json", "--lazy-over-gb", 16]
-            warns.append("the score is this build's absolute KL against the teacher; the release "
-                         "gate is a PAIRED kl-ladder against the incumbent rung (FINDINGS: KL is the gate)")
+            warns.append("The score is this build's KL to the teacher, not a paired comparison "
+                         "against a published build.")
             steps.append(_step("score", "kl-ladder", kl, {"append": ["--preflight"]},
                                retries=1, timeout_s=12 * 3600,
                                expect={"stdout_regex": "KL", "files": [f"{r.work}/kl.json"]}))
         else:
-            warns.append(f"no KL caches are registered for {r.teacher}: not scored "
-                         "(build them with `vqlab stream-score`, then register them)")
+            warns.append("No KL caches are registered for this teacher, so the build is not scored.")
     return steps, warns
 
 

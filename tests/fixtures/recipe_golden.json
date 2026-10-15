@@ -346,7 +346,7 @@
    ]
   },
   [
-   "fit-moe takes one --relerr-abort: the looser of the two geometries' (0.45) applies to every layer"
+   "The two geometries have different fit-error limits; the looser, 0.45, applies to every layer."
   ]
  ],
  "moe-d8": [
@@ -920,7 +920,7 @@
    ]
   },
   [
-   "sz-pack and sz-check are EXPERIMENTAL tools; the packed copy (<scratch>/moe-sz-mtp/moe-sz-mtp-sz) symlinks its unchanged shards into <scratch>/moe-sz-mtp/moe-sz-mtp, so keep both"
+   "Skip-zero is experimental. The packed copy shares its unchanged files with the unpacked build, so keep both."
   ]
  ],
  "dense-mtp-probe": [
@@ -1255,8 +1255,8 @@
    ]
   },
   [
-   "no incumbent base given: the base is made by stream-convert, and the build checks every fitted module lands on it (build-dense --dry-run)",
-   "no MTP wiring is recorded for P: the queue's probe chooses it (<scratch>/dense-mtp-probe/mtp-probe.json); record what ships in families/qwen3_8_dense/teachers/P/mtp.json"
+   "No existing base was given, so the build makes its own affine base first.",
+   "This teacher has no recorded draft-head wiring; the queue measures it before packing the head."
   ]
  ],
  "moe-affine": [
@@ -1785,8 +1785,8 @@
    ]
   },
   [
-   "no incumbent base given: the base is made by stream-convert, and the build checks every fitted module lands on it (build-dense --dry-run)",
-   "this teacher has no vision tower; nothing to graft"
+   "No existing base was given, so the build makes its own affine base first.",
+   "This teacher has no vision tower to graft."
   ]
  ],
  "dense-score": [
@@ -2017,8 +2017,8 @@
    ]
   },
   [
-   "no incumbent base given: the base is made by stream-convert, and the build checks every fitted module lands on it (build-dense --dry-run)",
-   "the score is this build's absolute KL against the teacher; the release gate is a PAIRED kl-ladder against the incumbent rung (FINDINGS: KL is the gate)"
+   "No existing base was given, so the build makes its own affine base first.",
+   "The score is this build's KL to the teacher, not a paired comparison against a published build."
   ]
  ],
  "moe-sz": [
@@ -2258,7 +2258,7 @@
    ]
   },
   [
-   "sz-pack and sz-check are EXPERIMENTAL tools; the packed copy (<scratch>/moe-sz/moe-sz-sz) symlinks its unchanged shards into <scratch>/moe-sz/moe-sz, so keep both"
+   "Skip-zero is experimental. The packed copy shares its unchanged files with the unpacked build, so keep both."
   ]
  ],
  "moe-sz-tail": [
@@ -2476,8 +2476,8 @@
    ]
   },
   [
-   "sz-pack and sz-check are EXPERIMENTAL tools; the packed copy (<scratch>/moe-sz-tail/moe-sz-tail-sz) symlinks its unchanged shards into <scratch>/moe-sz-tail/moe-sz-tail, so keep both",
-   "no KL caches are registered for T: not scored (build them with `vqlab stream-score`, then register them)"
+   "Skip-zero is experimental. The packed copy shares its unchanged files with the unpacked build, so keep both.",
+   "No KL caches are registered for this teacher, so the build is not scored."
   ]
  ]
 }

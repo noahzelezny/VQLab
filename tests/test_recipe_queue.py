@@ -85,7 +85,7 @@ def test_moe_mixed_uses_the_fitters_tail(fams):
     fams("qwen3_5", "T", "moe", 40)
     q, warns = rq.compile_recipe({"name": "a", "family": "qwen3_5", "teacher": "T", "geo": "d4-K128",
                                   "tail": {"from": 30, "geo": "d4-K512"}})
-    assert any("one --relerr-abort" in w for w in warns)
+    assert any("the looser" in w for w in warns)
     fit = _args(q, "fit")
     assert fit[fit.index("--tail-from") + 1] == "30" and fit[fit.index("--tail-geom") + 1] == "d4k512"
     assert fit[fit.index("--relerr-abort") + 1] == "0.6"         # the looser of the two
@@ -147,14 +147,14 @@ def test_score_only_with_registered_caches(fams, monkeypatch):
     fams("qwen3_5", "T", "moe", 4)
     r = {"name": "a", "family": "qwen3_5", "teacher": "T", "geo": "d4-K256", "score": True}
     q, warns = rq.compile_recipe(r)
-    assert "score" not in _names(q) and any("no KL caches" in w for w in warns)
+    assert "score" not in _names(q) and any("No KL caches" in w for w in warns)
     monkeypatch.setattr(rq.registry, "teacher_caches", lambda t=None: [
         {"teacher": "T", "corpus": c, "path": f"/c/{c}"} for c in ("prose", "code")])
     q, _ = rq.compile_recipe(r)
     q, warns = rq.compile_recipe(r)
     kl = _args(q, "score")
     assert kl[:4] == ["--cache", "code=/c/code", "--cache", "prose=/c/prose"]
-    assert "--lazy-over-gb" in kl and any("PAIRED" in w for w in warns)
+    assert "--lazy-over-gb" in kl and any("paired comparison" in w for w in warns)
 
 
 @pytest.mark.parametrize("recipe, why", [
@@ -359,7 +359,7 @@ def test_skipzero_packs_the_finished_artifact_and_checks_run_on_the_copy(fams):
     assert _args(q, "vision-smoke")[0] == built
     assert _args(q, "smoke")[0] == sz and _args(q, "runtime-check")[1] == sz
     assert _args(q, "release-check")[1] == sz
-    assert steps.validate(q) == [] and any("EXPERIMENTAL" in w for w in warns)
+    assert steps.validate(q) == [] and any("experimental" in w for w in warns)
     # d4-K256 = 2 bits per weight -> 2 MiB a module; minus a 1-bit-per-row mask per packed module
     saved = (512 / 1024 + 256 / 1024 + 1024 / 4096) * (2 << 20) - (1024 + 1024 + 4096) / 8
     assert q["estimate"]["artifact_gib"] == round(plain["estimate"]["artifact_gib"] - saved / 2 ** 30, 2)
@@ -462,7 +462,7 @@ def test_mtp_without_a_recorded_wiring_is_probed_first(fams):
     pack = _args(q, "mtp-pack")
     assert pack[pack.index("--wiring-from") + 1] == pa[pa.index("--out") + 1]
     assert "--fc-order" not in pack
-    assert any("probe chooses it" in w for w in warns) and steps.validate(q) == []
+    assert any("measures it" in w for w in warns) and steps.validate(q) == []
 
 
 def test_mtp_unrecorded_wiring_too_large_to_probe_is_refused(fams, monkeypatch):
@@ -481,7 +481,7 @@ def test_mtp_oversized_serves_the_sidecar_from_the_linked_folder(fams, monkeypat
     assert names.index("mtp-pack") < names.index("knurlogic-link")
     out = _args(q, "knurlogic-link")[0]
     assert _args(q, "mtp-pack")[-1] == f"{out}/mtp-head-q6.safetensors"
-    assert any("gated by check-release" in w for w in warns)
+    assert any("cluster serves" in w for w in warns)
 
 
 @pytest.mark.parametrize("arch, record, why", [
@@ -576,7 +576,7 @@ def test_an_oversized_build_is_smoked_on_the_cluster_through_knurlogic(fams, mon
     # the preflight really runs it: no skip, so a cluster that is down fails it
     assert "full" in rel["preflight"] and "skip" not in rel["preflight"]
     assert steps.validate(q) == []
-    assert any("through Knurlogic" in w for w in warns)
+    assert any("tested on the cluster" in w for w in warns)
     # everything but the smoke steps is the same queue
     keep = [s for s in small["steps"] if s["name"] not in ("vision-smoke", "release-check")]
     assert [s for s in q["steps"] if s["name"] not in ("knurlogic-link", "release-check")] == keep
