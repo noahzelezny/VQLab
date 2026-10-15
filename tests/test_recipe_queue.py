@@ -171,6 +171,8 @@ def test_score_only_with_registered_caches(fams, monkeypatch):
     ({"protect_bits": [8]}, "protect_bits must be an integer"),
     ({"bits": True}, "bits must be an integer"),
     ({"mtp": True}, "T has no MTP head"),
+    ({"mtp": True, "mtp_bits": 3}, "mtp_bits 3: 4, 5, 6, 8"),
+    ({"mtp": True, "mtp_bits": [6]}, "mtp_bits must be an integer"),
 ])
 def test_refusals(fams, recipe, why):
     fams("qwen3_5", "T", "moe", 40)
@@ -427,6 +429,24 @@ def test_mtp_packs_the_recorded_wiring_into_the_finished_artifact(fams):
     assert q["estimate"]["artifact_gib"] == round(want, 2)
 
 
+def test_mtp_bits_choose_the_sidecar_width(fams):
+    """A 4-bit head: mtp-pack gets --bits, the sidecar is named for it, and
+    the artifact is smaller by the bits dropped (16-bit scale+bias per 32)."""
+    _measured_dead_rows(fams("qwen3_5", "T", "moe", 40, mtp=1.5, wiring=_WIRING))
+    base = {**_MOE, "skipzero": True, "mtp": True}
+    q6, _ = rq.compile_recipe(base)
+    q4, _ = rq.compile_recipe({**base, "mtp_bits": 4})
+    sz = _args(q4, "smoke")[0]
+    side = f"{sz}/mtp-head-q4.safetensors"
+    pack = _args(q4, "mtp-pack")
+    assert pack[pack.index("--bits") + 1] == "4" and pack[-1] == side
+    assert _args(q4, "mtp-smoke") == ["--model", sz, "--sidecar", side]
+    assert f"head={side}" in _args(q4, "mtp-accept")
+    assert "--bits" not in _args(q6, "mtp-pack")
+    drop = q6["estimate"]["artifact_gib"] - q4["estimate"]["artifact_gib"]
+    assert round(drop, 2) == round(1.5 * 2 / 16, 2)
+
+
 def test_mtp_without_a_recorded_wiring_is_probed_first(fams):
     fams("qwen3_8_dense", "P", "dense", 24, vision=0, mtp=0.25)
     q, warns = rq.compile_recipe({"name": "p", "family": "qwen3_8_dense",
@@ -609,9 +629,15 @@ _PARITY = [
     ("qwen3_8_dense", {"geo": "d4-K256", "bits": 6, "group": 32},
      {"mode": "vq", "geo": "d4-K256", "bits": 6, "group": 32}),
     ("qwen3_5", {"geo": "d4-K256", "skipzero": True, "mtp": True},
-     {"mode": "vq", "geo": "d4-K256", "protect": 8, "skipzero": True, "mtp": True}),
+     {"mode": "vq", "geo": "d4-K256", "protect": 8, "skipzero": True, "mtp": True,
+      "mtpBits": 6}),
     ("qwen3_8_dense", {"geo": "d4-K256", "bits": 6, "group": 32, "mtp": True},
-     {"mode": "vq", "geo": "d4-K256", "bits": 6, "group": 32, "mtp": True}),
+     {"mode": "vq", "geo": "d4-K256", "bits": 6, "group": 32, "mtp": True, "mtpBits": 6}),
+    ("qwen3_8_dense", {"geo": "d4-K256", "bits": 6, "group": 32, "mtp": True, "mtp_bits": 4},
+     {"mode": "vq", "geo": "d4-K256", "bits": 6, "group": 32, "mtp": True, "mtpBits": 4}),
+    ("qwen3_5", {"geo": "d4-K256", "skipzero": True, "mtp": True, "mtp_bits": 8},
+     {"mode": "vq", "geo": "d4-K256", "protect": 8, "skipzero": True, "mtp": True,
+      "mtpBits": 8}),
 ]
 
 
@@ -652,7 +678,7 @@ def test_the_recipe_page_sizes_a_build_as_the_compiler_does(fams):
         t = {"kind": prof["arch"]["kind"], "gib": prof["bytes"]["by_class_gib"],
              "geometries": T._geometries(prof), "vq_layers": len(vq), "first_vq": min(vq),
              "skipzero": T._skipzero(family, teacher, prof),
-             "mtp_gib": T._mtp_gib(family, teacher, prof)}
+             "mtp": T._mtp(family, teacher, prof)}
         cases.append([t, draft])
         q, _ = rq.compile_recipe({"name": "a", "family": family, "teacher": teacher, **recipe})
         want.append(q["estimate"]["artifact_gib"])

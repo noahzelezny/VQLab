@@ -24,6 +24,7 @@ from vqlab.agents import model_scan
 from vqlab.util.errors import UserError
 from vqlab.core.source import fit_store
 from vqlab.family import registry
+from vqlab.mtp import registry as mtp_registry
 from vqlab.plan import recipe_queue
 from vqlab.queue import files as qf
 from vqlab.util.geo import geo_key
@@ -76,16 +77,18 @@ def _skipzero(family: str, teacher: str, prof: dict) -> dict | None:
             "checks": sz.get("checks") or []}
 
 
-def _mtp_gib(family: str, teacher: str, prof: dict) -> float | None:
-    """The packed MTP sidecar's GiB a recipe adds with mtp on (the
-    compiler's own figure, recipe_queue.mtp_head), or None where the
-    compiler would refuse the head."""
+def _mtp(family: str, teacher: str, prof: dict) -> dict | None:
+    """What the GUI needs to price the packed MTP sidecar at any width the
+    compiler allows (the bf16 graft, the pack's group, the widths), or None
+    where the compiler would refuse the head."""
     if family not in recipe_queue.MOE | recipe_queue.DENSE:
         return None
     try:
-        return recipe_queue.mtp_head(family, teacher, prof).gib
+        head = recipe_queue.mtp_head(family, teacher, prof)
     except (recipe_queue.RecipeError, KeyError):
         return None
+    return {"graft_gib": head.graft_gib, "group": mtp_registry.PACK_GROUP,
+            "bits": list(mtp_registry.PACK_BITS_CHOICES), "default": mtp_registry.PACK_BITS}
 
 
 def _scanned() -> list[dict]:
@@ -125,7 +128,7 @@ def teachers() -> dict:
             "on_disk": local is not None, "buildable": family in recipe_queue.MOE | recipe_queue.DENSE,
             "scored": teacher in caches, "profiled": prof.get("created"),
             "skipzero": _skipzero(family, teacher, prof),
-            "mtp_gib": _mtp_gib(family, teacher, prof)})
+            "mtp": _mtp(family, teacher, prof)})
     found = []
     for r in _scanned():
         if r.get("use") != "original" or not r.get("path") or not r.get("family"):

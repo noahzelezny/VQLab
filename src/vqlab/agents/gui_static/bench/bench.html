@@ -582,7 +582,7 @@ const BITS=[2,3,4,5,6,8];
 const PBITS=[4,5,6,8];  // protect widths on offer: nothing below 4
 const APBITS=[0,...PBITS];  // affine protect: 0 is '=' (uniform, the same width as the experts)
 const NAME_RE=/^[a-z0-9][a-z0-9._-]{0,79}$/;  // same rule as the recipe compiler
-const newRecipe=()=>({v:2,teacher:'',mode:'vq',geo:'',tailOn:false,tailGeo:'',tailFrom:0,bits:4,group:64,protect:8,aprotect:0,tower:false,mtp:false,score:false,name:'',nameSet:false});
+const newRecipe=()=>({v:2,teacher:'',mode:'vq',geo:'',tailOn:false,tailGeo:'',tailFrom:0,bits:4,group:64,protect:8,aprotect:0,tower:false,mtp:false,mtpBits:0,score:false,name:'',nameSet:false});
 // the page and the one persisted flag that belongs to no page
 const UI={page:P.lib,stAdv:false};
 // per-page state; resources (FLEET, SCORES, TEACH, LIVE, ...) below share {data,err,timer}
@@ -808,7 +808,8 @@ function szGib(t,r){
   return Object.keys(body).concat(Object.keys(tail)).filter((k,i,a)=>a.indexOf(k)===i).reduce((s,k)=>s+((r.tailOn&&+k>=r.tailFrom?tail:body)[k]||0),0);
 }
 // the packed MTP sidecar the compiler adds (server: recipe_queue.mtp_head)
-const mtpGib=(t,r)=>r.mtp?t.mtp_gib||0:0;
+const mtpGibAt=(t,bits)=>t.mtp?t.mtp.graft_gib*affBpw(bits,t.mtp.group)/16:0;
+const mtpGib=(t,r)=>r.mtp?mtpGibAt(t,r.mtpBits):0;
 function sizeOf(t,r){
   const s=sizeRaw(t,r);if(s)s.gib=s.gib-szGib(t,r)+mtpGib(t,r);return s;
 }
@@ -832,7 +833,7 @@ function sanitize(t){
   if(!fg.includes(r.tailGeo))r.tailGeo=r.geo;
   if(!r.tailFrom)r.tailFrom=t.first_vq+Math.floor(t.vq_layers/2);
   r.tailFrom=Math.max(lo,Math.min(hi,r.tailFrom));
-  if(!(t.gib||{}).vision)r.tower=false;if(!t.mtp_gib)r.mtp=false;if(!t.scored)r.score=false;
+  if(!(t.gib||{}).vision)r.tower=false;if(!t.mtp)r.mtp=false;else if(!t.mtp.bits.includes(r.mtpBits))r.mtpBits=t.mtp.default;if(!t.scored)r.score=false;
   if(!t.skipzero)r.skipzero=false;else if(r.skipzero===undefined)r.skipzero=true;
   r.protect=PBITS.find(b=>b>=(r.protect|0))||8;
   if(!isMoe(t)||!APBITS.includes(r.aprotect))r.aprotect=0;
@@ -847,6 +848,7 @@ function ensureName(){const t=curT();if(t&&!recipe.draft.nameSet)recipe.draft.na
 // the recipe JSON the backend compiles (plan/recipe_queue.py)
 function recipeOf(t,r){
   const o={name:r.name,family:t.family,teacher:t.teacher,mode:r.mode,vision:!!r.tower,mtp:!!r.mtp,score:!!r.score};
+  if(r.mtp)o.mtp_bits=r.mtpBits;
   if(r.mode==='vq'){o.geo=r.geo;if(isMoe(t)){if(r.tailOn)o.tail={from:r.tailFrom,geo:r.tailGeo};o.protect_bits=r.protect;if(szOn(t,r))o.skipzero=true}else{o.bits=r.bits;o.group=r.group}}
   else{o.bits=r.bits;o.group=r.group;if(isMoe(t)&&r.aprotect)o.protect_bits=r.aprotect}
   return o;
@@ -952,10 +954,11 @@ function pgRecipe(){
   <div class="cart" id="rcart">
     <div class="seg modeseg">${[['vq','VQ'],['affine','Affine']].map(([v,n])=>`<button aria-pressed="${r.mode===v}" data-g="mode" data-v="${v}" ${v==='vq'&&!fg.length?'disabled':''}>${n}</button>`).join('')}</div>
     ${r.mode==='vq'?vqSide():affSide}
-    <div class="ro">include ${I('KL score runs the score step after the build, and needs KL caches registered for this teacher. MTP drafting packs the teacher\'s own draft head into the build (6-bit, the published recipe) and fails the queue on a head that does not accept.'+(t.skipzero?' Skip-zero drops this teacher\'s dead expert rows on disk (sz-pack, then sz-check), as every published build of it was made; KL unchanged (F175). The saving is its measured dead rows priced at this recipe\'s geometry per layer, from '+t.skipzero.source+'.':''))}</div>
+    <div class="ro">include ${I('KL score runs the score step after the build, and needs KL caches registered for this teacher. MTP drafting packs the teacher\'s own draft head into the build (6-bit, the published recipe, or the width chosen under it) and fails the queue on a head that does not accept.'+(t.skipzero?' Skip-zero drops this teacher\'s dead expert rows on disk (sz-pack, then sz-check), as every published build of it was made; KL unchanged (F175). The saving is its measured dead rows priced at this recipe\'s geometry per layer, from '+t.skipzero.source+'.':''))}</div>
     ${t.skipzero&&r.mode==='vq'?`<button class="addon" aria-pressed="${!!r.skipzero}" data-g="skipzero"><i></i><span class="n">skip-zero</span><span class="t">−${fmt(szGib(t,{...r,skipzero:true}))} GiB</span></button>`:''}
     ${B.vision?addon('tower','vision tower',B.vision):''}
-    ${t.mtp_gib?addon('mtp','MTP drafting',t.mtp_gib):''}
+    ${t.mtp?addon('mtp','MTP drafting',mtpGibAt(t,r.mtpBits||t.mtp.default)):''}
+    ${t.mtp&&r.mtp?qrow(`head bits (q${t.mtp.default} ships)`,'mtpBits',t.mtp.bits,`The draft head's width (mtp-pack --bits, group ${t.mtp.group}). q${t.mtp.default} is the published recipe; fewer bits is a smaller, faster head, whose acceptance mtp-accept gates.`):''}
     <button class="addon" aria-pressed="${!!r.score}" data-g="score" ${t.scored?'':'disabled'}><i></i><span class="n">KL score</span></button>
   </div>
   </div>

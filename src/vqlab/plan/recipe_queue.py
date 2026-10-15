@@ -38,9 +38,10 @@ saves comes from those counts at the recipe's geometry (skipzero_gib).
 
 "mtp" packs the teacher's own draft head the way every published sidecar
 was made: mtp-extract of the head's bf16 tensors, then mtp-pack at its
-default recipe (6-bit, group 32, mtp.registry.PACK_*) into the finished
-artifact as mtp-head-q6.safetensors, with the wiring the checkpoint does not
-determine (fc_order, h_source for qwen3_5) taken from the teacher's record of
+default recipe (6-bit, group 32, mtp.registry.PACK_*; "mtp_bits" picks 4, 5, 6
+or 8) into the finished artifact as mtp-head-q6.safetensors (mtp-head-q4... at
+another width), with the wiring the checkpoint does not determine (fc_order,
+h_source for qwen3_5) taken from the teacher's record of
 what shipped (families/<f>/teachers/<t>/mtp.json). Where none is recorded the
 queue measures it: a trial pack, the family's probe (`mtp-probe35`), and the
 real pack reads the probe's choice (--wiring-from); a wrong guess drafts at
@@ -69,6 +70,7 @@ Recipe (JSON):
                                                    affine: optional, absent = uniform)
      "base": "<models>/org--name-4bit",            dense: the quantized incumbent
      "vision": true, "score": true, "mtp": true,   mtp: the teacher's draft head, packed
+     "mtp_bits": 6,                                the head's width: 4, 5, 6 (default) or 8
      "skipzero": true}                             MoE vq: dead rows dropped on disk
 
 The teacher is a profiled teacher (`vqlab family-profile`); its profile
@@ -315,14 +317,16 @@ class MtpHead:
     """The draft head a recipe packs: its family's MTP spec, the measured
     wiring (None: the queue's probe chooses it), and its GiB as the bf16
     graft and as the packed sidecar (the profile's mtp bytes at
-    mtp-pack's recipe)."""
+    mtp-pack's recipe at `bits`)."""
     spec: mtp_registry.FamilySpec
     wiring: dict | None
     graft_gib: float
     gib: float
+    bits: int
 
 
-def mtp_head(family: str, teacher: str, prof: dict) -> MtpHead:
+def mtp_head(family: str, teacher: str, prof: dict,
+             bits: int = mtp_registry.PACK_BITS) -> MtpHead:
     """The head `vqlab mtp-pack` builds for this teacher, or refused: a
     teacher whose checkpoint has none, a model type vqlab packs no head for,
     or a recorded wiring that does not name exactly the choices its family
@@ -343,7 +347,7 @@ def mtp_head(family: str, teacher: str, prof: dict) -> MtpHead:
                           f"must set exactly {', '.join(spec.wiring)}, "
                           f"not {', '.join(sorted(wiring))}")
     return MtpHead(spec, wiring, graft,
-                   _affine_gib(graft, mtp_registry.PACK_BITS, mtp_registry.PACK_GROUP))
+                   _affine_gib(graft, bits, mtp_registry.PACK_GROUP), bits)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -364,6 +368,7 @@ class Recipe:
     vision: bool
     score: bool
     mtp: bool
+    mtp_bits: int                   # the draft head's width, one of mtp.registry.PACK_BITS_CHOICES
     skipzero: bool                  # MoE vq only: sz-pack the finished artifact
 
     @property
@@ -412,9 +417,14 @@ class Recipe:
         if sz and not (mode == "vq" and family in MOE):
             raise RecipeError("skipzero has run only on MoE VQ builds (qwen3_5, docs/SKIPZERO.md); "
                               f"not on a {family} {mode} build")
+        mtp_bits = _int(r.get("mtp_bits", mtp_registry.PACK_BITS), "mtp_bits")
+        if mtp_bits not in mtp_registry.PACK_BITS_CHOICES:
+            raise RecipeError(f"mtp_bits {mtp_bits}: "
+                              f"{', '.join(map(str, mtp_registry.PACK_BITS_CHOICES))}")
         return cls(raw=r, name=name, family=family, teacher=teacher, mode=mode, bits=bits,
                    group=group, geo=geo, tail=tail, protect_bits=pb, base=r.get("base") or None,
-                   vision=bool(r.get("vision")), score=bool(r.get("score")), mtp=bool(r.get("mtp")),
+                   vision=bool(r.get("vision")), score=bool(r.get("score")),
+                   mtp=bool(r.get("mtp")), mtp_bits=mtp_bits,
                    skipzero=sz)
 
 
@@ -532,7 +542,7 @@ def _mtp_steps(r: Recipe, head: MtpHead, src: str, out: str, oversized: bool):
     """The draft head, packed into the finished artifact `out` and gated ->
     (steps, warnings). Its sidecar sits in `out` before the pin and before
     knurlogic-link, so the folder Knurlogic serves carries it."""
-    name = head.spec.sidecar_for()
+    name = head.spec.sidecar_for(head.bits)
     graft, sidecar = f"{r.work}/mtp-graft.safetensors", f"{out}/{name}"
     steps, warns = [], []
     steps.append(_step("mtp-extract", "mtp-extract", ["--src", src, "--out", graft],
@@ -540,6 +550,8 @@ def _mtp_steps(r: Recipe, head: MtpHead, src: str, out: str, oversized: bool):
                         "writes_gib": round(head.graft_gib, 1)},
                        retries=1, timeout_s=2 * 3600))
     pack = ["--model", out, "--mtp", graft]
+    if head.bits != mtp_registry.PACK_BITS:      # mtp-pack's own default is the published 6
+        pack += ["--bits", head.bits]
     pack_pf = {"full": "packs the one head", "writes_gib": round(head.gib + 0.5, 1)}
     record = f"families/{r.family}/teachers/{r.teacher}/mtp.json"
     if head.wiring:
@@ -719,7 +731,7 @@ def _compile(raw: dict) -> tuple[dict, list[str]]:
         saved = skipzero_gib(prof, _skipzero_rows(r), geo)
         art_gib -= saved
         scratch_gib += art_gib      # at most: sz-pack rewrites every shard that holds a dead row
-    head = mtp_head(r.family, r.teacher, prof) if r.mtp else None
+    head = mtp_head(r.family, r.teacher, prof, r.mtp_bits) if r.mtp else None
     if head:
         art_gib += head.gib
         # the bf16 graft, the sidecar, and a trial one where the probe chooses

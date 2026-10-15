@@ -51,6 +51,8 @@ from dataclasses import dataclass
 # (their vqlab_mtp metadata: "bits": 6, "group_size": 32, experts not split)
 PACK_BITS = 6
 PACK_GROUP = 32
+# the widths a recipe may pack the head at (mx affine); PACK_BITS is the published one
+PACK_BITS_CHOICES = (4, 5, 6, 8)
 
 
 @dataclass(frozen=True)
