@@ -16,8 +16,9 @@ it with; a chain is offered only for families whose pieces have each run:
                   mixed affine, experts at bits/group, the rest at protect/64]
 
 and every chain, whatever its mode, ends the same way: [graft ->
-vision-smoke] -> [sz-pack -> sz-check -> bundle] -> pin -> check-bundle --strict ->
-check-release -> [kl-ladder].
+vision-smoke] -> [sz-pack -> sz-check -> bundle] -> [mtp-extract -> mtp-pack ->
+mtp-smoke-head -> mtp-accept] -> pin -> check-bundle --strict -> check-release ->
+[kl-ladder].
 
 A build whose estimated size is past THIS box's resident bar (0.90 x its RAM,
 read from the machine at compile time: preflight_ram.bar_gib) cannot be loaded
@@ -35,12 +36,25 @@ copy. It is offered only for a teacher whose dead
 rows were measured (families/<f>/teachers/<t>/skipzero.json), and the size it
 saves comes from those counts at the recipe's geometry (skipzero_gib).
 
+"mtp" packs the teacher's own draft head the way every published sidecar
+was made: mtp-extract of the head's bf16 tensors, then mtp-pack at its
+default recipe (6-bit, group 32, mtp.registry.PACK_*) into the finished
+artifact as mtp-head-q6.safetensors, with the wiring the checkpoint does not
+determine (fc_order, h_source for qwen3_5) taken from the teacher's record of
+what shipped (families/<f>/teachers/<t>/mtp.json). Where none is recorded the
+queue measures it: a trial pack, the family's probe (`mtp-probe35`), and the
+real pack reads the probe's choice (--wiring-from); a wrong guess drafts at
+chance with no error, so the compiler never makes one. mtp-smoke-head then
+proves the sidecar loads and runs, and mtp-accept fails the queue on a dead
+head; past the resident bar check-release does that through Knurlogic,
+which serves the build with drafting on. A teacher with no head, or a model
+type vqlab packs no head for, is refused.
+
 A compiled chain is proven by its PREFLIGHT, which runs every step small
 and real (the fit on one layer, plus the tail's first layer for a mixed
 build); start the full run only from a preflight that passed. Any other
-family is refused by name. The MTP head is never compiled: its wiring flags
-come from `vqlab mtp-probe35`, and a wrong guess gives zero acceptance with
-no error. kl-ladder is added only when the teacher's caches are registered
+family is refused by name. kl-ladder is added only when the teacher's
+caches are registered
 (families/<f>/teachers/<t>/teacher_caches.json); it scores absolute KL, not
 the paired release gate. A fit's --relerr-abort comes from measured healthy
 ranges only (FINDINGS I.8); an unmeasured geometry is refused.
@@ -54,7 +68,7 @@ Recipe (JSON):
      "protect_bits": 8,                            MoE: attention/embeddings/shared (struct base;
                                                    affine: optional, absent = uniform)
      "base": "<models>/org--name-4bit",            dense: the quantized incumbent
-     "vision": true, "score": true,
+     "vision": true, "score": true, "mtp": true,   mtp: the teacher's draft head, packed
      "skipzero": true}                             MoE vq: dead rows dropped on disk
 
 The teacher is a profiled teacher (`vqlab family-profile`); its profile
@@ -73,6 +87,7 @@ import sys
 
 from vqlab import config
 from vqlab.family import registry
+from vqlab.mtp import registry as mtp_registry
 from vqlab.plan import preflight_ram
 from vqlab.util.errors import UserError
 from vqlab.util.geo import geo_key
@@ -86,6 +101,12 @@ NAME = re.compile(r"^[a-z0-9][a-z0-9._-]{0,79}$")
 # the codebook dims sz-pack packs (skipzero_load.SUPPORTED_DIMS, a peer layer;
 # tests/test_recipe_queue.py holds the two equal)
 SZ_DIMS = (2, 4, 8)
+# mtp-accept's gate: below this pooled acceptance the head is dead. The
+# published heads read 0.63-0.90 (docs/MTP.md), a wrong wiring ~0.00.
+MTP_ACCEPT_FLOOR = 0.3
+# tokens per prompt over mtp-accept's 12 prompts: ~700 draft steps, minutes
+# on a resident build, and far more than a live/dead verdict needs
+MTP_ACCEPT_TOKENS = 64
 
 
 class RecipeError(UserError):
@@ -281,12 +302,48 @@ def skipzero_gib(prof: dict, sz: dict, layer_geo: dict) -> float:
 def _skipzero_rows(r: "Recipe") -> dict:
     """The teacher's measured dead rows, or refused: skipzero is compiled
     only where they were measured."""
-    sz = registry.teacher_skipzero(r.family, r.teacher)
+    sz = registry.teacher_record(r.family, r.teacher, "skipzero.json")
     if not sz or not sz.get("dead_rows"):
         raise RecipeError(f"no dead rows are measured for {r.teacher} "
                           f"(families/{r.family}/teachers/{r.teacher}/skipzero.json): "
                           "skipzero is offered only where sz-pack has run")
     return sz
+
+
+@dataclasses.dataclass(frozen=True)
+class MtpHead:
+    """The draft head a recipe packs: its family's MTP spec, the measured
+    wiring (None: the queue's probe chooses it), and its GiB as the bf16
+    graft and as the packed sidecar (the profile's mtp bytes at
+    mtp-pack's recipe)."""
+    spec: mtp_registry.FamilySpec
+    wiring: dict | None
+    graft_gib: float
+    gib: float
+
+
+def mtp_head(family: str, teacher: str, prof: dict) -> MtpHead:
+    """The head `vqlab mtp-pack` builds for this teacher, or refused: a
+    teacher whose checkpoint has none, a model type vqlab packs no head for,
+    or a recorded wiring that does not name exactly the choices its family
+    leaves open."""
+    graft = prof["bytes"]["by_class_gib"].get("mtp")
+    if not graft:
+        raise RecipeError(f"{teacher} has no MTP head: its profile counts no "
+                          "mtp.* tensors")
+    mt = prof["arch"].get("model_type")
+    spec = mtp_registry.FAMILIES.get(mt)
+    if spec is None or spec.probe is None:
+        raise RecipeError(f"vqlab packs no MTP head for model_type {mt!r}: no probe "
+                          "for its wiring is registered (vqlab/mtp/registry.py)")
+    rec = registry.teacher_record(family, teacher, "mtp.json") or {}
+    wiring = rec.get("wiring")
+    if wiring is not None and sorted(wiring) != sorted(spec.wiring):
+        raise RecipeError(f"families/{family}/teachers/{teacher}/mtp.json: the wiring "
+                          f"must set exactly {', '.join(spec.wiring)}, "
+                          f"not {', '.join(sorted(wiring))}")
+    return MtpHead(spec, wiring, graft,
+                   _affine_gib(graft, mtp_registry.PACK_BITS, mtp_registry.PACK_GROUP))
 
 
 @dataclasses.dataclass(frozen=True)
@@ -471,9 +528,67 @@ def _dense_steps(r: Recipe, prof: dict, src: str, by: dict, vis: float):
     return steps, art_gib, scratch_gib, warns
 
 
-def _tail_steps(r: Recipe, src: str, by: dict, oversized: bool = False):
-    """What every chain ends with: [vision graft + smoke], the pin's smoke,
-    the bundle and release checks, [kl-ladder] -> (steps, warnings).
+def _mtp_steps(r: Recipe, head: MtpHead, src: str, out: str, oversized: bool):
+    """The draft head, packed into the finished artifact `out` and gated ->
+    (steps, warnings). Its sidecar sits in `out` before the pin and before
+    knurlogic-link, so the folder Knurlogic serves carries it."""
+    name = head.spec.sidecar_for()
+    graft, sidecar = f"{r.work}/mtp-graft.safetensors", f"{out}/{name}"
+    steps, warns = [], []
+    steps.append(_step("mtp-extract", "mtp-extract", ["--src", src, "--out", graft],
+                       {"full": "the pack reads the whole head",
+                        "writes_gib": round(head.graft_gib, 1)},
+                       retries=1, timeout_s=2 * 3600))
+    pack = ["--model", out, "--mtp", graft]
+    pack_pf = {"full": "packs the one head", "writes_gib": round(head.gib + 0.5, 1)}
+    record = f"families/{r.family}/teachers/{r.teacher}/mtp.json"
+    if head.wiring:
+        pack += [a for k in head.spec.wiring
+                 for a in (f"--{k.replace('_', '-')}", head.wiring[k])]
+    elif oversized:
+        raise RecipeError(f"no MTP wiring is recorded for {r.teacher} ({record}), and "
+                          "its probe needs the trunk resident, which this build is "
+                          "too large for here: measure it on a smaller build first")
+    else:
+        trial, probe = f"{r.work}/mtp-trial/{name}", f"{r.work}/mtp-probe.json"
+        steps.append(_step("mtp-trial-pack", "mtp-pack", [*pack, "--out", trial],
+                           pack_pf, retries=0, timeout_s=3600))
+        steps.append(_step("mtp-wiring-probe", head.spec.probe,
+                           ["--model", out, "--sidecar", trial, "--corpus", "lit",
+                            "--out", probe],
+                           # a preflight's trunk is one fitted layer: its control fails
+                           {"append": ["--tokens", 32, "--control-min", 0]},
+                           retries=0, timeout_s=2 * 3600))
+        pack += ["--wiring-from", probe]
+        warns.append(f"no MTP wiring is recorded for {r.teacher}: the queue's probe "
+                     f"chooses it ({probe}); record what ships in {record}")
+    steps.append(_step("mtp-pack", "mtp-pack", [*pack, "--out", sidecar], pack_pf,
+                       retries=0, timeout_s=3600, expect={"files": [sidecar]}))
+    steps.append(_step("mtp-smoke", "mtp-smoke-head",
+                       ["--model", out, "--sidecar", sidecar],
+                       {"append": ["--steps", 2, "--warmup", 1]},
+                       retries=0, timeout_s=1800))
+    if oversized:
+        warns.append("the MTP head's acceptance is gated by check-release: Knurlogic "
+                     "serves the build with drafting on, and a head that never "
+                     "accepts fails it")
+    else:
+        steps.append(_step("mtp-accept", "mtp-accept",
+                           ["--model", out, "--head", f"head={sidecar}",
+                            "--tokens", MTP_ACCEPT_TOKENS,
+                            "--min-acceptance", MTP_ACCEPT_FLOOR,
+                            "--out", f"{r.work}/mtp-accept.json"],
+                           # a preflight's trunk is one fitted layer: chance drafts
+                           {"append": ["--tokens", 4, "--min-acceptance", 0]},
+                           retries=0, timeout_s=2 * 3600))
+    return steps, warns
+
+
+def _tail_steps(r: Recipe, src: str, by: dict, head: MtpHead | None,
+                oversized: bool = False):
+    """What every chain ends with: [vision graft + smoke], [skip-zero],
+    [the MTP head], the pin's smoke, the bundle and release checks,
+    [kl-ladder] -> (steps, warnings).
 
     `oversized`: the artifact is past this box's resident bar
     (preflight_ram), so no load of it can run here. Its text and image smokes
@@ -520,9 +635,10 @@ def _tail_steps(r: Recipe, src: str, by: dict, oversized: bool = False):
         warns.append(f"sz-pack and sz-check are EXPERIMENTAL tools; the packed copy ({sz}) "
                      f"symlinks its unchanged shards into {out}, so keep both")
         out = sz
-    if r.mode == "vq" and r.mtp:
-        warns.append("the MTP head is not compiled: choose its wiring with `vqlab mtp-probe35`, "
-                     "then `vqlab mtp-pack` by hand")
+    if head:
+        mtp_steps, mtp_warns = _mtp_steps(r, head, src, out, oversized)
+        steps += mtp_steps
+        warns += mtp_warns
     pin = f"{r.work}/pin"
     steps.append(_step("smoke", "pin", [out, "--out", pin, "--max-tokens", 8],
                        {"full": "a pin is symlinks plus an 8-token smoke", "writes_gib": 0},
@@ -603,9 +719,15 @@ def _compile(raw: dict) -> tuple[dict, list[str]]:
         saved = skipzero_gib(prof, _skipzero_rows(r), geo)
         art_gib -= saved
         scratch_gib += art_gib      # at most: sz-pack rewrites every shard that holds a dead row
+    head = mtp_head(r.family, r.teacher, prof) if r.mtp else None
+    if head:
+        art_gib += head.gib
+        # the bf16 graft, the sidecar, and a trial one where the probe chooses
+        scratch_gib += head.graft_gib + head.gib * (1 if head.wiring else 2)
     # the resident bar of THIS box (0.90 x its RAM, read from the machine),
     # the rule preflight-ram enforces at load time
-    tail, tail_warns = _tail_steps(r, src, by, oversized=art_gib > preflight_ram.bar_gib())
+    oversized = art_gib > preflight_ram.bar_gib()
+    tail, tail_warns = _tail_steps(r, src, by, head, oversized=oversized)
     return {"name": r.name, "commit": "HEAD", "recipe": r.raw,
             # estimates for the confirmation, not measurements: the artifact
             # from the profile's exact per-geometry bytes, scratch = every

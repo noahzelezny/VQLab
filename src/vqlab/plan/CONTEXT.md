@@ -28,5 +28,5 @@ A recipe or geomap for `fit/`, and printed cost/value curves.
 - `preflight_disk.py`: `plan preflight-disk`: refuse a build whose output volume lacks the space
 - `preflight_ram.py`: `plan preflight-ram`: refuse a resident load of a model bigger than RAM
 - `price.py`: `plan price`: size-target a VQ build before fitting it
-- `recipe_queue.py`: `plan recipe compile`: a build recipe -> a `vqlab queue` file, qwen3_5 MoE, qwen3_8_dense and affine chains from steps that have each run, proven by their preflight; the GUI's Recipe writes through it
+- `recipe_queue.py`: `plan recipe compile`: a build recipe -> a `vqlab queue` file, qwen3_5 MoE, qwen3_8_dense and affine chains from steps that have each run, proven by their preflight, with the MTP head packed as the published sidecars were (wiring from `families/<f>/teachers/<t>/mtp.json`, else probed); the GUI's Recipe writes through it
 - `zero_groups.py`: `plan zero-groups`: code bytes that encode nothing, sized from scales alone

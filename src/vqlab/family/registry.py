@@ -183,15 +183,17 @@ def teacher_profile(family, teacher):
     return None
 
 
-def teacher_skipzero(family, teacher):
-    """A teacher's measured dead rows (families/<f>/teachers/<t>/skipzero.json,
-    by the profile's precedence), or None when none were measured. Written
-    from what sz-pack recorded in a shipped build's config (docs/SKIPZERO.md)."""
+def teacher_record(family: str, teacher: str, name: str) -> dict | None:
+    """A teacher's measured record families/<f>/teachers/<t>/<name>, by the
+    profile's precedence, or None when none was written (or it is
+    unreadable). The records: skipzero.json, its dead rows as sz-pack
+    recorded them in a shipped build's config (docs/SKIPZERO.md); mtp.json,
+    the MTP head wiring a shipped sidecar was packed with."""
     import json
     if any(not n or "/" in n or "\\" in n or n.startswith(".") for n in (family, teacher)):
         return None
     for d in reversed(family_dirs()):
-        f = d / family / "teachers" / teacher / "skipzero.json"
+        f = d / family / "teachers" / teacher / name
         try:
             return json.loads(f.read_text())
         except FileNotFoundError:

@@ -19,17 +19,26 @@ def _geos(rows):
 def fams(lab_dirs, monkeypatch):
     root, teach = lab_dirs.families, lab_dirs.teachers
 
-    def add(family, teacher, kind, layers, vision=0.8, visual_keys=True):
+    def add(family, teacher, kind, layers, vision=0.8, visual_keys=True,
+            mtp=0.0, wiring=None):
         src = teach / teacher
         src.mkdir(parents=True)
         key = "model.visual.blocks.0.w" if visual_keys else "vision_tower.blocks.0.w"
         (src / "model.safetensors.index.json").write_text(json.dumps({"weight_map": {key: "a"}}))
         d = root / family / "teachers" / teacher
         d.mkdir(parents=True)
+        by = {"carry": 1.0, "embed": 1.0, "vq_target": 16.0, "vision": vision}
+        if mtp:
+            by["mtp"] = mtp
         (d / "profile.json").write_text(json.dumps({
-            "identity": {"path": str(src)}, "arch": {"kind": kind, "vq_layers": list(range(layers))},
-            "bytes": {"by_class_gib": {"carry": 1.0, "embed": 1.0, "vq_target": 16.0, "vision": vision}},
+            "identity": {"path": str(src)},
+            "arch": {"kind": kind, "vq_layers": list(range(layers)),
+                     "model_type": "qwen3_5_moe" if kind == "moe" else "qwen3_5"},
+            "bytes": {"by_class_gib": by},
             "geometries": _geos([(2, 512), (4, 64), (4, 128), (4, 256), (4, 512), (8, 4096)])}))
+        if wiring:
+            rec = {"wiring": wiring, "source": "a fake sidecar"}
+            (d / "mtp.json").write_text(json.dumps(rec))
         return d
     monkeypatch.setattr(rq.registry, "family_dirs", lambda: [root])
     monkeypatch.setattr(rq.registry, "teacher_caches", lambda t=None: [])
@@ -88,14 +97,13 @@ def test_moe_mixed_uses_the_fitters_tail(fams):
 def test_vision_graft_matches_the_teachers_layout(fams):
     fams("qwen3_5", "T", "moe", 4)
     q, _ = rq.compile_recipe({"name": "a", "family": "qwen3_5", "teacher": "T", "geo": "d4-K256",
-                              "vision": True, "mtp": True})
+                              "vision": True})
     assert _names(q)[2:4] == ["vision", "vision-smoke"]
     assert _args(q, "vision")[-3:] == ["--dest-prefix", "vision_tower", "--permute-conv5"]
     fams("qwen3_5", "U", "moe", 4, visual_keys=False)
-    q, warns = rq.compile_recipe({"name": "b", "family": "qwen3_5", "teacher": "U", "geo": "d4-K256",
-                                  "vision": True, "mtp": True})
+    q, _ = rq.compile_recipe({"name": "b", "family": "qwen3_5", "teacher": "U", "geo": "d4-K256",
+                                  "vision": True})
     assert "--dest-prefix" not in _args(q, "vision")
-    assert any("MTP" in w for w in warns)
 
 
 def test_dense_chain(fams):
@@ -162,6 +170,7 @@ def test_score_only_with_registered_caches(fams, monkeypatch):
     ({"tail": {"from": "x", "geo": "d4-K512"}}, "tail.from must be an integer"),
     ({"protect_bits": [8]}, "protect_bits must be an integer"),
     ({"bits": True}, "bits must be an integer"),
+    ({"mtp": True}, "T has no MTP head"),
 ])
 def test_refusals(fams, recipe, why):
     fams("qwen3_5", "T", "moe", 40)
@@ -274,6 +283,9 @@ _GOLDEN_RECIPES = {
     "moe": ("qwen3_5", "T", {"geo": "d4-K256", "vision": True, "protect_bits": 6}),
     "moe-tail": ("qwen3_5", "T", {"geo": "d4-K256", "tail": {"from": 30, "geo": "d4-K512"}}),
     "moe-d8": ("qwen3_5", "T", {"geo": "d8-K4096", "mtp": True}),
+    "moe-sz-mtp": ("qwen3_5", "T", {"geo": "d4-K256", "vision": True, "skipzero": True,
+                                    "mtp": True}),
+    "dense-mtp-probe": ("qwen3_8_dense", "P", {"geo": "d4-K256", "mtp": True}),
     "moe-affine": ("qwen3_5", "T", {"mode": "affine", "bits": 3, "group": 32, "vision": True}),
     "moe-affine-protect": ("qwen3_5", "T", {"mode": "affine", "bits": 2, "protect_bits": 8}),
     "moe-affine-g128": ("qwen3_5", "T", {"mode": "affine", "bits": 4, "group": 128}),
@@ -299,9 +311,14 @@ def _measured_dead_rows(d, rows=(("gate_proj", 1024), ("up_proj", 1024), ("down_
                       "35": {"down_proj": 1024}}}))
 
 
+# the 397B's recorded wiring (families/qwen3_5/teachers/<397B>/mtp.json)
+_WIRING = {"fc_order": "eh", "h_source": "pre_norm"}
+
+
 def _golden_outputs(fams, tmp_path, monkeypatch):
-    _measured_dead_rows(fams("qwen3_5", "T", "moe", 40))
+    _measured_dead_rows(fams("qwen3_5", "T", "moe", 40, mtp=1.5, wiring=_WIRING))
     fams("qwen3_8_dense", "D", "dense", 24, vision=0)
+    fams("qwen3_8_dense", "P", "dense", 24, vision=0, mtp=0.25)
     monkeypatch.setattr(rq.registry, "teacher_caches", lambda t=None: [
         {"teacher": "D", "corpus": "prose", "path": "/c/prose"}])
     out = {}
@@ -349,7 +366,7 @@ def test_skipzero_packs_the_finished_artifact_and_checks_run_on_the_copy(fams):
 def test_skipzero_prices_each_layer_at_its_own_geometry(fams):
     _measured_dead_rows(fams("qwen3_5", "T", "moe", 40))
     prof = rq.load_profile("qwen3_5", "T")
-    sz = rq.registry.teacher_skipzero("qwen3_5", "T")
+    sz = rq.registry.teacher_record("qwen3_5", "T", "skipzero.json")
     flat = rq.skipzero_gib(prof, sz, {i: (4, 256) for i in range(40)})
     mixed = rq.skipzero_gib(prof, sz, {i: (4, 256) if i < 30 else (8, 4096) for i in range(40)})
     # layer 35's dead rows are priced at d8-K4096 (1.5 bits) instead of d4-K256 (2 bits)
@@ -378,6 +395,98 @@ def test_skipzero_needs_measured_dead_rows(fams):
                            "skipzero": True})
 
 
+_MOE = {"name": "a", "family": "qwen3_5", "teacher": "T", "geo": "d4-K256"}
+
+
+def _step_of(q, name):
+    return next(s for s in q["steps"] if s["name"] == name)
+
+
+def test_mtp_packs_the_recorded_wiring_into_the_finished_artifact(fams):
+    """As every published 397B sidecar was made: the bf16 head extracted
+    from the teacher, packed at mtp-pack's default recipe with the wiring
+    the shipped head records, into the copy that ships, then gated."""
+    _measured_dead_rows(fams("qwen3_5", "T", "moe", 40, mtp=1.5, wiring=_WIRING))
+    plain, _ = rq.compile_recipe({**_MOE, "skipzero": True})
+    q, _ = rq.compile_recipe({**_MOE, "skipzero": True, "mtp": True})
+    assert _names(q) == ["struct-base", "fit", "skipzero", "skipzero-check",
+                         "skipzero-bundle", "mtp-extract", "mtp-pack", "mtp-smoke",
+                         "mtp-accept", "smoke", "runtime-check", "release-check"]
+    sz = _args(q, "smoke")[0]
+    side = f"{sz}/mtp-head-q6.safetensors"
+    graft = _args(q, "mtp-extract")[_args(q, "mtp-extract").index("--out") + 1]
+    assert _args(q, "mtp-pack") == ["--model", sz, "--mtp", graft, "--fc-order", "eh",
+                                    "--h-source", "pre_norm", "--out", side]
+    assert _args(q, "mtp-smoke") == ["--model", sz, "--sidecar", side]
+    acc = _args(q, "mtp-accept")
+    assert f"head={side}" in acc
+    assert acc[acc.index("--min-acceptance") + 1] == str(rq.MTP_ACCEPT_FLOOR)
+    assert steps.validate(q) == []
+    # the sidecar: the profile's bf16 head at 6 bits + a 16-bit scale and bias per 32
+    want = plain["estimate"]["artifact_gib"] + 1.5 * 7 / 16
+    assert q["estimate"]["artifact_gib"] == round(want, 2)
+
+
+def test_mtp_without_a_recorded_wiring_is_probed_first(fams):
+    fams("qwen3_8_dense", "P", "dense", 24, vision=0, mtp=0.25)
+    q, warns = rq.compile_recipe({"name": "p", "family": "qwen3_8_dense",
+                                  "teacher": "P", "geo": "d4-K256", "mtp": True})
+    i = _names(q).index("mtp-extract")
+    assert _names(q)[i:i + 6] == ["mtp-extract", "mtp-trial-pack", "mtp-wiring-probe",
+                                  "mtp-pack", "mtp-smoke", "mtp-accept"]
+    probe = _step_of(q, "mtp-wiring-probe")
+    pa = probe["args"]
+    trial = _args(q, "mtp-trial-pack")
+    assert probe["cmd"] == "mtp-probe35" and "--fc-order" not in trial
+    assert pa[pa.index("--sidecar") + 1] == trial[-1]
+    pack = _args(q, "mtp-pack")
+    assert pack[pack.index("--wiring-from") + 1] == pa[pa.index("--out") + 1]
+    assert "--fc-order" not in pack
+    assert any("probe chooses it" in w for w in warns) and steps.validate(q) == []
+
+
+def test_mtp_unrecorded_wiring_too_large_to_probe_is_refused(fams, monkeypatch):
+    fams("qwen3_5", "T", "moe", 40, mtp=1.5)
+    _small_box(monkeypatch)
+    with pytest.raises(rq.RecipeError, match="no MTP wiring is recorded"):
+        rq.compile_recipe({**_MOE, "mtp": True})
+
+
+def test_mtp_oversized_serves_the_sidecar_from_the_linked_folder(fams, monkeypatch):
+    fams("qwen3_5", "T", "moe", 40, mtp=1.5, wiring=_WIRING)
+    _small_box(monkeypatch)
+    q, warns = rq.compile_recipe({**_MOE, "mtp": True})
+    names = _names(q)
+    assert "mtp-accept" not in names
+    assert names.index("mtp-pack") < names.index("knurlogic-link")
+    out = _args(q, "knurlogic-link")[0]
+    assert _args(q, "mtp-pack")[-1] == f"{out}/mtp-head-q6.safetensors"
+    assert any("gated by check-release" in w for w in warns)
+
+
+@pytest.mark.parametrize("arch, record, why", [
+    ({"model_type": "gemma4"}, None, "packs no MTP head for model_type 'gemma4'"),
+    ({}, {"fc_order": "eh"}, "must set exactly fc_order, h_source"),
+])
+def test_mtp_refusals(fams, arch, record, why):
+    d = fams("qwen3_5", "T", "moe", 4, mtp=1.5, wiring=record)
+    prof = json.loads((d / "profile.json").read_text())
+    prof["arch"].update(arch)
+    (d / "profile.json").write_text(json.dumps(prof))
+    with pytest.raises(rq.RecipeError, match=why):
+        rq.compile_recipe({**_MOE, "mtp": True})
+
+
+def test_the_shipped_heads_record_their_wiring():
+    """The checked-in records name exactly the choices their family leaves open."""
+    from vqlab.mtp import registry as mtp_registry
+    for prof_file in config.checkout_families_dir().glob("*/teachers/*/mtp.json"):
+        rec = json.loads(prof_file.read_text())
+        prof = json.loads((prof_file.parent / "profile.json").read_text())
+        spec = mtp_registry.FAMILIES[prof["arch"]["model_type"]]
+        assert sorted(rec["wiring"]) == sorted(spec.wiring) and rec["source"]
+
+
 def test_skipzero_dims_are_sz_packs():
     from vqlab.skipzero import skipzero_load
     assert rq.SZ_DIMS == skipzero_load.SUPPORTED_DIMS
@@ -400,6 +509,8 @@ _OVERSIZED_RECIPES = {
                                     "vision": True, "skipzero": True, "score": True}),
     "moe-big": ("qwen3_5", "T", {"geo": "d4-K256", "vision": True}),
     "dense-big": ("qwen3_8_dense", "D", {"geo": "d4-K256"}),
+    "moe-sz-mtp-big": ("qwen3_5", "T", {"geo": "d4-K256", "vision": True,
+                                        "skipzero": True, "mtp": True}),
 }
 
 
@@ -409,7 +520,7 @@ def _small_box(monkeypatch, gib=0.5):
 
 
 def _oversized_outputs(fams, tmp_path, monkeypatch):
-    _measured_dead_rows(fams("qwen3_5", "T", "moe", 40))
+    _measured_dead_rows(fams("qwen3_5", "T", "moe", 40, mtp=1.5, wiring=_WIRING))
     fams("qwen3_8_dense", "D", "dense", 24, vision=0)
     monkeypatch.setattr(rq.registry, "teacher_caches", lambda t=None: [
         {"teacher": "T", "corpus": "prose", "path": "/c/prose"}])
@@ -497,6 +608,10 @@ _PARITY = [
       "tailGeo": "d8-K4096", "tailFrom": 30}),
     ("qwen3_8_dense", {"geo": "d4-K256", "bits": 6, "group": 32},
      {"mode": "vq", "geo": "d4-K256", "bits": 6, "group": 32}),
+    ("qwen3_5", {"geo": "d4-K256", "skipzero": True, "mtp": True},
+     {"mode": "vq", "geo": "d4-K256", "protect": 8, "skipzero": True, "mtp": True}),
+    ("qwen3_8_dense", {"geo": "d4-K256", "bits": 6, "group": 32, "mtp": True},
+     {"mode": "vq", "geo": "d4-K256", "bits": 6, "group": 32, "mtp": True}),
 ]
 
 
@@ -518,7 +633,8 @@ def test_the_recipe_page_sizes_a_build_as_the_compiler_does(fams):
         pytest.skip("node is not installed")
     js = _page_size_js(GUI / "index.html")
     assert js == _page_size_js(GUI / "bench" / "bench.html")
-    for d in (fams("qwen3_5", "T", "moe", 40), fams("qwen3_8_dense", "D", "dense", 24, vision=0)):
+    for d in (fams("qwen3_5", "T", "moe", 40, mtp=1.5, wiring=_WIRING),
+              fams("qwen3_8_dense", "D", "dense", 24, vision=0, mtp=0.25)):
         _measured_dead_rows(d)
         prof = json.loads((d / "profile.json").read_text())
         for es in prof["geometries"].values():       # GiB-scale stacks and dead rows, so
@@ -535,7 +651,8 @@ def test_the_recipe_page_sizes_a_build_as_the_compiler_does(fams):
         vq = prof["arch"]["vq_layers"]
         t = {"kind": prof["arch"]["kind"], "gib": prof["bytes"]["by_class_gib"],
              "geometries": T._geometries(prof), "vq_layers": len(vq), "first_vq": min(vq),
-             "skipzero": T._skipzero(family, teacher, prof)}
+             "skipzero": T._skipzero(family, teacher, prof),
+             "mtp_gib": T._mtp_gib(family, teacher, prof)}
         cases.append([t, draft])
         q, _ = rq.compile_recipe({"name": "a", "family": family, "teacher": teacher, **recipe})
         want.append(q["estimate"]["artifact_gib"])

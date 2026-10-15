@@ -59,7 +59,7 @@ def _skipzero(family: str, teacher: str, prof: dict) -> dict | None:
     were measured or the compiler would refuse skipzero."""
     if family not in recipe_queue.MOE:
         return None
-    sz = registry.teacher_skipzero(family, teacher)
+    sz = registry.teacher_record(family, teacher, "skipzero.json")
     if not sz or not sz.get("dead_rows"):
         return None
     gib = {}
@@ -74,6 +74,18 @@ def _skipzero(family: str, teacher: str, prof: dict) -> dict | None:
         return None
     return {"gib": gib, "source": sz.get("source"), "findings": sz.get("findings") or [],
             "checks": sz.get("checks") or []}
+
+
+def _mtp_gib(family: str, teacher: str, prof: dict) -> float | None:
+    """The packed MTP sidecar's GiB a recipe adds with mtp on (the
+    compiler's own figure, recipe_queue.mtp_head), or None where the
+    compiler would refuse the head."""
+    if family not in recipe_queue.MOE | recipe_queue.DENSE:
+        return None
+    try:
+        return recipe_queue.mtp_head(family, teacher, prof).gib
+    except (recipe_queue.RecipeError, KeyError):
+        return None
 
 
 def _scanned() -> list[dict]:
@@ -112,7 +124,8 @@ def teachers() -> dict:
             "geometries": _geometries(prof), "fits": fits.get((family, teacher), {}),
             "on_disk": local is not None, "buildable": family in recipe_queue.MOE | recipe_queue.DENSE,
             "scored": teacher in caches, "profiled": prof.get("created"),
-            "skipzero": _skipzero(family, teacher, prof)})
+            "skipzero": _skipzero(family, teacher, prof),
+            "mtp_gib": _mtp_gib(family, teacher, prof)})
     found = []
     for r in _scanned():
         if r.get("use") != "original" or not r.get("path") or not r.get("family"):

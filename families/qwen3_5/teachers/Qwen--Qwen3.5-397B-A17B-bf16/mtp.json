@@ -1,0 +1,5 @@
+{
+ "wiring": {"fc_order": "eh", "h_source": "pre_norm"},
+ "source": "the vqlab_mtp metadata of mtp-head-q6.safetensors as shipped with TheDrainFlorist/Qwen3.5-397B-A17B-VQ-2.2, 2.4, 2.6, 3.1 and 3.5bpw: one head on every rung (sha256 817ae17d4d8267a2f52398e08283be1b33b96f105348a02f18e644ac5c4e781e), bits 6, group_size 32, norm_shift 1.0",
+ "measured": "mtp-probe35 on the 2.2bpw trunk (2026-09-02, 256 positions): eh/pre_norm 0.7227, eh/post_norm 0.7344, he 0.0000; a 3-token gap, so the head module's default pre_norm shipped (vqlab/mtp/registry.py)"
+}

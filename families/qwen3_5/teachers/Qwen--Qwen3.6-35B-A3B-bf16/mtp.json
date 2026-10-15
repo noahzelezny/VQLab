@@ -1,0 +1,4 @@
+{
+ "wiring": {"fc_order": "eh", "h_source": "post_norm"},
+ "source": "the vqlab_mtp metadata of mtp-head-q6.safetensors as shipped with TheDrainFlorist/Qwen3.6-35B-A3B-VQ-3.4, 3.8, 4.6 and 5.4bpw: one head on every rung (sha256 53205258538a3c169ff28923edae05ab1397f5e52f8c1bd22ac24d3b034656b4), bits 6, group_size 32, norm_shift 1.0"
+}

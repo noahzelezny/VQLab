@@ -807,8 +807,10 @@ function szGib(t,r){
   if(!szOn(t,r))return 0;const G=t.skipzero.gib,body=G[r.geo]||{},tail=r.tailOn?(G[r.tailGeo]||{}):body;
   return Object.keys(body).concat(Object.keys(tail)).filter((k,i,a)=>a.indexOf(k)===i).reduce((s,k)=>s+((r.tailOn&&+k>=r.tailFrom?tail:body)[k]||0),0);
 }
+// the packed MTP sidecar the compiler adds (server: recipe_queue.mtp_head)
+const mtpGib=(t,r)=>r.mtp?t.mtp_gib||0:0;
 function sizeOf(t,r){
-  const s=sizeRaw(t,r);if(s)s.gib-=szGib(t,r);return s;
+  const s=sizeRaw(t,r);if(s)s.gib=s.gib-szGib(t,r)+mtpGib(t,r);return s;
 }
 function sizeRaw(t,r){
   const B=t.gib||{},skel=(B.carry||0)+(B.embed||0),vis=r.tower?(B.vision||0):0;
@@ -830,7 +832,7 @@ function sanitize(t){
   if(!fg.includes(r.tailGeo))r.tailGeo=r.geo;
   if(!r.tailFrom)r.tailFrom=t.first_vq+Math.floor(t.vq_layers/2);
   r.tailFrom=Math.max(lo,Math.min(hi,r.tailFrom));
-  if(!(t.gib||{}).vision)r.tower=false;if(!(t.gib||{}).mtp)r.mtp=false;if(!t.scored)r.score=false;
+  if(!(t.gib||{}).vision)r.tower=false;if(!t.mtp_gib)r.mtp=false;if(!t.scored)r.score=false;
   if(!t.skipzero)r.skipzero=false;else if(r.skipzero===undefined)r.skipzero=true;
   r.protect=PBITS.find(b=>b>=(r.protect|0))||8;
   if(!isMoe(t)||!APBITS.includes(r.aprotect))r.aprotect=0;
@@ -950,10 +952,10 @@ function pgRecipe(){
   <div class="cart" id="rcart">
     <div class="seg modeseg">${[['vq','VQ'],['affine','Affine']].map(([v,n])=>`<button aria-pressed="${r.mode===v}" data-g="mode" data-v="${v}" ${v==='vq'&&!fg.length?'disabled':''}>${n}</button>`).join('')}</div>
     ${r.mode==='vq'?vqSide():affSide}
-    <div class="ro">include ${I('KL score runs the score step after the build, and needs KL caches registered for this teacher. MTP drafting is not compiled: choose its wiring by hand after the build.'+(t.skipzero?' Skip-zero drops this teacher\'s dead expert rows on disk (sz-pack, then sz-check), as every published build of it was made; KL unchanged (F175). The saving is its measured dead rows priced at this recipe\'s geometry per layer, from '+t.skipzero.source+'.':''))}</div>
+    <div class="ro">include ${I('KL score runs the score step after the build, and needs KL caches registered for this teacher. MTP drafting packs the teacher\'s own draft head into the build (6-bit, the published recipe) and fails the queue on a head that does not accept.'+(t.skipzero?' Skip-zero drops this teacher\'s dead expert rows on disk (sz-pack, then sz-check), as every published build of it was made; KL unchanged (F175). The saving is its measured dead rows priced at this recipe\'s geometry per layer, from '+t.skipzero.source+'.':''))}</div>
     ${t.skipzero&&r.mode==='vq'?`<button class="addon" aria-pressed="${!!r.skipzero}" data-g="skipzero"><i></i><span class="n">skip-zero</span><span class="t">−${fmt(szGib(t,{...r,skipzero:true}))} GiB</span></button>`:''}
     ${B.vision?addon('tower','vision tower',B.vision):''}
-    ${B.mtp?addon('mtp','MTP drafting',B.mtp):''}
+    ${t.mtp_gib?addon('mtp','MTP drafting',t.mtp_gib):''}
     <button class="addon" aria-pressed="${!!r.score}" data-g="score" ${t.scored?'':'disabled'}><i></i><span class="n">KL score</span></button>
   </div>
   </div>

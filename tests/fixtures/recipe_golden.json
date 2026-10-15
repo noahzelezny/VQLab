@@ -361,8 +361,8 @@
     "mtp": true
    },
    "estimate": {
-    "artifact_gib": 1.06,
-    "scratch_gib": 4.7
+    "artifact_gib": 1.72,
+    "scratch_gib": 6.8
    },
    "steps": [
     {
@@ -449,6 +449,95 @@
      }
     },
     {
+     "name": "mtp-extract",
+     "cmd": "mtp-extract",
+     "args": [
+      "--src",
+      "<tmp>/teachers/T",
+      "--out",
+      "<scratch>/moe-d8/mtp-graft.safetensors"
+     ],
+     "preflight": {
+      "full": "the pack reads the whole head",
+      "writes_gib": 1.5
+     },
+     "retries": 1,
+     "timeout_s": 7200
+    },
+    {
+     "name": "mtp-pack",
+     "cmd": "mtp-pack",
+     "args": [
+      "--model",
+      "<scratch>/moe-d8/moe-d8",
+      "--mtp",
+      "<scratch>/moe-d8/mtp-graft.safetensors",
+      "--fc-order",
+      "eh",
+      "--h-source",
+      "pre_norm",
+      "--out",
+      "<scratch>/moe-d8/moe-d8/mtp-head-q6.safetensors"
+     ],
+     "preflight": {
+      "full": "packs the one head",
+      "writes_gib": 1.2
+     },
+     "retries": 0,
+     "timeout_s": 3600,
+     "expect": {
+      "files": [
+       "<scratch>/moe-d8/moe-d8/mtp-head-q6.safetensors"
+      ]
+     }
+    },
+    {
+     "name": "mtp-smoke",
+     "cmd": "mtp-smoke-head",
+     "args": [
+      "--model",
+      "<scratch>/moe-d8/moe-d8",
+      "--sidecar",
+      "<scratch>/moe-d8/moe-d8/mtp-head-q6.safetensors"
+     ],
+     "preflight": {
+      "append": [
+       "--steps",
+       2,
+       "--warmup",
+       1
+      ]
+     },
+     "retries": 0,
+     "timeout_s": 1800
+    },
+    {
+     "name": "mtp-accept",
+     "cmd": "mtp-accept",
+     "args": [
+      "--model",
+      "<scratch>/moe-d8/moe-d8",
+      "--head",
+      "head=<scratch>/moe-d8/moe-d8/mtp-head-q6.safetensors",
+      "--tokens",
+      "64",
+      "--min-acceptance",
+      "0.3",
+      "--out",
+      "<scratch>/moe-d8/mtp-accept.json"
+     ],
+     "preflight": {
+      "append": [
+       "--tokens",
+       4,
+       "--min-acceptance",
+       0
+      ]
+     },
+     "retries": 0,
+     "timeout_s": 7200
+    },
+    {
      "name": "smoke",
      "cmd": "pin",
      "args": [
@@ -498,8 +587,668 @@
     }
    ]
   },
+  []
+ ],
+ "moe-sz-mtp": [
+  {
+   "name": "moe-sz-mtp",
+   "commit": "HEAD",
+   "recipe": {
+    "name": "moe-sz-mtp",
+    "family": "qwen3_5",
+    "teacher": "T",
+    "geo": "d4-K256",
+    "vision": true,
+    "skipzero": true,
+    "mtp": true
+   },
+   "estimate": {
+    "artifact_gib": 2.52,
+    "scratch_gib": 9.5
+   },
+   "steps": [
+    {
+     "name": "struct-base",
+     "cmd": "stream-convert",
+     "args": [
+      "--src",
+      "<tmp>/teachers/T",
+      "--out",
+      "<scratch>/moe-sz-mtp/struct",
+      "--struct",
+      "--protect-bits",
+      "8",
+      "--family",
+      "qwen3_5",
+      "--cpu-load"
+     ],
+     "preflight": {
+      "full": "the fit needs the whole struct base",
+      "writes_gib": 3.6
+     },
+     "retries": 1,
+     "timeout_s": 21600,
+     "expect": {
+      "files": [
+       "<scratch>/moe-sz-mtp/struct/config.json"
+      ]
+     }
+    },
+    {
+     "name": "fit",
+     "cmd": "fit-moe",
+     "args": [
+      "--base",
+      "<scratch>/moe-sz-mtp/struct",
+      "--src",
+      "<tmp>/teachers/T",
+      "--out",
+      "<scratch>/moe-sz-mtp/moe-sz-mtp",
+      "--vq-layers",
+      "0-39",
+      "--dim",
+      "4",
+      "--k",
+      "256",
+      "--family",
+      "qwen3_5",
+      "--seed",
+      "1234",
+      "--pack",
+      "--relerr-abort",
+      "0.45"
+     ],
+     "preflight": {
+      "args": [
+       "--base",
+       "<scratch>/moe-sz-mtp/struct",
+       "--src",
+       "<tmp>/teachers/T",
+       "--out",
+       "<scratch>/moe-sz-mtp/moe-sz-mtp",
+       "--vq-layers",
+       "0",
+       "--dim",
+       "4",
+       "--k",
+       "256",
+       "--family",
+       "qwen3_5",
+       "--seed",
+       "1234",
+       "--pack",
+       "--relerr-abort",
+       "0.45"
+      ],
+      "writes_gib": 3.6
+     },
+     "retries": 3,
+     "timeout_s": 172800,
+     "expect": {
+      "files": [
+       "<scratch>/moe-sz-mtp/moe-sz-mtp/config.json"
+      ]
+     }
+    },
+    {
+     "name": "vision",
+     "cmd": "graft",
+     "args": [
+      "--artifact",
+      "<scratch>/moe-sz-mtp/moe-sz-mtp",
+      "--src",
+      "<tmp>/teachers/T",
+      "--dest-prefix",
+      "vision_tower",
+      "--permute-conv5"
+     ],
+     "preflight": {
+      "full": "grafts the tower in place",
+      "writes_gib": 1.3
+     },
+     "retries": 0,
+     "timeout_s": 3600
+    },
+    {
+     "name": "vision-smoke",
+     "cmd": "vision-smoke",
+     "args": [
+      "<scratch>/moe-sz-mtp/moe-sz-mtp",
+      "--max-tokens",
+      "8"
+     ],
+     "preflight": {
+      "full": "reads the artifact, writes nothing",
+      "writes_gib": 0
+     },
+     "retries": 0,
+     "timeout_s": 3600
+    },
+    {
+     "name": "skipzero",
+     "cmd": "sz-pack",
+     "args": [
+      "<scratch>/moe-sz-mtp/moe-sz-mtp",
+      "--out",
+      "<scratch>/moe-sz-mtp/moe-sz-mtp-sz"
+     ],
+     "preflight": {
+      "append": [
+       "--layers",
+       "0-0"
+      ]
+     },
+     "gpu": false,
+     "retries": 0,
+     "timeout_s": 21600,
+     "expect": {
+      "files": [
+       "<scratch>/moe-sz-mtp/moe-sz-mtp-sz/config.json"
+      ]
+     }
+    },
+    {
+     "name": "skipzero-check",
+     "cmd": "sz-check",
+     "args": [
+      "<scratch>/moe-sz-mtp/moe-sz-mtp-sz",
+      "<scratch>/moe-sz-mtp/moe-sz-mtp"
+     ],
+     "preflight": {
+      "full": "numpy check, reads only",
+      "writes_gib": 0
+     },
+     "gpu": false,
+     "retries": 0,
+     "timeout_s": 10800
+    },
+    {
+     "name": "skipzero-bundle",
+     "cmd": "bundle",
+     "args": [
+      "--artifact",
+      "<scratch>/moe-sz-mtp/moe-sz-mtp-sz"
+     ],
+     "preflight": {
+      "full": "rewrites model.py and config.json, no weights",
+      "writes_gib": 0
+     },
+     "retries": 0,
+     "timeout_s": 1800
+    },
+    {
+     "name": "mtp-extract",
+     "cmd": "mtp-extract",
+     "args": [
+      "--src",
+      "<tmp>/teachers/T",
+      "--out",
+      "<scratch>/moe-sz-mtp/mtp-graft.safetensors"
+     ],
+     "preflight": {
+      "full": "the pack reads the whole head",
+      "writes_gib": 1.5
+     },
+     "retries": 1,
+     "timeout_s": 7200
+    },
+    {
+     "name": "mtp-pack",
+     "cmd": "mtp-pack",
+     "args": [
+      "--model",
+      "<scratch>/moe-sz-mtp/moe-sz-mtp-sz",
+      "--mtp",
+      "<scratch>/moe-sz-mtp/mtp-graft.safetensors",
+      "--fc-order",
+      "eh",
+      "--h-source",
+      "pre_norm",
+      "--out",
+      "<scratch>/moe-sz-mtp/moe-sz-mtp-sz/mtp-head-q6.safetensors"
+     ],
+     "preflight": {
+      "full": "packs the one head",
+      "writes_gib": 1.2
+     },
+     "retries": 0,
+     "timeout_s": 3600,
+     "expect": {
+      "files": [
+       "<scratch>/moe-sz-mtp/moe-sz-mtp-sz/mtp-head-q6.safetensors"
+      ]
+     }
+    },
+    {
+     "name": "mtp-smoke",
+     "cmd": "mtp-smoke-head",
+     "args": [
+      "--model",
+      "<scratch>/moe-sz-mtp/moe-sz-mtp-sz",
+      "--sidecar",
+      "<scratch>/moe-sz-mtp/moe-sz-mtp-sz/mtp-head-q6.safetensors"
+     ],
+     "preflight": {
+      "append": [
+       "--steps",
+       2,
+       "--warmup",
+       1
+      ]
+     },
+     "retries": 0,
+     "timeout_s": 1800
+    },
+    {
+     "name": "mtp-accept",
+     "cmd": "mtp-accept",
+     "args": [
+      "--model",
+      "<scratch>/moe-sz-mtp/moe-sz-mtp-sz",
+      "--head",
+      "head=<scratch>/moe-sz-mtp/moe-sz-mtp-sz/mtp-head-q6.safetensors",
+      "--tokens",
+      "64",
+      "--min-acceptance",
+      "0.3",
+      "--out",
+      "<scratch>/moe-sz-mtp/mtp-accept.json"
+     ],
+     "preflight": {
+      "append": [
+       "--tokens",
+       4,
+       "--min-acceptance",
+       0
+      ]
+     },
+     "retries": 0,
+     "timeout_s": 7200
+    },
+    {
+     "name": "smoke",
+     "cmd": "pin",
+     "args": [
+      "<scratch>/moe-sz-mtp/moe-sz-mtp-sz",
+      "--out",
+      "<scratch>/moe-sz-mtp/pin",
+      "--max-tokens",
+      "8"
+     ],
+     "preflight": {
+      "full": "a pin is symlinks plus an 8-token smoke",
+      "writes_gib": 0
+     },
+     "retries": 0,
+     "timeout_s": 3600
+    },
+    {
+     "name": "runtime-check",
+     "cmd": "check-bundle",
+     "args": [
+      "--artifact",
+      "<scratch>/moe-sz-mtp/moe-sz-mtp-sz",
+      "--strict"
+     ],
+     "preflight": {
+      "full": "a read-only check",
+      "writes_gib": 0
+     },
+     "retries": 0,
+     "timeout_s": 600
+    },
+    {
+     "name": "release-check",
+     "cmd": "check-release",
+     "args": [
+      "--artifact",
+      "<scratch>/moe-sz-mtp/moe-sz-mtp-sz",
+      "--tokenizer-ref",
+      "<tmp>/teachers/T/tokenizer.json"
+     ],
+     "preflight": {
+      "full": "reads the artifact; its smokes are short",
+      "writes_gib": 0
+     },
+     "retries": 0,
+     "timeout_s": 7200
+    }
+   ]
+  },
   [
-   "the MTP head is not compiled: choose its wiring with `vqlab mtp-probe35`, then `vqlab mtp-pack` by hand"
+   "sz-pack and sz-check are EXPERIMENTAL tools; the packed copy (<scratch>/moe-sz-mtp/moe-sz-mtp-sz) symlinks its unchanged shards into <scratch>/moe-sz-mtp/moe-sz-mtp, so keep both"
+  ]
+ ],
+ "dense-mtp-probe": [
+  {
+   "name": "dense-mtp-probe",
+   "commit": "HEAD",
+   "recipe": {
+    "name": "dense-mtp-probe",
+    "family": "qwen3_8_dense",
+    "teacher": "P",
+    "geo": "d4-K256",
+    "mtp": true
+   },
+   "estimate": {
+    "artifact_gib": 0.67,
+    "scratch_gib": 6.7
+   },
+   "steps": [
+    {
+     "name": "base",
+     "cmd": "stream-convert",
+     "args": [
+      "--src",
+      "<tmp>/teachers/P",
+      "--out",
+      "<scratch>/dense-mtp-probe/base-q4",
+      "--bits",
+      "4",
+      "--family",
+      "qwen3_8_dense"
+     ],
+     "preflight": {
+      "full": "the build splices into the whole base",
+      "writes_gib": 6.0
+     },
+     "retries": 1,
+     "timeout_s": 21600,
+     "expect": {
+      "files": [
+       "<scratch>/dense-mtp-probe/base-q4/config.json"
+      ]
+     }
+    },
+    {
+     "name": "fit",
+     "cmd": "fit-dense",
+     "args": [
+      "--src",
+      "<tmp>/teachers/P",
+      "--out",
+      "<scratch>/dense-mtp-probe/fit",
+      "--family",
+      "qwen3_8_dense",
+      "--layers",
+      "0-23",
+      "--dim",
+      "4",
+      "--k",
+      "256",
+      "--group",
+      "64",
+      "--seed",
+      "1234"
+     ],
+     "preflight": {
+      "args": [
+       "--src",
+       "<tmp>/teachers/P",
+       "--out",
+       "<scratch>/dense-mtp-probe/fit",
+       "--family",
+       "qwen3_8_dense",
+       "--layers",
+       "0-0",
+       "--dim",
+       "4",
+       "--k",
+       "256",
+       "--group",
+       "64",
+       "--seed",
+       "1234"
+      ]
+     },
+     "retries": 3,
+     "timeout_s": 86400
+    },
+    {
+     "name": "remap-check",
+     "cmd": "build-dense",
+     "args": [
+      "--family",
+      "qwen3_8_dense",
+      "--base",
+      "<scratch>/dense-mtp-probe/base-q4",
+      "--mlp",
+      "<scratch>/dense-mtp-probe/fit",
+      "--out",
+      "<scratch>/dense-mtp-probe/build",
+      "--dry-run"
+     ],
+     "preflight": {
+      "full": "validates names only, writes nothing",
+      "writes_gib": 0
+     },
+     "retries": 0,
+     "timeout_s": 1800,
+     "gpu": false
+    },
+    {
+     "name": "build",
+     "cmd": "build-dense",
+     "args": [
+      "--family",
+      "qwen3_8_dense",
+      "--base",
+      "<scratch>/dense-mtp-probe/base-q4",
+      "--mlp",
+      "<scratch>/dense-mtp-probe/fit",
+      "--out",
+      "<scratch>/dense-mtp-probe/build"
+     ],
+     "preflight": {
+      "full": "assembles what the fit wrote",
+      "writes_gib": 18.2
+     },
+     "retries": 1,
+     "timeout_s": 10800
+    },
+    {
+     "name": "pack",
+     "cmd": "pack-dense",
+     "args": [
+      "--src",
+      "<scratch>/dense-mtp-probe/build",
+      "--out",
+      "<scratch>/dense-mtp-probe/dense-mtp-probe"
+     ],
+     "preflight": {
+      "full": "packs what the build wrote",
+      "writes_gib": 18.2
+     },
+     "retries": 1,
+     "timeout_s": 10800,
+     "expect": {
+      "files": [
+       "<scratch>/dense-mtp-probe/dense-mtp-probe/config.json"
+      ]
+     }
+    },
+    {
+     "name": "mtp-extract",
+     "cmd": "mtp-extract",
+     "args": [
+      "--src",
+      "<tmp>/teachers/P",
+      "--out",
+      "<scratch>/dense-mtp-probe/mtp-graft.safetensors"
+     ],
+     "preflight": {
+      "full": "the pack reads the whole head",
+      "writes_gib": 0.2
+     },
+     "retries": 1,
+     "timeout_s": 7200
+    },
+    {
+     "name": "mtp-trial-pack",
+     "cmd": "mtp-pack",
+     "args": [
+      "--model",
+      "<scratch>/dense-mtp-probe/dense-mtp-probe",
+      "--mtp",
+      "<scratch>/dense-mtp-probe/mtp-graft.safetensors",
+      "--out",
+      "<scratch>/dense-mtp-probe/mtp-trial/mtp-head-q6.safetensors"
+     ],
+     "preflight": {
+      "full": "packs the one head",
+      "writes_gib": 0.6
+     },
+     "retries": 0,
+     "timeout_s": 3600
+    },
+    {
+     "name": "mtp-wiring-probe",
+     "cmd": "mtp-probe35",
+     "args": [
+      "--model",
+      "<scratch>/dense-mtp-probe/dense-mtp-probe",
+      "--sidecar",
+      "<scratch>/dense-mtp-probe/mtp-trial/mtp-head-q6.safetensors",
+      "--corpus",
+      "lit",
+      "--out",
+      "<scratch>/dense-mtp-probe/mtp-probe.json"
+     ],
+     "preflight": {
+      "append": [
+       "--tokens",
+       32,
+       "--control-min",
+       0
+      ]
+     },
+     "retries": 0,
+     "timeout_s": 7200
+    },
+    {
+     "name": "mtp-pack",
+     "cmd": "mtp-pack",
+     "args": [
+      "--model",
+      "<scratch>/dense-mtp-probe/dense-mtp-probe",
+      "--mtp",
+      "<scratch>/dense-mtp-probe/mtp-graft.safetensors",
+      "--wiring-from",
+      "<scratch>/dense-mtp-probe/mtp-probe.json",
+      "--out",
+      "<scratch>/dense-mtp-probe/dense-mtp-probe/mtp-head-q6.safetensors"
+     ],
+     "preflight": {
+      "full": "packs the one head",
+      "writes_gib": 0.6
+     },
+     "retries": 0,
+     "timeout_s": 3600,
+     "expect": {
+      "files": [
+       "<scratch>/dense-mtp-probe/dense-mtp-probe/mtp-head-q6.safetensors"
+      ]
+     }
+    },
+    {
+     "name": "mtp-smoke",
+     "cmd": "mtp-smoke-head",
+     "args": [
+      "--model",
+      "<scratch>/dense-mtp-probe/dense-mtp-probe",
+      "--sidecar",
+      "<scratch>/dense-mtp-probe/dense-mtp-probe/mtp-head-q6.safetensors"
+     ],
+     "preflight": {
+      "append": [
+       "--steps",
+       2,
+       "--warmup",
+       1
+      ]
+     },
+     "retries": 0,
+     "timeout_s": 1800
+    },
+    {
+     "name": "mtp-accept",
+     "cmd": "mtp-accept",
+     "args": [
+      "--model",
+      "<scratch>/dense-mtp-probe/dense-mtp-probe",
+      "--head",
+      "head=<scratch>/dense-mtp-probe/dense-mtp-probe/mtp-head-q6.safetensors",
+      "--tokens",
+      "64",
+      "--min-acceptance",
+      "0.3",
+      "--out",
+      "<scratch>/dense-mtp-probe/mtp-accept.json"
+     ],
+     "preflight": {
+      "append": [
+       "--tokens",
+       4,
+       "--min-acceptance",
+       0
+      ]
+     },
+     "retries": 0,
+     "timeout_s": 7200
+    },
+    {
+     "name": "smoke",
+     "cmd": "pin",
+     "args": [
+      "<scratch>/dense-mtp-probe/dense-mtp-probe",
+      "--out",
+      "<scratch>/dense-mtp-probe/pin",
+      "--max-tokens",
+      "8"
+     ],
+     "preflight": {
+      "full": "a pin is symlinks plus an 8-token smoke",
+      "writes_gib": 0
+     },
+     "retries": 0,
+     "timeout_s": 3600
+    },
+    {
+     "name": "runtime-check",
+     "cmd": "check-bundle",
+     "args": [
+      "--artifact",
+      "<scratch>/dense-mtp-probe/dense-mtp-probe",
+      "--strict"
+     ],
+     "preflight": {
+      "full": "a read-only check",
+      "writes_gib": 0
+     },
+     "retries": 0,
+     "timeout_s": 600
+    },
+    {
+     "name": "release-check",
+     "cmd": "check-release",
+     "args": [
+      "--artifact",
+      "<scratch>/dense-mtp-probe/dense-mtp-probe",
+      "--tokenizer-ref",
+      "<tmp>/teachers/P/tokenizer.json"
+     ],
+     "preflight": {
+      "full": "reads the artifact; its smokes are short",
+      "writes_gib": 0
+     },
+     "retries": 0,
+     "timeout_s": 7200
+    }
+   ]
+  },
+  [
+   "no incumbent base given: the base is made by stream-convert, and the build checks every fitted module lands on it (build-dense --dry-run)",
+   "no MTP wiring is recorded for P: the queue's probe chooses it (<scratch>/dense-mtp-probe/mtp-probe.json); record what ships in families/qwen3_8_dense/teachers/P/mtp.json"
   ]
  ],
  "moe-affine": [
