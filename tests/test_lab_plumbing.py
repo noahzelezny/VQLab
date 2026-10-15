@@ -56,6 +56,20 @@ def test_hf_snapshot(tmp_path, monkeypatch):
     assert config.expand("hf://org/m@fed432") == "hf://org/m@fed432"     # under 7: not a ref
 
 
+def test_hf_cache_order(tmp_path, monkeypatch):
+    """env (HF_HUB_CACHE, then HF_HOME) beats the config file, which beats the default."""
+    cfg = tmp_path / "config.toml"
+    cfg.write_text(f'[paths]\nhf_cache = "{tmp_path / "vol"}"\n')
+    monkeypatch.setenv("VQLAB_CONFIG", str(cfg))
+    for v in ("HF_HUB_CACHE", "HF_HOME"):
+        monkeypatch.delenv(v, raising=False)
+    assert config.hf_cache() == tmp_path / "vol"
+    monkeypatch.setenv("HF_HOME", str(tmp_path / "home"))
+    assert config.hf_cache() == tmp_path / "home" / "hub"
+    monkeypatch.setenv("HF_HUB_CACHE", str(tmp_path / "hub"))
+    assert config.hf_cache() == tmp_path / "hub"
+
+
 def _st(pf, args=("--out", "x")):
     return {"name": "s", "cmd": "fit-moe", "args": list(args), "preflight": pf}
 

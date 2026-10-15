@@ -513,12 +513,19 @@ _HF_REF = re.compile(r"(^|=)hf://([^/@\s]+)/([^/@\s]+)@([0-9a-f]{7,})(?=/|$)")
 
 
 def hf_cache() -> pathlib.Path:
-    """The Hugging Face hub cache: $HF_HUB_CACHE, $HF_HOME/hub, else ~/.cache/huggingface/hub."""
+    """The Hugging Face hub cache: $HF_HUB_CACHE, $HF_HOME/hub, the config
+    file's [paths] hf_cache (a cache on a storage volume, where nothing in the
+    environment points), else ~/.cache/huggingface/hub."""
     env = os.environ.get("HF_HUB_CACHE")
     if env:
         return pathlib.Path(env).expanduser()
     home = os.environ.get("HF_HOME")
-    return (pathlib.Path(home).expanduser() if home else pathlib.Path.home() / ".cache" / "huggingface") / "hub"
+    if home:
+        return pathlib.Path(home).expanduser() / "hub"
+    configured = _file_paths(str(config_file())).get("hf_cache")
+    if configured:
+        return pathlib.Path(configured).expanduser()
+    return pathlib.Path.home() / ".cache" / "huggingface" / "hub"
 
 
 def hf_snapshot(org: str, name: str, rev: str) -> pathlib.Path | None:
