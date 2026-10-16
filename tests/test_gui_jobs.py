@@ -303,6 +303,7 @@ def test_detach_json_is_one_parseable_line(tmp_path, monkeypatch, capsys):
     monkeypatch.setattr(runner.subprocess, "Popen", lambda *a, **kw: argparse.Namespace(pid=4242))
     a = argparse.Namespace(lease_wait=1, force=False, override_reservation=False,
                            keep_preflight=False, json=True)
+    (tmp_path / "state.json").write_text(json.dumps({"status": "created", "steps": []}))
     assert runner._detach(tmp_path, a) == 0
     line = capsys.readouterr().out.strip().splitlines()[-1]
     assert json.loads(line) == {"qdir": str(tmp_path), "pid": 4242}

@@ -169,6 +169,8 @@ def _attempts(st, rec, sdir, state, argv, expect, retries) -> dict:
         for f in ("stdout", "stderr"):
             if (sdir / f).exists():
                 (sdir / f).rename(sdir / f"{f}.attempt{attempt - 1}")
+        for k in ("rc", "seconds", "finished", "reasons", "warnings"):
+            rec.pop(k, None)                    # the last attempt's verdict
         rec.update(status="running", attempt=attempt, started=rec.get("started") or now_iso())
         save_state(pathlib.Path(state["qdir"]), state)
         t0 = time.time()
@@ -373,6 +375,12 @@ def _detach(qdir, a) -> int:
     p = subprocess.Popen(cmd, cwd=cwd, env=env,
                          stdin=subprocess.DEVNULL, stdout=open(qdir / "queue.log", "ab"),
                          stderr=subprocess.STDOUT, start_new_session=True)
+    # Claim the queue for the new runner now: a resumed queue's state still
+    # names the dead runner, and a `queue wait` issued before the child
+    # writes its own state would read that as `died`.
+    state = load_state(qdir)
+    state.update(status="running", pid=p.pid)
+    save_state(qdir, state)
     if a.json:
         print(json.dumps({"qdir": str(qdir), "pid": p.pid}))
     else:
