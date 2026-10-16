@@ -158,7 +158,7 @@ def test_score_only_with_registered_caches(fams, monkeypatch):
 
 
 @pytest.mark.parametrize("recipe, why", [
-    ({"family": "glm5_next"}, "no build of family"),
+    ({"family": "deepseek_v4"}, "no build of family"),
     ({"geo": "d4-K999"}, "not a legal geometry"),
     ({"geo": "d4-K64"}, "no measured healthy relerr"),
     ({"geo": "d4K256x"}, "not dD-KK"),
@@ -721,3 +721,52 @@ def test_a_teacher_downloaded_by_repo_is_built_from_the_download(tmp_path, monke
     assert rq.source_path(tp.teacher_source(ident)) == "<teachers>/Org--Moe"
     (tmp_path / "teachers" / "Org--Moe-bf16").mkdir()
     assert tp.teacher_source(ident) == ident["path"]   # the recorded folder wins
+
+
+def test_flash_next_fits_its_ngram_tables_after_the_experts(fams):
+    """qwen4_exp's n-gram tables take fit-ple -> splice-ple -> pack-ple, as
+    the published Flash-Next builds were made; the size trades their affine
+    copy in the struct base for their codes."""
+    d = fams("qwen4_exp", "F", "moe", 4)
+    prof = json.loads((d / "profile.json").read_text())
+    prof["bytes"]["by_class_gib"]["ple"] = 16.0
+    (d / "profile.json").write_text(json.dumps(prof))
+    base = {"name": "fn", "family": "qwen4_exp", "teacher": "F", "geo": "d4-K256"}
+    q, _ = rq.compile_recipe(base)
+    names = _names(q)
+    i = names.index("fit")
+    assert names[i + 1:i + 4] == ["ple-fit", "ple-splice", "ple-pack"]
+    fit = _args(q, "ple-fit")
+    assert fit[fit.index("--key-regex") + 1] == "ngram_embedding"
+    assert fit[fit.index("--group") + 1] == "32" and fit[fit.index("--k") + 1] == "2048"
+    assert next(s for s in q["steps"] if s["name"] == "ple-fit")["preflight"] == {
+        "append": ["--limit", 1]}
+    small, _ = rq.compile_recipe({**base, "ple_geo": "d8-K256"})
+    assert small["estimate"]["artifact_gib"] < q["estimate"]["artifact_gib"]
+    with pytest.raises(rq.RecipeError, match="ple_geo d4-K64"):
+        rq.compile_recipe({**base, "ple_geo": "d4-K64"})
+    del prof["bytes"]["by_class_gib"]["ple"]
+    (d / "profile.json").write_text(json.dumps(prof))
+    with pytest.raises(rq.RecipeError, match="re-profile"):
+        rq.compile_recipe(base)
+
+
+def test_glm_keeps_its_tower_in_the_base_and_its_head_at_a_layer(fams):
+    """glm5_next: the tower rides the struct base (tested, never grafted,
+    always counted) and the draft head is extracted by its layer key."""
+    d = fams("glm5_next", "G", "moe", 4, vision=1.0, mtp=4.0)
+    prof = json.loads((d / "profile.json").read_text())
+    prof["arch"].update(model_type="glm5_next", layers=4, mtp_layer=4)
+    (d / "profile.json").write_text(json.dumps(prof))
+    base = {"name": "g", "family": "glm5_next", "teacher": "G", "geo": "d4-K256"}
+    q, _ = rq.compile_recipe({**base, "vision": True, "mtp": True})
+    names = _names(q)
+    assert "vision" not in names and "vision-smoke" in names
+    assert "mtp-wiring-probe" not in names   # this head has nothing to choose
+    ex = _args(q, "mtp-extract")
+    assert ex[ex.index("--key-regex") + 1] == r"\.layers\.4\."
+    assert ex[ex.index("--strip-prefix") + 1] == "model.language_model."
+    off, warns = rq.compile_recipe(base)
+    assert any("always included" in w for w in warns)
+    assert off["estimate"]["artifact_gib"] == pytest.approx(
+        q["estimate"]["artifact_gib"] - rq._affine_gib(4.0, 6, 32), abs=0.01)

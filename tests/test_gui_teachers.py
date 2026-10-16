@@ -136,7 +136,7 @@ def test_merge_dedupe_and_buildable(lab, monkeypatch):
     fam = lab / "families"
     copy = lab / "models" / "Copy--Of-Moe"
     copy.mkdir()
-    d = fam / "glm5_next" / "teachers" / "Org--Glm"
+    d = fam / "deepseek_v4" / "teachers" / "Org--Ds"
     d.mkdir(parents=True)
     (d / "profile.json").write_text(json.dumps({"identity": {"path": str(lab / "nowhere")},
                                                 "arch": {"kind": "moe"}}))
@@ -149,8 +149,9 @@ def test_merge_dedupe_and_buildable(lab, monkeypatch):
     monkeypatch.setattr(model_scan, "load", lambda: rows)
     out = T.teachers()
     by = {t["id"]: t for t in out["teachers"]}
-    assert set(by) == {"qwen3_5/Org--Moe", "glm5_next/Org--Glm"}
-    assert by["glm5_next/Org--Glm"]["buildable"] is False and by["glm5_next/Org--Glm"]["on_disk"] is False
+    assert set(by) == {"qwen3_5/Org--Moe", "deepseek_v4/Org--Ds"}
+    ds = by["deepseek_v4/Org--Ds"]
+    assert ds["buildable"] is False and ds["on_disk"] is False
     assert [u["name"] for u in out["unprofiled"]] == ["Org/Other"]
 
 

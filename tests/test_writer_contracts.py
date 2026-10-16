@@ -593,3 +593,63 @@ def test_help_never_records(fx, tmp_path, cmd, flag):
 def test_read_only_flags_cover_the_cli():
     from vqlab import cli as vcli
     assert {"--dry-run", "--plan", "-h", "--help"} <= vcli.READ_ONLY_FLAGS
+
+
+PLE_T = "ngram_embedding.shard_0"
+
+
+def _ple_artifact(d):
+    """Two affine n-gram tables in the sanitized layout, as a struct base has them."""
+    import mlx.core as mx
+    d.mkdir()
+    one = np.ones((2, 4), np.float32)
+    keys = {f"model.layers.{i}.ple.ple_embedding.{PLE_T}.{s}": one
+            for i in (0, 1) for s in ("weight", "scales", "biases")}
+    keys["model.embed_tokens.weight"] = one
+    mx.save_safetensors(str(d / "model-00001.safetensors"),
+                        {k: mx.array(v) for k, v in keys.items()})
+    (d / "model.safetensors.index.json").write_text(json.dumps(
+        {"metadata": {}, "weight_map": dict.fromkeys(keys, "model-00001.safetensors")}))
+    q = {f"model.layers.{i}.ple.ple_embedding.{PLE_T}": {"bits": 8, "group_size": 32}
+         for i in (0, 1)}
+    (d / "config.json").write_text(json.dumps({"quantization": q}))
+    return d
+
+
+def _ple_fit(d, layers):
+    import mlx.core as mx
+    d.mkdir()
+    t = [f"model.language_model.layers.{i}.ple.ple_embedding.{PLE_T}.weight"
+         for i in layers]
+    parts = ("codes", "codebook", "vq_scales")
+    mx.save_safetensors(str(d / "ple-00001.safetensors"),
+                        {f"{k}.{s}": mx.zeros((2, 1)) for k in t for s in parts})
+    shard = {"shard": "ple-00001.safetensors", "shape": [2, 4]}
+    man = {"geometry": {"d": 4, "K": 2048}, "tensors": dict.fromkeys(t, shard)}
+    (d / "ple_manifest.json").write_text(json.dumps(man))
+    return d
+
+
+def test_a_partial_ple_fit_splices_only_its_tables(tmp_path):
+    """A preflight's one-table fit replaces that table alone: the others stay
+    affine, with their quantization entries, so the build still loads."""
+    from vqlab.build import splice_ple
+    d = _ple_artifact(tmp_path / "a")
+    fit = _ple_fit(tmp_path / "f", [0])
+    assert splice_ple.main(["--artifact", str(d), "--ple-fit", str(fit)]) == 0
+    wm = json.loads((d / "model.safetensors.index.json").read_text())["weight_map"]
+    t0, t1 = (f"model.layers.{i}.ple.ple_embedding.{PLE_T}" for i in (0, 1))
+    assert f"{t0}.codes" in wm and f"{t0}.weight" not in wm
+    assert f"{t1}.weight" in wm and f"{t1}.codes" not in wm
+    cfg = json.loads((d / "config.json").read_text())
+    assert list(cfg["quantization"]) == [t1] and cfg["vq_ple"]["keys"] == [t0]
+
+
+def test_a_ple_fit_that_names_no_tensor_is_refused(tmp_path):
+    from vqlab.build import splice_ple
+    d = _ple_artifact(tmp_path / "a")
+    before = (d / "model.safetensors.index.json").read_bytes()
+    fit = _ple_fit(tmp_path / "f", [7])
+    with pytest.raises(SystemExit, match="name no tensor"):
+        splice_ple.main(["--artifact", str(d), "--ple-fit", str(fit)])
+    assert (d / "model.safetensors.index.json").read_bytes() == before

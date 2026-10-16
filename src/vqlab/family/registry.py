@@ -11,7 +11,13 @@ from vqlab.core.source.teacher_profiles import profiles_in, read_profile
 
 FAMILY = {
     # "recipe": the Recipe page's build chain for the family, "moe" or "dense"
-    # (plan/recipe_queue.py); absent = the family builds through the CLI only
+    # (plan/recipe_queue.py); absent = the family builds through the CLI only.
+    # What the chain does differently per family, as the published builds
+    # were made:
+    #   "ple": {"key_regex", "group"}  n-gram tables VQ-fitted on their own
+    #          (fit-ple -> splice-ple -> pack-ple; Flash-Next)
+    #   "tower": "base"  the vision tower rides the struct base bf16, so it
+    #          is never grafted (GLM)
     "qwen3_5": {
         "recipe": "moe",
         "target_substr": "switch_mlp",
@@ -23,6 +29,8 @@ FAMILY = {
                  "down_proj": ("down_proj", None)},
     },
     "qwen4_exp": {
+        "recipe": "moe",
+        "ple": {"key_regex": "ngram_embedding", "group": 32},
         # Qwen3.8-Flash-Next (180B, 10-of-512). VERIFIED IDENTICAL to
         # qwen3_5 on every axis this table encodes (2026-08-28, from the
         # checkpoint index + the mlx-lm PR #1788 module tree): same fused
@@ -62,6 +70,7 @@ FAMILY = {
         # this family from a config.json.
         "runtime": "mlx_vlm",
         "model_type": "glm5_next",
+        "recipe": "moe", "tower": "base",
         "target_substr": "switch_mlp",
         "src_key": "model.language_model.layers.{li}.mlp.experts.{e}.{key}.weight",
         "proj": {"gate_proj": ("gate_proj", None),

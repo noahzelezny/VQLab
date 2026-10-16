@@ -29,5 +29,6 @@ def test_recipe_chains_come_from_the_registry():
     assert recipe_queue.DENSE == families.recipe_families("dense") >= {"qwen3_8_dense"}
     assert families.FAMILY["qwen3_5"]["recipe"] == "moe"
     assert families.FAMILY["qwen3_8_dense"]["recipe"] == "dense"
-    assert "recipe" not in families.FAMILY["glm5_next"]      # CLI-only for now
-    assert "glm5_next" not in recipe_queue.COMPILED
+    assert families.FAMILY["glm5_next"]["recipe"] == "moe"
+    assert "recipe" not in families.FAMILY["deepseek_v4"]    # CLI-only for now
+    assert "deepseek_v4" not in recipe_queue.COMPILED

@@ -7,8 +7,10 @@ A recipe says WHAT to build; this writes HOW, as the steps a queue runs
 Every step is a vqlab command with the flags the lab's queues of record ran
 it with; a chain is offered only for families whose pieces have each run:
 
-  MoE (qwen3_5):  stream-convert --struct -> fit-moe --pack [--tail-from/
-                  --tail-geom: a mixed build]
+  MoE (qwen3_5, qwen4_exp, glm5_next):  stream-convert --struct -> fit-moe
+                  --pack [--tail-from/--tail-geom: a mixed build]
+                  [-> fit-ple -> splice-ple -> pack-ple: a family with n-gram
+                  tables, Flash-Next; "ple_geo" picks their geometry]
   dense (qwen3_8_dense):  [stream-convert --bits: the base, unless an
                   incumbent is given] -> fit-dense -> build-dense --dry-run ->
                   build-dense -> pack-dense
@@ -53,9 +55,11 @@ type vqlab packs no head for, is refused.
 
 A compiled chain is proven by its PREFLIGHT, which runs every step small
 and real (the fit on one layer, plus the tail's first layer for a mixed
-build); start the full run only from a preflight that passed. Any other
-family is refused by name. kl-ladder is added only when the teacher's
-caches are registered
+build); start the full run only from a preflight that passed. Which family
+builds which chain, and what it does differently (n-gram tables, a tower
+that rides the base, a head stored as a layer), is its family registry
+entry (family/registry.py "recipe"); any other family is refused by name.
+kl-ladder is added only when the teacher's caches are registered
 (families/<f>/teachers/<t>/teacher_caches.json); it scores absolute KL, not
 the paired release gate. A fit's --relerr-abort comes from measured healthy
 ranges only (FINDINGS I.8); an unmeasured geometry is refused.
@@ -110,6 +114,11 @@ SZ_DIMS = (2, 4, 8)
 # mtp-accept's gate: below this pooled acceptance the head is dead. The
 # published heads read 0.63-0.90 (docs/MTP.md), a wrong wiring ~0.00.
 MTP_ACCEPT_FLOOR = 0.3
+# the n-gram (PLE) table geometries the published Flash-Next builds shipped
+# (their cards: d8/K256 on 2.1bpw, d4/K2048 on 3.2bpw, d8/K4096 on 4.4/5.5bpw);
+# the default is the 3.2bpw build's
+PLE_GEOS = ("d4-K2048", "d8-K256", "d8-K4096")
+PLE_GEO = "d4-K2048"
 # tokens per prompt over mtp-accept's 12 prompts: ~700 draft steps, minutes
 # on a resident build, and far more than a live/dead verdict needs
 MTP_ACCEPT_TOKENS = 64
@@ -215,9 +224,25 @@ def _affine_gib(gib: float, bits: int, group: int) -> float:
     return gib * (bits + 32 / group) / 16
 
 
+def _rest(by: dict) -> float:
+    """GiB of everything a base carries besides the experts, tower and head:
+    carry, embeddings and any n-gram tables (the profile's own class)."""
+    return by["carry"] + by["embed"] + by.get("ple", 0.0)
+
+
 def _convert_writes_gib(by: dict, bits: int) -> float:
     """What a stream-convert at `bits` writes, as its preflight states it."""
-    return round(by["carry"] + by["embed"] + by["vq_target"] * bits / 16, 1)
+    return round(_rest(by) + by["vq_target"] * bits / 16, 1)
+
+
+def _fam(family: str) -> dict:
+    """The family's registry entry: what its chain does differently."""
+    return registry.FAMILY.get(family) or {}
+
+
+def _vq_gib(gib: float, d: int, k: int, group: int) -> float:
+    """`gib` of bf16 weights as VQ codes plus a 16-bit scale per group."""
+    return gib * ((k.bit_length() - 1) / d + 16 / group) / 16
 
 
 def _caches(teacher: str) -> list[str]:
@@ -327,6 +352,7 @@ class MtpHead:
     graft_gib: float
     gib: float
     bits: int
+    extract: tuple = ()             # mtp-extract's key flags: a head stored off mtp.*
 
 
 def mtp_head(family: str, teacher: str, prof: dict,
@@ -336,6 +362,12 @@ def mtp_head(family: str, teacher: str, prof: dict,
     or a recorded wiring that does not name exactly the choices its family
     leaves open."""
     graft = ((prof.get("bytes") or {}).get("by_class_gib") or {}).get("mtp")
+    n = (prof.get("arch") or {}).get("mtp_layer")
+    # a head stored as upstream layers.<n> (GLM): mtp-extract takes it by that
+    # key, as the head module reads it (layers.<n>.*, mtp_head_glm5.load_graft)
+    extract = (() if n is None else
+               ("--key-regex", rf"\.layers\.{n}\.",
+                "--strip-prefix", "model.language_model."))
     if not graft:
         raise RecipeError(f"{teacher} has no MTP head: its profile counts no "
                           "mtp.* tensors")
@@ -344,7 +376,7 @@ def mtp_head(family: str, teacher: str, prof: dict,
     if spec is None:
         raise RecipeError(f"vqlab packs no MTP head for model_type {mt!r} "
                           "(none registered in vqlab/mtp/registry.py)")
-    if spec.probe is None:
+    if spec.wiring and spec.probe is None:
         raise RecipeError(f"no probe for the {mt!r} head's wiring is registered "
                           "(vqlab/mtp/registry.py), so the compiler cannot choose it")
     record = f"families/{family}/teachers/{teacher}/mtp.json"
@@ -358,8 +390,10 @@ def mtp_head(family: str, teacher: str, prof: dict,
         if bad:
             raise RecipeError(f"{record}: {', '.join(bad)} is not a value mtp-pack takes "
                               f"({mtp_registry.WIRING_CHOICES})")
+    if not spec.wiring:
+        wiring = {}          # the checkpoint determines this head: nothing to choose
     return MtpHead(spec, wiring, graft,
-                   _affine_gib(graft, bits, mtp_registry.PACK_GROUP), bits)
+                   _affine_gib(graft, bits, mtp_registry.PACK_GROUP), bits, extract)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -375,6 +409,7 @@ class Recipe:
     group: int
     geo: tuple[int, int] | None     # vq only
     tail: tuple[int, int, int] | None   # MoE vq only: (from layer, d, K)
+    ple: tuple[int, int] | None     # vq, a family with n-gram tables: their (d, K)
     protect_bits: int | None        # MoE: vq struct base (default 8); affine mixed (None = uniform)
     base: str | None                # dense: the quantized incumbent
     vision: bool
@@ -423,6 +458,12 @@ class Recipe:
             pb = None
         if mode == "affine" and group not in (32, 64, 128):
             raise RecipeError(f"group {group}: 32, 64 or 128")
+        ple = None
+        if mode == "vq" and _fam(family).get("ple"):
+            ple = geometry(r.get("ple_geo", PLE_GEO))
+            if geo_key(*ple) not in PLE_GEOS:
+                raise RecipeError(f"ple_geo {geo_key(*ple)}: the n-gram tables have "
+                                  f"shipped at {', '.join(PLE_GEOS)} only")
         sz = r.get("skipzero", False)
         if not isinstance(sz, bool):
             raise RecipeError(f"skipzero must be true or false, not {sz!r}")
@@ -434,7 +475,8 @@ class Recipe:
             raise RecipeError(f"mtp_bits {mtp_bits}: "
                               f"{', '.join(map(str, mtp_registry.PACK_BITS_CHOICES))}")
         return cls(raw=r, name=name, family=family, teacher=teacher, mode=mode, bits=bits,
-                   group=group, geo=geo, tail=tail, protect_bits=pb, base=r.get("base") or None,
+                   group=group, geo=geo, tail=tail, ple=ple, protect_bits=pb,
+                   base=r.get("base") or None,
                    vision=bool(r.get("vision")), score=bool(r.get("score")),
                    mtp=bool(r.get("mtp")), mtp_bits=mtp_bits,
                    skipzero=sz)
@@ -444,10 +486,10 @@ class Recipe:
 # the vision tower's GiB when the recipe grafts one, else 0.
 def _affine_steps(r: Recipe, src: str, by: dict, vis: float):
     if r.protect_bits is None:       # uniform: stream-convert's group applies everywhere
-        art_gib = _affine_gib(by["carry"] + by["embed"] + by["vq_target"], r.bits, r.group) + vis
+        art_gib = _affine_gib(_rest(by) + by["vq_target"], r.bits, r.group) + vis
     else:                            # mixed: experts bits/group, the rest protect/64
         art_gib = (_affine_gib(by["vq_target"], r.bits, r.group)
-                   + _affine_gib(by["carry"] + by["embed"], r.protect_bits, 64) + vis)
+                   + _affine_gib(_rest(by), r.protect_bits, 64) + vis)
     args = ["--src", src, "--out", r.out, "--bits", r.bits, "--family", r.family]
     if r.group != 64:
         args += ["--group", r.group]
@@ -468,7 +510,13 @@ def _moe_steps(r: Recipe, prof: dict, src: str, by: dict, vis: float):
     vq, spec = _layers(prof)
     lo, hi = vq[0], vq[-1]
     struct = f"{r.work}/struct"
-    skel_gib = _affine_gib(by["carry"] + by["embed"], r.protect_bits, 64)
+    # n-gram tables: stream-convert writes them at group 32
+    ple_gib = by.get("ple", 0.0)
+    if r.ple and not ple_gib:
+        raise RecipeError(f"{r.teacher}'s profile counts no n-gram tables; "
+                          "re-profile it (`vqlab family-profile`)")
+    skel_gib = (_affine_gib(by["carry"] + by["embed"], r.protect_bits, 64)
+                + _affine_gib(ple_gib, r.protect_bits, 32))
     struct_gib = round(skel_gib + _affine_gib(by["vq_target"], 2, 64), 1)   # experts: 2-bit markers
     steps, warns = [], []
     steps.append(_step("struct-base", "stream-convert",
@@ -503,7 +551,34 @@ def _moe_steps(r: Recipe, prof: dict, src: str, by: dict, vis: float):
                         # fit-moe rewrites every base shard, whatever --vq-layers says
                         "writes_gib": struct_gib},
                        retries=3, timeout_s=48 * 3600, expect={"files": [f"{r.out}/config.json"]}))
+    if r.ple:
+        ple_steps, ple_delta = _ple_steps(r, src, ple_gib)
+        steps += ple_steps
+        art_gib += ple_delta
     return steps, art_gib, struct_gib + art_gib, warns
+
+
+def _ple_steps(r: Recipe, src: str, gib: float):
+    """The n-gram tables, as the published Flash-Next builds made them: fit
+    on their own (fit-ple), spliced into the packed build in place of their
+    affine copies (splice-ple), then packed to their true code width
+    (pack-ple) -> (steps, the artifact's GiB change)."""
+    ple = _fam(r.family)["ple"]
+    (d, k), fit = r.ple, f"{r.work}/ple-fit"
+    codes = _vq_gib(gib, d, k, ple["group"])
+    args = ["--src", src, "--out", fit, "--key-regex", ple["key_regex"],
+            "--dim", d, "--k", k, "--group", ple["group"], "--seed", 1234]
+    steps = [
+        _step("ple-fit", "fit-ple", args, {"append": ["--limit", 1]},
+              retries=3, timeout_s=24 * 3600),
+        _step("ple-splice", "splice-ple", ["--artifact", r.out, "--ple-fit", fit],
+              {"full": "splices what the fit wrote", "writes_gib": round(codes, 1)},
+              retries=0, timeout_s=3 * 3600),
+        _step("ple-pack", "pack-ple", ["--artifact", r.out],
+              {"full": "packs what the splice wrote", "writes_gib": round(codes, 1)},
+              retries=0, timeout_s=3 * 3600)]
+    # the struct base carried the tables at the protect width, group 32
+    return steps, codes - _affine_gib(gib, r.protect_bits, 32)
 
 
 def _dense_steps(r: Recipe, prof: dict, src: str, by: dict, vis: float):
@@ -515,7 +590,7 @@ def _dense_steps(r: Recipe, prof: dict, src: str, by: dict, vis: float):
         raise RecipeError(f"the profile's VQ layers are not contiguous ({spec}); "
                           "fit-dense takes one range")
     fit, build = f"{r.work}/fit", f"{r.work}/build"
-    base_gib = _affine_gib(by["carry"] + by["embed"], r.bits, r.group)
+    base_gib = _affine_gib(_rest(by), r.bits, r.group)
     art_gib = base_gib + g.gib + vis
     scratch_gib = 2 * art_gib + (0 if r.base else base_gib + _affine_gib(by["vq_target"], r.bits, r.group))
     steps, warns = [], []
@@ -556,14 +631,15 @@ def _mtp_steps(r: Recipe, head: MtpHead, src: str, out: str, oversized: bool):
     name = head.spec.sidecar_for(head.bits)
     graft, sidecar = f"{r.work}/mtp-graft.safetensors", f"{out}/{name}"
     steps, warns = [], []
-    steps.append(_step("mtp-extract", "mtp-extract", ["--src", src, "--out", graft],
+    steps.append(_step("mtp-extract", "mtp-extract",
+                       ["--src", src, "--out", graft, *head.extract],
                        {"full": "the pack reads the whole head",
                         "writes_gib": round(head.graft_gib, 1)},
                        retries=1, timeout_s=2 * 3600))
     pack = ["--model", out, "--mtp", graft, "--bits", head.bits]
     pack_pf = {"full": "packs the one head", "writes_gib": round(head.gib + 0.5, 1)}
     record = f"families/{r.family}/teachers/{r.teacher}/mtp.json"
-    if head.wiring:
+    if head.wiring is not None:
         pack += [a for k in head.spec.wiring
                  for a in (f"--{k.replace('_', '-')}", head.wiring[k])]
     elif oversized:
@@ -604,6 +680,34 @@ def _mtp_steps(r: Recipe, head: MtpHead, src: str, out: str, oversized: bool):
     return steps, warns
 
 
+def _vision_steps(r: Recipe, src: str, by: dict, oversized: bool):
+    """The tower: grafted into the build and smoked, or, for a family whose
+    tower rides the struct base (GLM), only smoked -> (steps, warnings).
+    Past the resident bar the release check tests the image through
+    Knurlogic instead of the local smoke."""
+    if not by.get("vision"):
+        return [], (["This teacher has no vision tower to graft."] if r.vision else [])
+    steps, warns = [], []
+    if _fam(r.family).get("tower") == "base":
+        if not r.vision:
+            warns.append("This model keeps its vision tower inside the base, so it is "
+                         "always included.")
+    elif r.vision:
+        steps.append(_step("vision", "graft",
+                           ["--artifact", r.out, "--src", src, *_graft_flags(src)],
+                           {"full": "grafts the tower in place",
+                            "writes_gib": round(by["vision"] + 0.5, 1)},
+                           retries=0, timeout_s=3600))
+    else:
+        return [], []
+    if not oversized:
+        steps.append(_step("vision-smoke", "vision-smoke", [r.out, "--max-tokens", 8],
+                           {"full": "reads the artifact, writes nothing",
+                            "writes_gib": 0},
+                           retries=0, timeout_s=3600))
+    return steps, warns
+
+
 def _tail_steps(r: Recipe, src: str, by: dict, head: MtpHead | None,
                 oversized: bool = False):
     """What every chain ends with: [vision graft + smoke], [skip-zero],
@@ -618,18 +722,8 @@ def _tail_steps(r: Recipe, src: str, by: dict, head: MtpHead | None,
     generates, and puts the probe image through the same serving runtime
     (check-release passes its Knurlogic roles to vision-smoke). The local
     vision-smoke after the graft is dropped: it would only refuse."""
-    out, steps, warns = r.out, [], []
-    if r.vision:
-        if by.get("vision"):
-            steps.append(_step("vision", "graft", ["--artifact", out, "--src", src, *_graft_flags(src)],
-                               {"full": "grafts the tower in place", "writes_gib": round(by["vision"] + 0.5, 1)},
-                               retries=0, timeout_s=3600))
-            if not oversized:      # the release check tests the image through Knurlogic
-                steps.append(_step("vision-smoke", "vision-smoke", [out, "--max-tokens", 8],
-                                   {"full": "reads the artifact, writes nothing", "writes_gib": 0},
-                                   retries=0, timeout_s=3600))
-        else:
-            warns.append("This teacher has no vision tower to graft.")
+    out = r.out
+    steps, warns = _vision_steps(r, src, by, oversized)
     if r.skipzero:
         # as the published 397B builds were made: sz-pack of the finished,
         # grafted artifact (config vq_skipzero.source; lab/queues/
@@ -723,7 +817,8 @@ def _compile(raw: dict) -> tuple[dict, list[str]]:
     if bad:
         raise RecipeError(f"the teacher's profile is malformed: bytes.by_class_gib {bad} "
                           "is not a number of GiB")
-    vis = by.get("vision", 0.0) if r.vision else 0.0
+    in_base = _fam(r.family).get("tower") == "base"      # kept whatever the recipe says
+    vis = by.get("vision", 0.0) if r.vision or in_base else 0.0
     if r.mode == "affine":
         steps, art_gib, scratch_gib, warns = _affine_steps(r, src, by, vis)
     else:
@@ -739,7 +834,7 @@ def _compile(raw: dict) -> tuple[dict, list[str]]:
     if head:
         art_gib += head.gib
         # the bf16 graft, the sidecar, and a trial one where the probe chooses
-        scratch_gib += head.graft_gib + head.gib * (1 if head.wiring else 2)
+        scratch_gib += head.graft_gib + head.gib * (1 if head.wiring is not None else 2)
     # the resident bar of THIS box (0.90 x its RAM, read from the machine),
     # the rule preflight-ram enforces at load time
     oversized = art_gib > preflight_ram.bar_gib()

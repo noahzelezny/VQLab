@@ -37,9 +37,16 @@ def main(argv=None) -> int:
 
     ngram_mods = {k.rsplit(".weight", 1)[0].replace("model.language_model.", "model.")
                   for k in man["tensors"]}
-    # artifact keys use the sanitized mlx layout (model.layers...); map by suffix
-    drop = [k for k in wm if any(k.startswith(m + ".") or k == m + ".weight"
-            for m in ngram_mods) or ".ngram_embedding." in k]
+    # artifact keys use the sanitized mlx layout (model.layers...). Only the
+    # tables this fit holds are dropped, so a partial fit (fit-ple --limit, a
+    # queue preflight) leaves the rest affine and the build still loads; a
+    # fitted table that names no artifact tensor is a mapping bug, refused.
+    drop = [k for k in wm if any(k.startswith(m + ".") for m in ngram_mods)]
+    unmatched = sorted(m for m in ngram_mods
+                       if not any(k.startswith(m + ".") for k in drop))
+    if unmatched:
+        raise SystemExit(f"REFUSED: {len(unmatched)} fitted tables name no tensor in "
+                         f"{idx_p}, e.g. {unmatched[0]}; nothing written")
     shards = sorted({wm[k] for k in drop})
     print(f"{len(drop)} affine tensors to remove across {len(shards)} shards")
 
@@ -89,7 +96,7 @@ def main(argv=None) -> int:
 
     cfg_p = ART / "config.json"; cfg = read_json(cfg_p)
     q = cfg.get("quantization", {})
-    removed = [m for m in list(q) if ".ngram_embedding." in m]
+    removed = [m for m in list(q) if m in ngram_mods]      # the fitted tables only
     for m in removed:
         del q[m]
     qc = cfg.get("quantization_config", {})

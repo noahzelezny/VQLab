@@ -820,13 +820,18 @@ const mtpGib=(t,r)=>r.mtp?mtpGibAt(t,r.mtpBits):0;
 function sizeOf(t,r){
   const s=sizeRaw(t,r);if(s)s.gib=s.gib-szGib(t,r)+mtpGib(t,r);return s;
 }
+// the n-gram tables as codes at the compiler's geometry (recipe_queue._vq_gib)
+const pleGib=t=>{const p=t.ple,m=p&&/^d(\d+)-K(\d+)$/.exec(p.geo);return m?p.gib*(Math.log2(+m[2])/+m[1]+16/p.group)/16:0};
 function sizeRaw(t,r){
-  const B=t.gib||{},skel=(B.carry||0)+(B.embed||0),vis=r.tower?(B.vision||0):0;
+  const B=t.gib||{},vis=r.tower||t.tower_in_base?(B.vision||0):0;
+  // recipe_queue._rest: everything the base carries besides experts, tower and head
+  let skel=(B.carry||0)+(B.embed||0)+(B.ple||0);
   if(r.mode==='affine'){const bpw=affBpw(r.bits,r.group),p=isMoe(t)&&r.aprotect;  // mixed: experts bits/group, the rest protect/64 (recipe_queue._affine_steps)
     return {gib:(p?skel*affBpw(p,64):skel*bpw)/16+(B.vq_target||0)*bpw/16+vis,bpw}}
   const g=geoOf(t,r.geo);if(!g)return null;
   if(!isMoe(t))return {gib:skel*affBpw(r.bits,r.group)/16+g.gib+vis,bpw:g.bpw};
-  const base=skel*affBpw(r.protect,64)/16;
+  skel-=B.ple||0;                         // MoE VQ fits the n-gram tables on their own
+  const base=skel*affBpw(r.protect,64)/16+pleGib(t);
   if(!r.tailOn)return {gib:base+g.gib+vis,bpw:g.bpw};
   const tg=geoOf(t,r.tailGeo);if(!tg)return null;
   const n=t.vq_layers,nt=ntail(t,r),w=(a,b)=>a==null||b==null?null:(a*(n-nt)+b*nt)/n;

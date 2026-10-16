@@ -100,13 +100,17 @@ def dense_rows(tmpl, shapes, n_layers):
     return rows
 
 
-def classify(key: str, expert_rx) -> str:
+def classify(key: str, expert_rx, ple_rx=None, mtp_rx=None) -> str:
+    """A tensor's byte class. `ple_rx`: the family's n-gram tables (fitted on
+    their own); `mtp_rx`: a draft head stored as the trailing layer."""
     k = key.lower()
     cls = tensor_class(key)              # the one classifier (core.artifacts.artifact)
     if cls == "tower":
         return "vision"
-    if cls == "mtp":
+    if cls == "mtp" or (mtp_rx and mtp_rx.search(key)):
         return "mtp"
+    if ple_rx and ple_rx.search(key):
+        return "ple"
     if expert_rx and expert_rx.search(key):
         return "vq_target"
     if "embed_tokens" in k or "lm_head" in k:
@@ -238,19 +242,25 @@ def main(argv=None) -> int:
             fam, dense_tmpl = a.family, (DENSE_FAMILIES.get(a.family) or (None,))[0]
         spec = None
     rx = expert_regex(spec, dense_tmpl)
+    L = tc.get("num_hidden_layers") or 0
+    # a draft head stored as upstream layers.<num_hidden_layers> (GLM) rather
+    # than mtp.*: its tensors are the head, not a layer to fit
+    mtp_layer = L if L and any(f".layers.{L}." in k for k in shapes) else None
+    mtp_rx = re.compile(rf"\.layers\.{L}\.") if mtp_layer is not None else None
+    ple_rx = re.compile(spec["ple"]["key_regex"]) if spec and spec.get("ple") else None
     per_layer = {}
     for k, shp in shapes.items():
         n = math.prod(shp) * DTYPE_BYTES.get(dtypes[k], 2)
-        c = classify(k, rx)
+        c = classify(k, rx, ple_rx, mtp_rx)
         by_class[c] = by_class.get(c, 0) + n
         if c == "vq_target":
             m = re.search(r"layers\.(\d+)\.", k)
             if m:
                 per_layer[int(m.group(1))] = per_layer.get(int(m.group(1)), 0) + n
 
-    L = tc.get("num_hidden_layers") or 0
     rows = (dense_rows(dense_tmpl, shapes, L + 8) if dense_tmpl
             else module_rows(spec, shapes, L + 8) if spec else [])
+    rows = [r for r in rows if r["layer"] != mtp_layer]
     fp = provenance.fingerprint(T)
     sl = slug(T, fp)
     sigs = {}
@@ -285,7 +295,8 @@ def main(argv=None) -> int:
                  "kind": "moe" if moe else "dense",
                  "vq_layers": sorted({r["layer"] for r in rows}),
                  "vision_tower": by_class.get("vision", 0) > 0,
-                 "mtp_head": by_class.get("mtp", 0) > 0},
+                 "mtp_head": by_class.get("mtp", 0) > 0,
+                 "mtp_layer": mtp_layer},
         "bytes": {"by_class_gib": {k: round(v / GIB, 3) for k, v in sorted(by_class.items())},
                   "vq_target_gib_per_layer": {str(k): round(v / GIB, 4)
                                               for k, v in sorted(per_layer.items())},
@@ -304,6 +315,10 @@ def main(argv=None) -> int:
     out.mkdir(parents=True, exist_ok=True)
     pf = out / "profile.json"
     old = json.loads(pf.read_text()) if pf.exists() else None
+    if old and not prof["identity"]["hf_repo"]:
+        # a local copy names no repo; keep the one recorded for this teacher
+        for k in ("hf_repo", "hf_revision"):
+            prof["identity"][k] = (old.get("identity") or {}).get(k)
     if old and {k: v for k, v in old.items() if k != "created"} == \
             {k: v for k, v in prof.items() if k != "created"}:
         prof["created"] = old["created"]            # unchanged: no git churn

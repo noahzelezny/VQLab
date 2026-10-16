@@ -104,6 +104,16 @@ def _local(path: str) -> str | None:
     return os.path.realpath(p) if p and not p.startswith("hf://") and os.path.isdir(p) else None
 
 
+def _ple(family: str, by: dict) -> dict | None:
+    """A family's n-gram tables as the Recipe page prices them: their GiB as
+    stored, their group, and the geometry the compiler fits them at."""
+    spec = registry.FAMILY.get(family, {}).get("ple")
+    gib = (by.get("by_class_gib") or {}).get("ple")
+    if not (spec and gib):
+        return None
+    return {"gib": gib, "group": spec["group"], "geo": recipe_queue.PLE_GEO}
+
+
 def teachers() -> dict:
     fits = _fits()
     caches = {c["teacher"] for c in registry.teacher_caches()}
@@ -130,6 +140,8 @@ def teachers() -> dict:
             "on_disk": local is not None, "buildable": family in recipe_queue.COMPILED,
             "scored": teacher in caches, "profiled": prof.get("created"),
             "skipzero": _skipzero(family, teacher, prof),
+            "ple": _ple(family, by),
+            "tower_in_base": registry.FAMILY.get(family, {}).get("tower") == "base",
             "mtp": _mtp(family, teacher, prof)})
     found = []
     for r in _scanned():
