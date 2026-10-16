@@ -65,11 +65,11 @@ from vqlab.mtp.graft import check_graft_slots, graft_layer_weights, read_sidecar
 from vqlab.mtp.registry import WIRING_CHOICES
 
 SIDECAR_NAME = "mtp-head-q6.safetensors"
+FAMILY_NAME = "qwen3_5"
 
 # The MoE expert stack dominates the head's weight; the family's gates are
 # tiny and stay full precision, as they do in the trunk (family.keep_fp).
 _EXPERT_SUBSTR = "switch_mlp"
-_KEEP_FP = keep_fp("qwen3_5")
 
 # Which of the head's norms the +1.0 delta convention applies to. mlx-lm's
 # own sanitize shifts exactly these suffixes on the trunk; the head's fc
@@ -87,10 +87,12 @@ _NORM_KEYS = (
 
 
 def _mixed_predicate(bits, expert_bits, group_size):
+    keep = keep_fp(FAMILY_NAME)
+
     def predicate(path, mod):
         if not hasattr(mod, "to_quantized"):
             return False
-        if any(path.endswith(s) for s in _KEEP_FP):
+        if path.endswith(keep):
             return False
         b = expert_bits if _EXPERT_SUBSTR in path else bits
         return {"group_size": group_size, "bits": b}

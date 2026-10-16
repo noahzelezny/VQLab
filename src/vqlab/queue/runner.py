@@ -169,7 +169,7 @@ def _attempts(st, rec, sdir, state, argv, expect, retries) -> dict:
         for f in ("stdout", "stderr"):
             if (sdir / f).exists():
                 (sdir / f).rename(sdir / f"{f}.attempt{attempt - 1}")
-        for k in ("rc", "seconds", "finished", "reasons", "warnings"):
+        for k in ("rc", "seconds", "attempts", "finished", "reasons", "warnings"):
             rec.pop(k, None)                    # the last attempt's verdict
         rec.update(status="running", attempt=attempt, started=rec.get("started") or now_iso())
         save_state(pathlib.Path(state["qdir"]), state)
@@ -302,7 +302,8 @@ def run(qdir: pathlib.Path, force=False, lease_wait=1800, keep_preflight=False) 
             print(f"deferred: the GPU lease ({gpu_lease.lease_path()}) stayed held for {lease_wait} s")
             return 3
     state.update(status="running", started=state.get("started") or now_iso(),
-                 queue_run_id=os.environ.get("VQLAB_RUN_ID"), pid=os.getpid())
+                 queue_run_id=os.environ.get("VQLAB_RUN_ID"), pid=os.getpid(),
+                 host=_config.short_host())
     save_state(qdir, state)
     print(f"queue {state['name']} @ {state['commit'][:10]}  ({qdir})"
           + ("  PREFLIGHT" if preflight else ""), flush=True)
@@ -379,7 +380,7 @@ def _detach(qdir, a) -> int:
     # names the dead runner, and a `queue wait` issued before the child
     # writes its own state would read that as `died`.
     state = load_state(qdir)
-    state.update(status="running", pid=p.pid)
+    state.update(status="running", pid=p.pid, host=_config.short_host())
     save_state(qdir, state)
     if a.json:
         print(json.dumps({"qdir": str(qdir), "pid": p.pid}))
@@ -405,6 +406,7 @@ def _cmd_run(ap, a) -> int:
     if a.override_reservation and held and held.get("for") != resv.who():
         _record_override(qdir, held)
     if a.detach:
+        _check_pin(load_state(qdir))     # refuse here, before the queue is claimed
         return _detach(qdir, a)
     return run(qdir, force=a.force, lease_wait=a.lease_wait, keep_preflight=a.keep_preflight)
 

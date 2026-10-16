@@ -19,7 +19,8 @@ Modes:
                  the family's target_substr) marked 2-bit placeholders,
                  everything else at --protect-bits
 
-Recipe (measured on qwen4_exp; review per family): router (mlp.gate) bf16;
+Recipe (measured on qwen4_exp; review per family): the family's keep_fp modules
+(family.keep_fp; the router everywhere) bf16;
 ngram/PLE tables at the global group (32, divides 160-wide rows); body at
 group 64 via per-module override.
 
@@ -56,7 +57,7 @@ def body_spec(path, *, target, bits, group=64, protect_bits=None, struct=False,
     True (the global default), or a per-module {group_size, bits}. `keep` is
     the family's full-precision suffixes (family.keep_fp)."""
     if path.endswith(keep):
-        return False                                     # router bf16 (E7)
+        return False                         # the family's gates stay bf16 (E7)
     if "vision" in path or "visual" in path:
         # Under an mlx_vlm runtime the tower is part of the loaded model
         # (mlx_lm's sanitize drops it, so this branch never fires there).

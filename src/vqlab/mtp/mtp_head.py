@@ -31,17 +31,18 @@ import mlx.nn as nn
 from mlx_lm.models.base import create_attention_mask
 from mlx.utils import tree_flatten, tree_unflatten
 
+from vqlab.family import keep_fp
 from vqlab.mtp.graft import check_graft_slots, graft_layer_weights, read_sidecar
 
 SIDECAR_NAME = "mtp-head-q6.safetensors"
+FAMILY_NAME = "qwen4_exp"
 
 
 def _quantizable(path, mod):
     """nn.quantize hands the predicate EVERY submodule, norms included, and
     raises on anything without to_quantized -- so gate on that, not on names.
-    The MoE router stays full precision, mirroring qwen4_exp's own
-    quant_predicate."""
-    return hasattr(mod, "to_quantized") and not path.endswith("mlp.gate")
+    The family's gates stay full precision, as in the trunk (family.keep_fp)."""
+    return hasattr(mod, "to_quantized") and not path.endswith(keep_fp(FAMILY_NAME))
 
 
 # Measured from the bf16 graft header (2026-08-31): the 512-expert MoE stack

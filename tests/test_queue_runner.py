@@ -5,6 +5,7 @@ import json
 import os
 import sys
 
+from vqlab import config
 from vqlab.queue import report as rq
 from vqlab.queue import runner
 
@@ -31,11 +32,12 @@ def test_detach_claims_a_resumed_queue(tmp_path, monkeypatch):
     a = argparse.Namespace(lease_wait=1, force=False, override_reservation=False,
                            keep_preflight=False, json=False)
     runner._detach(d, a)
+    assert json.loads((d / "state.json").read_text())["host"] == config.short_host()
     assert rq.wait([d], timeout=0.05, poll=0.01) == 2      # running, not died
 
 
 def test_a_rerun_step_drops_the_last_attempts_verdict(tmp_path, monkeypatch):
-    rec = {"name": "s", "status": "stopped", "rc": -15, "seconds": 588.3,
+    rec = {"name": "s", "status": "stopped", "rc": -15, "seconds": 588.3, "attempts": 2,
            "finished": "then", "reasons": ["exit code -15"], "warnings": []}
     state = {"tree": str(tmp_path), "qdir": str(tmp_path), "steps": [rec]}
     seen = {}
@@ -47,4 +49,4 @@ def test_a_rerun_step_drops_the_last_attempts_verdict(tmp_path, monkeypatch):
     monkeypatch.setattr(runner._steps, "env", lambda state: {})
     runner._attempts({}, rec, tmp_path, state, ["true"], {}, 0)
     assert seen["status"] == "running"
-    assert not {"rc", "seconds", "finished", "reasons", "warnings"} & seen.keys()
+    assert not {"rc", "seconds", "attempts", "finished", "reasons", "warnings"} & seen.keys()
