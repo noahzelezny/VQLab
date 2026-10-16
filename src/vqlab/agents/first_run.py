@@ -56,7 +56,7 @@ def run(out=sys.stderr) -> pathlib.Path | None:
               f"`vqlab lab config set lab PATH`", file=out)
         return None
     S._reset()
-    free = S.free_bytes(lab) or 0
+    free = C.free_bytes(lab) or 0
     print(f"vqlab: first run. Models, teachers and work in progress go in {lab}\n"
           f"       ({free / GIB:,.0f} GiB free there). Config: {C.config_file()}\n"
           f"       To use another folder: `vqlab lab config set lab PATH`, or `vqlab gui` -> Storage\n"

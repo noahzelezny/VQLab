@@ -195,3 +195,26 @@ def test_an_interrupted_fetch_records_nothing(tmp_path, monkeypatch):
     with pytest.raises(KeyboardInterrupt):
         _fetch.main(["org/model", str(tmp_path), D.LOCKFILE, D.RCFILE])
     assert not (tmp_path / D.RCFILE).exists()
+
+
+def test_plan_says_size_folder_room_and_fit(lab, monkeypatch):
+    monkeypatch.setattr(D.config, "free_bytes", lambda p: 7 * D.GIB)
+    p = D.plan({"repo": "org/model"})
+    assert p["bytes"] == p["need"] == 1000 and p["free"] == 7 * D.GIB and p["fits"]
+    assert p["dest"] == str(D.dest("org/model"))
+    with pytest.raises(UserError, match="org/name"):
+        D.plan({"repo": "nope"})
+
+
+def test_a_download_the_disk_cannot_hold_is_refused(lab, monkeypatch):
+    """A resume counts only the bytes still to fetch; plan and start agree."""
+    _, procs, _ = lab
+    D.dest("org/model").mkdir(parents=True)
+    (D.dest("org/model") / "model.safetensors").write_bytes(b"x" * 400)
+    asked = []
+    monkeypatch.setattr(D.config, "free_shortfall",
+                        lambda path, need: asked.append(need) or 10 * D.GIB)
+    assert D.plan({"repo": "org/model"})["fits"] is False
+    with pytest.raises(UserError, match="not enough room"):
+        D.start({"repo": "org/model"})
+    assert asked == [600, 600] and not procs

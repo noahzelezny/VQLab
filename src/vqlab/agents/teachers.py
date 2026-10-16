@@ -22,7 +22,7 @@ import threading
 from vqlab import config
 from vqlab.agents import model_scan
 from vqlab.util.errors import UserError
-from vqlab.core.source import fit_store
+from vqlab.core.source import fit_store, teacher_profiles
 from vqlab.family import registry
 from vqlab.mtp import registry as mtp_registry
 from vqlab.plan import recipe_queue
@@ -112,13 +112,15 @@ def teachers() -> dict:
         if prof.get("unknown_family"):
             continue
         arch, by = prof.get("arch") or {}, (prof.get("bytes") or {})
-        local = _local((prof.get("identity") or {}).get("path"))
+        ident = prof.get("identity") or {}
+        local = _local(teacher_profiles.teacher_source(ident) or "")
         if local:
             have.add(local)
             names.add(teacher)
         out.append({
             "id": f"{family}/{teacher}", "family": family, "teacher": teacher,
-            "name": (prof.get("identity") or {}).get("hf_repo") or teacher.replace("--", "/", 1),
+            "name": ident.get("hf_repo") or teacher.replace("--", "/", 1),
+            "hf_repo": ident.get("hf_repo"),
             "kind": arch.get("kind"), "model_type": arch.get("model_type"),
             "layers": arch.get("layers"), "vq_layers": len(arch.get("vq_layers") or []),
             "first_vq": min(arch.get("vq_layers") or [0]), "experts": arch.get("experts"),

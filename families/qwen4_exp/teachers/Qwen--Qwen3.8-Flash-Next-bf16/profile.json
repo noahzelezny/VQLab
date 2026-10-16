@@ -5,8 +5,8 @@
  "teacher": "Qwen--Qwen3.8-Flash-Next-bf16",
  "identity": {
   "path": "<teachers>/Qwen--Qwen3.8-Flash-Next-bf16",
-  "hf_repo": null,
-  "hf_revision": null,
+  "hf_repo": "Qwen/Qwen3.8-Flash-Next",
+  "hf_revision": "de4b8e4d43b917e7706784d8bb445c9af86a3540",
   "config_sha256": "889658f2508e8c61d409b02e70e0d78d8d4452ec65aaafbe129805d213d2e74b",
   "shards": 131,
   "shard_fingerprint": "e607c6fddb09e99a4200c1e68c3e4350c48d78a7446feff6ba1e119efe47f38f"

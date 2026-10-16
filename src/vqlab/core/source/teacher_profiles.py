@@ -8,6 +8,8 @@ from __future__ import annotations
 import json
 import pathlib
 
+from vqlab import config
+
 
 def read_profile(p) -> dict | None:
     """A profile.json as a dict, or None when it is unreadable or not an object."""
@@ -29,3 +31,21 @@ def profiles_in(dirs) -> dict:
             if prof is not None:
                 out[(p.parent.parent.parent.name, p.parent.name)] = prof
     return out
+
+
+def download_path(repo: str) -> str:
+    """Where a Hub download of `repo` lands, in the recorded form every box
+    expands (<teachers>/<org>--<name>)."""
+    return "<teachers>/" + repo.replace("/", "--", 1)
+
+
+def teacher_source(identity: dict) -> str | None:
+    """The teacher's weights on this machine, in recorded form: the profile's
+    own path, else the folder a download of its hf_repo lands in; None when
+    neither is here. The one answer the picker and the compiler both use."""
+    repo = identity.get("hf_repo")
+    for p in (identity.get("path"), download_path(repo) if repo else None):
+        local = config.expand(p) if p else ""
+        if local and not local.startswith("hf://") and pathlib.Path(local).is_dir():
+            return p
+    return None

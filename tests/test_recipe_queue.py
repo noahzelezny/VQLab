@@ -707,3 +707,17 @@ def test_a_recorded_wiring_mtp_pack_cannot_take_is_refused(fams, wiring):
     _measured_dead_rows(fams("qwen3_5", "T", "moe", 40, mtp=1.5, wiring=wiring))
     with pytest.raises(rq.RecipeError, match=r"mtp\.json"):
         rq.compile_recipe({**_MOE, "mtp": True})
+
+
+def test_a_teacher_downloaded_by_repo_is_built_from_the_download(tmp_path, monkeypatch):
+    """A profile whose recorded folder is absent builds from the folder a
+    Hub download of its repo lands in (teacher_profiles.teacher_source)."""
+    from vqlab.core.source import teacher_profiles as tp
+    monkeypatch.setenv("VQLAB_TEACHERS_DIR", str(tmp_path / "teachers"))
+    ident = {"path": "<teachers>/Org--Moe-bf16", "hf_repo": "Org/Moe"}
+    assert tp.teacher_source(ident) is None
+    (tmp_path / "teachers" / "Org--Moe").mkdir(parents=True)
+    assert tp.teacher_source(ident) == "<teachers>/Org--Moe"
+    assert rq.source_path(tp.teacher_source(ident)) == "<teachers>/Org--Moe"
+    (tmp_path / "teachers" / "Org--Moe-bf16").mkdir()
+    assert tp.teacher_source(ident) == ident["path"]   # the recorded folder wins

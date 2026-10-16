@@ -33,7 +33,9 @@ from huggingface_hub.errors import HfHubHTTPError
 
 from vqlab import config
 from vqlab.agents import model_scan
+from vqlab.core.source import teacher_profiles
 from vqlab.util.errors import UserError
+from vqlab.util.fs import GIB
 from vqlab.queue import files as qf
 from vqlab.util.fs import dir_bytes, write_json_atomic
 from vqlab.core.artifacts.artifact import Artifact
@@ -82,7 +84,7 @@ def _save(state: dict) -> None:
 
 
 def dest(repo: str) -> pathlib.Path:
-    return config.teachers() / repo.replace("/", "--", 1)
+    return pathlib.Path(config.expand(teacher_profiles.download_path(repo)))
 
 
 def _plan(repo: str) -> tuple[list[str], int]:
@@ -163,20 +165,53 @@ def _ended(e: dict) -> None:
         model_scan.refresh_in_background()
 
 
-def start(body: dict) -> dict:
+def _repo(body: dict) -> str:
     repo = str(body.get("repo") or "")
     if not REPO.match(repo):
         raise UserError("a Hugging Face model id is org/name")
+    return repo
+
+
+def _sized(repo: str) -> tuple[list[str], int]:
+    """The allow list and total bytes of a download (_plan), with the Hub's
+    refusals as one plain line."""
+    try:                                         # network: never under _LOCK
+        return _plan(repo)
+    except HUB_ERRORS as exc:                    # not found, gated, offline
+        first = str(exc).strip().splitlines()[0] if str(exc).strip() else type(exc).__name__
+        raise UserError(f"cannot read {repo} on the Hub: {first}") from exc
+
+
+def _room(repo: str, total: int) -> tuple[pathlib.Path, int, int | None]:
+    """(folder, bytes still to fetch, the free bytes when they fall short):
+    the one verdict `plan` shows and `start` enforces."""
+    d = dest(repo)
+    need = max(0, total - dir_bytes(d)) if d.is_dir() else total
+    return d, need, config.free_shortfall(d, need)
+
+
+def plan(body: dict) -> dict:
+    """What a download of `repo` would write, where, the room there, and
+    whether it fits."""
+    repo = _repo(body)
+    _, total = _sized(repo)
+    d, need, short = _room(repo, total)
+    return {"repo": repo, "bytes": total, "need": need, "dest": str(d),
+            "free": config.free_bytes(d), "fits": short is None}
+
+
+def start(body: dict) -> dict:
+    repo = _repo(body)
     with _LOCK:
         e = _load().get(repo)
         if e and _alive(repo, e):
             return {"ok": True, "status": "downloading"}
-    try:                                         # network: never under _LOCK
-        allow, total = _plan(repo)
-    except HUB_ERRORS as exc:                    # not found, gated, offline
-        first = str(exc).strip().splitlines()[0] if str(exc).strip() else type(exc).__name__
-        raise UserError(f"cannot read {repo} on the Hub: {first}") from exc
-    d = dest(repo)
+    allow, total = _sized(repo)
+    d, need, short = _room(repo, total)
+    if short is not None:
+        raise UserError(f"not enough room: {repo} needs {need / GIB:.1f} GiB more and "
+                        f"that disk has {short / GIB:.1f} GiB free; choose another "
+                        "folder for original models in Storage")
     d.mkdir(parents=True, exist_ok=True)
     with _LOCK:
         state = _load()
@@ -198,7 +233,7 @@ def start(body: dict) -> dict:
 
 
 def stop(body: dict) -> dict:
-    repo = str(body.get("repo") or "")
+    repo = _repo(body)
     with _LOCK:
         state = _load()
         e = state.get(repo)

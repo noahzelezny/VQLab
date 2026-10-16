@@ -169,3 +169,18 @@ def test_skipzero_saving_only_where_dead_rows_were_measured(lab):
     # half of layer 1's gate rows, at 8 MiB a module, less a 1-bit-per-row mask
     assert z["gib"]["d4-K256"] == {"1": round(((4 << 20) - 128) / 2 ** 30, 5)}
     assert z["source"] == "a fake build" and z["findings"] == ["F0"]
+
+
+def test_a_downloaded_original_counts_as_on_disk(lab, monkeypatch):
+    """A profile whose path is absent is on disk once a Hub download of its
+    repo lands in the downloads folder, and its row carries the repo."""
+    from vqlab.agents import downloads
+    p = lab / "families" / "qwen3_5" / "teachers" / "Org--Moe" / "profile.json"
+    prof = json.loads(p.read_text())
+    prof["identity"] = {"path": str(lab / "nowhere"), "hf_repo": "Org/Moe"}
+    p.write_text(json.dumps(prof))
+    [t] = T.teachers()["teachers"]
+    assert t["hf_repo"] == "Org/Moe" and t["on_disk"] is False
+    downloads.dest("Org/Moe").mkdir(parents=True)
+    [t] = T.teachers()["teachers"]
+    assert t["on_disk"] is True

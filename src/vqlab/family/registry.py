@@ -10,7 +10,10 @@ fit_dense_vq.py; one table, imported everywhere, ends that.
 from vqlab.core.source.teacher_profiles import profiles_in, read_profile
 
 FAMILY = {
+    # "recipe": the Recipe page's build chain for the family, "moe" or "dense"
+    # (plan/recipe_queue.py); absent = the family builds through the CLI only
     "qwen3_5": {
+        "recipe": "moe",
         "target_substr": "switch_mlp",
         # HF-layout source: gate and up live FUSED in one [E, 2I, H] stack,
         # taken as halves along the OUT axis.
@@ -91,6 +94,7 @@ FAMILY = {
                  "down_proj": ("down_proj", None)},
     },
     "qwen3_8_dense": {
+        "recipe": "dense",
         # DENSE Qwen3.8-27B. Not an MoE: the mlp trio lives directly on the
         # layer with no .experts./.switch_mlp. segment, and each tensor is 2D
         # ([OUT, IN]) rather than [E, OUT, IN] — verify_artifact adds the E=1
@@ -119,6 +123,12 @@ FAMILY = {
                  "down_proj": ("down_proj", None)},
     },
 }
+
+def recipe_families(kind: str) -> frozenset:
+    """The families the Recipe page builds with the `kind` chain ("moe" or
+    "dense"), as each FAMILY entry declares."""
+    return frozenset(f for f, e in FAMILY.items() if e.get("recipe") == kind)
+
 
 # Dense fitter families: (src key template, default layer range "LO-HI").
 DENSE_FAMILIES = {
@@ -154,9 +164,10 @@ DENSE_REMAP = {
 #                                          else <records>/families)
 #
 # entry.json: {"kind": "moe", "target_substr", "src_key", "proj":
-# {proj: [src, half|null]}, ...} or {"kind": "dense", "src_key", "layers":
-# "LO-HI", "remap": [fit_tmpl, base_tmpl]}. A code entry above always wins
-# over a data entry of the same name, so a data file cannot silently
+# {proj: [src, half|null]}, "recipe": "moe" (optional), ...} or
+# {"kind": "dense", "src_key", "layers": "LO-HI", "remap": [fit_tmpl,
+# base_tmpl]}. A code entry above always wins over a data entry of the same
+# name, so a data file cannot silently
 # redefine a published family.
 def family_dirs():
     """The family folders, checkout first, the user's overriding."""

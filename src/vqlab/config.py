@@ -557,20 +557,46 @@ def expand(arg: str, box: str | None = None) -> str:
     return _HF_REF.sub(hf, _PLACEHOLDER.sub(sub, arg, count=1), count=1)
 
 
-def require_free(path, need_bytes: int, what: str, margin_gib: float = 5.0) -> None:
-    """Refuse a writer BEFORE it starts when its output volume cannot hold it.
-    `need_bytes` is the writer's own estimate of what it still has to write;
-    a run that would die hours in at 0 bytes free is refused in a second.
-    VQLAB_SKIP_DISK_CHECK=1 overrides (you know the estimate is wrong)."""
-    import shutil
-    if os.environ.get("VQLAB_SKIP_DISK_CHECK") == "1":
-        return
-    p = pathlib.Path(path)
+def existing(p: pathlib.Path) -> pathlib.Path | None:
+    """`p`, or its nearest ancestor that exists; None when none does."""
     while not p.exists() and p != p.parent:
         p = p.parent
-    free = shutil.disk_usage(p).free
-    need = need_bytes + margin_gib * 2**30
-    if need > free:
+    return p if p.exists() else None
+
+
+def free_bytes(path) -> int | None:
+    """Free bytes on the volume that holds `path` (or its nearest existing
+    ancestor); None when nothing on the way up exists."""
+    import shutil
+    e = existing(pathlib.Path(path).expanduser())
+    try:
+        return shutil.disk_usage(e).free if e else None
+    except OSError:
+        return None
+
+
+# room every writer leaves on its volume beyond its own estimate
+FREE_MARGIN_GIB = 5.0
+
+
+def free_shortfall(path, need_bytes: int,
+                   margin_gib: float = FREE_MARGIN_GIB) -> int | None:
+    """The free bytes on `path`'s volume when they cannot hold `need_bytes`
+    plus `margin_gib`, else None. VQLAB_SKIP_DISK_CHECK=1 never falls short
+    (you know the estimate is wrong)."""
+    if os.environ.get("VQLAB_SKIP_DISK_CHECK") == "1":
+        return None
+    free = free_bytes(path) or 0
+    return free if need_bytes + margin_gib * 2**30 > free else None
+
+
+def require_free(path, need_bytes: int, what: str,
+                 margin_gib: float = FREE_MARGIN_GIB) -> None:
+    """Refuse a writer BEFORE it starts when its output volume cannot hold it.
+    `need_bytes` is the writer's own estimate of what it still has to write;
+    a run that would die hours in at 0 bytes free is refused in a second."""
+    free = free_shortfall(path, need_bytes, margin_gib)
+    if free is not None:
         raise SystemExit(f"REFUSED ({what}): {path} needs ~{need_bytes / 2**30:.1f} GiB "
                          f"+ {margin_gib:g} GiB margin, only {free / 2**30:.1f} GiB free "
                          f"(VQLAB_SKIP_DISK_CHECK=1 overrides)")

@@ -5,8 +5,8 @@
  "teacher": "zai-org--GLM-5.3-Flash-BF16",
  "identity": {
   "path": "<teachers>/zai-org--GLM-5.3-Flash-BF16",
-  "hf_repo": null,
-  "hf_revision": null,
+  "hf_repo": "zai-org/GLM-5.3-Flash-BF16",
+  "hf_revision": "f9fed3bbc82291073373d67452e9f25317ef7577",
   "config_sha256": "33e63ec7fe607658be712bd6dd3c16c6549960d8e7f0483d34b939881b55f943",
   "shards": 120,
   "shard_fingerprint": "de717e66642ad1084b8ac68897edc42fbe6e738dbd83d7c9301c425c9163fca3"

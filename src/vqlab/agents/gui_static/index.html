@@ -295,6 +295,7 @@ input.fld.bad{border-color:var(--bad)}.fld.faint{color:var(--faint)}.fld.ro{curs
 .pnotes{height:1.5em;overflow:hidden}
 .jdsteps.plan{height:8.5em;max-height:none}
 .jdsteps.stale{opacity:.4}
+.first{padding:56px 0 64px;max-width:34em}.first h3{font-size:1.5em;font-weight:600;color:var(--fg);margin:0 0 10px;letter-spacing:0;text-transform:none}.first p{color:var(--dim);margin:0 0 22px;line-height:1.5}
 /* the open dialog is the only confirm: the page's own start/stop/resume button waits behind it */
 body:has(#jdlg:not(.hidden)) [data-qact]{visibility:hidden}
 .jdet .jobline{margin:0 0 10px}
@@ -933,9 +934,9 @@ async function reviewBuild(){
 
 // ================================================================ Recipe page
 function pgRecipe(){
-  const t=curT(),I=INFO,head=pickHead('Recipe',t?esc(t.name.split('/').pop()):TEACH.loaded?'pick a teacher':'loading…');
+  const t=curT(),I=INFO,head=pickHead('Recipe',t?esc(t.name.split('/').pop()):TEACH.loaded?'choose a model':'loading…');
   if(!t)return `<section class="panel"><h2>${head}</h2>
-  ${TEACH.err?errLine(TEACH.err):empty(TEACH.loaded?'no teacher here can be built yet; profile an original from the picker':'loading teachers…','ro')}${PICKER()}</section>`;
+  ${TEACH.err?errLine(TEACH.err):TEACH.loaded?`<div class="first"><h3>Pick a model to compress</h3><p>Choose an original model. If it is not on this machine yet, VQ Lab downloads it for you.</p><button class="btn go" data-pick>Choose a model →</button></div>`:empty('loading teachers…','ro')}${PICKER()}</section>`;
   const r=recipe.draft,moe=isMoe(t),fg=fitGeos(t).map(g=>g.geo),B=t.gib||{},rb=recipe.rb;
   const qrow=(label,k,vals,info)=>`<div class="bitrow"><span class="lbl"><span class="lt">${label}</span>${I(info)}</span><div class="kseg small">${vals.map(b=>`<button aria-pressed="${r[k]===b}" data-g="${k}" data-v="${b}">${k==='group'?b:k==='aprotect'&&!b?'=':'q'+b}</button>`).join('')}</div></div>`;
   const step=(label,nav,val,btns,info)=>`<div class="bitrow"><span class="lbl"><span class="lt">${label}</span>${I(info)}</span><div class="kseg small">${btns.map(([c,d,off])=>d===0?`<button class="cur" aria-pressed="true" tabindex="-1">${esc(val)}</button>`:`<button data-nav="${nav}" data-d="${d}" ${off?'disabled':''} aria-label="${nav} ${d}">${c}</button>`).join('')}</div></div>`;
@@ -1141,19 +1142,29 @@ async function hubSearch(q){
   else HF.data=got.d.filter(m=>m.safetensors&&m.config&&m.config.model_type&&words.slice(1).every(w=>m.id.toLowerCase().includes(w))).map(hfRow).sort((a,b)=>(!!a.why)-(!!b.why)).slice(0,30);
   if(pickFam==='hf')renderHub();
 }
-function hubDialog(){
+// the one download-confirm dialog (Hub search and the picker's Download button): size, destination and free room from the server's plan
+function dlConfirm(id,o){
   const box=$('#picker .box'),old=box.querySelector('.hfdlg');
+  if(old&&old.dataset.repo===id){old._draw(o);return}
   if(old){dropModal(old);old.remove()}
-  const id=HF.open;if(!id)return;
+  const el=document.createElement('div');el.className='hfdlg';el.dataset.repo=id;
+  const draw=el._draw=(o2=o)=>{o=o2;const p=el._plan,tight=p&&!p.err&&!p.fits,sz=!p?'checking size…':p.err?'':gibHub(p.bytes);
+    const note=!p||p.err?'':tight?'Not enough room on that disk.':o.line||'';
+    el.innerHTML=`<div class="hfbox"><div class="hfttl">${esc(id)}</div>${o.sub?`<div class="hfsz">${esc(o.sub)}</div>`:''}<div class="hfsz">${sz}</div>${p&&!p.err?`<div class="hfsz">saves to ${esc(p.dest)}</div>${p.free!=null?`<div class="hfsz">${gibHub(p.free)} free on that disk</div>`:''}`:''}<div class="vs hfnote">${p&&p.err?errLine(p.err,'jdbad'):esc(note)}</div><div class="hfbtns"><button class="mini" data-c>Cancel</button>${tight?'<button class="mini" data-f>Change folder</button>':''}<button class="mini pri" data-d${o.can!==false&&p&&!p.err&&!tight?'':' disabled'}>Download</button></div></div>`;
+    el.querySelector('[data-c]').onclick=()=>closeModal(el);
+    const f=el.querySelector('[data-f]');if(f)f.onclick=()=>{closeModal($('#picker'));go(P.storage)};
+    el.querySelector('[data-d]').onclick=async()=>{const x=await dlAct('start',id);if(x.ok){dl.onb.set(id,Date.now());closeModal(el);dlNext()}else el.querySelector('.hfnote').textContent=x.msg}};
+  draw();box.appendChild(el);openModal(el,{onClose:()=>{el.remove();if(o.onClose)o.onClose()}});
+  // asked afresh on every open: the folder and the room change whenever Storage does
+  api('/api/downloads/plan',{repo:id}).then(r=>{el._plan=notFailed(r)?r.j:{err:errOf(r)};if(el.isConnected)draw()});
+}
+function hubDialog(){
+  const old=$('#picker .box').querySelector('.hfdlg'),id=HF.open;
+  if(!id){if(old)closeModal(old);return}
   const r=(HF.data||[]).find(x=>x.id===id);if(!r)return;
   const d=dlOf(id),local=localNames().has(id),busy=d&&d.status==='downloading';
   const line=local?'already a local teacher':busy?'downloading…':r.why?r.why:r.gated?'gated — needs access on your Hub account':'';
-  const can=!r.why&&!local&&!busy;
-  const el=document.createElement('div');el.className='hfdlg';
-  el.innerHTML=`<div class="hfbox"><div class="hfttl">${esc(id)}</div><div class="hfsz">${r.why?esc(r.dtype||''):esc(r.dtype||'bf16')+' teacher'}</div><div class="hfsz">${gibHub(r.size)}</div><div class="vs hfnote">${esc(line)}</div><div class="hfbtns"><button class="mini" data-c>Cancel</button><button class="mini pri" data-d${can?'':' disabled'}>Download</button></div></div>`;
-  el.querySelector('[data-c]').onclick=()=>closeModal(el);
-  el.querySelector('[data-d]').onclick=async()=>{const x=await dlAct('start',id);if(x.ok)closeModal(el);else el.querySelector('.hfnote').textContent=x.msg};
-  box.appendChild(el);openModal(el,{onClose:()=>{HF.open='';el.remove();renderHub()}});
+  dlConfirm(id,{sub:r.why?r.dtype||'':(r.dtype||'bf16')+' teacher',line,can:!r.why&&!local&&!busy,onClose:()=>{HF.open='';renderHub()}});
 }
 function renderHub(){
   const loc=localNames();
@@ -1165,9 +1176,9 @@ function renderHub(){
 function renderPicker(){
   if(!$('#psearch'))return;
   const q=($('#psearch').value||'').toLowerCase(),rec=UI.page===P.recipe;
-  $('#psearch').placeholder=pickFam==='hf'?'Search Hugging Face (bf16 teachers)':'model or Hub repo';
+  $('#psearch').placeholder=pickFam==='hf'?'Search Hugging Face for an original':'model or Hub repo';
   const all=rec?[...TEACH.data,...TEACH.unp]:LIB_ROWS,nm=t=>t.n||t.name||'';
-  $('#pcount').textContent=rec?`${TEACH.data.length} teachers`:`${LIB_ROWS.length} local teachers`;
+  $('#pcount').textContent=rec?`${TEACH.data.length} models`:`${LIB_ROWS.length} models`;
   const creators=[...new Set(all.map(creator))];
   $('#pfams').innerHTML=`<button class="pfam" aria-current="${pickFam==='hf'}" data-pf="hf">Hugging Face<i>↗</i></button><div class="pfsep"></div>`+[['all','All'],...creators.map(c=>[c,c])].map(([k,l])=>`<button class="pfam" aria-current="${pickFam===k}" data-pf="${k}">${esc(l)}<i>${k==='all'?all.length:all.filter(t=>creator(t)===k).length}</i></button>`).join('');
   if(pickFam==='hf'){renderHub();return}
@@ -1175,8 +1186,12 @@ function renderPicker(){
   const kinds=`<div class="pkind"><div class="seg small pk">${[['all','all'],['dense','dense'],['moe','MoE']].map(([v,n])=>`<button aria-pressed="${pickKind===v}" data-pk="${v}">${n}</button>`).join('')}</div></div>`;
   let body;
   if(rec){
-    const row=t=>{const why=!t.buildable?`no build chain for ${t.family} yet`:!t.on_disk?'the original is not on this machine':'',nfit=Object.values(t.fits||{}).reduce((a,b)=>a+b,0);
-      return `<div class="prow${why?' no':' pick'}" role="button" tabindex="0" ${why?'':`data-pt="${esc(t.id)}"`} aria-current="${t.id===recipe.draft.teacher}"><span class="n">${esc(t.name)}${why?' '+INFO(esc(why)):''}</span><span class="m">${esc(t.kind||'')}${t.layers?' · '+t.layers+' layers':''}</span><span class="d">${nfit} fitted modules in the store · ${t.scored?'KL caches registered':'no KL caches'}</span></div>`};
+    const dlBtn=repo=>{const d=dlOf(repo),run=d&&d.status==='downloading';return `<button class="mini pri" data-dlg="${esc(repo)}"${run?' disabled':''}>${run?`downloading ${d.total?Math.round(100*d.bytes/d.total):0}%`:'Download'}</button>`};
+    // the sub-line says where the row stands without a bubble: status, shape, size, and whether a build gets a score
+    const row=t=>{const dlable=t.buildable&&!t.on_disk&&t.hf_repo,why=!t.buildable?'builds from the command line for now':!t.on_disk?'not on this machine':'',
+        size=Object.values(t.gib||{}).reduce((a,b)=>a+b,0),
+        sub=[why||'ready to build',(t.kind||'')+(t.layers?' · '+t.layers+' layers':''),size?gib(size*2**30):'',t.scored?'':'builds are not scored'].filter(Boolean).join(' · ');
+      return `<div class="prow${!why?' pick':dlable?'':' no'}" ${why?'':`role="button" tabindex="0" data-pt="${esc(t.id)}"`} aria-current="${t.id===recipe.draft.teacher}"><span class="n">${esc(t.name)}</span><span class="m">${dlable?dlBtn(t.hf_repo):''}</span><span class="d">${esc(sub)}</span></div>`};
     const urow=u=>{const busy=u.profiling||TEACH.pend.has(u.path);
       return `<div class="prow"><span class="n">${esc(u.name||u.path)}</span><span class="m"><button class="mini pri" data-prof="${esc(u.path)}"${busy?' disabled':''}>${busy?'profiling…':'Profile'}</button></span><span class="d">${esc(u.family||'')}${u.bytes!=null?' · '+gib(u.bytes):''}${TEACH.perr[u.path]?' · '+esc(TEACH.perr[u.path]):''}</span></div>`};
     const ps=list.filter(t=>!t.path&&t.id),us=pickKind==='all'?list.filter(t=>t.path):[];
@@ -1477,7 +1492,7 @@ function renderFlow(){
 // buttons that apply on a mouse press, so a re-render between press and release cannot swallow the click; that
 // press's own 'click' is then skipped. Touch keeps the plain click (a finger that lands and scrolls must not fire),
 // and so does the keyboard (detail 0).
-const PRESS=['g','nav','fork'],PRESS_SEL=PRESS.map(k=>`[data-${k}]`).join();let pressed=false;
+const PRESS=['g','nav','fork','dlg'],PRESS_SEL=PRESS.map(k=>`[data-${k}]`).join();let pressed=false;
 const onPress=(k,fn)=>on(k,(el,e)=>{if(e.type==='click'&&e.detail&&pressed){pressed=false;return}fn(el,e)});
 // Library
 on('sel',(el,e)=>{if(e.target.closest('a'))return;lib.sel=el.dataset.sel;render()});
@@ -1493,6 +1508,7 @@ on('pclose',()=>closeModal($('#picker')));
 on('pf',el=>{pickFam=el.dataset.pf;renderPicker()});
 on('pk',el=>{pickKind=el.dataset.pk;renderPicker()});
 on('prof',el=>profileStart(el.dataset.prof));
+onPress('dlg',el=>dlConfirm(el.dataset.dlg,{}));
 on('pt',el=>pickTeacher(el.dataset.pt));
 on('hf',el=>{HF.open=el.dataset.hf;hubDialog()});
 // Recipe

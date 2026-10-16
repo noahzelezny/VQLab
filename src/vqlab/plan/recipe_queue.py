@@ -94,10 +94,12 @@ from vqlab.plan import preflight_ram
 from vqlab.util.errors import UserError
 from vqlab.util.geo import geo_key
 from vqlab.core.artifacts.artifact import Artifact, INDEX
+from vqlab.core.source import teacher_profiles
 from vqlab.util.fs import GIB, write_text_atomic
 
-MOE = {"qwen3_5"}
-DENSE = {"qwen3_8_dense"}
+# the families each build chain serves, as the family registry declares them
+MOE = registry.recipe_families("moe")
+DENSE = registry.recipe_families("dense")
 # every family the compiler builds
 COMPILED = MOE | DENSE
 GEO = re.compile(r"^d(\d+)-?[kK](\d+)$")
@@ -710,7 +712,8 @@ def compile_recipe(r: dict) -> tuple[dict, list[str]]:
 def _compile(raw: dict) -> tuple[dict, list[str]]:
     r = Recipe.from_json(raw)
     prof = load_profile(r.family, r.teacher)
-    src = source_path(prof["identity"]["path"])
+    ident = prof["identity"]
+    src = source_path(teacher_profiles.teacher_source(ident) or ident["path"])
     kind = prof["arch"].get("kind")
     if (r.family in MOE) != (kind == "moe"):
         raise RecipeError(f"{r.teacher} is {kind}, but {r.family} builds are compiled as "

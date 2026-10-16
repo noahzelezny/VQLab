@@ -5,8 +5,8 @@
  "teacher": "Qwen--Qwen3.5-2B",
  "identity": {
   "path": "<models>/Qwen--Qwen3.5-2B",
-  "hf_repo": null,
-  "hf_revision": null,
+  "hf_repo": "Qwen/Qwen3.5-2B",
+  "hf_revision": "15852e8c16360a2fea060d615a32b45270f8a8fc",
   "config_sha256": "ed1c1723241f23f7f4e23430759cbd7dcfb4103cbdfe052bfe7626b57c2615b4",
   "shards": 1,
   "shard_fingerprint": "6f279d8c3dc2d06724673741a413b952d8564e943876d9b781a5c7315fa5e4a5"

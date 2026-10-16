@@ -23,7 +23,8 @@ nothing here computes a number of its own:
   /api/teachers      profiled teachers (sizes per geometry, fits, buildable) and
                     scanned originals not yet profiled; POST /profile profiles one
   /api/scores        measured KL cells, newest per artifact x cache (records/scores.py)
-  /api/downloads     Hub downloads into <teachers>; POST /start, /stop (agents/downloads.py)
+  /api/downloads     Hub downloads into <teachers>; POST /plan (size, folder,
+                     room), /start, /stop (agents/downloads.py)
   /api/jobs/files    queue files the Jobs page can start (<records>/queue-files)
   POST /api/jobs/recipe  a Recipe -> a queue file (plan/recipe_queue.py); /preview
                     the steps it would compile to, written nowhere
@@ -384,7 +385,8 @@ POSTS = {"/api/settings": post_settings, "/api/models/scan": post_models_scan,
          "/api/jobs/start": jobs.start, "/api/jobs/stop": jobs.stop, "/api/jobs/resume": jobs.resume,
          "/api/jobs/recipe": jobs.write_recipe, "/api/jobs/preview": jobs.preview,
          "/api/teachers/profile": teachers.profile,
-         "/api/downloads/start": downloads.start, "/api/downloads/stop": downloads.stop}
+         "/api/downloads/plan": downloads.plan, "/api/downloads/start": downloads.start,
+         "/api/downloads/stop": downloads.stop}
 
 
 class Handler(BaseHTTPRequestHandler):

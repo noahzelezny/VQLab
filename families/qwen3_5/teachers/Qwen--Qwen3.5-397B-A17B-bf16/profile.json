@@ -5,8 +5,8 @@
  "teacher": "Qwen--Qwen3.5-397B-A17B-bf16",
  "identity": {
   "path": "<models>/Qwen--Qwen3.5-397B-A17B-bf16",
-  "hf_repo": null,
-  "hf_revision": null,
+  "hf_repo": "Qwen/Qwen3.5-397B-A17B",
+  "hf_revision": "8472618112abcbd45acbcdc58436aff4233c23f7",
   "config_sha256": "3ae7fa89c2f7d1354096418ddaf1331e9e0898a8ca11e804fb6dbaa087efb7da",
   "shards": 94,
   "shard_fingerprint": "fc58dc62145990f146199c9773a5474b1dda57ae41d8504f3520518d829ac8ca"

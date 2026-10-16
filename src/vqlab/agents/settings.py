@@ -37,22 +37,6 @@ def _reset():
     C._file_table.cache_clear()
 
 
-def _existing(p: pathlib.Path) -> pathlib.Path | None:
-    while not p.exists() and p != p.parent:
-        p = p.parent
-    return p if p.exists() else None
-
-
-def free_bytes(path) -> int | None:
-    """Free bytes on the volume that holds `path` (or its nearest existing
-    ancestor); None when nothing on the way up exists."""
-    e = _existing(pathlib.Path(path).expanduser())
-    try:
-        return shutil.disk_usage(e).free if e else None
-    except OSError:
-        return None
-
-
 def source(key: str) -> str:
     env = C._ENV[key]
     if os.environ.get(env):
@@ -82,7 +66,7 @@ def locations() -> list[dict]:
         rows.append({"key": k, "paths": [str(p) for p in paths], "source": source(k),
                      "shared_with": "models" if shared else None,
                      "exists": [p.exists() for p in paths],
-                     "free_bytes": [free_bytes(p) for p in paths],
+                     "free_bytes": [C.free_bytes(p) for p in paths],
                      "description": DESCRIPTIONS[k]})
     return rows
 
@@ -125,7 +109,7 @@ LABELS = {"models": "models", "teachers": "bf16 teachers", "scratch": "work in p
 def _volume(p: pathlib.Path):
     """(device id, mount point) of the volume holding `p` (or its nearest
     existing ancestor)."""
-    e = _existing(p)
+    e = C.existing(p)
     if e is None:
         return None, None
     dev, m = e.stat().st_dev, e.resolve()
@@ -180,7 +164,7 @@ def validate(key: str, path: str, create: bool = False) -> dict:
         return {**res, "error": f"{d} exists and is not a directory"}
     if not d.exists():
         if not create:
-            return {**res, "free_bytes": free_bytes(d),
+            return {**res, "free_bytes": C.free_bytes(d),
                     "error": f"{d} does not exist (create it, or pass create)"}
         try:
             d.mkdir(parents=True, exist_ok=True)
@@ -191,8 +175,9 @@ def validate(key: str, path: str, create: bool = False) -> dict:
         with tempfile.NamedTemporaryFile(dir=d, prefix=".vqlab-write-test-"):
             pass
     except OSError as e:
-        return {**res, "free_bytes": free_bytes(d), "error": f"{d} is not writable: {e}"}
-    return {**res, "ok": True, "free_bytes": free_bytes(d), "error": None}
+        return {**res, "free_bytes": C.free_bytes(d),
+                "error": f"{d} is not writable: {e}"}
+    return {**res, "ok": True, "free_bytes": C.free_bytes(d), "error": None}
 
 
 _TABLE = re.compile(r"^\s*\[\[?([^\]]+)\]\]?\s*(#.*)?$")

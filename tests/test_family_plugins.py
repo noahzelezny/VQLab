@@ -20,3 +20,14 @@ def test_keep_fp_is_a_tuple_of_suffixes():
     for p in plugins().values():
         assert isinstance(p.keep_fp, tuple) and p.keep_fp, p.name
         assert all(isinstance(s, str) and s for s in p.keep_fp), p.name
+
+
+def test_recipe_chains_come_from_the_registry():
+    """The compiler builds exactly the families that declare a recipe kind."""
+    from vqlab.plan import recipe_queue
+    assert recipe_queue.MOE == families.recipe_families("moe") >= {"qwen3_5"}
+    assert recipe_queue.DENSE == families.recipe_families("dense") >= {"qwen3_8_dense"}
+    assert families.FAMILY["qwen3_5"]["recipe"] == "moe"
+    assert families.FAMILY["qwen3_8_dense"]["recipe"] == "dense"
+    assert "recipe" not in families.FAMILY["glm5_next"]      # CLI-only for now
+    assert "glm5_next" not in recipe_queue.COMPILED
