@@ -204,6 +204,7 @@ def queues_snapshot(n=40):
     this machine still owns the queue (queue/report.py runner_pid, the check
     `vqlab queue status` and the Jobs page's Resume make)."""
     dirs = sorted(qfiles.queue_dirs(), key=lambda p: p.name, reverse=True)[:max(1, n)]
+    started = qfiles.sources()
     out = []
     for d in dirs:
         try:
@@ -215,6 +216,8 @@ def queues_snapshot(n=40):
         out.append({"id": d.name, "name": s.get("name"), "status": s.get("status"), "live": live,
                     "eta": queue_eta.queue_eta(d, qfiles.queues_dir()) if live else None,
                     "preflight": bool(s.get("preflight")),
+                    "promoted": bool(s.get("preflight"))
+                    and qfiles.full_run_started(d, started),
                     "created": s.get("created"), "host": s.get("host"), "commit": s.get("commit"),
                     "source": s.get("source"),
                     "steps": [dict({k: r.get(k) for k in ("name", "status", "seconds", "started", "finished",

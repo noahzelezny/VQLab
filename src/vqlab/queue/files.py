@@ -52,6 +52,27 @@ def queue_dirs() -> list[pathlib.Path]:
     return sorted(p for p in queues_dir().glob("*") if (p / "state.json").exists())
 
 
+def sources() -> set[str]:
+    """The queue file every queue dir was created from (a full run's is its
+    preflight's queue.json)."""
+    out = set()
+    for p in queue_dirs():
+        try:
+            s = load_state(p).get("source")
+        except ValueError:
+            continue    # half-written: the Jobs list skips it too
+        if s:
+            out.add(s)
+    return out
+
+
+def full_run_started(qdir: pathlib.Path, started: set[str] | None = None) -> bool:
+    """Whether a preflight's full run has been created; `started` is a
+    precomputed sources() for callers checking many dirs."""
+    started = sources() if started is None else started
+    return str((qdir / "queue.json").resolve()) in started
+
+
 def latest():
     qs = queue_dirs()
     return qs[-1] if qs else None

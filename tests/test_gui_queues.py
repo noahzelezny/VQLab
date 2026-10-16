@@ -38,3 +38,20 @@ def test_eta_only_while_a_runner_owns_the_queue(lab_dirs, monkeypatch):
     monkeypatch.setattr(report, "pid_cmdline", lambda pid: "python -m vqlab.cli queue run q.json")
     [r] = gui.queues_snapshot()
     assert r["live"] is True and set(r["eta"]) >= {"eta_s", "steps"}
+
+
+def test_a_promoted_preflight_offers_no_second_full_run(tmp_path, monkeypatch):
+    """The Jobs page hides Start full run once the preflight's full run exists."""
+    def q(name, **state):
+        d = tmp_path / name
+        d.mkdir()
+        state = {"name": name, "status": "passed", "steps": [], **state}
+        (d / "state.json").write_text(json.dumps(state))
+        return d
+    pf = q("20260101-000000-a-preflight", preflight=True)
+    q("20260101-000001-b-preflight", preflight=True)
+    q("20260101-000002-a", source=str((pf / "queue.json").resolve()))
+    monkeypatch.setenv("VQLAB_QUEUE_DIR", str(tmp_path))
+    by = {r["id"]: r["promoted"] for r in gui.api_queues({"n": ["5"]})}
+    assert by == {"20260101-000000-a-preflight": True,
+                  "20260101-000001-b-preflight": False, "20260101-000002-a": False}

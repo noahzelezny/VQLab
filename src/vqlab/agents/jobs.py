@@ -146,7 +146,7 @@ def _source(body: dict) -> tuple[pathlib.Path, list[str]]:
     if not (s.get("preflight") and s.get("status") == "passed"):
         raise UserError("a full run starts from a preflight that passed")
     qfile = d / "queue.json"
-    if any(qf.load_state(o).get("source") == str(qfile.resolve()) for o in qf.queue_dirs()):
+    if qf.full_run_started(d):
         raise UserError("this preflight's full run was already started")
     if s.get("installed"):
         return qfile, []
