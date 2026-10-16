@@ -14,7 +14,7 @@ table:
   arch        model_type, layers, experts, hidden / expert widths, which
               layers are dense, vision tower, MTP head
   bytes       every tensor classified (experts / carry / embed / vision /
-              mtp) at its source dtype, and expert bytes PER LAYER
+              audio / mtp) at its source dtype, and expert bytes PER LAYER
   modules     one row per expert projection: (E, OUT, IN) -- the shape
               signature fit parts are attributed by (core/source/fit_store.py)
   geometries  per projection, which (d, K) are LEGAL: exact packing
@@ -47,7 +47,7 @@ import sys
 from vqlab import config as _config
 from vqlab import config
 from vqlab.core.artifacts.artifact import read_header, tensor_class
-from vqlab.family.registry import DENSE_FAMILIES, FAMILY
+from vqlab.family.registry import DENSE_FAMILIES, FAMILY, embed_regex
 from vqlab.core.source import fit_store as fitstore
 from vqlab.records import provenance
 from vqlab.util.geo import geo_key
@@ -58,6 +58,9 @@ TG_BYTES = 32768               # threadgroup codebook cache ceiling
 DTYPE_BYTES = {"BF16": 2, "F16": 2, "F32": 4, "F8_E4M3": 1, "F8_E5M2": 1,
                "I8": 1, "U8": 1, "I32": 4, "U32": 4, "I64": 8}
 DIMS = (2, 4, 8)
+# an audio tower (gemma4): its own class, never carry, since a converter
+# whose runtime drops it writes none of its bytes
+AUDIO_PREFIXES = ("audio_tower.", "embed_audio.")
 KS = tuple(2 ** b for b in range(4, 17))          # K16 .. K65536
 
 
@@ -100,13 +103,24 @@ def dense_rows(tmpl, shapes, n_layers):
     return rows
 
 
+def embed_rows(key: str, shapes: dict) -> list[dict]:
+    """A family whose VQ target is one embedding table (registry "embed"):
+    the table as the one module, E=1, its rows as OUT. Its layer is a
+    placeholder: the table belongs to no layer (arch.vq_table says so)."""
+    shp = shapes.get(key) or shapes.get(key + ".weight")
+    if shp is None:
+        return []
+    rows, cols = shp
+    return [{"layer": 0, "proj": "embed", "E": 1, "OUT": rows, "IN": cols}]
+
+
 def classify(key: str, expert_rx, ple_rx=None, mtp_rx=None) -> str:
     """A tensor's byte class. `ple_rx`: the family's n-gram tables (fitted on
     their own); `mtp_rx`: a draft head stored as the trailing layer."""
     k = key.lower()
     cls = tensor_class(key)              # the one classifier (core.artifacts.artifact)
-    if cls == "tower":
-        return "vision"
+    if cls == "tower" or key.startswith(AUDIO_PREFIXES):
+        return "vision" if cls == "tower" else "audio"
     if cls == "mtp" or (mtp_rx and mtp_rx.search(key)):
         return "mtp"
     if ple_rx and ple_rx.search(key):
@@ -120,7 +134,8 @@ def classify(key: str, expert_rx, ple_rx=None, mtp_rx=None) -> str:
 
 def expert_regex(spec, dense_tmpl=None):
     """Regex over SOURCE keys for the tensors VQ replaces: routed experts
-    (MoE) or the MLP trio (dense)."""
+    (MoE) or the MLP trio (dense); a one-table family's is registry
+    embed_regex."""
     if dense_tmpl:
         pat = re.escape(dense_tmpl).replace("\\{li\\}", r"\d+").replace(
             "\\{key\\}", r"[a-z_]+")
@@ -241,7 +256,8 @@ def main(argv=None) -> int:
         if a.family:
             fam, dense_tmpl = a.family, (DENSE_FAMILIES.get(a.family) or (None,))[0]
         spec = None
-    rx = expert_regex(spec, dense_tmpl)
+    table_rx = embed_regex(fam) if fam else None
+    rx = re.compile(table_rx) if table_rx else expert_regex(spec, dense_tmpl)
     L = tc.get("num_hidden_layers") or 0
     # a draft head stored as upstream layers.<num_hidden_layers> (GLM) rather
     # than mtp.*: its tensors are the head, not a layer to fit
@@ -258,7 +274,8 @@ def main(argv=None) -> int:
             if m:
                 per_layer[int(m.group(1))] = per_layer.get(int(m.group(1)), 0) + n
 
-    rows = (dense_rows(dense_tmpl, shapes, L + 8) if dense_tmpl
+    rows = (embed_rows(spec["embed"]["key"], shapes) if table_rx
+            else dense_rows(dense_tmpl, shapes, L + 8) if dense_tmpl
             else module_rows(spec, shapes, L + 8) if spec else [])
     rows = [r for r in rows if r["layer"] != mtp_layer]
     fp = provenance.fingerprint(T)
@@ -293,7 +310,10 @@ def main(argv=None) -> int:
                  "expert_intermediate": tc.get("moe_intermediate_size"),
                  "dense_intermediate": tc.get("intermediate_size"),
                  "kind": "moe" if moe else "dense",
-                 "vq_layers": sorted({r["layer"] for r in rows}),
+                 "vq_layers": [] if table_rx else sorted({r["layer"] for r in rows}),
+                 # a one-table family: the table VQ replaces, in no layer
+                 **({"vq_table": {"key": spec["embed"]["key"], "rows": rows[0]["OUT"],
+                                  "in": rows[0]["IN"]}} if table_rx and rows else {}),
                  "vision_tower": by_class.get("vision", 0) > 0,
                  "mtp_head": by_class.get("mtp", 0) > 0,
                  "mtp_layer": mtp_layer},

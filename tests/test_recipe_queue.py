@@ -638,7 +638,9 @@ _PARITY = [
     ("qwen3_5", {"geo": "d4-K256", "skipzero": True, "mtp": True, "mtp_bits": 8},
      {"mode": "vq", "geo": "d4-K256", "protect": 8, "skipzero": True, "mtp": True,
       "mtpBits": 8}),
+    ("gemma4_e4b", {"geo": "d2-K2048"}, {"mode": "vq", "geo": "d2-K2048", "bits": 8}),
 ]
+_PARITY_TEACHER = {"qwen3_5": "T", "qwen3_8_dense": "D", "gemma4_e4b": "E"}
 
 
 def _page_size_js(page: pathlib.Path) -> str:
@@ -647,7 +649,7 @@ def _page_size_js(page: pathlib.Path) -> str:
     return src[src.index("const isMoe=t=>"):src.index("function sanitize(")]
 
 
-def test_the_recipe_page_sizes_a_build_as_the_compiler_does(fams):
+def test_the_recipe_page_sizes_a_build_as_the_compiler_does(fams, lab_dirs):
     """The live drag re-derives the compiler's artifact size in JS (instant
     feedback before the preview returns); run that JS against
     compile_recipe's estimate so the two cannot drift."""
@@ -670,13 +672,16 @@ def test_the_recipe_page_sizes_a_build_as_the_compiler_does(fams):
                 e["stack_gib"] = 16 / 3 * bits / 16
                 e["bits_per_weight"] = bits
         (d / "profile.json").write_text(json.dumps(prof))
+    _e4b(fams, lab_dirs)
     cases, want = [], []
     for family, recipe, draft in _PARITY:
-        teacher = "T" if family == "qwen3_5" else "D"
+        teacher = _PARITY_TEACHER[family]
         prof = rq.load_profile(family, teacher)
         vq = prof["arch"]["vq_layers"]
         t = {"kind": prof["arch"]["kind"], "gib": prof["bytes"]["by_class_gib"],
-             "geometries": T._geometries(prof), "vq_layers": len(vq), "first_vq": min(vq),
+             "geometries": T._geometries(prof), "vq_layers": len(vq),
+             "first_vq": min(vq, default=0), "incumbent": T._incumbent(family),
+             "table": prof["arch"].get("vq_table"),
              "skipzero": T._skipzero(family, teacher, prof),
              "mtp": T._mtp(family, teacher, prof)}
         cases.append([t, draft])
@@ -770,3 +775,59 @@ def test_glm_keeps_its_tower_in_the_base_and_its_head_at_a_layer(fams):
     assert any("always included" in w for w in warns)
     assert off["estimate"]["artifact_gib"] == pytest.approx(
         q["estimate"]["artifact_gib"] - rq._affine_gib(4.0, 6, 32), abs=0.01)
+
+
+def _e4b(fams, lab_dirs, incumbent=True):
+    """A one-table e4b teacher, and (optionally) its 8-bit incumbent in the
+    models folder: a 1 MiB table plus 1 MiB of everything else."""
+    mx = pytest.importorskip("mlx.core")
+    d = fams("gemma4_e4b", "E", "dense", 1, vision=0.3)
+    prof = json.loads((d / "profile.json").read_text())
+    prof["arch"]["vq_layers"] = []
+    prof["geometries"] = {"embed": [{"d": 2, "K": 2048, "legal": True, "stack_gib": 1.887}]}
+    (d / "profile.json").write_text(json.dumps(prof))
+    if incumbent:
+        inc = lab_dirs.models / "mlx-community--gemma-4-e4b-it-8bit"
+        inc.mkdir()
+        t = {"language_model.model.embed_tokens_per_layer.weight":
+             mx.zeros((1024, 256), dtype=mx.uint32),
+             "audio_tower.layers.0.w": mx.zeros((1024, 256), dtype=mx.uint32)}
+        mx.save_safetensors(str(inc / "model-00001.safetensors"), t)
+        (inc / "model.safetensors.index.json").write_text(json.dumps(
+            {"weight_map": dict.fromkeys(t, "model-00001.safetensors")}))
+    return d
+
+
+def test_e4b_fits_its_one_table_into_its_incumbent(fams, lab_dirs):
+    """gemma4_e4b, as the shipped VQ-PLE build was made: the 8-bit incumbent
+    is the base (towers ride it), the per-layer table is fitted by fit-ple
+    and spliced by build-dense --embed; sized as the incumbent's measured
+    bytes less the table plus the table's codes."""
+    _e4b(fams, lab_dirs)
+    q, _ = rq.compile_recipe({"name": "e", "family": "gemma4_e4b", "teacher": "E",
+                              "geo": "d2-K2048"})
+    assert _names(q)[:5] == ["fit", "remap-check", "build", "pack", "vision-smoke"]
+    assert "vision" not in _names(q)                      # no graft: it rides the base
+    fit = next(s for s in q["steps"] if s["name"] == "fit")
+    assert fit["cmd"] == "fit-ple"
+    assert fit["preflight"] == {"append": ["--rows", rq.TABLE_PREFLIGHT_ROWS]}
+    a = fit["args"]
+    assert a[a.index("--key-regex") + 1] == rq.registry.embed_regex("gemma4_e4b")
+    assert [a[a.index(f) + 1] for f in ("--dim", "--k", "--group", "--seed")] == \
+        ["2", "2048", "64", "1234"]
+    for step in ("remap-check", "build"):
+        b = _args(q, step)
+        assert b[b.index("--embed") + 1] == a[a.index("--out") + 1] and "--mlp" not in b
+        assert b[b.index("--base") + 1] == "<models>/mlx-community--gemma-4-e4b-it-8bit"
+    assert q["estimate"]["artifact_gib"] == round(1 / 1024 + 1.887, 2)
+    assert steps.validate(q) == []
+
+
+def test_e4b_without_its_incumbent_is_refused(fams, lab_dirs):
+    _e4b(fams, lab_dirs, incumbent=False)
+    with pytest.raises(rq.RecipeError, match="download mlx-community/gemma-4-e4b-it-8bit"):
+        rq.compile_recipe({"name": "e", "family": "gemma4_e4b", "teacher": "E",
+                           "geo": "d2-K2048"})
+    with pytest.raises(rq.RecipeError, match="affine build is"):
+        rq.compile_recipe({"name": "e", "family": "gemma4_e4b", "teacher": "E",
+                           "mode": "affine"})

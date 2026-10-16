@@ -21,6 +21,12 @@ the default here is 32 (NOT the body's 64). d4/K2048/g32 = 11/4 + 16/32
     vqlab fit-ple --src <bf16 dir> --out <dir> \
         [--key-regex ngram_embedding] [--k 2048 --dim 4 --group 32] \
         [--limit N]   # fit only the first N matching tensors (validation)
+        [--rows N]    # fit only each table's first N rows (validation)
+
+--rows keeps every table at its full shape, so a preflight's splice, pack and
+load run exactly as the full build's do: the rows past N are written as code
+0 at scale 0, i.e. zero rows. Such a table is loadable and useless; the
+manifest records "rows_fitted" so nothing mistakes it for a fit.
 
 Scored like every artifact: relerr per tensor, reported worst-first; the
 manifest records geometry + per-tensor relerr so a localized blowup cannot
@@ -64,6 +70,9 @@ def main(argv=None) -> int:
     ap.add_argument("--rows-chunk", type=int, default=65536)
     ap.add_argument("--limit", type=int, default=None,
                     help="fit only the first N matching tensors (validation)")
+    ap.add_argument("--rows", type=int, default=None,
+                    help="fit only each table's first N rows; the rest are written "
+                         "as zero rows at full shape (validation)")
     ap.add_argument("--seed", type=int, default=1234)
     a = ap.parse_args(argv)
 
@@ -94,12 +103,13 @@ def main(argv=None) -> int:
             continue
         W = mx.load(str(SRC / idx[key]))[key]
         ROWS, COLS = W.shape
+        FIT = min(ROWS, a.rows) if a.rows else ROWS
         if COLS % G or G % D:
             raise SystemExit(f"FAIL: {key} is [{ROWS},{COLS}]; group {G} must "
                              f"divide cols and dim {D} must divide group")
 
         per_block = COLS // D
-        sel = mx.random.randint(0, ROWS, (max(1, a.sample // per_block),))
+        sel = mx.random.randint(0, FIT, (max(1, a.sample // per_block),))
         # materialize the sample on the CPU stream BEFORE any GPU math: the
         # source is lazy (possibly over SMB), and a GPU kernel waiting on
         # storage inside a command buffer trips the Metal watchdog (M4,
@@ -131,9 +141,9 @@ def main(argv=None) -> int:
 
         codes_parts, scales_parts = [], []
         num = den = 0.0
-        for s in range(0, ROWS, a.rows_chunk):
+        for s in range(0, FIT, a.rows_chunk):
             with mx.stream(mx.cpu):
-                blk = W[s:s + a.rows_chunk].astype(mx.float32)
+                blk = W[s:min(s + a.rows_chunk, FIT)].astype(mx.float32)
                 mx.eval(blk)
             Xn, sc = norm_block(blk, D, G)
             asn = assign(Xn, C)
@@ -147,13 +157,17 @@ def main(argv=None) -> int:
             mx.clear_cache()
 
         relerr = (num / max(den, 1e-12)) ** 0.5
+        if FIT < ROWS:              # --rows: the rest as zero rows, full shape
+            codes_parts.append(mx.zeros((ROWS - FIT, per_block), dtype=mx.uint16))
+            scales_parts.append(mx.zeros((ROWS - FIT, COLS // G), dtype=mx.float16))
         mx.save_safetensors(str(OUT / f"ple-{ki:04d}.safetensors"),
                             {f"{key}.codes": mx.concatenate(codes_parts, axis=0),
                              f"{key}.codebook": C.astype(mx.float16),
                              f"{key}.vq_scales": mx.concatenate(scales_parts, axis=0)
                                                    .astype(mx.float16)})
         manifest["tensors"][key] = {"shape": [ROWS, COLS], "relerr": round(relerr, 5),
-                                    "shard": f"ple-{ki:04d}.safetensors"}
+                                    "shard": f"ple-{ki:04d}.safetensors",
+                                    **({"rows_fitted": FIT} if FIT < ROWS else {})}
         print(f"[{ki+1}/{len(keys)}] {key.split('.layers.')[-1]}  "
               f"relerr {relerr:.4f}  [{time.time()-t0:.0f}s]", flush=True)
 

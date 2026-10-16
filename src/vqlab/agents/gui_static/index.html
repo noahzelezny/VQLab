@@ -587,7 +587,7 @@ const BITS=[2,3,4,5,6,8];
 const PBITS=[4,5,6,8];  // protect widths on offer: nothing below 4
 const APBITS=[0,...PBITS];  // affine protect: 0 is '=' (uniform, the same width as the experts)
 const NAME_RE=/^[a-z0-9][a-z0-9._-]{0,79}$/;  // same rule as the recipe compiler
-const newRecipe=()=>({v:2,teacher:'',mode:'vq',geo:'',tailOn:false,tailGeo:'',tailFrom:0,bits:4,group:64,protect:8,aprotect:0,tower:false,mtp:false,mtpBits:0,score:false,name:'',nameSet:false});
+const newRecipe=()=>({v:2,teacher:'',mode:'vq',geo:'',tailOn:false,tailGeo:'',tailFrom:0,group:64,protect:8,aprotect:0,tower:false,mtp:false,mtpBits:0,score:false,name:'',nameSet:false});
 // the page and the one persisted flag that belongs to no page
 const UI={page:P.lib,stAdv:false};
 // per-page state; resources (FLEET, SCORES, TEACH, LIVE, ...) below share {data,err,timer}
@@ -829,6 +829,8 @@ function sizeRaw(t,r){
   if(r.mode==='affine'){const bpw=affBpw(r.bits,r.group),p=isMoe(t)&&r.aprotect;  // mixed: experts bits/group, the rest protect/64 (recipe_queue._affine_steps)
     return {gib:(p?skel*affBpw(p,64):skel*bpw)/16+(B.vq_target||0)*bpw/16+vis,bpw}}
   const g=geoOf(t,r.geo);if(!g)return null;
+  // a one-table family builds on its incumbent as shipped: its measured bytes less the table (recipe_queue.incumbent)
+  if(t.incumbent)return t.incumbent.gib==null?null:{gib:t.incumbent.gib+g.gib,bpw:g.bpw};
   if(!isMoe(t))return {gib:skel*affBpw(r.bits,r.group)/16+g.gib+vis,bpw:g.bpw};
   skel-=B.ple||0;                         // MoE VQ fits the n-gram tables on their own
   const base=skel*affBpw(r.protect,64)/16+pleGib(t);
@@ -847,6 +849,7 @@ function sanitize(t){
   r.tailFrom=Math.max(lo,Math.min(hi,r.tailFrom));
   if(!(t.gib||{}).vision)r.tower=false;if(!t.mtp)r.mtp=false;else if(!t.mtp.bits.includes(r.mtpBits))r.mtpBits=t.mtp.default;if(!t.scored)r.score=false;
   if(!t.skipzero)r.skipzero=false;else if(r.skipzero===undefined)r.skipzero=true;
+  if(!BITS.includes(r.bits))r.bits=t.base_bits;if(t.incumbent)r.mode='vq';
   r.protect=PBITS.find(b=>b>=(r.protect|0))||8;
   if(!isMoe(t)||!APBITS.includes(r.aprotect))r.aprotect=0;
 }
@@ -867,7 +870,7 @@ function recipeOf(t,r){
 }
 function setTeacher(id){
   const t=TEACH.data.find(x=>x.id===id);if(!t)return;const fg=fitGeos(t);
-  recipe.draft=Object.assign(newRecipe(),{teacher:id,mode:fg.length?'vq':'affine',geo:fg.length?fg[Math.floor((fg.length-1)/2)].geo:'',tower:!!(t.gib||{}).vision,score:!!t.scored,skipzero:!!t.skipzero});
+  recipe.draft=Object.assign(newRecipe(),{teacher:id,mode:fg.length?'vq':'affine',geo:fg.length?fg[Math.floor((fg.length-1)/2)].geo:'',bits:t.base_bits,tower:!!(t.gib||{}).vision,score:!!t.scored,skipzero:!!t.skipzero});
   sanitize(t);ensureName();pvKick();
 }
 // after the teacher list changes: keep the draft on a buildable teacher, re-clamped to that teacher's profile
@@ -952,7 +955,7 @@ function pgRecipe(){
     <div class="ro">geometry ${I('Only geometries a fit can be compiled at: legal on every projection of this teacher, with a known healthy fit error for the abort threshold.')}</div>
     ${geoStep(r.tailOn?'body':'geometry','geo',gi)}
     ${r.tailOn?geoStep('tail','tailGeo',ti)+step('from layer','tfrom','L'+r.tailFrom,[['‹',-1,r.tailFrom<=lo],['',0],['›',1,r.tailFrom>=hi]],`Layers ${lo} to ${hi} can start the tail. ${ntail(t,r)} of ${t.vq_layers} VQ layers take the tail geometry.`):''}
-    ${moe?qrow('protect','protect',PBITS,'Bits for attention, embeddings and shared modules. They are a small share of the bytes and a large share of the damage.'):qrow('base bits','bits',BITS,'Bits of the affine base the VQ layers sit in: attention, embeddings and norms.')+qrow('group','group',GROUPS,'Weights per scale-and-bias group in the base. Smaller groups follow the weights more closely and add 32 bits per group.')}`;
+    ${moe?qrow('protect','protect',PBITS,'Bits for attention, embeddings and shared modules. They are a small share of the bytes and a large share of the damage.'):t.incumbent?`<div class="ro">base ${I('The table is fitted into this published build. Everything else, towers included, stays exactly as it ships.')} · ${esc(t.incumbent.repo)}</div>`:qrow('base bits','bits',BITS,t.table?'Bits of the affine base the table sits in: every layer, the other embeddings and the norms.':'Bits of the affine base the VQ layers sit in: attention, embeddings and norms.')+qrow('group','group',GROUPS,'Weights per scale-and-bias group in the base. Smaller groups follow the weights more closely and add 32 bits per group.')}`;
   const affSide=`<div class="ro">experts ${I('Round-to-nearest affine quantization of every linear layer. Bits and group fix the size exactly; dragging the chart picks the bits.')}</div>
     ${qrow('bits','bits',BITS)}${qrow('group','group',GROUPS,'Weights per scale-and-bias group. Smaller groups follow the weights more closely and add 32 bits per group.')}${moe?qrow('protect','aprotect',APBITS,'Bits for attention, embeddings and shared modules at group 64; the experts keep the bits and group above. = uses the expert bits everywhere. The router stays bf16 either way.'):''}`;
   const ok=NAME_RE.test(r.name),addon=(k,label,gb)=>`<button class="addon" aria-pressed="${!!r[k]}" data-g="${k}"><i></i><span class="n">${label}</span><span class="t">+${fmt(gb)} GiB</span></button>`;
@@ -966,7 +969,7 @@ function pgRecipe(){
     <div id="plan"></div>
   </div>
   <div class="cart" id="rcart">
-    <div class="seg modeseg">${[['vq','VQ'],['affine','Affine']].map(([v,n])=>`<button aria-pressed="${r.mode===v}" data-g="mode" data-v="${v}" ${v==='vq'&&!fg.length?'disabled':''}>${n}</button>`).join('')}</div>
+    <div class="seg modeseg">${[['vq','VQ'],['affine','Affine']].map(([v,n])=>`<button aria-pressed="${r.mode===v}" data-g="mode" data-v="${v}" ${v==='vq'&&!fg.length||v==='affine'&&t.incumbent?'disabled':''}>${n}</button>`).join('')}</div>
     ${r.mode==='vq'?vqSide():affSide}
     <div class="ro">include ${I('KL score measures the build against the teacher afterwards; it needs KL caches registered for this teacher. MTP drafting packs the teacher\'s own draft head into the build at the bits chosen below, and fails the queue if the head does not accept.'+(t.skipzero?' Skip-zero drops this teacher\'s dead expert rows on disk, as every published build of it does, with no change in KL. The saving is its measured dead rows priced at this recipe\'s geometry.':''))}</div>
     ${t.skipzero&&r.mode==='vq'?`<button class="addon" aria-pressed="${!!r.skipzero}" data-g="skipzero"><i></i><span class="n">skip-zero</span><span class="t">−${fmt(szGib(t,{...r,skipzero:true}))} GiB</span></button>`:''}
@@ -1106,9 +1109,9 @@ function drawPlan(){
 }
 function drawStrip(){
   const r=recipe.draft,t=curT(),lo=t.first_vq,hi=t.first_vq+t.vq_layers-1;
-  const pal=['var(--g2)','var(--acc)'],cells=Array.from({length:t.layers},(_,l)=>r.mode==='affine'?`q${r.bits} g${r.group}`:l<lo||l>hi?'':(r.tailOn&&l>=r.tailFrom?r.tailGeo:r.geo));
+  const pal=['var(--g2)','var(--acc)'],cells=Array.from({length:t.layers},(_,l)=>r.mode==='affine'?`q${r.bits} g${r.group}`:t.table?'base':l<lo||l>hi?'':(r.tailOn&&l>=r.tailFrom?r.tailGeo:r.geo));
   const geos=[...new Set(cells.filter(Boolean))],col=g=>!g?'var(--line)':pal[geos.indexOf(g)%pal.length];
-  $('#strip').innerHTML=`<div class="rohd mid ro"><span>allocation by layer · ${esc(t.layers)} layers${t.modules?' · '+esc(t.modules)+' modules':''}</span><span>${r.mode==='affine'?(isMoe(t)&&r.aprotect?'affine, rest q'+r.aprotect:'uniform affine'):r.tailOn?'tail from L'+r.tailFrom:'flat'}</span></div>
+  $('#strip').innerHTML=`<div class="rohd mid ro"><span>allocation by layer · ${esc(t.layers)} layers${t.modules?' · '+esc(t.modules)+' modules':''}</span><span>${t.table&&r.mode==='vq'?'embedding table '+esc(r.geo):r.mode==='affine'?(isMoe(t)&&r.aprotect?'affine, rest q'+r.aprotect:'uniform affine'):r.tailOn?'tail from L'+r.tailFrom:'flat'}</span></div>
    <div class="strip" style="grid-template-columns:repeat(${+t.layers},1fr)">${cells.map((g,l)=>`<i style="background:${col(g)}" title="L${l} ${esc(g||'not VQ')}"></i>`).join('')}</div>
    <div class="striplab"><span>L0</span><span>L${+t.layers-1}</span></div>
    <div class="key">${geos.map(g=>`<span><em style="background:${col(g)}"></em>${esc(g)} × ${cells.filter(x=>x===g).length}</span>`).join('')}</div>`;

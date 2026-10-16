@@ -23,6 +23,9 @@ _V = "knurlogic gemma4/vision/vision.py"
 SPEC = FamilyPlugin(
     name="gemma4",
     model_types=("gemma4", "gemma4_text"),
+    # the 26B's router projection stays bf16, as the published 6.2bpw build
+    # ships it (no router entry among its 206 8-bit per-module entries)
+    keep_fp=("router.proj",),
     notes="Gemma 4 e4b (dense, PLE, KV sharing) and 26B-A4B (MoE, K=V full layers); "
           "architecture + vision tower from knurlogic",
     reference="transformers 5.18 models/gemma4/modeling_gemma4.py (+ modeling_rope_utils.py "

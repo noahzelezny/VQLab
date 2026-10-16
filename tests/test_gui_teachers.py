@@ -185,3 +185,37 @@ def test_a_downloaded_original_counts_as_on_disk(lab, monkeypatch):
     downloads.dest("Org/Moe").mkdir(parents=True)
     [t] = T.teachers()["teachers"]
     assert t["on_disk"] is True
+
+
+def test_a_one_table_family_reports_its_table_base_bits_and_incumbent(lab, lab_dirs):
+    """gemma4_e4b: the page starts its draft at the family's base bits, shows
+    the table instead of layers, and can build only once the incumbent base
+    is here (its bytes less the table are what the build keeps)."""
+    mx = pytest.importorskip("mlx.core")
+    src = lab_dirs.root / "models" / "Org--E4b"
+    src.mkdir()
+    d = lab_dirs.families / "gemma4_e4b" / "teachers" / "Org--E4b"
+    d.mkdir(parents=True)
+    table = {"key": "language_model.model.embed_tokens_per_layer", "rows": 8, "in": 64}
+    (d / "profile.json").write_text(json.dumps({
+        "created": "2026-01-01", "identity": {"path": str(src), "hf_repo": None},
+        "arch": {"kind": "dense", "layers": 2, "vq_layers": [], "vq_table": table},
+        "bytes": {"by_class_gib": {"carry": 1.0, "embed": 1.0, "vq_target": 1.0}},
+        "geometries": {"embed": [_geo(2, 2048, 0.5)]}}))
+    row = lambda: next(t for t in T.teachers()["teachers"] if t["family"] == "gemma4_e4b")  # noqa: E731
+    t = row()
+    assert t["base_bits"] == registry.base_bits("gemma4_e4b") == 8
+    assert t["table"] == table and t["vq_layers"] == 0
+    assert t["incumbent"] == {"repo": "mlx-community/gemma-4-e4b-it-8bit", "gib": None}
+    assert not t["buildable"]
+    inc = lab_dirs.models / "mlx-community--gemma-4-e4b-it-8bit"
+    inc.mkdir()
+    w = {f"{table['key']}.weight": mx.zeros((256, 1024), dtype=mx.uint32),
+         "language_model.model.norm.weight": mx.zeros((256, 1024), dtype=mx.uint32)}
+    mx.save_safetensors(str(inc / "m.safetensors"), w)
+    (inc / "model.safetensors.index.json").write_text(json.dumps(
+        {"weight_map": dict.fromkeys(w, "m.safetensors")}))
+    t = row()
+    assert t["buildable"] and t["incumbent"]["gib"] == 1 / 1024
+    assert [r["base_bits"] for r in T.teachers()["teachers"]
+            if r["family"] == "qwen3_5"] == [registry.base_bits("qwen3_5")] == [4]

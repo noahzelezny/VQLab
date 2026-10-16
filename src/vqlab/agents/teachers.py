@@ -104,6 +104,20 @@ def _local(path: str) -> str | None:
     return os.path.realpath(p) if p and not p.startswith("hf://") and os.path.isdir(p) else None
 
 
+def _incumbent(family: str) -> dict | None:
+    """The base a one-table family builds on (recipe_queue.incumbent): its
+    repo, and the GiB the artifact keeps of it (None while it is not on
+    this machine)."""
+    repo = registry.FAMILY.get(family, {}).get("incumbent")
+    if not repo:
+        return None
+    try:
+        got = recipe_queue.incumbent(family)
+    except recipe_queue.RecipeError:
+        got = None
+    return {"repo": repo, "gib": got[1] if got else None}
+
+
 def _ple(family: str, by: dict) -> dict | None:
     """A family's n-gram tables as the Recipe page prices them: their GiB as
     stored, their group, and the geometry the compiler fits them at."""
@@ -127,6 +141,9 @@ def teachers() -> dict:
         if local:
             have.add(local)
             names.add(teacher)
+        # a one-table family builds only once its incumbent base is here
+        inc = _incumbent(family)
+        inc_ok = inc is None or inc["gib"] is not None
         out.append({
             "id": f"{family}/{teacher}", "family": family, "teacher": teacher,
             "name": ident.get("hf_repo") or teacher.replace("--", "/", 1),
@@ -137,11 +154,14 @@ def teachers() -> dict:
             "topk": arch.get("experts_per_token"), "modules": (prof.get("modules") or {}).get("count"),
             "gib": by.get("by_class_gib") or {}, "gib_per_bit": by.get("vq_target_gib_per_bit"),
             "geometries": _geometries(prof), "fits": fits.get((family, teacher), {}),
-            "on_disk": local is not None, "buildable": family in recipe_queue.COMPILED,
+            "on_disk": local is not None, "buildable": family in recipe_queue.COMPILED and inc_ok,
             "scored": teacher in caches, "profiled": prof.get("created"),
             "skipzero": _skipzero(family, teacher, prof),
             "ple": _ple(family, by),
             "tower_in_base": registry.FAMILY.get(family, {}).get("tower") == "base",
+            "base_bits": registry.base_bits(family),
+            "table": arch.get("vq_table"),
+            "incumbent": inc,
             "mtp": _mtp(family, teacher, prof)})
     found = []
     for r in _scanned():

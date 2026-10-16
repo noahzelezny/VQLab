@@ -25,9 +25,11 @@ vqlab.use_knurlogic_arch()
 @pytest.fixture
 def lab_dirs(tmp_path, monkeypatch):
     """Every lab location these tests touch, each an empty folder under
-    tmp_path: .records, .queues, .scratch, .teachers, .families (and .root)."""
+    tmp_path: .records, .queues, .scratch, .teachers, .families, .models and
+    .hf_cache (and .root)."""
     env = {"records": "VQLAB_RECORDS", "queues": "VQLAB_QUEUE_DIR", "scratch": "VQLAB_SCRATCH",
-           "teachers": "VQLAB_TEACHERS_DIR", "families": "VQLAB_FAMILIES_DIR"}
+           "teachers": "VQLAB_TEACHERS_DIR", "families": "VQLAB_FAMILIES_DIR",
+           "models": "VQLAB_MODELS_DIR", "hf_cache": "HF_HUB_CACHE"}
     dirs = {}
     for name, var in env.items():
         dirs[name] = tmp_path / name

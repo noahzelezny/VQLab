@@ -55,3 +55,27 @@ def test_ngram_tables_are_their_own_class():
     assert fp.classify(key, None, ple) == "ple"
     assert fp.classify(key, None) == "carry"
     assert fp.classify(f"{lm}.self_attn.q_proj.weight", None, ple) == "carry"
+
+
+def test_a_one_table_family_profiles_the_table_as_its_vq_target(tmp_path):
+    """gemma4_e4b (registry "embed"): the per-layer table is the one VQ
+    module, so the geometries are the table's and its bytes are vq_target."""
+    lm = "language_model.model"
+    t = {f"{lm}.embed_tokens_per_layer.weight": (64, 256),
+         f"{lm}.embed_tokens.weight": (64, 32),
+         f"{lm}.layers.0.mlp.gate_proj.weight": (64, 32)}
+    cfg = {"model_type": "gemma4", "text_config": {"num_hidden_layers": 1}}
+    prof = _profile(tmp_path, _teacher(tmp_path / "e4b", cfg, t), "gemma4_e4b")
+    assert prof["arch"]["kind"] == "dense" and prof["arch"]["vq_layers"] == []
+    assert prof["arch"]["vq_table"] == {"key": f"{lm}.embed_tokens_per_layer",
+                                        "rows": 64, "in": 256}
+    assert prof["modules"]["signatures"] == {"embed": [[1, 64, 256]]}
+    assert prof["bytes"]["vq_target_params"] == 64 * 256
+    assert prof["bytes"]["by_class_gib"]["vq_target"] == round(64 * 256 * 2 / 2**30, 3)
+    legal = {(g["d"], g["K"]) for g in prof["geometries"]["embed"] if g["legal"]}
+    assert (2, 2048) in legal and (2, 4096) in legal and (4, 4096) not in legal
+
+
+def test_an_audio_tower_is_its_own_class():
+    assert fp.classify("audio_tower.layers.0.w", None) == "audio"
+    assert fp.classify("embed_audio.embedding_projection.weight", None) == "audio"

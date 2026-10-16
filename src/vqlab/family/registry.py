@@ -7,6 +7,8 @@ lived inline in fit_moe.py, was text-scraped-and-exec'd by
 verify_artifact.py, and was duplicated (with a diverged name) in
 fit_dense_vq.py; one table, imported everywhere, ends that.
 """
+import re
+
 from vqlab.core.source.teacher_profiles import profiles_in, read_profile
 
 FAMILY = {
@@ -18,6 +20,16 @@ FAMILY = {
     #          (fit-ple -> splice-ple -> pack-ple; Flash-Next)
     #   "tower": "base"  the vision tower rides the struct base bf16, so it
     #          is never grafted (GLM)
+    #   "embed": {"key", "group"}  the VQ target is this one embedding table,
+    #          nothing else (dense: fit-ple -> build-dense --embed; e4b). Not
+    #          "ple": those tables ride an MoE build at their own geometry,
+    #          this one IS the build's geometry, spliced as vq_embed
+    #   "base_bits": the base width a recipe defaults to, the shipped build's
+    #          (base_bits(); 4 when absent)
+    #   "incumbent": "org/name"  the quantized Hub build the dense chain
+    #          splices into instead of converting its own base (e4b: the
+    #          converter's runtime drops the audio tower the shipped build
+    #          carries); with "tower": "base" its towers ride it
     "qwen3_5": {
         "recipe": "moe",
         "target_substr": "switch_mlp",
@@ -78,6 +90,7 @@ FAMILY = {
                  "down_proj": ("down_proj", None)},
     },
     "gemma4": {
+        "recipe": "moe",
         "target_substr": "switch_glu",
         # mlx-community's gemma bf16 is an MLX-FORMAT conversion, so
         # mlx_lm's sanitize has ALREADY split experts.gate_up_proj into
@@ -91,11 +104,16 @@ FAMILY = {
                  "down_proj": ("down_proj", None)},
     },
     "gemma4_e4b": {
+        # The shipped VQ-PLE build: mlx-community's 8-bit with only the
+        # per-layer embedding table VQ'd (d2/K2048, group 64).
+        "recipe": "dense", "base_bits": 8, "tower": "base",
+        "incumbent": "mlx-community/gemma-4-e4b-it-8bit",
+        "embed": {"key": "language_model.model.embed_tokens_per_layer", "group": 64},
         # gemma-4-e4b-it: DENSE mlp (no experts), weights are 2D [OUT, IN].
-        # Only used for VERIFICATION of e4b VQ artifacts (fit_e4b_vq.py) —
-        # the main fitter's is_vq_target() wants a 2-bit-marked struct BASE,
-        # which dense e4b builds do not have. Consumers must treat a 2D
-        # source tensor as [1, OUT, IN] (E=1).
+        # The MLP fields below describe that trio for the tools that read a
+        # dense family's MLPs (stream-convert's target_substr, the outlier
+        # gate, verify_artifact); the Recipe chain VQs the table only.
+        # Consumers must treat a 2D source tensor as [1, OUT, IN] (E=1).
         "target_substr": ".mlp.",
         "src_key": "language_model.model.layers.{li}.mlp.{key}.weight",
         "proj": {"gate_proj": ("gate_proj", None),
@@ -132,6 +150,19 @@ FAMILY = {
                  "down_proj": ("down_proj", None)},
     },
 }
+
+def base_bits(family: str) -> int:
+    """The affine base width a recipe for `family` starts at (FAMILY
+    "base_bits": the shipped build's), 4 when the family names none."""
+    return FAMILY.get(family, {}).get("base_bits", 4)
+
+
+def embed_regex(family: str) -> str | None:
+    """The source-key regex of the family's one VQ'd embedding table (FAMILY
+    "embed"), with or without its .weight suffix; None for other families."""
+    emb = FAMILY.get(family, {}).get("embed")
+    return "^" + re.escape(emb["key"]) + r"(\.weight)?$" if emb else None
+
 
 def recipe_families(kind: str) -> frozenset:
     """The families the Recipe page builds with the `kind` chain ("moe" or

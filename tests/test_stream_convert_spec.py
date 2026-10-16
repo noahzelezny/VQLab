@@ -86,3 +86,14 @@ def test_family_keeps_its_gates_full_precision():
     assert body_spec(gate, keep=keep_fp("qwen4_exp"), **kw) == {"group_size": 64,
                                                                  "bits": 8}
     assert keep_fp("no-such-family") == ("mlp.gate",)
+
+
+def test_gemma4_keeps_its_router_projection_full_precision():
+    """The 26B's struct base kept router.proj bf16, as the published 6.2bpw
+    build ships it (no router entry among its 8-bit per-module entries)."""
+    from vqlab.family import keep_fp
+    router = "language_model.model.layers.7.router.proj"
+    kw = {"target": "switch_glu", "bits": 2, "struct": True, "protect_bits": 8}
+    assert body_spec(router, keep=keep_fp("gemma4"), **kw) is False
+    assert body_spec("language_model.model.layers.7.self_attn.q_proj",
+                     keep=keep_fp("gemma4"), **kw) == {"group_size": 64, "bits": 8}

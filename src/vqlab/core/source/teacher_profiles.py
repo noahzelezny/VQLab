@@ -39,13 +39,36 @@ def download_path(repo: str) -> str:
     return "<teachers>/" + repo.replace("/", "--", 1)
 
 
+def _here(p: str | None) -> bool:
+    local = config.expand(p) if p else ""
+    return bool(local) and not local.startswith("hf://") and pathlib.Path(local).is_dir()
+
+
+def repo_source(repo: str) -> str | None:
+    """A Hub repo's weights on this machine, in recorded form: the Hugging
+    Face cache's snapshot of its main ref (hf://org/name@rev), else the
+    folder a download of it lands in, else <models>/org--name (a serving
+    copy); None when none is here."""
+    org, _, name = repo.partition("/")
+    cache = config.hf_cache() / f"models--{org}--{name}"
+    try:
+        rev = (cache / "refs" / "main").read_text().strip()
+    except OSError:
+        rev = ""
+    snap = config.portable(cache / "snapshots" / rev) if rev else None
+    folder = repo.replace("/", "--", 1)
+    for p in (snap, download_path(repo), f"<models>/{folder}"):
+        if _here(p):
+            return p
+    return None
+
+
 def teacher_source(identity: dict) -> str | None:
     """The teacher's weights on this machine, in recorded form: the profile's
     own path, else the folder a download of its hf_repo lands in; None when
     neither is here. The one answer the picker and the compiler both use."""
     repo = identity.get("hf_repo")
     for p in (identity.get("path"), download_path(repo) if repo else None):
-        local = config.expand(p) if p else ""
-        if local and not local.startswith("hf://") and pathlib.Path(local).is_dir():
+        if _here(p):
             return p
     return None

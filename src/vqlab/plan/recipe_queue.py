@@ -11,9 +11,12 @@ it with; a chain is offered only for families whose pieces have each run:
                   --pack [--tail-from/--tail-geom: a mixed build]
                   [-> fit-ple -> splice-ple -> pack-ple: a family with n-gram
                   tables, Flash-Next; "ple_geo" picks their geometry]
-  dense (qwen3_8_dense):  [stream-convert --bits: the base, unless an
-                  incumbent is given] -> fit-dense -> build-dense --dry-run ->
-                  build-dense -> pack-dense
+  dense (qwen3_8_dense, gemma4_e4b):  [stream-convert --bits: the base,
+                  unless an incumbent is given] -> fit-dense -> build-dense
+                  --dry-run -> build-dense -> pack-dense
+                  [a family whose VQ target is one embedding table, e4b: its
+                  incumbent Hub build is the base, fit-ple of that table in place
+                  of fit-dense, build-dense --embed]
   affine (either):  stream-convert --bits [--group] [--protect-bits: MoE
                   mixed affine, experts at bits/group, the rest at protect/64]
 
@@ -119,6 +122,9 @@ MTP_ACCEPT_FLOOR = 0.3
 # the default is the 3.2bpw build's
 PLE_GEOS = ("d4-K2048", "d8-K256", "d8-K4096")
 PLE_GEO = "d4-K2048"
+# rows a one-table fit preflight fits (fit-ple --rows): one of its default
+# row chunks, so the preflight's fit is minutes, not the table
+TABLE_PREFLIGHT_ROWS = 4096
 # tokens per prompt over mtp-accept's 12 prompts: ~700 draft steps, minutes
 # on a resident build, and far more than a live/dead verdict needs
 MTP_ACCEPT_TOKENS = 64
@@ -439,7 +445,8 @@ class Recipe:
         if family not in COMPILED:
             raise RecipeError(f"no build of family {family!r} has run through a queue yet; "
                               f"compiled families: {', '.join(sorted(COMPILED))}")
-        bits, group = _int(r.get("bits", 4), "bits"), _int(r.get("group", 64), "group")
+        bits = _int(r.get("bits", registry.base_bits(family)), "bits")
+        group = _int(r.get("group", 64), "group")
         geo = geometry(r.get("geo")) if mode == "vq" else None
         tail, pb = None, 8
         if mode == "vq" and family in MOE:
@@ -485,6 +492,9 @@ class Recipe:
 # Each chain builder -> (steps, artifact GiB, scratch GiB, warnings); `vis` is
 # the vision tower's GiB when the recipe grafts one, else 0.
 def _affine_steps(r: Recipe, src: str, by: dict, vis: float):
+    if _fam(r.family).get("incumbent"):     # its converter would drop the towers it ships
+        raise RecipeError(f"this model's affine build is {_fam(r.family)['incumbent']}; "
+                          "download it instead")
     if r.protect_bits is None:       # uniform: stream-convert's group applies everywhere
         art_gib = _affine_gib(_rest(by) + by["vq_target"], r.bits, r.group) + vis
     else:                            # mixed: experts bits/group, the rest protect/64
@@ -581,21 +591,66 @@ def _ple_steps(r: Recipe, src: str, gib: float):
     return steps, codes - _affine_gib(gib, r.protect_bits, 32)
 
 
-def _dense_steps(r: Recipe, prof: dict, src: str, by: dict, vis: float):
+def incumbent(family: str) -> tuple[str, float] | None:
+    """A one-table family's base: its incumbent Hub build (registry
+    "incumbent") in recorded form, and the GiB the artifact keeps of it --
+    its shard bytes less the table's affine tensors, read from the headers,
+    so towers and every module ride at the widths it ships. None for a
+    family without one; refused when it is not on this machine."""
+    fam = _fam(family)
+    repo, emb = fam.get("incumbent"), fam.get("embed")
+    if not (repo and emb):
+        return None
+    path = teacher_profiles.repo_source(repo)
+    if path is None:
+        raise RecipeError(f"download {repo} first: it is the base this model is built on")
+    art = Artifact(config.expand(path))
+    keep = sum(v["data_offsets"][1] - v["data_offsets"][0]
+               for f in art.shards for k, v in art.header(f).items()
+               if not k.startswith(emb["key"] + "."))
+    return path, keep / GIB
+
+
+def _dense_fit(r: Recipe, prof: dict, src: str, fit: str):
+    """The dense fit -> (its step, build-dense's flag for what it wrote):
+    fit-dense of the MLP layers, or, for a family whose VQ target is one
+    embedding table (registry "embed"), fit-ple of that table as the
+    shipped e4b build was made; its preflight fits a few rows of it."""
     d, k = r.geo
-    g = _legal(prof, d, k)
+    table = registry.embed_regex(r.family)
+    if table:
+        args = ["--src", src, "--out", fit, "--key-regex", table, "--dim", d, "--k", k,
+                "--group", _fam(r.family)["embed"]["group"], "--seed", 1234]
+        return _step("fit", "fit-ple", args,
+                     {"append": ["--rows", TABLE_PREFLIGHT_ROWS]},
+                     retries=3, timeout_s=24 * 3600), "--embed"
     vq, spec = _layers(prof)
     lo, hi = vq[0], vq[-1]
     if "," in spec:          # fit-dense --layers takes a range only
         raise RecipeError(f"the profile's VQ layers are not contiguous ({spec}); "
                           "fit-dense takes one range")
+    args = ["--src", src, "--out", fit, "--family", r.family, "--layers", f"{lo}-{hi}",
+            "--dim", d, "--k", k, "--group", r.group, "--seed", 1234]
+    i = args.index("--layers")
+    return _step("fit", "fit-dense", args,
+                 {"args": [*args[:i], "--layers", f"{lo}-{lo}", *args[i + 2:]]},
+                 retries=3, timeout_s=24 * 3600), "--mlp"
+
+
+def _dense_steps(r: Recipe, prof: dict, src: str, by: dict, vis: float):
+    g = _legal(prof, *r.geo)
     fit, build = f"{r.work}/fit", f"{r.work}/build"
+    fit_step, fit_flag = _dense_fit(r, prof, src, fit)
+    inc = None if r.base else incumbent(r.family)
     base_gib = _affine_gib(_rest(by), r.bits, r.group)
-    art_gib = base_gib + g.gib + vis
-    scratch_gib = 2 * art_gib + (0 if r.base else base_gib + _affine_gib(by["vq_target"], r.bits, r.group))
+    # an incumbent as shipped, towers and all, is measured, not modelled
+    art_gib = (inc[1] if inc else base_gib + vis) + g.gib
+    converts = not (r.base or inc)
+    scratch_gib = 2 * art_gib + (base_gib + _affine_gib(by["vq_target"], r.bits, r.group)
+                                 if converts else 0)
     steps, warns = [], []
-    if r.base:               # the quantized incumbent, as the shipped dense build used
-        base = source_path(r.base)
+    if r.base or inc:        # the quantized incumbent, as the shipped dense builds used
+        base = source_path(r.base) if r.base else inc[0]
     else:
         base = f"{r.work}/base-q{r.bits}"
         steps.append(_step("base", "stream-convert",
@@ -604,18 +659,13 @@ def _dense_steps(r: Recipe, prof: dict, src: str, by: dict, vis: float):
                             "writes_gib": _convert_writes_gib(by, r.bits)},
                            retries=1, timeout_s=6 * 3600, expect={"files": [f"{base}/config.json"]}))
         warns.append("No existing base was given, so the build makes its own affine base first.")
-    fargs = ["--src", src, "--out", fit, "--family", r.family, "--layers", f"{lo}-{hi}",
-             "--dim", d, "--k", k, "--group", r.group, "--seed", 1234]
-    i = fargs.index("--layers")
-    steps.append(_step("fit", "fit-dense", fargs,
-                       {"args": [*fargs[:i], "--layers", f"{lo}-{lo}", *fargs[i + 2:]]},
-                       retries=3, timeout_s=24 * 3600))
+    steps.append(fit_step)
     steps.append(_step("remap-check", "build-dense",
-                       ["--family", r.family, "--base", base, "--mlp", fit, "--out", build, "--dry-run"],
+                       ["--family", r.family, "--base", base, fit_flag, fit, "--out", build, "--dry-run"],
                        {"full": "validates names only, writes nothing", "writes_gib": 0},
                        retries=0, timeout_s=1800, gpu=False))
     steps.append(_step("build", "build-dense",
-                       ["--family", r.family, "--base", base, "--mlp", fit, "--out", build],
+                       ["--family", r.family, "--base", base, fit_flag, fit, "--out", build],
                        {"full": "assembles what the fit wrote", "writes_gib": round(sum(by.values()), 1)},
                        retries=1, timeout_s=3 * 3600))
     steps.append(_step("pack", "pack-dense", ["--src", build, "--out", r.out],
