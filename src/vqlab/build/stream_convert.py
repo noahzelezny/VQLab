@@ -47,13 +47,15 @@ from mlx_lm.utils import load_tokenizer, quantize_model, save_config
 from vqlab.core.artifacts.artifact import Artifact, copy_tokenizer_files, write_index
 from vqlab.family.registry import FAMILY
 from vqlab.family import model_loader as runtime_load
-from vqlab.family import alias_fused, fused_projections
+from vqlab.family import FamilyPlugin, alias_fused, fused_projections, keep_fp
 from vqlab.util.fs import GIB, read_json
 
-def body_spec(path, *, target, bits, group=64, protect_bits=None, struct=False):
+def body_spec(path, *, target, bits, group=64, protect_bits=None, struct=False,
+              keep=FamilyPlugin.keep_fp):
     """Quantization of one module outside --skeleton-from mode: False (bf16),
-    True (the global default), or a per-module {group_size, bits}."""
-    if path.endswith("mlp.gate"):
+    True (the global default), or a per-module {group_size, bits}. `keep` is
+    the family's full-precision suffixes (family.keep_fp)."""
+    if path.endswith(keep):
         return False                                     # router bf16 (E7)
     if "vision" in path or "visual" in path:
         # Under an mlx_vlm runtime the tower is part of the loaded model
@@ -167,6 +169,7 @@ def main(argv=None) -> int:
     SRC, DST = pathlib.Path(a.src), pathlib.Path(a.out)
     SHARD = int(a.shard_gib * GIB)
     target = FAMILY[a.family]["target_substr"]
+    KEEP = keep_fp(a.family)
 
     # Runtime per family registry (design decision 2026-08-29: provision for either
     # mlx-lm or mlx-vlm, never fork). mlx_lm families behave exactly as before;
@@ -226,7 +229,7 @@ def main(argv=None) -> int:
             SKEL_HITS["bf16"] += 1
             return False                     # unquantized in the reference too
         return body_spec(path, target=target, bits=a.bits, group=a.group,
-                         protect_bits=a.protect_bits, struct=a.struct)
+                         protect_bits=a.protect_bits, struct=a.struct, keep=KEEP)
 
     # Experts that ARRIVE quantized (deepseek_v4's teacher keeps the release's
     # mxfp4 experts) are never offered to the predicate by mlx's quantizer, so

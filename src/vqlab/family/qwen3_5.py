@@ -30,6 +30,8 @@ SPEC = FamilyPlugin(
     model_types=("qwen3_5", "qwen3_5_moe"),
     notes="Qwen3.5/3.6/3.8 hybrid gated-delta-net + gated attention, dense and MoE; "
           "architecture from knurlogic",
+    # every published qwen3_5 artifact keeps the shared-expert gate bf16 too
+    keep_fp=("mlp.gate", "shared_expert_gate"),
     reference="transformers 5.18 models/qwen3_5/modeling_qwen3_5.py + "
               "models/qwen3_5_moe/modeling_qwen3_5_moe.py; the maker checkpoints' "
               "config.json and stored tensor layout (Qwen/Qwen3.5-2B, Qwen/Qwen3.6-35B-A3B)",

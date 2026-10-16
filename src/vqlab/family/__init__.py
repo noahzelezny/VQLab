@@ -63,6 +63,9 @@ class FamilyPlugin:
     fused: tuple = ()
     # act_stats(model_dir, tokens, corpora, args) -> iterable of result dicts
     act_stats: Optional[Callable] = None
+    # module-name suffixes the body keeps full precision: a router error
+    # changes which experts run, not just how precisely they run
+    keep_fp: tuple = ("mlp.gate",)
 
 
 _CACHE: dict = {}
@@ -114,6 +117,13 @@ def fused_projections(name: str) -> tuple:
     """(a, b, fused) suffix triples the family's runtime fuses; () if none."""
     p = get(name)
     return tuple(p.fused) if p else ()
+
+
+def keep_fp(name: str) -> tuple:
+    """Module-name suffixes the family keeps full precision; the router alone
+    for a family with no plugin."""
+    p = get(name)
+    return tuple(p.keep_fp) if p else FamilyPlugin.keep_fp
 
 
 def alias_fused(skel: dict, triples) -> dict:

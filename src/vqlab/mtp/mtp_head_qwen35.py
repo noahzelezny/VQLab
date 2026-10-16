@@ -60,16 +60,16 @@ import mlx.core as mx
 import mlx.nn as nn
 from mlx.utils import tree_flatten, tree_unflatten
 
+from vqlab.family import keep_fp
 from vqlab.mtp.graft import check_graft_slots, graft_layer_weights, read_sidecar
 from vqlab.mtp.registry import WIRING_CHOICES
 
 SIDECAR_NAME = "mtp-head-q6.safetensors"
 
-# The MoE expert stack dominates the head's weight; the router and the
-# shared-expert gate are tiny and stay full precision, because a router error
-# changes which experts run, not just how precisely they run.
+# The MoE expert stack dominates the head's weight; the family's gates are
+# tiny and stay full precision, as they do in the trunk (family.keep_fp).
 _EXPERT_SUBSTR = "switch_mlp"
-_KEEP_FP = ("mlp.gate", "shared_expert_gate")
+_KEEP_FP = keep_fp("qwen3_5")
 
 # Which of the head's norms the +1.0 delta convention applies to. mlx-lm's
 # own sanitize shifts exactly these suffixes on the trunk; the head's fc

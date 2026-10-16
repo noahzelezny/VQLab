@@ -73,3 +73,16 @@ def test_teacher_tokenizer_files_are_copied_verbatim(tmp_path):
     assert (dst / "tokenizer.json").read_bytes() == teacher
     assert (dst / "tokenizer_config.json").read_text() == "{}"
     assert not (dst / "config.json").exists()
+
+
+def test_family_keeps_its_gates_full_precision():
+    """qwen3_5 keeps the shared-expert gate bf16 like every published rung;
+    a struct base once quantized it to 8-bit and check-release refused the
+    draft head beside it."""
+    from vqlab.family import keep_fp
+    gate = "model.layers.3.mlp.shared_expert_gate"
+    kw = {"target": T, "bits": 2, "struct": True, "protect_bits": 8}
+    assert body_spec(gate, keep=keep_fp("qwen3_5"), **kw) is False
+    assert body_spec(gate, keep=keep_fp("qwen4_exp"), **kw) == {"group_size": 64,
+                                                                 "bits": 8}
+    assert keep_fp("no-such-family") == ("mlp.gate",)
