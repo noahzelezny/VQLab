@@ -4,6 +4,7 @@ the shared `lab_dirs` fixture."""
 import os
 import pathlib
 import sys
+import tempfile
 import types
 
 import pytest
@@ -11,6 +12,14 @@ import pytest
 # never create a lab folder in the real home directory (agents/first_run.py);
 # set before anything runs, so subprocess `vqlab` calls inherit it too
 os.environ["VQLAB_NO_SETUP"] = "1"
+# ...and never write into the real lab: every store a test (or a `vqlab`
+# subprocess it runs) could append to points into one throwaway folder. The
+# writer-contract geo-builds filed 2,484 fixture fits into the real fit store
+# before this (2026-10-10..17). A test that needs its own location still sets it.
+_SANDBOX = pathlib.Path(tempfile.mkdtemp(prefix="vqlab-tests-"))
+for _var, _sub in (("VQLAB_FIT_STORE", "fits"), ("VQLAB_RECORDS", "records"),
+                   ("VQLAB_QUEUE_DIR", "queues"), ("VQLAB_LOG_DIR", "log")):
+    os.environ[_var] = str(_SANDBOX / _sub)
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1] / "src"))
 from vqlab import _layout  # noqa: E402,F401
