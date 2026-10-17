@@ -21,12 +21,18 @@ Idempotent: re-running replaces the graft shard and its index entries.
 """
 import argparse
 import sys
-import json
 import pathlib
 
 import mlx.core as mx
 
-from vqlab.core.artifacts.artifact import Artifact, tensor_bytes, tensor_class
+from vqlab.core.artifacts.artifact import (
+    IMAGE_PROCESSOR_FILES,
+    PROCESSOR_FILES,
+    Artifact,
+    copy_config_files,
+    tensor_bytes,
+    tensor_class,
+)
 from vqlab.util.fs import GIB, read_json, write_json
 
 def main(argv=None) -> int:
@@ -232,8 +238,8 @@ def main(argv=None) -> int:
         print(f"permuted {len(_n5)} 5-D tensor(s) to mlx channels-last: {_n5}")
 
     if args.dest_prefix:
-        _src_pref = sorted({k.split(".")[0] if not k.startswith("model.visual")
-                            else "model.visual" for k in out}, key=len)[-1]
+        _src_pref = max({k.split(".")[0] if not k.startswith("model.visual")
+                         else "model.visual" for k in out}, key=len)
         out = {args.dest_prefix + k[len(_src_pref):]: v for k, v in out.items()}
         vis = {args.dest_prefix + k[len(_src_pref):]: v for k, v in vis.items()}
         print(f"renamed graft keys: {_src_pref}.* -> {args.dest_prefix}.*")
@@ -293,15 +299,12 @@ def main(argv=None) -> int:
     # vision_config gate met those artifacts. A vision tower without its
     # preprocessor fails every request, so the grafter now copies them from
     # the source rather than trusting a later manual step.
-    import shutil
-    for pf in ("preprocessor_config.json", "video_preprocessor_config.json"):
-        s, d2 = SRC / pf, ART / pf
-        if s.is_file() and not d2.exists():
-            shutil.copy2(s, d2)
-            print(f"copied {pf} from {SRC.name}")
-        elif not s.is_file() and not d2.exists() and pf == "preprocessor_config.json":
-            print(f"WARNING: neither source nor artifact has {pf} — the "
-                  "vision_config release gate will refuse this artifact.")
+    for pf in copy_config_files(SRC, ART, PROCESSOR_FILES, overwrite=False):
+        print(f"copied {pf} from {SRC.name}")
+    if not any((ART / pf).exists() for pf in IMAGE_PROCESSOR_FILES):
+        print(f"WARNING: neither source nor artifact has any of "
+              f"{list(IMAGE_PROCESSOR_FILES)} — the vision_config release gate "
+              "will refuse this artifact.")
 
     missing = [k for k in ("vision_config", "image_token_id") if k not in cfg]
     print(f"grafted {len(out)} vision tensors ({total / GIB:.2f} GiB) -> "

@@ -13,7 +13,8 @@
    },
    "estimate": {
     "artifact_gib": 1.61,
-    "scratch_gib": 4.9
+    "scratch_gib": 4.9,
+    "preflight_gib": 4.1
    },
    "steps": [
     {
@@ -201,7 +202,8 @@
    },
    "estimate": {
     "artifact_gib": 1.06,
-    "scratch_gib": 4.7
+    "scratch_gib": 4.7,
+    "preflight_gib": 3.6
    },
    "steps": [
     {
@@ -362,7 +364,8 @@
    },
    "estimate": {
     "artifact_gib": 1.72,
-    "scratch_gib": 6.8
+    "scratch_gib": 6.8,
+    "preflight_gib": 4.26
    },
    "steps": [
     {
@@ -606,7 +609,8 @@
    },
    "estimate": {
     "artifact_gib": 2.52,
-    "scratch_gib": 9.5
+    "scratch_gib": 9.5,
+    "preflight_gib": 5.06
    },
    "steps": [
     {
@@ -936,7 +940,8 @@
    },
    "estimate": {
     "artifact_gib": 0.67,
-    "scratch_gib": 6.7
+    "scratch_gib": 6.7,
+    "preflight_gib": 5.17
    },
    "steps": [
     {
@@ -1274,7 +1279,8 @@
    },
    "estimate": {
     "artifact_gib": 5.3,
-    "scratch_gib": 5.3
+    "scratch_gib": 5.3,
+    "preflight_gib": 5.3
    },
    "steps": [
     {
@@ -1405,7 +1411,8 @@
    },
    "estimate": {
     "artifact_gib": 3.56,
-    "scratch_gib": 3.6
+    "scratch_gib": 3.6,
+    "preflight_gib": 3.56
    },
    "steps": [
     {
@@ -1502,7 +1509,8 @@
    },
    "estimate": {
     "artifact_gib": 4.78,
-    "scratch_gib": 4.8
+    "scratch_gib": 4.8,
+    "preflight_gib": 4.78
    },
    "steps": [
     {
@@ -1599,7 +1607,8 @@
    },
    "estimate": {
     "artifact_gib": 0.56,
-    "scratch_gib": 6.2
+    "scratch_gib": 6.2,
+    "preflight_gib": 5.06
    },
    "steps": [
     {
@@ -1802,7 +1811,8 @@
    },
    "estimate": {
     "artifact_gib": 0.56,
-    "scratch_gib": 6.2
+    "scratch_gib": 6.2,
+    "preflight_gib": 5.06
    },
    "steps": [
     {
@@ -2035,7 +2045,8 @@
    },
    "estimate": {
     "artifact_gib": 1.86,
-    "scratch_gib": 7.3
+    "scratch_gib": 7.3,
+    "preflight_gib": 4.4
    },
    "steps": [
     {
@@ -2279,7 +2290,8 @@
    },
    "estimate": {
     "artifact_gib": 1.06,
-    "scratch_gib": 5.7
+    "scratch_gib": 5.7,
+    "preflight_gib": 3.6
    },
    "steps": [
     {

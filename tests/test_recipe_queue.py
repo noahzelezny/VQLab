@@ -582,10 +582,11 @@ def test_an_oversized_build_is_smoked_on_the_cluster_through_knurlogic(fams, mon
     assert [s for s in q["steps"] if s["name"] not in ("knurlogic-link", "release-check")] == keep
 
 
-def test_the_bar_is_the_estimate_against_this_boxs_ram(fams, monkeypatch):
+def test_the_bar_is_build_or_preflight_against_this_boxs_ram(fams, monkeypatch):
     fams("qwen3_5", "T", "moe", 40)
     r = {"name": "a", "family": "qwen3_5", "teacher": "T", "geo": "d4-K256"}
-    est = rq.compile_recipe(r)[0]["estimate"]["artifact_gib"]
+    e = rq.compile_recipe(r)[0]["estimate"]
+    est = max(e["artifact_gib"], e["preflight_gib"])
     _small_box(monkeypatch, gib=est + 0.01)     # just fits
     assert "knurlogic-link" not in _names(rq.compile_recipe(r)[0])
     _small_box(monkeypatch, gib=est - 0.01)     # just does not
@@ -831,3 +832,19 @@ def test_e4b_without_its_incumbent_is_refused(fams, lab_dirs):
     with pytest.raises(rq.RecipeError, match="affine build is"):
         rq.compile_recipe({"name": "e", "family": "gemma4_e4b", "teacher": "E",
                            "mode": "affine"})
+
+
+def test_an_oversized_preflight_gates_a_fitting_build_remotely(fams, monkeypatch):
+    # Flash-Next: ~69 GiB built, but its preflight is the 4-bit struct base
+    fams("qwen3_5", "T", "moe", 40)
+    r = {"name": "a", "family": "qwen3_5", "teacher": "T", "geo": "d4-K256"}
+    e = rq.compile_recipe(r)[0]["estimate"]
+    est, pf = e["artifact_gib"], e["preflight_gib"]
+    # the struct base: the skeleton at protect bits, the experts as 2-bit markers
+    by = rq.load_profile("qwen3_5", "T")["bytes"]["by_class_gib"]
+    struct = (rq._affine_gib(by["carry"] + by["embed"], 8, 64)
+              + rq._affine_gib(by["vq_target"], 2, 64))
+    assert pf == pytest.approx(round(struct, 1), abs=0.11)
+    assert est < pf
+    _small_box(monkeypatch, gib=(est + pf) / 2)
+    assert "knurlogic-link" in _names(rq.compile_recipe(r)[0])

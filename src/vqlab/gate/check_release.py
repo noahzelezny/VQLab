@@ -29,7 +29,13 @@ import subprocess
 import sys
 
 from vqlab._layout import find as _find
-from vqlab.core.artifacts.artifact import INDEX, Artifact, read_header, tensor_class
+from vqlab.core.artifacts.artifact import (
+    IMAGE_PROCESSOR_FILES,
+    INDEX,
+    Artifact,
+    read_header,
+    tensor_class,
+)
 from vqlab.core.box.knurlogic_client import NO_THINKING
 from vqlab.util.fs import read_json
 
@@ -321,7 +327,7 @@ def main(argv=None) -> int:
     # exists to prevent, and the same one that gets gates routed around. If a
     # processor-config fix is ever wanted as doc-class, decide it there, not by
     # weakening this check.
-    _PROC_FILES = ("preprocessor_config.json", "processor_config.json")
+    _PROC_FILES = IMAGE_PROCESSOR_FILES
     _proc_gap = ("vision_config" in cfg
                  and not any((A / f).exists() for f in _PROC_FILES))
     _PROC_MSG = (f"config carries vision_config but none of {list(_PROC_FILES)} "

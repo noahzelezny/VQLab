@@ -18,7 +18,8 @@
    },
    "estimate": {
     "artifact_gib": 1.86,
-    "scratch_gib": 7.3
+    "scratch_gib": 7.3,
+    "preflight_gib": 4.4
    },
    "steps": [
     {
@@ -297,7 +298,8 @@
    },
    "estimate": {
     "artifact_gib": 1.86,
-    "scratch_gib": 5.5
+    "scratch_gib": 5.5,
+    "preflight_gib": 4.4
    },
    "steps": [
     {
@@ -484,7 +486,8 @@
    },
    "estimate": {
     "artifact_gib": 0.56,
-    "scratch_gib": 6.2
+    "scratch_gib": 6.2,
+    "preflight_gib": 5.06
    },
    "steps": [
     {
@@ -705,7 +708,8 @@
    },
    "estimate": {
     "artifact_gib": 2.52,
-    "scratch_gib": 9.5
+    "scratch_gib": 9.5,
+    "preflight_gib": 5.06
    },
    "steps": [
     {

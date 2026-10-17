@@ -511,7 +511,7 @@ def _affine_steps(r: Recipe, src: str, by: dict, vis: float):
                    {"full": "stream-convert has no partial mode",
                     "writes_gib": _convert_writes_gib(by, r.bits)},
                    retries=1, timeout_s=6 * 3600, expect={"files": [f"{r.out}/config.json"]})]
-    return steps, art_gib, art_gib, []
+    return steps, art_gib, art_gib, art_gib, []
 
 
 def _moe_steps(r: Recipe, prof: dict, src: str, by: dict, vis: float):
@@ -565,7 +565,8 @@ def _moe_steps(r: Recipe, prof: dict, src: str, by: dict, vis: float):
         ple_steps, ple_delta = _ple_steps(r, src, ple_gib)
         steps += ple_steps
         art_gib += ple_delta
-    return steps, art_gib, struct_gib + art_gib, warns
+    # its preflight fits one layer into the struct base: the base's size
+    return steps, art_gib, struct_gib + art_gib, struct_gib + vis, warns
 
 
 def _ple_steps(r: Recipe, src: str, gib: float):
@@ -646,8 +647,11 @@ def _dense_steps(r: Recipe, prof: dict, src: str, by: dict, vis: float):
     # an incumbent as shipped, towers and all, is measured, not modelled
     art_gib = (inc[1] if inc else base_gib + vis) + g.gib
     converts = not (r.base or inc)
-    scratch_gib = 2 * art_gib + (base_gib + _affine_gib(by["vq_target"], r.bits, r.group)
-                                 if converts else 0)
+    whole_gib = base_gib + _affine_gib(by["vq_target"], r.bits, r.group)
+    scratch_gib = 2 * art_gib + (whole_gib if converts else 0)
+    # its preflight fits one layer into the base: the incumbent as shipped,
+    # else the whole base with its MLPs still affine
+    pf_gib = inc[1] if inc else whole_gib + vis
     steps, warns = [], []
     if r.base or inc:        # the quantized incumbent, as the shipped dense builds used
         base = source_path(r.base) if r.base else inc[0]
@@ -671,7 +675,7 @@ def _dense_steps(r: Recipe, prof: dict, src: str, by: dict, vis: float):
     steps.append(_step("pack", "pack-dense", ["--src", build, "--out", r.out],
                        {"full": "packs what the build wrote", "writes_gib": round(sum(by.values()), 1)},
                        retries=1, timeout_s=3 * 3600, expect={"files": [f"{r.out}/config.json"]}))
-    return steps, art_gib, scratch_gib, warns
+    return steps, art_gib, scratch_gib, pf_gib, warns
 
 
 def _mtp_steps(r: Recipe, head: MtpHead, src: str, out: str, oversized: bool):
@@ -870,10 +874,10 @@ def _compile(raw: dict) -> tuple[dict, list[str]]:
     in_base = _fam(r.family).get("tower") == "base"      # kept whatever the recipe says
     vis = by.get("vision", 0.0) if r.vision or in_base else 0.0
     if r.mode == "affine":
-        steps, art_gib, scratch_gib, warns = _affine_steps(r, src, by, vis)
+        steps, art_gib, scratch_gib, pf_gib, warns = _affine_steps(r, src, by, vis)
     else:
         chain = _moe_steps if r.family in MOE else _dense_steps
-        steps, art_gib, scratch_gib, warns = chain(r, prof, src, by, vis)
+        steps, art_gib, scratch_gib, pf_gib, warns = chain(r, prof, src, by, vis)
     if r.skipzero:
         vq, _ = _layers(prof)
         geo = {i: (r.tail[1:] if r.tail and i >= r.tail[0] else r.geo) for i in vq}
@@ -886,14 +890,18 @@ def _compile(raw: dict) -> tuple[dict, list[str]]:
         # the bf16 graft, the sidecar, and a trial one where the probe chooses
         scratch_gib += head.graft_gib + head.gib * (1 if head.wiring is not None else 2)
     # the resident bar of THIS box (0.90 x its RAM, read from the machine),
-    # the rule preflight-ram enforces at load time
-    oversized = art_gib > preflight_ram.bar_gib()
+    # the rule preflight-ram enforces at load time. A build is gated where
+    # its preflight can be gated too: the chain's preflight artifact is its
+    # base (Flash-Next: ~69 GiB built, ~94 GiB struct-base preflight).
+    pf_gib += head.gib if head else 0.0
+    oversized = max(art_gib, pf_gib) > preflight_ram.bar_gib()
     tail, tail_warns = _tail_steps(r, src, by, head, oversized=oversized)
     return {"name": r.name, "commit": "HEAD", "recipe": r.raw,
             # estimates for the confirmation, not measurements: the artifact
             # from the profile's exact per-geometry bytes, scratch = every
             # intermediate the chain leaves (struct base, unpacked build)
-            "estimate": {"artifact_gib": round(art_gib, 2), "scratch_gib": round(scratch_gib, 1)},
+            "estimate": {"artifact_gib": round(art_gib, 2), "scratch_gib": round(scratch_gib, 1),
+                         "preflight_gib": round(pf_gib, 2)},
             "steps": steps + tail}, warns + tail_warns
 
 

@@ -45,7 +45,12 @@ from mlx.utils import tree_flatten, tree_unflatten
 # PROVISIONAL until a glm5_next struct base is built.
 from mlx_lm.utils import load_tokenizer, quantize_model, save_config
 
-from vqlab.core.artifacts.artifact import Artifact, copy_tokenizer_files, write_index
+from vqlab.core.artifacts.artifact import (
+    Artifact,
+    copy_config_files,
+    copy_tokenizer_files,
+    write_index,
+)
 from vqlab.family.registry import FAMILY
 from vqlab.family import model_loader as runtime_load
 from vqlab.family import FamilyPlugin, alias_fused, fused_projections, keep_fp
@@ -313,9 +318,9 @@ def main(argv=None) -> int:
     # for a sentencepiece-only source); every file the teacher HAS is its own
     load_tokenizer(SRC).save_pretrained(DST)
     copy_tokenizer_files(SRC, DST)
-    for pat in ("*.py", "generation_config.json"):
-        for f in glob.glob(str(SRC / pat)):
-            shutil.copy(f, DST)
+    copy_config_files(SRC, DST)
+    for f in glob.glob(str(SRC / "*.py")):
+        shutil.copy(f, DST)
     print(f"saved {tot/GIB:.1f} GiB in {len(set(index.values()))} shards "
           f"({time.time()-t0:.0f}s)", flush=True)
     return 0

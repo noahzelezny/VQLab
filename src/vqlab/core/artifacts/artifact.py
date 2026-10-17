@@ -238,6 +238,27 @@ def copy_tokenizer_files(src, dst) -> list[str]:
     return got
 
 
+# The teacher's generation and processor configs. A vision model whose build
+# lacks its processor config cannot serve an image request (check-release
+# refuses it): GLM's struct base once copied generation_config.json alone.
+# One of IMAGE_PROCESSOR_FILES is what an image request needs (check-release).
+IMAGE_PROCESSOR_FILES = ("preprocessor_config.json", "processor_config.json")
+PROCESSOR_FILES = (*IMAGE_PROCESSOR_FILES, "video_preprocessor_config.json")
+CONFIG_FILES = ("generation_config.json", *PROCESSOR_FILES)
+
+
+def copy_config_files(src, dst, names: tuple[str, ...] = CONFIG_FILES,
+                      overwrite: bool = True) -> list[str]:
+    """Copy each of `names` that `src` has into `dst` (keeping one `dst`
+    already has unless `overwrite`) -> the names copied."""
+    src, dst = pathlib.Path(src), pathlib.Path(dst)
+    got = [n for n in names
+           if (src / n).is_file() and (overwrite or not (dst / n).exists())]
+    for name in got:
+        shutil.copyfile(src / name, dst / name)
+    return got
+
+
 def tensor_class(key: str) -> str:
     """'text', 'tower' (vision tower, projector, image tokens, image-routing
     biases) or 'mtp' (an indexed draft head)."""

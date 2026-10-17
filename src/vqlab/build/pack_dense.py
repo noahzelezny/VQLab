@@ -12,7 +12,6 @@ self-contained.
 """
 import argparse
 import sys
-import json
 import pathlib
 import shutil
 
@@ -21,7 +20,12 @@ import numpy as np
 
 from vqlab.runtime import vq_pack
 from vqlab.util.fs import GIB, read_json, write_json
-from vqlab.core.artifacts.artifact import Artifact, copy_tokenizer_files, write_index
+from vqlab.core.artifacts.artifact import (
+    Artifact,
+    copy_config_files,
+    copy_tokenizer_files,
+    write_index,
+)
 
 def _packs(meta):
     """Would the loop below pack this module? (decided from config alone)"""
@@ -111,10 +115,9 @@ def main(argv=None) -> int:
     write_index(OUT, new_map)
     write_json(OUT / "config.json", cfg, indent=1)
     copy_tokenizer_files(SRC, OUT)
-    for f in ("generation_config.json", "processor_config.json", "preprocessor_config.json",
-              "model.py"):
-        if (SRC / f).exists():
-            shutil.copy(SRC / f, OUT / f)
+    copy_config_files(SRC, OUT)
+    if (SRC / "model.py").exists():
+        shutil.copy(SRC / "model.py", OUT / "model.py")
     tot = sum(p.stat().st_size for p in OUT.glob("*.safetensors"))
     print(f"packed {packed_n} code tensors ({skipped} skipped) -> {OUT}")
     print(f"  {tot/GIB:.2f} GiB of tensors")

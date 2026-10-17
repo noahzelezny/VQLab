@@ -29,7 +29,6 @@ import argparse
 import sys
 import pathlib
 import re
-import shutil
 
 from vqlab import _layout
 
@@ -37,7 +36,12 @@ import mlx.core as mx
 
 from vqlab.family.registry import DENSE_REMAP as FAMILIES  # shared registry
 from vqlab.util.fs import GIB, read_json, write_json
-from vqlab.core.artifacts.artifact import Artifact, copy_tokenizer_files, write_index
+from vqlab.core.artifacts.artifact import (
+    Artifact,
+    copy_config_files,
+    copy_tokenizer_files,
+    write_index,
+)
 
 PROJS = ("gate_proj", "up_proj", "down_proj")
 # the KV-shared layers' tensors mlx_lm's gemma4 never instantiates (has_kv is
@@ -316,9 +320,7 @@ def main(argv=None) -> int:
     (OUT / "model.py").write_text(model_py)
 
     copy_tokenizer_files(BASE, OUT)
-    for f in ("generation_config.json", "processor_config.json", "preprocessor_config.json"):
-        if (BASE / f).exists():
-            shutil.copy(BASE / f, OUT / f)
+    copy_config_files(BASE, OUT)
 
     tot = sum(p.stat().st_size for p in OUT.glob("*.safetensors"))
     print(f"\nartifact -> {OUT}\n  {tot/GIB:.2f} GiB of tensors")
