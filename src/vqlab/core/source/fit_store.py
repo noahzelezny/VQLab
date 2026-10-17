@@ -47,7 +47,7 @@ from vqlab.util.geo import geo_key
 
 GSZ = 64
 _MOD_RX = re.compile(r"layers\.(\d+)\..*?([A-Za-z0-9_]+)$")
-_SUFFIXES = (".codebook", ".codes", ".vq_scales")
+VQ_SUFFIXES = (".codebook", ".codes", ".vq_scales")
 
 
 def roots():
@@ -173,8 +173,8 @@ def read_tensor_bytes(p, h, base, key):
 
 def modules_in(h):
     """Module names that carry a full (codebook, codes, vq_scales) triple."""
-    mods = {k[: -len(s)] for k in h for s in _SUFFIXES if k.endswith(s)}
-    return sorted(m for m in mods if all(m + s in h for s in _SUFFIXES))
+    mods = {k[: -len(s)] for k in h for s in VQ_SUFFIXES if k.endswith(s)}
+    return sorted(m for m in mods if all(m + s in h for s in VQ_SUFFIXES))
 
 
 # ---------------------------------------------------------------- identity
@@ -190,7 +190,7 @@ def module_name(module: str) -> tuple[int | None, str]:
 
 def describe(p, h, base, module):
     """Everything provable about one module's fit from its header + codebook."""
-    cb, codes, sc = (h[module + s] for s in _SUFFIXES)
+    cb, codes, sc = (h[module + s] for s in VQ_SUFFIXES)
     K, d = cb["shape"]
     packed = codes["dtype"] == "U32"
     # an expert stack is [E, OUT, ...]; a dense table (the n-gram PLE tables)
@@ -202,14 +202,14 @@ def describe(p, h, base, module):
     ident = hashlib.sha256()
     ident.update(read_tensor_bytes(p, h, base, module + ".codebook"))
     ident.update(json.dumps({s: [h[module + s]["shape"], h[module + s]["dtype"]]
-                             for s in _SUFFIXES}, sort_keys=True).encode())
+                             for s in VQ_SUFFIXES}, sort_keys=True).encode())
     layer, proj = module_name(module)
     return {"fit_id": ident.hexdigest()[:16], "module": module,
             "layer": layer, "proj": proj,
             "d": int(d), "K": int(K), "E": int(E), "OUT": int(OUT), "IN": int(IN),
             "pack_bits": bits if packed else None,
             "bytes": sum(h[module + s]["data_offsets"][1] - h[module + s]["data_offsets"][0]
-                         for s in _SUFFIXES)}
+                         for s in VQ_SUFFIXES)}
 
 
 # ------------------------------------------------------------- code usage
@@ -411,7 +411,7 @@ def file_fit(root, rec, move=False):
     src = pathlib.Path(rec["location"].split("#", 1)[0])
     if not dst.exists():
         h, base = read_header(src)
-        if len(modules_in(h)) == 1 and set(h) == {rec["module"] + s for s in _SUFFIXES}:
+        if len(modules_in(h)) == 1 and set(h) == {rec["module"] + s for s in VQ_SUFFIXES}:
             copy_atomic(src, dst)
         else:
             with atomic_path(dst) as tmp:     # the store is shared between boxes
@@ -433,7 +433,7 @@ def file_fit(root, rec, move=False):
 
 def _extract(src, h, base, module, out):
     """Byte-exact slice of one module's three tensors into a new file."""
-    keys = [module + s for s in _SUFFIXES]
+    keys = [module + s for s in VQ_SUFFIXES]
     hdr, off, blobs = {}, 0, []
     with open(src, "rb") as f:
         for k in keys:

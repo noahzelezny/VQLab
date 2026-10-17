@@ -231,7 +231,7 @@ COMMANDS: dict[str, Command] = {c.name: c for c in (
     _C('provenance', 'vqlab.records.provenance', 'provenance.py', 'lab', True, False,
        'build record: how an artifact was made (tool, fitter, inputs, runtime, lineage)'),
     _C('scratch', 'vqlab.agents.scratch', 'scratch.py', 'lab', False, True,
-       'scratch reclaimable: unpacked dirs whose verified pack exists, sizes + total, and the rm lines for a human (never deletes)'),
+       'scratch reclaimable: what is provably redundant (packed sources, finished preflights, filed fits, duplicate caches) or archivable (written campaigns), with evidence, sizes, the rm lines for a human (never deletes)'),
     _C('registry', 'vqlab.records.registry', 'registry.py', 'lab', True, False,
        'index of every artifact from provable facts; Hub drift check (metadata only)'),
     _C('publish', 'vqlab.ship.publish', 'publish.py', 'ship', False, True,

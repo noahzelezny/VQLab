@@ -77,7 +77,7 @@ def _old_record(roots, a, parent):
     rec["code"]["repo"] = repo
     rec["inputs"] = [{"role": "base", "path": str(parent), "realpath": str(parent),
                       "shards": {"m.safetensors": [1, "ab" * 32]}}]
-    rec["id"] = hashlib.sha256(provenance._canon(rec).encode()).hexdigest()
+    rec["id"] = hashlib.sha256(provenance.canon(rec).encode()).hexdigest()
     (a / provenance.RECORD).write_text(json.dumps(rec, indent=1, default=str))
     (a / provenance.HISTORY).write_text(json.dumps(rec, sort_keys=True) + "\n")
     return rec

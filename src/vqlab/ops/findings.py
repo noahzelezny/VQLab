@@ -38,7 +38,7 @@ def _refuse_moved_log() -> None:
             f"Refusing to start numbering at F1.")
 
 
-def _findings_entries(path: Optional[Path] = None) -> List[Dict[str, Any]]:
+def findings_entries(path: Optional[Path] = None) -> List[Dict[str, Any]]:
     path = path or FINDINGS_LOG  # resolved at call time (tests redirect it)
     out = []
     if not path.is_file():
@@ -69,7 +69,7 @@ def _live_reservations(published: Optional[set] = None) -> Dict[int, float]:
     if not _FLOCK_DIR.is_dir():
         return out
     if published is None:
-        published = set(e["f"] for e in _findings_entries())
+        published = set(e["f"] for e in findings_entries())
     now = time.time()
     for f in _FLOCK_DIR.glob("F*.lock"):
         try:
@@ -107,7 +107,7 @@ def next_f_number(reserve: bool = False, owner: str = "") -> Dict[str, Any]:
     nothing and burns nothing.
     """
     _refuse_moved_log()
-    ents = _findings_entries()
+    ents = findings_entries()
     top = max((e["f"] for e in ents), default=0)
     pub = set(e["f"] for e in ents)
     taken = pub | set(_live_reservations(pub))
@@ -149,7 +149,7 @@ def release_f_number(n: int) -> Dict[str, Any]:
 
 def findings_tail(n: int = 10) -> Dict[str, Any]:
     _refuse_moved_log()
-    ents = _findings_entries()
+    ents = findings_entries()
     ents.sort(key=lambda e: e["f"])
     return {"count": len(ents), "entries": ents[-max(1, n):], "log": str(FINDINGS_LOG)}
 
@@ -186,7 +186,7 @@ def findings_append(headline: str, artifact: str, instrument: str, prediction: s
         raise LabError("INCOMPLETE", "verdict CORRECTS needs corrects='F<n>'")
     if use_reserved:
         n = int(use_reserved)
-        ents = _findings_entries()
+        ents = findings_entries()
         if n in set(e["f"] for e in ents):
             raise ValueError(f"F{n} is already in the log; it cannot be "
                              "reserved or reused")

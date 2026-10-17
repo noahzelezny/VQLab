@@ -220,7 +220,7 @@ def runtime_state(art: pathlib.Path):
 
 
 # ----------------------------------------------------------------- writing
-def _canon(rec):
+def canon(rec):
     return json.dumps({k: v for k, v in rec.items() if k not in ("id", "portable_id")},
                       sort_keys=True, separators=(",", ":"), default=str)
 
@@ -271,7 +271,7 @@ def write_build_record(out, *, tool, script=None, ap=None, args=None,
     # record ships with the artifact, so it must not carry this box's disk
     # layout, home directory or checkout location.
     rec = config.portable_obj(rec)
-    rec["id"] = hashlib.sha256(_canon(rec).encode()).hexdigest()
+    rec["id"] = hashlib.sha256(canon(rec).encode()).hexdigest()
     (out / RECORD).write_text(json.dumps(rec, indent=1, default=str))
     print(f"PROVENANCE {rec['id'][:12]} -> {out / RECORD}", flush=True)
     return rec
@@ -283,7 +283,7 @@ def id_ok(rec) -> bool:
     whose paths were made portable after it was written (`--portable`),
     to its `portable_id`. `id` is never rewritten: children and history
     name their parents by it."""
-    h = hashlib.sha256(_canon(rec).encode()).hexdigest()
+    h = hashlib.sha256(canon(rec).encode()).hexdigest()
     return h == rec.get("id") or (rec.get("portable_id") is not None
                                   and h == rec["portable_id"])
 
@@ -308,7 +308,7 @@ def portable_record(rec: dict, prefixes=None) -> dict:
         return rec
     new["id"] = rec.get("id")
     if "id" in rec:
-        new["portable_id"] = hashlib.sha256(_canon(new).encode()).hexdigest()
+        new["portable_id"] = hashlib.sha256(canon(new).encode()).hexdigest()
     return new
 
 
@@ -363,7 +363,7 @@ def _record_config_sanitize(art, changes, cfg_after: str) -> None:
     new["tool"] = {"name": "provenance --portable", "note": SANITIZE_NOTE,
                    "argv": ["vqlab", "provenance", "--portable"],
                    "run_id": os.environ.get("VQLAB_RUN_ID")}
-    new["id"] = hashlib.sha256(_canon(new).encode()).hexdigest()
+    new["id"] = hashlib.sha256(canon(new).encode()).hexdigest()
     rec_before = changes[by[RECORD]][1] if RECORD in by else rp.read_text()
     rec_entry = (rp, rec_before, json.dumps(new, indent=1, default=str))
     if RECORD in by:
@@ -589,7 +589,7 @@ def amend(art, names, note) -> dict:
     new["tool"] = {"name": "provenance --amend", "note": note,
                    "argv": ["vqlab", "provenance", "--amend", *names],
                    "run_id": os.environ.get("VQLAB_RUN_ID")}
-    new["id"] = hashlib.sha256(_canon(new).encode()).hexdigest()
+    new["id"] = hashlib.sha256(canon(new).encode()).hexdigest()
     hp = art / HISTORY
     hb = hp.read_text() if hp.exists() else ""
     hp.write_text(hb + ("" if not hb or hb.endswith("\n") else "\n") + json.dumps(cur, sort_keys=True) + "\n")

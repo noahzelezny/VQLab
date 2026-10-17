@@ -30,7 +30,7 @@ LOW_FREE_WARN_GIB = 200
 LOW_FREE_PROBLEM_GIB = 30
 STALE_DAYS = 14
 # a campaign folder is named for its finding (F197-vision-exp) or its date
-_CAMPAIGN = re.compile(r"^(F\d{2,4})\b")
+CAMPAIGN = re.compile(r"^(F\d{2,4})\b")
 
 
 def _findings_text() -> str:
@@ -58,7 +58,7 @@ def stale_scratch(root, now=None) -> list:
         age = (now - d.stat().st_mtime) / 86400
         if age < STALE_DAYS:
             continue
-        m = _CAMPAIGN.match(d.name)
+        m = CAMPAIGN.match(d.name)
         if (m and m.group(1) in text) or d.name in text:
             continue
         out.append({"name": d.name, "age_days": int(age)})
