@@ -669,6 +669,7 @@ def _page_size_js(page: pathlib.Path) -> str:
     return src[src.index("const isMoe=t=>"):src.index("function sanitize(")]
 
 
+@pytest.mark.checkout
 def test_the_recipe_page_sizes_a_build_as_the_compiler_does(fams, lab_dirs):
     """The live drag re-derives the compiler's artifact size in JS (instant
     feedback before the preview returns); run that JS against

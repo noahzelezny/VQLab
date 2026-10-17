@@ -11,7 +11,7 @@ nothing here computes a number of its own:
   /api/provenance   build record + lineage of a registered artifact
   /api/fits         <store>/index.jsonl: which (d, K) are fitted per layer
   /api/families     families/ + <families>: profile and onboard state
-  /api/runs         ~/.vqlab/runs.jsonl, the MCP run dirs, the GPU holder
+  /api/runs         the run log (config.run_log), the MCP run dirs, the GPU holder
   /api/queues       recent `vqlab queue` runs
   /api/settings     storage locations; POST sets one (agents/settings.py)
   /api/scratch      scratch folders; /reclaimable adds rm lines, never run
@@ -157,7 +157,7 @@ def api_families(_q):
 
 def api_runs(q):
     n = int(q.get("n", ["200"])[0])
-    log = pathlib.Path(os.environ.get("VQLAB_LOG_DIR", pathlib.Path.home() / ".vqlab")) / "runs.jsonl"
+    log = config.run_log()
     starts, ends = {}, {}
     for r in read_jsonl(log, limit=n * 3):
         (starts if r.get("event") == "start" else ends)[r.get("run_id")] = r

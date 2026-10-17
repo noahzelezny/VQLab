@@ -179,6 +179,7 @@ def test_runtime_equiv_compare_and_main(tmp_path, monkeypatch, capsys):
     assert json.loads(out.read_text())["result"]["bitwise"] is False
 
 
+@pytest.mark.checkout
 def test_runtime_equiv_is_a_routed_command():
     import pathlib
     from vqlab import cli

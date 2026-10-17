@@ -4,7 +4,7 @@ failing loudly.
 
     vqlab queue run <queue.json> [--commit REV] [--preflight] [--detach]
     vqlab queue run --resume <queue dir>      skip steps that already passed
-    vqlab queue run <queue.json> --on m4      another box: reservation + remote-path check first
+    vqlab queue run <queue.json> --on peer    another box: reservation + remote-path check first
     (a box reserved for someone else by `vqlab reserve` is refused unless
     --override-reservation, which state.json records)
     vqlab queue status [<queue dir>]          default: the latest queue

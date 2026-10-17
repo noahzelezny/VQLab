@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """vqlab reserve: say who has a box until when, where every box can see it.
 
-    vqlab reserve m4 --for knurlogic --until +3h [--note "vision bench"]
+    vqlab reserve peer --for knurlogic --until +3h [--note "vision bench"]
     vqlab reserve here --for noah --until 02:30
     vqlab reserve --list                  # active reservations, every box
-    vqlab reserve --release [m4|here]     # default: here
+    vqlab reserve --release [peer|here]   # default: here
 
 WHY (2026-10-03): the GPU lease is per box and says nothing about intent.
 Two sessions negotiated "M4 free?" by message four times in one night. A

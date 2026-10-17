@@ -3,3 +3,7 @@
 prune src/vqlab/agents/gui_static/bench
 # The private notebook never ships.
 prune lab
+# The sdist carries the whole test suite (conftest, fixtures, goldens), so
+# `pytest` runs from an unpacked sdist.
+graft tests
+global-exclude __pycache__ *.py[cod]

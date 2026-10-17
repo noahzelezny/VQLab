@@ -46,7 +46,6 @@ import argparse
 import json
 import math
 import os
-import pathlib
 import subprocess
 import sys
 
@@ -187,8 +186,9 @@ def main():
         if a.dry_run:
             continue
         art = os.path.join(a.out, f"art_{name}")
-        cmd = [sys.executable, str(pathlib.Path(__file__).resolve().parents[1]
-                                / "fit" / "geo_build.py"),
+        # through the CLI, as gate/pin and ship/release_prep run it: logged,
+        # and the same from a wheel as from a checkout
+        cmd = [sys.executable, "-m", "vqlab.cli", "geo-build",
                "--artifact", a.artifact, "--teacher", a.teacher, "--family", a.family,
                "--geomap", gm, "--out", art]
         for r in a.reuse + [os.path.join(a.out, f"art_{n}_parts") for n, _, _, _, _ in points]:

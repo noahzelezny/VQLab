@@ -22,6 +22,20 @@ import vqlab  # noqa: E402
 vqlab.use_knurlogic_arch()
 
 
+ROOT = pathlib.Path(__file__).resolve().parents[1]
+
+
+def pytest_collection_modifyitems(config, items):
+    """A `checkout` test needs the git tree (root docs, `git ls-files`, the
+    GUI's source, the ratchet's linters); an unpacked sdist has none."""
+    if (ROOT / ".git").exists():
+        return
+    skip = pytest.mark.skip(reason="needs the source checkout, not an sdist")
+    for item in items:
+        if item.get_closest_marker("checkout"):
+            item.add_marker(skip)
+
+
 @pytest.fixture
 def lab_dirs(tmp_path, monkeypatch):
     """Every lab location these tests touch, each an empty folder under

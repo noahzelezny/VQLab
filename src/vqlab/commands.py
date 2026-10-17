@@ -258,7 +258,7 @@ COMMANDS: dict[str, Command] = {c.name: c for c in (
     _C('queue', 'vqlab.queue.runner', 'queue/runner.py', 'lab', False, True,
        'run a list of steps from PINNED code (git worktree), under the GPU lease, failing loudly; --preflight'),
     _C('reserve', 'vqlab.queue.reserve', 'queue/reserve.py', 'lab', False, True,
-       'say who has a box until when (`reserve m4 --for X --until +3h`, --list, --release); queue run refuses a box reserved for someone else'),
+       'say who has a box until when (`reserve peer --for X --until +3h`, --list, --release); queue run refuses a box reserved for someone else'),
 )}
 
 # Namespaces, in pipeline order: namespace -> (what it is for, {sub: flat}).

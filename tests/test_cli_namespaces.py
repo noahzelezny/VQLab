@@ -110,6 +110,7 @@ def test_context_routing_reads_both_spellings():
     assert cli.routed("`score ppl`, `score`, `fit`") == {"score"}
 
 
+@pytest.mark.checkout
 def test_root_context_routes_every_command():
     ctx = (_layout.SRC.parent / "CONTEXT.md").read_text()
     assert not set(cli.COMMANDS) - cli.routed(ctx)

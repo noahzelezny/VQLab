@@ -25,6 +25,9 @@
   restart numbering at F1 when the log is missing but a checkout log exists.
 - MCP `queue_status` read `~/.vqlab/queues` while `vqlab queue` wrote
   `<records>/queues`; every reader now uses `config.queues_dir()`.
+- The run log (`vqlab runs`) is `<records>/runs.jsonl` (`config.run_log()`,
+  `VQLAB_LOG_DIR` overrides); an install that already has
+  `~/.vqlab/runs.jsonl` keeps appending there.
 
 ### Removed
 - Bare imports of tool modules (`import pack`, `import settings`,

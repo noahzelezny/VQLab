@@ -7,7 +7,7 @@ through shell history and EXPERIMENTS.md. The START line is written before
 the tool runs, so a run that is killed (watchdog, OOM, closed laptop) still
 leaves a record; an unmatched start IS the record that it died.
 
-    ~/.vqlab/runs.jsonl            (override the dir with VQLAB_LOG_DIR)
+    <records>/runs.jsonl           (vqlab.config.run_log; VQLAB_LOG_DIR overrides)
 
 Cost is two appends and two `git` calls per run. Logging must never break or
 slow a run: every failure here is swallowed. Tools that write a build record
@@ -20,15 +20,16 @@ import os
 import pathlib
 import time
 import uuid
+from vqlab import config
 from vqlab.util.clock import now_iso
 
 _T0 = {}
 
 
 def _path() -> pathlib.Path:
-    d = pathlib.Path(os.environ.get("VQLAB_LOG_DIR", pathlib.Path.home() / ".vqlab"))
-    d.mkdir(parents=True, exist_ok=True)
-    return d / "runs.jsonl"
+    p = config.run_log()
+    p.parent.mkdir(parents=True, exist_ok=True)
+    return p
 
 
 def _append(rec) -> None:

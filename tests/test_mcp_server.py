@@ -157,6 +157,7 @@ def test_findings_append_requires_every_field(lab):
     assert e3.value.code == "INCOMPLETE"
 
 
+@pytest.mark.checkout
 def test_read_doc_is_confined():
     assert m.t_read_doc("AGENTS.md", 1, 3)["end"] == 3
     with pytest.raises(m.ToolError):

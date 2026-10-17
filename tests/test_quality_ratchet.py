@@ -27,6 +27,10 @@ import sys
 from pathlib import Path
 from typing import Any
 
+import pytest
+
+pytestmark = pytest.mark.checkout
+
 ROOT = Path(__file__).resolve().parents[1]
 BASELINE = Path(__file__).with_name("quality_baseline.json")
 SRC = ROOT / "src" / "vqlab"

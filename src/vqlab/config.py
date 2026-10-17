@@ -156,13 +156,13 @@ def card() -> dict:
 def boxes() -> dict:
     """Other machines a queue may run on (`vqlab queue run --on NAME`).
 
-        [boxes.m4]
+        [boxes.peer]
         ssh       = "user@192.0.2.2"
-        repo      = "/Volumes/Shared/vqlab-clone"   # a clone of THIS repo on shared storage
+        repo      = "/path/to/shared/vqlab-clone"   # a clone of THIS repo on shared storage
         python    = "/path/to/envs/exo/bin/python"
-        config    = "/Volumes/Shared/m4-config.toml" # that box's own [paths]
-        queue_dir = "/Volumes/Shared/queues-m4"      # shared, so this box can `queue wait` on it
-        teachers  = "/Volumes/Local/teachers"     # optional: that box's LOCAL teacher copies
+        config    = "/path/to/shared/peer-config.toml" # that box's own [paths]
+        queue_dir = "/path/to/shared/queues-peer"    # shared, so this box can `queue wait` on it
+        teachers  = "/path/to/local/teachers"     # optional: that box's LOCAL teacher copies
         models    = "/path/to/models"             # optional: that box's served-artifacts root
                                                     # (check-release --cluster-peer reads it)
         hostname  = "box-b"                         # optional: its short hostname, if not NAME
@@ -282,6 +282,17 @@ def findings_log() -> pathlib.Path:
     <records>/FINDINGS-LOG.md."""
     env = os.environ.get("VQLAB_FINDINGS_LOG")
     return pathlib.Path(env).expanduser() if env else records() / "FINDINGS-LOG.md"
+
+
+def run_log() -> pathlib.Path:
+    """The run log every `vqlab <cmd>` appends to (records/runlog.py):
+    $VQLAB_LOG_DIR/runs.jsonl, else one already at ~/.vqlab/runs.jsonl (kept,
+    so an install's history is not orphaned), else <records>/runs.jsonl."""
+    env = os.environ.get("VQLAB_LOG_DIR")
+    if env:
+        return pathlib.Path(env).expanduser() / "runs.jsonl"
+    legacy = HOME / "runs.jsonl"
+    return legacy if legacy.is_file() else records() / "runs.jsonl"
 
 
 def registry_dir() -> pathlib.Path:

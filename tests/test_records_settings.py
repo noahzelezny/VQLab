@@ -12,7 +12,8 @@ from vqlab.agents import config_cmd
 from vqlab.agents import settings as S
 
 SRC = pathlib.Path(__file__).resolve().parents[1] / "src"
-EXTRA_ENV = ("VQLAB_FINDINGS_LOG", "VQLAB_FAMILIES_DIR", "VQLAB_QUEUE_DIR", "XDG_DATA_HOME")
+EXTRA_ENV = ("VQLAB_FINDINGS_LOG", "VQLAB_FAMILIES_DIR", "VQLAB_QUEUE_DIR", "XDG_DATA_HOME",
+             "VQLAB_LOG_DIR")
 
 
 @pytest.fixture
@@ -23,6 +24,18 @@ def cfg(tmp_path, monkeypatch):
     S._reset()
     yield tmp_path / "c.toml"
     S._reset()
+
+
+def test_the_run_log_lives_with_the_records_and_keeps_an_old_one(cfg, tmp_path, monkeypatch):
+    monkeypatch.setattr(C, "HOME", tmp_path / ".vqlab")
+    monkeypatch.setenv("VQLAB_RECORDS", str(tmp_path / "rec"))
+    assert C.run_log() == tmp_path / "rec" / "runs.jsonl"
+    # an install that already logged under ~/.vqlab keeps appending there
+    (tmp_path / ".vqlab").mkdir()
+    (tmp_path / ".vqlab" / "runs.jsonl").write_text("")
+    assert C.run_log() == tmp_path / ".vqlab" / "runs.jsonl"
+    monkeypatch.setenv("VQLAB_LOG_DIR", str(tmp_path / "log"))
+    assert C.run_log() == tmp_path / "log" / "runs.jsonl"
 
 
 def test_records_accessors_default_and_env(cfg, tmp_path, monkeypatch):

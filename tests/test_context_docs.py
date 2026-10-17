@@ -22,6 +22,8 @@ import re
 
 import pytest
 
+pytestmark = pytest.mark.checkout
+
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 PKG = ROOT / "src" / "vqlab"
 SKIP_STEMS = {"__init__", "__main__"}

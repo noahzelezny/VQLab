@@ -5,6 +5,10 @@ import pathlib
 import re
 import subprocess
 
+import pytest
+
+pytestmark = pytest.mark.checkout
+
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 # Assembled from fragments so a history rewrite that scrubs these strings
 # (git filter-repo --replace-text) cannot rewrite the guard itself.

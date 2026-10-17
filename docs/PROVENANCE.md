@@ -121,7 +121,7 @@ should record the resulting HF commit sha back into the registry.
 |---|---|---|
 | 1 | `provenance.py` writer + `vqlab provenance` (summary / --json / --verify / --lineage) | **done** |
 | 2 | build records in `fit-dense`, `geo-build`, `fit-moe`; geo-build origins ledger | **done** |
-| 2b | per-user run log (`~/.vqlab/runs.jsonl`, `vqlab runs`); run id stamped into records | **done** |
+| 2b | per-user run log (`<records>/runs.jsonl`, `vqlab runs`); run id stamped into records | **done** |
 | 2c | fit store: every fit filed with its recipe (`vqlab fits`, `geo-build --pool`); HDD archive migrated | **done** |
 | 3 | build records for every other build tool (`pack*`, `build-dense`, `bundle`, `rebundle-dense`, `stream-convert`, `graft`, `splice-ple`, `ple-swap`, `patch-arch`, `vision-layout --fix`, `mtp-*`), written by the CLI on a clean exit; in-place tools AMEND (prior record kept in `vqlab_provenance.history.jsonl`, linked by id) | **done** |
 | 4 | publish ships `vqlab_provenance.json`; paper DRAFT softens "external manifests" | needs Noah (VL4.10) |

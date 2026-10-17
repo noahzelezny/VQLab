@@ -38,6 +38,7 @@ import pathlib
 import shutil
 import subprocess
 import sys
+from vqlab import config
 from vqlab.core.artifacts.pin_record import (  # noqa: F401  (re-exported)
     MARKER, SCHEMA, SMOKE_LOG, _sha, check_pin)
 
@@ -65,8 +66,7 @@ def _child_run_id(parent: str | None, cmd: str) -> str | None:
     """The run id `vqlab <cmd>` got when launched from this process."""
     if not parent:
         return None
-    log = pathlib.Path(os.environ.get("VQLAB_LOG_DIR",
-                                      pathlib.Path.home() / ".vqlab")) / "runs.jsonl"
+    log = config.run_log()
     found = None
     try:
         for line in open(log):
