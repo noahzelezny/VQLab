@@ -13,7 +13,7 @@ Copy this list into the campaign's notes and tick it there.
       artifact-only tools resolve it); the CPU loader gate passes:
       `python src/vqlab/core/source/expert_src.py --selftest`.
 - [ ] Teacher archived in configured storage, never re-downloaded
-      (`vqlab config`, `where_is`).
+      (`vqlab lab config`, `where_is`).
 - [ ] Depth law MEASURED for this family (`layer-leverage`, ranked by the
       jump in `traj_rel`), never inherited from another family.
 - [ ] **Speed baseline of the bf16 or reference build** (section D), so

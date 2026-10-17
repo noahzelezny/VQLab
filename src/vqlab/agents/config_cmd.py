@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
-"""vqlab config: show where vqlab reads and writes, set a location, or write a starter config.
+"""vqlab lab config: show where vqlab reads and writes, set a location, or
+write a starter config.
 
-    vqlab config                      # every location, its source and free space
-    vqlab config --sizes              # + the size of each top-level scratch folder
-    vqlab config set KEY PATH [--create]   # validate PATH, then write KEY
-    vqlab config init                 # asks for every key in turn (in a terminal)
-    vqlab config init --root DIR      # write ~/.config/vqlab/config.toml under DIR
-    vqlab config init --scratch A --models B --teachers C --fit-store D [--records E]
+    vqlab lab config                      # every location, its source and free space
+    vqlab lab config --sizes              # + the size of each top-level scratch folder
+    vqlab lab config set KEY PATH [--create]   # validate PATH, then write KEY
+    vqlab lab config init                 # asks for every key in turn (in a terminal)
+    vqlab lab config init --root DIR      # write ~/.config/vqlab/config.toml under DIR
+    vqlab lab config init --scratch A --models B --teachers C --fit-store D
+        [--records E]
 
 Nothing in vqlab assumes a disk layout: each location resolves from its
 environment variable, then the config file, then a default
@@ -100,7 +102,8 @@ def walk():
 def init(a):
     path = C.config_file()
     if path.exists() and not a.force:
-        raise SystemExit(f"{path} exists; --force to overwrite (or `vqlab config set KEY PATH`)")
+        raise SystemExit(f"{path} exists; --force to overwrite "
+                         "(or `vqlab lab config set KEY PATH`)")
     if not (a.root or a.scratch or a.models or a.teachers or a.fit_store or a.records):
         if not sys.stdin.isatty():
             raise SystemExit("give --root (or every location), or run in a terminal to be asked")
@@ -136,7 +139,7 @@ def init(a):
 
 
 def main(argv=None):
-    ap = argparse.ArgumentParser(prog="vqlab config", description=__doc__,
+    ap = argparse.ArgumentParser(prog="vqlab lab config", description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--sizes", action="store_true",
                     help="also size each top-level scratch folder (du, time-capped)")

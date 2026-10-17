@@ -47,7 +47,7 @@ def _mcp():
 def _current():
     m = _mcp()
     return {"import_names": sorted(_layout.PERMANENT),
-            "file_names": sorted(_layout._FILE_NAMES),
+            "file_names": sorted(_layout.FILE_NAMES),
             "commands": sorted(cli.COMMANDS),
             "mcp_run_allowlist": sorted(m.RUN_ALLOWLIST),
             "mcp_gpu_free": sorted(m.GPU_FREE)}

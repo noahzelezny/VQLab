@@ -64,7 +64,7 @@ assert not {"queue", "vqlab.queue"} & set(PERMANENT)   # stdlib `queue` stays th
 
 # Old FILENAMES the PERMANENT names imply (vq_397b_codes.py -> fit_moe.py,
 # pack_artifact.py -> pack.py): archived queue files and ledgers name them.
-_FILE_NAMES = {k.rpartition(".")[2]: v.rpartition(".")[2] for k, v in PERMANENT.items()
+FILE_NAMES = {k.rpartition(".")[2]: v.rpartition(".")[2] for k, v in PERMANENT.items()
                if k.rpartition(".")[2] != v.rpartition(".")[2]}
 
 
@@ -79,7 +79,7 @@ def find(name: str) -> pathlib.Path:
     """Path of a module FILE by its filename or relative path. The old
     filenames PERMANENT implies (vq_397b_codes.py) map to their module."""
     stem, dot, ext = name.rpartition("/")[2].partition(".")
-    new = _FILE_NAMES.get(stem)
+    new = FILE_NAMES.get(stem)
     if new and ext == "py":
         name = name[:len(name) - len(stem + dot + ext)] + new + dot + ext
     for d in _FIND_DIRS:
