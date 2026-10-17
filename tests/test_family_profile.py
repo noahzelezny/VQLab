@@ -57,6 +57,23 @@ def test_ngram_tables_are_their_own_class():
     assert fp.classify(f"{lm}.self_attn.q_proj.weight", None, ple) == "carry"
 
 
+
+def test_ngram_tables_are_signed_so_their_fits_attribute(tmp_path):
+    """Flash-Next's n-gram tables are fitted on their own: the profile signs
+    each table under the name the fit store files it with (shard_N), so a
+    filed table fit is attributed; the expert geometries are unchanged."""
+    lm, t = "model.language_model", {}
+    for li in (0, 1):
+        t[f"{lm}.layers.{li}.mlp.experts.gate_up_proj"] = (2, 8, 16)
+        t[f"{lm}.layers.{li}.mlp.experts.down_proj"] = (2, 16, 4)
+        t[f"{lm}.layers.{li}.ple.ple_embedding.ngram_embedding.shard_0.weight"] = (10, 4)
+        t[f"{lm}.layers.{li}.ple.ple_embedding.ngram_embedding.shard_1.weight"] = (12, 4)
+    cfg = {"model_type": "qwen4_exp", "text_config": {"num_hidden_layers": 2, "num_experts": 2}}
+    prof = _profile(tmp_path, _teacher(tmp_path / "fn", cfg, t), "qwen4_exp")
+    sig = prof["modules"]["signatures"]
+    assert sig["shard_0"] == [[1, 10, 4]] and sig["shard_1"] == [[1, 12, 4]]
+    assert not {"shard_0", "shard_1"} & set(prof["geometries"])
+
 def test_a_one_table_family_profiles_the_table_as_its_vq_target(tmp_path):
     """gemma4_e4b (registry "embed"): the per-layer table is the one VQ
     module, so the geometries are the table's and its bytes are vq_target."""

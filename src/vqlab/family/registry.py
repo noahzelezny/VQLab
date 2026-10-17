@@ -210,9 +210,10 @@ DENSE_REMAP = {
 # name, so a data file cannot silently
 # redefine a published family.
 def family_dirs():
-    """The family folders, checkout first, the user's overriding."""
+    """The family folders, checkout first, the user's overriding
+    (config.family_dirs)."""
     from vqlab import config
-    return [config.checkout_families_dir(), config.families_dir()]
+    return config.family_dirs()
 
 
 def iter_profiles():

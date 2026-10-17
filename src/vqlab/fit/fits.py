@@ -24,8 +24,6 @@ import sys
 from vqlab.core.source import fit_store as fs
 from vqlab.util.geo import geo_key
 
-FAMILIES = fs._families_dir()   # honours VQLAB_FAMILIES_DIR
-
 
 def _layers(s):
     if not s:
@@ -123,7 +121,7 @@ def main(argv=None) -> int:
         return _census(root, recs, a)
 
     if a.cmd == "retag":
-        new = fs.teacher_slug(a.teacher, FAMILIES)
+        new = fs.teacher_slug(a.teacher)
         if new == a.old:
             print(f"REFUSE: {a.teacher} matches no profiled teacher by content "
                   f"(config + shard fingerprint); nothing proves {a.old!r} is another teacher")
@@ -137,7 +135,7 @@ def main(argv=None) -> int:
         return 0
 
     if a.cmd == "index":
-        sig = fs.load_signatures(FAMILIES)
+        sig = fs.load_signatures()
         new = dup = err = 0
         for r in fs.scan(a.dirs, sig):
             if "_error" in r:

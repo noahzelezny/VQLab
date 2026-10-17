@@ -103,6 +103,18 @@ def dense_rows(tmpl, shapes, n_layers):
     return rows
 
 
+def table_rows(rx, shapes: dict) -> list[dict]:
+    """A family's separately fitted tables (registry "ple": the n-gram
+    tables), one row each, named as the fit store names their fits, so a
+    filed table fit is attributed to its teacher by signature."""
+    rows = []
+    for k, shp in sorted(shapes.items()):
+        if rx.search(k) and len(shp) == 2:
+            layer, proj = fitstore.module_name(k)
+            rows.append({"layer": layer, "proj": proj, "E": 1, "OUT": shp[0], "IN": shp[1]})
+    return rows
+
+
 def embed_rows(key: str, shapes: dict) -> list[dict]:
     """A family whose VQ target is one embedding table (registry "embed"):
     the table as the one module, E=1, its rows as OUT. Its layer is a
@@ -291,6 +303,9 @@ def main(argv=None) -> int:
         geos[proj] = [{**g, "stack_gib": round(g["bytes"] * n_mod / GIB, 3)}
                       for g in geometry_table(IN, E, OUT)]
     expert_params = sum(r["E"] * r["OUT"] * r["IN"] for r in rows)
+    # signed, not sized: the tables have their own Recipe step (ple_geo)
+    for r in table_rows(ple_rx, shapes) if ple_rx else ():
+        sigs.setdefault(r["proj"], set()).add((r["E"], r["OUT"], r["IN"]))
     prof = {
         "schema": "vqlab.family-profile/1",
         "created": datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds"),

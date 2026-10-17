@@ -58,9 +58,13 @@ def roots():
     return config.fit_store()
 
 
-def _families_dir():
+def _profile_dirs(families_dir=None) -> list[pathlib.Path]:
+    """The folders profiles are read from: `families_dir` alone when given
+    (a test or a one-off), else every family folder (config.family_dirs).
+    Reading only the user's folder left every fit unattributed and every
+    teacher copy named by its directory, since the profiles are checked in."""
     from vqlab import config
-    return config.families_dir()
+    return [pathlib.Path(families_dir)] if families_dir else config.family_dirs()
 
 
 def teacher_identity(teacher_dir):
@@ -85,9 +89,9 @@ def teacher_slug(teacher_dir, families_dir=None) -> str:
     teacher, filed 602 fits under its dir name on 2026-09-26 -- VL4.11).
     Else its HF repo when it is a hub snapshot, else its directory name."""
     rp = pathlib.Path(os.path.realpath(teacher_dir))
-    fam = pathlib.Path(families_dir) if families_dir else _families_dir()
+    dirs = _profile_dirs(families_dir)
     cst = (rp / "config.json").stat() if (rp / "config.json").is_file() else None
-    key = (str(rp), str(fam), cst and (cst.st_mtime_ns, cst.st_size))
+    key = (str(rp), tuple(map(str, dirs)), cst and (cst.st_mtime_ns, cst.st_size))
     if key in _SLUGS:
         return _SLUGS[key]
     parts = rp.parts
@@ -99,7 +103,7 @@ def teacher_slug(teacher_dir, families_dir=None) -> str:
     if cfg.is_file():
         csha = hashlib.sha256(cfg.read_bytes()).hexdigest()
         cands = []
-        for (_, teacher), prof in sorted(profiles_in([fam]).items()):
+        for (_, teacher), prof in sorted(profiles_in(dirs).items()):
             ident = prof.get("identity") or {}
             if ident.get("config_sha256") == csha and ident.get("shard_fingerprint"):
                 cands.append((teacher, ident["shard_fingerprint"]))
@@ -174,22 +178,34 @@ def modules_in(h):
 
 
 # ---------------------------------------------------------------- identity
+def module_name(module: str) -> tuple[int | None, str]:
+    """(layer, proj) of a module: the name the store files it under and a
+    profile signs it with. A table's module ends in `.weight`
+    (…ngram_embedding.shard_0.weight): its name is the part before it."""
+    m = _MOD_RX.search(module.removesuffix(".weight"))
+    if m:
+        return int(m.group(1)), m.group(2)
+    return None, module.removesuffix(".weight").rsplit(".", 1)[-1]
+
+
 def describe(p, h, base, module):
     """Everything provable about one module's fit from its header + codebook."""
     cb, codes, sc = (h[module + s] for s in _SUFFIXES)
     K, d = cb["shape"]
-    E, OUT = codes["shape"][:2]
-    IN = sc["shape"][2] * GSZ
     packed = codes["dtype"] == "U32"
+    # an expert stack is [E, OUT, ...]; a dense table (the n-gram PLE tables)
+    # is [OUT, ...], one "expert". Unpacked codes give IN exactly (one code
+    # per d inputs); packed ones only through the scales' groups.
+    E, OUT = codes["shape"][:2] if len(codes["shape"]) == 3 else (1, codes["shape"][0])
+    IN = codes["shape"][-1] * d if not packed else sc["shape"][-1] * GSZ
     bits = math.ceil(math.log2(K))
     ident = hashlib.sha256()
     ident.update(read_tensor_bytes(p, h, base, module + ".codebook"))
     ident.update(json.dumps({s: [h[module + s]["shape"], h[module + s]["dtype"]]
                              for s in _SUFFIXES}, sort_keys=True).encode())
-    m = _MOD_RX.search(module)
+    layer, proj = module_name(module)
     return {"fit_id": ident.hexdigest()[:16], "module": module,
-            "layer": int(m.group(1)) if m else None,
-            "proj": m.group(2) if m else module.rsplit(".", 1)[-1],
+            "layer": layer, "proj": proj,
             "d": int(d), "K": int(K), "E": int(E), "OUT": int(OUT), "IN": int(IN),
             "pack_bits": bits if packed else None,
             "bytes": sum(h[module + s]["data_offsets"][1] - h[module + s]["data_offsets"][0]
@@ -209,7 +225,7 @@ def code_usage(rec, max_experts=None):
     p = rec["location"].split("#", 1)[0]
     h, base = read_header(p)
     t = h[rec["module"] + ".codes"]
-    E, OUT, W = t["shape"]
+    E, OUT, W = t["shape"] if len(t["shape"]) == 3 else (1, *t["shape"])   # a table: one "expert"
     dt = {"U8": np.uint8, "U16": np.uint16, "U32": np.uint32}[t["dtype"]]
     per = OUT * W * np.dtype(dt).itemsize
     pick = range(E) if not max_experts or max_experts >= E else \
@@ -218,7 +234,7 @@ def code_usage(rec, max_experts=None):
     counts = np.zeros(K, dtype=np.int64)
     a0 = t["data_offsets"][0]
     ts = h[rec["module"] + ".vq_scales"]
-    sper = int(np.prod(ts["shape"][1:])) * 2
+    sper = int(np.prod(ts["shape"][-2:])) * 2       # one expert's (or the table's) scales
     zero = groups = 0
     with open(p, "rb") as f:
         for e in pick:
@@ -263,10 +279,10 @@ def read_census(root):
 
 
 # ------------------------------------------------------------- attribution
-def load_signatures(families_dir):
+def load_signatures(families_dir=None):
     """{(proj, E, OUT, IN): [(family, teacher), ...]} from every profile."""
     sig = {}
-    for pj in profiles_in([families_dir]).values():
+    for pj in profiles_in(_profile_dirs(families_dir)).values():
         for proj, ss in (pj.get("modules", {}).get("signatures") or {}).items():
             for E, OUT, IN in ss:
                 sig.setdefault((proj, E, OUT, IN), []).append(

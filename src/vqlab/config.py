@@ -323,6 +323,13 @@ def checkout_families_dir() -> pathlib.Path:
     return here.parent.parent.parent / "families"
 
 
+def family_dirs() -> list[pathlib.Path]:
+    """Every folder teacher profiles and family entries are read from,
+    checkout first, the user's overriding: what the family registry and the
+    fit store both read (one list, so a profile counts everywhere or nowhere)."""
+    return [checkout_families_dir(), families_dir()]
+
+
 def research_dir() -> pathlib.Path:
     """Research notes, sweep plans, result tables: <records>/research."""
     return records() / "research"
