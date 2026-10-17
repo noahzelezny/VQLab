@@ -119,12 +119,31 @@ def test_dense_chain(fams):
 
 def test_dense_with_an_incumbent_base(fams, tmp_path):
     fams("qwen3_8_dense", "D", "dense", 24, vision=0)
-    inc = tmp_path / "inc"
-    inc.mkdir()
+    inc = _base(tmp_path)
     q, warns = rq.compile_recipe({"name": "d", "family": "qwen3_8_dense", "teacher": "D",
                                   "geo": "d2-K512", "base": str(inc)})
     assert _names(q)[0] == "fit" and _args(q, "build")[3] == str(inc)
     assert not any("stream-convert" in w for w in warns)
+    # its preflight fits one layer into that base: the base as measured on disk
+    assert q["estimate"]["preflight_gib"] == round(3 / 1024, 2)
+
+
+def _base(tmp_path, mib=3):
+    """A given base: one shard of `mib` MiB and its index."""
+    inc = tmp_path / "inc"
+    inc.mkdir()
+    (inc / "model-00001.safetensors").write_bytes(b"\0" * (mib << 20))
+    (inc / "model.safetensors.index.json").write_text(
+        json.dumps({"weight_map": {"w": "model-00001.safetensors"}}))
+    return inc
+
+
+def test_a_base_that_is_not_a_model_is_refused(fams, tmp_path):
+    fams("qwen3_8_dense", "D", "dense", 24, vision=0)
+    (tmp_path / "empty").mkdir()
+    with pytest.raises(rq.RecipeError, match="not a model"):
+        rq.compile_recipe({"name": "d", "family": "qwen3_8_dense", "teacher": "D",
+                           "geo": "d2-K512", "base": str(tmp_path / "empty")})
 
 
 def test_affine(fams):
@@ -821,6 +840,8 @@ def test_e4b_fits_its_one_table_into_its_incumbent(fams, lab_dirs):
         assert b[b.index("--embed") + 1] == a[a.index("--out") + 1] and "--mlp" not in b
         assert b[b.index("--base") + 1] == "<models>/mlx-community--gemma-4-e4b-it-8bit"
     assert q["estimate"]["artifact_gib"] == round(1 / 1024 + 1.887, 2)
+    # a few rows of the table at full shape: the preflight is the build's size
+    assert q["estimate"]["preflight_gib"] == q["estimate"]["artifact_gib"]
     assert steps.validate(q) == []
 
 

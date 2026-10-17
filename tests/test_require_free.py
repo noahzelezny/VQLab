@@ -16,9 +16,9 @@ def test_passes_small_and_override(tmp_path, monkeypatch):
     config.require_free(tmp_path, 2**60, "test")
 
 
-def test_free_shortfall_reports_the_room_it_found(tmp_path, monkeypatch):
-    free = config.free_shortfall(tmp_path, 2**60)
+def test_free_when_short_reports_the_room_it_found(tmp_path, monkeypatch):
+    free = config.free_when_short(tmp_path, 2**60)
     assert isinstance(free, int) and 0 < free < 2**60
-    assert config.free_shortfall(tmp_path, 1024, margin_gib=0) is None
+    assert config.free_when_short(tmp_path, 1024, margin_gib=0) is None
     monkeypatch.setenv("VQLAB_SKIP_DISK_CHECK", "1")
-    assert config.free_shortfall(tmp_path, 2**60) is None
+    assert config.free_when_short(tmp_path, 2**60) is None

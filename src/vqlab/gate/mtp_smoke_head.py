@@ -44,9 +44,15 @@ def _time(fn, *, warmup, iters):
     return (time.perf_counter() - t0) / iters * 1e3      # ms/step
 
 
-def _get(cfg, key: str):
-    """One key from a config that is a dict or an args object."""
-    return cfg[key] if isinstance(cfg, dict) else getattr(cfg, key)
+def vocab_size(model) -> int:
+    """The text vocab of a loaded model: its own args, else (a VLM wrapper
+    such as qwen4_exp) its text_config, which is a dict or an args object."""
+    args = (model.language_model if hasattr(model, "language_model")
+            else model).args
+    if getattr(args, "vocab_size", None):
+        return args.vocab_size
+    tc = args.text_config
+    return tc["vocab_size"] if isinstance(tc, dict) else tc.vocab_size
 
 
 def main(argv=None) -> int:
@@ -71,11 +77,7 @@ def main(argv=None) -> int:
           f"{mx.get_active_memory() / GIB:.2f} GiB", flush=True)
 
     D = head.D
-    args = (model.language_model if hasattr(model, "language_model")
-            else model).args
-    # A VLM wrapper (qwen4_exp) keeps the text vocab in its text_config.
-    vocab = getattr(args, "vocab_size", None) or _get(
-        args.text_config, "vocab_size")
+    vocab = vocab_size(model)
     make_cache = getattr(head, "make_draft_cache", None)
 
     for T in (1, 2):

@@ -579,7 +579,7 @@ def free_bytes(path) -> int | None:
 FREE_MARGIN_GIB = 5.0
 
 
-def free_shortfall(path, need_bytes: int,
+def free_when_short(path, need_bytes: int,
                    margin_gib: float = FREE_MARGIN_GIB) -> int | None:
     """The free bytes on `path`'s volume when they cannot hold `need_bytes`
     plus `margin_gib`, else None. VQLAB_SKIP_DISK_CHECK=1 never falls short
@@ -595,7 +595,7 @@ def require_free(path, need_bytes: int, what: str,
     """Refuse a writer BEFORE it starts when its output volume cannot hold it.
     `need_bytes` is the writer's own estimate of what it still has to write;
     a run that would die hours in at 0 bytes free is refused in a second."""
-    free = free_shortfall(path, need_bytes, margin_gib)
+    free = free_when_short(path, need_bytes, margin_gib)
     if free is not None:
         raise SystemExit(f"REFUSED ({what}): {path} needs ~{need_bytes / 2**30:.1f} GiB "
                          f"+ {margin_gib:g} GiB margin, only {free / 2**30:.1f} GiB free "

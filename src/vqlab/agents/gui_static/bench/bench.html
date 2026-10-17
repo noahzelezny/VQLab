@@ -1158,7 +1158,7 @@ function dlConfirm(id,o){
   const el=document.createElement('div');el.className='hfdlg';el.dataset.repo=id;
   const draw=el._draw=(o2=o)=>{o=o2;const p=el._plan,tight=p&&!p.err&&!p.fits,sz=!p?'checking size…':p.err?'':gibHub(p.bytes);
     const note=!p||p.err?'':tight?'Not enough room on that disk.':o.line||'';
-    el.innerHTML=`<div class="hfbox"><div class="hfttl">${esc(id)}</div>${o.sub?`<div class="hfsz">${esc(o.sub)}</div>`:''}<div class="hfsz">${sz}</div>${p&&!p.err?`<div class="hfsz">saves to ${esc(p.dest)}</div>${p.free!=null?`<div class="hfsz">${gibHub(p.free)} free on that disk</div>`:''}`:''}<div class="vs hfnote">${p&&p.err?errLine(p.err,'jdbad'):esc(note)}</div><div class="hfbtns"><button class="mini" data-c>Cancel</button>${tight?'<button class="mini" data-f>Change folder</button>':''}<button class="mini pri" data-d${o.can!==false&&p&&!p.err&&!tight?'':' disabled'}>Download</button></div></div>`;
+    el.innerHTML=`<div class="hfbox"><div class="hfttl">${esc(id)}</div>${o.sub?`<div class="hfsz">${esc(o.sub)}</div>`:''}<div class="hfsz">${sz}</div>${p&&!p.err?`<div class="hfsz">saves to your originals folder</div>${p.free!=null?`<div class="hfsz">${gibHub(p.free)} free on that disk</div>`:''}`:''}<div class="vs hfnote">${p&&p.err?errLine(p.err,'jdbad'):esc(note)}</div><div class="hfbtns"><button class="mini" data-c>Cancel</button>${tight?'<button class="mini" data-f>Change folder</button>':''}<button class="mini pri" data-d${o.can!==false&&p&&!p.err&&!tight?'':' disabled'}>Download</button></div></div>`;
     el.querySelector('[data-c]').onclick=()=>closeModal(el);
     const f=el.querySelector('[data-f]');if(f)f.onclick=()=>{closeModal($('#picker'));go(P.storage)};
     el.querySelector('[data-d]').onclick=async()=>{const x=await dlAct('start',id);if(x.ok){dl.onb.set(id,Date.now());closeModal(el);dlNext()}else el.querySelector('.hfnote').textContent=x.msg}};
@@ -1172,7 +1172,7 @@ function hubDialog(){
   const r=(HF.data||[]).find(x=>x.id===id);if(!r)return;
   const d=dlOf(id),local=localNames().has(id),busy=d&&d.status==='downloading';
   const line=local?'already a local teacher':busy?'downloading…':r.why?r.why:r.gated?'gated — needs access on your Hub account':'';
-  dlConfirm(id,{sub:r.why?r.dtype||'':(r.dtype||'bf16')+' teacher',line,can:!r.why&&!local&&!busy,onClose:()=>{HF.open='';renderHub()}});
+  dlConfirm(id,{sub:r.why?'':'original weights',line,can:!r.why&&!local&&!busy,onClose:()=>{HF.open='';renderHub()}});
 }
 function renderHub(){
   const loc=localNames();

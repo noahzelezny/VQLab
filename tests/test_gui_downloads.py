@@ -212,9 +212,9 @@ def test_a_download_the_disk_cannot_hold_is_refused(lab, monkeypatch):
     D.dest("org/model").mkdir(parents=True)
     (D.dest("org/model") / "model.safetensors").write_bytes(b"x" * 400)
     asked = []
-    monkeypatch.setattr(D.config, "free_shortfall",
+    monkeypatch.setattr(D.config, "free_when_short",
                         lambda path, need: asked.append(need) or 10 * D.GIB)
     assert D.plan({"repo": "org/model"})["fits"] is False
-    with pytest.raises(UserError, match="not enough room"):
+    with pytest.raises(UserError, match=r"not enough room: this model .* kept free"):
         D.start({"repo": "org/model"})
     assert asked == [600, 600] and not procs

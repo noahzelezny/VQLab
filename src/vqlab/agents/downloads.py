@@ -187,7 +187,7 @@ def _room(repo: str, total: int) -> tuple[pathlib.Path, int, int | None]:
     the one verdict `plan` shows and `start` enforces."""
     d = dest(repo)
     need = max(0, total - dir_bytes(d)) if d.is_dir() else total
-    return d, need, config.free_shortfall(d, need)
+    return d, need, config.free_when_short(d, need)
 
 
 def plan(body: dict) -> dict:
@@ -209,9 +209,10 @@ def start(body: dict) -> dict:
     allow, total = _sized(repo)
     d, need, short = _room(repo, total)
     if short is not None:
-        raise UserError(f"not enough room: {repo} needs {need / GIB:.1f} GiB more and "
-                        f"that disk has {short / GIB:.1f} GiB free; choose another "
-                        "folder for original models in Storage")
+        raise UserError(f"not enough room: this model needs {need / GIB:.1f} GiB more, plus "
+                        f"{config.FREE_MARGIN_GIB:g} GiB kept free, and that disk has "
+                        f"{short / GIB:.1f} GiB free; choose another folder for original "
+                        "models in Storage")
     d.mkdir(parents=True, exist_ok=True)
     with _LOCK:
         state = _load()

@@ -638,6 +638,14 @@ def _dense_fit(r: Recipe, prof: dict, src: str, fit: str):
                  retries=3, timeout_s=24 * 3600), "--mlp"
 
 
+def _measured_gib(base: str) -> float:
+    """GiB of a given base's weights, read from its shards on this machine."""
+    local = pathlib.Path(config.expand(base))
+    if not (local / INDEX).is_file():
+        raise RecipeError("the base you gave is not a model: it has no weight index")
+    return Artifact(local).size() / GIB
+
+
 def _dense_steps(r: Recipe, prof: dict, src: str, by: dict, vis: float):
     g = _legal(prof, *r.geo)
     fit, build = f"{r.work}/fit", f"{r.work}/build"
@@ -649,14 +657,16 @@ def _dense_steps(r: Recipe, prof: dict, src: str, by: dict, vis: float):
     converts = not (r.base or inc)
     whole_gib = base_gib + _affine_gib(by["vq_target"], r.bits, r.group)
     scratch_gib = 2 * art_gib + (whole_gib if converts else 0)
-    # its preflight fits one layer into the base: the incumbent as shipped,
-    # else the whole base with its MLPs still affine
-    pf_gib = inc[1] if inc else whole_gib + vis
     steps, warns = [], []
-    if r.base or inc:        # the quantized incumbent, as the shipped dense builds used
-        base = source_path(r.base) if r.base else inc[0]
-    else:
-        base = f"{r.work}/base-q{r.bits}"
+    # the quantized incumbent, as the shipped dense builds used, else one made here
+    base = (source_path(r.base) if r.base else inc[0] if inc
+            else f"{r.work}/base-q{r.bits}")
+    # its preflight fits one layer (a one-table family: a few rows of the
+    # table, at full shape) into the base, so it is the base as it stands
+    pf_gib = (art_gib if inc                    # an incumbent's preflight is its build
+              else _measured_gib(base) + vis if r.base
+              else whole_gib + vis)             # a converted base: every MLP still affine
+    if converts:
         steps.append(_step("base", "stream-convert",
                            ["--src", src, "--out", base, "--bits", r.bits, "--family", r.family],
                            {"full": "the build splices into the whole base",
