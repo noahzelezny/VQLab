@@ -59,8 +59,8 @@ from vqlab.core.source import fit_store as fitstore
 from vqlab.util.log import make_log
 # Packing is the shipped runtime's (runtime/vq_pack.py): one packer.
 from vqlab.runtime.vq_pack import pack, words_per_row
-# k-means lives in fit/kmeans.py; the old private names are kept for
-# fit_additive.py (was additive_vq.py) and anything else that imported them.
+# k-means lives in fit/kmeans.py (one home); fit_additive.py reads these
+# private names through this module.
 from vqlab.fit.kmeans import (
     assign_chunked as _assign,
     chunk_rows as _chunk,

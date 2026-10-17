@@ -124,7 +124,7 @@ def load_expert_stack(src_dir, src_idx: dict, fam: dict, li: int, proj: str,
         if is_unfused(fam):
             if half is not None:
                 raise ValueError("unfused layout with a fused-half proj map "
-                                 "— families.py entry is inconsistent")
+                                 "— family/registry.py entry is inconsistent")
             E = count_experts(fam, src_idx, li)
             if experts is not None:
                 E = min(E, experts)

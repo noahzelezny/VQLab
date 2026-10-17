@@ -305,7 +305,7 @@ def env(state):
     src = pathlib.Path(tree) if state.get("installed") else pathlib.Path(tree) / "src"
     e["PYTHONPATH"] = str(src) + (
         os.pathsep + e["PYTHONPATH"] if e.get("PYTHONPATH") else "")
-    e.setdefault("PYTHONPYCACHEPREFIX", str(pathlib.Path.home() / ".pycache-vqlab"))
+    e.setdefault("PYTHONPYCACHEPREFIX", str(_config.pycache_dir()))
     e.setdefault("VQLAB_FAMILIES_DIR", str(_config.families_dir()))
     e["VQLAB_QUEUE"] = state["qdir"]
     e["VQLAB_QUEUE_COMMIT"] = state["commit"]

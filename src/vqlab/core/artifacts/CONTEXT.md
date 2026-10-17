@@ -7,8 +7,6 @@ stamp fields, and comparisons against its Hugging Face repo.
 ## Rules that bite
 - Part of the core layer (L1): imports nothing from `vqlab.family` or above.
 - Machine-specific values (storage roots) come from `vqlab.config`, never from code.
-- Old names `vqlab.core.<module>` (and `vqlab.assemble.codepack` for `codepack`)
-  resolve here for one release (`_layout.DEPRECATED`).
 
 ## Files
 - `artifact.py`: the one place that knows how an artifact directory is laid out

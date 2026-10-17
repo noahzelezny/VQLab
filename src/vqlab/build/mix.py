@@ -129,7 +129,6 @@ def _band(s):
     return pathlib.Path(src), lo, hi
 
 
-plan = plan_mix  # old name, kept for one release
 
 
 def main(argv=None):

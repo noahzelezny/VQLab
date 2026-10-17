@@ -8,7 +8,7 @@ import os
 import pathlib
 
 # Bytes hashed from the head of a big file when a full hash is not worth the
-# wall time (a 751 GB teacher). records.provenance uses the same value.
+# wall time (a 751 GB teacher). records.provenance imports it.
 HEAD = 1 << 20
 # The build record's filename inside an artifact (records.provenance.RECORD).
 RECORD = "vqlab_provenance.json"

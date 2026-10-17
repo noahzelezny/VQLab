@@ -284,6 +284,13 @@ def findings_log() -> pathlib.Path:
     return pathlib.Path(env).expanduser() if env else records() / "FINDINGS-LOG.md"
 
 
+def pycache_dir() -> pathlib.Path:
+    """Where the runs vqlab launches (queue steps, MCP runs) write bytecode
+    (PYTHONPYCACHEPREFIX): <scratch>/pycache, so a pinned code tree stays
+    clean and nothing lands in the home folder."""
+    return scratch() / "pycache"
+
+
 def run_log() -> pathlib.Path:
     """The run log every `vqlab <cmd>` appends to (records/runlog.py):
     $VQLAB_LOG_DIR/runs.jsonl, else one already at ~/.vqlab/runs.jsonl (kept,

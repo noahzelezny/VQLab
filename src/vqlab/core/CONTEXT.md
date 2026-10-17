@@ -19,7 +19,6 @@ Imported as `vqlab.core.<group>.<module>` (e.g. `vqlab.core.box.gpu_lease`).
 
 ## Rules that bite
 - core (all three groups) is one layer, L1: it imports NOTHING from `vqlab.family` (layer rule, tests/test_layering.py), directly or through an indirection. A core module that needs a family lookup is in the wrong package: move it up. Imports between the groups are intra-core and legal.
-- Old flat names `vqlab.core.<module>` (and `vqlab.core.fitstore`, now `source/fit_store.py`) are aliases for one release (`_layout.DEPRECATED`): same module object. So are `vqlab.core.families`, `vqlab.core.numerics`, `vqlab.core.version_stamp`, `vqlab.core.runtime_load` (and bare `families` / `numerics` / `version_stamp` / `runtime_load`), `vqlab.family.arch` and `vqlab.assemble.codepack`.
 - Depth and geometry laws are family-local. Never inherit an allocation across families.
 
 ## Files

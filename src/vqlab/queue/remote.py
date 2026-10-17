@@ -160,6 +160,10 @@ def run_on(name, file, preflight=False, force=False, override_reservation=False)
     b = _config.boxes().get(name)
     if not b:
         raise SystemExit(f"no [boxes.{name}] in {_config.config_file()}")
+    missing = [k for k in ("repo", "python", "config", "queue_dir") if not b.get(k)]
+    if missing:
+        raise SystemExit(f"[boxes.{name}] cannot run queues: it names no {', '.join(missing)} "
+                         "(a vqlab clone on that box, its python, config and a shared queue dir)")
     why = resv.refusal(name, override_reservation)
     if why:
         raise SystemExit(why)

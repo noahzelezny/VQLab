@@ -7,8 +7,6 @@ architecture finder behind `vqlab.use_knurlogic_arch()`.
 ## Rules that bite
 - Part of the core layer (L1): imports nothing from `vqlab.family` or above.
 - Machine-specific values (lease path, hosts) come from `vqlab.config`, never from code.
-- Old names `vqlab.core.<module>` (and `vqlab.family.arch` for `arch_finder`)
-  resolve here for one release (`_layout.DEPRECATED`).
 
 ## Files
 - `gpu_lease.py`: the GPU lease file every GPU tenant flocks in turn (`lease_path`, `lease_holder`; box_quiet, ops/, queue/ and the MCP server)

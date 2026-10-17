@@ -117,12 +117,12 @@ src/vqlab/
   agents/       consumers of the api: the MCP server (agents/mcp/), the read-only GUI, doctor / config / scratch / onboard
   selftest/     `gate selftest`: the real pipeline on a tiny synthetic model, one module per stage it checks
   vqlab/cli.py        dispatcher: argv -> commands.py -> runpy.run_module (python -m vqlab.cli <cmd>)
-  vqlab/_layout.py    the explicit alias table for OLD module names (PERMANENT: runtime stems, published names; DEPRECATED: one release, warns) + find() / runtime_file() / corpus()
+  vqlab/_layout.py    PERMANENT: the names shipped text depends on (runtime stems, archived queue names) + find() / runtime_file() / corpus()
 ```
 
 Import modules by their canonical dotted name (`from vqlab.runtime import
-vq_pack`). Old spellings (`vqlab.vq_switch`, bare `vq_pack`, `vqlab.geo_build`,
-`vqlab.assemble.*`) resolve through `_layout`'s two tables to the SAME module
-object; every one that is not PERMANENT warns. **`runtime/` is the one hard
+vq_pack`). The spellings shipped text depends on (`vqlab.vq_switch`, bare
+`vq_pack`, `vqlab.vq_397b_codes`) resolve through `_layout.PERMANENT` to the
+SAME module object. **`runtime/` is the one hard
 boundary**: editing it changes what `gate check-bundle` compares every
 published artifact against.

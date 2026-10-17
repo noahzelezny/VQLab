@@ -22,12 +22,9 @@ from pathlib import Path
 PKG = Path(__file__).parent
 
 # The registry is vqlab/commands.py (pure data, shared with the MCP server
-# and the queue). These names are its views, kept for existing callers.
-from vqlab import commands as _registry
-from vqlab.commands import NAMESPACES, SPELLING, resolve, routed  # noqa: F401 (routed: old home)
+# and the queue).
+from vqlab.commands import COMMANDS, NAMESPACES, SPELLING, resolve, selftest_route
 
-# Old shape, {flat name: (pre-split filename, help)}: kept for one release.
-COMMANDS = {c.name: (c.file, c.help) for c in _registry.COMMANDS.values()}
 assert sorted(SPELLING) == sorted(COMMANDS) and len(SPELLING) == sum(
     len(subs) for _, subs in NAMESPACES.values()), "every command in exactly one namespace"
 
@@ -37,7 +34,7 @@ def _namespace_help(ns):
     print(f"vqlab {ns} -- {blurb}\n")
     for sub, flat in subs.items():
         alias = "" if flat == sub else f"  [alias: {flat}]"
-        print(f"  {sub:22s} {COMMANDS[flat][1]}{alias}")
+        print(f"  {sub:22s} {COMMANDS[flat].help}{alias}")
     print(f"\n`vqlab {ns} <command> --help` shows each command's full surface.")
 
 
@@ -49,8 +46,8 @@ def _help():
         print(f"\n{ns}:")
         for sub, flat in subs.items():
             alias = "" if flat == sub else f"  [alias: {flat}]"
-            print(f"  {ns + ' ' + sub:28s} {COMMANDS[flat][1]}{alias}")
-    print("\nEvery flat name is an alias kept for this release (`vqlab fit-moe` is")
+            print(f"  {ns + ' ' + sub:28s} {COMMANDS[flat].help}{alias}")
+    print("\nEvery flat name is an alias (`vqlab fit-moe` is")
     print("`vqlab fit moe`; `vqlab pack` is `vqlab build pack`) and behaves identically.")
     print("`vqlab <namespace>` lists one namespace;")
     print("`vqlab <namespace> <command> --help` shows each command's full surface.")
@@ -171,7 +168,7 @@ def main() -> int:
     if not helping:
         from vqlab.bench import box_quiet   # timed commands refuse a busy Mac (rule III)
         box_quiet.guard(cmd)
-    module = _registry.selftest_route(cmd, rest) or _registry.COMMANDS[cmd].module
+    module = selftest_route(cmd, rest) or COMMANDS[cmd].module
     import importlib.util
     script = importlib.util.find_spec(module).origin
     from vqlab import config as _cfg   # <teachers>/X -> this box's teachers root (a local copy on a box with one)

@@ -38,6 +38,14 @@ def test_the_run_log_lives_with_the_records_and_keeps_an_old_one(cfg, tmp_path, 
     assert C.run_log() == tmp_path / "log" / "runs.jsonl"
 
 
+def test_launched_runs_cache_bytecode_in_scratch_not_home(cfg, tmp_path, monkeypatch):
+    monkeypatch.setenv("VQLAB_SCRATCH", str(tmp_path / "s"))
+    assert C.pycache_dir() == tmp_path / "s" / "pycache"
+    from vqlab.queue import steps
+    monkeypatch.delenv("PYTHONPYCACHEPREFIX", raising=False)
+    e = steps.env({"tree": str(tmp_path), "qdir": "q", "commit": "c"})
+    assert e["PYTHONPYCACHEPREFIX"] == str(tmp_path / "s" / "pycache")
+
 def test_records_accessors_default_and_env(cfg, tmp_path, monkeypatch):
     monkeypatch.setattr(C, "HOME", tmp_path / ".vqlab")
     monkeypatch.setattr(C, "_XDG_RECORDS", tmp_path / "xdg" / "vqlab")
@@ -163,10 +171,10 @@ def _py(code):
 
 
 def test_import_leaves_meta_path_unchanged():
-    # vqlab's own stage-alias finder (_layout._Alias: old vqlab.* names only)
+    # vqlab's own alias finder (_layout._Alias: PERMANENT names only)
     # is internal; nothing that resolves another package's modules may appear
     r = _py("import sys; before = list(sys.meta_path); import vqlab; "
-            "from vqlab import _layout; from vqlab.core import arch_finder as arch; "
+            "from vqlab import _layout; from vqlab.core.box import arch_finder as arch; "
             "new = [f for f in sys.meta_path if f not in before "
             "and not isinstance(f, _layout._Alias)]; "
             "print(new == [] and arch._FINDER not in sys.meta_path)")

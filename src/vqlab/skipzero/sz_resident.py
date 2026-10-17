@@ -312,7 +312,6 @@ def install_resident(ns):
     return cls
 
 
-install = install_resident   # pre-step-15 name; one release
 
 
 def _kernel_factory(ns):

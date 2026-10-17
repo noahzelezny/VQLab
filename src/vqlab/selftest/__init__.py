@@ -137,5 +137,5 @@ def main(argv=None) -> int:
             shutil.rmtree(tmp, ignore_errors=True)
 
 
-if __name__ == "__main__":      # `python -m vqlab.gate.selftest` (old name) runs this file
+if __name__ == "__main__":
     sys.exit(main())

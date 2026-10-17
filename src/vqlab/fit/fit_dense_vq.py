@@ -38,7 +38,7 @@ def _assert_family_layout(src_idx, sample_key, family, registry_name):
     """Fail at STARTUP, helpfully, when the source does not match the family.
 
     Without this the first miss is a bare KeyError deep in the fit loop. A
-    new model family is SUPPORTED — via a families.py entry — but the two-hour
+    new model family is SUPPORTED — via a family/registry.py entry — but the two-hour
     characterisation pass in docs/ONBOARDING.md comes first: establish a
     deterministic instrument, profile the weight geometry, run the init
     sweep. Fitting an uncharacterised family at defaults produces numbers
@@ -54,7 +54,7 @@ def _assert_family_layout(src_idx, sample_key, family, registry_name):
         f"  expected key:      {sample_key}\n"
         f"  closest in source: " + ("\n                     ".join(near) or "(nothing similar)") + "\n"
         f"To onboard a new model family: add its key template to {registry_name} "
-        f"(src/vqlab/families.py) AND run the characterisation pass in "
+        f"(src/vqlab/family/registry.py) AND run the characterisation pass in "
         f"docs/ONBOARDING.md first — a fit at unexamined defaults produces "
         f"numbers nobody should believe. If the family is right, the source "
         f"dir is probably the wrong checkpoint (quantized vs bf16, or HF vs "

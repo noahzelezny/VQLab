@@ -57,11 +57,11 @@ EXEMPT = {"", "_layout"}
 ALLOWED_PEERS = {("util", "config")}
 
 
-def _stems():
-    """{bare stem: canonical dotted name} -- the names _layout resolves."""
+def _dotted_aliases():
+    """{alias: canonical dotted name} -- the names _layout resolves."""
     sys.path.insert(0, str(ROOT / "src"))
     from vqlab import _layout
-    return _layout._names()
+    return _layout.PERMANENT
 
 
 def _pkg_of(dotted: str) -> str | None:
@@ -105,7 +105,7 @@ def _imported(node, modname, is_pkg):
 
 
 def violations() -> set[str]:
-    stems = _stems()
+    stems = _dotted_aliases()
     found = set()
     for path in sorted(PKG.rglob("*.py")):
         rel = path.relative_to(PKG).as_posix()
@@ -195,7 +195,7 @@ TESTS_ALIAS_ALLOWED = {"test_public_imports.py"}
 def test_tests_use_canonical_imports():
     """tests/ imports modules where they live: no bare stems (`import
     vq_switch`) and no pre-split spellings (`from vqlab import vq_pack`)."""
-    stems = _stems()
+    stems = _dotted_aliases()
     bad = []
     for path in sorted((ROOT / "tests").rglob("*.py")):
         if path.name in TESTS_ALIAS_ALLOWED:

@@ -1,7 +1,5 @@
 """Kernel acceptance (E134): device-memory d4 codebook kernels, repo runtime.
 
-Was gate/e134_accept.py; that name still imports (_layout.DEPRECATED).
-
 Bar (set with the paper + M3 sessions BEFORE the fix existed):
   1. bit-identical to the VERIFIED threadgroup kernels wherever both load
   2. correct vs a reference dequant-matmul where only devcb loads

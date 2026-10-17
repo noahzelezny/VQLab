@@ -32,7 +32,7 @@ def test_git_blob_sha1_matches_git(tmp_path):
     assert hashing.git_blob_sha1(p) == "ce013625030ba8dba906f756967f9e9ca394464a"
 
 
-def test_fingerprint_shape_and_provenance_alias(tmp_path):
+def test_fingerprint_shape(tmp_path):
     from vqlab.records import provenance
     (tmp_path / "config.json").write_text("{}")
     (tmp_path / "a.safetensors").write_bytes(b"x" * 10)
@@ -41,8 +41,6 @@ def test_fingerprint_shape_and_provenance_alias(tmp_path):
     assert fp["provenance_id"] == "abc"
     assert fp["shards"]["a.safetensors"]["bytes"] == 10
     assert fp["files"]["config.json"] == hashlib.sha256(b"{}").hexdigest()
-    assert provenance.fingerprint(tmp_path) == fp
-    assert provenance.HEAD == hashing.HEAD and provenance.RECORD == hashing.RECORD
 
 
 def test_clock():
@@ -74,9 +72,3 @@ def test_dir_bytes(tmp_path):
     assert fs.dir_bytes(tmp_path / "missing", recursive=False) == 0
 
 
-def test_old_names_still_answer(tmp_path):
-    from vqlab.agents import mcp_server, run_queue
-    from vqlab.agents import scratch as scratch_cmd
-    assert run_queue._slug("a b") == "a_b" and isinstance(run_queue._now(), str)
-    (tmp_path / "a.safetensors").write_bytes(b"x" * 4)
-    assert mcp_server._dir_bytes(tmp_path) == scratch_cmd._dir_bytes(tmp_path) == 4

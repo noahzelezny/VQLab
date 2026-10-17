@@ -19,12 +19,13 @@ from vqlab.queue import reserve as _resv
 
 def _box_state(name: str, b: Dict[str, Any]) -> Dict[str, Any]:
     """Another box's lease holder and GPU-heavy processes, over ssh, from its
-    own clone and config (the [boxes.NAME] table). Never raises. The remote
-    snippet keeps the pre-split spelling vqlab.core.gpu_lease: the peer's
-    clone may predate core/box/, and the alias answers on newer clones."""
+    own clone and config (the [boxes.NAME] table). Never raises; a box with
+    no `repo` (reachable, but no vqlab clone there) says so."""
+    if not b.get("repo") or not b.get("config"):
+        return {"error": f"[boxes.{name}] names no vqlab clone (repo, config)"}
     remote = (f"cd {shlex.quote(b['repo'])} && VQLAB_CONFIG={shlex.quote(b['config'])} "
               f"PYTHONPATH=src {shlex.quote(b['python'])} -c "
-              + shlex.quote("import json; from vqlab.core.gpu_lease import lease_holder; "
+              + shlex.quote("import json; from vqlab.core.box.gpu_lease import lease_holder; "
                             "from vqlab.bench import box_quiet as q; s=q.state(); "
                             "print(json.dumps({'lease_holder': lease_holder(), 'load1': s['load1'], "
                             "'heavy': s['heavy'][:5]}))"))

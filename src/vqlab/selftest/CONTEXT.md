@@ -2,9 +2,7 @@
 
 Layer L12 (tests/test_layering.py): it drives every stage below it, so it
 may import any of them, and nothing below may import it. Command:
-`vqlab selftest` (also `vqlab gate selftest`). Was gate/selftest.py until
-untangle step 14; `vqlab.gate.selftest` and the bare `selftest` still import
-this package for one release (DeprecationWarning).
+`vqlab selftest` (also `vqlab gate selftest`).
 
 ## Inputs
 None: it synthesizes its own checkpoints in a temp workspace and points the

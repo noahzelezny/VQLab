@@ -9,6 +9,7 @@ import numpy as np
 import pytest
 from safetensors.numpy import save_file
 
+from vqlab import commands
 from vqlab.family import version_stamp as N
 
 RUN = {"mlx": "0.31.2", "mlx_lm": "0.31.9", "arch_sha256": "aa", "scorer_variant": "shared-clamp"}
@@ -32,6 +33,13 @@ def test_build_stamps_versions_arch_and_variant(toy_arch, monkeypatch):
     assert b["arch_sha256"] == N._sha(toy_arch)
     # no plugin for this model_type -> no variant
     assert N.build("toyarch_q")["scorer_variant"] is None
+
+
+def test_build_blob_names_no_module(toy_arch):
+    """Renaming or moving code must not change a stamped value: the blob
+    carries versions and hashes, never the stamping module's own name."""
+    blob = json.dumps(N.build("toyarch_q", variant=None))
+    assert "numerics" not in blob and "version_stamp" not in blob
 
 
 def test_build_records_loaded_file_without_comparing_it(toy_arch, tmp_path, monkeypatch):
@@ -183,7 +191,7 @@ def test_runtime_equiv_compare_and_main(tmp_path, monkeypatch, capsys):
 def test_runtime_equiv_is_a_routed_command():
     import pathlib
     from vqlab import cli
-    assert cli.COMMANDS["runtime-equiv"][0] == "runtime_equiv.py"
+    assert cli.COMMANDS["runtime-equiv"].file == "runtime_equiv.py"
     root = pathlib.Path(__file__).resolve().parents[1]
-    assert "runtime-equiv" in cli.routed((root / "CONTEXT.md").read_text())
+    assert "runtime-equiv" in commands.routed((root / "CONTEXT.md").read_text())
     assert "`runtime-equiv`" in (root / "src/vqlab/score/CONTEXT.md").read_text()

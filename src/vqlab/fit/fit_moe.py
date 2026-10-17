@@ -426,9 +426,9 @@ def main(argv=None) -> int:
             f"  expected key like: {_fam_probe}\n"
             f"  source has e.g.:   " + ("\n                     ".join(_near) or "(no mlp/expert keys)") + "\n"
             "To onboard a new model family: add its key template to FAMILY "
-            "(src/vqlab/families.py) AND run docs/ONBOARDING.md's "
+            "(src/vqlab/family/registry.py) AND run docs/ONBOARDING.md's "
             "characterisation pass first. If the family is right, check the "
-            "source dir (HF vs mlx layout differ; see families.py comments).")
+            "source dir (HF vs mlx layout differ; see family/registry.py comments).")
     run = FitRun(args=args, G=G, SRC=SRC, OUT=OUT, SHIP=SHIP, GEOM=GEOM,
                  TAIL_GEOM=TAIL_GEOM, TAIL_FROM=TAIL_FROM, FAM=FAM,
                  LAYER_SET=LAYER_SET, base_cfg=base_cfg, src_idx=src_idx)

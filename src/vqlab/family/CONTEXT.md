@@ -16,8 +16,7 @@ A family name or a checkpoint's `model_type`; the checked-in `families/<family>/
 ## Rules that bite
 - A new family is ONE entry: a plugin module here, or a `families/<name>/entry.json` data file. Don't fork a copy of the table into a tool. A code entry always wins over a data entry of the same name.
 - family sits above core and records: neither imports it. A record or card that only READS a stamp uses `core.artifacts.stamp_fields`.
-- Renaming or moving code must not change a stamped value (tests/test_version_stamp_identity.py).
-- `vqlab.core.families`, `vqlab.core.numerics`, `vqlab.core.version_stamp` and `vqlab.core.runtime_load` are pre-2026-10-10 names, aliased for one release.
+- Renaming or moving code must not change a stamped value (tests/test_numerics_build.py::test_build_blob_names_no_module).
 - Depth and geometry laws are family-local. Never inherit an allocation across families.
 
 ## Files

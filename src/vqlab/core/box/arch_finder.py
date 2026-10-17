@@ -97,7 +97,6 @@ def install_arch_finder() -> bool:
     return True
 
 
-install = install_arch_finder   # pre-step-9a name (vqlab.family.arch.install); one release
 
 
 def uninstall() -> None:

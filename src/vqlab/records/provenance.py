@@ -56,9 +56,8 @@ from vqlab import _layout, config
 from vqlab.core.artifacts.hub import is_backup  # local backups (.bak, .pre-*) are not outputs
 from vqlab.util.fs import GIB, read_jsonl, write_text_atomic
 from vqlab.util.geo import geo_key
-from vqlab.util.hashing import fingerprint as _fingerprint, sha256_file
+from vqlab.util.hashing import HEAD, RECORD, fingerprint, sha256_file
 
-RECORD = "vqlab_provenance.json"
 # Records this one REPLACED, oldest first: an in-place tool (bundle,
 # rebundle, graft, patch) amends the artifact, and the chain of what it was
 # before travels with it instead of being overwritten.
@@ -69,7 +68,6 @@ NOT_OUTPUTS = (RECORD, HISTORY)
 # refuses to ship them.
 JUNK = (".DS_Store",)
 SCHEMA = "vqlab.provenance/1"
-HEAD = 1 << 20
 # Full-hash files up to this size; above it, head hash + size (the scheme
 # artifact_manifest.py already uses). Overridable because a 400 GiB teacher
 # is not worth the wall time, but a 5 GiB rewritten shard is.
@@ -94,12 +92,6 @@ def file_record(p: pathlib.Path, full=True):
     else:
         rec["head_sha256"] = sha256_file(rp, HEAD)
     return rec
-
-
-def fingerprint(d) -> dict:
-    """Identity of an INPUT directory (vqlab.util.hashing.fingerprint, kept
-    here under its old name)."""
-    return _fingerprint(d, head=HEAD, record=RECORD)
 
 
 # ------------------------------------------------------------- environment

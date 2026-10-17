@@ -7,24 +7,14 @@ where the api has the operation. Two go straight to vqlab.ops:
   supervisor_pid, command, note), which is the MCP tool's documented
   output; ``api.run`` wraps the same call in a RunHandle;
 * ``queue_status`` belongs with ``vqlab queue wait``; the api does not
-  expose queues.
-
-The old module-level names are re-exported for imports: patch the defining
-vqlab.ops module, not this one."""
+  expose queues."""
 
 from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
 from vqlab import api
-from vqlab.core.box.gpu_lease import acquire_lease, release_lease  # noqa: F401
 from vqlab.ops import queues, runs
-from vqlab.ops.box import _box_state  # noqa: F401
-from vqlab.ops.queues import _queues_dir  # noqa: F401
-from vqlab.ops.runs import (DEFAULT_RETRIES, GPU_FREE, HEAVY, RESUMABLE,  # noqa: F401
-                            RUN_ALLOWLIST, _exo_instances, _lab_state, _lease_holder,
-                            _pid_alive, _this_host, lab_state_path, lease_path, runs_dir)
-from vqlab.ops.supervisor import supervise  # noqa: F401
 
 
 def t_run(cmd: str, args: Optional[List[str]] = None, tag: str = "",

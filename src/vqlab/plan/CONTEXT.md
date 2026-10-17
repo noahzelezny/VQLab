@@ -4,7 +4,7 @@
 Byte budget, a shipped rung, and a teacher (for leverage probes).
 
 ## Process
-New teacher? `vqlab onboard --teacher <dir>` sequences the whole characterisation pass and resumes (its code is `agents/onboard.py`: it launches GPU steps through the MCP server, so it lives in agents; `vqlab.plan.onboard` is an alias for one release). Otherwise:
+New teacher? `vqlab onboard --teacher <dir>` sequences the whole characterisation pass and resumes (its code is `agents/onboard.py`: it launches GPU steps through the MCP server, so it lives in agents). Otherwise:
 `vqlab family-profile --teacher <dir>` FIRST for any teacher: headers only, seconds, writes `families/<family>/teachers/<teacher>/profile.json` (legal geometries, exact bytes, GiB per bit). Then:
 `vqlab price`, `recipe compile` (recipe -> queue file), `layer-leverage`, `alloc-sweep`, `probe-init` (`init_sweep.py`); MTP draft probes `mtp-probe` (`mtp_probe_qwen4_exp.py`) and `mtp-probe35` (`mtp_probe_qwen35.py`); hard guards `preflight-ram` / `preflight-disk`.
 

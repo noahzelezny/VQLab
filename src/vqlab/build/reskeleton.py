@@ -156,7 +156,6 @@ def write(vq, sk, out, src, qmap, vcfg):
     return len(index), total
 
 
-plan = plan_reskeleton  # old name, kept for one release
 
 
 def main(argv=None) -> int:

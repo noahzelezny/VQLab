@@ -192,7 +192,6 @@ def install_serving(model_path, sidecar=None, family=None, quiet=False):
     return srv
 
 
-install = install_serving   # pre-step-15 name; one release
 
 
 def selfcheck(srv):

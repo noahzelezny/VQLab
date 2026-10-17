@@ -12,6 +12,4 @@ returns the result. No lab logic lives here.
                        queue_status, and the detached supervisor
     tools_findings.py  next_f_number (reserve/release), findings_tail,
                        findings_append
-
-`vqlab.agents.mcp_server` is a deprecated re-export of these names.
 """

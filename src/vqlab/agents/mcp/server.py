@@ -41,12 +41,15 @@ from typing import Any, Dict, List, Optional
 
 from vqlab import config
 from vqlab.agents.mcp.common import ToolError
-from vqlab.agents.mcp.tools_findings import (VERDICTS, t_findings_append, t_findings_tail,
+from vqlab.agents.mcp.tools_findings import (t_findings_append, t_findings_tail,
                                              t_next_f_number, t_release_f_number)
-from vqlab.agents.mcp.tools_runs import (RUN_ALLOWLIST, supervise, t_gpu_state, t_list_runs,
+from vqlab.agents.mcp.tools_runs import (t_gpu_state, t_list_runs,
                                          t_queue_status, t_run, t_status, t_stop)
 from vqlab.agents.mcp.tools_storage import (t_artifact_config, t_disk_free, t_list_artifacts,
                                             t_read_doc, t_where_is)
+from vqlab.ops.findings import VERDICTS
+from vqlab.ops.runs import RUN_ALLOWLIST
+from vqlab.ops.supervisor import supervise
 
 PROTOCOL_VERSION = "2024-11-05"
 SERVER_NAME = "vqlab"

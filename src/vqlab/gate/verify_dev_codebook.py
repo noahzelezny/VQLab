@@ -1,6 +1,5 @@
 """Device-codebook vs threadgroup-codebook d4 kernel, on real artifact layers
-(E113 acceptance step 1 for E134). Was gate/verify_e134_devcb.py; that
-name still imports (_layout.DEPRECATED).
+(E113 acceptance step 1 for E134).
 
 Compares _SRC_FUSED_PACKED (threadgroup cb) against _SRC_FUSED_PACKED_D4_DEVCB
 (device cb) THROUGH THE REAL _fused DISPATCH — the only difference forced is

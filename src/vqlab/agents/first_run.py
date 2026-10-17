@@ -49,7 +49,7 @@ def run(out=sys.stderr) -> pathlib.Path | None:
             (lab / d).mkdir(parents=True, exist_ok=True)
         cf = C.config_file()
         cf.parent.mkdir(parents=True, exist_ok=True)
-        cf.write_text("# vqlab storage (vqlab config / the GUI's Storage page edit this file)\n"
+        cf.write_text("# vqlab storage (vqlab lab config / the GUI's Storage page edit this file)\n"
                       f'[paths]\nlab = "{lab}"\n')
     except OSError as e:
         print(f"vqlab: could not set up {lab} ({e}); set a location with "

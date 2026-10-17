@@ -12,7 +12,8 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
-from vqlab.agents import mcp_server as m   # the deprecated re-export: calls go through it
+from vqlab.ops import roots
+from vqlab.agents.mcp import server as m   # the tool table: calls go through it
 from vqlab.ops import docs as ops_docs  # patches go to the defining module
 from vqlab.ops import findings as ops_findings
 from vqlab.ops import runs as ops_runs
@@ -174,7 +175,7 @@ def test_read_doc_without_checkout_points_online(tmp_path, monkeypatch):
     with pytest.raises(m.ToolError) as e:
         m.t_read_doc("docs/FINDINGS.md")
     assert e.value.code == "NO_CHECKOUT"
-    assert e.value.extra["url"] == m.DOCS_URL + "/docs/FINDINGS.md"
+    assert e.value.extra["url"] == roots.DOCS_URL + "/docs/FINDINGS.md"
     # stage contracts ship in the package and still resolve
     assert m.t_read_doc("src/vqlab/fit/CONTEXT.md", 1, 2)["end"] == 2
 

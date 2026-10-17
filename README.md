@@ -1,7 +1,5 @@
 # VQLab
 
-[![CI](https://github.com/noahzelezny/VQLab/actions/workflows/ci.yml/badge.svg)](https://github.com/noahzelezny/VQLab/actions/workflows/ci.yml)
-
 **Size-targeted vector-quantized (VQ) builds of large models on Apple Silicon,
 with MLX.** Name a byte budget, price the recipe before fitting, fit it
 data-free, pack to true bit-width, verify, and serve through stock `mlx-lm`.

@@ -11,8 +11,7 @@ it without an edge (tests/test_layering.py puts it at layer 0).
           BUILD_OUTPUTS, box_quiet all speak it)
   module  the dotted module `vqlab <name>` runs (runpy.run_module)
   file    its file, relative to its package folder (`mcp/server.py` for a
-          module inside a sub-package); kept for cli.COMMANDS' old
-          (file, help) view and _layout.find() callers
+          module inside a sub-package), for _layout.find() callers
   stage   its CLI namespace (`vqlab <stage> <sub>`)
   mcp     an agent may launch it through MCP `run` (publish never is)
   gpu     it may touch the GPU; False = header reads / records / HTTP

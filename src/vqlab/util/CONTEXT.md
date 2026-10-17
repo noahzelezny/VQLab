@@ -11,7 +11,7 @@ Imported as `from vqlab.util.<module> import <name>`.
 
 ## Rules that bite
 - Stdlib only (plus `vqlab.config` if ever needed). Nothing here may import a stage: `tests/test_layering.py` enforces it.
-- One home per helper. Before writing a private `_sha` / `_log` / `_now` / `_slug` / `_dir_bytes`, import the one here. The deprecated compat modules (run_queue, mcp_server, scratch_cmd) still answer to their old private names.
+- One home per helper. Before writing a private `_sha` / `_log` / `_now` / `_slug` / `_dir_bytes`, import the one here.
 
 ## Files
 - `clock.py`: time stamps and filename-safe slugs

@@ -1,5 +1,5 @@
 """Selftest: the package layout (corpus locator, one module object per
-name, CONTEXT.md routing, name collisions, pre-split `python -m` names)."""
+name, CONTEXT.md routing, name collisions, `python -m` on a PERMANENT name)."""
 from __future__ import annotations
 
 import importlib as _il
@@ -27,7 +27,7 @@ def check_layout(ctx):
     # modules we have already imported ourselves.
     repo = str(L.SRC.parent)
     outside = [p for p in sys.path if p and not p.startswith(repo)]
-    clash = sorted(n for n in L._names() if "." not in n and (
+    clash = sorted(n for n in L.PERMANENT if "." not in n and (
                    n in sys.stdlib_module_names
                    or _im.PathFinder.find_spec(n, outside) is not None))
     _check_one_module_object()
@@ -36,9 +36,9 @@ def check_layout(ctx):
     check("every package folder has its CONTEXT.md contract", not _nodoc, ", ".join(_nodoc))
     check("no bare alias collides with stdlib / site-packages",
           not clash, ", ".join(clash))
-    p = subprocess.run([PY, "-m", "vqlab.price", "--help"], capture_output=True,
+    p = subprocess.run([PY, "-m", "vqlab.pack_artifact", "--help"], capture_output=True,
                        text=True, env={**os.environ, "PYTHONPATH": str(L.SRC)})
-    check("pre-split `python -m vqlab.<name>` still runs", p.returncode == 0,
+    check("`python -m vqlab.pack_artifact` (a PERMANENT name) still runs", p.returncode == 0,
           p.stderr.strip().splitlines()[-1] if p.returncode else "")
 
 

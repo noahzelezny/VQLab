@@ -90,7 +90,6 @@ def plan_resident(src):
     return cfg, shapes
 
 
-plan = plan_resident   # pre-step-15 name; one release
 
 
 def check_vintage(model_py_text, shapes):

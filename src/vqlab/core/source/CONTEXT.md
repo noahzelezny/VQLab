@@ -7,8 +7,6 @@ counting act-stats runs over a teacher.
 
 ## Rules that bite
 - Part of the core layer (L1): imports nothing from `vqlab.family` or above.
-- `fit_store.py` was `vqlab.core.fitstore`; that name (and bare `fitstore`,
-  `vqlab.fitstore`) resolves to this module for one release (`_layout.DEPRECATED`).
 - `expert_src.py`'s loader checks are `tests/test_expert_src_loader.py`.
 
 ## Files

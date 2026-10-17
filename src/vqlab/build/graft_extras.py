@@ -82,7 +82,6 @@ def plan_graft(art: Artifact, src: pathlib.Path, preset: dict):
     return sw, pick, probe
 
 
-plan = plan_graft  # old name, kept for one release
 
 
 def main(argv=None):

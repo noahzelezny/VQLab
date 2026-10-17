@@ -38,7 +38,7 @@ def main():
     gpu = None
     try:
         import importlib
-        g = importlib.import_module("vqlab.agents.mcp_server").t_gpu_state()
+        g = importlib.import_module("vqlab.agents.mcp.tools_runs").t_gpu_state()
         h = g.get("lease_holder")
         gpu = {"held": bool(h), "by": (h.get("holder") or h.get("cmd") or "unknown") if h else None}
     except Exception:

@@ -65,7 +65,7 @@ def main(argv=None) -> int:
     ap.add_argument("--sample", type=int, default=300_000)
     ap.add_argument("--reps", type=int, default=2)
     ap.add_argument("--family", default="qwen3_5", choices=sorted(FAMILY),
-                    help="source-key family (families.py). Default preserves the "
+                    help="source-key family (family/registry.py). Default preserves the "
                          "original hardcoded qwen3_5 behaviour. For unfused "
                          "layouts (glm5_next) only the first --experts experts' "
                          "tensors are read at all.")

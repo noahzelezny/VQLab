@@ -1,21 +1,7 @@
-"""gate/kernel_reference.py, and the experiment-numbered gate files renamed
-to what they do (old names still resolve)."""
-import importlib.util
+"""gate/kernel_reference.py: the exact reference dequant-matmul."""
 
 import pytest
 
-from vqlab import _layout
-
-
-@pytest.mark.parametrize("old,new", [("e134_accept", "kernel_accept"),
-                                     ("verify_e134_devcb", "verify_dev_codebook")])
-def test_old_gate_names_resolve(old, new):
-    names = _layout._names()
-    assert importlib.util.find_spec(old) is None      # bare tool names: gone (R1)
-    for spelling in (f"vqlab.{old}", f"vqlab.gate.{old}"):
-        assert names[spelling] == f"vqlab.gate.{new}"
-        assert importlib.util.find_spec(spelling) is not None
-    assert _layout.find(f"{old}.py").name == f"{new}.py"
 
 
 def test_reference_dequant_matmul():

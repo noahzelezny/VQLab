@@ -39,13 +39,8 @@ greedily (greedy-only is what makes naive residual VQ underperform).
 import numpy as np
 
 
-# The k-means steps live in fit/kmeans.py (one home); old names kept.
-from vqlab.fit.kmeans import (  # noqa: F401
-    assign as _assign,
-    assign_mx_np as _assign_mx,
-    kmeanspp_init as _kmeanspp,
-    lloyd as _lloyd,
-)
+# The k-means steps live in fit/kmeans.py (one home).
+from vqlab.fit.kmeans import assign, kmeanspp_init, lloyd
 
 
 def fit_additive(X, K, M=2, iters=12, rng=None):
@@ -59,9 +54,9 @@ def fit_additive(X, K, M=2, iters=12, rng=None):
 
     R = X.copy()                               # residual
     for m in range(M):
-        C = _lloyd(R, _kmeanspp(R, K, rng), 8, rng)
+        C = lloyd(R, kmeanspp_init(R, K, rng), 8, rng)
         books.append(C)
-        codes[:, m] = _assign(R, C)
+        codes[:, m] = assign(R, C)
         R = R - C[codes[:, m]]
 
     # JOINT REFINEMENT. Greedy residual fitting picks each stage's code
@@ -75,9 +70,9 @@ def fit_additive(X, K, M=2, iters=12, rng=None):
                 if j != m:
                     other += C[codes[:, j]]
             T = X - other                      # what stage m must explain
-            codes[:, m] = _assign(T, books[m])
-            books[m] = _lloyd(T, books[m], 2, rng)
-            codes[:, m] = _assign(T, books[m])
+            codes[:, m] = assign(T, books[m])
+            books[m] = lloyd(T, books[m], 2, rng)
+            codes[:, m] = assign(T, books[m])
     return books, codes
 
 

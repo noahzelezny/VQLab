@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""vqlab fits — find, index and file fitted VQ modules (core/fitstore.py).
+"""vqlab fits — find, index and file fitted VQ modules (core/source/fit_store.py).
 
     vqlab fits index <dir> [<dir> ...]     READ-ONLY: record every module fit
                                            found under the dirs, where it lies

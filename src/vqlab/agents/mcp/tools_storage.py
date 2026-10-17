@@ -11,7 +11,6 @@ from typing import Any, Dict, List, Optional
 
 from vqlab import api
 from vqlab.ops import docs, storage
-from vqlab.ops.docs import DOC_ALLOW  # noqa: F401  (old name)
 
 
 def t_where_is(name: str, kind: str = "any", max_depth: int = 3) -> Dict[str, Any]:

@@ -1,11 +1,10 @@
 """The names other code depends on, frozen while the package is reorganized.
 
 Snapshot (tests/fixtures/public_names.json) of what exists today:
-  * every import name _layout answers for (the bare RUNTIME stems, pre-split
-    dotted `vqlab.*` names, RENAMED old names): shipped runtime text and
-    tests spell modules these ways;
-  * every old FILE name _layout.find() maps (queue files and shell chains
-    name files such as vq_397b_codes.py); these are not import names;
+  * every import name _layout answers for (_layout.PERMANENT: the bare
+    RUNTIME stems and the `vqlab.*` spellings shipped text names);
+  * every old FILE name _layout.find() maps (archived queue files name
+    files such as vq_397b_codes.py); these are not import names;
   * every CLI command;
   * the MCP `run` allowlist and its GPU-free subset.
 
@@ -41,14 +40,14 @@ RUNTIME_STEMS = sorted(p.stem for p in (ROOT / "src/vqlab/runtime").glob("*.py")
 
 
 def _mcp():
-    from vqlab.agents import mcp_server
-    return mcp_server
+    from vqlab.ops import runs     # the MCP `run` tool's allowlist lives here
+    return runs
 
 
 def _current():
     m = _mcp()
-    return {"import_names": sorted(_layout._names()),
-            "file_names": sorted(_layout.FILE_ALIASES),
+    return {"import_names": sorted(_layout.PERMANENT),
+            "file_names": sorted(_layout._FILE_NAMES),
             "commands": sorted(cli.COMMANDS),
             "mcp_run_allowlist": sorted(m.RUN_ALLOWLIST),
             "mcp_gpu_free": sorted(m.GPU_FREE)}
@@ -60,7 +59,7 @@ def snap():
 
 
 def test_no_import_name_disappears(snap):
-    gone = sorted(set(snap["import_names"]) - set(_layout._names()))
+    gone = sorted(set(snap["import_names"]) - set(_layout.PERMANENT))
     assert not gone, f"import names no longer resolved: {gone}"
 
 
@@ -69,14 +68,9 @@ def test_every_import_name_resolves(snap):
     assert not missing, missing
 
 
-def test_no_old_file_name_disappears(snap):
-    gone = sorted(set(snap["file_names"]) - set(_layout.FILE_ALIASES))
-    assert not gone, f"old file names no longer mapped: {gone}"
-    for stem in snap["file_names"]:
-        canon = _layout.FILE_ALIASES[stem]
-        if importlib.util.find_spec(canon).submodule_search_locations:
-            continue                    # a package (selftest/): no single file
-        assert _layout.find(f"{stem}.py").is_file(), stem
+def test_every_old_file_name_finds_a_file(snap):
+    missing = [s for s in snap["file_names"] if not _layout.find(f"{s}.py").is_file()]
+    assert not missing, f"old file names no longer found: {missing}"
 
 
 # Bare names an app might own. `import vqlab` must not answer for any of them
@@ -114,7 +108,7 @@ def test_import_vqlab_answers_for_no_foreign_bare_name():
 
 
 def test_bare_names_are_only_runtime_stems():
-    bare = {k for k in _layout._names() if "." not in k}
+    bare = {k for k in _layout.PERMANENT if "." not in k}
     assert bare == set(RUNTIME_STEMS), sorted(bare ^ set(RUNTIME_STEMS))
 
 
@@ -132,24 +126,6 @@ def test_reload_by_bare_name_keeps_identity():
     import vqlab.vq_switch as old
     assert bare is canon is old
     assert importlib.reload(bare) is canon and canon.__name__ == "vqlab.runtime.vq_switch"
-
-
-CORE_SPLIT = sorted(k for k, v in _layout.DEPRECATED.items()
-                    if v.startswith(("vqlab.core.artifacts.", "vqlab.core.source.",
-                                      "vqlab.core.box.")))
-
-
-@pytest.mark.parametrize("old", CORE_SPLIT)
-def test_core_split_old_names_are_one_module(old):
-    """Every pre-split spelling of a core module (flat vqlab.core.<mod>, bare
-    and vqlab.<mod> stems) is the SAME object as its sub-package home, and
-    a first import by the old name warns."""
-    new = _layout.DEPRECATED[old]
-    canon = importlib.import_module(new)
-    sys.modules.pop(old, None)
-    with pytest.warns(DeprecationWarning, match=new):
-        assert importlib.import_module(old) is canon
-    assert canon.__name__ == new
 
 
 def test_no_command_disappears(snap):

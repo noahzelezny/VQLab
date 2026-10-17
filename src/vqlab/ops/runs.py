@@ -142,7 +142,7 @@ def launch(cmd: str, args: Optional[List[str]] = None, tag: str = "",
     env = dict(os.environ)
     if (REPO / "src" / "vqlab").is_dir():            # a checkout; an installed wheel needs no path
         env["PYTHONPATH"] = str(REPO / "src") + (os.pathsep + env["PYTHONPATH"] if env.get("PYTHONPATH") else "")
-    env.setdefault("PYTHONPYCACHEPREFIX", str(Path.home() / ".pycache-vqlab"))
+    env.setdefault("PYTHONPYCACHEPREFIX", str(config.pycache_dir()))
     sup = subprocess.Popen(
         [sys.executable, "-m", "vqlab.ops.supervisor", "--supervise", str(rd)],
         cwd=str(REPO), env=env, stdin=subprocess.DEVNULL,

@@ -7,7 +7,7 @@ import sys
 from vqlab import _layout  # noqa: F401
 sys.path.insert(0, str(_layout.SRC / "vqlab" / "agents"))
 from vqlab.queue import report as rq
-from vqlab.agents import mcp_server as ms
+from vqlab.agents.mcp import server as ms
 
 
 def _q(tmp, name, status, pid=None):

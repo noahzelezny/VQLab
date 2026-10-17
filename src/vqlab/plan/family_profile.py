@@ -27,7 +27,7 @@ table:
     vqlab family-profile --teacher <dir> --suggest-entry   # unknown family
 
 An unknown architecture is not an error: the profile is still written from
-the header census, and --suggest-entry prints a draft families.py entry
+the header census, and --suggest-entry prints a draft family/registry.py entry
 inferred from the index for a human to confirm. Measured facts (init
 verdict, depth knee, safe K band) are appended to the same folder by the
 tools that measure them; this tool only writes what headers can prove.
@@ -49,7 +49,7 @@ from vqlab import config
 from vqlab.core.artifacts.artifact import read_header, tensor_class
 from vqlab.family.registry import DENSE_FAMILIES, FAMILY, embed_regex
 from vqlab.core.source import fit_store as fitstore
-from vqlab.records import provenance
+from vqlab.util import hashing
 from vqlab.util.geo import geo_key
 from vqlab.util.fs import GIB
 
@@ -228,10 +228,10 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser(prog="vqlab family-profile",
                                  description=__doc__.split("\n")[0])
     ap.add_argument("--teacher", required=True, help="bf16 teacher dir or HF snapshot")
-    ap.add_argument("--family", help="families.py name (default: from model_type)")
+    ap.add_argument("--family", help="family/registry.py name (default: from model_type)")
     ap.add_argument("--out", help="default: <families>/<family>/teachers/<teacher>/ (vqlab.config families_dir)")
     ap.add_argument("--suggest-entry", action="store_true",
-                    help="print a draft families.py entry inferred from the index")
+                    help="print a draft family/registry.py entry inferred from the index")
     ap.add_argument("--print", action="store_true", help="print the profile JSON")
     ap.add_argument("--write-entry", metavar="NAME",
                     help="unknown family: save the suggested entry as "
@@ -278,7 +278,7 @@ def main(argv=None) -> int:
             else dense_rows(dense_tmpl, shapes, L + 8) if dense_tmpl
             else module_rows(spec, shapes, L + 8) if spec else [])
     rows = [r for r in rows if r["layer"] != mtp_layer]
-    fp = provenance.fingerprint(T)
+    fp = hashing.fingerprint(T)
     sl = slug(T, fp)
     sigs = {}
     for r in rows:
@@ -356,7 +356,7 @@ def main(argv=None) -> int:
         print(f"  {proj:10s} {sigs[proj]}  legal: {len(ok)} "
               f"({', '.join(ok[:6])}{', ...' if len(ok) > 6 else ''})")
     if not rows:
-        print("  UNKNOWN FAMILY: no families.py entry matches. Draft entry:")
+        print("  UNKNOWN FAMILY: no family/registry.py entry matches. Draft entry:")
         print(json.dumps(prof["suggested_entry"], indent=2))
     elif a.suggest_entry:
         print(json.dumps(suggest_entry(shapes), indent=2))

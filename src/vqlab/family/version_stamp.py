@@ -228,14 +228,6 @@ def tree_sha256(files: dict) -> str | None:
     return hashlib.sha256(blob).hexdigest()
 
 
-def scorer_variant(model_type: str | None):
-    """family.registry.scorer_variant (moved there 2026-10-10; this name is
-    kept for one release). Imported at call time, as before the move, so
-    reading a stamp never loads the family plugins."""
-    from vqlab.family.registry import scorer_variant as _variant
-    return _variant(model_type)
-
-
 def build(model_type: str | None = None, *, family: str | None = None,
           model=None, model_dir=None, variant=_UNSET) -> dict:
     """This interpreter's numerics build for a model_type.
@@ -243,13 +235,15 @@ def build(model_type: str | None = None, *, family: str | None = None,
     `variant` defaults to the family plugin's current scorer variant; a path
     that does not apply the variant (kl_damage's direct forward) passes None.
     `model`, when loaded, adds the file its class actually came from."""
+    # At call time, so reading a stamp never loads the family plugins.
+    from vqlab.family.registry import scorer_variant as _scorer_variant
     if model_type is None and model_dir is not None:
         model_type = model_type_of(model_dir)
     runtime = _runtime_for(family)
     af = arch_file(model_type, runtime)
     out = {**versions(), "model_type": model_type, "runtime": runtime,
            "arch_file": af, "arch_sha256": _sha(af) if af else None,
-           "scorer_variant": scorer_variant(model_type) if variant is _UNSET else variant}
+           "scorer_variant": _scorer_variant(model_type) if variant is _UNSET else variant}
     files = arch_files(model_type, runtime) if af else {}
     out["arch_files"], out["arch_tree_sha256"] = files, tree_sha256(files)
     if model is not None:

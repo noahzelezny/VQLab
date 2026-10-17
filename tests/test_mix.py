@@ -48,7 +48,7 @@ def test_straddle_refused(tmp_path):
     base = _art(tmp_path / "base", 256, {"a.safetensors": [0, 1]})
     hi = _art(tmp_path / "hi", 2048, {"a.safetensors": [0, 1]})
     with pytest.raises(SystemExit, match="straddles"):
-        mix.plan(base, [(hi, 1, 1)])
+        mix.plan_mix(base, [(hi, 1, 1)])
 
 
 def test_runtime_mismatch_refused(tmp_path):

@@ -33,12 +33,12 @@ def test_every_command_in_exactly_one_namespace():
 
 
 def test_cli_views_are_derived():
-    assert cli.COMMANDS == {c.name: (c.file, c.help) for c in commands.COMMANDS.values()}
+    assert cli.COMMANDS is commands.COMMANDS
     assert cli.resolve is commands.resolve and cli.NAMESPACES is commands.NAMESPACES
 
 
 def test_mcp_sets_come_from_the_registry_and_match_the_snapshot():
-    from vqlab.agents import mcp_server as m
+    from vqlab.ops import runs as m
     snap = json.loads((ROOT / "tests/fixtures/public_names.json").read_text())
     assert m.RUN_ALLOWLIST == commands.mcp_allowlist()
     assert m.GPU_FREE == commands.mcp_gpu_free()

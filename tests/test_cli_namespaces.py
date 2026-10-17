@@ -7,7 +7,7 @@ import sys
 
 import pytest
 
-from vqlab import _layout  # noqa: F401
+from vqlab import _layout, commands
 from vqlab import cli
 
 from vqlab.bench import box_quiet
@@ -105,15 +105,15 @@ def test_unknown_sub_is_refused():
 
 
 def test_context_routing_reads_both_spellings():
-    assert cli.routed("`fit moe` and `vqlab build pack --out x` and `kl-ladder`") == {
+    assert commands.routed("`fit moe` and `vqlab build pack --out x` and `kl-ladder`") == {
         "fit-moe", "pack", "kl-ladder"}
-    assert cli.routed("`score ppl`, `score`, `fit`") == {"score"}
+    assert commands.routed("`score ppl`, `score`, `fit`") == {"score"}
 
 
 @pytest.mark.checkout
 def test_root_context_routes_every_command():
     ctx = (_layout.SRC.parent / "CONTEXT.md").read_text()
-    assert not set(cli.COMMANDS) - cli.routed(ctx)
+    assert not set(cli.COMMANDS) - commands.routed(ctx)
 
 
 def _q(cmd):
@@ -140,13 +140,12 @@ def test_queue_refuses_unknown_and_namespaced_publish():
     assert any("human action" in e for e in rq.validate(_q("ship publish")))
 
 
-def test_renamed_modules_keep_old_names():
+def test_permanent_filenames_resolve():
     assert _layout.find("vq_397b_codes.py") == _layout.find("fit_moe.py")
     assert _layout.find("pack_artifact.py") == _layout.find("pack.py")
-    m = _layout._names()
-    assert _layout.FILE_ALIASES["vq_397b_codes"] == m["vqlab.vq_397b_codes"] == "vqlab.fit.fit_moe"
-    assert _layout.FILE_ALIASES["pack_artifact"] == m["vqlab.assemble.pack_artifact"] == "vqlab.build.pack"
-    assert cli.COMMANDS["fit-moe"][0] == "fit_moe.py" and cli.COMMANDS["pack"][0] == "pack.py"
+    assert _layout.PERMANENT["vqlab.vq_397b_codes"] == "vqlab.fit.fit_moe"
+    assert _layout.PERMANENT["vqlab.build.pack_artifact"] == "vqlab.build.pack"
+    assert cli.COMMANDS["fit-moe"].file == "fit_moe.py" and cli.COMMANDS["pack"].file == "pack.py"
 
 
 def test_sidecar_writers_never_stamp_the_model_they_read():
@@ -156,43 +155,3 @@ def test_sidecar_writers_never_stamp_the_model_they_read():
     from vqlab import cli
     for c in ("mtp-pack", "mtp-graft"):
         assert "--model" not in cli.BUILD_OUTPUTS[c]
-
-
-def test_assemble_package_is_a_deprecated_alias_of_build():
-    import importlib
-    import sys
-    import warnings
-    for n in [k for k in sys.modules if k.startswith("vqlab.assemble")]:
-        del sys.modules[n]
-    import vqlab.build.mix as new_mix
-    with warnings.catch_warnings(record=True) as w:
-        warnings.simplefilter("always")
-        old_pkg = importlib.import_module("vqlab.assemble")
-        old_mix = importlib.import_module("vqlab.assemble.mix")
-    assert old_pkg is importlib.import_module("vqlab.build")
-    assert old_mix is new_mix
-    m = _layout._names()     # script modules (pack, build_dense) run at import
-    assert (m["vqlab.assemble.build_dense_vq"] == _layout.FILE_ALIASES["build_dense_vq"]
-            == m["vqlab.build_dense_vq"] == "vqlab.build.build_dense")
-    assert m["vqlab.assemble.pack"] == "vqlab.build.pack"
-    assert _layout.find("build_dense_vq.py") == _layout.find("build_dense.py")
-    msgs = [str(x.message) for x in w if issubclass(x.category, DeprecationWarning)]
-    assert any("vqlab.build.mix" in m for m in msgs)
-    assert not (_layout.PKG / "assemble").exists()
-    from vqlab.build import mix, graft_extras, reskeleton
-    assert mix.plan is mix.plan_mix and graft_extras.plan is graft_extras.plan_graft
-    assert reskeleton.plan is reskeleton.plan_reskeleton
-
-
-def test_step15_install_names_alias():
-    """untangle step 15: generic install()/plan() say what they install; the
-    old names stay as aliases for one release."""
-    from vqlab import _layout
-    from vqlab.core.source import ple_stream
-    from vqlab.skipzero import sz_resident, sz_resident_build
-    assert _layout.install is _layout.install_import_aliases
-    assert ple_stream.install is ple_stream.install_ple_stream
-    assert sz_resident.install is sz_resident.install_resident
-    assert sz_resident_build.plan is sz_resident_build.plan_resident
-    src = (_layout.PKG / "ship" / "serve.py").read_text()   # imports mlx_lm
-    assert "install = install_serving" in src

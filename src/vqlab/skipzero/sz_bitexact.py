@@ -441,7 +441,10 @@ def partial(resident, stage1, layers, outdir, original=None):
     spec = importlib.util.spec_from_file_location("sz_resident_art", res / "sz_resident.py")
     szr = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(szr)
-    SZ = szr.install(ns)
+    if not hasattr(szr, "install_resident"):
+        raise SystemExit(f"{res}/sz_resident.py predates install_resident: rebuild the "
+                         "resident artifact with the current `vqlab sz-resident`")
+    SZ = szr.install_resident(ns)
     from vqlab.skipzero import skipzero_load
     lo, hi = (int(v) for v in layers.split("-"))
     mods = [p for p in sz["modules"]

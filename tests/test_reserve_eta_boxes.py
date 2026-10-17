@@ -13,7 +13,7 @@ import pytest
 from vqlab import _layout  # noqa: F401
 from vqlab import config as C
 sys.path.insert(0, str(_layout.SRC / "vqlab" / "agents"))
-from vqlab.agents import mcp_server as ms
+from vqlab.agents.mcp import server as ms
 from vqlab.ops import box as ops_box
 from vqlab.queue import eta as queue_eta
 from vqlab.queue import reserve as R
@@ -189,6 +189,17 @@ def test_run_on_refuses_before_launch(cfg, monkeypatch):
         rq.run_on("m4", q)
     assert "unreadable (EIO)" in str(e.value) and "nothing launched" in str(e.value)
 
+
+
+def test_a_box_with_no_clone_cannot_run_queues_and_says_so(cfg, monkeypatch):
+    # reachable for Knurlogic and the leak guard, but no vqlab clone there
+    (cfg / "config.toml").write_text('[boxes.peer]\nssh = "u@peer"\nmodels = "/m"\n')
+    C._file_paths.cache_clear()
+    C._file_table.cache_clear()
+    monkeypatch.setattr(ops_box.subprocess, "run", lambda *a, **k: pytest.fail("ssh"))
+    assert "names no vqlab clone" in ops_box._box_state("peer", C.boxes()["peer"])["error"]
+    with pytest.raises(SystemExit, match="cannot run queues"):
+        rq.run_on("peer", cfg / "q.json")
 
 # ------------------------------------------------------------ teachers override
 def test_teachers_override_on_that_box(cfg, monkeypatch):

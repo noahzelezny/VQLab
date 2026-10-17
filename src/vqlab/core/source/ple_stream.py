@@ -120,7 +120,6 @@ def install_ple_stream(model, model_path, verbose=True):
     return bound
 
 
-install = install_ple_stream   # pre-step-15 name; one release
 
 
 def _bind(emb, keys, verbose, path):

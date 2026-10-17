@@ -37,6 +37,7 @@ import sys
 
 from vqlab import config as C
 from vqlab.records import provenance
+from vqlab.util import hashing
 from vqlab.util.fs import GIB, dir_bytes
 
 # tool name in a build record -> the input role that names what it packed
@@ -138,7 +139,7 @@ def reclaimable(roots, full=False):
             if why:
                 kept.append({**row, "reason": f"packed artifact does not verify ({why})"})
                 continue
-            have = provenance.fingerprint(src)
+            have = hashing.fingerprint(src)
             if inp.get("provenance_id") and have.get("provenance_id") != inp["provenance_id"]:
                 kept.append({**row, "reason": "source's build record changed since it was packed"})
                 continue
