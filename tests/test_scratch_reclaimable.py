@@ -136,6 +136,15 @@ def test_filed_fit_dir_listed_and_unfiled_kept(tmp_path):
     assert not items and "not filed" in kept[0].reason
 
 
+
+def test_root_that_is_itself_listed_is_not_also_kept(tmp_path):
+    root = tmp_path / "run_parts"
+    a = root / "a.safetensors"
+    index = _filed_index(tmp_path, (a, _fit(a, 1, b"a")))
+    items, _ = scratch_cmd.fit_items([root], [], index=index)
+    assert [i.path for i in items] == [str(root)]
+    assert scratch_cmd._top_level_kept([root], items, []) == []
+
 def test_fit_dir_with_same_codebook_other_codes_kept(tmp_path):
     root = tmp_path / "scratch"
     a = root / "refit" / "a.safetensors"

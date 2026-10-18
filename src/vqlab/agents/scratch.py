@@ -444,6 +444,8 @@ def _top_level_kept(roots: list[pathlib.Path], items: list[Item], kept: list[Kep
     refused = {os.path.realpath(k.path) for k in kept}
     out = []
     for root in roots:
+        if os.path.realpath(root) in listed:     # the root itself is a listed item
+            continue
         entries = sorted(root.iterdir()) if root.is_dir() else []
         loose = [p for p in entries if not p.is_dir() and not p.name.startswith(".")]
         if loose:
