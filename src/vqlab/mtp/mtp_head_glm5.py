@@ -58,6 +58,7 @@ class MTPHeadGlm5:
         self.arch = arch
         self.cfg = cfg
         self.D = cfg.hidden_size
+        self.h_width = self.D             # width of the trunk row _trunk reads
         self.eps = cfg.rms_norm_eps
         self.tie = cfg.tie_word_embeddings
         self.lm_head = None if self.tie else lang.lm_head

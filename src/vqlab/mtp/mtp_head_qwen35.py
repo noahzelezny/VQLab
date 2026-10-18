@@ -119,6 +119,7 @@ class MTPHeadQwen35:
         self.tie = bool(args.tie_word_embeddings)
         self.lm_head = None if self.tie else text.lm_head
         self.D = args.hidden_size
+        self.h_width = self.D             # width of the trunk row _trunk reads
         self.eps = getattr(args, "rms_norm_eps", 1e-6)
         # A full-attention layer index: DecoderLayer derives is_linear from
         # (idx + 1) % full_attention_interval, so this is the head's block.

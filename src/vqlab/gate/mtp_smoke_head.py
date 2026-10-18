@@ -76,7 +76,6 @@ def main(argv=None) -> int:
           f"GiB on disk, resident after load "
           f"{mx.get_active_memory() / GIB:.2f} GiB", flush=True)
 
-    D = head.D
     vocab = vocab_size(model)
     make_cache = getattr(head, "make_draft_cache", None)
 
@@ -85,7 +84,7 @@ def main(argv=None) -> int:
         # the loop passes it the same way (loop.py's `dcache`).
         cache = (make_cache() if make_cache is not None
                  else spec.make_draft_cache(arch))
-        h = mx.random.normal((1, T, D)).astype(mx.bfloat16)
+        h = mx.random.normal((1, T, head.h_width)).astype(mx.bfloat16)
         ids = mx.random.randint(0, vocab, (1, T))
         ms = _time(lambda: head._trunk(h, ids, cache),
                    warmup=a.warmup, iters=a.steps)

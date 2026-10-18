@@ -84,6 +84,7 @@ class MTPHead:
         self.lm_head = None if self.tie else model.lm_head
         self.D = args_t.hidden_size
         self.hc = core.hc
+        self.h_width = self.hc * self.D   # the trunk row carries hc streams
         self.eps = getattr(args_t, "rms_norm_eps", 1e-6)
         fa_idx = [i for i, l in enumerate(core.layers)
                   if l.layer_type == "full_attention"][0]
