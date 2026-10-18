@@ -93,6 +93,7 @@ import time
 from vqlab import config as _config
 from vqlab.core.box import exo
 from vqlab.core.box import gpu_lease
+from vqlab.gate import knurlogic_link
 from vqlab.queue import report
 from vqlab.queue import reserve as resv
 from vqlab.queue import steps as _steps
@@ -265,6 +266,10 @@ def _tidy(qdir, state, done, preflight, keep_preflight):
             pfroot = _config.preflight_dir() / qdir.name
         except SystemExit:
             pass
+    if pfroot is not None and state["status"] != "stopped":
+        # the knurlogic-link step's entry dies with its preflight, pass or fail;
+        # a stopped one resumes past that step and still needs it
+        state["preflight_links_removed"] = [str(e) for e in knurlogic_link.unlink_into(pfroot)]
     if preflight and done and pfroot and pfroot.is_dir() and not keep_preflight:
         # preflight outputs are proof the steps RUN, not artifacts: a passed
         # preflight leaves nothing on scratch (a failed one keeps its outputs

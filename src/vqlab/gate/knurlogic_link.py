@@ -16,6 +16,9 @@ Nothing is copied and nothing is deleted. An existing entry is replaced only
 when it is a SYMLINK that dangles or points into the queue-preflight area (a
 preflight's output, removed when the preflight passed); a real folder, or a
 link to anything else, is refused by name: removing it is a human's call.
+When a preflight ends the queue calls `unlink_into` on its output folder, so
+no entry is left pointing into a removed preflight (a dangling model name) or
+holding a failed one's outputs on scratch.
 
 A pipeline peer resolves the link on its own side, so the target path must be
 the same on every Mac that serves a rank (the shared volume mounted under one
@@ -70,6 +73,21 @@ def link(artifact, md: pathlib.Path | None = None) -> tuple[int, str]:
         return 2, f"FAIL: {entry} was linked but resolves to {entry.resolve()}, not {art}"
     return 0, (f"{replaced}OK: {entry} -> {art}\n"
                "  every Mac serving a rank must reach that path under the same name")
+
+
+def unlink_into(root: pathlib.Path, md: pathlib.Path | None = None) -> list[pathlib.Path]:
+    """Remove every models-dir SYMLINK that resolves into `root` -> the links
+    removed. Only links go; no data is touched."""
+    md = md if md is not None else models_dir()
+    if not md.is_dir():
+        return []
+    root = pathlib.Path(os.path.realpath(root))
+    gone = []
+    for entry in md.iterdir():
+        if entry.is_symlink() and pathlib.Path(os.path.realpath(entry)).is_relative_to(root):
+            entry.unlink()
+            gone.append(entry)
+    return gone
 
 
 def main(argv=None) -> int:

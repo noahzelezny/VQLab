@@ -63,3 +63,18 @@ def test_refuses_a_missing_models_dir_or_a_non_artifact(tmp_path, monkeypatch):
     monkeypatch.setenv("KNURLOGIC_MODELS", str(tmp_path / "nowhere"))
     assert kl.link(_art(tmp_path / "a"))[0] == 2
     assert kl.link(tmp_path)[0] == 2
+
+
+def test_unlink_into_removes_only_links_into_that_folder(tmp_path, monkeypatch):
+    # 2026-10-17: each preflight's link outlived it, dangling in the models
+    # dir after a pass and pinning a failed one's 196 GiB on scratch
+    md = tmp_path / "models"
+    md.mkdir()
+    pf = tmp_path / "pf" / "q1"
+    (md / "mine").symlink_to(_art(pf / "fit" / "mine"))
+    (md / "gone").symlink_to(pf / "fit" / "gone")                    # already dangling
+    (md / "other").symlink_to(_art(tmp_path / "pf" / "q2" / "fit" / "other"))
+    real = _art(md / "real")
+    assert sorted(e.name for e in kl.unlink_into(pf, md)) == ["gone", "mine"]
+    assert (md / "other").is_symlink() and real.is_dir() and (pf / "fit" / "mine").is_dir()
+    assert kl.unlink_into(pf, tmp_path / "no-such-dir") == []

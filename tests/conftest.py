@@ -15,13 +15,15 @@ import pytest
 # set before anything runs, so subprocess `vqlab` calls inherit it too
 os.environ["VQLAB_NO_SETUP"] = "1"
 # ...and never write into the real lab: every store a test (or a `vqlab`
-# subprocess it runs) could append to points into one throwaway folder. The
+# subprocess it runs) could append to, and the Knurlogic models dir a finished
+# preflight removes its links from, points into one throwaway folder. The
 # writer-contract geo-builds filed 2,484 fixture fits into the real fit store
 # before this (2026-10-10..17). A test that needs its own location still sets it.
 _SANDBOX = pathlib.Path(tempfile.mkdtemp(prefix="vqlab-tests-"))
 atexit.register(shutil.rmtree, _SANDBOX, ignore_errors=True)
 for _var, _sub in (("VQLAB_FIT_STORE", "fits"), ("VQLAB_RECORDS", "records"),
-                   ("VQLAB_QUEUE_DIR", "queues"), ("VQLAB_LOG_DIR", "log")):
+                   ("VQLAB_QUEUE_DIR", "queues"), ("VQLAB_LOG_DIR", "log"),
+                   ("VQLAB_PREFLIGHT_DIR", "preflight"), ("KNURLOGIC_MODELS", "models")):
     os.environ[_var] = str(_SANDBOX / _sub)
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1] / "src"))

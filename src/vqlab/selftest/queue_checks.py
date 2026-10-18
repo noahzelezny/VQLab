@@ -15,7 +15,7 @@ from vqlab.queue import steps as QS
 from vqlab.selftest import check
 from vqlab.util.fs import read_json
 
-_ENV = ("VQLAB_QUEUE_DIR", "VQLAB_GPU_LEASE", "VQLAB_PREFLIGHT_DIR")
+_ENV = ("VQLAB_QUEUE_DIR", "VQLAB_GPU_LEASE", "VQLAB_PREFLIGHT_DIR", "KNURLOGIC_MODELS")
 
 
 def check_queue(ctx):
@@ -25,6 +25,7 @@ def check_queue(ctx):
     os.environ["VQLAB_QUEUE_DIR"] = str(tmp / "queues")
     os.environ["VQLAB_PREFLIGHT_DIR"] = str(tmp / "pf")
     os.environ["VQLAB_GPU_LEASE"] = str(tmp / "gpu.lease")
+    os.environ["KNURLOGIC_MODELS"] = str(tmp / "models")
     qdirs = []
     try:
         _check_run_and_pin(tmp, qdirs)
@@ -94,9 +95,12 @@ def _check_preflight(tmp, qdirs):
     with contextlib.redirect_stdout(io.StringIO()):
         pd2 = QF.create(qf2, allow_dirty=True, preflight=True)
         qdirs.append(pd2)
+        (tmp / "models").mkdir(exist_ok=True)       # what a knurlogic-link step leaves
+        (tmp / "models" / "st2").symlink_to(tmp / "pf" / pd2.name / "fit")
         QR.run(pd2)
-    check("queue: a PASSED preflight leaves nothing on scratch",
+    check("queue: a PASSED preflight leaves nothing on scratch, nor a link into it",
           not (tmp / "pf" / pd2.name).exists()
+          and not (tmp / "models" / "st2").is_symlink()
           and read_json(pd2 / "state.json")["preflight_outputs"] == "removed after pass")
     check("queue: publish can never be queued",
           any("publish" in e for e in QS.validate({"steps": [{"name": "p", "cmd": "publish"}]})))
