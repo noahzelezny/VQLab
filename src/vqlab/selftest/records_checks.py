@@ -140,22 +140,32 @@ def _check_lineage_and_verify(ctx):
 def check_cli_build_records(ctx):
     print("[5c/7] CLI build records: fresh output + in-place amendment")
     g = ctx.geo
-    cenv = {**os.environ, "PYTHONPATH": str(_layout.SRC)}
-    cli = lambda *a_: subprocess.run([PY, "-m", "vqlab.cli", *a_],
-                                     capture_output=True, text=True, env=cenv)
+    # the checkout's src FIRST, the caller's path kept (it may be where mlx is)
+    cenv = {**os.environ, "PYTHONPATH": os.pathsep.join(
+        filter(None, [str(_layout.SRC), os.environ.get("PYTHONPATH")]))}
+
+    def cli(*a_):
+        return subprocess.run([PY, "-m", "vqlab.cli", *a_],
+                              capture_output=True, text=True, env=cenv)
+
+    def why(p):   # a failed command's last stderr line, so a FAIL says why
+        return f"rc {p.returncode}: {(p.stderr.strip().splitlines() or [''])[-1][:200]}" \
+            if p.returncode else ""
+
     p2 = ctx.tmp / "packed-cli"
-    cli("pack", "--src", str(ctx.f1), "--out", str(p2))      # a raw fit's vq_modules (see [3/7])
+    pk = cli("pack", "--src", str(ctx.f1), "--out", str(p2))  # a raw fit's vq_modules (see [3/7])
     r2 = read_json(p2 / "vqlab_provenance.json") if (p2 / "vqlab_provenance.json").exists() else {}
     check("pack via the CLI gets a build record linked to its fit",
           r2.get("tool", {}).get("name") == "pack"
-          and any(i.get("provenance_id") for i in r2.get("inputs", [])))
+          and any(i.get("provenance_id") for i in r2.get("inputs", [])), why(pk))
     if (g["out"] / "vqlab_provenance.json").exists():
         before = read_json(g["out"] / "vqlab_provenance.json")["id"]
         # geo-out was corrupted by the known-bad --verify check above; the
         # amendment must still record what it was and what it is now
-        cli("bundle", "--artifact", str(g["out"]), "--group", "64")
+        bd = cli("bundle", "--artifact", str(g["out"]), "--group", "64")
         ra = read_json(g["out"] / "vqlab_provenance.json")
-        hist = (g["out"] / "vqlab_provenance.history.jsonl").read_text().splitlines()
+        hf = g["out"] / "vqlab_provenance.history.jsonl"
+        hist = hf.read_text().splitlines() if hf.exists() else []
         check("in-place bundle AMENDS: new record links the old, history kept",
               ra["tool"]["name"] == "bundle" and ra.get("previous") == before
-              and json.loads(hist[-1])["id"] == before)
+              and bool(hist) and json.loads(hist[-1])["id"] == before, why(bd))

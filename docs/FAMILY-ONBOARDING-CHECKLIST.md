@@ -73,4 +73,4 @@ bandwidth stated.
 ## F. Close the campaign
 
 - [ ] Finding written (`findings_append`); fits filed in the fit store.
-- [ ] `vqlab lab scratch reclaimable`: hand the `rm` lines to Noah.
+- [ ] `vqlab lab scratch reclaimable`: hand the `rm` lines to the maintainer.

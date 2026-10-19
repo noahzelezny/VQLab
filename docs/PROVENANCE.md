@@ -13,7 +13,7 @@ EXPERIMENTS.md E92-E118 by hand, facts that no artifact recorded:
 |---|---|---|
 | 1 | **fitter vintage** | 397B 2.4bpw fit by the 08-16 fitter (random init, one-hot k-means; `fitter_0816_cdcdeab.py`), 2.6/3.1 by the 08-18+ k-means++ fitter, and layers 57-59 of each corrected rung refit by geo-build, whose default adds scale<->codebook alternation (F80/F81) the others lack. Three recipes in one family, one of them *inside* each rung. |
 | 2 | **runtime profile** | 35B 3.4 ships v1.5, 3.8/4.6/5.4 ship v2; the 397B rungs carry three bundles (md5 151f1eda / ca3645e0 / 55d1e38e); 27B published vs rebuilt: 545d4810 vs 50cdc89e. |
-| 3 | **local vs Hub drift + in-place rebundles** | 8/20 `Exo Models/` copies differed from HF (2026-09-19); F151 lost 3 of 13 runs to a concurrent rebundle. |
+| 3 | **local vs Hub drift + in-place rebundles** | 8 of 20 local serving copies differed from the Hub (2026-09-19); F151 lost 3 of 13 runs to a concurrent rebundle. |
 | 4 | **the paper's manifest claim** | The paper says published artifacts "carry external manifests". `vqlab manifest` writes a *tamper stamp* (shard size / mtime / sha256 of the first 1 MiB) into a cwd-relative, gitignored `manifests/` dir. It records nothing about how bytes were made, and no stamps for the published fleet were found. **The claim should be softened in DRAFT.md until §6 step 4 lands.** |
 | 5 | **"same recipe" != "same bytes"** | A rebuilt 35B struct base with the same quantization map differed from the published one (scales up to 12.8%) after an mlx version change. |
 | 6 | **defaults that change the method** | geo-build alternation on by default; geo-build `--seed` rejects -1 where fit-dense accepts it; fit-moe init default flipped 08-18. |

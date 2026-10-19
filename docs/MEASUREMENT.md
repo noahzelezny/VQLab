@@ -1,8 +1,7 @@
 # Measurement runbook: where decode and prefill time goes
 
 The order to run the instruments in, what each answers, and what it cannot
-see. Written for the session that runs them on the Mac (a person, Claude
-desktop, Scout, Chuck); every command is a `vqlab` CLI entry, and the
+see. Written for whoever runs them on the Mac, a person or an agent; every command is a `vqlab` CLI entry, and the
 GPU-free ones are also on the MCP `run` allowlist.
 
 The rule behind the order: **partition before you optimize.** Every kernel

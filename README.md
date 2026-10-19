@@ -2,8 +2,9 @@
 
 **Size-targeted vector-quantized (VQ) builds of large models on Apple Silicon,
 with MLX.** Name a byte budget, price the recipe before fitting, fit it
-data-free, pack to true bit-width, verify, and serve through stock `mlx-lm`.
-The runtime ships inside the artifact.
+data-free, pack to true bit-width, verify, and serve through stock `mlx-lm`
+(DeepSeek-V4 and Qwen3.8-Flash-Next load through Knurlogic's architecture
+files). The runtime ships inside the artifact.
 
 Paper: *Data-Free Vector Quantization Beats Affine Quantization at Matched
 Bytes Below 5 Bits*, doi:[10.5281/zenodo.22119017](https://doi.org/10.5281/zenodo.22119017).
@@ -234,7 +235,8 @@ are in [docs/MTP-USAGE.md](https://github.com/noahzelezny/VQLab/blob/master/docs
 
 Apple Silicon Mac with RAM sized to the artifact for fit and smoke (scoring
 streams and can exceed RAM; the 397B fits used 96 to 128 GB machines).
-Python 3.12 or newer, `mlx`, `mlx-lm`, `numpy`, `safetensors`.
+Python 3.12 or newer, `mlx`, `mlx-lm`, `knurlogic`, `huggingface_hub`, `numpy`,
+`safetensors` (pip installs them).
 
 Install into a disposable venv, never a shared interpreter: the package
 ships a model runtime, and which copy of a runtime resolves has produced
@@ -271,7 +273,9 @@ as SKIPPED with the reason.
 - `docs/` — start at [docs/INDEX.md](https://github.com/noahzelezny/VQLab/blob/master/docs/INDEX.md), which says what each
   doc is for and whether it still holds.
 - `families/` — per-family profiles: what the toolkit knows about each
-  checkpoint, as data.
+  checkpoint, as data. They come with a checkout, not with `pip install`; a
+  pip user writes their own with `vqlab family-profile --teacher <dir>`
+  (into `<records>/families`, which every tool reads).
 - `research/paper/` — the paper and the scripts that regenerate its tables.
 - [docs/FINDINGS.md](https://github.com/noahzelezny/VQLab/blob/master/docs/FINDINGS.md) is the law book: settled laws,
   retracted leads, instrument rules.
@@ -285,7 +289,7 @@ measurements, the artifacts and every published claim are the author's.
 ## License
 
 Code: GNU Affero General Public License v3.0 or later (AGPL-3.0-or-later,
-see [LICENSE](LICENSE)). Releases up to and including the 2026-10 GitHub
+see [LICENSE](https://github.com/noahzelezny/VQLab/blob/master/LICENSE)). Releases up to and including the 2026-10 GitHub
 snapshots were Apache-2.0. For a commercial license (use without the AGPL's
 obligations), contact [hello@thedrainflorist.com](mailto:hello@thedrainflorist.com).
 Corpus data files carry their own terms

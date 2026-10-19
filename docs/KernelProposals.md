@@ -1,6 +1,6 @@
 # KernelProposals — prefill/decode kernel ideas with quoted source lines
 
-Rule for this file (Claude's feedback, 2026-10-07): **every idea must quote the
+Rule for this file (review of 2026-10-07): **every idea must quote the
 current kernel lines it would change.** Round 2 skipped this and it cost us:
 the quotes contradict idea 4 outright and soften idea 1's premise. Future
 rounds append here with the same discipline.
@@ -140,15 +140,15 @@ it is per (out-row, group):
 One shared `cb[c]` serves all 32 out-rows; `s` differs per out-row. Nothing
 to fold.
 
-**4'. The feasible form: scale the accumulator, not the weights — but Claude's
-review (2026-10-07) shows it is NOT the cheap win it first looked like.**
+**4'. The feasible form: scale the accumulator, not the weights — but the
+review of 2026-10-07 shows it is NOT the cheap win it first looked like.**
 y = Σ_g s[row,g]·dot_g, so the per-element `s *` multiply + `(half)` round in
 phase 1 (quoted above, 4 stores per code) can in principle move to phase 3:
 after each group's mma, scale that group's contribution by a per-out-column
 broadcast and add it in. Phase 1 becomes a pure gather-copy: `wtT[...] = v.x`
 with no arithmetic.
 
-**Claude's pushback (2026-10-07), accepted in full:** because `s` varies per
+**Review objection (2026-10-07), accepted in full:** because `s` varies per
 out-row *and* per group, the per-group mma cannot chain into the single
 accumulator. Each group's mma must land in its own temporary result, get
 scaled column-by-column (broadcast `s[row,g]` over the token axis), and then
@@ -214,10 +214,10 @@ eliminated by aligning pack boundaries to code width at pack time
 
 ---
 
-## Sequencing (Claude's review, 2026-10-07 — the clean order)
+## Sequencing (review of 2026-10-07 — the clean order)
 
 Round 2's closing sequence was muddled (it self-corrected mid-sentence).
-Claude's order, which this file adopts:
+The review's order, which this file adopts:
 
 1. **#6 / group-major code layout** — phase-1 microbench. Bit-exact, no
    quality gate. Kill: < +3% prefill at 27B d4-K256, M=512/2048 (threshold
@@ -412,7 +412,7 @@ the F188 M4-only serving gap a candidate cause, but it is DEMOTED below
 R3-1..R3-4 and needs the M4-only machine mode (~128 GiB free) the
 operator described. Revisit after the earlier verdicts.
 
-### Sequencing (Claude, tomorrow)
+### Sequencing (next session)
 
 R3-1 (ship u8view) → R3-2 (mtp-accept, then flag on) → R3-3 (chunked
 KDA) → R3-4 (MoE sub-partition, then levers) → R3-5/R3-6 microbenches →

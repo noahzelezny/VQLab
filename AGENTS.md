@@ -288,8 +288,8 @@ whole multi-GB artifact, and nothing ever removed them once the finding was
 recorded. When you write the F-entry, in the same step:
 1. file any fits that exist nowhere else in the fit store (`vqlab fit fits`);
 2. confirm the result that ships is in the models root (and on the Hub);
-3. run `vqlab lab scratch reclaimable` and hand Noah the printed `rm` lines
-   for the campaign's directories (deletion is his action; never run it).
+3. run `vqlab lab scratch reclaimable` and hand the maintainer the printed `rm`
+   lines for the campaign's directories (deletion is a human's action; never run it).
 A failed `queue --preflight` leaves its full-size copies behind; list those too.
 
 **Name a campaign's folder for its finding**: `<scratch>/F197-vision-exp/`,

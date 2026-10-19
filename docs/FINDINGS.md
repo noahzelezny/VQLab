@@ -743,8 +743,7 @@ codebook property — replaced with accumulator-side scaling) and reframed idea 
 scalar strided stores, the per-code random gather, and missing gather
 pipelining). Every idea there quotes the kernel lines it would change.
 
-As of 2026-10-07 `docs/` and `src/` are tracked in git (the two-session
-workflow — local Scout + cloud Claude — reads them from GitHub). `lab/`
-(FINDINGS-LOG, EXPERIMENTS, archive, queues) is and stays gitignored — the
-private notebook. Ledger context the cloud session needs is quoted into
-`KernelProposals.md`, not copied wholesale.
+As of 2026-10-07 `docs/` and `src/` are tracked in git. The measured
+record behind these conclusions is a private notebook outside the repo;
+ledger context a proposal needs is quoted into `KernelProposals.md`, not
+copied wholesale.

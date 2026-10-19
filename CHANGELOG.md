@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.1.0 (unreleased)
+## 0.1.0 — 2026-10-19
 
 First release. VQLab fits size-targeted, data-free vector-quantization
 codebooks for large language models on Apple Silicon (MLX), assembles and

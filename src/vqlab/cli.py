@@ -142,10 +142,37 @@ def _record_build(cmd, rest, script):
               file=sys.stderr)
 
 
+def _version():
+    import vqlab
+    print(f"vqlab {vqlab.__version__}")
+
+
+# the top-level flags that print and exit
+_INFO = {"-h": _help, "--help": _help, "-V": _version, "--version": _version}
+
+
+def _run_tool(module: str) -> None:
+    """Execute a tool module as __main__ with the sys.argv main() set.
+
+    By module name, not file path: no file lookup, and relative and absolute
+    imports inside the tool resolve as in any import. alter_sys=False keeps
+    argv[0] as main() set it (True rewrites it to the module's file, so --help
+    said `usage: kl_ladder.py`). The run log, and through it
+    records.provenance, is already imported by the time `vqlab runs` /
+    `vqlab provenance` run: that copy is set aside so the tool executes fresh,
+    as under `python -m`, instead of runpy warning it may misbehave."""
+    loaded = sys.modules.pop(module, None)
+    try:
+        runpy.run_module(module, run_name="__main__", alter_sys=False)
+    finally:
+        if loaded is not None:
+            sys.modules[module] = loaded
+
+
 def main() -> int:
     argv = sys.argv[1:]
-    if not argv or argv[0] in ("-h", "--help"):
-        _help()
+    if not argv or argv[0] in _INFO:
+        _INFO[argv[0] if argv else "-h"]()
         return 0
     if argv[0] in NAMESPACES and (len(argv) == 1 or (
             argv[1] in ("-h", "--help") and argv[0] not in COMMANDS)):
@@ -170,17 +197,15 @@ def main() -> int:
         box_quiet.guard(cmd)
     module = selftest_route(cmd, rest) or COMMANDS[cmd].module
     import importlib.util
-    script = importlib.util.find_spec(module).origin
+    script = importlib.util.find_spec(module).origin   # the build record names it
     from vqlab import config as _cfg   # <teachers>/X -> this box's teachers root (a local copy on a box with one)
     rest = [_cfg.expand(a) for a in rest]
-    sys.argv = [str(script), *rest]
+    sys.argv = [f"vqlab {cmd}", *rest]     # what each tool's --help names itself
     from vqlab.records import runlog
     run = runlog.start(cmd, rest)
     rc = 0
     try:
-        # By module name, not file path: no file lookup, and relative and
-        # absolute imports inside the tool resolve as in any import.
-        runpy.run_module(module, run_name="__main__", alter_sys=True)
+        _run_tool(module)
     except SystemExit as e:
         rc = e.code if isinstance(e.code, int) else (0 if e.code is None else 1)
         raise

@@ -40,8 +40,9 @@ dependencies = [
     # the architecture files (deepseek_v4, qwen4_exp, ...) and the runtime the
     # artifacts are served by: one copy, vqlab.core.box.arch_finder loads them. The
     # floor is the release the KL caches and published scores were made on
-    # (an older one computes different numbers)
-    "knurlogic>=0.1.8",
+    # (an older one computes different numbers); capped below the next minor
+    # like mlx and mlx-lm, so a release nothing was measured on is not pulled in
+    "knurlogic>=0.1.8,<0.2",
 ]
 
 [project.optional-dependencies]

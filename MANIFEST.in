@@ -6,4 +6,7 @@ prune lab
 # The sdist carries the whole test suite (conftest, fixtures, goldens), so
 # `pytest` runs from an unpacked sdist.
 graft tests
+# The docs, changelog and citation the README and metadata point at.
+graft docs
+include CHANGELOG.md CITATION.cff
 global-exclude __pycache__ *.py[cod]
