@@ -121,7 +121,7 @@ def _step_args(st, state, preflight, outmap) -> tuple[list[str] | None, dict | N
     args = [_config.expand(str(a)) for a in st.get("args", [])]
     if preflight:
         return _steps.preflight_args(st, args, state, outmap)
-    _steps.make_out_parents(args, tree)
+    _steps.make_out_parents(args, tree, st.get("cmd"))
     return args, None
 
 

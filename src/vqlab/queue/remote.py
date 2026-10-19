@@ -68,7 +68,8 @@ def remote_paths(q, file, b, name, preflight=False) -> list[str]:
         if preflight and "args" in pf:
             arglists.append(pf["args"])
         for args in arglists:
-            ins, outs = _steps.path_args([_config.expand(str(a), box=name) for a in args])
+            ins, outs = _steps.path_args([_config.expand(str(a), box=name) for a in args],
+                                        st.get("cmd"))
             out += [p for p in ins if p.startswith("/")]
             for o in outs:
                 if o.startswith("/"):

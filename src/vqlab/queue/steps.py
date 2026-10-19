@@ -25,9 +25,17 @@ SCORING = {"score", "kl", "kl-ladder", "kl-pair", "tasks", "decode-timeline",
 OUT_FLAGS = {"--out", "--out-dir", "--output", "-o", "--per-pos-dir",
              "--parts", "--parts-dir", "--out-parts", "--save", "--log", "--json-out", "--cache-out",
              "--kl-per-position", "--keep-dir"}
+# ...except where a command READS that flag: kl-pair pairs the per-position
+# arrays two earlier kl-ladder runs wrote, so its --per-pos-dir must exist.
+INPUT_FLAGS = {"kl-pair": {"--per-pos-dir"}}
 _PATHLIKE = re.compile(r"""["'](/(?:Volumes|Users|opt|tmp|private)/[^"'\n]+|(?:src|scripts|research|families)/[^"'\s\n]+)["']""")
 GPU_FREE = _commands.mcp_gpu_free()
 PREFLIGHT_MARGIN = 10 << 30        # never take scratch below this (the step itself is sized separately)
+
+
+def out_flags(cmd: str | None = None) -> set[str]:
+    """The flags whose value is an output path for command `cmd`."""
+    return OUT_FLAGS - INPUT_FLAGS.get(cmd, set())
 
 
 # ------------------------------------------------------------------ schema
@@ -119,8 +127,9 @@ def strip_name(v):
     return _NAMED.sub("", v, count=1)
 
 
-def path_args(args):
+def path_args(args, cmd: str | None = None):
     """(inputs, outputs) among a step's args: values that look like paths."""
+    outf = out_flags(cmd)
     ins, outs = [], []
     prev = None
     for a in args:
@@ -130,10 +139,10 @@ def path_args(args):
             prev = a.split("=", 1)[0]
             if "=" in a:
                 v = a.split("=", 1)[1]
-                (outs if prev in OUT_FLAGS else ins).append(v) if "/" in v else None
+                (outs if prev in outf else ins).append(v) if "/" in v else None
             continue
         if "/" in a and not a.startswith(("http:", "https:")):
-            (outs if prev in OUT_FLAGS else ins).append(a)
+            (outs if prev in outf else ins).append(a)
         prev = None
     return ins, outs
 
@@ -149,12 +158,12 @@ def input_bytes(args, tree):
     return n
 
 
-def make_out_parents(args, tree: pathlib.Path):
+def make_out_parents(args, tree: pathlib.Path, cmd: str | None = None):
     """A declared output's parent is created, not demanded: preflight
     redirects outputs into dirs it makes itself, so it can never catch a
     missing parent (2026-09-28: reselect_kl/ did not exist, and the queue
     failed after 72 min of applies)."""
-    for o_ in path_args(args)[1]:
+    for o_ in path_args(args, cmd)[1]:
         op = pathlib.Path(o_) if pathlib.Path(o_).is_absolute() else tree / o_
         op.parent.mkdir(parents=True, exist_ok=True)
 
@@ -178,7 +187,7 @@ def static_check(st, tree: pathlib.Path, args) -> list[str]:
     absolute and exist). The night-4 miss was a DATA path inside a script, so
     a by-path script's string literals are checked too."""
     probs = []
-    ins, outs = path_args(args)
+    ins, outs = path_args(args, st.get("cmd"))
 
     def exists(p):
         pp = pathlib.Path(p)
@@ -202,7 +211,7 @@ def pin_check(st, args) -> tuple[list[str], list[str]]:
     if st.get("cmd") not in SCORING:
         return [], []
     ref, warn = [], []
-    for a in path_args(args)[0]:
+    for a in path_args(args, st.get("cmd"))[0]:
         d = pathlib.Path(a)
         if d.is_dir() and (d / "config.json").exists():
             ok, msg = pinmod.check_pin(d)
@@ -218,22 +227,23 @@ def pin_check(st, args) -> tuple[list[str], list[str]]:
 # ------------------------------------------------------------------ preflight
 
 
-def redirect_outs(args, pfdir: pathlib.Path, outmap: dict):
+def redirect_outs(args, pfdir: pathlib.Path, outmap: dict, cmd: str | None = None):
     """Preflight: send every output-flag value under pfdir (recording
     real -> preflight in outmap), and point any arg naming an EARLIER step's
     real output at that step's preflight output."""
+    outf = out_flags(cmd)
     res, prev = [], None
     for a in args:
         if a.startswith("-"):
             flag, eq, val = a.partition("=")
-            if eq and flag in OUT_FLAGS:
+            if eq and flag in outf:
                 new = str(pfdir / pathlib.Path(val).name)
                 outmap[val.rstrip("/")] = new
                 a = f"{flag}={new}"
             prev = flag if not eq else None
             res.append(a)
             continue
-        if prev in OUT_FLAGS:
+        if prev in outf:
             new = str(pfdir / pathlib.Path(a).name)
             outmap[a.rstrip("/")] = new
             a = new
@@ -265,7 +275,7 @@ def preflight_args(st, args, state, outmap) -> tuple[list[str] | None, dict | No
         args = args + [_config.expand(str(a)) for a in pf["append"]]
     pfdir = _config.preflight_dir() / pathlib.Path(state["qdir"]).name / slug(st["name"])
     pfdir.mkdir(parents=True, exist_ok=True)
-    args = redirect_outs(args, pfdir, outmap if outmap is not None else {})
+    args = redirect_outs(args, pfdir, outmap if outmap is not None else {}, st.get("cmd"))
     need = preflight_writes(st, args, state.get("tree"), preflight=True)
     free = shutil.disk_usage(pfdir).free
     if free - need < PREFLIGHT_MARGIN:
