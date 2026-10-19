@@ -50,7 +50,10 @@ dependencies = [
 score = ["transformers>=4.57"]
 # the image smoke (vision-smoke, check-release on an artifact with a tower)
 vision = ["mlx-vlm>=0.5", "transformers>=4.57", "pillow"]
-test = ["pytest", "ruff>=0.16,<0.17", "pylint", "build"]
+# ruff exactly: the quality ratchet compares hit COUNTS, and a patch release
+# counts differently (0.16.10 here and a newer 0.16.x in a fresh CI venv
+# disagreed by one E501 and one PLW1510 on the same tree, 2026-10-19)
+test = ["pytest", "ruff==0.16.10", "pylint", "build"]
 
 [project.urls]
 Homepage = "https://github.com/noahzelezny/VQLab"

@@ -19,7 +19,7 @@ def test_version_prints_the_package_version(flag, monkeypatch, capsys):
 def test_a_tool_names_itself_and_runs_without_warnings(cmd):
     # 2026-10-19 review: help said `usage: kl_ladder.py`, and provenance/runs
     # (already imported by the run log) printed a runpy RuntimeWarning
-    p = subprocess.run([sys.executable, "-m", "vqlab.cli", cmd, "--help"],
+    p = subprocess.run([sys.executable, "-m", "vqlab.cli", cmd, "--help"], check=False,
                        capture_output=True, text=True, timeout=120)
     assert p.returncode == 0
     assert p.stdout.startswith(f"usage: vqlab {cmd} ")
