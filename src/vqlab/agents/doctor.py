@@ -84,6 +84,24 @@ def _pkg(name):
     return {"version": v, "path": path}
 
 
+def package_version(name: str) -> str | None:
+    """An installed distribution's version, or None."""
+    return _pkg(name)["version"]
+
+
+def metal_info() -> dict:
+    """{"available", "device", "memory_gib"} of this machine's GPU, or
+    {"available": False, "error"} when mlx cannot say."""
+    try:
+        import mlx.core as mx
+        dev_info = getattr(mx, "device_info", None) or mx.metal.device_info
+        info = dev_info() if mx.metal.is_available() else {}
+        return {"available": mx.metal.is_available(), "device": info.get("device_name"),
+                "memory_gib": round(info.get("memory_size", 0) / GIB)}
+    except Exception as e:
+        return {"available": False, "error": str(e)}
+
+
 def _hf_token():
     if os.environ.get("HF_TOKEN"):
         return "$HF_TOKEN"
@@ -137,14 +155,7 @@ def report():
         r["packages"][p] = _pkg(p)
     if not r["packages"]["mlx"]["version"]:
         r["problems"].append("mlx is not importable in this interpreter: nothing can fit or score")
-    try:
-        import mlx.core as mx
-        dev_info = getattr(mx, "device_info", None) or mx.metal.device_info
-        info = dev_info() if mx.metal.is_available() else {}
-        r["metal"] = {"available": mx.metal.is_available(), "device": info.get("device_name"),
-                      "memory_gib": round(info.get("memory_size", 0) / GIB)}
-    except Exception as e:
-        r["metal"] = {"available": False, "error": str(e)}
+    r["metal"] = metal_info()
     mlm = r["packages"]["mlx-lm"]["path"]
     if mlm:
         for arch in ARCHES:
@@ -181,6 +192,8 @@ def report():
                           + (f" and {more} more" if more > 0 else "")
                           + ". Close them out (AGENTS.md: close a campaign's scratch)")
     r["problems"].extend(cache_problems())
+    from vqlab.agents import updates
+    r["release"] = updates.release_doc()
     if not r["hf_token"]:
         r["notes"].append("no Hugging Face token (HF_TOKEN or $HF_HOME/token): downloads of gated "
                           "repos and publish will fail")
@@ -208,6 +221,8 @@ def main(argv=None):
     for k, v in r["storage"].items():
         print(f"{k:11s} {v['path']}  " + (f"{v['free_gib']} GiB free" if v["exists"] else "MISSING"))
     print(f"HF_HOME     {r['hf_home'] or '-'}  token: {'yes' if r['hf_token'] else 'no'}")
+    if r["release"]["update"]:
+        print(f"update      vqlab {r['release']['latest']} is out: {r['release']['command']}")
     for n in r["notes"]:
         print(f"note: {n}")
     for p in r["problems"]:

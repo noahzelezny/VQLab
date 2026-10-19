@@ -30,7 +30,9 @@ Detached runs under the MCP runs dir, FINDINGS-LOG entries; queues under `<recor
 
 ## Files
 - `config_cmd.py`: `vqlab lab config`: show, set or initialise storage locations (over settings.py)
-- `doctor.py`: `vqlab lab doctor`: which interpreter, packages, storage and credentials a run would use
+- `doctor.py`: `vqlab lab doctor`: which interpreter, packages, storage and credentials a run would use, and whether a newer vqlab is out
+- `updates.py`: is a newer vqlab on PyPI (one request a day at most, cached in records; VQLAB_OFFLINE skips it); doctor and the GUI read it
+- `bug_report.py`: `vqlab lab report-bug`: a prefilled GitHub issue (versions, chip, last failed command; portable paths, no argv); prints the link, never sends
 - `model_scan.py`: `vqlab lab scan`: models already on this machine (vqlab's own roots, the Hugging Face cache, LM Studio, exo, Ollama, `[scan] extra`), tagged original / quantized / incomplete / unreadable with their vqlab family, into `<records>/registry/found.jsonl`; reads config.json and file lists only. The GUI rescans at launch and on Rescan; first run scans once
 - `first_run.py`: on a new install (no config, no location env, no older data) the first `vqlab` command creates `~/VQLab/{models,scratch,fits,records}` (bf16 teachers default to models/) and a config naming it, and says so once; `$VQLAB_NO_SETUP=1` skips it
 - `downloads.py`: the GUI's Hub downloads (`/api/downloads`, POST `/start` `/stop`): one fetch process per repo (`_fetch.py`: `snapshot_download` into `<teachers>/<org>--<name>`), progress from bytes on disk, a model scan when done; never deletes

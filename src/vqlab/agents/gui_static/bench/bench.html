@@ -48,6 +48,9 @@ header{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;border-bottom
 .st[aria-current=true]{color:var(--acc);border-color:color-mix(in srgb,var(--acc) 40%,transparent);background:color-mix(in srgb,var(--acc) 8%,transparent);text-shadow:var(--glow)}
 .st i{position:absolute;top:5px;right:8px;width:6px;height:6px;border-radius:50%;background:transparent}
 .flow{justify-self:end}
+.sec{display:flex;align-items:baseline;gap:14px;font-size:.7em;min-width:0}
+.secl{background:none;border:0;padding:0;color:var(--faint);font:inherit;cursor:pointer;letter-spacing:.04em}
+.secl:hover{color:var(--dim);text-decoration:underline}
 
 /* ---------- page frame ---------- */
 .wrap{max-width:1700px;width:100%;margin:0 auto;padding-block:14px 12px;padding-inline:clamp(16px,2vw,28px)}
@@ -355,7 +358,7 @@ body:has(#jdlg:not(.hidden)) [data-qact]{visibility:hidden}
 </style>
 
 <header>
-  <div></div>
+  <div class="sec" id="seclinks"><button class="secl" id="updbtn" hidden>Update available</button><button class="secl" id="bugbtn">Report a bug</button><span class="err" id="secerr"></span></div>
   <div class="mark" id="homebtn">VQ<span>·</span>LAB<svg viewBox="0 0 24 24" aria-hidden="true"><defs><clipPath id="fl"><path d="M9 2h6v7l6 11a1 1 0 0 1-1 2H4a1 1 0 0 1-1-2l6-11z"/></clipPath></defs><rect x="0" y="14" width="24" height="10" fill="var(--pink)" clip-path="url(#fl)"/><path d="M9 2h6v7l6 11a1 1 0 0 1-1 2H4a1 1 0 0 1-1-2l6-11z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M8 2h8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><circle cx="14" cy="17" r="1" fill="oklch(.95 .05 340)"/></svg></div>
   <div class="flow" id="flow"></div>
 </header>
@@ -1576,6 +1579,16 @@ const dragEnd=()=>{const svg=$('#chart');if(!svg||!svg.classList.contains('drag'
   svg.classList.remove('drag');recipe.view={key:recipe.draft.teacher+'|'+recipe.draft.mode,xr:recipe.dragXr};recipe.dragXr=null;ensureName();sanitize(curT());pvKick();redraw()};
 pageEl.addEventListener('pointerup',dragEnd);pageEl.addEventListener('pointercancel',dragEnd);
 
+// ---- secondary header links: update notice (GET /api/release, once) and bug report (GET /api/bug-report)
+function secErr(m){const e=$('#secerr');e.textContent=m||'';later(secErr,m?4000:null,()=>{e.textContent=''})}
+async function loadRelease(){
+  const r=await api('/api/release'),j=r.j;if(!r.ok||!j||j.error||!j.update||!j.command)return;
+  const b=$('#updbtn');b.hidden=false;b.title=`vqlab ${j.latest} is out (this is ${j.current}). Click to copy the update command.`;
+  b.onclick=async()=>{try{await navigator.clipboard.writeText(j.command);b.textContent='Copied'}catch{b.textContent=j.command}
+    later(b,T.copied*2,()=>{b.textContent='Update available'})}}
+$('#bugbtn').onclick=async()=>{const r=await api('/api/bug-report');
+  if(r.ok&&r.j&&r.j.url)window.open(r.j.url,'_blank','noopener');else secErr(errOf(r,'bug report'))};
+
 // ---- header, overlays, start-up
 delegate($('#flow'),'click',{i:el=>go(+el.dataset.i),dl:dlOpen});
 $('#homebtn').onclick=()=>go(P.lib);
@@ -1585,7 +1598,7 @@ delegate($('#dllist'),'click',{stop:el=>dlAct('stop',el.dataset.stop),resume:el=
 $('#jdlg').addEventListener('click',e=>{const b=e.target.closest('[data-jd]'),k=b&&b.dataset.jd;if(k==='cancel')closeModal($('#jdlg'));else if(k==='ok')jdOk()});
 const RZ={timer:0};
 addEventListener('resize',()=>later(RZ,T.resize,()=>{if(UI.page<=P.recipe)render()}));
-libPick();render();
+libPick();render();loadRelease();
 loadFleet();poll();loadTeachers();fndLoad();dlLoad();if(UI.page===P.storage)enter(P.storage);
 setInterval(()=>{if(UI.page===P.jobs||!LIVE.on)poll();if(UI.page===P.lib&&Date.now()-FLEET.at>T.fleetStale)loadFleet()},T.poll);
 

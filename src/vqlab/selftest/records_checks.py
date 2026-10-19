@@ -145,7 +145,7 @@ def check_cli_build_records(ctx):
         filter(None, [str(_layout.SRC), os.environ.get("PYTHONPATH")]))}
 
     def cli(*a_):
-        return subprocess.run([PY, "-m", "vqlab.cli", *a_],
+        return subprocess.run([PY, "-m", "vqlab.cli", *a_], check=False,
                               capture_output=True, text=True, env=cenv)
 
     def why(p):   # a failed command's last stderr line, so a FAIL says why

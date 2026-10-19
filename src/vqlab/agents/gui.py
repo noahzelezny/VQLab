@@ -16,6 +16,8 @@ nothing here computes a number of its own:
   /api/settings     storage locations; POST sets one (agents/settings.py)
   /api/scratch      scratch folders; /reclaimable adds rm lines, never run
   /api/storage/usage  per volume: total/used/free, what each vqlab location holds
+  /api/release      the running and latest vqlab, and whether to update (agents/updates.py)
+  /api/bug-report   a prefilled GitHub issue link (agents/bug_report.py)
   POST /api/pick-folder  the system's own folder chooser -> {ok, path}
   /api/models/found   models already on this machine (vqlab lab scan; rescanned at
                     launch and by POST /api/models/scan)
@@ -372,6 +374,20 @@ def post_settings(body):
                               create=bool(body.get("create")))
 
 
+def api_release(_q):
+    """{"current", "latest", "update", "command"}: the page's update notice
+    (agents/updates: PyPI at most once a day)."""
+    from vqlab.agents import updates
+    return updates.release_doc()
+
+
+def api_bug_report(_q):
+    """{"url"}: a prefilled GitHub issue for the page's Report-a-bug link
+    (agents/bug_report: versions, chip, last failed command; no paths)."""
+    from vqlab.agents import bug_report
+    return {"url": bug_report.new_issue_url("bug: ", bug_report.body())}
+
+
 ROUTES = {"/api/fleet": api_fleet, "/api/provenance": api_provenance,
           "/api/fits": api_fits, "/api/families": api_families, "/api/runs": api_runs,
           "/api/queues": api_queues, "/api/settings": api_settings,
@@ -379,7 +395,8 @@ ROUTES = {"/api/fleet": api_fleet, "/api/provenance": api_provenance,
           "/api/models/found": api_models_found,
           "/api/jobs/files": api_jobs_files, "/api/teachers": api_teachers,
           "/api/downloads": api_downloads, "/api/scores": api_scores,
-          "/api/scratch/reclaimable": api_scratch_reclaimable}
+          "/api/scratch/reclaimable": api_scratch_reclaimable,
+          "/api/release": api_release, "/api/bug-report": api_bug_report}
 POSTS = {"/api/settings": post_settings, "/api/models/scan": post_models_scan,
          "/api/pick-folder": post_pick_folder, "/api/jobs/plan": jobs.plan,
          "/api/jobs/start": jobs.start, "/api/jobs/stop": jobs.stop, "/api/jobs/resume": jobs.resume,

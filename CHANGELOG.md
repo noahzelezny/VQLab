@@ -20,7 +20,11 @@ licenses.
   its free space; `vqlab lab config set` and the GUI's Storage page change them.
   Nothing assumes a disk layout.
 - Dependencies are pinned to the tested ranges (mlx 0.32.x, mlx-lm
-  0.31-0.32, knurlogic 0.1.8 or newer).
+  0.31-0.32, knurlogic 0.1.x from 0.1.8).
+- `vqlab --version`; `vqlab lab doctor` says when a newer release is out
+  (PyPI, asked at most once a day; `VQLAB_OFFLINE=1` skips it).
+- `vqlab lab report-bug` fills in a GitHub issue with the versions, chip and
+  last failed command (no paths) and prints the link; nothing is sent.
 
 ### The GUI (`vqlab gui`)
 - Library: published builds and your own, with their measured KL.
@@ -29,6 +33,8 @@ licenses.
   queue; Qwen3.5/3.6 MoE, Qwen3.8 dense, Qwen3.8-Flash-Next, GLM-5.3-Flash
   and Gemma 4 (26B and E4B) build from the page.
 - Jobs: run a queue's preflight, then the build, and follow it.
+- An "Update available" note when a newer release is out (click copies the
+  upgrade command), and a "Report a bug" link that opens a prefilled issue.
 
 ### Families
 - Qwen3.5/3.6 MoE (35B, 397B), Qwen3.8 dense, Qwen3.8-Flash-Next,

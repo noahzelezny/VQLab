@@ -72,6 +72,20 @@ def end(run_id, rc):
         pass
 
 
+def runs() -> list[dict]:
+    """Every logged invocation, oldest first: its start record with "end" set
+    to its end record (None while it runs, or if it was killed)."""
+    p = _path()
+    starts, ends = {}, {}
+    for line in (p.read_text().splitlines() if p.exists() else []):
+        try:
+            r = json.loads(line)
+        except ValueError:
+            continue
+        (starts if r.get("event") == "start" else ends)[r.get("run_id")] = r
+    return [{**s, "end": ends.get(rid)} for rid, s in starts.items()]
+
+
 def main(argv=None) -> int:
     """`vqlab runs`: the last N invocations, paired start/end."""
     import argparse
@@ -81,25 +95,17 @@ def main(argv=None) -> int:
     ap.add_argument("--grep", help="substring of argv")
     ap.add_argument("--json", action="store_true", help="raw start records")
     a = ap.parse_args(argv)
-    p = _path()
-    if not p.exists():
-        print(f"no runs logged yet ({p})")
+    if not _path().exists():
+        print(f"no runs logged yet ({_path()})")
         return 0
-    starts, ends = {}, {}
-    for line in p.read_text().splitlines():
-        try:
-            r = json.loads(line)
-        except ValueError:
-            continue
-        (starts if r.get("event") == "start" else ends)[r.get("run_id")] = r
-    rows = [s for s in starts.values()
+    rows = [s for s in runs()
             if (not a.cmd or s.get("cmd") == a.cmd)
             and (not a.grep or a.grep in " ".join(s.get("argv", [])))][-a.n:]
     for s in rows:
         if a.json:
-            print(json.dumps({**s, "end": ends.get(s["run_id"])}))
+            print(json.dumps(s))
             continue
-        e = ends.get(s["run_id"])
+        e = s["end"]
         st = (f"rc={e['rc']} {e['seconds']}s" if e else "NO END (killed or running)")
         c = s.get("code", {})
         print(f"{s['time']}  {s['run_id']}  {s['cmd']:14s} {st:24s} "

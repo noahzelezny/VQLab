@@ -61,7 +61,10 @@ COMMANDS: dict[str, Command] = {c.name: c for c in (
     _C('mtp-probe35', 'vqlab.plan.mtp_probe_qwen35', 'mtp_probe_qwen35.py', 'plan', False, True,
        'MTP wiring sweep + acceptance probe (qwen3_5 / qwen3_5_moe)'),
     _C('doctor', 'vqlab.agents.doctor', 'doctor.py', 'lab', False, True,
-       'which interpreter, mlx / mlx-lm / arch files, storage roots and HF token this run would use (no GPU)'),
+       'which interpreter, mlx / mlx-lm / arch files, storage roots and HF token this run would use, and whether a newer vqlab is out (no GPU)'),
+    _C('report-bug', 'vqlab.agents.bug_report', 'bug_report.py', 'lab', False, True,
+       'a GitHub issue filled in with the versions, chip and last failed command '
+       '(no paths); prints the link, --open opens it, nothing is sent'),
     _C('config', 'vqlab.agents.config_cmd', 'config_cmd.py', 'lab', False, True,
        'show where vqlab reads/writes (and why), or `config init` a starter config'),
     _C('fits', 'vqlab.fit.fits', 'fits.py', 'fit', True, False,
@@ -382,6 +385,7 @@ NAMESPACES: dict[str, tuple[str, dict[str, str]]] = {
     }),
     'lab': ('the lab around the pipeline: records, queues, boxes, agents', {
         'doctor': 'doctor',
+        'report-bug': 'report-bug',
         'config': 'config',
         'runs': 'runs',
         'provenance': 'provenance',
