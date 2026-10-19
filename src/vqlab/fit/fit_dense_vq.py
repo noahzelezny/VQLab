@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""VQ-fit a DENSE mlp trio from a bf16 source (family-aware: gemma4_e4b, qwen3_8).
+"""VQ-fit a DENSE mlp trio from a bf16 source (family-aware: any DENSE_FAMILIES entry).
 
 WHY A SEPARATE FITTER. fit_moe.py targets modules that a prepared
 struct BASE marked as 2-bit placeholders (is_vq_target checks bits==2);
@@ -123,8 +123,9 @@ def main(argv=None) -> int:
     ap.add_argument("--iters", type=int, default=10)
     ap.add_argument("--layers", default=None)
     ap.add_argument("--family", default="gemma4_e4b",
-                    choices=["gemma4_e4b", "qwen3_8_dense"],
-                    help="selects tensor-name template and default layer range")
+                    choices=sorted(DENSE_FAMILIES),
+                    help="selects tensor-name template and default layer range "
+                         "(any DENSE_FAMILIES entry, data entries included)")
     ap.add_argument("--init-cap", type=int, default=200_000,
                     help="rows subsampled for the k-means++ INIT draw. Default "
                          "200_000 is the historical value. At K=65536 that is ~3 "

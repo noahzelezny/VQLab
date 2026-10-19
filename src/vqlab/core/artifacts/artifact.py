@@ -24,6 +24,7 @@ import subprocess
 from functools import cached_property
 
 INDEX = "model.safetensors.index.json"
+SINGLE = "model.safetensors"
 CONFIG = "config.json"
 RECORDS = ("vqlab_provenance.json", "vqlab_provenance.history.jsonl")
 MAPS = ("vq_modules", "quantization", "vq_skipzero")
@@ -72,7 +73,11 @@ class Artifact:
 
     @cached_property
     def index(self) -> dict:
-        """tensor -> shard file name."""
+        """tensor -> shard file name. A single-file checkpoint (a lone
+        model.safetensors, common for small models) has no index file: its
+        header is the map."""
+        if not (self.dir / INDEX).exists() and (self.dir / SINGLE).exists():
+            return dict.fromkeys(read_header(self.dir / SINGLE), SINGLE)
         return json.loads((self.dir / INDEX).read_text())["weight_map"]
 
     def map(self, name: str) -> dict:

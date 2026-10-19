@@ -43,3 +43,19 @@ def test_a_graft_keeps_processor_configs_the_build_already_has(tmp_path):
     names = ("preprocessor_config.json", "video_preprocessor_config.json")
     assert copy_config_files(src, dst, names, overwrite=False) == [names[1]]
     assert (dst / "preprocessor_config.json").read_text() == "staged"
+
+
+def test_a_single_file_checkpoint_is_indexed_from_its_header(tmp_path):
+    # 2026-10-18: Qwen3-Embedding-0.6B ships one model.safetensors and no
+    # index file; fit-dense died reading the index that small models lack
+    import json
+    import struct
+
+    from vqlab.core.artifacts.artifact import Artifact
+    hdr = json.dumps({"__metadata__": {"format": "pt"},
+                      "a.weight": {"dtype": "F16", "shape": [1], "data_offsets": [0, 2]},
+                      "b.weight": {"dtype": "F16", "shape": [1], "data_offsets": [2, 4]}}).encode()
+    (tmp_path / "model.safetensors").write_bytes(struct.pack("<Q", len(hdr)) + hdr + b"\0" * 4)
+    assert Artifact(tmp_path).index == {"a.weight": "model.safetensors",
+                                        "b.weight": "model.safetensors"}
+
